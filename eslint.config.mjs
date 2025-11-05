@@ -1,12 +1,15 @@
 import js from "@eslint/js";
 import nextPlugin from "@next/eslint-plugin-next";
+// Tailwind CSS linting
+// import officialTailwind from "eslint-plugin-tailwindcss"; // TODO: switch back when v4 stable
+import communityTailwind from "@poupe/eslint-plugin-tailwindcss";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import prettierConfig from "eslint-config-prettier";
 import boundaries from "eslint-plugin-boundaries";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
-// import tailwindPlugin from "eslint-plugin-tailwindcss"; // Disabled due to Tailwind v4 compatibility
 import simpleImportSort from "eslint-plugin-simple-import-sort";
+import unused from "eslint-plugin-unused-imports";
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
@@ -29,9 +32,11 @@ export default [
     plugins: {
       "@typescript-eslint": tsPlugin,
       "@next/next": nextPlugin,
-      // "tailwindcss": tailwindPlugin, // Disabled due to Tailwind v4 compatibility
+      // "tailwindcss": officialTailwind, // TODO: re-enable after upstream v4 fix
+      tailwindcss: communityTailwind,
       "simple-import-sort": simpleImportSort,
       "no-inline-styles": noInlineStyles,
+      "unused-imports": unused,
       boundaries: boundaries,
     },
     rules: {
@@ -49,6 +54,7 @@ export default [
           varsIgnorePattern: "^_",
         },
       ],
+      "unused-imports/no-unused-imports": "error",
       "@typescript-eslint/no-misused-promises": [
         "error",
         {
@@ -72,7 +78,8 @@ export default [
       "simple-import-sort/imports": "error",
       "simple-import-sort/exports": "error",
 
-      // Tailwind rules - disabled due to v4 compatibility
+      // Tailwind rules (community plugin has different rule names)
+      // TODO: restore official rules when switching back to official plugin
       // "tailwindcss/no-arbitrary-value": "error",
       // "tailwindcss/classnames-order": "off", // Prettier plugin handles order
 
@@ -106,10 +113,10 @@ export default [
       // ],
     },
     settings: {
-      // tailwindcss: {
-      //   callees: ["clsx", "cn", "classnames"],
-      //   config: "tailwind.config.ts"
-      // },
+      tailwindcss: {
+        config: "tailwind.config.ts",
+        callees: ["clsx", "cn", "classnames"],
+      },
       // boundaries: {
       //   elements: [
       //     { type: "app", pattern: "app/*" },
@@ -126,6 +133,14 @@ export default [
     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"],
     rules: {
       "boundaries/entry-point": "off",
+    },
+  },
+
+  // Next.js font file overrides
+  {
+    files: ["src/**/font*.{ts,tsx}"],
+    rules: {
+      "no-inline-styles/no-inline-styles": "off",
     },
   },
 

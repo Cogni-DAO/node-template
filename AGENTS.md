@@ -44,6 +44,15 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 
 - **Styling:** Tailwind preset + shadcn/ui only. No inline styles, no arbitrary values.
 - **Linting:** ESLint (typescript, boundaries, tailwind, import rules) + Prettier required.
+
+### Tailwind ESLint
+
+- Using `@poupe/eslint-plugin-tailwindcss` due to pnpm resolver issues with the official beta.
+- To switch back:
+  1. `pnpm add -D eslint-plugin-tailwindcss@latest`
+  2. In `eslint.config.mjs`, swap plugin import and key:
+     - enable `officialTailwind`, disable `communityTailwind`
+  3. Remove `@poupe/eslint-plugin-tailwindcss` if stable
 - **Type Safety:** No `any`. Full TypeScript coverage.
 - **File System Boundaries:** `features/` modules isolated; no cross-feature imports.
 - **No External Secrets:** All env vars defined via `.env.ts` schema; no hardcoded keys.
@@ -79,17 +88,17 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 # Development server
 pnpm dev
 
-# Type checking
-pnpm typecheck
-
-# Linting
-pnpm lint
-
-# Testing
-pnpm test
-
-# Build
+# Build for production
 pnpm build
+
+# Quality assurance (typecheck + lint + format check)
+pnpm check
+
+# Auto-fix linting and formatting issues
+pnpm lint:fix
+
+# Testing (not yet implemented)
+pnpm test
 ```
 
 ---
