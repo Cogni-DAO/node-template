@@ -89,3 +89,4 @@ pnpm lint
 ## Notes
 
 - All adapters must implement these interfaces
+- Inject `Clock` and `Rng` via ports to keep domain deterministic

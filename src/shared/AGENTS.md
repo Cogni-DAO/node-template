@@ -11,12 +11,13 @@
 
 ## Purpose
 
-Small, pure, framework-agnostic utilities including env/, schemas/, constants/, and util/.
+Low-level building blocks used across the repo. Primitives and reusable shapes (e.g., walletAddressZ, isoDateZ, paginationZ), DTO mappers, pure utilities. No auth scopes. No rate limits. No operation IDs.
 
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
 - [Architecture](../../docs/ARCHITECTURE.md)
+- **Related:** [contracts](../contracts/) (external IO specs), [types](../types/) (compile-time only)
 
 ## Boundaries
 
@@ -74,6 +75,8 @@ pnpm typecheck
 
 - Keep small and pure
 - Promote growing parts into core or new port
+- No versioning policy here; stability comes from the contracts that compose them
+- Keep `shared/` small and pure. Promote growing parts into `core` or a new `port`
 
 ## Dependencies
 

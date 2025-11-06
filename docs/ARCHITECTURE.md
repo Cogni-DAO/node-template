@@ -13,6 +13,8 @@ Every dependency points inward.
 ## System Layers (by directory)
 
 - **src/bootstrap/** → Composition root (DI/factories), env (Zod), exports a container/getPort().
+- **src/contracts/** → Operation contracts (id, Zod in/out, scopes, version). No logic.
+- **src/mcp/** → MCP host bootstrap. Registers tools mapped 1:1 to contracts.
 - **src/app/** → Delivery/UI + Next.js API routes. Imports only **features/ports/shared**.
 - **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… orchestrate **core** via **ports**.
 - **src/ports/** → Contracts/interfaces only.
@@ -104,6 +106,14 @@ Every dependency points inward.
 [x] ├── bootstrap/ # composition root (DI)
 [ ] │ ├── container.ts # wires adapters → ports
 [ ] │ └── config.ts # Zod-validated env
+[ ] │
+[x] ├── contracts/ # operation contracts (edge IO)
+[ ] │ ├── AGENTS.md
+[ ] │ └── \*.contract.ts
+[ ] │
+[x] ├── mcp/ # MCP host (future)
+[ ] │ ├── AGENTS.md
+[ ] │ └── server.stub.ts
 [ ] │
 [x] ├── app/ # delivery (Next UI + routes)
 [ ] │ ├── layout.tsx
@@ -230,8 +240,10 @@ Every dependency points inward.
   - `core` → only `core` (standalone).
   - `ports` → `core`.
   - `features` → `ports|core|shared`.
-  - `app` → `features|ports|shared` (never adapters).
+  - `app` → `features|ports|shared|contracts` (never adapters|core).
   - `adapters` → `ports|shared` (never `app|features|core`).
+  - `contracts` → `shared|types` only. Never imported by `features|ports|core`.
+  - `mcp` → `contracts|bootstrap|features|shared|ports` (never `app|components`).
 - **ESLint**: flat config with path rules; `eslint-plugin-boundaries`.
 - **Dependency-cruiser**: optional CI gate for graph violations.
 - **Contracts**: `tests/contract` must pass for any adapter.
@@ -258,14 +270,36 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 **Core (unit):** pure domain tests in `tests/unit/core/**`.  
 **Features (unit):** use-case tests with mocked ports in `tests/unit/features/**`.  
 **Contract (ports):** reusable contract harness per port in `tests/contract/<port-name>.contract.ts`; every adapter must pass it.  
+**Contract (edge):** each `src/contracts/*.contract.ts` has a contract test run against the HTTP route (and MCP later).  
 **Adapters (integration):** run contract + real-service tests in `tests/integration/<adapter-area>/**`.  
 **Routes (API e2e):** HTTP-level tests hitting Next API routes in `e2e/**`.  
 **Setup:** common mocks and config in `tests/setup.ts`.
 
 ---
 
+## Implementing a New Feature (5-Step Flow)
+
+1. **Define Contract:**  
+   Create `src/contracts/<feature>.<action>.v1.contract.ts` with Zod input, output, and scopes.
+
+2. **Add Use-Case Logic:**  
+   Implement `src/features/<feature>/services/<action>.ts` — pure logic calling domain ports only.
+
+3. **Expose Route:**  
+   In `src/app/api/<feature>/<action>/route.ts`, import the contract, validate input, call the use-case, validate output.
+
+4. **Adapter Support (if needed):**  
+   Add or update a `src/adapters/server/...` implementation to satisfy any ports the feature requires.
+
+5. **Test + Document:**  
+   Add a `tests/contract/<feature>.<action>.contract.ts` verifying the route matches the contract, then update that feature's AGENTS.md.
+
+---
+
 ## Notes
 
-- No UI in `adapters/`. Client wallet connect remains in `app/providers.tsx` and hooks.
-- Keep `shared/` small and pure. Promote growing parts into `core` or a new `port`.
-- Inject `Clock` and `Rng` via ports to keep domain deterministic.
+- **Contracts are edge-only.** Inner layers never import `src/contracts/**`. Breaking change → new `...vN` id.
+- **Routes must validate IO.** Parse input before calling the use-case. Parse output before responding. Fail closed.
+- **Auth is centralized.** Use one `guard()` for session/API-key scopes, rate-limit, idempotency. No per-route ad-hoc checks.
+- **Observability is mandatory.** Trace every call with `contractId`, `subject`, and cost/usage. Log denials.
+- **Adapters are pure infra.** No UI, no business rules. Implement ports only. Promote creeping helpers into ports or core.

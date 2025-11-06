@@ -120,25 +120,82 @@ export default [
             // Core can only import from core (standalone domain)
             {
               from: "core",
-              disallow: ["app", "features", "adapters/*", "ports", "shared"],
+              disallow: [
+                "app",
+                "features",
+                "adapters/*",
+                "ports",
+                "shared",
+                "contracts",
+                "mcp",
+              ],
             },
 
             // Ports can only import from core
             {
               from: "ports",
-              disallow: ["app", "features", "adapters/*", "shared"],
+              disallow: [
+                "app",
+                "features",
+                "adapters/*",
+                "shared",
+                "contracts",
+                "mcp",
+              ],
             },
 
-            // Features can import from ports, core, shared
-            { from: "features", disallow: ["app", "adapters/*"] },
+            // Features can import from ports, core, shared (forbidden from contracts)
+            {
+              from: "features",
+              disallow: ["app", "adapters/*", "contracts", "mcp"],
+            },
 
-            // App can import from features, ports, shared (never adapters)
-            { from: "app", disallow: ["adapters/*", "core"] },
+            // Contracts can only import from shared, types (protocol-agnostic)
+            {
+              from: "contracts",
+              allow: ["shared/**", "types/**"],
+              disallow: [
+                "app/**",
+                "features/**",
+                "adapters/**",
+                "core/**",
+                "ports/**",
+                "mcp/**",
+              ],
+            },
 
-            // Adapters can import from ports, shared (never app, features, core)
-            { from: "adapters/server", disallow: ["app", "features", "core"] },
+            // App can import from features, ports, shared, contracts (never adapters, core)
+            {
+              from: "app",
+              allow: ["features/**", "ports/**", "shared/**", "contracts/**"],
+              disallow: ["adapters/**", "core/**"],
+            },
+
+            // MCP can import contracts, bootstrap, features, shared, ports
+            {
+              from: "mcp",
+              allow: [
+                "contracts/**",
+                "bootstrap/**",
+                "features/**",
+                "shared/**",
+                "ports/**",
+              ],
+              disallow: ["app/**", "components/**", "core/**", "adapters/**"],
+            },
+
+            // Adapters can import from ports, shared, contracts (never app, features, core)
+            {
+              from: "adapters/server",
+              allow: ["ports/**", "shared/**", "contracts/**"],
+              disallow: ["app/**", "features/**", "core/**"],
+            },
             { from: "adapters/worker", disallow: ["app", "features", "core"] },
             { from: "adapters/cli", disallow: ["app", "features", "core"] },
+
+            // Tests can import anything
+            { from: "tests", allow: ["**/*"] },
+            { from: "e2e", allow: ["**/*"] },
           ],
         },
       ],
@@ -173,6 +230,8 @@ export default [
         "@styles/*": ["src/styles/*"],
         "@types/*": ["src/types/*"],
         "@assets/*": ["src/assets/*"],
+        "@contracts/*": ["src/contracts/*"],
+        "@mcp/*": ["src/mcp/*"],
       },
       tailwindcss: {
         config: "tailwind.config.ts",
@@ -192,6 +251,8 @@ export default [
         { type: "styles", pattern: "src/styles/**" },
         { type: "types", pattern: "src/types/**" },
         { type: "assets", pattern: "src/assets/**" },
+        { type: "contracts", pattern: "src/contracts/**" },
+        { type: "mcp", pattern: "src/mcp/**" },
         { type: "tests", pattern: "tests/**" },
         { type: "e2e", pattern: "e2e/**" },
         { type: "scripts", pattern: "scripts/**" },
