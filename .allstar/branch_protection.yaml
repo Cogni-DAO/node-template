@@ -11,3 +11,4 @@ requireStatusChecks:
   - context: Cogni Git PR Review
   - context: SonarCloud Code Analysis
   - context: CodeQL
+  - context: Lint PR

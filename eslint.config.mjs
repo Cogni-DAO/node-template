@@ -95,6 +95,14 @@ export default [
       // Import resolution
       "import/no-unresolved": "error",
 
+      // Block parent relatives only. Aliases unaffected.
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: ["../*", "../../*", "../../../*", "../../../../*"],
+        },
+      ],
+
       // Tailwind rules (community plugin has different rule names)
       // TODO: restore official rules when switching back to official plugin
       // "tailwindcss/no-arbitrary-value": "error",
@@ -153,6 +161,19 @@ export default [
     },
     settings: {
       "import/resolver": { typescript: true },
+      "boundaries/alias": {
+        "@core/*": ["src/core/*"],
+        "@ports/*": ["src/ports/*"],
+        "@features/*": ["src/features/*"],
+        "@app/*": ["src/app/*"],
+        "@adapters/*": ["src/adapters/*"],
+        "@shared/*": ["src/shared/*"],
+        "@bootstrap/*": ["src/bootstrap/*"],
+        "@components/*": ["src/components/*"],
+        "@styles/*": ["src/styles/*"],
+        "@types/*": ["src/types/*"],
+        "@assets/*": ["src/assets/*"],
+      },
       tailwindcss: {
         config: "tailwind.config.ts",
         callees: ["clsx", "cn", "classnames"],
