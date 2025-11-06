@@ -69,11 +69,11 @@ pnpm check
 
 # Auto-fix linting and formatting issues
 pnpm lint:fix
-
 pnpm format
 
 # Testing (not yet implemented)
 pnpm test
+pnpm e2e
 ```
 
 ---
