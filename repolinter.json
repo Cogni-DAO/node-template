@@ -114,7 +114,7 @@
       "rule": {
         "type": "file-contents",
         "options": {
-          "globsAny": [".github/workflows/*.yml", ".github/workflows/*.yaml"],
+          "files": [".github/workflows/ci.yaml"],
           "content": "pnpm check"
         }
       },
@@ -133,7 +133,7 @@
       "rule": {
         "type": "file-contents",
         "options": {
-          "globsAny": ["package.json"],
+          "files": ["package.json"],
           "content": "\"engines\"\\s*:\\s*\\{\\s*\"node\"\\s*:\\s*\"20\\.x\""
         }
       },

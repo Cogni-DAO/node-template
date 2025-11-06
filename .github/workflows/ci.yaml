@@ -27,5 +27,5 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
-      - run: pnpm run check
+      - run: pnpm check
       - run: pnpm run build
