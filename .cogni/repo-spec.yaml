@@ -9,14 +9,14 @@ intent:
 # Control GitHub check conclusion behavior for gate errors/timeouts
 # false (default): errors/timeouts result in 'neutral' conclusion (non-blocking)
 # true: errors/timeouts result in 'failure' conclusion (blocks merge)
-fail_on_error: false
+fail_on_error: true
 
 cogni_dao:
-  dao_contract: "DAO_ADDRESS_PLACEHOLDER"
-  plugin_contract: "PLUGIN_CONTRACT_PLACEHOLDER" 
-  signal_contract: "SIGNAL_CONTRACT_PLACEHOLDER"
-  chain_id: "CHAIN_ID_PLACEHOLDER"
-  base_url: "https://proposal.cognidao.org"  # Current deployed address of cogni-proposal-launcher
+  dao_contract: "0x067d3d827fAb4F3cE7c7A3D3b97F5898d490761D"       # Current Cogni parent DAO Contract Address
+  plugin_contract: "0x67966e0e9E30fEA545f2EeDE4253f96e1Fb68E2c"    # DAO's Aragon Voting Plugin Address
+  signal_contract: "0x685350a73E7bC60143568d32040EE3d79C0b11DD"    # DAO's CogniSignal Contract Address
+  chain_id: "11155111"                                             # Chain ID: Sepolia
+  base_url: "https://proposal.cognidao.org"                        # v0 Base URL: cogni-proposal-launcher service
 
 # Gates run in the order they appear below.
 gates:
@@ -40,8 +40,6 @@ gates:
   - type: ai-rule
     with:
       rule_file: patterns-and-docs.yaml
-
-  ## TODO - find and customize this rule for your repo!
   - type: ai-rule
     with:
       rule_file: repo-goal-alignment.yaml
