@@ -19,9 +19,6 @@ Infrastructure implementations of ports including server/, worker/, and cli/ ada
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "adapters/server",
@@ -29,10 +26,6 @@ Infrastructure implementations of ports including server/, worker/, and cli/ ada
   "must_not_import": ["app", "features", "core"]
 }
 ```
-
-- **Layer:** adapters
-- **May import:** ports, shared
-- **Must not import:** app, features, core
 
 ## Public Surface
 

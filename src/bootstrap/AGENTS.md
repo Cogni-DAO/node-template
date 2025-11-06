@@ -19,20 +19,21 @@ Composition root for dependency injection, environment configuration, and applic
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
-  "layer": "meta",
-  "may_import": ["adapters/server", "ports", "shared"],
+  "layer": "bootstrap",
+  "may_import": [
+    "bootstrap",
+    "ports",
+    "adapters/server",
+    "adapters/worker",
+    "adapters/cli",
+    "shared",
+    "types"
+  ],
   "must_not_import": ["app", "features", "core"]
 }
 ```
-
-- **Layer:** bootstrap
-- **May import:** adapters, ports, shared
-- **Must not import:** app, features, core
 
 ## Public Surface
 

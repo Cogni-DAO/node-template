@@ -19,9 +19,6 @@ End-to-end Playwright tests for API routes and UI workflows.
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "e2e",
@@ -29,10 +26,6 @@ End-to-end Playwright tests for API routes and UI workflows.
   "must_not_import": []
 }
 ```
-
-- **Layer:** e2e
-- **May import:** none (external testing only)
-- **Must not import:** All internal code
 
 ## Public Surface
 

@@ -19,9 +19,6 @@ Next.js application source implementing hexagonal architecture for a fully web3-
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries`.  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "meta",
@@ -29,10 +26,6 @@ Next.js application source implementing hexagonal architecture for a fully web3-
   "must_not_import": []
 }
 ```
-
-- **Layer:** src
-- **May import:** Internal src layers according to hexagonal rules
-- **Must not import:** tests, e2e, scripts, infra
 
 ## Public Surface
 

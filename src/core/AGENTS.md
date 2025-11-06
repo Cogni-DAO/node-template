@@ -19,9 +19,6 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "core",
@@ -36,10 +33,6 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
   ]
 }
 ```
-
-- **Layer:** core
-- **May import:** core only (standalone)
-- **Must not import:** app, features, ports, adapters, shared
 
 ## Public Surface
 

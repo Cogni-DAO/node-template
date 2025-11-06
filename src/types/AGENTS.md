@@ -20,9 +20,6 @@ Compile-time only support. TS utility types, branded types, ambient global.d.ts,
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries`.  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "types",
@@ -39,10 +36,6 @@ Compile-time only support. TS utility types, branded types, ambient global.d.ts,
   ]
 }
 ```
-
-- **Layer:** types
-- **May import:** types/ only
-- **Must not import:** anything else (compile-time only)
 
 ## Public Surface
 

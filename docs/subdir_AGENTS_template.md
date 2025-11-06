@@ -20,9 +20,6 @@
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "...",
@@ -30,10 +27,6 @@
   "must_not_import": [...]
 }
 ```
-
-- **Layer:** app | features | ports | core | adapters/server | adapters/worker | shared | tests | e2e | scripts
-- **May import:** [allowed layers/paths]
-- **Must not import:** [forbidden layers/paths]
 
 ## Public Surface
 

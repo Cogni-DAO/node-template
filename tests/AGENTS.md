@@ -19,20 +19,13 @@ Unit, integration, and contract tests including setup and test utilities.
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "tests",
-  "may_import": ["core", "features", "ports", "adapters/server", "shared"],
-  "must_not_import": ["app"]
+  "may_import": ["*"],
+  "must_not_import": []
 }
 ```
-
-- **Layer:** tests
-- **May import:** core, features, ports, adapters, shared
-- **Must not import:** app
 
 ## Public Surface
 

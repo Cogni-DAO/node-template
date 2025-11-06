@@ -20,9 +20,6 @@ Single source of truth for externally callable operations. Each file defines an 
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries`.  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "contracts",
@@ -37,10 +34,6 @@ Single source of truth for externally callable operations. Each file defines an 
   ]
 }
 ```
-
-- **Layer:** contracts
-- **May import:** shared/, types/
-- **Must not import:** app/, features/, adapters/, core/, ports/
 
 ## Public Surface
 

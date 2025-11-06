@@ -20,20 +20,13 @@ MCP host entrypoint. Registers tools that mirror src/contracts/\*\* operations a
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries`.  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
-  "layer": "adapters/server",
-  "may_import": ["contracts", "shared", "ports", "features"],
+  "layer": "mcp",
+  "may_import": ["mcp", "features", "ports", "contracts", "bootstrap"],
   "must_not_import": ["app", "core"]
 }
 ```
-
-- **Layer:** adapters/server
-- **May import:** contracts/, shared/, ports/, features/
-- **Must not import:** app/, core/
 
 ## Public Surface
 

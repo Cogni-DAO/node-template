@@ -19,9 +19,6 @@ Infrastructure as Code including Docker Compose, LiteLLM config, Langfuse, and T
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "infra",
@@ -29,10 +26,6 @@ Infrastructure as Code including Docker Compose, LiteLLM config, Langfuse, and T
   "must_not_import": ["*"]
 }
 ```
-
-- **Layer:** infra
-- **May import:** none (infrastructure only)
-- **Must not import:** All application code
 
 ## Public Surface
 

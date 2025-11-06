@@ -19,9 +19,6 @@ Contracts and interfaces only. Defines minimal interfaces that adapters implemen
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "ports",
@@ -35,10 +32,6 @@ Contracts and interfaces only. Defines minimal interfaces that adapters implemen
   ]
 }
 ```
-
-- **Layer:** ports
-- **May import:** core
-- **Must not import:** app, features, adapters, shared
 
 ## Public Surface
 

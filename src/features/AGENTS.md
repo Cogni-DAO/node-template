@@ -19,9 +19,6 @@ Vertical slices containing use cases like auth/ and proposals/. Orchestrates cor
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "features",
@@ -29,10 +26,6 @@ Vertical slices containing use cases like auth/ and proposals/. Orchestrates cor
   "must_not_import": ["app", "adapters/server", "adapters/worker", "features"]
 }
 ```
-
-- **Layer:** features
-- **May import:** ports, core, shared
-- **Must not import:** app, adapters, other features
 
 ## Public Surface
 

@@ -19,20 +19,20 @@ Build-time scripts for migrations, seeds, type generation, development utilities
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "scripts",
-  "may_import": ["shared", "adapters/server"],
-  "must_not_import": ["app", "features", "core", "ports"]
+  "may_import": ["scripts", "ports", "shared", "types"],
+  "must_not_import": [
+    "app",
+    "features",
+    "core",
+    "adapters/server",
+    "adapters/worker",
+    "adapters/cli"
+  ]
 }
 ```
-
-- **Layer:** scripts
-- **May import:** shared, adapters, bootstrap
-- **Must not import:** app, features, core, ports
 
 ## Public Surface
 

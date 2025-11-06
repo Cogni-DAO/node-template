@@ -20,9 +20,6 @@ Low-level building blocks used across the repo. Primitives and reusable shapes (
 
 ## Boundaries
 
-**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
-**Machine-readable boundary spec (required):**
-
 ```json
 {
   "layer": "shared",
@@ -37,10 +34,6 @@ Low-level building blocks used across the repo. Primitives and reusable shapes (
   ]
 }
 ```
-
-- **Layer:** shared
-- **May import:** shared only
-- **Must not import:** app, features, ports, core, adapters
 
 ## Public Surface
 
