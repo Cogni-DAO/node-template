@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Build-time scripts for migrations, seeds, type generation, and development utilities.
+Build-time scripts for migrations, seeds, type generation, development utilities, and documentation validation.
 
 ## Pointers
 
@@ -39,9 +39,9 @@ Build-time scripts for migrations, seeds, type generation, and development utili
 
 - **Exports:** none
 - **Routes (if any):** none
-- **CLI (if any):** Migration and seed commands
+- **CLI (if any):** Migration, seed, and validation commands
 - **Env/Config keys:** Database connection, development flags
-- **Files considered API:** none
+- **Files considered API:** validate-agents-md.mjs (validation script)
 
 ## Ports (optional)
 
@@ -51,7 +51,7 @@ Build-time scripts for migrations, seeds, type generation, and development utili
 
 ## Responsibilities
 
-- This directory **does**: Run migrations, seed data, generate types, development automation
+- This directory **does**: Run migrations, seed data, generate types, development automation, validate AGENTS.md files
 - This directory **does not**: Contain runtime code, business logic, UI components
 
 ## Usage
@@ -61,6 +61,7 @@ Minimal local commands:
 ```bash
 node scripts/migrate.ts
 node scripts/seed-db.ts
+pnpm check:agentsmd  # Validate all AGENTS.md files
 ```
 
 ## Standards
@@ -83,3 +84,4 @@ node scripts/seed-db.ts
 ## Notes
 
 - Scripts must be idempotent and safe to re-run
+- AGENTS.md validator enforces standards for both root and subdir AGENTS.md

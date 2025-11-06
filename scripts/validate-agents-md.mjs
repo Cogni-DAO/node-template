@@ -19,6 +19,15 @@ const REQ_HEADINGS = [
   "Notes",
 ];
 
+const ROOT_REQ_HEADINGS = [
+  "Mission",
+  "Workflow Guiding Principles",
+  "Agent Behavior",
+  "Environment",
+  "Pointers",
+  "Usage",
+];
+
 function h(md) {
   return [...md.matchAll(/^#{2}\s+(.+?)\s*$/gm)].map((m) => m[1].trim());
 }
@@ -108,11 +117,32 @@ function validateBoundaries(block) {
   }
 }
 
-function validate(file) {
-  const md = readFileSync(file, "utf8");
+function validateRootAgents(file, content) {
+  // 1. Check required headings (no order enforcement for root)
+  const headings = h(content);
+  for (const req of ROOT_REQ_HEADINGS) {
+    if (!headings.includes(req)) {
+      throw new Error(`${file}: missing heading "${req}"`);
+    }
+  }
 
+  // 2. Validate scope line for root
+  if (!/^> Scope: repository-wide/m.test(content)) {
+    console.warn(`${file}: Warning - missing or incorrect scope line`);
+  }
+
+  // 3. Basic Usage section validation (check for pnpm commands)
+  const usageBlock = getBlockAfter(content, "Usage");
+  if (!/pnpm check/m.test(usageBlock)) {
+    console.warn(
+      `${file}: Warning - Usage section missing 'pnpm check' command`
+    );
+  }
+}
+
+function validateSubdirAgents(file, content) {
   // 1) headings presence + order (core structure)
-  const headings = h(md);
+  const headings = h(content);
   let idx = -1;
   for (const req of REQ_HEADINGS) {
     const i = headings.indexOf(req);
@@ -122,19 +152,30 @@ function validate(file) {
   }
 
   // 2) validate critical sections only
-  validateMetadata(getBlockAfter(md, "Metadata"));
-  validateBoundaries(getBlockAfter(md, "Boundaries"));
+  validateMetadata(getBlockAfter(content, "Metadata"));
+  validateBoundaries(getBlockAfter(content, "Boundaries"));
 
   // Optional scope line check (warn only)
-  if (!/^> Scope: this directory only\./m.test(md)) {
+  if (!/^> Scope: this directory only\./m.test(content)) {
     console.warn(`${file}: Warning - missing scope line`);
   }
 }
 
-// Find all AGENTS.md files except the root one (which has different format)
+function validate(file) {
+  const md = readFileSync(file, "utf8");
+
+  // Route to appropriate validator based on file location
+  if (file === "AGENTS.md") {
+    validateRootAgents(file, md);
+  } else {
+    validateSubdirAgents(file, md);
+  }
+}
+
+// Find all AGENTS.md files including the root one
 const files = await globby([
   "**/AGENTS.md",
-  "!AGENTS.md",
+  "AGENTS.md",
   "!**/node_modules/**",
 ]);
 for (const f of files) {
