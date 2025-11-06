@@ -48,7 +48,11 @@ function getBlockAfter(md, heading) {
 }
 
 function validateMetadata(block) {
-  if (!/\*\*Owners:\*\*\s*@\w+/i.test(block))
+  if (
+    !/\*\*Owners:\*\*\s*@[A-Za-z0-9][A-Za-z0-9-]*(?:\/[A-Za-z0-9][A-Za-z0-9-]*)?/m.test(
+      block
+    )
+  )
     throw new Error("Metadata: missing Owner");
   const date = block.match(/\*\*Last reviewed:\*\*\s*([0-9-]+)/i)?.[1] ?? "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
