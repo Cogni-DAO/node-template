@@ -51,7 +51,7 @@ End-to-end Playwright tests for API routes and UI workflows.
 
 ## Responsibilities
 
-- This directory **does**: Test complete user workflows via browser automation
+- This directory **does**: Test end-to-end user workflows via browser automation
 - This directory **does not**: Import internal code, contain production logic
 
 ## Usage

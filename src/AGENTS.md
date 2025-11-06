@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Complete Next.js application source implementing hexagonal architecture for a fully web3-enclosed, crypto-funded AI application. Contains all layers from delivery to domain.
+Next.js application source implementing hexagonal architecture for a fully web3-enclosed, crypto-funded AI application. Contains all layers from delivery to domain.
 
 ## Pointers
 
@@ -37,7 +37,7 @@ Complete Next.js application source implementing hexagonal architecture for a fu
 
 ## Public Surface
 
-- **Exports:** Complete Next.js application
+- **Exports:** Next.js application
 - **Routes (if any):** All app routes via app/
 - **CLI (if any):** none
 - **Env/Config keys:** Via shared/env/ schemas
@@ -51,7 +51,7 @@ Complete Next.js application source implementing hexagonal architecture for a fu
 
 ## Responsibilities
 
-- This directory **does**: Implement complete hexagonal architecture, provide delivery layer, domain logic, infrastructure
+- This directory **does**: Implement hexagonal architecture, provide delivery layer, domain logic, infrastructure
 - This directory **does not**: Contain build tools, deployment config, external test utilities
 
 ## Usage

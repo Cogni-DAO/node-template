@@ -28,6 +28,13 @@ const ROOT_REQ_HEADINGS = [
   "Usage",
 ];
 
+const PROHIBITED_WORDS = [
+  "complete",
+  "comprehensive",
+  "final",
+  "production ready",
+];
+
 function h(md) {
   return [...md.matchAll(/^#{2}\s+(.+?)\s*$/gm)].map((m) => m[1].trim());
 }
@@ -138,6 +145,20 @@ function validateRootAgents(file, content) {
       `${file}: Warning - Usage section missing 'pnpm check' command`
     );
   }
+
+  // 4. Check for prohibited words
+  validateProhibitedWords(file, content);
+}
+
+function validateProhibitedWords(file, content) {
+  for (const word of PROHIBITED_WORDS) {
+    const regex = new RegExp(`\\b${word}\\b`, "gi");
+    if (regex.test(content)) {
+      throw new Error(
+        `${file}: prohibited word "${word}" found - these words are red flags and indicate improper understanding`
+      );
+    }
+  }
 }
 
 function validateSubdirAgents(file, content) {
@@ -154,6 +175,9 @@ function validateSubdirAgents(file, content) {
   // 2) validate critical sections only
   validateMetadata(getBlockAfter(content, "Metadata"));
   validateBoundaries(getBlockAfter(content, "Boundaries"));
+
+  // 3) check for prohibited words
+  validateProhibitedWords(file, content);
 
   // Optional scope line check (warn only)
   if (!/^> Scope: this directory only\./m.test(content)) {
