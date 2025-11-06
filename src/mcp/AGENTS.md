@@ -6,7 +6,6 @@
 
 - **Owners:** @derek @core-dev
 - **Last reviewed:** 2025-11-07
-- **Reviewed in PR:** #TBD
 - **Status:** draft
 
 ## Purpose

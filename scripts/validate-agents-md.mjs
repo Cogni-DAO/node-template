@@ -54,11 +54,6 @@ function validateMetadata(block) {
     throw new Error("Metadata: invalid date");
   if (!/\*\*Status:\*\*\s*(stable|draft|deprecated)/i.test(block))
     throw new Error("Metadata: invalid Status");
-
-  // Warn about missing PR but don't fail
-  if (!/\*\*Reviewed in PR:\*\*\s*(#\d+|TBD)/i.test(block)) {
-    console.warn("Warning: Reviewed in PR field missing or invalid");
-  }
 }
 
 function validateBoundaries(block) {

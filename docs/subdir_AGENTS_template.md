@@ -6,7 +6,6 @@
 
 - **Owners:** @handle1 @handle2 <!-- ≥1 required -->
 - **Last reviewed:** YYYY-MM-DD <!-- YYYY-MM-DD format -->
-- **Reviewed in PR:** #123 <!-- required when Public Surface changes -->
 - **Status:** stable | draft | deprecated
 
 ## Purpose
@@ -79,7 +78,7 @@ pnpm build -w path/to/this
 ## Change Protocol
 
 - Update this file when **Exports**, **Routes**, or **Env/Config** change
-- Bump **Last reviewed** and set **Reviewed in PR: #<num>**
+- Bump **Last reviewed** date
 - Update ESLint boundary rules if **Boundaries** changed
 - Ensure boundary lint + (if Ports) **contract tests** pass
 

@@ -6,7 +6,6 @@
 
 - **Owners:** @derekg1729
 - **Last reviewed:** 2025-11-06
-- **Reviewed in PR:** TBD
 - **Status:** draft
 
 ## Purpose
@@ -86,7 +85,7 @@ pnpm typecheck
 ## Change Protocol
 
 - Update this file when **Exports**, **Routes**, or **Env/Config** change
-- Bump **Last reviewed** and set **Reviewed in PR: #<num>**
+- Bump **Last reviewed** date
 - Update ESLint boundary rules if **Boundaries** changed
 - Ensure boundary lint + (if Ports) **contract tests** pass
 
