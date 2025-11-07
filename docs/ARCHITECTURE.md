@@ -100,7 +100,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] README.md # overview
 [ ] CHANGELOG.md # releases
 [ ] middleware.ts # headers, session/API-key guard, basic rate-limit
-[ ] vitest.config.ts # unit/integration
+[x] vitest.config.mts # unit/integration
 [ ] playwright.config.ts # UI/e2e
 
 [x] docs/
@@ -234,10 +234,12 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] └── images/
 
 [x] tests/
-[ ] ├── unit/ # core rules + features with mocked ports
-[ ] ├── integration/ # adapters against local services
-[ ] ├── contract/ # reusable port contract harness
-[ ] └── setup.ts
+[x] ├── \_fakes/ # deterministic test doubles (stubs only)
+[x] ├── \_fixtures/ # static test data (stubs only)
+[x] ├── unit/ # core rules + features with mocked ports (structure only)
+[x] ├── integration/ # adapters against local services (stubs only)
+[x] ├── contract/ # reusable port contract harness (stubs only)
+[x] └── setup.ts
 
 [x] e2e/
 [ ] ├── auth.spec.ts

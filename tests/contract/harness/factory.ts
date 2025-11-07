@@ -1,7 +1,5 @@
-/**
- * SPDX-License-Identifier: MIT
- * SPDX-FileCopyrightText: 2024 Cogni-DAO
- */
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 import { mkdtempSync, rmSync } from "node:fs";
 import http from "node:http";
