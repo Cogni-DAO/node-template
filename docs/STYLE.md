@@ -81,7 +81,7 @@ All TypeScript files in `src/**/*.{ts,tsx}` must include a TSDoc header block de
 
 **Required Format:**
 
-1. **SPDX license line comment** (`// SPDX-License-Identifier: Polyform-Noncommercial-1.0.0`)
+1. **SPDX license line comment** (`// SPDX-License-Identifier: Polyform-Shield-1.0.0`)
 2. **TSDoc block comment** with `@packageDocumentation` containing:
    - **Purpose:** 1-3 sentences on the file's role and why it exists.
    - **Scope:** What this file owns; what it explicitly does not do.
@@ -103,7 +103,7 @@ All TypeScript files in `src/**/*.{ts,tsx}` must include a TSDoc header block de
 ### Template
 
 ```typescript
-// SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
 
 /**
  * @packageDocumentation
@@ -122,7 +122,7 @@ All TypeScript files in `src/**/*.{ts,tsx}` must include a TSDoc header block de
 **Component (`Button.tsx`):**
 
 ```typescript
-// SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
 
 /**
  * @packageDocumentation
@@ -139,7 +139,7 @@ All TypeScript files in `src/**/*.{ts,tsx}` must include a TSDoc header block de
 **Service:**
 
 ```typescript
-// SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
 
 /**
  * @packageDocumentation
@@ -156,7 +156,7 @@ All TypeScript files in `src/**/*.{ts,tsx}` must include a TSDoc header block de
 **Barrel (`index.ts`):**
 
 ```typescript
-// SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
 
 /**
  * @packageDocumentation
@@ -173,7 +173,7 @@ All TypeScript files in `src/**/*.{ts,tsx}` must include a TSDoc header block de
 **Route:**
 
 ```typescript
-// SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
 
 /**
  * @packageDocumentation
@@ -230,7 +230,7 @@ apt install reuse-tool
 REUSE configuration is in `.reuse/dep5`. The tool validates that all files in `src/**/*.{ts,tsx}` have the SPDX license identifier as the first line comment:
 
 ```typescript
-// SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
 ```
 
 ### Usage

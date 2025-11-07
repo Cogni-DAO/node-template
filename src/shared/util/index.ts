@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
 
 /**
  * @packageDocumentation
