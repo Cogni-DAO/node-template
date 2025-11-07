@@ -212,9 +212,14 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 
 ### Files to Create:
 
-- [ ] `vitest.config.ts` - Unit/integration test configuration
+- [x] `vitest.config.mts` - Unit/integration test configuration
 - [ ] `playwright.config.ts` - End-to-end test configuration
-- [ ] `tests/setup.ts` - Test environment bootstrap
+- [x] `tests/setup.ts` - Test environment bootstrap
+- [x] `tests/_fakes/` - Deterministic test doubles (FakeClock, FakeRng, FakeTelemetry)
+- [x] `tests/_fixtures/` - Static test data
+- [x] `tests/contract/` - Port contract test framework with harness
+- [x] `tests/unit/` - Unit test directory structure
+- [x] `tests/integration/` - Integration test directory structure (stubs only)
 - [ ] `tests/unit/env.test.ts` - Environment validation tests
 - [ ] `tests/integration/api.test.ts` - API endpoint tests
 - [ ] `e2e/auth.spec.ts` - Authentication flow tests
