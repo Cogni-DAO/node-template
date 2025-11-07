@@ -20,3 +20,4 @@ success_criteria:
       gte: 0.7
     - metric: documents-new-patterns
       gte: 0.7
+
