@@ -1,9 +1,21 @@
-// script/validate-doc-headers.ts
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-import fs from "node:fs";
-import path from "node:path";
+/**
+ * Module: `@scripts/validate-doc-headers`
+ * Purpose: Validates TSDoc headers in TypeScript files for required documentation fields and format compliance.
+ * Scope: Scans e2e, infra, scripts, src, tests directories for .ts/.tsx files; does not validate runtime behavior or generated files.
+ * Invariants: All required fields must be present and non-empty; Module field must match `@layer/path` pattern; side-effects must be from allowed list.
+ * Side-effects: IO
+ * Notes: Supports parenthetical descriptions in side-effects; enforces unified header format across source and test files.
+ * Links: docs/STYLE.md, scripts/validate-agents-md.mjs
+ * @internal
+ */
 
-import fg from "fast-glob";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
+
+import { glob } from "fast-glob";
 
 interface Violation {
   file: string;
@@ -15,13 +27,20 @@ interface Violation {
 
 const INCLUDE = process.argv.slice(2).length
   ? process.argv.slice(2)
-  : ["src/**/*.{ts,tsx}"];
+  : [
+      "e2e/**/*.{ts,tsx,js,mjs,cjs}",
+      "infra/**/*.{ts,tsx,js,mjs,cjs}",
+      "scripts/**/*.{ts,tsx,js,mjs,cjs}",
+      "src/**/*.{ts,tsx,js,mjs,cjs}",
+      "tests/**/*.{ts,tsx,js,mjs,cjs}",
+    ];
 const EXCLUDE = [
   "**/*.d.ts",
   "**/generated/**",
   "**/fixtures/**",
   "**/icons/**",
   "**/*.svg.tsx",
+  "docs/**",
 ];
 const MAX_HEADER_LINES = 40;
 const ALLOWED_SIDE_EFFECTS = [
@@ -32,6 +51,7 @@ const ALLOWED_SIDE_EFFECTS = [
   "process.env",
   "global",
 ];
+const MODULE_PATTERN = /^`@[-a-z0-9_/]+`$/;
 
 // Anchored label regexes inside a TSDoc block line prefix "*"
 const RX = {
@@ -66,7 +86,7 @@ function findHeader(
   let i = 0;
   // allow up to 2 SPDX lines
   let spdxCount = 0;
-  while (i < lines.length && lines[i] && SPDX_LINE.test(lines[i])) {
+  while (i < lines.length && lines[i] && SPDX_LINE.test(lines[i] ?? "")) {
     spdxCount++;
     i++;
     if (spdxCount > 2) break;
@@ -116,6 +136,7 @@ function validateHeader(file: string, header: string): Violation[] {
     return m?.[1]?.trim() ?? "";
   };
 
+  const moduleValue = requireLabel("module");
   const purpose = requireLabel("purpose");
   const scope = requireLabel("scope");
   const invariants = requireLabel("invariants");
@@ -125,6 +146,11 @@ function validateHeader(file: string, header: string): Violation[] {
   // Optional labels
   const notes = RX.notes.exec(header)?.[1]?.trim() ?? "";
   const visibility = RX.visibility.exec(header)?.[1] ?? "";
+
+  // Module: must match the expected format pattern
+  if (moduleValue && !MODULE_PATTERN.test(moduleValue)) {
+    v.push(err(file, "DH010", `module-format-invalid: "${moduleValue}"`));
+  }
 
   // Purpose: ≤ ~400 chars and at least one period
   if (purpose) {
@@ -199,18 +225,18 @@ function validateHeader(file: string, header: string): Violation[] {
 }
 
 async function main(): Promise<void> {
-  const files = await fg(INCLUDE, { ignore: EXCLUDE, absolute: true });
+  const files = await glob(INCLUDE, { ignore: EXCLUDE, absolute: true });
   const violations: Violation[] = [];
   for (const f of files) {
-    const src = fs.readFileSync(f, "utf8");
+    const src = readFileSync(f, "utf8");
     const header = findHeader(src);
     if (!header) {
       violations.push(
-        err(path.relative(process.cwd(), f), "DH001", "missing-header")
+        err(relative(process.cwd(), f), "DH001", "missing-header")
       );
       continue;
     }
-    const fileRel = path.relative(process.cwd(), f);
+    const fileRel = relative(process.cwd(), f);
     const vs = validateHeader(fileRel, header.header);
     violations.push(...vs);
   }

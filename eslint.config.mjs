@@ -379,6 +379,7 @@ export default [
         { type: "tests", pattern: "tests/**" },
         { type: "e2e", pattern: "e2e/**" },
         { type: "scripts", pattern: "scripts/**" },
+        { type: "docs", pattern: "docs/**" },
       ],
     },
   },
@@ -507,6 +508,15 @@ export default [
     files: ["src/**/font*.{ts,tsx}"],
     rules: {
       "no-inline-styles/no-inline-styles": "off",
+    },
+  },
+
+  // Documentation template overrides - disable TSDoc rules for example files
+  {
+    files: ["docs/templates/**/*.{ts,tsx}"],
+    rules: {
+      "tsdoc/syntax": "off",
+      "jsdoc/*": "off",
     },
   },
 
