@@ -14,7 +14,7 @@ Vendored UI primitive building blocks copied into the repository for local maint
 
 ## Pointers
 
-- [UI Style Guide](../../../../docs/STYLEGUIDE_UI.md)
+- [UI Implementation Guide](../../../../docs/UI_IMPLEMENTATION_GUIDE.md)
 - [Updating shadcn](../../../../docs/UPDATING_SHADCN.md)
 
 ## Boundaries

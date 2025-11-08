@@ -5,8 +5,8 @@
  * Scope: Provides typed container variants using CVA factories. Does not handle responsive logic beyond CSS.
  * Invariants: Forwards all props except className to div element; maintains ref forwarding; blocks className prop.
  * Side-effects: none
- * Notes: Uses CVA factory from @/styles/ui - no literal classes allowed.
- * Links: src/styles/ui.ts, docs/STYLEGUIDE_UI.md
+ * Notes: Uses CVA factory from \@/styles/ui - no literal classes allowed.
+ * Links: src/styles/ui.ts, docs/UI_IMPLEMENTATION_GUIDE.md
  * @public
  */
 
