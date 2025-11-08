@@ -19,7 +19,7 @@ All TypeScript/JavaScript files require TSDoc headers with SPDX license informat
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: @shared/env/server
+ * Module: `@shared/env/server`
  * Purpose: Server-side environment variable validation and type-safe configuration schema using Zod.
  * Scope: Validates process.env for server runtime; provides serverEnv object. Does not handle client-side env vars.
  * Invariants: All required env vars validated at startup; provides boolean flags for NODE_ENV variants; fails fast on invalid env.
