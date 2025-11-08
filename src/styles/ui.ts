@@ -6,7 +6,7 @@
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings; TypeScript enforces variant types.
  * Side-effects: none
  * Notes: Single source of truth for component styling; ESLint blocks literal className outside this file.
- * Links: docs/STYLEGUIDE_UI.md, src/styles/tailwind.preset.ts
+ * Links: docs/UI_IMPLEMENTATION_GUIDE.md, src/styles/tailwind.preset.ts
  * @public
  */
 
@@ -315,6 +315,11 @@ export const terminalDot = cva("h-3 w-3 rounded-full", {
 });
 
 /**
+ * Terminal header styling for window controls bar
+ */
+export const terminalHeader = cva("flex items-center justify-between p-4");
+
+/**
  * Terminal body styling for content area
  */
 export const terminalBody = cva("p-4 space-y-2");
@@ -325,6 +330,53 @@ export const terminalBody = cva("p-4 space-y-2");
 export const iconButton = cva(
   "text-muted-foreground hover:text-foreground transition-colors"
 );
+
+/**
+ * Row layout styling for flex containers with alignment and spacing variants
+ */
+export const row = cva("flex", {
+  variants: {
+    align: {
+      start: "items-start",
+      center: "items-center",
+      end: "items-end",
+    },
+    justify: {
+      start: "justify-start",
+      between: "justify-between",
+      end: "justify-end",
+    },
+    gap: {
+      none: "",
+      xs: "gap-2",
+      sm: "gap-3",
+      md: "gap-4",
+    },
+  } as const,
+  defaultVariants: {
+    align: "center",
+    justify: "start",
+    gap: "none",
+  },
+});
+
+/**
+ * Padding utility styling for consistent spacing variants
+ */
+export const pad = cva("", {
+  variants: {
+    p: {
+      none: "",
+      xs: "p-1",
+      sm: "p-2",
+      md: "p-4",
+      lg: "p-6",
+    },
+  } as const,
+  defaultVariants: {
+    p: "none",
+  },
+});
 
 /**
  * Icon sizing variants for consistent icon dimensions

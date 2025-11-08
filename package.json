@@ -68,6 +68,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-no-inline-styles": "^1.0.5",
     "eslint-plugin-no-literal-classnames": "^1.2.0",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-tailwindcss": "^3.18.2",
