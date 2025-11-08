@@ -15,6 +15,7 @@ import noLiteralClassnames from "eslint-plugin-no-literal-classnames";
 import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tsdoc from "eslint-plugin-tsdoc";
+import unicorn from "eslint-plugin-unicorn";
 import unused from "eslint-plugin-unused-imports";
 
 /** @type {import('eslint').Linter.Config[]} */
@@ -64,6 +65,7 @@ export default [
       "jsx-a11y": jsxA11y,
       "react-hooks": reactHooks,
       tsdoc: tsdoc,
+      unicorn: unicorn,
     },
     rules: {
       ...tsPlugin.configs.strict.rules,
@@ -451,6 +453,24 @@ export default [
         },
       ],
       // Kit uses CVA outputs only - no literal classes allowed
+    },
+  },
+
+  // Kit components must be PascalCase
+  {
+    files: ["src/components/kit/**/*.{ts,tsx}"],
+    rules: {
+      "unicorn/filename-case": ["error", { cases: { pascalCase: true } }],
+      "import/no-default-export": "error",
+    },
+  },
+
+  // Helpers not TSX may be camelCase
+  {
+    files: ["src/components/**/*.ts"],
+    ignores: ["**/*.tsx"],
+    rules: {
+      "unicorn/filename-case": ["error", { cases: { camelCase: true } }],
     },
   },
 
