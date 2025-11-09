@@ -41,7 +41,7 @@ export const colorKeys = [
 ] as const;
 
 // Radius token keys (semantic keys for CVA props - map to CSS vars)
-export const radiusKeys = ["sm", "md", "lg", "xl"] as const;
+export const radiusKeys = ["none", "sm", "md", "lg", "xl", "full"] as const;
 
 // Semantic spacing keys (for CVA props - map to spacing scale)
 export const spacingSemanticKeys = [
@@ -65,3 +65,15 @@ export type SizeKey = (typeof sizeKeys)[number];
 // Font family keys (match tailwind.css font definitions)
 export const fontFamilyKeys = ["sans", "mono", "display"] as const;
 export type FontFamilyKey = (typeof fontFamilyKeys)[number];
+
+// Font weight keys (common font weights)
+export const fontWeightKeys = ["regular", "medium", "bold"] as const;
+export type FontWeightKey = (typeof fontWeightKeys)[number];
+
+// Duration keys (animation/transition timing)
+export const durationKeys = ["fast", "normal", "slow"] as const;
+export type DurationKey = (typeof durationKeys)[number];
+
+// Z-index keys (layering hierarchy)
+export const zIndexKeys = ["base", "overlay", "modal"] as const;
+export type ZIndexKey = (typeof zIndexKeys)[number];
