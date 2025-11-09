@@ -190,7 +190,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ │ ├── auth/siwe.adapter.ts # nonce + session store
 [ ] │ │ ├── wallet/verify.adapter.ts # viem-based signature checks
 [ ] │ │ ├── apikey/drizzle.repo.ts # API keys persistence
-[ ] │ │ ├── credits/drizzle.ledger.ts # atomic credit/usage accounting
+[ ] │ │ ├── credits/drizzle.repo.ts # atomic credit/usage accounting
 [ ] │ │ ├── db/drizzle.client.ts # drizzle instance
 [ ] │ │ ├── telemetry/langfuse.adapter.ts # traces + spans
 [ ] │ │ ├── logging/pino.adapter.ts # log transport
@@ -230,6 +230,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │
 [x] ├── styles/
 [x] │ ├── tailwind.preset.ts
+[x] │ ├── tailwind.css
 [x] │ └── ui.ts
 [ ] │
 [ ] ├── types/
