@@ -65,7 +65,7 @@ pnpm typecheck
 
 ## Standards
 
-- CSS variables in app/globals.css are source of truth
+- CSS variables in src/styles/tailwind.css are source of truth
 - TypeScript exports provide names only, not values
 - Token names mirror CSS variable naming
 - CVA factories use design tokens exclusively - no arbitrary Tailwind values
@@ -80,7 +80,7 @@ pnpm typecheck
 
 - Update this file when **Exports** change
 - Bump **Last reviewed** date
-- Token names must match CSS variables in app/globals.css
+- Token names must match CSS variables in src/styles/tailwind.css
 - CVA factory changes require updating components that use them
 
 ## Notes

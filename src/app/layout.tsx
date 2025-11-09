@@ -12,7 +12,7 @@
  * @public
  */
 
-import "./globals.css";
+import "@/styles/tailwind.css";
 
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
