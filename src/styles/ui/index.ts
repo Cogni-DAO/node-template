@@ -43,12 +43,23 @@ export {
 export { button, modeToggle } from "./inputs";
 
 // Typography components
-export { heading, paragraph, prompt, prose, textAccent } from "./typography";
+export {
+  brandText,
+  heading,
+  paragraph,
+  prompt,
+  prose,
+  textAccent,
+} from "./typography";
 
 // Overlay components
 export {
+  dropdownContent,
+  dropdownMenuCheck,
+  dropdownMenuItem,
   icon,
   iconButton,
+  navLink,
   reveal,
   terminalBody,
   terminalDot,
