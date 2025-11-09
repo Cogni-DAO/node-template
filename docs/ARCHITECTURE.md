@@ -134,8 +134,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ └── server.stub.ts
 [ ] │
 [x] ├── app/ # delivery (Next UI + routes)
-[ ] │ ├── layout.tsx
-[ ] │ ├── page.tsx
+[x] │ ├── layout.tsx
+[x] │ ├── page.tsx
 [ ] │ ├── providers.tsx # QueryClient, Wagmi, RainbowKit
 [ ] │ ├── globals.css
 [ ] │ ├── (public)/
@@ -231,7 +231,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] ├── styles/
 [x] │ ├── tailwind.preset.ts
 [x] │ ├── tailwind.css
-[x] │ └── ui.ts
+[x] │ ├── theme.ts
+[x] │ └── ui/
 [ ] │
 [ ] ├── types/
 [ ] │ ├── index.d.ts
