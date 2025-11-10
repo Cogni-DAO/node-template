@@ -14,7 +14,7 @@
 
 import { cva, type VariantProps } from "class-variance-authority";
 
-import type { SizeKey, SpacingSemanticKey } from "@/styles/theme";
+import type { BasicSpacingKey, SizeKey } from "@/styles/theme";
 
 // Common variant patterns (DRY)
 const flexAlignVariants = {
@@ -31,21 +31,21 @@ const flexJustifyVariants = {
 } as const;
 
 const containerAllSizeVariants = {
-  sm: "max-w-3xl",
-  md: "max-w-5xl",
-  lg: "max-w-7xl",
-  xl: "max-w-screen-xl",
+  sm: "max-w-[var(--size-container-md)]",
+  md: "max-w-[var(--size-container-xl)]",
+  lg: "max-w-[var(--size-container-3xl)]",
+  xl: "max-w-[var(--size-container-screen)]",
   full: "max-w-full",
 } as const;
 
 const spacingVariants = {
   none: "",
-  xs: "py-2",
-  sm: "py-8",
-  md: "py-12",
-  lg: "py-16",
-  xl: "py-20",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "py-[var(--spacing-sm)]",
+  sm: "py-[var(--spacing-xl)]",
+  md: "py-[var(--spacing-3xl)]",
+  lg: "py-[var(--spacing-4xl)]",
+  xl: "py-[var(--spacing-5xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 const gapVariants = {
   none: "",
@@ -54,7 +54,7 @@ const gapVariants = {
   md: "gap-[var(--spacing-lg)] lg:gap-[var(--spacing-xl)]",
   lg: "gap-[var(--spacing-xl)] lg:gap-[var(--size-icon-xl)]",
   xl: "gap-[var(--size-icon-xl)] lg:gap-[var(--size-icon-2xl)]",
-} satisfies Record<SpacingSemanticKey, string>;
+} satisfies Record<BasicSpacingKey, string>;
 
 const paddingVariants = {
   none: "",
@@ -63,31 +63,34 @@ const paddingVariants = {
   md: "p-[var(--spacing-md)]",
   lg: "p-[var(--spacing-lg)]",
   xl: "p-[var(--spacing-xl)]",
-} satisfies Record<SpacingSemanticKey, string>;
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Page shell styling for full-page body wrapper
  */
 export const pageShell = cva(
-  "bg-background text-foreground min-h-[100dvh] antialiased"
+  "bg-background text-foreground min-h-[var(--height-screen-dvh)] antialiased"
 );
 
 const pageContainerMaxWidthVariants = {
-  sm: "max-w-2xl",
-  md: "max-w-4xl",
-  lg: "max-w-6xl",
-  xl: "max-w-7xl",
+  sm: "max-w-[var(--size-container-sm)]",
+  md: "max-w-[var(--size-container-lg)]",
+  lg: "max-w-[var(--size-container-2xl)]",
+  xl: "max-w-[var(--size-container-3xl)]",
 } satisfies Record<SizeKey, string>;
 
 /**
  * Page container styling for centered content with responsive max-width
  */
-export const pageContainer = cva("mx-auto w-full px-4 sm:px-6 lg:px-8", {
-  variants: {
-    maxWidth: pageContainerMaxWidthVariants,
-  },
-  defaultVariants: { maxWidth: "lg" },
-});
+export const pageContainer = cva(
+  "mx-auto w-full px-[var(--spacing-md)] sm:px-[var(--spacing-lg-plus)] lg:px-[var(--spacing-xl)]",
+  {
+    variants: {
+      maxWidth: pageContainerMaxWidthVariants,
+    },
+    defaultVariants: { maxWidth: "lg" },
+  }
+);
 
 const twoColumnReverseVariants = {
   false: "",
@@ -98,7 +101,7 @@ const twoColumnReverseVariants = {
  * Two-column responsive layout with optional reverse flow
  */
 export const twoColumn = cva(
-  "grid gap-[var(--spacing-xl)] lg:grid-cols-2 lg:items-center",
+  "grid gap-[var(--spacing-xl)] lg:grid-cols-[var(--grid-cols-2)] lg:items-center",
   {
     variants: {
       reverse: twoColumnReverseVariants,
@@ -145,10 +148,10 @@ export const section = cva("w-full", {
 
 const gridColsVariants = {
   "1": "",
-  "2": "grid lg:grid-cols-2",
-  "3": "grid lg:grid-cols-3",
-  "4": "grid lg:grid-cols-4",
-  "12": "grid lg:grid-cols-12",
+  "2": "grid lg:grid-cols-[var(--grid-cols-2)]",
+  "3": "grid lg:grid-cols-[var(--grid-cols-3)]",
+  "4": "grid lg:grid-cols-[var(--grid-cols-4)]",
+  "12": "grid lg:grid-cols-[var(--grid-cols-12)]",
 } as const;
 
 const gridAlignVariants = {
@@ -178,7 +181,7 @@ const rowGapVariants = {
   md: "gap-[var(--spacing-md)]",
   lg: "gap-[var(--spacing-lg)]",
   xl: "gap-[var(--spacing-xl)]",
-} satisfies Record<SpacingSemanticKey, string>;
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Row layout styling for flex containers with alignment and spacing variants
@@ -221,12 +224,12 @@ const flexWrapVariants = {
 // Flex-specific spacing (margin-top instead of padding)
 const flexSpacingVariants = {
   none: "",
-  xs: "mt-2",
-  sm: "mt-4",
-  md: "mt-6",
-  lg: "mt-8",
-  xl: "mt-10",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "mt-[var(--spacing-sm)]",
+  sm: "mt-[var(--spacing-md)]",
+  md: "mt-[var(--spacing-lg-plus)]",
+  lg: "mt-[var(--spacing-xl)]",
+  xl: "mt-[var(--spacing-2xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Flex container styling with alignment and spacing variants
@@ -251,12 +254,12 @@ export const flex = cva("flex", {
 // Header-specific padding variants (y-axis only)
 const headerPaddingVariants = {
   none: "",
-  xs: "py-1",
-  sm: "py-2",
-  md: "py-4",
-  lg: "py-6",
-  xl: "py-8",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "py-[var(--spacing-2xs)]",
+  sm: "py-[var(--spacing-sm)]",
+  md: "py-[var(--spacing-md)]",
+  lg: "py-[var(--spacing-lg-plus)]",
+  xl: "py-[var(--spacing-xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Header styling for site header with border, background, and padding
