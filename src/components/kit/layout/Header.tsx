@@ -55,11 +55,11 @@ export function Header(): ReactElement {
               username="cogni-DAO"
               repo="cogni-template"
               size="lg"
-              variant="outline"
+              variant="default"
               showGithubIcon={true}
               showStarIcon={true}
               initialStars={0}
-              targetStars={1729}
+              targetStars={172900}
               autoAnimate={true}
               animationDuration={10}
             />

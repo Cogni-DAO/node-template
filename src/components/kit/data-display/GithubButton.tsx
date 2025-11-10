@@ -26,7 +26,7 @@ export interface GithubButtonProps {
   /** Button size variant */
   size?: "sm" | "default" | "lg";
   /** Button style variant */
-  variant?: "default" | "outline";
+  variant?: "default" | "outline" | "inverse";
   /** Whether to show GitHub icon */
   showGithubIcon?: boolean;
   /** Whether to show star icon */
@@ -48,7 +48,7 @@ export function GithubButton({
   repo,
   roundStars = true,
   size = "default",
-  variant = "outline",
+  variant = "default",
   showGithubIcon = true,
   showStarIcon = true,
   label,
