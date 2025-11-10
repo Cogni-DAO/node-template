@@ -156,12 +156,19 @@
   --spacing-xl: 2rem;
 
   /* Extended spacing scale */
-  --spacing-2xs: 0.125rem; /* 2px */
+  --spacing-2xs: 0.125rem; /* 2px - py-1 */
+  --spacing-xs-plus: 0.5rem; /* 8px - mt-2 */
   --spacing-md-plus: 0.75rem; /* 12px - mt-3 */
+  --spacing-lg-plus: 1.5rem; /* 24px - py-6, mt-6 */
+  --spacing-xl-plus: 1.25rem; /* 20px - mt-5 */
   --spacing-2xl: 2.5rem; /* 40px - mt-10 */
+  --spacing-2xl-plus: 2rem; /* 32px - mt-8 */
   --spacing-3xl: 3rem; /* 48px - py-12 */
   --spacing-4xl: 4rem; /* 64px - py-16 */
   --spacing-5xl: 5rem; /* 80px - py-20 */
+
+  /* Positioning tokens */
+  --position-sm: 1rem; /* 16px - top-4, left-4 */
 
   /* Typography scale */
   --text-xs: 0.75rem; /* 12px */
@@ -172,6 +179,8 @@
   --text-2xl: 1.5rem; /* 24px */
   --text-3xl: 1.875rem; /* 30px */
   --text-4xl: 2.25rem; /* 36px */
+  --text-5xl: 3rem; /* 48px */
+  --text-6xl: 3.75rem; /* 60px */
 
   /* Container widths */
   --size-container-sm: 42rem; /* max-w-2xl */
@@ -214,6 +223,36 @@
   --prose-base: 1rem;
   --prose-lg: 1.125rem;
   --prose-xl: 1.25rem;
+
+  /* Zero values for structural utilities */
+  --flex-none: 0;
+  --grow-none: 0;
+  --shrink-none: 0;
+
+  /* Color system */
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+
+  /* Alpha opacity variants for common percentages */
+  --alpha-20: 0.2;
+  --alpha-30: 0.3;
+  --alpha-40: 0.4;
+  --alpha-50: 0.5;
+  --alpha-60: 0.6;
+  --alpha-80: 0.8;
+  --alpha-90: 0.9;
+
+  /* Ring/border widths */
+  --ring-width-sm: 3px;
+
+  /* Grid system */
+  --grid-cols-2: repeat(2, minmax(0, 1fr));
+  --grid-cols-3: repeat(3, minmax(0, 1fr));
+  --grid-cols-4: repeat(4, minmax(0, 1fr));
+  --grid-cols-12: repeat(12, minmax(0, 1fr));
+
+  /* Viewport dimensions */
+  --height-screen-dvh: 100dvh;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

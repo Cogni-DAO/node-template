@@ -20,12 +20,15 @@ const ALLOWED_VAR =
 const ALLOWED_SEMANTIC_COLOR =
   /^(bg|text|border|from|to|via|fill|stroke|ring|ring-offset)-(background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|chart-[1-5])(-foreground)?$/;
 
+// ALLOWED_CHART_TOKENS: Chart color tokens as standalone values
+const ALLOWED_CHART_TOKENS = /^chart-[1-5]$/;
+
 // ALLOWED_SEMANTIC_SIZE: Semantic size tokens for sizing utilities
 const ALLOWED_SEMANTIC_SIZE =
   /^(h|w|gap|rounded|rounded-t|rounded-r|rounded-b|rounded-l|rounded-tl|rounded-tr|rounded-br|rounded-bl)-(none|sm|md|lg|xl|full)$/;
 
-// ALLOWED_STRUCTURAL: Structural selectors that should be allowed
-const ALLOWED_STRUCTURAL = /^has-\[>svg\]$/;
+// ALLOWED_STRUCTURAL: Structural selectors and utilities that should be allowed
+const ALLOWED_STRUCTURAL = /^(has-\[>svg\]|text-transparent)$/;
 
 // RAW_COLOR_SUFFIX: named palette or basic colors => must be tokenized
 const RAW_COLOR_SUFFIX =
@@ -58,6 +61,7 @@ function checkClassToken(token) {
   if (ALLOWED_SEMANTIC_COLOR.test(t)) return null;
   if (ALLOWED_SEMANTIC_SIZE.test(t)) return null;
   if (ALLOWED_STRUCTURAL.test(t)) return null;
+  if (ALLOWED_CHART_TOKENS.test(t)) return null;
 
   // Split into prefix + suffix (first dash only)
   const match = t.match(/^([a-z0-9-]+)-(.*)$/i);

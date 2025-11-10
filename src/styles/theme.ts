@@ -43,17 +43,24 @@ export const colorKeys = [
 // Radius token keys (semantic keys for CVA props - map to CSS vars)
 export const radiusKeys = ["none", "sm", "md", "lg", "xl", "full"] as const;
 
+// Basic spacing keys (common subset used by most components)
+export const basicSpacingKeys = ["none", "xs", "sm", "md", "lg", "xl"] as const;
+
 // Semantic spacing keys (for CVA props - map to spacing scale)
 export const spacingSemanticKeys = [
   "none",
   "2xs",
   "xs",
+  "xs-plus",
   "sm",
   "md",
   "md-plus",
   "lg",
+  "lg-plus",
   "xl",
+  "xl-plus",
   "2xl",
+  "2xl-plus",
   "3xl",
   "4xl",
   "5xl",
@@ -65,6 +72,7 @@ export const sizeKeys = ["sm", "md", "lg", "xl"] as const;
 // Type definitions
 export type ColorKey = (typeof colorKeys)[number];
 export type RadiusKey = (typeof radiusKeys)[number];
+export type BasicSpacingKey = (typeof basicSpacingKeys)[number];
 export type SpacingSemanticKey = (typeof spacingSemanticKeys)[number];
 export type SizeKey = (typeof sizeKeys)[number];
 
@@ -114,6 +122,8 @@ export const textSizeKeys = [
   "2xl",
   "3xl",
   "4xl",
+  "5xl",
+  "6xl",
 ] as const;
 export type TextSizeKey = (typeof textSizeKeys)[number];
 
