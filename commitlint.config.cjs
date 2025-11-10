@@ -33,6 +33,8 @@ module.exports = {
             "comprehensive",
             "final",
             "production ready",
+            "robust",
+            "full",
           ];
           const subject = parsed.subject || "";
 
