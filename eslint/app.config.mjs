@@ -246,14 +246,12 @@ export default [
           default: "disallow",
           rules: [
             {
-              target: [
-                "ports",
-                "adapters/server",
-                "shared",
-                "contracts",
-                "components",
-              ],
+              target: ["ports", "adapters/server", "shared", "components"],
               allow: ["**/index.ts", "**/index.tsx"],
+            },
+            {
+              target: ["contracts"],
+              allow: ["**/*.contract.ts"],
             },
             {
               target: ["styles"],
