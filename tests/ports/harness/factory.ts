@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/contract/harness/factory`
- * Purpose: Verifies contract test harness creation and infrastructure setup under isolated test conditions.
+ * Module: `@tests/ports/harness/factory`
+ * Purpose: Verifies port test harness creation and infrastructure setup under isolated test conditions.
  * Scope: Covers test environment creation, resource management, and cleanup. Does NOT mock external services or ports.
  * Invariants: Each harness gets fresh infrastructure; resources cleaned up on teardown; real service dependencies maintained.
  * Side-effects: IO
- * Notes: Creates temporary directories, HTTP servers, and process spawning for contract test isolation.
- * Links: tests/contract/ports/
+ * Notes: Creates temporary directories, HTTP servers, and process spawning for port test isolation.
+ * Links: tests/ports/
  * @public
  */
 

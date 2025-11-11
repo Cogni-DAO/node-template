@@ -1,16 +1,16 @@
-# tests/contract · AGENTS.md
+# tests/ports · AGENTS.md
 
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-11
 - **Status:** draft
 
 ## Purpose
 
-Reusable contract tests that verify port implementations are swappable.
+Port behavior tests that verify implementations are swappable and conform to expected behavior.
 
 ## Pointers
 
@@ -29,11 +29,11 @@ Reusable contract tests that verify port implementations are swappable.
 
 ## Public Surface
 
-- **Exports:** contract test functions for adapter validation
+- **Exports:** test functions for port validation
 - **Routes:** none
 - **CLI:** imported by integration tests
 - **Env/Config keys:** none
-- **Files considered API:** `ports/*.contract.ts`
+- **Files considered API:** `*.port.spec.ts`
 
 ## Responsibilities
 
@@ -43,14 +43,15 @@ Reusable contract tests that verify port implementations are swappable.
 ## Usage
 
 ```bash
-pnpm test tests/contract
-pnpm test tests/contract/ports
+pnpm test tests/ports
+pnpm test tests/ports/ai.port.spec.ts
 ```
 
 ## Standards
 
-- Every port must have a contract test suite
-- Adapters run these contracts in integration tests
+- Every port must have a behavior test suite
+- Adapters run these tests in integration tests
+- Port tests map 1:1 to src/ports/\*\* interfaces
 
 ## Dependencies
 
@@ -59,11 +60,11 @@ pnpm test tests/contract/ports
 
 ## Change Protocol
 
-- Update contract tests when port interfaces change
+- Update port tests when port interfaces change
 - Bump **Last reviewed** date
-- Ensure all adapters pass updated contract suites
+- Ensure all adapters pass updated test suites
 
 ## Notes
 
-- Contract tests define the behavioral specification for ports
-- Keep contract tests independent of specific adapter implementations
+- Port behavior tests define the specification for implementations
+- Keep tests independent of specific adapter implementations
