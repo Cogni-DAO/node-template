@@ -12,6 +12,8 @@
  * @public
  */
 
+export { CtaSection } from "./CtaSection";
+export { FeaturesGrid } from "./FeaturesGrid";
 export { Hero } from "./Hero";
 export {
   featureContent,

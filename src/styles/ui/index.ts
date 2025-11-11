@@ -52,6 +52,9 @@ export {
   textAccent,
 } from "./typography";
 
+// Code components
+export { codeToken, heroActionContainer, heroCodeBlock } from "./code";
+
 // Overlay components
 export {
   dropdownContent,
