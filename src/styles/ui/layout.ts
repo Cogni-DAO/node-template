@@ -14,7 +14,7 @@
 
 import { cva, type VariantProps } from "class-variance-authority";
 
-import type { SizeKey, SpacingSemanticKey } from "@/styles/theme";
+import type { BasicSpacingKey, SizeKey } from "@/styles/theme";
 
 // Common variant patterns (DRY)
 const flexAlignVariants = {
@@ -31,63 +31,66 @@ const flexJustifyVariants = {
 } as const;
 
 const containerAllSizeVariants = {
-  sm: "max-w-3xl",
-  md: "max-w-5xl",
-  lg: "max-w-7xl",
-  xl: "max-w-screen-xl",
+  sm: "max-w-[var(--size-container-md)]",
+  md: "max-w-[var(--size-container-xl)]",
+  lg: "max-w-[var(--size-container-3xl)]",
+  xl: "max-w-[var(--size-container-screen)]",
   full: "max-w-full",
 } as const;
 
 const spacingVariants = {
   none: "",
-  xs: "py-2",
-  sm: "py-8",
-  md: "py-12",
-  lg: "py-16",
-  xl: "py-20",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "py-[var(--spacing-sm)]",
+  sm: "py-[var(--spacing-xl)]",
+  md: "py-[var(--spacing-3xl)]",
+  lg: "py-[var(--spacing-4xl)]",
+  xl: "py-[var(--spacing-5xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 const gapVariants = {
   none: "",
-  xs: "gap-1",
-  sm: "gap-4 lg:gap-6",
-  md: "gap-6 lg:gap-8",
-  lg: "gap-8 lg:gap-12",
-  xl: "gap-12 lg:gap-16",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "gap-[var(--spacing-xs)]",
+  sm: "gap-[var(--spacing-xl)] lg:gap-[var(--spacing-lg)]",
+  md: "gap-[var(--spacing-lg)] lg:gap-[var(--spacing-xl)]",
+  lg: "gap-[var(--spacing-xl)] lg:gap-[var(--size-icon-xl)]",
+  xl: "gap-[var(--size-icon-xl)] lg:gap-[var(--size-icon-2xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 const paddingVariants = {
   none: "",
-  xs: "p-1",
-  sm: "p-2",
-  md: "p-4",
-  lg: "p-6",
-  xl: "p-8",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "p-[var(--spacing-xs)]",
+  sm: "p-[var(--spacing-sm)]",
+  md: "p-[var(--spacing-md)]",
+  lg: "p-[var(--spacing-lg)]",
+  xl: "p-[var(--spacing-xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Page shell styling for full-page body wrapper
  */
 export const pageShell = cva(
-  "bg-background text-foreground min-h-[100dvh] antialiased"
+  "bg-background text-foreground min-h-[var(--height-screen-dvh)] antialiased"
 );
 
 const pageContainerMaxWidthVariants = {
-  sm: "max-w-2xl",
-  md: "max-w-4xl",
-  lg: "max-w-6xl",
-  xl: "max-w-7xl",
+  sm: "max-w-[var(--size-container-sm)]",
+  md: "max-w-[var(--size-container-lg)]",
+  lg: "max-w-[var(--size-container-2xl)]",
+  xl: "max-w-[var(--size-container-3xl)]",
 } satisfies Record<SizeKey, string>;
 
 /**
  * Page container styling for centered content with responsive max-width
  */
-export const pageContainer = cva("mx-auto w-full px-4 sm:px-6 lg:px-8", {
-  variants: {
-    maxWidth: pageContainerMaxWidthVariants,
-  },
-  defaultVariants: { maxWidth: "lg" },
-});
+export const pageContainer = cva(
+  "mx-auto w-full px-[var(--spacing-md)] sm:px-[var(--spacing-lg-plus)] lg:px-[var(--spacing-xl)]",
+  {
+    variants: {
+      maxWidth: pageContainerMaxWidthVariants,
+    },
+    defaultVariants: { maxWidth: "lg" },
+  }
+);
 
 const twoColumnReverseVariants = {
   false: "",
@@ -97,26 +100,32 @@ const twoColumnReverseVariants = {
 /**
  * Two-column responsive layout with optional reverse flow
  */
-export const twoColumn = cva("grid gap-8 lg:grid-cols-2 lg:items-center", {
-  variants: {
-    reverse: twoColumnReverseVariants,
-  },
-  defaultVariants: { reverse: false },
-});
+export const twoColumn = cva(
+  "grid gap-[var(--spacing-xl)] lg:grid-cols-[var(--grid-cols-2)] lg:items-center",
+  {
+    variants: {
+      reverse: twoColumnReverseVariants,
+    },
+    defaultVariants: { reverse: false },
+  }
+);
 
 /**
  * Container styling for responsive layout wrappers with width and padding variants
  */
-export const container = cva("mx-auto px-4 sm:px-6 lg:px-8", {
-  variants: {
-    size: containerAllSizeVariants,
-    spacing: spacingVariants,
-  },
-  defaultVariants: {
-    size: "lg",
-    spacing: "none",
-  },
-});
+export const container = cva(
+  "mx-auto px-[var(--spacing-md)] sm:px-[var(--spacing-lg)] lg:px-[var(--spacing-xl)]",
+  {
+    variants: {
+      size: containerAllSizeVariants,
+      spacing: spacingVariants,
+    },
+    defaultVariants: {
+      size: "lg",
+      spacing: "none",
+    },
+  }
+);
 
 const sectionSurfaceVariants = {
   default: "",
@@ -139,10 +148,10 @@ export const section = cva("w-full", {
 
 const gridColsVariants = {
   "1": "",
-  "2": "grid lg:grid-cols-2",
-  "3": "grid lg:grid-cols-3",
-  "4": "grid lg:grid-cols-4",
-  "12": "grid lg:grid-cols-12",
+  "2": "grid lg:grid-cols-[var(--grid-cols-2)]",
+  "3": "grid lg:grid-cols-[var(--grid-cols-3)]",
+  "4": "grid lg:grid-cols-[var(--grid-cols-4)]",
+  "12": "grid lg:grid-cols-[var(--grid-cols-12)]",
 } as const;
 
 const gridAlignVariants = {
@@ -167,12 +176,12 @@ export const grid = cva("", {
 // Row-specific gap variants (smaller scale than grid)
 const rowGapVariants = {
   none: "",
-  xs: "gap-2",
-  sm: "gap-3",
-  md: "gap-4",
-  lg: "gap-6",
-  xl: "gap-8",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "gap-[var(--spacing-sm)]",
+  sm: "gap-[var(--size-dot)]",
+  md: "gap-[var(--spacing-md)]",
+  lg: "gap-[var(--spacing-lg)]",
+  xl: "gap-[var(--spacing-xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Row layout styling for flex containers with alignment and spacing variants
@@ -215,12 +224,12 @@ const flexWrapVariants = {
 // Flex-specific spacing (margin-top instead of padding)
 const flexSpacingVariants = {
   none: "",
-  xs: "mt-2",
-  sm: "mt-4",
-  md: "mt-6",
-  lg: "mt-8",
-  xl: "mt-10",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "mt-[var(--spacing-sm)]",
+  sm: "mt-[var(--spacing-md)]",
+  md: "mt-[var(--spacing-lg-plus)]",
+  lg: "mt-[var(--spacing-xl)]",
+  xl: "mt-[var(--spacing-2xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Flex container styling with alignment and spacing variants
@@ -245,12 +254,12 @@ export const flex = cva("flex", {
 // Header-specific padding variants (y-axis only)
 const headerPaddingVariants = {
   none: "",
-  xs: "py-1",
-  sm: "py-2",
-  md: "py-4",
-  lg: "py-6",
-  xl: "py-8",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "py-[var(--spacing-2xs)]",
+  sm: "py-[var(--spacing-sm)]",
+  md: "py-[var(--spacing-md)]",
+  lg: "py-[var(--spacing-lg-plus)]",
+  xl: "py-[var(--spacing-xl)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Header styling for site header with border, background, and padding

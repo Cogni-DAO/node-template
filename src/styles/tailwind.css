@@ -62,6 +62,7 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+    --chart-6: 10 50% 50%;
     --radius: 0.5rem;
   }
 
@@ -85,11 +86,19 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
+    --chart-1: 276 100% 70%; /* teal – property / "rules:" */
+    --chart-2: 160 40% 60%;
     --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --chart-4: 280 80% 70%;
+    --chart-6: 220 100% 65%;
+    /*--chart-5: 340 75% 55%;
+    /* updated chart colors based on editor token colors */
+
+    /*--chart-2: 246 75% 78%; /* blue-violet – operators */
+    --chart-3: 32 100% 95%; /* magenta – extra accent */
+    /*--chart-4: 276 25% 59%; /* purple – delimiters like "{" */
+    --chart-5: 20 90% 80%; /* peach/orange – hero/action strings */
+    /* teal – property / "rules:" */
   }
 }
 
@@ -118,6 +127,153 @@
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
+  --color-chart-6: hsl(var(--chart-6));
+
+  /* Status colors */
+  --color-danger: hsl(0 84.2% 60.2%);
+  --color-warning: hsl(43 74% 66%);
+  --color-success: hsl(142 71% 45%);
+
+  /* Icon sizes */
+  --size-icon-sm: 1rem;
+  --size-icon-md: 1.25rem;
+  --size-icon-lg: 1.5rem;
+  --size-icon-xl: 2rem;
+  --size-icon-2xl: 3rem;
+  --size-icon-3xl: 4rem;
+  --size-icon-4xl: 5rem;
+
+  /* Component widths */
+  --size-dropdown-sm: 8rem;
+  --size-dropdown-md: 9rem;
+  --size-dropdown-lg: 10rem;
+  --size-dropdown-xl: 12rem;
+
+  /* Terminal dots */
+  --size-dot: 0.75rem;
+
+  /* Spacing scale */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Extended spacing scale */
+  --spacing-2xs: 0.125rem; /* 2px - py-1 */
+  --spacing-xs-plus: 0.5rem; /* 8px - mt-2 */
+  --spacing-md-plus: 0.75rem; /* 12px - mt-3 */
+  --spacing-lg-plus: 1.5rem; /* 24px - py-6, mt-6 */
+  --spacing-xl-plus: 1.25rem; /* 20px - mt-5 */
+  --spacing-2xl: 2.5rem; /* 40px - mt-10 */
+  --spacing-2xl-plus: 2rem; /* 32px - mt-8 */
+  --spacing-3xl: 3rem; /* 48px - py-12 */
+  --spacing-4xl: 4rem; /* 64px - py-16 */
+  --spacing-5xl: 5rem; /* 80px - py-20 */
+
+  /* Positioning tokens */
+  --position-sm: 1rem; /* 16px - top-4, left-4 */
+
+  /* Hero code syntax tokens */
+  --spacing-hero-xs: 0.3125rem; /* 5px - syntax element spacing */
+  --spacing-hero-xl: 1.25rem; /* 20px - syntax element spacing */
+  --spacing-rainbow: 8.4375rem; /* 135px - rainbow action words spacing */
+  --width-action-words: 11.6875rem; /* 187px - action words container width (10% wider) */
+
+  /* Typography scale */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+  --text-3xl: 1.875rem; /* 30px */
+  --text-4xl: 2.25rem; /* 36px */
+  --text-5xl: 3rem; /* 48px */
+  --text-6xl: 3.75rem; /* 60px */
+
+  /* Container widths */
+  --size-container-sm: 42rem; /* max-w-2xl */
+  --size-container-md: 48rem; /* max-w-3xl */
+  --size-container-lg: 56rem; /* max-w-4xl */
+  --size-container-xl: 64rem; /* max-w-5xl */
+  --size-container-2xl: 72rem; /* max-w-6xl */
+  --size-container-3xl: 80rem; /* max-w-7xl */
+  --size-container-screen: 1280px; /* max-w-screen-xl */
+
+  /* Shadow system */
+  --shadow-xs: 0 1px rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+
+  /* Animation system */
+  --opacity-hidden: 0;
+  --opacity-half: 0.5;
+  --opacity-visible: 1;
+  --opacity-90: 0.9;
+  --opacity-80: 0.8;
+  --opacity-50: 0.5;
+  --opacity-30: 0.3;
+  --rotation-none: 0deg;
+  --rotation-quarter: 90deg;
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --delay-fast: 150ms;
+  --delay-normal: 300ms;
+  --delay-slow: 450ms;
+
+  /* Typography utilities */
+  --underline-offset: 4px;
+  --measure: 48ch; /* Typography measure for readable line lengths */
+
+  /* Prose system */
+  --prose-xs: 0.75rem;
+  --prose-sm: 0.875rem;
+  --prose-base: 1rem;
+  --prose-lg: 1.125rem;
+  --prose-xl: 1.25rem;
+
+  /* Zero values for structural utilities */
+  --flex-none: 0;
+  --grow-none: 0;
+  --shrink-none: 0;
+
+  /* Color system */
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+
+  /* Alpha opacity variants for common percentages */
+  --alpha-20: 0.2;
+  --alpha-30: 0.3;
+  --alpha-40: 0.4;
+  --alpha-50: 0.5;
+  --alpha-60: 0.6;
+  --alpha-80: 0.8;
+  --alpha-90: 0.9;
+
+  /* Ring/border widths */
+  --ring-width-sm: 3px;
+
+  /* Ring offset width scale */
+  --ring-offset-w-sm: 2px;
+  --ring-offset-w-md: 4px;
+
+  /* Grid system */
+  --grid-cols-2: repeat(2, minmax(0, 1fr));
+  --grid-cols-3: repeat(3, minmax(0, 1fr));
+  --grid-cols-4: repeat(4, minmax(0, 1fr));
+  --grid-cols-12: repeat(12, minmax(0, 1fr));
+
+  /* Viewport dimensions */
+  --height-screen-dvh: 100dvh;
+
+  /* Z-index layers (align with theme.ts zIndexKeys) */
+  --z-base: 0;
+  --z-overlay: 50;
+  --z-modal: 100;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

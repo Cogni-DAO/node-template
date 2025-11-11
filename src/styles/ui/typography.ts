@@ -15,10 +15,10 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
 import type {
+  BasicSpacingKey,
   FontFamilyKey,
   FontWeightKey,
   SizeKey,
-  SpacingSemanticKey,
 } from "@/styles/theme";
 
 const headingLevelVariants = {
@@ -85,12 +85,12 @@ const paragraphFamilyVariants = {
 
 const paragraphSpacingVariants = {
   none: "",
-  xs: "mt-2",
-  sm: "mt-3",
-  md: "mt-3",
-  lg: "mt-5",
-  xl: "mt-8",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "mt-[var(--spacing-xs-plus)]",
+  sm: "mt-[var(--spacing-md-plus)]",
+  md: "mt-[var(--spacing-md-plus)]",
+  lg: "mt-[var(--spacing-xl-plus)]",
+  xl: "mt-[var(--spacing-2xl-plus)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Paragraph styling with size and tone variants
@@ -138,7 +138,7 @@ export const prose = cva("prose", {
 
 const promptToneVariants = {
   default: "text-foreground",
-  success: "text-green-400",
+  success: "text-success",
 } as const;
 
 const promptFamilyVariants = {
@@ -164,7 +164,7 @@ export const prompt = cva("", {
 /**
  * Accent text styling for highlighted spans
  */
-export const textAccent = cva("block text-orange-500");
+export const textAccent = cva("block text-warning");
 
 const brandTextSizeVariants = {
   sm: "text-base font-semibold",
@@ -177,6 +177,8 @@ const brandTextToneVariants = {
   default: "text-foreground",
   subdued: "text-muted-foreground",
   invert: "text-background",
+  gradient:
+    "bg-gradient-to-r from-[var(--color-chart-2)] via-[var(--color-chart-1)] to-[var(--color-chart-4)] bg-clip-text text-transparent",
 } as const;
 
 /**
