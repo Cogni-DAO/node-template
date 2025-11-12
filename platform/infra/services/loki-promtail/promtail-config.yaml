@@ -38,7 +38,7 @@ scrape_configs:
       - source_labels: ["__meta_docker_container_label_maintainer"]
         target_label: "maintainer"
     pipeline_stages:
-      - docker # parses docker JSON log line into labels/message
+      - docker: {} # parses docker JSON log line into labels/message
       - timestamp:
           source: time
           format: RFC3339Nano
