@@ -1,0 +1,5 @@
+#cloud-config
+runcmd:
+  - apt-get update
+  - apt-get install -y docker.io
+  - docker run -d --restart=always -p 80:3000 ghcr.io/cogni-dao/cogni-template:v1
