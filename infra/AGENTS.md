@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Infrastructure as Code including Docker Compose, LiteLLM config, Langfuse, and Terraform/OpenTofu for Akash deployment.
+Infrastructure as Code including Docker Compose, LiteLLM config, Langfuse, and OpenTofu for Spheron deployment (managed Akash layer with crypto payments).
 
 ## Pointers
 
@@ -52,7 +52,7 @@ Minimal local commands:
 
 ```bash
 docker-compose up
-terraform plan
+tofu plan
 ```
 
 ## Standards
@@ -63,7 +63,7 @@ terraform plan
 ## Dependencies
 
 - **Internal:** none
-- **External:** Docker, Terraform/OpenTofu, cloud providers
+- **External:** Docker, OpenTofu/Terraform, Spheron/Akash providers
 
 ## Change Protocol
 

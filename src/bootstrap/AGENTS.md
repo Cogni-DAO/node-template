@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Composition root for dependency injection, environment configuration, and application bootstrap. Exports container/getPort() for wiring adapters to ports.
+System setup script and application bootstrap. Contains the system dependency installation script and dependency injection container for application runtime.
 
 ## Pointers
 
@@ -39,9 +39,9 @@ Composition root for dependency injection, environment configuration, and applic
 
 - **Exports:** container.ts, config.ts
 - **Routes (if any):** none
-- **CLI (if any):** none
+- **CLI (if any):** bootstrap script for system setup
 - **Env/Config keys:** All environment variables via Zod validation
-- **Files considered API:** container.ts, config.ts
+- **Files considered API:** container.ts, config.ts, bootstrap
 
 ## Ports (optional)
 
@@ -51,12 +51,18 @@ Composition root for dependency injection, environment configuration, and applic
 
 ## Responsibilities
 
-- This directory **does**: Wire adapters to ports, validate environment variables, provide DI container
+- This directory **does**: Install system dependencies, wire adapters to ports, validate environment variables, provide DI container
 - This directory **does not**: Contain business logic, UI components, or feature-specific code
 
 ## Usage
 
-Minimal local commands:
+System setup:
+
+```bash
+src/bootstrap/bootstrap  # install all system dependencies
+```
+
+Development validation:
 
 ```bash
 pnpm typecheck
