@@ -3,8 +3,8 @@
 
 /**
  * Module: `@features/ai/mappers`
- * Purpose: DTO mapping for AI feature - isolates core types from external layers
- * Scope: Maps between DTOs and core domain types with validation
+ * Purpose: DTO mapping for AI feature - isolates core types from external layers.
+ * Scope: Maps between DTOs and core domain types with validation. Does not handle external API calls or database operations.
  * Invariants: Pure functions, no side effects, proper error handling
  * Side-effects: none
  * Notes: Keeps core types isolated while enabling proper DTO translation

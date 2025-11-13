@@ -3,8 +3,8 @@
 
 /**
  * Module: `@core/chat/rules`
- * Purpose: Pure business rules and validation for chat functionality
- * Scope: Deterministic validation with actionable errors. No I/O or time dependencies.
+ * Purpose: Pure business rules and validation for chat functionality.
+ * Scope: Deterministic validation with actionable errors. Does not handle I/O or time dependencies.
  * Invariants: All functions are pure, deterministic, and idempotent
  * Side-effects: none (throws on validation failure)
  * Notes: Char-based trimming heuristic for v0, handles multi-byte chars correctly

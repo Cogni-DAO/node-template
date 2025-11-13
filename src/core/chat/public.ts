@@ -3,8 +3,8 @@
 
 /**
  * Module: `@core/chat/public`
- * Purpose: Public API for chat domain - allowed entry point for features
- * Scope: Exposes core domain entities and business rules
+ * Purpose: Public API for chat domain - allowed entry point for features.
+ * Scope: Exposes core domain entities and business rules. Does not expose internal implementation details.
  * Invariants: Only exports public domain API, no internal implementation details
  * Side-effects: none
  * Notes: Controlled entry point for hexagonal architecture boundaries

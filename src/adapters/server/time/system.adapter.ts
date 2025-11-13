@@ -3,8 +3,8 @@
 
 /**
  * Module: `@adapters/server/time/system`
- * Purpose: System clock implementation for real-world time access
- * Scope: Provides current system time in ISO format
+ * Purpose: System clock implementation for real-world time access.
+ * Scope: Provides current system time in ISO format. Does not handle timezone conversion or date arithmetic.
  * Invariants: Always returns valid ISO 8601 string
  * Side-effects: IO (reads system time)
  * Notes: Real implementation for production use

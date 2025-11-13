@@ -3,8 +3,8 @@
 
 /**
  * Module: `@app/api/v1/ai/completion`
- * Purpose: HTTP endpoint for AI completion
- * Scope: Validate, set input timestamps, delegate to feature
+ * Purpose: HTTP endpoint for AI completion.
+ * Scope: Validate, set input timestamps, delegate to feature. Does not handle authentication or rate limiting.
  * Invariants: Validates with contract, translates DTOs, handles errors cleanly
  * Side-effects: IO (HTTP request/response)
  * Notes: Route sets input timestamps, maps errors to HTTP codes

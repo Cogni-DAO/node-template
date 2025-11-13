@@ -3,8 +3,8 @@
 
 /**
  * Module: `@core/public`
- * Purpose: Stable core entry point - explicit named exports to control public surface
- * Scope: Re-exports only approved domain interfaces, prevents accidental creep/cycles
+ * Purpose: Stable core entry point - explicit named exports to control public surface.
+ * Scope: Re-exports only approved domain interfaces, prevents accidental creep/cycles. Does not modify or transform exports.
  * Invariants: Named exports only, no export *, controlled public API surface
  * Side-effects: none
  * Notes: Single entry point for all core domain access, enforced by ESLint
