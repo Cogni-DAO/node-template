@@ -26,6 +26,7 @@ import {
   ChatErrorCode,
   ChatValidationError,
   filterSystemMessages,
+  type Message,
   normalizeMessageRole,
 } from "@/core";
 import {
@@ -33,8 +34,20 @@ import {
   toCoreMessages,
 } from "@/features/ai/services/mappers";
 
-// Type for security testing - allows invalid roles
-type SecurityTestMessage = Omit<MessageDto, "role"> & { role: string };
+// Security test helper - allows testing invalid roles
+interface SecurityTestDto {
+  role: string;
+  content: string;
+  timestamp?: string;
+}
+
+// Security test helper function that bypasses type constraints
+const testToCoreMessages = (
+  dtos: SecurityTestDto[],
+  timestamp: string
+): Message[] => {
+  return toCoreMessages(dtos as MessageDto[], timestamp);
+};
 
 describe("security/ai/validation", () => {
   describe("system role injection protection", () => {
@@ -60,12 +73,12 @@ describe("security/ai/validation", () => {
       const timestamp = "2025-01-01T00:00:00Z";
 
       // Act & Assert
-      expect(() =>
-        toCoreMessages([systemDto as SecurityTestMessage], timestamp)
-      ).toThrow(ChatValidationError);
-      expect(() =>
-        toCoreMessages([systemDto as SecurityTestMessage], timestamp)
-      ).toThrow("Invalid role: system");
+      expect(() => testToCoreMessages([systemDto], timestamp)).toThrow(
+        ChatValidationError
+      );
+      expect(() => testToCoreMessages([systemDto], timestamp)).toThrow(
+        "Invalid role: system"
+      );
     });
 
     it("should reject system role variations in normalization", () => {
@@ -80,10 +93,7 @@ describe("security/ai/validation", () => {
           // If normalization allows it, mapper should reject it
           const timestamp = "2025-01-01T00:00:00Z";
           expect(() =>
-            toCoreMessages(
-              [{ role, content: "test" } as SecurityTestMessage],
-              timestamp
-            )
+            testToCoreMessages([{ role, content: "test" }], timestamp)
           ).toThrow(ChatValidationError);
         }
       });
@@ -93,8 +103,8 @@ describe("security/ai/validation", () => {
       // Arrange - Contract should not allow system role
       const invalidInput = {
         messages: [
-          { role: "system", content: "Evil prompt" } as SecurityTestMessage,
-        ],
+          { role: "system", content: "Evil prompt" },
+        ] satisfies SecurityTestDto[],
       };
 
       // Act & Assert
@@ -207,10 +217,7 @@ describe("security/ai/validation", () => {
 
       try {
         // Act
-        toCoreMessages(
-          [invalidInput as SecurityTestMessage],
-          "2025-01-01T00:00:00Z"
-        );
+        testToCoreMessages([invalidInput], "2025-01-01T00:00:00Z");
       } catch (error) {
         // Assert
         expect(error).toBeInstanceOf(ChatValidationError);

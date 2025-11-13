@@ -87,12 +87,12 @@ describe("app/_facades/ai/completion.server", () => {
       expect(coreMessages).toBeDefined();
 
       expect(coreMessages).toHaveLength(2);
-      expect(coreMessages[0]).toEqual({
+      expect(coreMessages?.[0]).toEqual({
         role: "user",
         content: "Hello",
         timestamp: "2025-01-01T12:00:00.000Z",
       });
-      expect(coreMessages[1]).toEqual({
+      expect(coreMessages?.[1]).toEqual({
         role: "assistant",
         content: "Hi there",
         timestamp: "2025-01-01T12:00:00.000Z",
