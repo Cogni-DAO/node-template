@@ -3,8 +3,8 @@
 
 /**
  * Module: `@ports/clock.port`
- * Purpose: Time abstraction for deterministic testing
- * Scope: Provides current time in ISO format for domain layer
+ * Purpose: Time abstraction for deterministic testing.
+ * Scope: Provides current time in ISO format for domain layer. Does not handle timezone conversion or date arithmetic.
  * Invariants: Always returns ISO 8601 string format
  * Side-effects: none (interface only)
  * Notes: Enables time injection for pure domain layer

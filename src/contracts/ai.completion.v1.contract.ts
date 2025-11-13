@@ -3,11 +3,11 @@
 
 /**
  * Module: `@contracts/ai.completion.v1.contract`
- * Purpose: External API contract for AI completion with DTOs that isolate internal types
+ * Purpose: External API contract for AI completion with DTOs that isolate internal types.
  * Scope: Edge IO definition with schema validation. Does not contain business logic.
- * Invariants: Contract remains stable; breaking changes require new version
+ * Invariants: Contract remains stable; breaking changes require new version.
  * Side-effects: none
- * Notes: Hard cap at schema level, client timestamps ignored
+ * Notes: Hard cap at schema level, client timestamps ignored.
  * Links: Used by HTTP routes for validation
  * @internal
  */

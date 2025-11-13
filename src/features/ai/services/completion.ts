@@ -3,8 +3,8 @@
 
 /**
  * Module: `@features/ai/services/completion`
- * Purpose: Use case orchestration for AI completion
- * Scope: Coordinate core rules, port calls, set output timestamp
+ * Purpose: Use case orchestration for AI completion.
+ * Scope: Coordinate core rules, port calls, set output timestamp. Does not handle authentication or rate limiting.
  * Invariants: Only imports core, ports, shared - never contracts or adapters
  * Side-effects: IO (via ports)
  * Notes: Applies business rules then delegates to LLM service

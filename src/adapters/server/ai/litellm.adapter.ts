@@ -3,8 +3,8 @@
 
 /**
  * Module: `@adapters/server/ai/litellm`
- * Purpose: LiteLLM service implementation for AI completion
- * Scope: Implement LlmService port, return content only (no timestamps)
+ * Purpose: LiteLLM service implementation for AI completion.
+ * Scope: Implement LlmService port, return content only (no timestamps). Does not handle authentication or rate limiting.
  * Invariants: Never sets timestamps, never logs prompts/keys, enforces timeouts
  * Side-effects: IO (HTTP calls to LiteLLM)
  * Notes: Provides defaults from serverEnv, handles provider-specific formatting

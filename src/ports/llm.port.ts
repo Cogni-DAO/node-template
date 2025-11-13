@@ -3,8 +3,8 @@
 
 /**
  * Module: `@ports/llm.port`
- * Purpose: LLM service abstraction for hexagonal architecture
- * Scope: Future-ready interface that won't require refactoring when adding streaming/metadata
+ * Purpose: LLM service abstraction for hexagonal architecture.
+ * Scope: Future-ready interface that won't require refactoring when adding streaming/metadata. Does not handle authentication or rate limiting.
  * Invariants: Only depends on core domain types, no infrastructure concerns
  * Side-effects: none (interface only)
  * Notes: Supports optional parameters, returns structured response with metadata

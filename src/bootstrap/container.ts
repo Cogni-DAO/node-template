@@ -3,11 +3,11 @@
 
 /**
  * Module: `@bootstrap/container`
- * Purpose: Dependency injection container for application composition
- * Scope: Wire adapters to ports for runtime dependency injection
- * Invariants: All ports have concrete implementations wired
- * Side-effects: Creates adapter instances
- * Notes: Composition root following DI principles
+ * Purpose: Dependency injection container for application composition root.
+ * Scope: Wire adapters to ports for runtime dependency injection. Does not handle singleton management or lifecycle.
+ * Invariants: All ports have concrete implementations wired; container instances are stateless; createContainer() returns fresh instances.
+ * Side-effects: none
+ * Notes: Composition root following DI principles; resolveAiDeps alias provides backwards compatibility.
  * Links: Used by API routes and other entry points
  * @public
  */

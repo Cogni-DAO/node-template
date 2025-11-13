@@ -3,7 +3,7 @@
 
 /**
  * Module: `@core/chat/model`
- * Purpose: Domain entities and value objects for chat functionality
+ * Purpose: Domain entities and value objects for chat functionality.
  * Scope: Pure domain types with optional timestamps. Does not handle I/O or time operations.
  * Invariants: No Date objects, no I/O dependencies, purely functional types
  * Side-effects: none
