@@ -22,10 +22,18 @@ const serverSchema = z.object({
   // Required now
   APP_BASE_URL: z.string().url(),
   DATABASE_URL: z.string().min(1),
-  SESSION_SECRET: z.string().min(32),
+  // TODO: Enable when session management is implemented
+  // SESSION_SECRET: z.string().min(32),
 
-  // LLM (Stage 8)
-  LITELLM_BASE_URL: z.string().url(),
+  // LLM (Stage 8) - LITELLM_BASE_URL defaults to deployment-aware configuration
+  LITELLM_BASE_URL: z
+    .string()
+    .url()
+    .default(
+      process.env.NODE_ENV === "production"
+        ? "http://litellm:4000"
+        : "http://localhost:4000"
+    ),
   LITELLM_MASTER_KEY: z.string().min(1),
   OPENROUTER_API_KEY: z.string().min(1),
   DEFAULT_MODEL: z.string().default("openrouter/auto"),

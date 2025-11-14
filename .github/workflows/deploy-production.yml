@@ -1,0 +1,81 @@
+name: Deploy (Production)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-production-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+      IMAGE_TAG: production-${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: platform/ci/scripts/build.sh
+
+      - name: Push to GHCR
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: platform/ci/scripts/push.sh
+
+      - name: Deploy to Cherry Servers
+        env:
+          TF_VAR_app_image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          TF_VAR_domain: ${{ secrets.TF_VAR_DOMAIN }}
+          TF_VAR_host: ${{ secrets.TF_VAR_HOST }}
+          TF_VAR_ssh_private_key: ${{ secrets.TF_VAR_SSH_PRIVATE_KEY }}
+          TF_VAR_litellm_master_key: ${{ secrets.TF_VAR_LITELLM_MASTER_KEY }}
+          TF_VAR_openrouter_api_key: ${{ secrets.TF_VAR_OPENROUTER_API_KEY }}
+          TF_VAR_litellm_port: 4000
+          TF_VAR_litellm_host: "127.0.0.1"
+          CHERRY_AUTH_TOKEN: ${{ secrets.CHERRY_AUTH_TOKEN }}
+        run: platform/ci/scripts/deploy.sh
+
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-artifacts-${{ github.run_id }}
+          path: ${{ runner.temp }}/deploy-${{ github.run_id }}/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Domain:** \`${{ secrets.TF_VAR_DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**AI Subdomain:** \`ai.${{ secrets.TF_VAR_DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Services Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎯 **Main App:** \`${{ secrets.TF_VAR_DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 🤖 **LiteLLM AI:** \`ai.${{ secrets.TF_VAR_DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 **Promtail Logging:** Container monitoring active" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔀 **Caddy Proxy:** SSL termination & routing" >> $GITHUB_STEP_SUMMARY

@@ -4,6 +4,8 @@
 # Example configuration for Cherry app deployment
 
 domain       = "canary.cognidao.org"
-app_image    = "ghcr.io/cogni-dao/cogni-template:production-<shortsha>"
+# app_image    = "ghcr.io/cogni-dao/cogni-template:production-<shortsha>"
 host         = "5.199.173.64" # or DNS
 ssh_user     = "root"
+litellm_master_key = "<your key>="
+openrouter_api_key = "sk-<key>"

@@ -27,3 +27,27 @@ variable "ssh_private_key" {
   description = "SSH private key in PEM format (injected by CI)"
   sensitive   = true
 }
+
+variable "litellm_master_key" {
+  type        = string
+  description = "LiteLLM master key for authentication"
+  sensitive   = true
+}
+
+variable "openrouter_api_key" {
+  type        = string
+  description = "OpenRouter API key for LLM access"
+  sensitive   = true
+}
+
+variable "litellm_port" {
+  type        = number
+  description = "Port for LiteLLM service"
+  default     = 4000
+}
+
+variable "litellm_host" {
+  type        = string
+  description = "Host for LiteLLM service"
+  default     = "127.0.0.1"
+}

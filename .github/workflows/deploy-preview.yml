@@ -1,0 +1,125 @@
+name: Deploy (Preview)
+
+on:
+  pull_request:
+    branches: [a]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to deploy"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+
+concurrency:
+  group: deploy-preview-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    environment: preview
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set image tag
+        id: image_tag
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMAGE_TAG="preview-pr${{ env.PR_NUMBER }}-${SHORT_SHA}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: platform/ci/scripts/build.sh
+
+      - name: Push to GHCR
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: platform/ci/scripts/push.sh
+
+      - name: Deploy to Cherry Servers (Preview)
+        env:
+          TF_VAR_app_image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          TF_VAR_domain: ${{ secrets.TF_VAR_PREVIEW_DOMAIN }}
+          TF_VAR_host: ${{ secrets.TF_VAR_PREVIEW_HOST }}
+          TF_VAR_ssh_private_key: ${{ secrets.TF_VAR_PREVIEW_SSH_PRIVATE_KEY }}
+          TF_VAR_litellm_master_key: ${{ secrets.TF_VAR_PREVIEW_LITELLM_MASTER_KEY }}
+          TF_VAR_openrouter_api_key: ${{ secrets.TF_VAR_PREVIEW_OPENROUTER_API_KEY }}
+          TF_VAR_litellm_port: 4000
+          TF_VAR_litellm_host: "127.0.0.1"
+          CHERRY_AUTH_TOKEN: ${{ secrets.CHERRY_AUTH_TOKEN }}
+        run: platform/ci/scripts/deploy.sh
+
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-deployment-artifacts-pr${{ env.PR_NUMBER }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/deploy-${{ github.run_id }}/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const previewDomain = '${{ secrets.TF_VAR_PREVIEW_DOMAIN }}';
+            const imageTag = '${{ env.IMAGE_TAG }}';
+            const commitSha = '${{ github.sha }}';
+
+            const body = `## 🚀 Preview Deployment
+
+            **Preview URL:** https://${previewDomain}
+            **AI API URL:** https://ai.${previewDomain}
+            **Image:** \`${{ env.IMAGE_NAME }}:${imageTag}\`
+            **Commit:** \`${commitSha}\`
+
+            ### Services Available
+            - 🎯 **Main App:** [${previewDomain}](https://${previewDomain})
+            - 🤖 **LiteLLM AI:** [ai.${previewDomain}](https://ai.${previewDomain})
+            - 🔍 **Health Check:** [${previewDomain}/api/v1/meta/health](https://${previewDomain}/api/v1/meta/health)
+            - 🤖 **AI Health Check:** [ai.${previewDomain}/health/readiness](https://ai.${previewDomain}/health/readiness)
+
+            > This preview will be updated automatically when you push new commits to this PR.`;
+
+            github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Preview Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Preview URL:** https://${{ secrets.TF_VAR_PREVIEW_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "**AI API URL:** https://ai.${{ secrets.TF_VAR_PREVIEW_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**PR:** #${{ env.PR_NUMBER }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
