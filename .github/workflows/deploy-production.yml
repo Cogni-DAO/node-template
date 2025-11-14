@@ -1,14 +1,6 @@
 name: Deploy (Production)
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Docker image tag to deploy"
-        required: false
-        type: string
   workflow_run:
     workflows: ["Build & Test Production"]
     types: [completed]
