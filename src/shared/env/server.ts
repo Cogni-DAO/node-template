@@ -12,7 +12,23 @@
  * @public
  */
 
-import { z } from "zod";
+import { z, ZodError } from "zod";
+
+export interface EnvValidationMeta {
+  code: "INVALID_ENV";
+  missing: string[];
+  invalid: string[];
+}
+
+export class EnvValidationError extends Error {
+  readonly meta: EnvValidationMeta;
+
+  constructor(meta: EnvValidationMeta) {
+    super(`Invalid server env: ${JSON.stringify(meta)}`);
+    this.name = "EnvValidationError";
+    this.meta = meta;
+  }
+}
 
 const serverSchema = z.object({
   NODE_ENV: z
@@ -54,13 +70,44 @@ let _serverEnv: ParsedEnv | null = null;
 
 function getServerEnv(): ParsedEnv {
   if (_serverEnv === null) {
-    const parsed = serverSchema.parse(process.env);
-    _serverEnv = {
-      ...parsed,
-      isDev: parsed.NODE_ENV === "development",
-      isTest: parsed.NODE_ENV === "test",
-      isProd: parsed.NODE_ENV === "production",
-    };
+    try {
+      const parsed = serverSchema.parse(process.env);
+      _serverEnv = {
+        ...parsed,
+        isDev: parsed.NODE_ENV === "development",
+        isTest: parsed.NODE_ENV === "test",
+        isProd: parsed.NODE_ENV === "production",
+      };
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const missing = new Set<string>();
+        const invalid = new Set<string>();
+
+        for (const issue of error.issues) {
+          const key = issue.path[0]?.toString();
+          if (!key) continue;
+
+          /*
+           * Treat all invalid_type as missing (avoids any casting)
+           */
+          if (issue.code === "invalid_type") {
+            missing.add(key);
+          } else {
+            invalid.add(key);
+          }
+        }
+
+        const meta: EnvValidationMeta = {
+          code: "INVALID_ENV",
+          missing: [...missing],
+          invalid: [...invalid],
+        };
+
+        throw new EnvValidationError(meta);
+      }
+
+      throw error;
+    }
   }
   return _serverEnv;
 }
@@ -81,3 +128,7 @@ export const serverEnv = new Proxy({} as ParsedEnv, {
 }) as ParsedEnv;
 
 export type ServerEnv = ParsedEnv;
+
+export function ensureServerEnv(): ServerEnv {
+  return getServerEnv();
+}
