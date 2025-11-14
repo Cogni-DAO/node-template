@@ -8,8 +8,8 @@ on_fail() {
   code=$?
   echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
 
-  if [[ -n "${VM_HOST:-}" ]]; then
-    ssh -o StrictHostKeyChecking=no root@"$VM_HOST" <<'EOF' || true
+  if [[ -n "${VM_HOST:-}" && -f "$SSH_KEY_PATH" ]]; then
+    ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
       echo "=== docker compose ps ==="
       cd /opt/cogni/runtime && docker compose ps || echo "docker compose ps failed"
 
@@ -50,6 +50,20 @@ log_error() {
 # SSH configuration
 SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/deploy_key}"
 SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes"
+
+# Validate SSH key exists and has correct permissions
+if [[ ! -f "$SSH_KEY_PATH" ]]; then
+    log_error "SSH key not found at: $SSH_KEY_PATH"
+    log_error "Make sure the 'Setup SSH deploy key' step completed successfully"
+    exit 1
+fi
+
+if [[ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]]; then
+    log_error "SSH key has incorrect permissions. Expected 600, got: $(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)"
+    exit 1
+fi
+
+log_info "SSH key validated: $SSH_KEY_PATH"
 
 # Validate required environment variables
 if [[ -z "${APP_IMAGE:-}" ]]; then
