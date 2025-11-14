@@ -1,5 +1,39 @@
 # Cherry Servers Continuous Deployment
 
+## GitHub Actions Workflows
+
+Automated deployment workflows are configured for the complete CI/CD pipeline:
+
+### Production Deployment (`.github/workflows/deploy-production.yml`)
+
+- **Trigger**: Push to `main` branch
+- **Environment**: `production`
+- **Process**: Build → Push to GHCR → Deploy to Cherry Servers
+- **Includes**: LiteLLM AI service deployment on subdomain `ai.*`
+
+### Preview Deployment (`.github/workflows/deploy-preview.yml`)
+
+- **Trigger**: Pull requests to `main`
+- **Environment**: `preview`
+- **Features**: PR comments with preview URLs, automatic updates on new commits
+- **Includes**: Full stack including LiteLLM for AI API testing
+
+### Build & Test (`.github/workflows/build.yml`)
+
+- **Trigger**: PRs and pushes affecting code/Docker files
+- **Purpose**: Container build verification and health check testing
+- **Tests**: Container startup, health endpoints, Docker healthcheck validation
+
+## CI/CD Scripts
+
+The deployment uses provider-agnostic scripts that work across any CI system:
+
+```bash
+platform/ci/scripts/build.sh    # Build Docker image (linux/amd64)
+platform/ci/scripts/push.sh     # Push to GHCR with authentication
+platform/ci/scripts/deploy.sh   # Deploy via OpenTofu
+```
+
 ## Overview
 
 Automated deployment workflow using GitHub Actions for mutable app updates on existing Cherry Servers infrastructure.
@@ -189,15 +223,24 @@ Access via Loki/Grafana dashboard or API queries.
 - Check disk space: `df -h`
 - Review container resource usage: `docker stats`
 
-## CI/CD Script Integration
+### Required GitHub Secrets
 
-The deployment uses provider-agnostic scripts:
+#### Production Environment
 
-```bash
-platform/ci/scripts/build.sh    # Build Docker image
-platform/ci/scripts/push.sh     # Push to GHCR
-platform/ci/scripts/deploy.sh   # Deploy via OpenTofu
-```
+- `TF_VAR_DOMAIN` - Production domain (e.g., app.cognidao.org)
+- `TF_VAR_HOST` - Production Cherry VM IP
+- `TF_VAR_SSH_PRIVATE_KEY` - SSH private key for production VM
+- `TF_VAR_LITELLM_MASTER_KEY` - LiteLLM authentication key
+- `TF_VAR_OPENROUTER_API_KEY` - OpenRouter API key for AI services
+- `CHERRY_AUTH_TOKEN` - Cherry Servers API token
+
+#### Preview Environment
+
+- `TF_VAR_PREVIEW_DOMAIN` - Preview domain (e.g., preview.cognidao.org)
+- `TF_VAR_PREVIEW_HOST` - Preview Cherry VM IP
+- `TF_VAR_PREVIEW_SSH_PRIVATE_KEY` - SSH private key for preview VM
+- `TF_VAR_PREVIEW_LITELLM_MASTER_KEY` - Preview LiteLLM key
+- `TF_VAR_PREVIEW_OPENROUTER_API_KEY` - Preview OpenRouter API key
 
 These scripts can be called from any CI system (GitHub Actions, Jenkins, etc.).
 

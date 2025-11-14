@@ -62,12 +62,12 @@ Required now:
 
 - APP_BASE_URL (url)
 - DATABASE_URL
-- SESSION_SECRET (≥32 chars)
+- TODO: SESSION_SECRET (≥32 chars) - commented out until session management is implemented
 
 LLM (Stage 8):
 
-- LITELLM_BASE_URL (url)
-- LITELLM_ADMIN_KEY
+- LITELLM_BASE_URL (url, auto-detects: localhost:4000 for dev, litellm:4000 for production)
+- LITELLM_MASTER_KEY
 - OPENROUTER_API_KEY
 - DEFAULT_MODEL (default: openrouter/auto)
 
@@ -133,4 +133,5 @@ Bump Last reviewed date. Ensure pnpm lint && pnpm typecheck pass.
 
 ## Notes
 
-- Rotation for SESSION_SECRET can be added later via SESSION_SECRETS CSV
+- SESSION_SECRET rotation can be added later via SESSION_SECRETS CSV when session management is implemented
+- LITELLM_BASE_URL automatically detects deployment context (local dev vs Docker network)

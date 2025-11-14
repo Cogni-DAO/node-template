@@ -31,8 +31,8 @@ describe("env schemas", () => {
       NODE_ENV: "test",
       APP_BASE_URL: "http://localhost:3000",
       DATABASE_URL: "postgres://u:p@h:5432/db?sslmode=require",
-      SESSION_SECRET: "x".repeat(32),
-      LITELLM_BASE_URL: "http://localhost:4000",
+      // TODO: SESSION_SECRET: "x".repeat(32),
+      // LITELLM_BASE_URL: auto-detects based on NODE_ENV
       LITELLM_MASTER_KEY: "adminkey",
       OPENROUTER_API_KEY: "or-key",
       // TODO: Add when wallet integration is ready
