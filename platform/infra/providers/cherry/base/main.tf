@@ -3,10 +3,16 @@
 
 terraform {
     required_providers {
-    cherryservers = {
-        source = "cherryservers/cherryservers"
+        cherryservers = {
+            source = "cherryservers/cherryservers"
+        }
     }
-    }
+    # TODO: Configure remote backend when ready
+    # backend "s3" {
+    #   bucket = "your-terraform-state-bucket"
+    #   key    = "cherry-base-${var.environment}.tfstate"
+    #   region = "us-east-1"
+    # }
 }
 # Set the variable value in variables.tf file.
 # Ensure the CHERRY_AUTH_KEY or CHERRY_AUTH_TOKEN environment variable is set and Exported: https://portal.cherryservers.com/settings/api-keys
@@ -15,20 +21,26 @@ terraform {
 #Create a new server:
 resource "cherryservers_server" "server" {
     plan         = var.plan
-    hostname     = var.hostname
+    hostname     = "${var.environment}-${var.vm_name_prefix}"
     project_id   = var.project_id
     region       = var.region
-    image        = var.image
-    ssh_key_ids  = [cherryservers_ssh_key.my_ssh_key.id]
+    image        = "ubuntu_22_04"
+    ssh_key_ids  = [cherryservers_ssh_key.key.id]
     user_data    = base64encode(file("${path.module}/bootstrap.yaml"))
+    allow_reinstall = true
     
     lifecycle {
         ignore_changes = [user_data]
     }
 }
 
+resource "cherryservers_ssh_key" "key" {
+    name       = "cogni-${var.environment}-deploy"
+    public_key = file("${path.module}/${var.public_key_path}")
+}
 
-resource "cherryservers_ssh_key" "my_ssh_key" {
-    name       = "cogni-key"
-    public_key = file(var.public_key_path)
+output "vm_host" {
+  description = "Public IP address of the provisioned VM"
+  value       = tolist(cherryservers_server.server.ip_addresses)[0].address
+  sensitive   = false
 }

@@ -2,197 +2,118 @@
 
 ## Goal
 
-Build once. Push to GHCR. Deploy via OpenTofu to Cherry with SSH-based deployment. Gate on HTTPS health validation.
+Set up VMs once, continuous CI/CD after.
 
-Split between immutable infrastructure (VM) and mutable application deployment.
+Split between immutable infrastructure (OpenTofu) and mutable application deployment (Docker Compose).
 
-## Architecture Split
+Build once. Push to GHCR. Deploy via GitHub Actions + Docker Compose to Cherry VMs. Gate on HTTPS health validation.
+
+## Two-Layer Architecture
 
 ### Base Infrastructure (`platform/infra/providers/cherry/base/`)
 
-- **Purpose**: One-time VM provisioning with static OS bootstrap
-- **Immutable**: VM configuration frozen after initial deployment
-- **Contains**: Server creation, SSH keys, minimal cloud-init (Docker + tools only)
+- **Purpose**: VM provisioning with Cherry Servers API
+- **Environment separation**: `env.preview.tfvars`, `env.prod.tfvars`
+- **Creates**: `preview-cogni`, `production-cogni` VMs with SSH deploy keys
+- **Authentication**: SSH public keys only, VM host output to GitHub secrets
 
-### App Deployment (`platform/infra/providers/cherry/app/`)
+### App Deployment (`platform/infra/services/runtime/`)
 
-- **Purpose**: SSH-based container deployment and configuration
-- **Mutable**: Updated on every deployment
-- **Contains**: Container orchestration, Caddy configuration, health validation
+- **Purpose**: Docker Compose stack for container deployment to existing VMs
+- **Environment separation**: GitHub Environment Secrets
+- **Deploys**: App + LiteLLM + Caddy + Promtail containers via `docker-compose.yml`
+- **Deployment**: SSH from GitHub Actions (no Terraform for app layer)
 
-## Component Overview
-
-### Docker Image
-
-- Built with `HEALTHCHECK CMD curl -fsS http://localhost:3000/api/v1/meta/health || exit 1`
-- Tagged as `production-${short_sha}` for immutable deployments
-- Pushed to GHCR with authentication
-
-### Infrastructure Files
+## File Structure
 
 ```
-platform/infra/providers/cherry/
-├── base/
-│   ├── main.tf                    # VM creation with lifecycle ignore
-│   ├── variables.tf               # VM sizing, SSH keys, region
-│   ├── bootstrap.yaml             # Minimal cloud-init (Docker only)
-│   └── terraform.tfvars.example
-└── app/
-    ├── main.tf                    # SSH deployment + health gate
-    ├── variables.tf               # domain, app_image, SSH connection
-    ├── files/Caddyfile.tmpl       # Reverse proxy template
-    └── terraform.tfvars.example
+platform/infra/
+├── providers/cherry/base/          # VM provisioning (OpenTofu only)
+│   ├── keys/                       # SSH public keys (committed)
+│   │   ├── cogni_preview_deploy.pub
+│   │   └── cogni_prod_deploy.pub
+│   ├── main.tf                     # Cherry provider + VM resources + outputs
+│   ├── variables.tf                # environment, vm_name_prefix, plan, region, public_key_path
+│   ├── env.preview.tfvars         # Preview VM config
+│   ├── env.prod.tfvars            # Production VM config
+│   └── bootstrap.yaml             # Cloud-init VM setup
+└── services/runtime/               # Container stack (Docker Compose)
+    ├── docker-compose.yml         # App + LiteLLM + Caddy + Promtail
+    └── configs/                   # Service configuration files
+        ├── Caddyfile.tmpl
+        ├── promtail-config.yaml
+        └── litellm.config.yaml
 ```
 
-### CI/CD Scripts (`platform/ci/scripts/`)
+## Container Stack
 
-Provider-agnostic scripts callable from any CI system:
+**Single image per commit**: `app-${sha}` tagged, reused across environments
+**Runtime containers**:
 
-- **`build.sh`**: Build linux/amd64 image with standardized tagging
-- **`push.sh`**: GHCR authentication and push
-- **`deploy.sh`**: OpenTofu deployment with variable injection
+- `app`: Next.js application with environment-specific runtime config
+- `litellm`: AI proxy service on `ai.${domain}` subdomain
+- `caddy`: HTTPS termination and routing
+- `promtail`: Log aggregation
 
-### Deployment Flow
+## GitHub Actions Workflows (Primary Interface)
 
-1. **Build Stage**
+**Build & Test Pipeline:**
 
-   ```bash
-   platform/ci/scripts/build.sh
-   # Builds: ${IMAGE}:production-${short_sha}
-   ```
+- `ci.yaml` - Static checks (lint, type, REUSE) on all PRs
+- `build-preview.yml` - Docker build + health tests (triggered by app changes)
+- `build-prod.yml` - Docker build + health tests for production
 
-2. **Push Stage**
+**Deployment Pipeline:**
 
-   ```bash
-   platform/ci/scripts/push.sh
-   # Authenticates with GHCR_PAT
-   # Pushes tagged image
-   ```
+- `deploy-preview.yml` - **Auto-triggered on PR**: Build → Push GHCR → SSH → Docker Compose
+- `deploy-production.yml` - **Auto-triggered on main**: Build → Push GHCR → SSH → Docker Compose
+- `provision-base.yml` - **Manual VM provisioning** via OpenTofu workflow dispatch
 
-3. **Deploy Stage**
-   ```bash
-   platform/ci/scripts/deploy.sh
-   # Sets: TF_VAR_app_image, TF_VAR_domain, TF_VAR_host, TF_VAR_ssh_private_key
-   # Runs: tofu -chdir=platform/infra/providers/cherry/app apply -auto-approve
-   ```
+**End-to-End Testing:**
 
-## SSH Deployment Process
+- `e2e-test-preview.yml` - Runs after preview deployment completes
 
-The app deployment via SSH executes:
+## Getting Started
 
-1. **File Transfer**: Upload rendered Caddyfile from template
-2. **Container Updates**:
-   ```bash
-   docker network create web || true
-   docker pull ${app_image}
-   docker rm -f app caddy || true
-   docker run -d --name app --network web --restart=always ${app_image}
-   docker run -d --name caddy --network web --restart=always \
-     -p 80:80 -p 443:443 \
-     -v /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
-     -v caddy_data:/data -v caddy_config:/config \
-     caddy:2
-   ```
-3. **Health Validation**: Curl loop to `https://${domain}/api/v1/meta/health` (5min timeout)
+**First-time setup**: See [DEPLOY.md](DEPLOY.md) for step-by-step guide.
 
-## Required Secrets
+## Deployment Flows
 
-### GitHub Secrets (for CI)
+**VM Provisioning (One-time)**: GitHub Actions "Provision Base Infrastructure" workflow  
+**App Deployment (Routine)**: Auto-triggered on PR/main → SSH → `docker compose up`
 
-- `GHCR_PAT`: GitHub Container Registry personal access token
-- `CHERRY_AUTH_TOKEN`: Cherry Servers API authentication
-- `TF_VAR_domain`: Target deployment domain
-- `TF_VAR_host`: Cherry VM IP address (from base deployment)
-- `TF_VAR_ssh_private_key`: SSH private key in PEM format
+**Manual deployments**: See [DEPLOY.md](DEPLOY.md)
 
-### Environment Variables
+## Secrets Management
 
-- `TF_VAR_app_image`: Set at deployment time to specific image:tag
-- SSH connection variables injected by CI scripts
+**GitHub Environment Secrets** (clean naming):
+
+- **`preview`/`production`**: `DATABASE_URL`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `SSH_DEPLOY_KEY`, `VM_HOST`, `DOMAIN`
+- **`cherry-base`**: `CHERRY_AUTH_TOKEN` (isolated from app deployments)
+
+**SSH Security**: Private keys never in Terraform state. SSH agent authentication only.
+**Deployment**: Github Actions and Docker Compose for app deployment. Faster, simpler rollbacks.
+
+## Environment Configuration
+
+**Base Layer**: VM topology in `env.{preview,prod}.tfvars`  
+**Runtime**: Environment secrets → Docker Compose `.env` on VM
 
 ## State Management
 
-### Current: Local State
+**Terraform state**: Only for base infrastructure (VMs)
 
-- Terraform state files in provider directories
-- `.gitignore` excludes `terraform.tfstate*` files
-- Manual state management during development
+- Base: `cherry-base-${environment}.tfstate`
+- App: No Terraform state (Docker Compose managed)
 
-### Future: Remote Backend
+## Health Validation
 
-- S3 + DynamoDB (or equivalent) for state storage and locking
-- Configured in provider `backend` blocks
-- State isolation between base/ and app/ deployments
+1. **Container healthchecks**: Docker HEALTHCHECK in Dockerfile
+2. **App health**: `https://${domain}/api/v1/meta/health`
+3. **AI health**: `https://ai.${domain}/health/readiness`
+4. **Deployment gate**: 5min curl loop validates deployment success
 
-## Branching and Deployment
+## Current State
 
-- **Trigger**: Push to `production` branch only
-- **Tagging**: `production-${short_sha}` for traceability
-- **Rollback**: Redeploy with previous `TF_VAR_app_image` tag
-- **Emergency**: Use `tofu apply -replace` for full VM recreation
-
-## Observability
-
-### Current (Minimal)
-
-- Container status via `docker ps` over SSH
-- Application logs via `docker logs app`
-- Caddy access logs on persistent volume
-
-### Future Enhancements
-
-- Vector/Promtail log shipping
-- Prometheus metrics collection
-- Grafana dashboards for deployment monitoring
-
-## Multi-Environment Support
-
-### Current: Single Environment
-
-- One base VM, one app deployment
-- Environment-specific domains via `TF_VAR_domain`
-
-### Future: Environment Separation
-
-- Separate base/ deployments per environment
-- Environment-specific variable files
-- Branch-based deployment triggers
-
-## Disaster Recovery
-
-### Rollback Process
-
-1. Identify previous working image tag
-2. Set `TF_VAR_app_image` to previous tag
-3. Run `tofu apply` - health gate validates success
-
-### Complete Recovery
-
-1. Redeploy base infrastructure if needed
-2. Update DNS A records to new VM IP
-3. Deploy latest known-good application image
-4. Verify health checks and monitoring
-
-## Jenkins Integration (Future)
-
-The same `platform/ci/scripts/*` will be reused:
-
-```groovy
-// Jenkinsfile mirrors GitHub Actions structure
-pipeline {
-  stages {
-    stage('Build') { sh 'platform/ci/scripts/build.sh' }
-    stage('Push')  { sh 'platform/ci/scripts/push.sh' }
-    stage('Deploy'){ sh 'platform/ci/scripts/deploy.sh' }
-  }
-}
-```
-
-Environment injection handled by Jenkins credential management.
-
-## Security Considerations
-
-- SSH private keys never logged or persisted
-- Container registry authentication via short-lived tokens
-- Health check endpoints provide minimal system information
-- Infrastructure state isolation between immutable/mutable components
+**Live**: Production VM with automated deployment pipeline
+**Available**: Preview environment ready for provisioning via GitHub Actions

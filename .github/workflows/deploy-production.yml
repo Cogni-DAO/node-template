@@ -1,0 +1,88 @@
+name: Deploy (Production)
+
+on:
+  workflow_run:
+    workflows: ["Build & Test Production"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-production-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image vars
+        id: image_vars
+        run: |
+          # Ensure IMAGE_NAME is lowercase for Docker registry compatibility
+          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+          else
+            IMAGE_TAG="app-${GITHUB_SHA}"
+          fi
+
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Setup SSH deploy key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          eval "$(ssh-agent -s)"
+          echo "$SSH_DEPLOY_KEY" | tr -d '\r' | ssh-add -
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+
+      - name: Deploy to Cherry Servers
+        env:
+          DEPLOY_ENVIRONMENT: production
+          APP_IMAGE: ${IMAGE_NAME}:${IMAGE_TAG}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+        run: platform/ci/scripts/deploy.sh
+
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-artifacts-${{ github.run_id }}
+          path: ${{ runner.temp }}/deploy-${{ github.run_id }}/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Domain:** \`${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**AI Subdomain:** \`ai.${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${GITHUB_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Services Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎯 **Main App:** \`${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 🤖 **LiteLLM AI:** \`ai.${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 **Promtail Logging:** Container monitoring active" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔀 **Caddy Proxy:** SSL termination & routing" >> $GITHUB_STEP_SUMMARY
