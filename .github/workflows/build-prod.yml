@@ -30,6 +30,12 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
       IMAGE_NAME: ghcr.io/${{ github.repository }}
 
+      # Build-time dummy env vars (schema-valid, non-secret)
+      NODE_ENV: test
+      APP_BASE_URL: http://localhost:3000
+      DATABASE_URL: sqlite://build.db
+      LITELLM_MASTER_KEY: build-key
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

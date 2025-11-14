@@ -52,6 +52,11 @@ describe("env schemas", () => {
       // intentionally missing required keys
     });
 
-    await expect(import("../../../src/shared/env/server")).rejects.toThrow();
+    await expect(async () => {
+      const { ensureServerEnv } = await import(
+        "../../../src/shared/env/server"
+      );
+      ensureServerEnv(); // should throw ZodError
+    }).rejects.toThrow();
   });
 });

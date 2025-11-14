@@ -15,16 +15,49 @@
 import { NextResponse } from "next/server";
 
 import { metaHealthOperation } from "@/contracts/meta.health.read.v1.contract";
+import { ensureServerEnv, EnvValidationError } from "@/shared/env";
 
 export const dynamic = "force-static";
 
 export function GET(): NextResponse {
-  const payload = {
-    status: "healthy" as const,
-    timestamp: new Date().toISOString(),
-    version: "0",
-  };
+  try {
+    ensureServerEnv();
 
-  const parsed = metaHealthOperation.output.parse(payload);
-  return NextResponse.json(parsed);
+    const payload = {
+      status: "healthy" as const,
+      timestamp: new Date().toISOString(),
+      version: "0",
+    };
+
+    const parsed = metaHealthOperation.output.parse(payload);
+    return NextResponse.json(parsed);
+  } catch (error) {
+    if (error instanceof EnvValidationError) {
+      return new NextResponse(
+        JSON.stringify({
+          status: "error",
+          reason: error.meta.code,
+          details: error.meta,
+        }),
+        {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }
+
+    /*
+     * Fallback for unexpected errors
+     */
+    return new NextResponse(
+      JSON.stringify({
+        status: "error",
+        reason: "INTERNAL_ERROR",
+      }),
+      {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }
+    );
+  }
 }
