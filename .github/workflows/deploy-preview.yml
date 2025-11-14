@@ -54,8 +54,21 @@ jobs:
           echo "$SSH_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
+          # Validate key file
+          echo "SSH key file size: $(wc -c ~/.ssh/deploy_key)"
+          echo "SSH key first line: $(head -1 ~/.ssh/deploy_key)"
+          echo "SSH key last line: $(tail -1 ~/.ssh/deploy_key)"
+
           # Known hosts
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+
+          # Test SSH connection
+          echo "Testing SSH connection..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=10 root@"$VM_HOST" "echo 'SSH test successful'" || {
+            echo "SSH test failed. Key fingerprint:"
+            ssh-keygen -lf ~/.ssh/deploy_key || echo "Could not read key fingerprint"
+            exit 1
+          }
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
           VM_HOST: ${{ secrets.VM_HOST }}
