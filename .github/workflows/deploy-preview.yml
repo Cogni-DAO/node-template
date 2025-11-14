@@ -1,19 +1,6 @@
 name: Deploy (Preview)
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: "PR number to deploy"
-        required: true
-        type: number
-      image_tag:
-        description: "Docker image tag to deploy"
-        required: false
-        type: string
   workflow_run:
     workflows: ["Build & Test Preview"]
     types: [completed]
