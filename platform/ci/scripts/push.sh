@@ -46,6 +46,9 @@ if [[ -z "${GHCR_USERNAME:-}" ]]; then
     exit 1
 fi
 
+# Ensure IMAGE_NAME is lowercase for Docker registry compatibility
+IMAGE_NAME=$(echo "${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')
+
 # Set full image reference
 FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 
