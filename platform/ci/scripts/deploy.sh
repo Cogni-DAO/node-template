@@ -4,6 +4,10 @@
 
 set -euo pipefail
 
+# Resolve repo root robustly
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
 on_fail() {
   code=$?
   echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
@@ -11,16 +15,16 @@ on_fail() {
   if [[ -n "${VM_HOST:-}" && -f "$SSH_KEY_PATH" ]]; then
     ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
       echo "=== docker compose ps ==="
-      cd /opt/cogni/runtime && docker compose ps || echo "docker compose ps failed"
+      cd /opt/cogni-runtime && docker compose ps || echo "docker compose ps failed"
 
       echo "=== logs: app ==="
-      cd /opt/cogni/runtime && docker compose logs --tail 80 app || true
+      cd /opt/cogni-runtime && docker compose logs --tail 80 app || true
 
       echo "=== logs: litellm ==="
-      cd /opt/cogni/runtime && docker compose logs --tail 80 litellm || true
+      cd /opt/cogni-runtime && docker compose logs --tail 80 litellm || true
 
       echo "=== logs: caddy ==="
-      cd /opt/cogni/runtime && docker compose logs --tail 80 caddy || true
+      cd /opt/cogni-runtime && docker compose logs --tail 80 caddy || true
 EOF
   fi
 
@@ -141,12 +145,11 @@ log_info() {
 
 log_info "Setting up runtime environment on VM..."
 
-# Create required directories
-sudo mkdir -p /etc/caddy /etc/promtail /etc/litellm /var/lib/promtail
+# Create required directories for data persistence
+sudo mkdir -p /var/lib/promtail
 
-# Create runtime directory and copy docker-compose.yml
-sudo mkdir -p /opt/cogni/runtime
-cd /opt/cogni/runtime
+# Change to runtime bundle directory
+cd /opt/cogni-runtime
 
 # Write environment file
 log_info "Creating runtime environment file..."
@@ -179,17 +182,14 @@ EOF
 # Make deployment script executable
 chmod +x "$ARTIFACT_DIR/deploy-remote.sh"
 
-# Copy docker-compose.yml and configs to VM via SSH
-log_info "Uploading docker-compose.yml and configuration files..."
-ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni/runtime /etc/caddy /etc/promtail /etc/litellm /var/lib/promtail"
+# Deploy runtime bundle to VM via rsync
+log_info "Deploying runtime bundle to VM..."
+ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-runtime"
 
-# Upload docker-compose.yml
-scp $SSH_OPTS platform/infra/services/runtime/docker-compose.yml root@"$VM_HOST":/opt/cogni/runtime/
-
-# Upload configuration files
-scp $SSH_OPTS platform/infra/services/runtime/configs/Caddyfile.tmpl root@"$VM_HOST":/etc/caddy/Caddyfile
-scp $SSH_OPTS platform/infra/services/runtime/configs/promtail-config.yaml root@"$VM_HOST":/etc/promtail/config.yaml
-scp $SSH_OPTS platform/infra/services/runtime/configs/litellm.config.yaml root@"$VM_HOST":/etc/litellm/config.yaml
+# Upload entire runtime bundle atomically
+rsync -av -e "ssh $SSH_OPTS" \
+  "$REPO_ROOT/platform/infra/services/runtime/" \
+  root@"$VM_HOST":/opt/cogni-runtime/
 
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
