@@ -71,13 +71,6 @@ jobs:
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: platform/ci/scripts/build.sh
 
-  push:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -85,15 +78,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image
+      - name: Push image to GHCR
         env:
-          IMAGE_NAME: ${{ needs.build.outputs.image_name }}
-          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          IMAGE_NAME: ${{ steps.meta.outputs.image_name }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: platform/ci/scripts/push.sh
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [build, push]
+    needs: build
     environment:
       name: preview
       url: https://${{ vars.DOMAIN }}
@@ -181,7 +174,7 @@ jobs:
 
   promote:
     runs-on: ubuntu-latest
-    needs: [build, push, deploy, e2e]
+    needs: [build, deploy, e2e]
     if: ${{ success() }}
     permissions:
       contents: write
