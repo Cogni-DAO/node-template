@@ -130,6 +130,7 @@ pnpm setup github --env production
 - `scripts/setup/bootstrap.ts` with subcommands: `local`, `infra`, `github`
 - Hard-coded secret lists and branch rules (no YAML specs for v0)
 - Uses `gh` CLI for GitHub API, assumes user Auth
+- Disable Vercel telemetry: pnpm exec next telemetry disable
 
 **Error handling:**
 
