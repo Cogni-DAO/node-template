@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
 
+permissions: {} # lock GITHUB_TOKEN to no permissions
+
 jobs:
   block-non-release:
     runs-on: ubuntu-latest
