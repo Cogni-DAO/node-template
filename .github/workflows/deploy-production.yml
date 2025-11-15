@@ -34,7 +34,7 @@ jobs:
           if [ -n "${{ github.event.inputs.image_tag }}" ]; then
             IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           else
-            IMAGE_TAG="app-${GITHUB_SHA}"
+            IMAGE_TAG="prod-${GITHUB_SHA}"
           fi
 
           echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV

@@ -122,7 +122,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    environment: preview
+    environment:
+      name: preview
+      url: https://${{ secrets.DOMAIN }}
     env:
       NEXT_TELEMETRY_DISABLED: 1
       PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
