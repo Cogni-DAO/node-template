@@ -40,6 +40,13 @@ export const heroButtonContainer = cva(
 );
 
 /**
+ * Hero button with badges container for CTA + KPI metrics layout
+ */
+export const heroButtonWithBadges = cva(
+  "flex flex-col items-center gap-[var(--spacing-lg)]"
+);
+
+/**
  * Hero visual container with responsive grid positioning and flex behavior
  */
 export const heroVisualContainer = cva(

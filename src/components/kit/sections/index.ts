@@ -19,6 +19,7 @@ export {
   featureContent,
   featureItem,
   heroButtonContainer,
+  heroButtonWithBadges,
   heroTextWrapper,
   heroVisualContainer,
   smallIcon,

@@ -14,7 +14,10 @@
 
 export { Reveal } from "./kit/animation/Reveal";
 export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";
+export { Badge } from "./kit/data-display/Badge";
 export { GithubButton } from "./kit/data-display/GithubButton";
+export { KpiBadge, type KpiBadgeProps } from "./kit/data-display/KpiBadge";
+export { KpiBadgeRow } from "./kit/data-display/KpiBadgeRow";
 export { TerminalFrame } from "./kit/data-display/TerminalFrame";
 export { Button } from "./kit/inputs/Button";
 export { ModeToggle } from "./kit/inputs/ModeToggle";
@@ -25,6 +28,7 @@ export { SkipLink } from "./kit/navigation/SkipLink";
 export {
   Hero,
   heroButtonContainer,
+  heroButtonWithBadges,
   heroTextWrapper,
   heroVisualContainer,
 } from "./kit/sections";
