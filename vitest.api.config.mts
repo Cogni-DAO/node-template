@@ -8,7 +8,7 @@
  * Invariants: Uses tsconfigPaths plugin for clean @/core resolution; loads .env.test for isolation; anchored at repo root.
  * Side-effects: process.env (.env.test injection)
  * Notes: Plugin-only approach eliminates manual alias conflicts; explicit tsconfig.json reference ensures path accuracy.
- * Links: tsconfig.json paths, tests/api/**/*.spec.ts
+ * Links: tsconfig.json paths, API test files
  * @public
  */
 
