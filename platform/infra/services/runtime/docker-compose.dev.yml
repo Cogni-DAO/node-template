@@ -34,9 +34,8 @@ services:
     restart: unless-stopped
     ports:
       - "4000:4000"
-    environment:
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+    env_file:
+      - ../../../../.env.local
     volumes:
       - ./configs/litellm.config.yaml:/app/config.yaml:ro
     command: --config /app/config.yaml --host 0.0.0.0 --port 4000
