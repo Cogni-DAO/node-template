@@ -1,14 +1,31 @@
-import { defineConfig } from "vitest/config";
-import path from "path";
-import { fileURLToPath } from "node:url";
-import { config } from "dotenv";
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/**
+ * Module: `vitest.api.config.mts`
+ * Purpose: Vitest configuration for API integration tests with simplified TypeScript path resolution.
+ * Scope: Configures API test environment and module resolution. Does not handle unit tests.
+ * Invariants: Uses tsconfigPaths plugin for clean @/core resolution; loads .env.test for isolation; anchored at repo root.
+ * Side-effects: process.env (.env.test injection)
+ * Notes: Plugin-only approach eliminates manual alias conflicts; explicit tsconfig.json reference ensures path accuracy.
+ * Links: tsconfig.json paths, API test files
+ * @public
+ */
+
+import { defineConfig } from "vitest/config";
+import tsconfigPaths from "vite-tsconfig-paths";
+import { config } from "dotenv";
 
 // Load .env.test for API integration tests
 config({ path: ".env.test" });
 
 export default defineConfig({
+  root: ".",
+  plugins: [
+    tsconfigPaths({
+      projects: ["./tsconfig.json"],
+    }),
+  ],
   test: {
     globals: true,
     environment: "node",
@@ -23,18 +40,5 @@ export default defineConfig({
     ],
     testTimeout: 10_000,
     hookTimeout: 10_000,
-  },
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@shared": path.resolve(__dirname, "./src/shared"),
-      "@core": path.resolve(__dirname, "./src/core"),
-      "@ports": path.resolve(__dirname, "./src/ports"),
-      "@features": path.resolve(__dirname, "./src/features"),
-      "@adapters": path.resolve(__dirname, "./src/adapters"),
-      "@components": path.resolve(__dirname, "./src/components"),
-      "@contracts": path.resolve(__dirname, "./src/contracts"),
-      "@tests": path.resolve(__dirname, "./tests"),
-    },
   },
 });
