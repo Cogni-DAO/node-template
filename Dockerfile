@@ -1,29 +1,53 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-FROM node:20-alpine AS deps
+# Base image – shared between deps and builder
+FROM node:20-alpine AS base
 WORKDIR /app
 RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
 
-FROM node:20-alpine AS builder
-WORKDIR /app
-RUN corepack enable
+# 1) Dependencies (full, including dev) – cached by package.json + pnpm-lock.yaml
+FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
+
+# 2) Build – reuse node_modules from deps
+FROM base AS builder
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Build-time env defaults – NOT secrets
+ARG DATABASE_URL=sqlite://build.db
+ARG LITELLM_MASTER_KEY=build-key
+ARG APP_ENV=production
+
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production \
+    DATABASE_URL=$DATABASE_URL \
+    LITELLM_MASTER_KEY=$LITELLM_MASTER_KEY \
+    APP_ENV=$APP_ENV
+
 RUN pnpm build
 
+# 3) Runtime – minimal, uses Next.js standalone output
 FROM node:20-alpine AS runner
 WORKDIR /app
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-RUN apk add --no-cache curl
 
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nextjs \
+  && apk add --no-cache curl
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 ENV LOG_FORMAT=json
+
 LABEL org.opencontainers.image.title="cogni-template"
 
+# Copy only what we actually need to run
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -31,9 +55,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 
 EXPOSE 3000
-ENV PORT=3000
-ENV NODE_ENV=production
-ENV HOSTNAME=0.0.0.0
 
 HEALTHCHECK --interval=10s --timeout=2s --start-period=15s --retries=3 \
   CMD curl -fsS http://0.0.0.0:3000/api/v1/meta/health || exit 1
