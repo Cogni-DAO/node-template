@@ -150,6 +150,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] ├── contracts/ # operation contracts (edge IO)
 [x] │ ├── AGENTS.md
 [x] │ ├── http/ # HTTP route contracts
+[x] │ ├── admin.accounts.register.v1.contract.ts # account registration
+[x] │ ├── admin.accounts.topup.v1.contract.ts # credit top-up
 [x] │ └── \*.contract.ts # individual operation contracts
 [ ] │
 [x] ├── mcp/ # MCP host (future)
@@ -160,12 +162,19 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ ├── layout.tsx
 [x] │ ├── page.tsx
 [x] │ ├── \_facades/ # server-side facades for UI
+[x] │ │ └── accounts/ # account management facades
 [ ] │ ├── providers.tsx # QueryClient, Wagmi, RainbowKit
 [ ] │ ├── (public)/
 [ ] │ ├── (protected)/
 [x] │ └── api/
 [x] │ ├── v1/meta/ # health, route-manifest, openapi
-[x] │ ├── v1/ai/completion/ # AI completion endpoint
+[x] │ ├── v1/ai/completion/ # AI completion endpoint  
+[x] │ └── admin/ # admin control plane endpoints
+[x] │ ├── accounts/
+[x] │ │ ├── register-litellm-key/ # POST - create account for API key
+[x] │ │ └── [accountId]/
+[x] │ │ └── credits/
+[x] │ │ └── topup/ # POST - manual credit funding
 [ ] │ ├── balance/route.ts # exposes credits
 [ ] │ ├── keys/create/route.ts # API-key issuance
 [ ] │ └── web3/verify/route.ts # calls wallet verification port
@@ -174,8 +183,13 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ ├── home/ # home page data
 [x] │ ├── ai/ # AI completion services
 [x] │ │ └── services/
+[x] │ ├── accounts/ # account management feature
+[x] │ │ ├── public.ts # feature public API (single entrypoint)
+[x] │ │ ├── errors.ts # feature error types and guards
+[x] │ │ └── services/
+[x] │ │ └── adminAccounts.ts # admin account operations
 [x] │ └── site-meta/ # meta services (health, routes)
-[x] │ ├── services/
+[x] │ └── services/
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
@@ -193,6 +207,12 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ │ ├── model.ts
 [x] │ │ ├── rules.ts
 [x] │ │ └── public.ts
+[x] │ ├── accounts/ # account domain model
+[x] │ │ ├── model.ts # account entities and business rules
+[x] │ │ ├── errors.ts # domain errors (InsufficientCreditsError)
+[x] │ │ └── public.ts # domain exports
+[x] │ ├── billing/ # billing domain logic
+[x] │ │ └── pricing.ts # credit cost calculations
 [x] │ └── public.ts # core exports
 [ ] │ ├── auth/
 [ ] │ │ ├── session.ts
@@ -207,11 +227,11 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] ├── ports/ # contracts (minimal interfaces)
 [x] │ ├── llm.port.ts # LLM service interface (LlmCaller)
 [x] │ ├── clock.port.ts # Clock { now(): Date }
+[x] │ ├── accounts.port.ts # AccountService interface (create, debit, credit)
 [x] │ └── index.ts # port exports
 [ ] │ ├── wallet.port.ts # WalletService { verifySignature(...) }
 [ ] │ ├── auth.port.ts # AuthService { issueNonce, verifySiwe, session }
 [ ] │ ├── apikey.port.ts # ApiKeyRepo { create, revoke, findByHash }
-[ ] │ ├── accounts.port.ts # AccountService { checkCredits, deductCredits }
 [ ] │ ├── usage.port.ts # UsageRepo { recordUsage, findByApiKey }
 [ ] │ ├── telemetry.port.ts # Telemetry { trace, event, span }
 [ ] │ ├── ratelimit.port.ts # RateLimiter { take(key, points) }
@@ -220,18 +240,21 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] ├── adapters/ # infrastructure implementations (no UI)
 [x] │ ├── server/
 [x] │ │ ├── ai/litellm.adapter.ts # LLM service impl
+[x] │ │ ├── accounts/ # account service implementation
+[x] │ │ │ └── drizzle.adapter.ts # database-backed AccountService
 [x] │ │ ├── db/ # database client and connection
 [x] │ │ │ ├── drizzle.client.ts # drizzle instance
+[x] │ │ │ ├── client.ts # main database client export
 [x] │ │ │ └── index.ts # db exports
 [x] │ │ ├── time/system.adapter.ts # system clock
 [x] │ │ └── index.ts # server adapter exports
 [x] │ └── test/ # fake implementations for CI
+[x] │ ├── AGENTS.md # test adapter documentation
 [x] │ ├── ai/fake-llm.adapter.ts # test LLM adapter
 [x] │ └── index.ts # test adapter exports
 [ ] │ ├── auth/siwe.adapter.ts # nonce + session store
 [ ] │ ├── wallet/verify.adapter.ts # viem-based signature checks
 [ ] │ ├── apikey/drizzle.repo.ts # API keys persistence
-[ ] │ ├── accounts/drizzle.adapter.ts # account/credit operations
 [ ] │ ├── telemetry/langfuse.adapter.ts # traces + spans
 [ ] │ ├── logging/pino.adapter.ts # log transport
 [ ] │ ├── ratelimit/db-bucket.adapter.ts # simple token-bucket
@@ -254,6 +277,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ │ └── index.ts
 [x] │ ├── util/
 [x] │ │ ├── cn.ts # className utility
+[x] │ │ ├── accountId.ts # stable account ID derivation from API key
 [x] │ │ └── index.ts
 [x] │ └── index.ts
 [ ] │ ├── schemas/

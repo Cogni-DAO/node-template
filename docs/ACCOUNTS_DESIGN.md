@@ -88,7 +88,7 @@ balance_credits DECIMAL(10,2) NOT NULL DEFAULT '0.00' -- computed from ledger
 
 ### Stage 2.5: Control Plane - Account Registration
 
-_Status: Next - implement explicit admin endpoints_
+_Status: Complete - stable account ID derivation and admin routes implemented_
 
 [x] Create stable accountId derivation helper: `src/shared/util/accountId.ts`
 
@@ -122,20 +122,20 @@ if (!account) {
 
 **New Admin Routes (MVP):**
 
-[ ] `POST /admin/accounts/register-litellm-key`
+[x] `POST /admin/accounts/register-litellm-key`
   - Explicitly creates/binds accounts to LiteLLM virtual keys
   - Only way accounts are created in the system
   - Admin auth required
 
-[ ] `POST /admin/accounts/:accountId/credits/topup`
+[x] `POST /admin/accounts/:accountId/credits/topup`
   - Manually adds credits via ledger
   - Required for testing before wallet integration
   - Admin auth required
 
 **Updated Completion Route:**
-- `/api/v1/ai/completion` validates existing accounts only
-- Returns 403 for unknown API keys (never creates accounts)
-- Pure data plane - no account creation side-effects
+[x] `/api/v1/ai/completion` validates existing accounts only
+[x] Returns 403 for unknown API keys (never creates accounts)
+[x] Pure data plane - no account creation side-effects
 
 ### Stage 3: Core Domain Layer
 
@@ -218,7 +218,7 @@ export interface AccountService {
 ```
 
 [x] Add to ports index: `src/ports/index.ts`
-[ ] Create port contract tests: `tests/ports/accounts.port.contract.ts` - Reusable test harness for any AccountService implementation - Validates atomic operations and error conditions
+[x] Create port contract tests: `tests/ports/accounts.port.contract.ts` - Reusable test harness for any AccountService implementation - Validates atomic operations and error conditions
 
 **Key Decisions**:
 - `createAccountForApiKey()` for explicit provisioning (admin routes only)
@@ -228,7 +228,7 @@ export interface AccountService {
 
 ### Stage 5: Database Adapter
 
-_Status: Partially complete - adapters implemented, transactions working_
+_Status: Complete - adapters implemented with full transaction support and error handling_
 
 [x] Implement database adapter: `src/adapters/server/accounts/drizzle.adapter.ts`
 ```typescript
@@ -315,22 +315,22 @@ function toNumber(decimal: string): number { /* ... */ }
 function fromNumber(num: number): string { /* ... */ }
 ```
 
-[x] Create test adapter: `src/adapters/test/accounts/fake-account.adapter.ts`
+[x] Create test adapter: `src/adapters/test/accounts/fake-account.adapter.ts` (removed - replaced with mock fixtures)
 [x] Update server adapter index: `src/adapters/server/index.ts`
-[ ] Integration tests: `tests/integration/adapters/accounts/`
+[x] Integration tests: `tests/integration/api/admin/accounts.int.test.ts`
     - Test against real database using existing infrastructure
     - **Transaction rollback tests**: Simulate insufficient balance, assert no ledger row inserted and balance unchanged
     - **Concurrent debit tests**: Multiple simultaneous debits from near-zero balance, verify one fails and balance ≥ 0
     - **Account provisioning tests**: First call for new API key creates account with zero balance
-[ ] Run port contract tests against database adapter
+[x] Run port contract tests against database adapter
 
 **Key Design**: Ledger-based accounting with computed balance and explicit transaction semantics for token-ready architecture.
 
 ### Stage 6: Feature Integration
 
-_Status: Partially complete - basic service wiring completed, pricing helpers pending_
+_Status: Complete - pricing helpers, credit deduction, and AI integration implemented_
 
-[ ] Add pricing helper: `src/core/billing/pricing.ts`
+[x] Add pricing helper: `src/core/billing/pricing.ts`
 
 ```typescript
 const DEFAULT_MODEL = "gpt-3.5-turbo"; // fallback for missing model info
@@ -347,7 +347,7 @@ export function calculateCost(params: {
   // return params.totalTokens * (modelPricing[params.modelId] || 0.001);
 }
 ```
-[ ] Update completion service: `src/features/ai/services/completion.ts`
+[x] Update completion service: `src/features/ai/services/completion.ts`
 ```typescript
 export async function execute(
   messages: Message[],
@@ -392,14 +392,14 @@ export async function execute(
 }
 ```
 
-[ ] Update LlmService port: `src/ports/llm.port.ts`
+[x] Update LlmService port: `src/ports/llm.port.ts`
     - Add optional `requestId?: string` parameter to completion method
     - Update litellm.adapter.ts to propagate requestId to LiteLLM/Langfuse
 [x] Update bootstrap container: `src/bootstrap/container.ts`
     - Wire AccountService adapter to port
     - Provide dependency injection for completion service
-[ ] Add error handling for credit scenarios in API route
-[ ] Integration tests: Credit flow end-to-end
+[x] Add error handling for credit scenarios in API route
+[x] Integration tests: Credit flow end-to-end
 
 **Critical Flow:**
 
@@ -414,23 +414,23 @@ export async function execute(
 
 ### Stage 7: MVP Admin Endpoints
 
-_Status: Next - implement 3 MVP endpoints for barebones workflow_
+_Status: Complete - all MVP admin endpoints implemented and tested_
 
 **Control Plane (admin-only):**
 
-[ ] `POST /admin/accounts/register-litellm-key`
+[x] `POST /admin/accounts/register-litellm-key`
   - Uses `AccountService.createAccountForApiKey()`
   - Admin auth required
   - Only way to create accounts
 
-[ ] `POST /admin/accounts/:accountId/credits/topup`
+[x] `POST /admin/accounts/:accountId/credits/topup`
   - Uses `AccountService.creditAccount()`
   - Admin auth required
   - Manual credit funding for testing
 
 **Data Plane (updated):**
 
-[ ] Update `POST /api/v1/ai/completion`
+[x] Update `POST /api/v1/ai/completion`
   - Add account validation: `AccountService.getAccountByApiKey()`
   - Return 403 for unknown keys (no auto-creation)
   - Existing credit debit logic unchanged
