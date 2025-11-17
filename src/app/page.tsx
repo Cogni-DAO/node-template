@@ -15,16 +15,15 @@
 import { ArrowRight } from "lucide-react";
 import type { ReactElement } from "react";
 
-import {
-  Button,
-  heroButtonWithBadges,
-  type KpiBadgeProps,
-  KpiBadgeRow,
-} from "@/components";
+import { Button, heroButtonWithBadges } from "@/components";
 import { FeaturesSection } from "@/features/home/components/FeaturesSection";
 import { HeroContent } from "@/features/home/components/HeroContent";
 import { HomeCtaSection } from "@/features/home/components/HomeCtaSection";
 import { HomeHeroSection } from "@/features/home/components/HomeHeroSection";
+import {
+  type KpiBadgeProps,
+  KpiBadgeRow,
+} from "@/features/home/components/KpiBadge";
 import { Terminal } from "@/features/home/components/Terminal";
 
 const kpiBadges: KpiBadgeProps[] = [
