@@ -23,13 +23,7 @@ export { Container } from "./kit/layout/Container";
 export { Header } from "./kit/layout/Header";
 export { NavigationLink } from "./kit/navigation/NavigationLink";
 export { SkipLink } from "./kit/navigation/SkipLink";
-export {
-  Hero,
-  heroButtonContainer,
-  heroButtonWithBadges,
-  heroTextWrapper,
-  heroVisualContainer,
-} from "./kit/sections";
+export { Hero } from "./kit/sections";
 export {
   type CodeToken,
   CodeTokenLine,
