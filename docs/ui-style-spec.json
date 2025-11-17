@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "tokens": {
+    "sourceFiles": ["src/styles/tailwind.css", "src/styles/theme.ts"],
+    "colorPrefixes": [
+      "bg-surface",
+      "bg-accent",
+      "bg-border",
+      "bg-fg",
+      "text-fg",
+      "text-accent",
+      "text-surface",
+      "border-border",
+      "ring-border",
+      "shadow-surface"
+    ],
+    "allowedBracketPattern": "\\\\[var\\\\(--[a-z0-9-]+\\\\)\\\\]",
+    "arbitraryValueRule": "Any Tailwind arbitrary value must wrap var(--token)"
+  },
+  "lintRules": {
+    "noRawColors": {
+      "id": "no-raw-colors",
+      "description": "Block hex/rgb/hsl literals and non-token bg/text/border/ring/shadow classes.",
+      "enforcedIn": "eslint.config.mjs"
+    },
+    "noArbitraryNonTokenValues": {
+      "id": "no-arbitrary-non-token-values",
+      "description": "Block arbitrary Tailwind utilities unless they wrap var(--token).",
+      "enforcedIn": "eslint.config.mjs"
+    },
+    "tokenClassnamePatterns": {
+      "id": "token-classname-patterns",
+      "description": "Require token-prefixed color/typography utilities (bg-surface-*, text-fg-*, border-border-*).",
+      "enforcedIn": "eslint.config.mjs"
+    },
+    "noVendorImportsOutsideKit": {
+      "id": "no-vendor-imports-outside-kit",
+      "description": "Only allow imports from src/components/vendor/ui-primitives/shadcn/** inside src/components/kit/**.",
+      "enforcedIn": "eslint.config.mjs"
+    }
+  },
+  "kit": {
+    "path": "src/components/kit",
+    "classNamePolicy": "className overrides allowed for layout/composition only; colors/typography remain tokenized via CVA."
+  },
+  "vendor": {
+    "path": "src/components/vendor/ui-primitives/shadcn",
+    "usage": "Never imported outside kit wrappers."
+  },
+  "featureLayer": {
+    "path": "src/features/*/components",
+    "allowedUtilities": "Standard Tailwind layout utilities plus token-prefixed color/typography classes."
+  }
+}
