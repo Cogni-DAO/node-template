@@ -12,10 +12,16 @@
  * @public
  */
 
+import { cva } from "class-variance-authority";
 import { ArrowRight } from "lucide-react";
 import type { ReactElement } from "react";
 
-import { Button, heroButtonWithBadges } from "@/components";
+import { Button } from "@/components";
+
+// Hero button with badges layout (page-specific)
+const heroButtonWithBadges = cva(
+  "flex flex-col items-center gap-[var(--spacing-lg)]"
+);
 import { FeaturesSection } from "@/features/home/components/FeaturesSection";
 import { HeroContent } from "@/features/home/components/HeroContent";
 import { HomeCtaSection } from "@/features/home/components/HomeCtaSection";
