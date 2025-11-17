@@ -81,9 +81,9 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 ## Directory & Boundary Specification
 
-[ ] .env.example # sample env vars for all services
-[ ] .env.local.example # local-only env template (never committed)
-[ ] .gitignore # standard git ignore list
+[x] .env.example # sample env vars for all services
+[x] .env.local.example # local-only env template (never committed)
+[x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
 [x] .prettierrc # code formatting config
@@ -93,8 +93,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] tailwind.config.ts # Tailwind theme + presets
 [x] tsconfig.json # typescript + alias paths
 [x] tsconfig.eslint.json # eslint typescript config
-[ ] package.json # deps, scripts, engines
-[ ] Dockerfile # reproducible build
+[x] package.json # deps, scripts, engines
+[x] Dockerfile # reproducible build
 [ ] .dockerignore # ignore node_modules, artifacts, .env.\*
 [x] LICENSE # OSS license
 [x] CODEOWNERS # review ownership
@@ -110,9 +110,9 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] ├── ARCHITECTURE.md # narrative + diagrams (longform)
 [x] └── UI_IMPLEMENTATION_GUIDE.md # practical UI development workflows
 
-[ ] platform/ # platform tooling and infrastructure
-[ ] ├── infra/ # Infrastructure as Code and deployment configs
-[ ] │ ├── providers/
+[x] platform/ # platform tooling and infrastructure
+[x] ├── infra/ # Infrastructure as Code and deployment configs
+[x] │ ├── providers/
 [ ] │ │ ├── cherry/
 [ ] │ │ │ ├── base/ # VM + static bootstrap (immutable)
 [ ] │ │ │ └── app/ # SSH deploy + health gate (mutable)
@@ -299,6 +299,16 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 - **Contracts**: `tests/contract` must pass for any adapter.
 - **Env**: Zod-validated; build fails on invalid/missing.
 - **Security**: middleware sets headers, verifies session or API key, rate-limits.
+
+### Styling Invariants
+
+- **Single source of truth:** All visual tokens (color, typography, spacing, radii, shadows) live in `src/styles/tailwind.css` + `src/styles/theme.ts`. Tailwind’s palette is trimmed to those semantics.
+- **Token-safe utilities:** `bg-*/text-*/border-*/ring-*/shadow-*` classes MUST use token prefixes (`bg-surface-*`, `text-fg-*`, `border-border-*`, etc.) or bracketed `var(--token)` forms. Raw hex/rgb/hsl values are blocked by `no-raw-colors`.
+- **Arbitrary values:** Tailwind arbitrary utilities are only allowed when they wrap `var(--token)` (`gap-[var(--spacing-lg)]`). `no-arbitrary-non-token-values` enforces this.
+- **Kit responsibilities:** `src/components/kit/*` components use CVA + tokens for core styling but can expose `className?: string` for layout/composition overrides only (flex/grid/gap/margin). Color/typography overrides via `className` remain disallowed.
+- **Feature ergonomics:** `src/features/*/components` may use standard Tailwind layout utilities so long as they pass the token rules above. Reusable UI should be promoted into kit.
+- **Vendor isolation:** Only kit wrappers may import from `src/components/vendor/ui-primitives/shadcn/**`. `no-vendor-imports-outside-kit` enforces this boundary.
+- **Machine-readable spec:** `docs/ui-style-spec.json` describes the allowed prefixes/patterns so AI tooling and scripts can audit styling automatically.
 
 ---
 
