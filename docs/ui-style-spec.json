@@ -1,5 +1,63 @@
 {
   "version": 1,
+  "inventory": {
+    "source": "docs/ui-component-inventory.json",
+    "description": "Machine-readable inventory of canonical kit components, vendor primitives, and cleanup tasks. Update both files together."
+  },
+  "components": {
+    "canonical": {
+      "source": "docs/ui-component-inventory.json#kit",
+      "notes": "Treat the kit entries marked `canonical` as the reusable public surface."
+    },
+    "gaps": {
+      "source": "docs/ui-component-inventory.json#gaps",
+      "notes": "Represents missing kit wrappers (Input, Textarea, Card, Dropdown) that must be filled before deleting vendor files."
+    },
+    "featureOnly": {
+      "source": "docs/ui-component-inventory.json#featureOnly",
+      "notes": "Tracks components intentionally kept inside feature slices (e.g., home-specific KPI badges)."
+    }
+  },
+  "componentReusePolicy": {
+    "rule": "Always search the canonical kit list before creating UI in features.",
+    "steps": [
+      "Check `components.canonical` for an existing primitive that matches at least 70% of your needs.",
+      "If it exists, extend via props or className (layout-only) instead of creating a new primitive.",
+      "If no canonical primitive fits, keep the implementation in the feature layer until it proves reusable.",
+      "Only promote new kit primitives after confirming multiple consumers; record them in docs/ui-component-inventory.json."
+    ]
+  },
+  "shadcnIntegration": {
+    "source": "shadcn/ui",
+    "componentsJson": "components.json (aliases.components/ui -> src/components/kit, aliases.utils -> @/shared/util/cn)",
+    "playbook": [
+      "1. Confirm no existing canonical primitive already covers the need.",
+      "2. Run `npx shadcn add <component>` (scaffolds into kit via components.json aliases).",
+      "3. Convert all classes to semantic tokens (bg-background, text-foreground, etc.).",
+      "4. Wrap Radix primitives as needed and wire variants through CVA.",
+      "5. Add the component to `docs/ui-component-inventory.json` under kit (canonical or feature-specific).",
+      "6. Run `pnpm check` to ensure ui-governance rules and lint tests still pass."
+    ]
+  },
+  "newComponentGuide": {
+    "fromScratch": [
+      "1. Search docs/ui-component-inventory.json for an existing primitive.",
+      "2. If it will be reused, place it under `src/components/kit/<category>/` and drive styling via CVA + tokens.",
+      "3. Expose `className?: string` for layout overrides and merge via `cn`.",
+      "4. Document purpose/invariants in the TSDoc header.",
+      "5. Register the component (and any CVA helpers) in docs/ui-component-inventory.json.",
+      "6. Re-run `pnpm check`."
+    ]
+  },
+  "cleanupPlan": {
+    "focus": [
+      "Absorb remaining vendor primitives (avatar, dropdown-menu, flip-words, github-button).",
+      "Relocate feature-only kit components (Hero, CtaSection, FeaturesGrid, etc.) into the features layer or generalize them.",
+      "Delete redundant CVA files once their single-use components move (e.g., hero styles).",
+      "Introduce kit wrappers for Input, Textarea, Card, Dropdown, then remove vendor duplicates."
+    ],
+    "tracking": "Update docs/ui-component-inventory.json `status` fields as each action completes."
+  },
   "tokens": {
     "sourceFiles": ["src/styles/tailwind.css", "src/styles/theme.ts"],
     "colorSuffixes": [

@@ -55,16 +55,6 @@ export {
 // Code components
 export { codeToken, heroActionContainer, heroCodeBlock } from "./code";
 
-// KPI components
-export {
-  kpiBadge,
-  kpiBadgeImage,
-  kpiBadgeLink,
-  kpiBadgeRow,
-  type KpiBadgeSize,
-  type KpiBadgeTone,
-} from "./kpi-badge";
-
 // Overlay components
 export {
   dropdownContent,

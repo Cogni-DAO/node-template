@@ -63,6 +63,7 @@ Use these templates for different file types:
 - [google/gts](https://github.com/google/gts)
 - [TSDoc](https://tsdoc.org/)
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Layer boundaries
+- [UI Component Inventory](ui-component-inventory.json) - Canonical kit + vendor tracking (keep in sync with `docs/ui-style-spec.json`)
 - `eslint.config.mjs` - Linting rules
 - `tsconfig.json` - TypeScript config
 
@@ -80,6 +81,7 @@ NEW changes to relax policy
 - [x] Implement ESLint rules `no-raw-colors`, `no-arbitrary-non-token-values`, `token-classname-patterns`, and `no-vendor-imports-outside-kit` inside `eslint.config.mjs`.
 - [x] Verify the Tailwind theme exposes only the semantic token palette expected by the new lint rules (remove default `blue-500`/`gray-700` palettes, ensure colors/fonts map to tokens).
 - [x] Create and reference a machine-readable token spec (e.g., `docs/ui-style-spec.json`) for AI governance tooling and style audits.
+- [ ] Keep `docs/ui-component-inventory.json` up to date with canonical kit primitives, vendor dependencies, and pending cleanup items (see UI Style Spec for structure).
 - [ ] Update kit components under `src/components/kit/*` to expose layout-only `className` overrides while keeping CVA/tokens as the source of core styling.
 
 _Phase 1 MVP = all items above. Complete these before tackling the cleanup tasks below._
