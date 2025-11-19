@@ -98,6 +98,7 @@ REQUIRED_SECRETS=(
     "DATABASE_URL"
     "LITELLM_MASTER_KEY"
     "OPENROUTER_API_KEY"
+    "SESSION_SECRET"
     "VM_HOST"
 )
 
@@ -183,9 +184,11 @@ cat > .env << ENV_EOF
 DOMAIN=${DOMAIN}
 APP_ENV=${APP_ENV}
 APP_IMAGE=${APP_IMAGE}
+APP_BASE_URL=https://${DOMAIN}
 DATABASE_URL=${DATABASE_URL}
 LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+SESSION_SECRET=${SESSION_SECRET}
 ENV_EOF
 
 log_info "Logging into GHCR for private image pulls..."
@@ -196,6 +199,9 @@ docker compose pull
 
 log_info "Stopping existing containers..."
 docker compose down || true
+
+log_info "Running database migrations..."
+docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
 
 log_info "Starting runtime stack..."
 docker compose up -d --remove-orphans
@@ -224,7 +230,7 @@ rsync -av -e "ssh $SSH_OPTS" \
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' SESSION_SECRET='$SESSION_SECRET' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."
