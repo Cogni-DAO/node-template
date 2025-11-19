@@ -18,11 +18,23 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - APP_ENV=${APP_ENV}
-      - APP_BASE_URL=https://${DOMAIN}
+      - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
+      # Database configuration: supports both DATABASE_URL (prod) and component vars (local)
       - DATABASE_URL=${DATABASE_URL}
+      - DB_HOST=postgres
+      - DB_PORT=${DB_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - PORT=${PORT:-3000}
+      - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
     depends_on:
+      postgres:
+        condition: service_healthy
       litellm:
         condition: service_healthy
 
@@ -78,8 +90,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-cogni_template_dev}
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
