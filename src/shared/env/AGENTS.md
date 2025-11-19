@@ -42,10 +42,9 @@ Single source of truth for environment variables. Validates at load time with Zo
 
 - `server.ts`: serverEnv (typed)
 - `client.ts`: clientEnv (typed)
-- `db-url.ts`: buildDatabaseUrl (pure function)
 - `index.ts`: re-exports + getEnv, requireEnv
 
-**Files considered API:** server.ts, client.ts, db-url.ts, index.ts
+**Files considered API:** server.ts, client.ts, index.ts
 **Routes/CLI:** none
 **Env/Config keys:** defined below
 
@@ -53,7 +52,6 @@ Single source of truth for environment variables. Validates at load time with Zo
 
 - `server.ts` → server-only, private vars. Never import from client code.
 - `client.ts` → public, browser-safe vars (NEXT*PUBLIC*\* only).
-- `db-url.ts` → pure function for constructing DATABASE_URL from components.
 - `index.ts` → re-exports and tiny helpers.
 
 ## Vars by layer
@@ -135,7 +133,7 @@ import { getEnv, requireEnv } from "@shared/env";
 When adding/removing keys, update:
 
 - schema in server.ts or client.ts,
-- buildDatabaseUrl function in db-url.ts if DB-related,
+- buildDatabaseUrl function in @shared/db if DB-related,
 - Vars by layer list above,
 - .env.example,
 - tests touching env.

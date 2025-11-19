@@ -14,7 +14,7 @@
 
 import { defineConfig } from "drizzle-kit";
 
-import { buildDatabaseUrl, type DbEnvInput } from "./src/shared/env/db-url";
+import { buildDatabaseUrl, type DbEnvInput } from "./src/shared/db/db-url";
 
 const dbUrl = buildDatabaseUrl(process.env as DbEnvInput);
 
