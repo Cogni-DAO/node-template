@@ -14,7 +14,7 @@
 
 import { z, ZodError } from "zod";
 
-import { buildDatabaseUrl } from "./db-url";
+import { buildDatabaseUrl } from "@/shared/db";
 
 export interface EnvValidationMeta {
   code: "INVALID_ENV";

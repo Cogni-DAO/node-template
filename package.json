@@ -21,7 +21,7 @@
     "docker:dev:stack:migrate": "docker compose --env-file .env.local -f platform/infra/services/runtime/docker-compose.dev.yml run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'",
     "docker:test:stack": "dotenv -e .env.test -e .env.local -- docker compose -f platform/infra/services/runtime/docker-compose.dev.yml up -d",
     "docker:test:stack:build": "dotenv -e .env.test -e .env.local -- docker compose -f platform/infra/services/runtime/docker-compose.dev.yml up -d --build",
-    "docker:test:stack:migrate": "dotenv -e .env.test -e .env.local -- docker compose -f platform/infra/services/runtime/docker-compose.dev.yml run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'",
+    "docker:test:stack:migrate": "dotenv -e .env.test -- docker compose -f platform/infra/services/runtime/docker-compose.dev.yml run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'",
     "docker:down": "docker compose -f platform/infra/services/runtime/docker-compose.yml down",
     "docker:stack": "docker compose -f platform/infra/services/runtime/docker-compose.yml up -d",
     "docker:stack:build": "docker compose -f platform/infra/services/runtime/docker-compose.yml up -d --build",

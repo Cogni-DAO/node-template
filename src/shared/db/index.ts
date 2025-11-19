@@ -3,8 +3,8 @@
 
 /**
  * Module: `@shared/db`
- * Purpose: Barrel export for database schema and related utilities.
- * Scope: Exposes database schema and related utilities. Does not handle connections or migrations.
+ * Purpose: Barrel export for database schema and URL construction utilities.
+ * Scope: Exposes database schema and URL construction utilities. Does not handle connections or migrations.
  * Invariants: Only re-exports public APIs; maintains type safety.
  * Side-effects: none
  * Notes: Used by adapters for database operations
@@ -12,4 +12,5 @@
  * @public
  */
 
+export * from "./db-url";
 export * from "./schema";

@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@shared/env/db-url`
- * Purpose: Single source of truth for constructing PostgreSQL DATABASE_URL from env pieces.
- * Scope: Safe to import from both app env (`serverEnv`) and tooling (`drizzle.config.ts`). Does not handle validation or defaults.
+ * Module: `@shared/db/db-url`
+ * Purpose: Database URL construction utility for PostgreSQL connections.
+ * Scope: Single source of truth for DATABASE_URL construction from env pieces. Safe for both app runtime and tooling. Does not handle connections or validation.
  * Invariants: No Next.js imports, no zod, no side-effects; pure function only.
  * Side-effects: none
  * Notes: Throws on missing required pieces; no configuration options to keep tooling simple.
- * Links: Environment configuration specification
+ * Links: Used by server env validation and drizzle configuration
  * @public
  */
 
@@ -37,7 +37,7 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
   }
 
   if (!Number.isFinite(port)) {
-    throw new Error(`Invalid DB_PORT value: ${env.DB_PORT}`);
+    throw new TypeError(`Invalid DB_PORT value: ${env.DB_PORT}`);
   }
 
   return `postgresql://${user}:${password}@${host}:${port}/${db}`;
