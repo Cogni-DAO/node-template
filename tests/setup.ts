@@ -3,12 +3,12 @@
 
 /**
  * Module: `@tests/setup`
- * Purpose: Verifies global test environment setup and isolation across all test suites under controlled conditions.
- * Scope: Configures test environment, env vars, and cleanup hooks. Does NOT mock specific services or ports.
- * Invariants: Tests run in isolation; env vars reset between suites; minimal configuration prevents validation errors.
- * Side-effects: process.env
- * Notes: Integration tests override minimal env vars; beforeAll/afterEach hooks ensure test isolation.
- * Links: vitest.config.mts
+ * Purpose: Global test environment setup with HTTP dispatcher configuration for SSL certificate handling and test isolation.
+ * Scope: Configures test environment, env vars, and undici HTTP agents. Does NOT mock specific services or ports.
+ * Invariants: Tests run in isolation; env vars reset between suites; HTTP agents handle localhost SSL correctly.
+ * Side-effects: process.env, global (HTTP dispatcher)
+ * Notes: Creates dual HTTP agents (strict external, relaxed localhost); no explicit agent cleanup to prevent suite failures.
+ * Links: vitest.config.mts, stack test setup
  * @public
  */
 
@@ -23,6 +23,11 @@ import { afterEach, beforeAll } from "vitest";
  * - Integration tests: real infra with clean setup/teardown
  * - Contract tests: port compliance verification
  */
+
+// Global agents for cleanup
+let strictAgent: Agent;
+let localhostAgent: Agent;
+let dispatcher: Dispatcher;
 
 beforeAll(() => {
   // Set test environment - minimal required for env validation
@@ -39,20 +44,20 @@ beforeAll(() => {
   });
 
   // Create two agents: strict for external, relaxed for localhost
-  const strictAgent = new Agent({
+  strictAgent = new Agent({
     connect: {
       rejectUnauthorized: true,
     },
   });
 
-  const localhostAgent = new Agent({
+  localhostAgent = new Agent({
     connect: {
       rejectUnauthorized: false, // Accept self-signed certs for localhost only
     },
   });
 
   // Custom dispatcher as plain object implementing Dispatcher interface
-  const dispatcher = {
+  dispatcher = {
     dispatch(
       opts: Dispatcher.DispatchOptions,
       handler: Dispatcher.DispatchHandler
@@ -66,9 +71,9 @@ beforeAll(() => {
       return agent.dispatch(opts, handler);
     },
     close() {
-      strictAgent.close();
-      localhostAgent.close();
-      return Promise.resolve();
+      return Promise.all([strictAgent.close(), localhostAgent.close()]).then(
+        () => undefined
+      );
     },
     destroy(err?: Error | null) {
       if (err) {
