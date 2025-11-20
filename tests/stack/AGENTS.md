@@ -24,7 +24,8 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 {
   "layer": "tests",
   "may_import": ["shared", "types"],
-  "must_not_import": ["app", "features", "core", "adapters", "ports"]
+  "must_not_import": ["app", "features", "core", "adapters", "ports"],
+  "database_access": "external_client_only"
 }
 ```
 
@@ -49,19 +50,21 @@ Requires running Docker Compose stack with app+postgres services.
 # One-time setup (creates test database and runs migrations)
 pnpm test:stack:setup
 
-# Start stack first
-pnpm dev:stack  # or docker:stack
+# Start infrastructure for testing
+pnpm dev:stack:test  # or pnpm docker:test:stack:fast
 
 # Run stack tests (automatically resets test database)
-pnpm test:stack
+pnpm test:stack:dev  # or pnpm test:stack:docker
 ```
 
 ## Standards
 
-- Tests make real HTTP requests to TEST_BASE_URL
+- **HTTP-first testing**: Stack tests MUST NOT import app DB clients, adapters, or server internals
+- Tests make real HTTP requests to TEST_BASE_URL as primary interface
+- Database inspection allowed via exposed ports (e.g., for verifying side effects)
 - Use .stack.test.ts extension
 - Focus on API contract compliance, not business logic
-- Clean up test data in afterAll/afterEach hooks
+- Database is reset automatically between test runs (no manual cleanup needed)
 
 ## Dependencies
 
