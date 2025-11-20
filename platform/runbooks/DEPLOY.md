@@ -1,5 +1,7 @@
 # Quick Deploy Guide
 
+Manual deployment process for testing. For automated setup design, see [SETUP_DESIGN.md](../../scripts/setup/SETUP_DESIGN.md).
+
 (Note: guide needs full walkthrough + review still. 90% accurate)
 
 ## 1. Generate SSH Deploy Key
@@ -47,12 +49,14 @@ For database architecture details, see [DATABASES.md](../../docs/DATABASES.md).
 ssh-add ~/.ssh/cogni_template_preview_deploy
 
 # Build and Push to GHCR
+export IMAGE_NAME=ghcr.io/cogni-dao/cogni-template
+export IMAGE_TAG=preview-local-$(git rev-parse --short HEAD)
 platform/ci/scripts/build.sh && platform/ci/scripts/push.sh
 
 # Set all environment variables
 export DEPLOY_ENVIRONMENT=preview
 export APP_ENV=production
-export APP_IMAGE=ghcr.io/cogni-dao/cogni-template:app-abc123
+export APP_IMAGE=$IMAGE_NAME:$IMAGE_TAG
 export DOMAIN=preview.cognidao.org
 export VM_HOST=your-vm-ip
 export DATABASE_URL="postgresql://cogni_app_preview:$APP_DB_PASSWORD_PREVIEW@postgres:5432/cogni_template_preview"
