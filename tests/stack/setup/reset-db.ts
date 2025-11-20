@@ -12,27 +12,53 @@
  * @internal
  */
 
-import { sql } from "drizzle-orm";
+import postgres from "postgres";
 
-import { db } from "@/adapters/server/db/drizzle.client";
+import { buildDatabaseUrl } from "@/shared/db/db-url";
 
-export default async () => {
+export default async function resetStackTestDatabase() {
   console.log("🧹 Resetting stack test database...");
+
+  // Build DATABASE_URL from environment pieces (consistent with app behavior)
+  const dbEnv: Record<string, string | number | undefined> = {
+    POSTGRES_USER: process.env.POSTGRES_USER,
+    POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD,
+    POSTGRES_DB: process.env.POSTGRES_DB,
+    DB_HOST: process.env.DB_HOST,
+    DB_PORT: process.env.DB_PORT,
+  };
+
+  // Filter out undefined values to satisfy exactOptionalPropertyTypes
+  const filteredEnv = Object.fromEntries(
+    Object.entries(dbEnv).filter(([, value]) => value !== undefined)
+  );
+
+  const databaseUrl = process.env.DATABASE_URL ?? buildDatabaseUrl(filteredEnv);
+
+  const sql = postgres(databaseUrl, {
+    max: 1, // Use only one connection for setup
+    connection: {
+      application_name: "vitest_stack_reset",
+    },
+  });
 
   try {
     // Wipe tables in dependency-safe order
     // TRUNCATE is faster than DELETE and resets sequences
-    await db.execute(sql`TRUNCATE TABLE accounts RESTART IDENTITY CASCADE`);
+    await sql`TRUNCATE TABLE accounts RESTART IDENTITY CASCADE`;
 
     // Add more tables here as needed for stack tests
-    // Example: await db.execute(sql`TRUNCATE TABLE credit_ledger, other_table RESTART IDENTITY CASCADE`);
+    // Example: await sql`TRUNCATE TABLE credit_ledger, other_table RESTART IDENTITY CASCADE`;
 
     console.log("✅ Stack test database reset complete");
   } catch (error) {
     console.error("❌ Failed to reset stack test database:", error);
     throw error;
+  } finally {
+    // Always close the connection to prevent leaks
+    await sql.end();
   }
 
   // No teardown needed for stack tests
   return () => Promise.resolve();
-};
+}
