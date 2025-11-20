@@ -15,7 +15,6 @@ jobs:
       github.event.pull_request.base.ref == 'main' &&
       startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest
-
     steps:
       - name: Check if ready to merge
         id: ready
@@ -67,4 +66,3 @@ jobs:
             --body "Automated merge by Cogni-1729 automation after required checks passed."
 
           echo "✅ Successfully merged release PR"
-
