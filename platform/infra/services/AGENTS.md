@@ -14,7 +14,7 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 
 ## Pointers
 
-- [runtime/](runtime/): Production and development Docker Compose stacks
+- [runtime/](runtime/): **PROTECTED** Production runtime configuration (copied to VMs)
 - [loki-promtail/](loki-promtail/): Log aggregation and monitoring stack
 - [litellm/](litellm/): LLM model routing and budget configurations
 - [langfuse/](langfuse/): Observability and telemetry stack
@@ -48,6 +48,8 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 
 - This directory **does**: Define supporting service configurations, compose files, and database initialization scripts
 - This directory **does not**: Handle application deployment or business logic
+
+**SECURITY NOTE**: The `runtime/` subdirectory is copied to production VMs and contains deployment-critical configuration.
 
 ## Usage
 
