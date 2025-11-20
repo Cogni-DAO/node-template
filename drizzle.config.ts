@@ -17,9 +17,16 @@ import { defineConfig } from "drizzle-kit";
 import { buildDatabaseUrl, type DbEnvInput } from "./src/shared/db/db-url";
 
 function getDatabaseUrl(): string {
-  // Use DATABASE_URL directly if available (testcontainers, platforms)
-  if (process.env.DATABASE_URL) {
-    return process.env.DATABASE_URL;
+  const directUrl = process.env.DATABASE_URL?.trim();
+
+  if (directUrl) {
+    try {
+      // Ensure direct URLs are valid; fall back to component pieces otherwise
+      new URL(directUrl);
+      return directUrl;
+    } catch {
+      // swallow and fall back to component pieces
+    }
   }
 
   // Fall back to constructing from individual pieces (canonical local dev)
