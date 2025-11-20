@@ -1,5 +1,10 @@
 name: Auto-merge release PRs
 
+# Behavior:
+# - Not on main: job skipped
+# - On main but not ready: job fails (red), no merge
+# - On main and ready: job succeeds and merges
+
 on:
   pull_request_review:
     types: [submitted]
@@ -67,6 +72,8 @@ jobs:
             echo "🟢 PR #${{ github.event.pull_request.number }} is ready to auto-merge"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "❌ PR #${{ github.event.pull_request.number }} is NOT ready to auto-merge"
+            exit 1
           fi
 
       - name: Auto-merge release PR
