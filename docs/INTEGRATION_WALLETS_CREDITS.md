@@ -1,8 +1,14 @@
 # App Integration: Wallets, LiteLLM Keys, and Credits
 
-This document explains how the Next.js app, wallets (wagmi/RainbowKit), LiteLLM virtual keys, and the Accounts & Credits system fit together within our hexagonal architecture.
+This document tracks wallet connectivity implementation (Steps 1-4) for the frontend user onboarding flow.
 
-Directly implementing the frontend for [docs/ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md).
+**Related Documentation:**
+
+- System architecture: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
+- Billing evolution (Stages 4-7): [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
+- API contracts: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
+
+**Scope:** Frontend wallet connectivity using wagmi/RainbowKit, backend `/api/v1/wallet/link` endpoint, and basic chat UI integration. For billing system evolution (dual-cost, markup, profit enforcement), see [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md).
 
 ---
 
