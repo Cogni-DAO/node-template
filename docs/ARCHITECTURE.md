@@ -95,7 +95,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 ## Directory & Boundary Specification
 
 [x] .env.example # sample env vars for all services
-[ ] .env.local.example # local-only env template (never committed)
+[x] .env.local.example # local-only env template (never committed)
 [x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
@@ -109,12 +109,12 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] package.json # deps, scripts, engines (db scripts added)
 [x] drizzle.config.ts # database migrations config
 [x] Dockerfile # reproducible build
-[ ] .dockerignore # ignore node_modules, artifacts, .env.\*
+[x] .dockerignore # ignore node_modules, artifacts, .env.\*
 [x] LICENSE # OSS license
 [x] CODEOWNERS # review ownership
 [x] SECURITY.md # disclosure policy
 [x] CONTRIBUTING.md # contribution standards
-[ ] README.md # overview
+[x] README.md # overview
 [ ] CHANGELOG.md # releases
 [ ] middleware.ts # headers, session/API-key guard, basic rate-limit
 [x] vitest.config.mts # unit/integration
@@ -123,7 +123,21 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 
 [x] docs/
 [x] ├── ARCHITECTURE.md # narrative + diagrams (longform)
-[x] └── UI_IMPLEMENTATION_GUIDE.md # practical UI development workflows
+[x] ├── ACCOUNTS_DESIGN.md # accounts & credits system design
+[x] ├── ACCOUNTS_API_KEY_ENDPOINTS.md # API endpoint contracts
+[x] ├── INTEGRATION_WALLETS_CREDITS.md # wallet connectivity (Steps 1-4)
+[x] ├── BILLING_EVOLUTION.md # billing system evolution (Stages 5-7)
+[x] ├── DATABASES.md # database architecture
+[x] ├── ENVIRONMENTS.md # environment configuration
+[x] ├── ERROR_HANDLING_ARCHITECTURE.md # error handling patterns
+[x] ├── FEATURE_DEVELOPMENT_GUIDE.md # feature development workflows
+[x] ├── IMPLEMENTATION_PLAN.md # implementation roadmap
+[x] ├── SETUP.md # developer setup guide
+[x] ├── STYLE.md # code style guide
+[x] ├── TESTING.md # testing strategy
+[x] ├── UI_IMPLEMENTATION_GUIDE.md # practical UI development workflows
+[x] ├── CI-CD.md # CI/CD documentation
+[x] └── templates/ # document templates
 
 [x] platform/ # platform tooling and infrastructure
 [x] ├── infra/ # Infrastructure as Code and deployment configs
@@ -140,8 +154,8 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ └── files/ # Shared templates and utility scripts
 [x] ├── ci/ # CI/CD automation
 [x] ├── bootstrap/ # One-time dev machine setup installers
-[ ] │ ├── install/ # Focused installer scripts (tofu, pnpm, docker, reuse)
-[ ] │ └── README.md # Installation instructions
+[x] │ ├── install/ # Focused installer scripts (tofu, pnpm, docker, reuse)
+[x] │ └── README.md # Installation instructions
 [x] └── runbooks/ # Deploy, rollback, incident docs
 
 [ ] public/
@@ -161,6 +175,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── http/ # HTTP route contracts
 [x] │ ├── admin.accounts.register.v1.contract.ts # account registration
 [x] │ ├── admin.accounts.topup.v1.contract.ts # credit top-up
+[x] │ ├── wallet.link.v1.contract.ts # wallet-to-account linking
 [x] │ └── \*.contract.ts # individual operation contracts
 [ ] │
 [x] ├── mcp/ # MCP host (future)
@@ -171,8 +186,15 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── layout.tsx
 [x] │ ├── page.tsx
 [x] │ ├── \_facades/ # server-side facades for UI
-[x] │ │ └── accounts/ # account management facades
-[x] │ ├── providers/ # Client-side provider composition
+[x] │ │ ├── accounts/ # account management facades
+[x] │ │ └── wallet/ # wallet linking facades
+[x] │ ├── providers/ # Client-side provider composition (wagmi, RainbowKit, React Query)
+[x] │ │ ├── AGENTS.md
+[x] │ │ ├── app-providers.client.tsx
+[x] │ │ ├── wallet.client.tsx
+[x] │ │ ├── query.client.tsx
+[x] │ │ └── wagmi-config-builder.ts
+[x] │ ├── wallet-test/ # Dev wallet test harness
 [ ] │ ├── (public)/
 [ ] │ ├── (protected)/
 [x] │ └── api/
@@ -198,8 +220,14 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ ├── errors.ts # feature error types and guards
 [x] │ │ └── services/
 [x] │ │ └── adminAccounts.ts # admin account operations
-[x] │ └── site-meta/ # meta services (health, routes)
-[x] │ └── services/
+[x] │ ├── site-meta/ # meta services (health, routes)
+[x] │ │ └── services/
+[ ] │ ├── chat/ # wallet-linked chat feature (Step 4)
+[ ] │ │ ├── components/
+[ ] │ │ ├── hooks/
+[ ] │ │ └── services/
+[ ] │ ├── payments/ # on-chain payment processing (Stage 7)
+[ ] │ │ └── services/
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
@@ -323,10 +351,14 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 
 [x] tests/
 [x] ├── \_fakes/ # deterministic test doubles (stubs only)
-[x] ├── \_fixtures/ # static test data (stubs only)
-[x] ├── unit/ # core rules + features with mocked ports (structure only)
+[x] ├── \_fixtures/ # static test data including wallet test data
+[x] ├── unit/ # core rules + features with mocked ports
+[x] ├── stack/ # stack tests against dev infrastructure
 [x] ├── integration/ # adapters against local services (stubs only)
 [x] ├── contract/ # reusable port contract harness (stubs only)
+[x] ├── ports/ # port contract tests
+[x] ├── security/ # security validation tests
+[x] ├── lint/ # ESLint rule tests
 [x] └── setup.ts
 
 [x] e2e/
@@ -336,9 +368,11 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] scripts/
 [x] ├── validate-agents-md.mjs # validates AGENTS.md files
 [x] ├── validate-doc-headers.ts # validates doc headers
+[x] ├── check-all.sh # structured check workflow with auto-fix mode
+[x] ├── check-root-layout.ts # validates root directory structure
 [x] ├── setup/ # setup scripts
-[x] └── eslint/ # custom ESLint plugins
-[x] ├── plugins/ui-governance.cjs
+[x] ├── eslint/ # custom ESLint plugins
+[x] │ └── plugins/ui-governance.cjs
 [ ] ├── db/ # database scripts
 [ ] │ ├── seed.ts
 [ ] │ └── migrate.ts

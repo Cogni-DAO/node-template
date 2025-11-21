@@ -283,22 +283,39 @@ _Not part of current work. Document at high level only._
 - `scripts/reconcile/daily-profit.ts` - Daily profit calculation
 - `scripts/reconcile/compare-litellm-invoice.ts` - Invoice reconciliation
 
-### 7.2 On-Chain Integration ⏸️ FUTURE
+### 7.2 On-Chain Integration with Resmic ⏸️ FUTURE
 
-- [ ] Design wallet payment detection system
-  - [ ] Monitor USDC/token transfers to DAO contract
-  - [ ] Write `credit_ledger` entries with `reason="onchain_deposit"`
-- [ ] Implement on-chain payment monitoring
-  - [ ] Block watcher service
-  - [ ] Automatic credit top-up workflows
+**Reference:** [Resmic SDK Documentation](https://docs.resmic.com/resmic-sdk/getting-started/usage/cryptopayment)
+
+- [ ] Install Resmic SDK for crypto payment processing
+- [ ] Create PaymentService port in `src/ports/payment.port.ts`
+  - [ ] Interface for initiating payment requests
+  - [ ] Interface for validating payment confirmations
+- [ ] Implement Resmic adapter: `src/adapters/server/payments/resmic.adapter.ts`
+  - [ ] Wrap Resmic SDK for payment initiation
+  - [ ] Handle webhook signature validation
+- [ ] Add webhook endpoint: `POST /api/v1/webhooks/resmic`
+  - [ ] Validate webhook signature from Resmic
+  - [ ] Extract payment data: amount, wallet address, transaction hash
+  - [ ] Convert USDC amount to credits via `CREDITS_PER_USDC`
+  - [ ] Call `AccountService.creditAccount` with `reason="onchain_deposit"`
+  - [ ] Store transaction hash in ledger metadata for audit trail
+- [ ] Frontend payment UI (Step 4 extension)
+  - [ ] Integrate Resmic payment widget
+  - [ ] Display payment status
+  - [ ] Show credit balance updates after payment confirmation
 - [ ] Build payment reconciliation and audit systems
+  - [ ] Query ledger for all `onchain_deposit` entries
+  - [ ] Compare with Resmic dashboard/API
 - [ ] Connect to DAO multi-sig wallet for payment collection
 
 **Potential files:**
 
-- `src/adapters/server/blockchain/` - Blockchain monitoring adapters
-- `src/features/payments/` - Payment processing feature
-- `scripts/blockchain/watch-deposits.ts` - Block watcher
+- `src/ports/payment.port.ts` - Payment service interface
+- `src/adapters/server/payments/resmic.adapter.ts` - Resmic SDK integration
+- `src/app/api/v1/webhooks/resmic/route.ts` - Payment webhook handler
+- `src/features/payments/` - Payment UI components and hooks
+- `scripts/reconcile/compare-resmic.ts` - Resmic payment reconciliation
 
 ---
 
