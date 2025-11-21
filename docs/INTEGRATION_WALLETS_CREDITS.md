@@ -4,6 +4,61 @@ This document explains how the Next.js app, wallets (wagmi/RainbowKit), LiteLLM 
 
 Directly implementing the frontend for [docs/ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md).
 
+---
+
+## MVP Wallet Loop Implementation Progress
+
+**Goal:** Implement the wallet-linked MVP loop on top of the existing accounts + credits + completion backend.
+
+### Step 1: Define shared HTTP contract for /api/v1/wallet/link ✅ COMPLETE
+
+- [x] Define WalletLinkRequest type with `address` field (string for MVP, future-proofed for viem Address type)
+- [x] Define WalletLinkResponse type containing `accountId` and `apiKey` as strings
+- [x] Place contract in `src/contracts/wallet.link.v1.contract.ts` following existing patterns
+- [x] Add Zod schemas for runtime validation matching WalletLinkRequest/Response
+- [x] Create unit tests verifying contract shapes (12 tests passing)
+- [x] Single source of truth for /wallet/link request and response shapes
+- [x] Types compile and can be imported from both backend and frontend code
+- [x] All tests pass, `pnpm check` green (232 tests passing total)
+
+**Files Created:**
+
+- `src/contracts/wallet.link.v1.contract.ts` - Contract with Zod schemas and TypeScript types
+- `tests/unit/contracts/wallet.link.v1.contract.test.ts` - 12 unit tests validating contract
+
+### Step 2: Implement /api/v1/wallet/link backend route ⏸️ PENDING
+
+- [ ] Create API route for POST /api/v1/wallet/link
+- [ ] Parse and validate JSON as WalletLinkRequest
+- [ ] Implement MVP strategy for apiKey resolution (single configured key or minimal DB mapping)
+- [ ] Derive accountId from apiKey using deriveAccountIdFromApiKey helper
+- [ ] Ensure account exists using AccountService (create-if-missing with zero balance)
+- [ ] Return WalletLinkResponse: { accountId, apiKey }
+- [ ] Handle errors: 400 for malformed requests, 5xx for internal failures
+- [ ] Add tests covering happy-path, invalid body, and failure scenarios
+
+### Step 3: Install wallet libraries and add global providers ⏸️ PENDING
+
+- [ ] Add dependencies: wagmi, viem, @rainbow-me/rainbowkit, @tanstack/react-query
+- [ ] Create Providers component configuring wagmi, React Query, and RainbowKit
+- [ ] Wrap root app layout with Providers component
+- [ ] Configure target EVM chain (Base network)
+- [ ] Verify development build runs with all providers configured
+- [ ] Test component can read connected wallet address via useAccount
+
+### Step 4: Wire wallet link into chat flow ⏸️ PENDING
+
+- [ ] Add wallet connect UI element
+- [ ] Implement client function to call POST /api/v1/wallet/link with shared contract types
+- [ ] Store returned accountId and apiKey client-side (context or localStorage for MVP)
+- [ ] Create minimal chat UI sending messages to /api/v1/ai/completion
+- [ ] Set Authorization header to stored apiKey
+- [ ] Render assistant messages on success
+- [ ] Show clear error state for credit-related errors (402 status)
+- [ ] Verify end-to-end: wallet connect → link → admin seed credits → chat → debit
+
+---
+
 ## High-Level Flow
 
 1. User connects an EVM wallet in the browser.
