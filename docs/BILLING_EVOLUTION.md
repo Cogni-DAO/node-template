@@ -2,6 +2,8 @@
 
 Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) with profit-enforcing billing and provider cost tracking.
 
+**Stage 6.5 applies after the Auth.js + billing_accounts + virtual_keys MVP is in place; it does not change auth, only how we compute and store costs for each LLM call.**
+
 **Context:**
 
 - System architecture: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
@@ -21,15 +23,19 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 - All balances stored as BIGINT integers
 - Default markup: 2.0× (100% markup = 50% margin)
 
+**MVP Credit Top-Ups:**
+
+Credits UP (real users) are handled via `POST /api/v1/payments/resmic/webhook`. The webhook verifies the Resmic signature, resolves the user's `billing_account_id`, inserts a positive `credit_ledger` entry with `reason='resmic_payment'` (or `'onchain_deposit'`), and updates `billing_accounts.balance_credits`.
+
 ---
 
 ### 6.5.1 Migrate Credits to Integer Units
 
-**Goal:** Change accounts.balance_credits and credit_ledger.delta to BIGINT, reset balances to 0 for pre-launch clean slate.
+**Goal:** Change billing_accounts.balance_credits and credit_ledger.amount to BIGINT, reset balances to 0 for pre-launch clean slate.
 
 **Files:**
 
-- `drizzle/migrations/0001_integer_credits.sql` - ALTER TABLE to BIGINT, reset to 0
+- `src/shared/db/migrations/*_integer_credits.sql` - ALTER TABLE to BIGINT, reset to 0
 - `src/shared/db/schema.ts` - Update type definitions to BIGINT
 
 **Notes:**
@@ -43,12 +49,17 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 
 **Goal:** Track provider_cost_credits and user_price_credits per call for audit and profit verification.
 
-**Schema:** id, account_id, request_id, model, prompt_tokens, completion_tokens, provider_cost_credits (BIGINT), user_price_credits (BIGINT), markup_factor_applied, created_at
+**Schema:** id, billing_account_id (FK → billing_accounts.id), virtual_key_id (FK → virtual_keys.id), request_id, model, prompt_tokens, completion_tokens, provider_cost_credits (BIGINT), user_price_credits (BIGINT), markup_factor_applied, created_at
 
 **Files:**
 
-- `drizzle/migrations/0002_llm_usage_tracking.sql` - CREATE TABLE with indexes
+- `src/shared/db/migrations/*_llm_usage_tracking.sql` - CREATE TABLE with indexes
 - `src/shared/db/schema.ts` - Add llmUsage table definition
+
+**Notes:**
+
+- Mirrors credit_ledger by linking both billing_account_id and virtual_key_id
+- Enables tracking which specific virtual key (and LiteLLM virtual key) generated each LLM call
 
 ---
 
@@ -95,9 +106,39 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 
 **Goal:** Single AccountService method that records llm_usage and debits user_price_credits in one transaction.
 
-**New Port Method:** `recordLlmUsage(accountId, requestId, model, tokens, provider_cost_credits, user_price_credits, markup_factor)`
+**New Port Method:**
 
-**Implementation:** Single DB transaction inserting llm_usage row, credit_ledger debit, updating accounts.balance_credits, enforcing non-negative balance
+```typescript
+recordLlmUsage(
+  billingAccountId: string,
+  virtualKeyId: string,
+  requestId: string,
+  model: string,
+  promptTokens: number,
+  completionTokens: number,
+  providerCostCredits: bigint,
+  userPriceCredits: bigint,
+  markupFactorApplied: number
+): Promise<void>
+```
+
+**Implementation:** Single DB transaction that:
+
+1. Inserts llm_usage row with all fields
+2. Inserts credit_ledger debit row (amount = -userPriceCredits, billing_account_id, virtual_key_id)
+3. Updates billing_accounts.balance_credits
+4. Enforces non-negative balance
+
+**Insufficient Balance Handling (MVP):**
+
+When `user_price_credits` exceeds current balance:
+
+- Commit full debit (allowing negative balance temporarily)
+- Record complete `llm_usage` row (full audit trail of provider cost)
+- Update `billing_accounts.balance_credits` to negative value
+- Throw `InsufficientCreditsError` after commit (logged but not blocking)
+
+This strategy ensures full cost visibility while accepting temporary overdraft risk in MVP. Post-MVP will add pre-call estimation to prevent negative balances.
 
 **Files:**
 
@@ -108,6 +149,7 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 **Notes:**
 
 - debitForUsage becomes internal helper or deprecated for LLM billing
+- Both llm_usage and credit_ledger get billing_account_id + virtual_key_id for consistent tracking
 
 ---
 
@@ -154,7 +196,6 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 
 - Pre-call max-cost estimation and 402 without calling LLM
 - Reconciliation scripts and monitoring dashboards
-- On-chain payment watchers and Resmic integration
 - credit_holds table for soft reservations
 - Complex historical balance migrations (using pre-launch reset instead)
 
