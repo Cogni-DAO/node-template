@@ -1,13 +1,70 @@
 # Security & Authentication Specification
 
-**Purpose:** Define the SIWE-based wallet authentication system for wallet-linked chat.
+**Purpose:** Define the Auth.js + SIWE wallet authentication system for wallet-linked chat.
 
-**Scope:** Session-based authentication using Sign-In with Ethereum (SIWE), replacing the insecure localStorage API key pattern.
+**Scope:** Session-based authentication using Auth.js Credentials provider with the official `siwe` library for EIP-4361 message verification, replacing the insecure localStorage API key pattern.
 
 **Related:**
 
-- Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md) (Steps 4A and 4)
+- Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
 - System architecture: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
+
+---
+
+## One Sentence Summary
+
+User signs SIWE message via RainbowKit → Auth.js Credentials provider creates Postgres session → API routes read session → resolve user.id → billing_account → default virtual_key → LiteLLM call.
+
+---
+
+## True MVP Definition
+
+**What MVP includes:**
+
+- Auth.js session-only authentication (HttpOnly cookies, no Bearer token support)
+- SIWE via Credentials provider + `siwe` library
+- Session → user.id → billing_account → virtual_key resolution
+- LiteLLM virtual key provisioning on first login (via `/key/generate` with master key)
+- Credit deduction per LLM request
+- Clean database reset (no migration from old schema)
+
+**What MVP explicitly excludes (post-MVP):**
+
+- Programmatic access via `Authorization: Bearer <virtual_key>` header (session-only for MVP)
+- Multi-wallet per user
+- On-chain payment integration
+- Custom `/api/v1/auth/*` endpoints (we only use Auth.js `/api/auth/*`)
+
+---
+
+## API Auth Policy (MVP)
+
+**Architectural Principle:** Versioned APIs (`/api/v1/*`) are protected product surfaces. Unversioned infrastructure/meta endpoints (`/health`, `/openapi.json`, `/meta/*`) are intentionally public and live outside versioned paths.
+
+**MVP supports Auth.js sessions only.** Programmatic access via `Authorization: Bearer <virtual_key>` and an operator/control-plane HTTP API are explicitly post-MVP.
+
+**Public Infrastructure/Meta Endpoints (No Auth Required):**
+
+- `/health` - Healthcheck for liveness/readiness probes
+- `/openapi.json` - OpenAPI specification document
+- `/meta/route-manifest` - Route manifest for testing/debugging
+- `/api/auth/*` - Auth.js routes (signin, signout, session, csrf)
+
+**User Session Required (Versioned Product API):**
+
+- `/api/v1/ai/*` - All LLM and credit-impacting endpoints
+  - `/api/v1/ai/completion` - Chat endpoint with credit deduction
+- Any new `/api/v1/*` routes that use LLM or affect credits must be session-protected
+
+**Payment Webhooks (Public, Webhook Signature Auth):**
+
+- `POST /api/v1/payments/resmic/webhook` - Resmic payment webhook for credit top-ups (verified via webhook signature)
+
+**Provisioning & Operations (Not HTTP in MVP):**
+
+- **Virtual key provisioning:** Happens internally in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)` using LiteLLM MASTER_KEY, not via HTTP endpoints
+- **Credit top-ups (real users):** Handled via Resmic payment webhook (`POST /api/v1/payments/resmic/webhook`). Webhook verifies signature, resolves `billing_account_id`, inserts positive `credit_ledger` entry with `reason='resmic_payment'` or `'onchain_deposit'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
+- **Future operator API:** Post-MVP may add `/api/operator/*` for key management, analytics, and manual adjustments
 
 ---
 
@@ -17,326 +74,468 @@
 
 **Why replacing:** Exposes service API key to JavaScript (XSS risk), no session management, API key is not a user credential.
 
-**Decision:** Implement SIWE + sessions NOW (Step 4A).
+**Decision:** Use industry-standard Auth.js with a Credentials provider that implements SIWE (Sign-In with Ethereum) via the official `siwe` library for message parsing and signature verification, instead of maintaining custom authentication code.
 
 ---
 
-## Target Architecture: SIWE + Sessions
+## Target Architecture: Auth.js + SIWE
 
 ### Core Principle
 
-**API keys are server-only secrets.**
+**LiteLLM virtual keys are server-only secrets.**
 
-- Stored in Postgres (accounts table or future account_api_keys table)
-- Loaded per-request: `session → accountId → apiKey` (server-side lookup)
+- Stored in Postgres `virtual_keys` table, linked to `billing_accounts` via FK
+- Loaded per-request: Auth.js session → user.id → billing_accounts → virtual_keys → LiteLLM virtual key
 - NEVER returned to browser, NEVER in localStorage, NEVER in client JS
 
 **Sessions are the client auth credential.**
 
-- Browser holds HttpOnly session cookie
-- Server resolves: `session cookie → session table → accountId → apiKey`
-- Wallet address used ONCE during login, then just UX
+- Managed by Auth.js (NextAuth v5)
+- Browser holds HttpOnly session cookie (set by Auth.js)
+- Server resolves: session cookie → Auth.js `users` table → user.id → `billing_accounts.owner_user_id` → default `virtual_keys` row → LiteLLM virtual key
+- Wallet address used for login, then just UX
 
 ### Identity Model
+
+**Wallet Address (Primary Identity)**
+
+- User signs in with wallet via SIWE
+- Stored in Auth.js user/account tables
+- Used to look up billing accountId
 
 **Account ID (`accountId`)**
 
 - Billing tenant identifier (not 1:1 with wallet addresses)
-- Server-side auth: session → accountId
-- Optional client exposure for UX only (React context for display)
-- NOT an auth primitive, NOT used for authorization decisions
+- Derived from wallet address or explicit mapping
+- Used internally for credit ledger and LiteLLM routing
+- Optional client exposure for UX only (NOT for authorization)
 
-**Wallet Address**
+**LiteLLM Virtual Key**
 
-- Used during SIWE login to prove ownership
-- Stored as nullable `primary_wallet_address` on accounts (non-unique)
-- Future: `account_wallet_links` table for multi-wallet support (no schema now)
-
-**API Key (`apiKey`)**
-
-- LiteLLM virtual key for upstream provider calls
-- Server-only secret, looked up from accountId
+- Stored in `virtual_keys` table, linked to `billing_accounts`
+- Server-only secret used for upstream LLM provider calls
 - Browser never sees it
+- Looked up from billing accountId via FK relationship
 
 ---
 
-## Step 4A: SIWE Authentication Flow
+## Dependencies
 
-### Overview
+### NPM Packages
 
-1. User connects wallet (wagmi/RainbowKit)
-2. Frontend calls `/api/v1/auth/nonce` with wallet address
-3. Server generates nonce, stores temporarily, returns SIWE message
-4. User signs message with wallet
-5. Frontend calls `/api/v1/auth/verify` with signature
-6. Server verifies signature, creates session, sets HttpOnly cookie
-7. All subsequent requests authenticated via session cookie
+**Required:**
 
-### Endpoint 1: POST /api/v1/auth/nonce
+- `next-auth@beta` (v5) - Core authentication framework
+- `@auth/drizzle-adapter` - Postgres session storage via Drizzle ORM
+- `siwe` - Official Sign-In with Ethereum library
+- `viem` - Already installed (used by SIWE for message verification)
 
-**Request:**
+**Already Installed:**
 
-```typescript
-{
-  address: string;
-}
-```
+- `wagmi` - Wallet connection (existing)
+- `@rainbow-me/rainbowkit` - Wallet UI (existing)
+- `drizzle-orm` - Database ORM (existing)
 
-**Behavior:**
+### File Structure
 
-1. Generate random 128-bit nonce
-2. Store `{ address, nonce, expiresAt }` in database or Redis (5 minute TTL)
-3. Build SIWE-style message:
-   - Domain: server hostname
-   - Chain ID: from request or default
-   - Nonce: generated value
-   - Issued At: current timestamp
+**Configuration:**
 
-**Response:**
+- `src/auth.ts` - Auth.js configuration (providers, callbacks, session strategy)
+- `src/auth.config.ts` (optional) - Shared auth config for middleware
 
-```typescript
-{
-  nonce: string,
-  message: string  // SIWE-formatted message for wallet to sign
-}
-```
+**Database Schema:**
 
-**Implementation Note:** SIWE message format is minimal for MVP. Core elements:
+- Auth.js identity tables (via Drizzle adapter): `users`, `accounts` (Auth.js provider accounts), `sessions`, `verification_tokens`
+- Our billing tables: `billing_accounts` (renamed to avoid collision), `virtual_keys`, `credit_ledger`
+- See "Database Schema" section below for detailed table structure and LiteLLM integration
 
-```
-${domain} wants you to sign in with your Ethereum account:
-${address}
+**API Routes:**
 
-URI: ${uri}
-Version: 1
-Chain ID: ${chainId}
-Nonce: ${nonce}
-Issued At: ${issuedAt}
-```
+- `/api/auth/*` - Auth.js built-in routes (handled automatically)
+  - `/api/auth/signin` - Triggers SIWE flow
+  - `/api/auth/session` - Returns current session
+  - `/api/auth/signout` - Clears session
+  - `/api/auth/csrf` - CSRF token
 
-Full SIWE spec compliance not required; just enough for nonce + domain + wallet-sign + verify pattern.
+**Utilities:**
 
-### Endpoint 2: POST /api/v1/auth/verify
+- `src/lib/auth/helpers.ts` - Session lookup utilities (auth(), getSession())
+- `src/lib/auth/mapping.ts` - User → billing account resolution (getOrCreateBillingAccountForUser)
 
-**Request:** `{ address: string, signature: string }`
+**Implementation Files:**
 
-**Behavior:**
-
-1. Recover address from message + signature (viem)
-2. Validate: recovered address matches, nonce valid and not expired
-3. On success:
-   - Resolve `accountId` for wallet
-   - Create session: `{ sessionId, accountId, walletAddress, expiresAt }`
-   - Set HttpOnly cookie
-4. Return `{ accountId }` (for UX only, NOT apiKey)
-
-**Cookie:** `Set-Cookie: session=<id>; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`
-
-### Session Storage
-
-**Session Table Schema (Postgres):**
-
-```sql
-CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,             -- Opaque UUID
-  account_id TEXT NOT NULL REFERENCES accounts(id),
-  wallet_address TEXT NOT NULL,    -- For audit/display
-  expires_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_sessions_account_id ON sessions(account_id);
-CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
-```
-
-**Cookie Design:**
-
-Cookie stores **opaque sessionId** (NOT JWT payload). Session data lives in Postgres.
-
-**Reference:** Inspired by [next-saas-starter's session.ts](https://github.com/nextjs/saas-starter/blob/main/lib/auth/session.ts) cookie handling pattern, adapted for opaque sessions.
-
-**Cookie Helper Module (`src/features/auth/services/cookie-session.ts`):**
-
-```typescript
-// Read sessionId from cookie
-function getSessionIdFromRequest(req: Request): string | null;
-
-// Set session cookie after SIWE verification
-function setSessionCookie(
-  res: Response,
-  sessionId: string,
-  expiresAt: Date
-): void;
-
-// Clear session cookie on logout
-function clearSessionCookie(res: Response): void;
-```
-
-**Cookie Properties (from next-saas-starter):**
-
-- `httpOnly: true` - XSS protection
-- `secure: true` - HTTPS only
-- `sameSite: 'lax'` - CSRF protection
-- `expires: Date` - From session row's expiresAt
-
-**Key Difference from next-saas-starter:**
-
-- They use JWT (signed token with `{ user: { id }, expires }` payload)
-- We use opaque sessionId (Postgres is source of truth)
-- Our approach enables proper logout/invalidation (delete row)
+- `src/middleware.ts` - Auth middleware for route protection
+- See "API Auth Policy (MVP)" section above for complete list of public vs protected routes
 
 ---
 
-## Step 4: Updated Endpoint Behavior
+## Authentication Flow
 
-### POST /api/v1/wallet/link
+### 1. User Signs In with Wallet
 
-**Behavior:**
+**Client Side:**
 
-- Require valid session (middleware enforces)
-- Read `accountId` from session
-- Ensure account exists + apiKey exists (server-side only)
-- Return `{ accountId }` (no apiKey)
+1. User clicks "Connect Wallet" (RainbowKit)
+2. Wallet connects via wagmi
+3. Frontend calls NextAuth sign-in: `signIn('credentials', { address, signature })`
+4. RainbowKit/wagmi handles SIWE message signing automatically
 
-### POST /api/v1/ai/completion
+**Server Side (Auth.js + SIWE):**
 
-**Dual Auth Mode:**
+1. Auth.js Credentials provider receives `{ message, signature }` from client
+2. Server-side: `new SiweMessage(message).verify({ signature })` using `siwe` library
+3. On success: Extract wallet address, create/load Auth.js `users` record
+4. Auth.js creates session in Postgres `sessions` table
+5. Returns HttpOnly session cookie to browser
 
-1. **Primary:** Check session cookie → get `accountId` → look up `apiKey` server-side
-2. **Fallback:** Check `Authorization: Bearer <apiKey>` header (for programmatic clients)
-3. Return 401 if neither present
+**SIWE Implementation Note:**
 
-Construct `LlmCaller { accountId, apiKey }` and proceed with existing completion logic.
+Auth.js does NOT ship a first-class SIWE provider. We implement SIWE using an Auth.js **Credentials provider** plus the official `siwe` library for parsing and verifying EIP-4361 messages. We do NOT maintain custom `/api/v1/auth/nonce` or `/api/v1/auth/verify` endpoints — all auth flows go through Auth.js standard `/api/auth/*` routes.
+
+**Files Involved:**
+
+- `src/auth.ts` - Auth.js config with Credentials provider + `siwe` verification logic
+- `src/app/providers/auth.client.tsx` - SessionProvider wrapper
+- Auth.js Drizzle adapter - Writes to `users`, `accounts`, `sessions` tables
+
+### 2. Session Cookie Management
+
+**Handled by Auth.js:**
+
+- Cookie name: `authjs.session-token` (production) or `next-auth.session-token` (dev)
+- Security: HttpOnly, Secure, SameSite=Lax
+- Expiry: 30 days default (configurable in `src/auth.ts`)
+- Storage: Postgres via Drizzle adapter
+
+**No custom cookie code needed** - Auth.js handles all cookie operations.
+
+### 3. Protected API Routes
+
+**Example:** `/api/v1/ai/completion/route.ts`
+
+**MVP Per-Request Resolution Flow (Session-Only):**
+
+1. `const session = await auth()` (Auth.js helper). If no session → return 401.
+2. Extract `userId = session.user.id` (Auth.js user ID)
+3. Call `getOrCreateBillingAccountForUser(userId)` from `src/lib/auth/mapping.ts`
+   - Returns `{ billingAccountId, defaultVirtualKeyId, litellmVirtualKey }`
+   - On first login, creates `billing_accounts` row with `owner_user_id = userId` and provisions default virtual key (via LiteLLM `/key/generate` with master key)
+4. Load default `virtual_keys` row for that `billingAccountId` where `is_default = true AND active = true`
+5. Use `virtual_keys.litellm_virtual_key` when calling LiteLLM
+6. After LiteLLM call, record usage in `credit_ledger` with `billing_account_id` and `virtual_key_id`
+
+**Key Point:** The `accountId` in `LlmCaller` is the `billing_accounts.id`. API keys are now LiteLLM virtual keys stored in the `virtual_keys` table, NOT directly in a billing_accounts column.
+
+**Post-MVP: Dual Auth Mode (NOT in initial implementation)**
+
+Future enhancement to support programmatic clients:
+
+- Accept `Authorization: Bearer <litellm_virtual_key>` header
+- Look up `virtual_keys` by key, resolve to `billing_accounts`, proceed
+- MVP is **session-only**; raw Bearer auth is explicitly post-MVP
+
+### 4. Frontend Session Access
+
+**Pattern:**
+
+React components use Auth.js hooks:
+
+**File:** `src/app/providers/auth.client.tsx`
+
+**Usage:**
+
+- Wrap app in `<SessionProvider>`
+- Components call `useSession()` hook
+- Access user: `session?.user?.address`
+- Display wallet address in UI (NOT for authorization)
+
+**No localStorage needed** - session managed by Auth.js.
 
 ---
 
-## Frontend Changes
+## Database Schema
 
-**SIWE Flow:** Call `/auth/nonce` → wallet signs message → call `/auth/verify` → session cookie set automatically.
+### Table Name Collision Resolution
 
-**Chat Requests:** Call `/ai/completion` with NO Authorization header (session cookie sent automatically).
+**Decision:** Our billing table is renamed from `accounts` to `billing_accounts` to avoid collision with Auth.js's `accounts` table. Auth.js keeps its default table names.
 
-**No localStorage** for API keys. Optional: store `accountId` in React context for display only.
+### Auth.js Identity Tables (Managed by Drizzle Adapter)
+
+**Created automatically when Auth.js runs:**
+
+- `users` - User records (includes wallet address from SIWE)
+- `accounts` - Auth.js provider accounts (links users to auth providers)
+- `sessions` - Active sessions with expiry
+- `verification_tokens` - Email verification (unused for SIWE, but Auth.js creates it)
+
+**Migration:** Auth.js Drizzle adapter auto-migrates these tables.
+
+### Our Billing Tables
+
+**File:** `src/shared/db/schema.ts`
+
+**`billing_accounts` table:**
+
+- `id` (PK) - Billing account identifier
+- `owner_user_id` (FK → `users.id`) - Auth.js user who owns this billing account
+- `balance_credits` - Remaining credits
+- Timestamps: `created_at`, `updated_at`
+
+**`virtual_keys` table:**
+
+- `id` (PK) - Virtual key identifier
+- `billing_account_id` (FK → `billing_accounts.id`) - Which billing account owns this key
+- `litellm_virtual_key` - The actual LiteLLM virtual key string
+- `label` - Human-readable name (e.g., "Default", "Production API")
+- `is_default` - Boolean, marks the default key for this billing account
+- `active` - Boolean, whether key is enabled
+- Timestamps: `created_at`, `updated_at`
+
+**`credit_ledger` table:**
+
+- `id` (PK) - Transaction identifier
+- `billing_account_id` (FK → `billing_accounts.id`) - Which billing account
+- `virtual_key_id` (FK → `virtual_keys.id`, nullable) - Which key was used
+- `amount` - Credit delta (positive = add, negative = deduct)
+- `balance_after` - Balance snapshot after transaction
+- `description` - Transaction description
+- Timestamps: `created_at`
+
+### LiteLLM Integration Model
+
+**Hierarchy:**
+
+- Each `billing_accounts` row owns one or more LiteLLM virtual keys (stored in `virtual_keys` table)
+- LiteLLM Teams/Users are optional analytics labels (not used in MVP)
+- MVP: 1 Auth.js user → 1 billing account → 1+ virtual keys
+
+**User → Billing Account Mapping (MVP Rule):**
+
+1. Auth.js manages `users` (identity, wallet address from SIWE)
+2. On first successful login for `user.id`, we create a `billing_accounts` row if none exists:
+   - Set `owner_user_id = user.id`
+   - Call LiteLLM `/key/generate` with master key to provision a default virtual key
+   - Create one default `virtual_keys` row with `is_default = true`, storing the LiteLLM key string
+3. For MVP, each user has exactly one billing account and at least one virtual key
+4. This mapping logic lives in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)`
 
 ---
 
 ## Implementation Checklist
 
-### Backend (MVP)
+### Phase 0: Database Reset & Route Restructuring (Fresh Start)
 
-- [ ] Add `sessions` table to database schema
-- [ ] Create cookie helper module (`src/features/auth/services/cookie-session.ts`)
-  - [ ] `getSessionIdFromRequest(req)` - Read opaque sessionId from cookie
-  - [ ] `setSessionCookie(res, sessionId, expiresAt)` - Set HttpOnly cookie
-  - [ ] `clearSessionCookie(res)` - Clear cookie on logout
-  - [ ] Reference: next-saas-starter's cookie pattern (httpOnly, secure, sameSite=lax)
-- [ ] Implement `POST /api/v1/auth/nonce` endpoint with contract
-- [ ] Implement `POST /api/v1/auth/verify` endpoint with contract
-  - [ ] After SIWE verification, create session row in Postgres
-  - [ ] Call `setSessionCookie(res, sessionId, expiresAt)`
-- [ ] Create `AuthService` port and adapter (SIWE + session CRUD)
-- [ ] Create session lookup helper for protected routes
-  - [ ] Call `getSessionIdFromRequest(req)`
-  - [ ] Load session row from Postgres
-  - [ ] Return `{ accountId, walletAddress, expiresAt }` or null
-- [ ] Add session middleware for protected routes
-- [ ] Update `/api/v1/wallet/link` to use session auth
-- [ ] Update `/api/v1/ai/completion` to support dual auth
-- [ ] Add `api_key` column to `accounts` (if not exists)
+**Context:** No production users yet. Clean slate for Auth.js + new billing schema + cleaner API structure.
 
-### Frontend (MVP)
+**Route Moves (Infrastructure/Meta Endpoints):**
 
-- [ ] Implement SIWE sign-in flow (nonce → sign → verify)
-- [ ] Remove localStorage API key storage
-- [ ] Remove Authorization header from chat requests
-- [ ] Update wallet test page
+- [ ] Move `src/app/api/v1/meta/health/route.ts` → `src/app/health/route.ts`
+- [ ] Move `src/app/api/v1/meta/openapi/route.ts` → `src/app/openapi.json/route.ts`
+- [ ] Move `src/app/api/v1/meta/route-manifest/route.ts` → `src/app/meta/route-manifest/route.ts`
+- [ ] Update any tests/docs referencing old paths
 
-### POST-MVP
+**Database Reset:**
 
-- [ ] Session cleanup job (expired sessions)
-- [ ] React context for accountId display (optional UX)
-- [ ] Multi-wallet support (`account_wallet_links` table)
+- [ ] Drop all existing tables from database
+- [ ] Delete all migration files in `src/shared/db/migrations/` or equivalent
+- [ ] Update `src/shared/db/schema.ts` to define new schema:
+  - Remove old `accounts` table definition
+  - Add `billing_accounts` table (with `owner_user_id`, `balance_credits`)
+  - Add `virtual_keys` table (with `billing_account_id`, `litellm_virtual_key`, `label`, `is_default`, `active`)
+  - Keep/update `credit_ledger` table (with `billing_account_id`, `virtual_key_id`)
+- [ ] Generate fresh migrations for new schema
+- [ ] Let Auth.js Drizzle adapter create its own tables (`users`, `accounts`, `sessions`, `verification_tokens`)
+
+**API Routes to Remove (v0 MVP patterns):**
+
+- [ ] Delete `src/app/api/v1/wallet/link/` directory and route
+- [ ] Delete `src/app/api/admin/accounts/register-litellm-key/` directory and route
+- [ ] Delete `src/app/api/admin/accounts/[accountId]/credits/topup/` directory and route
+
+**API Routes to Update:**
+
+- [ ] Update `src/app/api/v1/ai/completion/route.ts` to use session auth (not Authorization header)
+
+**Database Layer:**
+
+- [ ] Update `src/shared/db/schema.ts` - Replace `accounts` with `billing_accounts` + `virtual_keys`
+- [ ] Update `src/adapters/server/accounts/drizzle.adapter.ts` - Work with new schema
+
+**Tests to Remove (v0 patterns):**
+
+- [ ] Delete `tests/unit/contracts/wallet.link.v1.contract.test.ts`
+- [ ] Delete `tests/unit/app/_facades/wallet/link.test.ts`
+- [ ] Delete `tests/stack/api/wallet/link.stack.test.ts`
+- [ ] Delete `tests/stack/api/admin/accounts.stack.test.ts`
+- [ ] Delete `tests/unit/app/_facades/accounts/topup.test.ts`
+- [ ] Delete `tests/unit/app/_facades/accounts/register.test.ts`
+- [ ] Delete `tests/stack/api/admin/account-id-invariant.stack.test.ts`
+- [ ] Delete `tests/stack/api/accounts/provisioning.stack.test.ts`
+
+**Tests to Update (new schema):**
+
+- [ ] Update `tests/unit/shared/util/account-id.test.ts` - New ID derivation if needed
+- [ ] Update `tests/unit/features/ai/services/completion.test.ts` - Session-based auth
+- [ ] Update `tests/unit/core/accounts/model.test.ts` - New schema
+- [ ] Update `tests/stack/api/completion.route.stack.test.ts` - Session auth
+- [ ] Update `tests/integration/db/drizzle.client.int.test.ts` - New tables
+- [ ] Update `tests/contract/app/ai.completion.facade.test.ts` - Session flow
+
+### Phase 1: Auth.js Setup
+
+- [ ] Install dependencies: `next-auth@beta`, `@auth/drizzle-adapter`, `siwe`
+- [ ] Create `src/auth.ts` with SIWE provider configuration
+- [ ] Configure Drizzle adapter to use existing Postgres connection
+- [ ] Add `SESSION_SECRET` to `.env` (for JWT signing)
+- [ ] Create test route to verify `auth()` returns session
+
+### Phase 2: Frontend Integration
+
+- [ ] Create `src/app/providers/auth.client.tsx` with SessionProvider
+- [ ] Update root layout to wrap app in SessionProvider
+- [ ] Wire RainbowKit sign-in to Auth.js `signIn()` method
+- [ ] Add sign-out button calling `signOut()`
+- [ ] Test: wallet connect → sign message → session created
+
+### Phase 3: Billing Integration
+
+- [ ] Create `src/lib/auth/mapping.ts` with `getOrCreateBillingAccountForUser(user)` function
+  - On first login, provisions LiteLLM virtual key via `/key/generate` with MASTER_KEY
+  - Creates `billing_accounts` row with `owner_user_id`
+  - Creates default `virtual_keys` row with `is_default = true`, storing the LiteLLM key string
+- [ ] Update `src/adapters/server/accounts/drizzle.adapter.ts` to work with `billing_accounts` + `virtual_keys`
+- [ ] Update `/api/v1/ai/completion` to use session-only auth
+  - Replace `Authorization` header logic with `auth()` call
+  - Implement session → user → billing_account → virtual_key resolution
+- [ ] Test: sign in → chat → credits deducted correctly
+
+### Phase 4: Route Protection
+
+- [ ] Implement session auth on `/api/v1/ai/*` routes per "API Auth Policy (MVP)" section
+- [ ] Ensure public routes remain accessible: `/api/auth/*`, `/health`, `/openapi.json`, `/meta/route-manifest`
+- [ ] Test: unauthorized requests to `/api/v1/ai/*` return 401
+- [ ] Test: expired sessions are rejected
+- [ ] Test: public infrastructure routes remain accessible without auth
+
+### Phase 5: Cleanup
+
+- [ ] Remove any localStorage API key handling from frontend (if exists)
+- [ ] Remove any `Authorization` header code from chat requests
+- [ ] Update docs and environment variable examples
+- [ ] Verify no legacy custom auth endpoints remain
 
 ---
 
 ## Security Properties
 
-### What This Achieves
+### What Auth.js Provides
 
-1. **XSS Protection**: HttpOnly cookies cannot be read by JavaScript
-2. **CSRF Protection**: SameSite=Lax prevents cross-origin requests
-3. **Credential Separation**: API keys (service credentials) never exposed to clients
-4. **Session Management**: Proper logout, expiration, and revocation support
-5. **Audit Trail**: Sessions table tracks wallet associations for compliance
+1. **Battle-tested Security**: Industry-standard auth framework, audited and maintained
+2. **XSS Protection**: HttpOnly cookies cannot be read by JavaScript
+3. **CSRF Protection**: Built-in CSRF tokens and SameSite cookies
+4. **Session Management**: Automatic expiry, rotation, and revocation
+5. **Provider Abstraction**: Easy to add OAuth/social login later
+
+### What We Add
+
+1. **Credential Separation**: LiteLLM virtual keys never exposed to clients
+2. **Wallet Authentication**: SIWE proves wallet ownership without passwords
+3. **Billing Integration**: Session → user → billing_account → virtual_key → LiteLLM
+4. **LiteLLM Integration**: Billing accounts own LiteLLM virtual keys, tracked in our ledger
 
 ### What This Does NOT Cover (Out of Scope)
 
-- Multi-wallet per account (future: `account_wallet_links` table)
-- Session refresh/rotation (fixed 7-day expiry for MVP)
-- Rate limiting per session
+- Multi-wallet per account (future enhancement)
+- Rate limiting per session (add middleware if needed)
 - IP-based session validation
-- OAuth/social login
 - Two-factor authentication
-- Organizations/roles/permissions
-
----
-
-## Future: Multi-Wallet Support
-
-**Current (MVP):** One wallet per account, stored as `primary_wallet_address` (nullable, non-unique).
-
-**Future:** Multiple wallets per account via join table:
-
-```sql
--- NOT IMPLEMENTED YET, just design intent
-CREATE TABLE account_wallet_links (
-  id UUID PRIMARY KEY,
-  account_id TEXT NOT NULL REFERENCES accounts(id),
-  wallet_address TEXT NOT NULL,
-  is_primary BOOLEAN DEFAULT false,
-  linked_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(account_id, wallet_address)
-);
-```
-
-**Why not now:**
-
-- MVP only needs one wallet → one account mapping
-- `/wallet/link` can evolve to handle multi-wallet later
-- No breaking changes to session or auth flow
-- Keeps implementation focused
+- Organizations/roles/permissions (single-tenant billing for now)
 
 ---
 
 ## Migration Path
 
-### From Current Insecure State
+### Clean Slate Approach
 
-1. Implement Step 4A (SIWE + sessions)
-2. Update Step 4 endpoints to use sessions
-3. Deploy backend changes
-4. Update frontend to remove localStorage pattern
-5. Test end-to-end flow with session-based auth
-6. Keep API key auth mode for programmatic clients only
+**Context:** No production users yet, so we're doing a full database reset rather than gradual migration.
 
-### No Breaking Changes to Downstream
+1. **Phase 0: Database Reset** - Drop existing tables, delete migrations, define new schema
+2. **Phase 1: Auth.js Setup** - Install dependencies, create auth config
+3. **Phase 2: Frontend Integration** - Wire RainbowKit to Auth.js
+4. **Phase 3: Billing Integration** - Implement billing_accounts + virtual_keys + LiteLLM provisioning
+5. **Phase 4: Protection** - Add middleware and session checks
+6. **Phase 5: Cleanup** - Remove any legacy localStorage code
 
-- Billing logic (Stages 5-7) unchanged
-- Credits and ledger system unchanged
-- LLM integration unchanged
-- AccountService interface unchanged (internal apiKey lookup added)
+### Changes to Billing Layer
+
+- Table renamed: `accounts` → `billing_accounts`
+- New table: `virtual_keys` (replaces direct apiKey column)
+- Updated: `credit_ledger` now links to `billing_account_id` + `virtual_key_id`
+- `LlmCaller` interface updated to source keys from `virtual_keys` table
+- Auth resolution: session → user.id → billing_account → virtual_key → LiteLLM
 
 ---
 
-## Summary
+## Key Design Decisions
 
-**One sentence:** Browser authenticates with SIWE-signed message → receives HttpOnly session cookie (opaque sessionId) → server looks up session + apiKey from Postgres for LLM calls.
+### Why Auth.js Over Custom Implementation?
 
-**Key invariants:**
+**Reasons:**
 
-- API keys never leave the server
-- Cookie stores opaque sessionId (NOT JWT payload)
-- Postgres sessions table is source of truth
-- Session data: `{ accountId, walletAddress, expiresAt }`
+- Less custom security code to maintain
+- Better ecosystem compatibility (works with RainbowKit, wagmi)
+- Standard patterns users expect and trust
+- Built-in features (CSRF, session rotation, logout)
+- Easy to add OAuth/social login later if needed
 
-**Reference:** Cookie handling inspired by [next-saas-starter](https://github.com/nextjs/saas-starter/blob/main/lib/auth/session.ts), adapted for opaque Postgres-backed sessions instead of JWT.
+**Trade-offs:**
+
+- Auth.js tables (users, accounts, sessions) added to schema
+- Learn Auth.js API and conventions
+- Slightly less control over session format
+
+**Verdict:** Worth it for security and maintainability.
+
+### Why SIWE (Sign-In with Ethereum)?
+
+**Reasons:**
+
+- Wallet-native authentication (no email/password)
+- Cryptographic proof of wallet ownership
+- Works seamlessly with existing wagmi/RainbowKit setup
+- Standard EIP-4361 message format
+
+**Implementation Note:**
+
+Auth.js does NOT provide a built-in SIWE provider. We implement SIWE via:
+
+- Auth.js **Credentials provider** configured in `src/auth.ts`
+- Official `siwe` library for message parsing and signature verification
+- Custom authorize() function that validates EIP-4361 messages
+- RainbowKit provides UI for wallet signing
+- All auth flows go through Auth.js `/api/auth/*` routes (no custom endpoints)
+
+### Session vs JWT Strategy
+
+**Our Choice:** Database sessions (not JWT)
+
+**Reasons:**
+
+- Proper logout/revocation (delete session row)
+- Audit trail (who's logged in, when)
+- No token size limits (can store more data if needed)
+
+**Configured in:** `src/auth.ts` with `strategy: "database"`
+
+---
+
+## Key Invariants
+
+- LiteLLM virtual keys never leave the server (stored in `virtual_keys` table)
+- Auth.js manages all session operations (cookies, storage, expiry)
+- SIWE (via Credentials provider + `siwe` library) proves wallet ownership
+- Billing layer owns LiteLLM virtual keys (`billing_accounts` → `virtual_keys`)
+- Each user has one billing account with one default virtual key (MVP)
+- All credit changes flow through `credit_ledger` (append-only audit log)
+
+**Reference:** Auth.js docs at [authjs.dev](https://authjs.dev), SIWE spec at [eips.ethereum.org/EIPS/eip-4361](https://eips.ethereum.org/EIPS/eip-4361)
