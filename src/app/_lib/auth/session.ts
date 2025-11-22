@@ -7,27 +7,18 @@
  * Scope: Server-only helper that derives a SessionUser from request headers; does not perform network or database access.
  * Invariants: Returns null when no override header is present; no network or database access.
  * Side-effects: none
- * Notes: Replace with Auth.js-backed session retrieval when security stack lands.
+ * Notes: Uses Auth.js session helper; no header overrides.
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
  */
-import type { NextRequest } from "next/server";
-
+import { auth } from "@/auth";
 import type { SessionUser } from "@/shared/auth";
 
-/**
- * Temporary session resolver until Auth.js + SIWE wiring is complete.
- *
- * MVP policy: versioned APIs require an authenticated session. In the absence of
- * Auth.js, we allow a dev/test header override (`x-cogni-user-id`) to simulate
- * a logged-in user. This keeps the architecture aligned with the session-first
- * design while enabling automated tests.
- */
-export function getSessionUser(request: NextRequest): SessionUser | null {
-  const headerUserId = request.headers.get("x-cogni-user-id");
-  if (headerUserId) {
-    return { id: headerUserId };
-  }
+export async function getSessionUser(): Promise<SessionUser | null> {
+  const session = await auth();
+  const id = session?.user?.id;
+  if (!id) return null;
 
-  return null;
+  const walletAddress = session.user?.walletAddress;
+  return walletAddress ? { id, walletAddress } : { id };
 }
