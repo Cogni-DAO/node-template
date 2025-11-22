@@ -27,8 +27,12 @@ import {
   verificationTokens,
 } from "@/shared/db/schema.auth";
 
+/**
+ * Get auth domain from environment.
+ * NOTE: src/auth.ts is a boundary module and intentionally reads process.env
+ * directly to avoid importing env/server.ts, keeping Next.js build imports lightweight.
+ */
 function getAuthDomain(): string {
-  // Direct process.env access to avoid pulling in full serverEnv/DB config
   const domain = process.env.DOMAIN;
   if (domain) return domain;
   try {
@@ -56,112 +60,103 @@ function toNextAuthUser(
   };
 }
 
-// Lazy initialization to avoid eager DB/Env access during build
-let _lazyAuth: ReturnType<typeof NextAuth> | null = null;
+/**
+ * NextAuth configuration and exports.
+ * Direct export pattern per Auth.js v5 examples - no lazy initialization.
+ * Build-time: Docker builder provides DATABASE_URL so getDb() can validate during build.
+ * Runtime: Actual DB connections only happen when auth handlers are invoked.
+ */
+export const { auth, signIn, signOut, handlers } = NextAuth({
+  adapter: DrizzleAdapter(getDb(), {
+    usersTable: users,
+    accountsTable: accounts,
+    sessionsTable: sessions,
+    verificationTokensTable: verificationTokens,
+  }),
+  session: { strategy: "database" },
+  // Rely on AUTH_SECRET or NEXTAUTH_SECRET in process.env
+  providers: [
+    Credentials({
+      id: "siwe",
+      name: "Sign-In with Ethereum",
+      credentials: {
+        message: { label: "Message", type: "text" },
+        signature: { label: "Signature", type: "text" },
+      },
+      async authorize(credentials, req) {
+        if (!credentials?.message || !credentials?.signature) return null;
 
-export function lazyAuth(): ReturnType<typeof NextAuth> {
-  _lazyAuth ??= NextAuth({
-    adapter: DrizzleAdapter(getDb(), {
-      usersTable: users,
-      accountsTable: accounts,
-      sessionsTable: sessions,
-      verificationTokensTable: verificationTokens,
+        const siweMessage = new SiweMessage(credentials.message as string);
+        const domain = getAuthDomain();
+
+        // Enforce nonce match against Auth.js CSRF token cookie to mitigate replay
+        const csrfTokenFromCookie =
+          req?.headers
+            ?.get("cookie")
+            ?.match(/next-auth\.csrf-token=([^;]+);?/)?.[1]
+            ?.split("|")?.[0] ?? undefined;
+
+        if (!csrfTokenFromCookie || siweMessage.nonce !== csrfTokenFromCookie) {
+          return null;
+        }
+
+        const verification = await siweMessage.verify({
+          signature: credentials.signature as string,
+          domain,
+          nonce: csrfTokenFromCookie,
+        });
+
+        if (!verification.success) {
+          return null;
+        }
+
+        const address = siweMessage.address.toLowerCase();
+        const db = getDb();
+        const existing = await db.query.users.findFirst({
+          where: eq(users.id, address),
+        });
+
+        if (existing) {
+          return toNextAuthUser(existing, address);
+        }
+
+        const [created] = await db
+          .insert(users)
+          .values({
+            id: address,
+            name: address,
+            walletAddress: address,
+          })
+          .onConflictDoUpdate({
+            target: users.id,
+            set: { walletAddress: address, name: address },
+          })
+          .returning();
+
+        return toNextAuthUser(created, address);
+      },
     }),
-    session: { strategy: "database" },
-    // Rely on AUTH_SECRET or NEXTAUTH_SECRET in process.env
-    providers: [
-      Credentials({
-        id: "siwe",
-        name: "Sign-In with Ethereum",
-        credentials: {
-          message: { label: "Message", type: "text" },
-          signature: { label: "Signature", type: "text" },
-        },
-        async authorize(credentials, req) {
-          if (!credentials?.message || !credentials?.signature) return null;
-
-          const siweMessage = new SiweMessage(credentials.message as string);
-          const domain = getAuthDomain();
-
-          // Enforce nonce match against Auth.js CSRF token cookie to mitigate replay
-          const csrfTokenFromCookie =
-            req?.headers
-              ?.get("cookie")
-              ?.match(/next-auth\.csrf-token=([^;]+);?/)?.[1]
-              ?.split("|")?.[0] ?? undefined;
-
-          if (
-            !csrfTokenFromCookie ||
-            siweMessage.nonce !== csrfTokenFromCookie
-          ) {
-            return null;
-          }
-
-          const verification = await siweMessage.verify({
-            signature: credentials.signature as string,
-            domain,
-            nonce: csrfTokenFromCookie,
-          });
-
-          if (!verification.success) {
-            return null;
-          }
-
-          const address = siweMessage.address.toLowerCase();
-          const db = getDb();
-          const existing = await db.query.users.findFirst({
-            where: eq(users.id, address),
-          });
-
-          if (existing) {
-            return toNextAuthUser(existing, address);
-          }
-
-          const [created] = await db
-            .insert(users)
-            .values({
-              id: address,
-              name: address,
-              walletAddress: address,
-            })
-            .onConflictDoUpdate({
-              target: users.id,
-              set: { walletAddress: address, name: address },
-            })
-            .returning();
-
-          return toNextAuthUser(created, address);
-        },
-      }),
-    ],
-    callbacks: {
-      session({ session, user }) {
-        if (session.user) {
-          session.user.id = user.id;
-          session.user.walletAddress = user.walletAddress ?? null;
-        }
-        return session;
-      },
-      jwt({ token, user }) {
-        if (user) {
-          if (user.id) {
-            token.sub = user.id;
-          }
-          const wallet = user.walletAddress ?? null;
-          if (wallet) {
-            token.walletAddress = wallet;
-          }
-        }
-        return token;
-      },
+  ],
+  callbacks: {
+    session({ session, user }) {
+      if (session.user) {
+        session.user.id = user.id;
+        session.user.walletAddress = user.walletAddress ?? null;
+      }
+      return session;
     },
-    trustHost: process.env.NODE_ENV === "development",
-  });
-  return _lazyAuth;
-}
-
-// Export wrappers that delegate to the lazy instance
-export const auth = lazyAuth().auth;
-export const signIn = lazyAuth().signIn;
-export const signOut = lazyAuth().signOut;
-export const handlers = lazyAuth().handlers;
+    jwt({ token, user }) {
+      if (user) {
+        if (user.id) {
+          token.sub = user.id;
+        }
+        const wallet = user.walletAddress ?? null;
+        if (wallet) {
+          token.walletAddress = wallet;
+        }
+      }
+      return token;
+    },
+  },
+  trustHost: process.env.NODE_ENV === "development",
+});

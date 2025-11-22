@@ -31,7 +31,7 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 - We do not maintain hardcoded per-model USD pricing tables; LiteLLM's pricing map is the canonical source
 - Token counts and model metadata are stored for audit/analysis only, not for cost calculation
 
-Credits increase via positive entries in credit_ledger (e.g., from payments webhooks or admin tools); the specific payment rails are defined in the payments spec.
+Credits increase via positive entries in credit_ledger (e.g., from the Resmic confirm endpoint or future webhooks/admin tools).
 
 ---
 
@@ -195,17 +195,16 @@ Credits increase via positive entries in credit_ledger (e.g., from payments webh
 
 **High-Level Flow:**
 
-1. Users pay in USDC via Resmic checkout/widget
-2. Resmic sends signed webhook to our app
-3. Webhook handler resolves billing_account_id, converts USDC amount → credits using CREDITS_PER_USDC
-4. Writes positive credit_ledger row with `reason='resmic_payment'` or `'onchain_deposit'`
-5. Updates billing_accounts.balance_credits from ledger
+1. Users pay in USDC via the Resmic checkout/widget in the browser.
+2. Resmic sets its payment status callback to true client-side once it believes the payment is mined.
+3. The frontend calls POST /api/v1/payments/resmic/confirm with amountUsdCents and a clientPaymentId (UUID for idempotency).
+4. The backend resolves billing_account_id from the SIWE session, converts USD → credits, inserts a positive credit_ledger row with reason = 'resmic_payment', and updates billing_accounts.balance_credits.
 
 **Stage 7 Context:** This is part of the overall MVP loop (real money in → credits). It builds on Stage 6.5's dual-cost accounting without modifying the billing mechanics.
 
-**Implementation Details:** Endpoint definitions, Resmic SDK integration, webhook signature validation, and routing are defined in the payments spec.
+**Implementation Details:** Endpoint definitions, Resmic SDK integration, confirm endpoint behavior, and security limitations are defined in docs/PAYMENTS_RESMIC.md. There is no Resmic webhook in the MVP; all signals come from the frontend calling /api/v1/payments/resmic/confirm.
 
-**Reference:** See `docs/PAYMENTS_RESMIC.md` for MVP funding path details (webhook endpoints, SDK setup, testing).
+**Reference:** See `docs/PAYMENTS_RESMIC.md` for MVP funding path details (confirm endpoint, SDK setup, testing).
 
 ---
 

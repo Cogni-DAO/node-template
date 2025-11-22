@@ -67,9 +67,11 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 **Credits UP (Real Users):**
 
-- Resmic payment webhook receives payment notification
-- `POST /api/v1/payments/resmic/webhook` verifies signature, resolves `billing_account_id`
-- Inserts positive `credit_ledger` row with `reason='resmic_payment'` (or `'onchain_deposit'`)
+- User pays via Resmic checkout/widget (frontend-only SDK) in the browser
+- Resmic sets payment status callback to true client-side once payment is believed to be mined
+- Frontend calls `POST /api/v1/payments/resmic/confirm` (session-authenticated)
+- Backend resolves `billing_account_id` from SIWE session (not from request body)
+- Inserts positive `credit_ledger` row with `reason='resmic_payment'`
 - Updates `billing_accounts.balance_credits`
 
 **Credits DOWN (LLM Usage):**
@@ -156,9 +158,9 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 - `/api/auth/*` - Auth.js routes (handled automatically)
 
-**Payment Routes (Public, Webhook Auth):**
+**Payment Routes (Session Required):**
 
-- `src/app/api/v1/payments/resmic/webhook/route.ts` - Resmic payment webhook (top-up credits)
+- `src/app/api/v1/payments/resmic/confirm/route.ts` - Resmic payment confirmation (top-up credits, session-authenticated)
 
 **Infrastructure Routes (Public, Unversioned):**
 

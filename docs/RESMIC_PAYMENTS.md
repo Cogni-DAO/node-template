@@ -36,13 +36,14 @@ Resmic is a **frontend-only React SDK** that renders a crypto payment button and
 - Components:
   - `CryptoPayment` (newer consolidated component)
   - `EVMConnect` / `StarkNetConnect` (older per-chain components)
+  - **Note:** Component names come from the Resmic SDK and may change. This spec uses current naming as illustrative examples; always defer to official Resmic SDK documentation for exact component names and props.
 - Props (EVM):
   - `Address` – our receiving wallet address (DAO / multisig)
   - `Chains` – allowed EVM chains
   - `Tokens` – allowed tokens (USDC, ETH, etc.)
   - `Amount` – **USD amount** to receive
   - `noOfBlockConformation` – how many blocks to wait
-  - `setPaymentStatus` – **boolean-only** callback for "payment done"
+  - `setPaymentStatus` – **boolean-only** callback that fires in the browser when Resmic believes the payment is mined (no cryptographic proof, no server-side guarantee)
 
 **Critically:**
 
@@ -111,6 +112,7 @@ We keep a **hard separation**:
   - [ ] Generate unique client-side `clientPaymentId` (UUID)
   - [ ] Call backend endpoint with payload:
     - [ ] `amountUsdCents` (Resmic `Amount` × 100, e.g., $10 → 1000 cents)
+      - **Note:** `amountUsdCents` is our own internal billing convention for credit math, not a value provided by Resmic. The frontend computes this from Resmic's `Amount` prop before calling the confirm endpoint.
     - [ ] `clientPaymentId` (UUID for idempotency, REQUIRED)
     - [ ] Optional metadata: `chainId`, `tokenSymbol`, `timestamp`
   - [ ] Handle response:
