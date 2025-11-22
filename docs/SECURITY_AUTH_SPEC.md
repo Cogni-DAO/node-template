@@ -348,38 +348,38 @@ React components use Auth.js hooks:
 
 **API Routes to Remove (v0 MVP patterns):**
 
-- [ ] Delete `src/app/api/v1/wallet/link/` directory and route
-- [ ] Delete `src/app/api/admin/accounts/register-litellm-key/` directory and route
-- [ ] Delete `src/app/api/admin/accounts/[accountId]/credits/topup/` directory and route
+- [x] Delete `src/app/api/v1/wallet/link/` directory and route
+- [x] Delete `src/app/api/admin/accounts/register-litellm-key/` directory and route
+- [x] Delete `src/app/api/admin/accounts/[accountId]/credits/topup/` directory and route
 
 **API Routes to Update:**
 
-- [ ] Update `src/app/api/v1/ai/completion/route.ts` to use session auth (not Authorization header)
+- [x] Update `src/app/api/v1/ai/completion/route.ts` to use session auth (not Authorization header)
 
 **Database Layer:**
 
-- [ ] Update `src/shared/db/schema.ts` - Replace `accounts` with `billing_accounts` + `virtual_keys`
-- [ ] Update `src/adapters/server/accounts/drizzle.adapter.ts` - Work with new schema
+- [x] Update `src/shared/db/schema.ts` - Replace `accounts` with `billing_accounts` + `virtual_keys`
+- [x] Update `src/adapters/server/accounts/drizzle.adapter.ts` - Work with new schema
 
 **Tests to Remove (v0 patterns):**
 
-- [ ] Delete `tests/unit/contracts/wallet.link.v1.contract.test.ts`
-- [ ] Delete `tests/unit/app/_facades/wallet/link.test.ts`
-- [ ] Delete `tests/stack/api/wallet/link.stack.test.ts`
-- [ ] Delete `tests/stack/api/admin/accounts.stack.test.ts`
-- [ ] Delete `tests/unit/app/_facades/accounts/topup.test.ts`
-- [ ] Delete `tests/unit/app/_facades/accounts/register.test.ts`
-- [ ] Delete `tests/stack/api/admin/account-id-invariant.stack.test.ts`
-- [ ] Delete `tests/stack/api/accounts/provisioning.stack.test.ts`
+- [x] Delete `tests/unit/contracts/wallet.link.v1.contract.test.ts`
+- [x] Delete `tests/unit/app/_facades/wallet/link.test.ts`
+- [x] Delete `tests/stack/api/wallet/link.stack.test.ts`
+- [x] Delete `tests/stack/api/admin/accounts.stack.test.ts`
+- [x] Delete `tests/unit/app/_facades/accounts/topup.test.ts`
+- [x] Delete `tests/unit/app/_facades/accounts/register.test.ts`
+- [x] Delete `tests/stack/api/admin/account-id-invariant.stack.test.ts`
+- [x] Delete `tests/stack/api/accounts/provisioning.stack.test.ts`
 
 **Tests to Update (new schema):**
 
 - [ ] Update `tests/unit/shared/util/account-id.test.ts` - New ID derivation if needed
-- [ ] Update `tests/unit/features/ai/services/completion.test.ts` - Session-based auth
+- [x] Update `tests/unit/features/ai/services/completion.test.ts` - Session-based auth
 - [ ] Update `tests/unit/core/accounts/model.test.ts` - New schema
 - [ ] Update `tests/stack/api/completion.route.stack.test.ts` - Session auth
 - [ ] Update `tests/integration/db/drizzle.client.int.test.ts` - New tables
-- [ ] Update `tests/contract/app/ai.completion.facade.test.ts` - Session flow
+- [x] Update `tests/contract/app/ai.completion.facade.test.ts` - Session flow
 
 ### Phase 1: Auth.js Setup
 
@@ -420,9 +420,9 @@ React components use Auth.js hooks:
 ### Phase 5: Cleanup
 
 - [ ] Remove any localStorage API key handling from frontend (if exists)
-- [ ] Remove any `Authorization` header code from chat requests
+- [x] Remove any `Authorization` header code from chat requests
 - [ ] Update docs and environment variable examples
-- [ ] Verify no legacy custom auth endpoints remain
+- [x] Verify no legacy custom auth endpoints remain
 
 ---
 

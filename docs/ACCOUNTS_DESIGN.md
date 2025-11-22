@@ -210,7 +210,7 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 ### Phase 0: Database Reset
 
 - [ ] Drop existing tables, delete migrations
-- [ ] Update schema: `billing_accounts` + `virtual_keys` + `credit_ledger`
+- [x] Update schema: `billing_accounts` + `virtual_keys` + `credit_ledger`
 - [ ] Generate fresh migrations
 - [ ] Let Auth.js adapter create identity tables
 
@@ -224,8 +224,8 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 - [ ] Implement `src/lib/auth/mapping.ts` (getOrCreateBillingAccountForUser)
 - [ ] Provision default virtual key on first login (call LiteLLM `/key/generate` with `LITELLM_MASTER_KEY`; may attach `metadata.cogni_billing_account_id`)
-- [ ] Update completion route to use session auth + virtual_keys lookup
-- [ ] Remove `/api/v1/wallet/link` endpoint
+- [x] Update completion route to use session auth + virtual_keys lookup
+- [x] Remove `/api/v1/wallet/link` endpoint
 
 ### Phase 4-5: Protection & Cleanup
 
