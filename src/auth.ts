@@ -26,13 +26,14 @@ import {
   users,
   verificationTokens,
 } from "@/shared/db/schema.auth";
-import { serverEnv } from "@/shared/env";
 
 function getAuthDomain(): string {
-  const env = serverEnv();
-  if (env.DOMAIN) return env.DOMAIN;
+  // Direct process.env access to avoid pulling in full serverEnv/DB config
+  const domain = process.env.DOMAIN;
+  if (domain) return domain;
   try {
-    const url = new URL(env.APP_BASE_URL ?? "http://localhost:3000");
+    const baseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
+    const url = new URL(baseUrl);
     return url.hostname;
   } catch {
     return "localhost";
@@ -154,7 +155,7 @@ export function lazyAuth(): ReturnType<typeof NextAuth> {
         return token;
       },
     },
-    trustHost: serverEnv().NODE_ENV === "development",
+    trustHost: process.env.NODE_ENV === "development",
   });
   return _lazyAuth;
 }
