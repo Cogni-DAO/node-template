@@ -3,11 +3,11 @@
 
 /**
  * Module: `@app/_lib/auth/session`
- * Purpose: Temporary session resolver until Auth.js + SIWE integration is wired.
- * Scope: Server-only helper that derives a SessionUser from request headers; does not perform network or database access.
- * Invariants: Returns null when no override header is present; no network or database access.
- * Side-effects: none
- * Notes: Uses Auth.js session helper; no header overrides.
+ * Purpose: Server-side session resolver using Auth.js.
+ * Scope: Server-only helper that derives a SessionUser from Auth.js session; does not perform direct database access.
+ * Invariants: Returns null when no authenticated session exists; delegates DB access to Auth.js.
+ * Side-effects: IO (Auth.js session retrieval via Drizzle adapter)
+ * Notes: Wraps auth() from src/auth.ts; extracts wallet address from session.
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
  */
