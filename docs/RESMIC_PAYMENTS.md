@@ -85,6 +85,24 @@ We keep a **hard separation**:
 
 ---
 
+## 2.5 MVP Security Boundary
+
+**For MVP, the ONLY trust boundary for credits is:**
+
+1. **SIWE-authenticated session** (HttpOnly cookie, resolved by Auth.js)
+2. **Resmic SDK running in an authenticated UI** (frontend-only payment widget)
+3. **Our `POST /api/v1/payments/resmic/confirm` endpoint** — resolves `billing_account_id` from session, validates idempotency via `clientPaymentId`, writes `credit_ledger` + updates `billing_accounts.balance_credits`
+
+**What is NOT in the MVP critical path:**
+
+- ❌ On-chain verification (no tx hash passed to backend, no RPC calls to verify transfers)
+- ❌ Resmic webhooks or signed callbacks (Resmic is frontend-only)
+- ❌ Ponder on-chain watcher (introduced post-MVP for reconciliation; see `docs/PAYMENTS_PONDER_VERIFICATION.md`)
+
+**Security posture:** We trust the SIWE session and treat Resmic as a soft oracle. Post-MVP hardening via Ponder is described in `docs/PAYMENTS_PONDER_VERIFICATION.md`.
+
+---
+
 ## 3. Frontend Implementation (MVP Required)
 
 ### 3.1 Prerequisites
@@ -333,11 +351,12 @@ We keep a **hard separation**:
 
 ### 7.2 Future Improvements
 
-- [ ] Add on-chain watcher service:
-  - [ ] Monitor DAO address for USDC/ETH transfers
-  - [ ] Match tx amounts to `credit_ledger` entries by timestamp
-  - [ ] Auto-flag suspicious credits with no matching tx
-  - [ ] Document in `docs/ONCHAIN_WATCHER.md`
+- [ ] Add on-chain watcher service (Ponder):
+  - [ ] Run Ponder indexer as separate service watching Base/Base Sepolia
+  - [ ] Index USDC Transfer events into DAO wallet → `onchain_payments` table
+  - [ ] Periodic reconciliation job compares `onchain_payments` vs `credit_ledger` (reason='resmic_payment')
+  - [ ] Auto-flag discrepancies for manual review
+  - [ ] **Full spec:** See `docs/PAYMENTS_PONDER_VERIFICATION.md` for runtime topology, indexing config, and integration phases
 - [ ] Implement tx hash capture:
   - [ ] Fork Resmic or use ethers.js to capture tx hash client-side
   - [ ] Pass tx hash to confirm endpoint

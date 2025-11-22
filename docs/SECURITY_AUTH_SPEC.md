@@ -66,6 +66,13 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 - **Credit top-ups (real users):** Handled via Resmic confirm endpoint (`POST /api/v1/payments/resmic/confirm`). The endpoint requires an active SIWE session, resolves `billing_account_id` from the session (not from request body), inserts positive `credit_ledger` entry with `reason='resmic_payment'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
 - **Future operator API:** Post-MVP may add `/api/operator/*` for key management, analytics, and manual adjustments
 
+**Future On-Chain Watcher (Post-MVP):**
+
+- A Ponder-based on-chain indexer will run as a separate internal service (not a public endpoint) that reads from Base/Base Sepolia RPC and indexes USDC transfers into the DAO wallet.
+- Ponder will either connect directly to the same Postgres or expose a private HTTP/GraphQL API for reconciliation jobs.
+- All writes to `credit_ledger` still go through our app's business logic; Ponder provides an independent view for observability and fraud detection.
+- **Full spec:** See `docs/PAYMENTS_PONDER_VERIFICATION.md`.
+
 ---
 
 ## Legacy Pattern (Being Replaced)

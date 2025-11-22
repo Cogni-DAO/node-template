@@ -74,6 +74,10 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 - Inserts positive `credit_ledger` row with `reason='resmic_payment'`
 - Updates `billing_accounts.balance_credits`
 
+**MVP Trust Model:** The SIWE session and Resmic UI callback are the only gates; no on-chain verification in the critical path.
+
+**Post-MVP Hardening:** A Ponder-based on-chain indexer will watch the DAO wallet for USDC transfers and provide reconciliation/observability (not a hard gate initially). See `docs/PAYMENTS_PONDER_VERIFICATION.md`.
+
 **Credits DOWN (LLM Usage):**
 
 - After each LiteLLM call, compute `provider_cost_credits` + `user_price_credits`
