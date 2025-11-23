@@ -49,12 +49,13 @@ export function WalletConnectButton({
 
     // Sign out if no wallet connected or wallet doesn't match session
     if (
+      !isConnected ||
       !connectedAddress ||
       (sessionAddress && sessionAddress !== connectedAddress)
     ) {
       void signOut();
     }
-  }, [address, session, status]);
+  }, [address, isConnected, session, status]);
 
   // Reset SIWE attempt flag when wallet changes or disconnects
   useEffect(() => {
