@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2025 Cogni-DAO
+/**
+ * Module: `@app/\(app\)/credits/page`
+ * Purpose: Credits management page with Resmic payment integration scaffold.
+ * Scope: Client component that displays credit balance, purchase interface, and transaction history; does not handle live billing data or payment processing.
+ * Invariants: Session guaranteed by (app)/layout auth guard.
+ * Side-effects: none
+ * Notes: MVP scaffold for Resmic payment handoff. Real integration pending.
+ * Links: docs/RESMIC_PAYMENTS.md, docs/BILLING_EVOLUTION.md
+ */
 
 import Link from "next/link";
 import type { JSX } from "react";
