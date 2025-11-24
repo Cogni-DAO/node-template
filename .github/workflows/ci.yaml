@@ -44,6 +44,9 @@ jobs:
       - name: REUSE SPDX compliance
         uses: fsfe/reuse-action@772649cfa03a64a08c458c7cca9a6a473d74e7f9 # v6
 
+      - name: Validate chain configuration
+        run: pnpm validate:chain
+
       - name: Full static + unit test suite
         run: pnpm check
         # check runs: typecheck, lint, format:check, tests, check:docs, repo-check

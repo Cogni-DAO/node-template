@@ -68,7 +68,7 @@
     "e2e:debug": "dotenv -e .env -- env PWDEBUG=1 playwright test",
     "e2e:report": "playwright show-report e2e/artifacts/report",
     "env:check": "tsx scripts/check-runtime-env.ts",
-    "validate:chain": "tsx scripts/validate-chain-config.ts",
+    "validate:chain": "tsx --no-cache scripts/validate-chain-config.ts",
     "prepare": "husky"
   },
   "engines": {
@@ -137,6 +137,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@typescript-eslint/eslint-plugin": "^8.46.3",
+    "@depay/web3-mock": "^15.1.1",
     "@typescript-eslint/parser": "^8.46.3",
     "@vitest/coverage-v8": "^4.0.9",
     "conventional-changelog-conventionalcommits": "7",
