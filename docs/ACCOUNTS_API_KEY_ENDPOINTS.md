@@ -121,7 +121,21 @@ From this point on, all LLM calls for this user go through the same `billing_acc
   4. Call LiteLLM `POST /chat/completions` with `Authorization: Bearer <litellm_virtual_key>`
   5. Record usage in `credit_ledger` for `billing_account_id` + `virtual_key_id`
 
-**There is no MVP HTTP endpoint for "register key" or "top up credits".** Those are internal operations for now (tests and scripts can seed balances directly in the database).
+Session-based credit top-ups now flow through the Resmic confirm endpoint below; there is still no public HTTP surface for admin key registration or manual balance edits.
+
+### 2. `/api/v1/payments/resmic/confirm` (Payments)
+
+- [x] **Auth:** Auth.js session only (HttpOnly cookie). No billing account identifier in the payload.
+- [x] **Flow:**
+  1. Client calls after Resmic widget reports `paymentStatus=true` with `{ amountUsdCents, clientPaymentId, metadata }`.
+  2. Server resolves billing account from session via `getOrCreateBillingAccountForUser`.
+  3. Idempotent ledger write: insert `credit_ledger` row with `reason = 'resmic_payment'` and `reference = clientPaymentId`; credits computed as `amountUsdCents * 10`.
+  4. Returns `{ billingAccountId, balanceCredits }` from cached balance.
+
+### 3. `/api/v1/payments/resmic/summary` (Payments)
+
+- [x] **Auth:** Auth.js session only.
+- [x] **Flow:** Returns `{ billingAccountId, balanceCredits, ledger[] }` for the authenticated billing account, ordered newest-first, used by the Credits page to refresh balance/history after confirm.
 
 ---
 
