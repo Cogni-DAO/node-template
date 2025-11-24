@@ -1,8 +1,14 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
 /**
  * Module: `@components/vendor/depay/DePayWidget.client`
- * Purpose: Client-only wrapper around the DePay CDN widget
- * Scope: Loads CDN script and exposes a narrow callback surface for payments
- * Notes: Keep provider-specific logic here; callers supply billing/idempotency handling
+ * Purpose: Client-only wrapper for DePay payment widget CDN integration (OSS mode).
+ * Scope: Loads DePay CDN script and renders payment button; handles widget callbacks for success/failure. Does not handle idempotency, balance updates, or backend confirmation.
+ * Invariants: Requires browser environment (uses Next.js Script); widget fires callbacks client-side only.
+ * Side-effects: IO (loads external CDN script, wallet connection), DOM (renders button)
+ * Notes: OSS mode (no DePay tracking API, 0% fees); callers must handle payment confirmation via backend endpoint.
+ * Links: docs/DEPAY_PAYMENTS.md
  * @public
  */
 
