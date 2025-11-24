@@ -302,7 +302,7 @@ export default function CreditsPage(): ReactElement {
                     variant={amount === selectedAmount ? "default" : "outline"}
                     onClick={() => setSelectedAmount(amount)}
                   >
-                    ${amount} / {formatCredits(amount * 10)} credits
+                    ${amount} / {formatCredits(amount * 1000)} credits
                   </Button>
                 ))}
               </div>

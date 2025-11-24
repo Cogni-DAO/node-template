@@ -43,11 +43,6 @@ const serverSchema = z.object({
   APP_BASE_URL: z.string().url().optional(),
   DOMAIN: z.string().optional(),
 
-  // Resmic payments
-  DAO_WALLET_ADDRESS_BASE: z.string().min(1).optional(),
-  DAO_WALLET_ADDRESS_BASE_SEPOLIA: z.string().min(1).optional(),
-  RESMIC_ENABLED: z.coerce.boolean().default(true),
-
   // LLM (Stage 8) - App only needs proxy access, not provider keys
   LITELLM_BASE_URL: z
     .string()

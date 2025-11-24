@@ -251,15 +251,9 @@ We keep a **hard separation**:
 ### 4.4 Environment Configuration
 
 - [x] Add to `.env.example`:
-  - [x] `DAO_WALLET_ADDRESS_BASE` - DAO multisig address on Base mainnet
-  - [x] `DAO_WALLET_ADDRESS_BASE_SEPOLIA` - DAO address on Base Sepolia testnet
-  - [x] `RESMIC_ENABLED` - Feature flag (default: true)
-- [x] Add to `src/shared/env/server.ts`:
-  - [x] Validate DAO addresses as EVM addresses
-  - [x] Validate RESMIC_ENABLED boolean
+  - [x] `NEXT_PUBLIC_DAO_WALLET_ADDRESS` - Public DAO address for Resmic widget (frontend)
 - [x] Add to `src/shared/env/client.ts`:
-  - [x] `NEXT_PUBLIC_DAO_WALLET_ADDRESS` - Public DAO address
-  - [x] `NEXT_PUBLIC_RESMIC_ENABLED` - Feature flag for frontend
+  - [x] Validate `NEXT_PUBLIC_DAO_WALLET_ADDRESS`
 
 ---
 

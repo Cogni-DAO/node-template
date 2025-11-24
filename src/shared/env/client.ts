@@ -34,7 +34,6 @@ const clientSchema = z.object({
   // Optional - gracefully degrades to injected wallet only if missing
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().min(1).optional(),
   NEXT_PUBLIC_DAO_WALLET_ADDRESS: z.string().min(1).optional(),
-  NEXT_PUBLIC_RESMIC_ENABLED: z.coerce.boolean().default(true),
 });
 
 type ClientEnv = z.infer<typeof clientSchema>;
@@ -49,7 +48,6 @@ export function clientEnv(): ClientEnv {
           process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
         NEXT_PUBLIC_DAO_WALLET_ADDRESS:
           process.env.NEXT_PUBLIC_DAO_WALLET_ADDRESS,
-        NEXT_PUBLIC_RESMIC_ENABLED: process.env.NEXT_PUBLIC_RESMIC_ENABLED,
       });
     } catch (error) {
       if (error instanceof ZodError) {
