@@ -2,6 +2,12 @@
 
 > Scope: .cogni directory. Keep ≤150 lines. Do not restate root policies.
 
+## Metadata
+
+- **Owners:** @derekg1729
+- **Last reviewed:** 2025-11-24
+- **Status:** draft
+
 ## Purpose
 
 Governance metadata for the repo. `.cogni/repo-spec.yaml` is the authoritative source for DAO wallet, chain_id, and widget provider; no environment overrides are allowed for inbound payments.
@@ -10,6 +16,21 @@ Governance metadata for the repo. `.cogni/repo-spec.yaml` is the authoritative s
 
 - [Root AGENTS.md](../AGENTS.md)
 - [.cogni/repo-spec.yaml](./repo-spec.yaml)
+
+## Boundaries
+
+```json
+{
+  "layer": "meta",
+  "may_import": ["*"],
+  "must_not_import": []
+}
+```
+
+## Public Surface
+
+- **Exports:** repo-spec.yaml, rule files under .cogni/rules
+- **Files considered API:** repo-spec.yaml
 
 ## Responsibilities
 
