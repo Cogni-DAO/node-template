@@ -20,7 +20,8 @@ cogni_dao:
 
 # DAO Financial Rails Configuration
 payments_in:
-  resmic:
+  widget:
+    provider: depay # Current widget provider (DePay OSS mode)
     receiving_address_env: NEXT_PUBLIC_DAO_WALLET_ADDRESS
     allowed_chains:
       - base

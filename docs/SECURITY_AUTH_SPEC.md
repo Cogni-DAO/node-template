@@ -58,12 +58,12 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 
 **Payment Endpoints (User Session Required):**
 
-- [ ] `POST /api/v1/payments/resmic/confirm` - Resmic payment confirmation for credit top-ups (SIWE session with HttpOnly cookie, billing_account_id derived from session)
+- [ ] `POST /api/v1/payments/credits/confirm` - Widget payment confirmation for credit top-ups (SIWE session with HttpOnly cookie, billing_account_id derived from session)
 
 **Provisioning & Operations (Not HTTP in MVP):**
 
 - [x] **Virtual key provisioning:** Happens internally in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)` using LiteLLM MASTER_KEY, not via HTTP endpoints
-- [ ] **Credit top-ups (real users):** Handled via Resmic confirm endpoint (`POST /api/v1/payments/resmic/confirm`). The endpoint requires an active SIWE session, resolves `billing_account_id` from the session (not from request body), inserts positive `credit_ledger` entry with `reason='resmic_payment'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
+- [ ] **Credit top-ups (real users):** Handled via widget confirm endpoint (`POST /api/v1/payments/credits/confirm`). The endpoint requires an active SIWE session, resolves `billing_account_id` from the session (not from request body), inserts positive `credit_ledger` entry with `reason='widget_payment'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
 - [ ] **Future operator API:** Post-MVP may add `/api/operator/*` for key management, analytics, and manual adjustments
 
 **Future On-Chain Watcher (Post-MVP):**

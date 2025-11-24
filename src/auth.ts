@@ -13,6 +13,8 @@
 
 /* eslint-disable boundaries/no-unknown-files */
 
+import { randomUUID } from "node:crypto";
+
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import NextAuth, { type User as NextAuthUser } from "next-auth";
@@ -24,16 +26,13 @@ import { users } from "@/shared/db/schema.auth";
 
 type DbUser = typeof users.$inferSelect;
 
-function toNextAuthUser(
-  row: DbUser | undefined,
-  address: string
-): NextAuthUser {
-  const walletAddress = row?.walletAddress ?? address ?? null;
+function toNextAuthUser(row: DbUser, address: string): NextAuthUser {
+  const walletAddress = row.walletAddress ?? address;
   return {
-    id: row?.id ?? address,
-    name: row?.name ?? address,
-    email: row?.email ?? null,
-    image: row?.image ?? null,
+    id: row.id,
+    name: row.name ?? null,
+    email: row.email ?? null,
+    image: row.image ?? null,
     walletAddress,
   };
 }
@@ -140,7 +139,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         const address = siweMessage.address.toLowerCase();
         const db = getDb();
         const existing = await db.query.users.findFirst({
-          where: eq(users.id, address),
+          where: eq(users.walletAddress, address),
         });
 
         if (existing) {
@@ -150,15 +149,15 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         const [created] = await db
           .insert(users)
           .values({
-            id: address,
-            name: address,
+            id: randomUUID(),
             walletAddress: address,
           })
-          .onConflictDoUpdate({
-            target: users.id,
-            set: { walletAddress: address, name: address },
-          })
           .returning();
+
+        if (!created) {
+          console.error("[SIWE] Failed to create user");
+          return null;
+        }
 
         return toNextAuthUser(created, address);
       },
