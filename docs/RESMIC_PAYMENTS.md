@@ -108,48 +108,48 @@ We keep a **hard separation**:
 
 ### 3.1 Prerequisites
 
-- [ ] User authentication via SIWE (Auth.js) working with sessions
-- [ ] DAO receiving wallet address configured in environment variables
+- [x] User authentication via SIWE (Auth.js) working with sessions
+- [x] DAO receiving wallet address configured in environment variables
 
 ### 3.2 Resmic Component Integration
 
-- [ ] Install Resmic SDK: `npm install @resmic/react-sdk`
-- [ ] Create `BuyCreditsModal` or `PaymentWidget` component
-- [ ] Implement Resmic component with props:
-  - [ ] `Address` = `NEXT_PUBLIC_DAO_WALLET_ADDRESS` (from env, enforced by DAO_ENFORCEMENT.md)
-  - [ ] `Chains` = `[Chains.Base, Chains.BaseSepolia]` for testnet/mainnet
-  - [ ] `Tokens` = `[Tokens.USDC]` (or allowed set)
-  - [ ] `Amount` = user-selected USD amount (10, 25, 50, 100)
-  - [ ] `noOfBlockConformation` = 3-5 blocks
-  - [ ] `setPaymentStatus` = React state setter
-- [ ] Add loading/pending UI while `paymentStatus === false`
+- [x] Install Resmic SDK: `npm install @resmic/react-sdk`
+- [x] Create `BuyCreditsModal` or `PaymentWidget` component
+- [x] Implement Resmic component with props:
+  - [x] `Address` = `NEXT_PUBLIC_DAO_WALLET_ADDRESS` (from env, enforced by DAO_ENFORCEMENT.md)
+  - [x] `Chains` configured for EVM testnets (MVP uses Sepolia for Resmic widget)
+  - [x] `Tokens` = `[Tokens.USDT]` (or allowed set)
+  - [x] `Amount` = user-selected USD amount (10, 25, 50, 100)
+  - [x] `noOfBlockConformation` = 3-5 blocks
+  - [x] `setPaymentStatus` = React state setter
+- [x] Add loading/pending UI while `paymentStatus === false`
 
 ### 3.3 Payment Confirmation Flow
 
-- [ ] Create `/api/v1/payments/resmic/confirm` client helper
-- [ ] On `paymentStatus === true`:
-  - [ ] Generate unique client-side `clientPaymentId` (UUID)
-  - [ ] Call backend endpoint with payload:
-    - [ ] `amountUsdCents` (Resmic `Amount` × 100, e.g., $10 → 1000 cents)
+- [x] Create `/api/v1/payments/resmic/confirm` client helper
+- [x] On `paymentStatus === true`:
+  - [x] Generate unique client-side `clientPaymentId` (UUID)
+  - [x] Call backend endpoint with payload:
+    - [x] `amountUsdCents` (Resmic `Amount` × 100, e.g., $10 → 1000 cents)
       - **Note:** `amountUsdCents` is our own internal billing convention for credit math, not a value provided by Resmic. The frontend computes this from Resmic's `Amount` prop before calling the confirm endpoint.
-    - [ ] `clientPaymentId` (UUID for idempotency, REQUIRED)
-    - [ ] Optional metadata: `chainId`, `tokenSymbol`, `timestamp`
-  - [ ] Handle response:
-    - [ ] Success (200): update UI with new balance, show success message
-    - [ ] Error 401: redirect to login
-    - [ ] Error 500: show retry option
-  - [ ] Store `clientPaymentId` in localStorage to prevent double-submission
+    - [x] `clientPaymentId` (UUID for idempotency, REQUIRED)
+    - [x] Optional metadata: `chainId`, `tokenSymbol`, `timestamp`
+  - [x] Handle response:
+    - [x] Success (200): update UI with new balance, show success message
+    - [x] Error 401: redirect to login
+    - [x] Error 500: show retry option
+  - [x] Store `clientPaymentId` in localStorage to prevent double-submission
 
 **Critical:** Do NOT send `billingAccountId` in request body. Backend resolves it from session only.
 
 ### 3.4 UI/UX Requirements
 
-- [ ] "Buy Credits" button in header/sidebar when logged in
-- [ ] Credit balance display (fetch from API, no client-side conversion needed)
-- [ ] Payment amount selector (preset amounts: 10, 25, 50, 100 USD)
-- [ ] Loading state during Resmic transaction
-- [ ] Success confirmation with new balance
-- [ ] Error messaging for failed payments
+- [x] "Buy Credits" button in header/sidebar when logged in
+- [x] Credit balance display (fetch from API, no client-side conversion needed)
+- [x] Payment amount selector (preset amounts: 10, 25, 50, 100 USD)
+- [x] Loading state during Resmic transaction
+- [x] Success confirmation with new balance
+- [x] Error messaging for failed payments
 
 ### 3.5 Credits Page (MVP UI)
 
@@ -199,18 +199,18 @@ We keep a **hard separation**:
 
 **Implementation checklist:**
 
-- [ ] Create route file: `src/app/api/v1/payments/resmic/confirm/route.ts`
-- [ ] Add Zod contract: `src/contracts/payments.resmic.confirm.v1.contract.ts`
-  - [ ] Request schema: `{ amountUsdCents: number, clientPaymentId: string, metadata?: object }`
-  - [ ] Response schema: `{ billingAccountId: string, balanceCredits: number }`
-  - [ ] Validate: `amountUsdCents` > 0, `clientPaymentId` is valid UUID
-- [ ] Implement route handler:
-  - [ ] Extract SIWE session from cookie
-  - [ ] Validate session exists and is active
-  - [ ] Parse and validate request body against contract
-  - [ ] Resolve `billing_account_id` from session (never from body) and call `getOrCreateBillingAccountForUser(session.user)` before credit mutations
-  - [ ] Call payment service with session-derived `billingAccountId` and validated data
-  - [ ] Return response with new balance
+- [x] Create route file: `src/app/api/v1/payments/resmic/confirm/route.ts`
+- [x] Add Zod contract: `src/contracts/payments.resmic.confirm.v1.contract.ts`
+  - [x] Request schema: `{ amountUsdCents: number, clientPaymentId: string, metadata?: object }`
+  - [x] Response schema: `{ billingAccountId: string, balanceCredits: number }`
+  - [x] Validate: `amountUsdCents` > 0, `clientPaymentId` is valid UUID
+- [x] Implement route handler:
+  - [x] Extract SIWE session from cookie
+  - [x] Validate session exists and is active
+  - [x] Parse and validate request body against contract
+  - [x] Resolve `billing_account_id` from session (never from body) and call `getOrCreateBillingAccountForUser(session.user)` before credit mutations
+  - [x] Call payment service with session-derived `billingAccountId` and validated data
+  - [x] Return response with new balance
 
 **Files:**
 
@@ -220,22 +220,22 @@ We keep a **hard separation**:
 
 ### 4.2 Service Layer
 
-- [ ] Create payment service: `src/features/payments/services/resmic-confirm.ts`
-- [ ] Implement confirmation logic:
-  - [ ] Check for existing `credit_ledger` entry: `reason = 'resmic_payment' AND reference = clientPaymentId`
-  - [ ] If exists: return existing balance (idempotent, no-op)
-  - [ ] If new: proceed with credit
-  - [ ] Compute credits: `amountUsdCents * 10` (integer math, 1 cent = 10 credits)
-  - [ ] Resolve default `virtual_key_id` for billing account
-  - [ ] Insert `credit_ledger` row:
-    - [ ] `billing_account_id` from session (only source)
-    - [ ] `virtual_key_id` (default key)
-    - [ ] `amount` = computed credits (BIGINT)
-    - [ ] `reason = 'resmic_payment'`
-    - [ ] `reference` = `clientPaymentId` from request (required)
-    - [ ] `metadata` = JSON with `{ amountUsdCents, chain, token, timestamp }`
-  - [ ] Update `billing_accounts.balance_credits` atomically
-  - [ ] Return new balance
+- [x] Create payment service: `src/features/payments/services/resmic-confirm.ts`
+- [x] Implement confirmation logic:
+  - [x] Check for existing `credit_ledger` entry: `reason = 'resmic_payment' AND reference = clientPaymentId`
+  - [x] If exists: return existing balance (idempotent, no-op)
+  - [x] If new: proceed with credit
+  - [x] Compute credits: `amountUsdCents * 10` (integer math, 1 cent = 10 credits)
+  - [x] Resolve default `virtual_key_id` for billing account
+  - [x] Insert `credit_ledger` row:
+    - [x] `billing_account_id` from session (only source)
+    - [x] `virtual_key_id` (default key)
+    - [x] `amount` = computed credits (BIGINT)
+    - [x] `reason = 'resmic_payment'`
+    - [x] `reference` = `clientPaymentId` from request (required)
+    - [x] `metadata` = JSON with `{ amountUsdCents, chain, token, timestamp }`
+  - [x] Update `billing_accounts.balance_credits` atomically
+  - [x] Return new balance
 
 **Files:**
 
@@ -244,22 +244,22 @@ We keep a **hard separation**:
 
 ### 4.3 Database Changes
 
-- [ ] Verify `credit_ledger.reference` field exists (present in schema)
-- [ ] Add index on `credit_ledger.reference` for idempotency lookups
-- [ ] Verify `credit_ledger.metadata` JSONB column can store payment metadata
+- [x] Verify `credit_ledger.reference` field exists (present in schema)
+- [x] Add index on `credit_ledger.reference` for idempotency lookups
+- [x] Verify `credit_ledger.metadata` JSONB column can store payment metadata
 
 ### 4.4 Environment Configuration
 
-- [ ] Add to `.env.example`:
-  - [ ] `DAO_WALLET_ADDRESS_BASE` - DAO multisig address on Base mainnet
-  - [ ] `DAO_WALLET_ADDRESS_BASE_SEPOLIA` - DAO address on Base Sepolia testnet
-  - [ ] `RESMIC_ENABLED` - Feature flag (default: true)
-- [ ] Add to `src/shared/env/server.ts`:
-  - [ ] Validate DAO addresses as EVM addresses
-  - [ ] Validate RESMIC_ENABLED boolean
-- [ ] Add to `src/shared/env/client.ts`:
-  - [ ] `NEXT_PUBLIC_DAO_WALLET_ADDRESS` - Public DAO address
-  - [ ] `NEXT_PUBLIC_RESMIC_ENABLED` - Feature flag for frontend
+- [x] Add to `.env.example`:
+  - [x] `DAO_WALLET_ADDRESS_BASE` - DAO multisig address on Base mainnet
+  - [x] `DAO_WALLET_ADDRESS_BASE_SEPOLIA` - DAO address on Base Sepolia testnet
+  - [x] `RESMIC_ENABLED` - Feature flag (default: true)
+- [x] Add to `src/shared/env/server.ts`:
+  - [x] Validate DAO addresses as EVM addresses
+  - [x] Validate RESMIC_ENABLED boolean
+- [x] Add to `src/shared/env/client.ts`:
+  - [x] `NEXT_PUBLIC_DAO_WALLET_ADDRESS` - Public DAO address
+  - [x] `NEXT_PUBLIC_RESMIC_ENABLED` - Feature flag for frontend
 
 ---
 
