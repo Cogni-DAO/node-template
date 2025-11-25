@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-24
+- **Last reviewed:** 2025-11-26
 - **Status:** draft
 
 ## Purpose
 
-Client-side provider composition for the web UI shell. Configures React context providers (Auth.js SessionProvider, wagmi, RainbowKit, React Query) that wrap the Next.js App Router tree.
+Client-side provider composition for the web UI shell. Configures React context providers (NextAuth SessionProvider, wagmi, RainbowKit, React Query) that wrap the Next.js App Router tree.
 
 ## Pointers
 
@@ -32,9 +32,10 @@ Client-side provider composition for the web UI shell. Configures React context 
 
 - **Exports:**
   - `AppProviders` - Main composition component (imports all sub-providers)
-  - `AuthProvider` - Auth.js SessionProvider wrapper for auth context
+  - `AuthProvider` - NextAuth SessionProvider wrapper for auth context
   - `QueryProvider` - React Query client provider
-  - `WalletProvider` - wagmi + RainbowKit provider (creates config internally via dynamic import)
+  - `WalletProvider` - wagmi + RainbowKit provider (uses client-only config)
+  - `config` - Client-only wagmi configuration
   - `createAppLightTheme` - RainbowKit light theme matching design system (--muted colors)
   - `createAppDarkTheme` - RainbowKit dark theme matching design system (--accent colors)
   - `buildWagmiConfigOptions` - Pure helper for wagmi config (testable without React)
@@ -42,7 +43,7 @@ Client-side provider composition for the web UI shell. Configures React context 
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** Reads `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
-- **Files considered API:** app-providers.client.tsx, wallet.client.tsx, wagmi-config-builder.ts, rainbowkit-theme.ts
+- **Files considered API:** app-providers.client.tsx, wallet.client.tsx, wagmi-config.client.ts, wagmi-config-builder.ts, rainbowkit-theme.ts
 
 ## Ports (optional)
 
@@ -90,6 +91,7 @@ import { AppProviders } from "./providers/app-providers.client";
 - Equivalent role to /bootstrap (server runtime) and /mcp (MCP runtime)
 - Providers only configure client-side infrastructure, no domain logic
 - wagmi v2 API (compatible with RainbowKit 2.2.9)
-- WalletProvider uses dynamic import for connectors to avoid SSR IndexedDB errors (WalletConnect not SSR-safe)
+- AppProviders uses SafeWalletProvider wrapper to avoid SSR mismatch and flash of missing content
+- wagmi config is client-only to prevent indexedDB errors during SSR
 - wagmi-config-builder.ts extracted for testability: generic helper tested with simple types, production uses WagmiConnector
 - RainbowKit theme functions use design system tokens: light mode uses --muted for subtle button appearance, dark mode uses --accent for proper contrast
