@@ -16,12 +16,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-import { authConfig, authSecret } from "@/auth";
+import { authOptions, authSecret } from "@/auth";
 
 export default async function proxy(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
 
-  const tokenSecret = authSecret || authConfig.secret;
+  const tokenSecret = authSecret || authOptions.secret;
 
   if (!tokenSecret && pathname.startsWith("/api/v1/ai")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

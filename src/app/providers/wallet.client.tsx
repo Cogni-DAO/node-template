@@ -15,6 +15,7 @@
 "use client";
 
 import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
+import { RainbowKitSiweNextAuthProvider } from "@rainbow-me/rainbowkit-siwe-next-auth";
 import { useTheme } from "next-themes";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -85,9 +86,15 @@ export function WalletProvider({
 
   return (
     <WagmiProvider config={config}>
-      <RainbowKitProvider theme={rainbowKitTheme}>
-        {children}
-      </RainbowKitProvider>
+      <RainbowKitSiweNextAuthProvider
+        getSiweMessageOptions={() => ({
+          statement: "Sign in with Ethereum to the app.",
+        })}
+      >
+        <RainbowKitProvider theme={rainbowKitTheme}>
+          {children}
+        </RainbowKitProvider>
+      </RainbowKitSiweNextAuthProvider>
     </WagmiProvider>
   );
 }

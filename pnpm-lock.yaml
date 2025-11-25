@@ -35,6 +35,9 @@ importers:
       '@rainbow-me/rainbowkit':
         specifier: 2.2.9
         version: 2.2.9(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(babel-plugin-macros@3.1.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(typescript@5.9.3)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(wagmi@2.19.5(@tanstack/query-core@5.90.10)(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12))
+      '@rainbow-me/rainbowkit-siwe-next-auth':
+        specifier: ^0.5.0
+        version: 0.5.0(@rainbow-me/rainbowkit@2.2.9(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(babel-plugin-macros@3.1.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(typescript@5.9.3)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(wagmi@2.19.5(@tanstack/query-core@5.90.10)(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12)))(next-auth@4.24.13(next@16.0.1(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-macros@3.1.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react@19.0.0)
       '@tanstack/react-query':
         specifier: 5.90.10
         version: 5.90.10(react@19.0.0)
@@ -2029,6 +2032,14 @@ packages:
 
   '@radix-ui/rect@1.1.1':
     resolution: {integrity: sha512-HPwpGIzkl28mWyZqG52jiqDJ12waP11Pa1lGoiyUkIEuMLBP0oeK/C89esbXrxsky5we7dfd8U58nm0SgAWpVw==}
+
+  '@rainbow-me/rainbowkit-siwe-next-auth@0.5.0':
+    resolution: {integrity: sha512-Phd7bYa/fyjXn01/fFHtimuno4iKzlih3kr1nc96ZWnN0b9brHcheJ3pq63BVp3FLuRdXqgNuW2/a36u6Ctn+g==}
+    engines: {node: '>=12.4'}
+    peerDependencies:
+      '@rainbow-me/rainbowkit': 2.2.x
+      next-auth: '>=4.21.0 <5'
+      react: '>=18'
 
   '@rainbow-me/rainbowkit@2.2.9':
     resolution: {integrity: sha512-zXAeqkqpznpj9yEs1bTbpZbq0pVYKdJUnqqK/nI8xyYFDWchIOyBoEb/4+goT5RaHfGbDe9dp6pIEu/KelKE6A==}
@@ -8197,7 +8208,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@depay/web3-payments@15.3.3(c7883683b9a24fdc0e64e073a19ca5fd)':
+  '@depay/web3-payments@15.3.3(hqvmb6fsalsmhequyt2hgqvkuy)':
     dependencies:
       '@depay/solana-web3.js': 1.98.3
       '@depay/web3-blockchains': 9.8.10
@@ -8236,7 +8247,7 @@ snapshots:
       '@depay/web3-blockchains': 9.8.10
       '@depay/web3-client': 11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@depay/web3-exchanges': 15.7.3(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(@depay/web3-tokens@11.1.0(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(decimal.js@10.6.0)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
-      '@depay/web3-payments': 15.3.3(c7883683b9a24fdc0e64e073a19ca5fd)
+      '@depay/web3-payments': 15.3.3(hqvmb6fsalsmhequyt2hgqvkuy)
       '@depay/web3-tokens': 11.1.0(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@depay/web3-wallets': 18.1.17(@depay/coinbase-wallet-sdk@3.8.4(@babel/core@7.28.5)(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))(@depay/solana-web3.js@1.98.3)(@depay/walletconnect-v2@2.12.2(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@tanstack/react-virtual': 3.13.12(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -9704,6 +9715,12 @@ snapshots:
 
   '@radix-ui/rect@1.1.1': {}
 
+  '@rainbow-me/rainbowkit-siwe-next-auth@0.5.0(@rainbow-me/rainbowkit@2.2.9(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(babel-plugin-macros@3.1.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(typescript@5.9.3)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(wagmi@2.19.5(@tanstack/query-core@5.90.10)(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12)))(next-auth@4.24.13(next@16.0.1(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-macros@3.1.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react@19.0.0)':
+    dependencies:
+      '@rainbow-me/rainbowkit': 2.2.9(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(babel-plugin-macros@3.1.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(typescript@5.9.3)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(wagmi@2.19.5(@tanstack/query-core@5.90.10)(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12))
+      next-auth: 4.24.13(next@16.0.1(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-macros@3.1.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      react: 19.0.0
+
   '@rainbow-me/rainbowkit@2.2.9(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(babel-plugin-macros@3.1.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(typescript@5.9.3)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(wagmi@2.19.5(@tanstack/query-core@5.90.10)(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12))':
     dependencies:
       '@tanstack/react-query': 5.90.10(react@19.0.0)
@@ -11049,7 +11066,7 @@ snapshots:
       '@vitest/pretty-format': 4.0.9
       tinyrainbow: 3.0.3
 
-  '@wagmi/connectors@6.2.0(fbadb1ce4204bd53a8e14f87245a5e6c)':
+  '@wagmi/connectors@6.2.0(f2cxjm75vlh4w6fntbllhpftam)':
     dependencies:
       '@base-org/account': 2.4.0(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(utf-8-validate@5.0.10)(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12)
       '@coinbase/wallet-sdk': 4.3.6(@types/react@19.2.7)(bufferutil@4.0.9)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(utf-8-validate@5.0.10)(zod@4.1.12)
@@ -16228,7 +16245,7 @@ snapshots:
   wagmi@2.19.5(@tanstack/query-core@5.90.10)(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12):
     dependencies:
       '@tanstack/react-query': 5.90.10(react@19.0.0)
-      '@wagmi/connectors': 6.2.0(fbadb1ce4204bd53a8e14f87245a5e6c)
+      '@wagmi/connectors': 6.2.0(f2cxjm75vlh4w6fntbllhpftam)
       '@wagmi/core': 2.22.1(@tanstack/query-core@5.90.10)(@types/react@19.2.7)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))
       react: 19.0.0
       use-sync-external-store: 1.4.0(react@19.0.0)

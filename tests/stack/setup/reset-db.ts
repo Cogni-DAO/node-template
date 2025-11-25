@@ -34,9 +34,8 @@ export default async function resetStackTestDatabase() {
   );
 
   const databaseUrl = process.env.DATABASE_URL ?? buildDatabaseUrl(filteredEnv);
-  const parsedUrl = new URL(databaseUrl);
-  const parsedPort = Number(parsedUrl.port || "5432");
-  const parsedHost = parsedUrl.hostname;
+
+  // Verify we are connecting to the expected host/port = parsedUrl.hostname;
 
   const sql = postgres(databaseUrl, {
     max: 1, // Use only one connection for setup
@@ -46,10 +45,10 @@ export default async function resetStackTestDatabase() {
   });
 
   const expectedDb = process.env.POSTGRES_DB;
-  const expectedPort =
-    typeof process.env.DB_PORT === "number"
-      ? process.env.DB_PORT
-      : Number(process.env.DB_PORT ?? "5432");
+  const { port: parsedPortFromUrl } = new URL(databaseUrl);
+  const expectedPort = Number(
+    process.env.DB_PORT ?? parsedPortFromUrl ?? "5432"
+  );
 
   try {
     const [connectionInfo] = await sql<

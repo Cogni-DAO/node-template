@@ -11,16 +11,6 @@
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
  */
-import { auth } from "@/auth";
-import type { SessionUser } from "@/shared/auth";
+import { getServerSessionUser } from "@/lib/auth/server";
 
-export async function getSessionUser(): Promise<SessionUser | null> {
-  const session = await auth();
-  const id = session?.user?.id;
-  const walletAddress = session?.user?.walletAddress;
-
-  // Enforce wallet-first invariant: require both id and walletAddress
-  if (!id || !walletAddress) return null;
-
-  return { id, walletAddress };
-}
+export { getServerSessionUser as getSessionUser };

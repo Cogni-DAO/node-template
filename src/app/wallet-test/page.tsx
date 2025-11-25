@@ -26,7 +26,7 @@ export default function WalletTestPage(): ReactNode {
       <h1 className="text-[length:var(--font-size-xl)] font-[var(--font-weight-bold)]">
         Wallet Connection Test
       </h1>
-      <WalletConnectButton showError={true} />
+      <WalletConnectButton />
     </div>
   );
 }
