@@ -36,6 +36,7 @@ describe("bootstrap container DI wiring", () => {
         POSTGRES_USER: "postgres",
         POSTGRES_PASSWORD: "postgres",
         POSTGRES_DB: "test_db",
+        DB_HOST: "localhost",
         LITELLM_MASTER_KEY: "test-key",
         AUTH_SECRET: "x".repeat(32),
       });
@@ -58,6 +59,7 @@ describe("bootstrap container DI wiring", () => {
         POSTGRES_USER: "postgres",
         POSTGRES_PASSWORD: "postgres",
         POSTGRES_DB: "prod_db",
+        DB_HOST: "postgres",
         LITELLM_MASTER_KEY: "prod-key",
         AUTH_SECRET: "x".repeat(32),
       });
@@ -79,6 +81,7 @@ describe("bootstrap container DI wiring", () => {
         POSTGRES_USER: "postgres",
         POSTGRES_PASSWORD: "postgres",
         POSTGRES_DB: "dev_db",
+        DB_HOST: "localhost",
         LITELLM_MASTER_KEY: "dev-key",
         AUTH_SECRET: "x".repeat(32),
       });
@@ -101,6 +104,7 @@ describe("bootstrap container DI wiring", () => {
         POSTGRES_USER: "postgres",
         POSTGRES_PASSWORD: "postgres",
         POSTGRES_DB: "test_db",
+        DB_HOST: "localhost",
         LITELLM_MASTER_KEY: "test-key",
         AUTH_SECRET: "x".repeat(32),
       });
