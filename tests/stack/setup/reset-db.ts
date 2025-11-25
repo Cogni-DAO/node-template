@@ -42,7 +42,46 @@ export default async function resetStackTestDatabase() {
     },
   });
 
+  const expectedDb = process.env.POSTGRES_DB;
+  const expectedPort =
+    typeof process.env.DB_PORT === "number"
+      ? process.env.DB_PORT
+      : Number(process.env.DB_PORT ?? "5432");
+
   try {
+    const [connectionInfo] = await sql<
+      {
+        current_database: string | null;
+        server_port: number;
+        server_addr: string | null;
+      }[]
+    >`
+      SELECT current_database(), inet_server_port() AS server_port, inet_server_addr()::text AS server_addr
+    `;
+
+    if (!connectionInfo?.current_database) {
+      throw new Error("Failed to determine connected database name");
+    }
+
+    if (expectedDb && connectionInfo.current_database !== expectedDb) {
+      throw new Error(
+        `Connected to unexpected database: ${connectionInfo.current_database} (expected ${expectedDb})`
+      );
+    }
+
+    if (
+      Number.isFinite(expectedPort) &&
+      connectionInfo.server_port !== expectedPort
+    ) {
+      throw new Error(
+        `Connected to unexpected port: ${connectionInfo.server_port} (expected ${expectedPort})`
+      );
+    }
+
+    console.log(
+      `🔌 Connected to ${connectionInfo.current_database} @ ${connectionInfo.server_addr ?? "unknown"}:${connectionInfo.server_port}`
+    );
+
     // Dynamically discover all user tables (exclude postgres system tables)
     const tables = await sql<{ tablename: string }[]>`
       SELECT tablename
