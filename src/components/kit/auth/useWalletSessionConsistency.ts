@@ -11,7 +11,7 @@
  * @public
  */
 
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { useAccount } from "wagmi";
 
@@ -28,16 +28,25 @@ export function useWalletSessionConsistency(): void {
     // Only run check when session is authenticated
     if (status !== "authenticated" || !session) return;
 
+    const sessionUser = session.user as { walletAddress?: string | null };
+    const sessionAddress = normalizeWalletAddress(sessionUser?.walletAddress);
+    const connectedAddress = normalizeWalletAddress(address);
+
     const action = computeWalletSessionAction({
       isConnected,
-      connectedAddress: normalizeWalletAddress(address),
-      sessionAddress: normalizeWalletAddress(
-        (session.user as { walletAddress?: string | null })?.walletAddress
-      ),
+      connectedAddress,
+      sessionAddress,
     });
 
+    // [DEBUG] Log consistency check
+    console.log(
+      `[WalletSessionConsistency] Check: status=${status}, isConnected=${isConnected}, wallet=${connectedAddress}, session=${sessionAddress}, action=${action}`
+    );
+
     if (action === "sign_out") {
-      void signOut({ redirect: false });
+      console.warn(
+        `[WalletSessionConsistency] Mismatch detected: wallet=${connectedAddress} vs session=${sessionAddress}. (SignOut disabled for debugging)`
+      );
     }
   }, [address, isConnected, session, status]);
 }

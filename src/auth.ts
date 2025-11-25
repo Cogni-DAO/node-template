@@ -13,7 +13,7 @@
 
 /* eslint-disable boundaries/no-unknown-files */
 
-import { randomUUID } from "node:crypto";
+import nodeCrypto, { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
 import type { NextAuthOptions } from "next-auth";
@@ -84,6 +84,16 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
+          // [DEBUG] Log attempt details
+          const messageHash = nodeCrypto
+            .createHash("sha256")
+            .update(credentials.message as string)
+            .digest("hex")
+            .slice(0, 8);
+          console.log(
+            `[SIWE] Authorize attempt: nonce=${nonce}, address=${new SiweMessage(credentials.message as string).address}, msgHash=${messageHash}`
+          );
+
           const result = await siwe.verify({
             signature: credentials.signature as string,
             domain: nextAuthUrl.host,
@@ -125,8 +135,11 @@ export const authOptions: NextAuthOptions = {
           console.log("[SIWE] Login success for:", fields.address);
 
           return {
-            id: user.id,
-            walletAddress: user.walletAddress,
+            // Use address as primary ID for RainbowKit compatibility
+            id: fields.address,
+            walletAddress: fields.address,
+            // Persist DB ID separately
+            dbId: user.id,
           };
         } catch (e) {
           console.error("[SIWE] Authorize error:", e);
@@ -140,6 +153,8 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.walletAddress = user.walletAddress ?? null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        token.dbId = (user as any).dbId;
       }
       return token;
     },
@@ -147,6 +162,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.walletAddress = token.walletAddress as string | null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (session.user as any).dbId = token.dbId as string | null;
       }
       return session;
     },

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek
-- **Last reviewed:** 2025-11-25
+- **Last reviewed:** 2025-11-26
 - **Status:** stable
 
 ## Purpose
@@ -30,12 +30,12 @@ Authentication UI components and hooks. Provides the wallet connection button an
 ## Public Surface
 
 - **Exports:**
-  - `WalletConnectButton` - Canonical RainbowKit connect button with session consistency
+  - `WalletConnectButton` - SafeWalletConnectButton (exported as WalletConnectButton) - SSR-safe wrapper with placeholder
   - `useWalletSessionConsistency` - Hook to enforce wallet-session synchronization
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** `WalletConnectButton.tsx`, `useWalletSessionConsistency.ts`
+- **Files considered API:** `WalletConnectButton.tsx`, `SafeWalletConnectButton.tsx`, `useWalletSessionConsistency.ts`
 
 ## Responsibilities
 
@@ -70,4 +70,5 @@ import { WalletConnectButton } from "@/components/kit/auth/WalletConnectButton";
 
 - This directory contains the canonical wallet connection UI
 - `WalletConnectButton` is designed to be used in the global header
+- `SafeWalletConnectButton` handles dynamic loading to prevent layout shift and SSR errors
 - `useWalletSessionConsistency` is a critical security control to prevent session hijacking via wallet switching

@@ -105,6 +105,9 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.11.0
         version: 4.11.0(playwright-core@1.56.1)
+      '@biomejs/biome':
+        specifier: ^2.3.7
+        version: 2.3.7
       '@commitlint/cli':
         specifier: ^19.8.1
         version: 19.8.1(@types/node@20.19.24)(typescript@5.9.3)
@@ -474,6 +477,59 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
+
+  '@biomejs/biome@2.3.7':
+    resolution: {integrity: sha512-CTbAS/jNAiUc6rcq94BrTB8z83O9+BsgWj2sBCQg9rD6Wkh2gjfR87usjx0Ncx0zGXP1NKgT7JNglay5Zfs9jw==}
+    engines: {node: '>=14.21.3'}
+    hasBin: true
+
+  '@biomejs/cli-darwin-arm64@2.3.7':
+    resolution: {integrity: sha512-LirkamEwzIUULhXcf2D5b+NatXKeqhOwilM+5eRkbrnr6daKz9rsBL0kNZ16Hcy4b8RFq22SG4tcLwM+yx/wFA==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@biomejs/cli-darwin-x64@2.3.7':
+    resolution: {integrity: sha512-Q4TO633kvrMQkKIV7wmf8HXwF0dhdTD9S458LGE24TYgBjSRbuhvio4D5eOQzirEYg6eqxfs53ga/rbdd8nBKg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@biomejs/cli-linux-arm64-musl@2.3.7':
+    resolution: {integrity: sha512-/afy8lto4CB8scWfMdt+NoCZtatBUF62Tk3ilWH2w8ENd5spLhM77zKlFZEvsKJv9AFNHknMl03zO67CiklL2Q==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@biomejs/cli-linux-arm64@2.3.7':
+    resolution: {integrity: sha512-inHOTdlstUBzgjDcx0ge71U4SVTbwAljmkfi3MC5WzsYCRhancqfeL+sa4Ke6v2ND53WIwCFD5hGsYExoI3EZQ==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@biomejs/cli-linux-x64-musl@2.3.7':
+    resolution: {integrity: sha512-CQUtgH1tIN6e5wiYSJqzSwJumHYolNtaj1dwZGCnZXm2PZU1jOJof9TsyiP3bXNDb+VOR7oo7ZvY01If0W3iFQ==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [linux]
+
+  '@biomejs/cli-linux-x64@2.3.7':
+    resolution: {integrity: sha512-fJMc3ZEuo/NaMYo5rvoWjdSS5/uVSW+HPRQujucpZqm2ZCq71b8MKJ9U4th9yrv2L5+5NjPF0nqqILCl8HY/fg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [linux]
+
+  '@biomejs/cli-win32-arm64@2.3.7':
+    resolution: {integrity: sha512-aJAE8eCNyRpcfx2JJAtsPtISnELJ0H4xVVSwnxm13bzI8RwbXMyVtxy2r5DV1xT3WiSP+7LxORcApWw0LM8HiA==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@biomejs/cli-win32-x64@2.3.7':
+    resolution: {integrity: sha512-pulzUshqv9Ed//MiE8MOUeeEkbkSHVDVY5Cz5wVAnH1DUqliCQG3j6s1POaITTFqFfo7AVIx2sWdKpx/GS+Nqw==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [win32]
 
   '@coinbase/cdp-sdk@1.38.6':
     resolution: {integrity: sha512-l9gGGZqhCryuD3nfqB4Y+i8kfBtsnPJoKB5jxx5lKgXhVJw7/BPhgscKkVhP81115Srq3bFegD1IBwUkJ0JFMw==}
@@ -7913,6 +7969,41 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
+  '@biomejs/biome@2.3.7':
+    optionalDependencies:
+      '@biomejs/cli-darwin-arm64': 2.3.7
+      '@biomejs/cli-darwin-x64': 2.3.7
+      '@biomejs/cli-linux-arm64': 2.3.7
+      '@biomejs/cli-linux-arm64-musl': 2.3.7
+      '@biomejs/cli-linux-x64': 2.3.7
+      '@biomejs/cli-linux-x64-musl': 2.3.7
+      '@biomejs/cli-win32-arm64': 2.3.7
+      '@biomejs/cli-win32-x64': 2.3.7
+
+  '@biomejs/cli-darwin-arm64@2.3.7':
+    optional: true
+
+  '@biomejs/cli-darwin-x64@2.3.7':
+    optional: true
+
+  '@biomejs/cli-linux-arm64-musl@2.3.7':
+    optional: true
+
+  '@biomejs/cli-linux-arm64@2.3.7':
+    optional: true
+
+  '@biomejs/cli-linux-x64-musl@2.3.7':
+    optional: true
+
+  '@biomejs/cli-linux-x64@2.3.7':
+    optional: true
+
+  '@biomejs/cli-win32-arm64@2.3.7':
+    optional: true
+
+  '@biomejs/cli-win32-x64@2.3.7':
+    optional: true
+
   '@coinbase/cdp-sdk@1.38.6(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))':
     dependencies:
       '@solana-program/system': 0.8.1(@solana/kit@3.0.3(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10)))
@@ -8208,7 +8299,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@depay/web3-payments@15.3.3(hqvmb6fsalsmhequyt2hgqvkuy)':
+  '@depay/web3-payments@15.3.3(c7883683b9a24fdc0e64e073a19ca5fd)':
     dependencies:
       '@depay/solana-web3.js': 1.98.3
       '@depay/web3-blockchains': 9.8.10
@@ -8247,7 +8338,7 @@ snapshots:
       '@depay/web3-blockchains': 9.8.10
       '@depay/web3-client': 11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@depay/web3-exchanges': 15.7.3(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(@depay/web3-tokens@11.1.0(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(decimal.js@10.6.0)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
-      '@depay/web3-payments': 15.3.3(hqvmb6fsalsmhequyt2hgqvkuy)
+      '@depay/web3-payments': 15.3.3(c7883683b9a24fdc0e64e073a19ca5fd)
       '@depay/web3-tokens': 11.1.0(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@depay/web3-wallets': 18.1.17(@depay/coinbase-wallet-sdk@3.8.4(@babel/core@7.28.5)(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))(@depay/solana-web3.js@1.98.3)(@depay/walletconnect-v2@2.12.2(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@tanstack/react-virtual': 3.13.12(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -11066,7 +11157,7 @@ snapshots:
       '@vitest/pretty-format': 4.0.9
       tinyrainbow: 3.0.3
 
-  '@wagmi/connectors@6.2.0(f2cxjm75vlh4w6fntbllhpftam)':
+  '@wagmi/connectors@6.2.0(fbadb1ce4204bd53a8e14f87245a5e6c)':
     dependencies:
       '@base-org/account': 2.4.0(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(utf-8-validate@5.0.10)(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12)
       '@coinbase/wallet-sdk': 4.3.6(@types/react@19.2.7)(bufferutil@4.0.9)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(utf-8-validate@5.0.10)(zod@4.1.12)
@@ -16245,7 +16336,7 @@ snapshots:
   wagmi@2.19.5(@tanstack/query-core@5.90.10)(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12):
     dependencies:
       '@tanstack/react-query': 5.90.10(react@19.0.0)
-      '@wagmi/connectors': 6.2.0(f2cxjm75vlh4w6fntbllhpftam)
+      '@wagmi/connectors': 6.2.0(fbadb1ce4204bd53a8e14f87245a5e6c)
       '@wagmi/core': 2.22.1(@tanstack/query-core@5.90.10)(@types/react@19.2.7)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))
       react: 19.0.0
       use-sync-external-store: 1.4.0(react@19.0.0)

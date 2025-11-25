@@ -14,17 +14,43 @@
 
 "use client";
 
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import { useEffect, useState } from "react";
 
 import { AuthProvider } from "./auth.client";
 import { QueryProvider } from "./query.client";
-import { WalletProvider } from "./wallet.client";
 
-export function AppProviders({ children }: { children: ReactNode }): ReactNode {
+function SafeWalletProvider({
+  children,
+}: {
+  readonly children: ReactNode;
+}): ReactNode {
+  const [Component, setComponent] = useState<ComponentType<{
+    children: ReactNode;
+  }> | null>(null);
+
+  useEffect(() => {
+    import("./wallet.client").then((mod) => {
+      setComponent(() => mod.WalletProvider);
+    });
+  }, []);
+
+  if (!Component) {
+    return <>{children}</>;
+  }
+
+  return <Component>{children}</Component>;
+}
+
+export function AppProviders({
+  children,
+}: {
+  readonly children: ReactNode;
+}): ReactNode {
   return (
     <AuthProvider>
       <QueryProvider>
-        <WalletProvider>{children}</WalletProvider>
+        <SafeWalletProvider>{children}</SafeWalletProvider>
       </QueryProvider>
     </AuthProvider>
   );

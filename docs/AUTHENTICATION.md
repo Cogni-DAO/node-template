@@ -1,164 +1,38 @@
-# Authentication Architecture (Auth4 Goal)
+# Authentication
 
-This document outlines the roadmap to **Auth4**: a standardized, wallet-first authentication flow using **NextAuth v4** and the official **RainbowKit SIWE adapter**.
+## Current UX (MVP): Connect vs Verify vs Session
 
-> [!IMPORTANT]
-> This document supersedes previous v5 experiments. We are standardizing on **NextAuth v4** because the official RainbowKit SIWE adapter does not yet support v5.
+The current authentication flow involves a 2-step sequence after a true disconnect or permission revocation:
 
-## 🎯 Goal: Downgrade to NextAuth v4 & Adopt Canonical Adapter
+1.  **Wallet Connection**: The user approves the site in their wallet (e.g., MetaMask "Connect this website").
+2.  **Session Verification**: The user is presented with the "Verify your account" modal (RainbowKit's built-in SIWE UI) and must click "Sign message" to trigger the wallet signature prompt.
 
-We are downgrading from NextAuth v5 (Beta) to NextAuth v4 to support the official `@rainbow-me/rainbowkit-siwe-next-auth` adapter. This eliminates custom SIWE logic and aligns with the ecosystem standard.
+This "Verify your account" modal appears when the wallet is **connected** but the NextAuth session is **unauthenticated**. It is a standard part of the [RainbowKit Authentication](https://rainbowkit.com/docs/authentication) flow and ensures the user explicitly consents to signing in.
 
-### Version Matrix
+We use the stock [RainbowKit ConnectButton](https://rainbowkit.com/docs/connect-button) for the MVP, which enforces this behavior.
 
-| Package                                 | Version   | Notes                                  |
-| :-------------------------------------- | :-------- | :------------------------------------- |
-| `next-auth`                             | `^4.24.0` | **Downgrade from v5**. Stable release. |
-| `@rainbow-me/rainbowkit`                | `^2.2.0`  | Existing dependency.                   |
-| `@rainbow-me/rainbowkit-siwe-next-auth` | `^0.7.0`  | **New**. The official adapter.         |
-| `siwe`                                  | `^2.0.0`  | Peer dependency for adapter.           |
+## Known UX problems (intentional, MVP-tolerated)
 
-### Implementation Checklist
+### Problem A — Sign-in has two sections
 
-- [x] **1. Downgrade & Dependencies**
-  - [x] Uninstall `next-auth@beta`
-  - [x] Install `next-auth@4`
-  - [x] Install `@rainbow-me/rainbowkit-siwe-next-auth`
+- **Section 1**: MetaMask "Connect this website" (wallet permission).
+- **Section 2**: RainbowKit "Verify your account" modal + MetaMask SIWE "Sign-in request" (signature).
+- **Issue**: This feels disjoint because the intermediate step is a separate in-app modal requiring another click ("Sign message").
 
-- [x] **2. Refactor Auth Configuration (v4 Style)**
-  - [x] **[MODIFY] `src/auth.ts`**:
-    - [x] Remove `NextAuth()` initialization.
-    - [x] Export `authOptions: NextAuthOptions` instead.
-    - [x] **CRITICAL**: `authOptions.secret` MUST be set to `process.env.AUTH_SECRET`.
-    - [x] Remove `handlers`, `auth`, `signIn`, `signOut` exports.
-    - [x] Keep `Credentials` provider logic (SIWE verification) but adapt types.
+### Problem B — Only Disconnect exists (no session-only Sign Out)
 
-  - [x] **[MODIFY] `src/app/api/auth/[...nextauth]/route.ts`**:
-    - [x] Import `NextAuth` from `next-auth/next`.
-    - [x] Import `authOptions` from `@/auth`.
-    - [x] **CRITICAL**: This is the ONLY place `NextAuth(authOptions)` is called.
-    - [x] Export handler: `const handler = NextAuth(authOptions); export { handler as GET, handler as POST };`
+- We currently rely on RainbowKit "Disconnect", which removes the wallet connection/permission.
+- **Result**: Next time, the user must do both steps again (connect approval + SIWE signature).
+- **Desired future**: Add a session-only "Sign out" that clears the NextAuth session but leaves the wallet connected, so re-login is typically just one SIWE signature prompt.
 
-- [x] **3. Server-Side Session Helper (v4)**
-  - [x] **[NEW] `src/lib/auth/server.ts`**:
-    - [x] Import `getServerSession` from `next-auth`.
-    - [x] Import `authOptions` from `@/auth`.
-    - [x] Export `getServerSessionUser()`:
-      ```typescript
-      export async function getServerSessionUser() {
-        const session = await getServerSession(authOptions);
-        // ... enforce wallet-first invariant ...
-        return session?.user;
-      }
-      ```
-  - [x] **[DELETE/MODIFY] `src/app/_lib/auth/session.ts`**:
-    - [x] Make this a thin re-export of `src/lib/auth/server.ts` or delete it and update imports.
-  - [x] **[MIGRATE]** Replace all usages of `auth()` or old helpers:
-    - [x] API Routes -> use `getServerSessionUser()`
+## Planned evolution (post-MVP): Custom header control to remove disjoint flow
 
-- [x] **4. Update Middleware (Edge)**
-  - [x] **[MODIFY] `src/proxy.ts`** (Do NOT rename):
-    - [x] Remove `auth()` wrapper (v5 specific).
-    - [x] Use `getToken({ req, secret: process.env.AUTH_SECRET })` from `next-auth/jwt`.
-    - [x] **CRITICAL**: Must use `process.env.AUTH_SECRET` explicitly.
-    - [x] Maintain the `/api/v1/ai/*` protection logic.
+To remove the extra click and disjoint flow, we plan to:
 
-- [x] **5. Update Provider Architecture**
-  - [x] **[MODIFY] `src/app/providers/wallet.client.tsx`**:
-    - [x] Import `RainbowKitSiweNextAuthProvider`.
-    - [x] Wrap `RainbowKitProvider` with the SIWE adapter.
-    - [x] Configure `getSiweMessageOptions`.
-  - [x] **Boundary**: `RainbowKitSiweNextAuthProvider` owns the entire SIWE client flow (message, nonce, verify).
+1.  Adopt [RainbowKit Custom ConnectButton](https://rainbowkit.com/docs/custom-connect-button) (`ConnectButton.Custom`) to gain full control over the UI.
+2.  Automatically trigger the SIWE signature prompt immediately after wallet connection, bypassing the "Verify your account" modal step.
+3.  Add two explicit actions in the UI:
+    - **Sign out**: Clears the NextAuth session (using [NextAuth client API](https://next-auth.js.org/getting-started/client)).
+    - **Disconnect wallet**: Fully disconnects the wallet.
 
-- [x] **6. Refactor WalletConnectButton**
-  - [x] **[MODIFY] `src/components/kit/auth/WalletConnectButton.tsx`**:
-    - [x] Remove custom `handleLogin`, `signMessage`, `signIn` logic.
-    - [x] Remove `useEffect` for auto-login (handled by adapter).
-    - [x] **Keep**: Wallet-session consistency check (force signOut on mismatch).
-    - [x] **Constraint**: This component MUST NOT construct SIWE messages or call `signIn('credentials')`.
-
----
-
-## 🔒 Strict Constraints & Invariants
-
-To prevent regression to hybrid v4/v5 states, the following constraints must be strictly enforced:
-
-### 1. Auth Configuration Exports
-
-- **File**: `src/auth.ts`
-- **Rule**: MUST export `authOptions` ONLY.
-- **Forbidden**: `export const { auth, handlers, signIn, signOut } = NextAuth(...)`.
-- **Why**: Prevents usage of v5-style helpers that don't work with the v4 adapter.
-
-### 2. Route Handler Entrypoint
-
-- **File**: `src/app/api/auth/[...nextauth]/route.ts`
-- **Rule**: MUST be the **only** place where `NextAuth(authOptions)` is initialized.
-- **Why**: Centralizes the auth runtime.
-
-### 3. Server-Side Session Access
-
-- **File**: `src/lib/auth/server.ts`
-- **Rule**: All server-side session reads MUST use `getServerSessionUser()`.
-- **Forbidden**: Direct usage of `getServerSession(authOptions)` in page/route logic (except within the helper).
-- **Why**: Enforces the wallet-first invariant (session must have `walletAddress`) in one place.
-
-### 4. Adapter Integration
-
-- **File**: `src/app/providers/wallet.client.tsx`
-- **Rule**: MUST wrap `RainbowKitProvider` with `RainbowKitSiweNextAuthProvider`.
-- **Rule**: `getSiweMessageOptions` MUST be configured.
-- **Forbidden**: Any component calling `signIn('credentials')` or manually building SIWE messages.
-
-### 5. Session Shape
-
-- **Location**: `src/auth.ts` (callbacks)
-- **Rule**: `session.user.walletAddress` and `session.user.id` MUST be populated in the `session` callback.
-- **Invariant**: If `walletAddress` is missing, the session is invalid.
-
-### 6. Secret Consistency
-
-- **Rule**: `process.env.AUTH_SECRET` is the single source of truth.
-- **Guardrail**: Middleware (`getToken`) and NextAuth (`authOptions`) MUST use the exact same secret variable.
-
----
-
-## 🏗️ Architecture & Context
-
-### Core Principles
-
-- **Strategy**: Wallet-first authentication via SIWE.
-- **Engine**: NextAuth v4 (Stable).
-- **Adapter**: `@rainbow-me/rainbowkit-siwe-next-auth`.
-- **Sessions**: Stateless JWT sessions (no database session table).
-- **Secret**: `AUTH_SECRET` is the single source of truth for JWT signing/verification.
-
-### Server-Side Session Helper (v4)
-
-We will replace the v5 `auth()` helper with a dedicated v4-compatible helper to ensure type safety and invariant enforcement.
-
-**`src/lib/auth/server.ts`** (Canonical):
-
-```typescript
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/auth";
-
-export async function getServerSessionUser() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.walletAddress) return null;
-  return session.user;
-}
-```
-
-### Dev Troubleshooting
-
-#### Ghost Sessions
-
-**Problem**: After a database reset (`pnpm dev:stack:db:reset`), your browser may still hold a valid JWT cookie pointing to a user ID that no longer exists in the database.
-**Symptom**: Foreign key constraint violations when creating billing accounts or other resources.
-**Policy**:
-
-1.  If a valid JWT session refers to a `userId` that is missing from the `users` table, this is a **ghost session**.
-2.  We do **NOT** auto-create users in billing or account adapters to fix this.
-3.  The request should fail (500/logged) and developers should clear cookies and re-login.
-    **Enforcement**: The billing/account layer (`getOrCreateBillingAccountForUser`) must assume the user row already exists.
+This evolution is UI-level only; it will **not** introduce bespoke SIWE message creation or bypass the RainbowKit SIWE adapter.

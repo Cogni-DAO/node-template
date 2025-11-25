@@ -23,8 +23,8 @@ import {
   GithubButton,
   ModeToggle,
   NavigationLink,
-  WalletConnectButton,
 } from "@/components";
+import { SafeWalletConnectButton as WalletConnectButton } from "@/components/kit/auth/SafeWalletConnectButton";
 import { brandText, header, row } from "@/styles/ui";
 
 export function Header(): ReactElement {
