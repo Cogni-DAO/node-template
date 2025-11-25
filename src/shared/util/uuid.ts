@@ -4,7 +4,10 @@
 /**
  * Module: `@shared/util/uuid`
  * Purpose: UUID validation utility.
- * Scope: Provides a pure function to validate if a string is a valid UUID v4 using the `uuid` library.
+ * Scope: Provides a pure function to validate if a string is a valid UUID v4; does not generate UUIDs or handle any runtime logic.
+ * Invariants: Pure function; no external dependencies beyond the `uuid` library.
+ * Side-effects: none
+ * Links: none
  * @public
  */
 

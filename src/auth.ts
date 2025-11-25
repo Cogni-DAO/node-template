@@ -5,7 +5,7 @@
  * Module: `@/auth`
  * Purpose: NextAuth.js configuration and export.
  * Scope: App-wide authentication configuration. Does not handle client-side session management.
- * Invariants: Uses SIWE (Sign-In with Ethereum) provider with "credentials" ID.
+ * Invariants: Uses SIWE (Sign-In with Ethereum) provider with "credentials" ID; returns DB UUID as user ID.
  * Side-effects: IO (Handles session creation, validation, and persistence)
  * Links: docs/AUTHENTICATION.md
  * @public

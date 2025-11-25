@@ -7,7 +7,7 @@
  * Scope: Validates process.env for server runtime; provides lazy server environment access. Does not handle client-side env vars.
  * Invariants: All required env vars validated on first access; provides boolean flags for runtime and test modes; fails fast on invalid env.
  * Side-effects: process.env
- * Notes: Includes APP_ENV for adapter wiring; LLM config; constructs DATABASE_URL from pieces; lazy initialization prevents build-time access.
+ * Notes: APP_ENV for adapter wiring; LLM config; DATABASE_URL from direct var or all DB component vars; lazy init prevents build-time access.
  * Links: Environment configuration specification
  * @public
  */

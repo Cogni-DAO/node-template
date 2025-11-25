@@ -5,7 +5,7 @@
  * Module: `@shared/db/db-url`
  * Purpose: Database URL construction utility for PostgreSQL connections.
  * Scope: Single source of truth for DATABASE_URL construction from env pieces. Safe for both app runtime and tooling. Does not handle connections or validation.
- * Invariants: No Next.js imports, no zod, no side-effects; pure function only.
+ * Invariants: Pure function; no Next.js/Zod deps; strictly requires POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST.
  * Side-effects: none
  * Notes: Throws on missing required pieces; no configuration options to keep tooling simple.
  * Links: Used by server env validation and drizzle configuration

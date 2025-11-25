@@ -5,7 +5,7 @@
  * Module: `@adapters/server/accounts/drizzle`
  * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations.
  * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Does not handle authentication or business rules.
- * Invariants: All credit operations are atomic, ledger is source of truth, billing_accounts.balance_credits is computed cache
+ * Invariants: Atomic credit ops; ledger is source of truth; balance is computed cache; strictly validates UUID v4 inputs.
  * Side-effects: IO (database operations)
  * Notes: Uses transactions for consistency, throws port errors for business rule violations
  * Links: Implements AccountService port, uses shared database schema
