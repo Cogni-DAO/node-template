@@ -3,198 +3,165 @@
 
 /**
  * Module: `@/auth`
- * Purpose: Auth.js configuration using SIWE (Credentials provider) with JWT sessions.
- * Scope: Defines auth handlers, JWT strategy, and SIWE verification. Users table tracks wallet addresses; no database sessions. Does not handle client-side session management or route protection.
- * Invariants: JWT-backed sessions; wallet address in JWT token; manual user record management.
- * Side-effects: IO (User table writes only, no session table)
- * Links: docs/SECURITY_AUTH_SPEC.md
+ * Purpose: NextAuth.js configuration and export.
+ * Scope: App-wide authentication configuration. Does not handle client-side session management.
+ * Invariants: SIWE provider with "credentials" ID. Session user ID is DB UUID (users.id) for FKs; walletAddress is separate attribute.
+ * Side-effects: IO (Handles session creation, validation, and persistence)
+ * Links: docs/AUTHENTICATION.md
  * @public
  */
 
 /* eslint-disable boundaries/no-unknown-files */
 
-import { randomUUID } from "node:crypto";
+import nodeCrypto, { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
-import NextAuth, { type User as NextAuthUser } from "next-auth";
+import type { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { getCsrfToken } from "next-auth/react";
 import { SiweMessage } from "siwe";
 
 import { getDb } from "@/adapters/server/db/client";
 import { users } from "@/shared/db/schema.auth";
 
-type DbUser = typeof users.$inferSelect;
-
-function toNextAuthUser(row: DbUser, address: string): NextAuthUser {
-  const walletAddress = row.walletAddress ?? address;
-  return {
-    id: row.id,
-    name: row.name ?? null,
-    email: row.email ?? null,
-    image: row.image ?? null,
-    walletAddress,
-  };
-}
+export const authSecret =
+  process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
 
 /**
- * NextAuth configuration and exports.
- * Direct export pattern per Auth.js v5 examples - no lazy initialization.
- * Build-time: Docker builder provides DATABASE_URL so getDb() can validate during build.
- * Runtime: Actual DB connections only happen when auth handlers are invoked.
+ * NextAuth configuration.
+ * Exports authOptions for use in route handlers and server helpers.
  *
  * Note: No adapter with JWT strategy. Credentials provider manually manages users table.
  * Database sessions table is not used; JWT tokens stored in HttpOnly cookies instead.
  */
-export const { auth, signIn, signOut, handlers } = NextAuth({
+export const authOptions: NextAuthOptions = {
+  pages: {
+    // Prevent redirect to default NextAuth sign-in page
+    signIn: "/",
+  },
   session: {
     strategy: "jwt",
     // 30 days
     maxAge: 30 * 24 * 60 * 60,
   },
+  secret: authSecret,
   // Rely on AUTH_SECRET or NEXTAUTH_SECRET in process.env
   providers: [
     Credentials({
-      id: "siwe",
+      // Changed from "siwe" to match default RainbowKit adapter expectation
+      id: "credentials",
       name: "Sign-In with Ethereum",
       credentials: {
         message: { label: "Message", type: "text" },
         signature: { label: "Signature", type: "text" },
       },
       async authorize(credentials, req) {
-        console.log("[SIWE] authorize() called with:", {
-          hasMessage: !!credentials?.message,
-          hasSignature: !!credentials?.signature,
-          messagePreview:
-            typeof credentials?.message === "string"
-              ? credentials.message.substring(0, 100)
-              : "N/A",
-        });
+        try {
+          if (!credentials?.message || !credentials?.signature) {
+            console.error("[SIWE] Missing credentials");
+            return null;
+          }
 
-        if (!credentials?.message || !credentials?.signature) {
-          console.error("[SIWE] Missing credentials");
-          return null;
-        }
-
-        // Get domain from incoming request (single source of truth)
-        const host = req?.headers?.get("host");
-        if (!host) {
-          console.error("[SIWE] No host header in request");
-          return null;
-        }
-
-        const siweMessage = new SiweMessage(credentials.message as string);
-
-        console.log("[SIWE] Parsed message:", {
-          signedDomain: siweMessage.domain,
-          requestHost: host,
-          address: siweMessage.address,
-          nonce: siweMessage.nonce,
-        });
-
-        // CRITICAL: Enforce domain match (prevent domain spoofing)
-        if (siweMessage.domain !== host) {
-          console.error(
-            "[SIWE] Domain mismatch - signed domain must match request host",
-            {
-              signed: siweMessage.domain,
-              requestHost: host,
-            }
+          const siwe = new SiweMessage(credentials.message as string);
+          const nextAuthUrl = new URL(
+            process.env.NEXTAUTH_URL ?? "http://localhost:3000"
           );
+
+          // Convert Headers to plain object for getCsrfToken
+          const headers: Record<string, string> = {};
+          if (req.headers instanceof Headers) {
+            for (const [key, value] of req.headers.entries()) {
+              headers[key] = value;
+            }
+          } else {
+            Object.assign(headers, req.headers);
+          }
+
+          // Verify domain, nonce, and signature
+          const nonce = await getCsrfToken({ req: { headers } });
+          if (!nonce) {
+            console.error("[SIWE] Failed to retrieve nonce");
+            return null;
+          }
+
+          // [DEBUG] Log attempt details
+          const messageHash = nodeCrypto
+            .createHash("sha256")
+            .update(credentials.message as string)
+            .digest("hex")
+            .slice(0, 8);
+          console.log(
+            `[SIWE] Authorize attempt: nonce=${nonce}, address=${new SiweMessage(credentials.message as string).address}, msgHash=${messageHash}`
+          );
+
+          const result = await siwe.verify({
+            signature: credentials.signature as string,
+            domain: nextAuthUrl.host,
+            nonce,
+          });
+
+          if (!result.success) {
+            console.error("[SIWE] Verification failed:", result.error);
+            return null;
+          }
+
+          const { data: fields } = result;
+          const db = getDb();
+
+          // Check for existing user
+          let user = await db.query.users.findFirst({
+            where: eq(users.walletAddress, fields.address),
+          });
+
+          if (!user) {
+            // Create new user if not exists
+            const [newUser] = await db
+              .insert(users)
+              .values({
+                // Generate ID manually since it's not auto-generated in schema
+                id: randomUUID(),
+                walletAddress: fields.address,
+                // role: "user", // Removed as it might not be in schema, relying on default
+              })
+              .returning();
+            user = newUser;
+          }
+
+          if (!user) {
+            console.error("[SIWE] Failed to create or retrieve user");
+            return null;
+          }
+
+          console.log("[SIWE] Login success for:", fields.address);
+
+          return {
+            // Use DB UUID as primary ID for FK relationships
+            id: user.id,
+            walletAddress: fields.address,
+          };
+        } catch (e) {
+          console.error("[SIWE] Authorize error:", e);
           return null;
         }
-
-        // Enforce nonce match against Auth.js CSRF token cookie to mitigate replay
-        const cookieStore = await cookies();
-        const csrfCookie = cookieStore.get("authjs.csrf-token");
-        const csrfTokenFromCookie =
-          csrfCookie?.value?.split("|")?.[0] ?? undefined;
-
-        console.log("[SIWE] CSRF/Nonce check:", {
-          csrfFromCookie: csrfTokenFromCookie,
-          nonceFromMessage: siweMessage.nonce,
-          match: csrfTokenFromCookie === siweMessage.nonce,
-        });
-
-        if (!csrfTokenFromCookie || siweMessage.nonce !== csrfTokenFromCookie) {
-          console.error("[SIWE] Nonce mismatch");
-          return null;
-        }
-
-        console.log("[SIWE] Attempting signature verification...");
-        // Use request host for verification, not env-derived domain
-        const verification = await siweMessage.verify({
-          signature: credentials.signature as string,
-          domain: host,
-          nonce: csrfTokenFromCookie,
-        });
-
-        console.log("[SIWE] Verification result:", verification);
-
-        if (!verification.success) {
-          console.error("[SIWE] Signature verification failed");
-          return null;
-        }
-
-        const address = siweMessage.address.toLowerCase();
-        const db = getDb();
-
-        // Optimistic fetch first (fast path)
-        let user = await db.query.users.findFirst({
-          where: eq(users.walletAddress, address),
-        });
-
-        if (user) {
-          return toNextAuthUser(user, address);
-        }
-
-        // Insert with conflict handling (race condition safety)
-        await db
-          .insert(users)
-          .values({
-            id: randomUUID(),
-            walletAddress: address,
-          })
-          .onConflictDoNothing({ target: users.walletAddress });
-
-        // Fetch again to get the definitive record (ours or the winner's)
-        user = await db.query.users.findFirst({
-          where: eq(users.walletAddress, address),
-        });
-
-        if (!user) {
-          console.error("[SIWE] Failed to create or retrieve user");
-          return null;
-        }
-
-        return toNextAuthUser(user, address);
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // SIWE invariant: wallet address must exist
-        if (!user.walletAddress) {
-          throw new Error("SIWE authentication must provide wallet address");
-        }
         token.id = user.id;
-        token.walletAddress = user.walletAddress;
+        token.walletAddress = user.walletAddress ?? null;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        const userId = typeof token.id === "string" ? token.id : "";
-        const walletAddr =
-          typeof token.walletAddress === "string" ? token.walletAddress : null;
-
-        session.user.id = userId;
-        session.user.walletAddress = walletAddr;
+        session.user.id = token.id as string;
+        session.user.walletAddress = token.walletAddress as string | null;
       }
       return session;
     },
   },
-  // Always trust reverse proxy host headers; app only runs behind our own Caddy / managed proxies.
-  trustHost: true,
-});
+  // Enable debugging to diagnose login issues
+  debug: true,
+};

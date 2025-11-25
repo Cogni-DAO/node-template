@@ -3,7 +3,7 @@
 
 /**
  * Module: `@app/wallet-test/page`
- * Purpose: Dev-test page for verifying SIWE authentication flow with Auth.js.
+ * Purpose: Dev-test page for verifying SIWE authentication flow with NextAuth.
  * Scope: Client component that demonstrates WalletConnectButton with error display. Uses kit component for reusable auth logic. Does not implement wallet logic directly.
  * Invariants: None (delegates to WalletConnectButton)
  * Side-effects: IO (via WalletConnectButton)
@@ -26,7 +26,7 @@ export default function WalletTestPage(): ReactNode {
       <h1 className="text-[length:var(--font-size-xl)] font-[var(--font-weight-bold)]">
         Wallet Connection Test
       </h1>
-      <WalletConnectButton showError={true} />
+      <WalletConnectButton />
     </div>
   );
 }
