@@ -11,6 +11,15 @@ This "Verify your account" modal appears when the wallet is **connected** but th
 
 We use the stock [RainbowKit ConnectButton](https://rainbowkit.com/docs/connect-button) for the MVP, which enforces this behavior.
 
+## Invariants: Wallet-Session Coherence
+
+**Disconnecting or switching the wallet invalidates the SIWE session.**
+
+Since the wallet address is the canonical identity for billing and credits, we enforce strict coherence to prevent confusion (e.g., user thinks they are paying with Wallet A but are actually signed in as Wallet B).
+
+- If the wallet disconnects -> The session is signed out.
+- If the wallet switches to a different address -> The session is signed out.
+
 ## Known UX problems (intentional, MVP-tolerated)
 
 ### Problem A — Sign-in has two sections
