@@ -42,6 +42,7 @@
 - While LiteLLM still shares `cogni_template_dev`, treat this as a temporary workaround:
   - After a full stack restart that recreates `cogni_template_dev`, re-run `pnpm dev:stack:db:migrate` once LiteLLM finishes booting.
   - Remove this step once LiteLLM has its own isolated database.
+- CI must run migrations + a minimal table-existence check against the Docker Postgres instance to catch DB drift early.
 
 ## Guiding principles
 
