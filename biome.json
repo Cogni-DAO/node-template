@@ -1,0 +1,244 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.7/schema.json",
+  "root": true,
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.mjs",
+      "**/*.cjs",
+      "**/*.mts",
+      "**/*.cts",
+      "**/*.json"
+    ],
+    "ignoreUnknown": false
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": {
+        "recommended": true
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": {
+          "level": "warn",
+          "options": {
+            "ignoreRestSiblings": true
+          }
+        },
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "error"
+      },
+      "nursery": {
+        "useSortedClasses": {
+          "level": "warn",
+          "options": {
+            "attributes": ["class", "className"],
+            "functions": ["cn", "clsx", "cva"]
+          }
+        }
+      },
+      "style": {
+        "noDefaultExport": "warn",
+        "noProcessEnv": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": [
+                  "@vercel/**",
+                  "@sentry/**",
+                  "@datadog/**",
+                  "@clerk/**",
+                  "@auth0/**",
+                  "@supabase/**",
+                  "@upstash/**",
+                  "@amplitude/**",
+                  "@segment/**",
+                  "@fullstory/**",
+                  "@intercom/**",
+                  "newrelic",
+                  "dd-trace",
+                  "logrocket",
+                  "analytics-node",
+                  "mixpanel-browser",
+                  "mixpanel",
+                  "hotjar",
+                  "posthog-js",
+                  "posthog-node",
+                  "@hotjar/browser",
+                  "bugsnag",
+                  "rollbar",
+                  "honeybadger",
+                  "firebase/app",
+                  "firebase/auth",
+                  "firebase/firestore",
+                  "firebase/database",
+                  "appwrite",
+                  "pocketbase",
+                  "launchdarkly-node-server-sdk",
+                  "launchdarkly-react-client-sdk",
+                  "configcat-node",
+                  "configcat-js",
+                  "crisp-sdk-web"
+                ],
+                "message": "Vendor SDK imports are restricted to infra adapters"
+              }
+            ]
+          }
+        },
+        "useImportType": "error",
+        "useNamingConvention": {
+          "level": "warn",
+          "options": {
+            "conventions": [
+              {
+                "selector": { "kind": "variable" },
+                "formats": ["camelCase", "CONSTANT_CASE"]
+              },
+              {
+                "selector": { "kind": "function" },
+                "formats": ["camelCase", "PascalCase"]
+              },
+              {
+                "selector": { "kind": "class" },
+                "formats": ["PascalCase"]
+              },
+              {
+                "selector": { "kind": "interface" },
+                "formats": ["PascalCase"]
+              },
+              {
+                "selector": { "kind": "typeAlias" },
+                "formats": ["PascalCase"]
+              },
+              {
+                "selector": { "kind": "enum" },
+                "formats": ["PascalCase"]
+              }
+            ]
+          }
+        }
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "arrowParentheses": "always",
+      "bracketSpacing": true,
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "es5"
+    },
+    "globals": ["React"]
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/infra/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/shared/env/**/*.ts",
+        "src/shared/env/**/*.tsx",
+        "src/auth.ts",
+        "e2e/**/*.{ts,tsx}",
+        "playwright.config.ts",
+        "tests/**/*.ts",
+        "scripts/**/*.ts",
+        "docs/templates/**/*.ts",
+        "**/*.config.ts",
+        "**/*.config.js",
+        "**/*.config.cjs",
+        "**/*.config.mts",
+        "drizzle.config.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/components/**/*.{ts,tsx}",
+        "src/features/**/*.{ts,tsx}",
+        "src/app/**/*.{ts,tsx}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "warn"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/*.config.ts",
+        "**/*.config.js",
+        "**/*.config.cjs",
+        "**/*.config.mts",
+        "**/*.config.mjs",
+        "next.config.ts",
+        "postcss.config.mjs",
+        "playwright.config.ts",
+        "eslint.config.mjs",
+        "eslint/**/*.mjs",
+        "vitest*.config.mts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.d.ts"],
+      "formatter": {
+        "enabled": false
+      },
+      "linter": {
+        "enabled": false
+      }
+    }
+  ]
+}
