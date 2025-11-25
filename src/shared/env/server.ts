@@ -64,7 +64,7 @@ const serverSchema = z.object({
   POSTGRES_USER: z.string().min(1).optional(),
   POSTGRES_PASSWORD: z.string().min(1).optional(),
   POSTGRES_DB: z.string().min(1).optional(),
-  DB_HOST: z.string().default("localhost"),
+  DB_HOST: z.string().optional(),
   DB_PORT: z.coerce.number().default(5432),
 
   // NextAuth secret (required for JWT signing)
@@ -106,10 +106,11 @@ export function serverEnv(): ServerEnv {
         if (
           !parsed.POSTGRES_USER ||
           !parsed.POSTGRES_PASSWORD ||
-          !parsed.POSTGRES_DB
+          !parsed.POSTGRES_DB ||
+          !parsed.DB_HOST
         ) {
           throw new Error(
-            "Either DATABASE_URL or all component variables (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB) must be provided"
+            "Either DATABASE_URL or all component variables (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST) must be provided"
           );
         }
         DATABASE_URL = buildDatabaseUrl({

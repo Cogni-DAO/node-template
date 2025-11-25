@@ -12,6 +12,11 @@
  * @public
  */
 export interface SessionUser {
+  /**
+   * Primary database identifier (UUID).
+   * Maps to `users.id` in the `auth` schema.
+   * NEVER use wallet address here; use `walletAddress` field instead.
+   */
   id: string;
   walletAddress: string;
 }

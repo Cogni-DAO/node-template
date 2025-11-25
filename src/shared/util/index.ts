@@ -14,3 +14,4 @@
 
 export { deriveAccountIdFromApiKey } from "./accountId";
 export { cn } from "./cn";
+export { isValidUuid } from "./uuid";

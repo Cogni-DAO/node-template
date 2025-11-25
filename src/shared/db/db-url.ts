@@ -24,7 +24,7 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
   const user = env.POSTGRES_USER;
   const password = env.POSTGRES_PASSWORD;
   const db = env.POSTGRES_DB;
-  const host = env.DB_HOST ?? "localhost";
+  const host = env.DB_HOST;
   const port =
     typeof env.DB_PORT === "number"
       ? env.DB_PORT
@@ -34,6 +34,10 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
     throw new TypeError(
       "Missing required DB env vars: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB"
     );
+  }
+
+  if (!host) {
+    throw new TypeError("Missing required DB env var: DB_HOST");
   }
 
   if (!Number.isFinite(port)) {
