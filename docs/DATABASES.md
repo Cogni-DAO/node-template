@@ -173,7 +173,7 @@ pnpm docker:dev:stack:setup     # Complete: build stack, create DB, migrate
 
 # Manual steps (if needed)
 pnpm docker:dev:stack           # Start containers
-pnpm docker:dev:db:create       # Create database
+pnpm db:provision               # Create database
 pnpm docker:dev:stack:migrate   # Run migrations in container
 ```
 
