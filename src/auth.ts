@@ -5,7 +5,7 @@
  * Module: `@/auth`
  * Purpose: NextAuth.js configuration and export.
  * Scope: App-wide authentication configuration. Does not handle client-side session management.
- * Invariants: Uses SIWE (Sign-In with Ethereum) provider with "credentials" ID.
+ * Invariants: SIWE provider with "credentials" ID. Session user ID is DB UUID (users.id) for FKs; walletAddress is separate attribute.
  * Side-effects: IO (Handles session creation, validation, and persistence)
  * Links: docs/AUTHENTICATION.md
  * @public
@@ -135,11 +135,9 @@ export const authOptions: NextAuthOptions = {
           console.log("[SIWE] Login success for:", fields.address);
 
           return {
-            // Use address as primary ID for RainbowKit compatibility
-            id: fields.address,
+            // Use DB UUID as primary ID for FK relationships
+            id: user.id,
             walletAddress: fields.address,
-            // Persist DB ID separately
-            dbId: user.id,
           };
         } catch (e) {
           console.error("[SIWE] Authorize error:", e);
@@ -153,8 +151,6 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.walletAddress = user.walletAddress ?? null;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        token.dbId = (user as any).dbId;
       }
       return token;
     },
@@ -162,8 +158,6 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.walletAddress = token.walletAddress as string | null;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (session.user as any).dbId = token.dbId as string | null;
       }
       return session;
     },

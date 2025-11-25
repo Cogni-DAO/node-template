@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `tests/unit/components/kit/auth/use-wallet-session-consistency.test`
+ * Module: `@tests/unit/components/kit/auth/use-wallet-session-consistency.test`
  * Purpose: Unit tests for the useWalletSessionConsistency hook.
- * Scope: Tests the hook's logic for signing out on mismatch.
+ * Scope: Tests the hook's logic for signing out on mismatch. Does not test integration with real wallet.
  * Invariants: Must sign out if wallet disconnects or switches.
- * Side-effects: Mocks signOut.
+ * Side-effects: none
  * Links: src/components/kit/auth/useWalletSessionConsistency.ts
  * @vitest-environment happy-dom
  * @public
