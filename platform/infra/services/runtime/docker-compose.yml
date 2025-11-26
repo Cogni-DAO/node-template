@@ -115,6 +115,8 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       APP_DB_NAME: ${APP_DB_NAME}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       LITELLM_DB_NAME: litellm
     volumes:
       - ./postgres-init/provision.sh:/app/provision.sh:ro

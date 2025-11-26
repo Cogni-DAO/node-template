@@ -128,6 +128,8 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       APP_DB_NAME: ${POSTGRES_DB:-cogni_template_dev}
+      APP_DB_USER: ${POSTGRES_USER:-user}
+      APP_DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
       LITELLM_DB_NAME: litellm_dev
     volumes:
       - ./postgres-init/provision.sh:/app/provision.sh:ro

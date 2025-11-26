@@ -5,10 +5,10 @@ set -euo pipefail
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 # Module: platform/infra/services/runtime/postgres-init/provision.sh
-# Purpose: Runner script for idempotent DB provisioning.
-# Scope: Executed by the db-provision service container.
-# Invariants: Waits for Postgres to be healthy, then creates app and litellm databases if missing.
-# Side-effects: IO (psql commands).
+# Purpose: Idempotent database and role provisioning for runtime stack.
+# Scope: Executed by the db-provision service container; creates app role, app database (owned by role), and litellm database (root-owned).
+# Invariants: Requires APP_DB_USER and APP_DB_PASSWORD; validates identifier syntax (alphanumeric + underscore); creates role only if missing; sets DB ownership on new databases only.
+# Side-effects: IO (psql commands); creates roles and databases in target Postgres instance.
 
 # Configuration from Env
 PG_HOST="${DB_HOST:-postgres}"
@@ -19,6 +19,29 @@ PG_PASS="${POSTGRES_PASSWORD:-postgres}"
 # Target Databases (defaults)
 APP_DB="${APP_DB_NAME:-cogni_template_dev}"
 LITELLM_DB="${LITELLM_DB_NAME:-litellm_dev}"
+
+# App User Credentials (required, no defaults)
+APP_USER="${APP_DB_USER:-}"
+APP_PASS="${APP_DB_PASSWORD:-}"
+
+if [ -z "$APP_USER" ] || [ -z "$APP_PASS" ]; then
+  echo "❌ ERROR: APP_DB_USER and APP_DB_PASSWORD are required"
+  exit 1
+fi
+
+# Validate identifiers (strict allowlist: alphanumeric + underscore only)
+if ! [[ "$APP_USER" =~ ^[a-zA-Z0-9_]+$ ]]; then
+  echo "❌ ERROR: APP_DB_USER contains invalid characters (allowed: a-zA-Z0-9_)"
+  exit 1
+fi
+if ! [[ "$APP_DB" =~ ^[a-zA-Z0-9_]+$ ]]; then
+  echo "❌ ERROR: APP_DB_NAME contains invalid characters (allowed: a-zA-Z0-9_)"
+  exit 1
+fi
+if ! [[ "$LITELLM_DB" =~ ^[a-zA-Z0-9_]+$ ]]; then
+  echo "❌ ERROR: LITELLM_DB_NAME contains invalid characters (allowed: a-zA-Z0-9_)"
+  exit 1
+fi
 
 # Helper: Run SQL as Superuser
 function run_sql_as_root() {
@@ -34,19 +57,44 @@ until PGPASSWORD="$PG_PASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "p
 done
 echo "✅ Postgres is up."
 
-echo "🔧 Starting Provisioning (Database Creation Only)..."
+echo "🔧 Starting Provisioning (Roles and Databases)..."
 
-# Database Creation (Idempotent)
-for db in "$APP_DB" "$LITELLM_DB"; do
-  # We construct the CREATE statement safely by validating the db name first is not needed for MVP dev env
-  # where inputs are controlled env vars. In production hardening, we would be more rigorous.
-  exists=$(run_sql_as_root "postgres" "SELECT 1 FROM pg_database WHERE datname = '$db'" | grep -c 1 || true)
-  if [ "$exists" -eq 0 ]; then
-    echo "   -> Creating database '$db'..."
-    run_sql_as_root "postgres" "CREATE DATABASE $db;"
-  else
-    echo "   -> Database '$db' exists."
-  fi
-done
+# App Role Creation (Idempotent)
+echo "🔧 Checking app role '$APP_USER'..."
+role_exists=$(run_sql_as_root "postgres" "SELECT 1 FROM pg_roles WHERE rolname = '$APP_USER'" | grep -c 1 || true)
+if [ "$role_exists" -eq 0 ]; then
+  echo "   -> Creating role '$APP_USER'..."
+  # Use psql variables + format() for safe quoting (handles special chars including quotes)
+  PGPASSWORD="$PG_PASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "postgres" -v ON_ERROR_STOP=1 \
+    -v app_user="$APP_USER" \
+    -v app_pass="$APP_PASS" \
+    -c "DO \$\$ BEGIN
+          IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'app_user') THEN
+            EXECUTE format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'app_user', :'app_pass');
+          END IF;
+        END \$\$;"
+else
+  echo "   -> Role '$APP_USER' already exists."
+fi
+
+# App Database Creation (Idempotent, owned by app user)
+echo "🔧 Checking app database '$APP_DB'..."
+app_db_exists=$(run_sql_as_root "postgres" "SELECT 1 FROM pg_database WHERE datname = '$APP_DB'" | grep -c 1 || true)
+if [ "$app_db_exists" -eq 0 ]; then
+  echo "   -> Creating database '$APP_DB' with owner '$APP_USER'..."
+  run_sql_as_root "postgres" "CREATE DATABASE \"$APP_DB\" OWNER \"$APP_USER\";"
+else
+  echo "   -> Database '$APP_DB' already exists."
+fi
+
+# LiteLLM Database Creation (Idempotent, root-owned for litellm service)
+echo "🔧 Checking litellm database '$LITELLM_DB'..."
+litellm_db_exists=$(run_sql_as_root "postgres" "SELECT 1 FROM pg_database WHERE datname = '$LITELLM_DB'" | grep -c 1 || true)
+if [ "$litellm_db_exists" -eq 0 ]; then
+  echo "   -> Creating database '$LITELLM_DB'..."
+  run_sql_as_root "postgres" "CREATE DATABASE \"$LITELLM_DB\";"
+else
+  echo "   -> Database '$LITELLM_DB' already exists."
+fi
 
 echo "✅ Provisioning Complete."
