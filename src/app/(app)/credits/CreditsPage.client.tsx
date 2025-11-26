@@ -40,7 +40,7 @@ const DEFAULT_LEDGER_LIMIT = 10;
 
 async function fetchSummary(): Promise<CreditsSummaryOutput> {
   const response = await fetch(
-    "/api/v1/payments/credits/summary?limit=" + DEFAULT_LEDGER_LIMIT
+    `/api/v1/payments/credits/summary?limit=${DEFAULT_LEDGER_LIMIT}`
   );
   if (!response.ok) {
     throw new Error("Unable to load credits");

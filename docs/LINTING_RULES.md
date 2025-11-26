@@ -54,10 +54,12 @@
   > **Note**: Migrated to Biome organizeImports. Removes eslint-plugin-simple-import-sort. Biome now sorts: Node built-ins → external packages → internal aliases.
 - [x] **Commit 8**: Final ESLint Cleanup & Verification
   > **Note**: Removed React/Next.js, a11y, filename conventions (unicorn/check-file) from ESLint. ESLint now only enforces hex boundaries + UI/Tailwind governance. Filename conventions dropped temporarily (will be reintroduced via Biome `useFilenamingConvention` or Ultracite later).
+- [x] **Commit 8B**: Remove Duplicate Vendor SDK Restrictions
+  > **Note**: Removed ESLint vendor SDK import restrictions (no-vendor-sdk-imports plugin). These patterns were duplicated - Biome already enforces identical restrictions via `noRestrictedImports` (configured in Commit 1B) with same `src/infra/**` exemption.
 
-### Remaining ESLint Rules (Post-Commit 8)
+### Remaining ESLint Rules (Post-Commit 8B)
 
-**Active ESLint Configs**: base, app, tests, ui-governance, no-vendor-sdk-imports
+**Active ESLint Configs**: base, app, tests, ui-governance
 
 **Rules by Category** (Remaining):
 
@@ -75,9 +77,6 @@
    - `no-restricted-imports`, `no-restricted-properties`, `import/no-internal-modules`, `no-inline-styles/no-inline-styles`
    - Features, app, styles, vendor, kit layers
 
-5. **Vendor SDK Restrictions** (1 rule)
-   - `no-vendor-sdk-imports/no-vendor-sdk-imports` - blocks vendor SDKs outside infra
-
 **Rules REMOVED in Commit 8** (now handled by Biome or dropped):
 
 - ❌ React/Next.js (~15 rules) - `react-hooks/*`, `@next/next/*`, `react/*`
@@ -86,8 +85,12 @@
 - ❌ TypeScript core (~5 rules) - `@typescript-eslint/*` (moved to Biome)
 - ❌ Import sorting - `simple-import-sort/*` (moved to Biome organizeImports)
 
-**Total Active ESLint Rules**: ~13-15 (down from ~77)
-**Migrated to Biome**: 9 rules (Commits 2B-7)
+**Rules REMOVED in Commit 8B** (duplicate, now only in Biome):
+
+- ❌ Vendor SDK Restrictions (1 rule) - `no-vendor-sdk-imports/no-vendor-sdk-imports` (duplicate of Biome `noRestrictedImports`)
+
+**Total Active ESLint Rules**: ~12-14 (down from ~77)
+**Migrated to Biome**: 10 rules (Commits 2B-8B)
 **Dropped temporarily**: ~10 filename rules (to be reintroduced via Biome later)
 
 ### Post-Commit 8 Notes
@@ -886,9 +889,13 @@ Ensures all files match defined boundary patterns.
 
 ## 9. Vendor SDK Import Restrictions
 
-**Source**: `eslint/no-vendor-sdk-imports.config.mjs`, `scripts/eslint/plugins/no-vendor-sdk-imports.cjs`
+**Status**: ✅ **Migrated to Biome (Commit 8B)** - ESLint version removed as duplicate
 
-### Rule: no-vendor-sdk-imports
+**Previous Source**: `eslint/no-vendor-sdk-imports.config.mjs`, `scripts/eslint/plugins/no-vendor-sdk-imports.cjs` (deleted in Commit 8B)
+
+**Current Source**: `biome/base.json` (lines 27-73) - `noRestrictedImports` rule with `src/infra/**` override
+
+### Rule: no-vendor-sdk-imports (now: Biome noRestrictedImports)
 
 Prevents vendor lock-in by blocking proprietary SaaS SDK imports in core code.
 
