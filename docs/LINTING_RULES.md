@@ -66,9 +66,9 @@
 1. **UI Governance** (4 rules) - custom Tailwind token enforcement
    - `ui-governance/no-raw-colors`, `no-arbitrary-non-token-values`, `token-classname-patterns`, `no-vendor-imports-outside-kit`
 
-2. **Hexagonal Architecture** (3 rules) - eslint-plugin-boundaries
-   - `boundaries/element-types`, `boundaries/entry-point`, `boundaries/no-unknown-files`
-   - ⚠️ **Note**: These are currently broken (tests failing). Another developer implementing dependency-cruiser replacement.
+2. **Hexagonal Architecture** - dependency-cruiser
+   - ✅ **Migrated from ESLint**: Layer boundaries now enforced via dependency-cruiser (36/59 tests complete).
+   - See [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for boundary enforcement details and migration status.
 
 3. **Tailwind** (5 rules) - eslint-plugin-tailwindcss
    - `tailwindcss/no-conflicting-utilities`, `no-arbitrary-value-overuse`, `prefer-theme-tokens`, `valid-theme-function`, `valid-apply-directive`

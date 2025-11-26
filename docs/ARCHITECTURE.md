@@ -2,7 +2,7 @@
 
 **Core Mission**: A crypto-metered AI infrastructure loop where chat is just one client. DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
 
-This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. ESLint boundaries codify these rules (e.g. no `app → core`, no `adapters → core`, `shared/types` remain domain-agnostic).
+This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. Dependency-cruiser enforces these rules (e.g. no `app → core`, no `adapters → core`, `shared/types` remain domain-agnostic). See [.dependency-cruiser.cjs](../.dependency-cruiser.cjs) for boundary rules and [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for enforcement tests.
 
 Strict **Hexagonal (Ports & Adapters)** for a full-stack TypeScript app on **Next.js App Router**.  
 Purpose: a **metered AI backend** with per-request logging, credit accounting, and crypto billing.  

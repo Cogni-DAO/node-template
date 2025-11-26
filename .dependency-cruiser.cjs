@@ -20,6 +20,7 @@ const layers = {
   bootstrap: "^src/bootstrap",
   lib: "^src/lib",
   auth: "^src/auth\\.ts$",
+  proxy: "^src/proxy\\.ts$",
   components: "^src/components",
   styles: "^src/styles",
   types: "^src/types",
@@ -99,16 +100,32 @@ module.exports = {
       },
     },
 
-    // lib → lib, ports, shared, types
+    // lib → lib, ports, shared, types, auth
     {
       from: { path: layers.lib },
-      to: { path: [layers.lib, layers.ports, layers.shared, layers.types] },
+      to: {
+        path: [
+          layers.lib,
+          layers.ports,
+          layers.shared,
+          layers.types,
+          layers.auth,
+        ],
+      },
     },
 
-    // auth → auth, shared, types, lib
+    // auth → auth, adapters, shared, types (bootstrap-level: framework wiring)
     {
       from: { path: layers.auth },
-      to: { path: [layers.auth, layers.shared, layers.types, layers.lib] },
+      to: {
+        path: [layers.auth, layers.adapters, layers.shared, layers.types],
+      },
+    },
+
+    // proxy → auth, lib, shared, types (edge layer: middleware)
+    {
+      from: { path: layers.proxy },
+      to: { path: [layers.auth, layers.lib, layers.shared, layers.types] },
     },
 
     // mcp → mcp, features, ports, contracts, bootstrap
