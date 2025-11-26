@@ -21,6 +21,7 @@
         }
       },
       "style": {
+        "noDefaultExport": "error",
         "noProcessEnv": "error",
         "useImportType": "error",
         "noRestrictedImports": {

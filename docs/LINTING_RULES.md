@@ -40,7 +40,8 @@
   > **Note**: Establishes Biome pipeline with MVP rules (recommended disabled). No source code changes.
 - [x] **Commit 1B**: Mechanical Biome Apply
   > **Note**: Repo-wide formatting and class sorting fixes. Purely mechanical.
-- [ ] **Commit 2**: Migrate `no-default-export`
+- [x] **Commit 2B**: Migrate `no-default-export`
+  > **Note**: Enabled in Biome (error), removed from ESLint. Strict overrides for Next.js App Router only.
 - [ ] **Commit 3**: Migrate `no-process-env` (with parity tests)
 - [ ] **Commit 4**: Migrate `consistent-type-imports` (with parity tests)
 - [ ] **Commit 5**: Migrate `no-unused-vars` & `unused-imports` (with parity tests)
@@ -561,14 +562,14 @@ For this project specifically, **Option B (Biome + rustywind)** is the best choi
 
 ### Import Sorting & Resolution
 
-| Rule                         | Severity | Description                                | Biome Migration                           |
-| ---------------------------- | -------- | ------------------------------------------ | ----------------------------------------- |
-| `simple-import-sort/imports` | error    | Sort imports consistently                  | 🟢 Easy - Built-in import sorting         |
-| `simple-import-sort/exports` | error    | Sort exports consistently                  | 🟢 Easy - Built-in export sorting         |
-| `import/no-unresolved`       | error    | Disallow unresolved imports                | 🟢 Easy - Built-in TypeScript integration |
-| `import/no-cycle`            | error    | Disallow circular dependencies             | 🟡 Moderate - May need custom config      |
-| `import/no-default-export`   | error    | Disallow default exports (components only) | 🟢 Easy - `noDefaultExport`               |
-| `import/no-internal-modules` | error    | Restrict deep imports in features          | 🔴 Hard - Path-based restrictions         |
+| Rule                         | Severity | Description                                | Biome Migration                             |
+| ---------------------------- | -------- | ------------------------------------------ | ------------------------------------------- |
+| `simple-import-sort/imports` | error    | Sort imports consistently                  | 🟢 Easy - Built-in import sorting           |
+| `simple-import-sort/exports` | error    | Sort exports consistently                  | 🟢 Easy - Built-in export sorting           |
+| `import/no-unresolved`       | error    | Disallow unresolved imports                | 🟢 Easy - Built-in TypeScript integration   |
+| `import/no-cycle`            | error    | Disallow circular dependencies             | 🟡 Moderate - May need custom config        |
+| `import/no-default-export`   | error    | Disallow default exports (components only) | ✅ Migrated - `noDefaultExport` (Commit 2B) |
+| `import/no-internal-modules` | error    | Restrict deep imports in features          | 🔴 Hard - Path-based restrictions           |
 
 ### Import Restrictions by Layer
 

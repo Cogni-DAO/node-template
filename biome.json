@@ -20,5 +20,5 @@
     ],
     "ignoreUnknown": false
   },
-  "extends": ["./biome/base.json", "./biome/tests.json"]
+  "extends": ["./biome/base.json", "./biome/app.json", "./biome/tests.json"]
 }

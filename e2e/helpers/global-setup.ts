@@ -14,7 +14,7 @@
 
 import type { FullConfig } from "@playwright/test";
 
-export default async function globalSetup(cfg: FullConfig): Promise<void> {
+export async function globalSetup(cfg: FullConfig): Promise<void> {
   const isCi = !!process.env.CI;
   const BASE_URL = process.env.TEST_BASE_URL;
   const ENABLE_PROD = process.env.E2E_ENABLE_PROD;
