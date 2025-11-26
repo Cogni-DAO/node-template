@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/arch/test-adapters-entrypoints`
  * Purpose: Validates test adapters entry point enforcement prevents internal module imports.
- * Scope: Tests entry point rules for @/adapters/test via dependency-cruiser.
+ * Scope: Tests entry point rules for @/adapters/test via dependency-cruiser. Does NOT test layer boundaries.
  * Invariants: Only index.ts can be imported; internal files blocked.
  * Side-effects: IO (spawns depcruise subprocess)
  * Notes: Uses arch probes in src/bootstrap/__arch_probes__/ to test entry point enforcement.
