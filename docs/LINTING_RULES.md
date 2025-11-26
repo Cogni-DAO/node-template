@@ -44,7 +44,8 @@
   > **Note**: Enabled in Biome (error), removed from ESLint. Strict overrides for Next.js App Router only.
 - [x] **Commit 3**: Migrate `no-process-env` (with parity tests)
   > **Note**: Enabled in Biome (error), removed from ESLint. Allowlist for env modules and infrastructure files.
-- [ ] **Commit 4**: Migrate `consistent-type-imports` (with parity tests)
+- [x] **Commit 4**: Migrate `consistent-type-imports` (with parity tests)
+  > **Note**: Enabled in Biome as useImportType (error), removed from ESLint base and app configs. Enforces type-only imports.
 - [ ] **Commit 5**: Migrate `no-unused-vars` & `unused-imports` (with parity tests)
 - [ ] **Commit 6**: Migrate `no-explicit-any`
 - [ ] **Commit 7**: Migrate Import Sorting (`simple-import-sort`)

@@ -25,6 +25,7 @@ const eslintDir = path.resolve(__dirname, "../eslint");
 const ALLOWED_UNSKIPPED_SPECS = new Set([
   "canary.spec.ts", // Commit 2B: noDefaultExport
   "process-env.spec.ts", // Commit 3: noProcessEnv
+  "type-imports.spec.ts", // Commit 4: useImportType
   "meta.spec.ts", // Meta-tests (always active)
 ]);
 

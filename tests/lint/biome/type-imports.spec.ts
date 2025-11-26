@@ -15,16 +15,14 @@
 import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runBiome";
-// TODO: Migrate to Biome - waiting for corresponding commit
-// TODO: Migrate to Biome - waiting for corresponding commit
 
-describe.skip("Type Import Consistency", () => {
+describe("Type Import Consistency", () => {
   describe("Type-only port imports", () => {
     it("allows type-only port imports in features", async () => {
       const { errors } = await lintFixture(
         "src/features/ai/services/complete.ts",
         `import type { LlmService, Clock } from "@/ports"; export const service = (llm: LlmService, clock: Clock) => {};`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBe(0);
     });
@@ -33,13 +31,11 @@ describe.skip("Type Import Consistency", () => {
       const { errors, messages } = await lintFixture(
         "src/features/ai/services/complete.ts",
         `import { LlmService, Clock } from "@/ports"; export const service = (llm: LlmService, clock: Clock) => {};`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBeGreaterThan(0);
       expect(
-        messages.some(
-          (m) => m.ruleId === "@typescript-eslint/consistent-type-imports"
-        )
+        messages.some((m) => m.ruleId === "lint/style/useImportType")
       ).toBe(true);
     });
 
@@ -47,7 +43,7 @@ describe.skip("Type Import Consistency", () => {
       const { errors } = await lintFixture(
         "src/adapters/server/ai/litellm.adapter.ts",
         `import type { Message } from "@/core"; export class LiteLlmAdapter { process(msg: Message) {} };`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBe(0);
     });
@@ -56,7 +52,7 @@ describe.skip("Type Import Consistency", () => {
       const { errors } = await lintFixture(
         "src/adapters/server/ai/openai.adapter.ts",
         `import type { LlmService } from "@/ports"; export class OpenAIAdapter implements LlmService {};`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBe(0);
     });
@@ -93,7 +89,7 @@ describe.skip("Type Import Consistency", () => {
       const { errors } = await lintFixture(
         "src/features/ai/services/complete.ts",
         `import { Message } from "@/core"; export const processMessage = (msg: Message) => msg;`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBe(0);
     });
@@ -102,13 +98,11 @@ describe.skip("Type Import Consistency", () => {
       const { errors, messages } = await lintFixture(
         "src/features/chat/services/message.ts",
         `import { MessageRepository } from "@/ports"; export const service = (repo: MessageRepository) => {};`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBeGreaterThan(0);
       expect(
-        messages.some(
-          (m) => m.ruleId === "@typescript-eslint/consistent-type-imports"
-        )
+        messages.some((m) => m.ruleId === "lint/style/useImportType")
       ).toBe(true);
     });
   });
@@ -120,7 +114,7 @@ describe.skip("Type Import Consistency", () => {
       const { errors } = await lintFixture(
         "src/features/ai/services/complete.ts",
         `import { Message } from "@/core"; import type { LlmService } from "@/ports"; export const execute = (llm: LlmService, input: Message): Promise<Message> => llm.process(input);`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBe(0);
     });
@@ -129,13 +123,11 @@ describe.skip("Type Import Consistency", () => {
       const { errors, messages } = await lintFixture(
         "src/features/data/services/query.ts",
         `import { UserRepository, User } from "@/ports"; export const service = (repo: UserRepository): User => null as any;`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBeGreaterThan(0);
       expect(
-        messages.some(
-          (m) => m.ruleId === "@typescript-eslint/consistent-type-imports"
-        )
+        messages.some((m) => m.ruleId === "lint/style/useImportType")
       ).toBe(true);
     });
 
@@ -143,7 +135,7 @@ describe.skip("Type Import Consistency", () => {
       const { errors } = await lintFixture(
         "src/features/validation/services/schema.ts",
         `import { defaultSchema } from "@/shared"; export const validate = (data: unknown) => defaultSchema.parse(data);`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBe(0);
     });
@@ -154,7 +146,7 @@ describe.skip("Type Import Consistency", () => {
       const { errors } = await lintFixture(
         "src/bootstrap/container.ts",
         `import { LiteLlmAdapter } from "@/adapters/server"; import type { LlmService } from "@/ports"; export const container: { llm: LlmService } = { llm: new LiteLlmAdapter() };`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBe(0);
     });
@@ -163,13 +155,11 @@ describe.skip("Type Import Consistency", () => {
       const { errors, messages } = await lintFixture(
         "src/bootstrap/container.ts",
         `import { LlmService } from "@/ports"; export const container: { llm: LlmService } = null as any;`,
-        { focusRulePrefixes: ["@typescript-eslint/consistent-type-imports"] }
+        { focusRulePrefixes: ["lint/style/useImportType"] }
       );
       expect(errors).toBeGreaterThan(0);
       expect(
-        messages.some(
-          (m) => m.ruleId === "@typescript-eslint/consistent-type-imports"
-        )
+        messages.some((m) => m.ruleId === "lint/style/useImportType")
       ).toBe(true);
     });
   });

@@ -86,12 +86,6 @@ export default [
           checksVoidReturn: { attributes: false },
         },
       ],
-      "@typescript-eslint/consistent-type-imports": [
-        "error",
-        {
-          prefer: "type-imports",
-        },
-      ],
       "@typescript-eslint/explicit-function-return-type": [
         "warn",
         {
