@@ -248,5 +248,60 @@ module.exports = {
         path: "\\.\\./",
       },
     },
+
+    // Entry point enforcement: block internal module imports
+    // ports: must use @/ports (index.ts), not internal port files
+    {
+      name: "no-internal-ports-imports",
+      severity: "error",
+      from: {
+        path: "^src",
+      },
+      to: {
+        path: "^src/ports/(?!index\\.ts$).*\\.ts$",
+      },
+      comment: "Import from @/ports (index.ts), not internal port files",
+    },
+
+    // core: must use @/core (public.ts), not internal core files
+    {
+      name: "no-internal-core-imports",
+      severity: "error",
+      from: {
+        path: "^src",
+      },
+      to: {
+        path: "^src/core/(?!public\\.ts$).*\\.ts$",
+      },
+      comment: "Import from @/core (public.ts), not internal core files",
+    },
+
+    // adapters/server: must use @/adapters/server (index.ts), not internal files
+    {
+      name: "no-internal-adapter-imports",
+      severity: "error",
+      from: {
+        path: "^src",
+      },
+      to: {
+        path: "^src/adapters/server/(?!index\\.ts$).*\\.ts$",
+      },
+      comment:
+        "Import from @/adapters/server (index.ts), not internal adapter files",
+    },
+
+    // features: only allow services/ and components/ subdirectories
+    {
+      name: "no-internal-features-imports",
+      severity: "error",
+      from: {
+        path: "^src",
+      },
+      to: {
+        path: "^src/features/[^/]+/(mappers|utils|constants)/",
+      },
+      comment:
+        "Only import from features/*/services or features/*/components subdirectories",
+    },
   ],
 };

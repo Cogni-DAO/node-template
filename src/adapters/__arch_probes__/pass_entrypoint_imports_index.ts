@@ -12,5 +12,5 @@
  * @public
  */
 
-import type { LiteLlmAdapter } from "@/adapters/server";
-export const probePass: typeof LiteLlmAdapter | null = null;
+import { LiteLlmAdapter } from "@/adapters/server";
+export const probePass = LiteLlmAdapter;
