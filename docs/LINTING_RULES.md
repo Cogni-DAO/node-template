@@ -42,7 +42,8 @@
   > **Note**: Repo-wide formatting and class sorting fixes. Purely mechanical.
 - [x] **Commit 2B**: Migrate `no-default-export`
   > **Note**: Enabled in Biome (error), removed from ESLint. Strict overrides for Next.js App Router only.
-- [ ] **Commit 3**: Migrate `no-process-env` (with parity tests)
+- [x] **Commit 3**: Migrate `no-process-env` (with parity tests)
+  > **Note**: Enabled in Biome (error), removed from ESLint. Allowlist for env modules and infrastructure files.
 - [ ] **Commit 4**: Migrate `consistent-type-imports` (with parity tests)
 - [ ] **Commit 5**: Migrate `no-unused-vars` & `unused-imports` (with parity tests)
 - [ ] **Commit 6**: Migrate `no-explicit-any`

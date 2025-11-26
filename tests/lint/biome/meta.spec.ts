@@ -24,6 +24,7 @@ const eslintDir = path.resolve(__dirname, "../eslint");
 // Update this when migrating a new rule per docs/LINTING_RULES.md
 const ALLOWED_UNSKIPPED_SPECS = new Set([
   "canary.spec.ts", // Commit 2B: noDefaultExport
+  "process-env.spec.ts", // Commit 3: noProcessEnv
   "meta.spec.ts", // Meta-tests (always active)
 ]);
 

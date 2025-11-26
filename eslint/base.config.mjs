@@ -4,10 +4,10 @@
 /**
  * Module: `@eslint/base.config.mjs`
  * Purpose: Core ESLint rules for TypeScript, imports, and Node.js best practices.
- * Scope: Covers TypeScript files (.ts/.tsx/.mts), import sorting/resolution, code quality rules, process.env restrictions. Does not handle React/Next.js rules.
- * Invariants: All TypeScript files validated; imports sorted; process.env restricted to allowed files.
+ * Scope: Covers TypeScript files (.ts/.tsx/.mts), import sorting/resolution, code quality rules. Does not handle React/Next.js rules.
+ * Invariants: All TypeScript files validated; imports sorted.
  * Side-effects: none
- * Notes: Includes n/no-process-env rule with allowlist for env files and infrastructure.
+ * Notes: Core linting for base language features and imports.
  * Links: eslint.config.mjs, app.config.mjs
  * @public
  */
@@ -107,9 +107,6 @@ export default [
       "import/no-unresolved": "error",
       "import/no-cycle": "error",
 
-      // Node.js rules
-      "n/no-process-env": "error",
-
       // File header documentation: REUSE enforces SPDX, tsdoc validates TSDoc syntax
       "tsdoc/syntax": "error",
       // Avoid mid-code comments (allow eslint-disable and ts-ignore)
@@ -123,22 +120,6 @@ export default [
     settings: {
       "import/resolver": { typescript: true },
     },
-  },
-
-  // Allow process.env only in environment files, auth config, and E2E infrastructure
-  {
-    files: [
-      "src/shared/env/**/*.{ts,tsx}",
-      "src/auth.ts", // Auth.js needs NODE_ENV for trustHost and domain config
-      "e2e/**/*.{ts,tsx}",
-      "playwright.config.ts",
-      "tests/**/*.ts",
-      "scripts/**/*.ts",
-      "docs/templates/**/*.ts",
-      "*.config.{ts,mts}",
-      "drizzle.config.ts",
-    ],
-    rules: { "n/no-process-env": "off" },
   },
 
   prettierConfig,
