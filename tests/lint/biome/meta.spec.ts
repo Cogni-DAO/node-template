@@ -112,14 +112,22 @@ describe("Biome Test Infrastructure Meta-Tests", () => {
     }
   });
 
-  it("biome and eslint spec filenames match 1:1 (excluding meta/canary)", () => {
+  it("biome and eslint spec filenames match 1:1 (excluding meta/canary/arch tests)", () => {
+    const archTests = new Set([
+      "meta.spec.ts",
+      "canary.spec.ts",
+      "entry-points.spec.ts",
+      "adapters.spec.ts",
+      "bootstrap.spec.ts",
+      "boundaries.spec.ts",
+      "contracts.spec.ts",
+      "features-boundaries.spec.ts",
+      "imports.spec.ts",
+      "vendor-sdk-imports.spec.ts",
+    ]);
+
     const biomeSpecs = readdirSync(biomeDir)
-      .filter(
-        (f) =>
-          f.endsWith(".spec.ts") &&
-          f !== "meta.spec.ts" &&
-          f !== "canary.spec.ts" // Biome-specific canary
-      )
+      .filter((f) => f.endsWith(".spec.ts") && !archTests.has(f))
       .sort();
 
     const eslintSpecs = readdirSync(eslintDir)

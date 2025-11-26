@@ -38,6 +38,9 @@ module.exports = {
       fileName: "./tsconfig.json",
     },
 
+    // Track TypeScript type-only imports
+    tsPreCompilationDeps: true,
+
     // Normal dependency-cruiser hygiene
     doNotFollow: {
       path: "node_modules",

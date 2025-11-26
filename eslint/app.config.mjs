@@ -198,66 +198,6 @@ export default [
         },
       ],
       "boundaries/no-unknown-files": "error",
-      "boundaries/entry-point": [
-        "error",
-        {
-          default: "disallow",
-          rules: [
-            {
-              target: [
-                "ports",
-                "adapters/server",
-                "adapters/test",
-                "shared",
-                "components",
-                "lib",
-                "auth",
-              ],
-              allow: ["**/index.ts", "**/index.tsx"],
-            },
-            {
-              target: ["contracts"],
-              allow: [
-                "**/*.contract.ts",
-                "http/router.v1.ts",
-                "http/openapi.v1.ts",
-              ],
-            },
-            {
-              target: ["styles"],
-              allow: ["ui.ts", "tailwind.css"],
-            },
-            {
-              target: ["features"],
-              allow: [
-                "**/services/*.{ts,tsx}",
-                "**/components/*.{ts,tsx}",
-                "**/public.ts",
-              ],
-            },
-            {
-              target: ["core"],
-              allow: ["**/public.ts"],
-            },
-            {
-              target: ["bootstrap"],
-              allow: ["container.ts"],
-            },
-            {
-              target: ["app"],
-              allow: ["**/*.{ts,tsx}", "_facades/**/*.server.ts"],
-            },
-            {
-              target: ["lib"],
-              allow: ["**/*.ts"],
-            },
-            {
-              target: ["auth"],
-              allow: ["auth.ts"],
-            },
-          ],
-        },
-      ],
     },
     settings: {
       "boundaries/ignore": [
@@ -305,24 +245,10 @@ export default [
     },
   },
 
-  // ARCHITECTURE – Features layer: enforce barrel imports, block cross-feature deps
+  // ARCHITECTURE – Features layer: block cross-feature deps
   {
     files: ["src/features/**/*.{ts,tsx}"],
     rules: {
-      "import/no-internal-modules": [
-        "error",
-        {
-          allow: [
-            "@/components",
-            "@/components/kit/**",
-            "@/core", // alias -> src/core/public.ts
-            "@/ports", // alias -> src/ports/index.ts
-            "@/shared",
-            "services/*", // allow internal service imports within a feature
-            "errors", // allow internal error imports within a feature
-          ],
-        },
-      ],
       "no-restricted-imports": [
         "error",
         {

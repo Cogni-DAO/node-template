@@ -15,18 +15,39 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
-function runDepCruise(probeDirs: string[]): {
+function runDepCruise(probeFilesOrDirs: string[]): {
   exitCode: number;
   stderr: string;
   stdout: string;
 } {
-  const includeOnly = probeDirs.map((d) => `^${d}`).join("|");
+  // Extract caller layers from probe paths
+  const callerLayers = probeFilesOrDirs.map((path) => {
+    const match = path.match(/^(src\/[^/]+)/);
+    return match ? match[1] : path;
+  });
+
+  // For entry point validation, include all base layers so dependency-cruiser
+  // can see both the caller and the target of imports (e.g., app → ports/llm.port.ts)
+  const allBaseLayers = [
+    "src/core",
+    "src/ports",
+    "src/adapters",
+    "src/features",
+    "src/app",
+    "src/bootstrap",
+    "src/shared",
+    "src/components",
+  ];
+
+  const includeOnly = [...probeFilesOrDirs, ...callerLayers, ...allBaseLayers]
+    .map((d) => `^${d}`)
+    .join("|");
 
   const result = spawnSync(
     "pnpm",
     [
       "depcruise",
-      ...probeDirs,
+      ...probeFilesOrDirs,
       "--config",
       ".dependency-cruiser.cjs",
       "--include-only",
@@ -50,7 +71,9 @@ function runDepCruise(probeDirs: string[]): {
 describe("Entry point enforcement", () => {
   describe("Canonical imports allowed", () => {
     it("allows importing from ports index", () => {
-      const { exitCode, stderr } = runDepCruise(["src/ports/__arch_probes__"]);
+      const { exitCode, stderr } = runDepCruise([
+        "src/ports/__arch_probes__/pass_entrypoint_imports_index.ts",
+      ]);
       if (exitCode !== 0) {
         console.error("STDERR:", stderr);
       }
@@ -58,7 +81,9 @@ describe("Entry point enforcement", () => {
     });
 
     it("allows importing from core public", () => {
-      const { exitCode, stderr } = runDepCruise(["src/core/__arch_probes__"]);
+      const { exitCode, stderr } = runDepCruise([
+        "src/core/__arch_probes__/pass_entrypoint_imports_public.ts",
+      ]);
       if (exitCode !== 0) {
         console.error("STDERR:", stderr);
       }
@@ -67,7 +92,7 @@ describe("Entry point enforcement", () => {
 
     it("allows importing from adapters server index", () => {
       const { exitCode, stderr } = runDepCruise([
-        "src/adapters/__arch_probes__",
+        "src/bootstrap/__arch_probes__/pass_entrypoint_imports_adapters_index.ts",
       ]);
       if (exitCode !== 0) {
         console.error("STDERR:", stderr);
@@ -76,7 +101,9 @@ describe("Entry point enforcement", () => {
     });
 
     it("allows importing from features services", () => {
-      const { exitCode, stderr } = runDepCruise(["src/app/__arch_probes__"]);
+      const { exitCode, stderr } = runDepCruise([
+        "src/app/__arch_probes__/pass_entrypoint_imports_features_services.ts",
+      ]);
       if (exitCode !== 0) {
         console.error("STDERR:", stderr);
       }
@@ -84,7 +111,9 @@ describe("Entry point enforcement", () => {
     });
 
     it("allows importing from features components", () => {
-      const { exitCode, stderr } = runDepCruise(["src/app/__arch_probes__"]);
+      const { exitCode, stderr } = runDepCruise([
+        "src/app/__arch_probes__/pass_app_imports_features_components.ts",
+      ]);
       if (exitCode !== 0) {
         console.error("STDERR:", stderr);
       }
@@ -94,7 +123,9 @@ describe("Entry point enforcement", () => {
 
   describe("Internal imports blocked", () => {
     it("blocks internal port file imports", () => {
-      const { exitCode, stdout } = runDepCruise(["src/ports/__arch_probes__"]);
+      const { exitCode, stdout } = runDepCruise([
+        "src/app/__arch_probes__/fail_entrypoint_imports_ports_internal.ts",
+      ]);
       if (exitCode === 0) {
         console.log("STDOUT:", stdout);
       }
@@ -103,7 +134,9 @@ describe("Entry point enforcement", () => {
     });
 
     it("blocks internal core file imports", () => {
-      const { exitCode, stdout } = runDepCruise(["src/core/__arch_probes__"]);
+      const { exitCode, stdout } = runDepCruise([
+        "src/app/__arch_probes__/fail_entrypoint_imports_core_internal.ts",
+      ]);
       if (exitCode === 0) {
         console.log("STDOUT:", stdout);
       }
@@ -113,7 +146,7 @@ describe("Entry point enforcement", () => {
 
     it("blocks internal adapter file imports", () => {
       const { exitCode, stdout } = runDepCruise([
-        "src/adapters/__arch_probes__",
+        "src/bootstrap/__arch_probes__/fail_entrypoint_imports_adapters_internal.ts",
       ]);
       if (exitCode === 0) {
         console.log("STDOUT:", stdout);
@@ -123,7 +156,9 @@ describe("Entry point enforcement", () => {
     });
 
     it("blocks features mappers imports", () => {
-      const { exitCode, stdout } = runDepCruise(["src/app/__arch_probes__"]);
+      const { exitCode, stdout } = runDepCruise([
+        "src/app/__arch_probes__/fail_entrypoint_imports_features_mappers.ts",
+      ]);
       if (exitCode === 0) {
         console.log("STDOUT:", stdout);
       }
@@ -132,7 +167,9 @@ describe("Entry point enforcement", () => {
     });
 
     it("blocks features utils imports", () => {
-      const { exitCode, stdout } = runDepCruise(["src/app/__arch_probes__"]);
+      const { exitCode, stdout } = runDepCruise([
+        "src/app/__arch_probes__/fail_entrypoint_imports_features_utils.ts",
+      ]);
       if (exitCode === 0) {
         console.log("STDOUT:", stdout);
       }
@@ -141,7 +178,9 @@ describe("Entry point enforcement", () => {
     });
 
     it("blocks features constants imports", () => {
-      const { exitCode, stdout } = runDepCruise(["src/app/__arch_probes__"]);
+      const { exitCode, stdout } = runDepCruise([
+        "src/app/__arch_probes__/fail_entrypoint_imports_features_constants.ts",
+      ]);
       if (exitCode === 0) {
         console.log("STDOUT:", stdout);
       }
