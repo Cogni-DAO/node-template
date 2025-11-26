@@ -64,17 +64,18 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 run_check "typecheck" "pnpm typecheck"
 
 if [ "$FIX_MODE" = true ]; then
-  run_check "lint" "pnpm lint:fix"
+  run_check "lint" "pnpm lint:fix -- --reporter=summary --max-diagnostics=50"
   run_check "format" "pnpm format"
 else
-  run_check "lint" "pnpm lint"
-  run_check "format:check" "pnpm format:check"
+  run_check "lint" "pnpm lint -- --reporter=summary --max-diagnostics=50"
+  run_check "format" "pnpm format:check"
 fi
 
 
-run_check "test" "pnpm test"
+run_check "test" "pnpm test:unit"
 run_check "check:docs" "pnpm check:docs"
 run_check "check:root-layout" "pnpm check:root-layout"
+run_check "arch:check" "pnpm arch:check"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
