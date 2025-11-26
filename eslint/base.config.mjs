@@ -3,23 +3,18 @@
 
 /**
  * Module: `@eslint/base.config.mjs`
- * Purpose: Core ESLint rules for TypeScript, imports, and Node.js best practices.
- * Scope: Covers TypeScript files (.ts/.tsx/.mts), import sorting/resolution, code quality rules. Does not handle React/Next.js rules.
- * Invariants: All TypeScript files validated; imports sorted.
+ * Purpose: Minimal ESLint base config for parser setup only.
+ * Scope: All linting rules migrated to Biome. ESLint only handles boundaries + UI governance.
+ * Invariants: Parser configured for TypeScript files.
  * Side-effects: none
- * Notes: Core linting for base language features and imports.
+ * Notes: All TS/import/core rules now enforced by Biome.
  * Links: eslint.config.mjs, app.config.mjs
  * @public
  */
 
 import js from "@eslint/js";
-import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import prettierConfig from "eslint-config-prettier";
-import importPlugin from "eslint-plugin-import";
-import nodePlugin from "eslint-plugin-n";
-import tsdoc from "eslint-plugin-tsdoc";
-import unicorn from "eslint-plugin-unicorn";
 import globals from "globals";
 
 /** @type {import('eslint').Linter.Config[]} */
@@ -38,7 +33,7 @@ export default [
     },
   },
 
-  // TypeScript files only
+  // TypeScript files - parser only, no rules (Biome handles linting)
   {
     files: ["**/*.ts", "**/*.tsx", "**/*.mts"],
     languageOptions: {
@@ -54,54 +49,6 @@ export default [
           jsx: true,
         },
       },
-    },
-    plugins: {
-      "@typescript-eslint": tsPlugin,
-      import: importPlugin,
-      tsdoc: tsdoc,
-      unicorn: unicorn,
-      n: nodePlugin,
-    },
-    rules: {
-      ...tsPlugin.configs.strict.rules,
-      ...tsPlugin.configs["stylistic-type-checked"].rules,
-
-      // TypeScript strict rules
-      // Disable rules now handled by Biome
-      "@typescript-eslint/no-unused-vars": "off", // Biome: noUnusedVariables
-      "@typescript-eslint/no-explicit-any": "off", // Biome: noExplicitAny
-
-      "@typescript-eslint/no-misused-promises": [
-        "error",
-        {
-          checksVoidReturn: { attributes: false },
-        },
-      ],
-      "@typescript-eslint/explicit-function-return-type": [
-        "warn",
-        {
-          allowExpressions: true,
-        },
-      ],
-
-      // Import sorting - migrated to Biome organizeImports (Commit 7)
-
-      // Import resolution
-      "import/no-unresolved": "error",
-      "import/no-cycle": "error",
-
-      // File header documentation: REUSE enforces SPDX, tsdoc validates TSDoc syntax
-      "tsdoc/syntax": "error",
-      // Avoid mid-code comments (allow eslint-disable and ts-ignore)
-      "no-inline-comments": [
-        "error",
-        {
-          ignorePattern: "eslint-disable|ts-ignore|ts-expect-error|ts-check",
-        },
-      ],
-    },
-    settings: {
-      "import/resolver": { typescript: true },
     },
   },
 

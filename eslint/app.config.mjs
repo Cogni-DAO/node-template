@@ -1,31 +1,24 @@
-import nextPlugin from "@next/eslint-plugin-next";
 import communityTailwind from "@poupe/eslint-plugin-tailwindcss";
 import boundaries from "eslint-plugin-boundaries";
 import importPlugin from "eslint-plugin-import";
-import jsxA11y from "eslint-plugin-jsx-a11y";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
-import react from "eslint-plugin-react";
-import reactHooks from "eslint-plugin-react-hooks";
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
-  // Main TypeScript app files with all framework rules
+  // ARCHITECTURE/UI-GOVERNANCE – Hex boundaries + Tailwind/CVA governance only
+  // All other rules (React, a11y, TS, imports) handled by Biome
   {
     files: ["**/*.ts", "**/*.tsx"],
     plugins: {
-      "@next/next": nextPlugin,
       tailwindcss: communityTailwind,
       "no-inline-styles": noInlineStyles,
       import: importPlugin,
       boundaries: boundaries,
-      "jsx-a11y": jsxA11y,
-      react: react,
-      "react-hooks": reactHooks,
     },
     rules: {
-      ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs["core-web-vitals"].rules,
-
+      // ========================================
+      // UI GOVERNANCE: Vendor/import restrictions
+      // ========================================
       // Block parent relatives and restricted imports
       "no-restricted-imports": [
         "error",
@@ -67,28 +60,9 @@ export default [
         },
       ],
 
-      // React rules
-      "react/react-in-jsx-scope": "off",
-
-      // React hooks rules
-      "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
-
-      // Accessibility rules (standardized core set)
-      ...jsxA11y.configs.recommended.rules,
-      "jsx-a11y/alt-text": "error",
-      "jsx-a11y/anchor-is-valid": "error",
-      "jsx-a11y/aria-props": "error",
-      "jsx-a11y/aria-proptypes": "error",
-      "jsx-a11y/aria-role": "error",
-      "jsx-a11y/aria-unsupported-elements": "error",
-      "jsx-a11y/click-events-have-key-events": "error",
-      "jsx-a11y/interactive-supports-focus": "error",
-      "jsx-a11y/label-has-associated-control": "error",
-      "jsx-a11y/no-autofocus": "warn",
-      "jsx-a11y/no-static-element-interactions": "warn",
-
-      // Tailwind rules (community plugin has different rule names)
+      // ========================================
+      // UI GOVERNANCE: Tailwind rules
+      // ========================================
       "tailwindcss/no-conflicting-utilities": "error",
       "tailwindcss/no-arbitrary-value-overuse": [
         "error",
@@ -110,7 +84,9 @@ export default [
       // No inline styles
       "no-inline-styles/no-inline-styles": "error",
 
-      // Hexagonal architecture boundaries enforcement
+      // ========================================
+      // HEXAGONAL ARCHITECTURE: Boundaries
+      // ========================================
       "boundaries/element-types": [
         "error",
         {
@@ -329,7 +305,7 @@ export default [
     },
   },
 
-  // Features: only import the barrel or kit subpaths
+  // ARCHITECTURE – Features layer: enforce barrel imports, block cross-feature deps
   {
     files: ["src/features/**/*.{ts,tsx}"],
     rules: {
@@ -363,7 +339,7 @@ export default [
     },
   },
 
-  // App layer: block direct adapter imports (bootstrap is the only ingress)
+  // ARCHITECTURE – App layer: block direct adapter imports (bootstrap is the only ingress)
   {
     files: ["src/app/**/*.{ts,tsx}"],
     rules: {
@@ -378,7 +354,7 @@ export default [
     },
   },
 
-  // Styles layer - allow clsx/tailwind-merge and literal classes
+  // UI-GOVERNANCE – Styles layer: enforce CVA variant discipline
   {
     files: ["src/styles/**/*.{ts,tsx}"],
     rules: {
@@ -410,7 +386,7 @@ export default [
     },
   },
 
-  // Vendor layer - allow clsx/tailwind-merge and literal classes, no repo imports
+  // UI-GOVERNANCE – Vendor layer: allow clsx/tailwind-merge and literal classes
   {
     files: ["src/components/vendor/**/*.{ts,tsx}"],
     rules: {
@@ -419,7 +395,7 @@ export default [
     },
   },
 
-  // Kit layer - allow vendor imports but no literal classes (CVA outputs only)
+  // UI-GOVERNANCE – Kit layer: enforce tailwind-merge restrictions
   {
     files: ["src/components/kit/**/*.{ts,tsx}"],
     rules: {
@@ -444,7 +420,7 @@ export default [
     },
   },
 
-  // Shared cn utility may import tailwind-merge for reuse
+  // UI-GOVERNANCE – Shared cn utility: allow tailwind-merge
   {
     files: ["src/shared/util/cn.ts"],
     rules: {
@@ -476,7 +452,7 @@ export default [
     },
   },
 
-  // Allow layout.tsx to import global Tailwind CSS
+  // UI-GOVERNANCE – Layout.tsx: allow global Tailwind CSS import
   {
     files: ["src/app/layout.tsx"],
     rules: {

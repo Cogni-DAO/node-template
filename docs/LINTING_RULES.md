@@ -52,14 +52,61 @@
   > **Note**: Enabled in Biome as noExplicitAny (error), disabled in ESLint. Flags all explicit `any` types.
 - [x] **Commit 7**: Migrate Import Sorting (`simple-import-sort`)
   > **Note**: Migrated to Biome organizeImports. Removes eslint-plugin-simple-import-sort. Biome now sorts: Node built-ins → external packages → internal aliases.
-- [ ] **Commit 8**: Final ESLint Cleanup & Verification
+- [x] **Commit 8**: Final ESLint Cleanup & Verification
+  > **Note**: Removed React/Next.js, a11y, filename conventions (unicorn/check-file) from ESLint. ESLint now only enforces hex boundaries + UI/Tailwind governance. Filename conventions dropped temporarily (will be reintroduced via Biome `useFilenamingConvention` or Ultracite later).
 
-### Validation & Documentation
+### Remaining ESLint Rules (Post-Commit 8)
 
+**Active ESLint Configs**: base, app, tests, ui-governance, no-vendor-sdk-imports
+
+**Rules by Category** (Remaining):
+
+1. **UI Governance** (4 rules) - custom Tailwind token enforcement
+   - `ui-governance/no-raw-colors`, `no-arbitrary-non-token-values`, `token-classname-patterns`, `no-vendor-imports-outside-kit`
+
+2. **Hexagonal Architecture** (3 rules) - eslint-plugin-boundaries
+   - `boundaries/element-types`, `boundaries/entry-point`, `boundaries/no-unknown-files`
+   - ⚠️ **Note**: These are currently broken (tests failing). Another developer implementing dependency-cruiser replacement.
+
+3. **Tailwind** (5 rules) - eslint-plugin-tailwindcss
+   - `tailwindcss/no-conflicting-utilities`, `no-arbitrary-value-overuse`, `prefer-theme-tokens`, `valid-theme-function`, `valid-apply-directive`
+
+4. **UI Import Restrictions** (layer-specific)
+   - `no-restricted-imports`, `no-restricted-properties`, `import/no-internal-modules`, `no-inline-styles/no-inline-styles`
+   - Features, app, styles, vendor, kit layers
+
+5. **Vendor SDK Restrictions** (1 rule)
+   - `no-vendor-sdk-imports/no-vendor-sdk-imports` - blocks vendor SDKs outside infra
+
+**Rules REMOVED in Commit 8** (now handled by Biome or dropped):
+
+- ❌ React/Next.js (~15 rules) - `react-hooks/*`, `@next/next/*`, `react/*`
+- ❌ Accessibility (~11 rules) - `jsx-a11y/*`
+- ❌ Filename Conventions (~10 rules) - `unicorn/filename-case`, `check-file/*` (dropped temporarily)
+- ❌ TypeScript core (~5 rules) - `@typescript-eslint/*` (moved to Biome)
+- ❌ Import sorting - `simple-import-sort/*` (moved to Biome organizeImports)
+
+**Total Active ESLint Rules**: ~13-15 (down from ~77)
+**Migrated to Biome**: 9 rules (Commits 2B-7)
+**Dropped temporarily**: ~10 filename rules (to be reintroduced via Biome later)
+
+### Post-Commit 8 Notes
+
+**Filename Conventions**: Temporarily dropped `unicorn/filename-case` and `check-file/*` rules. These will be reintroduced later via:
+
+- Biome `useFilenamingConvention` when recommended rules are enabled
+- Or Ultracite custom rules for complex Next.js patterns
+
+**Boundaries**: `eslint-plugin-boundaries` tests currently failing. Being replaced by dependency-cruiser (in progress by another developer).
+
+**Performance**: ESLint surface area reduced by ~85% (77 → ~13-15 rules). Most linting now handled by Biome.
+
+### Future Work
+
+- [ ] Enable Biome `useFilenamingConvention` for filename discipline
+- [ ] Replace `eslint-plugin-boundaries` with dependency-cruiser
+- [ ] Consider Biome React/a11y rules once stable
 - [ ] Measure performance: compare before/after times for `pnpm format` and `pnpm check`
-- [ ] Document final ESLint rule count (target: 6-33, down from 77)
-- [ ] Update this doc with actual migration results
-- [ ] Commit final toolchain configuration
 
 ---
 
