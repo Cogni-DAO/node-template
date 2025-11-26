@@ -145,7 +145,7 @@
       "linter": { "enabled": false }
     },
     {
-      "includes": ["tests/lint/fixtures/**"],
+      "includes": ["tests/**/fixtures/**"],
       "linter": { "enabled": false },
       "formatter": { "enabled": false }
     }
