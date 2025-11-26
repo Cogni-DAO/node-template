@@ -99,9 +99,10 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
+[x] .dependency-cruiser.cjs # hex architecture boundary rules
 [x] .prettierrc # code formatting config
 [x] .prettierignore # exclude build/artifacts
-[x] eslint.config.mjs # eslint config (boundaries, tailwind, import rules)
+[x] eslint.config.mjs # eslint config (tailwind, UI governance, import rules)
 [x] commitlint.config.cjs # conventional commits enforcement
 [x] tailwind.config.ts # Tailwind theme + presets
 [x] tsconfig.json # typescript + alias paths
@@ -390,8 +391,8 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
   - `contracts` → `@/shared|@/types` only. Never imported by `features|ports|core`.
   - `bootstrap` → `@/adapters/server|@/ports` (DI composition only).
   - `mcp` → `@/contracts|@/bootstrap|@/features/*/services/*|@/ports` (never `app|components`).
-- **ESLint**: flat config with path rules; `eslint-plugin-boundaries`.
-- **Dependency-cruiser**: optional CI gate for graph violations.
+- **ESLint**: flat config for UI governance and Tailwind rules.
+- **Dependency-cruiser**: enforces hexagonal architecture boundaries; CI gate for import violations. Arch probes in `src/**/__arch_probes__/` validate boundaries via tests; excluded from builds (tsconfig, .dockerignore).
 - **Contracts**: `tests/contract` must pass for any adapter.
 - **Env**: Zod-validated; build fails on invalid/missing.
 - **Security**: middleware sets headers, verifies session or API key, rate-limits.
