@@ -21,7 +21,6 @@ import nodePlugin from "eslint-plugin-n";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tsdoc from "eslint-plugin-tsdoc";
 import unicorn from "eslint-plugin-unicorn";
-import unused from "eslint-plugin-unused-imports";
 import globals from "globals";
 
 /** @type {import('eslint').Linter.Config[]} */
@@ -60,7 +59,6 @@ export default [
     plugins: {
       "@typescript-eslint": tsPlugin,
       "simple-import-sort": simpleImportSort,
-      "unused-imports": unused,
       import: importPlugin,
       tsdoc: tsdoc,
       unicorn: unicorn,
@@ -71,15 +69,9 @@ export default [
       ...tsPlugin.configs["stylistic-type-checked"].rules,
 
       // TypeScript strict rules
+      // Disable rules now handled by Biome
+      "@typescript-eslint/no-unused-vars": "off", // Biome: noUnusedVariables
 
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-        },
-      ],
-      "unused-imports/no-unused-imports": "error",
       "@typescript-eslint/no-misused-promises": [
         "error",
         {
