@@ -45,10 +45,10 @@ const kpiBadgeRow = cva(
   "flex flex-wrap items-center justify-center gap-[var(--spacing-sm)]"
 );
 
-const kpiBadgeImage = cva("w-auto h-[var(--size-icon-lg)]");
+const kpiBadgeImage = cva("h-[var(--size-icon-lg)] w-auto");
 
 const kpiBadgeLink = cva(
-  "inline-block hover:opacity-[var(--opacity-80)] transition-opacity"
+  "inline-block transition-opacity hover:opacity-[var(--opacity-80)]"
 );
 
 type KpiBadgeTone = VariantProps<typeof kpiBadge>["tone"];

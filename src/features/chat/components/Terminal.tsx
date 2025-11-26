@@ -113,7 +113,7 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
             </Reveal>
           )}
         </div>
-        <div className="bg-border h-px" />
+        <div className="h-px bg-border" />
         <form onSubmit={handleSubmit} className="flex p-4">
           <Input
             type="text"

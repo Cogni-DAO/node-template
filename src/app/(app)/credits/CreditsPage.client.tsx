@@ -167,7 +167,7 @@ export function CreditsPageClient({
                 </div>
               </div>
               <div className="mt-[var(--spacing-sm)] grid gap-[var(--spacing-xs)] lg:grid-cols-2">
-                <div className="bg-muted rounded-lg p-[var(--spacing-md)]">
+                <div className="rounded-lg bg-muted p-[var(--spacing-md)]">
                   <div
                     className={paragraph({
                       size: "sm",
@@ -183,7 +183,7 @@ export function CreditsPageClient({
                       : `${formatCredits(summaryQuery.data?.balanceCredits ?? 0)} credits`}
                   </div>
                 </div>
-                <div className="bg-muted rounded-lg p-[var(--spacing-md)]">
+                <div className="rounded-lg bg-muted p-[var(--spacing-md)]">
                   <div
                     className={paragraph({
                       size: "sm",
@@ -199,7 +199,7 @@ export function CreditsPageClient({
                 </div>
               </div>
               {statusMessage ? (
-                <div className="border-border bg-accent/30 text-accent-foreground rounded-md border p-[var(--spacing-sm)] text-[var(--text-sm)]">
+                <div className="rounded-md border border-border bg-accent/30 p-[var(--spacing-sm)] text-[var(--text-sm)] text-accent-foreground">
                   {statusMessage}
                 </div>
               ) : null}
@@ -220,7 +220,7 @@ export function CreditsPageClient({
                   {ledgerEntries.map((entry) => (
                     <div
                       key={entry.id}
-                      className="border-border flex flex-col gap-[var(--spacing-2xs)] rounded-md border p-[var(--spacing-md)]"
+                      className="flex flex-col gap-[var(--spacing-2xs)] rounded-md border border-border p-[var(--spacing-md)]"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-[var(--spacing-sm)]">
@@ -249,7 +249,7 @@ export function CreditsPageClient({
                           {formatCredits(entry.amount)}
                         </div>
                       </div>
-                      <div className="text-muted-foreground flex flex-wrap items-center gap-[var(--spacing-sm)] text-[var(--text-sm)]">
+                      <div className="flex flex-wrap items-center gap-[var(--spacing-sm)] text-[var(--text-sm)] text-muted-foreground">
                         <span>
                           Balance after: {formatCredits(entry.balanceAfter)}
                         </span>

@@ -48,9 +48,9 @@ const githubButtonVariants = cva(
       },
       size: {
         default:
-          "h-8.5 rounded-md px-3 gap-2 text-[0.8125rem] leading-none [&_svg]:size-4 gap-2",
-        sm: "h-7 rounded-md px-2.5 gap-1.5 text-xs leading-none [&_svg]:size-3.5 gap-1.5",
-        lg: "h-10 rounded-md px-4 gap-2.5 text-sm leading-none [&_svg]:size-5 gap-2.5",
+          "h-8.5 gap-2 gap-2 rounded-md px-3 text-[0.8125rem] leading-none [&_svg]:size-4",
+        sm: "h-7 gap-1.5 gap-1.5 rounded-md px-2.5 text-xs leading-none [&_svg]:size-3.5",
+        lg: "h-10 gap-2.5 gap-2.5 rounded-md px-4 text-sm leading-none [&_svg]:size-5",
       },
     },
     defaultVariants: {
@@ -166,7 +166,7 @@ function GithubButtonPrimitive({
       const progress = Math.min(elapsed / duration, 1);
 
       // Easing function for smooth animation
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      const easeOutQuart = 1 - (1 - progress) ** 4;
 
       // Update star count from 0 to target with more frequent updates
       const newStars = Math.round(
@@ -291,7 +291,7 @@ function GithubButtonPrimitive({
         <div
           className={cn(
             "relative flex h-full items-center justify-center",
-            separator && "border-border bg-muted/60 w-9 border-r" // eslint-disable-line ui-governance/token-classname-patterns
+            separator && "w-9 border-border border-r bg-muted/60" // eslint-disable-line ui-governance/token-classname-patterns
           )}
         >
           <svg role="img" viewBox="0 0 24 24" fill="currentColor">
