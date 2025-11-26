@@ -19,8 +19,8 @@ import { Star } from "lucide-react";
 import {
   motion,
   type SpringOptions,
-  useInView,
   type UseInViewOptions,
+  useInView,
 } from "motion/react";
 import type {
   ButtonHTMLAttributes,

@@ -50,7 +50,8 @@
   > **Note**: Enabled in Biome as noUnusedVariables + noUnusedImports (error), removed from ESLint. Both rules flag unused code; underscore-prefix allowed.
 - [x] **Commit 6**: Migrate `no-explicit-any`
   > **Note**: Enabled in Biome as noExplicitAny (error), disabled in ESLint. Flags all explicit `any` types.
-- [ ] **Commit 7**: Migrate Import Sorting (`simple-import-sort`)
+- [x] **Commit 7**: Migrate Import Sorting (`simple-import-sort`)
+  > **Note**: Migrated to Biome organizeImports. Removes eslint-plugin-simple-import-sort. Biome now sorts: Node built-ins → external packages → internal aliases.
 - [ ] **Commit 8**: Final ESLint Cleanup & Verification
 
 ### Validation & Documentation

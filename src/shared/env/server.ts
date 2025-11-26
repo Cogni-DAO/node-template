@@ -12,7 +12,7 @@
  * @public
  */
 
-import { z, ZodError } from "zod";
+import { ZodError, z } from "zod";
 
 import { buildDatabaseUrl } from "@/shared/db";
 

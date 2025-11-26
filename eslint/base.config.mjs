@@ -18,7 +18,6 @@ import tsParser from "@typescript-eslint/parser";
 import prettierConfig from "eslint-config-prettier";
 import importPlugin from "eslint-plugin-import";
 import nodePlugin from "eslint-plugin-n";
-import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tsdoc from "eslint-plugin-tsdoc";
 import unicorn from "eslint-plugin-unicorn";
 import globals from "globals";
@@ -58,7 +57,6 @@ export default [
     },
     plugins: {
       "@typescript-eslint": tsPlugin,
-      "simple-import-sort": simpleImportSort,
       import: importPlugin,
       tsdoc: tsdoc,
       unicorn: unicorn,
@@ -86,9 +84,7 @@ export default [
         },
       ],
 
-      // Import sorting
-      "simple-import-sort/imports": "error",
-      "simple-import-sort/exports": "error",
+      // Import sorting - migrated to Biome organizeImports (Commit 7)
 
       // Import resolution
       "import/no-unresolved": "error",

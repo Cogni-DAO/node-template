@@ -15,6 +15,7 @@
 import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runBiome";
+
 // TODO: Migrate to Biome - waiting for corresponding commit
 // TODO: Migrate to Biome - waiting for corresponding commit
 
