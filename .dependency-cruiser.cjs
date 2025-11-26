@@ -255,7 +255,7 @@ module.exports = {
       name: "no-internal-ports-imports",
       severity: "error",
       from: {
-        path: "^src",
+        path: "^src/(?!ports/)",
       },
       to: {
         path: "^src/ports/(?!index\\.ts$).*\\.ts$",
@@ -268,7 +268,7 @@ module.exports = {
       name: "no-internal-core-imports",
       severity: "error",
       from: {
-        path: "^src",
+        path: "^src/(?!core/)",
       },
       to: {
         path: "^src/core/(?!public\\.ts$).*\\.ts$",
@@ -277,11 +277,12 @@ module.exports = {
     },
 
     // adapters/server: must use @/adapters/server (index.ts), not internal files
+    // Exception: src/auth.ts is a bootstrap file that can import adapter internals
     {
       name: "no-internal-adapter-imports",
       severity: "error",
       from: {
-        path: "^src",
+        path: "^src/(?!adapters/server/)(?!auth\\.ts$)",
       },
       to: {
         path: "^src/adapters/server/(?!index\\.ts$).*\\.ts$",
@@ -295,7 +296,7 @@ module.exports = {
       name: "no-internal-features-imports",
       severity: "error",
       from: {
-        path: "^src",
+        path: "^src/(?!features/)",
       },
       to: {
         path: "^src/features/[^/]+/(mappers|utils|constants)/",
