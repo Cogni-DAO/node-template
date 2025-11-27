@@ -24,6 +24,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
+import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import type { SessionUser } from "@/shared/auth/session";
 import {
   billingAccounts,
@@ -89,8 +90,12 @@ describe("Completion Billing Stack Test", () => {
     // Assert - Response successful
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json).toHaveProperty("message");
-    expect(json.message.role).toBe("assistant");
+
+    // Assert - Response matches contract exactly (prevents drift)
+    const validated = aiCompletionOperation.output.parse(json);
+    expect(validated.message.role).toBe("assistant");
+    expect(validated.message.content).toBeTruthy();
+    expect(validated.message.timestamp).toBeTruthy();
 
     // Assert - llm_usage row created
     const usageRows = await db
