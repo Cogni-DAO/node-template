@@ -3,12 +3,12 @@
 
 /**
  * Module: `@core/billing/pricing`
- * Purpose: Centralized credit pricing helpers for LLM usage.
- * Scope: Pure functions that convert token usage to credit costs. Does not access adapters or IO.
- * Invariants: Deterministic cost calculation, no floating-point surprises.
+ * Purpose: Credits-centric pricing calculations for LLM usage billing.
+ * Scope: Pure functions that convert USD to credits and apply markup. Does not access adapters or IO.
+ * Invariants: Always rounds up to ensure minimum 1 credit for non-zero costs; markup factor always ≥1.0; uses BigInt for credit amounts.
  * Side-effects: none
- * Notes: Keeps pricing logic in one place so adapters/features stay in sync.
- * Links: Used by AI completion feature to debit credits after usage.
+ * Notes: Credits are the atomic unit; USD amounts converted at configured rate. User price always ≥ provider cost.
+ * Links: Used by AI completion service for dual-cost accounting.
  * @public
  */
 
