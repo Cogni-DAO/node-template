@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/unit/app/_facades/ai/completion.server`
  * Purpose: Contract test to ensure completion facade returns exact aiCompletionOperation.output shape.
- * Scope: Validates facade output matches contract schema to prevent drift between API/UI/tests.
+ * Scope: Validates facade output matches contract schema to prevent drift between API/UI/tests. Does not test HTTP routing or real LLM calls.
  * Invariants: Facade output must always satisfy aiCompletionOperation.output.parse()
  * Side-effects: none
  * Notes: Uses reusable fixtures to ensure consistent test setup
