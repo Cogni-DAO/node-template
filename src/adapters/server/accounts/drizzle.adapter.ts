@@ -25,11 +25,15 @@ import {
   InsufficientCreditsPortError,
   VirtualKeyNotFoundPortError,
 } from "@/ports";
-import { billingAccounts, creditLedger, virtualKeys } from "@/shared/db";
+import {
+  billingAccounts,
+  creditLedger,
+  llmUsage,
+  virtualKeys,
+} from "@/shared/db";
+
 import { serverEnv } from "@/shared/env";
 import { isValidUuid } from "@/shared/util";
-
-const ZERO = 0;
 
 interface QueryableDb extends Pick<Database, "query" | "insert"> {
   query: Database["query"];
@@ -83,7 +87,7 @@ export class DrizzleAccountService implements AccountService {
       await tx.insert(billingAccounts).values({
         id: billingAccountId,
         ownerUserId: userId,
-        balanceCredits: ZERO,
+        balanceCredits: 0n,
         // Display name intentionally optional; stored later when UX surfaces exist
       });
 
@@ -135,7 +139,7 @@ export class DrizzleAccountService implements AccountService {
       const normalizedCost = this.normalizeAmount(cost, {
         enforceMinimumOne: true,
       });
-      const amount = this.fromNumber(-normalizedCost);
+      const amount = BigInt(-normalizedCost);
 
       const [updatedAccount] = await tx
         .update(billingAccounts)
@@ -149,23 +153,115 @@ export class DrizzleAccountService implements AccountService {
         throw new BillingAccountNotFoundPortError(billingAccountId);
       }
 
-      const newBalance = this.toNumber(updatedAccount.balanceCredits);
+      const newBalance = updatedAccount.balanceCredits; // bigint
 
       await tx.insert(creditLedger).values({
         billingAccountId,
         virtualKeyId,
         amount,
-        balanceAfter: this.fromNumber(newBalance),
+        balanceAfter: newBalance,
         reason: "ai_usage",
         reference: requestId,
         metadata: metadata ?? null,
       });
 
-      if (newBalance < 0) {
-        const previousBalance = newBalance + normalizedCost;
+      if (newBalance < 0n) {
+        const previousBalance = Number(newBalance) + normalizedCost;
         throw new InsufficientCreditsPortError(
           billingAccountId,
           normalizedCost,
+          previousBalance < 0 ? 0 : previousBalance
+        );
+      }
+    });
+  }
+
+  async recordLlmUsage({
+    billingAccountId,
+    virtualKeyId,
+    requestId,
+    model,
+    promptTokens,
+    completionTokens,
+    providerCostUsd,
+    providerCostCredits,
+    userPriceCredits,
+    markupFactorApplied,
+    metadata,
+  }: {
+    billingAccountId: string;
+    virtualKeyId: string;
+    requestId: string;
+    model: string;
+    promptTokens: number;
+    completionTokens: number;
+    providerCostUsd: number;
+    providerCostCredits: bigint;
+    userPriceCredits: bigint;
+    markupFactorApplied: number;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await this.ensureBillingAccountExists(tx, billingAccountId);
+      await this.ensureVirtualKeyExists(tx, billingAccountId, virtualKeyId);
+
+      // 2. Insert usage record
+      await tx.insert(llmUsage).values({
+        billingAccountId,
+        virtualKeyId,
+        requestId,
+        model,
+        promptTokens,
+        completionTokens,
+        providerCostUsd: providerCostUsd.toString(),
+        providerCostCredits,
+        userPriceCredits,
+        markupFactor: markupFactorApplied.toString(),
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+        },
+      });
+
+      // 3. Debit Ledger
+      // Note: userPriceCredits is positive, so we negate it for the ledger amount
+      const debitAmount = -userPriceCredits;
+
+      const [updatedAccount] = await tx
+        .update(billingAccounts)
+        .set({
+          balanceCredits: sql`${billingAccounts.balanceCredits} + ${debitAmount}`,
+        })
+        .where(eq(billingAccounts.id, billingAccountId))
+        .returning({ balanceCredits: billingAccounts.balanceCredits });
+
+      if (!updatedAccount) {
+        throw new BillingAccountNotFoundPortError(billingAccountId);
+      }
+
+      const newBalance = updatedAccount.balanceCredits; // bigint
+
+      await tx.insert(creditLedger).values({
+        billingAccountId,
+        virtualKeyId,
+        amount: debitAmount,
+        balanceAfter: newBalance,
+        reason: "llm_usage",
+        reference: requestId,
+        metadata: metadata ?? null,
+      });
+
+      // 4. Check Balance
+      if (newBalance < 0n) {
+        // Convert to number for error message (safe for display)
+        const costNum = Number(userPriceCredits);
+        const balanceNum = Number(newBalance);
+        const previousBalance = balanceNum + costNum;
+
+        throw new InsufficientCreditsPortError(
+          billingAccountId,
+          costNum,
           previousBalance < 0 ? 0 : previousBalance
         );
       }
@@ -193,12 +289,12 @@ export class DrizzleAccountService implements AccountService {
         virtualKeyId ?? (await this.findDefaultKey(tx, billingAccountId)).id;
 
       const normalizedAmount = this.normalizeAmount(amount);
-      const amountDecimal = this.fromNumber(normalizedAmount);
+      const amountBigInt = BigInt(normalizedAmount);
 
       const [updatedAccount] = await tx
         .update(billingAccounts)
         .set({
-          balanceCredits: sql`balance_credits + ${amountDecimal}`,
+          balanceCredits: sql`balance_credits + ${amountBigInt}`,
         })
         .where(eq(billingAccounts.id, billingAccountId))
         .returning({ balanceCredits: billingAccounts.balanceCredits });
@@ -212,8 +308,8 @@ export class DrizzleAccountService implements AccountService {
       await tx.insert(creditLedger).values({
         billingAccountId,
         virtualKeyId: resolvedVirtualKeyId,
-        amount: amountDecimal,
-        balanceAfter: this.fromNumber(newBalance),
+        amount: amountBigInt,
+        balanceAfter: updatedAccount.balanceCredits,
         reason,
         reference: reference ?? null,
         metadata: metadata ?? null,
@@ -398,10 +494,6 @@ export class DrizzleAccountService implements AccountService {
 
   private toNumber(value: number | string | bigint): number {
     return typeof value === "number" ? value : Number(value);
-  }
-
-  private fromNumber(num: number): number {
-    return num;
   }
 
   private generateVirtualKey(billingAccountId: string): string {

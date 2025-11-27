@@ -63,38 +63,48 @@ export class LiteLlmAdapter implements LlmService {
         );
       }
 
-      const data = await response.json();
-
-      // Extract response - never log full prompts or keys
-      const choice = data.choices?.[0];
-      if (!choice?.message?.content) {
-        throw new Error("Invalid response from LiteLLM: missing content");
-      }
-
-      // Build response object with proper optional property handling
-      const result: Awaited<ReturnType<LlmService["completion"]>> = {
-        message: {
-          role: "assistant",
-          content: choice.message.content,
-        },
-        finishReason: choice.finish_reason,
-        providerMeta: {
-          model,
-          provider: "litellm",
-          requestId: data.id,
-        },
+      const data = (await response.json()) as {
+        choices: { message: { content: string }; finish_reason?: string }[];
+        usage: { prompt_tokens: number; completion_tokens: number };
+        response_cost?: number;
       };
 
-      // Only add usage if present
-      if (data.usage) {
-        result.usage = {
-          promptTokens: Number(data.usage.prompt_tokens) || 0,
-          completionTokens: Number(data.usage.completion_tokens) || 0,
-          totalTokens: Number(data.usage.total_tokens) || 0,
-        };
+      if (
+        !data.choices ||
+        data.choices.length === 0 ||
+        !data.choices[0]?.message ||
+        typeof data.choices[0].message.content !== "string"
+      ) {
+        throw new Error("Invalid response from LiteLLM");
       }
 
-      return result;
+      // Fail closed if cost is missing to prevent free usage
+      if (typeof data.response_cost !== "number") {
+        console.error(
+          "[LiteLlmAdapter] Missing response_cost in LiteLLM response",
+          JSON.stringify(data)
+        );
+        throw new Error("Billing error: Provider cost missing from response");
+      }
+
+      return {
+        message: {
+          role: "assistant",
+          content: data.choices[0].message.content,
+        },
+        usage: {
+          promptTokens: Number(data.usage?.prompt_tokens) || 0,
+          completionTokens: Number(data.usage?.completion_tokens) || 0,
+          totalTokens:
+            Number(data.usage?.prompt_tokens) +
+              Number(data.usage?.completion_tokens) || 0,
+        },
+        ...(data.choices[0].finish_reason
+          ? { finishReason: data.choices[0].finish_reason }
+          : {}),
+        providerCostUsd: data.response_cost,
+        providerMeta: data as unknown as Record<string, unknown>,
+      };
     } catch (error) {
       // Map provider errors to typed errors (no stack leaks)
       if (error instanceof Error) {

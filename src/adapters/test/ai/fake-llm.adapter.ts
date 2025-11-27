@@ -30,6 +30,7 @@ export class FakeLlmAdapter implements LlmService {
         totalTokens: 15,
       },
       finishReason: "stop",
+      providerCostUsd: 0.0001, // Small fixed cost for billing tests ($0.0001 = 0.1 credits @ 1000 credits/USD)
       providerMeta: {
         model: params.model ?? "fake-model",
         provider: "fake",

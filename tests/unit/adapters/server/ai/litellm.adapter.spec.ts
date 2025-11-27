@@ -64,6 +64,7 @@ describe("LiteLlmAdapter", () => {
         completion_tokens: 8,
         total_tokens: 18,
       },
+      response_cost: 0.0002,
     };
 
     it("sends correct request to LiteLLM API", async () => {
@@ -135,35 +136,30 @@ describe("LiteLlmAdapter", () => {
           content: "Hello! How can I help you today?",
         },
         finishReason: "stop",
-        providerMeta: {
-          model: "gpt-3.5-turbo",
-          provider: "litellm",
-          requestId: "chatcmpl-test-123",
-        },
+        providerMeta: mockSuccessResponse,
         usage: {
           promptTokens: 10,
           completionTokens: 8,
           totalTokens: 18,
         },
+        providerCostUsd: 0.0002,
       });
     });
 
-    it("returns response without usage when not provided", async () => {
-      const responseWithoutUsage = {
+    it("throws error when response_cost is missing", async () => {
+      const responseWithoutCost = {
         ...mockSuccessResponse,
-        usage: undefined,
+        response_cost: undefined,
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => responseWithoutUsage,
+        json: async () => responseWithoutCost,
       });
 
-      const result = await adapter.completion(basicParams);
-
-      expect(result.usage).toBeUndefined();
-      expect(result.message).toBeDefined();
-      expect(result.providerMeta).toBeDefined();
+      await expect(adapter.completion(basicParams)).rejects.toThrow(
+        "Billing error: Provider cost missing from response"
+      );
     });
 
     it("handles multiple messages correctly", async () => {
@@ -216,6 +212,7 @@ describe("LiteLlmAdapter", () => {
             finish_reason: "stop",
           },
         ],
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -224,7 +221,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM: missing content"
+        "LiteLLM completion failed: Invalid response from LiteLLM"
       );
     });
 
@@ -232,6 +229,7 @@ describe("LiteLlmAdapter", () => {
       const invalidResponse = {
         id: "test-id",
         choices: null,
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -240,7 +238,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM: missing content"
+        "LiteLLM completion failed: Invalid response from LiteLLM"
       );
     });
 
@@ -261,19 +259,20 @@ describe("LiteLlmAdapter", () => {
     });
 
     it("handles different finish reasons", async () => {
-      const lengthResponse = {
+      const responseWithFinishReason = {
         ...mockSuccessResponse,
         choices: [
           {
-            ...mockSuccessResponse.choices[0],
+            message: { content: "Response" },
             finish_reason: "length",
           },
         ],
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => lengthResponse,
+        json: async () => responseWithFinishReason,
       });
 
       const result = await adapter.completion(basicParams);
@@ -288,6 +287,7 @@ describe("LiteLlmAdapter", () => {
           completion_tokens: "12",
           total_tokens: "27",
         },
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -311,6 +311,7 @@ describe("LiteLlmAdapter", () => {
           completion_tokens: null,
           total_tokens: undefined,
         },
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -339,6 +340,7 @@ describe("LiteLlmAdapter", () => {
         json: async () => ({
           id: "test",
           choices: [{ message: { content: "test" }, finish_reason: "stop" }],
+          response_cost: 0.0002,
         }),
       });
 
