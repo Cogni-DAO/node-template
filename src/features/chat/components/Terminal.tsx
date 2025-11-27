@@ -14,6 +14,7 @@
 
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 
@@ -35,6 +36,7 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleSubmit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
@@ -69,6 +71,8 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
           content: data.message.content, // Extract content from message object
         };
         setMessages((prev) => [...prev, assistantMessage]);
+        // Refresh credits display
+        queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
       } else if (response.status === 401) {
         setError("Your session expired, please reconnect your wallet.");
         onAuthExpired?.();

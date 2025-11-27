@@ -70,6 +70,7 @@ describe("LiteLlmAdapter", () => {
     it("sends correct request to LiteLLM API", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => mockSuccessResponse,
       });
 
@@ -98,6 +99,7 @@ describe("LiteLlmAdapter", () => {
     it("uses provided parameters over defaults", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => mockSuccessResponse,
       });
 
@@ -122,9 +124,13 @@ describe("LiteLlmAdapter", () => {
       });
     });
 
-    it("returns properly formatted response with usage", async () => {
+    it("returns properly formatted response with usage and cost from header", async () => {
+      const mockHeaders = new Headers();
+      mockHeaders.set("x-litellm-response-cost", "0.0002");
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: mockHeaders,
         json: async () => mockSuccessResponse,
       });
 
@@ -146,17 +152,15 @@ describe("LiteLlmAdapter", () => {
       });
     });
 
-    it("returns message without providerCostUsd when response_cost is missing", async () => {
+    it("returns message without providerCostUsd when x-litellm-response-cost header is missing", async () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-      const responseWithoutCost = {
-        ...mockSuccessResponse,
-        response_cost: undefined,
-      };
-
+      // Mock response without cost header
+      const mockHeaders = new Headers();
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => responseWithoutCost,
+        headers: mockHeaders,
+        json: async () => mockSuccessResponse,
       });
 
       const result = await adapter.completion(basicParams);
@@ -175,12 +179,14 @@ describe("LiteLlmAdapter", () => {
         totalTokens: 18,
       });
 
-      // Warning should be logged (prevents regression)
+      // Structured warning with BILLING_NO_PROVIDER_COST code should be logged
       expect(warnSpy).toHaveBeenCalledOnce();
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[LiteLlmAdapter] Missing response_cost"),
-        expect.any(String)
-      );
+      const loggedArg = warnSpy.mock.calls[0]?.[0];
+      expect(loggedArg).toBeDefined();
+      const loggedData = JSON.parse(loggedArg as string);
+      expect(loggedData.code).toBe("BILLING_NO_PROVIDER_COST");
+      expect(loggedData.model).toBe("gpt-3.5-turbo");
+      expect(loggedData.totalTokens).toBe(18);
 
       warnSpy.mockRestore();
     });
@@ -188,6 +194,7 @@ describe("LiteLlmAdapter", () => {
     it("handles multiple messages correctly", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => mockSuccessResponse,
       });
 
@@ -240,6 +247,7 @@ describe("LiteLlmAdapter", () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => invalidResponse,
       });
 
@@ -257,6 +265,7 @@ describe("LiteLlmAdapter", () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => invalidResponse,
       });
 
@@ -295,6 +304,7 @@ describe("LiteLlmAdapter", () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => responseWithFinishReason,
       });
 
@@ -315,6 +325,7 @@ describe("LiteLlmAdapter", () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => responseWithStringUsage,
       });
 
@@ -339,6 +350,7 @@ describe("LiteLlmAdapter", () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => responseWithInvalidUsage,
       });
 
@@ -360,6 +372,7 @@ describe("LiteLlmAdapter", () => {
     it("completion method returns a promise", () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => ({
           id: "test",
           choices: [{ message: { content: "test" }, finish_reason: "stop" }],
