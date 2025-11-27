@@ -156,6 +156,25 @@ export interface AccountService {
   }): Promise<CreditLedgerEntry[]>;
 
   /**
+   * Atomic credit deduction after LLM usage.
+   * Records usage details and debits credits in a single transaction.
+   * Throws InsufficientCreditsPortError if balance would go negative.
+   */
+  recordLlmUsage(params: {
+    billingAccountId: string;
+    virtualKeyId: string;
+    requestId: string;
+    model: string;
+    promptTokens: number;
+    completionTokens: number;
+    providerCostUsd: number;
+    providerCostCredits: bigint;
+    userPriceCredits: bigint;
+    markupFactorApplied: number;
+    metadata?: Record<string, unknown>;
+  }): Promise<void>;
+
+  /**
    * Lookup a specific credit ledger entry by reference and reason for idempotency checks.
    */
   findCreditLedgerEntryByReference(params: {
