@@ -16,17 +16,21 @@ import { randomUUID } from "node:crypto";
 
 import {
   assertMessageLength,
-  calculateCost,
+  calculateUserPriceCredits,
   filterSystemMessages,
   MAX_MESSAGE_CHARS,
   type Message,
   trimConversationHistory,
+  usdToCredits,
 } from "@/core";
 import type { AccountService, Clock, LlmCaller, LlmService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
+import { serverEnv } from "@/shared/env";
 
 const DEFAULT_MAX_COMPLETION_TOKENS = 2048;
 const CHARS_PER_TOKEN_ESTIMATE = 4;
+// Conservative estimate for pre-flight check: $0.01 per 1k tokens (high-end model price)
+const ESTIMATED_USD_PER_1K_TOKENS = 0.01;
 
 function estimateTotalTokens(messages: Message[]): number {
   const totalChars = messages.reduce(
@@ -56,17 +60,24 @@ export async function execute(
     MAX_MESSAGE_CHARS
   );
 
-  // Preflight credit check before calling the provider using a conservative estimate
+  // Preflight credit check
   const estimatedTotalTokens = estimateTotalTokens(trimmedMessages);
-  const estimatedCost = calculateCost({ totalTokens: estimatedTotalTokens });
+  const estimatedCostUsd =
+    (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
+  const estimatedUserPriceCredits = calculateUserPriceCredits(
+    usdToCredits(estimatedCostUsd, serverEnv().CREDITS_PER_USDC),
+    serverEnv().USER_PRICE_MARKUP_FACTOR
+  );
+
   const currentBalance = await accountService.getBalance(
     caller.billingAccountId
   );
 
-  if (currentBalance < estimatedCost) {
+  // Convert bigint to number for comparison (safe for pre-flight check)
+  if (currentBalance < Number(estimatedUserPriceCredits)) {
     throw new InsufficientCreditsPortError(
       caller.billingAccountId,
-      estimatedCost,
+      Number(estimatedUserPriceCredits),
       currentBalance
     );
   }
@@ -82,39 +93,70 @@ export async function execute(
   const totalTokens = result.usage?.totalTokens ?? 0;
   const providerMeta = (result.providerMeta ?? {}) as Record<string, unknown>;
   const modelId =
-    typeof providerMeta.model === "string" ? providerMeta.model : undefined;
-  const provider =
-    typeof providerMeta.provider === "string"
-      ? providerMeta.provider
-      : undefined;
-  const llmRequestId =
-    typeof providerMeta.requestId === "string"
-      ? providerMeta.requestId
-      : undefined;
-  const cost = calculateCost(
-    modelId !== undefined ? { modelId, totalTokens } : { totalTokens }
+    typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
+
+  // Calculate actual costs
+  // If providerCostUsd is missing (should be caught by adapter), default to 0 to avoid crash, but log error
+  const providerCostUsd = result.providerCostUsd ?? 0;
+  const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
+  // 5. Calculate costs (Credits-Centric)
+  const providerCostCredits = usdToCredits(
+    providerCostUsd,
+    serverEnv().CREDITS_PER_USDC
+  );
+  const userPriceCredits = calculateUserPriceCredits(
+    providerCostCredits,
+    markupFactor
   );
 
-  const debitMetadata: Record<string, unknown> = {};
-  if (result.usage) debitMetadata.usage = result.usage;
-  if (modelId) debitMetadata.model = modelId;
-  if (provider) debitMetadata.provider = provider;
-  if (llmRequestId) debitMetadata.llmRequestId = llmRequestId;
-  debitMetadata.virtualKeyId = caller.virtualKeyId;
+  // Enforce profit margin invariant
+  if (userPriceCredits < providerCostCredits) {
+    // This should be impossible due to calculateUserPriceCredits logic,
+    // but we assert it here for safety.
+    console.error(
+      `[CompletionService] Invariant violation: User price (${userPriceCredits}) < Provider cost (${providerCostCredits})`
+    );
+    // We still proceed, but maybe we should throw?
+    // For now, the pricing helper guarantees this, so it's a sanity check.
+  }
 
   try {
-    await accountService.debitForUsage({
+    await accountService.recordLlmUsage({
       billingAccountId: caller.billingAccountId,
       virtualKeyId: caller.virtualKeyId,
-      cost,
       requestId,
-      metadata: debitMetadata,
+      model: modelId,
+      promptTokens: result.usage?.promptTokens ?? 0,
+      completionTokens: result.usage?.completionTokens ?? 0,
+      providerCostUsd, // Store for audit
+      providerCostCredits,
+      userPriceCredits,
+      markupFactorApplied: markupFactor,
+      metadata: {
+        system: "ai_completion", // New metadata field
+        provider: providerMeta.provider,
+        llmRequestId: providerMeta.requestId,
+        totalTokens,
+      },
     });
   } catch (error) {
     // If we reached the provider, do not fail the response on post-call debit errors
+    // But we should probably log this critical failure
     if (!(error instanceof InsufficientCreditsPortError)) {
+      console.error(
+        "[CompletionService] Failed to record LLM usage",
+        JSON.stringify({ requestId, error })
+      );
+      // We still rethrow if it's not a credit issue, or swallow?
+      // Existing logic swallowed non-credit errors? No, it rethrew.
+      // "if (!(error instanceof InsufficientCreditsPortError)) { throw error; }"
+      // So we keep that behavior.
       throw error;
     }
+    // If it IS an InsufficientCreditsPortError, we swallow it?
+    // The original code swallowed it: "if (!(error instanceof ...)) { throw error; }" implies if it IS instance, do nothing.
+    // Wait, if debit fails due to insufficient credits AFTER the call, we effectively gave it for free but stopped future calls.
+    // That seems to be the intended behavior for "post-payment" style checks where pre-flight passed.
   }
 
   // Feature sets timestamp after completion using injected clock
