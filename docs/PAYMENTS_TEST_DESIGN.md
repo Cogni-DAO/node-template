@@ -42,19 +42,21 @@
 
 **Port Contract Tests:**
 
-- [ ] Create `tests/ports/payment-attempt.contract.ts` - reusable test suite
-- [ ] Repository creation tests (create, field validation)
-- [ ] Repository query tests (findById with ownership, findByTxHash)
-- [ ] Repository update tests (updateStatus, bindTxHash, recordVerificationAttempt)
-- [ ] Event logging tests (logEvent, append-only audit trail)
-- [ ] Constraint tests (unique indexes, txHash conflicts)
+- [x] Create `tests/ports/harness/payment-attempt.port.harness.ts` - reusable harness with 7 invariant tests
+  - [x] Repository creation test (create with CREATED_INTENT)
+  - [x] Repository query test (findById enforces ownership)
+  - [x] Repository query test (findByTxHash by chainId+txHash)
+  - [x] Constraint test (bindTxHash uniqueness enforcement)
+  - [x] Update test (recordVerificationAttempt increments count)
+  - [x] Update test (updateStatus persists status+errorCode)
+  - [x] Event logging test (logEvent audit trail)
 
-**Fake Adapter Tests (`tests/unit/adapters/test/payments/`):**
+**Test Helpers (no unit tests needed):**
 
-- [ ] `fake-onchain-verifier.adapter.spec.ts` - deterministic stub behavior
-  - Always returns VERIFIED status
-  - Returns expected values as actual values
-  - No external dependencies
+- `FakeOnChainVerifierAdapter` - Configurable canned responder for integration/service tests
+  - Used in Phase 3+ to simulate VERIFIED/PENDING/FAILED verification outcomes
+  - Includes `lastCallParams` to assert verify() wiring in service tests
+  - Value proven through usage, not unit tests of the fake itself
 
 **Real Adapter Tests (`tests/unit/adapters/server/payments/`):**
 
@@ -82,6 +84,7 @@
 - [ ] `getStatus()` - returns current status, checks timeouts
 - [ ] `getStatus()` - throttles verification attempts (10s window)
 - [ ] Settlement flow - calls confirmCreditsPayment, atomic transaction
+- [ ] Assert on both PaymentAttempt state AND fake.lastCallParams to prove verify() wiring
 
 **API Contract Tests (`tests/integration/payments/api.spec.ts`):**
 
