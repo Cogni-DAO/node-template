@@ -385,12 +385,14 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 - `submitted_at` (TIMESTAMP, nullable) - set when txHash bound (for PENDING_UNVERIFIED timeout)
 - `last_verify_attempt_at` (TIMESTAMP, nullable) - for GET throttle
 - `verify_attempt_count` (INTEGER, default 0) - incremented on each verification attempt
+- `created_at` (TIMESTAMP, NOT NULL, default now())
+- `updated_at` (TIMESTAMP, NOT NULL, default now())
 
 **Required Indexes:**
 
-- **Partial unique index:** `(chain_id, tx_hash) WHERE tx_hash IS NOT NULL`
-- `(billing_account_id, created_at)` - user history
-- `(status, created_at)` - polling
+- `payment_attempts_chain_tx_unique` - Partial unique: `(chain_id, tx_hash) WHERE tx_hash IS NOT NULL`
+- `payment_attempts_billing_account_idx` - `(billing_account_id, created_at)` for user history
+- `payment_attempts_status_idx` - `(status, created_at)` for polling
 
 ---
 
@@ -398,15 +400,20 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 
 **Purpose:** Append-only audit log (critical for Ponder reconciliation + disputes)
 
-**Key Columns:**
+**Schema:**
 
-- `id` (UUID, PK)
-- `attempt_id` (UUID, FK)
-- `event_type` (TEXT) - `INTENT_CREATED`, `TX_SUBMITTED`, `VERIFICATION_ATTEMPTED`, `CREDITED`, `REJECTED`, `FAILED`, `EXPIRED`
-- `from_status` (TEXT, nullable), `to_status` (TEXT)
-- `error_code` (TEXT, nullable)
-- `metadata` (JSONB) - txHash, blockNumber, validation details
-- `created_at` (TIMESTAMP)
+- `id` (UUID, PK, default gen_random_uuid())
+- `attempt_id` (UUID, NOT NULL, FK → payment_attempts)
+- `event_type` (TEXT, NOT NULL) - `INTENT_CREATED`, `TX_SUBMITTED`, `VERIFICATION_ATTEMPTED`, `CREDITED`, `REJECTED`, `FAILED`, `EXPIRED`
+- `from_status` (TEXT, nullable) - previous status (null for INTENT_CREATED)
+- `to_status` (TEXT, NOT NULL) - new status
+- `error_code` (TEXT, nullable) - only for REJECTED/FAILED events
+- `metadata` (JSONB, nullable) - txHash, blockNumber, validation details
+- `created_at` (TIMESTAMP, NOT NULL, default now())
+
+**Index:**
+
+- `payment_events_attempt_idx` - `(attempt_id, created_at)` for audit log queries
 
 ---
 
@@ -434,9 +441,17 @@ ON credit_ledger(reference)
 WHERE reason = 'widget_payment';
 ```
 
-**Recommendation:** Option B (composite reference) is simpler for MVP. Choose option A for future multi-chain/multi-rail support.
+**Recommendation:** Option B (composite reference) is simpler for MVP.
 
-**Existing:** Index on `(reference, reason)` provides lookup but may not enforce uniqueness. Add explicit unique constraint.
+**MVP Implementation (Option B):**
+
+```sql
+CREATE UNIQUE INDEX credit_ledger_payment_ref_unique
+ON credit_ledger(reference)
+WHERE reason = 'widget_payment';
+```
+
+Reference format: `"${chainId}:${txHash}"` (e.g., `"11155111:0xabc123..."`)
 
 ---
 
