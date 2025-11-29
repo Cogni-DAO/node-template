@@ -14,9 +14,11 @@
 
 **Core Domain:**
 
-- [ ] Create `core/payments/model.ts` with PaymentAttempt entity
-- [ ] Create `core/payments/rules.ts` for state transition validation
-- [ ] Create `core/payments/errors.ts` with error types + error_code enum
+- [x] Create `core/payments/model.ts` with PaymentAttempt entity
+- [x] Create `core/payments/rules.ts` for state transition validation
+- [x] Create `core/payments/errors.ts` with error types + error_code enum
+- [x] Create `core/payments/util.ts` for conversion utilities
+- [x] Create `core/payments/public.ts` barrel export
 
 **Ports:**
 
