@@ -37,7 +37,10 @@ export {
   isPaymentAttemptNotFoundPortError,
   isTxHashAlreadyBoundPortError,
   type LogPaymentEventParams,
+  type PaymentAttempt,
   PaymentAttemptNotFoundPortError,
   type PaymentAttemptRepository,
+  type PaymentAttemptStatus,
+  type PaymentErrorCode,
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";

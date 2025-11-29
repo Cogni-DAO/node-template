@@ -5,7 +5,9 @@
  * Module: `@ports/payment-attempt`
  * Purpose: Payment attempt repository port for persistence and audit logging.
  * Scope: Defines contracts for payment attempt lifecycle and event logging. Does not implement persistence logic.
- * Invariants: All repository operations enforce ownership; attempts are immutable once txHash is bound.
+ * Invariants:
+ * - findById enforces ownership; feature layer MUST enforce ownership before calling mutating methods.
+ * - Attempts are immutable once txHash is bound.
  * Side-effects: none (interface definition only)
  * Notes: Adapters throw port-level errors; feature layer translates to domain errors.
  * Links: Implemented by DrizzlePaymentAttemptRepository, used by payment feature services
@@ -18,6 +20,13 @@ import type {
   PaymentErrorCode,
 } from "@/core";
 
+// Re-export core types so adapters don't import from @/core directly
+export type {
+  PaymentAttempt,
+  PaymentAttemptStatus,
+  PaymentErrorCode,
+} from "@/core";
+
 /**
  * Port-level error thrown when payment attempt is not found
  * Adapters throw this when attempt doesn't exist or ownership check fails
@@ -25,11 +34,12 @@ import type {
 export class PaymentAttemptNotFoundPortError extends Error {
   constructor(
     public readonly attemptId: string,
-    public readonly billingAccountId: string
+    public readonly billingAccountId?: string
   ) {
-    super(
-      `Payment attempt ${attemptId} not found for billing account ${billingAccountId}`
-    );
+    const message = billingAccountId
+      ? `Payment attempt ${attemptId} not found for billing account ${billingAccountId}`
+      : `Payment attempt ${attemptId} not found`;
+    super(message);
     this.name = "PaymentAttemptNotFoundPortError";
   }
 }
@@ -87,6 +97,7 @@ export interface CreatePaymentAttemptParams {
 
 /**
  * Parameters for logging a payment event
+ * eventType is a coarse-grained operation verb; fromStatus/toStatus carry actual state transitions
  */
 export interface LogPaymentEventParams {
   attemptId: string;
@@ -94,10 +105,7 @@ export interface LogPaymentEventParams {
     | "INTENT_CREATED"
     | "TX_SUBMITTED"
     | "VERIFICATION_ATTEMPTED"
-    | "CREDITED"
-    | "REJECTED"
-    | "FAILED"
-    | "EXPIRED";
+    | "STATUS_CHANGED";
   fromStatus: PaymentAttemptStatus | null;
   toStatus: PaymentAttemptStatus;
   errorCode?: PaymentErrorCode;
