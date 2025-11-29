@@ -84,6 +84,4 @@ export interface PaymentAttempt {
   verifyAttemptCount: number;
   /** Creation timestamp */
   createdAt: Date;
-  /** Last update timestamp */
-  updatedAt: Date;
 }

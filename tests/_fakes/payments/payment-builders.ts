@@ -96,7 +96,6 @@ export function createPaymentAttempt(
     lastVerifyAttemptAt: options.lastVerifyAttemptAt ?? null,
     verifyAttemptCount: options.verifyAttemptCount ?? 0,
     createdAt: options.createdAt ?? DEFAULT_TIMESTAMP,
-    updatedAt: options.updatedAt ?? DEFAULT_TIMESTAMP,
   };
 }
 

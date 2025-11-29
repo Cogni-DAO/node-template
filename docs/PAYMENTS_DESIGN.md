@@ -28,11 +28,12 @@
 
 **Database:**
 
-- [ ] Migration: Create `payment_attempts` table per schema (include `from_address`, `error_code`, `submitted_at`, `last_verify_attempt_at`, `verify_attempt_count`)
-- [ ] Migration: Add partial unique index on `(chain_id, tx_hash) WHERE tx_hash IS NOT NULL`
-- [ ] Migration: Add unique constraint on `credit_ledger(reference)` for payments with chain awareness (see Persistence section for options)
-- [ ] Migration: Create `payment_events` table
-- [ ] Verify existing `(reference, reason)` index on credit_ledger
+- [x] Schema: Add `payment_attempts` table to `schema.billing.ts`
+- [x] Schema: Add `payment_events` table to `schema.billing.ts`
+- [x] Schema: Add partial unique index `payment_attempts_chain_tx_unique` on `(chain_id, tx_hash) WHERE tx_hash IS NOT NULL`
+- [x] Schema: Add unique index `credit_ledger_payment_ref_unique` on `(reference) WHERE reason = 'widget_payment'`
+- [x] Migration: Run `pnpm db:generate` to create migration file (0002_flimsy_microchip.sql)
+- [ ] Migration: Run `pnpm db:migrate` to apply migration (deferred until stack running)
 
 **Adapters:**
 
