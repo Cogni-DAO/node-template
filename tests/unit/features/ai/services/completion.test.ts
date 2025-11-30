@@ -25,6 +25,8 @@ import { describe, expect, it, vi } from "vitest";
 import { ChatValidationError, MAX_MESSAGE_CHARS } from "@/core";
 import { execute } from "@/features/ai/services/completion";
 import type { LlmCaller } from "@/ports";
+import type { RequestContext } from "@/shared/observability";
+import { makeNoopLogger } from "@/shared/observability";
 
 // Mock serverEnv
 vi.mock("@/shared/env", () => ({
@@ -49,6 +51,11 @@ describe("features/ai/services/completion", () => {
       const llmService = new FakeLlmService({ responseContent: "AI response" });
       const clock = new FakeClock("2025-01-01T12:00:00.000Z");
       const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock,
+      };
 
       // Act
       const accountService = createMockAccountServiceWithDefaults();
@@ -57,7 +64,8 @@ describe("features/ai/services/completion", () => {
         llmService,
         accountService,
         clock,
-        caller
+        caller,
+        testCtx
       );
 
       // Assert
@@ -78,10 +86,22 @@ describe("features/ai/services/completion", () => {
       const llmService = new FakeLlmService();
       const clock = new FakeClock();
       const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock,
+      };
 
       // Act
       const accountService = createMockAccountServiceWithDefaults();
-      await execute(messages, llmService, accountService, clock, caller);
+      await execute(
+        messages,
+        llmService,
+        accountService,
+        clock,
+        caller,
+        testCtx
+      );
 
       // Assert
       const lastCall = llmService.getLastCall();
@@ -95,11 +115,16 @@ describe("features/ai/services/completion", () => {
       const llmService = new FakeLlmService();
       const clock = new FakeClock();
       const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock,
+      };
 
       // Act & Assert
       const accountService = createMockAccountServiceWithDefaults();
       await expect(
-        execute(messages, llmService, accountService, clock, caller)
+        execute(messages, llmService, accountService, clock, caller, testCtx)
       ).rejects.toThrow(ChatValidationError);
       expect(llmService.wasCalled()).toBe(false); // Should not call LLM
     });
@@ -115,10 +140,22 @@ describe("features/ai/services/completion", () => {
       const llmService = new FakeLlmService();
       const clock = new FakeClock();
       const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock,
+      };
 
       // Act
       const accountService = createMockAccountServiceWithDefaults();
-      await execute(messages, llmService, accountService, clock, caller);
+      await execute(
+        messages,
+        llmService,
+        accountService,
+        clock,
+        caller,
+        testCtx
+      );
 
       // Assert - should trim to fit MAX_MESSAGE_CHARS (4000)
       const lastCall = llmService.getLastCall();
@@ -139,6 +176,11 @@ describe("features/ai/services/completion", () => {
       const llmService = new FakeLlmService();
       const clock = new FakeClock();
       const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock,
+      };
 
       // Act
       const accountService = createMockAccountServiceWithDefaults();
@@ -147,7 +189,8 @@ describe("features/ai/services/completion", () => {
         llmService,
         accountService,
         clock,
-        caller
+        caller,
+        testCtx
       );
 
       // Assert
@@ -161,6 +204,11 @@ describe("features/ai/services/completion", () => {
       const fixedTime = "2025-12-25T10:30:00.000Z";
       const clock = new FakeClock(fixedTime);
       const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock,
+      };
 
       // Act
       const accountService = createMockAccountServiceWithDefaults();
@@ -169,7 +217,8 @@ describe("features/ai/services/completion", () => {
         llmService,
         accountService,
         clock,
-        caller
+        caller,
+        testCtx
       );
 
       // Assert
@@ -185,11 +234,16 @@ describe("features/ai/services/completion", () => {
       });
       const clock = new FakeClock();
       const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock,
+      };
 
       // Act & Assert
       const accountService = createMockAccountServiceWithDefaults();
       await expect(
-        execute(messages, llmService, accountService, clock, caller)
+        execute(messages, llmService, accountService, clock, caller, testCtx)
       ).rejects.toThrow("LLM service unavailable");
     });
   });
