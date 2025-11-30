@@ -17,6 +17,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
+import type { RequestContext } from "@/shared/observability";
+import { makeNoopLogger } from "@/shared/observability";
 
 // Mock serverEnv (following pattern from completion.test.ts)
 vi.mock("@/shared/env", () => ({
@@ -47,11 +49,20 @@ describe("completion facade contract", () => {
     // Import after mocks are set up
     const { completion } = await import("@/app/_facades/ai/completion.server");
 
+    const testCtx: RequestContext = {
+      log: makeNoopLogger(),
+      reqId: "test-req-123",
+      clock,
+    };
+
     // Act
-    const result = await completion({
-      messages: [{ role: "user", content: "test" }],
-      sessionUser: { id: "test-user", walletAddress: "0x123" },
-    });
+    const result = await completion(
+      {
+        messages: [{ role: "user", content: "test" }],
+        sessionUser: { id: "test-user", walletAddress: "0x123" },
+      },
+      testCtx
+    );
 
     // Assert - Result matches contract schema exactly
     expect(() => aiCompletionOperation.output.parse(result)).not.toThrow();
@@ -80,11 +91,20 @@ describe("completion facade contract", () => {
 
     const { completion } = await import("@/app/_facades/ai/completion.server");
 
+    const testCtx: RequestContext = {
+      log: makeNoopLogger(),
+      reqId: "test-req-456",
+      clock,
+    };
+
     // Act
-    const result = await completion({
-      messages: [{ role: "user", content: "test" }],
-      sessionUser: { id: "test-user", walletAddress: "0x123" },
-    });
+    const result = await completion(
+      {
+        messages: [{ role: "user", content: "test" }],
+        sessionUser: { id: "test-user", walletAddress: "0x123" },
+      },
+      testCtx
+    );
 
     // Assert - This should compile without errors - facade return type matches contract
     const _typeCheck: z.infer<typeof aiCompletionOperation.output> = result;

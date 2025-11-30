@@ -16,14 +16,14 @@ import { createMockAccountService } from "@tests/_fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { confirmCreditsPaymentFacade } from "@/app/_facades/payments/credits.server";
-import { createContainer } from "@/bootstrap/container";
+import { getContainer } from "@/bootstrap/container";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { AccountService } from "@/ports";
 import type { SessionUser } from "@/shared/auth";
 
 vi.mock("@/bootstrap/container", () => ({
-  createContainer: vi.fn(),
+  getContainer: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/mapping", () => ({
@@ -34,7 +34,7 @@ vi.mock("@/features/payments/services/creditsConfirm", () => ({
   confirmCreditsPayment: vi.fn(),
 }));
 
-const mockCreateContainer = vi.mocked(createContainer);
+const mockGetContainer = vi.mocked(getContainer);
 const mockConfirmCreditsPayment = vi.mocked(confirmCreditsPayment);
 const mockGetOrCreateBillingAccountForUser = vi.mocked(
   getOrCreateBillingAccountForUser
@@ -52,9 +52,10 @@ describe("app/_facades/payments/credits.server", () => {
     vi.clearAllMocks();
     accountService = createMockAccountService();
 
-    mockCreateContainer.mockReturnValue({
+    mockGetContainer.mockReturnValue({
       accountService,
       // Unused in this facade, but required by Container type
+      log: {} as never,
       llmService: {} as never,
       clock: {} as never,
       paymentAttemptRepository: {} as never,
@@ -84,7 +85,7 @@ describe("app/_facades/payments/credits.server", () => {
       metadata: { source: "test" },
     });
 
-    expect(mockCreateContainer).toHaveBeenCalledTimes(1);
+    expect(mockGetContainer).toHaveBeenCalledTimes(1);
     expect(mockGetOrCreateBillingAccountForUser).toHaveBeenCalledWith(
       accountService,
       {

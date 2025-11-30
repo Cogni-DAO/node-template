@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-19
-- **Status:** draft
+- **Last reviewed:** 2025-12-01
+- **Status:** stable
 
 ## Purpose
 
-Low-level building blocks used across the repo. Primitives and reusable shapes (e.g., walletAddressZ, isoDateZ, paginationZ), DTO mappers, pure utilities, database schema definitions. No auth scopes. No rate limits. No operation IDs.
+Low-level building blocks used across the repo. Primitives, DTO mappers, pure utilities, database schemas, environment validation, and cross-cutting observability (logging, request context).
 
 ## Pointers
 
@@ -37,11 +37,16 @@ Low-level building blocks used across the repo. Primitives and reusable shapes (
 
 ## Public Surface
 
-- **Exports:** DTOs, mappers, constants, utilities, cn function, database schemas (accounts)
-- **Routes (if any):** none
-- **CLI (if any):** none
-- **Env/Config keys:** Environment schema definitions (DATABASE*URL, LITELLM*\*, APP_ENV)
-- **Files considered API:** env/index.ts, util/index.ts, db/index.ts
+- **Exports:**
+  - Environment validation (`serverEnv`, `clientEnv`)
+  - Database schemas (auth, billing)
+  - Utilities (cn, uuid, accountId)
+  - Constants (payments, web3)
+  - Observability (Logger, RequestContext, log helpers, event schemas)
+- **Routes:** none
+- **CLI:** none
+- **Env/Config keys:** `PINO_LOG_LEVEL`, `DATABASE_URL`, `LITELLM_*`, `APP_ENV`, `NODE_ENV`
+- **Files considered API:** `index.ts`, `env/index.ts`, `observability/index.ts`
 
 ## Ports (optional)
 
@@ -51,8 +56,14 @@ Low-level building blocks used across the repo. Primitives and reusable shapes (
 
 ## Responsibilities
 
-- This directory **does**: Provide pure utilities, DTOs, constants, environment schemas, database table definitions
-- This directory **does not**: Contain business logic, side effects, or framework dependencies
+- This directory **does**:
+  - Provide pure utilities, constants, environment validation
+  - Define database schemas (Drizzle)
+  - Provide observability infrastructure (logging, context, events)
+- This directory **does not**:
+  - Contain business logic or domain rules
+  - Import from ports, bootstrap, core, features, adapters
+  - Handle HTTP routing or responses
 
 ## Usage
 
@@ -73,7 +84,7 @@ pnpm typecheck
 ## Dependencies
 
 - **Internal:** shared/ only
-- **External:** zod, clsx, tailwind-merge, drizzle-orm (pg-core), utility libraries
+- **External:** zod, clsx, tailwind-merge, drizzle-orm (pg-core), pino, pino-pretty
 
 ## Change Protocol
 

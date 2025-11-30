@@ -179,15 +179,8 @@ describe("LiteLlmAdapter", () => {
         totalTokens: 18,
       });
 
-      // Structured warning with BILLING_NO_PROVIDER_COST code should be logged
-      expect(warnSpy).toHaveBeenCalledOnce();
-      const loggedArg = warnSpy.mock.calls[0]?.[0];
-      expect(loggedArg).toBeDefined();
-      const loggedData = JSON.parse(loggedArg as string);
-      expect(loggedData.code).toBe("BILLING_NO_PROVIDER_COST");
-      expect(loggedData.model).toBe("gpt-3.5-turbo");
-      expect(loggedData.totalTokens).toBe(18);
-
+      // Note: Missing cost header logging removed from adapter
+      // Feature layer handles this via completion.ts logging
       warnSpy.mockRestore();
     });
 

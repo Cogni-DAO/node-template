@@ -20,6 +20,8 @@ import { completion } from "@/app/_facades/ai/completion.server";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { ChatErrorCode, ChatValidationError } from "@/core";
 import type { SessionUser } from "@/shared/auth";
+import type { RequestContext } from "@/shared/observability";
+import { makeNoopLogger } from "@/shared/observability";
 
 // Mock the bootstrap container
 vi.mock("@/bootstrap/container", () => ({
@@ -77,8 +79,14 @@ describe("app/_facades/ai/completion.server", () => {
         requestId: "req-123",
       });
 
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock: fakeClock,
+      };
+
       // Act
-      const result = await completion(input);
+      const result = await completion(input, testCtx);
 
       // Assert
       expect(result).toEqual({
@@ -135,12 +143,19 @@ describe("app/_facades/ai/completion.server", () => {
       };
 
       const mockAccountService = createMockAccountServiceWithDefaults();
+      const fakeClock = new FakeClock();
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
         accountService: mockAccountService,
-        clock: new FakeClock(),
+        clock: fakeClock,
       });
+
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock: fakeClock,
+      };
 
       const validationError = new ChatValidationError(
         ChatErrorCode.MESSAGE_TOO_LONG,
@@ -149,8 +164,12 @@ describe("app/_facades/ai/completion.server", () => {
       mockExecute.mockRejectedValue(validationError);
 
       // Act & Assert
-      await expect(completion(input)).rejects.toThrow(ChatValidationError);
-      await expect(completion(input)).rejects.toThrow("Message exceeds limit");
+      await expect(completion(input, testCtx)).rejects.toThrow(
+        ChatValidationError
+      );
+      await expect(completion(input, testCtx)).rejects.toThrow(
+        "Message exceeds limit"
+      );
     });
 
     it("should handle LLM service failures", async () => {
@@ -161,18 +180,25 @@ describe("app/_facades/ai/completion.server", () => {
       };
 
       const mockAccountService = createMockAccountServiceWithDefaults();
+      const fakeClock = new FakeClock();
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
         accountService: mockAccountService,
-        clock: new FakeClock(),
+        clock: fakeClock,
       });
+
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock: fakeClock,
+      };
 
       const serviceError = new Error("LLM service temporarily unavailable");
       mockExecute.mockRejectedValue(serviceError);
 
       // Act & Assert
-      await expect(completion(input)).rejects.toThrow(
+      await expect(completion(input, testCtx)).rejects.toThrow(
         "LLM service temporarily unavailable"
       );
     });
@@ -206,8 +232,14 @@ describe("app/_facades/ai/completion.server", () => {
         requestId: "req-456",
       });
 
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock: fakeClock,
+      };
+
       // Act
-      await completion(input);
+      await completion(input, testCtx);
 
       // Assert - all input messages should get the same timestamp
       const executeCall = mockExecute.mock.calls[0];
@@ -232,12 +264,19 @@ describe("app/_facades/ai/completion.server", () => {
       };
 
       const mockAccountService = createMockAccountServiceWithDefaults();
+      const fakeClock = new FakeClock();
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
         accountService: mockAccountService,
-        clock: new FakeClock(),
+        clock: fakeClock,
       });
+
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        clock: fakeClock,
+      };
 
       // Simulate mapper throwing on invalid role (tested in isolation elsewhere)
       const roleError = new ChatValidationError(
@@ -247,7 +286,9 @@ describe("app/_facades/ai/completion.server", () => {
       mockExecute.mockRejectedValue(roleError);
 
       // Act & Assert
-      await expect(completion(input)).rejects.toThrow(ChatValidationError);
+      await expect(completion(input, testCtx)).rejects.toThrow(
+        ChatValidationError
+      );
     });
   });
 });
