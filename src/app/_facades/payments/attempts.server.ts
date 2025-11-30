@@ -119,6 +119,7 @@ export async function submitPaymentTxHashFacade(params: {
     {
       attemptId: params.attemptId,
       billingAccountId: billingAccount.id,
+      defaultVirtualKeyId: billingAccount.defaultVirtualKeyId,
       txHash: params.txHash,
     }
   );
@@ -173,6 +174,7 @@ export async function getPaymentStatusFacade(params: {
     {
       attemptId: params.attemptId,
       billingAccountId: billingAccount.id,
+      defaultVirtualKeyId: billingAccount.defaultVirtualKeyId,
     }
   );
 

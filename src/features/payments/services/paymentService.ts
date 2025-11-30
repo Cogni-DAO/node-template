@@ -59,6 +59,7 @@ export interface CreateIntentResult {
 export interface SubmitTxHashInput {
   attemptId: string;
   billingAccountId: string;
+  defaultVirtualKeyId: string;
   txHash: string;
 }
 
@@ -73,6 +74,7 @@ export interface SubmitTxHashResult {
 export interface GetStatusInput {
   attemptId: string;
   billingAccountId: string;
+  defaultVirtualKeyId: string;
 }
 
 export interface GetStatusResult {
@@ -215,7 +217,8 @@ export async function submitTxHash(
     repository,
     accountService,
     onChainVerifier,
-    clock
+    clock,
+    input.defaultVirtualKeyId
   );
 
   if (!attempt.txHash) {
@@ -303,7 +306,8 @@ export async function getStatus(
         repository,
         accountService,
         onChainVerifier,
-        clock
+        clock,
+        input.defaultVirtualKeyId
       );
     }
   }
@@ -339,7 +343,8 @@ async function verifyAndSettle(
   repository: PaymentAttemptRepository,
   accountService: AccountService,
   onChainVerifier: OnChainVerifier,
-  _clock: Clock
+  _clock: Clock,
+  defaultVirtualKeyId: string
 ): Promise<PaymentAttempt> {
   if (!attempt.txHash) {
     return attempt;
@@ -396,7 +401,7 @@ async function verifyAndSettle(
     try {
       await confirmCreditsPayment(accountService, {
         billingAccountId: attempt.billingAccountId,
-        defaultVirtualKeyId: "",
+        defaultVirtualKeyId,
         amountUsdCents: attempt.amountUsdCents,
         clientPaymentId,
         metadata: {
