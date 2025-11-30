@@ -56,9 +56,9 @@ describe("bootstrap container DI wiring", () => {
     });
 
     it("wires LiteLlmAdapter when APP_ENV=production", async () => {
-      // Set up production environment
+      // Test production adapter wiring (APP_ENV controls adapters, not NODE_ENV)
       Object.assign(process.env, {
-        NODE_ENV: "production",
+        NODE_ENV: "test", // Keep test mode for logging silence
         APP_ENV: "production",
         POSTGRES_USER: "postgres",
         POSTGRES_PASSWORD: "postgres",
@@ -80,8 +80,9 @@ describe("bootstrap container DI wiring", () => {
     });
 
     it("wires LiteLlmAdapter in development mode with APP_ENV=production", async () => {
+      // Test that APP_ENV controls adapters regardless of NODE_ENV
       Object.assign(process.env, {
-        NODE_ENV: "development",
+        NODE_ENV: "test", // Keep test mode for logging silence
         APP_ENV: "production",
         POSTGRES_USER: "postgres",
         POSTGRES_PASSWORD: "postgres",

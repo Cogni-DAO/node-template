@@ -21,11 +21,16 @@ import { REDACT_PATHS } from "./redact";
 export type { Logger } from "pino";
 
 export function makeLogger(bindings?: Record<string, unknown>): Logger {
+  // biome-ignore lint/style/noProcessEnv: Legitimate use for test tooling detection
+  const isVitest = process.env.VITEST === "true";
   const env = serverEnv();
+
+  // Silence logs in test tooling (VITEST or NODE_ENV=test) regardless of APP_ENV
+  const isTestTooling = isVitest || env.NODE_ENV === "test";
 
   const config = {
     level: env.PINO_LOG_LEVEL,
-    enabled: !env.isTestMode,
+    enabled: !isTestTooling,
     base: { app: "cogni-template", env: env.APP_ENV, ...bindings },
     messageKey: "msg",
     timestamp: pino.stdTimeFunctions.epochTime,
