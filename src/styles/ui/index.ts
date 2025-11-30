@@ -29,7 +29,7 @@ export {
   iconBox,
 } from "./data";
 // Input components
-export { button, modeToggle } from "./inputs";
+export { button, input, modeToggle } from "./inputs";
 // Layout components
 export {
   container,
