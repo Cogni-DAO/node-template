@@ -108,18 +108,6 @@ export class LiteLlmAdapter implements LlmService {
         providerMeta: data as unknown as Record<string, unknown>,
       };
 
-      console.log(
-        JSON.stringify({
-          level: "info",
-          msg: "[LiteLlmAdapter] used",
-          hasResponseCostHeader: !!response.headers.get(
-            "x-litellm-response-cost"
-          ),
-          providerCostUsd: providerCostFromHeader,
-          requestId: result.providerMeta?.requestId ?? "unknown",
-        })
-      );
-
       // Add optional fields only when present
       if (data.choices[0].finish_reason) {
         result.finishReason = data.choices[0].finish_reason;
@@ -127,18 +115,9 @@ export class LiteLlmAdapter implements LlmService {
 
       if (typeof providerCostFromHeader === "number") {
         result.providerCostUsd = providerCostFromHeader;
-      } else {
-        // Log structured warning - service layer will record usage but not debit
-        console.warn(
-          JSON.stringify({
-            code: "BILLING_NO_PROVIDER_COST",
-            message:
-              "LiteLLM did not return x-litellm-response-cost header - usage recorded but user not charged",
-            model,
-            totalTokens: result.usage?.totalTokens ?? 0,
-          })
-        );
       }
+      // Note: Missing cost header is handled at feature layer (completion.ts)
+      // No logging here - adapter stays pure
 
       return result;
     } catch (error) {

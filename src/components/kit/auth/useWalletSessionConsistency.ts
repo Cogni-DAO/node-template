@@ -45,15 +45,7 @@ export function useWalletSessionConsistency(): void {
       sessionAddress,
     });
 
-    // [DEBUG] Log consistency check
-    console.log(
-      `[WalletSessionConsistency] Check: status=${status}, isConnected=${isConnected}, wallet=${connectedAddress}, session=${sessionAddress}, action=${action}`
-    );
-
     if (action === "sign_out") {
-      console.warn(
-        `[WalletSessionConsistency] Mismatch detected: wallet=${connectedAddress} vs session=${sessionAddress}. Signing out to enforce coherence.`
-      );
       void signOut({ redirect: false });
     }
   }, [address, isConnected, session, status]);
