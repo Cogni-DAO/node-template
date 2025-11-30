@@ -5,7 +5,7 @@
  * Module: `@app/(app)/credits/CreditsPage.client`
  * Purpose: Client-side credits page UI handling balance display, ledger history, and USDC payment flow.
  * Scope: Fetches credits data via React Query, renders native USDC payment flow, and refreshes balance on success. Does not manage server-side config or repo-spec access.
- * Invariants: Widget configuration is provided via server props (no env access); backend handles verification and idempotency.
+ * Invariants: Payment amounts stored as integer cents (no float math); UI display uses CREDITS_PER_CENT constant from payments feature.
  * Side-effects: IO (fetch API via React Query).
  * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
  * @public
@@ -19,7 +19,7 @@ import { useState } from "react";
 
 import { Button, UsdcPaymentFlow } from "@/components";
 import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
-import { usePaymentFlow } from "@/features/payments/hooks/usePaymentFlow";
+import { CREDITS_PER_CENT, usePaymentFlow } from "@/features/payments/public";
 import {
   badge,
   card,
@@ -32,7 +32,8 @@ import {
   twoColumn,
 } from "@/styles/ui";
 
-const PAYMENT_AMOUNTS = [0.1, 10, 25, 50, 100] as const;
+// Payment amounts in USD cents (100 = $1.00, 1000 = $10.00, etc.)
+const PAYMENT_AMOUNTS = [100, 1000, 2500, 5000, 10000] as const;
 const DEFAULT_LEDGER_LIMIT = 10;
 
 async function fetchSummary(): Promise<CreditsSummaryOutput> {
@@ -65,7 +66,7 @@ export function CreditsPageClient(): ReactElement {
   });
 
   const paymentFlow = usePaymentFlow({
-    amountUsdCents: selectedAmount * 100, // Convert dollars to cents
+    amountUsdCents: selectedAmount, // Already in cents, pass as-is
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
     },
@@ -199,19 +200,22 @@ export function CreditsPageClient(): ReactElement {
             </div>
             <div className={cardContent()}>
               <div className="flex flex-wrap gap-[var(--spacing-sm)]">
-                {PAYMENT_AMOUNTS.map((amount) => (
+                {PAYMENT_AMOUNTS.map((amountCents) => (
                   <Button
-                    key={amount}
-                    variant={amount === selectedAmount ? "default" : "outline"}
-                    onClick={() => setSelectedAmount(amount)}
+                    key={amountCents}
+                    variant={
+                      amountCents === selectedAmount ? "default" : "outline"
+                    }
+                    onClick={() => setSelectedAmount(amountCents)}
                   >
-                    ${amount} / {formatCredits(amount * 1000)} credits
+                    ${(amountCents / 100).toFixed(2)} /{" "}
+                    {formatCredits(amountCents * CREDITS_PER_CENT)} credits
                   </Button>
                 ))}
               </div>
               <div className="mt-[var(--spacing-lg)] space-y-[var(--spacing-sm)]">
                 <UsdcPaymentFlow
-                  amountUsdCents={selectedAmount * 100}
+                  amountUsdCents={selectedAmount}
                   state={paymentFlow.state}
                   onStartPayment={paymentFlow.startPayment}
                   onReset={paymentFlow.reset}
