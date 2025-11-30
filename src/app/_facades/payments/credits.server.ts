@@ -12,7 +12,7 @@
  * @public
  */
 
-import { createContainer } from "@/bootstrap/container";
+import { getContainer } from "@/bootstrap/container";
 import type { CreditsConfirmOutput } from "@/contracts/payments.credits.confirm.v1.contract";
 import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
@@ -26,7 +26,7 @@ export async function confirmCreditsPaymentFacade(params: {
   clientPaymentId: string;
   metadata?: Record<string, unknown> | undefined;
 }): Promise<CreditsConfirmOutput> {
-  const { accountService } = createContainer();
+  const { accountService } = getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -64,7 +64,7 @@ export async function getCreditsSummaryFacade(params: {
   sessionUser: SessionUser;
   limit?: number | undefined;
 }): Promise<CreditsSummaryOutput> {
-  const { accountService } = createContainer();
+  const { accountService } = getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>

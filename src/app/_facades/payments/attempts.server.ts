@@ -14,7 +14,7 @@
 
 import { getAddress } from "viem";
 
-import { createContainer } from "@/bootstrap/container";
+import { getContainer } from "@/bootstrap/container";
 import type { PaymentIntentOutput } from "@/contracts/payments.intent.v1.contract";
 import type { PaymentStatusOutput } from "@/contracts/payments.status.v1.contract";
 import type { PaymentSubmitOutput } from "@/contracts/payments.submit.v1.contract";
@@ -39,7 +39,7 @@ export async function createPaymentIntentFacade(params: {
   sessionUser: SessionUser;
   amountUsdCents: number;
 }): Promise<PaymentIntentOutput> {
-  const { accountService, paymentAttemptRepository, clock } = createContainer();
+  const { accountService, paymentAttemptRepository, clock } = getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -97,7 +97,7 @@ export async function submitPaymentTxHashFacade(params: {
   txHash: string;
 }): Promise<PaymentSubmitOutput> {
   const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
-    createContainer();
+    getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -157,7 +157,7 @@ export async function getPaymentStatusFacade(params: {
   attemptId: string;
 }): Promise<PaymentStatusOutput> {
   const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
-    createContainer();
+    getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
