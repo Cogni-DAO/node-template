@@ -34,6 +34,7 @@ import type {
 } from "@/ports";
 import { getWidgetConfig } from "@/shared/config/repoSpec.server";
 import { USDC_TOKEN_ADDRESS, VERIFY_THROTTLE_SECONDS } from "@/shared/web3";
+import { PaymentNotFoundError } from "../errors";
 import { confirmCreditsPayment } from "./creditsConfirm";
 
 // ============================================================================
@@ -177,7 +178,7 @@ export async function submitTxHash(
     input.billingAccountId
   );
   if (!attempt) {
-    throw new Error(`Payment attempt ${input.attemptId} not found`);
+    throw new PaymentNotFoundError(input.attemptId, input.billingAccountId);
   }
 
   if (attempt.txHash === input.txHash) {
@@ -266,7 +267,7 @@ export async function getStatus(
     input.billingAccountId
   );
   if (!attempt) {
-    throw new Error(`Payment attempt ${input.attemptId} not found`);
+    throw new PaymentNotFoundError(input.attemptId, input.billingAccountId);
   }
 
   if (attempt.status === "CREATED_INTENT" && isIntentExpired(attempt, now)) {

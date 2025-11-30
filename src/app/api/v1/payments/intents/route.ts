@@ -17,6 +17,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createPaymentIntentFacade } from "@/app/_facades/payments/attempts.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { paymentIntentOperation } from "@/contracts/payments.intent.v1.contract";
+import { AuthUserNotFoundError } from "@/features/payments/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Auth errors
-    if (error instanceof Error && error.message === "AUTH_USER_NOT_FOUND") {
+    if (error instanceof AuthUserNotFoundError) {
       return NextResponse.json(
         { error: "User not provisioned; please re-authenticate" },
         { status: 401 }

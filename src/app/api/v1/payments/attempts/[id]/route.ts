@@ -17,6 +17,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getPaymentStatusFacade } from "@/app/_facades/payments/attempts.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { paymentStatusOperation } from "@/contracts/payments.status.v1.contract";
+import {
+  AuthUserNotFoundError,
+  PaymentNotFoundError,
+} from "@/features/payments/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +48,7 @@ export async function GET(
     return NextResponse.json(paymentStatusOperation.output.parse(result));
   } catch (error) {
     // Auth errors
-    if (error instanceof Error && error.message === "AUTH_USER_NOT_FOUND") {
+    if (error instanceof AuthUserNotFoundError) {
       return NextResponse.json(
         { error: "User not provisioned; please re-authenticate" },
         { status: 401 }
@@ -52,11 +56,7 @@ export async function GET(
     }
 
     // Payment not found errors
-    if (
-      error instanceof Error &&
-      error.message.includes("Payment attempt") &&
-      error.message.includes("not found")
-    ) {
+    if (error instanceof PaymentNotFoundError) {
       return NextResponse.json(
         { error: "Payment attempt not found or not owned by user" },
         { status: 404 }

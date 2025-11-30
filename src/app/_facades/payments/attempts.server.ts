@@ -18,6 +18,7 @@ import { createContainer } from "@/bootstrap/container";
 import type { PaymentIntentOutput } from "@/contracts/payments.intent.v1.contract";
 import type { PaymentStatusOutput } from "@/contracts/payments.status.v1.contract";
 import type { PaymentSubmitOutput } from "@/contracts/payments.submit.v1.contract";
+import { AuthUserNotFoundError } from "@/features/payments/errors";
 import {
   createIntent,
   getStatus,
@@ -49,11 +50,16 @@ export async function createPaymentIntentFacade(params: {
       walletAddress: params.sessionUser.walletAddress,
     });
   } catch (error) {
+    // Check for FK constraint violation (user not found in DB)
+    // Drizzle wraps Postgres errors - constraint name is in cause.message
     if (
-      error instanceof Error &&
-      error.message.includes("billing_accounts_owner_user_id_users_id_fk")
+      error &&
+      typeof error === "object" &&
+      "cause" in error &&
+      error.cause instanceof Error &&
+      error.cause.message.includes("billing_accounts_owner_user_id_users_id_fk")
     ) {
-      throw new Error("AUTH_USER_NOT_FOUND");
+      throw new AuthUserNotFoundError(params.sessionUser.id);
     }
     throw error;
   }
@@ -102,11 +108,16 @@ export async function submitPaymentTxHashFacade(params: {
       walletAddress: params.sessionUser.walletAddress,
     });
   } catch (error) {
+    // Check for FK constraint violation (user not found in DB)
+    // Drizzle wraps Postgres errors - constraint name is in cause.message
     if (
-      error instanceof Error &&
-      error.message.includes("billing_accounts_owner_user_id_users_id_fk")
+      error &&
+      typeof error === "object" &&
+      "cause" in error &&
+      error.cause instanceof Error &&
+      error.cause.message.includes("billing_accounts_owner_user_id_users_id_fk")
     ) {
-      throw new Error("AUTH_USER_NOT_FOUND");
+      throw new AuthUserNotFoundError(params.sessionUser.id);
     }
     throw error;
   }
@@ -157,11 +168,16 @@ export async function getPaymentStatusFacade(params: {
       walletAddress: params.sessionUser.walletAddress,
     });
   } catch (error) {
+    // Check for FK constraint violation (user not found in DB)
+    // Drizzle wraps Postgres errors - constraint name is in cause.message
     if (
-      error instanceof Error &&
-      error.message.includes("billing_accounts_owner_user_id_users_id_fk")
+      error &&
+      typeof error === "object" &&
+      "cause" in error &&
+      error.cause instanceof Error &&
+      error.cause.message.includes("billing_accounts_owner_user_id_users_id_fk")
     ) {
-      throw new Error("AUTH_USER_NOT_FOUND");
+      throw new AuthUserNotFoundError(params.sessionUser.id);
     }
     throw error;
   }
