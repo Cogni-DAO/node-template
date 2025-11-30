@@ -24,8 +24,8 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
 ```json
 {
   "layer": "features",
-  "may_import": ["core", "ports", "shared", "types"],
-  "must_not_import": ["app", "adapters", "bootstrap", "contracts", "mcp"]
+  "may_import": ["core", "ports", "shared", "types", "components", "contracts"],
+  "must_not_import": ["app", "adapters", "bootstrap", "mcp"]
 }
 ```
 
@@ -37,13 +37,19 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
   - `getStatus(repository, accountService, verifier, clock, input)` - Poll status with throttled verification
   - `confirmCreditsPayment(accountService, input)` - Atomic credit settlement; idempotent on clientPaymentId
   - `getCreditsSummary(accountService, input)` - Fetch balance and recent ledger entries
+- **Exports (hooks/):**
+  - `usePaymentFlow(options)` - React hook orchestrating USDC payment flow with wagmi + backend
+- **Exports (api/):**
+  - `paymentsClient` - Typed HTTP client for payment endpoints (discriminated union returns)
+- **Exports (utils/):**
+  - `mapBackendStatus(status, errorCode)` - Maps backend status to UI phase/result
 - **Exports (public.ts):**
   - Types: `PaymentsFeatureError`
   - Guards: `isPaymentsFeatureError`, `mapPaymentPortErrorToFeature`
 - **Routes:** none (used by app layer routes)
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** services/paymentService.ts, services/creditsConfirm.ts, errors.ts, public.ts
+- **Files considered API:** services/_, hooks/_, api/\*, utils/mapBackendStatus.ts, errors.ts, public.ts
 
 ## Ports
 
