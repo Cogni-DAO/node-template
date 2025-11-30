@@ -41,9 +41,9 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
     resetTestOnChainVerifier();
 
     // Seed test user 1 with billing account + virtual key
+    // walletAddress is auto-generated via generateTestWallet() to avoid cross-file collisions
     const seeded1 = await seedAuthenticatedUser(db, {
       id: randomUUID(),
-      walletAddress: `0x${"1".repeat(40)}`,
       name: "Test User 1",
     });
 
@@ -59,7 +59,6 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
     // Seed test user 2 (for ownership tests)
     const seeded2 = await seedAuthenticatedUser(db, {
       id: randomUUID(),
-      walletAddress: `0x${"2".repeat(40)}`,
       name: "Test User 2",
     });
 
@@ -75,9 +74,14 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   afterEach(async () => {
     // Cleanup cascades to billing/ledger/payment_attempts via FK
+    // Guard against undefined IDs when beforeEach fails partway through
     const { users } = await import("@/shared/db/schema.auth");
-    await db.delete(users).where(eq(users.id, testUserId));
-    await db.delete(users).where(eq(users.id, testUser2Id));
+    if (testUserId) {
+      await db.delete(users).where(eq(users.id, testUserId));
+    }
+    if (testUser2Id) {
+      await db.delete(users).where(eq(users.id, testUser2Id));
+    }
 
     // Reset fake adapter state
     resetTestOnChainVerifier();
