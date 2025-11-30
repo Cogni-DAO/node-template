@@ -20,6 +20,9 @@ export {
   chatMessages,
   container,
   grid,
+  heroButtons,
+  heroText,
+  heroVisual,
   section,
 } from "@/styles/ui";
 export { Reveal } from "./kit/animation/Reveal";
