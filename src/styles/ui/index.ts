@@ -53,6 +53,11 @@ export {
 
 // Overlay components
 export {
+  chatContainer,
+  chatDivider,
+  chatForm,
+  chatMessage,
+  chatMessages,
   dropdownContent,
   dropdownMenuCheck,
   dropdownMenuItem,
