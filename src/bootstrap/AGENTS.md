@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-16
-- **Status:** draft
+- **Last reviewed:** 2025-12-01
+- **Status:** stable
 
 ## Purpose
 
@@ -47,16 +47,28 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 
 ## Public Surface
 
-- **Exports:** Application bootstrap functions
-- **Routes (if any):** none
-- **CLI (if any):** none
-- **Env/Config keys:** none
-- **Files considered API:** none
+- **Exports:**
+  - `getContainer()` - Singleton DI container with logger
+  - `resetContainer()` - Reset singleton (tests only)
+  - `Container` interface - Ports + logger
+  - `resolveAiDeps()` - AI feature dependencies
+  - `wrapRouteHandlerWithLogging()` - Route logging wrapper (from `http/`)
+- **Routes:** none
+- **CLI:** none
+- **Env/Config keys:** none (uses `@/shared/env`)
+- **Files considered API:** `container.ts`, `http/index.ts`
 
 ## Responsibilities
 
-- This directory **does**: Environment validation, dependency injection wiring, environment-based adapter selection
-- This directory **does not**: System installation, platform configuration
+- This directory **does**:
+  - Dependency injection wiring with singleton container
+  - Environment-based adapter selection (APP_ENV=test → fakes, production → real)
+  - Logger initialization (one per process)
+  - Route logging wrapper with type-safe auth config (envelope-only)
+- This directory **does not**:
+  - System installation or platform configuration
+  - Handle request-scoped context (see `@/shared/observability`)
+  - Map domain errors to HTTP responses (routes handle locally)
 
 ## Usage
 

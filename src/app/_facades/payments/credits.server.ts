@@ -12,21 +12,25 @@
  * @public
  */
 
-import { createContainer } from "@/bootstrap/container";
+import { getContainer } from "@/bootstrap/container";
 import type { CreditsConfirmOutput } from "@/contracts/payments.credits.confirm.v1.contract";
 import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getCreditsSummary } from "@/features/payments/services/creditsSummary";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
+import type { RequestContext } from "@/shared/observability";
 
-export async function confirmCreditsPaymentFacade(params: {
-  sessionUser: SessionUser;
-  amountUsdCents: number;
-  clientPaymentId: string;
-  metadata?: Record<string, unknown> | undefined;
-}): Promise<CreditsConfirmOutput> {
-  const { accountService } = createContainer();
+export async function confirmCreditsPaymentFacade(
+  params: {
+    sessionUser: SessionUser;
+    amountUsdCents: number;
+    clientPaymentId: string;
+    metadata?: Record<string, unknown> | undefined;
+  },
+  _ctx: RequestContext
+): Promise<CreditsConfirmOutput> {
+  const { accountService } = getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -60,11 +64,14 @@ export async function confirmCreditsPaymentFacade(params: {
   };
 }
 
-export async function getCreditsSummaryFacade(params: {
-  sessionUser: SessionUser;
-  limit?: number | undefined;
-}): Promise<CreditsSummaryOutput> {
-  const { accountService } = createContainer();
+export async function getCreditsSummaryFacade(
+  params: {
+    sessionUser: SessionUser;
+    limit?: number | undefined;
+  },
+  _ctx: RequestContext
+): Promise<CreditsSummaryOutput> {
+  const { accountService } = getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>

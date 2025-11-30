@@ -12,18 +12,19 @@
  * @public
  */
 
-import { createMockAccountService } from "@tests/_fakes";
+import { createMockAccountService, makeTestCtx } from "@tests/_fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { confirmCreditsPaymentFacade } from "@/app/_facades/payments/credits.server";
-import { createContainer } from "@/bootstrap/container";
+import { getContainer } from "@/bootstrap/container";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { AccountService } from "@/ports";
 import type { SessionUser } from "@/shared/auth";
+import type { RequestContext } from "@/shared/observability";
 
 vi.mock("@/bootstrap/container", () => ({
-  createContainer: vi.fn(),
+  getContainer: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/mapping", () => ({
@@ -34,7 +35,7 @@ vi.mock("@/features/payments/services/creditsConfirm", () => ({
   confirmCreditsPayment: vi.fn(),
 }));
 
-const mockCreateContainer = vi.mocked(createContainer);
+const mockGetContainer = vi.mocked(getContainer);
 const mockConfirmCreditsPayment = vi.mocked(confirmCreditsPayment);
 const mockGetOrCreateBillingAccountForUser = vi.mocked(
   getOrCreateBillingAccountForUser
@@ -47,16 +48,20 @@ describe("app/_facades/payments/credits.server", () => {
   };
 
   let accountService: AccountService;
+  let testCtx: RequestContext;
 
   beforeEach(() => {
     vi.clearAllMocks();
     accountService = createMockAccountService();
 
-    mockCreateContainer.mockReturnValue({
+    testCtx = makeTestCtx();
+
+    mockGetContainer.mockReturnValue({
       accountService,
       // Unused in this facade, but required by Container type
+      log: {} as never,
       llmService: {} as never,
-      clock: {} as never,
+      clock: testCtx.clock as never,
       paymentAttemptRepository: {} as never,
       onChainVerifier: {} as never,
     });
@@ -77,14 +82,17 @@ describe("app/_facades/payments/credits.server", () => {
       creditsApplied: 1_000,
     });
 
-    const result = await confirmCreditsPaymentFacade({
-      sessionUser,
-      amountUsdCents: 100,
-      clientPaymentId: "payment-xyz",
-      metadata: { source: "test" },
-    });
+    const result = await confirmCreditsPaymentFacade(
+      {
+        sessionUser,
+        amountUsdCents: 100,
+        clientPaymentId: "payment-xyz",
+        metadata: { source: "test" },
+      },
+      testCtx
+    );
 
-    expect(mockCreateContainer).toHaveBeenCalledTimes(1);
+    expect(mockGetContainer).toHaveBeenCalledTimes(1);
     expect(mockGetOrCreateBillingAccountForUser).toHaveBeenCalledWith(
       accountService,
       {
@@ -113,11 +121,14 @@ describe("app/_facades/payments/credits.server", () => {
     );
 
     await expect(
-      confirmCreditsPaymentFacade({
-        sessionUser,
-        amountUsdCents: 100,
-        clientPaymentId: "payment-err",
-      })
+      confirmCreditsPaymentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 100,
+          clientPaymentId: "payment-err",
+        },
+        testCtx
+      )
     ).rejects.toThrow("AUTH_USER_NOT_FOUND");
   });
 });

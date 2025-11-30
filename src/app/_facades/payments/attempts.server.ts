@@ -14,7 +14,7 @@
 
 import { getAddress } from "viem";
 
-import { createContainer } from "@/bootstrap/container";
+import { getContainer } from "@/bootstrap/container";
 import type { PaymentIntentOutput } from "@/contracts/payments.intent.v1.contract";
 import type { PaymentStatusOutput } from "@/contracts/payments.status.v1.contract";
 import type { PaymentSubmitOutput } from "@/contracts/payments.submit.v1.contract";
@@ -26,20 +26,25 @@ import {
 } from "@/features/payments/services/paymentService";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
+import type { RequestContext } from "@/shared/observability";
 
 /**
  * Creates payment intent facade
  * Resolves billing account from session, delegates to feature service
  *
  * @param params - Session user and payment amount
+ * @param ctx - Request context for logging
  * @returns Payment intent with on-chain transfer parameters
  * @throws Error if user not provisioned or amount invalid
  */
-export async function createPaymentIntentFacade(params: {
-  sessionUser: SessionUser;
-  amountUsdCents: number;
-}): Promise<PaymentIntentOutput> {
-  const { accountService, paymentAttemptRepository, clock } = createContainer();
+export async function createPaymentIntentFacade(
+  params: {
+    sessionUser: SessionUser;
+    amountUsdCents: number;
+  },
+  _ctx: RequestContext
+): Promise<PaymentIntentOutput> {
+  const { accountService, paymentAttemptRepository, clock } = getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -88,16 +93,20 @@ export async function createPaymentIntentFacade(params: {
  * Resolves billing account from session, delegates to feature service
  *
  * @param params - Session user, attempt ID, and transaction hash
+ * @param ctx - Request context for logging
  * @returns Payment status after submission and verification attempt
  * @throws Error if attempt not found or not owned
  */
-export async function submitPaymentTxHashFacade(params: {
-  sessionUser: SessionUser;
-  attemptId: string;
-  txHash: string;
-}): Promise<PaymentSubmitOutput> {
+export async function submitPaymentTxHashFacade(
+  params: {
+    sessionUser: SessionUser;
+    attemptId: string;
+    txHash: string;
+  },
+  _ctx: RequestContext
+): Promise<PaymentSubmitOutput> {
   const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
-    createContainer();
+    getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -149,15 +158,19 @@ export async function submitPaymentTxHashFacade(params: {
  * Resolves billing account from session, delegates to feature service
  *
  * @param params - Session user and attempt ID
+ * @param ctx - Request context for logging
  * @returns Payment status with client-visible status mapping
  * @throws Error if attempt not found or not owned
  */
-export async function getPaymentStatusFacade(params: {
-  sessionUser: SessionUser;
-  attemptId: string;
-}): Promise<PaymentStatusOutput> {
+export async function getPaymentStatusFacade(
+  params: {
+    sessionUser: SessionUser;
+    attemptId: string;
+  },
+  _ctx: RequestContext
+): Promise<PaymentStatusOutput> {
   const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
-    createContainer();
+    getContainer();
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>

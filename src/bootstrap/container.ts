@@ -4,13 +4,16 @@
 /**
  * Module: `@bootstrap/container`
  * Purpose: Dependency injection container for application composition root with environment-based adapter selection.
- * Scope: Wire adapters to ports for runtime dependency injection; single source of truth for real vs fake adapter wiring. Does not handle singleton management or lifecycle.
- * Invariants: All ports wired; stateless containers; only adapter instantiation point.
- * Side-effects: none
- * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire FakeLlmAdapter in CI, DrizzleAccountService always used for accounts.
- * Links: Used by API routes and other entry points
+ * Scope: Wire adapters to ports for runtime dependency injection. Does not handle request-scoped lifecycle.
+ * Invariants: All ports wired; single container instance per process; only adapter instantiation point.
+ * Side-effects: IO (initializes logger and emits startup log on first access)
+ * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire FakeLlmAdapter in CI; always uses DrizzleAccountService.
+ * Notes: Use getContainer() to access singleton; see resetContainer() for test cleanup.
+ * Links: Used by API routes and other entry points; configure adapters here for DI.
  * @public
  */
+
+import type { Logger } from "pino";
 
 import {
   DrizzleAccountService,
@@ -29,8 +32,10 @@ import type {
   PaymentAttemptRepository,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
+import { makeLogger } from "@/shared/observability";
 
 export interface Container {
+  log: Logger;
   llmService: LlmService;
   accountService: AccountService;
   clock: Clock;
@@ -44,9 +49,42 @@ export type AiCompletionDeps = Pick<
   "llmService" | "accountService" | "clock"
 >;
 
-export function createContainer(): Container {
+// Module-level singleton
+let _container: Container | null = null;
+
+/**
+ * Get the singleton container instance.
+ * Lazily initializes on first access.
+ */
+export function getContainer(): Container {
+  if (!_container) {
+    _container = createContainer();
+  }
+  return _container;
+}
+
+/**
+ * Reset the singleton container.
+ * For tests only - allows fresh container between test runs.
+ */
+export function resetContainer(): void {
+  _container = null;
+}
+
+function createContainer(): Container {
   const env = serverEnv();
   const db = getDb();
+  const log = makeLogger({ service: "cogni-template" });
+
+  // Startup log - confirm config in Loki (no URLs/secrets)
+  log.info(
+    {
+      env: env.APP_ENV,
+      logLevel: env.PINO_LOG_LEVEL,
+      pretty: env.NODE_ENV === "development",
+    },
+    "container initialized"
+  );
 
   // Environment-based adapter wiring - single source of truth
   const llmService = env.isTestMode
@@ -64,6 +102,7 @@ export function createContainer(): Container {
   const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
 
   return {
+    log,
     llmService,
     accountService,
     clock: new SystemClock(),
@@ -77,7 +116,7 @@ export function createContainer(): Container {
  * Returns subset of Container needed for AI operations
  */
 export function resolveAiDeps(): AiCompletionDeps {
-  const container = createContainer();
+  const container = getContainer();
   return {
     llmService: container.llmService,
     accountService: container.accountService,

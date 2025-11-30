@@ -30,10 +30,11 @@ let localhostAgent: Agent;
 let dispatcher: Dispatcher;
 
 beforeAll(() => {
-  // Set test environment - minimal required for env validation
+  // Set test tooling environment
+  // Do NOT set APP_ENV here - let test suites control it for adapter wiring tests
   Object.assign(process.env, {
     NODE_ENV: "test",
-    APP_ENV: "test",
+    VITEST: "true", // Canonical test-runner signal - silences makeLogger() regardless of APP_ENV
     // Disable external service calls for unit tests
     DISABLE_TELEMETRY: "true",
     DISABLE_EXTERNAL_CALLS: "true",

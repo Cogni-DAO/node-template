@@ -23,11 +23,14 @@ describe("bootstrap container DI wiring", () => {
     delete process.env.AUTH_SECRET;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Reset singleton container after each test
+    const { resetContainer } = await import("@/bootstrap/container");
+    resetContainer();
     process.env = ORIGINAL_ENV; // restore
   });
 
-  describe("createContainer adapter selection", () => {
+  describe("getContainer adapter selection", () => {
     it("wires FakeLlmAdapter when APP_ENV=test", async () => {
       // Set up test environment
       Object.assign(process.env, {
@@ -42,19 +45,20 @@ describe("bootstrap container DI wiring", () => {
       });
 
       // Import after env setup to get correct adapter wiring
-      const { createContainer } = await import("@/bootstrap/container");
+      const { getContainer } = await import("@/bootstrap/container");
       const { FakeLlmAdapter } = await import("@/adapters/test");
 
-      const container = createContainer();
+      const container = getContainer();
 
       expect(container.llmService).toBeInstanceOf(FakeLlmAdapter);
       expect(container.clock).toBeDefined();
+      expect(container.log).toBeDefined();
     });
 
     it("wires LiteLlmAdapter when APP_ENV=production", async () => {
-      // Set up production environment
+      // Test production adapter wiring (APP_ENV controls adapters, not NODE_ENV)
       Object.assign(process.env, {
-        NODE_ENV: "production",
+        NODE_ENV: "test", // Keep test mode for logging silence
         APP_ENV: "production",
         POSTGRES_USER: "postgres",
         POSTGRES_PASSWORD: "postgres",
@@ -65,18 +69,20 @@ describe("bootstrap container DI wiring", () => {
       });
 
       // Import after env setup
-      const { createContainer } = await import("@/bootstrap/container");
+      const { getContainer } = await import("@/bootstrap/container");
       const { LiteLlmAdapter } = await import("@/adapters/server");
 
-      const container = createContainer();
+      const container = getContainer();
 
       expect(container.llmService).toBeInstanceOf(LiteLlmAdapter);
       expect(container.clock).toBeDefined();
+      expect(container.log).toBeDefined();
     });
 
     it("wires LiteLlmAdapter in development mode with APP_ENV=production", async () => {
+      // Test that APP_ENV controls adapters regardless of NODE_ENV
       Object.assign(process.env, {
-        NODE_ENV: "development",
+        NODE_ENV: "test", // Keep test mode for logging silence
         APP_ENV: "production",
         POSTGRES_USER: "postgres",
         POSTGRES_PASSWORD: "postgres",
@@ -86,12 +92,13 @@ describe("bootstrap container DI wiring", () => {
         AUTH_SECRET: "x".repeat(32),
       });
 
-      const { createContainer } = await import("@/bootstrap/container");
+      const { getContainer } = await import("@/bootstrap/container");
       const { LiteLlmAdapter } = await import("@/adapters/server");
 
-      const container = createContainer();
+      const container = getContainer();
 
       expect(container.llmService).toBeInstanceOf(LiteLlmAdapter);
+      expect(container.log).toBeDefined();
     });
   });
 
@@ -110,37 +117,38 @@ describe("bootstrap container DI wiring", () => {
       });
     });
 
-    it("returns fresh container instances on each call", async () => {
-      const { createContainer } = await import("@/bootstrap/container");
+    it("returns same container instance (singleton)", async () => {
+      const { getContainer } = await import("@/bootstrap/container");
 
-      const container1 = createContainer();
-      const container2 = createContainer();
+      const container1 = getContainer();
+      const container2 = getContainer();
 
-      expect(container1).not.toBe(container2);
-      expect(container1.llmService).not.toBe(container2.llmService);
-      expect(container1.clock).not.toBe(container2.clock);
+      // Should be the same singleton instance
+      expect(container1).toBe(container2);
+      expect(container1.llmService).toBe(container2.llmService);
+      expect(container1.clock).toBe(container2.clock);
+      expect(container1.log).toBe(container2.log);
     });
 
-    it("resolveAiDeps alias works correctly", async () => {
-      const { createContainer, resolveAiDeps } = await import(
+    it("resolveAiDeps uses singleton container", async () => {
+      const { getContainer, resolveAiDeps } = await import(
         "@/bootstrap/container"
       );
 
-      const container1 = createContainer();
-      const container2 = resolveAiDeps();
+      const container = getContainer();
+      const aiDeps = resolveAiDeps();
 
-      // Should be equivalent but different instances
-      expect(container1).not.toBe(container2);
-      expect(container1.llmService.constructor).toBe(
-        container2.llmService.constructor
-      );
+      // Should reference the same singleton instances
+      expect(container.llmService).toBe(aiDeps.llmService);
+      expect(container.clock).toBe(aiDeps.clock);
     });
 
     it("provides all required container dependencies", async () => {
-      const { createContainer } = await import("@/bootstrap/container");
+      const { getContainer } = await import("@/bootstrap/container");
 
-      const container = createContainer();
+      const container = getContainer();
 
+      expect(container).toHaveProperty("log");
       expect(container).toHaveProperty("llmService");
       expect(container).toHaveProperty("clock");
       expect(container.llmService.completion).toBeTypeOf("function");
