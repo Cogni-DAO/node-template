@@ -91,7 +91,6 @@ import { AppProviders } from "./providers/app-providers.client";
 - Equivalent role to /bootstrap (server runtime) and /mcp (MCP runtime)
 - Providers only configure client-side infrastructure, no domain logic
 - wagmi v2 API (compatible with RainbowKit 2.2.9)
-- AppProviders uses SafeWalletProvider wrapper to avoid SSR mismatch and flash of missing content
 - wagmi config is client-only to prevent indexedDB errors during SSR
 - wagmi-config-builder.ts extracted for testability: generic helper tested with simple types, production uses WagmiConnector
 - RainbowKit theme functions use design system tokens: light mode uses --muted for subtle button appearance, dark mode uses --accent for proper contrast
