@@ -327,7 +327,185 @@ count_over_time({app="cogni-template"}[5m])
 
 ---
 
-## 8. Known Issues & Future Work
+## 8. CI Telemetry
+
+**Architecture:** GitHub Actions jobs → log files → composite action → Grafana Cloud Loki (`env=ci`)
+
+**Purpose:** Ship CI job logs (success + failure) to Grafana Cloud for centralized observability across local, preview, production, AND CI environments.
+
+### Implementation
+
+**Composite Action:** `.github/actions/loki-push/action.yml`
+
+- Wraps `platform/ci/scripts/loki_push.sh` for clean interface
+- Best-effort push: never fails CI builds (`|| true`)
+- Hardcodes `env=ci` label (prevents accidental mislabeling)
+
+**Shell Script:** `platform/ci/scripts/loki_push.sh`
+
+- Parses logfmt labels (space-delimited `k=v k2=v2`)
+- Constructs Loki JSON payload with single stream
+- Uses curl with basic auth (`-u user:token`)
+- Truncates `sha8` label to 8 chars for cardinality control
+
+### Label Contract (Low-Cardinality)
+
+| Label      | Source                          | Cardinality | Notes                     |
+| ---------- | ------------------------------- | ----------- | ------------------------- |
+| `app`      | Static `cogni-template`         | 1           | Fixed                     |
+| `env`      | Static `ci`                     | 1           | Locked (R6)               |
+| `workflow` | `${{ github.workflow }}`        | ~10         | Workflow name             |
+| `job`      | `${{ github.job }}`             | ~20         | Job name                  |
+| `ref`      | `${{ github.ref_name }}`        | Low         | Branch name               |
+| `run_id`   | `${{ github.run_id }}`          | **High**    | Necessary for grouping    |
+| `attempt`  | `${{ github.run_attempt }}`     | 1-3         | Retry attempts            |
+| `sha8`     | `${{ github.sha }}` (truncated) | **High**    | 8-char commit SHA         |
+| `status`   | `${{ job.status }}`             | 3           | success/failure/cancelled |
+
+**⚠️ Cardinality Warning:**
+
+- `run_id` and `sha8` are high-cardinality labels (unbounded growth)
+- Acceptable for CI telemetry but **watch Grafana Cloud costs**
+- **Mitigation strategies:**
+  - Set retention limits for `env=ci` logs (e.g., 7-14 days)
+  - Consider sampling success logs in future (keep all failures)
+  - Monitor Loki label cardinality metrics
+
+### Queryable Labels (Exact)
+
+All CI logs have these labels for filtering:
+
+**Hardcoded (locked):**
+
+- `app="cogni-template"` - Application identifier (always present)
+- `env="ci"` - Environment locked to `ci` (prevents production mislabeling)
+- `job` - Job name from composite action input (e.g., `"stack-test"`)
+
+**From GitHub workflow context:**
+
+- `workflow` - Workflow name (e.g., `"CI"`)
+- `ref` - Branch/tag name (e.g., `"main"`, `"fix/observability"`)
+- `run_id` - Unique GitHub run ID (e.g., `"12345678901"`)
+- `attempt` - Retry attempt number (e.g., `"1"`, `"2"`)
+- `sha8` - First 8 chars of commit SHA (e.g., `"42038a1f"`)
+- `status` - Job outcome (e.g., `"success"`, `"failure"`, `"cancelled"`)
+
+**Example queries:**
+
+```logql
+# All CI logs
+{app="cogni-template", env="ci"}
+
+# Specific workflow
+{app="cogni-template", env="ci", workflow="CI"}
+
+# Specific job
+{app="cogni-template", env="ci", job="stack-test"}
+
+# Specific run (group all jobs from one run)
+{app="cogni-template", env="ci", run_id="12345678901"}
+
+# Specific branch
+{app="cogni-template", env="ci", ref="main"}
+
+# Specific commit
+{app="cogni-template", env="ci", sha8="42038a1f"}
+
+# All failures
+{app="cogni-template", env="ci", status="failure"}
+```
+
+### Workflow Integration
+
+**Current Coverage (All workflows):**
+
+- `ci.yaml` (`ci` + `stack-test` jobs) - lint, tests, Docker Compose failures
+- `sonar.yml` (`sonar` job) - SonarCloud analysis
+- `build-prod.yml` (`build-image` job) - production image build
+- `staging-preview.yml` (`build`, `deploy`, `e2e`, `promote` jobs) - staging pipeline
+- `deploy-production.yml` (`deploy-image` job) - production deployment
+
+**Pattern:**
+
+```yaml
+- name: Capture failure context
+  if: failure()
+  run: |
+    echo "=== Context ===" >> ${{ runner.temp }}/ci-job.log
+    # Capture relevant failure diagnostics
+
+- name: Upload failure context artifact
+  if: failure()
+  uses: actions/upload-artifact@v4
+  with:
+    name: ci-failure-context-${{ github.run_id }}-${{ github.run_attempt }}
+    path: ${{ runner.temp }}/ci-job.log
+
+- name: Push logs to Loki
+  if: always()
+  uses: ./.github/actions/loki-push
+  with:
+    loki_url: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+    loki_user: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
+    loki_token: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
+    log_file: ${{ runner.temp }}/ci-job.log
+    job_name: my-job
+    labels: workflow=${{ github.workflow }} job=${{ github.job }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ github.sha }}
+```
+
+### Querying CI Logs
+
+```logql
+# All CI failures
+{app="cogni-template", env="ci"} | json | level="error"
+
+# Specific workflow run
+{app="cogni-template", env="ci", run_id="12345678901"}
+
+# Stack test failures this week
+{app="cogni-template", env="ci", job="stack-test"} |= "failed"
+
+# Compare CI vs production errors
+{app="cogni-template", env=~"ci|production"} | json | level="error"
+```
+
+### Secrets Required
+
+Add to GitHub repository secrets (org or repo level):
+
+| Secret                       | Description                                                            |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| `GRAFANA_CLOUD_LOKI_URL`     | Loki push endpoint (e.g., `https://logs-prod-us-central1.grafana.net`) |
+| `GRAFANA_CLOUD_LOKI_USER`    | Numeric user ID                                                        |
+| `GRAFANA_CLOUD_LOKI_API_KEY` | API key with `logs:write` scope                                        |
+
+**Note:** These are the same secrets used for runtime log collection (preview/production).
+
+### Design Rationale
+
+**Why composite action + script?**
+
+- Composite: Stable interface, versioning, easy adoption across workflows
+- Script: Testable logic, not YAML-spaghetti, can run locally
+
+**Why best-effort (|| true)?**
+
+- CI telemetry should never fail a build
+- Missing observability < failing deployments
+
+**Why hardcode env=ci?**
+
+- Prevents accidental `env=production` from CI (R6)
+- Clean separation from runtime environments
+
+**Why artifact upload on failure?**
+
+- Loki has ingestion limits; artifacts preserve full fidelity (R3)
+- Artifacts for investigation, Loki for search/alerting
+
+---
+
+## 9. Known Issues & Future Work
 
 **Phase 2 Complete - Remaining V1 Work:**
 
@@ -350,3 +528,9 @@ count_over_time({app="cogni-template"}[5m])
 - [ ] Alerting rules (error rate spikes, payment failures)
 - [ ] Advanced filtering (drop health check logs, metrics endpoints)
 - [ ] Structured metadata extraction (high-cardinality fields)
+
+**CI Telemetry Hardening:**
+
+- [x] N1: Validate logfmt labels (token-based validation, reject quotes)
+- [ ] N2: Split large logs into multiple Loki entries (chunk >500KB)
+- [x] N3: Add jq dependency check (`command -v jq`)

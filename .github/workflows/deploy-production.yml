@@ -124,3 +124,12 @@ jobs:
           echo "- 🎯 **Main App:** \`${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- 📊 **Promtail Logging:** Container monitoring active" >> $GITHUB_STEP_SUMMARY
           echo "- 🔀 **Caddy Proxy:** SSL termination & routing" >> $GITHUB_STEP_SUMMARY
+
+      - name: CI Telemetry
+        if: always()
+        uses: ./.github/actions/loki-ci-telemetry
+        with:
+          loki_url: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+          loki_user: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
+          loki_token: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
+          job_status: ${{ job.status }}
