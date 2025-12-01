@@ -29,6 +29,12 @@ set -euo pipefail
 
 # Env vars required: LOKI_URL, LOKI_USER, LOKI_TOKEN, LOG_FILE, JOB_NAME, LABELS
 
+# N3: Check jq dependency (implicit on ubuntu-latest but not guaranteed)
+if ! command -v jq >/dev/null; then
+  echo "⚠️  Loki push skipped: jq not found"
+  exit 0
+fi
+
 # Validate required env vars
 if [[ -z "${LOKI_URL:-}" ]] || [[ -z "${LOKI_USER:-}" ]] || [[ -z "${LOKI_TOKEN:-}" ]]; then
   echo "⚠️  Loki push skipped: missing credentials (LOKI_URL, LOKI_USER, or LOKI_TOKEN)"
@@ -93,8 +99,17 @@ parse_logfmt_labels() {
   echo "$json"
 }
 
-# Construct labels with hardcoded app and env
-CUSTOM_LABELS=$(parse_logfmt_labels "${LABELS:-}")
+# N1: Validate LABELS format (Phase 1: strict no-spaces-in-values)
+# Reject if any value contains whitespace or quotes; use locked labels only on invalid input
+CUSTOM_LABELS="{}"
+if [[ -n "${LABELS:-}" ]]; then
+  # Check for problematic characters in values (spaces, quotes within k=v pairs)
+  if echo "${LABELS}" | grep -qE '=[^ ]*[[:space:]]|="|\x27'; then
+    echo "⚠️  LABELS contains spaces/quotes in values; using locked labels only"
+  else
+    CUSTOM_LABELS=$(parse_logfmt_labels "${LABELS}")
+  fi
+fi
 
 # Merge with hardcoded labels (app, env, job)
 # Locked labels: app, env, job - explicitly deleted from custom to prevent override

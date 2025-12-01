@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+name: CI Telemetry to Loki
+description: |
+  Capture CI job telemetry and push to Grafana Cloud Loki.
+  - Always: writes compact summary (workflow/job/ref/sha/outcome)
+  - On failure: appends docker/compose context (logs, ps)
+  - Always: pushes to Loki with env=ci label
+
+inputs:
+  loki_url:
+    description: "Grafana Cloud Loki push URL"
+    required: true
+  loki_user:
+    description: "Loki basic auth username (numeric user ID)"
+    required: true
+  loki_token:
+    description: "Loki basic auth API key"
+    required: true
+  job_status:
+    description: "Job status from caller (pass ${{ job.status }})"
+    required: true
+  compose_file:
+    description: "Path to docker-compose file for failure context (optional)"
+    required: false
+  compose_services:
+    description: "Space-separated services to capture logs from"
+    required: false
+    default: "app litellm caddy postgres alloy"
+  tail_lines:
+    description: "Number of log lines to capture per service on failure"
+    required: false
+    default: "200"
+
+runs:
+  using: composite
+  steps:
+    - name: Capture run summary
+      if: always()
+      shell: bash
+      run: |
+        # Lightweight summary for all runs (success + failure)
+        LOG_FILE="${{ runner.temp }}/ci-job.log"
+        cat >> "$LOG_FILE" << SUMMARY_EOF
+        === CI Run Summary ===
+        workflow: ${{ github.workflow }}
+        job: ${{ github.job }}
+        run_id: ${{ github.run_id }}
+        attempt: ${{ github.run_attempt }}
+        ref: ${{ github.ref_name }}
+        sha: ${{ github.sha }}
+        actor: ${{ github.actor }}
+        outcome: ${{ inputs.job_status }}
+        timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+        SUMMARY_EOF
+
+    - name: Capture failure context
+      if: inputs.job_status == 'failure' && inputs.compose_file != ''
+      shell: bash
+      env:
+        COMPOSE_FILE: ${{ inputs.compose_file }}
+        COMPOSE_SERVICES: ${{ inputs.compose_services }}
+        TAIL_LINES: ${{ inputs.tail_lines }}
+      run: |
+        LOG_FILE="${{ runner.temp }}/ci-job.log"
+
+        echo "" >> "$LOG_FILE"
+        echo "=== Failure Context ===" >> "$LOG_FILE"
+        echo "captured_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG_FILE"
+
+        # Docker system state
+        echo "" >> "$LOG_FILE"
+        echo "=== docker ps ===" >> "$LOG_FILE"
+        docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" >> "$LOG_FILE" 2>&1 || echo "docker ps failed" >> "$LOG_FILE"
+
+        # Compose state (if project exists)
+        if docker compose -f "$COMPOSE_FILE" ps --quiet 2>/dev/null; then
+          echo "" >> "$LOG_FILE"
+          echo "=== docker compose ps ===" >> "$LOG_FILE"
+          docker compose -f "$COMPOSE_FILE" ps >> "$LOG_FILE" 2>&1 || true
+
+          # Capture logs for each service
+          for svc in $COMPOSE_SERVICES; do
+            echo "" >> "$LOG_FILE"
+            echo "=== logs: $svc (tail $TAIL_LINES) ===" >> "$LOG_FILE"
+            docker compose -f "$COMPOSE_FILE" logs --tail="$TAIL_LINES" "$svc" >> "$LOG_FILE" 2>&1 || echo "No logs for $svc" >> "$LOG_FILE"
+          done
+        else
+          echo "No compose project found for $COMPOSE_FILE" >> "$LOG_FILE"
+        fi
+
+    - name: Push to Loki
+      if: always()
+      uses: ./.github/actions/loki-push
+      with:
+        loki_url: ${{ inputs.loki_url }}
+        loki_user: ${{ inputs.loki_user }}
+        loki_token: ${{ inputs.loki_token }}
+        log_file: ${{ runner.temp }}/ci-job.log
+        job_name: ${{ github.job }}
+        labels: workflow=${{ github.workflow }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ github.sha }}
