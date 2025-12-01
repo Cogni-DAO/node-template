@@ -231,7 +231,6 @@ pnpm test:visual      # Playwright visual regression
 ### Navigation
 
 - [`NavigationLink`](../src/components/kit/navigation/NavigationLink.tsx) — Nav link with active state
-- [`SkipLink`](../src/components/kit/navigation/SkipLink.tsx) — Accessibility skip link
 
 ### Sections
 

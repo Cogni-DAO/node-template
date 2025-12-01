@@ -68,7 +68,6 @@ export {
   iconButton,
   navLink,
   reveal,
-  skipLink,
   terminalBody,
   terminalDot,
   terminalFrame,

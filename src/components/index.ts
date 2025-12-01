@@ -51,7 +51,6 @@ export { Header } from "./kit/layout/Header";
 export { PageContainer } from "./kit/layout/PageContainer";
 export { SectionCard } from "./kit/layout/SectionCard";
 export { NavigationLink } from "./kit/navigation/NavigationLink";
-export { SkipLink } from "./kit/navigation/SkipLink";
 export { UsdcPaymentFlow } from "./kit/payments/UsdcPaymentFlow";
 export { Hero } from "./kit/sections";
 export {

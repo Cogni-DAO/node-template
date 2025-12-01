@@ -243,13 +243,6 @@ export const dropdownMenuCheck = cva("", {
 });
 
 /**
- * Skip link styling for accessibility navigation
- */
-export const skipLink = cva(
-  "sr-only transition-all duration-[var(--duration-fast)] focus:not-sr-only focus:absolute focus:top-[var(--position-sm)] focus:left-[var(--position-sm)] focus:z-[var(--z-overlay)] focus:rounded-md focus:bg-primary focus:px-[var(--position-sm)] focus:py-[var(--spacing-sm)] focus:text-primary-foreground focus:shadow-[var(--shadow-lg)]"
-);
-
-/**
  * Chat container with flex column layout
  */
 export const chatContainer = cva("flex h-full flex-col");
