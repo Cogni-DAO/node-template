@@ -19,7 +19,7 @@ inputs:
     description: "Loki basic auth API key"
     required: true
   job_status:
-    description: "Job status from caller (pass ${{ job.status }})"
+    description: "Job status from caller (pass job.status from workflow)"
     required: true
   compose_file:
     description: "Path to docker-compose file for failure context (optional)"
