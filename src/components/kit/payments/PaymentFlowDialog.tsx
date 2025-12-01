@@ -119,16 +119,22 @@ export function PaymentFlowDialog({
           canCancel,
         });
 
-        // In TERMINAL: NEVER auto-close via Dialog, only via button clicks
-        if (isTerminal) {
-          console.log("[PaymentFlowDialog] Ignoring close (terminal state)");
-          return; // Ignore all Dialog-initiated close attempts
-        }
+        if (!isOpen) {
+          // In TERMINAL: allow close (X button) but also reset
+          if (isTerminal) {
+            console.log(
+              "[PaymentFlowDialog] Terminal close - resetting and closing"
+            );
+            onReset();
+            onClose();
+            return;
+          }
 
-        // In other states: allow close if canClose or canCancel
-        if (!isOpen && (canClose || canCancel)) {
-          console.log("[PaymentFlowDialog] Allowing close");
-          onClose();
+          // In other states: allow close if canClose or canCancel
+          if (canClose || canCancel) {
+            console.log("[PaymentFlowDialog] Allowing close");
+            onClose();
+          }
         }
       }}
     >
