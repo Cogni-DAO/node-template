@@ -114,6 +114,37 @@ jobs:
       - name: Run stack tests
         run: pnpm test:stack:docker
 
+      - name: Capture failure context
+        if: failure()
+        run: |
+          echo "=== Docker Compose Status ===" >> ${{ runner.temp }}/ci-job.log
+          # Check if compose project exists before logging (avoid noisy failures)
+          if docker compose -f platform/infra/services/runtime/docker-compose.dev.yml ps --quiet 2>/dev/null; then
+            docker compose -f platform/infra/services/runtime/docker-compose.dev.yml logs --tail=200 >> ${{ runner.temp }}/ci-job.log 2>&1
+          else
+            echo "No compose project found" >> ${{ runner.temp }}/ci-job.log
+          fi
+
+      - name: Upload failure context artifact
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-failure-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-job.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Push logs to Loki
+        if: always()
+        uses: ./.github/actions/loki-push
+        with:
+          loki_url: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+          loki_user: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
+          loki_token: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
+          log_file: ${{ runner.temp }}/ci-job.log
+          job_name: stack-test
+          labels: workflow=${{ github.workflow }} job=${{ github.job }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ github.sha }}
+
       - name: Teardown stack
         if: always()
         run: |

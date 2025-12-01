@@ -19,6 +19,26 @@ Ask the user which environment to investigate, or infer from context:
 
 **Important:** `dev:stack` does NOT collect app logs, only other services (app runs outside Docker). Only `docker:stack` collects all logs locally.
 
+### CI Logs (GitHub Actions)
+
+For CI failures, use `env="ci"`:
+
+```logql
+# All CI logs
+{app="cogni-template", env="ci"}
+
+# Specific workflow (e.g., "CI", "Staging Preview")
+{app="cogni-template", env="ci", workflow="CI"}
+
+# Specific job (e.g., "stack-test", "build-image")
+{app="cogni-template", env="ci", job="stack-test"}
+
+# Specific run (find run_id in GitHub Actions URL)
+{app="cogni-template", env="ci", run_id="12345678901"}
+```
+
+**Available labels:** `workflow`, `job`, `ref`, `run_id`, `attempt`, `sha8`
+
 ## 2. Discover Available Data
 
 1. **List datasources** to get UID:
@@ -43,9 +63,18 @@ Ask the user which environment to investigate, or infer from context:
 **Our Configured Labels (indexed, low-cardinality):**
 
 - `app` - Always "cogni-template"
-- `env` - Environment: local | preview | production
-- `service` - Service name: app | litellm | caddy | deployment
-- `stream` - stdout | stderr
+- `env` - Environment: local | preview | production | ci
+- `service` - Service name: app | litellm | caddy | deployment (runtime only, not CI)
+- `stream` - stdout | stderr (runtime only, not CI)
+
+**CI-specific labels** (when `env="ci"`):
+
+- `workflow` - GitHub workflow name
+- `job` - Job name
+- `ref` - Branch/tag name
+- `run_id` - GitHub run ID
+- `attempt` - Retry attempt
+- `sha8` - 8-char commit SHA
 
 **JSON Fields (queryable via `| json`):**
 

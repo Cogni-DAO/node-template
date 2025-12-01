@@ -1,6 +1,11 @@
+# .gemini/commands/logs.toml
+description = "Collect and analyze logs for the problem at hand"
+prompt = """
 It's time to collect and analyze logs for the problem at hand.
 
 Use current context to infer the environment, or get user input: #$PROBLEM
+
+NOTE: you do not currently have access to the MCP. please directly use the local url
 
 Follow this systematic approach:
 
@@ -68,7 +73,6 @@ For CI failures, use `env="ci"`:
 - `stream` - stdout | stderr (runtime only, not CI)
 
 **CI-specific labels** (when `env="ci"`):
-
 - `workflow` - GitHub workflow name
 - `job` - Job name
 - `ref` - Branch/tag name
@@ -127,3 +131,4 @@ After collecting logs, provide:
 
 - Local: http://localhost:3001
 - Cloud: https://<your-org>.grafana.net
+"""

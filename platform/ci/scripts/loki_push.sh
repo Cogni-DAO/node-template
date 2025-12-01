@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+##
+# Script: platform/ci/scripts/loki_push.sh
+# Purpose: Push CI job logs to Grafana Cloud Loki with env=ci label for centralized observability.
+# Scope: Best-effort telemetry push; never fails CI builds (exits 0 on all paths).
+# Inputs:
+#   LOKI_URL - Loki push endpoint (e.g., https://logs-prod-us-central1.grafana.net)
+#   LOKI_USER - Basic auth username (numeric Grafana Cloud user ID)
+#   LOKI_TOKEN - Basic auth API key (secret)
+#   LOG_FILE - Path to log file to push
+#   JOB_NAME - Job name for Loki stream label
+#   LABELS - Space-delimited logfmt labels (e.g., "workflow=CI job=test ref=main")
+# Outputs: Logs pushed to Loki with hardcoded env=ci label; HTTP status to stdout.
+# Invariants:
+#   - env=ci label locked (prevents accidental production labeling from CI)
+#   - sha8 label truncated to 8 chars for cardinality control
+#   - URL normalized (trailing slash stripped)
+#   - Temp files unique per run (mktemp with trap cleanup)
+#   - Never prints credentials
+# Side-effects: HTTP POST to LOKI_URL; creates/deletes temp file; reads LOG_FILE.
+# Exit: Always 0 (best-effort; skips push on missing inputs/files).
+# Notes: Called by .github/actions/loki-push composite action. Response body capped at 2000 chars.
+##
+
+set -euo pipefail
+
+# Env vars required: LOKI_URL, LOKI_USER, LOKI_TOKEN, LOG_FILE, JOB_NAME, LABELS
+
+# Validate required env vars
+if [[ -z "${LOKI_URL:-}" ]] || [[ -z "${LOKI_USER:-}" ]] || [[ -z "${LOKI_TOKEN:-}" ]]; then
+  echo "⚠️  Loki push skipped: missing credentials (LOKI_URL, LOKI_USER, or LOKI_TOKEN)"
+  exit 0
+fi
+
+# Normalize URL (strip trailing slash to prevent double-slash)
+LOKI_URL="${LOKI_URL%/}"
+
+if [[ -z "${LOG_FILE:-}" ]] || [[ ! -s "${LOG_FILE}" ]]; then
+  echo "⚠️  Loki push skipped: LOG_FILE not found or empty"
+  exit 0
+fi
+
+if [[ -z "${JOB_NAME:-}" ]]; then
+  echo "⚠️  Loki push skipped: JOB_NAME not set"
+  exit 0
+fi
+
+# Create temporary file for curl response (prevents parallel run collisions)
+RESPONSE_FILE=$(mktemp -t loki-push.XXXXXX)
+trap "rm -f '$RESPONSE_FILE'" EXIT
+
+# Read log file (escape for JSON)
+LOG_CONTENT=$(cat "${LOG_FILE}" | jq -Rs .)
+
+# Parse logfmt labels into JSON map
+# Input: "workflow=CI job=test ref=main sha8=abc123..."
+# Output: {"workflow":"CI","job":"test","ref":"main","sha8":"abc123"}
+parse_logfmt_labels() {
+  local labels="$1"
+  local json="{"
+  local first=true
+
+  # Split on spaces, parse k=v pairs
+  while IFS= read -r pair; do
+    if [[ "$pair" =~ ^([^=]+)=(.+)$ ]]; then
+      local key="${BASH_REMATCH[1]}"
+      local value="${BASH_REMATCH[2]}"
+
+      # Sanitize key (Loki requires [a-zA-Z0-9_])
+      key=$(echo "$key" | tr -c '[:alnum:]_' '_')
+
+      # Truncate sha8 to 8 chars (label cardinality control)
+      if [[ "$key" == "sha8" ]] && [[ ${#value} -gt 8 ]]; then
+        value="${value:0:8}"
+      fi
+
+      if [[ "$first" = true ]]; then
+        first=false
+      else
+        json+=","
+      fi
+
+      # Escape value for JSON
+      value=$(echo "$value" | jq -Rs .)
+      json+="\"$key\":$value"
+    fi
+  done <<< "$(echo "$labels" | tr ' ' '\n')"
+
+  json+="}"
+  echo "$json"
+}
+
+# Construct labels with hardcoded app and env
+CUSTOM_LABELS=$(parse_logfmt_labels "${LABELS:-}")
+
+# Merge with hardcoded labels (app, env, job)
+# Locked labels: app, env, job - explicitly deleted from custom to prevent override
+# env=ci is locked to prevent accidental production labeling from CI
+STREAM_LABELS=$(jq -n \
+  --argjson custom "$CUSTOM_LABELS" \
+  --arg app "cogni-template" \
+  --arg env "ci" \
+  --arg job "$JOB_NAME" \
+  '($custom | del(.env, .app, .job)) + {app: $app, env: $env, job: $job}')
+
+# Get timestamp in nanoseconds
+TIMESTAMP_NS=$(date +%s%N)
+
+# Construct Loki JSON payload
+PAYLOAD=$(jq -n \
+  --argjson labels "$STREAM_LABELS" \
+  --arg timestamp "$TIMESTAMP_NS" \
+  --argjson content "$LOG_CONTENT" \
+  '{
+    streams: [
+      {
+        stream: $labels,
+        values: [
+          [$timestamp, $content]
+        ]
+      }
+    ]
+  }')
+
+# Push to Loki with basic auth
+HTTP_CODE=$(curl -sS -w "%{http_code}" -o "$RESPONSE_FILE" \
+  -X POST \
+  -u "${LOKI_USER}:${LOKI_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data-binary "$PAYLOAD" \
+  "${LOKI_URL}/loki/api/v1/push" || echo "000")
+
+if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
+  echo "✅ Pushed logs to Loki (HTTP $HTTP_CODE)"
+else
+  echo "⚠️  Loki push failed (HTTP $HTTP_CODE)"
+  # Print response body without credentials (capped to 2000 chars)
+  head -c 2000 "$RESPONSE_FILE" 2>/dev/null || true
+fi
+
+# Always exit 0 (best-effort) - trap handles cleanup
+exit 0
