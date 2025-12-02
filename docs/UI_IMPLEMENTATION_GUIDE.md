@@ -249,8 +249,6 @@ pnpm test:visual      # Playwright visual regression
 
 ### Auth
 
-- [`WalletConnectButton`](../src/components/kit/auth/SafeWalletConnectButton.tsx) — Web3 wallet connection
-
 ---
 
 ## Validation Checklist

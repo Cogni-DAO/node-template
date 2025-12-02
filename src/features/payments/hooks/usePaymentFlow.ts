@@ -5,9 +5,9 @@
  * Module: `@features/payments/hooks/usePaymentFlow`
  * Purpose: Orchestrates USDC payment flow state machine with wagmi + backend.
  * Scope: Manages intent → signature → confirmation → submit → poll cycle. Does not persist state across reloads.
- * Invariants: Single payment at a time; no localStorage; chain params from intent only; creditsAdded computed using CREDITS_PER_CENT constant.
+ * Invariants: Single payment at a time; attemptId guard cancels stale async on reset; creditsAdded uses CREDITS_PER_CENT.
  * Side-effects: IO (paymentsClient, wagmi); React state (useReducer, polling).
- * Notes: Implements full PENDING substates for Phase 3 stability.
+ * Notes: Implements attemptId pattern to prevent stale async continuations from corrupting state after reset/cancel.
  * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
  * @public
  */
@@ -369,6 +369,10 @@ export function usePaymentFlow(
   const successCalledRef = useRef(false);
   const errorCalledRef = useRef(false);
 
+  // Attempt ID to guard against stale async operations after reset/cancel
+  // Incremented on startPayment and reset - stale async checks this before dispatching
+  const attemptIdRef = useRef(0);
+
   // Handle wallet write errors
   useEffect(() => {
     if (writeError && internalState.phase === "AWAITING_SIGNATURE") {
@@ -420,6 +424,9 @@ export function usePaymentFlow(
       "chainId" in internalState &&
       "txHash" in internalState
     ) {
+      // Capture attemptId at effect start to detect stale async
+      const effectAttemptId = attemptIdRef.current;
+
       dispatch({
         type: "TX_CONFIRMED",
         attemptId: internalState.attemptId,
@@ -435,6 +442,11 @@ export function usePaymentFlow(
           internalState.attemptId,
           { txHash: internalState.txHash }
         );
+
+        // Guard: if attempt was reset during await, ignore result
+        if (attemptIdRef.current !== effectAttemptId) {
+          return;
+        }
 
         if (!result.ok) {
           dispatch({ type: "SUBMIT_FAILED", error: result.error });
@@ -481,10 +493,23 @@ export function usePaymentFlow(
       return;
     }
 
+    // Capture attemptId at effect start to detect stale async
+    const effectAttemptId = attemptIdRef.current;
     const { txHash, chainId } = internalState;
 
     const pollInterval = setInterval(async () => {
+      // Guard: if attempt was reset, stop polling
+      if (attemptIdRef.current !== effectAttemptId) {
+        clearInterval(pollInterval);
+        return;
+      }
+
       const result = await paymentsClient.getStatus(internalState.attemptId);
+
+      // Guard: check again after await
+      if (attemptIdRef.current !== effectAttemptId) {
+        return;
+      }
 
       if (!result.ok) {
         dispatch({
@@ -548,9 +573,18 @@ export function usePaymentFlow(
       return;
     }
 
+    // Start new attempt - increment to invalidate any prior stale operations
+    attemptIdRef.current += 1;
+    const currentAttemptId = attemptIdRef.current;
+
     dispatch({ type: "START_CREATE_INTENT" });
 
     const result = await paymentsClient.createIntent({ amountUsdCents });
+
+    // Guard: if attempt was reset/restarted during await, ignore result
+    if (attemptIdRef.current !== currentAttemptId) {
+      return;
+    }
 
     if (!result.ok) {
       dispatch({ type: "INTENT_FAILED", error: result.error });
@@ -579,6 +613,8 @@ export function usePaymentFlow(
   }, [internalState.phase, amountUsdCents, writeContract]);
 
   const reset = useCallback(() => {
+    // Invalidate any in-flight async operations from prior attempt
+    attemptIdRef.current += 1;
     successCalledRef.current = false;
     errorCalledRef.current = false;
     dispatch({ type: "RESET" });

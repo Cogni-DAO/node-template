@@ -83,10 +83,10 @@ const flow = usePaymentFlow({ amountUsdCents: 1000, onSuccess: () => {} });
 
 - All components are client-side ("use client")
 - State driven entirely by `PaymentFlowState` prop from `usePaymentFlow` hook
-- Dialog blocks all auto-close attempts in TERMINAL (only explicit button clicks)
+- Dialog dismissible in all active states; parent decides cancel (reset) vs close behavior
 - Never renders raw viem/wagmi errors (uses formatPaymentError utility)
 - Money formatting via shared/utils/money (no float math)
-- Cancel vs Close button semantics: Cancel (pre-wallet), Close (wallet shown or on-chain)
+- Close when txHash===null triggers reset (cancel); close when txHash!==null preserves state
 
 ## Dependencies
 
@@ -101,6 +101,6 @@ const flow = usePaymentFlow({ amountUsdCents: 1000, onSuccess: () => {} });
 
 ## Notes
 
-- Dialog controlled state prevents unmount during SUCCESS/ERROR
-- Amount input disabled during payment (phase !== READY)
+- Transition-based auto-open prevents flash loops when user closes during on-chain
+- Amount input disabled when txHash!==null OR result!==null (on-chain or terminal)
 - PaymentStatusChip allows users to close dialog but monitor on-chain payments
