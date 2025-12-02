@@ -39,7 +39,6 @@ export const colorKeys = [
   "syntax-delimiter",
   "syntax-string",
   "syntax-keyword",
-  "accent-blue",
 ] as const;
 
 // Radius token keys (semantic keys for CVA props - map to CSS vars)

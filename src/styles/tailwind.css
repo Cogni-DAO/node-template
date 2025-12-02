@@ -34,7 +34,6 @@
   --color-syntax-delimiter: hsl(var(--syntax-delimiter));
   --color-syntax-string: hsl(var(--syntax-string));
   --color-syntax-keyword: hsl(var(--syntax-keyword));
-  --color-accent-blue: hsl(var(--accent-blue));
 
   /* Font families */
   --font-sans: var(--font-sans);
@@ -118,8 +117,10 @@
     --syntax-string: 27 87% 67%; /* orange/peach - strings & variables */
     --syntax-keyword: 10 50% 50%; /* red/brown - keywords */
 
-    /* UI accent colors */
-    --accent-blue: 217 91% 60%; /* brand accent blue */
+    /* Accent gradient stops (aligned with brand hue 217) */
+    --accent-from: 217 85% 50%;
+    --accent-to: 217 100% 70%;
+    --accent-glow: 217 95% 60%;
 
     /* Status colors */
     --color-danger: 0 84.2% 60.2%;
@@ -158,8 +159,10 @@
     --syntax-string: 20 90% 80%; /* peach/orange - strings & variables */
     --syntax-keyword: 220 100% 65%; /* blue - keywords */
 
-    /* UI accent colors */
-    --accent-blue: 217 71% 40%; /* brand accent blue */
+    /* Accent gradient stops (aligned with brand hue 217, darker for dark mode) */
+    --accent-from: 217 80% 45%;
+    --accent-to: 217 100% 60%;
+    --accent-glow: 217 90% 52%;
   }
 
   /* Hero animation tokens (isolated, code.ts only) */
@@ -192,45 +195,16 @@
     height: 100%;
   }
 
-  /* Rainbow glowing border effect for Cards */
-  .cogni-neon {
-    position: relative;
-    isolation: isolate;
-    border-radius: 1.25rem;
-  }
-
-  .cogni-neon::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    padding: 1px;
-    border-radius: inherit;
-    background: linear-gradient(
-      90deg,
-      hsl(var(--primary) / 0.5),
-      hsl(var(--accent) / 0.5),
-      hsl(210 100% 60% / 0.5),
-      hsl(var(--primary) / 0.5)
+  /* Accent gradient text utility - uses same tokens as button variant */
+  .text-gradient-accent {
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--accent-from)),
+      hsl(var(--accent-to))
     );
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    filter: blur(0.2px);
-    opacity: 0.55;
-    pointer-events: none;
-  }
-
-  .cogni-neon::after {
-    content: "";
-    position: absolute;
-    inset: -6px;
-    border-radius: inherit;
-    background: inherit;
-    filter: blur(18px);
-    opacity: 0.12;
-    z-index: -1;
-    pointer-events: none;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px hsl(var(--accent-glow) / 0.15);
   }
 }

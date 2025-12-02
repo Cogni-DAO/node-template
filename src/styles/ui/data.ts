@@ -129,7 +129,7 @@ const iconBoxSizeVariants = {
 
 const iconBoxColorVariants = {
   orange: "bg-warning",
-  blue: "bg-accent-blue",
+  blue: "bg-primary",
   green: "bg-success",
   red: "bg-danger",
 } as const;
