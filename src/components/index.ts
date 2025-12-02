@@ -26,7 +26,7 @@ export {
   section,
 } from "@/styles/ui";
 export { Reveal } from "./kit/animation/Reveal";
-export { SafeWalletConnectButton as WalletConnectButton } from "./kit/auth/SafeWalletConnectButton";
+export { WalletConnectButton } from "./kit/auth/WalletConnectButton";
 export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";
 export { Badge } from "./kit/data-display/Badge";
 export { GithubButton } from "./kit/data-display/GithubButton";

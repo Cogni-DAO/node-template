@@ -146,21 +146,20 @@ Solution requires:
 
 ## Files Modified (All Phases)
 
-| File                                                | Action                                                              |
-| --------------------------------------------------- | ------------------------------------------------------------------- |
-| tailwind.config.ts                                  | Add spacing/width/maxWidth/zIndex/durations to theme.extend         |
-| src/styles/tailwind.css                             | Delete @theme inline, add @config, keep hero vars + semantic colors |
-| src/styles/ui/\*.ts                                 | Replace 120+ var() with Tailwind classes (6 files)                  |
-| src/features/home/components/KpiBadge.tsx           | Migrate from deleted CSS vars                                       |
-| src/components/kit/auth/WalletConnectButton.tsx     | Add compact variant                                                 |
-| src/components/kit/auth/SafeWalletConnectButton.tsx | Forward variant prop                                                |
-| src/components/kit/layout/Header.tsx                | Mobile-first rewrite                                                |
-| src/components/kit/navigation/MobileNav.tsx         | NEW - Sheet menu                                                    |
-| src/components/kit/theme/SheetThemeToggle.tsx       | NEW - Inline toggle                                                 |
-| src/components/vendor/shadcn/sheet.tsx              | NEW via shadcn                                                      |
-| src/components/vendor/shadcn/toggle.tsx             | NEW via shadcn                                                      |
-| src/components/vendor/shadcn/toggle-group.tsx       | NEW via shadcn                                                      |
-| docs/HANDOFF_WALLET_BUTTON_STABILITY.md             | NEW - Technical handoff                                             |
+| File                                            | Action                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| tailwind.config.ts                              | Add spacing/width/maxWidth/zIndex/durations to theme.extend         |
+| src/styles/tailwind.css                         | Delete @theme inline, add @config, keep hero vars + semantic colors |
+| src/styles/ui/\*.ts                             | Replace 120+ var() with Tailwind classes (6 files)                  |
+| src/features/home/components/KpiBadge.tsx       | Migrate from deleted CSS vars                                       |
+| src/components/kit/auth/WalletConnectButton.tsx | Add compact variant                                                 |
+| src/components/kit/layout/Header.tsx            | Mobile-first rewrite                                                |
+| src/components/kit/navigation/MobileNav.tsx     | NEW - Sheet menu                                                    |
+| src/components/kit/theme/SheetThemeToggle.tsx   | NEW - Inline toggle                                                 |
+| src/components/vendor/shadcn/sheet.tsx          | NEW via shadcn                                                      |
+| src/components/vendor/shadcn/toggle.tsx         | NEW via shadcn                                                      |
+| src/components/vendor/shadcn/toggle-group.tsx   | NEW via shadcn                                                      |
+| docs/HANDOFF_WALLET_BUTTON_STABILITY.md         | NEW - Technical handoff                                             |
 
 ---
 

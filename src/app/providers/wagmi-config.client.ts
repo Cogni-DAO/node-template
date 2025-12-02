@@ -5,9 +5,10 @@
  * Module: `@app/providers/wagmi-config.client`
  * Purpose: Canonical Wagmi + RainbowKit configuration (Client Only).
  * Scope: Shared web3 configuration used by the WalletProvider. Does not export server-safe config.
- * Invariants: Uses getDefaultConfig for SSR safety and best practices.
+ * Invariants: ssr:false (client-only mode); skeleton overlay in WalletConnectButton gates hydration.
  * Side-effects: none
- * Links: https://rainbowkit.com/docs/installation
+ * Notes: TODO: wagmi cookie SSR (cookieStorage + initialState) to eliminate disconnected phase. See wagmi.sh/react/guides/ssr
+ * Links: https://rainbowkit.com/docs/installation, https://wagmi.sh/react/guides/ssr
  * @public
  */
 
@@ -24,6 +25,6 @@ export const config = getDefaultConfig({
   appName: "Cogni Template",
   projectId: env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "YOUR_PROJECT_ID",
   chains: [CHAIN],
-  // If your dApp uses server side rendering (SSR)
-  ssr: true,
+  // Client-only mode: wagmi hydration gated by skeleton overlay in WalletConnectButton
+  ssr: false,
 });

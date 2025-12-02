@@ -7,8 +7,8 @@
  * Scope: Provides site chrome with logo, nav, wallet, theme toggle, and mobile menu. Does not handle routing or analytics.
  * Invariants: No horizontal overflow; min-w-0/truncate/shrink-0 guards; GitHub hidden <lg; theme hidden <md.
  * Side-effects: none
- * Notes: Standard Tailwind classes (not CVA); mobile spacing tight (px-2, gap-1); MobileNav has GitHub + theme.
- * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx
+ * Notes: Desktop wallet in [data-wallet-slot="desktop"] for CSS (see tailwind.css). Mobile: px-2, gap-1; MobileNav has GitHub + theme.
+ * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx, src/styles/tailwind.css
  * @public
  */
 
@@ -24,7 +24,7 @@ import {
   ModeToggle,
   NavigationLink,
 } from "@/components";
-import { SafeWalletConnectButton as WalletConnectButton } from "@/components/kit/auth/SafeWalletConnectButton";
+import { WalletConnectButton } from "@/components/kit/auth/WalletConnectButton";
 
 export function Header(): ReactElement {
   return (
@@ -75,9 +75,11 @@ export function Header(): ReactElement {
                 />
               </div>
 
-              {/* Wallet: compact on mobile, full on sm+ */}
+              {/* Wallet: CSS-gated instances (compact on mobile, default on desktop) */}
               <WalletConnectButton variant="compact" className="sm:hidden" />
-              <WalletConnectButton className="hidden sm:flex" />
+              <div data-wallet-slot="desktop" className="hidden sm:flex">
+                <WalletConnectButton variant="default" />
+              </div>
 
               {/* Theme toggle: hidden on mobile (in Sheet footer), visible on desktop */}
               <ModeToggle className="hidden md:flex" />

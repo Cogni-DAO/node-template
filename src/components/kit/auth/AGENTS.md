@@ -30,28 +30,27 @@ Authentication UI components. Provides the wallet connection button using Rainbo
 ## Public Surface
 
 - **Exports:**
-  - `WalletConnectButton` - RainbowKit ConnectButton with variant prop (default | compact)
-  - `SafeWalletConnectButton` - SSR-safe wrapper (exported as "WalletConnectButton" via components/index.ts)
+  - `WalletConnectButton` - Prop-driven RainbowKit ConnectButton with variants: compact (mobile, avatar) and default (desktop, address)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** `WalletConnectButton.tsx`, `SafeWalletConnectButton.tsx`
+- **Files considered API:** `WalletConnectButton.tsx`
 
 ## Responsibilities
 
-- This directory **does**: Provide UI for wallet connection via RainbowKit with responsive variants for mobile overflow prevention
-- This directory **does not**: Implement auth providers; handle server-side sessions; auto sign-out; stable wallet slot rendering (see HANDOFF_WALLET_BUTTON_STABILITY.md)
+- This directory **does**: Provide UI for wallet connection via RainbowKit with prop-driven variant selection and hydration stability (fixed dimensions, skeleton overlay)
+- This directory **does not**: Implement auth providers; handle server-side sessions; auto sign-out; perform wagmi SSR hydration
 
 ## Usage
 
 ```tsx
 import { WalletConnectButton } from "@/components";
 
-// Default: full address/balance when connected
-<WalletConnectButton />
-
-// Compact: avatar-only, no balance (mobile)
+// Two instances with CSS breakpoints (Header.tsx pattern):
 <WalletConnectButton variant="compact" className="sm:hidden" />
+<div data-wallet-slot="desktop" className="hidden sm:flex">
+  <WalletConnectButton variant="default" />
+</div>
 ```
 
 ## Standards
@@ -74,6 +73,7 @@ import { WalletConnectButton } from "@/components";
 ## Notes
 
 - This directory contains the canonical wallet connection UI
-- `WalletConnectButton` is designed to be used in the global header
-- `SafeWalletConnectButton` handles dynamic loading to prevent layout shift and SSR errors
+- `WalletConnectButton` is designed to be used in the global header with CSS-gated instances per breakpoint
+- Desktop button fills fixed shell via CSS selector `[data-wallet-slot="desktop"] button { width: 100%; height: 100%; }` (see src/styles/tailwind.css)
+- Wagmi currently uses `ssr: false` + client-side skeleton gating; TODO: implement wagmi cookie-based SSR hydration for optimal stability
 - Auth session is source of truth; wallet connection is ephemeral

@@ -175,11 +175,10 @@ Render a single component with fixed dimensions that reserves space up-front. On
 
 ## Files to Modify
 
-| File                                                  | Current State                                      | Change Required                              |
-| ----------------------------------------------------- | -------------------------------------------------- | -------------------------------------------- |
-| `src/components/kit/auth/WalletConnectButton.tsx`     | Uses `ConnectButton` with props                    | Use `ConnectButton.Custom` with stable shell |
-| `src/components/kit/auth/SafeWalletConnectButton.tsx` | Dynamic import with `loading: () => null`          | Keep as-is OR remove entirely if not needed  |
-| `src/components/kit/layout/Header.tsx`                | Renders two instances (sm:hidden / hidden sm:flex) | Consider single responsive instance          |
+| File                                              | Current State                                      | Change Required                              |
+| ------------------------------------------------- | -------------------------------------------------- | -------------------------------------------- |
+| `src/components/kit/auth/WalletConnectButton.tsx` | Uses `ConnectButton` with props                    | Use `ConnectButton.Custom` with stable shell |
+| `src/components/kit/layout/Header.tsx`            | Renders two instances (sm:hidden / hidden sm:flex) | Consider single responsive instance          |
 
 ---
 

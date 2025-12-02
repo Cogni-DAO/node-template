@@ -109,3 +109,11 @@
 
 /* @theme inline block deleted - tokens migrated to tailwind.config.ts */
 /* Keep hero animation vars above (isolated to code.ts) */
+
+@layer utilities {
+  /* Desktop-only wallet button fill - scoped to data-wallet-slot to avoid affecting mobile */
+  [data-wallet-slot="desktop"] button {
+    width: 100%;
+    height: 100%;
+  }
+}
