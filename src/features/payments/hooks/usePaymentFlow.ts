@@ -369,6 +369,10 @@ export function usePaymentFlow(
   const successCalledRef = useRef(false);
   const errorCalledRef = useRef(false);
 
+  // Flow instance ID to guard against stale async operations after reset/cancel
+  // Incremented on startPayment and reset - stale async checks this before dispatching
+  const flowIdRef = useRef(0);
+
   // Handle wallet write errors
   useEffect(() => {
     if (writeError && internalState.phase === "AWAITING_SIGNATURE") {
@@ -420,6 +424,9 @@ export function usePaymentFlow(
       "chainId" in internalState &&
       "txHash" in internalState
     ) {
+      // Capture flowId at effect start to detect stale async
+      const effectFlowId = flowIdRef.current;
+
       dispatch({
         type: "TX_CONFIRMED",
         attemptId: internalState.attemptId,
@@ -435,6 +442,11 @@ export function usePaymentFlow(
           internalState.attemptId,
           { txHash: internalState.txHash }
         );
+
+        // Guard: if flow was reset during await, ignore result
+        if (flowIdRef.current !== effectFlowId) {
+          return;
+        }
 
         if (!result.ok) {
           dispatch({ type: "SUBMIT_FAILED", error: result.error });
@@ -481,10 +493,23 @@ export function usePaymentFlow(
       return;
     }
 
+    // Capture flowId at effect start to detect stale async
+    const effectFlowId = flowIdRef.current;
     const { txHash, chainId } = internalState;
 
     const pollInterval = setInterval(async () => {
+      // Guard: if flow was reset, stop polling
+      if (flowIdRef.current !== effectFlowId) {
+        clearInterval(pollInterval);
+        return;
+      }
+
       const result = await paymentsClient.getStatus(internalState.attemptId);
+
+      // Guard: check again after await
+      if (flowIdRef.current !== effectFlowId) {
+        return;
+      }
 
       if (!result.ok) {
         dispatch({
@@ -548,9 +573,18 @@ export function usePaymentFlow(
       return;
     }
 
+    // Start new flow instance - increment to invalidate any prior stale operations
+    flowIdRef.current += 1;
+    const currentFlowId = flowIdRef.current;
+
     dispatch({ type: "START_CREATE_INTENT" });
 
     const result = await paymentsClient.createIntent({ amountUsdCents });
+
+    // Guard: if flow was reset/restarted during await, ignore result
+    if (flowIdRef.current !== currentFlowId) {
+      return;
+    }
 
     if (!result.ok) {
       dispatch({ type: "INTENT_FAILED", error: result.error });
@@ -579,6 +613,8 @@ export function usePaymentFlow(
   }, [internalState.phase, amountUsdCents, writeContract]);
 
   const reset = useCallback(() => {
+    // Invalidate any in-flight async operations from prior flow
+    flowIdRef.current += 1;
     successCalledRef.current = false;
     errorCalledRef.current = false;
     dispatch({ type: "RESET" });

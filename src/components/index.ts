@@ -50,6 +50,7 @@ export { Container } from "./kit/layout/Container";
 export { Header } from "./kit/layout/Header";
 export { PageContainer } from "./kit/layout/PageContainer";
 export { SectionCard } from "./kit/layout/SectionCard";
+export { MobileNav } from "./kit/navigation/MobileNav";
 export { NavigationLink } from "./kit/navigation/NavigationLink";
 export { UsdcPaymentFlow } from "./kit/payments/UsdcPaymentFlow";
 export { Hero } from "./kit/sections";

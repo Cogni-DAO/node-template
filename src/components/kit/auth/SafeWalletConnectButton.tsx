@@ -3,9 +3,9 @@
 
 /**
  * Module: `@components/kit/auth/SafeWalletConnectButton`
- * Purpose: SSR-safe wrapper for WalletConnectButton.
+ * Purpose: SSR-safe wrapper for WalletConnectButton with variant support.
  * Scope: Client-side only. Handles dynamic loading and placeholder. Does not render wallet logic on server.
- * Invariants: Renders placeholder on server/loading; renders button on client.
+ * Invariants: Renders placeholder on server/loading; renders button on client; forwards variant prop.
  * Side-effects: none
  * Links: src/components/kit/auth/WalletConnectButton.tsx
  * @public
@@ -14,8 +14,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { ComponentProps } from "react";
 
-export const SafeWalletConnectButton = dynamic(
+import type { WalletConnectButton } from "./WalletConnectButton";
+
+type WalletConnectButtonProps = ComponentProps<typeof WalletConnectButton>;
+
+const DynamicWalletConnectButton = dynamic(
   () => import("./WalletConnectButton").then((mod) => mod.WalletConnectButton),
   {
     ssr: false,
@@ -24,3 +29,9 @@ export const SafeWalletConnectButton = dynamic(
     ),
   }
 );
+
+export function SafeWalletConnectButton(
+  props: WalletConnectButtonProps
+): React.JSX.Element {
+  return <DynamicWalletConnectButton {...props} />;
+}
