@@ -7,7 +7,8 @@
  * Scope: Provides site chrome with logo, nav, wallet, theme toggle, and mobile menu. Does not handle routing or analytics.
  * Invariants: No horizontal overflow; min-w-0/truncate/shrink-0 guards; GitHub hidden <lg; theme hidden <md.
  * Side-effects: none
- * Notes: Desktop wallet in [data-wallet-slot="desktop"] for CSS (see tailwind.css). Mobile: px-4 + logo pl-4; logo 24px, text-xl; MobileNav has GitHub + theme.
+ * Notes: Desktop wallet in [data-wallet-slot="desktop"] for CSS (see tailwind.css).
+ *        Mobile: px-4 + logo pl-4; logo 24px, text-xl; MobileNav has GitHub + theme.
  * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx, src/styles/tailwind.css
  * @public
  */
