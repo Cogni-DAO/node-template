@@ -14,9 +14,7 @@
 
 import type { ReactElement } from "react";
 
-import { HomeCtaSection } from "@/features/home/components/HomeCtaSection";
 import { HomeStats } from "@/features/home/components/HomeStats";
-import { KeyFeatures } from "@/features/home/components/KeyFeatures";
 import { NewHomeHero } from "@/features/home/components/NewHomeHero";
 
 export default function HomePage(): ReactElement {
@@ -24,8 +22,6 @@ export default function HomePage(): ReactElement {
     <div className="flex min-h-screen flex-col">
       <NewHomeHero />
       <HomeStats />
-      <KeyFeatures />
-      <HomeCtaSection />
     </div>
   );
 }
