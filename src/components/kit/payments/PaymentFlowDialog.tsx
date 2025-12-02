@@ -5,10 +5,10 @@
  * Module: `@components/kit/payments/PaymentFlowDialog`
  * Purpose: Modal dialog for payment flow states (IN_FLIGHT/TERMINAL).
  * Scope: Presentational dialog component. Does not contain payment logic or state management.
- * Invariants: Blocks page during payment; dismissable pre-chain or in TERMINAL; shows user-friendly errors only.
+ * Invariants: Dismissible when isInFlight OR isTerminal; parent (UsdcPaymentFlow) decides cancel vs close semantics via onClose callback.
  * Side-effects: none
- * Notes: Uses Dialog on desktop, Drawer on mobile for better ergonomics.
- * Links: docs/PAYMENTS_FRONTEND_DESIGN.md, ~/.claude/plans/floating-stirring-trinket.md
+ * Notes: Dialog uses desktop-only pattern; parent handles escape/backdrop logic via dismissible prop derivation.
+ * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
  * @public
  */
 
@@ -22,14 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/vendor/shadcn/dialog";
-import type { PaymentFlowPhase, PaymentFlowState } from "@/types/payments";
+import type { PaymentFlowState } from "@/types/payments";
 
 export interface PaymentFlowDialogProps {
   /** Dialog open state */
   open: boolean;
-
-  /** Current payment phase */
-  phase: PaymentFlowPhase;
 
   /** True only during pending phases (from state.isInFlight) */
   isInFlight: boolean;
@@ -88,7 +85,6 @@ function formatCredits(amount: number): string {
 
 export function PaymentFlowDialog({
   open,
-  phase,
   isInFlight,
   walletStep,
   txHash,
@@ -99,55 +95,29 @@ export function PaymentFlowDialog({
   onReset,
   onClose,
 }: PaymentFlowDialogProps): ReactElement {
-  const isTerminal = phase === "DONE";
+  const isTerminal = result !== null;
 
-  // Only show "Cancel" during intent creation (before wallet prompt)
-  const canCancel = isInFlight && walletStep === null;
-
-  // Show "Close" for: terminal states, wallet prompt shown, or on-chain
-  const canClose = isTerminal || (isInFlight && walletStep !== null);
+  // Dialog is dismissible in all active states (parent decides cancel vs close)
+  const dismissible = isInFlight || isTerminal;
 
   return (
     <Dialog
       open={open}
       onOpenChange={(isOpen) => {
-        console.log("[PaymentFlowDialog] onOpenChange called:", {
-          isOpen,
-          phase,
-          isTerminal,
-          canClose,
-          canCancel,
-        });
-
-        if (!isOpen) {
-          // In TERMINAL: allow close (X button) but also reset
-          if (isTerminal) {
-            console.log(
-              "[PaymentFlowDialog] Terminal close - resetting and closing"
-            );
-            onReset();
-            onClose();
-            return;
-          }
-
-          // In other states: allow close if canClose or canCancel
-          if (canClose || canCancel) {
-            console.log("[PaymentFlowDialog] Allowing close");
-            onClose();
-          }
+        if (!isOpen && dismissible) {
+          onClose();
         }
       }}
     >
       <DialogContent
         className="sm:max-w-md"
-        // Disable escape/backdrop click except when explicitly allowed
         onEscapeKeyDown={(e) => {
-          if (isTerminal || (!canClose && !canCancel)) {
+          if (!dismissible) {
             e.preventDefault();
           }
         }}
         onPointerDownOutside={(e) => {
-          if (isTerminal || (!canClose && !canCancel)) {
+          if (!dismissible) {
             e.preventDefault();
           }
         }}

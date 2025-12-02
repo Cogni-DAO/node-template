@@ -90,7 +90,11 @@ export function CreditsPageClient(): ReactElement {
             }
           }}
           placeholder="1.00 - 100000.00"
-          disabled={paymentFlow.state.phase !== "READY"}
+          disabled={
+            // Lock input when: on-chain tx exists OR terminal state (requires explicit reset)
+            paymentFlow.state.txHash !== null ||
+            paymentFlow.state.result !== null
+          }
         />
 
         {/* Payment Flow */}

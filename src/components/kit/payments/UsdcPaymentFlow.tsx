@@ -5,17 +5,17 @@
  * Module: `@components/kit/payments/UsdcPaymentFlow`
  * Purpose: Composed payment flow UI with button, dialog, and status chip.
  * Scope: Renders PaymentButton + PaymentFlowDialog + PaymentStatusChip. Does not contain business logic or API calls.
- * Invariants: State prop drives all rendering; callbacks are pure event handlers; className for layout only.
+ * Invariants: Close when txHash null triggers reset; auto-opens on transitions only; userClosedOnChain tracks chip visibility.
  * Side-effects: none
- * Notes: Refactored to use new component architecture per ~/.claude/plans/floating-stirring-trinket.md
- * Links: docs/PAYMENTS_FRONTEND_DESIGN.md, docs/UI_IMPLEMENTATION_GUIDE.md
+ * Notes: Transition-based auto-open prevents flash loops; phase-aware close decides cancel vs preserve.
+ * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
  * @public
  */
 
 "use client";
 
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/shared/util";
 import type { PaymentFlowState } from "@/types/payments";
 import { PaymentButton } from "./PaymentButton";
@@ -52,27 +52,61 @@ export function UsdcPaymentFlow({
 }: UsdcPaymentFlowProps): ReactElement {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Debug: Log component mount
-  useEffect(() => {
-    console.log("[UsdcPaymentFlow] MOUNTED");
-  }, []);
+  // Track previous state for transition detection
+  const prevIsInFlight = useRef(false);
+  const prevResult = useRef<"SUCCESS" | "ERROR" | null>(null);
 
-  // Auto-open dialog when payment is in-flight or has result
-  useEffect(() => {
-    console.log("[UsdcPaymentFlow] State changed:", {
-      phase: state.phase,
-      isInFlight: state.isInFlight,
-      result: state.result,
-      isDialogOpen,
-    });
+  // Track if user manually closed dialog while on-chain (show chip instead)
+  const [userClosedOnChain, setUserClosedOnChain] = useState(false);
 
-    if (state.isInFlight || state.result !== null) {
-      console.log("[UsdcPaymentFlow] Setting dialog open = true");
+  // Auto-open dialog only on state transitions (not continuously)
+  useEffect(() => {
+    const becameInFlight = state.isInFlight && !prevIsInFlight.current;
+    const gotResult = state.result !== null && prevResult.current === null;
+
+    // Auto-open when becoming in-flight (unless user already closed on-chain)
+    if (becameInFlight && !userClosedOnChain) {
       setIsDialogOpen(true);
     }
-  }, [state.phase, state.isInFlight, state.result, isDialogOpen]);
 
-  // Show status chip when dialog is closed but payment is in progress
+    // Always show result - user needs to see success/error
+    if (gotResult) {
+      setIsDialogOpen(true);
+    }
+
+    // Update refs after comparison
+    prevIsInFlight.current = state.isInFlight;
+    prevResult.current = state.result;
+  }, [state.isInFlight, state.result, userClosedOnChain]);
+
+  // Reset userClosedOnChain when payment resets to READY
+  useEffect(() => {
+    if (state.phase === "READY" && !state.isInFlight && state.result === null) {
+      setUserClosedOnChain(false);
+    }
+  }, [state.phase, state.isInFlight, state.result]);
+
+  // Handle dialog close with phase-aware behavior
+  const handleDialogClose = () => {
+    // No txHash = no on-chain action yet = safe to cancel/reset
+    // This covers: creating intent AND wallet prompt (before signing)
+    const canCancel = state.isInFlight && state.txHash === null;
+
+    if (canCancel) {
+      onReset();
+      setIsDialogOpen(false);
+      setUserClosedOnChain(false);
+      return;
+    }
+
+    // On-chain pending (txHash exists): just close, show chip, keep tracking
+    if (state.txHash !== null) {
+      setUserClosedOnChain(true);
+    }
+    setIsDialogOpen(false);
+  };
+
+  // Show status chip when dialog is closed but payment is in progress with txHash
   const showStatusChip =
     !isDialogOpen &&
     state.isInFlight &&
@@ -89,7 +123,7 @@ export function UsdcPaymentFlow({
           onStartPayment();
           setIsDialogOpen(true);
         }}
-        disabled={disabled}
+        disabled={disabled || state.result !== null}
       />
 
       {/* Status Chip (when dialog closed but payment in progress) */}
@@ -104,7 +138,6 @@ export function UsdcPaymentFlow({
       {/* Payment Flow Dialog */}
       <PaymentFlowDialog
         open={isDialogOpen}
-        phase={state.phase}
         isInFlight={state.isInFlight}
         walletStep={state.walletStep}
         txHash={state.txHash}
@@ -113,7 +146,7 @@ export function UsdcPaymentFlow({
         errorMessage={state.errorMessage}
         creditsAdded={state.creditsAdded}
         onReset={onReset}
-        onClose={() => setIsDialogOpen(false)}
+        onClose={handleDialogClose}
       />
     </div>
   );

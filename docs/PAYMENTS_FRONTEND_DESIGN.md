@@ -422,10 +422,24 @@ import { useAccount } from "wagmi";
 2. **Single active payment** - Reset required before new payment
 3. **Polling interval** - 3 seconds for status check (backend throttles to 10s)
 4. **No reload recovery** - De-scoped for MVP
+5. **AttemptId guard** - Prevents stale async operations from corrupting state after reset/cancel
 
 ---
 
 ## Component Design: `UsdcPaymentFlow`
+
+### Architecture
+
+```
+UsdcPaymentFlow (composer - manages dialog state)
+├─ PaymentButton (always visible)
+│  └─ States: idle | loading | disabled
+├─ PaymentFlowDialog (modal, controlled)
+│  ├─ IN_FLIGHT: spinner + step text + tx link
+│  └─ TERMINAL: success/error + Done/Try Again button
+└─ PaymentStatusChip (conditional)
+   └─ Visible: txHash exists + dialog closed + payment in-flight
+```
 
 ### Interface
 
@@ -453,66 +467,84 @@ export interface UsdcPaymentFlowProps {
 }
 ```
 
-### Render States
+### Dialog Close Behavior
 
-#### READY State
+Close behavior is phase-aware based on `txHash`:
+
+| State            | txHash      | Close Action          | Input                       |
+| ---------------- | ----------- | --------------------- | --------------------------- |
+| Creating intent  | null        | Reset + close         | Editable                    |
+| Wallet prompt    | null        | Reset + close         | Editable                    |
+| On-chain pending | exists      | Close only, show chip | Locked                      |
+| Terminal         | exists/null | Close only            | Locked (use Done/Try Again) |
+
+### Render States (Dialog-Based)
+
+#### PaymentButton (Always Visible)
 
 ```tsx
-<div className={cn(paymentFlowContainer(), className)}>
-  <Button
-    onClick={onStartPayment}
-    disabled={disabled || state.isCreatingIntent}
-    rightIcon={
-      state.isCreatingIntent ? <Loader2 className="animate-spin" /> : undefined
-    }
-  >
-    {state.isCreatingIntent
-      ? "Preparing..."
-      : `Pay $${(amountUsdCents / 100).toFixed(2)}`}
-  </Button>
-</div>
+<PaymentButton
+  amountUsdCents={amountUsdCents}
+  isInFlight={state.isInFlight}
+  onClick={() => {
+    onStartPayment();
+    setIsDialogOpen(true);
+  }}
+  disabled={disabled || state.result !== null}
+/>
 ```
 
-#### PENDING State
+#### PaymentFlowDialog - IN_FLIGHT State
 
 ```tsx
-<div className={cn(paymentFlowContainer(), className)}>
-  <div className={paymentFlowStatus()}>
-    <StepIndicator
-      steps={["Wallet", "Chain", "Verify"]}
-      current={currentStep}
-    />
-    <p className={paragraph({ size: "sm", tone: "subdued" })}>
-      {getStepMessage(state.walletStep)}
-    </p>
-    {state.txHash && (
-      <a href={getExplorerUrl(state.txHash)} target="_blank" rel="noopener">
-        View transaction →
-      </a>
-    )}
-  </div>
-</div>
-```
-
-#### DONE State
-
-```tsx
-<div className={cn(paymentFlowContainer(), className)}>
-  {state.result === "SUCCESS" ? (
-    <Alert intent="success">
-      <CheckCircle2 />
-      <span>Added {formatCredits(state.creditsAdded)} credits</span>
-    </Alert>
-  ) : (
-    <Alert intent="destructive">
-      <XCircle />
-      <span>{state.errorMessage}</span>
-    </Alert>
+<div className="flex flex-col items-center gap-4 py-6">
+  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  <p className="text-center text-sm text-muted-foreground">
+    {getStepMessage(walletStep)}
+  </p>
+  {txHash && explorerUrl && (
+    <a href={explorerUrl} target="_blank" rel="noopener noreferrer">
+      View transaction <ExternalLink />
+    </a>
   )}
-  <Button variant="outline" onClick={onReset}>
-    {state.result === "SUCCESS" ? "Make Another Payment" : "Try Again"}
-  </Button>
 </div>
+```
+
+#### PaymentFlowDialog - SUCCESS State
+
+```tsx
+<div className="flex flex-col items-center gap-6 py-8">
+  <CheckCircle2 className="h-16 w-16 text-success" />
+  <p className="font-semibold text-xl">
+    {creditsAdded} credits added
+  </p>
+</div>
+<Button onClick={() => { onReset(); onClose(); }} size="lg">
+  Done
+</Button>
+```
+
+#### PaymentFlowDialog - ERROR State
+
+```tsx
+<div className="flex flex-col items-center gap-6 py-8">
+  <XCircle className="h-16 w-16 text-destructive" />
+  <p className="text-xl font-semibold">{errorMessage ?? "Payment failed"}</p>
+</div>
+```
+
+#### PaymentStatusChip (When Dialog Closed During On-Chain)
+
+```tsx
+{
+  showStatusChip && (
+    <PaymentStatusChip
+      txHash={state.txHash}
+      explorerUrl={state.explorerUrl}
+      onClick={() => setIsDialogOpen(true)}
+    />
+  );
+}
 ```
 
 ### CVA Styling

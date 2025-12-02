@@ -38,7 +38,7 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
   - `confirmCreditsPayment(accountService, input)` - Atomic credit settlement; idempotent on clientPaymentId
   - `getCreditsSummary(accountService, input)` - Fetch balance and recent ledger entries
 - **Exports (hooks/):**
-  - `usePaymentFlow(options)` - React hook orchestrating USDC payment flow with wagmi + backend; returns PaymentFlowState with isInFlight, explorerUrl, txHash, chainId threading
+  - `usePaymentFlow(options)` - React hook orchestrating USDC payment flow with wagmi + backend; uses attemptId guard to cancel stale async on reset; returns PaymentFlowState
   - `useCreditsSummary(options)` - React Query hook for fetching credits balance and ledger entries
 - **Exports (api/):**
   - `paymentsClient` - Typed HTTP client for payment endpoints (discriminated union returns)

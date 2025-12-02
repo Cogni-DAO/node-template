@@ -5,9 +5,9 @@
  * Module: `@features/payments/hooks/usePaymentFlow`
  * Purpose: Orchestrates USDC payment flow state machine with wagmi + backend.
  * Scope: Manages intent → signature → confirmation → submit → poll cycle. Does not persist state across reloads.
- * Invariants: Single payment at a time; no localStorage; chain params from intent only; creditsAdded computed using CREDITS_PER_CENT constant.
+ * Invariants: Single payment at a time; attemptId guard cancels stale async on reset; creditsAdded uses CREDITS_PER_CENT.
  * Side-effects: IO (paymentsClient, wagmi); React state (useReducer, polling).
- * Notes: Implements full PENDING substates for Phase 3 stability.
+ * Notes: Implements attemptId pattern to prevent stale async continuations from corrupting state after reset/cancel.
  * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
  * @public
  */
@@ -369,9 +369,9 @@ export function usePaymentFlow(
   const successCalledRef = useRef(false);
   const errorCalledRef = useRef(false);
 
-  // Flow instance ID to guard against stale async operations after reset/cancel
+  // Attempt ID to guard against stale async operations after reset/cancel
   // Incremented on startPayment and reset - stale async checks this before dispatching
-  const flowIdRef = useRef(0);
+  const attemptIdRef = useRef(0);
 
   // Handle wallet write errors
   useEffect(() => {
@@ -424,8 +424,8 @@ export function usePaymentFlow(
       "chainId" in internalState &&
       "txHash" in internalState
     ) {
-      // Capture flowId at effect start to detect stale async
-      const effectFlowId = flowIdRef.current;
+      // Capture attemptId at effect start to detect stale async
+      const effectAttemptId = attemptIdRef.current;
 
       dispatch({
         type: "TX_CONFIRMED",
@@ -443,8 +443,8 @@ export function usePaymentFlow(
           { txHash: internalState.txHash }
         );
 
-        // Guard: if flow was reset during await, ignore result
-        if (flowIdRef.current !== effectFlowId) {
+        // Guard: if attempt was reset during await, ignore result
+        if (attemptIdRef.current !== effectAttemptId) {
           return;
         }
 
@@ -493,13 +493,13 @@ export function usePaymentFlow(
       return;
     }
 
-    // Capture flowId at effect start to detect stale async
-    const effectFlowId = flowIdRef.current;
+    // Capture attemptId at effect start to detect stale async
+    const effectAttemptId = attemptIdRef.current;
     const { txHash, chainId } = internalState;
 
     const pollInterval = setInterval(async () => {
-      // Guard: if flow was reset, stop polling
-      if (flowIdRef.current !== effectFlowId) {
+      // Guard: if attempt was reset, stop polling
+      if (attemptIdRef.current !== effectAttemptId) {
         clearInterval(pollInterval);
         return;
       }
@@ -507,7 +507,7 @@ export function usePaymentFlow(
       const result = await paymentsClient.getStatus(internalState.attemptId);
 
       // Guard: check again after await
-      if (flowIdRef.current !== effectFlowId) {
+      if (attemptIdRef.current !== effectAttemptId) {
         return;
       }
 
@@ -573,16 +573,16 @@ export function usePaymentFlow(
       return;
     }
 
-    // Start new flow instance - increment to invalidate any prior stale operations
-    flowIdRef.current += 1;
-    const currentFlowId = flowIdRef.current;
+    // Start new attempt - increment to invalidate any prior stale operations
+    attemptIdRef.current += 1;
+    const currentAttemptId = attemptIdRef.current;
 
     dispatch({ type: "START_CREATE_INTENT" });
 
     const result = await paymentsClient.createIntent({ amountUsdCents });
 
-    // Guard: if flow was reset/restarted during await, ignore result
-    if (flowIdRef.current !== currentFlowId) {
+    // Guard: if attempt was reset/restarted during await, ignore result
+    if (attemptIdRef.current !== currentAttemptId) {
       return;
     }
 
@@ -613,8 +613,8 @@ export function usePaymentFlow(
   }, [internalState.phase, amountUsdCents, writeContract]);
 
   const reset = useCallback(() => {
-    // Invalidate any in-flight async operations from prior flow
-    flowIdRef.current += 1;
+    // Invalidate any in-flight async operations from prior attempt
+    attemptIdRef.current += 1;
     successCalledRef.current = false;
     errorCalledRef.current = false;
     dispatch({ type: "RESET" });
