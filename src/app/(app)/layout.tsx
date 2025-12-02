@@ -5,9 +5,9 @@
  * Module: `@app/(app)/layout`
  * Purpose: Auth guard layout for protected application pages.
  * Scope: Client layout component that enforces authentication for all routes under (app). Does not handle business logic or page content.
- * Invariants: Requires valid NextAuth session to render children; redirects unauthenticated users to home; shows loading state during auth check.
+ * Invariants: Requires valid session to render children; redirects unauthenticated to home; no auto sign-out.
  * Side-effects: IO (NextAuth session retrieval via client hook, Next.js navigation)
- * Notes: All pages under (app)/* require authentication. Do NOT add per-page auth checks.
+ * Notes: All pages under (app)/* require authentication. Auth session is source of truth.
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
  */
@@ -15,7 +15,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
@@ -24,18 +24,16 @@ export default function AppLayout({
 }: {
   children: ReactNode;
 }): ReactNode {
-  const { status, data: session } = useSession();
+  const { status } = useSession();
   const router = useRouter();
 
-  // Redirect unauthenticated users to home; sign out if walletAddress missing
+  // Redirect unauthenticated users to home
+  // Note: No auto sign-out here - sign-out must be explicit user action
   useEffect(() => {
     if (status === "unauthenticated") {
       router.replace("/");
     }
-    if (status === "authenticated" && !session?.user?.walletAddress) {
-      void signOut();
-    }
-  }, [status, session, router]);
+  }, [status, router]);
 
   // Loading state
   if (status === "loading") {

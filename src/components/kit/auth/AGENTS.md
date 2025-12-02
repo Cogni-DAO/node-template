@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derek
-- **Last reviewed:** 2025-11-26
+- **Last reviewed:** 2025-12-02
 - **Status:** stable
 
 ## Purpose
 
-Authentication UI components and hooks. Provides the wallet connection button and session consistency logic.
+Authentication UI components. Provides the wallet connection button using RainbowKit.
 
 ## Pointers
 
@@ -30,17 +30,16 @@ Authentication UI components and hooks. Provides the wallet connection button an
 ## Public Surface
 
 - **Exports:**
-  - `WalletConnectButton` - SafeWalletConnectButton (exported as WalletConnectButton) - SSR-safe wrapper with placeholder
-  - `useWalletSessionConsistency` - Hook to enforce wallet-session synchronization
+  - `WalletConnectButton` - RainbowKit ConnectButton wrapper (exported via SafeWalletConnectButton for SSR safety)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** `WalletConnectButton.tsx`, `SafeWalletConnectButton.tsx`, `useWalletSessionConsistency.ts`
+- **Files considered API:** `WalletConnectButton.tsx`, `SafeWalletConnectButton.tsx`
 
 ## Responsibilities
 
-- This directory **does**: Provide UI for wallet connection; enforce consistency between wallet state and auth session
-- This directory **does not**: Implement auth providers; handle server-side sessions
+- This directory **does**: Provide UI for wallet connection via RainbowKit
+- This directory **does not**: Implement auth providers; handle server-side sessions; auto sign-out (sign-out must be explicit user action)
 
 ## Usage
 
@@ -53,12 +52,13 @@ import { WalletConnectButton } from "@/components/kit/auth/WalletConnectButton";
 ## Standards
 
 - Components must be client-side ("use client")
-- Uses `useWalletSessionConsistency` to handle sign-out on wallet change
+- Sign-out is explicit user action only - no auto sign-out based on wallet state
+- Follow RainbowKit best practices: global provider, explicit connect/disconnect flows
 
 ## Dependencies
 
-- **Internal:** `@/shared/auth`
-- **External:** `@rainbow-me/rainbowkit`, `wagmi`, `next-auth/react`
+- **Internal:** none
+- **External:** `@rainbow-me/rainbowkit`
 
 ## Change Protocol
 
@@ -71,4 +71,4 @@ import { WalletConnectButton } from "@/components/kit/auth/WalletConnectButton";
 - This directory contains the canonical wallet connection UI
 - `WalletConnectButton` is designed to be used in the global header
 - `SafeWalletConnectButton` handles dynamic loading to prevent layout shift and SSR errors
-- `useWalletSessionConsistency` is a critical security control to prevent session hijacking via wallet switching
+- Auth session is source of truth; wallet connection is ephemeral
