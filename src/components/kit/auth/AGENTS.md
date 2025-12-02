@@ -30,7 +30,8 @@ Authentication UI components. Provides the wallet connection button using Rainbo
 ## Public Surface
 
 - **Exports:**
-  - `WalletConnectButton` - RainbowKit ConnectButton wrapper (exported via SafeWalletConnectButton for SSR safety)
+  - `WalletConnectButton` - RainbowKit ConnectButton with variant prop (default | compact)
+  - `SafeWalletConnectButton` - SSR-safe wrapper (exported as "WalletConnectButton" via components/index.ts)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
@@ -38,15 +39,19 @@ Authentication UI components. Provides the wallet connection button using Rainbo
 
 ## Responsibilities
 
-- This directory **does**: Provide UI for wallet connection via RainbowKit
-- This directory **does not**: Implement auth providers; handle server-side sessions; auto sign-out (sign-out must be explicit user action)
+- This directory **does**: Provide UI for wallet connection via RainbowKit with responsive variants for mobile overflow prevention
+- This directory **does not**: Implement auth providers; handle server-side sessions; auto sign-out; stable wallet slot rendering (see HANDOFF_WALLET_BUTTON_STABILITY.md)
 
 ## Usage
 
 ```tsx
-import { WalletConnectButton } from "@/components/kit/auth/WalletConnectButton";
+import { WalletConnectButton } from "@/components";
 
-<WalletConnectButton />;
+// Default: full address/balance when connected
+<WalletConnectButton />
+
+// Compact: avatar-only, no balance (mobile)
+<WalletConnectButton variant="compact" className="sm:hidden" />
 ```
 
 ## Standards

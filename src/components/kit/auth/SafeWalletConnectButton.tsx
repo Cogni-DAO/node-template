@@ -3,11 +3,12 @@
 
 /**
  * Module: `@components/kit/auth/SafeWalletConnectButton`
- * Purpose: SSR-safe wrapper for WalletConnectButton with variant support.
- * Scope: Client-side only. Handles dynamic loading and placeholder. Does not render wallet logic on server.
- * Invariants: Renders placeholder on server/loading; renders button on client; forwards variant prop.
+ * Purpose: SSR-safe dynamic wrapper for WalletConnectButton.
+ * Scope: Client-side only. Handles dynamic loading. Does not render wallet logic on server.
+ * Invariants: No loading placeholder (prevents duplicate flash); forwards all props including variant; prevents hydration mismatch.
  * Side-effects: none
- * Links: src/components/kit/auth/WalletConnectButton.tsx
+ * Notes: Exported as "WalletConnectButton" via components/index.ts for convenience.
+ * Links: src/components/kit/auth/WalletConnectButton.tsx, docs/HANDOFF_WALLET_BUTTON_STABILITY.md
  * @public
  */
 

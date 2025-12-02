@@ -3,12 +3,12 @@
 
 /**
  * Module: `@components/kit/auth/WalletConnectButton`
- * Purpose: Renders the canonical RainbowKit connect button with optional compact variant.
- * Scope: Client-side only. Used in the app header. Does not handle wallet selection UI.
- * Invariants: Must be wrapped in WagmiProvider and SessionProvider. Sign-out is explicit via RainbowKit UI, not background effects.
+ * Purpose: RainbowKit connect button with responsive variant support for mobile overflow prevention.
+ * Scope: Client-side only. Used in header. Does not handle wallet selection UI or persistence.
+ * Invariants: Must be wrapped in WagmiProvider and SessionProvider; variant prop controls display mode.
  * Side-effects: none
- * Notes: Compact variant uses accountStatus="avatar" + showBalance=false for mobile layouts.
- * Links: docs/AUTHENTICATION.md, https://rainbowkit.com/docs/connect-button
+ * Notes: Compact variant uses accountStatus="avatar", showBalance=false, max-w-[8.5rem] (approved).
+ * Links: docs/AUTHENTICATION.md, docs/HANDOFF_WALLET_BUTTON_STABILITY.md
  * @public
  */
 
