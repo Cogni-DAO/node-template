@@ -40,6 +40,18 @@ Phased approach to consolidate UI before locking it down. Don't lock down trash.
 
 - Mobile QA: 360/768/1280 manual verification on /, /credits, /chat
 - Phase 4: Storybook + Playwright visual regression (separate PR)
+- next-themes SSR fix (see below)
+
+### TODO: next-themes SSR Theme Sync
+
+**Current state:** `wallet.client.tsx` uses a `mounted` state to avoid hydration mismatch. This works but causes a brief theme flash on load.
+
+**Proper fix:**
+
+- [ ] Use next-themes with `attribute="class"` and `enableSystem` + `defaultTheme="system"` (if not already)
+- [ ] In `app/layout.tsx`, read the theme cookie via `cookies()` and set `<html className={themeClass} data-theme={themeClass} style={{ colorScheme: themeClass === "dark" ? "dark" : "light" }}>`
+- [ ] Ensure ThemeProvider uses the same cookie key so server and client agree
+- [ ] Delete the `mounted` workaround in `wallet.client.tsx`
 
 **Visual changes (3 only):**
 

@@ -4,10 +4,10 @@
 /**
  * Module: `@tests/unit/app/app-layout-auth-guard`
  * Purpose: Unit tests for (app)/layout auth guard invariant enforcement.
- * Scope: Tests that AppLayout enforces authenticated sessions must have walletAddress. Does not test routing or actual NextAuth integration.
- * Invariants: loading shows UI; unauthenticated redirects; authenticated without wallet calls signOut; authenticated with wallet renders children.
+ * Scope: Tests that AppLayout enforces route protection via redirect. Does not test routing or actual NextAuth integration.
+ * Invariants: loading shows UI; unauthenticated redirects; authenticated renders children. No auto sign-out - sign-out is explicit user action only.
  * Side-effects: none (mocked hooks)
- * Notes: Uses React Testing Library with mocked useSession, signOut, and useRouter. DOM environment via test-level override.
+ * Notes: Uses React Testing Library with mocked useSession and useRouter. DOM environment via test-level override.
  * Links: src/app/(app)/layout.tsx, docs/SECURITY_AUTH_SPEC.md
  * @public
  */
@@ -29,7 +29,6 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock next-auth/react hooks
-const mockSignOut = vi.fn();
 let mockSessionData: {
   status: "loading" | "authenticated" | "unauthenticated";
   data: { user?: { walletAddress?: string } } | null;
@@ -37,7 +36,6 @@ let mockSessionData: {
 
 vi.mock("next-auth/react", () => ({
   useSession: () => mockSessionData,
-  signOut: mockSignOut,
 }));
 
 // Mock RainbowKit (causes Vanilla Extract CommonJS errors in happy-dom)
@@ -73,9 +71,8 @@ describe("AppLayout Auth Guard", () => {
     // Should not render children
     expect(screen.queryByTestId("children")).not.toBeInTheDocument();
 
-    // Should not call navigation or signOut
+    // Should not call navigation
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(mockSignOut).not.toHaveBeenCalled();
   });
 
   it("redirects to home when status is unauthenticated", async () => {
@@ -102,9 +99,6 @@ describe("AppLayout Auth Guard", () => {
 
     // Should not render children
     expect(screen.queryByTestId("children")).not.toBeInTheDocument();
-
-    // Should not call signOut
-    expect(mockSignOut).not.toHaveBeenCalled();
   });
 
   it("renders children when authenticated with valid walletAddress", async () => {
@@ -129,16 +123,17 @@ describe("AppLayout Auth Guard", () => {
     expect(screen.getByTestId("children")).toBeInTheDocument();
     expect(screen.getByText("Protected Content")).toBeInTheDocument();
 
-    // Should not call router.replace or signOut
+    // Should not call router.replace
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(mockSignOut).not.toHaveBeenCalled();
   });
 
-  it("calls signOut when authenticated but walletAddress is missing", async () => {
+  it("renders children when authenticated even if walletAddress is missing (no auto sign-out)", async () => {
+    // This tests the new invariant: no auto sign-out based on session state
+    // Sign-out must be explicit user action
     mockSessionData = {
       status: "authenticated",
       data: {
-        user: {}, // No walletAddress
+        user: {}, // No walletAddress - but should NOT auto sign-out
       },
     };
 
@@ -150,67 +145,10 @@ describe("AppLayout Auth Guard", () => {
       </APP_LAYOUT>
     );
 
-    // Should call signOut via useEffect
-    await waitFor(() => {
-      expect(mockSignOut).toHaveBeenCalledOnce();
-    });
-
-    // Should render children initially (before signOut completes)
-    // The layout renders children when status='authenticated' in the sync render,
-    // but triggers signOut in useEffect
+    // Should render children (authenticated = render, regardless of walletAddress)
     expect(screen.getByTestId("children")).toBeInTheDocument();
 
-    // Should not call router.replace
-    expect(mockReplace).not.toHaveBeenCalled();
-  });
-
-  it("calls signOut when authenticated but walletAddress is explicitly undefined", async () => {
-    mockSessionData = {
-      status: "authenticated",
-      data: {
-        user: {
-          // Omit walletAddress entirely (can't explicitly pass undefined with exactOptionalPropertyTypes)
-        },
-      },
-    };
-
-    const { default: APP_LAYOUT } = await import("@/app/(app)/layout");
-
-    render(
-      <APP_LAYOUT>
-        <div data-testid="children">Protected Content</div>
-      </APP_LAYOUT>
-    );
-
-    // Should call signOut via useEffect
-    await waitFor(() => {
-      expect(mockSignOut).toHaveBeenCalledOnce();
-    });
-
-    // Should not call router.replace
-    expect(mockReplace).not.toHaveBeenCalled();
-  });
-
-  it("calls signOut when authenticated but session.user is missing", async () => {
-    mockSessionData = {
-      status: "authenticated",
-      data: {}, // No user property
-    };
-
-    const { default: APP_LAYOUT } = await import("@/app/(app)/layout");
-
-    render(
-      <APP_LAYOUT>
-        <div data-testid="children">Protected Content</div>
-      </APP_LAYOUT>
-    );
-
-    // Should call signOut via useEffect
-    await waitFor(() => {
-      expect(mockSignOut).toHaveBeenCalledOnce();
-    });
-
-    // Should not call router.replace
+    // Should not redirect
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });

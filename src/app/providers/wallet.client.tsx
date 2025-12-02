@@ -17,6 +17,7 @@ import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { RainbowKitSiweNextAuthProvider } from "@rainbow-me/rainbowkit-siwe-next-auth";
 import { useTheme } from "next-themes";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { WagmiProvider } from "wagmi";
 
 import { createAppDarkTheme, createAppLightTheme } from "./rainbowkit-theme";
@@ -28,11 +29,20 @@ export function WalletProvider({
   readonly children: ReactNode;
 }): ReactNode {
   const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
-  // Determine RainbowKit theme based on resolved theme
-  // Default to light if resolvedTheme is undefined (initial render)
+  // Invariant: server and first client render must produce identical HTML.
+  // next-themes resolves the actual theme only after mount, so we hardcode
+  // "dark" pre-mount and switch to the real theme once mounted.
+  // This avoids hydration errors while keeping WagmiProvider always present.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const rainbowKitTheme =
-    resolvedTheme === "dark" ? createAppDarkTheme() : createAppLightTheme();
+    mounted && resolvedTheme === "light"
+      ? createAppLightTheme()
+      : createAppDarkTheme();
 
   return (
     <WagmiProvider config={config}>

@@ -3,10 +3,10 @@
 
 /**
  * Module: `@components/kit/auth/WalletConnectButton`
- * Purpose: Renders the canonical RainbowKit connect button and enforces wallet-session consistency.
+ * Purpose: Renders the canonical RainbowKit connect button.
  * Scope: Client-side only. Used in the app header. Does not handle wallet selection UI.
- * Invariants: Must be wrapped in WagmiProvider and SessionProvider.
- * Side-effects: IO (Signs out user if wallet disconnects or changes via useWalletSessionConsistency)
+ * Invariants: Must be wrapped in WagmiProvider and SessionProvider. Sign-out is explicit via RainbowKit UI, not background effects.
+ * Side-effects: none
  * Links: docs/AUTHENTICATION.md
  * @public
  */
@@ -16,9 +16,6 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import type React from "react";
 
-import { useWalletSessionConsistency } from "./useWalletSessionConsistency";
-
 export function WalletConnectButton(): React.JSX.Element {
-  useWalletSessionConsistency();
   return <ConnectButton />;
 }
