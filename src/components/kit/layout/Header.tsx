@@ -3,11 +3,11 @@
 
 /**
  * Module: `@components/kit/layout/Header`
- * Purpose: Mobile-first site header with responsive navigation and overflow protection.
- * Scope: Provides site chrome with responsive breakpoints. Does not handle routing, authentication logic, or analytics.
- * Invariants: No horizontal overflow at any viewport; touch targets ≥ 44px; keyboard accessible.
+ * Purpose: Mobile-first site header with responsive layout and overflow protection.
+ * Scope: Provides site chrome with logo, nav, wallet, theme toggle, and mobile menu. Does not handle routing or analytics.
+ * Invariants: No horizontal overflow; min-w-0/truncate/shrink-0 guards; GitHub hidden <lg; theme hidden <md.
  * Side-effects: none
- * Notes: Uses standard Tailwind classes for layout; GitHub only visible lg+ in header, accessible in MobileNav on mobile.
+ * Notes: Standard Tailwind classes (not CVA); mobile spacing tight (px-2, gap-1); MobileNav has GitHub + theme.
  * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx
  * @public
  */
@@ -30,7 +30,7 @@ export function Header(): ReactElement {
   return (
     <header className="border-border border-b bg-background py-3">
       {/* Container: matches max-w-7xl pattern from Credits page */}
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+      <div className="mx-auto w-full max-w-7xl px-2 sm:px-6">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           {/* Logo - min-w-0 prevents flex overflow */}
           <Link href="/" className="flex min-w-0 items-center gap-2">
@@ -58,7 +58,7 @@ export function Header(): ReactElement {
             </nav>
 
             {/* Action buttons - responsive */}
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-3">
               {/* GitHub: only visible lg+ in header (mobile users access via Sheet) */}
               <div className="hidden lg:flex">
                 <GithubButton
@@ -79,7 +79,8 @@ export function Header(): ReactElement {
               <WalletConnectButton variant="compact" className="sm:hidden" />
               <WalletConnectButton className="hidden sm:flex" />
 
-              <ModeToggle />
+              {/* Theme toggle: hidden on mobile (in Sheet footer), visible on desktop */}
+              <ModeToggle className="hidden md:flex" />
 
               {/* Mobile menu trigger - 44px touch target */}
               <MobileNav className="md:hidden" />
