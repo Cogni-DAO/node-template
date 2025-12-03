@@ -16,10 +16,11 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { Thread } from "@/components";
 import { ChatRuntimeProvider } from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
+import { ChatComposerExtras, useModels } from "@/features/ai/public";
 import { useCreditsSummary } from "@/features/payments/public";
 
 function ChatCreditsHint() {
@@ -56,10 +57,36 @@ const ChatWelcomeWithHint = () => (
 );
 
 export default function ChatPage(): ReactNode {
+  const modelsQuery = useModels();
+
+  // Initialize with fallback, will be updated by Thread component from API
+  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
+  const defaultModelId = modelsQuery.data?.defaultModelId ?? "gpt-4o-mini";
+
+  // Update selected model when API data loads
+  useEffect(() => {
+    if (modelsQuery.data?.defaultModelId && selectedModel === "gpt-4o-mini") {
+      setSelectedModel(modelsQuery.data.defaultModelId);
+    }
+  }, [modelsQuery.data?.defaultModelId, selectedModel]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ChatRuntimeProvider onAuthExpired={() => signOut()}>
-        <Thread welcomeMessage={<ChatWelcomeWithHint />} />
+      <ChatRuntimeProvider
+        selectedModel={selectedModel}
+        defaultModelId={defaultModelId}
+        onAuthExpired={() => signOut()}
+      >
+        <Thread
+          welcomeMessage={<ChatWelcomeWithHint />}
+          composerLeft={
+            <ChatComposerExtras
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+              defaultModelId={defaultModelId}
+            />
+          }
+        />
       </ChatRuntimeProvider>
     </div>
   );
