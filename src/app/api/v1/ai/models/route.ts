@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/api/v1/ai/models`
+ * Purpose: Provides HTTP endpoint for listing available AI models.
+ * Scope: Auth-protected GET endpoint that returns cached model list with tier info. Does not implement caching logic or model fetching.
+ * Invariants: Uses server-side cache (no per-request network calls), validates with contract.
+ * Side-effects: IO (HTTP request/response)
+ * Notes: Implements SEC-001 (auth-protected) and PERF-001 (cached).
+ * Links: ai.models.v1.contract, models-cache utility
+ * @public
+ */
+
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/app/_lib/auth/session";
+import { getCachedModels } from "@/app/_lib/models-cache";
+import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import { aiModelsOperation } from "@/contracts/ai.models.v1.contract";
+import { logRequestWarn } from "@/shared/observability";
+
+export const dynamic = "force-dynamic";
+
+export const GET = wrapRouteHandlerWithLogging(
+  { routeId: "ai.models", auth: { mode: "required", getSessionUser } },
+  async (ctx, _request, _sessionUser) => {
+    try {
+      // Fetch from cache (fast, no network call)
+      const data = await getCachedModels();
+
+      // Validate output with contract
+      const outputParseResult = aiModelsOperation.output.safeParse(data);
+      if (!outputParseResult.success) {
+        logRequestWarn(ctx.log, outputParseResult.error, "INVALID_CACHE_DATA");
+        return NextResponse.json(
+          { error: "Invalid models data" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(outputParseResult.data, { status: 200 });
+    } catch (error) {
+      logRequestWarn(ctx.log, error, "MODELS_FETCH_ERROR");
+      return NextResponse.json(
+        { error: "Failed to fetch models" },
+        { status: 503 }
+      );
+    }
+  }
+);
