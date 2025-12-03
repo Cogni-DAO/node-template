@@ -21,6 +21,7 @@ import type {
   PaymentSubmitInput,
   PaymentSubmitOutput,
 } from "@/contracts/payments.submit.v1.contract";
+import { clientLogger } from "@/shared/observability";
 
 type ApiSuccess<T> = { ok: true; data: T };
 type ApiError = { ok: false; error: string; errorCode?: string };
@@ -34,10 +35,10 @@ async function handleResponse<T>(res: Response): Promise<ApiResult<T>> {
   const body = await res.json().catch(() => ({ error: "Invalid response" }));
 
   if (!res.ok) {
-    // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
-    console.error("[paymentsClient] Request failed:", {
+    clientLogger.error("PAYMENTS_CLIENT_HTTP_ERROR", {
       status: res.status,
-      body,
+      error: body.error ?? body.errorMessage ?? "Request failed",
+      errorCode: body.errorCode,
     });
     return {
       ok: false,

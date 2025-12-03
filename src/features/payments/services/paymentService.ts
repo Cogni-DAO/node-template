@@ -6,7 +6,7 @@
  * Purpose: Orchestrate payment attempt lifecycle via ports. Handles intent creation, txHash submission, status polling, and settlement.
  * Scope: Feature-layer orchestration for payment attempts; validates state transitions, enforces TTLs; does not expose HTTP handling.
  * Invariants: State machine transitions validated via core/rules; atomic settlement via confirmCreditsPayment.
- * Side-effects: IO (via PaymentAttemptRepository, OnChainVerifier, AccountService ports).
+ * Side-effects: IO
  * Notes: OnChainVerifier stubbed (always VERIFIED) in MVP; Phase 3 uses real Ponder indexer.
  * Links: docs/PAYMENTS_DESIGN.md
  * @public

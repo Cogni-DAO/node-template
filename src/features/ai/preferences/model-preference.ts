@@ -12,6 +12,8 @@
  * @internal
  */
 
+import { clientLogger } from "@/shared/observability";
+
 const STORAGE_KEY = "cogni.chat.preferredModelId";
 
 /**
@@ -29,8 +31,9 @@ export function getPreferredModelId(): string | null {
     return stored;
   } catch (error) {
     // Safari private mode, quota exceeded, permissions denied
-    // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
-    console.warn("Failed to read model preference from localStorage:", error);
+    clientLogger.warn("MODEL_PREF_READ_FAIL", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }
@@ -49,8 +52,9 @@ export function setPreferredModelId(modelId: string): void {
     window.localStorage.setItem(STORAGE_KEY, modelId);
   } catch (error) {
     // Safari private mode, quota exceeded, permissions denied
-    // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
-    console.warn("Failed to write model preference to localStorage:", error);
+    clientLogger.warn("MODEL_PREF_WRITE_FAIL", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     // Fail silently - user can still use model selection, just won't persist
   }
 }
@@ -67,8 +71,9 @@ export function clearPreferredModelId(): void {
   try {
     window.localStorage.removeItem(STORAGE_KEY);
   } catch (error) {
-    // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
-    console.warn("Failed to clear model preference from localStorage:", error);
+    clientLogger.warn("MODEL_PREF_CLEAR_FAIL", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -91,10 +96,11 @@ export function validatePreferredModel(
   }
 
   // Stored model no longer available - clear it
-  // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
-  console.warn(
-    `Stored model "${stored}" not in available list, falling back to default`
-  );
+  clientLogger.warn("MODEL_PREF_INVALID", {
+    storedModel: stored,
+    availableModels: availableModelIds,
+    defaultModelId,
+  });
   clearPreferredModelId();
   return defaultModelId;
 }
