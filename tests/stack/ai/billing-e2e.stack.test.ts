@@ -22,6 +22,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
+import { TEST_MODEL_ID } from "@tests/_fakes";
 import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as completionPOST } from "@/app/api/v1/ai/completion/route";
@@ -88,6 +89,7 @@ describe("Billing E2E Stack Test", () => {
         method: "POST",
         body: JSON.stringify({
           messages: [{ role: "user", content: "Hello E2E" }],
+          model: TEST_MODEL_ID,
         }),
       }
     );

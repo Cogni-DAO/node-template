@@ -1,0 +1,117 @@
+# features/ai · AGENTS.md
+
+> Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
+
+## Metadata
+
+- **Owners:** @derek @core-dev
+- **Last reviewed:** 2025-12-03
+- **Status:** draft
+
+## Purpose
+
+AI feature owns all LLM interaction endpoints, runtimes, and services. Provides completion services, chat integration (assistant-ui), and model selection UI for the application.
+
+## Pointers
+
+- [Root AGENTS.md](../../../AGENTS.md)
+- [Architecture](../../../docs/ARCHITECTURE.md)
+- [Chat subfeature](./chat/AGENTS.md)
+- **Related:** [../payments/](../payments/) (credits), [../../contracts/](../../contracts/) (ai.completion.v1, ai.chat.v1, ai.models.v1)
+
+## Boundaries
+
+```json
+{
+  "layer": "features",
+  "may_import": ["core", "ports", "shared", "types", "components", "contracts"],
+  "must_not_import": ["app", "adapters"]
+}
+```
+
+## Public Surface
+
+- **Exports (via public.ts):**
+  - `ChatRuntimeProvider` (chat runtime state)
+  - `ModelPicker` (model selection dialog)
+  - `ChatComposerExtras` (composer toolbar with model selection)
+  - `useModels` (React Query hook for models list)
+  - `getPreferredModelId`, `setPreferredModelId`, `validatePreferredModel` (localStorage preferences)
+- **Routes:**
+  - `/api/v1/ai/completion` (POST) - text completion with credits metering
+  - `/api/v1/ai/chat` (POST) - chat endpoint (non-streaming in v0)
+  - `/api/v1/ai/models` (GET) - list available models with tier info
+- **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
+- **Files considered API:** public.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
+
+## Ports
+
+- **Uses ports:** LlmCaller (via services/completion.ts)
+- **Implements ports:** none
+- **Contracts:** ai.completion.v1, ai.chat.v1, ai.models.v1
+
+## Responsibilities
+
+- **This feature does:**
+  - Provide AI completion services with credit metering
+  - Provide chat UI integration via assistant-ui
+  - Expose model selection UI with localStorage persistence
+  - Fetch and cache available models list (server-side cache with SWR)
+  - Validate selected models against server-side allowlist
+  - Transform between wire formats and domain DTOs
+  - Delegate to LlmCaller port for actual LLM calls
+
+- **This feature does not:**
+  - Implement LLM adapters (owned by adapters/server/ai)
+  - Manage credits/billing (owned by features/accounts)
+  - Persist chat messages to database (planned for v2)
+  - Implement streaming (planned for v1)
+
+## Usage
+
+```typescript
+// Chat page with model selection
+import { ChatRuntimeProvider, ChatComposerExtras } from "@/features/ai/public";
+import { Thread } from "@/components/kit/chat";
+
+<ChatRuntimeProvider onAuthExpired={() => signOut()}>
+  <Thread
+    composerLeft={
+      <ChatComposerExtras
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
+        defaultModelId={defaultModelId}
+      />
+    }
+  />
+</ChatRuntimeProvider>
+```
+
+## Standards
+
+- Contract types via z.infer only - no manual interfaces
+- Zod runtime validation on route input/output
+- All exports via public.ts barrel (stable API surface)
+- Server-side cache for models list (5min TTL, SWR)
+- Client-side localStorage with SSR guards and graceful degradation
+- 409 retry logic when selected model not in server allowlist
+
+## Dependencies
+
+- **Internal:** @/contracts/ai.\*, @/ports/llm.port, @/shared/env/server, @/components/kit/\*, @/components/vendor/assistant-ui, @/components/vendor/shadcn
+- **External:** @assistant-ui/react, @assistant-ui/react-markdown, @tanstack/react-query, zod, lucide-react
+
+## Change Protocol
+
+- On wire format change: Update contract (ai.completion.v1, ai.chat.v1, ai.models.v1)
+- On public API change: Update public.ts exports and this AGENTS.md
+- Breaking changes: Bump contract version
+- Keep old versions until callers migrate
+
+## Notes
+
+- Model list currently hardcoded from litellm.config.yaml (TODO: fetch from LiteLLM API)
+- Chat is non-streaming in v0 (streaming planned for v1)
+- Message persistence planned for v2 with smart windowing
+- Model validation implements UX-001 (graceful fallback to default)
+- Server cache implements PERF-001 (no per-request network calls)

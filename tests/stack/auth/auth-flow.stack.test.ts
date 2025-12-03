@@ -21,6 +21,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
+import { TEST_MODEL_ID } from "@tests/_fakes";
 import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
@@ -40,6 +41,7 @@ describe("Auth Flow Stack Test", () => {
 
     const body = {
       messages: [{ role: "user", content: "Hello AI" }],
+      model: TEST_MODEL_ID,
     };
 
     // Seed user in DB to satisfy FK constraint
@@ -102,6 +104,7 @@ describe("Auth Flow Stack Test", () => {
 
     const body = {
       messages: [{ role: "user", content: "Hello AI" }],
+      model: TEST_MODEL_ID,
     };
 
     const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
