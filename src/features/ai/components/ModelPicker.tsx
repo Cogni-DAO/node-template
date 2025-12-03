@@ -25,8 +25,11 @@ import {
   DialogTrigger,
 } from "@/components/kit/overlays/Dialog";
 import type { Model } from "@/contracts/ai.models.v1.contract";
+import {
+  getIconByProviderKey,
+  getProviderIcon,
+} from "@/features/ai/config/provider-icons";
 import { cn } from "@/shared/util/cn";
-import { getProviderIcon } from "../config/provider-icons";
 
 export interface ModelPickerProps {
   models: Model[];
@@ -120,7 +123,10 @@ export function ModelPicker({
               </div>
             ) : (
               filteredModels.map((model) => {
-                const Icon = getProviderIcon(model.id);
+                // Prefer providerKey from model_info, fallback to ID-based inference
+                const Icon = model.providerKey
+                  ? getIconByProviderKey(model.providerKey)
+                  : getProviderIcon(model.id);
                 const isSelected = model.id === value;
 
                 return (

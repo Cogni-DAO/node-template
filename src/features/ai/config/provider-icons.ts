@@ -22,13 +22,13 @@ import {
 
 /**
  * Provider-to-icon mapping
- * Keys are provider prefixes extracted from model IDs
+ * Keys match provider_key from LiteLLM model_info
  */
 const PROVIDER_ICONS = {
   qwen: MessageCircle,
   hermes: BrainCircuit,
-  gpt: Sparkles,
-  claude: BrainCircuit,
+  openai: Sparkles,
+  anthropic: BrainCircuit,
   default: Zap,
 } as const satisfies Record<string, LucideIcon>;
 
@@ -56,4 +56,17 @@ function getProviderKey(modelId: string): keyof typeof PROVIDER_ICONS {
 export function getProviderIcon(modelId: string): LucideIcon {
   const providerKey = getProviderKey(modelId);
   return PROVIDER_ICONS[providerKey];
+}
+
+/**
+ * Get Lucide icon component directly from provider key
+ * Use when providerKey is available from model_info
+ */
+export function getIconByProviderKey(
+  providerKey: string | undefined
+): LucideIcon {
+  if (!providerKey) return PROVIDER_ICONS.default;
+  return providerKey in PROVIDER_ICONS
+    ? PROVIDER_ICONS[providerKey as keyof typeof PROVIDER_ICONS]
+    : PROVIDER_ICONS.default;
 }
