@@ -86,7 +86,8 @@
         }
       },
       "suspicious": {
-        "noExplicitAny": "error"
+        "noExplicitAny": "error",
+        "noConsole": "error"
       }
     }
   },
@@ -124,6 +125,7 @@
         "src/shared/env/**/*.ts",
         "src/shared/env/**/*.tsx",
         "src/auth.ts",
+        "src/shared/observability/clientLogger.ts",
         "e2e/**/*.{ts,tsx}",
         "playwright.config.ts",
         "tests/**/*.ts",
@@ -139,6 +141,28 @@
         "rules": {
           "style": {
             "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "e2e/**/*.{ts,tsx}",
+        "playwright.config.ts",
+        "tests/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,js,cjs,mjs}",
+        "**/*.config.ts",
+        "**/*.config.js",
+        "**/*.config.cjs",
+        "**/*.config.mts",
+        "drizzle.config.ts",
+        "src/shared/observability/logging/logger.ts",
+        "src/shared/observability/clientLogger.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
           }
         }
       }

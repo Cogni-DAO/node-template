@@ -80,8 +80,8 @@ describe("model-preference localStorage utilities", () => {
       // Assert - No crash, returns null
       expect(result).toBeNull();
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to read model preference"),
-        expect.any(Error)
+        "[CLIENT] WARN MODEL_PREF_READ_FAIL",
+        expect.stringContaining('"error"')
       );
 
       consoleSpy.mockRestore();
@@ -95,8 +95,8 @@ describe("model-preference localStorage utilities", () => {
       // Act & Assert - No crash
       expect(() => setPreferredModelId("qwen3-4b")).not.toThrow();
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to write model preference"),
-        expect.any(Error)
+        "[CLIENT] WARN MODEL_PREF_WRITE_FAIL",
+        expect.stringContaining('"error"')
       );
 
       consoleSpy.mockRestore();
@@ -110,8 +110,8 @@ describe("model-preference localStorage utilities", () => {
       // Act & Assert - No crash
       expect(() => clearPreferredModelId()).not.toThrow();
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to clear model preference"),
-        expect.any(Error)
+        "[CLIENT] WARN MODEL_PREF_CLEAR_FAIL",
+        expect.stringContaining('"error"')
       );
 
       consoleSpy.mockRestore();
@@ -193,9 +193,8 @@ describe("model-preference localStorage utilities", () => {
 
       // Assert - Warning logged
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Stored model "removed-model" not in available list'
-        )
+        "[CLIENT] WARN MODEL_PREF_INVALID",
+        expect.stringContaining('"storedModel":"removed-model"')
       );
 
       consoleSpy.mockRestore();

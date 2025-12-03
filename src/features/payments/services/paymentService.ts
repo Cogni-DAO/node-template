@@ -6,7 +6,7 @@
  * Purpose: Orchestrate payment attempt lifecycle via ports. Handles intent creation, txHash submission, status polling, and settlement.
  * Scope: Feature-layer orchestration for payment attempts; validates state transitions, enforces TTLs; does not expose HTTP handling.
  * Invariants: State machine transitions validated via core/rules; atomic settlement via confirmCreditsPayment.
- * Side-effects: IO (via PaymentAttemptRepository, OnChainVerifier, AccountService ports).
+ * Side-effects: IO
  * Notes: OnChainVerifier stubbed (always VERIFIED) in MVP; Phase 3 uses real Ponder indexer.
  * Links: docs/PAYMENTS_DESIGN.md
  * @public
@@ -33,6 +33,7 @@ import type {
   PaymentAttemptRepository,
 } from "@/ports";
 import { getWidgetConfig } from "@/shared/config/repoSpec.server";
+import type { Logger } from "@/shared/observability/logging";
 import { USDC_TOKEN_ADDRESS, VERIFY_THROTTLE_SECONDS } from "@/shared/web3";
 import { PaymentNotFoundError } from "../errors";
 import { confirmCreditsPayment } from "./creditsConfirm";
@@ -169,6 +170,7 @@ export async function submitTxHash(
   accountService: AccountService,
   onChainVerifier: OnChainVerifier,
   clock: Clock,
+  log: Logger,
   input: SubmitTxHashInput
 ): Promise<SubmitTxHashResult> {
   const now = new Date(clock.now());
@@ -219,6 +221,7 @@ export async function submitTxHash(
     accountService,
     onChainVerifier,
     clock,
+    log,
     input.defaultVirtualKeyId
   );
 
@@ -258,6 +261,7 @@ export async function getStatus(
   accountService: AccountService,
   onChainVerifier: OnChainVerifier,
   clock: Clock,
+  log: Logger,
   input: GetStatusInput
 ): Promise<GetStatusResult> {
   const now = new Date(clock.now());
@@ -308,6 +312,7 @@ export async function getStatus(
         accountService,
         onChainVerifier,
         clock,
+        log,
         input.defaultVirtualKeyId
       );
     }
@@ -345,6 +350,7 @@ async function verifyAndSettle(
   accountService: AccountService,
   onChainVerifier: OnChainVerifier,
   _clock: Clock,
+  log: Logger,
   defaultVirtualKeyId: string
 ): Promise<PaymentAttempt> {
   if (!attempt.txHash) {
@@ -417,9 +423,12 @@ async function verifyAndSettle(
         attempt = await repository.updateStatus(attempt.id, "CREDITED");
       }
     } catch (error) {
-      console.error(
-        `Settlement failed for attempt ${attempt.id}:`,
-        error instanceof Error ? error.message : error
+      log.error(
+        {
+          attemptId: attempt.id,
+          error: error instanceof Error ? error.message : error,
+        },
+        "Settlement failed for payment attempt"
       );
     }
 
