@@ -4,33 +4,34 @@
 /**
  * Module: `@features/ai/config/provider-icons`
  * Purpose: Provides provider icon registry for model selection UI.
- * Scope: Maps model IDs to Lucide icon components based on provider prefixes. Does not implement icon rendering logic.
- * Invariants: Uses only Lucide icons (bundled with app).
+ * Scope: Maps provider keys to icon components (custom SVGs + Lucide fallbacks). Does not implement icon rendering logic.
+ * Invariants: Icons use currentColor for theme compatibility.
  * Side-effects: none
- * Notes: Icons inferred from model ID prefixes; fallback to SparklesIcon.
+ * Notes: Custom inline SVG components for major providers, Lucide fallbacks for others.
  * Links: Used by ModelPicker component
  * @internal
  */
 
-import {
-  BrainCircuit,
-  type LucideIcon,
-  MessageCircle,
-  Sparkles,
-  Zap,
-} from "lucide-react";
+import { BrainCircuit, Zap } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
+
+import { AnthropicIcon } from "../icons/providers/AnthropicIcon";
+import { OpenAIIcon } from "../icons/providers/OpenAIIcon";
+import { QwenIcon } from "../icons/providers/QwenIcon";
+
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 /**
  * Provider-to-icon mapping
  * Keys match provider_key from LiteLLM model_info
  */
 const PROVIDER_ICONS = {
-  qwen: MessageCircle,
-  hermes: BrainCircuit,
-  openai: Sparkles,
-  anthropic: BrainCircuit,
+  qwen: QwenIcon,
+  hermes: BrainCircuit, // Lucide fallback (no custom SVG)
+  openai: OpenAIIcon,
+  anthropic: AnthropicIcon,
   default: Zap,
-} as const satisfies Record<string, LucideIcon>;
+} as const satisfies Record<string, IconComponent>;
 
 /**
  * Extract provider key from model ID
@@ -50,21 +51,21 @@ function getProviderKey(modelId: string): keyof typeof PROVIDER_ICONS {
 }
 
 /**
- * Get Lucide icon component for a model ID
+ * Get icon component for a model ID
  * Falls back to default icon if provider not found
  */
-export function getProviderIcon(modelId: string): LucideIcon {
+export function getProviderIcon(modelId: string): IconComponent {
   const providerKey = getProviderKey(modelId);
   return PROVIDER_ICONS[providerKey];
 }
 
 /**
- * Get Lucide icon component directly from provider key
+ * Get icon component directly from provider key
  * Use when providerKey is available from model_info
  */
 export function getIconByProviderKey(
   providerKey: string | undefined
-): LucideIcon {
+): IconComponent {
   if (!providerKey) return PROVIDER_ICONS.default;
   return providerKey in PROVIDER_ICONS
     ? PROVIDER_ICONS[providerKey as keyof typeof PROVIDER_ICONS]

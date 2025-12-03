@@ -63,7 +63,7 @@ model_list:
       model: openrouter/openai/gpt-4o-mini
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "GPT-4O Mini"
+      display_name: "GPT-4o Mini"
       is_free: false
       provider_key: "openai"
 
