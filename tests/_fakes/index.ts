@@ -16,6 +16,7 @@ export {
   createMockAccountService,
   createMockAccountServiceWithDefaults,
 } from "./accounts/mock-account.service";
+export * from "./ai/fakes";
 export { FakeClock } from "./fake-clock";
 export { FakeRng } from "./fake-rng";
 export { FakeTelemetry } from "./fake-telemetry";

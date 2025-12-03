@@ -13,7 +13,7 @@
  */
 
 import { createMockAccountServiceWithDefaults, FakeClock } from "@tests/_fakes";
-import { FakeLlmService } from "@tests/_fakes/ai/fakes";
+import { FakeLlmService, TEST_MODEL_ID } from "@tests/_fakes/ai/fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { completion } from "@/app/_facades/ai/completion.server";
@@ -57,6 +57,7 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "Hello" },
           { role: "assistant" as const, content: "Hi there" },
         ],
+        model: TEST_MODEL_ID,
         sessionUser,
       };
 
@@ -140,6 +141,7 @@ describe("app/_facades/ai/completion.server", () => {
       // Arrange
       const input = {
         messages: [{ role: "user" as const, content: "A".repeat(5000) }],
+        model: TEST_MODEL_ID,
         sessionUser,
       };
 
@@ -178,6 +180,7 @@ describe("app/_facades/ai/completion.server", () => {
       // Arrange
       const input = {
         messages: [{ role: "user" as const, content: "Hello" }],
+        model: TEST_MODEL_ID,
         sessionUser,
       };
 
@@ -213,6 +216,7 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "First" },
           { role: "assistant" as const, content: "Second" },
         ],
+        model: TEST_MODEL_ID,
         sessionUser,
       };
 
@@ -264,6 +268,7 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "Hello" },
           // Note: TypeScript prevents system role in DTO, but test runtime behavior
         ],
+        model: TEST_MODEL_ID,
         sessionUser,
       };
 
