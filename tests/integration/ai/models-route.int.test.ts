@@ -28,8 +28,8 @@ vi.mock("@/app/_lib/models-cache", () => ({
 
 // Import after mocks
 import { getSessionUser } from "@/app/_lib/auth/session";
-import { getCachedModels } from "@/app/_lib/models-cache";
 import { GET } from "@/app/api/v1/ai/models/route";
+import { getCachedModels } from "@/shared/ai/model-catalog.server";
 
 describe("/api/v1/ai/models integration tests", () => {
   beforeEach(() => {
