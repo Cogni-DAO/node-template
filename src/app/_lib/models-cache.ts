@@ -3,35 +3,22 @@
 
 /**
  * Module: `@app/_lib/models-cache`
- * Purpose: Provides server-side cache for available LiteLLM models with TTL and stale-while-revalidate.
- * Scope: Exposes cached model list for validation and API responses without per-request network calls. Does not implement model fetching logic (currently returns hardcoded list).
- * Invariants: Cache refreshes in background (SWR), stale data served on errors.
- * Side-effects: global (module-scoped cache), IO (background fetch intervals)
- * Notes: Temporarily hardcoded from litellm.config.yaml (TODO: fetch from LiteLLM API).
+ * Purpose: Provides server-side cache for LiteLLM model metadata with long TTL and stale-while-revalidate.
+ * Scope: Fetches from LiteLLM /model/info, caches results, validates model IDs. Does not modify model configuration or handle UI state.
+ * Invariants: Cache refreshes in background (SWR), stale data served on errors, cold-start failure returns error (no hardcoded fallback).
+ * Side-effects: global (module-scoped cache), IO (fetch to LiteLLM /model/info every 1h)
+ * Notes: Derives all model metadata from LiteLLM model_info (no app-side hardcoding). Single source of truth: litellm.config.yaml.
  * Links: /api/v1/ai/models route, chat route validation
  * @internal
  */
 
 import type { Model, ModelsOutput } from "@/contracts/ai.models.v1.contract";
 import { serverEnv } from "@/shared/env/server";
+import { makeLogger } from "@/shared/observability";
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const log = makeLogger({ module: "models-cache" });
 
-/**
- * Hardcoded models list from platform/infra/services/runtime/configs/litellm.config.yaml
- * TODO: Replace with dynamic fetch from ${LITELLM_BASE_URL}/v1/models
- */
-const HARDCODED_MODELS: Model[] = [
-  // Free ZDR Models
-  { id: "qwen3-4b", name: "Qwen 3 4B (Free)", isFree: true },
-  { id: "qwen3-235b", name: "Qwen 3 235B (Free)", isFree: true },
-  { id: "qwen3-coder", name: "Qwen 3 Coder (Free)", isFree: true },
-  { id: "hermes-3-405b", name: "Hermes 3 405B (Free)", isFree: true },
-  { id: "gpt-oss-20b", name: "GPT OSS 20B (Free)", isFree: true },
-  // Paid Models
-  { id: "gpt-4o-mini", name: "GPT-4O Mini", isFree: false },
-  { id: "claude-3-haiku", name: "Claude 3 Haiku", isFree: false },
-];
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (models change only on LiteLLM restart)
 
 interface CacheEntry {
   data: ModelsOutput;
@@ -42,25 +29,117 @@ let cache: CacheEntry | null = null;
 let refreshPromise: Promise<ModelsOutput> | null = null;
 
 /**
- * Fetch models from LiteLLM (placeholder for future implementation)
- * Currently returns hardcoded list
+ * Transform LiteLLM /model/info response to our Model schema
+ * Handles variant shapes: { data: [...] } or { models: [...] } or raw array
+ * Item keys: model_name (preferred) or id
+ */
+function transformModelInfoResponse(data: unknown): Model[] {
+  // Handle multiple wrapper formats
+  let modelsList: unknown[];
+  if (Array.isArray(data)) {
+    modelsList = data;
+  } else if (typeof data === "object" && data !== null) {
+    const wrapper = data as { data?: unknown[]; models?: unknown[] };
+    modelsList = wrapper.data ?? wrapper.models ?? [];
+  } else {
+    // Explicit error for unexpected shape
+    log.error(
+      { responseType: typeof data },
+      "LiteLLM /model/info unexpected response shape"
+    );
+    throw new Error(
+      `LiteLLM /model/info returned unexpected shape (type: ${typeof data})`
+    );
+  }
+
+  if (!Array.isArray(modelsList)) {
+    log.error({ modelsList }, "LiteLLM /model/info wrapper missing array");
+    throw new Error("LiteLLM /model/info response missing models array");
+  }
+
+  return modelsList
+    .map((item): Model | null => {
+      if (typeof item !== "object" || item === null) return null;
+
+      // Prefer model_name, fallback to id
+      const id =
+        (item as { model_name?: string }).model_name ??
+        (item as { id?: string }).id;
+
+      // Drop malformed entries with no valid ID
+      if (!id) return null;
+
+      const modelInfo = ((item as Record<string, unknown>).model_info ??
+        {}) as {
+        display_name?: string;
+        is_free?: boolean;
+        provider_key?: string;
+      };
+
+      // Use model_info fields from LiteLLM config (no inference)
+      return {
+        id,
+        name: modelInfo.display_name,
+        isFree: modelInfo.is_free ?? false, // Default to paid if missing
+        providerKey: modelInfo.provider_key,
+      };
+    })
+    .filter((item): item is Model => item !== null);
+}
+
+/**
+ * Fetch models from LiteLLM /model/info endpoint
+ * Throws on error - caller handles fallback to stale cache
  */
 async function fetchModelsFromLiteLLM(): Promise<ModelsOutput> {
-  // TODO: Implement actual fetch from LiteLLM
-  // const response = await fetch(`${serverEnv().LITELLM_BASE_URL}/v1/models`);
-  // Parse and map to our schema
+  const masterKey = serverEnv().LITELLM_MASTER_KEY;
 
-  return {
-    models: HARDCODED_MODELS,
-    defaultModelId: serverEnv().DEFAULT_MODEL,
-  };
+  // AbortController for timeout (compatible with Node 16+)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(`${serverEnv().LITELLM_BASE_URL}/model/info`, {
+      method: "GET",
+      headers: masterKey ? { Authorization: `Bearer ${masterKey}` } : {},
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      // LOUD ERROR: Auth/config mistakes observable
+      log.error(
+        {
+          status: response.status,
+          baseUrl: serverEnv().LITELLM_BASE_URL,
+          hasMasterKey: !!masterKey,
+        },
+        "LiteLLM /model/info request failed"
+      );
+      throw new Error(`LiteLLM /model/info returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const models = transformModelInfoResponse(data);
+
+    if (models.length === 0) {
+      log.error("LiteLLM /model/info returned empty list");
+      throw new Error("LiteLLM returned no models");
+    }
+
+    return {
+      models,
+      defaultModelId: serverEnv().DEFAULT_MODEL,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
  * Get cached models list with SWR (stale-while-revalidate)
  * - Returns cached data if fresh (< TTL)
  * - Returns stale data immediately + triggers background refresh if expired
- * - Blocks only on first call (no cache)
+ * - Throws on first call if LiteLLM unreachable (no cache, no fallback)
  */
 export async function getCachedModels(): Promise<ModelsOutput> {
   const now = Date.now();
@@ -72,6 +151,8 @@ export async function getCachedModels(): Promise<ModelsOutput> {
 
   // Stale cache: return immediately + refresh in background
   if (cache) {
+    const staleData = cache.data; // Capture for closure
+
     // Trigger background refresh if not already in progress
     if (!refreshPromise) {
       refreshPromise = fetchModelsFromLiteLLM()
@@ -81,17 +162,20 @@ export async function getCachedModels(): Promise<ModelsOutput> {
           return data;
         })
         .catch((err) => {
-          console.error("Background models refresh failed:", err);
+          log.warn(
+            { err },
+            "Background models refresh failed, serving stale cache"
+          );
           refreshPromise = null;
-          // Keep stale cache on error (cache must exist at this point)
-          if (!cache) throw new Error("Cache unexpectedly missing");
-          return cache.data;
+          // Serve stale cache
+          return staleData;
         });
     }
-    return cache.data; // Return stale immediately (SWR)
+    return staleData; // Return stale immediately (SWR)
   }
 
-  // No cache: blocking fetch
+  // No cache: blocking fetch (cold start)
+  // If this fails, let it throw - caller returns 503
   const data = await fetchModelsFromLiteLLM();
   cache = { data, timestamp: now };
   return data;
@@ -101,14 +185,23 @@ export async function getCachedModels(): Promise<ModelsOutput> {
  * Check if a model ID is in the allowed list (fast, cached)
  */
 export async function isModelAllowed(modelId: string): Promise<boolean> {
-  const { models } = await getCachedModels();
-  return models.some((m) => m.id === modelId);
+  try {
+    const { models } = await getCachedModels();
+    return models.some((m) => m.id === modelId);
+  } catch (error) {
+    // LOUD ERROR: Make allowlist failures observable
+    log.error(
+      { err: error, modelId },
+      "Model allowlist unavailable, allowing DEFAULT_MODEL only"
+    );
+    // If cache unavailable, only allow DEFAULT_MODEL (fail-open for default only)
+    return modelId === serverEnv().DEFAULT_MODEL;
+  }
 }
 
 /**
- * Get default model ID (cached)
+ * Get default model ID (from env, not cache)
  */
-export async function getDefaultModelId(): Promise<string> {
-  const { defaultModelId } = await getCachedModels();
-  return defaultModelId;
+export function getDefaultModelId(): string {
+  return serverEnv().DEFAULT_MODEL;
 }
