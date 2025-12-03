@@ -4,13 +4,13 @@
 
 ## Metadata
 
-- **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-30
-- **Status:** draft
+- **Owners:** @derek
+- **Last reviewed:** 2025-12-02
+- **Status:** stable
 
 ## Purpose
 
-Design system token definitions and TypeScript mirrors for theming.
+Design system with single token pipeline: colors in CSS vars, spacing/sizing in Tailwind config, CVA factories for components.
 
 ## Pointers
 
@@ -42,7 +42,7 @@ Design system token definitions and TypeScript mirrors for theming.
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** tailwind.preset.ts, ui.ts, ui/index.ts, theme.ts
+- **Files considered API:** ui.ts, ui/index.ts, theme.ts
 
 ## Ports (optional)
 
@@ -65,20 +65,12 @@ pnpm typecheck
 
 ## Standards
 
-- CSS variables in src/styles/tailwind.css are source of truth
-- TypeScript exports provide names only, not values
-- Token names mirror CSS variable naming
-- CVA factories use design tokens exclusively - no arbitrary Tailwind values
+- **Token pipeline (CSS-first)**: Colors + fonts + spacing + z-index → `@theme inline` block → Tailwind utilities; Runtime theme vars (:root/.dark) mapped via `hsl(var(--name))` pattern
+- **Tailwind v4 CSS-first**: Uses `@theme inline`, `@utility`, `@custom-variant` directives; no JS config file
+- **Dropdown widths**: Use CSS custom property syntax `w-(--dropdown-sm)` instead of theme tokens
+- CVA factories use Tailwind classes (gap-4, h-icon-lg, z-overlay) - no var() refs except approved hero animation tokens and dropdown widths
 - theme.ts exports only token keys and types for CVA variant props
-- All component styling must flow through ui.ts barrel (which re-exports from ui/ domain modules)
-
-### CVA + theme.ts Checklist
-
-- [ ] Token values live in tailwind.css and tailwind.preset.ts
-- [ ] src/styles/theme.ts exports keys and types only
-- [ ] In src/styles/ui/\**, declare `const *Variants = { … } satisfies Record<TokenKey,string>` and pass into cva. No inline variant objects
-- [ ] Tailwind strings appear only in cva base or \*Variants consts
-- [ ] Kit props are typed from theme.ts; features import kit only
+- All component styling flows through ui.ts barrel (re-exports from ui/ domain modules)
 
 ## Dependencies
 

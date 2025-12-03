@@ -2,28 +2,73 @@
 @custom-variant dark (&:is(.dark *));
 @import "tw-animate-css";
 
-/*
-  The default border color has changed to `currentColor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-*/
-@layer base {
-  *,
-  ::after,
-  ::before,
-  ::backdrop,
-  ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
-  }
+@theme inline {
+  /* Colors - map CSS vars to Tailwind color namespace */
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-danger: hsl(var(--color-danger));
+  --color-warning: hsl(var(--color-warning));
+  --color-success: hsl(var(--color-success));
+  --color-syntax-property: hsl(var(--syntax-property));
+  --color-syntax-operator: hsl(var(--syntax-operator));
+  --color-syntax-punctuation: hsl(var(--syntax-punctuation));
+  --color-syntax-delimiter: hsl(var(--syntax-delimiter));
+  --color-syntax-string: hsl(var(--syntax-string));
+  --color-syntax-keyword: hsl(var(--syntax-keyword));
 
-  body {
-    font-family: var(--font-sans);
-    @apply bg-background text-foreground;
-  }
+  /* Font families */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
 
-  * {
-    @apply border-border;
-  }
+  /* Spacing - icon sizes */
+  --spacing-icon-sm: 1rem;
+  --spacing-icon-md: 1.25rem;
+  --spacing-icon-lg: 1.5rem;
+  --spacing-icon-xl: 2rem;
+  --spacing-icon-2xl: 3rem;
+  --spacing-icon-3xl: 4rem;
+  --spacing-icon-4xl: 5rem;
+
+  /* Container max-widths (generates max-w-container-* utilities) */
+  --max-width-container-sm: 42rem;
+  --max-width-container-md: 48rem;
+  --max-width-container-lg: 56rem;
+  --max-width-container-xl: 64rem;
+  --max-width-container-2xl: 72rem;
+  --max-width-container-3xl: 80rem;
+  --max-width-container-screen: 1280px;
+
+  /* Z-index layers */
+  --z-index-overlay: 50;
+  --z-index-modal: 100;
+}
+
+@utility min-w-measure {
+  min-width: min(100%, var(--measure));
+}
+
+@utility max-w-measure {
+  max-width: min(100%, var(--measure));
 }
 
 @layer base {
@@ -38,12 +83,18 @@
     /* For now reuse sans; you can swap to a display font later */
     --font-display: var(--font-sans);
 
+    /* Dropdown widths - used with w-(--dropdown-sm) syntax */
+    --dropdown-sm: 8rem;
+    --dropdown-md: 9rem;
+    --dropdown-lg: 10rem;
+    --dropdown-xl: 12rem;
+
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 210 40% 96.1%;
+    --popover-foreground: 215.4 16.3% 20%;
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
@@ -66,23 +117,30 @@
     --syntax-string: 27 87% 67%; /* orange/peach - strings & variables */
     --syntax-keyword: 10 50% 50%; /* red/brown - keywords */
 
-    /* UI accent colors */
-    --accent-blue: 217 91% 60%; /* brand accent blue */
+    /* Accent gradient stops (aligned with brand hue 217) */
+    --accent-from: 217 85% 50%;
+    --accent-to: 217 100% 70%;
+    --accent-glow: 217 95% 60%;
+
+    /* Status colors */
+    --color-danger: 0 84.2% 60.2%;
+    --color-warning: 43 74% 66%;
+    --color-success: 142 71% 45%;
 
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 0 0% 0%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 0 0% 0%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --popover: 217.2 32.6% 9%;
+    --popover-foreground: 215 20.2% 76.1%;
+    --primary: 217 71% 40%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 20%;
+    --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 9%;
     --muted-foreground: 215 20.2% 76.1%;
     --accent: 217.2 32.6% 17.5%;
@@ -91,7 +149,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --ring: 217 71% 40%;
 
     /* Code syntax highlighting palette (dark mode) */
     --syntax-property: 276 100% 70%; /* teal - object properties */
@@ -101,201 +159,52 @@
     --syntax-string: 20 90% 80%; /* peach/orange - strings & variables */
     --syntax-keyword: 220 100% 65%; /* blue - keywords */
 
-    /* UI accent colors */
-    --accent-blue: 220 100% 65%; /* brand accent blue */
+    /* Accent gradient stops (aligned with brand hue 217, darker for dark mode) */
+    --accent-from: 217 80% 45%;
+    --accent-to: 217 100% 60%;
+    --accent-glow: 217 90% 52%;
+  }
+
+  /* Hero animation tokens (isolated, code.ts only) */
+  :root {
+    --hero-spacing-xs: 0.3125rem;
+    --hero-spacing-xl: 1.25rem;
+    --hero-spacing-rainbow: 8.4375rem;
+    --width-action-words: 11.6875rem;
+  }
+
+  /* Apply base styles using CSS variables directly (Tailwind v4 compatibility) */
+  body {
+    font-family: var(--font-sans);
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  * {
+    border-color: hsl(var(--border));
   }
 }
 
-@theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+/* @theme inline block deleted - tokens migrated to tailwind.config.ts */
+/* Keep hero animation vars above (isolated to code.ts) */
 
-  /* Code syntax highlighting colors */
-  --color-syntax-property: hsl(var(--syntax-property));
-  --color-syntax-operator: hsl(var(--syntax-operator));
-  --color-syntax-punctuation: hsl(var(--syntax-punctuation));
-  --color-syntax-delimiter: hsl(var(--syntax-delimiter));
-  --color-syntax-string: hsl(var(--syntax-string));
-  --color-syntax-keyword: hsl(var(--syntax-keyword));
+@layer utilities {
+  /* Desktop-only wallet button fill - scoped to data-wallet-slot to avoid affecting mobile */
+  [data-wallet-slot="desktop"] button {
+    width: 100%;
+    height: 100%;
+  }
 
-  /* Status colors */
-  --color-danger: hsl(0 84.2% 60.2%);
-  --color-warning: hsl(43 74% 66%);
-  --color-success: hsl(142 71% 45%);
-
-  /* UI accent colors */
-  --color-accent-blue: hsl(var(--accent-blue));
-
-  /* Icon sizes */
-  --size-icon-sm: 1rem;
-  --size-icon-md: 1.25rem;
-  --size-icon-lg: 1.5rem;
-  --size-icon-xl: 2rem;
-  --size-icon-2xl: 3rem;
-  --size-icon-3xl: 4rem;
-  --size-icon-4xl: 5rem;
-
-  /* Component widths */
-  --size-dropdown-sm: 8rem;
-  --size-dropdown-md: 9rem;
-  --size-dropdown-lg: 10rem;
-  --size-dropdown-xl: 12rem;
-
-  /* GitHub button palette */
-  --github-button-bg: #09090b;
-  --github-button-bg-hover: #18181b;
-  --github-button-border: #27272a;
-  --github-button-text: #fafafa;
-  --github-button-bg-dark: #fafafa;
-  --github-button-bg-dark-hover: #f4f4f5;
-  --github-button-border-dark: #d4d4d8;
-  --github-button-text-dark: #0a0a0a;
-  --github-button-yellow: #fbbf24;
-
-  /* Terminal dots */
-  --size-dot: 0.75rem;
-
-  /* Spacing scale */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-
-  /* Extended spacing scale */
-  --spacing-2xs: 0.125rem; /* 2px - py-1 */
-  --spacing-xs-plus: 0.5rem; /* 8px - mt-2 */
-  --spacing-md-plus: 0.75rem; /* 12px - mt-3 */
-  --spacing-lg-plus: 1.5rem; /* 24px - py-6, mt-6 */
-  --spacing-xl-plus: 1.25rem; /* 20px - mt-5 */
-  --spacing-2xl: 2.5rem; /* 40px - mt-10 */
-  --spacing-2xl-plus: 2rem; /* 32px - mt-8 */
-  --spacing-3xl: 3rem; /* 48px - py-12 */
-  --spacing-4xl: 4rem; /* 64px - py-16 */
-  --spacing-5xl: 5rem; /* 80px - py-20 */
-
-  /* Positioning tokens */
-  --position-sm: 1rem; /* 16px - top-4, left-4 */
-
-  /* Hero code syntax tokens */
-  --spacing-hero-xs: 0.3125rem; /* 5px - syntax element spacing */
-  --spacing-hero-xl: 1.25rem; /* 20px - syntax element spacing */
-  --spacing-rainbow: 8.4375rem; /* 135px - rainbow action words spacing */
-  --width-action-words: 11.6875rem; /* 187px - action words container width (10% wider) */
-
-  /* Typography scale */
-  --text-xs: 0.75rem; /* 12px */
-  --text-sm: 0.875rem; /* 14px */
-  --text-base: 1rem; /* 16px */
-  --text-lg: 1.125rem; /* 18px */
-  --text-xl: 1.25rem; /* 20px */
-  --text-2xl: 1.5rem; /* 24px */
-  --text-3xl: 1.875rem; /* 30px */
-  --text-4xl: 2.25rem; /* 36px */
-  --text-5xl: 3rem; /* 48px */
-  --text-6xl: 3.75rem; /* 60px */
-
-  /* Container widths */
-  --size-container-sm: 42rem; /* max-w-2xl */
-  --size-container-md: 48rem; /* max-w-3xl */
-  --size-container-lg: 56rem; /* max-w-4xl */
-  --size-container-xl: 64rem; /* max-w-5xl */
-  --size-container-2xl: 72rem; /* max-w-6xl */
-  --size-container-3xl: 80rem; /* max-w-7xl */
-  --size-container-screen: 1280px; /* max-w-screen-xl */
-
-  /* Shadow system */
-  --shadow-xs: 0 1px rgb(0 0 0 / 0.05);
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-lg:
-    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
-
-  /* Animation system */
-  --opacity-hidden: 0;
-  --opacity-half: 0.5;
-  --opacity-visible: 1;
-  --opacity-90: 0.9;
-  --opacity-80: 0.8;
-  --opacity-50: 0.5;
-  --opacity-30: 0.3;
-  --rotation-none: 0deg;
-  --rotation-quarter: 90deg;
-  --duration-fast: 150ms;
-  --duration-normal: 300ms;
-  --duration-slow: 500ms;
-  --delay-fast: 150ms;
-  --delay-normal: 300ms;
-  --delay-slow: 450ms;
-
-  /* Typography utilities */
-  --underline-offset: 4px;
-  --measure: 48ch; /* Typography measure for readable line lengths */
-
-  /* Prose system */
-  --prose-xs: 0.75rem;
-  --prose-sm: 0.875rem;
-  --prose-base: 1rem;
-  --prose-lg: 1.125rem;
-  --prose-xl: 1.25rem;
-
-  /* Zero values for structural utilities */
-  --flex-none: 0;
-  --grow-none: 0;
-  --shrink-none: 0;
-
-  /* Color system */
-  --color-white: #ffffff;
-  --color-transparent: transparent;
-
-  /* Alpha opacity variants for common percentages */
-  --alpha-20: 0.2;
-  --alpha-30: 0.3;
-  --alpha-40: 0.4;
-  --alpha-50: 0.5;
-  --alpha-60: 0.6;
-  --alpha-80: 0.8;
-  --alpha-90: 0.9;
-
-  /* Ring/border widths */
-  --ring-width-sm: 3px;
-
-  /* Ring offset width scale */
-  --ring-offset-w-sm: 2px;
-  --ring-offset-w-md: 4px;
-
-  /* Grid system */
-  --grid-cols-2: repeat(2, minmax(0, 1fr));
-  --grid-cols-3: repeat(3, minmax(0, 1fr));
-  --grid-cols-4: repeat(4, minmax(0, 1fr));
-  --grid-cols-12: repeat(12, minmax(0, 1fr));
-
-  /* Viewport dimensions */
-  --height-screen-dvh: 100dvh;
-
-  /* Z-index layers (align with theme.ts zIndexKeys) */
-  --z-base: 0;
-  --z-overlay: 50;
-  --z-modal: 100;
-
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Accent gradient text utility - uses same tokens as button variant */
+  .text-gradient-accent {
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--accent-from)),
+      hsl(var(--accent-to))
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px hsl(var(--accent-glow) / 0.15);
+  }
 }

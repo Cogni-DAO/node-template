@@ -5,8 +5,9 @@
  * Module: `@app/providers/wallet.client`
  * Purpose: Wallet provider for EVM wallet connections using wagmi and RainbowKit.
  * Scope: Wraps app with WagmiProvider and RainbowKitProvider. Does not handle server-side rendering of wallet context.
- * Invariants: Uses canonical config; passes authenticationStatus to RainbowKitProvider.
+ * Invariants: Config created in useEffect (browser-only); stable across theme changes; nested RainbowKitThemeProvider isolates theme from WagmiProvider.
  * Side-effects: none
+ * Notes: Nested RainbowKitThemeProvider isolates theme changes from WagmiProvider to prevent React Query Hydrate warnings.
  * Links: https://rainbowkit.com/docs/authentication
  * @public
  */
@@ -17,33 +18,92 @@ import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { RainbowKitSiweNextAuthProvider } from "@rainbow-me/rainbowkit-siwe-next-auth";
 import { useTheme } from "next-themes";
 import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { Config } from "wagmi";
 import { WagmiProvider } from "wagmi";
 
+import { clientEnv } from "@/shared/env";
+import { CHAIN } from "@/shared/web3";
+
 import { createAppDarkTheme, createAppLightTheme } from "./rainbowkit-theme";
-import { config } from "./wagmi-config.client";
+
+/**
+ * Nested component that handles RainbowKit theme switching.
+ * Isolates theme changes from WagmiProvider to prevent Hydrate errors.
+ */
+function RainbowKitThemeProvider({
+  children,
+}: {
+  readonly children: ReactNode;
+}): ReactNode {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const theme = useMemo(
+    () =>
+      mounted && resolvedTheme === "light"
+        ? createAppLightTheme()
+        : createAppDarkTheme(),
+    [mounted, resolvedTheme]
+  );
+
+  return <RainbowKitProvider theme={theme}>{children}</RainbowKitProvider>;
+}
 
 export function WalletProvider({
   children,
 }: {
   readonly children: ReactNode;
 }): ReactNode {
-  const { resolvedTheme } = useTheme();
+  const [wagmiConfig, setWagmiConfig] = useState<Config | null>(null);
 
-  // Determine RainbowKit theme based on resolved theme
-  // Default to light if resolvedTheme is undefined (initial render)
-  const rainbowKitTheme =
-    resolvedTheme === "dark" ? createAppDarkTheme() : createAppLightTheme();
+  // Create wagmi config in browser only to prevent IndexedDB SSR errors
+  // Config created once and never recreated (stable across theme changes)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initWagmiConfig() {
+      const { getDefaultConfig } = await import("@rainbow-me/rainbowkit");
+      const env = clientEnv();
+
+      const config = getDefaultConfig({
+        appName: "Cogni Template",
+        projectId:
+          env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "YOUR_PROJECT_ID",
+        chains: [CHAIN],
+        ssr: false,
+      });
+
+      if (!cancelled) {
+        setWagmiConfig(config);
+      }
+    }
+
+    initWagmiConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Wait for config before rendering to prevent useAccount hook errors
+  // Brief delay covered by skeleton overlay in WalletConnectButton
+  if (!wagmiConfig) {
+    return null;
+  }
 
   return (
-    <WagmiProvider config={config}>
+    <WagmiProvider config={wagmiConfig}>
       <RainbowKitSiweNextAuthProvider
         getSiweMessageOptions={() => ({
           statement: "Sign in with Ethereum to the app.",
         })}
       >
-        <RainbowKitProvider theme={rainbowKitTheme}>
-          {children}
-        </RainbowKitProvider>
+        <RainbowKitThemeProvider>{children}</RainbowKitThemeProvider>
       </RainbowKitSiweNextAuthProvider>
     </WagmiProvider>
   );
