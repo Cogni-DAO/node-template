@@ -12,6 +12,7 @@
  * @public
  */
 
+import { TEST_MODEL_ID } from "@tests/_fakes";
 import { setupCompletionFacadeTest } from "@tests/_fixtures/ai/completion-facade-setup";
 import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
@@ -60,6 +61,7 @@ describe("completion facade contract", () => {
     const result = await completion(
       {
         messages: [{ role: "user", content: "test" }],
+        model: TEST_MODEL_ID,
         sessionUser: { id: "test-user", walletAddress: "0x123" },
       },
       testCtx
@@ -103,6 +105,7 @@ describe("completion facade contract", () => {
     const result = await completion(
       {
         messages: [{ role: "user", content: "test" }],
+        model: TEST_MODEL_ID,
         sessionUser: { id: "test-user", walletAddress: "0x123" },
       },
       testCtx

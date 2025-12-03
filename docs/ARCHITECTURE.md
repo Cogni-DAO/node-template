@@ -167,17 +167,22 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [ ] └── images/
 
 [x] src/
+[x] ├── auth.ts # Auth.js configuration (SIWE credentials provider)
+[x] ├── proxy.ts # Auth proxy for /api/v1/ai/_ routes
 [x] ├── bootstrap/ # composition root (DI)
 [x] │ ├── container.ts # wires adapters → ports
 [ ] │ └── config.ts # Zod-validated env
 [ ] │
 [x] ├── contracts/ # operation contracts (edge IO)
 [x] │ ├── AGENTS.md
-[x] │ ├── http/ # HTTP route contracts
-[x] │ ├── admin.accounts.register.v1.contract.ts # account registration
-[x] │ ├── admin.accounts.topup.v1.contract.ts # credit top-up
-[x] │ ├── wallet.link.v1.contract.ts # wallet-to-account linking
-[x] │ └── \*.contract.ts # individual operation contracts
+[x] │ ├── http/ # HTTP route contracts (openapi.v1.ts)
+[x] │ ├── ai.chat.v1.contract.ts # streaming chat
+[x] │ ├── ai.completion.v1.contract.ts # AI completion
+[x] │ ├── payments.intent.v1.contract.ts # payment intent creation
+[x] │ ├── payments.submit.v1.contract.ts # payment submission
+[x] │ ├── payments.status.v1.contract.ts # payment status
+[x] │ ├── payments.credits._.v1.contract.ts # credits summary/confirm
+[x] │ └── meta.\*.v1.contract.ts # health, route-manifest
 [ ] │
 [x] ├── mcp/ # MCP host (future)
 [x] │ ├── AGENTS.md
@@ -187,8 +192,10 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── layout.tsx
 [x] │ ├── page.tsx
 [x] │ ├── \_lib/ # private app-level helpers
-[x] │ │ └── auth/ # session helpers
-[x] │ │ └── session.ts
+[x] │ │ └── auth/session.ts
+[x] │ ├── \_facades/ # route facade helpers
+[x] │ │ ├── ai/
+[x] │ │ └── payments/
 [x] │ ├── providers/ # Client-side provider composition (wagmi, RainbowKit, React Query)
 [x] │ │ ├── AGENTS.md
 [x] │ │ ├── app-providers.client.tsx
@@ -200,37 +207,35 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── (app)/ # protected, authenticated pages
 [x] │ └── api/
 [x] │ ├── auth/[...nextauth]/ # Auth.js routes
-[x] │ ├── v1/
-[x] │ │ ├── ai/completion/ # AI completion (session-protected, credit-metered)
-[x] │ │ └── payments/credits/ # credit payment endpoints
-[x] │ └── admin/accounts/ # admin account management
+[x] │ └── v1/
+[x] │ ├── ai/completion/ # AI completion (credit-metered)
+[x] │ ├── ai/chat/ # streaming chat (credit-metered)
+[x] │ └── payments/ # payment endpoints (intents, attempts, credits)
 [ ] │
 [x] ├── features/ # application services
 [x] │ ├── home/ # home page data
-[x] │ ├── ai/ # AI completion services
-[x] │ │ └── services/
+[x] │ ├── ai/ # AI services
+[x] │ │ ├── services/ # completion service
+[x] │ │ ├── chat/ # streaming chat (assistant-ui)
+[x] │ │ │ ├── providers/
+[x] │ │ │ └── components/
+[x] │ │ ├── components/ # ModelPicker, ChatComposerExtras
+[x] │ │ ├── config/ # provider icons registry
+[x] │ │ ├── hooks/ # useModels
+[x] │ │ ├── icons/ # provider SVG components
+[x] │ │ │ └── providers/
+[x] │ │ └── preferences/ # model localStorage
 [x] │ ├── accounts/ # account management feature
-[x] │ │ ├── public.ts # feature public API (single entrypoint)
-[x] │ │ ├── errors.ts # feature error types and guards
 [x] │ │ └── services/
-[x] │ │ └── adminAccounts.ts # admin account operations
 [x] │ ├── site-meta/ # meta services (health, routes)
 [x] │ │ └── services/
-[x] │ ├── chat/ # authenticated chat feature
-[x] │ │ └── components/
-[x] │ ├── payments/ # widget payment processing
-[x] │ │ └── services/
-[ ] │ ├── auth/
-[ ] │ │ ├── actions.ts
-[ ] │ │ └── services/
-[ ] │ └── proposals/
-[ ] │ ├── actions.ts
-[ ] │ ├── services/
-[ ] │ ├── components/
-[ ] │ ├── hooks/
-[ ] │ ├── types.ts
-[ ] │ ├── constants.ts
-[ ] │ └── index.ts
+[x] │ ├── payments/ # USDC payment processing
+[x] │ │ ├── services/
+[x] │ │ ├── hooks/
+[x] │ │ ├── api/
+[x] │ │ └── utils/
+[ ] │ ├── auth/ # (not implemented)
+[ ] │ └── proposals/ # (not implemented)
 [ ] │
 [x] ├── core/ # domain: entities, rules, invariants
 [x] │ ├── chat/ # chat domain model
@@ -243,6 +248,11 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ └── public.ts # domain exports
 [x] │ ├── billing/ # billing domain logic
 [x] │ │ └── pricing.ts # credit cost calculations
+[x] │ ├── payments/ # payment domain model
+[x] │ │ ├── model.ts # PaymentAttempt entity
+[x] │ │ ├── rules.ts # state machine transitions
+[x] │ │ ├── errors.ts # PaymentErrorCode enum
+[x] │ │ └── public.ts
 [x] │ └── public.ts # core exports
 [ ] │ ├── auth/
 [ ] │ │ ├── session.ts
@@ -258,6 +268,8 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── llm.port.ts # LLM service interface (LlmCaller)
 [x] │ ├── clock.port.ts # Clock { now(): Date }
 [x] │ ├── accounts.port.ts # AccountService interface (create, debit, credit)
+[x] │ ├── payment-attempt.port.ts # PaymentAttemptRepository interface
+[x] │ ├── onchain-verifier.port.ts # OnChainVerifier interface (stubbed for MVP)
 [x] │ └── index.ts # port exports
 [ ] │ ├── wallet.port.ts # WalletService { verifySignature(...) }
 [ ] │ ├── auth.port.ts # AuthService { issueNonce, verifySiwe, session }
@@ -277,12 +289,16 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ │ ├── client.ts # main database client export
 [x] │ │ │ ├── migrations/ # schema migrations (see shared/db/schema.\*.ts)
 [x] │ │ │ └── index.ts # db exports
+[x] │ │ ├── payments/ # payment adapters
+[x] │ │ │ ├── drizzle-payment-attempt.adapter.ts
+[x] │ │ │ └── ponder-onchain-verifier.adapter.ts # stubbed for MVP
 [x] │ │ ├── time/system.adapter.ts # system clock
 [x] │ │ └── index.ts # server adapter exports
 [x] │ └── test/ # fake implementations for CI
-[x] │ ├── AGENTS.md # test adapter documentation
-[x] │ ├── ai/fake-llm.adapter.ts # test LLM adapter
-[x] │ └── index.ts # test adapter exports
+[x] │ ├── AGENTS.md
+[x] │ ├── ai/fake-llm.adapter.ts
+[x] │ ├── payments/fake-onchain-verifier.adapter.ts
+[x] │ └── index.ts
 [ ] │ ├── auth/siwe.adapter.ts # nonce + session store
 [ ] │ ├── wallet/verify.adapter.ts # viem-based signature checks
 [ ] │ ├── apikey/drizzle.repo.ts # API keys persistence
@@ -315,8 +331,12 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ └── index.ts
 [x] │ ├── util/
 [x] │ │ ├── cn.ts # className utility
-[x] │ │ ├── accountId.ts # stable account ID derivation from API key
 [x] │ │ └── index.ts
+[x] │ ├── observability/ # logging and context
+[x] │ │ ├── logging/ # Pino structured logging
+[x] │ │ └── context/ # RequestContext pattern
+[x] │ ├── web3/ # chain config, USDC addresses
+[x] │ ├── config/ # repo-spec config helpers
 [x] │ └── index.ts
 [ ] │ ├── schemas/
 [ ] │ │ ├── api.ts # request/response DTOs
@@ -326,19 +346,30 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [ ] │
 [x] ├── components/ # shared presentational UI
 [x] │ ├── kit/
-[x] │ │ ├── layout/ # Container
-[x] │ │ ├── data-display/ # Avatar, TerminalFrame
-[x] │ │ ├── animation/ # Reveal
-[x] │ │ └── typography/ # Prompt
+[x] │ │ ├── layout/
+[x] │ │ ├── data-display/
+[x] │ │ ├── animation/
+[x] │ │ ├── typography/
+[x] │ │ ├── inputs/
+[x] │ │ ├── navigation/
+[x] │ │ ├── feedback/
+[x] │ │ ├── auth/
+[x] │ │ ├── chat/
+[x] │ │ ├── payments/
+[x] │ │ ├── sections/
+[x] │ │ └── theme/
 [x] │ ├── vendor/
-[x] │ │ └── ui-primitives/
-[x] │ │ └── shadcn/ # button, avatar, card, \_vendor_utils
+[x] │ │ ├── shadcn/ # shadcn/ui primitives
+[x] │ │ └── assistant-ui/ # assistant-ui components
 [x] │ └── index.ts
 [ ] │
 [x] ├── styles/
 [x] │ ├── tailwind.css # v4 CSS-first config (@theme/@utility)
 [x] │ ├── theme.ts # token key types
 [x] │ └── ui/ # CVA styling factories
+[ ] │
+[x] ├── lib/ # additional library helpers
+[x] │ └── auth/ # auth mapping and server helpers
 [ ] │
 [ ] ├── types/
 [ ] │ ├── index.d.ts
@@ -478,5 +509,6 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
 - [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches
 - [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines
+- [Model Selection](MODEL_SELECTION.md) - Dynamic model fetching from LiteLLM, validation, and UI integration
 - [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details

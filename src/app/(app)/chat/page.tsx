@@ -14,32 +14,14 @@
 
 "use client";
 
-import { ThreadPrimitive } from "@assistant-ui/react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
-import { Button, Thread } from "@/components";
+import { Thread } from "@/components";
 import { ChatRuntimeProvider } from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
+import { ChatComposerExtras, useModels } from "@/features/ai/public";
 import { useCreditsSummary } from "@/features/payments/public";
-
-const SUGGESTIONS = [
-  {
-    title: "Help me start",
-    label: "a community-owned project",
-    action: "Help me start a community-owned project around ___",
-  },
-  {
-    title: "Explain how",
-    label: "Cogni works in 30 seconds",
-    action: "Explain how Cogni works in 30 seconds",
-  },
-  {
-    title: "Is my idea legal?",
-    label: "What should I watch out for?",
-    action: "Is my idea legal? What should I watch out for?",
-  },
-];
 
 function ChatCreditsHint() {
   const { data, isLoading, isError } = useCreditsSummary();
@@ -60,47 +42,51 @@ function ChatCreditsHint() {
 }
 
 const ChatWelcomeWithHint = () => (
-  <div className="mx-auto my-auto flex w-full max-w-[var(--thread-max-width)] grow flex-col">
-    <div className="flex w-full grow flex-col items-center justify-center">
-      <div className="flex size-full flex-col justify-center px-8">
-        <div className="fade-in slide-in-from-bottom-2 animate-in font-semibold text-2xl duration-300 ease-out">
-          What do you want to build together?
-        </div>
-        <div className="fade-in slide-in-from-bottom-2 animate-in text-2xl text-muted-foreground/65 delay-100 duration-300 ease-out">
-          Start a project, join one, or ship a change—Cogni helps with the next
-          step.
-        </div>
+  <div className="mx-auto flex h-full w-full max-w-[var(--thread-max-width)] flex-col items-center justify-center">
+    <div className="flex flex-col justify-center px-8">
+      <div className="fade-in slide-in-from-bottom-2 animate-in font-semibold text-2xl duration-300 ease-out">
+        What do you want to build together?
       </div>
-    </div>
-    <div className="grid w-full @md:grid-cols-2 gap-2 pb-4">
-      {SUGGESTIONS.map((suggestion, index) => (
-        <div
-          key={`suggested-action-${suggestion.title}-${index}`}
-          className="fade-in slide-in-from-bottom-4 @md:nth-[n+3]:block hidden nth-[n+3]:hidden animate-in duration-300 ease-out"
-          style={{ animationDelay: `${index * 50}ms` }}
-        >
-          <ThreadPrimitive.Suggestion prompt={suggestion.action} send asChild>
-            <Button
-              variant="ghost"
-              className="h-auto w-full flex-1 @md:flex-col flex-wrap items-start justify-start gap-1 rounded-3xl border px-5 py-4 text-sm dark:hover:bg-accent/60"
-              aria-label={suggestion.action}
-            >
-              <span className="font-medium">{suggestion.title}</span>
-              <span className="text-muted-foreground">{suggestion.label}</span>
-            </Button>
-          </ThreadPrimitive.Suggestion>
-        </div>
-      ))}
+      <div className="fade-in slide-in-from-bottom-2 animate-in text-2xl text-muted-foreground/65 delay-100 duration-300 ease-out">
+        Start a project, join one, or ship a change—Cogni helps with the next
+        step.
+      </div>
     </div>
     <ChatCreditsHint />
   </div>
 );
 
 export default function ChatPage(): ReactNode {
+  const modelsQuery = useModels();
+
+  // Initialize with fallback, will be updated by Thread component from API
+  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
+  const defaultModelId = modelsQuery.data?.defaultModelId ?? "gpt-4o-mini";
+
+  // Update selected model when API data loads
+  useEffect(() => {
+    if (modelsQuery.data?.defaultModelId && selectedModel === "gpt-4o-mini") {
+      setSelectedModel(modelsQuery.data.defaultModelId);
+    }
+  }, [modelsQuery.data?.defaultModelId, selectedModel]);
+
   return (
-    <div className="flex h-screen flex-col">
-      <ChatRuntimeProvider onAuthExpired={() => signOut()}>
-        <Thread welcomeMessage={<ChatWelcomeWithHint />} />
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <ChatRuntimeProvider
+        selectedModel={selectedModel}
+        defaultModelId={defaultModelId}
+        onAuthExpired={() => signOut()}
+      >
+        <Thread
+          welcomeMessage={<ChatWelcomeWithHint />}
+          composerLeft={
+            <ChatComposerExtras
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+              defaultModelId={defaultModelId}
+            />
+          }
+        />
       </ChatRuntimeProvider>
     </div>
   );

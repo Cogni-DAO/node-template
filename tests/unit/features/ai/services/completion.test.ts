@@ -12,14 +12,16 @@
  * @public
  */
 
-import { createMockAccountServiceWithDefaults, FakeClock } from "@tests/_fakes";
 import {
   createConversation,
   createLongMessage,
   createMixedRoleConversation,
+  createMockAccountServiceWithDefaults,
   createUserMessage,
+  FakeClock,
   FakeLlmService,
-} from "@tests/_fakes/ai/fakes";
+  TEST_MODEL_ID,
+} from "@tests/_fakes";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChatValidationError, MAX_MESSAGE_CHARS } from "@/core";
@@ -62,6 +64,7 @@ describe("features/ai/services/completion", () => {
       const accountService = createMockAccountServiceWithDefaults();
       const result = await execute(
         messages,
+        TEST_MODEL_ID,
         llmService,
         accountService,
         clock,
@@ -98,6 +101,7 @@ describe("features/ai/services/completion", () => {
       const accountService = createMockAccountServiceWithDefaults();
       await execute(
         messages,
+        TEST_MODEL_ID,
         llmService,
         accountService,
         clock,
@@ -127,7 +131,15 @@ describe("features/ai/services/completion", () => {
       // Act & Assert
       const accountService = createMockAccountServiceWithDefaults();
       await expect(
-        execute(messages, llmService, accountService, clock, caller, testCtx)
+        execute(
+          messages,
+          TEST_MODEL_ID,
+          llmService,
+          accountService,
+          clock,
+          caller,
+          testCtx
+        )
       ).rejects.toThrow(ChatValidationError);
       expect(llmService.wasCalled()).toBe(false); // Should not call LLM
     });
@@ -154,6 +166,7 @@ describe("features/ai/services/completion", () => {
       const accountService = createMockAccountServiceWithDefaults();
       await execute(
         messages,
+        TEST_MODEL_ID,
         llmService,
         accountService,
         clock,
@@ -191,6 +204,7 @@ describe("features/ai/services/completion", () => {
       const accountService = createMockAccountServiceWithDefaults();
       await execute(
         originalMessages,
+        TEST_MODEL_ID,
         llmService,
         accountService,
         clock,
@@ -220,6 +234,7 @@ describe("features/ai/services/completion", () => {
       const accountService = createMockAccountServiceWithDefaults();
       const result = await execute(
         messages,
+        TEST_MODEL_ID,
         llmService,
         accountService,
         clock,
@@ -250,7 +265,15 @@ describe("features/ai/services/completion", () => {
       // Act & Assert
       const accountService = createMockAccountServiceWithDefaults();
       await expect(
-        execute(messages, llmService, accountService, clock, caller, testCtx)
+        execute(
+          messages,
+          TEST_MODEL_ID,
+          llmService,
+          accountService,
+          clock,
+          caller,
+          testCtx
+        )
       ).rejects.toThrow("LLM service unavailable");
     });
   });
