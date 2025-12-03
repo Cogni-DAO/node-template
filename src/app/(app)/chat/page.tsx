@@ -32,9 +32,9 @@ function ChatCreditsHint() {
   return (
     <div className="mt-6 flex justify-center">
       <p className="text-muted-foreground text-sm">
-        You may need credits to run AI.{" "}
+        Select a Free model or{" "}
         <Link href="/credits" className="text-primary underline">
-          Add credits →
+          Buy Credits →
         </Link>
       </p>
     </div>
@@ -45,11 +45,11 @@ const ChatWelcomeWithHint = () => (
   <div className="mx-auto flex h-full w-full max-w-[var(--thread-max-width)] flex-col items-center justify-center">
     <div className="flex flex-col justify-center px-8">
       <div className="fade-in slide-in-from-bottom-2 animate-in font-semibold text-2xl duration-300 ease-out">
-        What do you want to build together?
+        This is where YOU need to add value
       </div>
       <div className="fade-in slide-in-from-bottom-2 animate-in text-2xl text-muted-foreground/65 delay-100 duration-300 ease-out">
-        Start a project, join one, or ship a change—Cogni helps with the next
-        step.
+        This is dumb right now. Fork this project, and make this AI valuable to
+        one specific niche.
       </div>
     </div>
     <ChatCreditsHint />
