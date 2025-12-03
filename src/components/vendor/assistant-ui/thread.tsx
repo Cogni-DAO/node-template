@@ -18,9 +18,8 @@ import {
   Square,
 } from "lucide-react";
 import type { FC, ReactNode } from "react";
-
+import { ComposerAddAttachment } from "@/components/kit/chat/ComposerAddAttachment";
 import {
-  ComposerAddAttachment,
   ComposerAttachments,
   UserMessageAttachments,
 } from "@/components/vendor/assistant-ui/attachment";
