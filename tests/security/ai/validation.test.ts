@@ -17,6 +17,7 @@ import {
   createSystemMessage,
   createUserMessage,
   FakeLlmService,
+  TEST_MODEL_ID,
 } from "@tests/_fakes/ai/fakes";
 import errorCases from "@tests/_fixtures/ai/error-cases.json";
 import { describe, expect, it } from "vitest";
@@ -181,15 +182,18 @@ describe("security/ai/validation", () => {
     });
 
     it("should handle empty and null inputs gracefully", () => {
-      // Empty messages array
+      // Empty messages array (but model required)
       expect(() =>
-        aiCompletionOperation.input.parse({ messages: [] })
+        aiCompletionOperation.input.parse({
+          messages: [],
+          model: TEST_MODEL_ID,
+        })
       ).not.toThrow();
 
       // Null/undefined should fail
       expect(() => aiCompletionOperation.input.parse(null)).toThrow();
       expect(() => aiCompletionOperation.input.parse(undefined)).toThrow();
-      expect(() => aiCompletionOperation.input.parse({})).toThrow(); // Missing messages field
+      expect(() => aiCompletionOperation.input.parse({})).toThrow(); // Missing messages and model fields
     });
 
     it("should ignore client-provided timestamps in favor of server timestamps", () => {
