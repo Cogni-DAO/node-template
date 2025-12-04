@@ -8,6 +8,7 @@ permissions:
   contents: write
   packages: write
   pull-requests: write
+  actions: read # Required for CI telemetry to fetch job logs
 
 concurrency:
   group: staging-preview-${{ github.workflow }}-${{ github.ref }}

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/_lib/models-cache`
+ * Module: `@shared/ai/model-catalog.server`
  * Purpose: Provides server-side cache for LiteLLM model metadata with long TTL and stale-while-revalidate.
  * Scope: Fetches from LiteLLM /model/info, caches results, validates model IDs. Does not modify model configuration or handle UI state.
  * Invariants: Cache refreshes in background (SWR), stale data served on errors, cold-start failure returns error (no hardcoded fallback).
@@ -12,7 +12,6 @@
  * @internal
  */
 
-import type { Model, ModelsOutput } from "@/contracts/ai.models.v1.contract";
 import { serverEnv } from "@/shared/env/server";
 import { makeLogger } from "@/shared/observability";
 
@@ -20,20 +19,36 @@ const log = makeLogger({ module: "models-cache" });
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (models change only on LiteLLM restart)
 
+/**
+ * Internal model definition for catalog.
+ * Decoupled from API contract to avoid circular dependencies.
+ */
+export interface ModelMeta {
+  id: string;
+  name?: string | undefined;
+  isFree: boolean;
+  providerKey?: string | undefined;
+}
+
+export interface ModelsCatalog {
+  models: ModelMeta[];
+  defaultModelId: string;
+}
+
 interface CacheEntry {
-  data: ModelsOutput;
+  data: ModelsCatalog;
   timestamp: number;
 }
 
 let cache: CacheEntry | null = null;
-let refreshPromise: Promise<ModelsOutput> | null = null;
+let _refreshPromise: Promise<ModelsCatalog> | null = null;
 
 /**
- * Transform LiteLLM /model/info response to our Model schema
+ * Transform LiteLLM /model/info response to our internal ModelMeta shape
  * Handles variant shapes: { data: [...] } or { models: [...] } or raw array
  * Item keys: model_name (preferred) or id
  */
-function transformModelInfoResponse(data: unknown): Model[] {
+function transformModelInfoResponse(data: unknown): ModelMeta[] {
   // Handle multiple wrapper formats
   let modelsList: unknown[];
   if (Array.isArray(data)) {
@@ -58,7 +73,7 @@ function transformModelInfoResponse(data: unknown): Model[] {
   }
 
   return modelsList
-    .map((item): Model | null => {
+    .map((item): ModelMeta | null => {
       if (typeof item !== "object" || item === null) return null;
 
       // Prefer model_name, fallback to id
@@ -84,14 +99,14 @@ function transformModelInfoResponse(data: unknown): Model[] {
         providerKey: modelInfo.provider_key,
       };
     })
-    .filter((item): item is Model => item !== null);
+    .filter((item): item is ModelMeta => item !== null);
 }
 
 /**
  * Fetch models from LiteLLM /model/info endpoint
  * Throws on error - caller handles fallback to stale cache
  */
-async function fetchModelsFromLiteLLM(): Promise<ModelsOutput> {
+async function fetchModelsFromLiteLLM(): Promise<ModelsCatalog> {
   const masterKey = serverEnv().LITELLM_MASTER_KEY;
 
   // AbortController for timeout (compatible with Node 16+)
@@ -141,7 +156,7 @@ async function fetchModelsFromLiteLLM(): Promise<ModelsOutput> {
  * - Returns stale data immediately + triggers background refresh if expired
  * - Throws on first call if LiteLLM unreachable (no cache, no fallback)
  */
-export async function getCachedModels(): Promise<ModelsOutput> {
+export async function getCachedModels(): Promise<ModelsCatalog> {
   const now = Date.now();
 
   // Fresh cache hit
@@ -154,23 +169,21 @@ export async function getCachedModels(): Promise<ModelsOutput> {
     const staleData = cache.data; // Capture for closure
 
     // Trigger background refresh if not already in progress
-    if (!refreshPromise) {
-      refreshPromise = fetchModelsFromLiteLLM()
-        .then((data) => {
-          cache = { data, timestamp: Date.now() };
-          refreshPromise = null;
-          return data;
-        })
-        .catch((err) => {
-          log.warn(
-            { err },
-            "Background models refresh failed, serving stale cache"
-          );
-          refreshPromise = null;
-          // Serve stale cache
-          return staleData;
-        });
-    }
+    _refreshPromise ??= fetchModelsFromLiteLLM()
+      .then((data) => {
+        cache = { data, timestamp: Date.now() };
+        _refreshPromise = null;
+        return data;
+      })
+      .catch((error) => {
+        makeLogger({ module: "model-catalog" }).error(
+          { err: error },
+          "Background models refresh failed, serving stale cache"
+        );
+        _refreshPromise = null;
+        // Serve stale cache
+        return staleData;
+      });
     return staleData; // Return stale immediately (SWR)
   }
 
@@ -196,6 +209,24 @@ export async function isModelAllowed(modelId: string): Promise<boolean> {
     );
     // If cache unavailable, only allow DEFAULT_MODEL (fail-open for default only)
     return modelId === serverEnv().DEFAULT_MODEL;
+  }
+}
+
+/**
+ * Check if a model is free (fast, cached)
+ * Returns false if model not found or cache unavailable (safe default)
+ */
+export async function isModelFree(modelId: string): Promise<boolean> {
+  try {
+    const { models } = await getCachedModels();
+    const model = models.find((m) => m.id === modelId);
+    return model?.isFree ?? false;
+  } catch (error) {
+    log.error(
+      { err: error, modelId },
+      "Model cache unavailable for isModelFree check, defaulting to false (paid)"
+    );
+    return false;
   }
 }
 

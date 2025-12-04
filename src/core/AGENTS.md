@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Pure domain logic with entities, rules, and business invariants. No I/O, time, or RNG dependencies. Includes account models, credit pricing calculations, chat message validation, and payment attempt state machine for USDC credit top-ups.
+Pure domain logic with entities, rules, and business invariants. No I/O, time, or RNG dependencies. Includes account models, credit pricing calculations, chat message validation, AI utilities (system prompt, token estimation), and payment attempt state machine for USDC credit top-ups.
 
 ## Pointers
 
@@ -44,6 +44,7 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
   - Payment constants (CREDITS_PER_CENT, MIN_PAYMENT_CENTS, MAX_PAYMENT_CENTS, PAYMENT_INTENT_TTL_MS, PENDING_UNVERIFIED_TTL_MS)
   - Domain errors (InsufficientCreditsError, PaymentIntentExpiredError, PaymentVerificationError, etc.)
   - Utilities (USDC conversion, message builders, payment state checkers)
+  - AI utilities (system prompt application, token estimation)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
@@ -57,7 +58,7 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
 
 ## Responsibilities
 
-- This directory **does**: Define domain entities (Account, Message, PaymentAttempt), business rules (credit sufficiency, message trimming, payment state machine), validation logic (message length, role normalization, amount bounds, TTL checks), pricing calculations (USD to credits with markup, USDC conversions)
+- This directory **does**: Define domain entities (Account, Message, PaymentAttempt), business rules (credit sufficiency, message trimming, payment state machine), validation logic (message length, role normalization, amount bounds, TTL checks), pricing calculations (USD to credits with markup, USDC conversions), AI utilities (apply system prompt, estimate tokens)
 - This directory **does not**: Perform I/O, access external services, handle UI concerns, read env vars, persist data
 
 ## Usage

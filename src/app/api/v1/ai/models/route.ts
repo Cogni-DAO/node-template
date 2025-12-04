@@ -14,9 +14,14 @@
 
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
-import { getCachedModels } from "@/app/_lib/models-cache";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import type { Model } from "@/contracts/ai.models.v1.contract";
 import { aiModelsOperation } from "@/contracts/ai.models.v1.contract";
+import {
+  getCachedModels,
+  type ModelMeta,
+} from "@/shared/ai/model-catalog.server";
+import { serverEnv } from "@/shared/env";
 import { logRequestWarn } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +31,42 @@ export const GET = wrapRouteHandlerWithLogging(
   async (ctx, _request, _sessionUser) => {
     try {
       // Fetch from cache (fast, no network call)
-      const data = await getCachedModels();
+      const { models } = await getCachedModels();
+
+      // Map internal ModelMeta to contract Model
+      const contractModels: Model[] = models.map((m: ModelMeta) => ({
+        id: m.id,
+        name: m.name,
+        isFree: m.isFree,
+        providerKey: m.providerKey,
+      }));
+
+      const defaultModelId = serverEnv().DEFAULT_MODEL;
+
+      // Validate DEFAULT_MODEL exists in catalog (invariant)
+      const modelIds = contractModels.map((m) => m.id);
+      if (!modelIds.includes(defaultModelId)) {
+        logRequestWarn(
+          ctx.log,
+          new Error(
+            `DEFAULT_MODEL="${defaultModelId}" not found in catalog. Available: ${modelIds.join(", ")}`
+          ),
+          "INVALID_DEFAULT_MODEL"
+        );
+        return NextResponse.json(
+          { error: "Invalid models data" },
+          { status: 500 }
+        );
+      }
+
+      const responseData = {
+        models: contractModels,
+        defaultModelId,
+      };
 
       // Validate output with contract
-      const outputParseResult = aiModelsOperation.output.safeParse(data);
+      const outputParseResult =
+        aiModelsOperation.output.safeParse(responseData);
       if (!outputParseResult.success) {
         logRequestWarn(ctx.log, outputParseResult.error, "INVALID_CACHE_DATA");
         return NextResponse.json(

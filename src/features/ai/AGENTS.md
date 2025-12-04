@@ -53,7 +53,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 ## Responsibilities
 
 - **This feature does:**
-  - Provide AI completion services with credit metering
+  - Provide AI completion services with credit metering (invariant gate for free models)
   - Provide chat UI integration via assistant-ui
   - Expose model selection UI with localStorage persistence
   - Fetch and cache available models list (server-side cache with SWR)
@@ -98,7 +98,7 @@ import { Thread } from "@/components/kit/chat";
 
 ## Dependencies
 
-- **Internal:** @/contracts/ai.\*, @/ports/llm.port, @/shared/env/server, @/components/kit/\*, @/components/vendor/assistant-ui, @/components/vendor/shadcn
+- **Internal:** @/contracts/ai._, @/ports/llm.port, @/shared/env/server, @/components/kit/_, @/components/vendor/assistant-ui, @/components/vendor/shadcn
 - **External:** @assistant-ui/react, @assistant-ui/react-markdown, @tanstack/react-query, zod, lucide-react
 
 ## Change Protocol
@@ -110,7 +110,7 @@ import { Thread } from "@/components/kit/chat";
 
 ## Notes
 
-- Model list currently hardcoded from litellm.config.yaml (TODO: fetch from LiteLLM API)
+- Model list fetched from LiteLLM /model/info (cached)
 - Chat supports streaming via SSE (v1)
 - Message persistence planned for v2 with smart windowing
 - Model validation implements UX-001 (graceful fallback to default)

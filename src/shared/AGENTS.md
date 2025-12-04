@@ -43,6 +43,7 @@ Low-level building blocks used across the repo. Primitives, DTO mappers, pure ut
   - Utilities (cn, uuid, accountId)
   - Constants (payments, web3)
   - Observability (Logger, RequestContext, log helpers, event schemas)
+  - AI model catalog (cache)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** `PINO_LOG_LEVEL`, `DATABASE_URL`, `LITELLM_*`, `APP_ENV`, `NODE_ENV`
@@ -60,6 +61,7 @@ Low-level building blocks used across the repo. Primitives, DTO mappers, pure ut
   - Provide pure utilities, constants, environment validation
   - Define database schemas (Drizzle)
   - Provide observability infrastructure (logging, context, events)
+  - Provide AI model catalog cache
 - This directory **does not**:
   - Contain business logic or domain rules
   - Import from ports, bootstrap, core, features, adapters

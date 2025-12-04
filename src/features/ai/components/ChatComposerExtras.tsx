@@ -27,13 +27,15 @@ export interface ChatComposerExtrasProps {
   selectedModel: string;
   onModelChange: (model: string) => void;
   defaultModelId: string;
+  balance?: number;
 }
 
 export function ChatComposerExtras({
   selectedModel,
   onModelChange,
   defaultModelId,
-}: ChatComposerExtrasProps) {
+  balance = 0,
+}: Readonly<ChatComposerExtrasProps>) {
   const modelsQuery = useModels();
   const [localModel, setLocalModel] = useState(selectedModel);
 
@@ -61,6 +63,7 @@ export function ChatComposerExtras({
       value={localModel}
       onValueChange={handleModelChange}
       disabled={modelsQuery.isLoading || modelsQuery.isError}
+      balance={balance}
     />
   );
 }
