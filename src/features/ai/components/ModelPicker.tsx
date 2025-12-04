@@ -149,7 +149,7 @@ export function ModelPicker({
                       "transition-colors hover:bg-accent",
                       isSelected && "bg-accent",
                       isPaidAndNoBalance &&
-                        "opacity-50 cursor-not-allowed hover:bg-transparent"
+                        "cursor-not-allowed opacity-50 hover:bg-transparent"
                     )}
                   >
                     <Icon className="size-5 shrink-0 text-muted-foreground" />
@@ -166,7 +166,7 @@ export function ModelPicker({
                       <Check className="size-4 shrink-0 text-primary" />
                     )}
                     {isPaidAndNoBalance && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-muted-foreground text-xs">
                         (Credits required)
                       </span>
                     )}

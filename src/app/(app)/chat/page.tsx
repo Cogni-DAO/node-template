@@ -14,7 +14,6 @@
 
 "use client";
 
-import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { type ReactNode, useEffect, useState } from "react";
 
@@ -22,24 +21,6 @@ import { Thread } from "@/components";
 import { ChatRuntimeProvider } from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
 import { ChatComposerExtras, useModels } from "@/features/ai/public";
 import { useCreditsSummary } from "@/features/payments/public";
-
-function ChatCreditsHint() {
-  const { data, isLoading, isError } = useCreditsSummary();
-  const noCredits = !isLoading && !isError && (data?.balanceCredits ?? 0) === 0;
-
-  if (!noCredits) return null;
-
-  return (
-    <div className="mt-6 flex justify-center">
-      <p className="text-muted-foreground text-sm">
-        Select a Free model or{" "}
-        <Link href="/credits" className="text-primary underline">
-          Buy Credits →
-        </Link>
-      </p>
-    </div>
-  );
-}
 
 const ChatWelcomeWithHint = () => (
   <div className="mx-auto flex h-full w-full max-w-[var(--thread-max-width)] flex-col items-center justify-center">
@@ -52,7 +33,6 @@ const ChatWelcomeWithHint = () => (
         one specific niche.
       </div>
     </div>
-    <ChatCreditsHint />
   </div>
 );
 
@@ -63,12 +43,33 @@ export default function ChatPage(): ReactNode {
   const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
   const defaultModelId = modelsQuery.data?.defaultModelId ?? "gpt-4o-mini";
 
+  const { data: creditsData, isLoading: isCreditsLoading } =
+    useCreditsSummary();
+  const balance = creditsData?.balanceCredits ?? 0;
+
   // Update selected model when API data loads
   useEffect(() => {
     if (modelsQuery.data?.defaultModelId && selectedModel === "gpt-4o-mini") {
       setSelectedModel(modelsQuery.data.defaultModelId);
     }
   }, [modelsQuery.data?.defaultModelId, selectedModel]);
+
+  // Auto-select free model if balance is 0 and current model is paid
+  useEffect(() => {
+    if (isCreditsLoading || !modelsQuery.data) return;
+
+    const currentModel = modelsQuery.data.models.find(
+      (m) => m.id === selectedModel
+    );
+    const isPaid = currentModel && !currentModel.isFree;
+
+    if (balance <= 0 && isPaid) {
+      const firstFreeModel = modelsQuery.data.models.find((m) => m.isFree);
+      if (firstFreeModel) {
+        setSelectedModel(firstFreeModel.id);
+      }
+    }
+  }, [balance, isCreditsLoading, modelsQuery.data, selectedModel]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -84,6 +85,7 @@ export default function ChatPage(): ReactNode {
               selectedModel={selectedModel}
               onModelChange={setSelectedModel}
               defaultModelId={defaultModelId}
+              balance={balance}
             />
           }
         />

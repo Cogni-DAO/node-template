@@ -6,20 +6,24 @@
 
 ---
 
-# Docs About the setup
+# Docs About the setup work todos
+
 docs/OBSERVABILITY.md
 docs/ALLOY_LOKI_SETUP.md
 
 # My app's server + client logger
+
 src/shared/observability/logging/logger.ts
 src/shared/observability/clientLogger.ts
 
 # docker network has Alloy run, collect logs, send to Loki cloud or local dev
+
 platform/infra/services/runtime/docker-compose.yml
 platform/infra/services/runtime/configs/alloy-config.alloy
 platform/infra/services/runtime/configs/grafana-provisioning/datasources/loki.yaml
 
 # Docker MCP servers launch automatically for claude code
+
 .mcp.json
 
 ## 1. Implementation Checklist
