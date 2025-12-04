@@ -4,10 +4,11 @@
 # Base image – shared between deps and builder
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
 # 1) Dependencies (full, including dev) – cached by package.json + pnpm-lock.yaml
 FROM base AS deps
+RUN apk add --no-cache g++ make python3  
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
@@ -41,7 +42,7 @@ RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs \
   && apk add --no-cache curl
 
-# Enable pnpm for migrations
+# Enable pnpm (same version as base)
 RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
 # Ensure PATH includes /usr/local/bin for pnpm shims
@@ -53,20 +54,18 @@ ENV LOG_FORMAT=json
 
 LABEL org.opencontainers.image.title="cogni-template"
 
-# Copy runtime bundle AND migration tools
+# Copy standalone bundle (includes production dependencies)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Copy migration tools
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/src/shared/db ./src/shared/db
 COPY --from=builder --chown=nextjs:nodejs /app/src/adapters/server/db/migrations ./src/adapters/server/db/migrations
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
-
-# Sanity check that pnpm works for migrations
-RUN pnpm --version
 
 EXPOSE 3000
 
