@@ -47,6 +47,7 @@ RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
 # Ensure PATH includes /usr/local/bin for pnpm shims
 ENV PATH="/usr/local/bin:${PATH}"
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
