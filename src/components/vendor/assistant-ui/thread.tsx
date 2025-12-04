@@ -109,14 +109,15 @@ const ThreadSuggestions: FC = () => {
     <div className="aui-thread-welcome-suggestions grid w-full grid-cols-2 gap-2 pb-2">
       {[
         {
-          title: "Help me start",
+          title: "Dream of",
           label: "a community-owned project",
-          action: "Help me start a community-owned project around ___",
+          action:
+            "Dream of a community-owned AI, serving one random niche of your choice",
         },
         {
-          title: "Explain how",
-          label: "Cogni works in 30 seconds",
-          action: "Explain how Cogni works in 30 seconds",
+          title: "Tell me about",
+          label: "the builders behind cogni",
+          action: "Tell me about the builders behind Cogni",
         },
       ].map((suggestedAction, index) => (
         <div
