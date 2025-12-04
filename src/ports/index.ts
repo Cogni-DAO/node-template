@@ -59,3 +59,4 @@ export {
   type PaymentErrorCode,
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
+export * from "./usage.port";

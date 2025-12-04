@@ -122,6 +122,17 @@ export const llmUsage = pgTable(
     ),
     virtualKeyIdx: index("llm_usage_virtual_key_idx").on(table.virtualKeyId),
     requestIdx: index("llm_usage_request_idx").on(table.requestId),
+    // Index for aggregation: Filter by account + range scan on createdAt
+    aggregationIdx: index("llm_usage_aggregation_idx").on(
+      table.billingAccountId,
+      table.createdAt
+    ),
+    // Index for pagination: Filter by account + order by createdAt DESC, id DESC
+    paginationIdx: index("llm_usage_pagination_idx").on(
+      table.billingAccountId,
+      table.createdAt,
+      table.id
+    ),
   })
 );
 
