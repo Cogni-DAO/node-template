@@ -18,7 +18,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - **Delegate cleanly:** Use subagents with narrow scopes.
 - **Validate early:** Run `pnpm check` before proposing commits.
 - **Update docs:** Reflect any surface changes in AGENTS.md.
-- **Full Validation:** `pnpm check:full` is long running, but has CI parity. Use as final required feature validation.
+- **Full Validation:** `pnpm check:full` is long running, but has CI parity. Use as last required feature validation gate.
 
 ## Agent Behavior
 
