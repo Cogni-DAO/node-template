@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import type { ChatInput, ChatMessage } from "@/contracts/ai.chat.v1.contract";
+import { clientLogger } from "@/shared/observability";
 
 /**
  * Message builder using CONTRACT TYPES - never manual interfaces
@@ -120,7 +121,10 @@ export function ChatRuntimeProvider({
       }
       if (response.status === 409) {
         // UX-001: Invalid model, retry with defaultModelId
-        console.warn(`Model "${selectedModel}" invalid, retrying with default`);
+        clientLogger.warn("CHAT_MODEL_INVALID_RETRY", {
+          selectedModel,
+          defaultModelId,
+        });
         const retryBody: ChatInput & { stream?: boolean } = {
           ...requestBody,
           model: defaultModelId,
@@ -231,10 +235,14 @@ export function ChatRuntimeProvider({
       } else if (eventType === "message.completed") {
         queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
       } else if (eventType === "error") {
-        console.error("Stream error:", data.message);
+        clientLogger.error("CHAT_STREAM_ERROR", {
+          message: data.message,
+        });
       }
     } catch (e) {
-      console.error("Error parsing SSE", e);
+      clientLogger.error("CHAT_STREAM_CHUNK_PARSE_FAIL", {
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   };
 

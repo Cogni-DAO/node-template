@@ -6,7 +6,8 @@
  * Purpose: NextAuth.js configuration and export.
  * Scope: App-wide authentication configuration. Does not handle client-side session management.
  * Invariants: Uses SIWE (Sign-In with Ethereum) provider with "credentials" ID; returns DB UUID as user ID.
- * Side-effects: IO (Handles session creation, validation, and persistence)
+ * Side-effects: IO
+ * Notes: Handles session creation, validation, and persistence.
  * Links: docs/AUTHENTICATION.md
  * @public
  */
@@ -23,9 +24,13 @@ import { SiweMessage } from "siwe";
 
 import { getDb } from "@/adapters/server/db/client";
 import { users } from "@/shared/db/schema.auth";
+import { makeLogger } from "@/shared/observability/logging";
 
 export const authSecret =
   process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
+
+// Lazy logger initialization to avoid module-level env validation
+const getLog = () => makeLogger({ module: "auth" });
 
 /**
  * NextAuth configuration.
@@ -58,7 +63,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials, req) {
         try {
           if (!credentials?.message || !credentials?.signature) {
-            console.error("[SIWE] Missing credentials");
+            getLog().error("[SIWE] Missing credentials");
             return null;
           }
 
@@ -80,7 +85,7 @@ export const authOptions: NextAuthOptions = {
           // Verify domain, nonce, and signature
           const nonce = await getCsrfToken({ req: { headers } });
           if (!nonce) {
-            console.error("[SIWE] Failed to retrieve nonce");
+            getLog().error("[SIWE] Failed to retrieve nonce");
             return null;
           }
 
@@ -90,8 +95,13 @@ export const authOptions: NextAuthOptions = {
             .update(credentials.message as string)
             .digest("hex")
             .slice(0, 8);
-          console.log(
-            `[SIWE] Authorize attempt: nonce=${nonce}, address=${new SiweMessage(credentials.message as string).address}, msgHash=${messageHash}`
+          getLog().info(
+            {
+              nonce,
+              address: new SiweMessage(credentials.message as string).address,
+              msgHash: messageHash,
+            },
+            "[SIWE] Authorize attempt"
           );
 
           const result = await siwe.verify({
@@ -101,7 +111,10 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!result.success) {
-            console.error("[SIWE] Verification failed:", result.error);
+            getLog().error(
+              { error: result.error },
+              "[SIWE] Verification failed"
+            );
             return null;
           }
 
@@ -128,11 +141,11 @@ export const authOptions: NextAuthOptions = {
           }
 
           if (!user) {
-            console.error("[SIWE] Failed to create or retrieve user");
+            getLog().error("[SIWE] Failed to create or retrieve user");
             return null;
           }
 
-          console.log("[SIWE] Login success for:", fields.address);
+          getLog().info({ address: fields.address }, "[SIWE] Login success");
 
           // Always use DB UUID as primary ID
           return {
@@ -140,7 +153,7 @@ export const authOptions: NextAuthOptions = {
             walletAddress: fields.address,
           };
         } catch (e) {
-          console.error("[SIWE] Authorize error:", e);
+          getLog().error({ error: e }, "[SIWE] Authorize error");
           return null;
         }
       },
