@@ -14,7 +14,6 @@
 
 "use client";
 
-import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { type ReactNode, useEffect, useState } from "react";
 
@@ -23,36 +22,17 @@ import { ChatRuntimeProvider } from "@/features/ai/chat/providers/ChatRuntimePro
 import { ChatComposerExtras, useModels } from "@/features/ai/public";
 import { useCreditsSummary } from "@/features/payments/public";
 
-function ChatCreditsHint() {
-  const { data, isLoading, isError } = useCreditsSummary();
-  const noCredits = !isLoading && !isError && (data?.balanceCredits ?? 0) === 0;
-
-  if (!noCredits) return null;
-
-  return (
-    <div className="mt-6 flex justify-center">
-      <p className="text-muted-foreground text-sm">
-        You may need credits to run AI.{" "}
-        <Link href="/credits" className="text-primary underline">
-          Add credits →
-        </Link>
-      </p>
-    </div>
-  );
-}
-
 const ChatWelcomeWithHint = () => (
   <div className="mx-auto flex h-full w-full max-w-[var(--thread-max-width)] flex-col items-center justify-center">
     <div className="flex flex-col justify-center px-8">
       <div className="fade-in slide-in-from-bottom-2 animate-in font-semibold text-2xl duration-300 ease-out">
-        What do you want to build together?
+        This is where YOU need to add value
       </div>
       <div className="fade-in slide-in-from-bottom-2 animate-in text-2xl text-muted-foreground/65 delay-100 duration-300 ease-out">
-        Start a project, join one, or ship a change—Cogni helps with the next
-        step.
+        This is dumb right now. Fork this project, and make this AI valuable to
+        one specific niche.
       </div>
     </div>
-    <ChatCreditsHint />
   </div>
 );
 
@@ -63,12 +43,33 @@ export default function ChatPage(): ReactNode {
   const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
   const defaultModelId = modelsQuery.data?.defaultModelId ?? "gpt-4o-mini";
 
+  const { data: creditsData, isLoading: isCreditsLoading } =
+    useCreditsSummary();
+  const balance = creditsData?.balanceCredits ?? 0;
+
   // Update selected model when API data loads
   useEffect(() => {
     if (modelsQuery.data?.defaultModelId && selectedModel === "gpt-4o-mini") {
       setSelectedModel(modelsQuery.data.defaultModelId);
     }
   }, [modelsQuery.data?.defaultModelId, selectedModel]);
+
+  // Auto-select free model if balance is 0 and current model is paid
+  useEffect(() => {
+    if (isCreditsLoading || !modelsQuery.data) return;
+
+    const currentModel = modelsQuery.data.models.find(
+      (m) => m.id === selectedModel
+    );
+    const isPaid = currentModel && !currentModel.isFree;
+
+    if (balance <= 0 && isPaid) {
+      const firstFreeModel = modelsQuery.data.models.find((m) => m.isFree);
+      if (firstFreeModel) {
+        setSelectedModel(firstFreeModel.id);
+      }
+    }
+  }, [balance, isCreditsLoading, modelsQuery.data, selectedModel]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -84,6 +85,7 @@ export default function ChatPage(): ReactNode {
               selectedModel={selectedModel}
               onModelChange={setSelectedModel}
               defaultModelId={defaultModelId}
+              balance={balance}
             />
           }
         />

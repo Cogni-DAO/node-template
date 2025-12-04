@@ -36,6 +36,7 @@ export interface ModelPickerProps {
   value: string;
   onValueChange: (modelId: string) => void;
   disabled?: boolean;
+  balance?: number;
 }
 
 export function ModelPicker({
@@ -43,7 +44,8 @@ export function ModelPicker({
   value,
   onValueChange,
   disabled,
-}: ModelPickerProps) {
+  balance = 0,
+}: Readonly<ModelPickerProps>) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -128,20 +130,26 @@ export function ModelPicker({
                   ? getIconByProviderKey(model.providerKey)
                   : getProviderIcon(model.id);
                 const isSelected = model.id === value;
+                const isPaidAndNoBalance = !model.isFree && balance <= 0;
 
                 return (
                   <button
                     key={model.id}
                     type="button"
+                    disabled={isPaidAndNoBalance}
                     onClick={() => {
-                      onValueChange(model.id);
-                      setOpen(false);
-                      setSearchQuery("");
+                      if (!isPaidAndNoBalance) {
+                        onValueChange(model.id);
+                        setOpen(false);
+                        setSearchQuery("");
+                      }
                     }}
                     className={cn(
                       "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left",
                       "transition-colors hover:bg-accent",
-                      isSelected && "bg-accent"
+                      isSelected && "bg-accent",
+                      isPaidAndNoBalance &&
+                        "cursor-not-allowed opacity-50 hover:bg-transparent"
                     )}
                   >
                     <Icon className="size-5 shrink-0 text-muted-foreground" />
@@ -156,6 +164,11 @@ export function ModelPicker({
                     )}
                     {!model.isFree && isSelected && (
                       <Check className="size-4 shrink-0 text-primary" />
+                    )}
+                    {isPaidAndNoBalance && (
+                      <span className="text-muted-foreground text-xs">
+                        (Credits required)
+                      </span>
                     )}
                   </button>
                 );

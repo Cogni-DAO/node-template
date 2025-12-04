@@ -22,6 +22,7 @@
 #   - Content single-encoded (--arg, not --argjson; jq handles escaping)
 #   - Temp files unique per run (mktemp with trap cleanup)
 #   - Never prints credentials
+#   - Curl timeouts prevent hanging CI (10s connect, 30s total, 2 retries)
 # Side-effects: HTTP POST to LOKI_URL; creates/deletes temp file; reads LOG_FILE.
 # Exit: Always 0 (best-effort; skips push on missing inputs/files).
 # Notes: Called by .github/actions/loki-push composite action. Response body capped at 2000 chars.
@@ -159,9 +160,13 @@ PAYLOAD=$(jq -n \
     ]
   }')
 
-# Push to Loki with basic auth
+# Push to Loki with basic auth (with timeouts to prevent hanging CI)
 HTTP_CODE=$(curl -sS -w "%{http_code}" -o "$RESPONSE_FILE" \
   -X POST \
+  --connect-timeout 10 \
+  --max-time 30 \
+  --retry 2 \
+  --retry-delay 2 \
   -u "${LOKI_USER}:${LOKI_TOKEN}" \
   -H "Content-Type: application/json" \
   --data-binary "$PAYLOAD" \

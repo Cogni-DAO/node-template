@@ -5,7 +5,8 @@ name: CI Telemetry to Loki
 description: |
   Capture CI job telemetry and push to Grafana Cloud Loki.
   - Always: writes JSON summary (queryable via {env="ci"} | json)
-  - On failure: appends FAILCTX-prefixed docker/compose context
+  - On failure: appends generic failure context (job logs, metadata)
+  - On failure + compose_file: appends docker/compose logs
   - Always: pushes to Loki with env=ci label and low-cardinality labels
 
 inputs:
@@ -67,12 +68,79 @@ runs:
           --arg repo "${{ github.repository }}" \
           --arg run_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
           --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          '{type: $type, status: $status, workflow: $workflow, job: $job, run_id: $run_id, attempt: $attempt, ref: $ref, sha: $sha, sha8: $sha8, actor: $actor, repo: $repo, run_url: $run_url, captured_at: $captured_at}' \
+          '{schema_version: 1, type: $type, status: $status, workflow: $workflow, job: $job, run_id: $run_id, attempt: $attempt, ref: $ref, sha: $sha, sha8: $sha8, actor: $actor, repo: $repo, run_url: $run_url, captured_at: $captured_at}' \
           >> "$LOG_FILE"
 
         printf '\n' >> "$LOG_FILE"
 
-    - name: Capture failure context
+    - name: Capture generic failure context
+      if: failure()
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        LOG_FILE="${{ runner.temp }}/ci-job.log"
+        MAX_GENERIC_BYTES=262144  # 256KB cap for generic failure context
+
+        # Temp file for generic context
+        TEMP_GENERIC=$(mktemp)
+        trap "rm -f '$TEMP_GENERIC'" EXIT
+
+        {
+          echo ""
+          echo "=== Generic Failure Context ==="
+          echo "captured_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "workflow: ${{ github.workflow }}"
+          echo "job: ${{ github.job }}"
+          echo "run_id: ${{ github.run_id }}"
+          echo "run_attempt: ${{ github.run_attempt }}"
+          echo "ref: ${{ github.ref_name }}"
+          echo "sha: ${{ github.sha }}"
+          echo "actor: ${{ github.actor }}"
+          echo "runner_os: ${{ runner.os }}"
+          echo "runner_name: ${{ runner.name }}"
+
+          # Toolchain versions
+          echo ""
+          echo "=== Toolchain Versions ==="
+          node --version 2>&1 || echo "node: not found"
+          pnpm --version 2>&1 || echo "pnpm: not found"
+          git --version 2>&1 || echo "git: not found"
+          docker --version 2>&1 || echo "docker: not found"
+
+          # Repo state
+          echo ""
+          echo "=== Repo State ==="
+          git status --porcelain 2>&1 || echo "git status failed"
+
+          # Debug files (if present and small)
+          if [[ -f "pnpm-debug.log" ]] && [[ $(wc -c < "pnpm-debug.log") -lt 10240 ]]; then
+            echo ""
+            echo "=== pnpm-debug.log ==="
+            cat pnpm-debug.log
+          fi
+
+        } > "$TEMP_GENERIC"
+
+        # Fetch GitHub Actions job logs via API
+        TEMP_JOB_LOGS=$(mktemp)
+        trap "rm -f '$TEMP_GENERIC' '$TEMP_JOB_LOGS'" EXIT
+
+        OUTPUT_FILE="$TEMP_JOB_LOGS" \
+          GITHUB_TOKEN="$GITHUB_TOKEN" \
+          GITHUB_REPOSITORY="${{ github.repository }}" \
+          GITHUB_RUN_ID="${{ github.run_id }}" \
+          GITHUB_RUN_ATTEMPT="${{ github.run_attempt }}" \
+          GITHUB_JOB="${{ github.job }}" \
+          platform/ci/scripts/fetch_github_job_logs.sh || true
+
+        # Append job logs to generic context
+        cat "$TEMP_JOB_LOGS" >> "$TEMP_GENERIC"
+
+        # Cap size and prefix with FAILCTX:
+        head -c "$MAX_GENERIC_BYTES" "$TEMP_GENERIC" | sed 's/^/FAILCTX: /' >> "$LOG_FILE"
+
+    - name: Capture docker-compose failure context
       if: failure() && inputs.compose_file != ''
       shell: bash
       env:
@@ -81,7 +149,7 @@ runs:
         TAIL_LINES: ${{ inputs.tail_lines }}
       run: |
         LOG_FILE="${{ runner.temp }}/ci-job.log"
-        MAX_FAILCTX_BYTES=524288  # 512KB cap for failure context
+        MAX_FAILCTX_BYTES=524288  # 512KB cap for docker-compose context
 
         # Capture to temp file first, then prefix and append
         TEMP_FAILCTX=$(mktemp)
@@ -89,7 +157,7 @@ runs:
 
         {
           echo ""
-          echo "=== Failure Context ==="
+          echo "=== Docker-Compose Failure Context ==="
           echo "captured_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
           # Docker system state

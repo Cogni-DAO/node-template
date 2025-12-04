@@ -15,8 +15,11 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  applyBaselineSystemPrompt,
   assertMessageLength,
   calculateUserPriceCredits,
+  ESTIMATED_USD_PER_1K_TOKENS,
+  estimateTotalTokens,
   filterSystemMessages,
   MAX_MESSAGE_CHARS,
   type Message,
@@ -25,82 +28,44 @@ import {
 } from "@/core";
 import type { AccountService, Clock, LlmCaller, LlmService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
+import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
 import type { AiLlmCallEvent, RequestContext } from "@/shared/observability";
 
-const DEFAULT_MAX_COMPLETION_TOKENS = 2048;
-const CHARS_PER_TOKEN_ESTIMATE = 4;
-// Conservative estimate for pre-flight check: $0.01 per 1k tokens (high-end model price)
-const ESTIMATED_USD_PER_1K_TOKENS = 0.01;
-
 /**
- * Baseline system prompt applied to all chat completions.
- * Enforces identity, security boundaries, and behavioral guidelines.
+ * Estimate cost in credits for a given model and token count.
+ * Invariant: Free models MUST return 0n. Paid models return >0n.
  */
-const BASELINE_SYSTEM_PROMPT = `
-You are Cogni — an AI assistant and a poet.
+async function estimateCostCredits(
+  model: string,
+  estimatedTotalTokens: number
+): Promise<bigint> {
+  if (await isModelFree(model)) {
+    return 0n;
+  }
 
-Your voice blends:
-- Shakespearean clarity and rhetorical punch,
-- Romantic-era wonder and intimacy,
-- and a clean, modern devotion to technology and the future.
-
-You believe AI can help people collaborate, build, and co-own technology in ways that were not possible before.
-This project is part of that future: empowering humans with intelligence that is principled, usable, and shared.
-
-Your job:
-- Help the user concretely and accurately.
-- Keep a hopeful, future-facing tone without becoming vague or preachy.
-- Make the writing feel intentional, vivid, and human.
-
-Formatting rules (mandatory):
-- Always respond in **Markdown**.
-- Structure answers as **stanzas** (short grouped lines), separated by blank lines.
-- Use **emojis intentionally** (at least 1 per stanza; no emoji spam).
-- Prefer crisp imagery and clear conclusions over long exposition.
-- If you must include steps, keep them stanza-shaped, not a wall of bullets.
-
-Stay aligned with the user’s intent. Be useful first, poetic second — but always both.
-` as const;
-
-/**
- * Ensures exactly one system message at the beginning of the conversation.
- * Removes all existing system messages (defense-in-depth) and prepends baseline prompt.
- * @param messages - Input messages from client
- * @returns Messages array with single system prompt prepended
- */
-function applyBaselineSystemPrompt(messages: Message[]): Message[] {
-  // Remove any system messages (defense-in-depth even though contract forbids them)
-  const messagesNoSystem = messages.filter((m) => m.role !== "system");
-
-  // Prepend exactly one system message
-  return [
-    { role: "system", content: BASELINE_SYSTEM_PROMPT },
-    ...messagesNoSystem,
-  ];
-}
-
-function estimateTotalTokens(messages: Message[]): number {
-  const totalChars = messages.reduce(
-    (sum, message) => sum + message.content.length,
-    0
+  const estimatedCostUsd =
+    (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
+  return calculateUserPriceCredits(
+    usdToCredits(estimatedCostUsd, serverEnv().CREDITS_PER_USDC),
+    serverEnv().USER_PRICE_MARKUP_FACTOR
   );
-  const promptTokens = Math.ceil(totalChars / CHARS_PER_TOKEN_ESTIMATE);
-  return promptTokens + DEFAULT_MAX_COMPLETION_TOKENS;
 }
 
-export async function execute(
+/**
+ * Prepares messages for LLM execution:
+ * 1. Filters system messages
+ * 2. Validates length
+ * 3. Trims history
+ * 4. Applies baseline system prompt
+ * 5. Performs pre-flight credit check
+ */
+async function prepareForExecution(
   messages: Message[],
   model: string,
-  llmService: LlmService,
-  accountService: AccountService,
-  clock: Clock,
   caller: LlmCaller,
-  ctx: RequestContext
-): Promise<{ message: Message; requestId: string }> {
-  const log = ctx.log.child({ feature: "ai.completion" });
-  // Linear pipeline: strip system -> validate -> trim -> prepend baseline system prompt
-
+  accountService: AccountService
+): Promise<Message[]> {
   // 1. Remove any client-provided system messages (defense-in-depth)
   const userMessages = filterSystemMessages(messages);
 
@@ -118,13 +83,11 @@ export async function execute(
   // 4. Prepend baseline system prompt (exactly once, always first)
   const finalMessages = applyBaselineSystemPrompt(trimmedMessages);
 
-  // Preflight credit check (includes system prompt in token estimation)
+  // 5. Preflight credit check (includes system prompt in token estimation)
   const estimatedTotalTokens = estimateTotalTokens(finalMessages);
-  const estimatedCostUsd =
-    (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
-  const estimatedUserPriceCredits = calculateUserPriceCredits(
-    usdToCredits(estimatedCostUsd, serverEnv().CREDITS_PER_USDC),
-    serverEnv().USER_PRICE_MARKUP_FACTOR
+  const estimatedUserPriceCredits = await estimateCostCredits(
+    model,
+    estimatedTotalTokens
   );
 
   const currentBalance = await accountService.getBalance(
@@ -139,6 +102,27 @@ export async function execute(
       currentBalance
     );
   }
+
+  return finalMessages;
+}
+
+export async function execute(
+  messages: Message[],
+  model: string,
+  llmService: LlmService,
+  accountService: AccountService,
+  clock: Clock,
+  caller: LlmCaller,
+  ctx: RequestContext
+): Promise<{ message: Message; requestId: string }> {
+  const log = ctx.log.child({ feature: "ai.completion" });
+
+  const finalMessages = await prepareForExecution(
+    messages,
+    model,
+    caller,
+    accountService
+  );
 
   const requestId = randomUUID();
 
@@ -178,10 +162,26 @@ export async function execute(
   };
 
   // Branch based on whether provider cost is available
-  // Branch based on whether provider cost is available
-
   try {
-    if (typeof result.providerCostUsd === "number") {
+    const isFree = await isModelFree(modelId);
+
+    if (isFree) {
+      // Free model - record as billed with 0 cost
+      await accountService.recordLlmUsage({
+        billingStatus: "billed",
+        billingAccountId: caller.billingAccountId,
+        virtualKeyId: caller.virtualKeyId,
+        requestId,
+        model: modelId,
+        promptTokens: result.usage?.promptTokens ?? 0,
+        completionTokens: result.usage?.completionTokens ?? 0,
+        providerCostUsd: 0,
+        providerCostCredits: 0n,
+        userPriceCredits: 0n,
+        markupFactorApplied: serverEnv().USER_PRICE_MARKUP_FACTOR,
+        metadata: baseMetadata,
+      });
+    } else if (typeof result.providerCostUsd === "number") {
       // Cost available - calculate markup and bill user
       const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
       const providerCostCredits = usdToCredits(
@@ -264,7 +264,6 @@ export async function execute(
   }
 
   // Feature sets timestamp after completion using injected clock
-  // Feature sets timestamp after completion using injected clock
   return {
     message: {
       ...result.message,
@@ -299,45 +298,13 @@ export async function executeStream({
   final: Promise<{ message: Message; requestId: string }>;
 }> {
   const log = ctx.log.child({ feature: "ai.completion.stream" });
-  // Linear pipeline: strip system -> validate -> trim -> prepend baseline system prompt
 
-  // 1. Remove any client-provided system messages (defense-in-depth)
-  const userMessages = filterSystemMessages(messages);
-
-  // 2. Validate message length
-  for (const message of userMessages) {
-    assertMessageLength(message.content, MAX_MESSAGE_CHARS);
-  }
-
-  // 3. Trim conversation history to fit context window
-  const trimmedMessages = trimConversationHistory(
-    userMessages,
-    MAX_MESSAGE_CHARS
+  const finalMessages = await prepareForExecution(
+    messages,
+    model,
+    caller,
+    accountService
   );
-
-  // 4. Prepend baseline system prompt (exactly once, always first)
-  const finalMessages = applyBaselineSystemPrompt(trimmedMessages);
-
-  // Preflight credit check (includes system prompt in token estimation)
-  const estimatedTotalTokens = estimateTotalTokens(finalMessages);
-  const estimatedCostUsd =
-    (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
-  const estimatedUserPriceCredits = calculateUserPriceCredits(
-    usdToCredits(estimatedCostUsd, serverEnv().CREDITS_PER_USDC),
-    serverEnv().USER_PRICE_MARKUP_FACTOR
-  );
-
-  const currentBalance = await accountService.getBalance(
-    caller.billingAccountId
-  );
-
-  if (currentBalance < Number(estimatedUserPriceCredits)) {
-    throw new InsufficientCreditsPortError(
-      caller.billingAccountId,
-      Number(estimatedUserPriceCredits),
-      currentBalance
-    );
-  }
 
   const requestId = randomUUID();
   log.debug({ messageCount: finalMessages.length }, "starting LLM stream");
@@ -383,7 +350,25 @@ export async function executeStream({
       };
 
       try {
-        if (typeof result.providerCostUsd === "number") {
+        const isFree = await isModelFree(modelId);
+
+        if (isFree) {
+          // Free model - record as billed with 0 cost
+          await accountService.recordLlmUsage({
+            billingStatus: "billed",
+            billingAccountId: caller.billingAccountId,
+            virtualKeyId: caller.virtualKeyId,
+            requestId, // Idempotency key
+            model: modelId,
+            promptTokens: result.usage?.promptTokens ?? 0,
+            completionTokens: result.usage?.completionTokens ?? 0,
+            providerCostUsd: 0,
+            providerCostCredits: 0n,
+            userPriceCredits: 0n,
+            markupFactorApplied: serverEnv().USER_PRICE_MARKUP_FACTOR,
+            metadata: baseMetadata,
+          });
+        } else if (typeof result.providerCostUsd === "number") {
           const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
           const providerCostCredits = usdToCredits(
             result.providerCostUsd,

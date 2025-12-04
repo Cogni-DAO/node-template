@@ -27,8 +27,16 @@ import { describe, expect, it, vi } from "vitest";
 import { ChatValidationError, MAX_MESSAGE_CHARS } from "@/core";
 import { execute } from "@/features/ai/services/completion";
 import type { LlmCaller } from "@/ports";
+import { InsufficientCreditsPortError } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeNoopLogger } from "@/shared/observability";
+
+// Mock model catalog
+vi.mock("@/shared/ai/model-catalog.server", () => ({
+  isModelFree: vi.fn().mockImplementation(async (modelId: string) => {
+    return modelId === "free-model";
+  }),
+}));
 
 // Mock serverEnv
 vi.mock("@/shared/env", () => ({
@@ -300,6 +308,84 @@ describe("features/ai/services/completion", () => {
           testCtx
         )
       ).rejects.toThrow("LLM service unavailable");
+    });
+
+    it("should allow free model execution with zero balance", async () => {
+      // Arrange
+      const messages = [createUserMessage("Hello")];
+      const llmService = new FakeLlmService({
+        responseContent: "Free response",
+      });
+      const clock = new FakeClock();
+      const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        routeId: "test.route",
+        clock,
+      };
+
+      // Mock account service with 0 balance
+      const accountService = createMockAccountServiceWithDefaults();
+      accountService.getBalance = vi.fn().mockResolvedValue(0);
+
+      // Act
+      const result = await execute(
+        messages,
+        "free-model", // Matches mock for isModelFree=true
+        llmService,
+        accountService,
+        clock,
+        caller,
+        testCtx
+      );
+
+      // Assert
+      expect(result.message.content).toBe("Free response");
+      expect(llmService.wasCalled()).toBe(true);
+
+      // Verify usage recorded with 0 cost
+      expect(accountService.recordLlmUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          billingStatus: "billed",
+          providerCostUsd: 0,
+          providerCostCredits: 0n,
+          userPriceCredits: 0n,
+        })
+      );
+    });
+
+    it("should block paid model execution with zero balance", async () => {
+      // Arrange
+      const messages = [createUserMessage("Hello")];
+      const llmService = new FakeLlmService();
+      const clock = new FakeClock();
+      const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        routeId: "test.route",
+        clock,
+      };
+
+      // Mock account service with 0 balance
+      const accountService = createMockAccountServiceWithDefaults();
+      accountService.getBalance = vi.fn().mockResolvedValue(0);
+
+      // Act & Assert
+      await expect(
+        execute(
+          messages,
+          "paid-model", // Matches mock for isModelFree=false
+          llmService,
+          accountService,
+          clock,
+          caller,
+          testCtx
+        )
+      ).rejects.toThrow(InsufficientCreditsPortError);
+
+      expect(llmService.wasCalled()).toBe(false);
     });
   });
 });

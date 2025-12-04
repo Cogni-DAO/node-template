@@ -173,7 +173,7 @@ export const POST = wrapRouteHandlerWithLogging(
 
       // Validate model against cached allowlist (MVP-004: PERF-001 fix)
       const { isModelAllowed, getDefaultModelId } = await import(
-        "@/app/_lib/models-cache"
+        "@/shared/ai/model-catalog.server"
       );
       const modelIsValid = await isModelAllowed(input.model);
 
