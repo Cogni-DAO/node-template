@@ -3,6 +3,36 @@
 > [!CRITICAL]
 > LiteLLM is the canonical source for usage telemetry. Our DB stores only charge receipts for billing audit.
 
+## Implementation Checklist
+
+### P0: Kill Shadow Metering
+
+- [ ] Delete any code parsing stream chunks for model/tokens/provider
+- [ ] Remove cost recomputation logic (trust x-litellm-response-cost)
+- [ ] Simplify llm_usage table to charge_receipt (drop telemetry columns)
+- [ ] Update recordLlmUsage port to recordChargeReceipt (minimal fields)
+
+### P1: Implement LiteLLM Adapter
+
+- [ ] Create `src/adapters/server/ai/litellm.usage.adapter.ts`
+- [ ] Chart: `GET /spend/logs?user_id=X&summarize=true` (LiteLLM pre-aggregates)
+- [ ] Table: `GET /spend/logs?user_id=X&summarize=false` (paginated, max 100/request)
+- [ ] Add bounded pagination (MAX_PAGES circuit breaker)
+- [ ] Map LiteLLM log schema → UsageService port types
+
+### P1: Refactor Activity Service
+
+- [ ] Primary/fallback: try LiteLLM, catch → degraded receipts-only
+- [ ] Add `telemetrySource: "litellm" | "fallback"` to contract output
+
+### P2: Long-Term Hedge (Only If Needed)
+
+- [ ] Monitor LiteLLM data retention (check if logs disappear after N days)
+- [ ] If retention < 90 days: implement periodic export job
+- [ ] **Do NOT build this preemptively**
+
+---
+
 ## Design Decisions
 
 ### 1. System of Record
@@ -35,28 +65,14 @@
 
 ---
 
-### 3. Activity API Architecture
+### 3. Read Modes
 
-**Primary data source:**
+**Chart:** `GET /spend/logs?user_id=X&summarize=true` (LiteLLM pre-aggregates by date)
+**Table:** `GET /spend/logs?user_id=X&summarize=false&limit=100` (paginated logs)
 
-```
-Activity API → LiteLLMUsageAdapter → GET /spend/logs?user_id=X&start_date=Y&end_date=Z&summarize=false
-```
+**Fallback:** Query charge_receipt for cost + timestamps only. Return `{ model: "unavailable", tokens: 0, telemetrySource: "fallback" }`
 
-**Fallback (when LiteLLM unavailable):**
-
-```
-Activity API → DrizzleUsageAdapter → SELECT FROM charge_receipt WHERE billing_account_id = X
-```
-
-**Fallback output (degraded):**
-
-- `chartSeries`: Buckets with `spend` (from charged_credits) and `timestamps` only
-- `rows`: Array of `{ id, timestamp, cost, model: "unavailable", provider: "unavailable", tokensIn: 0, tokensOut: 0, finish: "unavailable" }`
-- `telemetrySource: "fallback"`
-- `dataLimited: true` - UI shows "Limited details (telemetry service unavailable)" banner
-
-**Critical guardrail:** Implement bounded pagination in LiteLLMUsageAdapter. Large accounts can span multiple pages. LiteLLM has documented pagination/underreporting bugs. Never assume "one query returns everything."
+**Pagination:** Bounded fetch (MAX_PAGES=10). Never trust "one query returns everything."
 
 ---
 
@@ -82,114 +98,10 @@ Activity API → DrizzleUsageAdapter → SELECT FROM charge_receipt WHERE billin
 
 **Idempotency:** request_id as PRIMARY KEY prevents duplicate inserts. Use `INSERT ... ON CONFLICT (request_id) DO NOTHING`.
 
----
+### 5. Reconciliation
 
-## MVP Definition
-
-**Write path:**
-
-- `credit_ledger` (authoritative entitlements)
-- `charge_receipt` table with minimal columns:
-  - Identity: `request_id` (PK), `billing_account_id`
-  - Correlation: `litellm_call_id` (recommended for disputes, nullable)
-  - Billing: `charged_credits`, `response_cost_usd`, `provenance`, `created_at`
-- No telemetry fields stored (no model/provider/tokens)
-
-**Read path:**
-
-- Activity API queries LiteLLM `/spend/logs?user_id=<billingAccountId>` with bounded pagination
-- Fallback to charge receipts (degraded output) when LiteLLM unavailable
-- Returns `telemetrySource` indicator
-
-**Deletions:**
-
-- Remove stream chunk parsing for model/tokens/provider
-- Remove cost recomputation logic
-- Remove any code treating llm_usage.usage JSONB as canonical telemetry
-
-**Ships when:**
-
-- Manual validation proves LiteLLM spend matches our credit_ledger charges
-- Fallback mode tested (returns degraded data, not 500)
-- No shadow metering codepaths remain
-
----
-
-## Implementation Checklist
-
-### P0: Kill Shadow Metering
-
-- [ ] Delete any code parsing stream chunks for model/tokens/provider
-- [ ] Remove cost recomputation logic (trust x-litellm-response-cost)
-- [ ] Simplify llm_usage table to charge_receipt (drop telemetry columns)
-- [ ] Update recordLlmUsage port to recordChargeReceipt (minimal fields)
-
-### P1: Implement LiteLLM Adapter
-
-- [ ] Create `src/adapters/server/ai/litellm.usage.adapter.ts`
-- [ ] Implement: `GET /spend/logs?user_id=X&start_date=Y&end_date=Z&summarize=false`
-- [ ] Add **bounded pagination** (fetch max N pages, abort if exceeded, warn user)
-- [ ] Add response caching (5min TTL)
-- [ ] Map LiteLLM log schema → UsageService port types
-
-### P1: Refactor Activity Service
-
-- [ ] Primary/fallback orchestration:
-  ```
-  try {
-    return await litellmUsageAdapter.getUsageStats(params);
-  } catch (error) {
-    log.warn({ error }, "LiteLLM unavailable");
-    return await chargeReceiptAdapter.getUsageStats(params);  // Degraded
-  }
-  ```
-- [ ] Add `telemetrySource: "litellm" | "fallback"` to contract output
-
-### P2: Long-Term Hedge (Only If Needed)
-
-- [ ] Monitor LiteLLM data retention (check if logs disappear after N days)
-- [ ] If retention < 90 days: implement periodic export job
-- [ ] If export needed: add warehouse schema + reconciliation tests
-- [ ] **Do NOT build this preemptively**
-
----
-
-## Pagination Guardrails
-
-**Problem:** LiteLLM has real-world pagination bugs and underreporting issues in usage views.
-
-**Solution:** Bounded pagination with circuit breaker.
-
-**Requirements:**
-
-1. Fetch up to MAX_PAGES (e.g., 10) before aborting
-2. Implement pagination based on actual LiteLLM response structure (verify API spec first)
-3. If pagination limit exceeded, log error and return partial data with `dataIncomplete: true` flag
-4. Never assume "one query returns everything" for large accounts
-
-**Implementation:** Adapter must inspect `/spend/logs` response schema and implement cursor/offset/next-token pagination as appropriate. Do not hardcode limit/offset without verifying against running LiteLLM instance.
-
-**Never trust "one query" for production billing data.**
-
----
-
-## Testing Strategy
-
-### Invariant Tests
-
-1. **No shadow metering**: Code does not parse streams or recompute tokens/cost
-2. **Identity correlation**: billingAccountId sent as `user` field, litellmCallId captured from headers
-3. **Pagination handled**: Adapter fetches multiple pages if needed, aborts at MAX_PAGES
-4. **Fallback works**: DrizzleUsageAdapter returns degraded data (receipts only) when LiteLLM fails
-5. **Fallback is degraded**: Fallback output has `model: "unavailable"`, `tokens: 0`, `telemetrySource: "fallback"`
-6. **Idempotency**: ON CONFLICT (request_id) DO NOTHING prevents double charge receipts
-
-### Critical Stack Tests
-
-- `activity-litellm-primary.stack.test.ts`: Verify Activity API queries LiteLLM first
-- `activity-pagination.stack.test.ts`: Verify multi-page handling for large accounts
-- `activity-fallback.stack.test.ts`: Verify degraded mode when LiteLLM unavailable
-- `charge-receipt-idempotency.stack.test.ts`: Verify duplicate requests don't double-bill
+- `sum(charge_receipt.response_cost_usd) ≈ sum(litellm.cost)` (±$0.01 per 100 requests)
+- `charged_credits = response_cost_usd × MARKUP × CREDITS_PER_USD`
 
 ---
 
@@ -204,22 +116,16 @@ Activity API → DrizzleUsageAdapter → SELECT FROM charge_receipt WHERE billin
 
 ### Phase 2: Implement LiteLLM Adapter
 
-1. Create adapter with pagination guardrails (based on actual API spec)
-2. Manual validation: Query test billing account, verify spend matches credit_ledger
-3. Add feature flag: `USE_LITELLM_FOR_ACTIVITY=true`
-4. Enable in production, monitor for 48 hours
+1. Verify reconciliation: `sum(litellm.cost) ≈ sum(receipt.response_cost_usd)` for test account
+2. Create adapter with chart (summarize=true) and table (summarize=false) modes
+3. Add bounded pagination (MAX_PAGES=10)
+4. Enable with feature flag, monitor 48 hours
 
-### Phase 3: Cut Over
+### Phase 3: Cut Over & Cleanup
 
-1. If no errors in 48 hours, make LiteLLM primary (remove feature flag)
-2. DB becomes fallback only
-3. Monitor fallback frequency (should be <1%)
-
-### Phase 4: Schema Cleanup
-
-1. Drop forbidden columns from llm_usage table
-2. Rename to charge_receipt
-3. Remove shadow metering code
+1. Remove feature flag, make LiteLLM primary
+2. Drop forbidden columns (model, provider, tokens, usage)
+3. Rename llm_usage → charge_receipt
 
 ---
 
