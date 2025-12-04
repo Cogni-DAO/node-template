@@ -16,7 +16,7 @@
 # Side-effects: Starts/stops Docker containers; creates/drops test database
 # Invariants:
 #   - Always tears down stack (trap ensures cleanup even on failure/interrupt)
-#   - Uses .env.test exclusively (never reads .env.local)
+#   - Verifies .env.test exists; delegates to docker/test commands that use --env-file .env.test
 #   - Runs tests in same order as CI for consistency
 # Links: package.json, .env.test, docker-compose.dev.yml, CI workflow
 
@@ -64,9 +64,25 @@ log_error() {
 
 check_port() {
   local port=$1
-  if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
-    return 1
+
+  # Try lsof (macOS, some Linux)
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+      return 1
+    fi
+    return 0
   fi
+
+  # Try ss (modern Linux)
+  if command -v ss >/dev/null 2>&1; then
+    if ss -ltn | grep -q ":$port "; then
+      return 1
+    fi
+    return 0
+  fi
+
+  # No port-checking tool available - warn but don't fail
+  echo "  ! Cannot check port $port (no lsof/ss available - skipping)"
   return 0
 }
 
@@ -91,6 +107,21 @@ if [ "$SKIP_BUILD" = true ]; then
 else
   echo "Mode: Full (rebuild Docker images)"
 fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 0: Verify .env.test exists
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+log_step "0/6" "Verifying .env.test configuration..."
+
+if [ ! -f .env.test ]; then
+  log_error ".env.test not found. Create it from .env.test.example"
+  exit 1
+fi
+echo "  ✓ .env.test exists"
+
+# Export marker so downstream scripts know we're in check:full context
+export CHECK_FULL_MODE=true
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 1: Pre-flight checks
