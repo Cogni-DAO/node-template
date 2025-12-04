@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-01
+- **Last reviewed:** 2025-12-04
 - **Status:** draft
 
 ## Purpose
@@ -31,8 +31,8 @@ CI/CD automation scripts and configuration documentation for multiple pipeline s
 
 - **Exports:** none
 - **Routes (if any):** none
-- **CLI (if any):** `scripts/build.sh`, `scripts/push.sh`, `scripts/deploy.sh`, `scripts/test-image.sh`, `scripts/loki_push.sh`
-- **Env/Config keys:** `GHCR_PAT`, `CHERRY_AUTH_TOKEN`, `TF_VAR_*`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `LOKI_URL`, `LOKI_USER`, `LOKI_TOKEN`, `LOG_FILE`, `JOB_NAME`, `LABELS`
+- **CLI (if any):** `scripts/build.sh`, `scripts/push.sh`, `scripts/deploy.sh`, `scripts/test-image.sh`, `scripts/loki_push.sh`, `scripts/fetch_github_job_logs.sh`
+- **Env/Config keys:** `GHCR_PAT`, `CHERRY_AUTH_TOKEN`, `TF_VAR_*`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `LOKI_URL`, `LOKI_USER`, `LOKI_TOKEN`, `LOG_FILE`, `JOB_NAME`, `LABELS`, `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`, `GITHUB_JOB`, `OUTPUT_FILE`
 - **Files considered API:** `scripts/*.sh`
 
 ## Ports (optional)
@@ -54,7 +54,8 @@ Minimal local commands:
 scripts/build.sh
 scripts/push.sh
 scripts/deploy.sh
-scripts/loki_push.sh  # CI telemetry (requires LOKI_URL, LOKI_USER, LOKI_TOKEN, LOG_FILE, JOB_NAME, LABELS)
+scripts/loki_push.sh  # Push logs to Loki (requires LOKI_URL, LOKI_USER, LOKI_TOKEN, LOG_FILE, JOB_NAME, LABELS)
+scripts/fetch_github_job_logs.sh  # Fetch job logs from GitHub Actions API (requires GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_JOB, OUTPUT_FILE)
 ```
 
 ## Standards
@@ -66,7 +67,7 @@ scripts/loki_push.sh  # CI telemetry (requires LOKI_URL, LOKI_USER, LOKI_TOKEN, 
 ## Dependencies
 
 - **Internal:** `../infra/providers/cherry/app/`
-- **External:** Docker, OpenTofu, git, curl
+- **External:** Docker, OpenTofu, git, curl, jq
 
 ## Change Protocol
 

@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   packages: write
+  actions: read # Required for CI telemetry to fetch job logs
 
 concurrency:
   group: build-prod-${{ github.workflow }}-${{ github.ref }}
