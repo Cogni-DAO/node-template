@@ -4,13 +4,15 @@
 /**
  * Module: `@contracts/ai.activity.v1.contract`
  * Purpose: Contract for fetching AI usage activity (charts + logs).
- * Scope: Defines input/output for activity dashboard.
+ * Scope: Defines input/output for activity dashboard. Does not implement logic.
  * Invariants:
  * - Time is UTC ISO strings.
  * - Range is [from, to) (inclusive start, exclusive end).
  * - Chart buckets are zero-filled for the requested range.
  * - Money is decimal string to avoid float precision issues.
  * - Cursor is opaque string.
+ * Side-effects: none
+ * Links: [ActivityService](../../features/ai/services/activity.ts)
  * @public
  */
 

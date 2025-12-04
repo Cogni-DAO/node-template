@@ -1,5 +1,16 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@components/kit/data-display/ActivityTable`
+ * Purpose: Table component for displaying activity logs.
+ * Scope: Renders list of usage logs. Does not handle pagination logic (display only).
+ * Invariants: Uses shadcn/table.
+ * Side-effects: none
+ * Links: [ActivityView](../../../app/(app)/activity/view.tsx)
+ * @public
+ */
 
 "use client";
 

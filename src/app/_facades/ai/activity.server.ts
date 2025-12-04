@@ -4,8 +4,10 @@
 /**
  * Module: `@app/_facades/ai/activity.server`
  * Purpose: App-layer facade for Activity dashboard.
- * Scope: Resolves session user to billing account, delegates to Activity feature.
+ * Scope: Resolves session user to billing account, delegates to Activity feature. Does not handle HTTP transport.
  * Invariants: Only app layer imports this; validates billing account.
+ * Side-effects: IO
+ * Links: [ActivityService](../../../features/ai/services/activity.ts)
  * @public
  */
 

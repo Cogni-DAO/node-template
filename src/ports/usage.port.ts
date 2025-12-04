@@ -4,10 +4,12 @@
 /**
  * Module: `@ports/usage`
  * Purpose: Interface for fetching usage statistics and logs.
- * Scope: Read-only access to usage data.
+ * Scope: Defines interface for usage data retrieval. Does not implement storage.
  * Invariants:
- * - Returns domain-agnostic types (no DB entities).
- * - Money is decimal string.
+ * - UsageStatsResult.series must be zero-filled.
+ * - UsageLogsResult.nextCursor is opaque.
+ * Side-effects: none
+ * Links: [DrizzleUsageAdapter](../adapters/server/accounts/drizzle.usage.adapter.ts)
  * @public
  */
 

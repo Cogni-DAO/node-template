@@ -1,5 +1,16 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/(app)/activity/page`
+ * Purpose: Activity dashboard page.
+ * Scope: Fetches initial data server-side and renders view. Does not handle client interactions.
+ * Invariants: Protected route (server-side auth check).
+ * Side-effects: IO
+ * Links: [ActivityView](./view.tsx)
+ * @public
+ */
 
 import { redirect } from "next/navigation";
 

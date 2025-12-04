@@ -38,7 +38,7 @@ PostgreSQL implementations of account service ports for credit accounting operat
 ## Ports (optional)
 
 - **Uses ports:** none
-- **Implements ports:** AccountService
+- **Implements ports:** AccountService, UsageService
 - **Contracts (required if implementing):** AccountService contract tests pending
 
 ## Responsibilities

@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/contract/app/ai.activity.facade`
+ * Purpose: Contract tests for ActivityFacade.
+ * Scope: Verifies getActivity against contract schema. Does not test UI.
+ * Invariants: Uses real database (test stack).
+ * Side-effects: IO
+ * Links: [ActivityFacade](../../../src/app/_facades/ai/activity.server.ts)
+ * @internal
+ */
+
 import { describe, expect, it, vi } from "vitest";
 
 import { getActivity } from "@/app/_facades/ai/activity.server";
