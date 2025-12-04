@@ -30,6 +30,7 @@ services:
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEFAULT_MODEL=${DEFAULT_MODEL}
       - AUTH_SECRET=${AUTH_SECRET}
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
@@ -121,6 +122,26 @@ services:
     volumes:
       - ./postgres-init/provision.sh:/app/provision.sh:ro
     entrypoint: ["/bin/bash", "/app/provision.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  db-migrate:
+    image: ${MIGRATOR_IMAGE}
+    container_name: db-migrate
+    profiles:
+      - bootstrap
+    restart: "no"
+    networks:
+      - web
+    environment:
+      # Only DB env vars (least-secret exposure)
+      - DATABASE_URL=${DATABASE_URL}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - POSTGRES_USER=${APP_DB_USER}
+      - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
+      - POSTGRES_DB=${APP_DB_NAME}
     depends_on:
       postgres:
         condition: service_healthy

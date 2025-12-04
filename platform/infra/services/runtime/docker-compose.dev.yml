@@ -28,6 +28,7 @@ services:
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEFAULT_MODEL=${DEFAULT_MODEL}
       - AUTH_SECRET=${AUTH_SECRET}
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
@@ -134,6 +135,30 @@ services:
     volumes:
       - ./postgres-init/provision.sh:/app/provision.sh:ro
     entrypoint: ["/bin/bash", "/app/provision.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  db-migrate:
+    image: ${MIGRATOR_IMAGE:-cogni-template-migrate-local}
+    build:
+      context: ../../../..
+      dockerfile: ./Dockerfile
+      target: migrator
+    container_name: db-migrate
+    profiles:
+      - bootstrap
+    restart: "no"
+    networks:
+      - web
+    environment:
+      # Env contract matches runtime compose (DATABASE_URL + component vars)
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
     depends_on:
       postgres:
         condition: service_healthy
