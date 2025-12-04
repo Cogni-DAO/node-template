@@ -129,8 +129,8 @@ POSTGRES_DB=${APP_DB_NAME}
 
 **Migration Commands:**
 
-- `pnpm dev:stack:db:migrate` - Host environments (uses dotenv to load env files)
-- `pnpm docker:dev:stack:migrate` - Container environments (uses db-migrate service)
+- `pnpm db:migrate` - Run migrations via db-migrate service (dev environment)
+- `pnpm db:migrate:test` - Run migrations via db-migrate service (test environment)
 - `docker compose --profile bootstrap run --rm db-migrate` - Direct compose invocation
 
 ### 2.1 Local Development
@@ -142,7 +142,7 @@ POSTGRES_DB=${APP_DB_NAME}
 **Commands:**
 
 ```bash
-pnpm dev:stack:db:migrate    # Migrate dev database
+pnpm db:migrate              # Migrate dev database via db-migrate service
 pnpm dev:stack               # Start app using same database
 ```
 
@@ -181,7 +181,7 @@ pnpm docker:dev:stack:setup     # Complete: build stack, create DB, migrate
 # Manual steps (if needed)
 pnpm docker:dev:stack           # Start containers
 pnpm db:provision               # Create database
-pnpm docker:dev:stack:migrate   # Run migrations via db-migrate service
+pnpm db:migrate                 # Run migrations via db-migrate service
 ```
 
 **Key Properties:**
@@ -225,10 +225,10 @@ pnpm docker:stack:setup         # Start production compose (assumes DB exists)
 
 ```bash
 # 1. Start Docker stack in test mode
-pnpm docker:test:stack:build    # Build and start containers with test env
+pnpm docker:test:stack          # Build and start containers with test env
 
 # 2. Run migrations via db-migrate service
-pnpm docker:test:stack:migrate
+pnpm db:migrate:test
 
 # 3. Run host tests against containerized app
 pnpm test:stack:docker
