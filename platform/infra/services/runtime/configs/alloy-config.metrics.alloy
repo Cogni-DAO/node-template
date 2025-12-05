@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+//
+// Alloy configuration with logs + metrics shipping (preview/production only)
+// Requires: PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_USERNAME, PROMETHEUS_PASSWORD, METRICS_TOKEN
+// Use alloy-config.alloy for logs-only (local dev)
+
+// =============================================================================
+// Docker Container Discovery & Log Collection (same as base config)
+// =============================================================================
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "docker_logs" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "(app|litellm|caddy)"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "(.*)"
+    replacement   = "${1}"
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  rule {
+    target_label = "app"
+    replacement  = "cogni-template"
+  }
+
+  rule {
+    target_label = "env"
+    replacement  = sys.env("DEPLOY_ENVIRONMENT")
+  }
+
+  rule {
+    source_labels = ["env"]
+    regex         = "^(local|preview|production)$"
+    action        = "keep"
+  }
+}
+
+loki.source.docker "default" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.relabel.docker_logs.output
+  forward_to    = [loki.process.docker_logs.receiver]
+  relabel_rules = discovery.relabel.docker_logs.rules
+}
+
+loki.process "docker_logs" {
+  stage.docker {}
+
+  stage.timestamp {
+    source = "time"
+    format = "RFC3339Nano"
+  }
+
+  forward_to = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+  endpoint {
+    url = sys.env("LOKI_WRITE_URL")
+
+    basic_auth {
+      username = sys.env("LOKI_USERNAME")
+      password = sys.env("LOKI_PASSWORD")
+    }
+  }
+}
+
+// =============================================================================
+// Prometheus Metrics Scraping (Stage 9)
+// =============================================================================
+// Scrapes /api/metrics from app and ships to Grafana Cloud Mimir.
+// Only use this config when PROMETHEUS_* and METRICS_TOKEN are deployed.
+// =============================================================================
+
+prometheus.scrape "app_metrics" {
+  targets = [
+    {"__address__" = "app:3000"},
+  ]
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+  scrape_interval = "15s"
+  metrics_path    = "/api/metrics"
+  bearer_token    = sys.env("METRICS_TOKEN")
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("PROMETHEUS_REMOTE_WRITE_URL")
+    basic_auth {
+      username = sys.env("PROMETHEUS_USERNAME")
+      password = sys.env("PROMETHEUS_PASSWORD")
+    }
+  }
+}

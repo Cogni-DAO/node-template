@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-01
+- **Last reviewed:** 2025-12-06
 - **Status:** draft
 
 ## Purpose
@@ -83,6 +83,7 @@ Optional:
 - LITELLM_MVP_API_KEY (MVP wallet link single key - TODO: remove when proper wallet→key registry exists)
 - OPENROUTER_API_KEY (for LiteLLM providers)
 - AUTH_SECRET (≥32 chars) - TODO: when session management added
+- METRICS*TOKEN (≥32 chars) - Bearer auth for /api/metrics endpoint (PROMETHEUS*\* are Alloy-only; not in app)
 
 **Public client (client.ts)**
 

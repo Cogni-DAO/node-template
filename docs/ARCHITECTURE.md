@@ -398,7 +398,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] scripts/
 [x] ├── validate-agents-md.mjs # validates AGENTS.md files
 [x] ├── validate-doc-headers.ts # validates doc headers
-[x] ├── check-all.sh # structured check workflow with auto-fix mode
+[x] ├── check-fast.sh # structured check workflow with auto-fix mode
 [x] ├── check-root-layout.ts # validates root directory structure
 [x] ├── setup/ # setup scripts
 [x] ├── eslint/ # custom ESLint plugins
@@ -506,6 +506,7 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 
 - [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
+- [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
 - [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches
 - [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines

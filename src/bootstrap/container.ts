@@ -5,10 +5,9 @@
  * Module: `@bootstrap/container`
  * Purpose: Dependency injection container for application composition root with environment-based adapter selection.
  * Scope: Wire adapters to ports for runtime dependency injection. Does not handle request-scoped lifecycle.
- * Invariants: All ports wired; single container instance per process; only adapter instantiation point.
+ * Invariants: All ports wired; single container instance per process; config.unhandledErrorPolicy set by env.
  * Side-effects: IO (initializes logger and emits startup log on first access)
- * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire FakeLlmAdapter in CI; always uses DrizzleAccountService.
- * Notes: Use getContainer() to access singleton; see resetContainer() for test cleanup.
+ * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire FakeLlmAdapter; ContainerConfig controls wrapper behavior.
  * Links: Used by API routes and other entry points; configure adapters here for DI.
  * @public
  */
@@ -34,8 +33,16 @@ import type {
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
+export type UnhandledErrorPolicy = "rethrow" | "respond_500";
+
+export interface ContainerConfig {
+  /** How to handle unhandled errors in route wrappers: rethrow for dev/test, respond_500 for production safety */
+  unhandledErrorPolicy: UnhandledErrorPolicy;
+}
+
 export interface Container {
   log: Logger;
+  config: ContainerConfig;
   llmService: LlmService;
   accountService: AccountService;
   clock: Clock;
@@ -101,8 +108,14 @@ function createContainer(): Container {
   const accountService = new DrizzleAccountService(db);
   const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
 
+  // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
+  const config: ContainerConfig = {
+    unhandledErrorPolicy: env.isProd ? "respond_500" : "rethrow",
+  };
+
   return {
     log,
+    config,
     llmService,
     accountService,
     clock: new SystemClock(),
