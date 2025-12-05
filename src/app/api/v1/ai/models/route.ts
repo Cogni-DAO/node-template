@@ -41,15 +41,15 @@ export const GET = wrapRouteHandlerWithLogging(
         providerKey: m.providerKey,
       }));
 
-      const defaultModelId = serverEnv().DEFAULT_MODEL;
+      const defaultPreferredModelId = serverEnv().DEFAULT_MODEL;
 
       // Validate DEFAULT_MODEL exists in catalog (invariant)
       const modelIds = contractModels.map((m) => m.id);
-      if (!modelIds.includes(defaultModelId)) {
+      if (!modelIds.includes(defaultPreferredModelId)) {
         ctx.log.error(
           {
             errCode: "inv_default_model_not_in_catalog",
-            defaultModelId,
+            defaultPreferredModelId,
             catalogSize: modelIds.length,
           },
           "Default model not found in catalog"
@@ -60,9 +60,14 @@ export const GET = wrapRouteHandlerWithLogging(
         );
       }
 
+      // Compute default free model (first free model in catalog, or null)
+      const defaultFreeModelId =
+        contractModels.find((m) => m.isFree)?.id ?? null;
+
       const responseData = {
         models: contractModels,
-        defaultModelId,
+        defaultPreferredModelId,
+        defaultFreeModelId,
       };
 
       // Validate output with contract
