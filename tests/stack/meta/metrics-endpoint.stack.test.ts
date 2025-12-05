@@ -23,12 +23,8 @@ function baseUrl(path: string): string {
 const METRICS_TOKEN = process.env.METRICS_TOKEN ?? "dev-metrics-token";
 
 describe("Metrics Endpoint", () => {
-  test("[meta] /api/metrics returns 401 without token in non-dev mode", async () => {
-    // Skip if no token configured (dev mode allows unauthenticated)
-    if (!process.env.METRICS_TOKEN) {
-      return;
-    }
-
+  test("[meta] /api/metrics returns 401 without token", async () => {
+    // Token is always required - no dev mode exception
     const response = await fetch(baseUrl("/api/metrics"));
     expect(response.status).toBe(401);
   });

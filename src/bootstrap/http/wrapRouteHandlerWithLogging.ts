@@ -5,13 +5,13 @@
  * Module: `@bootstrap/http/wrapRouteHandlerWithLogging`
  * Purpose: Route wrapper to eliminate boilerplate for request logging envelope and metrics.
  * Scope: Bootstrap-layer utility. Handles ctx creation, timing, envelope logging, and Prometheus metrics. Does not implement route-specific business logic.
- * Invariants: Always logs request start/end; always measures duration; catches all errors and logs them; always records metrics (even on 5xx).
+ * Invariants: Always logs request start/end exactly once; always measures duration; catches unhandled errors; always records metrics (even on 5xx).
  * Side-effects: IO (creates request context, emits structured log entries, records Prometheus metrics)
  * Notes: Use this wrapper for all instrumented routes. Domain events go in facades/features, not here.
- *        For unhandled 5xx errors, intentionally emits TWO log entries:
- *        1. logRequestError (error level) - error signal for alerting
- *        2. logRequestEnd (info level) - envelope metric for dashboards
- *        Metrics are recorded in a finally block to ensure 5xx paths are captured.
+ *        logRequestEnd runs exactly once in the finally block for all paths (success, 401, 5xx).
+ *        For unhandled errors: logs error, then rethrows in dev/test (APP_ENV != production) for diagnosis.
+ *        In production, converts to 500 for safety.
+ *        Metrics are recorded in a finally block to ensure all paths are captured.
  * Links: Used by route handlers; delegates to shared/observability helpers; records to shared/observability/server/metrics.
  * @public
  */
@@ -117,10 +117,13 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
       }
     );
 
+    // Get config once before try block to avoid env failures masking real errors
+    const { unhandledErrorPolicy } = container.config;
+
     logRequestStart(ctx.log);
     const start = performance.now();
 
-    // Track response for metrics (captured in try/catch, recorded in finally)
+    // Track response for metrics/logging (captured in try/catch, used in finally)
     let responseStatus = 500;
     let response: NextResponse;
 
@@ -128,8 +131,6 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
       // Check session requirement before calling handler
       if (options.auth?.mode === "required" && !sessionUser) {
         responseStatus = 401;
-        const durationMs = performance.now() - start;
-        logRequestEnd(ctx.log, { status: responseStatus, durationMs });
         response = NextResponse.json(
           { error: "Session required" },
           { status: responseStatus }
@@ -139,25 +140,28 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
 
       response = await handler(ctx, request, sessionUser, context);
       responseStatus = response.status;
-      const durationMs = performance.now() - start;
-      logRequestEnd(ctx.log, { status: responseStatus, durationMs });
       return response;
     } catch (error) {
       // Wrapper only catches unhandled errors - route should handle domain errors
       responseStatus = 500;
       logRequestError(ctx.log, error, "INTERNAL_SERVER_ERROR");
-      logRequestEnd(ctx.log, {
-        status: responseStatus,
-        durationMs: performance.now() - start,
-      });
+
+      if (unhandledErrorPolicy === "rethrow") {
+        throw error;
+      }
+
+      // respond_500: convert to 500 for production safety
       response = NextResponse.json(
         { error: "Internal server error" },
         { status: responseStatus }
       );
       return response;
     } finally {
-      // Always record metrics, even on errors
+      // Always log request end exactly once and record metrics
       const durationMs = performance.now() - start;
+
+      logRequestEnd(ctx.log, { status: responseStatus, durationMs });
+
       httpRequestsTotal.inc({
         route: options.routeId,
         method: request.method,

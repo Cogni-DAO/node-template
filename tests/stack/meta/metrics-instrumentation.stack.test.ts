@@ -42,24 +42,29 @@ function parsePrometheusText(text: string): MetricSample[] {
     // Match: metric_name{label="value",...} value
     // Or: metric_name value
     const match = line.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)\{([^}]*)\}\s+(.+)$/);
-    if (match) {
-      const [, name, labelsStr, valueStr] = match;
+    if (match && match[1] && match[2] && match[3]) {
+      const name = match[1];
+      const labelsStr = match[2];
+      const valueStr = match[3];
       const labels: Record<string, string> = {};
 
       // Parse labels: key="value",key2="value2"
       const labelMatches = labelsStr.matchAll(
         /([a-zA-Z_][a-zA-Z0-9_]*)="([^"]*)"/g
       );
-      for (const [, key, value] of labelMatches) {
-        labels[key] = value;
+      for (const labelMatch of labelMatches) {
+        if (labelMatch[1] && labelMatch[2]) {
+          labels[labelMatch[1]] = labelMatch[2];
+        }
       }
 
       samples.push({ name, labels, value: parseFloat(valueStr) });
     } else {
       // No labels: metric_name value
       const simpleMatch = line.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)\s+(.+)$/);
-      if (simpleMatch) {
-        const [, name, valueStr] = simpleMatch;
+      if (simpleMatch && simpleMatch[1] && simpleMatch[2]) {
+        const name = simpleMatch[1];
+        const valueStr = simpleMatch[2];
         samples.push({ name, labels: {}, value: parseFloat(valueStr) });
       }
     }
@@ -113,12 +118,11 @@ async function fetchMetrics(): Promise<MetricSample[]> {
 
 describe("HTTP Metrics Instrumentation", () => {
   it("increments http_requests_total and http_request_duration_ms on wrapped route", async () => {
-    // Note: /api/v1/ai/* routes are protected by proxy.ts which returns 401 BEFORE
-    // the route handler runs, bypassing our metrics wrapper. Use payments route instead.
-    const testRoute = "payments.credits_summary";
-    const testPath = "/api/v1/payments/credits/summary";
+    // Test using /api/metrics itself - it's wrapped with wrapRouteHandlerWithLogging
+    // and lives outside /api/v1/* so it's not blocked by proxy auth.
+    const testRoute = "meta.metrics";
 
-    // 1. Get baseline metrics
+    // 1. Get baseline metrics (first fetch)
     const baseline = await fetchMetrics();
 
     // Sum all status buckets for this route (could be 2xx, 4xx, or 5xx)
@@ -143,12 +147,13 @@ describe("HTTP Metrics Instrumentation", () => {
     );
     const baseDurationCount = baselineDuration?.value ?? 0;
 
-    // 2. Hit a wrapped route (will return 401 or 5xx, doesn't matter - metrics recorded either way)
-    const response = await fetch(baseUrl(testPath));
-    // Accept any status - we're testing metrics increment, not route behavior
-    expect([200, 401, 500]).toContain(response.status);
+    // 2. Hit /api/metrics again (second fetch increments the counter)
+    const response = await fetch(baseUrl("/api/metrics"), {
+      headers: { Authorization: `Bearer ${METRICS_TOKEN}` },
+    });
+    expect(response.status).toBe(200);
 
-    // 3. Get metrics again
+    // 3. Get metrics again (third fetch to read the incremented values)
     const after = await fetchMetrics();
 
     const afterCounters = after.filter(
@@ -168,9 +173,11 @@ describe("HTTP Metrics Instrumentation", () => {
     );
     const afterDurationCount = afterDuration?.value ?? 0;
 
-    // 4. Assert increments by exactly 1
-    expect(afterCounterTotal).toBe(baseCounterTotal + 1);
-    expect(afterDurationCount).toBe(baseDurationCount + 1);
+    // 4. Assert increments by exactly 1 (second fetch incremented, third fetch reads)
+    // Note: baseline includes first fetch, "after" includes first + second + third fetch
+    // So we expect +2 total (second and third fetches)
+    expect(afterCounterTotal).toBe(baseCounterTotal + 2);
+    expect(afterDurationCount).toBe(baseDurationCount + 2);
   });
 });
 

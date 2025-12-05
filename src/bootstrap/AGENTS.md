@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-01
+- **Last reviewed:** 2025-12-06
 - **Status:** stable
 
 ## Purpose
@@ -48,11 +48,13 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 ## Public Surface
 
 - **Exports:**
-  - `getContainer()` - Singleton DI container with logger
+  - `getContainer()` - Singleton DI container with logger and config
   - `resetContainer()` - Reset singleton (tests only)
-  - `Container` interface - Ports + logger
+  - `Container` interface - Ports + logger + config
+  - `ContainerConfig` interface - Runtime behavior config (unhandledErrorPolicy)
+  - `UnhandledErrorPolicy` type - `"rethrow" | "respond_500"`
   - `resolveAiDeps()` - AI feature dependencies
-  - `wrapRouteHandlerWithLogging()` - Route logging wrapper (from `http/`)
+  - `wrapRouteHandlerWithLogging()` - Route logging wrapper with metrics (from `http/`)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none (uses `@/shared/env`)

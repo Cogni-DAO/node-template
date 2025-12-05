@@ -4,8 +4,8 @@
 /**
  * Module: `@/proxy`
  * Purpose: Next.js 16 proxy (formerly middleware) for route protection.
- * Scope: Root-level proxy. Enforces session auth on /api/v1/ai/* routes via NextAuth JWT token inspection. Does not handle auth for other API routes.
- * Invariants: Public routes remain accessible; protected routes require valid session.
+ * Scope: Root-level proxy. Enforces session auth on ALL /api/v1/* routes via NextAuth JWT token inspection. Does not handle public infrastructure endpoints (e.g., /api/metrics, /api/health).
+ * Invariants: Public routes remain accessible; protected routes require valid session; public infra endpoints must live outside /api/v1/.
  * Side-effects: none
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
@@ -23,12 +23,12 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
 
   const tokenSecret = authSecret || authOptions.secret;
 
-  if (!tokenSecret && pathname.startsWith("/api/v1/ai")) {
+  if (!tokenSecret && pathname.startsWith("/api/v1/")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const token =
-    tokenSecret && pathname.startsWith("/api/v1/ai")
+    tokenSecret && pathname.startsWith("/api/v1/")
       ? await getToken({
           req,
           secret: tokenSecret,
@@ -37,11 +37,12 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
 
   const isLoggedIn = !!token;
 
-  // Protect /api/v1/ai/* routes (second line of defense)
-  // IMPORTANT: All route handlers under /api/v1/ai must still call getServerSession() server-side.
+  // Protect ALL /api/v1/* routes (uniform auth perimeter)
+  // IMPORTANT: All route handlers under /api/v1 must still call getServerSession() server-side.
   // This proxy provides early rejection for unauthenticated requests, but handlers
   // are responsible for their own auth enforcement.
-  if (pathname.startsWith("/api/v1/ai")) {
+  // Public infrastructure endpoints (e.g., /api/metrics, /api/health) must live outside /api/v1/.
+  if (pathname.startsWith("/api/v1/")) {
     if (!isLoggedIn) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -51,6 +52,6 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  // Only run middleware on /api/v1/ai/* routes to avoid unnecessary overhead
-  matcher: ["/api/v1/ai/:path*"],
+  // Run middleware on ALL /api/v1/* routes for uniform auth perimeter
+  matcher: ["/api/v1/:path*"],
 };
