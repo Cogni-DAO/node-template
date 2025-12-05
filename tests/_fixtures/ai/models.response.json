@@ -8,5 +8,6 @@
     { "id": "gpt-4o-mini", "name": "GPT-4O Mini", "isFree": false },
     { "id": "claude-3-haiku", "name": "Claude 3 Haiku", "isFree": false }
   ],
-  "defaultModelId": "gpt-4o-mini"
+  "defaultPreferredModelId": "gpt-4o-mini",
+  "defaultFreeModelId": "qwen3-4b"
 }
