@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2025-12-05
+- **Last reviewed:** 2025-12-06
 - **Status:** stable
 
 ## Purpose
 
-Server-side logging utilities using Pino with sync mode and zero buffering.
+Server-side logging and metrics utilities. Pino logging with sync mode; Prometheus metrics via prom-client.
 
 ## Pointers
 
@@ -43,10 +43,15 @@ Server-side logging utilities using Pino with sync mode and zero buffering.
   - `logRequestStart/End/Error/Warn` - Request lifecycle helpers
   - `REDACT_PATHS` - Sensitive field redaction
   - `Logger` - Pino type
+  - `metricsRegistry` - prom-client Registry singleton (globalThis-backed)
+  - `httpRequestsTotal`, `httpRequestDurationMs` - HTTP metrics
+  - `aiChatStreamDurationMs`, `aiLlmCallDurationMs`, `aiLlmTokensTotal`, `aiLlmCostUsdTotal`, `aiLlmErrorsTotal` - AI metrics
+  - `statusBucket(status)`, `classifyLlmError(error)` - Metric helpers
+  - `LlmErrorCode` - Error code type
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** `PINO_LOG_LEVEL`, `NODE_ENV`, `SERVICE_NAME`, `VITEST`
-- **Files considered API:** `index.ts`, `logger.ts`, `logEvent.ts`, `helpers.ts`
+- **Files considered API:** `index.ts`, `logger.ts`, `logEvent.ts`, `helpers.ts`, `metrics.ts`
 
 ## Ports
 
@@ -81,7 +86,7 @@ logEvent(logger, EVENT_NAMES.ADAPTER_LITELLM_STREAM_RESULT, {
 ## Dependencies
 
 - **Internal:** `../events` (EVENT_NAMES, EventName, EventBase)
-- **External:** pino
+- **External:** pino, prom-client
 
 ## Change Protocol
 

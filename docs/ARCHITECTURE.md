@@ -506,6 +506,7 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 
 - [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
+- [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
 - [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches
 - [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines

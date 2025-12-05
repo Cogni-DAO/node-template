@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-03
+- **Last reviewed:** 2025-12-06
 - **Status:** draft
 
 ## Purpose
@@ -33,7 +33,7 @@ Service configuration files for runtime stack services (LiteLLM proxy, Grafana A
 - **Exports:** none
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`
+- **Env/Config keys:** `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`, `METRICS_TOKEN`, `PROMETHEUS_REMOTE_WRITE_URL`, `PROMETHEUS_USERNAME`, `PROMETHEUS_PASSWORD`
 - **Files considered API:** litellm.config.yaml, alloy-config.alloy, grafana-provisioning/datasources/loki.yaml
 
 ## Ports (optional)
@@ -65,6 +65,7 @@ Mounted as volumes in docker-compose.yml.
 - Scrapes JSON logs from Docker containers
 - Forwards to Loki (local or Grafana Cloud based on env)
 - Adds deployment labels
+- Prometheus scrape + remote*write blocks (disabled by default; uncomment when PROMETHEUS*\* creds deployed)
 
 ## Dependencies
 
