@@ -1,8 +1,8 @@
 # Observability
 
-**Status:** Structured logging + Loki collection operational; client logs not collected; no Prometheus metrics (yet)
+**Status:** Structured logging + Loki collection operational; Prometheus metrics operational; client logs not collected
 
-**Purpose:** JSON logging with event registry enforcement, shipped via Alloy to Grafana Cloud Loki for production debugging.
+**Purpose:** JSON logging with event registry enforcement + Prometheus metrics, shipped via Alloy to Grafana Cloud Loki/Mimir for production debugging and dashboards.
 
 ---
 
@@ -56,8 +56,10 @@ src/shared/observability/
 
 **Infrastructure:**
 
-- `platform/infra/services/runtime/configs/alloy-config.alloy` - Log scraper config
-- `platform/infra/services/runtime/docker-compose.yml` - Alloy + Loki services
+- `platform/infra/services/runtime/configs/alloy-config.alloy` - Logs only (local dev)
+- `platform/infra/services/runtime/configs/alloy-config.metrics.alloy` - Logs + metrics (preview/prod)
+- `platform/infra/services/runtime/docker-compose.yml` - Prod stack (uses metrics config)
+- `platform/infra/services/runtime/docker-compose.dev.yml` - Dev stack (uses logs-only config)
 - `.mcp.json` - Grafana MCP servers for log querying
 
 ---
@@ -141,12 +143,35 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 ---
 
+## Metrics (Prometheus-format)
+
+**Purpose:** Alertable numeric signals (rates/latency/tokens/cost) complementary to logs.
+
+**Flow:** App (`GET /api/metrics`) → Alloy `prometheus.scrape` → Grafana Cloud Mimir
+
+**Endpoint:** `GET /api/metrics` (Bearer auth required in production)
+
+**Config:** `alloy-config.metrics.alloy` (preview/prod); `alloy-config.alloy` (local dev, logs-only)
+
+**Registry:** `src/shared/observability/server/metrics.ts` - prom-client registry + metric definitions
+
+**Recorded at:**
+
+- HTTP: `wrapRouteHandlerWithLogging` - request count + handler duration (finally block)
+- Chat SSE: `ai.chat_stream_closed` - stream duration
+- LLM: `ai.llm_call_completed` + error paths - duration/tokens/cost/errors
+
+**Core metrics:** `http_requests_total`, `http_request_duration_ms`, `ai_chat_stream_duration_ms`, `ai_llm_call_duration_ms`, `ai_llm_tokens_total`, `ai_llm_cost_usd_total`, `ai_llm_errors_total`
+
+**Labels:** All low-cardinality—`route` (routeId), `method`, `status` (2xx/4xx/5xx), `provider`, `model_class` (free/standard/premium), `code` (error type)
+
+---
+
 ## Current Shortcomings
 
 **Not Yet Implemented:**
 
 - ❌ Client logs not collected (console-only, no shipping pipeline)
-- ❌ No Prometheus metrics (http_requests_total, ai_llm_duration_ms, etc.)
 - ❌ No Grafana dashboards
 - ❌ No alerting rules
 
