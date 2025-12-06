@@ -226,7 +226,7 @@ services:
 networks:
   cogni-edge:
     name: cogni-edge
-    external: false
+    external: true
   internal:
     name: internal
     external: false
