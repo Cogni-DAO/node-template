@@ -99,10 +99,10 @@
     }
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,mjs,cjs,json}": [
+    "*.{ts,tsx,js,jsx,mjs,cjs}": [
       "biome check --write"
     ],
-    "*.{md,css,yaml,yml}": [
+    "*.{md,css,yaml,yml,json}": [
       "prettier --write"
     ]
   },
