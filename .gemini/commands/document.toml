@@ -7,7 +7,7 @@ It's time to update documentation for this branch — both `*/AGENTS.md` files a
 
 ## 1. Review Changed Files
 
-- List all staged (or branch) changes and group them by directory.
+- List all staged (or branch) changes and group them by directory. Compare current branch against origin `staging` branch.
 - For each changed or new file, update the **top-of-file TSDoc header** if its behavior, inputs/outputs, or side-effects changed.
 - Use templates: `docs/templates/header_source_template.ts` (source), `header_test_template.ts` (tests), `header_e2e_template.ts` (e2e).
 - If only internal refactors or formatting changed, no documentation update is needed.
@@ -17,6 +17,7 @@ It's time to update documentation for this branch — both `*/AGENTS.md` files a
 
 ## 2. Update Directory Docs
 
+- Every subdirectory NEEDS to have a `AGENTS.md` file. Create one from template if missing.
 - Update a directory’s `AGENTS.md` **only if**:
   - Public exports, routes, env keys, ports, or boundaries changed
   - Ownership/status/date changed

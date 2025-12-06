@@ -31,7 +31,8 @@ export const GET = wrapRouteHandlerWithLogging(
     const startMs = performance.now();
     try {
       // Fetch from cache (fast, no network call)
-      const { models } = await getCachedModels();
+      // defaults are computed from catalog metadata tags (never from env)
+      const { models, defaults } = await getCachedModels();
 
       // Map internal ModelMeta to contract Model
       const contractModels: Model[] = models.map((m: ModelMeta) => ({
@@ -41,28 +42,10 @@ export const GET = wrapRouteHandlerWithLogging(
         providerKey: m.providerKey,
       }));
 
-      const defaultModelId = serverEnv().DEFAULT_MODEL;
-
-      // Validate DEFAULT_MODEL exists in catalog (invariant)
-      const modelIds = contractModels.map((m) => m.id);
-      if (!modelIds.includes(defaultModelId)) {
-        ctx.log.error(
-          {
-            errCode: "inv_default_model_not_in_catalog",
-            defaultModelId,
-            catalogSize: modelIds.length,
-          },
-          "Default model not found in catalog"
-        );
-        return NextResponse.json(
-          { error: "Server configuration error" },
-          { status: 500 }
-        );
-      }
-
       const responseData = {
         models: contractModels,
-        defaultModelId,
+        defaultPreferredModelId: defaults.defaultPreferredModelId,
+        defaultFreeModelId: defaults.defaultFreeModelId,
       };
 
       // Validate output with contract
