@@ -6,7 +6,7 @@ See [OBSERVABILITY.md](./OBSERVABILITY.md) for current metrics implementation.
 
 ## Implementation Checklist — Public Analytics Page
 
-> Status: Design complete. Infrastructure ready. Implementation not started.
+> Status: Backend implementation finished. Frontend not started.
 
 ### Phase 1: Infrastructure Prerequisites — DONE
 
@@ -24,11 +24,11 @@ See [OBSERVABILITY.md](./OBSERVABILITY.md) for current metrics implementation.
 - [x] Confirm no user/wallet/key/reqId labels — none present
 - [x] Confirm route labels use templates — `wrapRouteHandlerWithLogging.ts:165-166` uses `routeId`
 
-### Phase 2.5: Metrics Infrastructure Fixes — REQUIRED
+### Phase 2.5: Metrics Infrastructure Fixes — DONE
 
 > These fixes ensure metrics are correctly labeled and don't conflate scraper traffic with user traffic.
 
-- [ ] **Add `env` to default labels** — `metrics.ts:31` currently only sets `app`
+- [x] **Add `env` to default labels** — `metrics.ts:31-36`
 
   ```typescript
   metricsRegistry.setDefaultLabels({
@@ -37,31 +37,38 @@ See [OBSERVABILITY.md](./OBSERVABILITY.md) for current metrics implementation.
   });
   ```
 
-  - Without this, preview and production metrics are indistinguishable
-  - Verified via Mimir: `env` label returns empty `[]`
+  - Preview and production metrics now distinguishable via `env` label
 
-- [ ] **Exclude `/api/metrics` from `http_requests_total`** — scraper traffic pollutes user metrics
-  - Current state: `meta.metrics` route has 3301 requests (all Alloy scrapes at 15s interval)
-  - Option A: Skip metrics recording in `/api/metrics` route handler
-  - Option B: Filter `route!="meta.metrics"` in all dashboard queries
-  - Recommendation: Option A — don't record at source
+- [x] **Exclude `/api/metrics` from `http_requests_total`** — scraper traffic excluded
+  - Implemented in `wrapRouteHandlerWithLogging.ts:166`
+  - Skip metrics recording when `routeId === "meta.metrics"`
+  - Scraper traffic no longer pollutes user traffic analytics
 
-- [ ] **Verify scrape timeout is set** — Alloy config should have explicit timeout
-  - Check `alloy-config.metrics.alloy` for `scrape_timeout` setting
-  - Default is scrape_interval, but explicit is safer
+- [x] **Verify scrape timeout is set** — Alloy config has explicit timeout
+  - `alloy-config.metrics.alloy:96` — `scrape_timeout = "10s"`
 
-### Phase 3: Backend Implementation
+### Phase 3: Backend Implementation — DONE
 
-- [ ] Add `recharts` dependency — `pnpm add recharts`
-- [ ] Create contract — `src/contracts/analytics.summary.v1.contract.ts`
-- [ ] Create service — `src/features/analytics/services/analytics.ts`
-- [ ] Create facade — `src/app/_facades/analytics/summary.server.ts`
-- [ ] Create API route — `src/app/api/v1/analytics/summary/route.ts`
-- [ ] Add env vars — `MIMIR_URL`, `MIMIR_USER`, `MIMIR_TOKEN`
+Hexagonal architecture implementation:
+
+- [x] Port — `src/ports/metrics-query.port.ts` (MetricsQueryPort interface)
+- [x] Adapter — `src/adapters/server/metrics/mimir.adapter.ts` (Mimir implementation)
+- [x] Test double — `src/adapters/test/metrics/fake-metrics.adapter.ts`
+- [x] Container wiring — `src/bootstrap/container.ts` (environment-based adapter selection)
+- [x] Contract — `src/contracts/analytics.summary.v1.contract.ts` (Zod schemas)
+- [x] Service — `src/features/analytics/services/analytics.ts` (k-anonymity logic)
+- [x] Facade — `src/app/_facades/analytics/summary.server.ts` (type mapping)
+- [x] Route — `src/app/api/v1/analytics/summary/route.ts` (HTTP endpoint with caching)
+- [x] Environment — `src/shared/env/server.ts` (MIMIR*URL, MIMIR_USER, MIMIR_TOKEN, ANALYTICS*\*)
+- [x] Tests — Unit, adapter, and contract tests (k-anonymity, timeout, PII denylist)
+
+Endpoint: `GET /api/v1/analytics/summary?window={7d|30d|90d}`
 
 ### Phase 4: Frontend Implementation
 
+- [ ] Add recharts dependency — `pnpm add recharts`
 - [ ] Create feature components — `src/features/analytics/components/`
+- [ ] Create hooks — `src/features/analytics/hooks/useAnalyticsSummary.ts`
 - [ ] Create page — `src/app/(public)/analytics/page.tsx`
 - [ ] Add to navigation (optional)
 
