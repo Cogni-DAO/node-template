@@ -2,20 +2,20 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/api/v1/analytics/summary`
+ * Module: `@app/api/v1/public/analytics/summary`
  * Purpose: Public HTTP endpoint for analytics summary with privacy guarantees.
- * Scope: Validates query params with contract schema, delegates to analytics facade, returns cached JSON. Does not perform queries or business logic.
- * Invariants: Public endpoint (no auth); fixed time windows only; aggressive caching (60s); output validated against contract.
+ * Scope: Public route using wrapPublicRoute(); validates query params, delegates to facade, returns JSON. Does not perform queries or business logic.
+ * Invariants: Fixed windows only (7d/30d/90d); contract-validated output; rate limit + cache via wrapPublicRoute().
  * Side-effects: IO (reads metrics via facade)
- * Notes: Rate limited at Caddy layer (10 req/min/IP); cache headers set per design doc.
- * Links: docs/METRICS_OBSERVABILITY.md, contracts/analytics.summary.v1.contract.ts
+ * Notes: wrapPublicRoute() auto-applies rate limiting (10 req/min/IP + burst 5) and cache headers (60s + swr 300s).
+ * Links: docs/METRICS_OBSERVABILITY.md, contracts/analytics.summary.v1.contract.ts, bootstrap/http/wrapPublicRoute.ts
  * @public
  */
 
 import { NextResponse } from "next/server";
 
 import { getAnalyticsSummaryFacade } from "@/app/_facades/analytics/summary.server";
-import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import { wrapPublicRoute } from "@/bootstrap/http";
 import { analyticsSummaryOperation } from "@/contracts/analytics.summary.v1.contract";
 import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
@@ -50,10 +50,11 @@ function handleRouteError(
   return null;
 }
 
-export const GET = wrapRouteHandlerWithLogging(
+export const GET = wrapPublicRoute(
   {
     routeId: "analytics.summary",
-    auth: { mode: "none" },
+    cacheTtlSeconds: 60,
+    staleWhileRevalidateSeconds: 300,
   },
   async (ctx, request) => {
     try {
@@ -69,12 +70,7 @@ export const GET = wrapRouteHandlerWithLogging(
       // Validate output against contract
       const output = analyticsSummaryOperation.output.parse(summary);
 
-      // Return with aggressive caching
-      return NextResponse.json(output, {
-        headers: {
-          "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
-        },
-      });
+      return NextResponse.json(output);
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
       if (errorResponse) return errorResponse;

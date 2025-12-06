@@ -30,9 +30,18 @@ vi.mock("@/shared/env", () => ({
   }),
 }));
 
+// Mock rate limiter to always allow requests in contract tests
+vi.mock("@/bootstrap/http/rateLimiter", () => ({
+  publicApiLimiter: {
+    consume: vi.fn(() => true), // Always allow
+  },
+  extractClientIp: vi.fn(() => "test-ip"),
+  TokenBucketRateLimiter: vi.fn(),
+}));
+
 import { getAnalyticsSummaryFacade } from "@/app/_facades/analytics/summary.server";
 // Import after mock
-import { GET } from "@/app/api/v1/analytics/summary/route";
+import { GET } from "@/app/api/v1/public/analytics/summary/route";
 
 describe("/api/v1/analytics/summary contract tests", () => {
   const mockSummaryData = {
