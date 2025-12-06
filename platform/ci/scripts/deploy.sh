@@ -554,7 +554,7 @@ while true; do
 
     all_ready="true"
     for config in currencyDetails.json weights.json grain.json; do
-        if ! $EDGE_COMPOSE exec -T caddy sh -lc "curl -sf http://sourcecred:6006/config/$config >/dev/null"; then
+        if ! $EDGE_COMPOSE exec -T caddy sh -lc "wget -qO- http://sourcecred:6006/config/$config >/dev/null"; then
             all_ready="false"
             break
         fi
