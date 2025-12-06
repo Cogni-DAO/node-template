@@ -1,6 +1,6 @@
 # Observability Finish Pass (Generic, Post-PR)
 
-Goal: add **minimal, high-signal** logging/metrics for the changes in this PR. **No refactors** and **no observability redesign**.
+Goal: add **minimal, high-signal** logging/metrics for the changes in this branch. **No refactors** and **no observability redesign**.
 
 ## 0) Scope + budget (non-negotiable)
 
