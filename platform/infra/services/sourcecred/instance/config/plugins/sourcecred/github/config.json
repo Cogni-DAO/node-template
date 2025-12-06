@@ -1,5 +1,7 @@
 {
   "repositories": [
-    "cogni-dao/cogni-template"
-  ]
+    "Cogni-DAO/cogni-template"
+  ],
+  "includeDevelopers": true,
+  "excludeBots": true
 }

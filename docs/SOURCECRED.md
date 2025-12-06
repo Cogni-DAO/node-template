@@ -1,61 +1,119 @@
-# SourceCred
+# SourceCred Implementation Spec
 
-v0, barely MVP. SourceCred is run as an isolated Docker service to track contributions.
-SourceCred is our temporary proof of concept, with plans to migrate, adapt, and replace it with
-a tailored version.
+> **Scope**: This document applies to `Cogni-DAO/cogni-template`. Phase 3 implements generic plumbing in this repo. Phase 4 is for per-node activation (e.g., `CogniCanary`).
 
-## Prerequisites
+## Implementation Status
 
-- `SOURCECRED_GITHUB_TOKEN` must be set in your `.env.local` (or `.env`).
-  - You can reuse your `ACTIONS_AUTOMATION_BOT_PAT` for this.
+- [x] **Phase 1: Infrastructure** (Service stack, Docker, CI/CD) - _Completed in PR #161_
+- [x] **Phase 2: Configuration** (Weights, Grain, Plugins)
+  - [x] `sourcecred.json`
+  - [x] `currencyDetails.json`
+  - [x] `github_config.json`
+  - [x] `grain.json`
+  - [x] `weights.json`
+- [ ] **Phase 3: Generic On-Chain Integration** (CSV, Safe Script, CI)
+- [ ] **Phase 4: Per-Node Activation** (e.g., CogniCanary)
 
-## Usage
+## Alignment Summary
 
-We provide pnpm scripts to manage the SourceCred instance:
+### Agreed
 
-```bash
-# 1. Build the container (required first time or after config changes)
-pnpm sourcecred:build
+- **GitHub-only plugin**: No Discord or Discourse integration.
+- **Single Currency (Template)**: "CogniTemplate" only; `CogniCanary` fork will rename to "CanaryCogni" (or similar).
+- **Manual Approval**: All distributions require human sign-off (no auto-merge).
+- **Signal-over-Noise**: Comments and low-signal surfaces are strongly de-weighted.
 
-# 2. Load data from GitHub (long running process)
-# This fetches data using your GitHub token and stores it in the cache volume.
-pnpm sourcecred:load
+For the detailed "why" behind our configuration, see [SOURCECRED_CONFIG_RATIONALE.md](SOURCECRED_CONFIG_RATIONALE.md).
 
-# 3. Start the UI
-# Once the stack is running, you can access the SourceCred UI at:
-# - **URL:** `https://localhost/sourcecred/` (Read-Only)
-pnpm sourcecred:up
+### Disagreed (Decisions)
 
-# 4. Stop the service
-pnpm sourcecred:down
-```
+- **Allocation Policy**: We use **RECENT + BALANCED** (vs RECENT-only).
+- **Integration**: We use **Scoreboard-only v0** (vs CSV/Gnosis integration).
+- **Reactions**: **Zero weight** for v0 (vs positive weight).
+- **Balanced Budget**: **Capped budget share** (vs avoiding BALANCED).
 
-> [!NOTE]
-> The public view at `/sourcecred/` is read-only. All administrative actions (loading data, recalculating scores) must be performed via the CLI scripts.
+## Configuration Specifications
 
-## Configuration
+### `grain.json`
 
-- **Instance Config**: `platform/infra/services/sourcecred/instance`
+- **Max Simultaneous Distributions**: `1`
+- **Allocation Policies**:
+  - `RECENT`: Budget `600`, Discount `0.6`
+  - `BALANCED`: Budget `400`, Lookback `0`
+- **Disabled**: `integration`, `accountingEnabled` (CSV/accounting integration is not configured in this repo; scoreboard-only).
+
+### `weights.json`
+
+- **Adopt**: Node/Edge weights from standard architecture:
+  - `ISSUE`: 2
+  - `PULL`: 10
+  - `REVIEW`: 4
+  - `COMMENT`: 0.5
+- **Override**: `reactionEdgeWeightsAll` = `0`
+
+### `sourcecred.json`
+
+- **Bundled Plugins**: `["sourcecred/github"]`
+
+### `currencyDetails.json`
+
+- **Name**: "CogniTemplate"
+- **Suffix**: " COGTMP"
+- **Integration**: `null`
+
+### `github_config.json`
+
+- **Repo**: `Cogni-DAO/cogni-template`
+- **Include Developers**: `true`
+- **Exclude Bots**: `true`
+
+## Operational Invariants
+
+> [!IMPORTANT]
+> These invariants must be strictly maintained.
+
+1.  **No Crypto Integration (v0)**: Do not enable CSV/Gnosis integration until an explicit Phase 2 decision.
+2.  **Manual Distributions**: Never auto-merge grain PRs. Each distribution is a human-approved event.
+3.  **Idle Handling**: Skip grain distributions (or leave PR unmerged) during idle periods.
+4.  **Legacy Status**: Document SourceCred as legacy/temporary, with a migration plan to CogniCred.
+5.  **Budget Safety**: Keep BALANCED budget share <= 40% and monitor for odd oscillations.
+6.  **Identity**: Only add identities to ledger after CogniTemplate waiver/opt-in is recorded.
+7.  **No On-Chain in Template**: `cogni-template` will never enable CSV/on-chain integration.
+
+## File Pointers
+
+- **Instance Config**: `platform/infra/services/sourcecred/instance/config`
 - **Repositories**: `platform/infra/services/sourcecred/instance/config/plugins/sourcecred/github/config.json`
 - **Docker**: `platform/infra/services/sourcecred/docker-compose.sourcecred.yml`
 
-## Deployment & Architecture
+## Phase 3: Generic On-Chain Integration (In Progress)
 
-SourceCred runs as a distinct Docker Compose stack (`cogni-sourcecred`) to keep it isolated from the main application runtime, but it shares the `cogni-edge` network to allow Caddy to route traffic to it.
+**Goal**: Implement generic Cred->CSV->Safe integration in `cogni-template` so forks can activate it via config.
 
-### Routing (Caddy)
+### Tasks
 
-Access to the SourceCred UI is managed by the Edge stack's Caddy instance.
+- [ ] **Enable CSV Grain**: Configure SourceCred to output CSV grain reports (generic).
+- [ ] **Payout Script**: Add `scripts/sourcecred-safe-payout.ts` to convert CSV -> Safe transaction JSON.
+  - Must be idempotent.
+  - Must use env vars for Chain ID, Token Address, Safe Address (no hardcoded values).
+- [ ] **CI Integration**: Add a GitHub Action job that runs the payout script.
+  - Runs in `dry-run` mode if env vars are missing.
+- [ ] **Tests**: Add basic tests to verify CSV parsing and Safe payload generation.
 
-- **Config**: `platform/infra/services/edge/configs/Caddyfile.tmpl`
-- **Proxy Rule**: `handle_path /sourcecred/* { reverse_proxy sourcecred:6006 }`
-- **Redirect**: `redir /sourcecred /sourcecred/` (ensures trailing slash for asset loading)
+## Phase 4 (Per-Node Activation): On-Chain Integration
 
-This setup allows SourceCred to be served under a subpath of the main domain (e.g., `https://cogni.dao/sourcecred/`) without exposing its internal port 6006 directly to the internet.
+> [!NOTE]
+> Tasks in this phase execute **only** in forks (e.g., `cogni-canary`).
 
-### Environment & Secrets
+**Goal**: Activate the generic plumbing for a specific node (e.g., CogniCanary).
 
-The deployment script (`deploy.sh`) injects the necessary credentials:
+### Example: CogniCanary (Sacrificial Testbed)
 
-1.  **Secret**: `ACTIONS_AUTOMATION_BOT_PAT` (from GitHub Secrets) is mapped to `SOURCECRED_GITHUB_TOKEN` in the container.
-2.  **Network**: The service attaches to the external `cogni-edge` network to communicate with Caddy.
+`cogni-canary` is the first live experimental node. It is a **sacrificial testbed** whose configs and economics may be broken on purpose to learn.
+
+### Activation Tasks
+
+- [ ] **Pre-requisite**: Fork `cogni-template` into `cogni-canary`.
+- [ ] **Deploy Infra**: Deploy Token, Safe, and Aragon DAO on chosen chain (e.g., Base Sepolia).
+- [ ] **Configure Env**: Set `SOURCECRED_PAYOUT_SAFE_ADDRESS`, `SOURCECRED_PAYOUT_TOKEN_ADDRESS`, etc.
+- [ ] **Enable CI**: Set CI variables to switch the payout job from `dry-run` to `propose` (or `auto` for testnets).
