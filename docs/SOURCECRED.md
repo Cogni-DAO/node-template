@@ -21,9 +21,16 @@ pnpm sourcecred:build
 pnpm sourcecred:load
 
 # 3. Start the UI
-# Launches the service at http://localhost:6006
+# Once the stack is running, you can access the SourceCred UI at:
+# - **URL:** `https://localhost/sourcecred/` (Read-Only)
 pnpm sourcecred:up
+
+# 4. Stop the service
+pnpm sourcecred:down
 ```
+
+> [!NOTE]
+> The public view at `/cred/` is read-only. All administrative actions (loading data, recalculating scores) must be performed via the CLI scripts.
 
 ## Configuration
 

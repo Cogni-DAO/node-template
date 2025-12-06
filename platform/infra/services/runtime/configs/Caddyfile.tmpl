@@ -15,7 +15,8 @@ www.{$DOMAIN} {
 {$DOMAIN} {
   encode zstd gzip
   reverse_proxy app:3000
-  handle_path /cred/* {
+  redir /sourcecred /sourcecred/
+  handle_path /sourcecred/* {
     reverse_proxy sourcecred:6006
   }
   log {

@@ -12,10 +12,10 @@ services:
     environment:
       - SOURCECRED_GITHUB_TOKEN=${ACTIONS_AUTOMATION_BOT_PAT}
     networks:
-      - web
+      - cogni-edge
 
 networks:
-  web:
+  cogni-edge:
     external: true
 
 volumes:
