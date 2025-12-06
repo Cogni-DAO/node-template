@@ -1,4 +1,5 @@
 {
-  "currencyName": "CogniTemplateCoins",
-  "currencySuffix": "CTC"
+  "currencyName": "CogniTemplate",
+  "currencySuffix": "COGTMP",
+  "integrationCurrency": null
 }

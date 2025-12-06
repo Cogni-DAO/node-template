@@ -3,12 +3,12 @@
 ## Implementation Status
 
 - [x] **Phase 1: Infrastructure** (Service stack, Docker, CI/CD) - _Completed in PR #161_
-- [ ] **Phase 2: Configuration** (Weights, Grain, Plugins)
-  - [ ] `sourcecred.json`
-  - [ ] `currencyDetails.json`
-  - [ ] `github_config.json`
-  - [ ] `grain.json`
-  - [ ] `weights.json`
+- [x] **Phase 2: Configuration** (Weights, Grain, Plugins)
+  - [x] `sourcecred.json`
+  - [x] `currencyDetails.json`
+  - [x] `github_config.json`
+  - [x] `grain.json`
+  - [x] `weights.json`
 - [ ] **Phase 3: Verification** (Manual testing)
 
 ## Alignment Summary
@@ -19,6 +19,8 @@
 - **Single Currency**: "AlphaCogni" only. No on-chain token in config.
 - **Manual Approval**: All distributions require human sign-off (no auto-merge).
 - **Signal-over-Noise**: Comments and low-signal surfaces are strongly de-weighted.
+
+For the detailed "why" behind our configuration, see [SOURCECRED_CONFIG_RATIONALE.md](SOURCECRED_CONFIG_RATIONALE.md).
 
 ### Disagreed (Decisions)
 
@@ -48,13 +50,13 @@
 
 ### `currencyDetails.json`
 
-- **Name**: "AlphaCogni"
-- **Suffix**: " ALPHA"
+- **Name**: "CogniTemplate"
+- **Suffix**: " COGTMP"
 - **Integration**: `null`
 
 ### `github_config.json`
 
-- **Repo**: `Cogni-DAO/cogni-alpha`
+- **Repo**: `Cogni-DAO/cogni-template`
 - **Include Developers**: `true`
 - **Exclude Bots**: `true`
 
@@ -68,7 +70,7 @@
 3.  **Idle Handling**: Skip grain distributions (or leave PR unmerged) during idle periods.
 4.  **Legacy Status**: Document SourceCred as legacy/temporary, with a migration plan to CogniCred.
 5.  **Budget Safety**: Keep BALANCED budget share <= 40% and monitor for odd oscillations.
-6.  **Identity**: Only add identities to ledger after AlphaCogni waiver/opt-in is recorded.
+6.  **Identity**: Only add identities to ledger after CogniTemplate waiver/opt-in is recorded.
 
 ## File Pointers
 
