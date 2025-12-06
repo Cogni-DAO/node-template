@@ -5,7 +5,8 @@
  * Module: `@bootstrap/http/rateLimiter`
  * Purpose: In-memory rate limiter for public API endpoints.
  * Scope: Token bucket algorithm; extracts client IP from X-Real-IP (set by Caddy from TCP source); returns 429 when limit exceeded. Does NOT persist state across instances or restarts.
- * Invariants: 10 req/min/IP + burst 5; cleanup stale entries every 60s; X-Real-IP set by Caddy via header_up directive (non-spoofable).
+ * Invariants: 10 req/min/IP + burst 5; new clients start with 15 tokens (10 base + 5 burst); cleanup stale entries every 60s;
+ *             X-Real-IP set by Caddy via header_up directive (non-spoofable).
  * Side-effects: global (in-memory rate limit store with periodic cleanup)
  * Notes: Per-instance limitation - multiple app instances each have independent limits (acceptable for MVP).
  *        IP extraction prefers X-Real-IP (Caddy-set) over X-Forwarded-For (fallback).
@@ -17,7 +18,7 @@ import type { NextRequest } from "next/server";
 
 interface BucketState {
   tokens: number; // Remaining tokens
-  lastRefill: number; // Timestamp of last refill (ms)
+  lastSeen: number; // Timestamp of last update (ms)
 }
 
 interface RateLimiterConfig {
@@ -50,16 +51,16 @@ export class TokenBucketRateLimiter {
     let bucket = this.buckets.get(key);
 
     if (!bucket) {
-      // New client - initialize with full bucket
+      // New client - initialize with full bucket including burst capacity
       bucket = {
-        tokens: this.config.maxTokens,
-        lastRefill: now,
+        tokens: this.config.maxTokens + this.config.burstSize,
+        lastSeen: now,
       };
       this.buckets.set(key, bucket);
     }
 
     // Refill tokens based on time elapsed
-    const elapsedMs = now - bucket.lastRefill;
+    const elapsedMs = now - bucket.lastSeen;
     const elapsedSeconds = elapsedMs / 1000;
     const tokensToAdd = elapsedSeconds * this.config.refillRate;
 
@@ -67,7 +68,7 @@ export class TokenBucketRateLimiter {
       bucket.tokens + tokensToAdd,
       this.config.maxTokens + this.config.burstSize
     );
-    bucket.lastRefill = now;
+    bucket.lastSeen = now;
 
     // Consume 1 token
     if (bucket.tokens >= 1) {
@@ -87,11 +88,12 @@ export class TokenBucketRateLimiter {
       const staleThresholdMs = 60_000; // 60 seconds
 
       for (const [key, bucket] of this.buckets.entries()) {
-        const timeSinceLastRefill = now - bucket.lastRefill;
-        const isFull = bucket.tokens >= this.config.maxTokens;
+        const timeSinceLastSeen = now - bucket.lastSeen;
+        const isFull =
+          bucket.tokens >= this.config.maxTokens + this.config.burstSize;
 
         // Remove if bucket is full and unused for >60s
-        if (isFull && timeSinceLastRefill > staleThresholdMs) {
+        if (isFull && timeSinceLastSeen > staleThresholdMs) {
           this.buckets.delete(key);
         }
       }

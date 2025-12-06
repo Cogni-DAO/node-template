@@ -27,18 +27,18 @@ function baseUrl(path: string): string {
 const RATE_LIMIT_TEST_IP = generateUniqueTestIp();
 
 describe("Public Analytics Rate Limiting", () => {
-  it("should enforce rate limit: allow N requests then return 429 on N+1", async () => {
+  it("should enforce rate limit: allow 15 requests then return 429 on 16th", async () => {
     const endpoint = "/api/v1/public/analytics/summary?window=7d";
 
-    // Make 10 requests rapidly (should all succeed)
+    // Make 15 requests rapidly (10 base + 5 burst - should all succeed)
     const responses: Response[] = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 15; i++) {
       const response = await fetchWithIp(baseUrl(endpoint), RATE_LIMIT_TEST_IP);
       responses.push(response);
     }
 
-    // First 10 requests should succeed
-    for (let i = 0; i < 10; i++) {
+    // First 15 requests should succeed (new client gets full burst capacity)
+    for (let i = 0; i < 15; i++) {
       expect(responses[i]?.status).toBe(200);
       // Verify Cache-Control headers present on success responses
       expect(responses[i]?.headers.get("Cache-Control")).toContain("public");
@@ -47,7 +47,7 @@ describe("Public Analytics Rate Limiting", () => {
       );
     }
 
-    // 11th request should be rate limited
+    // 16th request should be rate limited
     const rateLimitedResponse = await fetchWithIp(
       baseUrl(endpoint),
       RATE_LIMIT_TEST_IP

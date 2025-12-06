@@ -33,15 +33,15 @@ describe("TokenBucketRateLimiter", () => {
   });
 
   describe("Rate limit enforcement", () => {
-    it("should allow N requests then block N+1 for same key in same window", () => {
+    it("should allow N+burst requests then block for new client", () => {
       const key = "test-ip-1";
 
-      // Allow 10 requests
-      for (let i = 0; i < 10; i++) {
+      // New client starts with 15 tokens (10 base + 5 burst)
+      for (let i = 0; i < 15; i++) {
         expect(limiter.consume(key)).toBe(true);
       }
 
-      // 11th request should be blocked
+      // 16th request should be blocked
       expect(limiter.consume(key)).toBe(false);
     });
 
@@ -49,21 +49,24 @@ describe("TokenBucketRateLimiter", () => {
       vi.useFakeTimers();
       const key = "test-ip-2";
 
-      // Exhaust bucket
-      for (let i = 0; i < 10; i++) {
+      // Exhaust bucket (15 tokens)
+      for (let i = 0; i < 15; i++) {
         limiter.consume(key);
       }
 
       // Should be blocked
       expect(limiter.consume(key)).toBe(false);
 
-      // Advance time by 60 seconds (one full window)
+      // Advance time by 60 seconds (refills 10 tokens)
       vi.advanceTimersByTime(60_000);
 
-      // Should allow 10 more requests
+      // Should allow 10 more requests (refill rate, not burst)
       for (let i = 0; i < 10; i++) {
         expect(limiter.consume(key)).toBe(true);
       }
+
+      // 11th should fail (only refilled base amount, not burst)
+      expect(limiter.consume(key)).toBe(false);
 
       vi.useRealTimers();
     });
@@ -72,16 +75,31 @@ describe("TokenBucketRateLimiter", () => {
       const keyA = "192.168.1.1";
       const keyB = "192.168.1.2";
 
-      // Exhaust keyA
-      for (let i = 0; i < 10; i++) {
+      // Exhaust keyA (15 tokens)
+      for (let i = 0; i < 15; i++) {
         limiter.consume(keyA);
       }
 
       // keyA should be blocked
       expect(limiter.consume(keyA)).toBe(false);
 
-      // keyB should still have full allowance
+      // keyB should still have full allowance (15 tokens)
       expect(limiter.consume(keyB)).toBe(true);
+    });
+
+    it("should provide immediate burst capacity for new clients", () => {
+      const key = "burst-test-ip";
+
+      // New client should be able to make 15 rapid requests (10 base + 5 burst)
+      const results: boolean[] = [];
+      for (let i = 0; i < 16; i++) {
+        results.push(limiter.consume(key));
+      }
+
+      // First 15 should succeed
+      expect(results.slice(0, 15).every((r) => r === true)).toBe(true);
+      // 16th should fail
+      expect(results[15]).toBe(false);
     });
   });
 
