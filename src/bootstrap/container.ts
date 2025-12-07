@@ -42,9 +42,26 @@ import { makeLogger } from "@/shared/observability";
 
 export type UnhandledErrorPolicy = "rethrow" | "respond_500";
 
+/**
+ * Config for rate limit bypass in test environments.
+ * Security: Only enabled when APP_ENV=test; production builds ignore bypass header.
+ */
+export interface RateLimitBypassConfig {
+  /** Whether bypass is enabled (only true when APP_ENV=test) */
+  enabled: boolean;
+  /** Header name to check for bypass (e.g., "x-stack-test") */
+  headerName: string;
+  /** Header value that triggers bypass (e.g., "1") */
+  headerValue: string;
+}
+
 export interface ContainerConfig {
   /** How to handle unhandled errors in route wrappers: rethrow for dev/test, respond_500 for production safety */
   unhandledErrorPolicy: UnhandledErrorPolicy;
+  /** Rate limit bypass config for stack tests; only enabled when APP_ENV=test */
+  rateLimitBypass: RateLimitBypassConfig;
+  /** Deploy environment for metrics/logging (e.g., "local", "preview", "production") */
+  DEPLOY_ENVIRONMENT: string;
 }
 
 export interface Container {
@@ -140,6 +157,15 @@ function createContainer(): Container {
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
   const config: ContainerConfig = {
     unhandledErrorPolicy: env.isProd ? "respond_500" : "rethrow",
+    // Rate limit bypass: only enabled in test mode (APP_ENV=test)
+    // Security: Production builds will never enable bypass regardless of header
+    rateLimitBypass: {
+      enabled: env.isTestMode,
+      headerName: "x-stack-test",
+      headerValue: "1",
+    },
+    // Deploy environment for metrics/logging
+    DEPLOY_ENVIRONMENT: env.DEPLOY_ENVIRONMENT ?? "local",
   };
 
   return {
