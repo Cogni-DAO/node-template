@@ -517,24 +517,11 @@ fi
 log_info "SourceCred Configuration:"
 grep -C 2 "repositories" /opt/cogni-template-sourcecred/instance/config/plugins/sourcecred/github/config.json || log_warn "Could not read GitHub config"
 
-# 2. Check if data needs loading (Idempotence based on state ONLY - SC-2)
-NEEDS_LOAD="false"
-if [[ ! -f /opt/cogni-template-sourcecred/instance/data/ledger.json ]]; then
-    log_warn "SourceCred ledger missing in instance/data - triggering initial load..."
-    NEEDS_LOAD="true"
-fi
+# 3. Pull image (Immutable Artifact - SC-invariant-2)
+log_info "Pulling SourceCred image..."
+$SOURCECRED_COMPOSE pull sourcecred
 
-if [[ "$NEEDS_LOAD" == "true" ]]; then
-    log_info "Running SourceCred data load (yarn load)..."
-    # Runs in disposable container using the just-built image
-    $SOURCECRED_COMPOSE run --rm sourcecred yarn load || {
-        log_error "SourceCred load failed - check token permissions or repo config"
-        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
-        exit 1
-    }
-fi
-
-# 3. Start service
+# 4. Start service
 log_info "Starting SourceCred container..."
 $SOURCECRED_COMPOSE up -d
 
@@ -544,10 +531,28 @@ log_info "Waiting for SourceCred readiness..."
 # SC-READINESS-CURL-PATH: Warn if network resolution is broken
 $EDGE_COMPOSE exec -T caddy sh -lc 'getent hosts sourcecred >/dev/null' || log_warn "Caddy cannot resolve 'sourcecred' hostname - probe may fail"
 
-deadline=$((SECONDS+30))
+deadline=$((SECONDS+300))
 while true; do
     if (( SECONDS >= deadline )); then
         log_error "SourceCred failed to become ready (timeout)"
+        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
+        exit 1
+    fi
+
+    # Fail fast if container crashed (SC-invariant-3)
+    cid="$($SOURCECRED_COMPOSE ps -q sourcecred || true)"
+    if [[ -z "$cid" ]]; then
+        status="missing"
+        restarting="false"
+    else
+        container_info="$(docker inspect -f '{{.State.Status}} {{.State.Restarting}}' "$cid" 2>/dev/null || echo 'missing false')"
+        status="${container_info%% *}"
+        restarting="${container_info##* }"
+    fi
+
+    # Treat exited/dead/restarting/missing as failure; allow created/running to keep trying
+    if [[ "$status" == "exited" || "$status" == "dead" || "$status" == "missing" || "$restarting" == "true" ]]; then
+        log_error "SourceCred container failed early (State: $status, Restarting: $restarting)"
         $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
         exit 1
     fi
@@ -561,15 +566,11 @@ while true; do
     done
 
     if [[ "$all_ready" == "true" ]]; then
-        # Check stability: Must be running and NOT restarting
-        status=$($SOURCECRED_COMPOSE ps -q sourcecred | xargs -r docker inspect -f '{{.State.Status}} {{.State.Restarting}}' || echo "unknown true")
-        if [[ "$status" == "running false" ]]; then
-            log_info "SourceCred is ready and stable (all configs reachable)"
-            break
-        else
-             log_warn "SourceCred is unstable (Status: $status), waiting..."
-        fi
+        log_info "SourceCred is ready (all configs reachable)"
+        break
     fi
+
+    sleep 2
 
     sleep 1
 done
