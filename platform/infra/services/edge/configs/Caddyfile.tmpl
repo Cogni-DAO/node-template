@@ -2,7 +2,11 @@
   log {
     level INFO
     format json
-    output file /data/logs/caddy/caddy.log
+    output file /data/logs/caddy/caddy.log {
+      roll_size 10MB
+      roll_keep 7
+      roll_keep_for 168h
+    }
   }
 }
 
@@ -38,6 +42,10 @@ www.{$DOMAIN} {
 
   log {
     format json
-    output file /data/logs/caddy/access.log
+    output file /data/logs/caddy/access.log {
+      roll_size 10MB
+      roll_keep 7
+      roll_keep_for 168h
+    }
   }
 }
