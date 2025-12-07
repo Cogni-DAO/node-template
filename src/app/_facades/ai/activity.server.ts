@@ -11,6 +11,7 @@
  * @public
  */
 
+import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 
 import { resolveActivityDeps } from "@/bootstrap/container";
@@ -18,9 +19,18 @@ import type { aiActivityOperation } from "@/contracts/ai.activity.v1.contract";
 import { ActivityService } from "@/features/ai/services/activity";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
+import {
+  type AiActivityQueryCompletedEvent,
+  EVENT_NAMES,
+  makeLogger,
+} from "@/shared/observability";
+
+const logger = makeLogger({ component: "ActivityFacade" });
 
 type ActivityInput = z.infer<typeof aiActivityOperation.input> & {
   sessionUser: SessionUser;
+  /** Optional correlation ID - generated if not provided */
+  reqId?: string;
 };
 
 type ActivityOutput = z.infer<typeof aiActivityOperation.output>;
@@ -28,6 +38,8 @@ type ActivityOutput = z.infer<typeof aiActivityOperation.output>;
 export async function getActivity(
   input: ActivityInput
 ): Promise<ActivityOutput> {
+  const startTime = performance.now();
+  const effectiveReqId = input.reqId ?? randomUUID();
   const { usageService, accountService } = resolveActivityDeps();
   const activityService = new ActivityService(usageService);
 
@@ -113,11 +125,28 @@ export async function getActivity(
     nextCursor = Buffer.from(json).toString("base64");
   }
 
-  return {
+  const result: ActivityOutput = {
     chartSeries,
     totals,
     rows,
     nextCursor,
     telemetrySource: stats.telemetrySource,
   };
+
+  // Log completion event
+  const logEvent: AiActivityQueryCompletedEvent = {
+    event: EVENT_NAMES.AI_ACTIVITY_QUERY_COMPLETED,
+    reqId: effectiveReqId,
+    routeId: "ai.activity.v1",
+    scope: "user",
+    billingAccountId: billingAccount.id,
+    telemetrySource: stats.telemetrySource,
+    groupBy: input.groupBy,
+    durationMs: performance.now() - startTime,
+    resultCount: rows.length,
+    status: "success",
+  };
+  logger.info(logEvent, EVENT_NAMES.AI_ACTIVITY_QUERY_COMPLETED);
+
+  return result;
 }
