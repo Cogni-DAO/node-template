@@ -24,6 +24,15 @@ write_files:
           "max-file": "3"
         }
       }
+  - path: /etc/systemd/journald.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Journal]
+      Storage=persistent
+      SystemMaxUse=200M
+      SystemMaxFileSize=50M
+      RuntimeMaxUse=50M
 
 runcmd:
   # Install Docker
@@ -34,6 +43,7 @@ runcmd:
   - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   - systemctl enable docker
   - systemctl start docker
+  - systemctl restart systemd-journald
   # Create cogni-edge network (shared between edge and runtime compose projects)
   # Must exist before any docker compose up that references it as external
   - docker network create cogni-edge || true
