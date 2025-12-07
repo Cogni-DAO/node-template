@@ -23,6 +23,7 @@ import {
   InvalidRangeError,
 } from "@/features/ai/services/activity";
 import type { UsageService } from "@/ports";
+import { UsageTelemetryUnavailableError } from "@/ports";
 
 // Mock UsageService that returns empty results
 function createMockUsageService(): UsageService {
@@ -320,6 +321,84 @@ describe("Activity Feature Invariants", () => {
         billingAccountId: "test-account",
         limit: 1000,
       });
+    });
+  });
+
+  describe("inv_litellm_hard_dependency (P1)", () => {
+    it("UsageTelemetryUnavailableError propagates to caller (for 503 mapping)", async () => {
+      const usageService: UsageService = {
+        getUsageStats: vi
+          .fn()
+          .mockRejectedValue(
+            new UsageTelemetryUnavailableError("LiteLLM unreachable")
+          ),
+        listUsageLogs: vi.fn(),
+      };
+      const service = new ActivityService(usageService);
+
+      await expect(
+        service.getActivitySummary({
+          billingAccountId: "test-account",
+          from: new Date("2024-01-01"),
+          to: new Date("2024-01-02"),
+          groupBy: "day",
+        })
+      ).rejects.toThrow(UsageTelemetryUnavailableError);
+    });
+
+    it("UsageTelemetryUnavailableError from logs query propagates", async () => {
+      const usageService: UsageService = {
+        getUsageStats: vi.fn(),
+        listUsageLogs: vi
+          .fn()
+          .mockRejectedValue(
+            new UsageTelemetryUnavailableError("LiteLLM unreachable")
+          ),
+      };
+      const service = new ActivityService(usageService);
+
+      await expect(
+        service.getRecentActivity({
+          billingAccountId: "test-account",
+          limit: 10,
+        })
+      ).rejects.toThrow(UsageTelemetryUnavailableError);
+    });
+  });
+
+  describe("inv_identity_server_derived (P1)", () => {
+    it("ActivityService always uses provided billingAccountId (server-derived)", async () => {
+      const usageService = createMockUsageService();
+      const service = new ActivityService(usageService);
+
+      await service.getActivitySummary({
+        billingAccountId: "server-derived-acc-123",
+        from: new Date("2024-01-01"),
+        to: new Date("2024-01-02"),
+        groupBy: "day",
+      });
+
+      expect(usageService.getUsageStats).toHaveBeenCalledWith(
+        expect.objectContaining({
+          billingAccountId: "server-derived-acc-123",
+        })
+      );
+    });
+
+    it("listUsageLogs uses server-derived billingAccountId", async () => {
+      const usageService = createMockUsageService();
+      const service = new ActivityService(usageService);
+
+      await service.getRecentActivity({
+        billingAccountId: "server-derived-acc-456",
+        limit: 10,
+      });
+
+      expect(usageService.listUsageLogs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          billingAccountId: "server-derived-acc-456",
+        })
+      );
     });
   });
 });

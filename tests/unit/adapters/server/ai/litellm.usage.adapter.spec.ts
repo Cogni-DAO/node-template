@@ -4,7 +4,7 @@
 /**
  * Module: `@adapters/server/ai/litellm.usage`
  * Purpose: Unit tests for LiteLlmUsageAdapter with mocked HTTP calls.
- * Scope: Tests P1 invariants: bounded pagination, server-derived identity, error handling, pass-through telemetry.
+ * Scope: Tests P1 invariants: bounded pagination, server-derived identity, error handling, pass-through telemetry. Does not make real HTTP calls.
  * Invariants: No real HTTP calls; deterministic responses; UsageTelemetryPort contract compliance
  * Side-effects: none (mocked fetch)
  * Links: src/adapters/server/ai/litellm.usage.adapter.ts, docs/ACTIVITY_METRICS.md (P1 invariants)
@@ -132,7 +132,7 @@ describe("LiteLlmUsageAdapter", () => {
       });
     });
 
-    it("throws UsageTelemetryUnavailableError when LiteLLM returns 5xx", async () => {
+    it("throws UsageTelemetryUnavailableError only for infra errors (502/503/504)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 503,
@@ -142,6 +142,20 @@ describe("LiteLlmUsageAdapter", () => {
       await expect(
         adapter.getSpendLogs(billingAccountId, params)
       ).rejects.toThrow(UsageTelemetryUnavailableError);
+    });
+
+    it("throws regular Error (not UsageTelemetryUnavailableError) for 4xx/500 errors", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+      });
+
+      await expect(
+        adapter.getSpendLogs(billingAccountId, params)
+      ).rejects.toThrow(
+        "LiteLLM /spend/logs failed: 500 Internal Server Error"
+      );
     });
 
     it("throws UsageTelemetryUnavailableError on network error", async () => {
@@ -209,11 +223,23 @@ describe("LiteLlmUsageAdapter", () => {
       });
     });
 
-    it("throws UsageTelemetryUnavailableError when LiteLLM returns 4xx", async () => {
+    it("throws regular Error (not UsageTelemetryUnavailableError) for 4xx errors", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 401,
         statusText: "Unauthorized",
+      });
+
+      await expect(
+        adapter.getSpendChart(billingAccountId, params)
+      ).rejects.toThrow("LiteLLM /spend/logs failed: 401 Unauthorized");
+    });
+
+    it("throws UsageTelemetryUnavailableError only for infra errors (502/503/504)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
       });
 
       await expect(

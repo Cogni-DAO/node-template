@@ -10,13 +10,13 @@
  * - Bounded pagination: MAX_PAGES=10, limit≤100 enforced
  * - Pass-through: model, tokens, cost from LiteLLM as-is (no local recomputation)
  * - Read-only: never writes to DB or calls recordChargeReceipt
- * Side-effects: HTTP requests to LiteLLM
+ * Side-effects: IO (HTTP requests to LiteLLM)
  * Links: [UsageTelemetryPort](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
  * @internal
  */
 
-import type { UsageTelemetryPort } from "@/ports/usage.port";
-import { UsageTelemetryUnavailableError } from "@/ports/usage.port";
+import type { UsageTelemetryPort } from "@/ports";
+import { UsageTelemetryUnavailableError } from "@/ports";
 import { serverEnv } from "@/shared/env/server";
 
 const MAX_PAGES = 10;
@@ -27,13 +27,16 @@ const MAX_LIMIT = 100;
  * P1: Single implementation by design. Throws UsageTelemetryUnavailableError on failure.
  */
 export class LiteLlmUsageAdapter implements UsageTelemetryPort {
-  private readonly baseUrl: string;
-  private readonly masterKey: string | undefined;
+  private get baseUrl(): string {
+    return serverEnv().LITELLM_BASE_URL;
+  }
 
-  constructor(config?: { baseUrl?: string; masterKey?: string }) {
-    const env = serverEnv();
-    this.baseUrl = config?.baseUrl ?? env.LITELLM_BASE_URL;
-    this.masterKey = config?.masterKey ?? env.LITELLM_MASTER_KEY;
+  private get masterKey(): string {
+    const key = serverEnv().LITELLM_MASTER_KEY;
+    if (!key) {
+      throw new Error("LITELLM_MASTER_KEY is not configured");
+    }
+    return key;
   }
 
   async getSpendLogs(
@@ -94,12 +97,16 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
         });
 
         if (!response.ok) {
-          const error = new Error(
+          // Only treat infra-ish errors as 'unavailable' (503 to client)
+          if ([502, 503, 504].includes(response.status)) {
+            throw new UsageTelemetryUnavailableError(
+              `LiteLLM /spend/logs unavailable: ${response.status}`,
+              new Error(`${response.status} ${response.statusText}`)
+            );
+          }
+          // Everything else is a logic/config bug → normal error → 500
+          throw new Error(
             `LiteLLM /spend/logs failed: ${response.status} ${response.statusText}`
-          );
-          throw new UsageTelemetryUnavailableError(
-            `LiteLLM /spend/logs unavailable: ${response.status}`,
-            error
           );
         }
 
@@ -128,9 +135,14 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
         pagesConsumed++;
         url.searchParams.set("cursor", currentCursor);
       } catch (error) {
+        // Re-throw known error types as-is
         if (error instanceof UsageTelemetryUnavailableError) {
-          throw error; // Already wrapped
+          throw error;
         }
+        if (error instanceof Error && error.message.startsWith("LiteLLM")) {
+          throw error; // Config/logic error, not infra
+        }
+        // Network failures → wrap as unavailable
         throw new UsageTelemetryUnavailableError(
           `Failed to fetch usage logs from LiteLLM`,
           error instanceof Error ? error : new Error(String(error))
@@ -184,12 +196,16 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
       });
 
       if (!response.ok) {
-        const error = new Error(
+        // Only treat infra-ish errors as 'unavailable' (503 to client)
+        if ([502, 503, 504].includes(response.status)) {
+          throw new UsageTelemetryUnavailableError(
+            `LiteLLM /spend/logs unavailable: ${response.status}`,
+            new Error(`${response.status} ${response.statusText}`)
+          );
+        }
+        // Everything else is a logic/config bug → normal error → 500
+        throw new Error(
           `LiteLLM /spend/logs failed: ${response.status} ${response.statusText}`
-        );
-        throw new UsageTelemetryUnavailableError(
-          `LiteLLM /spend/logs unavailable: ${response.status}`,
-          error
         );
       }
 
@@ -209,9 +225,14 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
 
       return { buckets };
     } catch (error) {
+      // Re-throw known error types as-is
       if (error instanceof UsageTelemetryUnavailableError) {
-        throw error; // Already wrapped
+        throw error;
       }
+      if (error instanceof Error && error.message.startsWith("LiteLLM")) {
+        throw error; // Config/logic error, not infra
+      }
+      // Network failures → wrap as unavailable
       throw new UsageTelemetryUnavailableError(
         `Failed to fetch usage chart from LiteLLM`,
         error instanceof Error ? error : new Error(String(error))

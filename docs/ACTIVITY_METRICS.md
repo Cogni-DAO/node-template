@@ -58,6 +58,12 @@
 - [ ] HTTP layer: catch `UsageTelemetryUnavailableError` → 503 with `{ code: "LITELLM_UNAVAILABLE" }`
 - [ ] Container: bind Activity usage to `LiteLlmUsageAdapter`
 
+### P1: Test Coverage
+
+- [x] **Unit**: `litellm.usage.adapter.spec.ts` - bounded pagination, identity, error handling, pass-through (9 tests)
+- [x] **Contract**: `activity.invariants.test.ts` - error propagation, identity server-derived (4 P1 tests added)
+- [ ] **Wiring**: Activity uses LiteLlmUsageAdapter (not DrizzleUsageAdapter), 503 on error
+
 ### P2/P3: Future Considerations
 
 - [ ] If LiteLLM availability proves problematic in production, revisit degraded fallback view
