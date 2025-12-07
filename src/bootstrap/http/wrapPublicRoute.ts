@@ -3,11 +3,11 @@
 
 /**
  * Module: `@bootstrap/http/wrapPublicRoute`
- * Purpose: Factory for public API route wrapper with mandatory rate limiting and caching.
- * Scope: Public route wrapper (/api/v1/public/*); enforces rate limiting, cache headers, standard error shape. Does NOT implement business logic.
+ * Purpose: Pure factory for public API route wrapper with mandatory rate limiting and caching.
+ * Scope: Factory only; no env/container dependencies. Bootstrap layer creates bound singleton.
  * Invariants: All public routes MUST use this wrapper; rate limit 10 req/min/IP + burst 5; cache headers auto-applied; 429 on rate limit.
  * Side-effects: IO (rate limiter state, request context, metrics)
- * Notes: Factory pattern allows injecting config for testability; singleton export for routes.
+ * Notes: Pure factory enables clean testing; bootstrap/http/index.ts exports bound instance.
  * Links: Used by all /api/v1/public/** routes; CI validation in tests/meta/public-route-enforcement.test.ts
  * @public
  */
@@ -19,11 +19,7 @@ import {
   publicRateLimitExceededTotal,
   type RequestContext,
 } from "@/shared/observability";
-import {
-  extractClientIp,
-  publicApiLimiter,
-  type TokenBucketRateLimiter,
-} from "./rateLimiter";
+import { extractClientIp, type TokenBucketRateLimiter } from "./rateLimiter";
 import { wrapRouteHandlerWithLogging } from "./wrapRouteHandlerWithLogging";
 
 export interface PublicRouteConfig {
@@ -40,7 +36,7 @@ type PublicRouteHandler<TContext = unknown> = (
 
 /**
  * Dependencies for public route wrapper factory.
- * Allows injection for testability without global state.
+ * Injected by bootstrap layer; no global state or env access.
  */
 export interface WrapPublicRouteDeps {
   rateLimitBypass: RateLimitBypassConfig;
@@ -50,13 +46,20 @@ export interface WrapPublicRouteDeps {
 
 /**
  * Factory to create public route wrapper with injected dependencies.
- * Internal - use for unit testing only. Routes should use the exported wrapPublicRoute singleton.
+ * Pure function - no container/env dependencies.
  *
  * @example
+ * // Bootstrap usage (in bootstrap/http/index.ts):
+ * export const wrapPublicRoute = makeWrapPublicRoute({
+ *   rateLimitBypass: getContainer().config.rateLimitBypass,
+ *   rateLimiter: publicApiLimiter,
+ *   DEPLOY_ENVIRONMENT: getContainer().config.DEPLOY_ENVIRONMENT,
+ * });
+ *
  * // Unit test usage:
  * const wrapPublicRoute = makeWrapPublicRoute({
  *   rateLimitBypass: { enabled: false, headerName: "x-stack-test", headerValue: "1" },
- *   rateLimiter: publicApiLimiter,
+ *   rateLimiter: mockLimiter,
  *   DEPLOY_ENVIRONMENT: "test",
  * });
  */
@@ -129,52 +132,4 @@ export function makeWrapPublicRoute(deps: WrapPublicRouteDeps) {
       }
     );
   };
-}
-
-// Singleton wrapper - lazily initialized from container on first use
-let _wrapPublicRoute: ReturnType<typeof makeWrapPublicRoute> | null = null;
-
-function getWrapPublicRoute(): ReturnType<typeof makeWrapPublicRoute> {
-  if (!_wrapPublicRoute) {
-    // Lazy import to avoid circular dependency (container imports from bootstrap/http)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getContainer } = require("@/bootstrap/container") as {
-      getContainer: () => {
-        config: {
-          rateLimitBypass: RateLimitBypassConfig;
-          DEPLOY_ENVIRONMENT: string;
-        };
-      };
-    };
-
-    const container = getContainer();
-    _wrapPublicRoute = makeWrapPublicRoute({
-      rateLimitBypass: container.config.rateLimitBypass,
-      rateLimiter: publicApiLimiter,
-      DEPLOY_ENVIRONMENT: container.config.DEPLOY_ENVIRONMENT,
-    });
-  }
-  return _wrapPublicRoute;
-}
-
-/**
- * Public route wrapper with rate limiting and cache headers.
- * Uses container config singleton - all routes share the same deps.
- *
- * All routes under /api/v1/public/** MUST use this wrapper.
- *
- * @example
- * export const GET = wrapPublicRoute(
- *   { routeId: "analytics.summary", cacheTtlSeconds: 60 },
- *   async (ctx, request) => {
- *     const data = await getSomePublicData();
- *     return NextResponse.json(data);
- *   }
- * );
- */
-export function wrapPublicRoute<TContext = unknown>(
-  config: PublicRouteConfig,
-  handler: PublicRouteHandler<TContext>
-): (request: NextRequest, context?: TContext) => Promise<NextResponse> {
-  return getWrapPublicRoute()(config, handler);
 }
