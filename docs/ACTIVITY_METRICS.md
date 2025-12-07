@@ -11,11 +11,13 @@
 
 3. **Minimal charge_receipt**: Audit-focused table with only: `request_id`, `billing_account_id`, `litellm_call_id`, `charged_credits`, `response_cost_usd`, `provenance`, `created_at`. No model/tokens/usage JSONB.
 
-4. **Activity reads from LiteLLM**: Dashboard uses `/spend/logs` as primary source with bounded pagination. Fallback to local receipts only when LiteLLM unavailable, explicitly marked `telemetrySource: "fallback"`.
+4. **Activity reads from LiteLLM (hard dependency)**: Dashboard uses `/spend/logs` as the ONLY source for usage telemetry. No runtime fallback to local receipts. If LiteLLM is unavailable, the activity endpoint returns 503 and the UI shows an explicit error state.
 
 5. **Streaming doesn't change gating**: We decide once, up front. Post-call cost from LiteLLM is for charging and reconciliation only, never to retroactively deny service.
 
 6. **Idempotent receipts with ledger pairing**: Every charge_receipt row is keyed by `request_id` (idempotent insert). Each receipt maps 1:1 to a `credit_ledger` debit entry. The post-call write must either succeed atomically (transaction) or use idempotent two-step keyed by `request_id`—never partial state.
+
+7. **User-visible spend = our billing**: Activity dashboard displays `charged_credits` (our billed amount with markup), not raw provider/model rates. LiteLLM is the source for telemetry (model, tokens), but spend shown to users reflects what we charged them.
 
 ---
 
@@ -31,24 +33,26 @@
 - [x] Update activity reads to return `telemetrySource: "fallback"` (prep for P1)
 - [x] Update mocks and tests for new schema
 
-### P1: Implement LiteLLM Usage Adapter
+### P1: Implement LiteLLM Usage Adapter (Hard Dependency)
 
-- [ ] Create `src/adapters/server/ai/litellm.usage.adapter.ts`
-- [ ] Chart: `GET /spend/logs?user_id=X&summarize=true` (LiteLLM pre-aggregates)
-- [ ] Table: `GET /spend/logs?user_id=X&summarize=false` (paginated, max 100/request)
+- [ ] Create `src/adapters/server/ai/litellm.usage.adapter.ts` (read-only adapter)
+- [ ] Chart: `GET /spend/logs?user_id=X&group_by=day` for daily aggregates
+- [ ] Table: `GET /spend/logs?user_id=X&limit=100` (paginated logs)
 - [ ] Add bounded pagination (MAX_PAGES=10 circuit breaker)
 - [ ] Map LiteLLM log schema → UsageService port types
+- [ ] Pass through LiteLLM fields as-is (no local recomputation of cost/tokens)
 
-### P1: Refactor Activity Service
+### P1: Wire Activity Service (No Fallback)
 
-- [ ] Primary/fallback: try LiteLLM adapter, catch → degraded receipts-only
-- [ ] Surface `telemetrySource: "litellm" | "fallback"` in contract output
+- [ ] ActivityService depends ONLY on `LiteLlmUsagePort` — do NOT inject DrizzleUsageAdapter
+- [ ] Error handling: if LiteLLM returns 4xx/5xx/timeout, propagate `LiteLlmUnavailableError`
+- [ ] HTTP layer returns 503 with `{ code: "LITELLM_UNAVAILABLE" }`
+- [ ] Remove `telemetrySource` from contract (only one source in P1)
+- [ ] Re-scope DrizzleUsageAdapter to billing/reconciliation only (not called from Activity endpoint)
 
-### P2: Long-Term Hedge (Only If Needed)
+### P2/P3: Future Considerations
 
-- [ ] Monitor LiteLLM data retention (check if logs disappear after N days)
-- [ ] If retention < 90 days: implement periodic export job
-- [ ] **Do NOT build this preemptively**
+- [ ] If LiteLLM availability proves problematic in production, revisit degraded fallback view
 
 ---
 
@@ -164,17 +168,18 @@ Canonical cost is determined in priority order:
 
 ### 6. Read Modes (Activity Dashboard)
 
-**Primary (LiteLLM - P1):**
+**LiteLLM Only (P1):**
 
-- **Chart:** `GET /spend/logs?user_id=X&summarize=true` (LiteLLM pre-aggregates by date)
-- **Table:** `GET /spend/logs?user_id=X&summarize=false&limit=100` (paginated logs)
-- **Pagination:** Bounded fetch (MAX_PAGES=10). Never trust "one query returns everything."
+- **Telemetry:** `GET /spend/logs?user_id=X` for model, tokens, timestamps
+- **Spend:** Derived from local `charged_credits` (our billing view with markup)
+- **Pagination:** Bounded fetch (MAX_PAGES=10, limit≤100). Stop and log warning if exceeded.
+- **Identity:** `user_id = billingAccountId` derived on server, never from client
 
-**Fallback (Local - P0):**
+**Error State:**
 
-- Query charge_receipt for cost + timestamps only
-- Return `{ model: "unavailable", tokens: 0, telemetrySource: "fallback" }`
-- Explicitly mark degraded state in UI
+- If LiteLLM unavailable: return 503 `{ code: "LITELLM_UNAVAILABLE" }`
+- UI shows explicit "Usage unavailable" state
+- No fallback to local receipts for telemetry
 
 ---
 
@@ -213,10 +218,10 @@ Canonical cost is determined in priority order:
 
 ### Phase 3: P1 Implementation
 
-1. Create LiteLLM usage adapter
-2. Wire activity service: primary LiteLLM, fallback local
-3. Feature flag rollout, monitor 48 hours
-4. Remove flag, LiteLLM is primary
+1. Create LiteLLM usage adapter (read-only, bounded pagination)
+2. Wire activity service to LiteLLM only (no fallback)
+3. Spend = local `charged_credits`, telemetry = LiteLLM `/spend/logs`
+4. Deploy, monitor LiteLLM availability
 
 ### Phase 4: Cleanup
 
@@ -226,33 +231,43 @@ Canonical cost is determined in priority order:
 
 ---
 
-## File Pointers (P0 Scope)
+## File Pointers
 
-| File                                                    | Change                                                                   |
-| ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `src/shared/db/schema.billing.ts`                       | Drop model/tokens/usage/markup columns, add litellm_call_id + provenance |
-| `src/adapters/server/db/migrations/XXXX_*.sql`          | NEW: schema migration                                                    |
-| `src/ports/accounts.port.ts`                            | Reshape recordLlmUsage → recordChargeReceipt params                      |
-| `src/ports/llm.port.ts`                                 | Add litellmCallId to completion result type                              |
-| `src/ports/usage.port.ts`                               | Add telemetrySource to result types                                      |
-| `src/adapters/server/ai/litellm.adapter.ts`             | Extract x-litellm-call-id header                                         |
-| `src/features/ai/services/completion.ts`                | Remove post-call blocking, pass litellmCallId + provenance               |
-| `src/adapters/server/accounts/drizzle.adapter.ts`       | Simplified recording (fewer columns)                                     |
-| `src/adapters/server/accounts/drizzle.usage.adapter.ts` | Return telemetrySource="fallback", remove token aggregation              |
-| `src/contracts/ai.activity.v1.contract.ts`              | Add telemetrySource to response schema                                   |
+### P0 Scope (Complete)
+
+| File                                              | Change                                              |
+| ------------------------------------------------- | --------------------------------------------------- |
+| `src/shared/db/schema.billing.ts`                 | Minimal charge_receipt columns, add litellm_call_id |
+| `src/adapters/server/db/migrations/0000_*.sql`    | Schema migration                                    |
+| `src/ports/accounts.port.ts`                      | recordChargeReceipt params                          |
+| `src/ports/llm.port.ts`                           | Add litellmCallId to completion result              |
+| `src/adapters/server/ai/litellm.adapter.ts`       | Extract x-litellm-call-id header                    |
+| `src/features/ai/services/completion.ts`          | Preflight gating + non-blocking post-call billing   |
+| `src/adapters/server/accounts/drizzle.adapter.ts` | Simplified recording (fewer columns)                |
+
+### P1 Scope
+
+| File                                                    | Change                                                               |
+| ------------------------------------------------------- | -------------------------------------------------------------------- |
+| `src/adapters/server/ai/litellm.usage.adapter.ts`       | NEW: Read-only adapter for `/spend/logs` (telemetry)                 |
+| `src/ports/usage.port.ts`                               | LiteLlmUsagePort interface                                           |
+| `src/adapters/server/accounts/drizzle.usage.adapter.ts` | Re-scope to billing/reconciliation only (not activity)               |
+| `src/app/_facades/ai/activity.server.ts`                | Wire to LiteLLM for telemetry, local for spend                       |
+| `src/contracts/ai.activity.v1.contract.ts`              | Spend fields = our billing (charged_credits); remove telemetrySource |
 
 ---
 
 ## Non-Negotiables
 
 1. **Preflight-only gating** - Never block a response after the LLM call starts
-2. **LiteLLM is canonical** - No shadow metering, no local token storage
-3. **Pagination is mandatory** - Never assume one query returns all data
-4. **Fallback is mandatory** - Activity UX must work when LiteLLM is down
+2. **LiteLLM is canonical for telemetry** - No shadow metering, no local token storage
+3. **User-visible spend = our billing** - Dashboard shows `charged_credits`, not raw provider costs
+4. **Pagination is mandatory** - Bounded fetch (MAX_PAGES=10, limit≤100)
 5. **Server controls identity** - billingAccountId is server-derived, never client-provided
 6. **Idempotent receipts** - request_id as PK with 1:1 ledger mapping, atomic or two-step
+7. **No fallback** - If LiteLLM is down, fail loudly (503), don't show partial data
 
 ---
 
 **Last Updated**: 2025-12-08
-**Status**: Design Approved (P0 Ready)
+**Status**: P0 Complete, P1 Design Approved
