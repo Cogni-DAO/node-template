@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-05
+- **Last reviewed:** 2025-12-08
 - **Status:** draft
 
 ## Purpose
 
-PostgreSQL implementations of account service ports for credit accounting operations with dual-cost LLM billing support (tracks both provider cost and user price).
+PostgreSQL implementations of account service ports for credit accounting and charge receipt recording. Per [ACTIVITY_METRICS.md](../../../../docs/ACTIVITY_METRICS.md), LiteLLM is canonical for telemetry; we store minimal charge receipts.
 
 ## Pointers
 
@@ -43,8 +43,8 @@ PostgreSQL implementations of account service ports for credit accounting operat
 
 ## Responsibilities
 
-- This directory **does**: Implement AccountService using PostgreSQL via Drizzle ORM; atomic recordLlmUsage with billing status discrimination (billed vs needs_review); transaction rollback on insufficient credits; virtual key provisioning via LiteLLM API
-- This directory **does not**: Handle business logic or authentication; compute pricing (uses pre-calculated values from features layer); validate markup invariants
+- This directory **does**: Implement AccountService using PostgreSQL via Drizzle ORM; atomic recordChargeReceipt (idempotent, non-blocking per ACTIVITY_METRICS.md); virtual key provisioning via LiteLLM API; UsageService for activity queries with telemetrySource fallback
+- This directory **does not**: Handle business logic or authentication; compute pricing (uses pre-calculated values from features layer); store model/tokens (LiteLLM is canonical)
 
 ## Usage
 
@@ -75,5 +75,5 @@ pnpm test tests/integration/
 
 - Implements ledger-based accounting with computed balance cache
 - Transaction semantics critical for credit integrity
-- recordLlmUsage branches on billingStatus: "billed" debits credits, "needs_review" records usage only
-- Supports nullable cost fields in llm_usage table for graceful degradation when provider cost unavailable
+- recordChargeReceipt is idempotent (request_id as unique key) and non-blocking (never throws InsufficientCredits post-call)
+- llm_usage stores minimal charge receipt fields; telemetry lives in LiteLLM

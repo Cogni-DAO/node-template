@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-05
+- **Last reviewed:** 2025-12-08
 - **Status:** draft
 
 ## Purpose
@@ -47,20 +47,21 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 ## Ports
 
-- **Uses ports:** LlmCaller (via services/completion.ts)
+- **Uses ports:** LlmService (completion, completionStream), AccountService (recordChargeReceipt)
 - **Implements ports:** none
-- **Contracts:** ai.completion.v1, ai.chat.v1, ai.models.v1
+- **Contracts:** ai.completion.v1, ai.chat.v1, ai.models.v1, ai.activity.v1
 
 ## Responsibilities
 
 - **This feature does:**
-  - Provide AI completion services with credit metering (invariant gate for free models)
+  - Provide AI completion services with preflight credit gating and non-blocking post-call billing
   - Provide chat UI integration via assistant-ui
   - Expose model selection UI with localStorage persistence
   - Fetch and cache available models list (server-side cache with SWR)
   - Validate selected models against server-side allowlist
   - Transform between wire formats and domain DTOs
   - Delegate to LlmCaller port for actual LLM calls
+  - Record charge receipts via AccountService.recordChargeReceipt (per ACTIVITY_METRICS.md)
 
 - **This feature does not:**
   - Implement LLM adapters (owned by adapters/server/ai)
@@ -116,3 +117,4 @@ import { Thread } from "@/components/kit/chat";
 - Message persistence planned for v2 with smart windowing
 - Model validation implements UX-001 (graceful fallback to default)
 - Server cache implements PERF-001 (no per-request network calls)
+- Post-call billing is non-blocking per ACTIVITY_METRICS.md design
