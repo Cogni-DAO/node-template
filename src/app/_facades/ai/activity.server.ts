@@ -139,7 +139,6 @@ export async function getActivity(
     routeId: "ai.activity.v1",
     scope: "user",
     billingAccountId: billingAccount.id,
-    telemetrySource: "litellm", // P1: LiteLLM is the only source
     groupBy: input.groupBy,
     durationMs: performance.now() - startTime,
     resultCount: rows.length,

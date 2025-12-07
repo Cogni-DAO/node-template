@@ -35,24 +35,27 @@
 
 ### P1: Implement LiteLLM Usage Adapter (Hard Dependency)
 
-- [x] Add `LiteLlmUsagePort` interface to `src/ports/usage.port.ts`
+- [x] Add `UsageTelemetryPort` interface to `src/ports/usage.port.ts` (vendor-neutral naming)
+- [x] Add `UsageTelemetryUnavailableError` for 503 mapping
 - [x] Remove `TelemetrySource` type (single source in P1)
 - [x] Remove `telemetrySource` field from `UsageStatsResult` and `UsageLogsResult`
-- [ ] Create `src/adapters/server/ai/litellm.usage.adapter.ts` (read-only adapter)
-- [ ] Chart: `GET /spend/logs?user_id=X&group_by=day` for daily aggregates
-- [ ] Table: `GET /spend/logs?user_id=X&limit=100` (paginated logs)
-- [ ] Add bounded pagination (MAX_PAGES=10 circuit breaker)
-- [ ] Map LiteLLM log schema → UsageService port types
-- [ ] Pass through LiteLLM fields as-is (no local recomputation of cost/tokens)
+- [x] Create `src/adapters/server/ai/litellm.usage.adapter.ts` (read-only adapter)
+- [x] Chart: `GET /spend/logs?user_id=X&group_by=day` for daily aggregates
+- [x] Table: `GET /spend/logs?user_id=X&limit=100` (paginated logs)
+- [x] Add bounded pagination (MAX_PAGES=10 circuit breaker)
+- [x] Map LiteLLM log schema → port DTOs (pass-through)
+- [x] Identity: billingAccountId as user_id (server-derived, never client-provided)
 
 ### P1: Wire Activity Service (No Fallback)
 
 - [x] Remove `telemetrySource` from contract (only one source in P1)
 - [x] Mark DrizzleUsageAdapter as deprecated (billing/reconciliation only)
-- [x] Update activity facade to hardcode `telemetrySource: "litellm"` in observability event
-- [ ] ActivityService depends ONLY on `LiteLlmUsagePort` — do NOT inject DrizzleUsageAdapter
-- [ ] Error handling: if LiteLLM returns 4xx/5xx/timeout, propagate `LiteLlmUnavailableError`
-- [ ] HTTP layer returns 503 with `{ code: "LITELLM_UNAVAILABLE" }`
+- [x] Remove `telemetrySource` from `AiActivityQueryCompletedEvent`
+- [x] Fix `UsageTelemetryUnavailableError` throwing (import as value, not type)
+- [ ] Wire ActivityService to use `UsageTelemetryPort` (no DrizzleUsageAdapter)
+- [ ] Add thin adapter to map UsageTelemetryPort DTOs → ActivityService DTOs
+- [ ] HTTP layer: catch `UsageTelemetryUnavailableError` → 503 with `{ code: "LITELLM_UNAVAILABLE" }`
+- [ ] Container: bind Activity usage to `LiteLlmUsageAdapter`
 
 ### P2/P3: Future Considerations
 

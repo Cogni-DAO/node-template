@@ -13,6 +13,7 @@
  * - Spend = our billing (charged_credits), telemetry = LiteLLM (model/tokens/timestamps).
  * Side-effects: none
  * Links: [LiteLlmUsageAdapter](../adapters/server/ai/litellm.usage.adapter.ts), docs/ACTIVITY_METRICS.md
+ * Port naming: UsageTelemetryPort is vendor-neutral. LiteLLM is the single implementation by design.
  * @public
  */
 
@@ -72,16 +73,16 @@ export interface UsageService {
 }
 
 /**
- * LiteLLM usage adapter port - read-only telemetry from /spend/logs.
- * P1: Single source for model, tokens, timestamps. Never writes to DB.
- * Spend (cost to user) comes from local charged_credits, not this adapter.
+ * Usage telemetry port - read-only telemetry from external usage tracking system.
+ * P1: Single implementation (LiteLLM) by design. Single source for model, tokens, timestamps.
+ * Never writes to DB. Spend (cost to user) comes from local charged_credits, not this port.
  */
-export interface LiteLlmUsagePort {
+export interface UsageTelemetryPort {
   /**
-   * Query LiteLLM /spend/logs with bounded pagination.
+   * Query usage logs with bounded pagination.
    * @param billingAccountId - Server-derived identity (never client-provided)
    * @param params - Time range and pagination params
-   * @throws LiteLlmUnavailableError if LiteLLM is down/unreachable
+   * @throws UsageTelemetryUnavailableError if telemetry system is down/unreachable
    */
   getSpendLogs(
     billingAccountId: string,
@@ -93,17 +94,17 @@ export interface LiteLlmUsagePort {
     }
   ): Promise<{
     logs: Array<{
-      /** LiteLLM call ID for forensic correlation */
+      /** Call ID for forensic correlation */
       callId: string;
       /** Timestamp of the request */
       timestamp: Date;
-      /** Model name from LiteLLM (pass-through) */
+      /** Model name (pass-through from telemetry system) */
       model: string;
-      /** Input tokens from LiteLLM (pass-through) */
+      /** Input tokens (pass-through from telemetry system) */
       tokensIn: number;
-      /** Output tokens from LiteLLM (pass-through) */
+      /** Output tokens (pass-through from telemetry system) */
       tokensOut: number;
-      /** Provider cost in USD from LiteLLM (observational, not user-facing spend) */
+      /** Provider cost in USD (observational, not user-facing spend) */
       providerCostUsd: string;
     }>;
     nextCursor?: string;
@@ -112,10 +113,10 @@ export interface LiteLlmUsagePort {
   }>;
 
   /**
-   * Query LiteLLM /spend/logs with daily aggregation.
+   * Query usage chart with time-based aggregation.
    * @param billingAccountId - Server-derived identity
    * @param params - Time range and grouping
-   * @throws LiteLlmUnavailableError if LiteLLM is down/unreachable
+   * @throws UsageTelemetryUnavailableError if telemetry system is down/unreachable
    */
   getSpendChart(
     billingAccountId: string,
@@ -127,10 +128,30 @@ export interface LiteLlmUsagePort {
   ): Promise<{
     buckets: Array<{
       bucketStart: Date;
-      /** Provider cost from LiteLLM (not user-facing spend) */
+      /** Provider cost from telemetry system (not user-facing spend) */
       providerCostUsd: string;
       tokens: number;
       requests: number;
     }>;
   }>;
+}
+
+/**
+ * Error thrown when usage telemetry system is unavailable.
+ * Maps to 503 Service Unavailable in HTTP layer.
+ */
+export class UsageTelemetryUnavailableError extends Error {
+  public override readonly cause: Error | undefined;
+
+  constructor(message: string, cause?: Error) {
+    super(message);
+    this.name = "UsageTelemetryUnavailableError";
+    this.cause = cause;
+  }
+}
+
+export function isUsageTelemetryUnavailableError(
+  error: Error
+): error is UsageTelemetryUnavailableError {
+  return error instanceof UsageTelemetryUnavailableError;
 }
