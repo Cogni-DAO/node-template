@@ -24,10 +24,12 @@ www.{$DOMAIN} {
   # Rate limiting enforced app-side, keyed on X-Real-IP
   handle_path /api/v1/public/* {
     reverse_proxy app:3000 {
-      # Enforce strict timeout to prevent resource exhaustion
-      timeout 10s
       # Set X-Real-IP from actual TCP source (cannot be spoofed by HTTP headers)
       header_up X-Real-IP {remote_host}
+      # Enforce strict timeout to prevent resource exhaustion
+      transport http {
+        response_header_timeout 10s
+      }
     }
   }
 
