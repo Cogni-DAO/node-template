@@ -55,6 +55,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 - **This feature does:**
   - Provide AI completion services with preflight credit gating and non-blocking post-call billing
+  - Apply pricing policy (markup factor from env) via llmPricingPolicy service
   - Provide chat UI integration via assistant-ui
   - Expose model selection UI with localStorage persistence
   - Fetch and cache available models list (server-side cache with SWR)

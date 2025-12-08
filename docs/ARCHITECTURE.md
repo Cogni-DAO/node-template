@@ -216,7 +216,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── features/ # application services
 [x] │ ├── home/ # home page data
 [x] │ ├── ai/ # AI services
-[x] │ │ ├── services/ # completion service
+[x] │ │ ├── services/ # completion service, llmPricingPolicy
 [x] │ │ ├── chat/ # streaming chat (assistant-ui)
 [x] │ │ │ ├── providers/
 [x] │ │ │ └── components/

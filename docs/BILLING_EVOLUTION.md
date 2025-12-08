@@ -10,6 +10,7 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 - API contracts: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
 - Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
 - Payments (MVP funding): [DEPAY_PAYMENTS.md](DEPAY_PAYMENTS.md)
+- Usage Activity Metrics: [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md)
 
 ---
 
@@ -50,23 +51,26 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ---
 
-### 6.5.2 Add llm_usage Table (Charge Receipts)
+### 6.5.2 Charge Receipt Table
 
-- [x] **Goal:** Minimal audit-focused charge receipt table. LiteLLM is canonical for telemetry.
+**Table name:** `charge_receipt` (physical table currently `llm_usage` in schema.billing.ts, will be renamed)
 
-- **Schema (Minimal):** id, billing_account_id, virtual_key_id, request_id (unique, idempotency key), litellm_call_id (forensic), charged_credits, response_cost_usd (observational), provenance, created_at
+**Goal:** Minimal audit-focused charge receipt table. LiteLLM is canonical for telemetry.
 
-**Design:** Per ACTIVITY_METRICS.md, no model/tokens/usage JSONB stored locally. Query LiteLLM /spend/logs for telemetry.
+**Schema:** request_id (text PRIMARY KEY), billing_account_id, virtual_key_id, litellm_call_id (nullable), charged_credits (bigint NOT NULL), response_cost_usd (decimal nullable), provenance (text NOT NULL), created_at
 
-- **Files:**
-  - [x] `src/adapters/server/db/migrations/0000_*.sql` - Consolidated migration (single squashed)
-  - [x] `src/shared/db/schema.billing.ts` - llmUsage as charge_receipt table
+**Cost Derivation (single path):**
 
-**Notes:**
+- If `x-litellm-response-cost` header present → use it (non-streaming only)
+- Else if stream `usage.cost` present → use it (requires `litellm_settings.include_cost_in_streaming_usage: true`)
+- Else → `response_cost_usd = null`, `charged_credits = 0`, log CRITICAL (degraded under-billing mode)
 
-- `request_id` is PRIMARY KEY for idempotent inserts
-- `litellm_call_id` captures `x-litellm-call-id` header for forensic correlation
-- `provenance` indicates source: "response" | "stream"
+**MVP Tasks:**
+
+- [ ] Rename table: `llm_usage` → `charge_receipt` (migration + schema update)
+- [x] Verify table exists in all environments (dev, test, stack)
+- [x] Enable LiteLLM cost tracking - Added `include_cost_in_streaming_usage: true` to litellm.config.yaml
+- [x] Verify `recordChargeReceipt` writes exactly one row per non-free completion
 
 ---
 
@@ -76,7 +80,7 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 - **Variables:**
   - [x] `USER_PRICE_MARKUP_FACTOR=2.0` - Profit markup (2.0 = 50% margin)
-  - [x] `CREDITS_PER_USDC=1000` - Credit unit conversion
+  - [x] `CREDITS_PER_USD=10_000_000` - Protocol constant in `src/core/billing/pricing.ts`
 
 - **Files:**
   - [x] `.env.example` - Add both variables
@@ -136,26 +140,43 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ### 6.5.6 Wire Charge Receipts into Completion Flow
 
-- [x] **Goal:** Update completion service to calculate chargedCredits and call recordChargeReceipt after LLM call.
+- [x] **Goal:** Update completion service to calculate chargedCredits and call recordChargeReceipt after LLM call using LiteLLM-as-oracle cost derivation.
+
+**Cost Derivation Algorithm (Single Path):**
+
+Given `providerCostUsd` from LiteLLM (header or usage event, may be undefined):
+
+- **If cost present**: Calculate `chargedCredits = usdToCredits(providerCostUsd) × markup`, set `responseCostUsd = providerCostUsd`
+- **If cost missing**: Set `chargedCredits = 0n`, `responseCostUsd = null`, log CRITICAL alert
+- **Always write receipt atomically** (even if cost is null, for audit trail)
+
+**Hard Dependency:** LiteLLM must emit cost via `x-litellm-response-cost` header or final usage event. When cost is missing:
+
+- Receipt written with `response_cost_usd = null` and `charged_credits = 0`
+- CRITICAL alert logged for ops visibility
+- Reconciliation process must flag underbilled requests
+- NO fallback to token-based cost calculation (forbidden per ACTIVITY_METRICS.md §3)
 
 **Flow:**
 
-1. Pre-flight: estimate cost, check balance, DENY if insufficient (InsufficientCreditsPortError)
-2. Call LiteLLM via LlmService
-3. Extract from LlmService response:
-   - providerCostUsd (from `x-litellm-response-cost` header)
-   - litellmCallId (from `x-litellm-call-id` header for forensics)
-4. Calculate chargedCredits: `usdToCredits(providerCostUsd) × USER_PRICE_MARKUP_FACTOR`
-5. Call `AccountService.recordChargeReceipt` (non-blocking, never throws)
-6. Return response to user (NEVER blocked by post-call billing)
+1. **Pre-flight** (blocking): estimate cost, check balance, DENY if insufficient (InsufficientCreditsPortError)
+2. **Call LiteLLM** via LlmService
+3. **Extract cost** (priority order per ACTIVITY_METRICS.md §3):
+   - From `x-litellm-response-cost` header
+   - OR from final `usage.cost` event (streams with `include_usage: true`)
+   - OR null if neither present
+4. **Calculate chargedCredits** per algorithm above (may be 0 if cost missing)
+5. **Write atomically**: Call `AccountService.recordChargeReceipt` (non-blocking, never throws InsufficientCreditsPortError)
+6. **Return response** to user (NEVER blocked by post-call billing)
 
 - **Files:**
   - [x] `src/ports/llm.port.ts` - LlmService response includes providerCostUsd, litellmCallId
-  - [x] `src/adapters/server/ai/litellm.adapter.ts` - Extract cost + call ID from headers
+  - [x] `src/adapters/server/ai/litellm.adapter.ts` - Extract cost from headers (non-stream) + usage.cost (stream)
   - [x] `src/features/ai/services/completion.ts` - Preflight gating + non-blocking post-call billing
-  - [x] `tests/unit/features/ai/services/completion.test.ts` - Test non-blocking behavior
+  - [x] completion.ts has CRITICAL alert when providerCostUsd is undefined (line 250-261)
+  - [ ] **GAP**: No test coverage for cost=null path (header + usage event both missing)
 
-**Design:** Pre-call uses conservative estimate. Post-call uses actual LiteLLM cost. See ACTIVITY_METRICS.md for full design.
+**Design:** Pre-call uses conservative estimate. Post-call uses actual LiteLLM cost. If cost is missing, log CRITICAL and write $0 receipt for later reconciliation. See ACTIVITY_METRICS.md §3.
 
 ---
 
@@ -170,6 +191,54 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
   - [ ] `docs/ACCOUNTS_API_KEY_ENDPOINTS.md` - Update completion flow to mention recordChargeReceipt
 
 **Canonical Reference:** See `docs/ACTIVITY_METRICS.md` for full design rationale and invariants.
+
+---
+
+## Current Status (2025-12-08)
+
+**Billing flow operational. Charges writing to DB. Activity metrics page shows zeros (not investigated).**
+
+**Complete:**
+
+- [x] LiteLLM streaming cost via `include_cost_in_streaming_usage: true` (litellm.config.yaml)
+- [x] Protocol constant `CREDITS_PER_USD = 10_000_000` in src/core/billing/pricing.ts
+- [x] Single source of truth: `calculateLlmUserCharge()` with markup-before-ceil
+- [x] `response_cost_usd` stores user cost (with markup), not provider cost
+- [x] Adapter hasCost logging fixed (litellm.adapter.ts:464)
+
+**Test verification:** Provider $0.0006261 → User $0.0012522 → 12522 credits in DB
+
+**Incomplete:**
+
+- [ ] Rename `llm_usage` → `charge_receipt`
+- [x] Remove deprecated `CREDITS_PER_USDC` env var
+- [ ] Integration test: paid completion → assert DB values
+- [ ] Activity metrics page investigation (shows zeros)
+
+---
+
+## MVP Implementation Plan
+
+### Priority 1: Enable LiteLLM Cost Tracking ✅ COMPLETE
+
+- [x] Investigate LiteLLM config (YAML + env vars) for cost tracking settings
+- [x] Verify OpenRouter API returns cost data (via LiteLLM `/spend/logs`)
+- [x] Enable cost passthrough in LiteLLM proxy - `include_cost_in_streaming_usage: true`
+- [x] Test: trigger paid completion → cost appears in stream `usage.cost` field
+- [x] Test: query LiteLLM `/spend/logs` → cost field populated
+
+### Priority 2: Enforce Billing Invariants
+
+- [x] Add CRITICAL log in completion.ts when `providerCostUsd === undefined` (line 250-261)
+- [ ] Rename table: `llm_usage` → `charge_receipt` (migration + schema)
+- [ ] Verify 1:1 linkage: each charge_receipt.request_id matches exactly one credit_ledger.reference
+- [ ] Add integration test: paid completion → assert charge_receipt + ledger both have request_id, charged_credits > 0
+
+### Priority 3: Activity Dashboard Integration
+
+- [ ] Verify Activity endpoint reads from LiteLLM `/spend/logs` (telemetry)
+- [ ] Verify Activity endpoint shows charged_credits from local charge_receipt (billing view)
+- [ ] Test: UI displays non-zero spend after P1 fix completes
 
 ---
 
@@ -204,11 +273,24 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ## Success Criteria
 
+**Invariants:**
+
+- 1 credit = $0.0000001 (protocol constant `CREDITS_PER_USD = 10_000_000`)
+- `response_cost_usd` stores user cost (with markup), not provider cost
+- Single ceil at end: `chargedCredits = ceil(userCostUsd × CREDITS_PER_USD)`
+- Post-call billing NEVER blocks user response
+- `llm_usage.request_id` = `credit_ledger.reference` (1:1 linkage)
+
 **Verification:**
 
-- Single SQL query against llm_usage (charge_receipt) shows chargedCredits per request
-- All credits stored as BIGINT with 1 credit = $0.001 invariant respected
-- Provider cost comes from LiteLLM's `x-litellm-response-cost` header
-- llm_usage rows can be joined with LiteLLM logs by requestId (litellm_call_id) for forensic correlation
-- Post-call billing NEVER blocks user response (non-blocking invariant)
-- LiteLLM `/spend/logs` is canonical source for usage telemetry (model, tokens, cost breakdown)
+- SQL shows user-facing values: `SELECT charged_credits, response_cost_usd FROM llm_usage`
+- Cost source: LiteLLM `usage.cost` (stream) or `x-litellm-response-cost` header (non-stream)
+- Forensic: `llm_usage.litellm_call_id` joins with LiteLLM `/spend/logs`
+
+---
+
+## Known Issues
+
+- [ ] **Activity reporting of billing doesn't work.** Activity metrics page shows zeros despite real usage. Not investigated.
+- [ ] **Cents sprawl across codebase.** 126+ references to "cents" in payment flows. Should standardize on USD only. Credits are canonical ledger unit; cents is unnecessary intermediate format causing conversion sprawl and dual-scale bugs. All money→credits conversions should use `usdToCredits()`. Need to quarantine cents at API boundary and use USD internally.
+- [ ] **Pre-call estimate too conservative.** Uses `ESTIMATED_USD_PER_1K_TOKENS = $0.002` as upper-bound. User with $5 balance cannot make paid LLM call (estimate requires ~$0.93). Should reduce estimate or document that it's intentionally conservative to prevent underbilling.
