@@ -3,17 +3,17 @@
 
 /**
  * Module: `@ports/usage`
- * Purpose: Interface for fetching usage statistics and logs.
+ * Purpose: Interface for fetching usage statistics and logs for the Activity dashboard.
  * Scope: Defines interface for usage data retrieval. Does not implement storage.
  * Invariants:
  * - UsageStatsResult.series must be zero-filled.
  * - Money fields (spend/cost) are decimal strings (6 decimal places).
  * - UsageLogsResult.nextCursor is opaque.
- * - P1: LiteLLM is the single telemetry source. No fallback, no telemetrySource field.
- * - Spend = our billing (charged_credits), telemetry = LiteLLM (model/tokens/timestamps).
+ * - P1: LiteLLM is the single usage log source. No fallback, no telemetrySource field.
+ * - Spend = our billing (charged_credits), usage logs = LiteLLM (model/tokens/timestamps).
  * Side-effects: none
- * Links: [LiteLlmUsageAdapter](../adapters/server/ai/litellm.usage.adapter.ts), docs/ACTIVITY_METRICS.md
- * Port naming: UsageTelemetryPort is vendor-neutral. LiteLLM is the single implementation by design.
+ * Links: [LiteLlmActivityUsageAdapter](../adapters/server/ai/litellm.activity-usage.adapter.ts), docs/ACTIVITY_METRICS.md
+ * Port naming: ActivityUsagePort is for Activity dashboard, distinct from observability/metrics telemetry.
  * @public
  */
 
@@ -73,16 +73,17 @@ export interface UsageService {
 }
 
 /**
- * Usage telemetry port - read-only telemetry from external usage tracking system.
+ * Usage log port - read-only usage logs from external usage tracking system.
  * P1: Single implementation (LiteLLM) by design. Single source for model, tokens, timestamps.
+ * Powers the Activity dashboard. Distinct from observability/metrics telemetry (Grafana, Prometheus).
  * Never writes to DB. Spend (cost to user) comes from local charged_credits, not this port.
  */
-export interface UsageTelemetryPort {
+export interface ActivityUsagePort {
   /**
    * Query usage logs with bounded pagination.
    * @param billingAccountId - Server-derived identity (never client-provided)
    * @param params - Time range and pagination params
-   * @throws UsageTelemetryUnavailableError if telemetry system is down/unreachable
+   * @throws ActivityUsageUnavailableError if usage log system is down/unreachable
    */
   getSpendLogs(
     billingAccountId: string,
@@ -116,7 +117,7 @@ export interface UsageTelemetryPort {
    * Query usage chart with time-based aggregation.
    * @param billingAccountId - Server-derived identity
    * @param params - Time range and grouping
-   * @throws UsageTelemetryUnavailableError if telemetry system is down/unreachable
+   * @throws ActivityUsageUnavailableError if usage log system is down/unreachable
    */
   getSpendChart(
     billingAccountId: string,
@@ -137,21 +138,22 @@ export interface UsageTelemetryPort {
 }
 
 /**
- * Error thrown when usage telemetry system is unavailable.
+ * Error thrown when usage log system is unavailable.
  * Maps to 503 Service Unavailable in HTTP layer.
+ * Used by Activity dashboard; distinct from observability/metrics errors.
  */
-export class UsageTelemetryUnavailableError extends Error {
+export class ActivityUsageUnavailableError extends Error {
   public override readonly cause: Error | undefined;
 
   constructor(message: string, cause?: Error) {
     super(message);
-    this.name = "UsageTelemetryUnavailableError";
+    this.name = "ActivityUsageUnavailableError";
     this.cause = cause;
   }
 }
 
-export function isUsageTelemetryUnavailableError(
+export function isActivityUsageUnavailableError(
   error: Error
-): error is UsageTelemetryUnavailableError {
-  return error instanceof UsageTelemetryUnavailableError;
+): error is ActivityUsageUnavailableError {
+  return error instanceof ActivityUsageUnavailableError;
 }

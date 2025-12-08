@@ -15,7 +15,7 @@ import { redirect } from "next/navigation";
 
 import { getActivity } from "@/app/_facades/ai/activity.server";
 import { getServerSessionUser } from "@/lib/auth/server";
-import { isUsageTelemetryUnavailableError } from "@/ports";
+import { isActivityUsageUnavailableError } from "@/ports";
 import { ActivityUnavailableView } from "./unavailable-view";
 import { ActivityView } from "./view";
 
@@ -44,7 +44,7 @@ export default async function ActivityPage() {
     return <ActivityView initialData={data} />;
   } catch (error) {
     // P1: LiteLLM is hard dependency - show explicit error state
-    if (error instanceof Error && isUsageTelemetryUnavailableError(error)) {
+    if (error instanceof Error && isActivityUsageUnavailableError(error)) {
       return <ActivityUnavailableView />;
     }
     throw error; // Let error boundary handle other errors

@@ -18,8 +18,8 @@ import {
   DrizzleAccountService,
   DrizzlePaymentAttemptRepository,
   getDb,
+  LiteLlmActivityUsageAdapter,
   LiteLlmAdapter,
-  LiteLlmUsageAdapter,
   LiteLlmUsageServiceAdapter,
   type MimirAdapterConfig,
   MimirMetricsAdapter,
@@ -148,9 +148,9 @@ function createContainer(): Container {
   const accountService = new DrizzleAccountService(db);
   const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
 
-  // UsageService: P1 - LiteLLM is canonical telemetry source (no fallback)
+  // UsageService: P1 - LiteLLM is canonical usage log source for Activity (no fallback)
   const usageService = new LiteLlmUsageServiceAdapter(
-    new LiteLlmUsageAdapter()
+    new LiteLlmActivityUsageAdapter()
   );
 
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety

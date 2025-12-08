@@ -2,25 +2,26 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@adapters/server/ai/litellm.usage`
- * Purpose: LiteLLM implementation of UsageTelemetryPort (read-only).
- * Scope: Queries LiteLLM /spend/logs API for usage telemetry. Does not write to any DB.
+ * Module: `@adapters/server/ai/litellm.activity-usage`
+ * Purpose: LiteLLM implementation of ActivityUsagePort (read-only).
+ * Scope: Queries LiteLLM /spend/logs API for usage logs. Does not write to any DB.
  * Invariants:
  * - Identity: billingAccountId is server-derived, passed as end_user to LiteLLM /spend/logs
  * - Bounded pagination: MAX_PAGES=10, limit≤100 enforced
  * - Pass-through: model, tokens, cost from LiteLLM as-is (no local recomputation)
  * - Read-only: never writes to DB or calls recordChargeReceipt
  * Side-effects: IO (HTTP requests to LiteLLM)
- * Links: [UsageTelemetryPort](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
+ * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
+ * Note: Distinct from observability/metrics telemetry; powers Activity dashboard only.
  * @internal
  */
 
-import type { UsageTelemetryPort } from "@/ports";
-import { UsageTelemetryUnavailableError } from "@/ports";
+import type { ActivityUsagePort } from "@/ports";
+import { ActivityUsageUnavailableError } from "@/ports";
 import { serverEnv } from "@/shared/env/server";
 import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
-const logger = makeLogger({ component: "LiteLlmUsageAdapter" });
+const logger = makeLogger({ component: "LiteLlmActivityUsageAdapter" });
 
 const MAX_PAGES = 10;
 const MAX_LIMIT = 100;
@@ -35,10 +36,11 @@ function formatDateForLiteLlm(date: Date): string {
 }
 
 /**
- * LiteLLM usage adapter - read-only telemetry from /spend/logs.
- * P1: Single implementation by design. Throws UsageTelemetryUnavailableError on failure.
+ * LiteLLM usage log adapter - read-only usage logs from /spend/logs.
+ * P1: Single implementation by design. Throws ActivityUsageUnavailableError on failure.
+ * Powers Activity dashboard; distinct from observability telemetry.
  */
-export class LiteLlmUsageAdapter implements UsageTelemetryPort {
+export class LiteLlmActivityUsageAdapter implements ActivityUsagePort {
   private get baseUrl(): string {
     return serverEnv().LITELLM_BASE_URL;
   }
@@ -126,7 +128,7 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
 
           // Only treat infra-ish errors as 'unavailable' (503 to client)
           if ([502, 503, 504].includes(response.status)) {
-            throw new UsageTelemetryUnavailableError(
+            throw new ActivityUsageUnavailableError(
               `LiteLLM /spend/logs unavailable: ${response.status}`,
               new Error(`${response.status} ${response.statusText}`)
             );
@@ -163,7 +165,7 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
         url.searchParams.set("cursor", currentCursor);
       } catch (error) {
         // Re-throw known error types as-is
-        if (error instanceof UsageTelemetryUnavailableError) {
+        if (error instanceof ActivityUsageUnavailableError) {
           throw error;
         }
 
@@ -186,7 +188,7 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
           throw error; // Config/logic error, not infra
         }
         // Network failures → wrap as unavailable
-        throw new UsageTelemetryUnavailableError(
+        throw new ActivityUsageUnavailableError(
           `Failed to fetch usage logs from LiteLLM`,
           error instanceof Error ? error : new Error(String(error))
         );
@@ -255,7 +257,7 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
 
         // Only treat infra-ish errors as 'unavailable' (503 to client)
         if ([502, 503, 504].includes(response.status)) {
-          throw new UsageTelemetryUnavailableError(
+          throw new ActivityUsageUnavailableError(
             `LiteLLM /spend/logs unavailable: ${response.status}`,
             new Error(`${response.status} ${response.statusText}`)
           );
@@ -283,7 +285,7 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
       return { buckets };
     } catch (error) {
       // Re-throw known error types as-is
-      if (error instanceof UsageTelemetryUnavailableError) {
+      if (error instanceof ActivityUsageUnavailableError) {
         throw error;
       }
       if (error instanceof Error && error.message.startsWith("LiteLLM")) {
@@ -305,7 +307,7 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
       );
 
       // Network failures → wrap as unavailable
-      throw new UsageTelemetryUnavailableError(
+      throw new ActivityUsageUnavailableError(
         `Failed to fetch usage chart from LiteLLM`,
         error instanceof Error ? error : new Error(String(error))
       );

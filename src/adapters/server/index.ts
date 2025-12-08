@@ -14,8 +14,8 @@
 
 export { DrizzleAccountService } from "./accounts/drizzle.adapter";
 export { DrizzleUsageAdapter } from "./accounts/drizzle.usage.adapter";
+export { LiteLlmActivityUsageAdapter } from "./ai/litellm.activity-usage.adapter";
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
-export { LiteLlmUsageAdapter } from "./ai/litellm.usage.adapter";
 export { LiteLlmUsageServiceAdapter } from "./ai/litellm.usage-service.adapter";
 export { type Database, getDb } from "./db/client";
 export {

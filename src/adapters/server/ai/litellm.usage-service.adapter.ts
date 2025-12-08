@@ -3,41 +3,46 @@
 
 /**
  * Module: `@adapters/server/ai/litellm.usage-service`
- * Purpose: Thin adapter mapping UsageTelemetryPort → UsageService interface.
- * Scope: Allows ActivityService to consume LiteLLM telemetry via existing UsageService port. Does not write to DB.
+ * Purpose: Thin adapter mapping ActivityUsagePort → UsageService interface.
+ * Scope: Allows ActivityService to consume LiteLLM usage logs via existing UsageService port. Does not write to DB.
  * Invariants:
- * - Pass-through telemetry: model, tokens, timestamps from LiteLLM as-is
+ * - Pass-through data: model, tokens, timestamps from LiteLLM as-is
  * - cost field = providerCostUsd (observational, not user billing - see docs/ACTIVITY_METRICS.md)
  * - No local cost recomputation
- * Side-effects: IO (delegates to UsageTelemetryPort)
- * Links: [UsageTelemetryPort](../../../../ports/usage.port.ts), [UsageService](../../../../ports/usage.port.ts)
+ * Side-effects: IO (delegates to ActivityUsagePort)
+ * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), [UsageService](../../../../ports/usage.port.ts)
+ * Note: Distinct from observability/metrics telemetry; powers Activity dashboard.
  * @internal
  */
 
 import type {
+  ActivityUsagePort,
   UsageLogsParams,
   UsageLogsResult,
   UsageService,
   UsageStatsParams,
   UsageStatsResult,
-  UsageTelemetryPort,
 } from "@/ports";
 
 /**
- * Adapter that wraps UsageTelemetryPort to implement UsageService interface.
- * P1: Single implementation by design. Throws UsageTelemetryUnavailableError on LiteLLM failure.
+ * Adapter that wraps ActivityUsagePort to implement UsageService interface.
+ * P1: Single implementation by design. Throws ActivityUsageUnavailableError on LiteLLM failure.
+ * Powers Activity dashboard; distinct from observability telemetry.
  */
 export class LiteLlmUsageServiceAdapter implements UsageService {
-  constructor(private readonly telemetryPort: UsageTelemetryPort) {}
+  constructor(private readonly activityUsagePort: ActivityUsagePort) {}
 
   async getUsageStats(params: UsageStatsParams): Promise<UsageStatsResult> {
     const { billingAccountId, from, to, groupBy } = params;
 
-    const result = await this.telemetryPort.getSpendChart(billingAccountId, {
-      from,
-      to,
-      groupBy,
-    });
+    const result = await this.activityUsagePort.getSpendChart(
+      billingAccountId,
+      {
+        from,
+        to,
+        groupBy,
+      }
+    );
 
     // Map UsageTelemetryPort buckets → UsageStatsResult series
     const series = result.buckets.map((bucket) => ({
@@ -81,7 +86,7 @@ export class LiteLlmUsageServiceAdapter implements UsageService {
     const now = new Date();
     const from = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-    const result = await this.telemetryPort.getSpendLogs(billingAccountId, {
+    const result = await this.activityUsagePort.getSpendLogs(billingAccountId, {
       from,
       to: now,
       limit,

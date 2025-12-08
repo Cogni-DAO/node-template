@@ -40,13 +40,13 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listCreditLedgerEntries, findCreditLedgerEntryByReference)
   - LlmService (completion, completionStream with CompletionStreamParams including abortSignal; returns providerCostUsd, litellmCallId)
   - UsageService (getUsageStats, listUsageLogs)
-  - UsageTelemetryPort (getSpendLogs, getSpendChart; read-only telemetry from external usage tracking system)
+  - ActivityUsagePort (getSpendLogs, getSpendChart; read-only usage logs for Activity dashboard, distinct from observability telemetry)
   - ChatDeltaEvent (text_delta | error | done)
   - PaymentAttemptRepository (create, findById, findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent)
   - OnChainVerifier (verify transaction against expected parameters)
   - MetricsQueryPort (queryRange, queryInstant for Prometheus-compatible backends)
   - Clock (now)
-  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError, UsageTelemetryUnavailableError)
+  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError, ActivityUsageUnavailableError)
   - Types (ChargeReceiptParams, ChargeReceiptProvenance, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
 - **Routes:** none
 - **CLI:** none
@@ -96,4 +96,4 @@ These tests are separate from edge tests for src/contracts/\*\*
 - OnChainVerifier is generic (no blockchain-specific types), returns VerificationResult with status (VERIFIED | PENDING | FAILED)
 - Port-level errors are thrown by adapters, caught and translated by feature layer
 - recordChargeReceipt is non-blocking (never throws InsufficientCredits post-call per ACTIVITY_METRICS.md)
-- UsageTelemetryPort is vendor-neutral; single implementation (LiteLLM) by design; throws UsageTelemetryUnavailableError on failures (for 503 mapping)
+- ActivityUsagePort is for Activity dashboard (distinct from observability/Grafana telemetry); single implementation (LiteLLM) by design; throws ActivityUsageUnavailableError on failures (for 503 mapping)

@@ -21,7 +21,7 @@ import { getActivity } from "@/app/_facades/ai/activity.server";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { aiActivityOperation } from "@/contracts/ai.activity.v1.contract";
 import { getServerSessionUser } from "@/lib/auth/server";
-import { isUsageTelemetryUnavailableError } from "@/ports";
+import { isActivityUsageUnavailableError } from "@/ports";
 
 export const dynamic = "force-dynamic";
 
@@ -74,9 +74,9 @@ export const GET = wrapRouteHandlerWithLogging(
       }
 
       // P1: LiteLLM is hard dependency - fail loudly with 503
-      if (error instanceof Error && isUsageTelemetryUnavailableError(error)) {
+      if (error instanceof Error && isActivityUsageUnavailableError(error)) {
         return NextResponse.json(
-          { code: "LITELLM_UNAVAILABLE", error: "Usage telemetry unavailable" },
+          { code: "LITELLM_UNAVAILABLE", error: "Usage logs unavailable" },
           { status: 503 }
         );
       }

@@ -2,19 +2,19 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@adapters/server/ai/litellm.usage`
- * Purpose: Unit tests for LiteLlmUsageAdapter with mocked HTTP calls.
- * Scope: Tests P1 invariants: bounded pagination, server-derived identity, error handling, pass-through telemetry. Does not make real HTTP calls.
- * Invariants: No real HTTP calls; deterministic responses; UsageTelemetryPort contract compliance
+ * Module: `@adapters/server/ai/litellm.activity-usage`
+ * Purpose: Unit tests for LiteLlmActivityUsageAdapter with mocked HTTP calls.
+ * Scope: Tests P1 invariants: bounded pagination, server-derived identity, error handling, pass-through data. Does not make real HTTP calls.
+ * Invariants: No real HTTP calls; deterministic responses; ActivityUsagePort contract compliance
  * Side-effects: none (mocked fetch)
- * Links: src/adapters/server/ai/litellm.usage.adapter.ts, docs/ACTIVITY_METRICS.md (P1 invariants)
+ * Links: src/adapters/server/ai/litellm.activity-usage.adapter.ts, docs/ACTIVITY_METRICS.md (P1 invariants)
  * @public
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LiteLlmUsageAdapter } from "@/adapters/server/ai/litellm.usage.adapter";
-import { UsageTelemetryUnavailableError } from "@/ports/usage.port";
+import { LiteLlmActivityUsageAdapter } from "@/adapters/server/ai/litellm.activity-usage.adapter";
+import { ActivityUsageUnavailableError } from "@/ports/usage.port";
 
 // Mock serverEnv
 vi.mock("@/shared/env/server", () => ({
@@ -24,12 +24,12 @@ vi.mock("@/shared/env/server", () => ({
   }),
 }));
 
-describe("LiteLlmUsageAdapter", () => {
-  let adapter: LiteLlmUsageAdapter;
+describe("LiteLlmActivityUsageAdapter", () => {
+  let adapter: LiteLlmActivityUsageAdapter;
   const mockFetch = vi.fn();
 
   beforeEach(() => {
-    adapter = new LiteLlmUsageAdapter();
+    adapter = new LiteLlmActivityUsageAdapter();
     vi.clearAllMocks();
     global.fetch = mockFetch;
   });
@@ -133,7 +133,7 @@ describe("LiteLlmUsageAdapter", () => {
       });
     });
 
-    it("throws UsageTelemetryUnavailableError only for infra errors (502/503/504)", async () => {
+    it("throws ActivityUsageUnavailableError only for infra errors (502/503/504)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 503,
@@ -142,10 +142,10 @@ describe("LiteLlmUsageAdapter", () => {
 
       await expect(
         adapter.getSpendLogs(billingAccountId, params)
-      ).rejects.toThrow(UsageTelemetryUnavailableError);
+      ).rejects.toThrow(ActivityUsageUnavailableError);
     });
 
-    it("throws regular Error (not UsageTelemetryUnavailableError) for 4xx/500 errors", async () => {
+    it("throws regular Error (not ActivityUsageUnavailableError) for 4xx/500 errors", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -159,12 +159,12 @@ describe("LiteLlmUsageAdapter", () => {
       );
     });
 
-    it("throws UsageTelemetryUnavailableError on network error", async () => {
+    it("throws ActivityUsageUnavailableError on network error", async () => {
       mockFetch.mockRejectedValueOnce(new Error("Network timeout"));
 
       await expect(
         adapter.getSpendLogs(billingAccountId, params)
-      ).rejects.toThrow(UsageTelemetryUnavailableError);
+      ).rejects.toThrow(ActivityUsageUnavailableError);
     });
   });
 
@@ -225,7 +225,7 @@ describe("LiteLlmUsageAdapter", () => {
       });
     });
 
-    it("throws regular Error (not UsageTelemetryUnavailableError) for 4xx errors", async () => {
+    it("throws regular Error (not ActivityUsageUnavailableError) for 4xx errors", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 401,
@@ -237,7 +237,7 @@ describe("LiteLlmUsageAdapter", () => {
       ).rejects.toThrow("LiteLLM /spend/logs failed: 401 Unauthorized");
     });
 
-    it("throws UsageTelemetryUnavailableError only for infra errors (502/503/504)", async () => {
+    it("throws ActivityUsageUnavailableError only for infra errors (502/503/504)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 503,
@@ -246,7 +246,7 @@ describe("LiteLlmUsageAdapter", () => {
 
       await expect(
         adapter.getSpendChart(billingAccountId, params)
-      ).rejects.toThrow(UsageTelemetryUnavailableError);
+      ).rejects.toThrow(ActivityUsageUnavailableError);
     });
   });
 });

@@ -23,7 +23,7 @@ import {
   InvalidRangeError,
 } from "@/features/ai/services/activity";
 import type { UsageService } from "@/ports";
-import { UsageTelemetryUnavailableError } from "@/ports";
+import { ActivityUsageUnavailableError } from "@/ports";
 
 // Mock UsageService that returns empty results
 function createMockUsageService(): UsageService {
@@ -325,12 +325,12 @@ describe("Activity Feature Invariants", () => {
   });
 
   describe("inv_litellm_hard_dependency (P1)", () => {
-    it("UsageTelemetryUnavailableError propagates to caller (for 503 mapping)", async () => {
+    it("ActivityUsageUnavailableError propagates to caller (for 503 mapping)", async () => {
       const usageService: UsageService = {
         getUsageStats: vi
           .fn()
           .mockRejectedValue(
-            new UsageTelemetryUnavailableError("LiteLLM unreachable")
+            new ActivityUsageUnavailableError("LiteLLM unreachable")
           ),
         listUsageLogs: vi.fn(),
       };
@@ -343,16 +343,16 @@ describe("Activity Feature Invariants", () => {
           to: new Date("2024-01-02"),
           groupBy: "day",
         })
-      ).rejects.toThrow(UsageTelemetryUnavailableError);
+      ).rejects.toThrow(ActivityUsageUnavailableError);
     });
 
-    it("UsageTelemetryUnavailableError from logs query propagates", async () => {
+    it("ActivityUsageUnavailableError from logs query propagates", async () => {
       const usageService: UsageService = {
         getUsageStats: vi.fn(),
         listUsageLogs: vi
           .fn()
           .mockRejectedValue(
-            new UsageTelemetryUnavailableError("LiteLLM unreachable")
+            new ActivityUsageUnavailableError("LiteLLM unreachable")
           ),
       };
       const service = new ActivityService(usageService);
@@ -362,7 +362,7 @@ describe("Activity Feature Invariants", () => {
           billingAccountId: "test-account",
           limit: 10,
         })
-      ).rejects.toThrow(UsageTelemetryUnavailableError);
+      ).rejects.toThrow(ActivityUsageUnavailableError);
     });
   });
 

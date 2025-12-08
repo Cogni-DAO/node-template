@@ -66,10 +66,15 @@ Endpoint: `GET /api/v1/analytics/summary?window={7d|30d|90d}`
 
 ### Phase 4: Frontend Implementation
 
-- [ ] Add recharts dependency — `pnpm add recharts`
-- [ ] Create feature components — `src/features/analytics/components/`
-- [ ] Create hooks — `src/features/analytics/hooks/useAnalyticsSummary.ts`
-- [ ] Create page — `src/app/(public)/analytics/page.tsx`
+> **Invariant:** Reuse `ActivityChart` from `/activity` for time series; reuse shadcn primitives (Card, Select, Chart); recharts already installed.
+
+- [ ] Create `WindowSelector` component — adapts `TimeRangeSelector` pattern for 7d/30d/90d enum
+- [ ] Create `AnalyticsSummaryCards` component — 4 stat cards using shadcn/card
+- [ ] Create `ModelDistributionChart` component — recharts BarChart wrapper (parallel to ActivityChart)
+- [ ] Create `PrivacyFooter` component — simple disclaimer text
+- [ ] Create client view `src/app/(public)/analytics/view.tsx` — composes all charts
+- [ ] Create server page `src/app/(public)/analytics/page.tsx` — RSC fetches from facade
+- [ ] Implement null-handling for k-anonymity suppression (display "—" or filter nulls)
 - [ ] Add to navigation (optional)
 
 ### Phase 5: Security Hardening
@@ -201,39 +206,53 @@ Public transparency page at `/analytics` displaying aggregated platform metrics 
 
 ---
 
-## UI Layout
+## UI Layout — MVP
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Platform Analytics                        [7d] [30d] [90d]     │
-│  Aggregated metrics • Updated every 60s                         │
+│  Public metrics • Updated every 60s                             │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐       │
 │  │ Requests  │ │  Tokens   │ │Error Rate │ │ Latency   │       │
 │  │   1.2M    │ │   25.4B   │ │   0.03%   │ │ p95: 1.2s │       │
+│  │    (—)    │ │    (—)    │ │    (—)    │ │    (—)    │       │ ← null displays as "—"
 │  └───────────┘ └───────────┘ └───────────┘ └───────────┘       │
 ├─────────────────────────────────────────────────────────────────┤
-│  Requests (per {bucket})                                        │
+│  Requests Over Time (per {bucket})                              │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  ▂▃▄▅▆▇█▇▆▅▄▃▂▃▄▅▆▇█▇▆▅▄▃▂▃▄▅▆▇█▇▆▅                     │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
-│  Tokens (per {bucket})                                          │
+│  Tokens Over Time (per {bucket})                                │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  ▂▃▄▅▆▇█▇▆▅▄▃▂▃▄▅▆▇█▇▆▅▄▃▂▃▄▅▆▇█▇▆▅                     │   │
 │  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Error Rate Over Time (per {bucket})                            │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  ▂▃▂▃▂▃▂▃▂▃▂▃                                             │   │
+│  └─────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Model Distribution         Error Rate Over Time                │
-│  ┌────────────────┐        ┌────────────────┐                  │
-│  │ █ free         │        │ ▂▃▂▃▂▃▂▃▂▃▂▃  │                  │
-│  │ ██ standard    │        └────────────────┘                  │
-│  │ ███ premium    │                                             │
-│  └────────────────┘                                             │
+│  Model Usage Distribution (by tokens)                          │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Free       █████████████                                │   │
+│  │  Standard   ████████████████████                         │   │
+│  │  Premium    ██████                                        │   │
+│  └─────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │  Data is aggregated and anonymized. Individual user data is     │
 │  never exposed. Low-activity periods are suppressed.            │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**MVP Metrics:**
+
+- **Summary Cards:** Total Requests, Total Tokens, Error Rate %, Latency p95
+- **Time Series:** Request Rate, Token Rate, Error Rate (3 separate AreaCharts)
+- **Distribution:** Model Class by tokens (horizontal BarChart)
+
+**Excluded from MVP:** Latency p50 (only p95 in summary card), model distribution side-by-side with error rate (stacked layout instead)
 
 **UI labels are dynamic based on window:**
 
@@ -241,21 +260,24 @@ Public transparency page at `/analytics` displaying aggregated platform metrics 
 - 30d → "per 6 hours"
 - 90d → "per day"
 
+**Null-handling invariant:** All numeric values nullable (k-anonymity). Display "—" for null stats; filter or show gaps for null timeseries points.
+
 ### Component Structure
 
 ```
-src/features/analytics/
-├── components/
-│   ├── AnalyticsDashboard.tsx     # Main container
-│   ├── MetricCard.tsx             # Summary stat card
-│   ├── TimeseriesChart.tsx        # recharts line chart
-│   ├── DistributionChart.tsx      # recharts bar chart
-│   ├── WindowSelector.tsx         # 7d/30d/90d toggle
-│   └── PrivacyFooter.tsx          # Transparency disclaimer
-├── hooks/
-│   └── useAnalyticsSummary.ts     # React Query hook
-└── services/
-    └── analytics.ts               # Mimir query service
+src/app/(public)/analytics/
+├── page.tsx                       # Server component (RSC, fetches facade)
+└── view.tsx                       # Client component (composes all charts)
+
+src/features/analytics/components/
+├── WindowSelector.tsx             # 7d/30d/90d selector (adapts TimeRangeSelector)
+├── AnalyticsSummaryCards.tsx      # 4 stat cards grid (shadcn/card)
+├── ModelDistributionChart.tsx     # recharts BarChart wrapper
+└── PrivacyFooter.tsx              # Disclaimer text
+
+Reused:
+- src/components/kit/data-display/ActivityChart.tsx (time series)
+- src/components/vendor/shadcn/* (Card, Select, Chart primitives)
 ```
 
 ---
