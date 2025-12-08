@@ -53,7 +53,7 @@ export async function getActivity(
     }
   );
 
-  const [stats, logs] = await Promise.all([
+  const [stats, logs, receipts] = await Promise.all([
     activityService.getActivitySummary({
       billingAccountId: billingAccount.id,
       from: new Date(input.from),
@@ -65,7 +65,21 @@ export async function getActivity(
       limit: input.limit,
       ...(input.cursor ? { cursor: input.cursor } : {}),
     }),
+    accountService.listChargeReceipts({
+      billingAccountId: billingAccount.id,
+      from: new Date(input.from),
+      to: new Date(input.to),
+      limit: input.limit,
+    }),
   ]);
+
+  // Build join map: litellmCallId → user cost (USD with markup)
+  const userCostMap = new Map<string, string>();
+  for (const receipt of receipts) {
+    if (receipt.litellmCallId && receipt.responseCostUsd) {
+      userCostMap.set(receipt.litellmCallId, receipt.responseCostUsd);
+    }
+  }
 
   // Map to contract DTOs
   const chartSeries = stats.series.map((bucket) => ({
@@ -75,43 +89,45 @@ export async function getActivity(
     requests: bucket.requests,
   }));
 
+  // Calculate total user spend from charge receipts (what we billed)
+  const totalUserSpend = receipts.reduce((sum, receipt) => {
+    if (receipt.responseCostUsd) {
+      return sum + Number.parseFloat(receipt.responseCostUsd);
+    }
+    return sum;
+  }, 0);
+
+  const diffMs = new Date(input.to).getTime() - new Date(input.from).getTime();
+  const diffDays = Math.max(1, diffMs / (1000 * 60 * 60 * 24));
+
   const totals = {
     spend: {
-      total: stats.totals.spend,
-      avgDay: "0", // TBD: Implement avg calculation
-      pastRange: "0", // TBD: Implement past range
+      total: totalUserSpend.toFixed(6),
+      avgDay: (totalUserSpend / diffDays).toFixed(6),
+      pastRange: "0", // TBD
     },
     tokens: {
       total: stats.totals.tokens,
-      avgDay: 0,
+      avgDay: Math.round(stats.totals.tokens / diffDays),
       pastRange: 0,
     },
     requests: {
       total: stats.totals.requests,
-      avgDay: 0,
+      avgDay: Math.round(stats.totals.requests / diffDays),
       pastRange: 0,
     },
   };
 
-  // Simple avgDay calculation (total / days in range)
-  const diffMs = new Date(input.to).getTime() - new Date(input.from).getTime();
-  const diffDays = Math.max(1, diffMs / (1000 * 60 * 60 * 24));
-
-  totals.spend.avgDay = (
-    Number.parseFloat(stats.totals.spend) / diffDays
-  ).toFixed(6);
-  totals.tokens.avgDay = Math.round(stats.totals.tokens / diffDays);
-  totals.requests.avgDay = Math.round(stats.totals.requests / diffDays);
-
   const rows = logs.logs.map((log) => ({
     id: log.id,
     timestamp: log.timestamp.toISOString(),
-    provider: "litellm", // Hardcoded for now, could come from metadata
+    provider: "litellm",
     model: log.model,
     app: (log.metadata?.app as string) || "Unknown",
     tokensIn: log.tokensIn,
     tokensOut: log.tokensOut,
-    cost: log.cost,
+    // Display user cost in USD (with markup), not provider cost
+    cost: userCostMap.get(log.id) ?? "—",
     speed: (log.metadata?.speed as number) || 0,
     finish: (log.metadata?.finishReason as string) || "unknown",
   }));

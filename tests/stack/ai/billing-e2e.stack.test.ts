@@ -65,12 +65,13 @@ describe("Billing E2E Stack Test", () => {
       walletAddress: mockSessionUser.walletAddress,
     });
 
-    // Seed billing account with 100 credits
+    // Seed billing account with protocol-scale credits
+    // Protocol scale: 10M credits = $1 USD. Seed with $10 worth for safety margin.
     const billingAccountId = randomUUID();
     await db.insert(billingAccounts).values({
       id: billingAccountId,
       ownerUserId: mockSessionUser.id,
-      balanceCredits: 100n,
+      balanceCredits: 100_000_000n, // 100M credits = $10 (protocol scale)
     });
 
     // Seed virtual key
@@ -129,8 +130,8 @@ describe("Billing E2E Stack Test", () => {
     const account = await db.query.billingAccounts.findFirst({
       where: eq(billingAccounts.id, billingAccountId),
     });
-    // Safe because test balance is small (100)
-    expect(Number(account?.balanceCredits)).toBe(100 + Number(amount));
+    // Balance = initial (100M) + debit (negative amount)
+    expect(account?.balanceCredits).toBe(100_000_000n + amount);
 
     // 4. Verify Summary Endpoint (T2)
     const summaryReq = new NextRequest(
@@ -150,7 +151,7 @@ describe("Billing E2E Stack Test", () => {
 
     // 5. UI-consistency stack test
     expect(summaryJson.billingAccountId).toBe(billingAccountId);
-    expect(summaryJson.balanceCredits).toBe(Number(100n + amount));
+    expect(summaryJson.balanceCredits).toBe(Number(100_000_000n + amount));
 
     // Cleanup (cascades to billing_accounts, credit_ledger, llm_usage)
     await db.delete(users).where(eq(users.id, mockSessionUser.id));

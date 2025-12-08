@@ -56,8 +56,9 @@ describe("Completion Billing Stack Test", () => {
     });
 
     // Seed billing account with sufficient credits
+    // Protocol scale: 10M credits = $1 USD. Seed with $10 worth for safety margin.
     const billingAccountId = "billing-stack-test-account";
-    const initialBalance = 10000n; // 10,000 credits
+    const initialBalance = 100_000_000n; // 100M credits = $10 (protocol scale)
     await db.insert(billingAccounts).values({
       id: billingAccountId,
       ownerUserId: mockSessionUser.id,

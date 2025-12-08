@@ -29,6 +29,7 @@ export function createMockAccountService(): AccountService {
     listCreditLedgerEntries: vi.fn(),
     findCreditLedgerEntryByReference: vi.fn(),
     recordChargeReceipt: vi.fn(),
+    listChargeReceipts: vi.fn(),
   };
 }
 
@@ -68,5 +69,6 @@ export function createMockAccountServiceWithDefaults(
     listCreditLedgerEntries: vi.fn().mockResolvedValue([]),
     findCreditLedgerEntryByReference: vi.fn().mockResolvedValue(null),
     recordChargeReceipt: vi.fn().mockResolvedValue(undefined),
+    listChargeReceipts: vi.fn().mockResolvedValue([]),
   };
 }

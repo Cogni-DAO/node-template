@@ -14,7 +14,7 @@
 
 import { randomBytes, randomUUID } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import type { Database } from "@/adapters/server/db/client";
 import {
@@ -513,5 +513,46 @@ export class DrizzleAccountService implements AccountService {
       metadata: (row.metadata as Record<string, unknown> | null) ?? null,
       createdAt: row.createdAt,
     };
+  }
+
+  async listChargeReceipts(params: {
+    billingAccountId: string;
+    from: Date;
+    to: Date;
+    limit?: number;
+  }): Promise<
+    Array<{
+      litellmCallId: string | null;
+      chargedCredits: string;
+      responseCostUsd: string | null;
+      createdAt: Date;
+    }>
+  > {
+    const take = Math.min(params.limit ?? 100, 1000);
+
+    const rows = await this.db
+      .select({
+        litellmCallId: llmUsage.litellmCallId,
+        chargedCredits: llmUsage.chargedCredits,
+        responseCostUsd: llmUsage.responseCostUsd,
+        createdAt: llmUsage.createdAt,
+      })
+      .from(llmUsage)
+      .where(
+        and(
+          eq(llmUsage.billingAccountId, params.billingAccountId),
+          gte(llmUsage.createdAt, params.from),
+          lt(llmUsage.createdAt, params.to)
+        )
+      )
+      .orderBy(desc(llmUsage.createdAt))
+      .limit(take);
+
+    return rows.map((r) => ({
+      litellmCallId: r.litellmCallId,
+      chargedCredits: String(r.chargedCredits),
+      responseCostUsd: r.responseCostUsd ? String(r.responseCostUsd) : null,
+      createdAt: r.createdAt,
+    }));
   }
 }
