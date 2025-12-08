@@ -37,7 +37,7 @@ describe("Chat Streaming", () => {
     const { user } = await seedAuthenticatedUser(
       db,
       { id: randomUUID() },
-      { balanceCredits: 10000 }
+      { balanceCredits: 100_000_000 }
     );
 
     // user.walletAddress guaranteed non-null by seedAuthenticatedUser (generates via generateTestWallet)
@@ -158,7 +158,7 @@ describe("Chat Streaming", () => {
     const { user } = await seedAuthenticatedUser(
       db,
       { id: randomUUID() },
-      { balanceCredits: 10000 }
+      { balanceCredits: 100_000_000 }
     );
 
     if (!user.walletAddress) throw new Error("walletAddress required");
@@ -239,7 +239,7 @@ describe("Chat Streaming", () => {
     const { user } = await seedAuthenticatedUser(
       db,
       { id: randomUUID() },
-      { balanceCredits: 10000 }
+      { balanceCredits: 100_000_000 }
     );
 
     // user.walletAddress guaranteed non-null by seedAuthenticatedUser (generates via generateTestWallet)

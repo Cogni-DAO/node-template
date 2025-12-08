@@ -16,7 +16,10 @@ import type { z } from "zod";
 
 import { resolveActivityDeps } from "@/bootstrap/container";
 import type { aiActivityOperation } from "@/contracts/ai.activity.v1.contract";
-import { ActivityService } from "@/features/ai/services/activity";
+import {
+  ActivityService,
+  validateActivityRange,
+} from "@/features/ai/services/activity";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
 import {
@@ -53,6 +56,15 @@ export async function getActivity(
     }
   );
 
+  // Parse dates once and validate range
+  const from = new Date(input.from);
+  const to = new Date(input.to);
+  const { diffDays } = validateActivityRange({
+    from,
+    to,
+    groupBy: input.groupBy,
+  });
+
   // Fetch raw logs (LiteLLM telemetry) + receipts (our billing)
   const [logs, receipts] = await Promise.all([
     activityService.getRecentActivity({
@@ -62,8 +74,8 @@ export async function getActivity(
     }),
     accountService.listChargeReceipts({
       billingAccountId: billingAccount.id,
-      from: new Date(input.from),
-      to: new Date(input.to),
+      from,
+      to,
       limit: input.limit ?? 100,
     }),
   ]);
@@ -123,23 +135,23 @@ export async function getActivity(
   );
   const totalRequests = logs.logs.length;
 
-  const diffMs = new Date(input.to).getTime() - new Date(input.from).getTime();
-  const diffDays = Math.max(1, diffMs / (1000 * 60 * 60 * 24));
+  // Use diffDays from validation (already calculated above)
+  const avgDays = Math.max(1, diffDays);
 
   const totals = {
     spend: {
       total: totalUserSpend.toFixed(6),
-      avgDay: (totalUserSpend / diffDays).toFixed(6),
+      avgDay: (totalUserSpend / avgDays).toFixed(6),
       pastRange: "0",
     },
     tokens: {
       total: totalTokens,
-      avgDay: Math.round(totalTokens / diffDays),
+      avgDay: Math.round(totalTokens / avgDays),
       pastRange: 0,
     },
     requests: {
       total: totalRequests,
-      avgDay: Math.round(totalRequests / diffDays),
+      avgDay: Math.round(totalRequests / avgDays),
       pastRange: 0,
     },
   };
