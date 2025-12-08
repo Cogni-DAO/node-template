@@ -3,46 +3,88 @@
 
 /**
  * Module: `@core/billing/pricing`
- * Purpose: Credits-centric pricing calculations for LLM usage billing.
- * Scope: Pure functions that convert USD to credits and apply markup. Does not access adapters or IO.
- * Invariants: Always rounds up to ensure minimum 1 credit for non-zero costs; markup factor always ≥1.0; uses BigInt for credit amounts.
+ * Purpose: Protocol-level billing math with fixed-point credit conversion.
+ * Scope: Pure functions for USD/cents/credits conversion and markup calculation. Does not access env or perform IO.
+ * Invariants: CREDITS_PER_USD is protocol constant (10M); single ceil at pipeline end; ledger amounts are BigInt;
+ *   usdCentsToCredits uses integer-only math.
  * Side-effects: none
- * Notes: Credits are the atomic unit; USD amounts converted at configured rate. User price always ≥ provider cost.
- * Links: Used by AI completion service for dual-cost accounting.
+ * Links: `src/features/ai/services/llmPricingPolicy.ts`, `src/features/payments/services/creditsConfirm.ts`
  * @public
  */
 
 /**
- * Convert USD cost to credits using the configured conversion rate.
- * Always rounds up to ensure minimum 1 credit for any non-zero cost.
+ * Protocol constant: credits per USD.
+ * 10,000,000 credits per $1 USD = 1 credit = $0.0000001
+ *
+ * This gives 7 decimal places of precision for USD costs,
+ * enough for tiny LLM calls (e.g., $0.0006261 * 2 = $0.0012522 → 12522 credits exact).
+ *
+ * DO NOT change this value - it's a protocol constant like wei in ETH.
+ */
+export const CREDITS_PER_USD = 10_000_000;
+
+/**
+ * Convert USD to credits using the protocol constant.
+ * Single place where ceil rounding occurs.
  *
  * @param usd - Cost in USD
- * @param creditsPerUsd - Conversion rate (e.g., 1000 credits per USD)
  * @returns Credits as BigInt
  */
-export function usdToCredits(usd: number, creditsPerUsd: number): bigint {
-  const credits = Math.ceil(usd * creditsPerUsd);
-  return BigInt(credits);
+export function usdToCredits(usd: number): bigint {
+  return BigInt(Math.ceil(usd * CREDITS_PER_USD));
 }
 
 /**
- * Calculates the user price in credits based on the provider cost in credits.
- * Applies the markup factor and rounds up.
- * Enforces that user price is at least the provider cost (profit margin >= 0).
+ * Convert credits to USD for display.
+ *
+ * @param credits - Credit amount
+ * @returns USD value
  */
-export function calculateUserPriceCredits(
-  providerCostCredits: bigint,
-  markupFactor: number
-): bigint {
-  // Calculate price with markup
-  // Convert BigInt to number for multiplication, then ceil, then back to BigInt
-  // Note: For very large numbers, precision loss might occur, but credits are likely within safe integer range for number (2^53).
-  // 1 credit = $0.001. 2^53 credits = $9 trillion. Safe.
-  const price = Math.ceil(Number(providerCostCredits) * markupFactor);
-  const userPriceCredits = BigInt(price);
+export function creditsToUsd(credits: number | bigint): number {
+  return Number(credits) / CREDITS_PER_USD;
+}
 
-  // Enforce profit margin invariant: Price >= Cost
-  return userPriceCredits >= providerCostCredits
-    ? userPriceCredits
-    : providerCostCredits;
+/** Cents per USD - used for integer division in payment conversions */
+const CENTS_PER_USD = 100n;
+
+/**
+ * Convert USD cents to credits using integer math (no floats).
+ * Used by payment flows where input is in cents.
+ *
+ * Formula: ceil(cents * CREDITS_PER_USD / 100)
+ * Implemented as: (cents * CREDITS_PER_USD + 99) / 100 (integer ceil division)
+ *
+ * @param amountUsdCents - Amount in USD cents (integer, must be non-negative)
+ * @returns Credits as BigInt
+ */
+export function usdCentsToCredits(amountUsdCents: number | bigint): bigint {
+  const cents = BigInt(amountUsdCents);
+  if (cents < 0n) {
+    throw new Error("amountUsdCents must be non-negative");
+  }
+  // Integer ceil division: (a + b - 1) / b
+  return (cents * BigInt(CREDITS_PER_USD) + CENTS_PER_USD - 1n) / CENTS_PER_USD;
+}
+
+/**
+ * Calculate LLM user charge from provider cost.
+ * Single entry point for all billing math (preflight, completion, stream).
+ *
+ * Pipeline: providerCostUsd → userCostUsd (markup, no rounding) → chargedCredits (single ceil via usdToCredits)
+ *
+ * @param providerCostUsd - Raw cost from LiteLLM
+ * @param markupFactor - Multiplier (e.g., 2.0 = 100% markup)
+ * @returns { chargedCredits, userCostUsd }
+ */
+export function calculateLlmUserCharge(
+  providerCostUsd: number,
+  markupFactor: number
+): { chargedCredits: bigint; userCostUsd: number } {
+  // Step 1: Apply markup (no rounding)
+  const userCostUsd = providerCostUsd * markupFactor;
+
+  // Step 2: Single ceil via usdToCredits (uses protocol constant)
+  const chargedCredits = usdToCredits(userCostUsd);
+
+  return { chargedCredits, userCostUsd };
 }

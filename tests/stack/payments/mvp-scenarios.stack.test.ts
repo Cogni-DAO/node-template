@@ -353,7 +353,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         where: eq(creditLedger.reference, "11155111:0xconfirm123"),
       });
       expect(ledger).toBeTruthy();
-      expect(Number(ledger?.amount)).toBe(5000); // 500 cents * 10 = 5000 credits
+      expect(Number(ledger?.amount)).toBe(50_000_000); // $5 * 10,000,000 credits/USD
     });
   });
 
@@ -505,7 +505,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
       if (attempt?.status === "CREDITED") {
         // If CREDITED, ledger MUST exist with correct amount
         expect(ledger).toBeTruthy();
-        expect(Number(ledger?.amount)).toBe(5000); // 500 cents * 10 = 5000 credits
+        expect(Number(ledger?.amount)).toBe(50_000_000); // $5 * 10,000,000 credits/USD
         expect(ledger?.reason).toBe("widget_payment");
       } else {
         // If not CREDITED, ledger MUST NOT exist

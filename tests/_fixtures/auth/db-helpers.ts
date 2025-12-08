@@ -77,12 +77,13 @@ export async function seedAuthenticatedUser(
   }
 
   // Create billing account
+  // Protocol scale: 10M credits = $1 USD. Default to $10 worth.
   const [billingAccount] = await db
     .insert(billingAccounts)
     .values({
       id: `billing-${user.id}`,
       ownerUserId: user.id,
-      balanceCredits: BigInt(billingParams.balanceCredits ?? 1000),
+      balanceCredits: BigInt(billingParams.balanceCredits ?? 100_000_000),
     })
     .returning();
 

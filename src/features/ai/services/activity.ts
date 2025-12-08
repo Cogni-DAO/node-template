@@ -33,6 +33,40 @@ export class InvalidRangeError extends Error {
   }
 }
 
+/**
+ * Validate activity date range and groupBy constraints.
+ * Throws InvalidRangeError on validation failure.
+ *
+ * @returns { diffDays } - Days between from and to (for avgDay calculations)
+ */
+export function validateActivityRange(params: {
+  from: Date;
+  to: Date;
+  groupBy: "day" | "hour";
+}): { diffDays: number } {
+  const { from, to, groupBy } = params;
+
+  if (from.getTime() >= to.getTime()) {
+    throw new InvalidRangeError("Invalid time range: from must be before to");
+  }
+
+  const diffMs = to.getTime() - from.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  if (groupBy === "day" && diffDays > 90) {
+    throw new InvalidRangeError(
+      "Date range too large for daily grouping (max 90 days)"
+    );
+  }
+  if (groupBy === "hour" && diffDays > 7) {
+    throw new InvalidRangeError(
+      "Date range too large for hourly grouping (max 7 days)"
+    );
+  }
+
+  return { diffDays };
+}
+
 const CursorSchema = z.object({
   createdAt: z.string().datetime(),
   id: z.string(),
@@ -49,24 +83,8 @@ export class ActivityService {
   }): Promise<UsageStatsResult> {
     const { billingAccountId, from, to, groupBy } = params;
 
-    // Validate range
-    if (from.getTime() >= to.getTime()) {
-      throw new InvalidRangeError("Invalid time range: from must be before to");
-    }
-
-    const diffMs = to.getTime() - from.getTime();
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-    if (groupBy === "day" && diffDays > 90) {
-      throw new InvalidRangeError(
-        "Date range too large for daily grouping (max 90 days)"
-      );
-    }
-    if (groupBy === "hour" && diffDays > 7) {
-      throw new InvalidRangeError(
-        "Date range too large for hourly grouping (max 7 days)"
-      );
-    }
+    // Validate range using shared validator
+    validateActivityRange({ from, to, groupBy });
 
     return this.usageService.getUsageStats({
       billingAccountId,
