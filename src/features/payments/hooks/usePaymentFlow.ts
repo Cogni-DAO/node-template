@@ -5,7 +5,7 @@
  * Module: `@features/payments/hooks/usePaymentFlow`
  * Purpose: Orchestrates USDC payment flow state machine with wagmi + backend.
  * Scope: Manages intent → signature → confirmation → submit → poll cycle. Does not persist state across reloads.
- * Invariants: Single payment at a time; attemptId guard cancels stale async on reset; creditsAdded uses CREDITS_PER_CENT.
+ * Invariants: Single payment at a time; attemptId guard cancels stale async on reset; creditsAdded uses usdCentsToCredits.
  * Side-effects: IO (paymentsClient, wagmi); React state (useReducer, polling).
  * Notes: Implements attemptId pattern to prevent stale async continuations from corrupting state after reset/cancel.
  * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { CREDITS_PER_CENT } from "@/core";
+import { usdCentsToCredits } from "@/core";
 import * as clientLogger from "@/shared/observability/client";
 import { EVENT_NAMES } from "@/shared/observability/events";
 import { USDC_ABI } from "@/shared/web3/usdc-abi";
@@ -468,7 +468,7 @@ export function usePaymentFlow(
         if (result.data.status === "CREDITED") {
           dispatch({
             type: "VERIFICATION_SUCCESS",
-            creditsAdded: amountUsdCents * CREDITS_PER_CENT,
+            creditsAdded: Number(usdCentsToCredits(amountUsdCents)),
             txHash,
             chainId,
           });
@@ -538,7 +538,7 @@ export function usePaymentFlow(
         if (mapped.result === "SUCCESS") {
           dispatch({
             type: "VERIFICATION_SUCCESS",
-            creditsAdded: amountUsdCents * CREDITS_PER_CENT,
+            creditsAdded: Number(usdCentsToCredits(amountUsdCents)),
             txHash,
             chainId,
           });

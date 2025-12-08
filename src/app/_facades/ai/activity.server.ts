@@ -16,7 +16,10 @@ import type { z } from "zod";
 
 import { resolveActivityDeps } from "@/bootstrap/container";
 import type { aiActivityOperation } from "@/contracts/ai.activity.v1.contract";
-import { ActivityService } from "@/features/ai/services/activity";
+import {
+  ActivityService,
+  validateActivityRange,
+} from "@/features/ai/services/activity";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
 import {
@@ -53,65 +56,116 @@ export async function getActivity(
     }
   );
 
-  const [stats, logs] = await Promise.all([
-    activityService.getActivitySummary({
-      billingAccountId: billingAccount.id,
-      from: new Date(input.from),
-      to: new Date(input.to),
-      groupBy: input.groupBy,
-    }),
+  // Parse dates once and validate range
+  const from = new Date(input.from);
+  const to = new Date(input.to);
+  const { diffDays } = validateActivityRange({
+    from,
+    to,
+    groupBy: input.groupBy,
+  });
+
+  // Fetch raw logs (LiteLLM telemetry) + receipts (our billing)
+  const [logs, receipts] = await Promise.all([
     activityService.getRecentActivity({
       billingAccountId: billingAccount.id,
-      limit: input.limit,
+      limit: input.limit ?? 100,
       ...(input.cursor ? { cursor: input.cursor } : {}),
+    }),
+    accountService.listChargeReceipts({
+      billingAccountId: billingAccount.id,
+      from,
+      to,
+      limit: input.limit ?? 100,
     }),
   ]);
 
-  // Map to contract DTOs
-  const chartSeries = stats.series.map((bucket) => ({
-    bucketStart: bucket.bucketStart.toISOString(),
-    spend: bucket.spend,
-    tokens: bucket.tokens,
-    requests: bucket.requests,
-  }));
+  // Build join map: litellmCallId → user cost (USD with markup)
+  const userCostMap = new Map<string, string>();
+  for (const receipt of receipts) {
+    if (receipt.litellmCallId && receipt.responseCostUsd) {
+      userCostMap.set(receipt.litellmCallId, receipt.responseCostUsd);
+    }
+  }
+
+  // Aggregate logs into daily buckets for tokens/requests (LiteLLM telemetry)
+  const logBuckets = new Map<string, { tokens: number; requests: number }>();
+  for (const log of logs.logs) {
+    const dateKey = log.timestamp.toISOString().slice(0, 10); // YYYY-MM-DD
+    const existing = logBuckets.get(dateKey) ?? { tokens: 0, requests: 0 };
+    logBuckets.set(dateKey, {
+      tokens: existing.tokens + log.tokensIn + log.tokensOut,
+      requests: existing.requests + 1,
+    });
+  }
+
+  // Aggregate receipts into daily buckets for spend (our billing)
+  const spendBuckets = new Map<string, number>();
+  for (const receipt of receipts) {
+    const dateKey = receipt.createdAt.toISOString().slice(0, 10);
+    const existing = spendBuckets.get(dateKey) ?? 0;
+    const cost = receipt.responseCostUsd
+      ? Number.parseFloat(receipt.responseCostUsd)
+      : 0;
+    spendBuckets.set(dateKey, existing + cost);
+  }
+
+  // Merge buckets into chart series
+  const allDates = new Set([...logBuckets.keys(), ...spendBuckets.keys()]);
+  const chartSeries = Array.from(allDates)
+    .sort()
+    .map((date) => ({
+      bucketStart: new Date(date).toISOString(),
+      spend: (spendBuckets.get(date) ?? 0).toFixed(6),
+      tokens: logBuckets.get(date)?.tokens ?? 0,
+      requests: logBuckets.get(date)?.requests ?? 0,
+    }));
+
+  // Calculate totals
+  const totalUserSpend = receipts.reduce((sum, receipt) => {
+    return (
+      sum +
+      (receipt.responseCostUsd ? Number.parseFloat(receipt.responseCostUsd) : 0)
+    );
+  }, 0);
+
+  const totalTokens = logs.logs.reduce(
+    (sum, log) => sum + log.tokensIn + log.tokensOut,
+    0
+  );
+  const totalRequests = logs.logs.length;
+
+  // Use diffDays from validation (already calculated above)
+  const avgDays = Math.max(1, diffDays);
 
   const totals = {
     spend: {
-      total: stats.totals.spend,
-      avgDay: "0", // TBD: Implement avg calculation
-      pastRange: "0", // TBD: Implement past range
+      total: totalUserSpend.toFixed(6),
+      avgDay: (totalUserSpend / avgDays).toFixed(6),
+      pastRange: "0",
     },
     tokens: {
-      total: stats.totals.tokens,
-      avgDay: 0,
+      total: totalTokens,
+      avgDay: Math.round(totalTokens / avgDays),
       pastRange: 0,
     },
     requests: {
-      total: stats.totals.requests,
-      avgDay: 0,
+      total: totalRequests,
+      avgDay: Math.round(totalRequests / avgDays),
       pastRange: 0,
     },
   };
 
-  // Simple avgDay calculation (total / days in range)
-  const diffMs = new Date(input.to).getTime() - new Date(input.from).getTime();
-  const diffDays = Math.max(1, diffMs / (1000 * 60 * 60 * 24));
-
-  totals.spend.avgDay = (
-    Number.parseFloat(stats.totals.spend) / diffDays
-  ).toFixed(6);
-  totals.tokens.avgDay = Math.round(stats.totals.tokens / diffDays);
-  totals.requests.avgDay = Math.round(stats.totals.requests / diffDays);
-
   const rows = logs.logs.map((log) => ({
     id: log.id,
     timestamp: log.timestamp.toISOString(),
-    provider: "litellm", // Hardcoded for now, could come from metadata
+    provider: "litellm",
     model: log.model,
     app: (log.metadata?.app as string) || "Unknown",
     tokensIn: log.tokensIn,
     tokensOut: log.tokensOut,
-    cost: log.cost,
+    // Display user cost in USD (with markup), not provider cost
+    cost: userCostMap.get(log.id) ?? "—",
     speed: (log.metadata?.speed as number) || 0,
     finish: (log.metadata?.finishReason as string) || "unknown",
   }));
@@ -130,7 +184,6 @@ export async function getActivity(
     totals,
     rows,
     nextCursor,
-    telemetrySource: stats.telemetrySource,
   };
 
   // Log completion event
@@ -140,7 +193,6 @@ export async function getActivity(
     routeId: "ai.activity.v1",
     scope: "user",
     billingAccountId: billingAccount.id,
-    telemetrySource: stats.telemetrySource,
     groupBy: input.groupBy,
     durationMs: performance.now() - startTime,
     resultCount: rows.length,

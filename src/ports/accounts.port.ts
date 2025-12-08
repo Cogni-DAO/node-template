@@ -200,4 +200,24 @@ export interface AccountService {
     reason: string;
     reference: string;
   }): Promise<CreditLedgerEntry | null>;
+
+  /**
+   * List charge receipts for a billing account (for Activity dashboard spend join).
+   * Returns litellmCallId → chargedCredits for joining with LiteLLM telemetry.
+   */
+  listChargeReceipts(params: {
+    billingAccountId: string;
+    from: Date;
+    to: Date;
+    limit?: number;
+  }): Promise<
+    Array<{
+      litellmCallId: string | null;
+      /** Credits charged as decimal string */
+      chargedCredits: string;
+      /** User cost in USD (with markup) as decimal string */
+      responseCostUsd: string | null;
+      createdAt: Date;
+    }>
+  >;
 }

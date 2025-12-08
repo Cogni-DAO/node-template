@@ -49,10 +49,11 @@ describe("Chat Model Validation Stack Test", () => {
     });
 
     // Seed billing account
+    // Protocol scale: 10M credits = $1 USD. Seed with $10 worth.
     await db.insert(billingAccounts).values({
       id: billingAccountId,
       ownerUserId: userId,
-      balanceCredits: 10000n,
+      balanceCredits: 100_000_000n, // 100M credits = $10
     });
 
     // Seed virtual key

@@ -228,11 +228,12 @@ describe("LLM Metrics Instrumentation", () => {
       walletAddress: mockSessionUser.walletAddress,
     });
 
+    // Protocol scale: 10M credits = $1 USD. Seed with $10 worth for safety margin.
     const billingAccountId = randomUUID();
     await db.insert(billingAccounts).values({
       id: billingAccountId,
       ownerUserId: mockSessionUser.id,
-      balanceCredits: 10000n,
+      balanceCredits: 100_000_000n, // 100M credits = $10 (protocol scale)
     });
 
     await db.insert(virtualKeys).values({

@@ -2,81 +2,124 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@core/billing/pricing`
+ * Module: `@tests/unit/core/billing/pricing`
  * Purpose: Unit tests for pricing helpers.
- * Scope: Verifies usdToCredits and calculateUserPriceCredits. Does not test database integration.
- * Invariants: Conversion rates are deterministic; rounding is always up (ceil).
+ * Scope: Verifies calculateLlmUserCharge and CREDITS_PER_USD constant. Does not test policy layer.
+ * Invariants: Single ceil at the end; markup applied before rounding.
  * Side-effects: none
  * Links: `src/core/billing/pricing.ts`
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  calculateUserPriceCredits,
+  CREDITS_PER_USD,
+  calculateLlmUserCharge,
+  usdCentsToCredits,
   usdToCredits,
 } from "@/core/billing/pricing";
 
-// Mock serverEnv
-vi.mock("@/shared/env", () => ({
-  serverEnv: () => ({
-    CREDITS_PER_USDC: 1000,
-  }),
-}));
-
 describe("Pricing Logic", () => {
-  // RATE is mocked to 1000
-
-  describe("usdToCredits", () => {
-    const CREDITS_PER_USDC = 1000;
-
-    it("converts exact USD amounts to credits", () => {
-      expect(usdToCredits(1.0, CREDITS_PER_USDC)).toBe(1000n);
-      expect(usdToCredits(0.001, CREDITS_PER_USDC)).toBe(1n);
-      expect(usdToCredits(0.000001, CREDITS_PER_USDC)).toBe(1n); // Minimum 1 credit
-    });
-
-    it("rounds up fractional credits", () => {
-      // $0.0015 -> 1.5 credits -> 2 credits
-      expect(usdToCredits(0.0015, CREDITS_PER_USDC)).toBe(2n); // 1.5 → 2
-      expect(usdToCredits(0.0011, CREDITS_PER_USDC)).toBe(2n); // 1.1 → 2
-    });
-
-    it("handles zero cost", () => {
-      expect(usdToCredits(0, CREDITS_PER_USDC)).toBe(0n);
+  describe("CREDITS_PER_USD constant", () => {
+    it("is 10 million (1 credit = $0.0000001)", () => {
+      expect(CREDITS_PER_USD).toBe(10_000_000);
     });
   });
 
-  describe("calculateUserPriceCredits", () => {
-    const MARKUP = 1.5; // 1.5x markup
-
-    it("applies markup and rounds up", () => {
-      // Cost: 1000 credits
-      // Price: 1000 * 1.5 = 1500 credits
-      expect(calculateUserPriceCredits(1000n, MARKUP)).toBe(1500n);
+  describe("usdToCredits", () => {
+    it("converts USD to credits using CREDITS_PER_USD constant", () => {
+      // $1.00 = 10,000,000 credits
+      expect(usdToCredits(1.0)).toBe(10_000_000n);
+      // $0.0000001 = 1 credit
+      expect(usdToCredits(0.0000001)).toBe(1n);
     });
 
-    it("ensures user price is at least provider cost (profit margin)", () => {
-      // Cost: 1 credit
-      // Price: 1 * 1.5 = 1.5 -> 2 credits
-      expect(calculateUserPriceCredits(1n, MARKUP)).toBe(2n);
-    });
-
-    it("handles small costs correctly", () => {
-      // Cost: 1 credit
-      // Price: 1 * 1.5 = 1.5 -> 2 credits
-      expect(calculateUserPriceCredits(1n, MARKUP)).toBe(2n);
-    });
-
-    it("always results in price >= cost", () => {
-      const inputs = [1n, 10n, 100n, 1000n, 10000n];
-      inputs.forEach((cost) => {
-        const userCredits = calculateUserPriceCredits(cost, MARKUP);
-        expect(userCredits).toBeGreaterThanOrEqual(cost);
-      });
+    it("rounds up fractional credits (ceil)", () => {
+      // $0.00000015 = 1.5 credits → 2 credits
+      expect(usdToCredits(0.00000015)).toBe(2n);
+      // $0.00000011 = 1.1 credits → 2 credits
+      expect(usdToCredits(0.00000011)).toBe(2n);
     });
 
     it("handles zero cost", () => {
-      expect(calculateUserPriceCredits(0n, MARKUP)).toBe(0n);
+      expect(usdToCredits(0)).toBe(0n);
+    });
+  });
+
+  describe("usdCentsToCredits", () => {
+    it("converts cents to credits using integer math (ceil)", () => {
+      // 100 cents ($1.00) = ceil(100 * 10_000_000 / 100) = 10_000_000 credits
+      expect(usdCentsToCredits(100)).toBe(10_000_000n);
+      // 1 cent ($0.01) = ceil(1 * 10_000_000 / 100) = 100_000 credits
+      expect(usdCentsToCredits(1)).toBe(100_000n);
+      // 1100 cents ($11.00) = ceil(1100 * 10_000_000 / 100) = 110_000_000 credits
+      expect(usdCentsToCredits(1100)).toBe(110_000_000n);
+    });
+
+    it("handles zero cents", () => {
+      expect(usdCentsToCredits(0)).toBe(0n);
+    });
+
+    it("throws on negative input", () => {
+      expect(() => usdCentsToCredits(-1)).toThrow(
+        "amountUsdCents must be non-negative"
+      );
+    });
+
+    it("accepts bigint input", () => {
+      expect(usdCentsToCredits(100n)).toBe(10_000_000n);
+    });
+  });
+
+  describe("calculateLlmUserCharge", () => {
+    const MARKUP = 2.0; // 100% markup
+
+    it("applies markup then converts to credits", () => {
+      // Provider cost: $0.0006261
+      // User cost: $0.0006261 * 2.0 = $0.0012522
+      // Credits: ceil(0.0012522 * 10_000_000) = ceil(12522) = 12522
+      const result = calculateLlmUserCharge(0.0006261, MARKUP);
+      expect(result.userCostUsd).toBeCloseTo(0.0012522, 10);
+      expect(result.chargedCredits).toBe(12522n);
+    });
+
+    it("handles tiny costs with precision", () => {
+      // Provider cost: $0.0001
+      // User cost: $0.0001 * 2.0 = $0.0002
+      // Credits: ceil(0.0002 * 10_000_000) = ceil(2000) = 2000
+      const result = calculateLlmUserCharge(0.0001, MARKUP);
+      expect(result.userCostUsd).toBeCloseTo(0.0002, 10);
+      expect(result.chargedCredits).toBe(2000n);
+    });
+
+    it("handles larger costs", () => {
+      // Provider cost: $1.00
+      // User cost: $1.00 * 2.0 = $2.00
+      // Credits: ceil(2.00 * 10_000_000) = 20_000_000
+      const result = calculateLlmUserCharge(1.0, MARKUP);
+      expect(result.userCostUsd).toBe(2.0);
+      expect(result.chargedCredits).toBe(20_000_000n);
+    });
+
+    it("rounds up when needed (single ceil)", () => {
+      // Provider cost: $0.00000001
+      // User cost: $0.00000001 * 2.0 = $0.00000002
+      // Credits: ceil(0.00000002 * 10_000_000) = ceil(0.2) = 1
+      const result = calculateLlmUserCharge(0.00000001, MARKUP);
+      expect(result.chargedCredits).toBe(1n);
+    });
+
+    it("handles zero cost", () => {
+      const result = calculateLlmUserCharge(0, MARKUP);
+      expect(result.userCostUsd).toBe(0);
+      expect(result.chargedCredits).toBe(0n);
+    });
+
+    it("works with different markup factors", () => {
+      // 1.5x markup
+      const result = calculateLlmUserCharge(0.001, 1.5);
+      expect(result.userCostUsd).toBeCloseTo(0.0015, 10);
+      // Credits: ceil(0.0015 * 10_000_000) = 15000
+      expect(result.chargedCredits).toBe(15000n);
     });
   });
 });

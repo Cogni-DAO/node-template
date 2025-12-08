@@ -30,7 +30,6 @@ export interface AiActivityQueryCompletedEvent {
   scope: "user" | "org" | "system";
   billingAccountId: string;
   orgId?: string | undefined;
-  telemetrySource: "litellm" | "fallback";
   groupBy: "day" | "hour";
   durationMs: number;
   resultCount: number;
