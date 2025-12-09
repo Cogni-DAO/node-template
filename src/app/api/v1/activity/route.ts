@@ -37,7 +37,7 @@ export const GET = wrapRouteHandlerWithLogging(
     const inputResult = aiActivityOperation.input.safeParse({
       from: searchParams.get("from"),
       to: searchParams.get("to"),
-      groupBy: searchParams.get("groupBy"),
+      step: searchParams.get("step") || undefined,
       cursor: searchParams.get("cursor") || undefined,
       limit: searchParams.has("limit")
         ? Number.parseInt(searchParams.get("limit") || "20", 10)

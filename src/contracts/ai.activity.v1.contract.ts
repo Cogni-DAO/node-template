@@ -19,15 +19,52 @@
 
 import { z } from "zod";
 
+/**
+ * Allowed step values for time bucketing.
+ * Server derives optimal step from range if not provided.
+ * Max granularity is 1d (no weekly buckets - too coarse for useful analysis).
+ */
+export const ActivityStepSchema = z.enum(["5m", "15m", "1h", "6h", "1d"]);
+export type ActivityStep = z.infer<typeof ActivityStepSchema>;
+
+/**
+ * Step durations in milliseconds for epoch-based bucketing.
+ */
+export const STEP_MS: Record<ActivityStep, number> = {
+  "5m": 5 * 60 * 1000,
+  "15m": 15 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+  "6h": 6 * 60 * 60 * 1000,
+  "1d": 24 * 60 * 60 * 1000,
+};
+
+/**
+ * Maximum allowed range (in ms) for each step to enforce maxPoints cap (~240 buckets).
+ */
+export const MAX_RANGE_FOR_STEP: Record<ActivityStep, number> = {
+  "5m": 20 * 60 * 60 * 1000, // 20 hours (240 buckets)
+  "15m": 60 * 60 * 60 * 1000, // 60 hours / 2.5 days (240 buckets)
+  "1h": 10 * 24 * 60 * 60 * 1000, // 10 days (240 buckets)
+  "6h": 60 * 24 * 60 * 60 * 1000, // 60 days (240 buckets)
+  "1d": 90 * 24 * 60 * 60 * 1000, // 90 days (max range, 90 buckets)
+};
+
+/**
+ * Maximum overall range allowed (90 days).
+ */
+export const MAX_RANGE_MS = 90 * 24 * 60 * 60 * 1000;
+
 export const aiActivityOperation = {
   id: "ai.activity.v1",
   summary: "Fetch AI activity statistics and logs",
   description:
-    "Returns usage statistics (spend, tokens, requests) grouped by time, and a paginated list of usage logs.",
+    "Returns usage statistics (spend, tokens, requests) grouped by time, and a paginated list of usage logs. Server derives optimal bucket step from range size.",
   input: z.object({
     from: z.string().datetime().describe("Start time (inclusive, UTC ISO)"),
     to: z.string().datetime().describe("End time (exclusive, UTC ISO)"),
-    groupBy: z.enum(["day", "hour"]).describe("Time bucket granularity"),
+    step: ActivityStepSchema.optional().describe(
+      "Bucket granularity (server-derived if omitted)"
+    ),
     cursor: z.string().optional().describe("Opaque cursor for pagination"),
     limit: z
       .number()
@@ -38,6 +75,9 @@ export const aiActivityOperation = {
       .describe("Max logs to return"),
   }),
   output: z.object({
+    effectiveStep: ActivityStepSchema.describe(
+      "Actual step used (server-derived or validated)"
+    ),
     chartSeries: z.array(
       z.object({
         bucketStart: z.string().datetime(),

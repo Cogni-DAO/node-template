@@ -27,7 +27,7 @@ export default async function ActivityPage() {
     redirect("/");
   }
 
-  // Default to last 30 days
+  // Default to last 30 days (server derives optimal step: 1d for this range)
   const to = new Date();
   const from = new Date();
   from.setDate(from.getDate() - 30);
@@ -37,7 +37,7 @@ export default async function ActivityPage() {
       sessionUser: user,
       from: from.toISOString(),
       to: to.toISOString(),
-      groupBy: "day",
+      // step omitted - server derives optimal step based on range
       limit: 100, // Higher limit to capture full month of data
     });
 
