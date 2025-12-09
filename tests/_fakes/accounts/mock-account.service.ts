@@ -59,7 +59,6 @@ export function createMockAccountServiceWithDefaults(
       ownerUserId: "test-user",
       balanceCredits,
       defaultVirtualKeyId: "virtual-key-1",
-      litellmVirtualKey: "vk-test-123",
     }),
     getBalance: vi.fn().mockResolvedValue(balanceCredits),
     debitForUsage: vi.fn().mockResolvedValue(undefined),

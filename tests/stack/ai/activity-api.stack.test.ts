@@ -63,7 +63,7 @@ describe("Activity API Stack Tests", () => {
     await db.insert(virtualKeys).values({
       id: randomUUID(),
       billingAccountId: testBillingAccountId,
-      litellmVirtualKey: "vk-activity-test",
+      litellmVirtualKey: "[master-key-mode]",
       isDefault: true,
     });
   });

@@ -56,10 +56,10 @@ describe("Chat Model Validation Stack Test", () => {
       balanceCredits: 100_000_000n, // 100M credits = $10
     });
 
-    // Seed virtual key
+    // Seed virtual key (sentinel value - MVP uses master key mode)
     await db.insert(virtualKeys).values({
       billingAccountId,
-      litellmVirtualKey: `vk-${randomUUID()}`,
+      litellmVirtualKey: "[master-key-mode]",
       isDefault: true,
     });
 

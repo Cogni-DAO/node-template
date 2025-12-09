@@ -103,18 +103,18 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       },
     ]);
 
-    // Seed virtual keys
+    // Seed virtual keys (sentinel value - MVP uses master key mode)
     await db.insert(virtualKeys).values([
       {
         id: accountA.virtualKeyId,
         billingAccountId: accountA.billingAccountId,
-        litellmVirtualKey: "vk-a",
+        litellmVirtualKey: "[master-key-mode]",
         isDefault: true,
       },
       {
         id: accountB.virtualKeyId,
         billingAccountId: accountB.billingAccountId,
-        litellmVirtualKey: "vk-b",
+        litellmVirtualKey: "[master-key-mode]",
         isDefault: true,
       },
     ]);

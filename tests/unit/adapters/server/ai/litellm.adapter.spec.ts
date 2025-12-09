@@ -17,10 +17,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LiteLlmAdapter } from "@/adapters/server/ai/litellm.adapter";
 import type { LlmCaller, LlmService } from "@/ports";
 
-// Mock the serverEnv module - only LITELLM_BASE_URL needed (model is always explicitly provided)
+// Mock the serverEnv module - LITELLM_BASE_URL and LITELLM_MASTER_KEY needed
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
     LITELLM_BASE_URL: "https://api.test-litellm.com",
+    LITELLM_MASTER_KEY: "test-master-key-secret",
   }),
 }));
 
@@ -29,7 +30,6 @@ describe("LiteLlmAdapter", () => {
   const testCaller: LlmCaller = {
     billingAccountId: "test-user-123",
     virtualKeyId: "vk-test-1",
-    litellmVirtualKey: "test-api-key-456",
   };
 
   // Mock fetch globally
@@ -67,7 +67,7 @@ describe("LiteLlmAdapter", () => {
       response_cost: 0.0002,
     };
 
-    it("sends correct request to LiteLLM API", async () => {
+    it("sends correct request to LiteLLM API with master key auth", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         headers: new Headers(),
@@ -82,14 +82,17 @@ describe("LiteLlmAdapter", () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: "Bearer test-api-key-456",
+            Authorization: "Bearer test-master-key-secret", // Uses master key, not per-user virtual key
           },
           body: JSON.stringify({
             model: "gpt-3.5-turbo", // explicitly provided (required)
             messages: [{ role: "user", content: "Hello world" }],
             temperature: 0.7, // default
             max_tokens: 2048, // default
-            user: "test-user-123",
+            user: "test-user-123", // billingAccountId for cost attribution
+            metadata: {
+              cogni_billing_account_id: "test-user-123",
+            },
           }),
           signal: expect.any(AbortSignal),
         }
@@ -121,6 +124,9 @@ describe("LiteLlmAdapter", () => {
         temperature: 0.2,
         max_tokens: 1024,
         user: "test-user-123",
+        metadata: {
+          cogni_billing_account_id: "test-user-123",
+        },
       });
     });
 

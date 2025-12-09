@@ -24,7 +24,7 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 - [x] Auth.js session-only authentication (HttpOnly cookies, no Bearer token support)
 - [x] SIWE via Credentials provider + `siwe` library
 - [x] Session → user.id → billing_account → virtual_key resolution
-- [x] LiteLLM virtual key provisioning on first login (via `/key/generate` with master key)
+- [x] LiteLLM calls use server-held `LITELLM_MASTER_KEY` with user attribution (no per-user virtual keys)
 - [x] Credit deduction per LLM request
 - [x] Clean database reset (no migration from old schema)
 
@@ -62,7 +62,7 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 
 **Provisioning & Operations (Not HTTP in MVP):**
 
-- [x] **Virtual key provisioning:** Happens internally in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)` using LiteLLM MASTER_KEY, not via HTTP endpoints
+- [x] **Billing account provisioning:** Happens internally in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)`. Creates `billing_accounts` and `virtual_keys` rows for referential integrity; no per-user LiteLLM keys are generated. All LLM calls use `LITELLM_MASTER_KEY` with `billingAccountId` in metadata for cost attribution.
 - [ ] **Credit top-ups (real users):** Handled via widget confirm endpoint (`POST /api/v1/payments/credits/confirm`). The endpoint requires an active SIWE session, resolves `billing_account_id` from the session (not from request body), inserts positive `credit_ledger` entry with `reason='widget_payment'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
 - [ ] **Future operator API:** Post-MVP may add `/api/operator/*` for key management, analytics, and manual adjustments
 
@@ -117,12 +117,12 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 - Used internally for credit ledger and LiteLLM routing
 - Optional client exposure for UX only (NOT for authorization)
 
-**LiteLLM Virtual Key**
+**LiteLLM Virtual Key (MVP: Master Key Mode)**
 
-- Stored in `virtual_keys` table, linked to `billing_accounts`
-- Server-only secret used for upstream LLM provider calls
-- Browser never sees it
-- Looked up from billing accountId via FK relationship
+- MVP uses `LITELLM_MASTER_KEY` from environment for all LLM calls
+- `virtual_keys` table stores a sentinel value `[master-key-mode]` for referential integrity (not a real key)
+- User attribution passed via `metadata.cogni_billing_account_id` in LiteLLM requests
+- Future: User-facing API keys will use `VirtualKeyManagementPort` to create real per-key LiteLLM virtual keys
 
 ---
 
@@ -234,13 +234,13 @@ Auth.js does NOT ship a first-class SIWE provider. We implement SIWE using an Au
 1. `const session = await auth()` (NextAuth helper). If no session → return 401.
 2. Extract `userId = session.user.id` (NextAuth user ID)
 3. Call `getOrCreateBillingAccountForUser(userId)` from `src/lib/auth/mapping.ts`
-   - Returns `{ billingAccountId, defaultVirtualKeyId, litellmVirtualKey }`
-   - On first login, creates `billing_accounts` row with `owner_user_id = userId` and provisions default virtual key (via LiteLLM `/key/generate` with master key)
-4. Load default `virtual_keys` row for that `billingAccountId` where `is_default = true AND active = true`
-5. Use `virtual_keys.litellm_virtual_key` when calling LiteLLM
+   - Returns `{ billingAccountId, defaultVirtualKeyId }` (no key string - master key mode)
+   - On first login, creates `billing_accounts` row with `owner_user_id = userId` and a `virtual_keys` row with sentinel value
+4. Construct `LlmCaller` with `{ billingAccountId, virtualKeyId }` (no key string)
+5. LiteLLM adapter uses `LITELLM_MASTER_KEY` from env, passes `billingAccountId` in metadata for cost attribution
 6. After LiteLLM call, record usage in `credit_ledger` with `billing_account_id` and `virtual_key_id`
 
-**Key Point:** The `accountId` in `LlmCaller` is the `billing_accounts.id`. API keys are now LiteLLM virtual keys stored in the `virtual_keys` table, NOT directly in a billing_accounts column.
+**Key Point:** The `LlmCaller` interface contains only IDs (`billingAccountId`, `virtualKeyId`). The actual LiteLLM authentication uses `LITELLM_MASTER_KEY` from server environment - no secrets flow through application layers.
 
 **Post-MVP: Dual Auth Mode (NOT in initial implementation)**
 
@@ -303,7 +303,7 @@ React components use Auth.js hooks:
 
 - `id` (PK) - Virtual key identifier
 - `billing_account_id` (FK → `billing_accounts.id`) - Which billing account owns this key
-- `litellm_virtual_key` - The actual LiteLLM virtual key string
+- `litellm_virtual_key` - Sentinel value `[master-key-mode]` in MVP (not a real key); future user API keys will store encrypted key references
 - `label` - Human-readable name (e.g., "Default", "Production API")
 - `is_default` - Boolean, marks the default key for this billing account
 - `active` - Boolean, whether key is enabled
@@ -334,9 +334,9 @@ React components use Auth.js hooks:
 1. Auth.js manages `users` (identity, wallet address from SIWE)
 2. On first successful login for `user.id`, we create a `billing_accounts` row if none exists:
    - Set `owner_user_id = user.id`
-   - Call LiteLLM `/key/generate` with master key to provision a default virtual key
-   - Create one default `virtual_keys` row with `is_default = true`, storing the LiteLLM key string
-3. For MVP, each user has exactly one billing account and at least one virtual key
+   - Create one default `virtual_keys` row with `is_default = true`, storing sentinel `[master-key-mode]`
+   - No LiteLLM `/key/generate` call in MVP - all calls use `LITELLM_MASTER_KEY`
+3. For MVP, each user has exactly one billing account and one virtual key (for referential integrity)
 4. This mapping logic lives in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)`
 
 ---
@@ -485,7 +485,12 @@ React components use Auth.js hooks:
 
 ### Known Security Issues
 
-- [ ] **LiteLLM virtual keys exposed in plaintext.** Keys stored unencrypted in DB and returned from AccountService; high risk of leakage via API responses, JWTs, and logs. MVP fix: remove `litellmVirtualKey` from all client-facing returns; fetch/decrypt server-side only in LiteLLM adapter by `virtualKeyId`; add guard test/log-scan to prevent key exposure. Long-term: encrypt-at-rest with master key rotation.
+- [x] **~~LiteLLM virtual keys exposed in plaintext.~~** ✅ **FIXED:** MVP uses master key mode:
+  - `litellmVirtualKey` removed from `BillingAccount` and `LlmCaller` interfaces
+  - `virtual_keys.litellm_virtual_key` stores sentinel `[master-key-mode]` (not a real key)
+  - LiteLLM adapter uses `LITELLM_MASTER_KEY` from env with `billingAccountId` in metadata for cost attribution
+  - No secrets flow through application layers
+  - Future user API keys will use `VirtualKeyManagementPort` with show-once semantics
 
 ---
 
@@ -592,11 +597,13 @@ Auth.js does NOT provide a built-in SIWE provider. We implement SIWE via:
 
 ## Key Invariants
 
-- LiteLLM virtual keys never leave the server (stored in `virtual_keys` table)
+- **No per-user secrets in application layers:** `LlmCaller` contains only IDs; `LITELLM_MASTER_KEY` accessed only at adapter boundary
+- **`virtual_keys` stores sentinel, not secrets:** Value `[master-key-mode]` preserves FK integrity without storing real keys
 - NextAuth manages all session operations (cookies, storage, expiry)
 - SIWE (via Credentials provider + `siwe` library) proves wallet ownership
-- Billing layer owns LiteLLM virtual keys (`billing_accounts` → `virtual_keys`)
+- Billing layer owns virtual key IDs for referential integrity (`billing_accounts` → `virtual_keys`)
 - Each user has one billing account with one default virtual key (MVP)
 - All credit changes flow through `credit_ledger` (append-only audit log)
+- User attribution for LiteLLM cost tracking via `metadata.cogni_billing_account_id`
 
 **Reference:** NextAuth docs at [next-auth.js.org](https://next-auth.js.org), SIWE spec at [eips.ethereum.org/EIPS/eip-4361](https://eips.ethereum.org/EIPS/eip-4361)

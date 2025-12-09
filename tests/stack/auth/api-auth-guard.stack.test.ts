@@ -82,7 +82,7 @@ describe("API Auth Guard Stack Test", () => {
 
     await db.insert(virtualKeys).values({
       billingAccountId,
-      litellmVirtualKey: `vk-test-${walletAddress}`,
+      litellmVirtualKey: "[master-key-mode]", // Sentinel - MVP uses master key
       label: "Test Default",
       isDefault: true,
       active: true,
