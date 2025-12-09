@@ -3,12 +3,12 @@
 
 /**
  * Module: `@adapters/server/ai/litellm`
- * Purpose: LiteLLM service implementation for AI completion and streaming with cost extraction.
- * Scope: Implements LlmService port (completion + stream), extracts cost from headers. Does not handle auth or rate-limiting.
- * Invariants: Never logs prompts/keys; 15s timeout; stream settles once; model param required.
+ * Purpose: LiteLLM service implementation for AI completion and streaming with cost extraction and runtime secret validation.
+ * Scope: Implements LlmService port (completion + stream), extracts cost from headers, validates secrets at adapter boundary. Does not handle auth or rate-limiting.
+ * Invariants: Never logs prompts/keys/chunks; 30s timeout (completion), 15s connect timeout (stream); settles once; model required.
  * Side-effects: IO (HTTP calls to LiteLLM)
- * Notes: SSE via eventsource-parser; model required (no DEFAULT_MODEL fallback).
- * Links: LlmService port, serverEnv, defer<T>() for promise settlement
+ * Notes: SSE via eventsource-parser; assertRuntimeSecrets() before fetch; logs only bounded metadata (no content).
+ * Links: LlmService port, serverEnv, assertRuntimeSecrets, defer<T>() for promise settlement
  * @internal
  */
 
@@ -19,6 +19,7 @@ import {
 } from "eventsource-parser";
 import type { ChatDeltaEvent, LlmService } from "@/ports";
 import { serverEnv } from "@/shared/env";
+import { assertRuntimeSecrets } from "@/shared/env/invariants";
 import { makeLogger } from "@/shared/observability";
 
 const logger = makeLogger({ component: "LiteLlmAdapter" });
@@ -104,6 +105,9 @@ export class LiteLlmAdapter implements LlmService {
 
     try {
       const env = serverEnv();
+      // Validate runtime secrets at adapter boundary (not in serverEnv to avoid breaking Next.js build)
+      assertRuntimeSecrets(env);
+
       // HTTP call to LiteLLM with timeout enforcement
       // Uses LITELLM_MASTER_KEY (server-only secret) - never expose per-user virtual keys
       const response = await fetch(
@@ -243,6 +247,9 @@ export class LiteLlmAdapter implements LlmService {
     const connectCtl = new AbortController();
     const connectTimer = setTimeout(() => connectCtl.abort(), 15000);
     const env = serverEnv();
+    // Validate runtime secrets at adapter boundary
+    assertRuntimeSecrets(env);
+
     try {
       const signal = params.abortSignal
         ? AbortSignal.any([connectCtl.signal, params.abortSignal])
@@ -369,11 +376,6 @@ export class LiteLlmAdapter implements LlmService {
                   ) {
                     usageCost = json.usage.cost;
                   }
-                  // DEBUG: Log RAW usage event from LiteLLM
-                  logger.info(
-                    { rawUsageEvent: json.usage, fullChunk: json },
-                    "LiteLLM stream - RAW USAGE EVENT"
-                  );
                 }
 
                 const choice = json.choices?.[0];
@@ -395,7 +397,7 @@ export class LiteLlmAdapter implements LlmService {
                     ? parseError.message
                     : "JSON parse error";
                 logger.warn(
-                  { data: data.slice(0, 100) },
+                  { dataLength: data.length },
                   `Malformed SSE data: ${errorMessage}`
                 );
                 // Do not yield error - continue processing remaining events
@@ -434,18 +436,6 @@ export class LiteLlmAdapter implements LlmService {
             result.providerCostUsd = derivedCost;
           }
 
-          // DEBUG: Log cost derivation result
-          logger.debug(
-            {
-              model,
-              headerCost: providerCostUsd,
-              usageCost,
-              derivedCost,
-              litellmCallId,
-            },
-            "Stream cost derivation complete"
-          );
-
           // Prefer response body id (gen-...) for join with /spend/logs
           // Fall back to header UUID if response id not available
           if (litellmRequestId) {
@@ -453,12 +443,6 @@ export class LiteLlmAdapter implements LlmService {
           } else if (litellmCallId) {
             result.litellmCallId = litellmCallId;
           }
-
-          // DEBUG: Log entire result object from stream
-          logger.info(
-            { streamResult: result },
-            "LiteLLM stream completion - FULL RESULT"
-          );
 
           // ALWAYS include providerMeta with model (SSE doesn't return this, use request param)
           result.providerMeta = {
