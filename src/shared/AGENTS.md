@@ -41,6 +41,7 @@ Low-level building blocks used across the repo. Primitives, DTO mappers, pure ut
   - Environment validation (`serverEnv`, `clientEnv`)
   - Database schemas (auth, billing)
   - Utilities (cn, uuid, accountId)
+  - Time utilities (TimeRange presets, deriveTimeRange)
   - Constants (payments, web3)
   - Observability (Logger, RequestContext, log helpers, event schemas)
   - AI model catalog (cache)
