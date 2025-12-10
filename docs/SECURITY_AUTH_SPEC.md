@@ -30,7 +30,7 @@ It does **not** own billing ledger semantics (see ACCOUNTS_DESIGN.md).
 - SIWE verification: Auth.js Credentials provider + `siwe` library.
 - Used by: web app calling `/api/v1/*`.
 
-### B) Programmatic API (Next)
+### B) Programmatic API (Roadmap)
 
 - Auth mechanism: `Authorization: Bearer <app_api_key>` (product key, not a LiteLLM key).
 - Lookup: hash the presented key, match `app_api_keys.key_hash`.
@@ -38,7 +38,7 @@ It does **not** own billing ledger semantics (see ACCOUNTS_DESIGN.md).
 
 ---
 
-### Key lifecycle endpoints (Next)
+### Key lifecycle endpoints (Roadmap)
 
 - `POST /api/v1/keys` (session required)
 - `GET /api/v1/keys` (session required)
@@ -70,7 +70,7 @@ It does **not** own billing ledger semantics (see ACCOUNTS_DESIGN.md).
 
 ---
 
-## Next PR Acceptance Criteria (API Keys)
+## Roadmap Acceptance Criteria (API Keys)
 
 1. `app_api_keys` exists with hash-only storage + show-once plaintext.
 2. `/api/v1/*` accepts session OR Bearer app_api_key.

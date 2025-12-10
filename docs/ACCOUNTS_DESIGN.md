@@ -29,7 +29,7 @@ This is what exists _right now_ in code, not what we want later.
 - `virtual_keys` currently acts as an internal FK/scope handle for ledger/receipts (no per-key spend attribution yet).
 - Per-key attribution is **not implemented** until app_api_keys + 1:1 mapping exists.
 
-## Next Actions: App API Keys + 1:1 LiteLLM Key Mapping
+## Roadmap: App API Keys + 1:1 LiteLLM Key Mapping
 
 - Add `app_api_keys` (hash-only, show-once plaintext)
 - Add `app_api_key_id` FK to the LiteLLM mapping table (unique 1:1)
