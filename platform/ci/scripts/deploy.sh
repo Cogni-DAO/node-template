@@ -707,7 +707,7 @@ check_url() {
   return 1
 }
 
-check_url "https://$DOMAIN/health" "App"
+check_url "https://$DOMAIN/readyz" "App (readiness)"
 
 # Store deployment metadata
 log_info "Recording deployment metadata..."
@@ -728,7 +728,8 @@ log_info "✅ Docker Compose deployment complete!"
 log_info ""
 log_info "🌐 Application URLs:"
 log_info "  - Main App: https://$DOMAIN"
-log_info "  - Health Check: https://$DOMAIN/health"
+log_info "  - Readiness Check: https://$DOMAIN/readyz"
+log_info "  - Liveness Check: https://$DOMAIN/livez"
 log_info ""
 log_info "📁 Deployment artifacts in $ARTIFACT_DIR:"
 log_info "  - deployment.json: Deployment metadata"

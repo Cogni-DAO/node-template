@@ -37,58 +37,35 @@ fi
 
 log_info "Testing image: $IMAGE_REF"
 
-# Start test container with hardcoded test environment
-log_info "Starting test container..."
+# Start test container with MINIMAL env (liveness gate, not readiness)
+log_info "Starting test container with minimal env..."
 docker run -d --name test-container \
     -p 3000:3000 \
     -e NODE_ENV=production \
     -e APP_ENV=test \
-    -e LITELLM_MASTER_KEY=test-build-validation-key \
     -e DATABASE_URL=postgresql://testuser:testpass@localhost:5432/testdb \
     "${IMAGE_REF}"
 
-# Wait for Docker healthcheck to pass
-log_info "Waiting for Docker healthcheck..."
-for i in {1..30}; do
-    STATUS=$(docker inspect test-container --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
-
-    if [[ "$STATUS" == "healthy" ]]; then
-        log_info "✅ Docker healthcheck passed"
-        break
-    elif [[ "$STATUS" == "unhealthy" ]]; then
-        log_error "Docker healthcheck reported unhealthy"
-        docker logs test-container
-        exit 1
-    elif [[ $i -eq 30 ]]; then
-        log_error "Docker healthcheck timeout (60s)"
-        log_error "Final status: $STATUS"
-        docker logs test-container
-        exit 1
-    else
-        log_info "Attempt $i/30: healthcheck=$STATUS, waiting..."
-        sleep 2
-    fi
-done
-
-# Test health endpoint directly
-log_info "Testing health endpoint..."
+# Poll /livez endpoint (fast liveness gate, 10-20s budget)
+# Do NOT use Docker HEALTHCHECK (requires full env for /readyz)
+log_info "Polling /livez endpoint (10-20s budget)..."
 for i in {1..10}; do
-    if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then
-        log_info "✅ Health endpoint responding correctly"
-        RESPONSE=$(curl -s http://localhost:3000/health)
+    if curl -fsS http://localhost:3000/livez >/dev/null 2>&1; then
+        log_info "✅ Liveness check passed (/livez responding)"
+        RESPONSE=$(curl -s http://localhost:3000/livez)
         log_info "Response: $RESPONSE"
         break
     elif [[ $i -eq 10 ]]; then
-        log_error "Health endpoint test failed (30s timeout)"
+        log_error "Liveness gate failed (20s timeout)"
         log_error "Attempting to fetch response for debugging:"
-        curl -v http://localhost:3000/health 2>&1 || true
+        curl -v http://localhost:3000/livez 2>&1 || true
         log_error ""
         log_error "Container logs:"
         docker logs test-container
         exit 1
     else
-        log_info "Attempt $i/10: health endpoint not ready, waiting..."
-        sleep 3
+        log_info "Attempt $i/10: /livez not ready, waiting..."
+        sleep 2
     fi
 done
 

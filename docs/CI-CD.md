@@ -68,9 +68,9 @@ push to staging → staging-preview.yml
 **Jobs:** `build → test-image → push → deploy → e2e → promote`
 
 - Builds Docker image
-- Tests container health (startup + health endpoint with hardcoded test env)
+- Tests liveness (/livez gate with minimal env, pre-push validation)
 - Pushes validated image to GHCR
-- Deploys to preview environment
+- Deploys to preview environment (readiness hard-gate on /readyz)
 - Runs full Playwright E2E tests
 - **If E2E passes:** auto-creates release branch + PR to main
 
