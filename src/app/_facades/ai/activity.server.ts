@@ -122,9 +122,9 @@ export async function getActivity(
   const allLogs = logsResult.logs;
   const fetchedLogCount = allLogs.length;
 
-  // Build join map: litellmCallId → chargedCredits
+  // Build join map: litellmCallId → responseCostUsd
   // Activity is usage-driven; charge_receipts adds cost via LEFT JOIN on litellmCallId
-  const chargeMap = new Map<string, string>(); // litellmCallId → chargedCredits
+  const chargeMap = new Map<string, string>(); // litellmCallId → responseCostUsd (USD)
   for (const receipt of receipts) {
     // Only join LiteLLM-based receipts to LiteLLM usage logs
     if (
@@ -132,7 +132,7 @@ export async function getActivity(
       receipt.litellmCallId &&
       receipt.responseCostUsd
     ) {
-      chargeMap.set(receipt.litellmCallId, receipt.chargedCredits);
+      chargeMap.set(receipt.litellmCallId, receipt.responseCostUsd);
     }
   }
 
@@ -160,9 +160,9 @@ export async function getActivity(
     };
 
     // Get spend from joined receipt by litellmCallId (if exists)
-    const chargedCreditsStr = chargeMap.get(log.id);
-    const logSpend = chargedCreditsStr
-      ? Number.parseFloat(chargedCreditsStr)
+    const responseCostUsdStr = chargeMap.get(log.id);
+    const logSpend = responseCostUsdStr
+      ? Number.parseFloat(responseCostUsdStr)
       : 0;
 
     buckets.set(bucketEpoch, {
@@ -189,9 +189,9 @@ export async function getActivity(
   let totalTokens = 0;
   for (const log of allLogs) {
     totalTokens += log.tokensIn + log.tokensOut;
-    const chargedCreditsStr = chargeMap.get(log.id);
-    if (chargedCreditsStr) {
-      totalUserSpend += Number.parseFloat(chargedCreditsStr);
+    const responseCostUsdStr = chargeMap.get(log.id);
+    if (responseCostUsdStr) {
+      totalUserSpend += Number.parseFloat(responseCostUsdStr);
     }
   }
   const totalRequests = allLogs.length;
@@ -232,7 +232,7 @@ export async function getActivity(
     app: (log.metadata?.app as string) || "Unknown",
     tokensIn: log.tokensIn,
     tokensOut: log.tokensOut,
-    // Display user cost from charge_receipts (LEFT JOIN by litellmCallId)
+    // Display user cost in USD from charge_receipts (LEFT JOIN by litellmCallId)
     cost: chargeMap.get(log.id) ?? "—",
     speed: (log.metadata?.speed as number) || 0,
     finish: (log.metadata?.finishReason as string) || "unknown",

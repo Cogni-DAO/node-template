@@ -81,7 +81,6 @@ describe("app/_facades/payments/credits.server", () => {
       ownerUserId: sessionUser.id,
       balanceCredits: 0,
       defaultVirtualKeyId: "vk-1",
-      litellmVirtualKey: "vk-test",
     });
 
     mockConfirmCreditsPayment.mockResolvedValue({

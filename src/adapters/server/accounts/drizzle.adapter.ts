@@ -15,7 +15,7 @@
  * @public
  */
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
@@ -49,7 +49,6 @@ interface QueryableDb extends Pick<Database, "query" | "insert"> {
 
 interface VirtualKeyRow {
   id: string;
-  litellmVirtualKey: string;
 }
 
 type CreditLedgerRow = typeof creditLedger.$inferSelect;
@@ -85,7 +84,6 @@ export class DrizzleAccountService implements AccountService {
           ownerUserId: existingAccount.ownerUserId,
           balanceCredits: this.toNumber(existingAccount.balanceCredits),
           defaultVirtualKeyId: defaultKey.id,
-          litellmVirtualKey: defaultKey.litellmVirtualKey,
         };
       }
 
@@ -109,7 +107,6 @@ export class DrizzleAccountService implements AccountService {
         ownerUserId: userId,
         balanceCredits: 0,
         defaultVirtualKeyId: createdKey.id,
-        litellmVirtualKey: createdKey.litellmVirtualKey,
       };
     });
   }
@@ -407,7 +404,6 @@ export class DrizzleAccountService implements AccountService {
 
     return {
       id: defaultKey.id,
-      litellmVirtualKey: defaultKey.litellmVirtualKey,
     };
   }
 
@@ -416,68 +412,17 @@ export class DrizzleAccountService implements AccountService {
     billingAccountId: string,
     params: { label?: string }
   ): Promise<VirtualKeyRow> {
-    const env = serverEnv();
-
-    // In test mode, avoid network calls and generate deterministic key
-    if (env.isTestMode) {
-      const fakeKey = this.generateVirtualKey(billingAccountId);
-      const [created] = await tx
-        .insert(virtualKeys)
-        .values({
-          billingAccountId,
-          litellmVirtualKey: fakeKey,
-          label: params.label ?? "Default",
-          isDefault: true,
-          active: true,
-        })
-        .returning({
-          id: virtualKeys.id,
-          litellmVirtualKey: virtualKeys.litellmVirtualKey,
-        });
-
-      if (!created) {
-        throw new VirtualKeyNotFoundPortError(billingAccountId);
-      }
-
-      return created;
-    }
-
-    const response = await fetch(`${env.LITELLM_BASE_URL}/key/generate`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.LITELLM_MASTER_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        metadata: { cogni_billing_account_id: billingAccountId },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed to generate LiteLLM virtual key: ${response.status} ${response.statusText}`
-      );
-    }
-
-    const json = (await response.json()) as { key?: string };
-    const litellmVirtualKey = json.key;
-
-    if (!litellmVirtualKey) {
-      throw new Error("LiteLLM response missing key");
-    }
-
+    // MVP: virtual_keys is scope/FK handle only. Auth uses LITELLM_MASTER_KEY from env.
     const [created] = await tx
       .insert(virtualKeys)
       .values({
         billingAccountId,
-        litellmVirtualKey,
         label: params.label ?? "Default",
         isDefault: true,
         active: true,
       })
       .returning({
         id: virtualKeys.id,
-        litellmVirtualKey: virtualKeys.litellmVirtualKey,
       });
 
     if (!created) {
@@ -489,11 +434,6 @@ export class DrizzleAccountService implements AccountService {
 
   private toNumber(value: number | string | bigint): number {
     return typeof value === "number" ? value : Number(value);
-  }
-
-  private generateVirtualKey(billingAccountId: string): string {
-    const randomSegment = randomBytes(16).toString("base64url");
-    return `vk-${billingAccountId.slice(0, 8)}-${randomSegment}`;
   }
 
   private normalizeAmount(

@@ -20,7 +20,6 @@ export type { Message } from "@/core";
 export interface LlmCaller {
   billingAccountId: string;
   virtualKeyId: string;
-  litellmVirtualKey: string;
 }
 
 export interface CompletionStreamParams {

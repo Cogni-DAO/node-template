@@ -36,7 +36,6 @@ describe("features/ai/services/completion (stream)", () => {
   const createTestCaller = (): LlmCaller => ({
     billingAccountId: "billing-test-user",
     virtualKeyId: "virtual-key-123",
-    litellmVirtualKey: "vk-test-key",
   });
 
   it("should orchestrate streaming flow and bill on completion", async () => {
