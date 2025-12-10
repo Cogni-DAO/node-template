@@ -64,7 +64,7 @@
 **Constants** (add to `src/shared/web3/chain.ts`):
 
 - `MIN_PAYMENT_CENTS = 100`, `MAX_PAYMENT_CENTS = 1_000_000` (in core/payments/rules.ts)
-- [x] `MIN_CONFIRMATIONS = 5`
+- [x] `MIN_CONFIRMATIONS` - Defined in `src/shared/web3/chain.ts`
 - `PAYMENT_INTENT_TTL_MS = 30 * 60 * 1000` (in core/payments/rules.ts)
 - `PENDING_UNVERIFIED_TTL_MS = 24 * 60 * 60 * 1000` (in core/payments/rules.ts)
 - [x] `VERIFY_THROTTLE_SECONDS = 10` (GET polling throttle)
@@ -383,7 +383,7 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 
 2. **Query chain via EvmOnchainClient:** (see [On-Chain Infrastructure](ONCHAIN_READERS.md#shared-evm-infrastructure))
    - Fetch transaction and receipt, decode ERC20 Transfer log, compute confirmations
-   - Return `PENDING` if confirmations < MIN_CONFIRMATIONS (5)
+   - Return `PENDING` if confirmations < MIN_CONFIRMATIONS
    - Return `FAILED` with specific error code for: TX_NOT_FOUND, TX_REVERTED, TOKEN_TRANSFER_NOT_FOUND, SENDER_MISMATCH, RECIPIENT_MISMATCH, AMOUNT_MISMATCH
 
 3. **Return VERIFIED:** All validations passed
