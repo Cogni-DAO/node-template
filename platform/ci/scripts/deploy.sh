@@ -697,15 +697,28 @@ check_url() {
   local label="$2"
 
   for i in $(seq 1 "$max_attempts"); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    # Capture response body and HTTP status
+    local response
+    local http_code
+    response=$(curl -sS -w "\n%{http_code}" "$url" 2>&1)
+    http_code=$(echo "$response" | tail -n1)
+    local body=$(echo "$response" | sed '$d')
+
+    if [ "$http_code" = "200" ]; then
       log_info "✅ $label health check passed: $url"
       return 0
     fi
-    log_warn "Attempt ${i}/${max_attempts}: $label not ready yet, waiting ${sleep_seconds}s..."
+
+    log_warn "Attempt ${i}/${max_attempts}: $label not ready yet (HTTP $http_code), waiting ${sleep_seconds}s..."
+    if [ $i -eq $max_attempts ]; then
+      # On final attempt, show response body for debugging
+      log_error "❌ $label did not become ready after $((max_attempts * sleep_seconds))s: $url"
+      log_error "HTTP Status: $http_code"
+      log_error "Response body: $body"
+    fi
     sleep "$sleep_seconds"
   done
 
-  log_error "❌ $label did not become ready after $((max_attempts * sleep_seconds))s: $url"
   return 1
 }
 
