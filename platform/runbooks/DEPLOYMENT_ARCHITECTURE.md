@@ -181,8 +181,9 @@ POSTGRES_DB=${APP_DB_NAME}
 
 ## Health Validation
 
-1. **Container healthchecks**: Docker HEALTHCHECK in Dockerfile
-2. **App health**: `https://${domain}/health` successful curl
+1. **Container healthchecks**: Docker HEALTHCHECK uses `/readyz` (full validation)
+2. **Deployment readiness**: `https://${domain}/readyz` successful curl (hard gate)
+3. **Liveness probe**: `/livez` available for fast boot verification
 
 ## Current State
 

@@ -27,7 +27,8 @@ Deploy Next.js container on Spheron (managed Akash layer) via OpenTofu and bind 
 - **`infra/terraform/spheron/main.tf`** - OpenTofu configuration with Spheron provider, autoscaling (1-3 replicas), health checks
 - **`infra/terraform/spheron/AGENTS.md`** - Deployment documentation and usage instructions
 - **`Dockerfile`** - Production container build with standalone Next.js output
-- **`src/app/health/route.ts`** - Health endpoint returning JSON status for Spheron monitoring
+- **`src/app/(infra)/livez/route.ts`** - Liveness probe (fast, no deps)
+- **`src/app/(infra)/readyz/route.ts`** - Readiness probe (env+secrets validation)
 
 ### Architecture Context
 

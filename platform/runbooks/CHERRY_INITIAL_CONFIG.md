@@ -113,7 +113,12 @@ tofu apply
 Test endpoints:
 
 ```bash
-curl -I https://your-domain.com/health
+# Liveness (fast, no deps)
+curl -I https://your-domain.com/livez
+# Expected: HTTP/2 200
+
+# Readiness (full validation)
+curl -I https://your-domain.com/readyz
 # Expected: HTTP/2 200
 
 docker ps
@@ -144,7 +149,8 @@ docker ps
 
 - Check app container status: `docker ps`
 - Verify internal network: `docker network ls`
-- Test direct app connection: `curl http://VM_IP:3000/health`
+- Test liveness: `curl http://VM_IP:3000/livez`
+- Test readiness: `curl http://VM_IP:3000/readyz`
 
 ## Outputs
 

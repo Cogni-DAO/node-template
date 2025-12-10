@@ -281,8 +281,8 @@ services/{name}/src/
 
 ```typescript
 // Required from Phase 2/3
-GET /healthz    → 200 OK if process is alive
-GET /readyz     → 200 OK if ready to accept traffic
+GET /livez      → 200 OK if process is alive (no deps)
+GET /readyz     → 200 OK if ready to accept traffic (env+secrets+DB)
 
 // Added in Phase 4
 GET /metrics    → Prometheus format metrics
