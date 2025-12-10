@@ -27,7 +27,6 @@ export interface SeedUserParams {
 export interface SeedBillingParams {
   balanceCredits?: number | bigint;
   virtualKeyLabel?: string;
-  litellmVirtualKey?: string;
 }
 
 export interface SeededAuthData {
@@ -91,13 +90,11 @@ export async function seedAuthenticatedUser(
     throw new Error("Failed to create test billing account");
   }
 
-  // Create virtual key
+  // MVP: virtual_keys is scope/FK handle only. Auth uses LITELLM_MASTER_KEY from env.
   const [virtualKey] = await db
     .insert(virtualKeys)
     .values({
       billingAccountId: billingAccount.id,
-      litellmVirtualKey:
-        billingParams.litellmVirtualKey ?? `vk-test-${user.id}`,
       label: billingParams.virtualKeyLabel ?? "Test Default",
       isDefault: true,
       active: true,

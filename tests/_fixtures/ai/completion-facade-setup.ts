@@ -32,7 +32,6 @@ export function setupCompletionFacadeTest() {
     mockBillingAccount: {
       id: "test-billing-account",
       defaultVirtualKeyId: "test-vk-id",
-      litellmVirtualKey: "test-litellm-key",
     },
   };
 }

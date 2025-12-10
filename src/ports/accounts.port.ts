@@ -94,7 +94,6 @@ export interface BillingAccount {
   ownerUserId: string;
   balanceCredits: number;
   defaultVirtualKeyId: string;
-  litellmVirtualKey: string;
 }
 
 export interface CreditLedgerEntry {

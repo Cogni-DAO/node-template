@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-30
+- **Last reviewed:** 2025-12-10
 - **Status:** stable
 
 ## Purpose
@@ -53,9 +53,11 @@ pnpm test:stack:setup
 # Start infrastructure for testing
 pnpm dev:stack:test  # or pnpm docker:test:stack:fast
 
-# Run stack tests (automatically resets test database)
+# Run stack tests (automatically polls /livez and /readyz, resets test database)
 pnpm test:stack:dev  # or pnpm test:stack:docker
 ```
+
+**Probe validation**: `setup/wait-for-probes.ts` runs as vitest globalSetup, polling `/livez` (20s budget) then `/readyz` (120s budget) before any tests execute. Tests fail fast if stack not ready.
 
 ## Standards
 

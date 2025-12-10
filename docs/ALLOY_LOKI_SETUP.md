@@ -226,7 +226,7 @@ Open http://127.0.0.1:12345 in your browser:
 
 **Filtering:**
 
-- Drop health check logs: `{service="app"} |= "GET /health"`
+- Drop probe logs: `{service="app"} |= "GET /livez"` or `{service="app"} |= "GET /readyz"`
 - Drop metrics endpoint logs: `{service="app"} |= "GET /metrics"`
 
 **Structured Metadata:**

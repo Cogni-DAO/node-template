@@ -127,7 +127,6 @@ describe("app/_facades/ai/completion.server", () => {
       expect(executeCall?.[5]).toEqual({
         billingAccountId: "billing-test-account-id",
         virtualKeyId: "virtual-key-1",
-        litellmVirtualKey: "vk-test-123",
       });
 
       expect(

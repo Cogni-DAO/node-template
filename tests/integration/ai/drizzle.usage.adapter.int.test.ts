@@ -103,18 +103,16 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       },
     ]);
 
-    // Seed virtual keys
+    // MVP: virtual_keys is scope/FK handle only
     await db.insert(virtualKeys).values([
       {
         id: accountA.virtualKeyId,
         billingAccountId: accountA.billingAccountId,
-        litellmVirtualKey: "vk-a",
         isDefault: true,
       },
       {
         id: accountB.virtualKeyId,
         billingAccountId: accountB.billingAccountId,
-        litellmVirtualKey: "vk-b",
         isDefault: true,
       },
     ]);
