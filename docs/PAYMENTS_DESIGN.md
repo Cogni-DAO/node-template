@@ -4,7 +4,7 @@
 
 **Status:** Design phase - ready for implementation
 
-**Purpose:** MVP payment system with durable state machine, two-port architecture (PaymentAttemptRepository + OnChainVerifier), stub verification on Ethereum Sepolia. Real Ponder-backed verification deferred to Phase 3 (Base mainnet).
+**Purpose:** Production payment system with durable state machine, two-port architecture (PaymentAttemptRepository + OnChainVerifier). Real EVM RPC verification implemented via viem.
 
 ---
 
@@ -126,33 +126,33 @@
 
 ---
 
-### Phase 3: EVM RPC Verification (Next - Direct RPC with viem)
+### Phase 3: EVM RPC Verification ✅ COMPLETE
 
 **Objective:** Implement real on-chain verification using direct RPC queries via viem. No indexer dependency.
 
 **Implementation:**
 
-- [ ] Create `adapters/server/payments/evm-rpc-onchain-verifier.adapter.ts` implementing OnChainVerifier port
-- [ ] Inject `EvmOnchainClient` dependency (see [ONCHAIN_READERS.md](ONCHAIN_READERS.md#shared-evm-infrastructure))
-- [ ] Read canonical config:
+- [x] Create `adapters/server/payments/evm-rpc-onchain-verifier.adapter.ts` implementing OnChainVerifier port
+- [x] Inject `EvmOnchainClient` dependency (see [ONCHAIN_READERS.md](ONCHAIN_READERS.md#shared-evm-infrastructure))
+- [x] Read canonical config:
   - `chainId` from `getWidgetConfig().chainId` (sourced from `.cogni/repo-spec.yaml` `cogni_dao.chain_id`, validated against `CHAIN_ID` constant)
   - `receivingAddress` from `getWidgetConfig().receivingAddress` (sourced from `.cogni/repo-spec.yaml` `payments_in.widget.receiving_address`)
   - `tokenAddress` from `USDC_TOKEN_ADDRESS` constant (`@/shared/web3/chain`)
-- [ ] Assert caller params match canonical config (immediate failure if mismatch)
-- [ ] Use `EvmOnchainClient` for all RPC operations: getTransaction, getTransactionReceipt, getBlockNumber
-- [ ] Decode ERC20 Transfer log, compute confirmations
-- [ ] Map failure conditions to PaymentErrorCode (see section 5)
+- [x] Assert caller params match canonical config (immediate failure if mismatch)
+- [x] Use `EvmOnchainClient` for all RPC operations: getTransaction, getTransactionReceipt, getBlockNumber
+- [x] Decode ERC20 Transfer log, compute confirmations
+- [x] Map failure conditions to PaymentErrorCode (see section 5)
 
 **Wiring & Tests:**
 
-- [ ] Wire DI in `bootstrap/container.ts`:
+- [x] Wire DI in `bootstrap/container.ts`:
   - `APP_ENV=test` → FakeOnChainVerifierAdapter (in-memory, no RPC)
   - `APP_ENV=production|preview|dev` → EvmRpcOnChainVerifierAdapter with ViemEvmOnchainClient
-- [ ] Wire EvmOnchainClient in DI:
+- [x] Wire EvmOnchainClient in DI:
   - `APP_ENV=test` → FakeEvmOnchainClient
   - `APP_ENV=production|preview|dev` → ViemEvmOnchainClient
 - [ ] Add smoke test: run EvmRpcOnChainVerifierAdapter against known-good tx on Sepolia/Base testnet
-- [ ] Unit tests: use FakeEvmOnchainClient to simulate all verification branches (success, pending, each failure mode)
+- [x] Unit tests: use FakeEvmOnchainClient to simulate all verification branches (success, pending, each failure mode)
 
 **Invariants:**
 
@@ -181,7 +181,7 @@
 
 **Scope:** Single chain (configured via repo-spec.yaml: Ethereum Sepolia 11155111 for testing, Base mainnet 8453 for production). Single token (USDC), single payment type (credit_topup). No multi-chain, refunds, partial fills, or subscriptions.
 
-**Flow:** Client creates attempt → executes on-chain USDC transfer → submits txHash → backend calls OnChainVerifier (MVP: stubbed, Phase 3: direct RPC via viem) → credits balance.
+**Flow:** Client creates attempt → executes on-chain USDC transfer → submits txHash → backend calls OnChainVerifier (real EVM RPC verification via viem) → credits balance.
 
 **Endpoints:**
 
@@ -196,7 +196,7 @@
 **Three Invariants:**
 
 1. **Sender binding:** Receipt sender MUST match session wallet (enforced by OnChainVerifier in Phase 3)
-2. **Receipt validation:** Token/recipient/amount MUST be verified via OnChainVerifier port (stubbed in MVP, viem RPC in Phase 3)
+2. **Receipt validation:** Token/recipient/amount MUST be verified via OnChainVerifier port (real EVM RPC verification via viem)
 3. **Exactly-once credit:** DB constraints MUST prevent double-credit
 
 ---
@@ -206,7 +206,7 @@
 ### Security Invariants
 
 - **MUST** capture `from_address` from SIWE session wallet at attempt creation (checksum via `getAddress()`)
-- **MUST** call OnChainVerifier port before crediting (stubbed in MVP, viem RPC in Phase 3)
+- **MUST** call OnChainVerifier port before crediting (real EVM RPC verification via viem)
 - **MUST** match token_address to canonical USDC on configured chain
 - **MUST** require `amount >= expected_usdc_amount` (enforced by OnChainVerifier in Phase 3)
 - **MUST** never trust client-supplied txHash for crediting - verification is backend-only
@@ -371,9 +371,7 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 
 **Status values:** `VERIFIED` | `PENDING` | `FAILED`
 
-**MVP (Stub Adapter):** Always returns `{ status: VERIFIED }` - real validation deferred to Phase 3.
-
-**Phase 3 (EvmRpcOnChainVerifierAdapter):** Direct RPC verification with canonical config validation:
+**Production (EvmRpcOnChainVerifierAdapter):** Direct RPC verification with canonical config validation:
 
 1. **Validate caller params against canonical config:**
    - Read: `chainId` from `getWidgetConfig().chainId`, `receivingAddress` from `getWidgetConfig().receivingAddress`, `tokenAddress` from `USDC_TOKEN_ADDRESS`

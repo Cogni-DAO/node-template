@@ -133,7 +133,6 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── ENVIRONMENTS.md # environment configuration
 [x] ├── ERROR_HANDLING_ARCHITECTURE.md # error handling patterns
 [x] ├── FEATURE_DEVELOPMENT_GUIDE.md # feature development workflows
-[x] ├── IMPLEMENTATION_PLAN.md # implementation roadmap
 [x] ├── SETUP.md # developer setup guide
 [x] ├── STYLE.md # code style guide
 [x] ├── TESTING.md # testing strategy
@@ -271,7 +270,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── clock.port.ts # Clock { now(): Date }
 [x] │ ├── accounts.port.ts # AccountService interface (create, debit, credit)
 [x] │ ├── payment-attempt.port.ts # PaymentAttemptRepository interface
-[x] │ ├── onchain-verifier.port.ts # OnChainVerifier interface (stubbed for MVP)
+[x] │ ├── onchain-verifier.port.ts # OnChainVerifier interface (real EVM RPC verification)
 [x] │ └── index.ts # port exports
 [ ] │ ├── wallet.port.ts # WalletService { verifySignature(...) }
 [ ] │ ├── auth.port.ts # AuthService { issueNonce, verifySiwe, session }
@@ -295,7 +294,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ │ └── index.ts # db exports
 [x] │ │ ├── payments/ # payment adapters
 [x] │ │ │ ├── drizzle-payment-attempt.adapter.ts
-[x] │ │ │ └── ponder-onchain-verifier.adapter.ts # stubbed for MVP
+[x] │ │ │ └── ponder-onchain-verifier.adapter.ts # legacy stub (replaced by evm-rpc-onchain-verifier.adapter.ts)
 [x] │ │ ├── time/system.adapter.ts # system clock
 [x] │ │ └── index.ts # server adapter exports
 [x] │ └── test/ # fake implementations for CI
