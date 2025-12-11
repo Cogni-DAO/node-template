@@ -1,10 +1,12 @@
 # Payments: USDC with Backend Verification
 
-**MVP Chain:** Ethereum Sepolia (11155111) — **Phase 3 Chain:** Base mainnet (8453)
+**MVP Chain:** Ethereum Sepolia (11155111) — **Production Chain:** Base mainnet (8453)
 
 **Status:** Design phase - ready for implementation
 
 **Purpose:** Production payment system with durable state machine, two-port architecture (PaymentAttemptRepository + OnChainVerifier). Real EVM RPC verification implemented via viem.
+
+**Chain Policy:** Sepolia is test-only for development and temporary test fixtures. Production deployments MUST use Base mainnet. The `RepoSpecChainName` enum supports both chains during the transition period; Sepolia support will be removed once the DAO is fully deployed on Base.
 
 ---
 

@@ -18,15 +18,7 @@ import { parse } from "yaml";
 
 import { CHAIN_ID } from "@/shared/web3/chain";
 
-interface RepoSpec {
-  cogni_dao?: { chain_id?: unknown };
-  payments_in?: {
-    credits_topup?: {
-      provider?: unknown;
-      receiving_address?: unknown;
-    };
-  };
-}
+import { type RepoSpec, repoSpecSchema } from "./repoSpec.schema";
 
 export interface InboundPaymentConfig {
   chainId: number;
@@ -35,11 +27,6 @@ export interface InboundPaymentConfig {
 }
 
 let cachedPaymentConfig: InboundPaymentConfig | null = null;
-
-function isValidEvmAddress(address: string | undefined): address is string {
-  if (!address) return false;
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
-}
 
 function loadRepoSpec(): RepoSpec {
   const repoSpecPath = path.join(process.cwd(), ".cogni", "repo-spec.yaml");
@@ -52,17 +39,31 @@ function loadRepoSpec(): RepoSpec {
 
   const content = fs.readFileSync(repoSpecPath, "utf8");
 
+  let parsed: unknown;
   try {
-    return parse(content) as RepoSpec;
-  } catch {
+    parsed = parse(content);
+  } catch (error) {
     throw new Error(
-      "[repo-spec] Failed to parse .cogni/repo-spec.yaml; ensure valid YAML"
+      `[repo-spec] Failed to parse .cogni/repo-spec.yaml; ensure valid YAML: ${error instanceof Error ? error.message : String(error)}`
     );
   }
+
+  const result = repoSpecSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(
+      `[repo-spec] Invalid repo-spec.yaml structure: ${result.error.message}`
+    );
+  }
+
+  return result.data;
 }
 
 function validateAndMap(spec: RepoSpec): InboundPaymentConfig {
-  const chainId = Number(spec?.cogni_dao?.chain_id);
+  // Convert chain_id to number (supports both string and number from YAML)
+  const chainId =
+    typeof spec.cogni_dao.chain_id === "string"
+      ? Number(spec.cogni_dao.chain_id)
+      : spec.cogni_dao.chain_id;
 
   if (!Number.isFinite(chainId)) {
     throw new Error(
@@ -70,33 +71,19 @@ function validateAndMap(spec: RepoSpec): InboundPaymentConfig {
     );
   }
 
+  // TODO: Remove Sepolia (11155111) support from RepoSpecChainName enum once DAO is deployed on Base mainnet
   if (chainId !== CHAIN_ID) {
     throw new Error(
       `[repo-spec] Chain mismatch: repo-spec declares ${chainId}, app requires ${CHAIN_ID}`
     );
   }
 
-  const receivingAddress = spec?.payments_in?.credits_topup?.receiving_address;
-  if (
-    typeof receivingAddress !== "string" ||
-    !isValidEvmAddress(receivingAddress.trim())
-  ) {
-    throw new Error(
-      "[repo-spec] Invalid payments_in.credits_topup.receiving_address; expected EVM address (0x + 40 hex chars)"
-    );
-  }
-
-  const provider = spec?.payments_in?.credits_topup?.provider;
-  if (typeof provider !== "string" || provider.trim().length === 0) {
-    throw new Error(
-      "[repo-spec] Missing payments_in.credits_topup.provider; specify payment provider in repo-spec"
-    );
-  }
+  const topup = spec.payments_in.credits_topup;
 
   return {
     chainId,
-    receivingAddress: receivingAddress.trim(),
-    provider: provider.trim(),
+    receivingAddress: topup.receiving_address.trim(),
+    provider: topup.provider.trim(),
   };
 }
 

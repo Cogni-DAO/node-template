@@ -155,4 +155,112 @@ describe("getPaymentConfig (repo-spec)", () => {
       cleanup(tmpDir);
     }
   });
+
+  it("accepts chain_id as a number (not just string)", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: ${CHAIN_ID}`,
+        "payments_in:",
+        "  credits_topup:",
+        "    provider: cogni-usdc-backend-v1",
+        '    receiving_address: "0x1111111111111111111111111111111111111111"',
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      const config = getPaymentConfig();
+
+      expect(config.chainId).toBe(CHAIN_ID);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("throws on invalid EVM address format (schema validation)", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: "${CHAIN_ID}"`,
+        "payments_in:",
+        "  credits_topup:",
+        "    provider: test-provider",
+        '    receiving_address: "not-an-address"',
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("throws on invalid chain name in allowed_chains", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: "${CHAIN_ID}"`,
+        "payments_in:",
+        "  credits_topup:",
+        "    provider: test-provider",
+        '    receiving_address: "0x1111111111111111111111111111111111111111"',
+        "    allowed_chains:",
+        '      - "InvalidChain"',
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("throws on invalid token name in allowed_tokens", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: "${CHAIN_ID}"`,
+        "payments_in:",
+        "  credits_topup:",
+        "    provider: test-provider",
+        '    receiving_address: "0x1111111111111111111111111111111111111111"',
+        "    allowed_tokens:",
+        '      - "NOTAUSDC"',
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("throws when payments_in.credits_topup is missing", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: "${CHAIN_ID}"`,
+        "payments_in:", // missing credits_topup
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
 });

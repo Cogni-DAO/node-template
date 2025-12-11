@@ -39,9 +39,10 @@ Server-only configuration helpers sourced from versioned repo metadata (e.g., `.
 ## Public Surface
 
 - **Exports:** `getPaymentConfig()`, `InboundPaymentConfig` - server-only helpers reading repo-spec metadata
+- **Exports (schema):** `repoSpecSchema`, `creditsTopupSpecSchema`, `RepoSpec`, `CreditsTopupSpec`, `RepoSpecChainName`, `RepoSpecTokenName` - Zod schemas and derived types
 - **Routes/CLI:** none
 - **Env/Config keys:** none (reads versioned files only)
-- **Files considered API:** index.ts, repoSpec.server.ts
+- **Files considered API:** index.ts, repoSpec.server.ts, repoSpec.schema.ts
 
 ## Responsibilities
 
@@ -56,13 +57,14 @@ Server-only configuration helpers sourced from versioned repo metadata (e.g., `.
 ## Standards
 
 - Helpers must read repo-spec from disk on the server only and cache parsed results.
+- Schema-first validation: All repo-spec structures validated via Zod schemas at runtime; types derived from schemas.
 - No env-based overrides for governance-managed addresses or chain configuration.
 - Export through `index.ts` entry point only.
 
 ## Dependencies
 
 - **Internal:** `@/shared/web3` (chain constants)
-- **External:** yaml parser, Node fs/path
+- **External:** Zod (schema validation), yaml parser, Node fs/path
 
 ## Change Protocol
 
@@ -74,3 +76,5 @@ Server-only configuration helpers sourced from versioned repo metadata (e.g., `.
 
 - Repo-spec changes require a server restart to refresh cached payment config.
 - Reads from `payments_in.credits_topup.*` path only - no fallback to legacy widget paths.
+- Schema validates: EVM address format, non-empty provider, allowed chains (Sepolia | Base), allowed tokens (USDC).
+- Chain policy: Sepolia is test-only; production repos must use Base mainnet (8453). Sepolia (11155111) support will be removed from `RepoSpecChainName` enum once DAO is fully deployed on Base.
