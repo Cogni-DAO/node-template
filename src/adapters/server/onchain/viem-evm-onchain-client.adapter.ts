@@ -23,7 +23,7 @@ import {
 
 import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import { serverEnv } from "@/shared/env";
-import { CHAIN } from "@/shared/web3";
+import { CHAIN, ERC20_ABI } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
 /**
@@ -135,8 +135,22 @@ export class ViemEvmOnchainClient implements EvmOnchainClient {
     return logs;
   }
 
-  async getBalance(address: `0x${string}`): Promise<bigint> {
+  async getNativeBalance(address: `0x${string}`): Promise<bigint> {
     const client = this.getClient();
     return client.getBalance({ address });
+  }
+
+  async getErc20Balance(params: {
+    tokenAddress: `0x${string}`;
+    holderAddress: `0x${string}`;
+  }): Promise<bigint> {
+    const client = this.getClient();
+    const balance = await client.readContract({
+      address: params.tokenAddress,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [params.holderAddress],
+    });
+    return balance as bigint;
   }
 }

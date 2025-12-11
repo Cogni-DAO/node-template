@@ -3,11 +3,11 @@
 
 /**
  * Module: `@features/treasury/components/TreasuryBadge`
- * Purpose: Displays DAO treasury ETH balance in header as clickable link to block explorer.
+ * Purpose: Displays DAO treasury USDC balance in header as clickable link to block explorer.
  * Scope: Presentation component using useTreasurySnapshot hook. Client-side only. Does not call APIs or perform RPC directly.
- * Invariants: Shows "Ξ --" on loading/error; no polling (hook handles fetch strategy); links to block explorer when data available.
+ * Invariants: Shows "$ --" on loading/error; no polling (hook handles fetch strategy); links to block explorer when data available.
  * Side-effects: none (pure presentation)
- * Notes: Phase 2: ETH only. Optional stale indicator for RPC timeouts. Links to Etherscan/Basescan based on chainId.
+ * Notes: Phase 2: USDC only. Optional stale indicator for RPC timeouts. Links to Etherscan/Basescan based on chainId.
  * Links: docs/ONCHAIN_READERS.md
  * @public
  */
@@ -20,24 +20,24 @@ import { useTreasurySnapshot } from "@/features/treasury/hooks/useTreasurySnapsh
 import { getAddressExplorerUrl } from "@/shared/web3";
 
 /**
- * Formats balance for display (e.g., "3,726.42" → "3,726")
+ * Formats USDC balance for display (e.g., "3726.42" → "3,726")
  * Strips decimals and formats with commas for readability
  */
 function formatBalanceForDisplay(balance: string): string {
-  const num = parseFloat(balance);
+  const num = Number.parseFloat(balance);
   if (Number.isNaN(num)) return "--";
   return Math.floor(num).toLocaleString("en-US");
 }
 
 /**
  * Treasury badge component for header display.
- * Shows DAO ETH balance with graceful degradation on errors.
+ * Shows DAO USDC balance with graceful degradation on errors.
  *
  * @returns Treasury badge element
  */
 export function TreasuryBadge(): ReactElement {
   const {
-    ethBalance,
+    usdcBalance,
     treasuryAddress,
     chainId,
     isLoading,
@@ -47,8 +47,8 @@ export function TreasuryBadge(): ReactElement {
 
   // Determine display value
   let displayValue = "--";
-  if (!isLoading && !error && ethBalance !== null) {
-    displayValue = formatBalanceForDisplay(ethBalance);
+  if (!isLoading && !error && usdcBalance !== null) {
+    displayValue = formatBalanceForDisplay(usdcBalance);
   }
 
   // Generate explorer URL if we have the data
@@ -64,7 +64,7 @@ export function TreasuryBadge(): ReactElement {
     <>
       <span className="text-muted-foreground">Treasury</span>
       <span className={`font-mono font-semibold ${textStyle}`}>
-        Ξ {displayValue}
+        $ {displayValue}
       </span>
     </>
   );

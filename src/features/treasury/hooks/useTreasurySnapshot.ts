@@ -7,7 +7,7 @@
  * Scope: Client-side only. Calls /api/v1/treasury/snapshot once per page load with long staleTime. Does not call RPC directly.
  * Invariants: NO refetchInterval, NO refetchOnWindowFocus; rely on staleTime only.
  * Side-effects: IO (HTTP GET to treasury snapshot API)
- * Notes: Phase 2: ETH balance only. Returns full snapshot (address, chainId, balance, staleWarning).
+ * Notes: Phase 2: USDC balance only. Returns full snapshot (address, chainId, balance, staleWarning).
  * Links: docs/ONCHAIN_READERS.md
  * @public
  */
@@ -25,7 +25,7 @@ const TREASURY_STALE_TIME_MS = 2 * 60 * 1000; // 2 minutes
  * No authentication required (public data).
  */
 async function fetchTreasurySnapshot(): Promise<TreasurySnapshotResponseV1> {
-  const res = await fetch("/api/v1/treasury/snapshot");
+  const res = await fetch("/api/v1/public/treasury/snapshot");
 
   if (!res.ok) {
     throw new Error(`Treasury snapshot fetch failed: ${res.status}`);
@@ -35,8 +35,8 @@ async function fetchTreasurySnapshot(): Promise<TreasurySnapshotResponseV1> {
 }
 
 export interface UseTreasurySnapshotResult {
-  /** ETH balance formatted as decimal string (e.g., "3.726") */
-  ethBalance: string | null;
+  /** USDC balance formatted as decimal string (e.g., "3726.42") */
+  usdcBalance: string | null;
   /** Treasury address from API response */
   treasuryAddress: string | null;
   /** Chain ID from API response */
@@ -65,14 +65,14 @@ export function useTreasurySnapshot(): UseTreasurySnapshotResult {
     retry: 1, // Retry once on failure
   });
 
-  // Extract ETH balance from first balance entry
-  const ethBalance =
+  // Extract USDC balance from first balance entry
+  const usdcBalance =
     data?.balances && data.balances.length > 0
       ? (data.balances[0]?.balanceFormatted ?? null)
       : null;
 
   return {
-    ethBalance,
+    usdcBalance,
     treasuryAddress: data?.treasuryAddress ?? null,
     chainId: data?.chainId ?? null,
     isLoading,

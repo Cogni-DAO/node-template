@@ -4,23 +4,24 @@
 /**
  * Module: `@adapters/server/onchain/viem-treasury`
  * Purpose: Treasury balance adapter using direct RPC calls via EvmOnchainClient.
- * Scope: Implements TreasuryReadPort for ETH balances using viem. Does not handle business logic.
- * Invariants: Validates chainId and treasuryAddress from repo-spec; uses EvmOnchainClient for all RPC.
+ * Scope: Implements TreasuryReadPort for USDC balances using viem. Does not handle business logic.
+ * Invariants: Validates chainId and treasuryAddress from repo-spec; uses EvmOnchainClient for all RPC; reads USDC address from chain config.
  * Side-effects: IO (RPC calls via EvmOnchainClient)
- * Notes: Phase 2: ETH only. Future: add ERC20 token support.
+ * Notes: Phase 2: USDC only. Queries ERC20 balance via getErc20Balance().
  * Links: docs/ONCHAIN_READERS.md
  * @public
  */
 
-import { formatEther, getAddress } from "viem";
+import { formatUnits, getAddress } from "viem";
 
 import type { TreasuryReadPort, TreasurySnapshot } from "@/ports";
 import { getPaymentConfig } from "@/shared/config/repoSpec.server";
+import { USDC_TOKEN_ADDRESS } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
 /**
  * Treasury adapter using EvmOnchainClient for direct RPC balance queries.
- * Phase 2: ETH balance only via getBalance().
+ * Phase 2: USDC balance only via getErc20Balance().
  */
 export class ViemTreasuryAdapter implements TreasuryReadPort {
   constructor(private readonly evmClient: EvmOnchainClient) {}
@@ -48,17 +49,19 @@ export class ViemTreasuryAdapter implements TreasuryReadPort {
       );
     }
 
-    // Phase 2: Only support ETH (native token)
+    // Phase 2: Only support USDC (no custom tokens yet)
     if (params.tokenAddresses && params.tokenAddresses.length > 0) {
       throw new Error(
-        "[ViemTreasuryAdapter] ERC20 token support not yet implemented (Phase 2: ETH only)"
+        "[ViemTreasuryAdapter] Custom token addresses not yet supported (Phase 2: USDC only)"
       );
     }
 
-    // Query ETH balance
-    const balanceWei = await this.evmClient.getBalance(
-      treasuryChecksummed as `0x${string}`
-    );
+    // Query USDC balance
+    const usdcAddress = getAddress(USDC_TOKEN_ADDRESS);
+    const balanceRaw = await this.evmClient.getErc20Balance({
+      tokenAddress: usdcAddress as `0x${string}`,
+      holderAddress: treasuryChecksummed as `0x${string}`,
+    });
     const blockNumber = await this.evmClient.getBlockNumber();
 
     return {
@@ -67,11 +70,11 @@ export class ViemTreasuryAdapter implements TreasuryReadPort {
       blockNumber,
       balances: [
         {
-          token: "ETH",
-          tokenAddress: null,
-          balanceWei,
-          balanceFormatted: formatEther(balanceWei),
-          decimals: 18,
+          token: "USDC",
+          tokenAddress: usdcAddress,
+          balanceWei: balanceRaw,
+          balanceFormatted: formatUnits(balanceRaw, 6), // USDC has 6 decimals
+          decimals: 6,
         },
       ],
       timestamp: Date.now(),

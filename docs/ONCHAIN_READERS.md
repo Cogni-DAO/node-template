@@ -49,7 +49,7 @@
 
 **Port:** `TreasuryReadPort.getTreasurySnapshot({ chainId, treasuryAddress, tokenAddresses? })`
 
-**API:** `GET /api/v1/treasury/snapshot`
+**API:** `GET /api/v1/public/treasury/snapshot` (public namespace, no auth required)
 
 - Calls TreasuryReadPort with strict timeout (3-5s)
 - On timeout or RPC error, returns 200 with `staleWarning: true`; never exposes raw RPC errors
