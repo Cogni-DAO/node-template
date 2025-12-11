@@ -39,7 +39,7 @@ Server-only configuration helpers sourced from versioned repo metadata (e.g., `.
 ## Public Surface
 
 - **Exports:** `getPaymentConfig()`, `InboundPaymentConfig` - server-only helpers reading repo-spec metadata
-- **Exports (schema):** `repoSpecSchema`, `creditsTopupSpecSchema`, `RepoSpec`, `CreditsTopupSpec`, `RepoSpecChainName`, `RepoSpecTokenName` - Zod schemas and derived types
+- **Exports (schema):** `repoSpecSchema`, `creditsTopupSpecSchema`, `RepoSpec`, `CreditsTopupSpec` - Zod schemas and derived types
 - **Routes/CLI:** none
 - **Env/Config keys:** none (reads versioned files only)
 - **Files considered API:** index.ts, repoSpec.server.ts, repoSpec.schema.ts
@@ -76,5 +76,6 @@ Server-only configuration helpers sourced from versioned repo metadata (e.g., `.
 
 - Repo-spec changes require a server restart to refresh cached payment config.
 - Reads from `payments_in.credits_topup.*` path only - no fallback to legacy widget paths.
-- Schema validates: EVM address format, non-empty provider, allowed chains (Sepolia | Base), allowed tokens (USDC).
-- Chain policy: Sepolia is test-only; production repos must use Base mainnet (8453). Sepolia (11155111) support will be removed from `RepoSpecChainName` enum once DAO is fully deployed on Base.
+- Schema validates structure: EVM address format, non-empty provider; `allowed_chains`/`allowed_tokens` are informational metadata (not enforced).
+- Chain alignment: `cogni_dao.chain_id` must match `CHAIN_ID` from `@/shared/web3/chain` or startup fails. See [CHAIN_CONFIG.md](../../../docs/CHAIN_CONFIG.md).
+- Use `getPaymentConfig()` for DAO wallet only; use `CHAIN_ID`/`USDC_TOKEN_ADDRESS` from `@/shared/web3/chain` for network constants.

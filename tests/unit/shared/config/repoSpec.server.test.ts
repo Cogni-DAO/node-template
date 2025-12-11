@@ -200,7 +200,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     }
   });
 
-  it("throws on invalid chain name in allowed_chains", async () => {
+  it("accepts any string values for allowed_chains (informational metadata)", async () => {
     const tmpDir = writeRepoSpec(
       [
         "cogni_dao:",
@@ -210,37 +210,18 @@ describe("getPaymentConfig (repo-spec)", () => {
         "    provider: test-provider",
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
         "    allowed_chains:",
-        '      - "InvalidChain"',
+        '      - "CustomChain"',
+        '      - "AnotherChain"',
       ].join("\n")
     );
     process.chdir(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
-      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
-    } finally {
-      cleanup(tmpDir);
-    }
-  });
-
-  it("throws on invalid token name in allowed_tokens", async () => {
-    const tmpDir = writeRepoSpec(
-      [
-        "cogni_dao:",
-        `  chain_id: "${CHAIN_ID}"`,
-        "payments_in:",
-        "  credits_topup:",
-        "    provider: test-provider",
-        '    receiving_address: "0x1111111111111111111111111111111111111111"',
-        "    allowed_tokens:",
-        '      - "NOTAUSDC"',
-      ].join("\n")
-    );
-    process.chdir(tmpDir);
-
-    try {
-      const { getPaymentConfig } = await loadPaymentConfig();
-      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+      const config = getPaymentConfig();
+      expect(config.receivingAddress).toBe(
+        "0x1111111111111111111111111111111111111111"
+      );
     } finally {
       cleanup(tmpDir);
     }

@@ -19,7 +19,11 @@ import type {
   VerificationResult,
 } from "@/ports";
 import { getPaymentConfig } from "@/shared/config/repoSpec.server";
-import { MIN_CONFIRMATIONS, USDC_TOKEN_ADDRESS } from "@/shared/web3/chain";
+import {
+  CHAIN_ID,
+  MIN_CONFIRMATIONS,
+  USDC_TOKEN_ADDRESS,
+} from "@/shared/web3/chain";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
 // ERC20 Transfer event ABI for decoding logs
@@ -78,7 +82,7 @@ export class EvmRpcOnChainVerifierAdapter implements OnChainVerifier {
     const config = getPaymentConfig();
     const canonicalToken = USDC_TOKEN_ADDRESS;
 
-    if (params.chainId !== config.chainId) {
+    if (params.chainId !== CHAIN_ID) {
       return failedResult("INVALID_CHAIN");
     }
 
