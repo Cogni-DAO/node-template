@@ -18,7 +18,8 @@ export default [
   // ========================================
   {
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["**/*.{test,spec}.{ts,tsx}"],
+    // Exclude tests (fixtures may need literals) and styles (cannot influence runtime chain selection)
+    ignores: ["**/*.{test,spec}.{ts,tsx}", "src/styles/**"],
     rules: {
       "no-restricted-syntax": [
         "error",
