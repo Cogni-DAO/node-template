@@ -3,11 +3,11 @@
 
 /**
  * Module: `@features/treasury/components/TreasuryBadge`
- * Purpose: Displays DAO treasury USDC balance in header as clickable link to block explorer.
+ * Purpose: Displays DAO treasury USDC balance in header as clickable link to Aragon DAO app.
  * Scope: Presentation component using useTreasurySnapshot hook. Client-side only. Does not call APIs or perform RPC directly.
- * Invariants: Shows "$ --" on loading/error; no polling (hook handles fetch strategy); links to block explorer when data available.
+ * Invariants: Shows "$ --" on loading/error; no polling (hook handles fetch strategy); links to Aragon DAO assets page when data available.
  * Side-effects: none (pure presentation)
- * Notes: Phase 2: USDC only. Optional stale indicator for RPC timeouts. Links to Etherscan/Basescan based on chainId.
+ * Notes: Phase 2: USDC only. Optional stale indicator for RPC timeouts. Links to app.aragon.org based on chainId.
  * Links: docs/ONCHAIN_READERS.md
  * @public
  */
@@ -17,7 +17,7 @@
 import Link from "next/link";
 import type { ReactElement } from "react";
 import { useTreasurySnapshot } from "@/features/treasury/hooks/useTreasurySnapshot";
-import { getAddressExplorerUrl } from "@/shared/web3";
+import { getDaoTreasuryUrl } from "@/shared/web3";
 
 /**
  * Formats USDC balance for display (e.g., "3726.42" → "3,726")
@@ -51,10 +51,10 @@ export function TreasuryBadge(): ReactElement {
     displayValue = formatBalanceForDisplay(usdcBalance);
   }
 
-  // Generate explorer URL if we have the data
+  // Generate Aragon DAO URL if we have the data
   const explorerUrl =
     treasuryAddress && chainId
-      ? getAddressExplorerUrl(chainId, treasuryAddress)
+      ? getDaoTreasuryUrl(chainId, treasuryAddress)
       : null;
 
   // Optional: Add visual indicator for stale data
@@ -79,8 +79,8 @@ export function TreasuryBadge(): ReactElement {
         className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-sm transition-colors hover:bg-accent"
         title={
           staleWarning
-            ? "Treasury balance unavailable (RPC timeout) - Click to view on block explorer"
-            : "DAO Treasury Balance - Click to view on block explorer"
+            ? "Treasury balance unavailable (RPC timeout) - Click to view on Aragon"
+            : "DAO Treasury Balance - Click to view on Aragon"
         }
       >
         {content}
