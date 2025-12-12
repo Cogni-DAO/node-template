@@ -55,3 +55,26 @@ export function getTransactionExplorerUrl(
   if (!base) return null;
   return `${base}/tx/${txHash}`;
 }
+
+/**
+ * Generates Aragon DAO app URL for a treasury address on the specified chain.
+ *
+ * @param chainId - Chain ID (from chain.ts CHAINS map)
+ * @param address - DAO treasury address
+ * @returns Aragon DAO assets URL or null if chain not supported
+ */
+export function getDaoTreasuryUrl(
+  chainId: number,
+  address: string
+): string | null {
+  // Map chain ID to Aragon network identifier
+  const networkMap: Record<number, string> = {
+    11155111: "ethereum-sepolia", // Sepolia testnet
+    8453: "base-mainnet", // Base mainnet
+  };
+
+  const network = networkMap[chainId];
+  if (!network) return null;
+
+  return `https://app.aragon.org/dao/${network}/${address}/assets`;
+}

@@ -9,6 +9,27 @@
 
 model_list:
   # ===== FREE MODELS =====
+
+  # Mistral
+  - model_name: devstral
+    litellm_params:
+      model: openrouter/mistralai/devstral-2512:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Devstral"
+      is_free: true
+      provider_key: "mistral"
+
+  # Kimi (MoonshotAI)
+  - model_name: kimi-k2
+    litellm_params:
+      model: openrouter/moonshotai/kimi-k2:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Kimi K2 Free"
+      is_free: true
+      provider_key: "kimi"
+
   # Amazon
   - model_name: nova-2-lite
     litellm_params:
@@ -34,12 +55,12 @@ model_list:
 
   # ===== PAID MODELS =====
   # OpenAI
-  - model_name: gpt-5-nano
+  - model_name: gpt-4o-mini
     litellm_params:
-      model: openrouter/openai/gpt-5-nano
+      model: openrouter/openai/gpt-4o-mini-2024-07-18
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "GPT-5 Nano"
+      display_name: "GPT-4o Mini"
       is_free: false
       provider_key: "openai"
 
@@ -120,12 +141,12 @@ model_list:
       provider_key: "google"
 
   # Kimi (MoonshotAI)
-  - model_name: kimi-k2
+  - model_name: kimi-k2-thinking
     litellm_params:
       model: openrouter/moonshotai/kimi-k2-thinking
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "Kimi K2"
+      display_name: "Kimi K2 Thinking"
       is_free: false
       provider_key: "kimi"
 
