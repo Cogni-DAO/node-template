@@ -4,7 +4,7 @@
 // Must run synchronously before React hydration to apply theme class
 (() => {
   try {
-    const theme = localStorage.getItem("theme") || "system";
+    const theme = localStorage.getItem("theme") || "dark";
     const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
       .matches
       ? "dark"
