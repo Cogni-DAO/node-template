@@ -15,7 +15,8 @@ Cogni is a DAO-first "org factory." This repo ships the **Node** — a sovereign
 
 ## Phase Checklist
 
-- [ ] **Phase 0**: Freeze Node Template
+- [ ] **Phase 0**: Node Formation MVP (manual steps remain)
+- [ ] **Phase 0.5**: Freeze Node Template
 - [ ] **Phase 1**: AI Core + Evals Foundation
 - [ ] **Phase 2**: Operator Services Scaffold
 - [ ] **Phase 3**: git-review-daemon Live
@@ -82,7 +83,18 @@ Operator shares CI/CD, observability, deploy invariants, and hex architecture wi
 
 ## Phases (Summary)
 
-### Phase 0: Freeze Node Template
+### Phase 0: Node Formation MVP
+
+Enable anyone to create their own Node (DAO + app). Manual steps remain for infra/GitHub setup.
+
+- Create `packages/setup-core/` with Aragon OSx encoding + SetupPlan schemas
+- Web wizard for DAO formation (wallet-signed, no private key env vars)
+- Server-side tx receipt verification
+- Export deployment record + repo-spec addresses
+
+→ See: [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)
+
+### Phase 0.5: Freeze Node Template
 
 Lock current hex architecture. Document what exists. All code is Node-owned.
 
@@ -156,6 +168,7 @@ Requirements:
 | -------------------------------------------------------------- | ---------------------------------- |
 | [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md) | Boundaries, invariants, boot seams |
 | [MVP Deliverables](docs/MVP_DELIVERABLES.md)                   | Scope lock, success criteria       |
+| [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)             | DAO formation tooling (Phase 0)    |
 | [AI Architecture & Evals](docs/AI_EVALS.md)                    | LangGraph, Langfuse, eval gates    |
 | [Services Migration Guide](docs/SERVICES_MIGRATION.md)         | Implementation checklist           |
 | [Architecture](docs/ARCHITECTURE.md)                           | Hex architecture details           |
