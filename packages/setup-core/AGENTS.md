@@ -22,10 +22,20 @@ Pure TypeScript package for Node Formation P0. Provides Aragon OSx encoding, add
 ```json
 {
   "layer": "packages",
-  "may_import": ["viem"],
-  "must_not_import": ["src", "services", "node:fs", "window"]
+  "may_import": ["packages"],
+  "must_not_import": [
+    "app",
+    "features",
+    "ports",
+    "core",
+    "adapters",
+    "shared",
+    "services"
+  ]
 }
 ```
+
+**External deps:** `viem` (ABI encoding). No Node.js APIs, no browser APIs.
 
 ## Public Surface
 

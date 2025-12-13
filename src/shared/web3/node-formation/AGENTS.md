@@ -21,9 +21,9 @@ Node Formation P0 web3 primitives: Aragon OSx ABIs, CogniSignal ABI, contract by
 
 ```json
 {
-  "layer": "shared/web3",
-  "may_import": ["viem/types"],
-  "must_not_import": ["@/core", "@/ports", "@/adapters", "@/features"]
+  "layer": "shared",
+  "may_import": ["shared", "types"],
+  "must_not_import": ["core", "ports", "adapters", "features", "app"]
 }
 ```
 
@@ -45,6 +45,17 @@ Node Formation P0 web3 primitives: Aragon OSx ABIs, CogniSignal ABI, contract by
 
 - This directory **does**: Provide minimal ABIs for DAO formation, export bytecode constants, maintain chain address mappings
 - This directory **does not**: Encode setup data (see `packages/setup-core`), make RPC calls, handle wallet signing
+
+## Usage
+
+```typescript
+import {
+  DAO_FACTORY_ABI,
+  TOKEN_VOTING_ABI,
+  COGNI_SIGNAL_ABI,
+  COGNI_SIGNAL_BYTECODE,
+} from "@/shared/web3/node-formation";
+```
 
 ## Standards
 
