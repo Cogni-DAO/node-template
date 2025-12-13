@@ -119,6 +119,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "playwright.config.mjs",
   "playwright.config.ts",
   "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
   "postcss.config.mjs",
   "public",
   "scripts",

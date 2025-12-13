@@ -113,7 +113,10 @@ export function encodeTokenVotingSetup(params: {
       symbol: params.tokenSettings.symbol,
     },
     mintSettings,
-    { target: params.targetConfig.target, operation: params.targetConfig.operation },
+    {
+      target: params.targetConfig.target,
+      operation: params.targetConfig.operation,
+    },
     params.minApprovals,
     params.pluginMetadata,
     [...params.excludedAccounts],

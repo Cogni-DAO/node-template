@@ -36,7 +36,7 @@ function splitWords(data: `0x${string}`): `0x${string}`[] {
   if (stripped.length % 64 !== 0) return [];
   const words: `0x${string}`[] = [];
   for (let i = 0; i < stripped.length; i += 64) {
-    words.push((`0x${stripped.slice(i, i + 64)}`) as `0x${string}`);
+    words.push(`0x${stripped.slice(i, i + 64)}` as `0x${string}`);
   }
   return words;
 }

@@ -33,6 +33,7 @@
       "@/ports": ["src/ports/index.ts"],
       "@/adapters/server": ["src/adapters/server/index.ts"],
       "@/shared": ["src/shared/index.ts"],
+      "@setup-core": ["packages/setup-core/src/index.ts"],
       "@setup-core/*": ["packages/setup-core/src/*"],
       "@features/*": ["src/features/*"],
       "@app/*": ["src/app/*"],

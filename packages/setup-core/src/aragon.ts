@@ -18,26 +18,23 @@ export type AragonOsxAddresses = {
   tokenVotingPluginRepo: HexAddress;
 };
 
-export const SUPPORTED_CHAIN_IDS = [8453, 84532, 11155111] as const;
+// Only BASE and SEPOLIA supported (matches chain.ts)
+export const SUPPORTED_CHAIN_IDS = [8453, 11155111] as const;
 export type SupportedChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
 
 /**
  * Hardcoded addresses from docs/NODE_FORMATION_SPEC.md (Appendix).
  * OSx v1.4.0 deployments.
  */
-export const ARAGON_OSX_ADDRESSES: Record<SupportedChainId, AragonOsxAddresses> = {
+export const ARAGON_OSX_ADDRESSES: Record<
+  SupportedChainId,
+  AragonOsxAddresses
+> = {
   // Base Mainnet (8453)
   8453: {
     daoFactory: "0xcc602EA573a42eBeC290f33F49D4A87177ebB8d2",
     pluginSetupProcessor: "0x91a851E9Ed7F2c6d41b15F76e4a88f5A37067cC9",
     tokenVotingPluginRepo: "0x2532570DcFb749A7F976136CC05648ef2a0f60b0",
-  },
-
-  // Base Sepolia (84532)
-  84532: {
-    daoFactory: "0x016CBa9bd729C30b16849b2c52744447767E9dab",
-    pluginSetupProcessor: "0xd97D409Ca645b108468c26d8506f3a4Bf9D0BE81",
-    tokenVotingPluginRepo: "0xdEbcF8779495a62156c6d1416628F60525984e9d",
   },
 
   // Sepolia (11155111)
