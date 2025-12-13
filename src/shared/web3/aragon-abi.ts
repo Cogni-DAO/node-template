@@ -14,6 +14,13 @@
 export const DAO_FACTORY_ABI = [
   {
     type: "function",
+    name: "pluginSetupProcessor",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
     name: "createDao",
     stateMutability: "nonpayable",
     inputs: [

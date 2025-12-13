@@ -24,14 +24,17 @@ export type TokenVotingVotingSettings = {
 };
 
 export type TokenVotingTokenSettings = {
-  token: HexAddress; // address
+  addr: HexAddress; // address (0x0 => deploy new token in Aragon setup)
   name: string;
   symbol: string;
 };
 
-export type TokenVotingMintSettings = {
+export type TokenVotingMintSettingsV1_3 = {
   receivers: readonly HexAddress[];
   amounts: readonly bigint[];
+};
+
+export type TokenVotingMintSettingsV1_4 = TokenVotingMintSettingsV1_3 & {
   ensureDelegationOnMint: boolean;
 };
 
@@ -43,38 +46,59 @@ export type TokenVotingTargetConfig = {
 export function encodeTokenVotingSetup(params: {
   votingSettings: TokenVotingVotingSettings;
   tokenSettings: TokenVotingTokenSettings;
-  mintSettings: TokenVotingMintSettings;
-  initialHolders: readonly HexAddress[];
-  initialVotingPower: readonly bigint[];
-  initialBalances: readonly bigint[];
-  admins: readonly HexAddress[];
-  // TokenVoting requires a list of allowed actions to be executed.
-  // For P0 we keep this fixed to `[]`.
-  targetConfig?: readonly TokenVotingTargetConfig[];
+  mintSettings: TokenVotingMintSettingsV1_3 | TokenVotingMintSettingsV1_4;
+  targetConfig: TokenVotingTargetConfig;
+  minApprovals: bigint;
+  pluginMetadata: Hex;
+  excludedAccounts: readonly HexAddress[];
+  /**
+   * Controls MintSettings encoding shape.
+   * - "v1.4": (receivers, amounts, ensureDelegationOnMint)
+   * - "v1.3": (receivers, amounts)
+   *
+   * IMPORTANT: Must match the deployed TokenVoting setup ABI for your chain.
+   */
+  mintSettingsVersion: "v1.4" | "v1.3";
 }): Hex {
-  const targetConfig = params.targetConfig ?? [];
-
-  // Layout based on `DAO_FORMATION_SCRIPT.md`:
+  // Layout based on NODE_FORMATION_SPEC.md / DAO_FORMATION_SCRIPT.md:
   // (
   //   VotingSettings,
   //   TokenSettings,
   //   MintSettings,
-  //   address[] initialHolders,
-  //   uint256[] initialVotingPower,
-  //   uint256[] initialBalances,
-  //   address[] admins,
-  //   TargetConfig[] targetConfig
+  //   TargetConfig,
+  //   uint256 minApprovals,
+  //   bytes pluginMetadata,
+  //   address[] excludedAccounts
   // )
+  const mintSettingsAbi =
+    params.mintSettingsVersion === "v1.4"
+      ? "(address[] receivers,uint256[] amounts,bool ensureDelegationOnMint) mintSettings,"
+      : "(address[] receivers,uint256[] amounts) mintSettings,";
+
   const abi = parseAbiParameters(
     "(uint8 votingMode,uint32 supportThreshold,uint32 minParticipation,uint64 minDuration,uint256 minProposerVotingPower) votingSettings," +
-      "(address token,string name,string symbol) tokenSettings," +
-      "(address[] receivers,uint256[] amounts,bool ensureDelegationOnMint) mintSettings," +
-      "address[] initialHolders," +
-      "uint256[] initialVotingPower," +
-      "uint256[] initialBalances," +
-      "address[] admins," +
-      "(address target,uint8 operation)[] targetConfig"
+      "(address addr,string name,string symbol) tokenSettings," +
+      mintSettingsAbi +
+      "(address target,uint8 operation) targetConfig," +
+      "uint256 minApprovals," +
+      "bytes pluginMetadata," +
+      "address[] excludedAccounts"
   );
+
+  const mintSettings =
+    params.mintSettingsVersion === "v1.4"
+      ? {
+          receivers: [...params.mintSettings.receivers],
+          amounts: [...params.mintSettings.amounts],
+          ensureDelegationOnMint:
+            "ensureDelegationOnMint" in params.mintSettings
+              ? params.mintSettings.ensureDelegationOnMint
+              : false,
+        }
+      : {
+          receivers: [...params.mintSettings.receivers],
+          amounts: [...params.mintSettings.amounts],
+        };
 
   return encodeAbiParameters(abi, [
     {
@@ -85,19 +109,14 @@ export function encodeTokenVotingSetup(params: {
       minProposerVotingPower: params.votingSettings.minProposerVotingPower,
     },
     {
-      token: params.tokenSettings.token,
+      addr: params.tokenSettings.addr,
       name: params.tokenSettings.name,
       symbol: params.tokenSettings.symbol,
     },
-    {
-      receivers: [...params.mintSettings.receivers],
-      amounts: [...params.mintSettings.amounts],
-      ensureDelegationOnMint: params.mintSettings.ensureDelegationOnMint,
-    },
-    [...params.initialHolders],
-    [...params.initialVotingPower],
-    [...params.initialBalances],
-    [...params.admins],
-    targetConfig.map((t) => ({ target: t.target, operation: t.operation })),
+    mintSettings,
+    { target: params.targetConfig.target, operation: params.targetConfig.operation },
+    params.minApprovals,
+    params.pluginMetadata,
+    [...params.excludedAccounts],
   ]);
 }
