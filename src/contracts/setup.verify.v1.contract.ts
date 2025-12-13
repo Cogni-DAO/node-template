@@ -22,17 +22,22 @@ export const setupVerifyOperation = {
   summary: "Verify DAO formation transactions",
   description:
     "Server derives addresses from tx receipts and verifies on-chain state (balanceOf, CogniSignal.DAO())",
-  input: z.object({
-    chainId: z
-      .number()
-      .int()
-      .refine((id) => (SUPPORTED_CHAIN_IDS as readonly number[]).includes(id), {
-        message: `chainId must be one of: ${SUPPORTED_CHAIN_IDS.join(", ")}`,
-      }),
-    daoTxHash: txHash.describe("DAOFactory.createDao transaction hash"),
-    signalTxHash: txHash.describe("CogniSignal deployment transaction hash"),
-    initialHolder: hexAddress.describe("Expected token recipient address"),
-  }),
+  input: z
+    .object({
+      chainId: z
+        .number()
+        .int()
+        .refine(
+          (id) => (SUPPORTED_CHAIN_IDS as readonly number[]).includes(id),
+          {
+            message: `chainId must be one of: ${SUPPORTED_CHAIN_IDS.join(", ")}`,
+          }
+        ),
+      daoTxHash: txHash.describe("DAOFactory.createDao transaction hash"),
+      signalTxHash: txHash.describe("CogniSignal deployment transaction hash"),
+      initialHolder: hexAddress.describe("Expected token recipient address"),
+    })
+    .strict(), // SECURITY: Reject any client-supplied addresses (must derive from receipts)
   output: z.discriminatedUnion("verified", [
     z.object({
       verified: z.literal(true),
