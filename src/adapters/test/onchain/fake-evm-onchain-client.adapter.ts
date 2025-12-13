@@ -12,7 +12,14 @@
  * @public
  */
 
-import type { Log, Transaction, TransactionReceipt } from "viem";
+import type {
+  Abi,
+  ContractFunctionArgs,
+  ContractFunctionName,
+  Log,
+  Transaction,
+  TransactionReceipt,
+} from "viem";
 
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
@@ -196,16 +203,24 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
     return code ?? null;
   }
 
-  async readContract(params: {
+  async readContract<
+    const TAbi extends Abi,
+    TFunctionName extends ContractFunctionName<TAbi, "view" | "pure">,
+    const TArgs extends ContractFunctionArgs<
+      TAbi,
+      "view" | "pure",
+      TFunctionName
+    >,
+  >(params: {
     address: `0x${string}`;
-    abi: readonly unknown[];
-    functionName: string;
-    args: readonly unknown[];
+    abi: TAbi;
+    functionName: TFunctionName;
+    args: TArgs;
   }): Promise<unknown> {
     this.readContractCalls.push({
       address: params.address,
-      functionName: params.functionName,
-      args: params.args,
+      functionName: String(params.functionName),
+      args: Array.isArray(params.args) ? [...params.args] : [],
     });
     const key = `${params.address.toLowerCase()}:${params.functionName}:${JSON.stringify(
       params.args

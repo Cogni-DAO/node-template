@@ -4,9 +4,10 @@
 /**
  * Module: `@shared/web3/cogni-signal-abi`
  * Purpose: Minimal CogniSignal ABI needed for Node Formation P0.
- * Scope: ABI constants only.
+ * Scope: ABI constants only; does not include full CogniSignal interface.
  * Invariants: Minimal surface; only include what P0 uses.
  * Side-effects: none
+ * Links: docs/NODE_FORMATION_SPEC.md
  * @public
  */
 

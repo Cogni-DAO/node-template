@@ -95,7 +95,11 @@ export interface EvmOnchainClient {
   readContract<
     const TAbi extends Abi,
     TFunctionName extends ContractFunctionName<TAbi, "view" | "pure">,
-    const TArgs extends ContractFunctionArgs<TAbi, "view" | "pure", TFunctionName>,
+    const TArgs extends ContractFunctionArgs<
+      TAbi,
+      "view" | "pure",
+      TFunctionName
+    >,
   >(params: {
     address: `0x${string}`;
     abi: TAbi;

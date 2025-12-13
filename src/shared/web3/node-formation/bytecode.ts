@@ -4,9 +4,10 @@
 /**
  * Module: `@shared/web3/bytecode`
  * Purpose: Bytecode constants for client-side deployments.
- * Scope: Constants only. No dynamic fetching.
+ * Scope: Constants only; does not fetch or compile bytecode at runtime.
  * Invariants: Bytecode must be a 0x-prefixed hex string.
  * Side-effects: none
+ * Links: docs/NODE_FORMATION_SPEC.md
  * @public
  */
 

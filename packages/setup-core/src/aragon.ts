@@ -10,7 +10,7 @@
  * @public
  */
 
-export type HexAddress = `0x${string}`;
+import type { HexAddress } from "./types";
 
 export type AragonOsxAddresses = {
   daoFactory: HexAddress;

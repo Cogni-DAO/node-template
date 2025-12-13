@@ -12,7 +12,7 @@
 
 import type { TransactionReceipt } from "viem";
 
-export type HexAddress = `0x${string}`;
+import type { HexAddress } from "./types";
 
 function toAddress(hex: string): HexAddress | null {
   if (!hex.startsWith("0x")) return null;

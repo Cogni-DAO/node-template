@@ -4,9 +4,10 @@
 /**
  * Module: `@shared/web3/node-formation`
  * Purpose: Node Formation (P0) chain constants.
- * Scope: Pure constants (no env).
+ * Scope: Pure constants only; does not read env or make RPC calls.
  * Invariants: Must match deployed contracts on the selected chain.
  * Side-effects: none
+ * Links: docs/NODE_FORMATION_SPEC.md
  * @public
  */
 
@@ -15,11 +16,14 @@ export type SupportedChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
 
 type HexAddress = `0x${string}`;
 
-export const ARAGON_OSX_ADDRESSES: Record<SupportedChainId, {
-  daoFactory: HexAddress;
-  pluginSetupProcessor: HexAddress;
-  tokenVotingPluginRepo: HexAddress;
-}> = {
+export const ARAGON_OSX_ADDRESSES: Record<
+  SupportedChainId,
+  {
+    daoFactory: HexAddress;
+    pluginSetupProcessor: HexAddress;
+    tokenVotingPluginRepo: HexAddress;
+  }
+> = {
   // Base Mainnet (8453) - OSx v1.4.0
   8453: {
     daoFactory: "0xcc602EA573a42eBeC290f33F49D4A87177ebB8d2",

@@ -13,6 +13,9 @@
  */
 
 import {
+  type Abi,
+  type ContractFunctionArgs,
+  type ContractFunctionName,
   createPublicClient,
   http,
   type Log,
@@ -157,25 +160,29 @@ export class ViemEvmOnchainClient implements EvmOnchainClient {
   async getBytecode(address: `0x${string}`): Promise<`0x${string}` | null> {
     const client = this.getClient();
     const code = await client.getBytecode({ address });
-    return code;
+    return code ?? null;
   }
 
-  async readContract(params: {
+  async readContract<
+    const TAbi extends Abi,
+    TFunctionName extends ContractFunctionName<TAbi, "view" | "pure">,
+    const TArgs extends ContractFunctionArgs<
+      TAbi,
+      "view" | "pure",
+      TFunctionName
+    >,
+  >(params: {
     address: `0x${string}`;
-    abi: readonly unknown[];
-    functionName: string;
-    args: readonly unknown[];
+    abi: TAbi;
+    functionName: TFunctionName;
+    args: TArgs;
   }): Promise<unknown> {
     const client = this.getClient();
     return client.readContract({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      address: params.address as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      abi: params.abi as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      functionName: params.functionName as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      args: params.args as any,
+      address: params.address,
+      abi: params.abi,
+      functionName: params.functionName,
+      args: params.args,
     });
   }
 }

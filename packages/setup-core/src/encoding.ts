@@ -12,8 +12,7 @@
 
 import { encodeAbiParameters, parseAbiParameters } from "viem";
 
-export type Hex = `0x${string}`;
-export type HexAddress = `0x${string}`;
+import type { Hex, HexAddress } from "./types";
 
 export type TokenVotingVotingSettings = {
   votingMode: number; // uint8

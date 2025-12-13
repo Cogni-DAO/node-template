@@ -4,9 +4,10 @@
 /**
  * Module: `@shared/web3/aragon-abi`
  * Purpose: Minimal Aragon OSx ABIs needed for Node Formation P0.
- * Scope: ABI constants only.
+ * Scope: ABI constants only; does not include full Aragon interfaces.
  * Invariants: Keep minimal surface; do not add unrelated functions/events.
  * Side-effects: none
+ * Links: docs/NODE_FORMATION_SPEC.md
  * @public
  */
 
@@ -38,13 +39,21 @@ export const DAO_FACTORY_ABI = [
         name: "_pluginSettings",
         type: "tuple[]",
         components: [
-          { name: "pluginSetupRef", type: "tuple", components: [
-            { name: "pluginSetupRepo", type: "address" },
-            { name: "versionTag", type: "tuple", components: [
-              { name: "release", type: "uint16" },
-              { name: "build", type: "uint16" },
-            ] },
-          ] },
+          {
+            name: "pluginSetupRef",
+            type: "tuple",
+            components: [
+              { name: "pluginSetupRepo", type: "address" },
+              {
+                name: "versionTag",
+                type: "tuple",
+                components: [
+                  { name: "release", type: "uint16" },
+                  { name: "build", type: "uint16" },
+                ],
+              },
+            ],
+          },
           { name: "data", type: "bytes" },
         ],
       },

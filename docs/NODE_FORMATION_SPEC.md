@@ -219,9 +219,9 @@ export function encodeTokenVotingSetup(params: {
 
 ### P0: Web DAO Formation (MVP)
 
-- [ ] Create `packages/setup-core/` with encoding + address constants
-- [ ] Verify TokenVoting MintSettings struct against OSx v1.4.0 ABI
-- [ ] Add Foundry-vs-viem encoding parity test fixture
+- [x] Create `packages/setup-core/` with encoding + address constants (scaffolded, 7-param encoding correct, supports both v1.3 and v1.4 MintSettings)
+- [ ] Verify TokenVoting MintSettings struct against OSx v1.4.0 ABI (determine if `ensureDelegationOnMint` field exists)
+- [ ] Add Foundry-vs-viem encoding parity test fixture (blocked: needs MintSettings field verification first)
 - [ ] Implement Aragon OSx preflight (getCode + factory→PSP invariant)
 - [ ] Implement `DAOFactory.createDao` call with TokenVoting + MintSettings
 - [ ] Implement `CogniSignal(dao)` deployment
