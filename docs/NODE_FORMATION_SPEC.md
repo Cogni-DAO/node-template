@@ -18,7 +18,7 @@
 
 4. **Server Verification Boundary**: Browser is untrusted. Server derives ALL addresses from tx receipts. Request contains only `{ chainId, daoTxHash, signalTxHash, initialHolder }`.
 
-5. **Package Isolation**: `setup-core` cannot import `src/`, `services/`, or browser/node-specific APIs.
+5. **Package Isolation**: `aragon-osx` cannot import `src/`, `services/`, or browser/node-specific APIs.
 
 6. **Fork Freedom**: Formation tooling works standalone without Cogni Operator accounts.
 
@@ -88,7 +88,7 @@ Phases: IDLE → PREFLIGHT → CREATING_DAO → AWAITING_DAO_CONFIRMATION → DE
 
 **Implementation:** → `src/app/api/setup/verify/route.ts`
 
-**Receipt Decoders:** → `packages/setup-core/src/osx/receipt.ts`
+**Receipt Decoders:** → `packages/aragon-osx/src/osx/receipt.ts`
 
 Server derives addresses from receipts (never trusts client):
 
@@ -100,9 +100,9 @@ Server derives addresses from receipts (never trusts client):
 
 ### viem Encoding (TokenVoting Setup with Mint)
 
-**Encoder:** → `packages/setup-core/src/encoding.ts` (`encodeTokenVotingSetup`)
+**Encoder:** → `packages/aragon-osx/src/encoding.ts` (`encodeTokenVotingSetup`)
 
-**Constants:** → `packages/setup-core/src/osx/version.ts` (DEFAULT_VOTING_SETTINGS, MINT_SETTINGS_VERSION)
+**Constants:** → `packages/aragon-osx/src/osx/version.ts` (DEFAULT_VOTING_SETTINGS, MINT_SETTINGS_VERSION)
 
 **Tx Builders:** → `src/features/setup/daoFormation/txBuilders.ts` (`buildCreateDaoArgs`, `buildDeploySignalArgs`)
 
@@ -116,13 +116,13 @@ Current implementation uses v1.3 MintSettings (2 fields). Supports v1.4 (3 field
 
 ### P0: Web DAO Formation (MVP)
 
-- [x] Create `packages/setup-core/` with encoding + address constants (enhanced with osx/ subdirectory for events, receipt decoders, version constants)
+- [x] Create `packages/aragon-osx/` with encoding + address constants (enhanced with osx/ subdirectory for events, receipt decoders, version constants)
 - [ ] Verify TokenVoting MintSettings struct against OSx v1.4.0 ABI (determine if `ensureDelegationOnMint` field exists)
 - [ ] Add Foundry-vs-viem encoding parity test fixture (blocked: needs MintSettings field verification first)
 - [x] Implement Aragon OSx preflight (getCode + factory→PSP invariant) → `src/features/setup/hooks/useAragonPreflight.ts`
 - [x] Implement `DAOFactory.createDao` call with TokenVoting + MintSettings → `src/features/setup/hooks/useDAOFormation.ts` + `src/features/setup/daoFormation/txBuilders.ts`
 - [x] Implement `CogniSignal(dao)` deployment → `src/features/setup/hooks/useDAOFormation.ts` (uses `useDeployContract`)
-- [x] Server endpoint: derive addresses from receipt events (pin exact event signatures) → `src/app/api/setup/verify/route.ts` + `packages/setup-core/src/osx/receipt.ts`
+- [x] Server endpoint: derive addresses from receipt events (pin exact event signatures) → `src/app/api/setup/verify/route.ts` + `packages/aragon-osx/src/osx/receipt.ts`
 - [x] Server endpoint: verify balanceOf + CogniSignal.DAO() → `src/app/api/setup/verify/route.ts`
 - [x] Export repo-spec YAML with `chain_id` as string → `buildRepoSpecYaml()` in verify route
 - [x] Build wizard UI → `src/app/(app)/setup/dao/page.tsx` + `DAOFormationPage.client.tsx` + `src/features/setup/components/FormationFlowDialog.tsx`
@@ -162,11 +162,11 @@ Current implementation uses v1.3 MintSettings (2 fields). Supports v1.4 (3 field
 
 | File                                                   | Status | Description                                            |
 | ------------------------------------------------------ | ------ | ------------------------------------------------------ |
-| `packages/setup-core/src/aragon.ts`                    | ✅     | OSx address constants (BASE + SEPOLIA only)            |
-| `packages/setup-core/src/encoding.ts`                  | ✅     | TokenVoting struct encoding (viem, v1.3/v1.4 support)  |
-| `packages/setup-core/src/osx/events.ts`                | ✅     | OSx event ABIs + topic constants                       |
-| `packages/setup-core/src/osx/receipt.ts`               | ✅     | Strict receipt decoders (throws if events not found)   |
-| `packages/setup-core/src/osx/version.ts`               | ✅     | Pinned OSx version constants                           |
+| `packages/aragon-osx/src/aragon.ts`                    | ✅     | OSx address constants (BASE + SEPOLIA only)            |
+| `packages/aragon-osx/src/encoding.ts`                  | ✅     | TokenVoting struct encoding (viem, v1.3/v1.4 support)  |
+| `packages/aragon-osx/src/osx/events.ts`                | ✅     | OSx event ABIs + topic constants                       |
+| `packages/aragon-osx/src/osx/receipt.ts`               | ✅     | Strict receipt decoders (throws if events not found)   |
+| `packages/aragon-osx/src/osx/version.ts`               | ✅     | Pinned OSx version constants                           |
 | `src/shared/web3/node-formation/aragon-abi.ts`         | ✅     | Minimal ABIs: DAOFactory, TokenVoting, GovernanceERC20 |
 | `src/shared/web3/node-formation/bytecode.ts`           | ✅     | CogniSignal bytecode + ABI                             |
 | `src/features/setup/daoFormation/formation.reducer.ts` | ✅     | Pure reducer + types (state machine)                   |
@@ -181,7 +181,7 @@ Current implementation uses v1.3 MintSettings (2 fields). Supports v1.4 (3 field
 
 | File                                                        | Status | Description                                                    |
 | ----------------------------------------------------------- | ------ | -------------------------------------------------------------- |
-| `packages/setup-core/src/__tests__/encoding.parity.test.ts` | ⏳     | Foundry-vs-viem parity test                                    |
+| `packages/aragon-osx/src/__tests__/encoding.parity.test.ts` | ⏳     | Foundry-vs-viem parity test                                    |
 | `src/app/setup/dao/page.tsx`                                | ⏳     | Wizard page (config → createDao → deploySignal → verify)       |
 | `src/app/setup/dao/_components/*.tsx`                       | ⏳     | ConfigStep, PreflightStep, DeployStep, VerifyStep, SuccessStep |
 
@@ -282,7 +282,7 @@ Hardcoded per chainId. Server enforces `chainId in SUPPORTED_CHAIN_IDS` before a
 
 ### 3. TokenVoting Configuration (Exact Parity)
 
-**Constants:** → `packages/setup-core/src/osx/version.ts` (DEFAULT_VOTING_SETTINGS)
+**Constants:** → `packages/aragon-osx/src/osx/version.ts` (DEFAULT_VOTING_SETTINGS)
 
 | Setting                | Value          | Meaning                                  |
 | ---------------------- | -------------- | ---------------------------------------- |
@@ -298,13 +298,13 @@ Hardcoded per chainId. Server enforces `chainId in SUPPORTED_CHAIN_IDS` before a
 
 ### 4. Server-Side Address Derivation (Security Boundary)
 
-**Receipt Decoders:** → `packages/setup-core/src/osx/receipt.ts`
+**Receipt Decoders:** → `packages/aragon-osx/src/osx/receipt.ts`
 
 - `decodeDaoAddress()` - Extracts DAO from DAORegistered event (strict, throws if not found)
 - `decodePluginAddress()` - Extracts plugin from InstallationApplied event (strict, throws if not found)
 - `decodeSignalDeployment()` - Extracts CogniSignal from contractAddress
 
-**Event Topics:** → `packages/setup-core/src/osx/events.ts`
+**Event Topics:** → `packages/aragon-osx/src/osx/events.ts`
 
 - DAORegistered: `0x5c0366e72f6d8608e72a1f50a8e61fdc9187b94c8c0cee349b2e879c03a9c6d9`
 - InstallationApplied: `0x6fe58f3e17da33f74b44ff6a4bf7824e31c5b4b4e6c3cb7ac8c1a0c15d4b4f24`
@@ -322,7 +322,7 @@ Hardcoded per chainId. Server enforces `chainId in SUPPORTED_CHAIN_IDS` before a
 
 ### 5. Encoding Parity Test (TODO)
 
-**Target:** `packages/setup-core/src/__tests__/encoding.parity.test.ts`
+**Target:** `packages/aragon-osx/src/__tests__/encoding.parity.test.ts`
 
 TokenVoting setup encoding must match Foundry exactly. The 7-param struct includes nested tuples - any field mismatch (e.g., `MintSettings.ensureDelegationOnMint`) causes silent failure.
 
@@ -334,15 +334,15 @@ TokenVoting setup encoding must match Foundry exactly. The 7-param struct includ
 
 **Allowed:**
 
-- `src/app/setup/*` → `packages/setup-core`
-- `packages/setup-cli` → `packages/setup-core`
+- `src/app/setup/*` → `packages/aragon-osx`
+- `packages/setup-cli` → `packages/aragon-osx`
 
 **Forbidden:**
 
-- `packages/setup-core` → `src/*`, `services/*`, `node:fs`, `window`
+- `packages/aragon-osx` → `src/*`, `services/*`, `node:fs`, `window`
 - `packages/setup-cli` → `src/*`, `services/*`
 
-**Why:** Enables future repo split. setup-core is pure; runners inject adapters.
+**Why:** Enables future repo split. aragon-osx is pure; runners inject adapters.
 
 ---
 
@@ -390,7 +390,7 @@ Populates: `dao_contract`, `plugin_contract`, `signal_contract`, `chain_id` (as 
 
 ## Appendix: Aragon OSx Addresses
 
-**Implementation:** → `packages/setup-core/src/aragon.ts` (ARAGON_OSX_ADDRESSES, getAragonAddresses)
+**Implementation:** → `packages/aragon-osx/src/aragon.ts` (ARAGON_OSX_ADDRESSES, getAragonAddresses)
 
 **Supported Chains:** BASE (8453), SEPOLIA (11155111)
 

@@ -87,7 +87,7 @@ Operator shares CI/CD, observability, deploy invariants, and hex architecture wi
 
 Enable anyone to create their own Node (DAO + app). Manual steps remain for infra/GitHub setup.
 
-- Create `packages/setup-core/` with Aragon OSx encoding + SetupPlan schemas
+- Create `packages/aragon-osx/` with Aragon OSx encoding + SetupPlan schemas
 - Web wizard for DAO formation (wallet-signed, no private key env vars)
 - Server-side tx receipt verification
 - Export deployment record + repo-spec addresses

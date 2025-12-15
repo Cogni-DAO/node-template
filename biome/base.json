@@ -190,7 +190,7 @@
       }
     },
     {
-      "includes": ["packages/setup-core/tsup.config.ts"],
+      "includes": ["packages/aragon-osx/tsup.config.ts"],
       "linter": {
         "rules": {
           "style": {
