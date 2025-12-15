@@ -11,7 +11,12 @@
  * @public
  */
 
-import { getAragonAddresses, type SupportedChainId } from "@setup-core";
+import {
+  DAO_REGISTERED_EVENT,
+  getAragonAddresses,
+  INSTALLATION_APPLIED_EVENT,
+  type SupportedChainId,
+} from "@setup-core";
 import { NextResponse } from "next/server";
 import { createPublicClient, http } from "viem";
 import { base, sepolia } from "viem/chains";
@@ -83,13 +88,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       } else {
         // Extract DAO address from DAORegistered event
         // DAORegistered(address indexed dao, address indexed creator, string subdomain)
-        // Topic: keccak256("DAORegistered(address,address,string)")
         for (const log of daoReceipt.logs) {
-          // DAORegistered topic
-          if (
-            log.topics[0] ===
-            "0x5c0366e72f6d8608e72a1f50a8e61fdc9187b94c8c0cee349b2e879c03a9c6d9"
-          ) {
+          if (log.topics[0] === DAO_REGISTERED_EVENT.topic) {
             daoAddress = `0x${log.topics[1]?.slice(26)}` as `0x${string}`;
           }
         }
@@ -97,10 +97,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         // Extract plugin address from InstallationApplied event
         // InstallationApplied(address indexed dao, address indexed plugin, bytes32 preparedSetupId, bytes32 appliedSetupId)
         for (const log of daoReceipt.logs) {
-          if (
-            log.topics[0] ===
-            "0x6fe58f3e17da33f74b44ff6a4bf7824e31c5b4b4e6c3cb7ac8c1a0c15d4b4f24"
-          ) {
+          if (log.topics[0] === INSTALLATION_APPLIED_EVENT.topic) {
             pluginAddress = `0x${log.topics[2]?.slice(26)}` as `0x${string}`;
           }
         }
