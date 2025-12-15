@@ -30,20 +30,27 @@ import type { DAOFormationConfig } from "./formation.reducer";
 // Types
 // ============================================================================
 
+/**
+ * Type for createDao transaction args.
+ *
+ * CRITICAL: Struct field order must match OSx v1.4.0 exactly.
+ * - DAOSettings: trustedForwarder, daoURI, subdomain, metadata
+ * - PluginSetupRef: versionTag BEFORE pluginSetupRepo
+ */
 export interface CreateDaoTxArgs {
   address: HexAddress;
   args: readonly [
-    metadata: `0x${string}`,
     daoSettings: {
-      subdomain: string;
       trustedForwarder: HexAddress;
       daoURI: string;
+      subdomain: string;
+      metadata: `0x${string}`;
     },
     pluginSettings: readonly [
       {
         pluginSetupRef: {
-          pluginSetupRepo: HexAddress;
           versionTag: { release: number; build: number };
+          pluginSetupRepo: HexAddress;
         };
         data: `0x${string}`;
       },
@@ -61,6 +68,12 @@ export interface DeploySignalTxArgs {
 
 /**
  * Build arguments for DAOFactory.createDao transaction.
+ *
+ * CRITICAL: This must produce args matching the OSx v1.4.0 createDao signature:
+ *   createDao(DAOSettings, PluginSettings[])
+ *
+ * DAOSettings field order: trustedForwarder, daoURI, subdomain, metadata
+ * PluginSetupRef field order: versionTag, pluginSetupRepo
  */
 export function buildCreateDaoArgs(
   chainId: SupportedChainId,
@@ -68,7 +81,7 @@ export function buildCreateDaoArgs(
 ): CreateDaoTxArgs {
   const aragonAddresses = getAragonAddresses(chainId);
 
-  // Encode TokenVoting setup data
+  // Encode TokenVoting setup data (7-param struct)
   const tokenVotingSetupData = encodeTokenVotingSetup({
     votingSettings: DEFAULT_VOTING_SETTINGS,
     tokenSettings: {
@@ -90,26 +103,29 @@ export function buildCreateDaoArgs(
     mintSettingsVersion: MINT_SETTINGS_VERSION,
   });
 
-  // Encode empty DAO metadata (contentAddressedURI = 0)
-  const daoMetadata = encodeAbiParameters(
-    parseAbiParameters("uint256 contentAddressedURI"),
-    [0n]
-  );
+  // Encode DAO metadata: matches Foundry's abi.encode(string(...))
+  // The Foundry script encodes a human-readable name string
+  const daoMetadata = encodeAbiParameters(parseAbiParameters("string"), [
+    `CogniSignal DAO - ${config.tokenName}`,
+  ]);
 
   return {
     address: aragonAddresses.daoFactory,
     args: [
-      daoMetadata,
+      // DAOSettings: trustedForwarder, daoURI, subdomain, metadata
       {
-        subdomain: "", // No ENS subdomain
         trustedForwarder: DEPLOY_NEW_TOKEN_ADDRESS,
         daoURI: "",
+        subdomain: "", // No ENS subdomain
+        metadata: daoMetadata,
       },
+      // PluginSettings array
       [
         {
           pluginSetupRef: {
-            pluginSetupRepo: aragonAddresses.tokenVotingPluginRepo,
+            // CRITICAL: versionTag BEFORE pluginSetupRepo
             versionTag: TOKEN_VOTING_VERSION_TAG,
+            pluginSetupRepo: aragonAddresses.tokenVotingPluginRepo,
           },
           data: tokenVotingSetupData,
         },

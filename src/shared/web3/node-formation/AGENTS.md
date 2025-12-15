@@ -62,6 +62,9 @@ import {
 - Minimal ABI surfaces only (no full contract interfaces)
 - ABIs extracted from OSx v1.4.0 or cogni-gov-contracts Foundry artifacts
 - Bytecode placeholders updated when artifacts available
+- **CRITICAL:** Struct field order must match OSx exactly:
+  - DAOSettings: trustedForwarder, daoURI, subdomain, metadata
+  - PluginSetupRef: versionTag (uint8 release, uint16 build), pluginSetupRepo
 
 ## Dependencies
 

@@ -88,3 +88,4 @@ pnpm --filter @setup-core test
 - MintSettings struct supports both v1.3 and v1.4 via `mintSettingsVersion` parameter
 - OSx v1.4.0 field verification required before production use
 - Package isolation enforced: enables future repo split (Node vs Operator)
+- Encoding parity test in `tests/encoding.parity.test.ts` validates struct field order

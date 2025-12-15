@@ -11,7 +11,15 @@
  * @public
  */
 
-/** DAOFactory minimal ABI (createDao). */
+/**
+ * DAOFactory minimal ABI (createDao).
+ *
+ * CRITICAL: Struct field order must match OSx v1.4.0 exactly.
+ * Source: https://github.com/aragon/osx/tree/v1.4.0/packages/contracts/src/framework/dao/DAOFactory.sol
+ *
+ * DAOSettings field order: trustedForwarder, daoURI, subdomain, metadata
+ * PluginSetupRef field order: versionTag, pluginSetupRepo
+ */
 export const DAO_FACTORY_ABI = [
   {
     type: "function",
@@ -25,14 +33,15 @@ export const DAO_FACTORY_ABI = [
     name: "createDao",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "_metadata", type: "bytes" },
       {
         name: "_daoSettings",
         type: "tuple",
         components: [
-          { name: "subdomain", type: "string" },
+          // Order: trustedForwarder, daoURI, subdomain, metadata
           { name: "trustedForwarder", type: "address" },
           { name: "daoURI", type: "string" },
+          { name: "subdomain", type: "string" },
+          { name: "metadata", type: "bytes" },
         ],
       },
       {
@@ -43,15 +52,16 @@ export const DAO_FACTORY_ABI = [
             name: "pluginSetupRef",
             type: "tuple",
             components: [
-              { name: "pluginSetupRepo", type: "address" },
+              // Order: versionTag BEFORE pluginSetupRepo
               {
                 name: "versionTag",
                 type: "tuple",
                 components: [
-                  { name: "release", type: "uint16" },
+                  { name: "release", type: "uint8" },
                   { name: "build", type: "uint16" },
                 ],
               },
+              { name: "pluginSetupRepo", type: "address" },
             ],
           },
           { name: "data", type: "bytes" },
@@ -59,8 +69,32 @@ export const DAO_FACTORY_ABI = [
       },
     ],
     outputs: [
-      { name: "dao", type: "address" },
-      { name: "installedPlugins", type: "address[]" },
+      { name: "createdDao", type: "address" },
+      {
+        name: "installedPlugins",
+        type: "tuple[]",
+        components: [
+          { name: "plugin", type: "address" },
+          {
+            name: "preparedSetupData",
+            type: "tuple",
+            components: [
+              { name: "helpers", type: "address[]" },
+              {
+                name: "permissions",
+                type: "tuple[]",
+                components: [
+                  { name: "operation", type: "uint8" },
+                  { name: "where", type: "address" },
+                  { name: "who", type: "address" },
+                  { name: "condition", type: "address" },
+                  { name: "permissionId", type: "bytes32" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
     ],
   },
 ] as const;
