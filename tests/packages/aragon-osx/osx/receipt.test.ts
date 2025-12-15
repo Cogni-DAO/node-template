@@ -21,7 +21,7 @@ import {
   INSTALLATION_APPLIED_EVENT,
   ReceiptDecodingError,
   type TransactionReceipt,
-} from "@aragon-osx";
+} from "@cogni/aragon-osx";
 import { describe, expect, it } from "vitest";
 
 // ============================================================================

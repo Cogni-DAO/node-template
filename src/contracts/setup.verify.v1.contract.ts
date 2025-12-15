@@ -11,7 +11,7 @@
  * @public
  */
 
-import { SUPPORTED_CHAIN_IDS } from "@aragon-osx";
+import { SUPPORTED_CHAIN_IDS } from "@cogni/aragon-osx";
 import { z } from "zod";
 
 const hexAddress = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address");

@@ -18,7 +18,7 @@ import {
   ReceiptDecodingError,
   SUPPORTED_CHAIN_IDS,
   type SupportedChainId,
-} from "@aragon-osx";
+} from "@cogni/aragon-osx";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
   useAccount,

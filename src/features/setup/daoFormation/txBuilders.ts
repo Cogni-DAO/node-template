@@ -21,7 +21,7 @@ import {
   MINT_SETTINGS_VERSION,
   type SupportedChainId,
   TOKEN_VOTING_VERSION_TAG,
-} from "@aragon-osx";
+} from "@cogni/aragon-osx";
 import { encodeAbiParameters, parseAbiParameters } from "viem";
 
 import type { DAOFormationConfig } from "./formation.reducer";

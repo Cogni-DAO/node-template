@@ -16,7 +16,7 @@ import {
   getAragonAddresses,
   INSTALLATION_APPLIED_EVENT,
   type SupportedChainId,
-} from "@aragon-osx";
+} from "@cogni/aragon-osx";
 import { NextResponse } from "next/server";
 import { createPublicClient, http } from "viem";
 import { base, sepolia } from "viem/chains";

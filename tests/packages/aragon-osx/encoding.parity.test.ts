@@ -17,7 +17,7 @@ import {
   encodeTokenVotingSetup,
   INITIAL_TOKEN_AMOUNT,
   MINT_SETTINGS_VERSION,
-} from "@aragon-osx";
+} from "@cogni/aragon-osx";
 import { describe, expect, it } from "vitest";
 
 describe("encodeTokenVotingSetup parity with Foundry", () => {
