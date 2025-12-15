@@ -12,6 +12,6 @@
  */
 
 // @ts-expect-error - intentional violation for arch testing
-import { encodeTokenVotingSetup } from "../../../packages/setup-core/src/encoding";
+import { encodeTokenVotingSetup } from "../../../packages/aragon-osx/src/encoding";
 
 export const probe = encodeTokenVotingSetup;

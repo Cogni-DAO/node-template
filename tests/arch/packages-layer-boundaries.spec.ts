@@ -49,7 +49,7 @@ function runDepCruise(probeDirs: string[]): {
 
 describe("Packages layer isolation (monorepo boundaries)", () => {
   it("allows packages to import from packages (internal)", () => {
-    const { exitCode, stderr } = runDepCruise(["packages/setup-core/src"]);
+    const { exitCode, stderr } = runDepCruise(["packages/aragon-osx/src"]);
     if (exitCode !== 0) {
       console.error("STDERR:", stderr);
     }
@@ -58,7 +58,7 @@ describe("Packages layer isolation (monorepo boundaries)", () => {
 
   it("blocks packages from importing src", () => {
     const { exitCode, stdout } = runDepCruise([
-      "packages/setup-core/__arch_probes__",
+      "packages/aragon-osx/__arch_probes__",
       "src/shared",
     ]);
     if (exitCode === 0) {
@@ -71,7 +71,7 @@ describe("Packages layer isolation (monorepo boundaries)", () => {
   it("blocks src from deep-importing package internals", () => {
     const { exitCode, stdout } = runDepCruise([
       "src/features/__arch_probes__/illegal-deep-package-import.ts",
-      "packages/setup-core/src",
+      "packages/aragon-osx/src",
     ]);
     if (exitCode === 0) {
       console.log("STDOUT:", stdout);

@@ -44,7 +44,7 @@ Node Formation P0 web3 primitives: Aragon OSx ABIs, CogniSignal ABI, contract by
 ## Responsibilities
 
 - This directory **does**: Provide minimal ABIs for DAO formation, export bytecode constants, maintain chain address mappings
-- This directory **does not**: Encode setup data (see `packages/setup-core`), make RPC calls, handle wallet signing
+- This directory **does not**: Encode setup data (see `packages/aragon-osx`), make RPC calls, handle wallet signing
 
 ## Usage
 

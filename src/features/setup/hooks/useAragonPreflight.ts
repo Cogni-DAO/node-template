@@ -13,7 +13,7 @@
 
 "use client";
 
-import { getAragonAddresses, type SupportedChainId } from "@setup-core";
+import { getAragonAddresses, type SupportedChainId } from "@aragon-osx";
 import { useCallback, useState } from "react";
 import { usePublicClient } from "wagmi";
 

@@ -11,7 +11,7 @@
  * @public
  */
 
-import type { HexAddress } from "@setup-core";
+import type { HexAddress } from "@aragon-osx";
 
 // ============================================================================
 // Types

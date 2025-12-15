@@ -16,7 +16,7 @@ DAO formation feature slice. Pure state machines, transaction builders, server v
 
 - [NODE_FORMATION_SPEC.md](../../../docs/NODE_FORMATION_SPEC.md): P0 MVP design spec
 - [DAO_FORMATION_SCRIPT.md](../../../docs/DAO_FORMATION_SCRIPT.md): Aragon OSx mechanics
-- `packages/setup-core`: Pure OSx primitives (no IO)
+- `packages/aragon-osx`: Pure OSx primitives (no IO)
 
 ## Boundaries
 
@@ -40,7 +40,7 @@ DAO formation feature slice. Pure state machines, transaction builders, server v
 
 ## Ports
 
-- **Uses ports:** none (uses `@setup-core` package + wagmi directly)
+- **Uses ports:** none (uses `@aragon-osx` package + wagmi directly)
 - **Implements ports:** none
 - **Contracts:** none required
 
@@ -53,9 +53,9 @@ DAO formation feature slice. Pure state machines, transaction builders, server v
   - Wagmi hook wiring (`hooks/useDAOFormation.ts`)
   - Formation dialog UI (`components/FormationFlowDialog.tsx`)
 - This directory **does not**:
-  - Contain OSx encoding logic (delegated to `@setup-core`)
+  - Contain OSx encoding logic (delegated to `@aragon-osx`)
   - Implement server verification (app/api layer)
-  - Parse receipts (delegated to `@setup-core`)
+  - Parse receipts (delegated to `@aragon-osx`)
 
 ## Usage
 
@@ -72,11 +72,11 @@ import { useDAOFormation } from "@/features/setup/public";
 - Pure functions in `daoFormation/` - no side effects
 - Hooks in `hooks/` are thin wagmi wiring only
 - Components mirror PaymentFlow pattern
-- All OSx version constants live in `@setup-core`
+- All OSx version constants live in `@aragon-osx`
 
 ## Dependencies
 
-- **Internal:** `@setup-core`, `@/shared/web3`, `@/shared/errors`, `@/components/kit`
+- **Internal:** `@aragon-osx`, `@/shared/web3`, `@/shared/errors`, `@/components/kit`
 - **External:** wagmi, viem, react
 
 ## Change Protocol
@@ -90,4 +90,4 @@ import { useDAOFormation } from "@/features/setup/public";
 
 - P0 MVP: wallet-signed formation only (no CLI, terraform, GitHub automation)
 - Server verification at `/api/setup/verify` derives all addresses from receipts
-- Uses `@setup-core` for pure OSx primitives (encoding, receipt parsing, version constants)
+- Uses `@aragon-osx` for pure OSx primitives (encoding, receipt parsing, version constants)
