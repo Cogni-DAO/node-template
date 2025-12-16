@@ -47,31 +47,30 @@ export class LangfuseAdapter implements LangfusePort {
   /**
    * Create a Langfuse trace with the OTel trace ID.
    * Uses traceId from OTel for correlation.
+   *
+   * @throws Error if trace creation fails (caller handles graceful degradation)
    */
-  createTrace(
+  async createTrace(
     traceId: string,
     metadata: {
       requestId: string;
       model: string;
       promptHash: string;
     }
-  ): void {
-    try {
-      this.langfuse.trace({
-        id: traceId, // Use OTel traceId as Langfuse trace ID
-        name: "llm-completion",
-        metadata: {
-          requestId: metadata.requestId,
-          model: metadata.model,
-          promptHash: metadata.promptHash,
-        },
-      });
-      this.activeTraces.add(traceId);
-    } catch (error) {
-      // Graceful degradation - log and continue
-      // biome-ignore lint/suspicious/noConsole: Langfuse errors should be visible
-      console.error("[LangfuseAdapter] createTrace failed:", error);
-    }
+  ): Promise<string> {
+    // No try/catch - let errors propagate to caller for graceful degradation
+    // Caller wraps in try/catch and sets langfuseTraceId = undefined on failure
+    this.langfuse.trace({
+      id: traceId, // Use OTel traceId as Langfuse trace ID
+      name: "llm-completion",
+      metadata: {
+        requestId: metadata.requestId,
+        model: metadata.model,
+        promptHash: metadata.promptHash,
+      },
+    });
+    this.activeTraces.add(traceId);
+    return traceId;
   }
 
   /**

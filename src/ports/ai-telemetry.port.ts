@@ -139,6 +139,8 @@ export interface LangfusePort {
    *
    * @param traceId - OTel trace ID to use as Langfuse trace ID
    * @param metadata - Additional trace metadata
+   * @returns The trace ID on success
+   * @throws Error if trace creation fails
    */
   createTrace(
     traceId: string,
@@ -147,7 +149,7 @@ export interface LangfusePort {
       model: string;
       promptHash: string;
     }
-  ): void;
+  ): Promise<string>;
 
   /**
    * Record generation metrics on the trace.

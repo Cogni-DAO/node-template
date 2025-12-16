@@ -60,10 +60,10 @@
 - [x] Enforce Node runtime for AI routes (`export const runtime = 'nodejs'`)
 - [x] OTel instrumentation with explicit root span at request entry (do not rely on auto-instrumentation)
 - [x] Store `trace_id` deterministically from root span into RequestContext
-- [ ] Direct Langfuse SDK integration (not OTel exporter) to reliably obtain `langfuse_trace_id`
+- [x] Direct Langfuse SDK integration (not OTel exporter) to reliably obtain `langfuse_trace_id`
 - [x] Propagate `reqId` + `trace_id` in LiteLLM metadata
 - [x] Create `ai_invocation_summaries` table (see schema below)
-- [ ] Write correlation IDs to ai_invocation_summaries on every AI call
+- [x] Write correlation IDs to ai_invocation_summaries on every AI call
 
 #### P0 Known Issues
 
@@ -260,5 +260,5 @@
 
 ---
 
-**Last Updated**: 2025-12-16
+**Last Updated**: 2025-12-17
 **Status**: Design Approved
