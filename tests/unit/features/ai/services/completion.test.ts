@@ -18,6 +18,7 @@ import {
   createMixedRoleConversation,
   createMockAccountServiceWithDefaults,
   createUserMessage,
+  FakeAiTelemetryAdapter,
   FakeClock,
   FakeLlmService,
   TEST_MODEL_ID,
@@ -30,6 +31,9 @@ import type { LlmCaller } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeNoopLogger } from "@/shared/observability";
+
+// Helper to create fake telemetry for tests
+const createFakeAiTelemetry = () => new FakeAiTelemetryAdapter();
 
 // Mock model catalog
 vi.mock("@/shared/ai/model-catalog.server", () => ({
@@ -63,6 +67,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -76,7 +81,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert
@@ -109,6 +116,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -122,7 +130,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert - Critical invariant: exactly one system message with baseline content
@@ -148,6 +158,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -162,7 +173,9 @@ describe("features/ai/services/completion", () => {
           accountService,
           clock,
           caller,
-          testCtx
+          testCtx,
+          createFakeAiTelemetry(),
+          undefined
         )
       ).rejects.toThrow(ChatValidationError);
       expect(llmService.wasCalled()).toBe(false); // Should not call LLM
@@ -182,6 +195,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -195,7 +209,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert - should trim to fit MAX_MESSAGE_CHARS (4000)
@@ -228,6 +244,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -241,7 +258,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert
@@ -258,6 +277,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -271,7 +291,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert
@@ -290,6 +312,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -304,7 +327,9 @@ describe("features/ai/services/completion", () => {
           accountService,
           clock,
           caller,
-          testCtx
+          testCtx,
+          createFakeAiTelemetry(),
+          undefined
         )
       ).rejects.toThrow("LLM service unavailable");
     });
@@ -320,6 +345,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -336,7 +362,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert
@@ -361,6 +389,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -378,7 +407,9 @@ describe("features/ai/services/completion", () => {
           accountService,
           clock,
           caller,
-          testCtx
+          testCtx,
+          createFakeAiTelemetry(),
+          undefined
         )
       ).rejects.toThrow(InsufficientCreditsPortError);
 

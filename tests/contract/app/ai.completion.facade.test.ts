@@ -12,7 +12,11 @@
  * @public
  */
 
-import { createMockAccountServiceWithDefaults, FakeClock } from "@tests/_fakes";
+import {
+  createMockAccountServiceWithDefaults,
+  FakeAiTelemetryAdapter,
+  FakeClock,
+} from "@tests/_fakes";
 import { FakeLlmService, TEST_MODEL_ID } from "@tests/_fakes/ai/fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -69,6 +73,8 @@ describe("app/_facades/ai/completion.server", () => {
         llmService: fakeLlm,
         accountService: mockAccountService,
         clock: fakeClock,
+        aiTelemetry: new FakeAiTelemetryAdapter(),
+        langfuse: undefined,
       });
 
       mockExecute.mockResolvedValue({
@@ -83,6 +89,7 @@ describe("app/_facades/ai/completion.server", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock: fakeClock,
       };
@@ -152,11 +159,14 @@ describe("app/_facades/ai/completion.server", () => {
         llmService: new FakeLlmService(),
         accountService: mockAccountService,
         clock: fakeClock,
+        aiTelemetry: new FakeAiTelemetryAdapter(),
+        langfuse: undefined,
       });
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock: fakeClock,
       };
@@ -191,11 +201,14 @@ describe("app/_facades/ai/completion.server", () => {
         llmService: new FakeLlmService(),
         accountService: mockAccountService,
         clock: fakeClock,
+        aiTelemetry: new FakeAiTelemetryAdapter(),
+        langfuse: undefined,
       });
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock: fakeClock,
       };
@@ -228,6 +241,8 @@ describe("app/_facades/ai/completion.server", () => {
         llmService: new FakeLlmService(),
         accountService: mockAccountService,
         clock: fakeClock,
+        aiTelemetry: new FakeAiTelemetryAdapter(),
+        langfuse: undefined,
       });
 
       mockExecute.mockResolvedValue({
@@ -242,6 +257,7 @@ describe("app/_facades/ai/completion.server", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock: fakeClock,
       };
@@ -279,11 +295,14 @@ describe("app/_facades/ai/completion.server", () => {
         llmService: new FakeLlmService(),
         accountService: mockAccountService,
         clock: fakeClock,
+        aiTelemetry: new FakeAiTelemetryAdapter(),
+        langfuse: undefined,
       });
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock: fakeClock,
       };
