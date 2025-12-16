@@ -156,6 +156,10 @@ describe("LiteLlmAdapter", () => {
         },
         providerCostUsd: 0.0002,
         litellmCallId: "chatcmpl-test-123", // From response.id, used for joining with /spend/logs
+        // New fields per AI_SETUP_SPEC.md
+        promptHash: expect.any(String), // SHA-256 hash of canonical payload
+        resolvedProvider: "openai", // Inferred from "gpt-" prefix in model name
+        resolvedModel: "gpt-3.5-turbo", // From response (defaults to request model)
       });
     });
 
@@ -229,7 +233,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: LiteLLM API error: 401 Unauthorized"
+        "LiteLLM API error: 401 Unauthorized"
       );
     });
 
@@ -252,7 +256,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM"
+        "Invalid response from LiteLLM"
       );
     });
 
@@ -270,7 +274,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM"
+        "Invalid response from LiteLLM"
       );
     });
 
@@ -278,7 +282,7 @@ describe("LiteLlmAdapter", () => {
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Network error"
+        "LiteLLM network error: Network error"
       );
     });
 

@@ -17,12 +17,38 @@ import {
   type EventSourceMessage,
   type EventSourceParser,
 } from "eventsource-parser";
-import type { ChatDeltaEvent, LlmService } from "@/ports";
+import {
+  type ChatDeltaEvent,
+  classifyLlmErrorFromStatus,
+  LlmError,
+  type LlmService,
+} from "@/ports";
+import {
+  computePromptHash,
+  DEFAULT_MAX_TOKENS,
+  DEFAULT_TEMPERATURE,
+} from "@/shared/ai/prompt-hash";
 import { serverEnv } from "@/shared/env";
 import { assertRuntimeSecrets } from "@/shared/env/invariants";
 import { makeLogger } from "@/shared/observability";
 
 const logger = makeLogger({ component: "LiteLlmAdapter" });
+
+/**
+ * Extract provider name from LiteLLM model ID prefix.
+ * e.g., "openai/gpt-4" → "openai", "anthropic/claude-3" → "anthropic"
+ * Falls back to "unknown" if no prefix.
+ */
+function extractProviderFromModel(model: string): string {
+  const slashIndex = model.indexOf("/");
+  if (slashIndex > 0) {
+    return model.slice(0, slashIndex);
+  }
+  // Fallback: try to infer from known model prefixes
+  if (model.startsWith("gpt-") || model.startsWith("o1")) return "openai";
+  if (model.startsWith("claude-")) return "anthropic";
+  return "unknown";
+}
 
 /**
  * Create a deferred promise with resolve/reject callbacks.
@@ -80,8 +106,8 @@ export class LiteLlmAdapter implements LlmService {
       throw new Error("LiteLLM completion requires model parameter");
     }
     const model = params.model;
-    const temperature = params.temperature ?? 0.7;
-    const maxTokens = params.maxTokens ?? 2048;
+    const temperature = params.temperature ?? DEFAULT_TEMPERATURE;
+    const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
 
     // Extract caller data for user attribution (cost tracking in LiteLLM)
     const { billingAccountId } = params.caller;
@@ -91,6 +117,14 @@ export class LiteLlmAdapter implements LlmService {
       role: msg.role,
       content: msg.content,
     }));
+
+    // Compute prompt hash BEFORE adding metadata (per AI_SETUP_SPEC.md)
+    const promptHash = computePromptHash({
+      model,
+      messages: liteLlmMessages,
+      temperature,
+      maxTokens,
+    });
 
     const requestBody = {
       model,
@@ -103,113 +137,131 @@ export class LiteLlmAdapter implements LlmService {
       },
     };
 
-    try {
-      const env = serverEnv();
-      // Validate runtime secrets at adapter boundary (not in serverEnv to avoid breaking Next.js build)
-      assertRuntimeSecrets(env);
+    const env = serverEnv();
+    // Validate runtime secrets at adapter boundary (not in serverEnv to avoid breaking Next.js build)
+    assertRuntimeSecrets(env);
 
+    let response: Response;
+    try {
       // HTTP call to LiteLLM with timeout enforcement
       // Uses LITELLM_MASTER_KEY (server-only secret) - never expose per-user virtual keys
-      const response = await fetch(
-        `${env.LITELLM_BASE_URL}/v1/chat/completions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${env.LITELLM_MASTER_KEY}`,
-          },
-          body: JSON.stringify(requestBody),
-          /** 30 second timeout */
-          signal: AbortSignal.timeout(30000),
+      response = await fetch(`${env.LITELLM_BASE_URL}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.LITELLM_MASTER_KEY}`,
+        },
+        body: JSON.stringify(requestBody),
+        /** 30 second timeout */
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch (error) {
+      // Handle fetch errors (network, timeout, abort)
+      if (error instanceof Error) {
+        if (error.name === "AbortError" || error.name === "TimeoutError") {
+          throw new LlmError(`LiteLLM request timed out`, "timeout", 408);
         }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `LiteLLM API error: ${response.status} ${response.statusText}`
+        throw new LlmError(
+          `LiteLLM network error: ${error.message}`,
+          "unknown"
         );
       }
-
-      // Read cost and call ID from response headers
-      const providerCostFromHeader = getProviderCostFromHeaders(response);
-      const litellmCallId = getLitellmCallIdFromHeaders(response);
-
-      const data = (await response.json()) as {
-        id?: string;
-        choices: { message: { content: string }; finish_reason?: string }[];
-        usage: {
-          prompt_tokens: number;
-          completion_tokens: number;
-          total_tokens?: number;
-        };
-      };
-
-      if (
-        !data.choices ||
-        data.choices.length === 0 ||
-        !data.choices[0]?.message ||
-        typeof data.choices[0].message.content !== "string"
-      ) {
-        throw new Error("Invalid response from LiteLLM");
-      }
-
-      // Build result object conditionally to satisfy exactOptionalPropertyTypes
-      const promptTokens = Number(data.usage?.prompt_tokens) || 0;
-      const completionTokens = Number(data.usage?.completion_tokens) || 0;
-      const totalTokens = data.usage?.total_tokens
-        ? Number(data.usage.total_tokens)
-        : promptTokens + completionTokens;
-
-      const result: Awaited<ReturnType<LlmService["completion"]>> = {
-        message: {
-          role: "assistant",
-          content: data.choices[0].message.content,
-        },
-        usage: {
-          promptTokens,
-          completionTokens,
-          totalTokens,
-        },
-        providerMeta: data as unknown as Record<string, unknown>,
-      };
-
-      // Add optional fields only when present
-      if (data.choices[0].finish_reason) {
-        result.finishReason = data.choices[0].finish_reason;
-      }
-
-      if (typeof providerCostFromHeader === "number") {
-        result.providerCostUsd = providerCostFromHeader;
-      }
-
-      // Prefer response body id (gen-...) for join with /spend/logs
-      if (data.id) {
-        result.litellmCallId = data.id;
-      } else if (litellmCallId) {
-        result.litellmCallId = litellmCallId;
-      }
-
-      // Sanitized adapter log (no content, bounded fields only)
-      logger.info(
-        {
-          model,
-          tokensUsed: totalTokens,
-          finishReason: result.finishReason,
-          hasCost: typeof providerCostFromHeader === "number",
-          hasCallId: !!litellmCallId,
-          contentLength: data.choices[0].message.content.length,
-        },
-        "adapter.litellm.completion_result"
-      );
-
-      return result;
-    } catch (error) {
-      // Map provider errors to typed errors (no stack leaks)
-      if (error instanceof Error) {
-        throw new Error(`LiteLLM completion failed: ${error.message}`);
-      }
-      throw new Error("LiteLLM completion failed: Unknown error");
+      throw new LlmError("LiteLLM completion failed: Unknown error", "unknown");
     }
+
+    // Handle HTTP errors with typed LlmError (per AI_SETUP_SPEC.md)
+    if (!response.ok) {
+      const kind = classifyLlmErrorFromStatus(response.status);
+      throw new LlmError(
+        `LiteLLM API error: ${response.status} ${response.statusText}`,
+        kind,
+        response.status
+      );
+    }
+
+    // Read cost and call ID from response headers
+    const providerCostFromHeader = getProviderCostFromHeaders(response);
+    const litellmCallId = getLitellmCallIdFromHeaders(response);
+
+    const data = (await response.json()) as {
+      id?: string;
+      model?: string;
+      choices: { message: { content: string }; finish_reason?: string }[];
+      usage: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens?: number;
+      };
+    };
+
+    if (
+      !data.choices ||
+      data.choices.length === 0 ||
+      !data.choices[0]?.message ||
+      typeof data.choices[0].message.content !== "string"
+    ) {
+      throw new LlmError("Invalid response from LiteLLM", "unknown");
+    }
+
+    // Build result object conditionally to satisfy exactOptionalPropertyTypes
+    const promptTokens = Number(data.usage?.prompt_tokens) || 0;
+    const completionTokens = Number(data.usage?.completion_tokens) || 0;
+    const totalTokens = data.usage?.total_tokens
+      ? Number(data.usage.total_tokens)
+      : promptTokens + completionTokens;
+
+    // Extract resolved model from response (may differ from requested model)
+    const resolvedModel = data.model ?? model;
+    const resolvedProvider = extractProviderFromModel(resolvedModel);
+
+    const result: Awaited<ReturnType<LlmService["completion"]>> = {
+      message: {
+        role: "assistant",
+        content: data.choices[0].message.content,
+      },
+      usage: {
+        promptTokens,
+        completionTokens,
+        totalTokens,
+      },
+      providerMeta: data as unknown as Record<string, unknown>,
+      promptHash,
+      resolvedProvider,
+      resolvedModel,
+    };
+
+    // Add optional fields only when present
+    if (data.choices[0].finish_reason) {
+      result.finishReason = data.choices[0].finish_reason;
+    }
+
+    if (typeof providerCostFromHeader === "number") {
+      result.providerCostUsd = providerCostFromHeader;
+    }
+
+    // Prefer response body id (gen-...) for join with /spend/logs
+    if (data.id) {
+      result.litellmCallId = data.id;
+    } else if (litellmCallId) {
+      result.litellmCallId = litellmCallId;
+    }
+
+    // Sanitized adapter log (no content, bounded fields only)
+    logger.info(
+      {
+        model: resolvedModel,
+        provider: resolvedProvider,
+        tokensUsed: totalTokens,
+        finishReason: result.finishReason,
+        hasCost: typeof providerCostFromHeader === "number",
+        hasCallId: !!litellmCallId,
+        contentLength: data.choices[0].message.content.length,
+        promptHash,
+      },
+      "adapter.litellm.completion_result"
+    );
+
+    return result;
   }
 
   async completionStream(
@@ -220,14 +272,22 @@ export class LiteLlmAdapter implements LlmService {
       throw new Error("LiteLLM completionStream requires model parameter");
     }
     const model = params.model;
-    const temperature = params.temperature ?? 0.7;
-    const maxTokens = params.maxTokens ?? 2048;
+    const temperature = params.temperature ?? DEFAULT_TEMPERATURE;
+    const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
     const { billingAccountId } = params.caller;
 
     const liteLlmMessages = params.messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
     }));
+
+    // Compute prompt hash BEFORE adding metadata (per AI_SETUP_SPEC.md)
+    const promptHash = computePromptHash({
+      model,
+      messages: liteLlmMessages,
+      temperature,
+      maxTokens,
+    });
 
     const requestBody = {
       model,
@@ -266,21 +326,38 @@ export class LiteLlmAdapter implements LlmService {
         signal,
       });
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw error; // Propagate abort immediately
+      // Handle fetch errors (network, timeout, abort)
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          throw new LlmError("LiteLLM stream aborted", "aborted");
+        }
+        if (error.name === "TimeoutError") {
+          throw new LlmError(
+            "LiteLLM stream connection timed out",
+            "timeout",
+            408
+          );
+        }
+        throw new LlmError(
+          `LiteLLM stream init failed: ${error.message}`,
+          "unknown"
+        );
       }
-      throw new Error(
-        `LiteLLM stream init failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
+      throw new LlmError(
+        "LiteLLM stream init failed: Unknown error",
+        "unknown"
       );
     } finally {
       clearTimeout(connectTimer);
     }
 
+    // Handle HTTP errors with typed LlmError (per AI_SETUP_SPEC.md)
     if (!response.ok) {
-      throw new Error(
-        `LiteLLM API error: ${response.status} ${response.statusText}`
+      const kind = classifyLlmErrorFromStatus(response.status);
+      throw new LlmError(
+        `LiteLLM API error: ${response.status} ${response.statusText}`,
+        kind,
+        response.status
       );
     }
 
@@ -414,9 +491,17 @@ export class LiteLlmAdapter implements LlmService {
           }
         } finally {
           reader.releaseLock();
+
+          // Extract resolved model/provider (SSE doesn't return these, use request param)
+          const resolvedModel = model;
+          const resolvedProvider = extractProviderFromModel(resolvedModel);
+
           // Build result object conditionally to satisfy exactOptionalPropertyTypes
           const result: CompletionResult = {
             message: { role: "assistant", content: fullContent },
+            promptHash,
+            resolvedProvider,
+            resolvedModel,
           };
           if (finalUsage) {
             result.usage = finalUsage;
@@ -446,28 +531,21 @@ export class LiteLlmAdapter implements LlmService {
 
           // ALWAYS include providerMeta with model (SSE doesn't return this, use request param)
           result.providerMeta = {
-            model,
-            provider: "litellm",
+            model: resolvedModel,
+            provider: resolvedProvider,
           };
-
-          // Invariant enforcement: model must be set
-          if (!result.providerMeta.model) {
-            logger.warn(
-              { model, hasUsage: !!finalUsage },
-              "inv_stream_missing_provider_meta: Stream result missing providerMeta.model"
-            );
-          }
 
           // Sanitized adapter log (no content, bounded fields only)
           logger.info(
             {
-              model: result.providerMeta.model,
-              provider: result.providerMeta.provider,
+              model: resolvedModel,
+              provider: resolvedProvider,
               tokensUsed: finalUsage?.totalTokens,
               finishReason,
               hasCost: typeof derivedCost === "number",
               hasCallId: !!litellmCallId,
               contentLength: fullContent.length,
+              promptHash,
             },
             "adapter.litellm.stream_result"
           );
