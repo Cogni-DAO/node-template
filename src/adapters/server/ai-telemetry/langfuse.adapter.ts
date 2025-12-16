@@ -96,7 +96,6 @@ export class LangfuseAdapter implements LangfusePort {
         model: generation.model,
         metadata: {
           latencyMs: generation.latencyMs,
-          providerCostUsd: generation.providerCostUsd,
           status: generation.status,
           errorCode: generation.errorCode,
         },
@@ -109,6 +108,11 @@ export class LangfuseAdapter implements LangfusePort {
           promptTokens: generation.tokensIn ?? null,
           completionTokens: generation.tokensOut ?? null,
         };
+      }
+
+      // Pass actual provider cost to Langfuse (overrides auto-calculated estimates)
+      if (generation.providerCostUsd != null) {
+        generationParams.costDetails = { total: generation.providerCostUsd };
       }
 
       // Only include statusMessage on error
