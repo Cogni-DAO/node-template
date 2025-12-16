@@ -421,6 +421,13 @@ export class LiteLlmAdapter implements LlmService {
               if (!event) break;
               const data = event.data;
 
+              // TODO(stream-hang-risk): streamCompleted is only set when '[DONE]' is seen.
+              // If LiteLLM/provider doesn't emit '[DONE]' but ends the stream normally,
+              // the `final` promise will never resolve (hang). Current OpenRouter behavior
+              // always emits '[DONE]', but this is a known fragility. Options to fix:
+              // 1. Track hadErrorOrAbort flag and resolve in finally when reader ends normally
+              // 2. Add timeout on `final` in higher layers to convert hangs to 'timeout' errors
+              // 3. Add contract test asserting '[DONE]' is always emitted
               if (data === "[DONE]") {
                 streamCompleted = true;
                 yield { type: "done" } as const;
