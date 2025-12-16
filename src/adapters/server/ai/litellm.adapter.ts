@@ -5,9 +5,9 @@
  * Module: `@adapters/server/ai/litellm`
  * Purpose: LiteLLM service implementation for AI completion and streaming with cost extraction and runtime secret validation.
  * Scope: Implements LlmService port (completion + stream), extracts cost from headers, validates secrets at adapter boundary. Does not handle auth or rate-limiting.
- * Invariants: Never logs prompts/keys/chunks; 30s timeout (completion), 15s connect timeout (stream); settles once; model required.
+ * Invariants: Never logs prompts/keys/chunks; 30s timeout (completion), 15s connect timeout (stream); settles once; model required; stream abort rejects with LlmError(kind='aborted').
  * Side-effects: IO (HTTP calls to LiteLLM)
- * Notes: SSE via eventsource-parser; assertRuntimeSecrets() before fetch; logs only bounded metadata (no content).
+ * Notes: SSE via eventsource-parser; assertRuntimeSecrets() before fetch; logs only bounded metadata (no content); aborted streams are errors, not partial successes.
  * Links: LlmService port, serverEnv, assertRuntimeSecrets, defer<T>() for promise settlement
  * @internal
  */
@@ -249,6 +249,7 @@ export class LiteLlmAdapter implements LlmService {
     }
 
     // Sanitized adapter log (no content, bounded fields only)
+    // Use final resolved call ID for hasCallId (not header-only value)
     logger.info(
       {
         model: resolvedModel,
@@ -256,7 +257,7 @@ export class LiteLlmAdapter implements LlmService {
         tokensUsed: totalTokens,
         finishReason: result.finishReason,
         hasCost: typeof providerCostFromHeader === "number",
-        hasCallId: !!litellmCallId,
+        hasCallId: !!result.litellmCallId,
         contentLength: data.choices[0].message.content.length,
         promptHash,
       },
@@ -394,6 +395,7 @@ export class LiteLlmAdapter implements LlmService {
         let finishReason: string | undefined;
         let usageCost: number | undefined; // Cost from stream usage event
         let litellmRequestId: string | undefined; // LiteLLM's gen-... ID from response
+        let streamCompleted = false; // Track if stream completed normally (not aborted/errored)
 
         // Queue for parsed events from eventsource-parser
         const eventQueue: EventSourceMessage[] = [];
@@ -420,6 +422,7 @@ export class LiteLlmAdapter implements LlmService {
               const data = event.data;
 
               if (data === "[DONE]") {
+                streamCompleted = true;
                 yield { type: "done" } as const;
                 continue;
               }
@@ -439,8 +442,18 @@ export class LiteLlmAdapter implements LlmService {
                       ? json.error
                       : json.error.message || "Provider error";
                   const errorText = `LiteLLM stream error: ${errorMsg}`;
+                  // Extract status code if available for proper error classification
+                  const statusCode =
+                    typeof json.error?.code === "number"
+                      ? json.error.code
+                      : undefined;
+                  const errorKind = statusCode
+                    ? classifyLlmErrorFromStatus(statusCode)
+                    : "unknown";
                   yield { type: "error", error: errorText } as const;
-                  deferred.reject(new Error(errorText));
+                  deferred.reject(
+                    new LlmError(errorText, errorKind, statusCode)
+                  );
                   return;
                 }
 
@@ -487,7 +500,9 @@ export class LiteLlmAdapter implements LlmService {
           }
         } catch (error: unknown) {
           if (error instanceof Error && error.name === "AbortError") {
-            // Stream aborted - resolve final with partial content, no error yield
+            // Stream aborted - reject with typed LlmError for proper telemetry
+            deferred.reject(new LlmError("LiteLLM stream aborted", "aborted"));
+            return;
           } else {
             // Real stream failure
             deferred.reject(error);
@@ -496,64 +511,68 @@ export class LiteLlmAdapter implements LlmService {
         } finally {
           reader.releaseLock();
 
-          // Extract resolved model/provider (SSE doesn't return these, use request param)
-          const resolvedModel = model;
-          const resolvedProvider = extractProviderFromModel(resolvedModel);
+          // Only resolve on successful stream completion (not abort/error)
+          if (streamCompleted) {
+            // Extract resolved model/provider (SSE doesn't return these, use request param)
+            const resolvedModel = model;
+            const resolvedProvider = extractProviderFromModel(resolvedModel);
 
-          // Build result object conditionally to satisfy exactOptionalPropertyTypes
-          const result: CompletionResult = {
-            message: { role: "assistant", content: fullContent },
-            promptHash,
-            resolvedProvider,
-            resolvedModel,
-          };
-          if (finalUsage) {
-            result.usage = finalUsage;
-          }
-          if (finishReason) {
-            result.finishReason = finishReason;
-          }
+            // Build result object conditionally to satisfy exactOptionalPropertyTypes
+            const result: CompletionResult = {
+              message: { role: "assistant", content: fullContent },
+              promptHash,
+              resolvedProvider,
+              resolvedModel,
+            };
+            if (finalUsage) {
+              result.usage = finalUsage;
+            }
+            if (finishReason) {
+              result.finishReason = finishReason;
+            }
 
-          // Cost derivation priority (ACTIVITY_METRICS.md §3):
-          // 1. Header (providerCostUsd from x-litellm-response-cost)
-          // 2. Usage event (usageCost from stream usage.cost)
-          // 3. Neither → undefined (will log CRITICAL in completion.ts)
-          const derivedCost =
-            typeof providerCostUsd === "number" ? providerCostUsd : usageCost;
+            // Cost derivation priority (ACTIVITY_METRICS.md §3):
+            // 1. Header (providerCostUsd from x-litellm-response-cost)
+            // 2. Usage event (usageCost from stream usage.cost)
+            // 3. Neither → undefined (will log CRITICAL in completion.ts)
+            const derivedCost =
+              typeof providerCostUsd === "number" ? providerCostUsd : usageCost;
 
-          if (typeof derivedCost === "number") {
-            result.providerCostUsd = derivedCost;
-          }
+            if (typeof derivedCost === "number") {
+              result.providerCostUsd = derivedCost;
+            }
 
-          // Prefer response body id (gen-...) for join with /spend/logs
-          // Fall back to header UUID if response id not available
-          if (litellmRequestId) {
-            result.litellmCallId = litellmRequestId;
-          } else if (litellmCallId) {
-            result.litellmCallId = litellmCallId;
-          }
+            // Prefer response body id (gen-...) for join with /spend/logs
+            // Fall back to header UUID if response id not available
+            if (litellmRequestId) {
+              result.litellmCallId = litellmRequestId;
+            } else if (litellmCallId) {
+              result.litellmCallId = litellmCallId;
+            }
 
-          // ALWAYS include providerMeta with model (SSE doesn't return this, use request param)
-          result.providerMeta = {
-            model: resolvedModel,
-            provider: resolvedProvider,
-          };
-
-          // Sanitized adapter log (no content, bounded fields only)
-          logger.info(
-            {
+            // ALWAYS include providerMeta with model (SSE doesn't return this, use request param)
+            result.providerMeta = {
               model: resolvedModel,
               provider: resolvedProvider,
-              tokensUsed: finalUsage?.totalTokens,
-              finishReason,
-              hasCost: typeof derivedCost === "number",
-              hasCallId: !!litellmCallId,
-              contentLength: fullContent.length,
-              promptHash,
-            },
-            "adapter.litellm.stream_result"
-          );
-          deferred.resolve(result);
+            };
+
+            // Sanitized adapter log (no content, bounded fields only)
+            // Use final resolved call ID for hasCallId (not header-only value)
+            logger.info(
+              {
+                model: resolvedModel,
+                provider: resolvedProvider,
+                tokensUsed: finalUsage?.totalTokens,
+                finishReason,
+                hasCost: typeof derivedCost === "number",
+                hasCallId: !!result.litellmCallId,
+                contentLength: fullContent.length,
+                promptHash,
+              },
+              "adapter.litellm.stream_result"
+            );
+            deferred.resolve(result);
+          }
         }
       })();
 
