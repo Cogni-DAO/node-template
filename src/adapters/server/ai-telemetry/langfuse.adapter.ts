@@ -8,7 +8,7 @@
  * Invariants:
  *   - Uses OTel traceId as Langfuse trace ID for correlation
  *   - flush() only if trace was created; never await on request path
- *   - Gracefully degrades if SDK errors (logs and continues)
+ *   - createTrace() throws on failure; caller handles graceful degradation
  * Side-effects: IO (Langfuse API calls)
  * Notes: Per AI_SETUP_SPEC.md P0 scope
  * Links: LangfusePort, OTel traceId correlation
