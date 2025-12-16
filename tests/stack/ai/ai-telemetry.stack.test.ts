@@ -13,7 +13,7 @@
  */
 
 import { TEST_MODEL_ID } from "@tests/_fakes";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -94,16 +94,21 @@ describe("AI Telemetry Stack Tests", () => {
       expect(responseJson.message?.requestId).toBeDefined();
       const returnedRequestId = responseJson.message?.requestId as string;
 
-      // Query ai_invocation_summaries for success rows
+      // Query ai_invocation_summaries by THIS request's ID (not status - avoids stale CI data)
       const rows = await db
         .select()
         .from(aiInvocationSummaries)
-        .where(eq(aiInvocationSummaries.status, "success"));
+        .where(eq(aiInvocationSummaries.requestId, returnedRequestId))
+        .orderBy(desc(aiInvocationSummaries.createdAt))
+        .limit(1);
 
-      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.length).toBe(1);
 
       const [row] = rows;
-      if (!row) throw new Error("No ai_invocation_summaries row found");
+      if (!row)
+        throw new Error(
+          `No ai_invocation_summaries row for requestId=${returnedRequestId}`
+        );
 
       // P0 Assertions per AI_SETUP_SPEC.md Test Gates
       // 1. status = 'success'
