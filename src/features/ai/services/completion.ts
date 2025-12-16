@@ -156,7 +156,8 @@ export async function execute(
     accountService
   );
 
-  const requestId = randomUUID();
+  // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
+  const requestId = ctx.reqId;
   // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt (idempotency key)
   const invocationId = randomUUID();
 
@@ -195,7 +196,8 @@ export async function execute(
     });
 
     // Per AI_SETUP_SPEC.md: Record telemetry on error path with REAL prompt_hash
-    const durationMs = performance.now() - llmStart;
+    // latencyMs must be integer for DB schema (milliseconds precision sufficient)
+    const latencyMs = Math.max(0, Math.round(performance.now() - llmStart));
     const errorKind = error instanceof LlmError ? error.kind : "unknown";
 
     // Create Langfuse trace first to capture langfuseTraceId for DB record
@@ -211,7 +213,7 @@ export async function execute(
           model,
           status: "error",
           errorCode: errorKind,
-          latencyMs: durationMs,
+          latencyMs,
         });
         // Flush in background (never await on request path per spec)
         langfuse
@@ -235,7 +237,7 @@ export async function execute(
         routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION, // Current version
         status: "error",
         errorCode: errorKind,
-        latencyMs: durationMs,
+        latencyMs,
       });
     } catch (telemetryError) {
       // Telemetry should never block error propagation
@@ -392,8 +394,10 @@ export async function execute(
   }
 
   // Per AI_SETUP_SPEC.md: Record success telemetry
-  // Use pre-computed promptHash (should match adapter's hash if defaults unchanged)
-  const successDurationMs = llmEvent.durationMs;
+  // Prefer adapter's promptHash (canonical payload hash) when available; fall back to pre-computed
+  // latencyMs must be integer for DB schema (milliseconds precision sufficient)
+  const latencyMs = Math.max(0, Math.round(llmEvent.durationMs));
+  const resolvedPromptHash = result.promptHash ?? promptHash;
 
   // Create Langfuse trace first to capture langfuseTraceId for DB record
   let langfuseTraceId: string | undefined;
@@ -402,12 +406,12 @@ export async function execute(
       langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
         requestId: ctx.reqId,
         model: result.resolvedModel ?? modelId,
-        promptHash, // Use pre-computed hash
+        promptHash: resolvedPromptHash,
       });
       langfuse.recordGeneration(ctx.traceId, {
         model: result.resolvedModel ?? modelId,
         status: "success",
-        latencyMs: successDurationMs,
+        latencyMs,
         ...(result.usage?.promptTokens !== undefined
           ? { tokensIn: result.usage.promptTokens }
           : {}),
@@ -436,10 +440,10 @@ export async function execute(
       ...(langfuseTraceId ? { langfuseTraceId } : {}),
       provider: result.resolvedProvider ?? "unknown",
       model: result.resolvedModel ?? modelId,
-      promptHash, // Use pre-computed hash (consistent with error path)
+      promptHash: resolvedPromptHash, // Prefer adapter's canonical hash
       routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION, // Current version
       status: "success",
-      latencyMs: successDurationMs,
+      latencyMs,
       ...(result.usage?.promptTokens !== undefined
         ? { tokensIn: result.usage.promptTokens }
         : {}),
@@ -509,7 +513,8 @@ export async function executeStream({
     accountService
   );
 
-  const requestId = randomUUID();
+  // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
+  const requestId = ctx.reqId;
   // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt (idempotency key)
   const invocationId = randomUUID();
 
@@ -655,8 +660,10 @@ export async function executeStream({
       }
 
       // Per AI_SETUP_SPEC.md: Record success telemetry for stream
-      // Use pre-computed promptHash (consistent with error path)
-      const successDurationMs = llmEvent.durationMs;
+      // Prefer adapter's promptHash (canonical payload hash) when available; fall back to pre-computed
+      // latencyMs must be integer for DB schema (milliseconds precision sufficient)
+      const latencyMs = Math.max(0, Math.round(llmEvent.durationMs));
+      const resolvedPromptHash = result.promptHash ?? promptHash;
 
       // Create Langfuse trace first to capture langfuseTraceId for DB record
       let langfuseTraceId: string | undefined;
@@ -665,12 +672,12 @@ export async function executeStream({
           langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
             requestId: ctx.reqId,
             model: result.resolvedModel ?? modelId,
-            promptHash, // Use pre-computed hash
+            promptHash: resolvedPromptHash,
           });
           langfuse.recordGeneration(ctx.traceId, {
             model: result.resolvedModel ?? modelId,
             status: "success",
-            latencyMs: successDurationMs,
+            latencyMs,
             ...(result.usage?.promptTokens !== undefined
               ? { tokensIn: result.usage.promptTokens }
               : {}),
@@ -699,10 +706,10 @@ export async function executeStream({
           ...(langfuseTraceId ? { langfuseTraceId } : {}),
           provider: result.resolvedProvider ?? "unknown",
           model: result.resolvedModel ?? modelId,
-          promptHash, // Use pre-computed hash
+          promptHash: resolvedPromptHash, // Prefer adapter's canonical hash
           routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION,
           status: "success",
-          latencyMs: successDurationMs,
+          latencyMs,
           ...(result.usage?.promptTokens !== undefined
             ? { tokensIn: result.usage.promptTokens }
             : {}),
@@ -751,7 +758,8 @@ export async function executeStream({
       });
 
       // Per AI_SETUP_SPEC.md: Record error telemetry for stream with REAL prompt_hash
-      const errorDurationMs = performance.now() - llmStart;
+      // latencyMs must be integer for DB schema (milliseconds precision sufficient)
+      const latencyMs = Math.max(0, Math.round(performance.now() - llmStart));
       const errorKind = error instanceof LlmError ? error.kind : "unknown";
 
       // Create Langfuse trace first to capture langfuseTraceId for DB record
@@ -767,7 +775,7 @@ export async function executeStream({
             model,
             status: "error",
             errorCode: errorKind,
-            latencyMs: errorDurationMs,
+            latencyMs,
           });
           // Flush in background (never await on request path per spec)
           langfuse
@@ -791,7 +799,7 @@ export async function executeStream({
           routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION,
           status: "error",
           errorCode: errorKind,
-          latencyMs: errorDurationMs,
+          latencyMs,
         });
       } catch (telemetryError) {
         // Telemetry should never block error propagation

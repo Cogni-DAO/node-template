@@ -26,6 +26,8 @@ export interface FakeLlmOptions {
     totalTokens: number;
   };
   delay?: number;
+  /** Custom promptHash to return (tests canonical hash propagation) */
+  promptHash?: string;
 }
 
 export class FakeLlmService implements LlmService {
@@ -81,7 +83,7 @@ export class FakeLlmService implements LlmService {
       providerCostUsd: 0.0001, // Small fixed cost for billing tests
       // New fields per AI_SETUP_SPEC.md
       litellmCallId: "fake-litellm-call-id",
-      promptHash: "fake-prompt-hash-sha256",
+      promptHash: this.options.promptHash ?? "fake-prompt-hash-sha256",
       resolvedProvider: "fake",
       resolvedModel: params.model ?? "mock-model",
     };
@@ -137,7 +139,7 @@ export class FakeLlmService implements LlmService {
         providerCostUsd,
         // New fields per AI_SETUP_SPEC.md
         litellmCallId: "fake-litellm-call-id",
-        promptHash: "fake-prompt-hash-sha256",
+        promptHash: this.options.promptHash ?? "fake-prompt-hash-sha256",
         resolvedProvider: "fake",
         resolvedModel: params.model ?? "mock-model",
       }),

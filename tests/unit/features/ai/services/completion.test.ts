@@ -94,7 +94,8 @@ describe("features/ai/services/completion", () => {
         content: "AI response",
         timestamp: "2025-01-01T12:00:00.000Z",
       });
-      expect(result.requestId).toBeDefined();
+      // P0 invariant: returned requestId MUST equal ctx.reqId (stable per request entry)
+      expect(result.requestId).toBe(testCtx.reqId);
       expect(llmService.wasCalled()).toBe(true);
 
       // Critical invariant: exactly one system message in LLM payload
@@ -300,6 +301,92 @@ describe("features/ai/services/completion", () => {
 
       // Assert
       expect(result.message.timestamp).toBe(fixedTime);
+    });
+
+    it("should use ctx.reqId for telemetry requestId (P0 stability)", async () => {
+      // Arrange
+      const messages = [createUserMessage("Hello")];
+      const llmService = new FakeLlmService({ responseContent: "Hi there" });
+      const clock = new FakeClock();
+      const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "stable-request-id-12345",
+        traceId: "00000000000000000000000000000000",
+        routeId: "test.route",
+        clock,
+      };
+      const telemetry = createFakeAiTelemetry();
+
+      // Act
+      const accountService = createMockAccountServiceWithDefaults();
+      const result = await execute(
+        messages,
+        TEST_MODEL_ID,
+        llmService,
+        accountService,
+        clock,
+        caller,
+        testCtx,
+        telemetry,
+        undefined
+      );
+
+      // Assert - P0 invariants
+      // 1. Returned requestId equals ctx.reqId
+      expect(result.requestId).toBe(testCtx.reqId);
+
+      // 2. Telemetry records ctx.reqId
+      const lastInvocation = telemetry.getLast();
+      expect(lastInvocation).toBeDefined();
+      expect(lastInvocation?.requestId).toBe(testCtx.reqId);
+
+      // 3. Charge receipt uses stable requestId (check mock was called with it)
+      expect(accountService.recordChargeReceipt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: testCtx.reqId,
+        })
+      );
+    });
+
+    it("should use adapter promptHash when available (canonical hash)", async () => {
+      // Arrange
+      const messages = [createUserMessage("Hello")];
+      const adapterPromptHash =
+        "adapter-canonical-hash-64chars-padded-to-64-chars-1234567890abc";
+      const llmService = new FakeLlmService({
+        responseContent: "Hi there",
+        promptHash: adapterPromptHash, // Adapter returns its canonical hash
+      });
+      const clock = new FakeClock();
+      const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
+        routeId: "test.route",
+        clock,
+      };
+      const telemetry = createFakeAiTelemetry();
+
+      // Act
+      const accountService = createMockAccountServiceWithDefaults();
+      await execute(
+        messages,
+        TEST_MODEL_ID,
+        llmService,
+        accountService,
+        clock,
+        caller,
+        testCtx,
+        telemetry,
+        undefined
+      );
+
+      // Assert - Telemetry should use adapter's hash (source of truth)
+      const lastInvocation = telemetry.getLast();
+      expect(lastInvocation).toBeDefined();
+      expect(lastInvocation?.promptHash).toBe(adapterPromptHash);
     });
 
     it("should propagate LLM service errors", async () => {

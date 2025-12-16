@@ -59,7 +59,8 @@ export class DrizzleAiTelemetryAdapter implements AiTelemetryPort {
         tokensOut: params.tokensOut ?? null,
         tokensTotal: params.tokensTotal ?? null,
         providerCostUsd: params.providerCostUsd?.toString() ?? null,
-        latencyMs: params.latencyMs,
+        // Defensive guard: ensure integer for DB schema (callers should already round)
+        latencyMs: Math.max(0, Math.round(params.latencyMs)),
         status: params.status,
         errorCode: params.errorCode ?? null,
       });
