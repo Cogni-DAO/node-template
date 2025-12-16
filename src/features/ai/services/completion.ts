@@ -8,9 +8,9 @@
  * Invariants:
  * - Only imports core, ports, shared - never contracts or adapters
  * - Pre-call credit check enforced; post-call billing never blocks response
- * - Records chargeReason='llm_usage', sourceSystem='litellm', sourceReference=litellmCallId for all completions
+ * - request_id is stable per request entry (ctx.reqId), NOT regenerated per LLM call
  * Side-effects: IO (via ports)
- * Notes: Logs warnings when cost is zero; post-call billing errors swallowed to preserve UX; logs error if litellmCallId missing
+ * Notes: Uses adapter promptHash when available (canonical); logs warnings when cost is zero; post-call billing errors swallowed to preserve UX
  * Links: Called by API routes, uses core domain and ports, types/billing.ts (categorization)
  * @public
  */
