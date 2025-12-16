@@ -32,9 +32,9 @@ let sdk: NodeSDK | null = null;
  * - Hard-fail in non-dev if startup fails
  */
 export async function register(): Promise<void> {
-  // Only initialize OTel in Node.js runtime (not Edge)
+  // Only initialize OTel in Node.js runtime (allowlist, not denylist)
   // biome-ignore lint/style/noProcessEnv: NEXT_RUNTIME is set by Next.js, no config file
-  if (process.env.NEXT_RUNTIME === "edge") {
+  if (process.env.NEXT_RUNTIME !== "nodejs") {
     return;
   }
 

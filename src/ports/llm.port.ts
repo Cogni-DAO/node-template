@@ -20,7 +20,9 @@ export type { Message } from "@/core";
 export interface LlmCaller {
   billingAccountId: string;
   virtualKeyId: string;
+  /** Request correlation ID - for LiteLLM metadata propagation */
   requestId: string;
+  /** OTel trace ID - for LiteLLM metadata propagation */
   traceId: string;
 }
 

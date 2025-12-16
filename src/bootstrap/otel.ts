@@ -111,17 +111,20 @@ export function getCurrentTraceId(): string {
   return span.spanContext().traceId;
 }
 
+/** Regex for valid OTel trace ID: 32 lowercase hex characters */
+const TRACE_ID_REGEX = /^[0-9a-f]{32}$/;
+
 /**
- * Check if a trace ID is valid (non-zero).
+ * Check if a trace ID is valid (non-zero, valid hex format).
  *
  * Zero trace ID indicates SDK not properly started or noop tracer.
  * Use this to verify OTel is working correctly in tests.
  *
  * @param traceId - Trace ID to check
- * @returns true if trace ID is non-zero (valid)
+ * @returns true if trace ID is valid lowercase hex and non-zero
  */
 export function isValidTraceId(traceId: string): boolean {
-  return traceId !== ZERO_TRACE_ID && traceId.length === 32;
+  return TRACE_ID_REGEX.test(traceId) && traceId !== ZERO_TRACE_ID;
 }
 
 /**
