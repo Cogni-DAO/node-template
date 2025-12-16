@@ -5,9 +5,16 @@
  * Module: `@adapters/server/ai/litellm`
  * Purpose: LiteLLM service implementation for AI completion and streaming with cost extraction and runtime secret validation.
  * Scope: Implements LlmService port (completion + stream), extracts cost from headers, validates secrets at adapter boundary. Does not handle auth or rate-limiting.
- * Invariants: Never logs prompts/keys/chunks; 30s timeout (completion), 15s connect timeout (stream); settles once; model required; stream abort rejects with LlmError(kind='aborted').
+ * Invariants:
+ *   - Never logs prompts/keys/chunks
+ *   - 30s timeout (completion), 15s connect timeout (stream)
+ *   - Settles once; model required
+ *   - Stream abort rejects with LlmError(kind='aborted')
  * Side-effects: IO (HTTP calls to LiteLLM)
- * Notes: SSE via eventsource-parser; assertRuntimeSecrets() before fetch; logs only bounded metadata (no content); aborted streams are errors, not partial successes.
+ * Notes:
+ *   - SSE via eventsource-parser; assertRuntimeSecrets() before fetch
+ *   - Logs only bounded metadata (no content)
+ *   - Aborted streams are errors, not partial successes
  * Links: LlmService port, serverEnv, assertRuntimeSecrets, defer<T>() for promise settlement
  * @internal
  */
