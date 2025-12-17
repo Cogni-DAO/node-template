@@ -27,21 +27,32 @@
 | `router_policy_version` | Semver or SHA    | Model routing logic |
 | `provider` + `model`    | LiteLLM response | Resolved target     |
 
-### Correlation IDs
+### Correlation ID Map
 
-| ID                  | Generated At         | Propagates To                                        |
-| ------------------- | -------------------- | ---------------------------------------------------- |
-| `request_id`        | Request entry (once) | All layers, charge_receipts, ai_invocation_summaries |
-| `trace_id`          | Explicit root span   | LiteLLM metadata, Langfuse, OTel span attributes     |
-| `litellm_call_id`   | LiteLLM response     | ai_invocation_summaries (join key)                   |
-| `langfuse_trace_id` | Langfuse SDK         | ai_invocation_summaries (debug URL)                  |
-| `graph_run_id`      | Per graph execution  | Optional: multiple AI calls within one request_id    |
+| ID                  | Scope                     | Purpose                                                 |
+| ------------------- | ------------------------- | ------------------------------------------------------- |
+| `request_id`        | One per inbound request   | Primary join across all systems                         |
+| `trace_id`          | One per distributed trace | OTel backbone; 32-hex                                   |
+| `span_id`           | One per operation         | Tracing UI only; **do NOT persist as durable join key** |
+| `invocation_id`     | One per LLM call attempt  | Idempotency key; UNIQUE in ai_invocation_summaries      |
+| `graph_run_id`      | One per graph execution   | Groups multiple LLM calls within a request              |
+| `langfuse_trace_id` | Langfuse-specific         | Optional debug join; equals trace_id when enabled       |
+| `litellm_call_id`   | LiteLLM call ID           | Join to /spend/logs; may be null on errors              |
+
+**ID Categories:**
+
+| Category                        | IDs                                           | Notes                                                 |
+| ------------------------------- | --------------------------------------------- | ----------------------------------------------------- |
+| **Essential (always required)** | `request_id`, `trace_id`, `invocation_id`     | Must be non-null on every ai_invocation_summaries row |
+| **Essential for graphs**        | `graph_run_id`, `graph_name`, `graph_version` | Required when LLM call is within a graph execution    |
+| **Nice-to-have**                | `langfuse_trace_id`, `litellm_call_id`        | Nullable; depends on external service availability    |
 
 **ID Strategy:**
 
 - One stable `request_id` per user-initiated request—do NOT generate new IDs per layer
-- `trace_id` for distributed tracing; `span_id` changes per operation
+- `trace_id` for distributed tracing; `span_id` changes per operation (never persist span_id)
 - `request_id` attached as OTel span attribute AND forwarded in LiteLLM metadata
+- `invocation_id` generated per LLM call attempt (idempotency key for retries)
 
 ### Eval Artifact Policy
 
@@ -74,15 +85,70 @@
 - [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
 - [ ] Documentation updates [document.md](../.agent/workflows/document.md)
 
-### P1: ai-core Package + Eval Harness
+### P1: First LangGraph Graph
 
-- [ ] Create `packages/ai-core` per [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md)
-- [ ] Implement one real graph (e.g., `review.graph.ts`) + prompt files
-- [ ] Tool contracts with Zod schemas (see tool structure below)
-- [ ] Create `evals/` runner with 3-5 fixtures + goldens
-- [ ] CI gate: require explicit golden update policy
+Create `packages/ai-core` with one working graph that demonstrates the full correlation flow.
 
-### P2: Future (Do NOT Build Yet)
+#### P1 Deliverables
+
+- [ ] Create `packages/ai-core` scaffold per [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md)
+- [ ] Move `src/shared/ai/prompt-hash.ts` → `packages/ai-core/src/hashing/prompt-hash.ts`
+- [ ] Define canonical `AiCoreLlmPort` in `packages/ai-core/src/ports/llm.port.ts`
+- [ ] Update `src/ports/llm.port.ts` to re-export from `@cogni/ai-core`
+- [ ] Implement first graph (`packages/ai-core/src/graphs/review.graph.ts`)
+- [ ] Create orchestration service (`src/features/ai/services/review.ts`)
+- [ ] Add TypeScript conformance test (`tests/contract/ai-core-port-conformance.contract.ts`)
+- [ ] Add dependency-cruiser rule: ai-core must not import from `src/`
+
+#### P1 Invariants (Blocking for Merge)
+
+- [ ] **GRAPH_CALLER_TYPE_REQUIRED**: Graph APIs must require `graphRunId` at the type level (not optional). Use distinct caller types: `AiCoreLlmCaller` (base) vs `GraphLlmCaller extends AiCoreLlmCaller` with required `graphRunId`.
+- [ ] **PROMPT_HASH_VERSION_IN_PAYLOAD**: `prompt_hash_version: 'v1'` must be embedded inside the canonical payload that is hashed, not just exported as a constant.
+- [ ] **HASHING_SINGLE_CALL_SITE**: Only `litellm.adapter.ts` computes `promptHash`. Graph code must NOT compute or re-compute it—adapter returns it in `AiCoreLlmResult.promptHash`.
+- [ ] **GRAPH_METADATA_ENFORCED**: If `caller.graphRunId` is present, then `graph_name` and `graph_version` must be non-null on `ai_invocation_summaries` rows. Enforced by telemetry writer validation.
+- [ ] **SINGLE_SOURCE_CONTRACTS**: `@cogni/ai-core` is canonical home for LLM port + prompt hash. App re-exports; no parallel definitions.
+
+#### P1 File Pointers
+
+| File                                          | Purpose                                              |
+| --------------------------------------------- | ---------------------------------------------------- |
+| `packages/ai-core/src/ports/llm.port.ts`      | Canonical `AiCoreLlmPort`, `GraphLlmCaller` types    |
+| `packages/ai-core/src/hashing/prompt-hash.ts` | `computePromptHash()`, `PROMPT_HASH_VERSION`         |
+| `packages/ai-core/src/graphs/review.graph.ts` | First graph with DI config pattern                   |
+| `src/ports/llm.port.ts`                       | Re-exports from ai-core + app streaming extension    |
+| `src/features/ai/services/review.ts`          | Orchestration: generates `graphRunId`, bridges ports |
+| `src/adapters/server/ai/litellm.adapter.ts`   | Sole `promptHash` computation site                   |
+
+### P2: First Eval Runner
+
+Build eval harness to validate graph outputs against golden fixtures.
+
+#### P2 Deliverables
+
+- [ ] Create `evals/` directory structure
+- [ ] Implement `evals/runner.ts` harness (load fixtures, run graph, compare goldens)
+- [ ] Add 3-5 fixtures for review graph (`evals/fixtures/review-*.json`)
+- [ ] Create corresponding goldens (`evals/goldens/review-*.golden.json`)
+- [ ] Add `evals/scripts/update-goldens.ts` with explicit `--update` flag
+- [ ] CI gate: fail if goldens change without `--update-goldens` flag
+
+#### P2 Invariants
+
+- [ ] **GOLDEN_UPDATE_POLICY**: Never silently update goldens to make CI pass. Requires commit message explaining why.
+- [ ] **STRUCTURED_OUTPUT_VALIDATION**: All AI responses must validate against Zod schema before golden comparison.
+- [ ] **DETERMINISTIC_COMPARE**: Golden matching uses explicit tolerances (exact, subset, numeric delta).
+- [ ] **EVAL_ARTIFACT_CAPTURE**: Eval runs must persist full prompt/response artifacts (local files or Langfuse datasets).
+
+#### P2 File Pointers
+
+| File                              | Purpose                     |
+| --------------------------------- | --------------------------- |
+| `evals/runner.ts`                 | Test harness entry point    |
+| `evals/fixtures/`                 | Input test cases            |
+| `evals/goldens/`                  | Expected outputs            |
+| `evals/scripts/update-goldens.ts` | Explicit golden update tool |
+
+### P3: Future (Do NOT Build Yet)
 
 - [ ] Evaluate ClickHouse/data lake after eval loop works
 - [ ] PostHog analytics (requires stable correlation IDs first)
@@ -254,11 +320,12 @@
 
 ## Related Docs
 
-- [AI_EVALS.md](AI_EVALS.md) - Stack details, eval structure, CI gates
+- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - LangGraph architecture, port definitions, flow diagrams
+- [AI_EVALS.md](AI_EVALS.md) - Eval harness structure, CI gates
 - [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md) - Package creation rules
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal layers
 
 ---
 
 **Last Updated**: 2025-12-17
-**Status**: Design Approved
+**Status**: P0 Complete, P1/P2 Design Approved
