@@ -71,6 +71,12 @@ vi.mock("next-auth/react", () => ({
   signOut: vi.fn(),
 }));
 
+// Mock payments feature boundary - controls useCreditsSummary behavior per test
+const mockUseCreditsSummary = vi.fn();
+vi.mock("@/features/payments/public", () => ({
+  useCreditsSummary: () => mockUseCreditsSummary(),
+}));
+
 describe("ChatPage - No Client-Invented Model IDs", () => {
   let queryClient: QueryClient;
 
@@ -82,13 +88,15 @@ describe("ChatPage - No Client-Invented Model IDs", () => {
   });
 
   it("MUST NOT render any model ID that is not in server's models list", async () => {
+    // Mock positive credits state
+    mockUseCreditsSummary.mockReturnValue({
+      data: { balanceCredits: 100, ledger: [] },
+      isLoading: false,
+    });
+
     // Server returns ONLY claude models (no gpt-4o-mini!)
     const modelsData = createModelsClaudeOnly();
     queryClient.setQueryData(["ai-models"], modelsData);
-    queryClient.setQueryData(["payments-summary", { limit: undefined }], {
-      balanceCredits: 100,
-      ledger: [],
-    });
 
     const { container } = render(
       <SessionProvider session={null}>
@@ -115,13 +123,15 @@ describe("ChatPage - No Client-Invented Model IDs", () => {
   });
 
   it("MUST use free model default when balance is zero", async () => {
+    // Mock zero credits state
+    mockUseCreditsSummary.mockReturnValue({
+      data: { balanceCredits: 0, ledger: [] },
+      isLoading: false,
+    });
+
     // Server returns both free and paid, default is paid
     const modelsData = createModelsWithFree();
     queryClient.setQueryData(["ai-models"], modelsData);
-    queryClient.setQueryData(["payments-summary", { limit: undefined }], {
-      balanceCredits: 0,
-      ledger: [],
-    });
 
     render(
       <SessionProvider session={null}>

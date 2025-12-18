@@ -75,6 +75,12 @@ vi.mock("next-auth/react", () => ({
   signOut: vi.fn(),
 }));
 
+// Mock payments feature boundary - controls useCreditsSummary behavior per test
+const mockUseCreditsSummary = vi.fn();
+vi.mock("@/features/payments/public", () => ({
+  useCreditsSummary: () => mockUseCreditsSummary(),
+}));
+
 describe("ChatPage - Zero Credits Invariant", () => {
   let queryClient: QueryClient;
 
@@ -86,7 +92,11 @@ describe("ChatPage - Zero Credits Invariant", () => {
   });
 
   it("MUST NOT show paid model label during loading phase", async () => {
-    // Simulate loading state - don't seed QueryClient (queries will be in loading state)
+    // Simulate loading state
+    mockUseCreditsSummary.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+    });
 
     const { container } = render(
       <SessionProvider session={null}>
@@ -106,12 +116,14 @@ describe("ChatPage - Zero Credits Invariant", () => {
   });
 
   it("MUST NOT pass paid defaultModelId when user has zero credits", async () => {
+    // Mock zero credits state
+    mockUseCreditsSummary.mockReturnValue({
+      data: { balanceCredits: 0, ledger: [] },
+      isLoading: false,
+    });
+
     const modelsData = createModelsWithFree();
     queryClient.setQueryData(["ai-models"], modelsData);
-    queryClient.setQueryData(["payments-summary", { limit: undefined }], {
-      balanceCredits: 0,
-      ledger: [],
-    });
 
     render(
       <SessionProvider session={null}>
@@ -140,12 +152,14 @@ describe("ChatPage - Zero Credits Invariant", () => {
   });
 
   it("MUST block interaction when zero credits and no free models", async () => {
+    // Mock zero credits state
+    mockUseCreditsSummary.mockReturnValue({
+      data: { balanceCredits: 0, ledger: [] },
+      isLoading: false,
+    });
+
     const modelsData = createModelsPaidOnly();
     queryClient.setQueryData(["ai-models"], modelsData);
-    queryClient.setQueryData(["payments-summary", { limit: undefined }], {
-      balanceCredits: 0,
-      ledger: [],
-    });
 
     render(
       <SessionProvider session={null}>

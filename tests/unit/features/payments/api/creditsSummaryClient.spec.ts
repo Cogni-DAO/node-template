@@ -62,7 +62,7 @@ describe("creditsSummaryClient", () => {
       const result = await creditsSummaryClient.getSummary();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/v1/payments/credits/summary"
+        "http://localhost/api/v1/payments/credits/summary"
       );
       expect(result).toEqual({
         ok: true,
@@ -79,7 +79,7 @@ describe("creditsSummaryClient", () => {
       const result = await creditsSummaryClient.getSummary({ limit: 10 });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/v1/payments/credits/summary?limit=10"
+        "http://localhost/api/v1/payments/credits/summary?limit=10"
       );
       expect(result.ok).toBe(true);
     });
@@ -93,7 +93,7 @@ describe("creditsSummaryClient", () => {
       const result = await creditsSummaryClient.getSummary({});
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/v1/payments/credits/summary"
+        "http://localhost/api/v1/payments/credits/summary"
       );
       expect(result.ok).toBe(true);
     });

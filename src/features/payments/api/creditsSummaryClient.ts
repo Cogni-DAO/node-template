@@ -19,6 +19,19 @@ import type {
 import * as clientLogger from "@/shared/observability/client";
 import { EVENT_NAMES } from "@/shared/observability/events";
 
+/**
+ * Resolves a relative URL path to an absolute URL.
+ * In browser: uses window.location.origin
+ * In Node (tests): falls back to http://localhost
+ */
+function resolveUrl(path: string): string {
+  const base =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "http://localhost";
+  return new URL(path, base).toString();
+}
+
 type ApiSuccess<T> = { ok: true; data: T };
 type ApiError = { ok: false; error: string; errorCode?: string };
 type ApiResult<T> = ApiSuccess<T> | ApiError;
@@ -65,7 +78,7 @@ export const creditsSummaryClient = {
         params.toString() ? `?${params}` : ""
       }`;
 
-      const res = await fetch(url);
+      const res = await fetch(resolveUrl(url));
       return handleResponse<CreditsSummaryOutput>(res);
     } catch (error) {
       clientLogger.error(
