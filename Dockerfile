@@ -1,29 +1,25 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-# Base image – shared between deps and builder
+# Base image – shared across stages
 FROM node:20-alpine AS base
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
-# 1) Dependencies (full, including dev) – cached by package.json + pnpm-lock.yaml
-FROM base AS deps
+# Builder: full workspace install + build
+# Cache efficiency relies on BuildKit pnpm-store mount (packages pre-fetched)
+FROM base AS builder
 RUN apk add --no-cache g++ make python3
-COPY package.json pnpm-lock.yaml ./
+
+# Copy full workspace (filtered by .dockerignore)
+COPY . .
+
 # Use official node dist to avoid unofficial-builds.nodejs.org flakiness
 ENV npm_config_disturl=https://nodejs.org/dist
+
+# Install all dependencies (workspace-aware via pnpm-workspace.yaml in context)
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm fetch --frozen-lockfile
-
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm install --frozen-lockfile --offline
-
-# 2) Build – reuse node_modules from deps
-FROM base AS builder
-WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+    pnpm install --frozen-lockfile
 
 ARG APP_ENV=production
 
@@ -31,39 +27,34 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production \
     APP_ENV=${APP_ENV}
 
-# Build-time DB env for NextAuth + Drizzle adapter validation during `pnpm build`.
-# No actual DB connection is made at build time; these values satisfy config validation only.
-# Runtime containers will override with real credentials.
-ENV DATABASE_URL="postgresql://build_user:build_pass@build-host.invalid:5432/build_db" \
-    AUTH_SECRET="build-time-secret-min-32-chars-long-placeholder"
+# Build all workspace packages (brute-force, not graph-scoped)
+# Required: package exports point to dist/, must exist before Next.js build
+RUN pnpm -r --filter "./packages/**" build
 
-# Build workspace packages (TypeScript project references)
-# Required: Next.js build imports @cogni/* packages, which must be built first
-RUN pnpm exec tsc -b
+# Build-time placeholder for AUTH_SECRET (required by env validation during Next.js page collection)
+# Not a real secret; runtime containers must provide real AUTH_SECRET via deployment env
+ARG AUTH_SECRET_BUILD="build-time-placeholder-min-32-chars-xxxxxxxxxxxxxxxx"
+ENV AUTH_SECRET=${AUTH_SECRET_BUILD}
 
-# Persist Next's build cache across Docker builds (huge win for rebuilds)
+# Build workspace root (Next.js app)
 RUN --mount=type=cache,id=next-cache,target=/app/.next/cache,sharing=locked \
-    pnpm build
-    
-# 3) Migrator – minimal image for running database migrations via drizzle-kit
+    pnpm -w build
+
+# Migrator – minimal image for database migrations via drizzle-kit
 FROM base AS migrator
 WORKDIR /app
 
-# Copy package manifest files (required for pnpm to work)
-COPY package.json pnpm-lock.yaml ./
-
-# Reuse node_modules from deps stage (includes drizzle-kit and all dependencies)
-COPY --from=deps /app/node_modules ./node_modules
-
-# Copy only files required by drizzle.config.ts and migrate command
-COPY drizzle.config.ts ./
-COPY src/shared/db ./src/shared/db
-COPY src/adapters/server/db/migrations ./src/adapters/server/db/migrations
+# Copy from builder (includes built workspace packages)
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/drizzle.config.ts ./
+COPY --from=builder /app/src/shared/db ./src/shared/db
+COPY --from=builder /app/src/adapters/server/db/migrations ./src/adapters/server/db/migrations
 
 # Run canonical migration script (drizzle-kit migrate)
 CMD ["pnpm", "db:migrate:container"]
 
-# 4) Runtime – lean production image (no migration tooling)
+# Runner – lean production image
 FROM node:20-alpine AS runner
 WORKDIR /app
 
