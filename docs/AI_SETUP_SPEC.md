@@ -93,12 +93,14 @@ Create first graph inside a feature slice with full correlation flow. No package
 
 #### P1 Deliverables
 
+**P1 instance:** `src/features/ai/graphs/chat.graph.ts` (chat subfeature under AI feature).
+
 - [ ] Implement first graph (`src/features/<feature>/ai/graphs/<graph>.graph.ts`)
 - [ ] Create prompt templates (`src/features/<feature>/ai/prompts/<graph>.prompt.ts`)
 - [ ] Create orchestration service (`src/features/<feature>/ai/services/<graph>.ts`)
 - [ ] Create `src/features/ai/ai.facade.ts` as single AI entrypoint (decides graph vs direct LLM, generates `graphRunId`)
 - [ ] Create `src/features/ai/tool-runner.ts` for tool execution + UiEvent emission
-- [ ] Integrate chat route: consumes UiEvents from facade, maps to Data Stream Protocol
+- [x] Integrate chat route: consumes UiEvents from facade, maps to Data Stream Protocol
 
 #### P1 Invariants (Blocking for Merge)
 
