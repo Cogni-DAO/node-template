@@ -10,7 +10,7 @@
  *   - GRAPHS_USE_TOOLRUNNER_ONLY: Tools invoked exclusively via toolRunner.exec()
  * Side-effects: none (pure logic; effects via injected deps)
  * Notes: P1 skeleton - full LangGraph integration in future
- * Links: ai.facade.ts, tool-runner.ts, AI_SETUP_SPEC.md
+ * Links: ai_runtime.ts, tool-runner.ts, AI_SETUP_SPEC.md
  * @internal
  */
 
@@ -18,7 +18,7 @@ import type { Message } from "@/core";
 import type { LlmService } from "@/ports";
 
 import type { ToolRunner } from "../tool-runner";
-import type { UiEvent } from "../types";
+import type { AiEvent } from "../types";
 
 /**
  * Graph name for telemetry.
@@ -51,8 +51,8 @@ export interface ChatGraphDeps {
   readonly llmService: LlmService;
   /** Tool runner for tool execution */
   readonly toolRunner: ToolRunner;
-  /** Callback to emit UiEvents */
-  readonly emit: (event: UiEvent) => void;
+  /** Callback to emit AiEvents */
+  readonly emit: (event: AiEvent) => void;
 }
 
 /**
@@ -63,14 +63,14 @@ export interface ChatGraphDeps {
  *
  * @param input - Graph input
  * @param deps - Injected dependencies
- * @returns Async generator of UiEvents
+ * @returns Async generator of AiEvents
  */
 export async function* executeChatGraph(
   _input: ChatGraphInput,
   _deps: ChatGraphDeps
-): AsyncGenerator<UiEvent> {
+): AsyncGenerator<AiEvent> {
   // P1 Skeleton: Graph execution will be implemented when LangGraph is integrated
-  // For now, direct LLM streaming is handled by ai.facade.ts
+  // For now, direct LLM streaming is handled by ai_runtime.ts
 
   // This generator is a placeholder that yields nothing
   // Real implementation will:

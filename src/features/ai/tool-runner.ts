@@ -3,7 +3,7 @@
 
 /**
  * Module: `@features/ai/tool-runner`
- * Purpose: Tool execution with UiEvent emission and payload redaction.
+ * Purpose: Tool execution with AiEvent emission and payload redaction.
  * Scope: Sole owner of toolCallId generation; executes tools via injected implementations. Does not import adapters.
  * Invariants:
  *   - GRAPHS_USE_TOOLRUNNER_ONLY: Graphs invoke tools exclusively through toolRunner.exec()
@@ -11,27 +11,27 @@
  *   - TOOLRUNNER_ALLOWLIST_HARD_FAIL: Missing allowlist or redaction failure → error event
  *   - TOOLRUNNER_RESULT_SHAPE: Returns {ok:true, value} | {ok:false, errorCode, safeMessage}
  *   - TOOLRUNNER_PIPELINE_ORDER: validate args → execute → validate result → redact → emit → return
- * Side-effects: none (UiEvent emission via injected callback is caller's responsibility)
+ * Side-effects: none (AiEvent emission via injected callback is caller's responsibility)
  * Notes: Per AI_SETUP_SPEC.md P1 invariants
- * Links: types.ts, ai.facade.ts, AI_SETUP_SPEC.md
+ * Links: types.ts, ai_runtime.ts, AI_SETUP_SPEC.md
  * @public
  */
 
 import { randomUUID } from "node:crypto";
 
 import type {
+  AiEvent,
   BoundTool,
   ToolCallResultEvent,
   ToolCallStartEvent,
   ToolResult,
-  UiEvent,
 } from "./types";
 
 /**
- * Callback for emitting UiEvents during tool execution.
- * Used by tool-runner to stream events to facade.
+ * Callback for emitting AiEvents during tool execution.
+ * Used by tool-runner to stream events to runtime.
  */
-export type EmitUiEvent = (event: UiEvent) => void;
+export type EmitAiEvent = (event: AiEvent) => void;
 
 /**
  * Options for tool execution.
@@ -43,10 +43,10 @@ export interface ToolExecOptions {
 
 /**
  * Create a tool runner instance with the given bound tools.
- * The runner executes tools and emits UiEvents via the provided callback.
+ * The runner executes tools and emits AiEvents via the provided callback.
  *
  * @param boundTools - Map of tool name to bound tool (contract + implementation)
- * @param emit - Callback to emit UiEvents
+ * @param emit - Callback to emit AiEvents
  * @returns Tool runner with exec method
  */
 export function createToolRunner<
@@ -54,7 +54,7 @@ export function createToolRunner<
     string,
     BoundTool<string, unknown, unknown, Record<string, unknown>>
   >,
->(boundTools: TTools, emit: EmitUiEvent) {
+>(boundTools: TTools, emit: EmitAiEvent) {
   /**
    * Execute a tool by name with given arguments.
    * Follows fixed pipeline per TOOLRUNNER_PIPELINE_ORDER.

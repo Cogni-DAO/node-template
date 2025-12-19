@@ -2,15 +2,15 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@features/ai/services/streaming`
- * Purpose: Streaming orchestrator that decides graph vs direct LLM and emits UiEvents.
- * Scope: Generates graphRunId for graph executions; returns AsyncIterable<UiEvent> and StreamFinalResult. Does not touch wire protocol encoding.
+ * Module: `@features/ai/services/ai_runtime`
+ * Purpose: AI runtime orchestrator that decides graph vs direct LLM and emits AiEvents.
+ * Scope: Generates graphRunId for graph executions; returns AsyncIterable<AiEvent> and StreamFinalResult. Does not touch wire protocol encoding.
  * Invariants:
- *   - AI_FACADE_EMITS_UIEVENTS: Only emits UiEvents (text_delta, tool_call_start, tool_call_result)
- *   - FACADE_STREAMS_ASYNC_ITERABLE: Returns AsyncIterable<UiEvent>, no buffering
+ *   - AI_RUNTIME_EMITS_AIEVENTS: Only emits AiEvents (text_delta for P1; tool events added when graphs land)
+ *   - RUNTIME_STREAMS_ASYNC_ITERABLE: Returns AsyncIterable<AiEvent>, no buffering
  *   - Delegates to completion.ts for billing/telemetry (never calls llmService directly)
  *   - Must NOT import app/*, adapters/*, or contracts/*
- *   - Route layer maps UiEvents to assistant-stream format
+ *   - Route layer maps AiEvents to assistant-stream format
  * Side-effects: IO (via injected services)
  * Notes: P1 supports direct LLM streaming; graph support added when graphs are implemented
  * Links: ../types.ts, ../tool-runner.ts, completion.ts, AI_SETUP_SPEC.md
@@ -30,13 +30,13 @@ import type {
   LlmService,
 } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
-import type { StreamFinalResult, TextDeltaEvent, UiEvent } from "../types";
+import type { AiEvent, StreamFinalResult, TextDeltaEvent } from "../types";
 import { executeStream } from "./completion";
 
 /**
- * Input for AI facade operations.
+ * Input for AI runtime operations.
  */
-export interface AiFacadeInput {
+export interface AiRuntimeInput {
   /** Conversation messages */
   readonly messages: Message[];
   /** Model identifier */
@@ -48,11 +48,11 @@ export interface AiFacadeInput {
 }
 
 /**
- * Dependencies for AI facade.
+ * Dependencies for AI runtime.
  * Injected at construction to enable testing and DI.
  * Includes all deps needed to delegate to executeStream().
  */
-export interface AiFacadeDeps {
+export interface AiRuntimeDeps {
   readonly llmService: LlmService;
   readonly accountService: AccountService;
   readonly clock: Clock;
@@ -61,41 +61,41 @@ export interface AiFacadeDeps {
 }
 
 /**
- * AI facade result with stream and completion promise.
+ * AI runtime result with stream and completion promise.
  */
-export interface AiFacadeResult {
-  /** Stream of UI events for real-time rendering */
-  readonly stream: AsyncIterable<UiEvent>;
+export interface AiRuntimeResult {
+  /** Stream of AI events for real-time rendering */
+  readonly stream: AsyncIterable<AiEvent>;
   /** Promise resolving with final result (ok with usage/finishReason, or error) */
   readonly final: Promise<StreamFinalResult>;
 }
 
 /**
- * Create a streaming service instance with injected dependencies.
+ * Create an AI runtime instance with injected dependencies.
  * Entry point for AI chat streaming with graph vs direct LLM decision.
  *
  * @param deps - Injected service dependencies
- * @returns Service with streamChat method
+ * @returns Runtime with runChatStream method
  */
-export function createStreamingService(deps: AiFacadeDeps) {
+export function createAiRuntime(deps: AiRuntimeDeps) {
   const { llmService, accountService, clock, aiTelemetry, langfuse } = deps;
 
   /**
-   * Stream a chat response as UiEvents.
-   * Delegates to executeStream() for billing/telemetry, then transforms to UiEvents.
+   * Run a chat stream as AiEvents.
+   * Delegates to executeStream() for billing/telemetry, then transforms to AiEvents.
    * P1: Direct LLM path only. Graph support in future.
    *
-   * Per FACADE_STREAMS_ASYNC_ITERABLE: Returns immediately, streams via AsyncIterable.
-   * Per AI_FACADE_EMITS_UIEVENTS: Only emits text_delta, tool_call_start, tool_call_result, done.
+   * Per RUNTIME_STREAMS_ASYNC_ITERABLE: Returns immediately, streams via AsyncIterable.
+   * Per AI_RUNTIME_EMITS_AIEVENTS: Only emits text_delta (P1); tool events when graphs land.
    *
    * @param input - Chat input (messages, model, caller)
    * @param ctx - Request context for logging/telemetry
-   * @returns Stream of UiEvents and completion promise
+   * @returns Stream of AiEvents and completion promise
    */
-  async function streamChat(
-    input: AiFacadeInput,
+  async function runChatStream(
+    input: AiRuntimeInput,
     ctx: RequestContext
-  ): Promise<AiFacadeResult> {
+  ): Promise<AiRuntimeResult> {
     const { messages, model, caller, abortSignal } = input;
 
     // P1: Direct LLM path only
@@ -118,19 +118,19 @@ export function createStreamingService(deps: AiFacadeDeps) {
       }
     );
 
-    // Transform ChatDeltaEvents to UiEvents
-    const uiEventStream = transformToUiEvents(deltaStream);
+    // Transform ChatDeltaEvents to AiEvents
+    const aiEventStream = transformToAiEvents(deltaStream);
 
     // Pass through final result unchanged (discriminated union with usage/finishReason)
     return {
-      stream: uiEventStream,
+      stream: aiEventStream,
       final: completionFinal,
     };
   }
 
   /**
    * Generate a graph run ID for graph executions.
-   * Per AI_SETUP_SPEC.md: Facade is sole owner of graphRunId generation.
+   * Per AI_SETUP_SPEC.md: Runtime is sole owner of graphRunId generation.
    *
    * @returns Unique graph run ID
    */
@@ -139,18 +139,18 @@ export function createStreamingService(deps: AiFacadeDeps) {
   }
 
   return {
-    streamChat,
+    runChatStream,
     generateGraphRunId,
   };
 }
 
 /**
- * Transform LLM ChatDeltaEvents to UiEvents.
- * Maps port-level events to feature-level UI events.
+ * Transform LLM ChatDeltaEvents to AiEvents.
+ * Maps port-level events to feature-level AI events.
  */
-async function* transformToUiEvents(
+async function* transformToAiEvents(
   deltaStream: AsyncIterable<ChatDeltaEvent>
-): AsyncIterable<UiEvent> {
+): AsyncIterable<AiEvent> {
   for await (const event of deltaStream) {
     switch (event.type) {
       case "text_delta": {
@@ -173,10 +173,6 @@ async function* transformToUiEvents(
 }
 
 /**
- * Type for the streaming service instance.
+ * Type for the AI runtime instance.
  */
-export type StreamingService = ReturnType<typeof createStreamingService>;
-
-// Backwards compat alias (to be removed in refactor PR)
-export const createAiFacade = createStreamingService;
-export type AiFacade = StreamingService;
+export type AiRuntime = ReturnType<typeof createAiRuntime>;

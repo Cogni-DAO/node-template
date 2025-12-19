@@ -16,6 +16,14 @@
 
 // Activity validation (for app facade)
 export { validateActivityRange } from "./services/activity";
+// AI runtime (P1: single AI entrypoint for streaming)
+export type {
+  AiRuntime,
+  AiRuntimeDeps,
+  AiRuntimeInput,
+  AiRuntimeResult,
+} from "./services/ai_runtime";
+export { createAiRuntime } from "./services/ai_runtime";
 // Non-streaming completion (for app facade)
 export { execute, executeStream } from "./services/completion";
 // Message mappers (for app facade DTO conversion)
@@ -24,18 +32,6 @@ export {
   type MessageDto,
   toCoreMessages,
 } from "./services/mappers";
-// Streaming service (P1: single AI entrypoint for streaming)
-export type {
-  AiFacade,
-  AiFacadeDeps,
-  AiFacadeInput,
-  AiFacadeResult,
-  StreamingService,
-} from "./services/streaming";
-export {
-  createAiFacade,
-  createStreamingService,
-} from "./services/streaming";
-export type { EmitUiEvent, ToolExecOptions, ToolRunner } from "./tool-runner";
+export type { EmitAiEvent, ToolExecOptions, ToolRunner } from "./tool-runner";
 // Tool runner (for bootstrap wiring)
 export { createToolRunner } from "./tool-runner";

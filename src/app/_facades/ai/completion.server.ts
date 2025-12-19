@@ -130,7 +130,7 @@ export async function completionStream(
   input: CompletionInput & { abortSignal?: AbortSignal },
   ctx: RequestContext
 ): Promise<{
-  stream: AsyncIterable<import("@/features/ai/public").UiEvent>;
+  stream: AsyncIterable<import("@/features/ai/public").AiEvent>;
   final: Promise<import("@/features/ai/public").StreamFinalResult>;
 }> {
   const { llmService, accountService, clock, aiTelemetry, langfuse } =
@@ -166,10 +166,8 @@ export async function completionStream(
 
   try {
     // Import from public.server.ts - never from services/* directly
-    const { createStreamingService } = await import(
-      "@/features/ai/public.server"
-    );
-    const streamingService = createStreamingService({
+    const { createAiRuntime } = await import("@/features/ai/public.server");
+    const aiRuntime = createAiRuntime({
       llmService,
       accountService,
       clock,
@@ -177,7 +175,7 @@ export async function completionStream(
       langfuse,
     });
 
-    const { stream, final } = await streamingService.streamChat(
+    const { stream, final } = await aiRuntime.runChatStream(
       {
         messages: coreMessages,
         model: input.model,

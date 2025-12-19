@@ -34,12 +34,12 @@ export {
   setPreferredModelId,
   validatePreferredModel,
 } from "./preferences/model-preference";
-// UiEvent types (for route consumption - types only, no runtime)
+// AiEvent types (for route consumption - types only, no runtime)
 export type {
+  AiEvent,
   DoneEvent,
   StreamFinalResult,
   TextDeltaEvent,
   ToolCallResultEvent,
   ToolCallStartEvent,
-  UiEvent,
 } from "./types";

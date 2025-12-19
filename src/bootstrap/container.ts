@@ -249,13 +249,17 @@ export function resolveAiDeps(): AiCompletionDeps {
 }
 
 /**
- * Resolves dependencies for AI facade.
+ * Resolves minimal dependencies for AI runtime.
  * Per AI_SETUP_SPEC.md: Single AI entrypoint for routes.
- * Caller uses createAiFacade from @/features/ai/public with these deps.
+ * Note: Full AiRuntimeDeps is resolved via resolveAiDeps() above.
+ * @deprecated Use resolveAiDeps() instead - this is unused legacy code.
  */
-export type AiFacadeDeps = Pick<Container, "llmService" | "accountService">;
+export type AiRuntimeMinimalDeps = Pick<
+  Container,
+  "llmService" | "accountService"
+>;
 
-export function resolveAiFacadeDeps(): AiFacadeDeps {
+export function resolveAiRuntimeMinimalDeps(): AiRuntimeMinimalDeps {
   const container = getContainer();
   return {
     llmService: container.llmService,

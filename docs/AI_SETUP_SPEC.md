@@ -98,9 +98,9 @@ Create first graph inside a feature slice with full correlation flow. No package
 - [ ] Implement first graph (`src/features/<feature>/ai/graphs/<graph>.graph.ts`)
 - [ ] Create prompt templates (`src/features/<feature>/ai/prompts/<graph>.prompt.ts`)
 - [ ] Create orchestration service (`src/features/<feature>/ai/services/<graph>.ts`)
-- [ ] Create `src/features/ai/ai.facade.ts` as single AI entrypoint (decides graph vs direct LLM, generates `graphRunId`)
-- [ ] Create `src/features/ai/tool-runner.ts` for tool execution + UiEvent emission
-- [x] Integrate chat route: consumes UiEvents from facade, maps to Data Stream Protocol
+- [x] Create `src/features/ai/services/ai_runtime.ts` as single AI entrypoint (decides graph vs direct LLM, generates `graphRunId`)
+- [ ] Create `src/features/ai/tool-runner.ts` for tool execution + AiEvent emission
+- [x] Integrate chat route: consumes AiEvents from runtime, maps to Data Stream Protocol
 
 #### P1 Invariants (Blocking for Merge)
 
@@ -109,26 +109,26 @@ Create first graph inside a feature slice with full correlation flow. No package
 - [ ] **HASHING_SINGLE_CALL_SITE**: Only `litellm.adapter.ts` computes `promptHash`. Graph code must NOT compute or re-compute it.
 - [ ] **GRAPH_METADATA_ENFORCED**: If `caller.graphRunId` is present, then `graph_name` and `graph_version` must be non-null on `ai_invocation_summaries` rows. Enforced by telemetry writer validation.
 - [ ] **GRAPHS_NO_IO**: Graphs must not import IO/adapters; routes stay thin; graphs live in feature slices.
-- [ ] **GRAPHS_USE_TOOLRUNNER_ONLY**: Graphs invoke tools exclusively through `toolRunner.exec()`. No direct tool implementation calls. ToolRunner is sole owner of toolCallId generation and tool lifecycle UiEvents.
-- [ ] **AI_FACADE_EMITS_UIEVENTS**: ai.facade emits UiEvents only (text_delta, tool_call_start, tool_call_result). Route layer maps UiEvents → Data Stream Protocol using official assistant-ui helper. Facade never touches protocol encoding.
-- [ ] **DATA_STREAM_PROTOCOL_ONLY**: Chat route maps UiEvents to assistant-ui Data Stream Protocol chunks via official helper; never invent custom SSE vocabulary.
+- [ ] **GRAPHS_USE_TOOLRUNNER_ONLY**: Graphs invoke tools exclusively through `toolRunner.exec()`. No direct tool implementation calls. ToolRunner is sole owner of toolCallId generation and tool lifecycle AiEvents.
+- [x] **AI_RUNTIME_EMITS_AIEVENTS**: ai_runtime emits AiEvents only (text_delta for P1; tool events when graphs land). Route layer maps AiEvents → Data Stream Protocol using official assistant-ui helper. Runtime never touches protocol encoding.
+- [ ] **DATA_STREAM_PROTOCOL_ONLY**: Chat route maps AiEvents to assistant-ui Data Stream Protocol chunks via official helper; never invent custom SSE vocabulary.
 - [ ] **TOOLCALL_ID_STABLE**: Tool calls use either model-provided `tool_call.id` (when model-initiated) or UUID generated at tool-runner boundary (when graph-initiated). Same `toolCallId` persists across all stream chunks (start→args→result). Never use `span_id` as `toolCallId`.
-- [ ] **FACADE_STREAMS_ASYNC_ITERABLE**: ai.facade must return `AsyncIterable<UiEvent>`, yielding immediately. No buffering or `Promise<UiEvent[]>`. Buffering breaks live tool-running state in UI.
+- [x] **RUNTIME_STREAMS_ASYNC_ITERABLE**: ai_runtime must return `AsyncIterable<AiEvent>`, yielding immediately. No buffering or `Promise<AiEvent[]>`. Buffering breaks live tool-running state in UI.
 - [ ] **TOOLRUNNER_ALLOWLIST_HARD_FAIL**: Redaction uses explicit allowlist per tool. Missing allowlist or redaction failure → emit `tool_call_result` as error with safe message. Never pass-through unknown fields.
 - [ ] **TOOLRUNNER_RESULT_SHAPE**: `toolRunner.exec()` returns `{ok:true, value}` | `{ok:false, errorCode, safeMessage}`. Error codes: `validation`, `execution`, `unavailable`, `redaction_failed`. Graphs handle via result shape, not exceptions.
-- [ ] **TOOLRUNNER_PIPELINE_ORDER**: Fixed order: validate args → execute → validate result → redact → emit UiEvent → return. Validation failures still emit `tool_call_result` error event with same `toolCallId`.
+- [ ] **TOOLRUNNER_PIPELINE_ORDER**: Fixed order: validate args → execute → validate result → redact → emit AiEvent → return. Validation failures still emit `tool_call_result` error event with same `toolCallId`.
 
 #### P1 File Pointers
 
 | File                                                  | Purpose                                                                          |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `src/features/ai/types.ts`                            | UiEvent type definition (feature-internal, NOT in shared/)                       |
-| `src/features/ai/ai.facade.ts`                        | Single AI entrypoint; decides graph vs direct; emits UiEvents                    |
-| `src/features/ai/tool-runner.ts`                      | Tool execution; owns toolCallId; emits tool lifecycle UiEvents; redacts payloads |
+| `src/features/ai/types.ts`                            | AiEvent type definition (feature-internal, NOT in shared/)                       |
+| `src/features/ai/services/ai_runtime.ts`              | Single AI entrypoint; decides graph vs direct; emits AiEvents                    |
+| `src/features/ai/tool-runner.ts`                      | Tool execution; owns toolCallId; emits tool lifecycle AiEvents; redacts payloads |
 | `src/features/<feature>/ai/graphs/<graph>.graph.ts`   | Graph definition (pure logic, no IO)                                             |
 | `src/features/<feature>/ai/prompts/<graph>.prompt.ts` | Prompt templates                                                                 |
-| `src/features/<feature>/ai/services/<graph>.ts`       | Orchestration: bridges ports, receives `graphRunId` from facade                  |
-| `src/app/api/v1/ai/chat/route.ts`                     | Consumes UiEvents; maps to Data Stream Protocol                                  |
+| `src/features/<feature>/ai/services/<graph>.ts`       | Orchestration: bridges ports, receives `graphRunId` from runtime                 |
+| `src/app/api/v1/ai/chat/route.ts`                     | Consumes AiEvents; maps to Data Stream Protocol                                  |
 | `src/shared/ai/prompt-hash.ts`                        | `computePromptHash()`, `PROMPT_HASH_VERSION`                                     |
 | `src/adapters/server/ai/litellm.adapter.ts`           | Sole `promptHash` computation site                                               |
 
@@ -155,7 +155,7 @@ Create first graph inside a feature slice with full correlation flow. No package
 
 **Redaction ownership:**
 
-- **ToolRunner** redacts tool payloads per allowlist before emitting UiEvents
+- **ToolRunner** redacts tool payloads per allowlist before emitting AiEvents
 - **Route** may apply final transport-level truncation as last-mile enforcement
 
 **Prod stream payloads:**

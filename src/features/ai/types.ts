@@ -4,20 +4,20 @@
 /**
  * Module: `@features/ai/types`
  * Purpose: Internal type definitions for AI feature streaming and tool lifecycle.
- * Scope: UiEvent types emitted by ai.facade, StreamFinalResult for completion, and tool-runner types. Feature-internal, NOT in shared/.
+ * Scope: AiEvent types emitted by ai_runtime, StreamFinalResult for completion, and tool-runner types. Feature-internal, NOT in shared/.
  * Invariants:
- *   - UiEvents are the ONLY output type from ai.facade
+ *   - AiEvents are the ONLY output type from ai_runtime
  *   - toolCallId must be stable across start→result lifecycle
- *   - Route layer maps UiEvents to assistant-stream format (never facade)
+ *   - Route layer maps AiEvents to assistant-stream format (never runtime)
  * Side-effects: none (types only)
- * Notes: Per AI_SETUP_SPEC.md P1 invariant AI_FACADE_EMITS_UIEVENTS
- * Links: ai.facade.ts, tool-runner.ts, AI_SETUP_SPEC.md
+ * Notes: Per AI_SETUP_SPEC.md P1 invariant AI_RUNTIME_EMITS_AIEVENTS
+ * Links: ai_runtime.ts, tool-runner.ts, AI_SETUP_SPEC.md
  * @internal
  */
 
 /**
  * Text content streaming from LLM.
- * Emitted by facade when receiving text chunks from LLM stream.
+ * Emitted by runtime when receiving text chunks from LLM stream.
  */
 export interface TextDeltaEvent {
   readonly type: "text_delta";
@@ -57,7 +57,7 @@ export interface ToolCallResultEvent {
 
 /**
  * Stream completed.
- * Emitted by facade when the entire response is done.
+ * Emitted by runtime when the entire response is done.
  */
 export interface DoneEvent {
   readonly type: "done";
@@ -85,10 +85,10 @@ export type StreamFinalResult =
     };
 
 /**
- * Union of all UI events emitted by ai.facade.
- * Per AI_FACADE_EMITS_UIEVENTS: facade emits these only; route maps to wire protocol.
+ * Union of all AI events emitted by ai_runtime.
+ * Per AI_RUNTIME_EMITS_AIEVENTS: runtime emits these only; route maps to wire protocol.
  */
-export type UiEvent =
+export type AiEvent =
   | TextDeltaEvent
   | ToolCallStartEvent
   | ToolCallResultEvent
