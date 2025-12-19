@@ -19,13 +19,13 @@
 
 ### Reproducibility Keys (per run/span)
 
-| Key                     | Source           | Purpose             |
-| ----------------------- | ---------------- | ------------------- |
-| `graph_name`            | ai-core export   | Which workflow ran  |
-| `graph_version`         | git SHA at build | Exact code version  |
-| `prompt_hash`           | Content hash     | Detect prompt drift |
-| `router_policy_version` | Semver or SHA    | Model routing logic |
-| `provider` + `model`    | LiteLLM response | Resolved target     |
+| Key                     | Source                | Purpose             |
+| ----------------------- | --------------------- | ------------------- |
+| `graph_name`            | Graph module constant | Which workflow ran  |
+| `graph_version`         | Git SHA at build      | Exact code version  |
+| `prompt_hash`           | Content hash          | Detect prompt drift |
+| `router_policy_version` | Semver or SHA         | Model routing logic |
+| `provider` + `model`    | LiteLLM response      | Resolved target     |
 
 ### Correlation ID Map
 
@@ -82,42 +82,105 @@
 
 #### Chores
 
-- [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../.agent/workflows/document.md)
+- [x] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
+- [x] Documentation updates [document.md](../.agent/workflows/document.md)
 
 ### P1: First LangGraph Graph
 
-Create `packages/ai-core` with one working graph that demonstrates the full correlation flow.
+Create first graph inside a feature slice with full correlation flow. No package required.
+
+**Runtime choice:** P1 uses assistant-ui **Data Stream Protocol** (`@assistant-ui/react-data-stream`). We are NOT using assistant-ui's LangGraph runtime (`@assistant-ui/react-langgraph`). Server emits DSP chunks; client uses standard data-stream runtime.
 
 #### P1 Deliverables
 
-- [ ] Create `packages/ai-core` scaffold per [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md)
-- [ ] Move `src/shared/ai/prompt-hash.ts` → `packages/ai-core/src/hashing/prompt-hash.ts`
-- [ ] Define canonical `AiCoreLlmPort` in `packages/ai-core/src/ports/llm.port.ts`
-- [ ] Update `src/ports/llm.port.ts` to re-export from `@cogni/ai-core`
-- [ ] Implement first graph (`packages/ai-core/src/graphs/review.graph.ts`)
-- [ ] Create orchestration service (`src/features/ai/services/review.ts`)
-- [ ] Add TypeScript conformance test (`tests/contract/ai-core-port-conformance.contract.ts`)
-- [ ] Add dependency-cruiser rule: ai-core must not import from `src/`
+- [ ] Implement first graph (`src/features/<feature>/ai/graphs/<graph>.graph.ts`)
+- [ ] Create prompt templates (`src/features/<feature>/ai/prompts/<graph>.prompt.ts`)
+- [ ] Create orchestration service (`src/features/<feature>/ai/services/<graph>.ts`)
+- [ ] Orchestration generates `graphRunId` once per invocation
+- [ ] Create `src/features/ai/ai.facade.ts` as single AI entrypoint (decides graph vs direct LLM)
+- [ ] Create `src/features/ai/tool-runner.ts` for tool execution + UiEvent emission
+- [ ] Integrate chat route: consumes UiEvents from facade, maps to Data Stream Protocol
+- [ ] Add skeleton `evals/` directory for future eval harness
 
 #### P1 Invariants (Blocking for Merge)
 
-- [ ] **GRAPH_CALLER_TYPE_REQUIRED**: Graph APIs must require `graphRunId` at the type level (not optional). Use distinct caller types: `AiCoreLlmCaller` (base) vs `GraphLlmCaller extends AiCoreLlmCaller` with required `graphRunId`.
+- [ ] **GRAPH_CALLER_TYPE_REQUIRED**: Use distinct caller types: `LlmCaller` (no graphRunId) vs `GraphLlmCaller` (extends LlmCaller with REQUIRED `graphRunId`, `graphName`, `graphVersion`). Do NOT add graphRunId as optional field on base LlmCaller.
 - [ ] **PROMPT_HASH_VERSION_IN_PAYLOAD**: `prompt_hash_version: 'v1'` must be embedded inside the canonical payload that is hashed, not just exported as a constant.
-- [ ] **HASHING_SINGLE_CALL_SITE**: Only `litellm.adapter.ts` computes `promptHash`. Graph code must NOT compute or re-compute it—adapter returns it in `AiCoreLlmResult.promptHash`.
+- [ ] **HASHING_SINGLE_CALL_SITE**: Only `litellm.adapter.ts` computes `promptHash`. Graph code must NOT compute or re-compute it.
 - [ ] **GRAPH_METADATA_ENFORCED**: If `caller.graphRunId` is present, then `graph_name` and `graph_version` must be non-null on `ai_invocation_summaries` rows. Enforced by telemetry writer validation.
-- [ ] **SINGLE_SOURCE_CONTRACTS**: `@cogni/ai-core` is canonical home for LLM port + prompt hash. App re-exports; no parallel definitions.
+- [ ] **GRAPHS_NO_IO**: Graphs must not import IO/adapters; routes stay thin; graphs live in feature slices.
+- [ ] **GRAPHS_USE_TOOLRUNNER_ONLY**: Graphs invoke tools exclusively through `toolRunner.exec()`. No direct tool implementation calls. ToolRunner is sole owner of toolCallId generation and tool lifecycle UiEvents.
+- [ ] **AI_FACADE_EMITS_UIEVENTS**: ai.facade emits UiEvents only (text_delta, tool_call_start, tool_call_result). Route layer maps UiEvents → Data Stream Protocol using official assistant-ui helper. Facade never touches protocol encoding.
+- [ ] **DATA_STREAM_PROTOCOL_ONLY**: Chat route maps UiEvents to assistant-ui Data Stream Protocol chunks via official helper; never invent custom SSE vocabulary.
+- [ ] **TOOLCALL_ID_STABLE**: Tool calls use either model-provided `tool_call.id` (when model-initiated) or UUID generated at tool-runner boundary (when graph-initiated). Same `toolCallId` persists across all stream chunks (start→args→result). Never use `span_id` as `toolCallId`.
+- [ ] **FACADE_STREAMS_ASYNC_ITERABLE**: ai.facade must return `AsyncIterable<UiEvent>`, yielding immediately. No buffering or `Promise<UiEvent[]>`. Buffering breaks live tool-running state in UI.
+- [ ] **TOOLRUNNER_ALLOWLIST_HARD_FAIL**: Redaction uses explicit allowlist per tool. Missing allowlist or redaction failure → emit `tool_call_result` as error with safe message. Never pass-through unknown fields.
+- [ ] **TOOLRUNNER_RESULT_SHAPE**: `toolRunner.exec()` returns `{ok:true, value}` | `{ok:false, errorCode, safeMessage}`. Error codes: `validation`, `execution`, `unavailable`, `redaction_failed`. Graphs handle via result shape, not exceptions.
+- [ ] **TOOLRUNNER_PIPELINE_ORDER**: Fixed order: validate args → execute → validate result → redact → emit UiEvent → return. Validation failures still emit `tool_call_result` error event with same `toolCallId`.
 
 #### P1 File Pointers
 
-| File                                          | Purpose                                              |
-| --------------------------------------------- | ---------------------------------------------------- |
-| `packages/ai-core/src/ports/llm.port.ts`      | Canonical `AiCoreLlmPort`, `GraphLlmCaller` types    |
-| `packages/ai-core/src/hashing/prompt-hash.ts` | `computePromptHash()`, `PROMPT_HASH_VERSION`         |
-| `packages/ai-core/src/graphs/review.graph.ts` | First graph with DI config pattern                   |
-| `src/ports/llm.port.ts`                       | Re-exports from ai-core + app streaming extension    |
-| `src/features/ai/services/review.ts`          | Orchestration: generates `graphRunId`, bridges ports |
-| `src/adapters/server/ai/litellm.adapter.ts`   | Sole `promptHash` computation site                   |
+| File                                                  | Purpose                                                                          |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/features/ai/ai.facade.ts`                        | Single AI entrypoint; decides graph vs direct; emits UiEvents                    |
+| `src/features/ai/tool-runner.ts`                      | Tool execution; owns toolCallId; emits tool lifecycle UiEvents; redacts payloads |
+| `src/features/<feature>/ai/graphs/<graph>.graph.ts`   | Graph definition (pure logic, no IO)                                             |
+| `src/features/<feature>/ai/prompts/<graph>.prompt.ts` | Prompt templates                                                                 |
+| `src/features/<feature>/ai/services/<graph>.ts`       | Orchestration: generates `graphRunId`, bridges ports                             |
+| `src/app/api/v1/ai/chat/route.ts`                     | Consumes UiEvents; maps to Data Stream Protocol                                  |
+| `src/shared/ai/prompt-hash.ts`                        | `computePromptHash()`, `PROMPT_HASH_VERSION`                                     |
+| `src/adapters/server/ai/litellm.adapter.ts`           | Sole `promptHash` computation site                                               |
+
+---
+
+### Streaming & Tool UI Integration
+
+#### Tool UI Mapping
+
+- Tool names are stable API identifiers (snake_case, versioned if needed)
+- Every tool must have Zod `inputSchema` and `outputSchema` for UI rendering and eval validation
+- Frontend components registered by `toolName` (e.g., `knowledge_search` → `<KnowledgeSearchUI />`)
+- Always provide `ToolFallback` for unregistered tools
+
+#### ToolCallId Provenance
+
+**Model-initiated tool calls:** Use `tool_call.id` from model response (e.g., OpenAI's `call_123abc`)
+
+**Graph-initiated tool calls:** Generate UUID at tool-runner boundary; persist as `toolCallId` across all stream chunks
+
+**Invariant:** Same `toolCallId` must appear in start→args→result chunks; enables UI to correlate tool lifecycle without relay on internal span_id.
+
+#### Stream Redaction Policy
+
+**Redaction ownership:**
+
+- **ToolRunner** redacts tool payloads per allowlist before emitting UiEvents
+- **Route** may apply final transport-level truncation as last-mile enforcement
+
+**Prod stream payloads:**
+
+- Never stream full request/response bodies (redact entirely)
+- Stream UI-safe summaries + references only: tool name, execution status (running/success/error), result summary (IDs/URLs/counts), error message (no secrets)
+- Allowlist fields per tool (e.g., `KnowledgeSearchResult` streams `{ query, resultCount, topHitUrl }` not full documents)
+- Truncate long strings (e.g., >500 chars) to summary + reference link
+- Never stream tokens, API keys, raw sensitive data, large code diffs, or full documents
+
+**Eval/CI:**
+
+- Capture full prompt/response artifacts out-of-band (Langfuse datasets or local files in `evals/artifacts/`)
+- Don't include full artifacts in user-facing stream by default
+- Only stream redacted payloads same as prod
+
+#### Example Redaction (knowledge_search tool)
+
+| Field              | Prod Stream                          | Full Artifact (Eval Only)              |
+| ------------------ | ------------------------------------ | -------------------------------------- |
+| `query`            | ✓ (query string)                     | ✓ Full query                           |
+| `documents`        | ✗ (redacted, stream count + top URL) | ✓ Full documents in eval artifact file |
+| `relevance_scores` | ✗                                    | ✓ Full scores in eval                  |
+| `error`            | ✓ (message only)                     | ✓ Full error + stack                   |
+
+---
 
 ### P2: First Eval Runner
 
@@ -226,28 +289,46 @@ Build eval harness to validate graph outputs against golden fixtures.
 
 ## Design Decisions
 
-### 1. Package Location
+### 1. Graph & AI Component Location
 
-| Component            | Location                        | Rationale                        |
-| -------------------- | ------------------------------- | -------------------------------- |
-| LangGraph graphs     | `packages/ai-core`              | Pure logic, no HTTP/DB           |
-| Prompt templates     | `packages/ai-core/src/prompts/` | Versioned text files             |
-| Tool contracts       | `packages/ai-core/src/tools/`   | Schema + handler interface       |
-| Tool implementations | `src/adapters/tools/`           | IO + policy + instrumentation    |
-| Route handlers       | `src/app/`                      | Thin entrypoints calling ai-core |
+| Component            | Location                                     | Rationale                                 |
+| -------------------- | -------------------------------------------- | ----------------------------------------- |
+| LangGraph graphs     | `src/features/<feature>/ai/graphs/`          | Feature-scoped; pure logic, no IO         |
+| Prompt templates     | `src/features/<feature>/ai/prompts/`         | Versioned text files                      |
+| Tool contracts       | `src/features/<feature>/ai/tools/` (default) | Feature-scoped schemas                    |
+| Tool implementations | `src/adapters/tools/`                        | IO + policy + instrumentation             |
+| Route handlers       | `src/app/`                                   | Thin entrypoints calling feature services |
 
-**Rule:** `packages/ai-core` MUST NOT import from `src/`. See [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md).
+**Graphs start in feature slices.** Packages are NOT required for LangGraph. See [LANGGRAPH_AI.md](LANGGRAPH_AI.md).
 
-### 2. Tool Structure
+### 2. Package Warrant Principles
+
+Create packages only when criteria are met:
+
+| Criterion                  | When to Package                                      |
+| -------------------------- | ---------------------------------------------------- |
+| **Cross-repo stability**   | Node + Operator need same contract (post-split)      |
+| **Multi-deployable reuse** | Same code consumed by 2+ services without divergence |
+| **Boundary enforcement**   | Hard isolation needed (no IO imports)                |
+
+**Do NOT package:**
+
+- Graphs before proven cross-service reuse
+- Tool contracts used by single feature
+- Patterns used only once
+
+### 3. Tool Structure
 
 **Per-tool files:**
 
-- `packages/ai-core/src/tools/<tool>.tool.ts` - Contract: name, schema (Zod), typed handler interface, parsing helpers
+- `src/features/<feature>/ai/tools/<tool>.tool.ts` - Contract: name, schema (Zod), typed handler interface
 - `src/adapters/tools/<tool>.impl.ts` - Implementation: IO, policy checks, instrumentation
 
 **Single registry:**
 
 - `src/features/ai/tool-registry.ts` - Binds tool contracts to implementations (DI wiring)
+
+**Drift guardrail:** If a tool contract is used by 2+ features or any Operator service, move to shared location (`src/shared/ai/contracts/` or package post-split).
 
 **Ports guidance:** One port per external system, NOT per tool.
 
@@ -261,10 +342,10 @@ Build eval harness to validate graph outputs against golden fixtures.
 **Anti-patterns:**
 
 - One port interface per tool when multiple tools hit same backend
-- Putting IO inside ai-core tool definitions
+- Putting IO inside graph/tool definitions
 - Tool contracts without schemas (breaks evals)
 
-### 3. Correlation Flow
+### 4. Correlation Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -290,7 +371,7 @@ Build eval harness to validate graph outputs against golden fixtures.
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4. Eval Harness Requirements
+### 5. Eval Harness Requirements
 
 **Structured outputs:** All AI responses must validate against Zod schema.
 
@@ -311,10 +392,11 @@ Build eval harness to validate graph outputs against golden fixtures.
 ## Anti-Patterns to Avoid
 
 1. **No data lake before evals work** - ClickHouse/PostHog wait for stable correlation IDs
-2. **No graphs in app routes** - LangGraph stays in `packages/ai-core`, never absorbs HTTP/DB
+2. **No graphs in routes** - Routes stay thin; graphs live in feature slices and must not import IO/adapters
 3. **No LiteLLM-only telemetry** - Always have local summary fallback + correlation IDs
 4. **No port-per-tool** - Ports per external system, tools compose on top
-5. **No IO in ai-core** - Tool contracts define schemas; implementations live in adapters
+5. **No IO in graphs** - Tool contracts define schemas; implementations live in adapters
+6. **No premature packaging** - Package only after proven cross-service reuse (see Package Warrant Principles)
 
 ---
 
@@ -327,5 +409,5 @@ Build eval harness to validate graph outputs against golden fixtures.
 
 ---
 
-**Last Updated**: 2025-12-17
-**Status**: P0 Complete, P1/P2 Design Approved
+**Last Updated**: 2025-12-19
+**Status**: P0 Complete, P1/P2 Design Approved (Feature-Centric Pivot)
