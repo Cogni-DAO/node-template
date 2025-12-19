@@ -33,13 +33,14 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 ## Public Surface
 
-- **Exports (via public.ts):**
+- **Exports (via public.ts/public.server.ts):**
   - `ChatRuntimeProvider` (chat runtime state)
   - `ModelPicker` (model selection dialog)
   - `ChatComposerExtras` (composer toolbar with model selection)
   - `useModels` (React Query hook for models list)
   - `getPreferredModelId`, `setPreferredModelId`, `validatePreferredModel` (localStorage preferences)
-  - `aiFacade` (P1: single AI entrypoint; decides graph vs direct LLM; emits UiEvents)
+  - `StreamFinalResult` (discriminated union for stream completion: ok with usage/finishReason, or error)
+  - `createStreamingService` (streaming orchestrator via public.server.ts)
   - `toolRunner` (P1: tool execution; owns toolCallId; emits tool lifecycle UiEvents)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
@@ -52,7 +53,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `tools/` - Tool contracts (Zod schemas + handler interfaces)
   - `services/` - Graph orchestration (bridges ports, receives graphRunId from facade)
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
-- **Files considered API:** public.ts, ai.facade.ts, tool-runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
+- **Files considered API:** public.ts, public.server.ts, types.ts, services/streaming.ts, tool-runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 
 ## Ports
 

@@ -4,7 +4,7 @@
 /**
  * Module: `@features/ai/types`
  * Purpose: Internal type definitions for AI feature streaming and tool lifecycle.
- * Scope: UiEvent types emitted by ai.facade and tool-runner. Feature-internal, NOT in shared/.
+ * Scope: UiEvent types emitted by ai.facade, StreamFinalResult for completion, and tool-runner types. Feature-internal, NOT in shared/.
  * Invariants:
  *   - UiEvents are the ONLY output type from ai.facade
  *   - toolCallId must be stable across start→result lifecycle
@@ -62,6 +62,27 @@ export interface ToolCallResultEvent {
 export interface DoneEvent {
   readonly type: "done";
 }
+
+/**
+ * Stream final result - discriminated union for ok/error paths.
+ * Per assistant-stream: route must emit FinishMessage with real usage/finishReason.
+ * This type enables route to handle all terminal states without exceptions.
+ */
+export type StreamFinalResult =
+  | {
+      readonly ok: true;
+      readonly requestId: string;
+      readonly usage: {
+        readonly promptTokens: number;
+        readonly completionTokens: number;
+      };
+      readonly finishReason: string;
+    }
+  | {
+      readonly ok: false;
+      readonly requestId: string;
+      readonly error: "timeout" | "aborted" | "internal";
+    };
 
 /**
  * Union of all UI events emitted by ai.facade.

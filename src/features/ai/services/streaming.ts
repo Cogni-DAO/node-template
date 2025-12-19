@@ -2,26 +2,36 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@features/ai/ai.facade`
- * Purpose: Single AI entrypoint that decides graph vs direct LLM and emits UiEvents.
- * Scope: Generates graphRunId for graph executions; returns AsyncIterable<UiEvent>. Does not touch wire protocol encoding.
+ * Module: `@features/ai/services/streaming`
+ * Purpose: Streaming orchestrator that decides graph vs direct LLM and emits UiEvents.
+ * Scope: Generates graphRunId for graph executions; returns AsyncIterable<UiEvent> and StreamFinalResult. Does not touch wire protocol encoding.
  * Invariants:
- *   - AI_FACADE_EMITS_UIEVENTS: Only emits UiEvents (text_delta, tool_call_start, tool_call_result, done)
+ *   - AI_FACADE_EMITS_UIEVENTS: Only emits UiEvents (text_delta, tool_call_start, tool_call_result)
  *   - FACADE_STREAMS_ASYNC_ITERABLE: Returns AsyncIterable<UiEvent>, no buffering
+ *   - Delegates to completion.ts for billing/telemetry (never calls llmService directly)
+ *   - Must NOT import app/*, adapters/*, or contracts/*
  *   - Route layer maps UiEvents to assistant-stream format
- * Side-effects: IO (via injected LlmService)
+ * Side-effects: IO (via injected services)
  * Notes: P1 supports direct LLM streaming; graph support added when graphs are implemented
- * Links: types.ts, tool-runner.ts, llm.port.ts, AI_SETUP_SPEC.md
+ * Links: ../types.ts, ../tool-runner.ts, completion.ts, AI_SETUP_SPEC.md
  * @public
  */
 
 import { randomUUID } from "node:crypto";
 
 import type { Message } from "@/core";
-import type { AccountService, LlmCaller, LlmService } from "@/ports";
+import type {
+  AccountService,
+  AiTelemetryPort,
+  ChatDeltaEvent,
+  Clock,
+  LangfusePort,
+  LlmCaller,
+  LlmService,
+} from "@/ports";
 import type { RequestContext } from "@/shared/observability";
-
-import type { DoneEvent, TextDeltaEvent, UiEvent } from "./types";
+import type { StreamFinalResult, TextDeltaEvent, UiEvent } from "../types";
+import { executeStream } from "./completion";
 
 /**
  * Input for AI facade operations.
@@ -40,10 +50,14 @@ export interface AiFacadeInput {
 /**
  * Dependencies for AI facade.
  * Injected at construction to enable testing and DI.
+ * Includes all deps needed to delegate to executeStream().
  */
 export interface AiFacadeDeps {
   readonly llmService: LlmService;
   readonly accountService: AccountService;
+  readonly clock: Clock;
+  readonly aiTelemetry: AiTelemetryPort;
+  readonly langfuse: LangfusePort | undefined;
 }
 
 /**
@@ -52,22 +66,24 @@ export interface AiFacadeDeps {
 export interface AiFacadeResult {
   /** Stream of UI events for real-time rendering */
   readonly stream: AsyncIterable<UiEvent>;
-  /** Promise resolving when stream completes (for billing/telemetry) */
-  readonly final: Promise<{ requestId: string }>;
+  /** Promise resolving with final result (ok with usage/finishReason, or error) */
+  readonly final: Promise<StreamFinalResult>;
 }
 
 /**
- * Create an AI facade instance with injected dependencies.
+ * Create a streaming service instance with injected dependencies.
+ * Entry point for AI chat streaming with graph vs direct LLM decision.
  *
  * @param deps - Injected service dependencies
- * @returns Facade with streamChat method
+ * @returns Service with streamChat method
  */
-export function createAiFacade(deps: AiFacadeDeps) {
-  const { llmService } = deps;
+export function createStreamingService(deps: AiFacadeDeps) {
+  const { llmService, accountService, clock, aiTelemetry, langfuse } = deps;
 
   /**
    * Stream a chat response as UiEvents.
-   * P1: Direct LLM streaming only. Graph support in future.
+   * Delegates to executeStream() for billing/telemetry, then transforms to UiEvents.
+   * P1: Direct LLM path only. Graph support in future.
    *
    * Per FACADE_STREAMS_ASYNC_ITERABLE: Returns immediately, streams via AsyncIterable.
    * Per AI_FACADE_EMITS_UIEVENTS: Only emits text_delta, tool_call_start, tool_call_result, done.
@@ -81,27 +97,34 @@ export function createAiFacade(deps: AiFacadeDeps) {
     ctx: RequestContext
   ): Promise<AiFacadeResult> {
     const { messages, model, caller, abortSignal } = input;
-    const requestId = ctx.reqId;
 
     // P1: Direct LLM path only
     // Future: Check if this request should use a graph, generate graphRunId if so
-    const { stream: llmStream, final: llmFinal } =
-      await llmService.completionStream({
+
+    // Delegate to executeStream for billing, telemetry, credit checks
+    // Never call llmService directly from this layer
+    const { stream: deltaStream, final: completionFinal } = await executeStream(
+      {
         messages,
         model,
+        llmService,
+        accountService,
+        clock,
         caller,
+        ctx,
+        aiTelemetry,
+        langfuse,
         ...(abortSignal ? { abortSignal } : {}),
-      });
+      }
+    );
 
-    // Transform LLM ChatDeltaEvents to UiEvents
-    const uiEventStream = transformToUiEvents(llmStream);
+    // Transform ChatDeltaEvents to UiEvents
+    const uiEventStream = transformToUiEvents(deltaStream);
 
-    // Wrap final promise to return requestId
-    const finalPromise = llmFinal.then(() => ({ requestId }));
-
+    // Pass through final result unchanged (discriminated union with usage/finishReason)
     return {
       stream: uiEventStream,
-      final: finalPromise,
+      final: completionFinal,
     };
   }
 
@@ -126,13 +149,9 @@ export function createAiFacade(deps: AiFacadeDeps) {
  * Maps port-level events to feature-level UI events.
  */
 async function* transformToUiEvents(
-  llmStream: AsyncIterable<
-    | { type: "text_delta"; delta: string }
-    | { type: "error"; error: string }
-    | { type: "done" }
-  >
+  deltaStream: AsyncIterable<ChatDeltaEvent>
 ): AsyncIterable<UiEvent> {
-  for await (const event of llmStream) {
+  for await (const event of deltaStream) {
     switch (event.type) {
       case "text_delta": {
         const textEvent: TextDeltaEvent = {
@@ -146,18 +165,18 @@ async function* transformToUiEvents(
         // Log error but don't emit to UI - the stream will complete with error
         // Errors are handled at route level
         break;
-      case "done": {
-        const doneEvent: DoneEvent = {
-          type: "done",
-        };
-        yield doneEvent;
-        break;
-      }
+      case "done":
+        // End generator - route will emit FinishMessage using data from final
+        return;
     }
   }
 }
 
 /**
- * Type for the AI facade instance.
+ * Type for the streaming service instance.
  */
-export type AiFacade = ReturnType<typeof createAiFacade>;
+export type StreamingService = ReturnType<typeof createStreamingService>;
+
+// Backwards compat alias (to be removed in refactor PR)
+export const createAiFacade = createStreamingService;
+export type AiFacade = StreamingService;

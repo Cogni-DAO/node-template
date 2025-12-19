@@ -4,7 +4,7 @@
 /**
  * Module: `@app/api/v1/ai/chat`
  * Purpose: HTTP endpoint for chat API using assistant-ui streaming.
- * Scope: Maps ChatDeltaEvents to assistant-stream format. Does not implement business logic.
+ * Scope: Maps UiEvents to assistant-stream format, emits FinishMessage with real usage. Does not implement business logic.
  * Invariants:
  *   - Uses official assistant-stream helper (no custom SSE)
  *   - Validates input with contract, delegates to completion facade
@@ -286,20 +286,46 @@ export const POST = wrapRouteHandlerWithLogging(
             }
 
             // Wait for final result (billing) with 15s timeout
-            const finalTimeout = new Promise<{ timedOut: true }>((resolve) =>
-              setTimeout(() => resolve({ timedOut: true }), 15000)
+            const FINAL_TIMEOUT_MS = 15000;
+            const finalTimeout = new Promise<{ ok: false; error: "timeout" }>(
+              (resolve) =>
+                setTimeout(
+                  () => resolve({ ok: false, error: "timeout" }),
+                  FINAL_TIMEOUT_MS
+                )
             );
 
-            const result = await Promise.race([
-              final.then(() => ({ timedOut: false })),
-              finalTimeout,
-            ]);
+            const result = await Promise.race([final, finalTimeout]);
 
-            if (result.timedOut) {
+            if (result.ok) {
+              // Emit FinishMessage with real usage/finishReason from LLM
+              controller.enqueue({
+                type: "message-finish",
+                path: [],
+                finishReason: result.finishReason as
+                  | "stop"
+                  | "length"
+                  | "tool-calls"
+                  | "content-filter"
+                  | "other"
+                  | "error"
+                  | "unknown",
+                usage: {
+                  promptTokens: result.usage.promptTokens,
+                  completionTokens: result.usage.completionTokens,
+                },
+              });
+            } else {
+              // Emit error chunk for timeout/aborted/internal errors
               ctx.log.warn(
-                { reqId: ctx.reqId, timeoutMs: 15000 },
-                "ai.chat_stream_finalization_lost"
+                { reqId: ctx.reqId, error: result.error },
+                "ai.chat_stream_final_error"
               );
+              controller.enqueue({
+                type: "error",
+                path: [],
+                error: `Stream finalization failed: ${result.error}`,
+              });
             }
           } catch (error) {
             if (error instanceof Error && error.name === "AbortError") {
