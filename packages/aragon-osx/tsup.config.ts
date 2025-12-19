@@ -16,7 +16,12 @@ import { defineConfig } from "tsup";
 export const tsupConfig = defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
-  dts: true,
+  dts: {
+    compilerOptions: {
+      // Disable composite for tsup DTS generation to avoid TS6307
+      composite: false,
+    },
+  },
   clean: true,
   sourcemap: true,
   platform: "neutral",
