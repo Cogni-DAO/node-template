@@ -14,6 +14,14 @@
 
 // Model selection rules (re-exported from core for app layer access)
 export { pickDefaultModel } from "@/core";
+export type {
+  AiFacade,
+  AiFacadeDeps,
+  AiFacadeInput,
+  AiFacadeResult,
+} from "./ai.facade";
+// AI Facade (P1: single AI entrypoint)
+export { createAiFacade } from "./ai.facade";
 export type { ChatComposerExtrasProps } from "./components/ChatComposerExtras";
 // Model selection components
 export { ChatComposerExtras } from "./components/ChatComposerExtras";
@@ -31,3 +39,14 @@ export {
   setPreferredModelId,
   validatePreferredModel,
 } from "./preferences/model-preference";
+export type { EmitUiEvent, ToolExecOptions, ToolRunner } from "./tool-runner";
+// Tool runner (for bootstrap wiring)
+export { createToolRunner } from "./tool-runner";
+// UiEvent types (for route consumption)
+export type {
+  DoneEvent,
+  TextDeltaEvent,
+  ToolCallResultEvent,
+  ToolCallStartEvent,
+  UiEvent,
+} from "./types";

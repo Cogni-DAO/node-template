@@ -43,7 +43,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `toolRunner` (P1: tool execution; owns toolCallId; emits tool lifecycle UiEvents)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
-  - `/api/v1/ai/chat` (POST) - chat endpoint (P1: consumes UiEvents, maps to Data Stream Protocol)
+  - `/api/v1/ai/chat` (POST) - chat endpoint (P1: consumes UiEvents, maps to assistant-stream format)
   - `/api/v1/ai/models` (GET) - list available models with tier info
   - `/api/v1/activity` (GET) - usage statistics and logs
 - **Subdirectories (P1):**

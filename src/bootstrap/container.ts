@@ -248,6 +248,21 @@ export function resolveAiDeps(): AiCompletionDeps {
   };
 }
 
+/**
+ * Resolves dependencies for AI facade.
+ * Per AI_SETUP_SPEC.md: Single AI entrypoint for routes.
+ * Caller uses createAiFacade from @/features/ai/public with these deps.
+ */
+export type AiFacadeDeps = Pick<Container, "llmService" | "accountService">;
+
+export function resolveAiFacadeDeps(): AiFacadeDeps {
+  const container = getContainer();
+  return {
+    llmService: container.llmService,
+    accountService: container.accountService,
+  };
+}
+
 export function resolveActivityDeps(): ActivityDeps {
   const container = getContainer();
   return {
