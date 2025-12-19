@@ -47,10 +47,10 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `/api/v1/ai/models` (GET) - list available models with tier info
   - `/api/v1/activity` (GET) - usage statistics and logs
 - **Subdirectories (P1):**
-  - `ai/graphs/` - LangGraph definitions (pure logic, no IO)
-  - `ai/prompts/` - Prompt templates (versioned text)
-  - `ai/tools/` - Tool contracts (Zod schemas + handler interfaces)
-  - `ai/services/` - Graph orchestration (generates graphRunId, bridges ports)
+  - `graphs/` - LangGraph definitions (pure logic, no IO)
+  - `prompts/` - Prompt templates (versioned text)
+  - `tools/` - Tool contracts (Zod schemas + handler interfaces)
+  - `services/` - Graph orchestration (bridges ports, receives graphRunId from facade)
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
 - **Files considered API:** public.ts, ai.facade.ts, tool-runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 

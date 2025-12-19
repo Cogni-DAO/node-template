@@ -96,11 +96,9 @@ Create first graph inside a feature slice with full correlation flow. No package
 - [ ] Implement first graph (`src/features/<feature>/ai/graphs/<graph>.graph.ts`)
 - [ ] Create prompt templates (`src/features/<feature>/ai/prompts/<graph>.prompt.ts`)
 - [ ] Create orchestration service (`src/features/<feature>/ai/services/<graph>.ts`)
-- [ ] Orchestration generates `graphRunId` once per invocation
-- [ ] Create `src/features/ai/ai.facade.ts` as single AI entrypoint (decides graph vs direct LLM)
+- [ ] Create `src/features/ai/ai.facade.ts` as single AI entrypoint (decides graph vs direct LLM, generates `graphRunId`)
 - [ ] Create `src/features/ai/tool-runner.ts` for tool execution + UiEvent emission
 - [ ] Integrate chat route: consumes UiEvents from facade, maps to Data Stream Protocol
-- [ ] Add skeleton `evals/` directory for future eval harness
 
 #### P1 Invariants (Blocking for Merge)
 
@@ -122,11 +120,12 @@ Create first graph inside a feature slice with full correlation flow. No package
 
 | File                                                  | Purpose                                                                          |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/features/ai/types.ts`                            | UiEvent type definition (feature-internal, NOT in shared/)                       |
 | `src/features/ai/ai.facade.ts`                        | Single AI entrypoint; decides graph vs direct; emits UiEvents                    |
 | `src/features/ai/tool-runner.ts`                      | Tool execution; owns toolCallId; emits tool lifecycle UiEvents; redacts payloads |
 | `src/features/<feature>/ai/graphs/<graph>.graph.ts`   | Graph definition (pure logic, no IO)                                             |
 | `src/features/<feature>/ai/prompts/<graph>.prompt.ts` | Prompt templates                                                                 |
-| `src/features/<feature>/ai/services/<graph>.ts`       | Orchestration: generates `graphRunId`, bridges ports                             |
+| `src/features/<feature>/ai/services/<graph>.ts`       | Orchestration: bridges ports, receives `graphRunId` from facade                  |
 | `src/app/api/v1/ai/chat/route.ts`                     | Consumes UiEvents; maps to Data Stream Protocol                                  |
 | `src/shared/ai/prompt-hash.ts`                        | `computePromptHash()`, `PROMPT_HASH_VERSION`                                     |
 | `src/adapters/server/ai/litellm.adapter.ts`           | Sole `promptHash` computation site                                               |

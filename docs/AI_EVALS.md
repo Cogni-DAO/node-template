@@ -45,7 +45,7 @@ src/features/<feature>/ai/
   tools/                # Tool contracts (feature-scoped)
     <tool>.tool.ts      # Zod schema + handler interface
   services/             # Orchestration
-    <graph>.ts          # Generates graphRunId, bridges ports
+    <graph>.ts          # Bridges ports, receives graphRunId from facade
 ```
 
 ### Prompt Versioning

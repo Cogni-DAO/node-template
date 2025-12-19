@@ -56,7 +56,7 @@ src/features/<feature>/ai/
 ├── tools/
 │   └── <tool>.tool.ts        # Tool contracts (Zod schema + handler interface)
 └── services/
-    └── <graph>.ts            # Orchestration: generates graphRunId, bridges ports
+    └── <graph>.ts            # Orchestration: bridges ports, receives graphRunId from facade
 ```
 
 ### Step-by-Step
@@ -71,7 +71,7 @@ src/features/<feature>/ai/
    - `prompt_hash` computed by adapter for drift detection
 
 3. **Create orchestration service** in `services/<graph>.ts`
-   - Generate `graphRunId` (UUID) once per graph invocation
+   - Receive `graphRunId` from facade (single owner)
    - Bridge app's `LlmService` to graph's expected port
    - Pass `graph_name` + `graph_version` to telemetry
 
