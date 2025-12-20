@@ -1,11 +1,14 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
 /**
- * Module: scripts/validate-package-declarations.ts
+ * Module: `@scripts/validate-package-declarations`
  * Purpose: Validates that all workspace packages have declaration files after tsc -b.
- * Usage: pnpm packages:validate (called automatically by packages:build)
- *
- * Data-driven: Discovers packages from tsconfig.json references, reads each
- * package.json's exports["."].types to find expected declaration path.
- * No hardcoded package names.
+ * Scope: Build/CI-time guard; discovers packages from tsconfig.json references and verifies declaration files exist. Does not validate declaration contents or type correctness.
+ * Invariants: All workspace packages must have exports["."].types or types field in package.json pointing to existing .d.ts files.
+ * Side-effects: IO (reads tsconfig.json and package.json files); terminates process on validation failure.
+ * Links: tsconfig.json, packages/{pkg}/package.json
+ * @public
  */
 
 import { existsSync, readFileSync } from "node:fs";
