@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/unit/features/ai/services/metrics`
  * Purpose: Unit tests for metrics module.
- * Scope: Tests success/error path metric recording with mocked Prometheus metrics.
+ * Scope: Tests success/error path metric recording with mocked Prometheus metrics. Does NOT test real Prometheus integration or model catalog.
  * Invariants: Success records duration/tokens/cost; error records error counter only.
  * Side-effects: none (mocked)
  * Notes: MVP tests only - verifies correct metrics called per path.

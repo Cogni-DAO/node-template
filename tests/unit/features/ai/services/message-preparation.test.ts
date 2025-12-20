@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/unit/features/ai/services/message-preparation`
  * Purpose: Unit tests for message-preparation module.
- * Scope: Tests module-specific behavior (hash determinism, system prompt). Core functions tested elsewhere.
+ * Scope: Tests module-specific behavior (hash determinism, system prompt). Does NOT test core functions (filter, trim, validate) - those are tested in @/core.
  * Invariants: PROMPTHASH_DUAL_RESOLUTION - fallbackPromptHash available for error paths.
  * Side-effects: none
  * Notes: MVP tests only - core functions (filter, trim, validate) tested in @/core.
