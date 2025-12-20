@@ -9,6 +9,36 @@
 2. **Policy Stays Local**: ESLint/depcruise/prettier/tsconfig never centralized
 3. **Local Gate Parity**: `pnpm check` is local equivalent of CI; CI parallelizes same checks across jobs
 4. **No Runtime Fetches**: Workflows never fetch config from outside repo
+5. **Scripts Are the API**: Workflows orchestrate by calling named pnpm scripts; no inline command duplication
+
+---
+
+## Kit Interface
+
+When the kit exists (P1+), these are the stable override hooks:
+
+| Input               | Default      | Node Override                                      |
+| ------------------- | ------------ | -------------------------------------------------- |
+| `ci_command`        | `pnpm check` | Node can define custom check script                |
+| `ci_extra_commands` | _(none)_     | Optional additional commands after standard checks |
+
+**Rule**: Kit invokes scripts; nodes own script contents.
+
+---
+
+## Update Flow
+
+**Now (P0)**: No shared kit. Each node owns its workflows directly.
+
+**P1 (In-Repo Seam)**:
+
+- Thin caller (`ci.yaml`) → reusable impl (`_rails-node-ci.yml`)
+- Updates: edit `_rails-node-ci.yml`, all callers get changes immediately
+
+**P3 (External Kit)**:
+
+- Nodes pin to versioned ref: `uses: cogni-dao/cogni-rails/.github/workflows/node-ci.yml@v1.2.0`
+- Updates: bump ref in caller, test, merge
 
 ---
 
@@ -95,6 +125,8 @@
 | `tsconfig*.json`               | Path aliases                |
 | `scripts/check-*.sh`           | Local gate definitions      |
 | `Dockerfile`                   | Image definition            |
+
+**Ownership split**: Nodes own scripts and policy configs. Kit owns invocation conventions (when to call, how to parallelize, what to cache). This prevents kit from becoming a jail cell.
 
 ---
 
