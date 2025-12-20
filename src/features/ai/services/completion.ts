@@ -16,16 +16,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  applyBaselineSystemPrompt,
-  assertMessageLength,
-  ESTIMATED_USD_PER_1K_TOKENS,
-  estimateTotalTokens,
-  filterSystemMessages,
-  MAX_MESSAGE_CHARS,
-  type Message,
-  trimConversationHistory,
-} from "@/core";
+import type { Logger } from "pino";
+import type { Message } from "@/core";
 import type { StreamFinalResult } from "@/features/ai/types";
 import type {
   AccountService,
@@ -33,109 +25,208 @@ import type {
   Clock,
   LangfusePort,
   LlmCaller,
+  LlmCompletionResult,
   LlmService,
 } from "@/ports";
-import { InsufficientCreditsPortError, LlmError } from "@/ports";
-import { getModelClass, isModelFree } from "@/shared/ai/model-catalog.server";
-import {
-  computePromptHash,
-  DEFAULT_MAX_TOKENS,
-  DEFAULT_TEMPERATURE,
-} from "@/shared/ai/prompt-hash";
-import { serverEnv } from "@/shared/env";
+import { LlmError } from "@/ports";
 import {
   type AiLlmCallEvent,
-  aiLlmCallDurationMs,
-  aiLlmCostUsdTotal,
-  aiLlmErrorsTotal,
-  aiLlmTokensTotal,
   classifyLlmError,
   type RequestContext,
 } from "@/shared/observability";
-import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
+import { recordBilling } from "./billing";
+import { prepareMessages } from "./message-preparation";
+import { recordMetrics } from "./metrics";
+import { validateCreditsUpperBound } from "./preflight-credit-check";
+import { recordTelemetry } from "./telemetry";
+
+// ============================================================================
+// P3: Shared post-call handling (DRY consolidation)
+// ============================================================================
 
 /**
- * Estimate cost in credits for pre-flight gating.
- *
- * Uses ESTIMATED_USD_PER_1K_TOKENS as upper-bound estimate.
- * Post-call billing uses actual LiteLLM cost; these may differ (expected).
- *
- * Invariants:
- * - Free models MUST return 0n
- * - Paid models return >0n
- * - Uses same USD→credits pipeline as post-call (calculateDefaultLlmCharge)
- * - Only difference: estimated vs actual USD input
+ * Context for post-call handling (shared between execute and executeStream).
  */
-async function estimateCostCredits(
-  model: string,
-  estimatedTotalTokens: number
-): Promise<bigint> {
-  if (await isModelFree(model)) {
-    return 0n;
-  }
-
-  // Preflight uses conservative upper-bound estimate
-  const estimatedCostUsd =
-    (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
-
-  // Same pipeline as post-call: markup + ceil via calculateDefaultLlmCharge
-  const { chargedCredits } = calculateDefaultLlmCharge(estimatedCostUsd);
-  return chargedCredits;
+interface PostCallContext {
+  readonly invocationId: string;
+  readonly requestId: string;
+  readonly traceId: string;
+  readonly routeId: string;
+  readonly fallbackPromptHash: string;
+  readonly requestedModel: string;
+  readonly llmStart: number;
+  readonly caller: LlmCaller;
+  readonly provenance: "response" | "stream";
+  readonly accountService: AccountService;
+  readonly aiTelemetry: AiTelemetryPort;
+  readonly langfuse: LangfusePort | undefined;
 }
 
 /**
- * Prepares messages for LLM execution:
- * 1. Filters system messages
- * 2. Validates length
- * 3. Trims history
- * 4. Applies baseline system prompt
- * 5. Performs pre-flight credit check
+ * Handle successful LLM completion (metrics, billing, telemetry).
+ * Used by both execute() and executeStream().
  */
-async function prepareForExecution(
-  messages: Message[],
-  model: string,
-  caller: LlmCaller,
-  accountService: AccountService
-): Promise<Message[]> {
-  // 1. Remove any client-provided system messages (defense-in-depth)
-  const userMessages = filterSystemMessages(messages);
+async function handleLlmSuccess(
+  result: LlmCompletionResult,
+  context: PostCallContext,
+  log: Logger
+): Promise<void> {
+  const {
+    invocationId,
+    requestId,
+    traceId,
+    routeId,
+    fallbackPromptHash,
+    requestedModel,
+    llmStart,
+    caller,
+    provenance,
+    accountService,
+    aiTelemetry,
+    langfuse,
+  } = context;
 
-  // 2. Validate message length
-  for (const message of userMessages) {
-    assertMessageLength(message.content, MAX_MESSAGE_CHARS);
-  }
+  // Extract model ID from provider metadata
+  const totalTokens = result.usage?.totalTokens ?? 0;
+  const providerMeta = (result.providerMeta ?? {}) as Record<string, unknown>;
+  const modelId =
+    typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
 
-  // 3. Trim conversation history to fit context window
-  const trimmedMessages = trimConversationHistory(
-    userMessages,
-    MAX_MESSAGE_CHARS
-  );
-
-  // 4. Prepend baseline system prompt (exactly once, always first)
-  const finalMessages = applyBaselineSystemPrompt(trimmedMessages);
-
-  // 5. Preflight credit check (includes system prompt in token estimation)
-  const estimatedTotalTokens = estimateTotalTokens(finalMessages);
-  const estimatedUserPriceCredits = await estimateCostCredits(
-    model,
-    estimatedTotalTokens
-  );
-
-  const currentBalance = await accountService.getBalance(
-    caller.billingAccountId
-  );
-
-  // Convert bigint to number for comparison (safe for pre-flight check)
-  if (currentBalance < Number(estimatedUserPriceCredits)) {
-    throw new InsufficientCreditsPortError(
-      caller.billingAccountId,
-      Number(estimatedUserPriceCredits),
-      currentBalance
+  // Invariant enforcement: log when model resolution fails
+  if (modelId === "unknown") {
+    log.warn(
+      {
+        requestId,
+        requestedModel,
+        streaming: provenance === "stream",
+        hasProviderMeta: !!result.providerMeta,
+        providerMetaKeys: result.providerMeta
+          ? Object.keys(result.providerMeta)
+          : [],
+      },
+      "inv_provider_meta_model_missing: Model name missing from LLM response"
     );
   }
 
-  return finalMessages;
+  // Log LLM call with structured event
+  const durationMs = performance.now() - llmStart;
+  const llmEvent: AiLlmCallEvent = {
+    event: "ai.llm_call",
+    routeId,
+    reqId: requestId,
+    billingAccountId: caller.billingAccountId,
+    model: modelId,
+    durationMs,
+    tokensUsed: totalTokens,
+    providerCostUsd: result.providerCostUsd,
+  };
+  log.info(llmEvent, "ai.llm_call_completed");
+
+  // Record LLM metrics
+  await recordMetrics({
+    model: modelId,
+    durationMs,
+    ...(totalTokens !== undefined && { tokensUsed: totalTokens }),
+    ...(result.providerCostUsd !== undefined && {
+      providerCostUsd: result.providerCostUsd,
+    }),
+    isError: false,
+  });
+
+  // Post-call billing (non-blocking, handles errors internally)
+  await recordBilling(
+    {
+      billingAccountId: caller.billingAccountId,
+      virtualKeyId: caller.virtualKeyId,
+      requestId,
+      model: modelId,
+      providerCostUsd: result.providerCostUsd,
+      litellmCallId: result.litellmCallId,
+      provenance,
+    },
+    accountService,
+    log
+  );
+
+  // Record success telemetry
+  const latencyMs = Math.max(0, Math.round(durationMs));
+  await recordTelemetry(
+    {
+      invocationId,
+      requestId,
+      traceId,
+      fallbackPromptHash,
+      canonicalPromptHash: result.promptHash,
+      model: modelId,
+      latencyMs,
+      status: "success",
+      resolvedProvider: result.resolvedProvider,
+      resolvedModel: result.resolvedModel,
+      usage: result.usage,
+      providerCostUsd: result.providerCostUsd,
+      litellmCallId: result.litellmCallId,
+    },
+    aiTelemetry,
+    langfuse,
+    log
+  );
 }
+
+/**
+ * Handle failed LLM completion (metrics, telemetry).
+ * Used by both execute() and executeStream().
+ * Note: Does NOT call recordBilling (no charge on error).
+ */
+async function handleLlmError(
+  error: unknown,
+  context: PostCallContext,
+  log: Logger
+): Promise<void> {
+  const {
+    invocationId,
+    requestId,
+    traceId,
+    fallbackPromptHash,
+    requestedModel,
+    llmStart,
+    aiTelemetry,
+    langfuse,
+  } = context;
+
+  const durationMs = performance.now() - llmStart;
+
+  // Record error metric
+  const errorCode = classifyLlmError(error);
+  await recordMetrics({
+    model: requestedModel,
+    durationMs,
+    isError: true,
+    errorCode,
+  });
+
+  // Record error telemetry
+  const latencyMs = Math.max(0, Math.round(durationMs));
+  const errorKind = error instanceof LlmError ? error.kind : "unknown";
+  await recordTelemetry(
+    {
+      invocationId,
+      requestId,
+      traceId,
+      fallbackPromptHash,
+      model: requestedModel,
+      latencyMs,
+      status: "error",
+      errorCode: errorKind,
+    },
+    aiTelemetry,
+    langfuse,
+    log
+  );
+}
+
+// ============================================================================
+// Public API (frozen signatures per API_FROZEN invariant)
+// ============================================================================
 
 export async function execute(
   messages: Message[],
@@ -150,36 +241,46 @@ export async function execute(
 ): Promise<{ message: Message; requestId: string }> {
   const log = ctx.log.child({ feature: "ai.completion" });
 
-  const finalMessages = await prepareForExecution(
-    messages,
+  // Prepare messages + get fallback hash
+  const {
+    messages: finalMessages,
+    fallbackPromptHash,
+    estimatedTokensUpperBound,
+  } = prepareMessages(messages, model);
+
+  // Pre-flight credit check (upper-bound estimate)
+  await validateCreditsUpperBound(
+    caller.billingAccountId,
+    estimatedTokensUpperBound,
     model,
-    caller,
     accountService
   );
 
-  // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
+  // Per spec: request_id is stable per request entry (from ctx.reqId)
   const requestId = ctx.reqId;
-  // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt (idempotency key)
+  // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt
   const invocationId = randomUUID();
-
-  // Per AI_SETUP_SPEC.md: Compute prompt_hash BEFORE LLM call so it's available on error path
-  // Messages are converted to LLM-ready format (role + content only, no timestamp)
-  const llmMessages = finalMessages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
-  const promptHash = computePromptHash({
-    model,
-    messages: llmMessages,
-    temperature: DEFAULT_TEMPERATURE,
-    maxTokens: DEFAULT_MAX_TOKENS,
-  });
-
-  // Delegate to port - caller constructed at auth boundary
-  log.debug({ messageCount: finalMessages.length }, "calling LLM");
   const llmStart = performance.now();
 
-  let result: Awaited<ReturnType<LlmService["completion"]>>;
+  // Build shared context for post-call handling
+  const postCallContext: PostCallContext = {
+    invocationId,
+    requestId,
+    traceId: ctx.traceId,
+    routeId: ctx.routeId,
+    fallbackPromptHash,
+    requestedModel: model,
+    llmStart,
+    caller,
+    provenance: "response",
+    accountService,
+    aiTelemetry,
+    langfuse,
+  };
+
+  // Execute LLM call
+  log.debug({ messageCount: finalMessages.length }, "calling LLM");
+  let result: LlmCompletionResult;
   try {
     result = await llmService.completion({
       messages: finalMessages,
@@ -187,285 +288,12 @@ export async function execute(
       caller,
     });
   } catch (error) {
-    // Record error metric before rethrowing
-    const errorCode = classifyLlmError(error);
-    const errorModelClass = await getModelClass(model);
-    aiLlmErrorsTotal.inc({
-      provider: "litellm",
-      code: errorCode,
-      model_class: errorModelClass,
-    });
-
-    // Per AI_SETUP_SPEC.md: Record telemetry on error path with REAL prompt_hash
-    // latencyMs must be integer for DB schema (milliseconds precision sufficient)
-    const latencyMs = Math.max(0, Math.round(performance.now() - llmStart));
-    const errorKind = error instanceof LlmError ? error.kind : "unknown";
-
-    // Create Langfuse trace first to capture langfuseTraceId for DB record
-    let langfuseTraceId: string | undefined;
-    if (langfuse) {
-      try {
-        langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
-          requestId: ctx.reqId,
-          model,
-          promptHash, // Real hash
-        });
-        langfuse.recordGeneration(ctx.traceId, {
-          model,
-          status: "error",
-          errorCode: errorKind,
-          latencyMs,
-        });
-        // Flush in background (never await on request path per spec)
-        langfuse
-          .flush()
-          .catch((err) => log.warn({ err }, "Langfuse flush failed"));
-      } catch {
-        // Langfuse failure shouldn't block request - DB telemetry still written
-        langfuseTraceId = undefined;
-      }
-    }
-
-    try {
-      await aiTelemetry.recordInvocation({
-        invocationId,
-        requestId: ctx.reqId,
-        traceId: ctx.traceId,
-        ...(langfuseTraceId ? { langfuseTraceId } : {}),
-        provider: "unknown", // Not available on error (no response)
-        model,
-        promptHash, // Real hash computed BEFORE LLM call
-        routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION, // Current version
-        status: "error",
-        errorCode: errorKind,
-        latencyMs,
-      });
-    } catch (telemetryError) {
-      // Telemetry should never block error propagation
-      log.error(
-        { err: telemetryError, invocationId },
-        "Failed to record error telemetry"
-      );
-    }
-
+    await handleLlmError(error, postCallContext, log);
     throw error;
   }
 
-  const totalTokens = result.usage?.totalTokens ?? 0;
-  const providerMeta = (result.providerMeta ?? {}) as Record<string, unknown>;
-  const modelId =
-    typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
-
-  // Invariant enforcement: log when model resolution fails
-  if (modelId === "unknown") {
-    log.warn(
-      {
-        requestId,
-        requestedModel: model,
-        streaming: false,
-        hasProviderMeta: !!result.providerMeta,
-        providerMetaKeys: result.providerMeta
-          ? Object.keys(result.providerMeta)
-          : [],
-      },
-      "inv_provider_meta_model_missing: Model name missing from LLM response"
-    );
-  }
-
-  // Log LLM call with structured event
-  const llmEvent: AiLlmCallEvent = {
-    event: "ai.llm_call",
-    routeId: ctx.routeId,
-    reqId: ctx.reqId,
-    billingAccountId: caller.billingAccountId,
-    model: modelId,
-    durationMs: performance.now() - llmStart,
-    tokensUsed: totalTokens,
-    providerCostUsd: result.providerCostUsd,
-  };
-  log.info(llmEvent, "ai.llm_call_completed");
-
-  // Record LLM metrics
-  const modelClass = await getModelClass(modelId);
-  aiLlmCallDurationMs.observe(
-    { provider: "litellm", model_class: modelClass },
-    llmEvent.durationMs
-  );
-  if (llmEvent.tokensUsed) {
-    aiLlmTokensTotal.inc(
-      { provider: "litellm", model_class: modelClass },
-      llmEvent.tokensUsed
-    );
-  }
-  if (typeof llmEvent.providerCostUsd === "number") {
-    aiLlmCostUsdTotal.inc(
-      { provider: "litellm", model_class: modelClass },
-      llmEvent.providerCostUsd
-    );
-  }
-
-  // Post-call billing: Calculate charged credits and record receipt
-  // Per ACTIVITY_METRICS.md: post-call is NEVER blocking
-  try {
-    const isFree = await isModelFree(modelId);
-    let chargedCredits = 0n;
-
-    // DEBUG: Log cost data received from LiteLLM
-    log.debug(
-      {
-        requestId,
-        modelId,
-        isFree,
-        providerCostUsd: result.providerCostUsd,
-        litellmCallId: result.litellmCallId,
-        tokensUsed: result.usage?.totalTokens,
-      },
-      "Post-call billing: LiteLLM response data"
-    );
-
-    let userCostUsd: number | null = null;
-
-    if (!isFree && typeof result.providerCostUsd === "number") {
-      // Use policy function for consistent calculation
-      const charge = calculateDefaultLlmCharge(result.providerCostUsd);
-      chargedCredits = charge.chargedCredits;
-      userCostUsd = charge.userCostUsd;
-
-      log.debug(
-        {
-          requestId,
-          providerCostUsd: result.providerCostUsd,
-          userCostUsd,
-          chargedCredits: chargedCredits.toString(),
-        },
-        "Cost calculation complete"
-      );
-    } else if (!isFree && typeof result.providerCostUsd !== "number") {
-      // CRITICAL: Non-free model but no cost data (degraded billing)
-      log.error(
-        {
-          requestId,
-          modelId,
-          litellmCallId: result.litellmCallId,
-          isFree,
-        },
-        "CRITICAL: LiteLLM response missing cost data - billing incomplete (degraded under-billing mode)"
-      );
-    }
-    // If no cost available or free model: chargedCredits stays 0n
-
-    // INVARIANT: Always record charge receipt for billed calls
-    // sourceReference: litellmCallId (happy path) or requestId (forensic fallback)
-    const sourceReference = result.litellmCallId ?? requestId;
-    if (!result.litellmCallId) {
-      log.error(
-        { requestId, modelId, isFree },
-        "BUG: LiteLLM response missing call ID - recording charge_receipt without joinable usage reference"
-      );
-    }
-
-    await accountService.recordChargeReceipt({
-      billingAccountId: caller.billingAccountId,
-      virtualKeyId: caller.virtualKeyId,
-      requestId,
-      chargedCredits,
-      responseCostUsd: userCostUsd,
-      litellmCallId: result.litellmCallId ?? null,
-      provenance: "response",
-      chargeReason: "llm_usage",
-      sourceSystem: "litellm",
-      sourceReference,
-    });
-  } catch (error) {
-    // Post-call billing is best-effort - NEVER block user response
-    // recordChargeReceipt should never throw InsufficientCreditsPortError per design
-    log.error(
-      {
-        err: error,
-        requestId,
-        billingAccountId: caller.billingAccountId,
-      },
-      "CRITICAL: Post-call billing failed - user response NOT blocked"
-    );
-    // DO NOT RETHROW - user already got LLM response, must see it
-    // EXCEPT in test environment where we need to catch these issues
-    if (serverEnv().APP_ENV === "test") {
-      throw error;
-    }
-  }
-
-  // Per AI_SETUP_SPEC.md: Record success telemetry
-  // Prefer adapter's promptHash (canonical payload hash) when available; fall back to pre-computed
-  // latencyMs must be integer for DB schema (milliseconds precision sufficient)
-  const latencyMs = Math.max(0, Math.round(llmEvent.durationMs));
-  const resolvedPromptHash = result.promptHash ?? promptHash;
-
-  // Create Langfuse trace first to capture langfuseTraceId for DB record
-  let langfuseTraceId: string | undefined;
-  if (langfuse) {
-    try {
-      langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
-        requestId: ctx.reqId,
-        model: result.resolvedModel ?? modelId,
-        promptHash: resolvedPromptHash,
-      });
-      langfuse.recordGeneration(ctx.traceId, {
-        model: result.resolvedModel ?? modelId,
-        status: "success",
-        latencyMs,
-        ...(result.usage?.promptTokens !== undefined
-          ? { tokensIn: result.usage.promptTokens }
-          : {}),
-        ...(result.usage?.completionTokens !== undefined
-          ? { tokensOut: result.usage.completionTokens }
-          : {}),
-        ...(result.providerCostUsd !== undefined
-          ? { providerCostUsd: result.providerCostUsd }
-          : {}),
-      });
-      // Flush in background (never await on request path per spec)
-      langfuse
-        .flush()
-        .catch((err) => log.warn({ err }, "Langfuse flush failed"));
-    } catch {
-      // Langfuse failure shouldn't block request - DB telemetry still written
-      langfuseTraceId = undefined;
-    }
-  }
-
-  try {
-    await aiTelemetry.recordInvocation({
-      invocationId,
-      requestId: ctx.reqId,
-      traceId: ctx.traceId,
-      ...(langfuseTraceId ? { langfuseTraceId } : {}),
-      provider: result.resolvedProvider ?? "unknown",
-      model: result.resolvedModel ?? modelId,
-      promptHash: resolvedPromptHash, // Prefer adapter's canonical hash
-      routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION, // Current version
-      status: "success",
-      latencyMs,
-      ...(result.usage?.promptTokens !== undefined
-        ? { tokensIn: result.usage.promptTokens }
-        : {}),
-      ...(result.usage?.completionTokens !== undefined
-        ? { tokensOut: result.usage.completionTokens }
-        : {}),
-      ...(result.usage?.totalTokens !== undefined
-        ? { tokensTotal: result.usage.totalTokens }
-        : {}),
-      ...(result.providerCostUsd !== undefined
-        ? { providerCostUsd: result.providerCostUsd }
-        : {}),
-      ...(result.litellmCallId ? { litellmCallId: result.litellmCallId } : {}),
-    });
-  } catch (telemetryError) {
-    // Telemetry should never block user response
-    log.error(
-      { err: telemetryError, invocationId },
-      "Failed to record success telemetry"
-    );
-  }
+  // Handle success (metrics, billing, telemetry)
+  await handleLlmSuccess(result, postCallContext, log);
 
   // Feature sets timestamp after completion using injected clock
   return {
@@ -507,233 +335,57 @@ export async function executeStream({
 }> {
   const log = ctx.log.child({ feature: "ai.completion.stream" });
 
-  const finalMessages = await prepareForExecution(
-    messages,
+  // Prepare messages + get fallback hash
+  const {
+    messages: finalMessages,
+    fallbackPromptHash,
+    estimatedTokensUpperBound,
+  } = prepareMessages(messages, model);
+
+  // Pre-flight credit check (upper-bound estimate)
+  await validateCreditsUpperBound(
+    caller.billingAccountId,
+    estimatedTokensUpperBound,
     model,
-    caller,
     accountService
   );
 
-  // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
+  // Per spec: request_id is stable per request entry (from ctx.reqId)
   const requestId = ctx.reqId;
-  // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt (idempotency key)
+  // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt
   const invocationId = randomUUID();
+  const llmStart = performance.now();
 
-  // Per AI_SETUP_SPEC.md: Compute prompt_hash BEFORE LLM call so it's available on error path
-  const llmMessages = finalMessages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
-  const promptHash = computePromptHash({
-    model,
-    messages: llmMessages,
-    temperature: DEFAULT_TEMPERATURE,
-    maxTokens: DEFAULT_MAX_TOKENS,
-  });
+  // Build shared context for post-call handling
+  const postCallContext: PostCallContext = {
+    invocationId,
+    requestId,
+    traceId: ctx.traceId,
+    routeId: ctx.routeId,
+    fallbackPromptHash,
+    requestedModel: model,
+    llmStart,
+    caller,
+    provenance: "stream",
+    accountService,
+    aiTelemetry,
+    langfuse,
+  };
 
   log.debug({ messageCount: finalMessages.length }, "starting LLM stream");
-  const llmStart = performance.now();
 
   const { stream, final } = await llmService.completionStream({
     messages: finalMessages,
     model,
     caller,
-    // Explicitly handle optional property
     ...(abortSignal ? { abortSignal } : {}),
   });
 
-  // Wrap final promise to handle billing
+  // Wrap final promise to handle billing/telemetry
+  // INVARIANT: STREAMING_SIDE_EFFECTS_ONCE - side effects fire ONLY from this promise
   const wrappedFinal = final
     .then(async (result) => {
-      const totalTokens = result.usage?.totalTokens ?? 0;
-      const providerMeta = (result.providerMeta ?? {}) as Record<
-        string,
-        unknown
-      >;
-      const modelId =
-        typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
-
-      // Invariant enforcement: log when model resolution fails
-      if (modelId === "unknown") {
-        log.warn(
-          {
-            requestId,
-            requestedModel: model,
-            streaming: true,
-            hasProviderMeta: !!result.providerMeta,
-            providerMetaKeys: result.providerMeta
-              ? Object.keys(result.providerMeta)
-              : [],
-          },
-          "inv_provider_meta_model_missing: Model name missing from LLM stream response"
-        );
-      }
-
-      const llmEvent: AiLlmCallEvent = {
-        event: "ai.llm_call",
-        routeId: ctx.routeId,
-        reqId: ctx.reqId,
-        billingAccountId: caller.billingAccountId,
-        model: modelId,
-        durationMs: performance.now() - llmStart,
-        tokensUsed: totalTokens,
-        providerCostUsd: result.providerCostUsd,
-      };
-      log.info(llmEvent, "ai.llm_call_completed");
-
-      // Record LLM metrics
-      const modelClass = await getModelClass(modelId);
-      aiLlmCallDurationMs.observe(
-        { provider: "litellm", model_class: modelClass },
-        llmEvent.durationMs
-      );
-      if (llmEvent.tokensUsed) {
-        aiLlmTokensTotal.inc(
-          { provider: "litellm", model_class: modelClass },
-          llmEvent.tokensUsed
-        );
-      }
-      if (typeof llmEvent.providerCostUsd === "number") {
-        aiLlmCostUsdTotal.inc(
-          { provider: "litellm", model_class: modelClass },
-          llmEvent.providerCostUsd
-        );
-      }
-
-      // Post-call billing: Calculate charged credits and record receipt
-      // Per ACTIVITY_METRICS.md: post-call is NEVER blocking
-      try {
-        const isFree = await isModelFree(modelId);
-        let chargedCredits = 0n;
-        let userCostUsd: number | null = null;
-
-        if (!isFree && typeof result.providerCostUsd === "number") {
-          // Use policy function for consistent calculation
-          const charge = calculateDefaultLlmCharge(result.providerCostUsd);
-          chargedCredits = charge.chargedCredits;
-          userCostUsd = charge.userCostUsd;
-
-          log.debug(
-            {
-              requestId,
-              providerCostUsd: result.providerCostUsd,
-              userCostUsd,
-              chargedCredits: chargedCredits.toString(),
-            },
-            "Stream cost calculation complete"
-          );
-        }
-        // If no cost available or free model: chargedCredits stays 0n
-
-        // INVARIANT: Always record charge receipt for billed calls
-        // sourceReference: litellmCallId (happy path) or requestId (forensic fallback)
-        const sourceReference = result.litellmCallId ?? requestId;
-        if (!result.litellmCallId) {
-          log.error(
-            { requestId, modelId: model, isFree },
-            "BUG: LiteLLM response missing call ID - recording charge_receipt without joinable usage reference"
-          );
-        }
-
-        await accountService.recordChargeReceipt({
-          billingAccountId: caller.billingAccountId,
-          virtualKeyId: caller.virtualKeyId,
-          requestId,
-          chargedCredits,
-          responseCostUsd: userCostUsd,
-          litellmCallId: result.litellmCallId ?? null,
-          provenance: "stream",
-          chargeReason: "llm_usage",
-          sourceSystem: "litellm",
-          sourceReference,
-        });
-      } catch (error) {
-        // Post-call billing is best-effort - NEVER block user response
-        log.error(
-          {
-            err: error,
-            requestId,
-            billingAccountId: caller.billingAccountId,
-          },
-          "CRITICAL: Post-stream billing failed"
-        );
-        if (serverEnv().APP_ENV === "test") throw error;
-      }
-
-      // Per AI_SETUP_SPEC.md: Record success telemetry for stream
-      // Prefer adapter's promptHash (canonical payload hash) when available; fall back to pre-computed
-      // latencyMs must be integer for DB schema (milliseconds precision sufficient)
-      const latencyMs = Math.max(0, Math.round(llmEvent.durationMs));
-      const resolvedPromptHash = result.promptHash ?? promptHash;
-
-      // Create Langfuse trace first to capture langfuseTraceId for DB record
-      let langfuseTraceId: string | undefined;
-      if (langfuse) {
-        try {
-          langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
-            requestId: ctx.reqId,
-            model: result.resolvedModel ?? modelId,
-            promptHash: resolvedPromptHash,
-          });
-          langfuse.recordGeneration(ctx.traceId, {
-            model: result.resolvedModel ?? modelId,
-            status: "success",
-            latencyMs,
-            ...(result.usage?.promptTokens !== undefined
-              ? { tokensIn: result.usage.promptTokens }
-              : {}),
-            ...(result.usage?.completionTokens !== undefined
-              ? { tokensOut: result.usage.completionTokens }
-              : {}),
-            ...(result.providerCostUsd !== undefined
-              ? { providerCostUsd: result.providerCostUsd }
-              : {}),
-          });
-          // Flush in background (never await on request path per spec)
-          langfuse
-            .flush()
-            .catch((err) => log.warn({ err }, "Langfuse flush failed"));
-        } catch {
-          // Langfuse failure shouldn't block request - DB telemetry still written
-          langfuseTraceId = undefined;
-        }
-      }
-
-      try {
-        await aiTelemetry.recordInvocation({
-          invocationId,
-          requestId: ctx.reqId,
-          traceId: ctx.traceId,
-          ...(langfuseTraceId ? { langfuseTraceId } : {}),
-          provider: result.resolvedProvider ?? "unknown",
-          model: result.resolvedModel ?? modelId,
-          promptHash: resolvedPromptHash, // Prefer adapter's canonical hash
-          routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION,
-          status: "success",
-          latencyMs,
-          ...(result.usage?.promptTokens !== undefined
-            ? { tokensIn: result.usage.promptTokens }
-            : {}),
-          ...(result.usage?.completionTokens !== undefined
-            ? { tokensOut: result.usage.completionTokens }
-            : {}),
-          ...(result.usage?.totalTokens !== undefined
-            ? { tokensTotal: result.usage.totalTokens }
-            : {}),
-          ...(result.providerCostUsd !== undefined
-            ? { providerCostUsd: result.providerCostUsd }
-            : {}),
-          ...(result.litellmCallId
-            ? { litellmCallId: result.litellmCallId }
-            : {}),
-        });
-      } catch (telemetryError) {
-        // Telemetry should never block user response
-        log.error(
-          { err: telemetryError, invocationId },
-          "Failed to record stream success telemetry"
-        );
-      }
+      await handleLlmSuccess(result, postCallContext, log);
 
       return {
         ok: true as const,
@@ -746,71 +398,8 @@ export async function executeStream({
       };
     })
     .catch(async (error) => {
-      // If stream fails/aborts, we still want to record partial usage if available
-      // But for now, we just log and rethrow.
-      // Ideally, we'd catch AbortError and record partials if LiteLLM gave us any.
       log.error({ err: error, requestId }, "Stream execution failed");
-
-      // Record error metric
-      const errorCode = classifyLlmError(error);
-      const errorModelClass = await getModelClass(model);
-      aiLlmErrorsTotal.inc({
-        provider: "litellm",
-        code: errorCode,
-        model_class: errorModelClass,
-      });
-
-      // Per AI_SETUP_SPEC.md: Record error telemetry for stream with REAL prompt_hash
-      // latencyMs must be integer for DB schema (milliseconds precision sufficient)
-      const latencyMs = Math.max(0, Math.round(performance.now() - llmStart));
-      const errorKind = error instanceof LlmError ? error.kind : "unknown";
-
-      // Create Langfuse trace first to capture langfuseTraceId for DB record
-      let langfuseTraceId: string | undefined;
-      if (langfuse) {
-        try {
-          langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
-            requestId: ctx.reqId,
-            model,
-            promptHash, // Real hash
-          });
-          langfuse.recordGeneration(ctx.traceId, {
-            model,
-            status: "error",
-            errorCode: errorKind,
-            latencyMs,
-          });
-          // Flush in background (never await on request path per spec)
-          langfuse
-            .flush()
-            .catch((err) => log.warn({ err }, "Langfuse flush failed"));
-        } catch {
-          // Langfuse failure shouldn't block request - DB telemetry still written
-          langfuseTraceId = undefined;
-        }
-      }
-
-      try {
-        await aiTelemetry.recordInvocation({
-          invocationId,
-          requestId: ctx.reqId,
-          traceId: ctx.traceId,
-          ...(langfuseTraceId ? { langfuseTraceId } : {}),
-          provider: "unknown",
-          model,
-          promptHash, // Real hash computed BEFORE LLM call
-          routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION,
-          status: "error",
-          errorCode: errorKind,
-          latencyMs,
-        });
-      } catch (telemetryError) {
-        // Telemetry should never block error propagation
-        log.error(
-          { err: telemetryError, invocationId },
-          "Failed to record stream error telemetry"
-        );
-      }
+      await handleLlmError(error, postCallContext, log);
 
       // Return discriminated union instead of throwing
       const isAborted = error instanceof Error && error.name === "AbortError";
