@@ -27,14 +27,13 @@ import type {
   LlmService,
 } from "@/ports";
 import { LlmError } from "@/ports";
-import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
 import {
   type AiLlmCallEvent,
   classifyLlmError,
   type RequestContext,
 } from "@/shared/observability";
-import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
+import { recordBilling } from "./billing";
 import { prepareMessages } from "./message-preparation";
 import { recordMetrics } from "./metrics";
 import { validateCreditsUpperBound } from "./preflight-credit-check";
@@ -196,95 +195,20 @@ export async function execute(
     isError: false,
   });
 
-  // Post-call billing: Calculate charged credits and record receipt
-  // Per ACTIVITY_METRICS.md: post-call is NEVER blocking
-  try {
-    const isFree = await isModelFree(modelId);
-    let chargedCredits = 0n;
-
-    // DEBUG: Log cost data received from LiteLLM
-    log.debug(
-      {
-        requestId,
-        modelId,
-        isFree,
-        providerCostUsd: result.providerCostUsd,
-        litellmCallId: result.litellmCallId,
-        tokensUsed: result.usage?.totalTokens,
-      },
-      "Post-call billing: LiteLLM response data"
-    );
-
-    let userCostUsd: number | null = null;
-
-    if (!isFree && typeof result.providerCostUsd === "number") {
-      // Use policy function for consistent calculation
-      const charge = calculateDefaultLlmCharge(result.providerCostUsd);
-      chargedCredits = charge.chargedCredits;
-      userCostUsd = charge.userCostUsd;
-
-      log.debug(
-        {
-          requestId,
-          providerCostUsd: result.providerCostUsd,
-          userCostUsd,
-          chargedCredits: chargedCredits.toString(),
-        },
-        "Cost calculation complete"
-      );
-    } else if (!isFree && typeof result.providerCostUsd !== "number") {
-      // CRITICAL: Non-free model but no cost data (degraded billing)
-      log.error(
-        {
-          requestId,
-          modelId,
-          litellmCallId: result.litellmCallId,
-          isFree,
-        },
-        "CRITICAL: LiteLLM response missing cost data - billing incomplete (degraded under-billing mode)"
-      );
-    }
-    // If no cost available or free model: chargedCredits stays 0n
-
-    // INVARIANT: Always record charge receipt for billed calls
-    // sourceReference: litellmCallId (happy path) or requestId (forensic fallback)
-    const sourceReference = result.litellmCallId ?? requestId;
-    if (!result.litellmCallId) {
-      log.error(
-        { requestId, modelId, isFree },
-        "BUG: LiteLLM response missing call ID - recording charge_receipt without joinable usage reference"
-      );
-    }
-
-    await accountService.recordChargeReceipt({
+  // P2: Post-call billing (non-blocking, handles errors internally)
+  await recordBilling(
+    {
       billingAccountId: caller.billingAccountId,
       virtualKeyId: caller.virtualKeyId,
       requestId,
-      chargedCredits,
-      responseCostUsd: userCostUsd,
-      litellmCallId: result.litellmCallId ?? null,
+      model: modelId,
+      providerCostUsd: result.providerCostUsd,
+      litellmCallId: result.litellmCallId,
       provenance: "response",
-      chargeReason: "llm_usage",
-      sourceSystem: "litellm",
-      sourceReference,
-    });
-  } catch (error) {
-    // Post-call billing is best-effort - NEVER block user response
-    // recordChargeReceipt should never throw InsufficientCreditsPortError per design
-    log.error(
-      {
-        err: error,
-        requestId,
-        billingAccountId: caller.billingAccountId,
-      },
-      "CRITICAL: Post-call billing failed - user response NOT blocked"
-    );
-    // DO NOT RETHROW - user already got LLM response, must see it
-    // EXCEPT in test environment where we need to catch these issues
-    if (serverEnv().APP_ENV === "test") {
-      throw error;
-    }
-  }
+    },
+    accountService,
+    log
+  );
 
   // Per AI_SETUP_SPEC.md: Record success telemetry
   // Prefer adapter's promptHash (canonical payload hash) when available; fall back to pre-computed
@@ -483,65 +407,20 @@ export async function executeStream({
         isError: false,
       });
 
-      // Post-call billing: Calculate charged credits and record receipt
-      // Per ACTIVITY_METRICS.md: post-call is NEVER blocking
-      try {
-        const isFree = await isModelFree(modelId);
-        let chargedCredits = 0n;
-        let userCostUsd: number | null = null;
-
-        if (!isFree && typeof result.providerCostUsd === "number") {
-          // Use policy function for consistent calculation
-          const charge = calculateDefaultLlmCharge(result.providerCostUsd);
-          chargedCredits = charge.chargedCredits;
-          userCostUsd = charge.userCostUsd;
-
-          log.debug(
-            {
-              requestId,
-              providerCostUsd: result.providerCostUsd,
-              userCostUsd,
-              chargedCredits: chargedCredits.toString(),
-            },
-            "Stream cost calculation complete"
-          );
-        }
-        // If no cost available or free model: chargedCredits stays 0n
-
-        // INVARIANT: Always record charge receipt for billed calls
-        // sourceReference: litellmCallId (happy path) or requestId (forensic fallback)
-        const sourceReference = result.litellmCallId ?? requestId;
-        if (!result.litellmCallId) {
-          log.error(
-            { requestId, modelId: model, isFree },
-            "BUG: LiteLLM response missing call ID - recording charge_receipt without joinable usage reference"
-          );
-        }
-
-        await accountService.recordChargeReceipt({
+      // P2: Post-call billing (non-blocking, handles errors internally)
+      await recordBilling(
+        {
           billingAccountId: caller.billingAccountId,
           virtualKeyId: caller.virtualKeyId,
           requestId,
-          chargedCredits,
-          responseCostUsd: userCostUsd,
-          litellmCallId: result.litellmCallId ?? null,
+          model: modelId,
+          providerCostUsd: result.providerCostUsd,
+          litellmCallId: result.litellmCallId,
           provenance: "stream",
-          chargeReason: "llm_usage",
-          sourceSystem: "litellm",
-          sourceReference,
-        });
-      } catch (error) {
-        // Post-call billing is best-effort - NEVER block user response
-        log.error(
-          {
-            err: error,
-            requestId,
-            billingAccountId: caller.billingAccountId,
-          },
-          "CRITICAL: Post-stream billing failed"
-        );
-        if (serverEnv().APP_ENV === "test") throw error;
-      }
+        },
+        accountService,
+        log
+      );
 
       // Per AI_SETUP_SPEC.md: Record success telemetry for stream
       // Prefer adapter's promptHash (canonical payload hash) when available; fall back to pre-computed

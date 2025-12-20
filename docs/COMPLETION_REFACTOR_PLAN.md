@@ -1,7 +1,7 @@
 # Refactor Plan: completion.ts Modularization
 
-> **Status**: In Progress (P2 - preflight-credit-check complete)
-> **Scope**: Extract `completion.ts` (826→708 lines) into focused modules (<150 lines each)
+> **Status**: In Progress (P2 - billing complete)
+> **Scope**: Extract `completion.ts` (826→587 lines) into focused modules (<150 lines each)
 > **Goal**: Clean architecture, DRY, testable, LangGraph-ready
 
 > [!CRITICAL]
@@ -37,9 +37,9 @@
 - [x] Extract `preflight-credit-check.ts` - move credit estimation + balance check
 - [x] Wire into `completion.ts` - call `validateCreditsUpperBound()`
 - [x] Verify: `pnpm check` passes, all tests green
-- [ ] Extract `billing.ts` - unify billing logic from `execute()` and `executeStream().wrappedFinal`
-- [ ] Wire into `completion.ts` - call `recordBilling()` in both paths
-- [ ] Verify: `pnpm check` passes, all tests green
+- [x] Extract `billing.ts` - unify billing logic from `execute()` and `executeStream().wrappedFinal`
+- [x] Wire into `completion.ts` - call `recordBilling()` in both paths
+- [x] Verify: `pnpm check` passes, all tests green
 - [ ] Extract `telemetry.ts` - unify success/error telemetry from both paths
 - [ ] Wire into `completion.ts` - call `recordTelemetry()` in both paths
 - [ ] Verify: `pnpm check` passes, all tests green
@@ -501,4 +501,4 @@ Per `FEATURE_DEVELOPMENT_GUIDE.md`, feature services export `execute`. The new m
 ---
 
 **Last Updated**: 2025-12-21
-**Status**: In Progress (P2 preflight-credit-check complete)
+**Status**: In Progress (P2 billing complete)
