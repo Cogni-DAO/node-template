@@ -17,7 +17,20 @@
  * @public
  */
 
-import type { Message } from "@/core";
+import {
+  applyBaselineSystemPrompt,
+  assertMessageLength,
+  estimateTotalTokens,
+  filterSystemMessages,
+  MAX_MESSAGE_CHARS,
+  type Message,
+  trimConversationHistory,
+} from "@/core";
+import {
+  computePromptHash,
+  DEFAULT_MAX_TOKENS,
+  DEFAULT_TEMPERATURE,
+} from "@/shared/ai/prompt-hash";
 
 /**
  * Result of message preparation.
@@ -48,8 +61,46 @@ export interface PreparedMessages {
  * @throws ChatValidationError if message exceeds length limit
  */
 export function prepareMessages(
-  _rawMessages: Message[],
-  _model: string
+  rawMessages: Message[],
+  model: string
 ): PreparedMessages {
-  throw new Error("Not implemented - P1 extraction pending");
+  // 1. Remove any client-provided system messages (defense-in-depth)
+  const userMessages = filterSystemMessages(rawMessages);
+
+  // 2. Validate message length
+  for (const message of userMessages) {
+    assertMessageLength(message.content, MAX_MESSAGE_CHARS);
+  }
+
+  // 3. Trim conversation history to fit context window
+  const trimmedMessages = trimConversationHistory(
+    userMessages,
+    MAX_MESSAGE_CHARS
+  );
+
+  // 4. Prepend baseline system prompt (exactly once, always first)
+  const finalMessages = applyBaselineSystemPrompt(trimmedMessages);
+
+  // 5. Estimate token count (includes system prompt)
+  const estimatedTokensUpperBound = estimateTotalTokens(finalMessages);
+
+  // 6. Compute fallback promptHash for error path availability
+  // Per AI_SETUP_SPEC.md: prompt_hash must be available on error path
+  // Messages are converted to LLM-ready format (role + content only, no timestamp)
+  const llmMessages = finalMessages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+  const fallbackPromptHash = computePromptHash({
+    model,
+    messages: llmMessages,
+    temperature: DEFAULT_TEMPERATURE,
+    maxTokens: DEFAULT_MAX_TOKENS,
+  });
+
+  return {
+    messages: finalMessages,
+    fallbackPromptHash,
+    estimatedTokensUpperBound,
+  };
 }

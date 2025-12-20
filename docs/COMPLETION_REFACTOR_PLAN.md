@@ -1,6 +1,6 @@
 # Refactor Plan: completion.ts Modularization
 
-> **Status**: Draft
+> **Status**: In Progress (P1)
 > **Scope**: Extract `completion.ts` (826 lines) into focused modules (<150 lines each)
 > **Goal**: Clean architecture, DRY, testable, LangGraph-ready
 
@@ -25,9 +25,9 @@
 
 ### P1: Extract Pure Modules (No Ports)
 
-- [ ] Extract `message-preparation.ts` - move `prepareForExecution()` logic, return `PreparedMessages`
-- [ ] Wire into `completion.ts` - call `prepareMessages()`, keep all other code unchanged
-- [ ] Verify: `pnpm check` passes, all tests green
+- [x] Extract `message-preparation.ts` - move `prepareForExecution()` logic, return `PreparedMessages`
+- [x] Wire into `completion.ts` - call `prepareMessages()`, keep all other code unchanged
+- [x] Verify: `pnpm check` passes, all tests green
 - [ ] Extract `metrics.ts` - move Prometheus metric calls to `recordMetrics()`
 - [ ] Wire into `completion.ts` - call `recordMetrics()` in both paths
 - [ ] Verify: `pnpm check` passes, all tests green
@@ -500,5 +500,5 @@ Per `FEATURE_DEVELOPMENT_GUIDE.md`, feature services export `execute`. The new m
 
 ---
 
-**Last Updated**: 2025-12-20
-**Status**: Design Draft
+**Last Updated**: 2025-12-21
+**Status**: In Progress (P1 message-preparation complete)

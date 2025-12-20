@@ -16,16 +16,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  applyBaselineSystemPrompt,
-  assertMessageLength,
-  ESTIMATED_USD_PER_1K_TOKENS,
-  estimateTotalTokens,
-  filterSystemMessages,
-  MAX_MESSAGE_CHARS,
-  type Message,
-  trimConversationHistory,
-} from "@/core";
+import { ESTIMATED_USD_PER_1K_TOKENS, type Message } from "@/core";
 import type { StreamFinalResult } from "@/features/ai/types";
 import type {
   AccountService,
@@ -37,11 +28,6 @@ import type {
 } from "@/ports";
 import { InsufficientCreditsPortError, LlmError } from "@/ports";
 import { getModelClass, isModelFree } from "@/shared/ai/model-catalog.server";
-import {
-  computePromptHash,
-  DEFAULT_MAX_TOKENS,
-  DEFAULT_TEMPERATURE,
-} from "@/shared/ai/prompt-hash";
 import { serverEnv } from "@/shared/env";
 import {
   type AiLlmCallEvent,
@@ -53,6 +39,7 @@ import {
   type RequestContext,
 } from "@/shared/observability";
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
+import { prepareMessages } from "./message-preparation";
 
 /**
  * Estimate cost in credits for pre-flight gating.
@@ -83,60 +70,6 @@ async function estimateCostCredits(
   return chargedCredits;
 }
 
-/**
- * Prepares messages for LLM execution:
- * 1. Filters system messages
- * 2. Validates length
- * 3. Trims history
- * 4. Applies baseline system prompt
- * 5. Performs pre-flight credit check
- */
-async function prepareForExecution(
-  messages: Message[],
-  model: string,
-  caller: LlmCaller,
-  accountService: AccountService
-): Promise<Message[]> {
-  // 1. Remove any client-provided system messages (defense-in-depth)
-  const userMessages = filterSystemMessages(messages);
-
-  // 2. Validate message length
-  for (const message of userMessages) {
-    assertMessageLength(message.content, MAX_MESSAGE_CHARS);
-  }
-
-  // 3. Trim conversation history to fit context window
-  const trimmedMessages = trimConversationHistory(
-    userMessages,
-    MAX_MESSAGE_CHARS
-  );
-
-  // 4. Prepend baseline system prompt (exactly once, always first)
-  const finalMessages = applyBaselineSystemPrompt(trimmedMessages);
-
-  // 5. Preflight credit check (includes system prompt in token estimation)
-  const estimatedTotalTokens = estimateTotalTokens(finalMessages);
-  const estimatedUserPriceCredits = await estimateCostCredits(
-    model,
-    estimatedTotalTokens
-  );
-
-  const currentBalance = await accountService.getBalance(
-    caller.billingAccountId
-  );
-
-  // Convert bigint to number for comparison (safe for pre-flight check)
-  if (currentBalance < Number(estimatedUserPriceCredits)) {
-    throw new InsufficientCreditsPortError(
-      caller.billingAccountId,
-      Number(estimatedUserPriceCredits),
-      currentBalance
-    );
-  }
-
-  return finalMessages;
-}
-
 export async function execute(
   messages: Message[],
   model: string,
@@ -150,30 +83,34 @@ export async function execute(
 ): Promise<{ message: Message; requestId: string }> {
   const log = ctx.log.child({ feature: "ai.completion" });
 
-  const finalMessages = await prepareForExecution(
-    messages,
+  // P1: Use prepareMessages for message prep + fallback hash
+  // Alias fallbackPromptHash as promptHash to minimize downstream changes
+  const {
+    messages: finalMessages,
+    fallbackPromptHash: promptHash,
+    estimatedTokensUpperBound,
+  } = prepareMessages(messages, model);
+
+  // Credit check (inline for now, will be extracted to preflight-credit-check.ts in P2)
+  const estimatedUserPriceCredits = await estimateCostCredits(
     model,
-    caller,
-    accountService
+    estimatedTokensUpperBound
   );
+  const currentBalance = await accountService.getBalance(
+    caller.billingAccountId
+  );
+  if (currentBalance < Number(estimatedUserPriceCredits)) {
+    throw new InsufficientCreditsPortError(
+      caller.billingAccountId,
+      Number(estimatedUserPriceCredits),
+      currentBalance
+    );
+  }
 
   // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
   const requestId = ctx.reqId;
   // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt (idempotency key)
   const invocationId = randomUUID();
-
-  // Per AI_SETUP_SPEC.md: Compute prompt_hash BEFORE LLM call so it's available on error path
-  // Messages are converted to LLM-ready format (role + content only, no timestamp)
-  const llmMessages = finalMessages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
-  const promptHash = computePromptHash({
-    model,
-    messages: llmMessages,
-    temperature: DEFAULT_TEMPERATURE,
-    maxTokens: DEFAULT_MAX_TOKENS,
-  });
 
   // Delegate to port - caller constructed at auth boundary
   log.debug({ messageCount: finalMessages.length }, "calling LLM");
@@ -507,29 +444,34 @@ export async function executeStream({
 }> {
   const log = ctx.log.child({ feature: "ai.completion.stream" });
 
-  const finalMessages = await prepareForExecution(
-    messages,
+  // P1: Use prepareMessages for message prep + fallback hash
+  // Alias fallbackPromptHash as promptHash to minimize downstream changes
+  const {
+    messages: finalMessages,
+    fallbackPromptHash: promptHash,
+    estimatedTokensUpperBound,
+  } = prepareMessages(messages, model);
+
+  // Credit check (inline for now, will be extracted to preflight-credit-check.ts in P2)
+  const estimatedUserPriceCredits = await estimateCostCredits(
     model,
-    caller,
-    accountService
+    estimatedTokensUpperBound
   );
+  const currentBalance = await accountService.getBalance(
+    caller.billingAccountId
+  );
+  if (currentBalance < Number(estimatedUserPriceCredits)) {
+    throw new InsufficientCreditsPortError(
+      caller.billingAccountId,
+      Number(estimatedUserPriceCredits),
+      currentBalance
+    );
+  }
 
   // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
   const requestId = ctx.reqId;
   // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt (idempotency key)
   const invocationId = randomUUID();
-
-  // Per AI_SETUP_SPEC.md: Compute prompt_hash BEFORE LLM call so it's available on error path
-  const llmMessages = finalMessages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
-  const promptHash = computePromptHash({
-    model,
-    messages: llmMessages,
-    temperature: DEFAULT_TEMPERATURE,
-    maxTokens: DEFAULT_MAX_TOKENS,
-  });
 
   log.debug({ messageCount: finalMessages.length }, "starting LLM stream");
   const llmStart = performance.now();
