@@ -75,16 +75,21 @@ dts: false,  // tsc -b handles declarations via project references
 
 **Important:** Never add `tsc -b` to individual package build scripts. Always run it from root to ensure the full reference graph is built correctly.
 
-### Fast vs Full Typecheck
+### TypeScript Configuration
 
-Two tsconfigs exist for different scenarios:
+Five tsconfigs exist for different scenarios:
 
-| Config              | Command               | Includes                | Use Case                         |
-| ------------------- | --------------------- | ----------------------- | -------------------------------- |
-| `tsconfig.app.json` | `pnpm typecheck`      | `src/`, `scripts/` only | Fast checks (no packages needed) |
-| `tsconfig.json`     | `pnpm typecheck:full` | Everything via `tsc -b` | Full build (packages must exist) |
+| Config                  | Command               | Includes               | Use Case                               |
+| ----------------------- | --------------------- | ---------------------- | -------------------------------------- |
+| `tsconfig.base.json`    | N/A                   | None (options only)    | Shared compiler options + path aliases |
+| `tsconfig.json`         | `pnpm typecheck:full` | None (solution-style)  | `tsc -b` with project references       |
+| `tsconfig.app.json`     | `pnpm typecheck`      | `src/`, `scripts/`     | Fast app typecheck (no packages)       |
+| `tsconfig.scripts.json` | N/A (tsx uses it)     | `scripts/`             | tsx tooling path resolution            |
+| `tsconfig.eslint.json`  | N/A (ESLint uses it)  | `src/`, `tests/`, root | ESLint parser                          |
 
-**Why**: Root tsconfig uses project references to packages. Running `tsc --noEmit` on it requires `dist/` to exist (TS6305). The app-only config sidesteps this for fast iteration.
+**Why solution-style root**: `tsconfig.json` contains only `references` (no `include`). This prevents the "mixed-mode" anti-pattern where package sources are both directly included AND referenced, causing TS6305 errors in Docker builds.
+
+**Why separate configs**: Each tool (tsc, tsx, ESLint) needs path aliases but has different scope requirements. Shared options live in `tsconfig.base.json`; tool-specific configs extend it.
 
 ## Known Issues
 
