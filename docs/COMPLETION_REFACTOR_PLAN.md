@@ -20,8 +20,8 @@
 ### P0: Foundation (Tests First)
 
 - [x] Add regression test for **STREAMING_SIDE_EFFECTS_ONCE** (billing/telemetry/metrics fire exactly once on success/error/abort)
-- [ ] Verify existing tests cover current behavior (baseline)
-- [ ] Create empty module files with type stubs only (no implementation)
+- [x] Verify existing tests cover current behavior (baseline)
+- [x] Create empty module files with type stubs only (no implementation)
 
 ### P1: Extract Pure Modules (No Ports)
 
