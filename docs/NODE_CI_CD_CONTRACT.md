@@ -7,22 +7,22 @@
 
 1. **Fork Freedom**: CI runs without secrets; CD (build/deploy) is gated and skippable on forks
 2. **Policy Stays Local**: ESLint/depcruise/prettier/tsconfig never centralized
-3. **Local Gate Parity**: `pnpm check` is local equivalent of CI; CI parallelizes same checks across jobs
+3. **Local Gate Parity**: `pnpm check` runs same assertions as CI, different execution (sequential vs parallel)
 4. **No Runtime Fetches**: Workflows never fetch config from outside repo
 5. **Scripts Are the API**: Workflows orchestrate by calling named pnpm scripts; no inline command duplication
 
----
+### Merge Gate (Required for PR Merge)
 
-## Kit Interface
+| Check                               | Local | CI              |
+| ----------------------------------- | ----- | --------------- |
+| `pnpm typecheck`                    | ✓     | static job      |
+| `pnpm lint`                         | ✓     | static job      |
+| `pnpm format:check`                 | ✓     | unit job        |
+| `pnpm test:ci` (unit/contract/meta) | ✓     | unit job        |
+| `pnpm arch:check`                   | ✓     | static job      |
+| `pnpm test:int`                     | ✓     | integration job |
 
-When the kit exists (P1+), these are the stable override hooks:
-
-| Input               | Default      | Node Override                                      |
-| ------------------- | ------------ | -------------------------------------------------- |
-| `ci_command`        | `pnpm check` | Node can define custom check script                |
-| `ci_extra_commands` | _(none)_     | Optional additional commands after standard checks |
-
-**Rule**: Kit invokes scripts; nodes own script contents.
+**Optional** (not blocking): `pnpm test:stack:docker`, e2e, coverage upload
 
 ---
 
@@ -104,7 +104,9 @@ When the kit exists (P1+), these are the stable override hooks:
 
 **Note**: `ci.yaml` runs the same checks as `pnpm check` but parallelized across jobs (static → unit/integration). Local gate runs sequentially for simplicity.
 
-### Portable (Rails Candidates)
+### Rails-Eligible (Extract at P3)
+
+Portable plumbing scripts. Currently local, but candidates for future shared kit extraction. Not node policy—just implementation.
 
 | Path                                 | Purpose              |
 | ------------------------------------ | -------------------- |
@@ -141,7 +143,7 @@ When the kit exists (P1+), these are the stable override hooks:
 | Cost at scale  | Per-minute billing | Own infra    |
 | Vendor lock-in | GitHub-specific    | Portable     |
 
-**Key driver**: Dolt CI/CD (database merkle tree management) requires persistent state and complex branching that GitHub Actions can't manage. Jenkins migration is gated (P2) until Dolt integration begins.
+**Key driver**: Dolt CI/CD (database merkle tree memory) requires persistent state, branch-aware pipelines, and merge conflict resolution that GitHub Actions cannot provide. Jenkins is essential for this use case. Migration is gated (P2) until Dolt integration begins.
 
 ### 2. Why In-Repo Seam First?
 
