@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-19
+- **Last reviewed:** 2025-12-21
 - **Status:** draft (P1 in progress)
 
 ## Purpose
@@ -52,7 +52,15 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `graphs/` - LangGraph definitions (pure logic, no IO)
   - `prompts/` - Prompt templates (versioned text)
   - `tools/` - Tool contracts (Zod schemas + handler interfaces)
-  - `services/` - AI runtime orchestration (bridges ports, receives graphRunId from runtime)
+  - `services/` - AI service modules:
+    - `completion.ts` - Orchestrator with internal DRY helpers (execute, executeStream)
+    - `message-preparation.ts` - Message filtering, validation, fallbackPromptHash
+    - `preflight-credit-check.ts` - Upper-bound credit estimation
+    - `billing.ts` - Non-blocking charge receipt recording
+    - `telemetry.ts` - DB + Langfuse writes (ai_invocation_summaries)
+    - `metrics.ts` - Prometheus metric recording
+    - `ai_runtime.ts` - AI runtime orchestration (bridges ports, receives graphRunId from runtime)
+    - `llmPricingPolicy.ts` - Pricing markup calculation
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
 - **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, tool-runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 

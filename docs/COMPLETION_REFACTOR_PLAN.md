@@ -65,8 +65,8 @@
 
 #### Chores
 
-- [ ] Update `features/ai/AGENTS.md` with new module descriptions
-- [ ] Run `/document` to update file headers
+- [x] Update `features/ai/AGENTS.md` with new module descriptions
+- [x] Run `/document` to update file headers
 
 ---
 
@@ -517,4 +517,4 @@ Per `FEATURE_DEVELOPMENT_GUIDE.md`, feature services export `execute`. The new m
 ---
 
 **Last Updated**: 2025-12-21
-**Status**: Complete (P0-P3 done, chores pending)
+**Status**: Complete

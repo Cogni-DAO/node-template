@@ -230,7 +230,8 @@ Build eval harness to validate graph outputs against golden fixtures.
 | `src/shared/observability/server/otel.ts`   | New: OTel SDK init + context propagation |
 | `src/adapters/server/ai/litellm.adapter.ts` | Attach trace_id to LiteLLM metadata      |
 | `src/shared/db/schema.ai.ts`                | New: ai_invocation_summaries table       |
-| `src/features/ai/services/completion.ts`    | Write to ai_invocation_summaries         |
+| `src/features/ai/services/completion.ts`    | Orchestrator (delegates to telemetry.ts) |
+| `src/features/ai/services/telemetry.ts`     | Write to ai_invocation_summaries         |
 | `src/bootstrap/container.ts`                | Wire Langfuse sink                       |
 
 ---

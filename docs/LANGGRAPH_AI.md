@@ -165,7 +165,7 @@ src/features/<feature>/ai/
               │
               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ TELEMETRY (src/features/ai/services/completion.ts)                  │
+│ TELEMETRY (src/features/ai/services/telemetry.ts)                   │
 │ - Writes ai_invocation_summaries row per LLM call                   │
 │ - Enforces: if graphRunId → graph_name + graph_version non-null     │
 └─────────────────────────────────────────────────────────────────────┘
