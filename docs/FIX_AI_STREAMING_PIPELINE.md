@@ -14,7 +14,7 @@
 
 **Optional refactor (recommended but not blocking):**
 
-- [ ] Extract `completion.ts` into focused modules (800+ lines → 5 files < 150 lines each)
+- [x] Extract `completion.ts` into focused modules (see [COMPLETION_REFACTOR_PLAN.md](COMPLETION_REFACTOR_PLAN.md))
 
 ---
 
