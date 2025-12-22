@@ -407,6 +407,7 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 ## Related Docs
 
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - LangGraph architecture, port definitions, flow diagrams
+- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) - Graph execution, billing idempotency, pump+fanout pattern
 - [AI_EVALS.md](AI_EVALS.md) - Eval harness structure, CI gates
 - [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md) - Package creation rules
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal layers

@@ -357,6 +357,7 @@ Create packages only when criteria are met:
 ## Related Docs
 
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P0/P1/P2 checklists, ID map, invariants
+- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Graph execution, billing idempotency, pump+fanout
 - [AI_EVALS.md](AI_EVALS.md) — Eval harness structure, CI gates
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal layers
 
