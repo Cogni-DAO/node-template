@@ -134,11 +134,14 @@ async function handleLlmSuccess(
   });
 
   // Post-call billing (non-blocking, handles errors internally)
+  // P0: runId = requestId (direct LLM call); attempt = 0 (no run persistence)
   await recordBilling(
     {
       billingAccountId: caller.billingAccountId,
       virtualKeyId: caller.virtualKeyId,
-      requestId,
+      runId: requestId,
+      attempt: 0,
+      ingressRequestId: requestId,
       model: modelId,
       providerCostUsd: result.providerCostUsd,
       litellmCallId: result.litellmCallId,

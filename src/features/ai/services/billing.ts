@@ -26,11 +26,17 @@ import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
 
 /**
  * Context for billing a completed LLM call.
+ * Run semantics (runId, attempt) are set by caller (completion.ts), not by billing.
  */
 export interface BillingContext {
   readonly billingAccountId: string;
   readonly virtualKeyId: string;
-  readonly requestId: string;
+  /** Canonical execution identity (set by caller) */
+  readonly runId: string;
+  /** Retry attempt number (set by caller; P0: always 0) */
+  readonly attempt: number;
+  /** Ingress request correlation (set by caller; P0: equals runId) */
+  readonly ingressRequestId?: string;
   readonly model: string;
   readonly providerCostUsd: number | undefined;
   readonly litellmCallId: string | undefined;
@@ -40,12 +46,15 @@ export interface BillingContext {
 /**
  * Record charge receipt for a completed LLM call.
  *
+ * TODO(P0): DIRECT-CALL-ONLY. This function is for non-graph direct LLM calls.
+ * Graph execution will use usage_report events -> commitUsageFact() instead.
+ * Remove this function when graphs are implemented (see GRAPH_EXECUTION.md P0 checklist).
+ *
  * Non-blocking in production (catches all errors).
  * Re-throws in test environment for visibility.
  *
  * Invariants:
  * - ZERO_CREDIT_RECEIPTS_WRITTEN: Always records receipt even when chargedCredits = 0n
- * - LITELLM_CALL_ID_FALLBACK: sourceReference = litellmCallId ?? requestId with error log
  * - TEST_ENV_RETHROWS_BILLING: APP_ENV === "test" re-throws for test visibility
  *
  * @param context - Billing context from LLM result
@@ -60,7 +69,9 @@ export async function recordBilling(
   const {
     billingAccountId,
     virtualKeyId,
-    requestId,
+    runId,
+    attempt,
+    ingressRequestId,
     model,
     providerCostUsd,
     litellmCallId,
@@ -80,7 +91,7 @@ export async function recordBilling(
 
       log.debug(
         {
-          requestId,
+          runId,
           providerCostUsd,
           userCostUsd,
           chargedCredits: chargedCredits.toString(),
@@ -90,35 +101,29 @@ export async function recordBilling(
     } else if (!isFree && typeof providerCostUsd !== "number") {
       // CRITICAL: Non-free model but no cost data (degraded billing)
       log.error(
-        {
-          requestId,
-          model,
-          litellmCallId,
-          isFree,
-        },
+        { runId, model, litellmCallId, isFree },
         "CRITICAL: LiteLLM response missing cost data - billing incomplete (degraded under-billing mode)"
       );
     }
     // If no cost available or free model: chargedCredits stays 0n
 
-    // INVARIANT: Always record charge receipt for billed calls
-    // sourceReference: litellmCallId (happy path) or requestId (forensic fallback)
-    const sourceReference = litellmCallId ?? requestId;
+    // usageUnitId: litellmCallId (happy path) or deterministic fallback
+    const usageUnitId = litellmCallId ?? `MISSING:${runId}/0`;
     if (!litellmCallId) {
       log.error(
-        { requestId, model, isFree },
-        "BUG: LiteLLM response missing call ID - recording charge_receipt without joinable usage reference"
+        { runId, model, isFree },
+        "BUG: LiteLLM response missing call ID - using fallback usageUnitId"
       );
     }
 
-    // P0: Direct LLM call = single-node graph; ingressRequestId coincidentally equals runId
-    // P1: runId persists across reconnects; many ingressRequestIds per runId
+    const sourceReference = computeIdempotencyKey(runId, attempt, usageUnitId);
+
     await accountService.recordChargeReceipt({
       billingAccountId,
       virtualKeyId,
-      runId: requestId, // P0: requestId serves as runId for direct LLM calls
-      attempt: 0, // P0: always 0
-      ingressRequestId: requestId, // Optional delivery correlation
+      runId,
+      attempt,
+      ...(ingressRequestId && { ingressRequestId }),
       chargedCredits,
       responseCostUsd: userCostUsd,
       litellmCallId: litellmCallId ?? null,
@@ -131,11 +136,7 @@ export async function recordBilling(
     // Post-call billing is best-effort - NEVER block user response
     // recordChargeReceipt should never throw InsufficientCreditsPortError per design
     log.error(
-      {
-        err: error,
-        requestId,
-        billingAccountId,
-      },
+      { err: error, runId, billingAccountId },
       `CRITICAL: Post-call billing failed (${provenance}) - user response NOT blocked`
     );
     // DO NOT RETHROW - user already got LLM response, must see it
