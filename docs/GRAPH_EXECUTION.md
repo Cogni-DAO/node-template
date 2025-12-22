@@ -32,7 +32,7 @@
 Refactor billing for run-centric idempotency. Wrap existing LLM path behind `GraphExecutorPort`.
 
 - [x] Create `GraphExecutorPort` interface in `src/ports/graph-executor.port.ts`
-- [ ] Create `InProcGraphExecutorAdapter` wrapping existing streaming/completion path
+- [x] Create `InProcGraphExecutorAdapter` wrapping existing streaming/completion path
 - [ ] Implement `RunEventRelay` (StreamDriver + Fanout) in `AiRuntimeService` (billing-independent consumption)
 - [ ] Refactor `completion.ts`: emit `usage_report` event only, remove `recordBilling()` call
 - [x] Add `UsageFact` type in `src/types/usage.ts` (type only, no functions)
@@ -339,29 +339,30 @@ Wraps existing behavior behind `GraphExecutorPort`:
 ```typescript
 export class InProcGraphExecutorAdapter implements GraphExecutorPort {
   constructor(
-    private completion: typeof executeStream,
-    private toolRunner: ToolRunner
+    private deps: InProcGraphExecutorDeps,
+    private completionStream: CompletionStreamFn
   ) {}
 
   runGraph(req: GraphRunRequest): GraphRunResult {
     // P0_ATTEMPT_FREEZE: attempt is always 0, no persistence
-    const runId = req.runId; // Required - caller must provide
+    const { runId, ingressRequestId, messages, model, caller } = req;
     const attempt = 0; // P0: frozen at 0
 
+    // Create RequestContext using ingressRequestId (delivery correlation)
+    const ctx = this.createRequestContext(ingressRequestId);
+
     // Kick off async internally, return handles synchronously
-    const completionPromise = this.completion({
-      messages: req.messages,
-      model: req.model,
-      // ... pass through
+    const completionPromise = this.completionStream({
+      messages,
+      model,
+      caller,
+      ctx,
+      // ... deps pass through
     });
 
-    // Transform stream lazily, inject run_id/attempt into usage_report events
-    const stream = this.createTransformedStream(
-      completionPromise,
-      runId,
-      attempt
-    );
-    const final = this.wrapFinal(completionPromise, runId);
+    // Transform stream lazily
+    const stream = this.createTransformedStream(completionPromise, runId);
+    const final = this.createFinalPromise(completionPromise, runId);
 
     return { stream, final };
   }
@@ -372,6 +373,7 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
 
 - Enforces `GRAPH_LLM_VIA_COMPLETION` by delegating to `completion.executeStream()`
 - `runId` provided by caller; `attempt` frozen at 0 in P0 (per P0_ATTEMPT_FREEZE)
+- `ingressRequestId` used for RequestContext.reqId (delivery-layer correlation per RUNID_IS_CANONICAL)
 - Injects run context into all emitted `UsageFact` objects for idempotency
 
 ---
@@ -434,6 +436,7 @@ function commitUsageFact(fact: UsageFact, callIndex: number): void {
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution within graphs
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) — Credit unit standard, pricing policy, markup
 - [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md) — Activity dashboard join
+- [USAGE_HISTORY.md](USAGE_HISTORY.md) — Message artifact persistence (parallel stream consumer)
 
 ---
 
