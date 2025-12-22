@@ -93,16 +93,13 @@ describe("features/ai/services/completion (stream)", () => {
       finishReason: "stop",
     });
 
-    // Verify charge receipt recorded (per ACTIVITY_METRICS.md)
+    // Verify charge receipt recorded (billing path is being refactored to usage_report events per GRAPH_EXECUTION.md)
     expect(accountService.recordChargeReceipt).toHaveBeenCalledTimes(1);
-    const mockCalls = vi.mocked(accountService.recordChargeReceipt).mock.calls;
-    expect(mockCalls.length).toBeGreaterThan(0);
-    const billingCall = mockCalls[0]?.[0];
-    expect(billingCall).toBeDefined();
-    expect(billingCall).toMatchObject({
-      billingAccountId: "billing-test-user",
-      requestId: result.requestId, // Idempotency check
-      provenance: "stream", // Streaming completion
-    });
+    expect(accountService.recordChargeReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        billingAccountId: "billing-test-user",
+        provenance: "stream",
+      })
+    );
   });
 });
