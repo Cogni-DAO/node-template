@@ -9,7 +9,7 @@
 
 2. **PARALLEL_TO_BILLING**: HistoryWriterSubscriber consumes AiEvent stream alongside BillingSubscriber. Neither depends on the other. Both are idempotent. RunEventRelay fans out via per-subscriber queues (non-blocking); slow subscribers do not block UI streaming.
 
-3. **IDEMPOTENT_WRITES**: `UNIQUE(run_id, artifact_key)` prevents duplicate inserts on replay. Adapter uses `ON CONFLICT DO NOTHING`, then SELECTs existing row to compare `content_hash`. If hash mismatch, emit error metric (runId + artifactKey only, never content/hashes). Same pattern as billing.
+3. **IDEMPOTENT_WRITES**: `UNIQUE(run_id, artifact_key)` prevents duplicate inserts on in-process event duplication. Adapter uses `ON CONFLICT DO NOTHING`, then SELECTs existing row to compare `content_hash`. If hash mismatch, emit error metric (runId + artifactKey only, never content/hashes). Same pattern as billing. **Note:** This handles same-process duplicate delivery, not crash recovery—there is no persistent event log in P0.
 
 4. **USER_ARTIFACT_AT_START**: User input artifact persisted immediately on run start (before execution). Survives graph crash.
 
@@ -23,9 +23,17 @@
 
 9. **THREAD_ID_PROPAGATION**: For LangGraph runs, `thread_id` flows: `GraphRunRequest.threadId` → LangGraph config → relay context → `run_artifacts.thread_id`. Enables resume/time-travel correlation.
 
-10. **RELAY_PROVIDES_CONTEXT**: RunEventRelay provides run context (`runId`, `threadId`) to subscribers. Events are pure payloads without these fields; subscribers receive context from relay. This prevents cross-run attribution bugs.
+10. **RELAY_PROVIDES_CONTEXT**: RunEventRelay provides run context (`runId`, `threadId`, `accountId`) to subscribers. Events are pure payloads without these fields; subscribers receive context from relay. This prevents cross-run attribution bugs and ensures tenant scope is never omitted.
 
 11. **LANGGRAPH_POSTGRES_SAVER**: LangGraph.js uses self-hosted `PostgresSaver` checkpointer (not LangSmith Threads API). Thread creation is implicit—`thread_id` is just the checkpointer key passed in config. Checkpoint metadata (`checkpointId`, `checkpointNs`) is LangGraph-only; UI must not depend on it in P0.
+
+12. **TENANT_SCOPED**: All `run_artifacts` rows include `account_id` (NOT NULL). All queries MUST filter by tenant. Postgres RLS enforces isolation in-db with `FORCE ROW LEVEL SECURITY`. Missing tenant context = access denied.
+
+13. **SOFT_DELETE_DEFAULT**: All reads filter `WHERE deleted_at IS NULL AND (retention_expires_at IS NULL OR retention_expires_at > now())`. Hard delete via scheduled job only (P1).
+
+14. **REDACT_BEFORE_PERSIST**: HistoryWriterSubscriber applies masking before computing `content_hash` and before calling `persistArtifact()`. Same masking applies before any logs/traces. Single redaction boundary—no downstream masking. Regex masking is best-effort (secrets-first priority).
+
+15. **TENANT_SCOPED_THREAD_ID**: LangGraph `thread_id` MUST be tenant-scoped: `${accountId}:${threadKey}`. This ensures checkpoint isolation—checkpoints contain real state and may include PII. Isolating only artifacts is insufficient.
 
 ---
 
@@ -35,8 +43,10 @@
 
 Persist user input and assistant final output per run. No tool call/result storage yet.
 
+#### Core Persistence
+
 - [ ] Create `RunHistoryPort` interface in `src/ports/run-history.port.ts`
-- [ ] Create `run_artifacts` table (see Schema below)
+- [ ] Create `run_artifacts` table with tenant scope (see Schema below)
 - [ ] Create `DrizzleRunHistoryAdapter` in `src/adapters/server/ai/`
 - [ ] Wire `HistoryWriterSubscriber` into `RunEventRelay` fanout (parallel to billing)
 - [ ] Persist user artifact at run start in `AiRuntimeService.runGraph()`
@@ -44,6 +54,36 @@ Persist user input and assistant final output per run. No tool call/result stora
 - [ ] Executors emit `assistant_final` event (LangGraph: from state; direct LLM: assembled from deltas)
 - [ ] Persist assistant artifact on `assistant_final` event in `HistoryWriterSubscriber`
 - [ ] Add idempotency test: replay `assistant_final` twice → 1 assistant artifact row
+
+#### Tenant Isolation (P0 blocker)
+
+- [ ] Add `account_id` NOT NULL column to `run_artifacts` schema
+- [ ] Add RLS policy with `FORCE ROW LEVEL SECURITY` (see Schema)
+- [ ] Add indexes `(account_id, run_id)` and `(account_id, thread_id)`
+- [ ] Pass `accountId` via relay context (RELAY_PROVIDES_CONTEXT)
+- [ ] Update `getArtifacts()` to require `accountId` parameter
+- [ ] Add stack test: query without `SET LOCAL app.current_account_id` → access denied
+- [ ] Add stack test: cannot read artifacts with mismatched `account_id`
+
+#### Retention & Soft Delete
+
+- [ ] Add `deleted_at` and `retention_expires_at` columns to schema
+- [ ] Add retention index on `retention_expires_at`
+- [ ] Filter deleted/expired rows in all read queries by default
+- [ ] Add `softDelete(accountId, runId)` to port interface
+- [ ] Document default retention window in config (e.g., `ARTIFACT_RETENTION_DAYS=90`)
+
+#### Masking (REDACT_BEFORE_PERSIST)
+
+- [ ] Create `src/features/ai/services/masking.ts` with regex-based PII masking
+- [ ] Implement patterns: email, phone, credit card, API keys (sk-\*, Bearer, key patterns)
+- [ ] Apply masking in HistoryWriterSubscriber BEFORE `content_hash` computation
+- [ ] Apply same masking BEFORE any content logging/tracing
+
+#### Thread ID Scoping (TENANT_SCOPED_THREAD_ID)
+
+- [ ] Enforce `thread_id = ${accountId}:${threadKey}` format in `AiRuntimeService`
+- [ ] Add contract test: LangGraph runs require tenant-scoped thread_id
 
 #### Chores
 
@@ -57,6 +97,21 @@ Enable if graph tool-calling requires audit/replay.
 - [ ] Add `tool_call` artifact type: `{toolName, argsRedacted, resultSummary}`
 - [ ] Persist tool artifacts via HistoryWriterSubscriber on `tool_call_result` events
 - [ ] Stack test: graph with tool calls → tool artifacts persisted
+
+### P1: Enhanced Retention & Masking
+
+- [ ] Scheduled job to hard-delete rows where `retention_expires_at < now() - grace_period`
+- [ ] Evaluate pg_partman for partition-based retention at scale
+- [ ] Evaluate Presidio integration for stronger PII detection
+- [ ] Add per-workspace retention policy override
+
+### P1: LangGraph Checkpoint Retention (Compliance)
+
+Deleting artifacts without checkpoints is not compliant user data deletion—checkpoints hold real conversation state.
+
+- [ ] Implement retention/deletion for LangGraph PostgresSaver checkpoint tables
+- [ ] Ensure checkpoint deletion respects tenant-scoped thread_id (per TENANT_SCOPED_THREAD_ID)
+- [ ] Coordinate artifact + checkpoint deletion for GDPR/user-initiated delete requests
 
 ### P1+: Run Lineage (Future)
 
@@ -80,19 +135,21 @@ Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, 
 
 ## File Pointers (P0 Scope)
 
-| File                                            | Change                                         |
-| ----------------------------------------------- | ---------------------------------------------- |
-| `src/ports/graph-executor.port.ts`              | Add `threadId?: string` to `GraphRunRequest`   |
-| `src/ports/run-history.port.ts`                 | New: `RunHistoryPort` interface                |
-| `src/ports/index.ts`                            | Re-export `RunHistoryPort`                     |
-| `src/shared/db/schema.history.ts`               | New: `run_artifacts` table                     |
-| `src/adapters/server/ai/run-history.adapter.ts` | New: `DrizzleRunHistoryAdapter`                |
-| `src/features/ai/services/ai_runtime.ts`        | Persist user artifact at run start             |
-| `src/features/ai/services/history-writer.ts`    | New: HistoryWriterSubscriber consumes AiEvents |
-| `src/bootstrap/container.ts`                    | Wire RunHistoryPort                            |
-| `src/types/ai-events.ts`                        | Add `AssistantFinalEvent` to AiEvent union     |
-| `tests/stack/ai/history-idempotency.test.ts`    | New: replay assistant_final twice → 1 row      |
-| `tests/ports/run-history.port.spec.ts`          | New: port contract test                        |
+| File                                              | Change                                                      |
+| ------------------------------------------------- | ----------------------------------------------------------- |
+| `src/ports/graph-executor.port.ts`                | Add `threadId?: string` to `GraphRunRequest`                |
+| `src/ports/run-history.port.ts`                   | New: `RunHistoryPort` interface with tenant scope           |
+| `src/ports/index.ts`                              | Re-export `RunHistoryPort`                                  |
+| `src/shared/db/schema.history.ts`                 | New: `run_artifacts` table with RLS + retention columns     |
+| `src/adapters/server/ai/run-history.adapter.ts`   | New: `DrizzleRunHistoryAdapter` with RLS context setting    |
+| `src/features/ai/services/ai_runtime.ts`          | Persist user artifact; enforce tenant-scoped thread_id      |
+| `src/features/ai/services/history-writer.ts`      | New: HistoryWriterSubscriber with masking before persist    |
+| `src/features/ai/services/masking.ts`             | New: regex-based PII masking utility                        |
+| `src/bootstrap/container.ts`                      | Wire RunHistoryPort                                         |
+| `src/types/ai-events.ts`                          | Add `AssistantFinalEvent` to AiEvent union                  |
+| `tests/stack/ai/history-idempotency.test.ts`      | New: replay assistant_final twice → 1 row                   |
+| `tests/stack/ai/history-tenant-isolation.test.ts` | New: cross-tenant access denied; missing RLS setting denied |
+| `tests/ports/run-history.port.spec.ts`            | New: port contract test with accountId requirement          |
 
 ---
 
@@ -100,27 +157,43 @@ Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, 
 
 **New table: `run_artifacts`**
 
-| Column         | Type        | Notes                                         |
-| -------------- | ----------- | --------------------------------------------- |
-| `id`           | uuid        | PK                                            |
-| `run_id`       | text        | NOT NULL                                      |
-| `thread_id`    | text        | Nullable (LangGraph thread scope)             |
-| `artifact_key` | text        | NOT NULL, e.g. `user/0`, `assistant/final`    |
-| `role`         | text        | NOT NULL, `user` \| `assistant` \| `tool`     |
-| `content`      | text        | Nullable (text content)                       |
-| `content_hash` | text        | Nullable (sha256 hex for mismatch detection)  |
-| `content_json` | jsonb       | Nullable (reserved; unused in P0)             |
-| `content_ref`  | text        | Nullable (blob storage ref for large content) |
-| `metadata`     | jsonb       | Nullable (model, finishReason, etc.)          |
-| `created_at`   | timestamptz |                                               |
+| Column                 | Type        | Notes                                            |
+| ---------------------- | ----------- | ------------------------------------------------ |
+| `id`                   | uuid        | PK                                               |
+| `account_id`           | text        | NOT NULL (tenant scope)                          |
+| `run_id`               | text        | NOT NULL                                         |
+| `thread_id`            | text        | Nullable (must be tenant-prefixed per invariant) |
+| `artifact_key`         | text        | NOT NULL, e.g. `user/0`, `assistant/final`       |
+| `role`                 | text        | NOT NULL, `user` \| `assistant` \| `tool`        |
+| `content`              | text        | Nullable (masked before storage)                 |
+| `content_hash`         | text        | Nullable (sha256 hex, computed AFTER masking)    |
+| `content_json`         | jsonb       | Nullable (reserved; unused in P0)                |
+| `content_ref`          | text        | Nullable (blob storage ref for large content)    |
+| `metadata`             | jsonb       | Nullable (model, finishReason, etc.)             |
+| `created_at`           | timestamptz |                                                  |
+| `deleted_at`           | timestamptz | Nullable (soft delete)                           |
+| `retention_expires_at` | timestamptz | Nullable (default = created_at + retention days) |
 
 **Constraints:**
 
-- `UNIQUE(run_id, artifact_key)` — idempotency (one artifact per key per run)
-- Index on `run_id` for run-level queries
-- Adapter uses `INSERT ... ON CONFLICT DO NOTHING` for idempotent writes
+- `UNIQUE(account_id, run_id, artifact_key)` — idempotency scoped to tenant (avoids assumption that run_id is globally unique)
+- Adapter uses `ON CONFLICT DO NOTHING` for idempotent writes
 
-**Hashing rule:** If `content_json != null`, hash stable JSON stringify; else hash `utf8(content)`. Store sha256 hex. Adapter computes on persist; on conflict, SELECT existing hash and compare. Mismatch = error metric (runId + artifactKey only, never content/hashes).
+**Indexes:**
+
+- `(account_id, run_id)` — tenant-scoped run queries
+- `(account_id, thread_id)` partial where thread_id not null — tenant-scoped thread queries
+- `(retention_expires_at)` partial where not deleted — retention job queries
+
+**RLS (per TENANT_SCOPED invariant):**
+
+- Enable + force RLS on table
+- Policy requires BOTH `USING` (reads/updates/deletes) AND `WITH CHECK` (inserts/update-to) clauses
+- Both clauses check `account_id = current_setting('app.current_account_id', true)`
+- Missing setting returns NULL → denies all access (reads and writes)
+- Adapter sets `SET LOCAL` per request before any queries
+
+**Hashing rule:** Masking applied FIRST (per REDACT_BEFORE_PERSIST). Then hash stable JSON or utf8 content. Mismatch on conflict = error metric (no content logged).
 
 **Idempotency key format:**
 
@@ -252,28 +325,29 @@ Only `history-writer.ts` may call `runHistoryPort.persistArtifact()`.
 // src/ports/run-history.port.ts
 
 export interface RunArtifact {
+  readonly accountId: string; // tenant scope (required, per TENANT_SCOPED)
   readonly runId: string;
-  readonly threadId?: string; // LangGraph thread scope (nullable)
+  readonly threadId?: string; // must be tenant-prefixed per TENANT_SCOPED_THREAD_ID
   readonly artifactKey: string;
   readonly role: "user" | "assistant" | "tool";
-  readonly content?: string;
-  readonly contentHash?: string; // sha256 hex (computed by adapter)
+  readonly content?: string; // masked before storage per REDACT_BEFORE_PERSIST
+  readonly contentHash?: string; // sha256 hex (computed AFTER masking)
   readonly contentRef?: string;
   readonly metadata?: Record<string, unknown>;
 }
 
 export interface RunHistoryPort {
-  /**
-   * Persist a run artifact. Computes content_hash (from content_json if set, else content).
-   * Idempotent: duplicate (runId, artifactKey) is no-op; emits error metric on hash mismatch.
-   */
+  /** Idempotent persist. Hash mismatch on conflict = error metric. */
   persistArtifact(artifact: RunArtifact): Promise<void>;
 
-  /**
-   * Retrieve artifacts for a run.
-   * Returns deterministic order: ORDER BY created_at ASC, id ASC.
-   */
-  getArtifacts(runId: string): Promise<readonly RunArtifact[]>;
+  /** Tenant-scoped read. Filters deleted/expired by default. */
+  getArtifacts(
+    accountId: string,
+    runId: string
+  ): Promise<readonly RunArtifact[]>;
+
+  /** Soft delete all artifacts for a run. */
+  softDelete(accountId: string, runId: string): Promise<void>;
 }
 ```
 
@@ -298,8 +372,9 @@ export interface GraphRunRequest {
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Run-centric billing, RunEventRelay, pump+fanout
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — AiEvent types, stream architecture
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal layers, port patterns
+- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Thread_id generation (must be tenant-scoped per TENANT_SCOPED_THREAD_ID)
 
 ---
 
 **Last Updated**: 2025-12-22
-**Status**: Draft (P0 Design)
+**Status**: Draft (P0 Design - Compliance Review Complete)
