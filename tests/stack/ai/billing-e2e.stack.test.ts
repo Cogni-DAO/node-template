@@ -109,7 +109,7 @@ describe("Billing E2E Stack Test", () => {
     });
     expect(receipt).toBeDefined();
     expect(receipt?.billingAccountId).toBe(billingAccountId);
-    expect(receipt?.provenance).toBe("response"); // Non-streaming
+    expect(receipt?.provenance).toBe("stream"); // Per UNIFIED_GRAPH_EXECUTOR: all execution flows through streaming
 
     // Query credit_ledger WHERE reference=sourceReference (ledger uses sourceReference as reference)
     if (!receipt?.sourceReference)
