@@ -21,6 +21,8 @@ import type { Logger } from "pino";
 import type { AccountService } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
+import { EVENT_NAMES } from "@/shared/observability";
+import type { AiBillingCommitCompleteEvent } from "@/shared/observability/events/ai";
 import type { RunContext } from "@/types/run-context";
 import type { UsageFact } from "@/types/usage";
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
@@ -253,22 +255,34 @@ export async function commitUsageFact(
       sourceReference,
     });
 
-    log.info(
-      {
-        runId,
-        attempt,
-        usageUnitId,
-        sourceReference,
-        chargedCredits: chargedCredits.toString(),
-      },
-      "commitUsageFact: charge recorded"
-    );
+    // Log billing commit complete (success path)
+    const successEvent: AiBillingCommitCompleteEvent = {
+      event: EVENT_NAMES.AI_BILLING_COMMIT_COMPLETE,
+      reqId: ingressRequestId,
+      runId,
+      attempt,
+      outcome: "success",
+      chargedCredits: chargedCredits.toString(),
+      sourceSystem: source,
+    };
+    log.info(successEvent);
   } catch (error) {
     // Post-call billing is best-effort - NEVER block user response
-    log.error(
-      { err: error, runId, ingressRequestId, billingAccountId },
-      "CRITICAL: commitUsageFact failed - user response NOT blocked"
-    );
+    // Log billing commit complete (error path) with errorCode
+    const errorCode =
+      error instanceof Error && error.message.includes("duplicate")
+        ? "db_error"
+        : "unknown";
+    const errorEvent: AiBillingCommitCompleteEvent = {
+      event: EVENT_NAMES.AI_BILLING_COMMIT_COMPLETE,
+      reqId: ingressRequestId,
+      runId,
+      attempt,
+      outcome: "error",
+      errorCode,
+      sourceSystem: source,
+    };
+    log.error({ ...errorEvent, err: error });
     // Re-throw in test environment for visibility
     if (serverEnv().APP_ENV === "test") {
       throw error;

@@ -21,7 +21,8 @@ import type { Logger } from "pino";
 
 import type { Message } from "@/core";
 import type { AccountService, GraphExecutorPort, LlmCaller } from "@/ports";
-import type { RequestContext } from "@/shared/observability";
+import { EVENT_NAMES, type RequestContext } from "@/shared/observability";
+import type { AiRelayPumpErrorEvent } from "@/shared/observability/events/ai";
 import type { RunContext } from "@/types/run-context";
 import type { AiEvent, StreamFinalResult } from "../types";
 import { commitUsageFact } from "./billing";
@@ -177,7 +178,14 @@ class RunEventRelay {
    */
   startPump(): void {
     this.pump().catch((err) => {
-      this.log.error({ err }, "RunEventRelay: pump failed");
+      // Log pump error with event registry
+      const pumpErrorEvent: AiRelayPumpErrorEvent = {
+        event: EVENT_NAMES.AI_RELAY_PUMP_ERROR,
+        reqId: this.context.ingressRequestId,
+        runId: this.context.runId,
+        errorCode: "pump_failed",
+      };
+      this.log.error({ ...pumpErrorEvent, err });
       this.pumpDone = true;
       // Wake up UI stream if waiting
       if (this.uiResolve) {
