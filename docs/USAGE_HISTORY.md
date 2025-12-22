@@ -19,7 +19,7 @@
 
 7. **RETRY_IS_NEW_RUN**: A retry creates a new `run_id`. No `attempt` field in P0—lineage/retry semantics are P1+ (requires `runs` table).
 
-8. **ARTIFACTS_ARE_CACHE**: `run_artifacts` is a transcript cache for audit/billing/activity—NOT the source of truth for LangGraph state. LangGraph checkpointer owns graph memory; run_artifacts caches final messages for cross-executor use.
+8. **ARTIFACTS_ARE_CACHE**: `run_artifacts` is a best-effort transcript cache for billing correlation and activity display—NOT the source of truth for LangGraph state. LangGraph checkpointer owns graph memory; run_artifacts caches final messages for cross-executor use. **Note:** Do not claim "audit" until durable event delivery exists.
 
 9. **THREAD_ID_PROPAGATION**: For LangGraph runs, `thread_id` flows: `GraphRunRequest.threadId` → LangGraph config → relay context → `run_artifacts.thread_id`. Enables resume/time-travel correlation.
 
@@ -31,7 +31,7 @@
 
 13. **SOFT_DELETE_DEFAULT**: All reads filter `WHERE deleted_at IS NULL AND (retention_expires_at IS NULL OR retention_expires_at > now())`. Hard delete via scheduled job only (P1).
 
-14. **REDACT_BEFORE_PERSIST**: HistoryWriterSubscriber applies masking before computing `content_hash` and before calling `persistArtifact()`. Same masking applies before any logs/traces. Single redaction boundary—no downstream masking. Regex masking is best-effort (secrets-first priority).
+14. **REDACT_BEFORE_PERSIST**: HistoryWriterSubscriber applies masking before computing `content_hash` and before calling `persistArtifact()`. Same masking applies before any logs/traces. Single redaction boundary—no downstream masking. Regex masking is best-effort (secrets-first: API keys, tokens). **Stored content may still contain PII**—retention and deletion must treat all content as personal data.
 
 15. **TENANT_SCOPED_THREAD_ID**: LangGraph `thread_id` MUST be tenant-scoped: `${accountId}:${threadKey}`. This ensures checkpoint isolation—checkpoints contain real state and may include PII. Isolating only artifacts is insufficient.
 
@@ -54,6 +54,7 @@ Persist user input and assistant final output per run. No tool call/result stora
 - [ ] Executors emit `assistant_final` event (LangGraph: from state; direct LLM: assembled from deltas)
 - [ ] Persist assistant artifact on `assistant_final` event in `HistoryWriterSubscriber`
 - [ ] Add idempotency test: replay `assistant_final` twice → 1 assistant artifact row
+- [ ] Add ordering test: `getArtifacts()` returns deterministic order (created_at ASC, id ASC)
 
 #### Tenant Isolation (P0 blocker)
 
@@ -163,7 +164,7 @@ Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, 
 | `account_id`           | text        | NOT NULL (tenant scope)                          |
 | `run_id`               | text        | NOT NULL                                         |
 | `thread_id`            | text        | Nullable (must be tenant-prefixed per invariant) |
-| `artifact_key`         | text        | NOT NULL, e.g. `user/0`, `assistant/final`       |
+| `artifact_key`         | text        | NOT NULL, e.g. `input`, `output`, `tool/{id}`    |
 | `role`                 | text        | NOT NULL, `user` \| `assistant` \| `tool`        |
 | `content`              | text        | Nullable (masked before storage)                 |
 | `content_hash`         | text        | Nullable (sha256 hex, computed AFTER masking)    |
@@ -191,7 +192,7 @@ Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, 
 - Policy requires BOTH `USING` (reads/updates/deletes) AND `WITH CHECK` (inserts/update-to) clauses
 - Both clauses check `account_id = current_setting('app.current_account_id', true)`
 - Missing setting returns NULL → denies all access (reads and writes)
-- Adapter sets `SET LOCAL` per request before any queries
+- **Transaction scope required:** All adapter calls must run in explicit DB transaction. `SET LOCAL` only works inside transactions; outside, it silently does nothing. Adapter executes `SET LOCAL app.current_account_id = $1` at transaction start before any queries.
 
 **Hashing rule:** Masking applied FIRST (per REDACT_BEFORE_PERSIST). Then hash stable JSON or utf8 content. Mismatch on conflict = error metric (no content logged).
 
@@ -199,8 +200,8 @@ Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, 
 
 | Role        | artifact_key        | When persisted                           |
 | ----------- | ------------------- | ---------------------------------------- |
-| `user`      | `user/0`            | Run start (before graph execution)       |
-| `assistant` | `assistant/final`   | On `assistant_final` event               |
+| `user`      | `input`             | Run start (before graph execution)       |
+| `assistant` | `output`            | On `assistant_final` event               |
 | `tool`      | `tool/{toolCallId}` | P1: On `tool_call_result` (if persisted) |
 
 **Why no `conversation_id`?** Conversations are a UI concept. The underlying primitive is runs. Session/conversation grouping is P2 if needed.
@@ -209,8 +210,8 @@ Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, 
 
 **Metadata fields (P0 minimum):** Since no `runs` table exists in P0, artifact metadata carries run-level info for debugging:
 
-- `assistant/final` metadata: `{model, finishReason, executorType, graphName?}`
-- `user/0` metadata: `{selectedModel, executorType}`
+- `output` metadata: `{model, finishReason, executorType, graphName?}`
+- `input` metadata: `{selectedModel, executorType}`
 - LangGraph runs: executor may add `{checkpointId?, checkpointNs?}` to metadata for time-travel correlation (optional, UI must not depend on it)
 
 ---
@@ -269,15 +270,13 @@ export interface AssistantFinalEvent {
 
 ### 3. Idempotency Key Strategy
 
-**Format:** `${role}/${qualifier}`
+| artifact_key    | Uniqueness scope         |
+| --------------- | ------------------------ |
+| `input`         | One user input per run   |
+| `output`        | One final output per run |
+| `tool/{callId}` | One per tool invocation  |
 
-| artifact_key      | Uniqueness scope         |
-| ----------------- | ------------------------ |
-| `user/0`          | One user input per run   |
-| `assistant/final` | One final output per run |
-| `tool/{callId}`   | One per tool invocation  |
-
-**Why this format?** Simple, explicit, and self-documenting. No attempt field in P0—retries create new runs.
+**Why `input`/`output` not `user`/`assistant`?** Avoids collision with `role` enum. `role` = speaker (user/assistant/tool); `artifact_key` = artifact type.
 
 ---
 
@@ -340,7 +339,7 @@ export interface RunHistoryPort {
   /** Idempotent persist. Hash mismatch on conflict = error metric. */
   persistArtifact(artifact: RunArtifact): Promise<void>;
 
-  /** Tenant-scoped read. Filters deleted/expired by default. */
+  /** Tenant-scoped read. Filters deleted/expired. ORDER BY created_at ASC, id ASC. */
   getArtifacts(
     accountId: string,
     runId: string
