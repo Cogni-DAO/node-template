@@ -3,35 +3,29 @@
 
 /**
  * Module: `@features/ai/services/ai_runtime`
- * Purpose: AI runtime orchestrator that decides graph vs direct LLM and emits AiEvents.
- * Scope: Generates graphRunId for graph executions; returns AsyncIterable<AiEvent> and StreamFinalResult. Does not touch wire protocol encoding.
+ * Purpose: AI runtime orchestrator using GraphExecutorPort with run-centric billing.
+ * Scope: Generates runId, calls graphExecutor.runGraph(), pumps stream via RunEventRelay. Does not touch wire protocol encoding.
  * Invariants:
- *   - AI_RUNTIME_EMITS_AIEVENTS: Only emits AiEvents (text_delta for P1; tool events added when graphs land)
- *   - RUNTIME_STREAMS_ASYNC_ITERABLE: Returns AsyncIterable<AiEvent>, no buffering
- *   - Delegates to completion.ts for billing/telemetry (never calls llmService directly)
+ *   - UNIFIED_GRAPH_EXECUTOR: All execution via GraphExecutorPort.runGraph()
+ *   - BILLING_INDEPENDENT_OF_CLIENT: RunEventRelay pumps to completion; UI disconnect doesn't stop billing
+ *   - AI_RUNTIME_EMITS_AIEVENTS: Only emits AiEvents (text_delta, tool_call_*, done); usage_report filtered out
  *   - Must NOT import app/*, adapters/*, or contracts/*
  *   - Route layer maps AiEvents to assistant-stream format
  * Side-effects: IO (via injected services)
- * Notes: P1 supports direct LLM streaming; graph support added when graphs are implemented
- * Links: ../types.ts, ../tool-runner.ts, completion.ts, AI_SETUP_SPEC.md
+ * Notes: Per GRAPH_EXECUTION.md P0 implementation
+ * Links: ../types.ts, billing.ts, GRAPH_EXECUTION.md
  * @public
  */
 
-import { randomUUID } from "node:crypto";
+import type { Logger } from "pino";
 
 import type { Message } from "@/core";
-import type {
-  AccountService,
-  AiTelemetryPort,
-  ChatDeltaEvent,
-  Clock,
-  LangfusePort,
-  LlmCaller,
-  LlmService,
-} from "@/ports";
+import type { AccountService, GraphExecutorPort, LlmCaller } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
-import type { AiEvent, StreamFinalResult, TextDeltaEvent } from "../types";
-import { executeStream } from "./completion";
+import type { RunContext } from "@/types/run-context";
+import type { AiEvent, StreamFinalResult } from "../types";
+import { commitUsageFact } from "./billing";
+import { createRunIdentity } from "./run-id-factory";
 
 /**
  * Input for AI runtime operations.
@@ -49,22 +43,18 @@ export interface AiRuntimeInput {
 
 /**
  * Dependencies for AI runtime.
- * Injected at construction to enable testing and DI.
- * Includes all deps needed to delegate to executeStream().
+ * Per UNIFIED_GRAPH_EXECUTOR: uses GraphExecutorPort, not direct LLM calls.
  */
 export interface AiRuntimeDeps {
-  readonly llmService: LlmService;
+  readonly graphExecutor: GraphExecutorPort;
   readonly accountService: AccountService;
-  readonly clock: Clock;
-  readonly aiTelemetry: AiTelemetryPort;
-  readonly langfuse: LangfusePort | undefined;
 }
 
 /**
  * AI runtime result with stream and completion promise.
  */
 export interface AiRuntimeResult {
-  /** Stream of AI events for real-time rendering */
+  /** Stream of AI events for real-time rendering (usage_report filtered out) */
   readonly stream: AsyncIterable<AiEvent>;
   /** Promise resolving with final result (ok with usage/finishReason, or error) */
   readonly final: Promise<StreamFinalResult>;
@@ -72,102 +62,206 @@ export interface AiRuntimeResult {
 
 /**
  * Create an AI runtime instance with injected dependencies.
- * Entry point for AI chat streaming with graph vs direct LLM decision.
+ * Entry point for AI chat streaming via GraphExecutorPort.
  *
  * @param deps - Injected service dependencies
  * @returns Runtime with runChatStream method
  */
 export function createAiRuntime(deps: AiRuntimeDeps) {
-  const { llmService, accountService, clock, aiTelemetry, langfuse } = deps;
+  const { graphExecutor, accountService } = deps;
 
   /**
    * Run a chat stream as AiEvents.
-   * Delegates to executeStream() for billing/telemetry, then transforms to AiEvents.
-   * P1: Direct LLM path only. Graph support in future.
-   *
-   * Per RUNTIME_STREAMS_ASYNC_ITERABLE: Returns immediately, streams via AsyncIterable.
-   * Per AI_RUNTIME_EMITS_AIEVENTS: Only emits text_delta (P1); tool events when graphs land.
+   * Per UNIFIED_GRAPH_EXECUTOR: delegates to graphExecutor.runGraph().
+   * Per BILLING_INDEPENDENT_OF_CLIENT: uses RunEventRelay for pump+fanout.
    *
    * @param input - Chat input (messages, model, caller)
    * @param ctx - Request context for logging/telemetry
-   * @returns Stream of AiEvents and completion promise
+   * @returns Stream of AiEvents (usage_report filtered) and completion promise
    */
-  async function runChatStream(
+  function runChatStream(
     input: AiRuntimeInput,
     ctx: RequestContext
-  ): Promise<AiRuntimeResult> {
+  ): AiRuntimeResult {
     const { messages, model, caller, abortSignal } = input;
+    const log = ctx.log.child({ feature: "ai.runtime" });
 
-    // P1: Direct LLM path only
-    // Future: Check if this request should use a graph, generate graphRunId if so
+    // Create run identity via factory (P0: runId = ingressRequestId = ctx.reqId)
+    const identity = createRunIdentity(ctx);
+    const { runId, attempt, ingressRequestId } = identity;
 
-    // Delegate to executeStream for billing, telemetry, credit checks
-    // Never call llmService directly from this layer
-    const { stream: deltaStream, final: completionFinal } = await executeStream(
-      {
-        messages,
-        model,
-        llmService,
-        accountService,
-        clock,
-        caller,
-        ctx,
-        aiTelemetry,
-        langfuse,
-        ...(abortSignal ? { abortSignal } : {}),
-      }
+    // Create RunContext for relay subscribers (per RELAY_PROVIDES_CONTEXT)
+    const runContext: RunContext = { runId, attempt, ingressRequestId };
+
+    log.debug({ runId, ingressRequestId, model }, "runChatStream starting");
+
+    // Call graph executor (non-async: returns stream handle immediately)
+    const { stream: graphStream, final: graphFinal } = graphExecutor.runGraph({
+      runId,
+      ingressRequestId,
+      messages,
+      model,
+      caller,
+      ...(abortSignal && { abortSignal }),
+    });
+
+    // Create RunEventRelay for pump+fanout pattern (context provided to subscribers)
+    const relay = new RunEventRelay(
+      graphStream,
+      runContext,
+      accountService,
+      log
     );
 
-    // Transform ChatDeltaEvents to AiEvents
-    const aiEventStream = transformToAiEvents(deltaStream);
+    // Start pump (fire and forget - runs to completion regardless of UI)
+    relay.startPump();
 
-    // Pass through final result unchanged (discriminated union with usage/finishReason)
+    // Transform GraphFinal to StreamFinalResult
+    const finalResult = graphFinal.then(
+      (gf): StreamFinalResult =>
+        gf.ok
+          ? {
+              ok: true,
+              requestId: gf.requestId,
+              usage: gf.usage ?? { promptTokens: 0, completionTokens: 0 },
+              finishReason: gf.finishReason ?? "stop",
+            }
+          : {
+              ok: false,
+              requestId: gf.requestId,
+              error: gf.error ?? "internal",
+            }
+    );
+
     return {
-      stream: aiEventStream,
-      final: completionFinal,
+      stream: relay.uiStream(),
+      final: finalResult,
     };
-  }
-
-  /**
-   * Generate a graph run ID for graph executions.
-   * Per AI_SETUP_SPEC.md: Runtime is sole owner of graphRunId generation.
-   *
-   * @returns Unique graph run ID
-   */
-  function generateGraphRunId(): string {
-    return randomUUID();
   }
 
   return {
     runChatStream,
-    generateGraphRunId,
   };
 }
 
+// ============================================================================
+// RunEventRelay: Pump + Fanout Pattern
+// ============================================================================
+
 /**
- * Transform LLM ChatDeltaEvents to AiEvents.
- * Maps port-level events to feature-level AI events.
+ * RunEventRelay implements the StreamDriver + Fanout pattern per GRAPH_EXECUTION.md.
+ *
+ * Invariants:
+ * - BILLING_INDEPENDENT_OF_CLIENT: Pump runs to completion; UI disconnect doesn't stop billing
+ * - RELAY_PROVIDES_CONTEXT: Subscribers receive RunContext from relay, not from events
+ * - Billing subscriber calls commitUsageFact() for each usage_report event
+ * - UI stream filters out usage_report events (internal to billing)
+ * - callIndex tracked per-run for deterministic fallback usageUnitId
  */
-async function* transformToAiEvents(
-  deltaStream: AsyncIterable<ChatDeltaEvent>
-): AsyncIterable<AiEvent> {
-  for await (const event of deltaStream) {
-    switch (event.type) {
-      case "text_delta": {
-        const textEvent: TextDeltaEvent = {
-          type: "text_delta",
-          delta: event.delta,
-        };
-        yield textEvent;
-        break;
+class RunEventRelay {
+  private readonly uiQueue: AiEvent[] = [];
+  private uiResolve: (() => void) | null = null;
+  private pumpDone = false;
+  private callIndex = 0;
+
+  constructor(
+    private readonly upstream: AsyncIterable<AiEvent>,
+    private readonly context: RunContext,
+    private readonly accountService: AccountService,
+    private readonly log: Logger
+  ) {}
+
+  /**
+   * Start the pump loop. Runs to completion, regardless of UI consumption.
+   * Fire-and-forget: errors are logged but not propagated.
+   */
+  startPump(): void {
+    this.pump().catch((err) => {
+      this.log.error({ err }, "RunEventRelay: pump failed");
+      this.pumpDone = true;
+      // Wake up UI stream if waiting
+      if (this.uiResolve) {
+        this.uiResolve();
+        this.uiResolve = null;
       }
-      case "error":
-        // Log error but don't emit to UI - the stream will complete with error
-        // Errors are handled at route level
-        break;
-      case "done":
-        // End generator - route will emit FinishMessage using data from final
+    });
+  }
+
+  /**
+   * Internal pump loop. Consumes upstream to completion.
+   */
+  private async pump(): Promise<void> {
+    for await (const event of this.upstream) {
+      // Billing subscriber: process usage_report events
+      if (event.type === "usage_report") {
+        await this.handleBilling(event);
+        // Don't forward usage_report to UI
+        continue;
+      }
+
+      // UI subscriber: queue all other events
+      this.uiQueue.push(event);
+      if (this.uiResolve) {
+        this.uiResolve();
+        this.uiResolve = null;
+      }
+    }
+
+    this.pumpDone = true;
+    // Wake up UI stream if waiting
+    if (this.uiResolve) {
+      this.uiResolve();
+      this.uiResolve = null;
+    }
+  }
+
+  /**
+   * Handle billing for a usage_report event.
+   * Per BILLING_INDEPENDENT_OF_CLIENT: errors are logged, never propagated.
+   * Per RELAY_PROVIDES_CONTEXT: context passed to commitUsageFact (not from event).
+   */
+  private async handleBilling(event: {
+    type: "usage_report";
+    fact: import("@/types/usage").UsageFact;
+  }): Promise<void> {
+    try {
+      await commitUsageFact(
+        event.fact,
+        this.callIndex++,
+        this.context,
+        this.accountService,
+        this.log
+      );
+    } catch (error) {
+      // BILLING_INDEPENDENT_OF_CLIENT: never propagate to UI
+      this.log.error(
+        { err: error, runId: event.fact.runId, callIndex: this.callIndex - 1 },
+        "RunEventRelay: billing error swallowed"
+      );
+    }
+  }
+
+  /**
+   * UI stream: yields events from queue, filters out usage_report.
+   * Safe to abandon - pump continues regardless.
+   */
+  async *uiStream(): AsyncIterable<AiEvent> {
+    while (true) {
+      // Drain queue
+      while (this.uiQueue.length > 0) {
+        const event = this.uiQueue.shift();
+        if (event) yield event;
+      }
+
+      // Check if pump is done
+      if (this.pumpDone) {
         return;
+      }
+
+      // Wait for more events
+      await new Promise<void>((resolve) => {
+        this.uiResolve = resolve;
+      });
     }
   }
 }

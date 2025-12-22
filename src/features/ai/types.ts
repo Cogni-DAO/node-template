@@ -30,6 +30,10 @@ export type {
  * Stream final result - discriminated union for ok/error paths.
  * Per assistant-stream: route must emit FinishMessage with real usage/finishReason.
  * This type enables route to handle all terminal states without exceptions.
+ *
+ * Billing fields (model, providerCostUsd, litellmCallId) are included for
+ * GraphExecutorAdapter to emit usage_report events. Per GRAPH_EXECUTION.md:
+ * adapter emits usage_report → billing subscriber calls commitUsageFact().
  */
 export type StreamFinalResult =
   | {
@@ -40,6 +44,12 @@ export type StreamFinalResult =
         readonly completionTokens: number;
       };
       readonly finishReason: string;
+      /** Resolved model ID for billing (from provider response) */
+      readonly model?: string;
+      /** Provider cost in USD for billing calculation */
+      readonly providerCostUsd?: number;
+      /** LiteLLM call ID for idempotent billing (usage_unit_id) */
+      readonly litellmCallId?: string;
     }
   | {
       readonly ok: false;

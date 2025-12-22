@@ -21,6 +21,7 @@ import type { Logger } from "pino";
 import type { AccountService } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
+import type { RunContext } from "@/types/run-context";
 import type { UsageFact } from "@/types/usage";
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
 
@@ -176,26 +177,23 @@ export function computeIdempotencyKey(
  * - ONE_LEDGER_WRITER: Only this module calls accountService.recordChargeReceipt()
  * - IDEMPOTENT_CHARGES: DB constraint on (source_system, source_reference) prevents duplicates
  * - Billing subscriber owns callIndex for deterministic fallback
+ * - RELAY_PROVIDES_CONTEXT: ingressRequestId comes from context, not from fact
  *
- * @param fact - Usage fact from usage_report event
+ * @param fact - Usage fact from usage_report event (executor-agnostic)
  * @param callIndex - Billing-subscriber-assigned index for fallback usageUnitId
+ * @param context - Run context from relay (provides ingressRequestId for correlation)
  * @param accountService - Account service port for charge recording
  * @param log - Logger for error reporting
  */
 export async function commitUsageFact(
   fact: UsageFact,
   callIndex: number,
+  context: RunContext,
   accountService: AccountService,
   log: Logger
 ): Promise<void> {
-  const {
-    runId,
-    attempt,
-    billingAccountId,
-    virtualKeyId,
-    ingressRequestId,
-    source,
-  } = fact;
+  const { runId, attempt, billingAccountId, virtualKeyId, source } = fact;
+  const { ingressRequestId } = context;
 
   // Resolve usageUnitId: adapter-provided or fallback
   let usageUnitId = fact.usageUnitId;
