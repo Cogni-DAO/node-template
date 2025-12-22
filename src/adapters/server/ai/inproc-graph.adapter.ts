@@ -31,7 +31,13 @@ import type {
 } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeLogger } from "@/shared/observability";
-import type { AiEvent, DoneEvent, TextDeltaEvent } from "@/types/ai-events";
+import type {
+  AiEvent,
+  DoneEvent,
+  TextDeltaEvent,
+  UsageReportEvent,
+} from "@/types/ai-events";
+import type { UsageFact } from "@/types/usage";
 
 /**
  * Dependencies for InProcGraphExecutorAdapter.
@@ -47,6 +53,7 @@ export interface InProcGraphExecutorDeps {
 
 /**
  * Completion stream result shape.
+ * Includes billing fields for GraphExecutorAdapter to emit usage_report.
  */
 export interface CompletionStreamResult {
   stream: AsyncIterable<ChatDeltaEvent>;
@@ -56,6 +63,12 @@ export interface CompletionStreamResult {
         requestId: string;
         usage: { promptTokens: number; completionTokens: number };
         finishReason: string;
+        /** Resolved model ID for billing */
+        model?: string;
+        /** Provider cost in USD */
+        providerCostUsd?: number;
+        /** LiteLLM call ID for idempotent billing */
+        litellmCallId?: string;
       }
     | {
         ok: false;
@@ -112,10 +125,7 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
    * Per GRAPH_EXECUTION.md:
    * - P0_ATTEMPT_FREEZE: attempt is always 0
    * - GRAPH_LLM_VIA_COMPLETION: delegates to completion.executeStream
-   *
-   * TODO(P0): When completion.ts stops calling recordBilling(), this adapter must
-   * emit UsageReportEvent on stream for billing subscriber. See GRAPH_EXECUTION.md
-   * checklist item: "Refactor completion.ts: emit usage_report event only".
+   * - Emits usage_report event before done for billing subscriber
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
     const { runId, ingressRequestId, messages, model, caller, abortSignal } =
@@ -156,7 +166,12 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
     };
 
     // Create transformed stream (lazy execution)
-    const stream = this.createTransformedStream(getCompletionPromise, runId);
+    // Pass run context for building UsageFact in usage_report event
+    const stream = this.createTransformedStream(getCompletionPromise, {
+      runId,
+      attempt,
+      caller,
+    });
 
     // Create wrapped final promise
     const final = this.createFinalPromise(getCompletionPromise, runId);
@@ -193,15 +208,22 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
 
   /**
    * Transform ChatDeltaEvents to AiEvents.
-   * Adds done event at stream end per GRAPH_FINALIZATION_ONCE.
+   * Emits usage_report before done per GRAPH_EXECUTION.md billing flow.
+   * Per GRAPH_FINALIZATION_ONCE: exactly one done event per run.
    */
   private async *createTransformedStream(
     getCompletionPromise: () => Promise<
       Awaited<ReturnType<CompletionStreamFn>>
     >,
-    runId: string
+    runContext: {
+      runId: string;
+      attempt: number;
+      caller: GraphRunRequest["caller"];
+    }
   ): AsyncIterable<AiEvent> {
-    const { stream } = await getCompletionPromise();
+    const { runId, attempt, caller } = runContext;
+    const completionResult = await getCompletionPromise();
+    const { stream, final } = completionResult;
 
     for await (const event of stream) {
       switch (event.type) {
@@ -218,7 +240,38 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
           this.log.warn({ runId, error: event }, "Stream error event");
           break;
         case "done": {
-          // Emit done event per GRAPH_FINALIZATION_ONCE
+          // 1. Await final to get billing data
+          const result = await final;
+
+          // 2. Emit usage_report if successful (billing subscriber will process)
+          if (result.ok) {
+            const fact: UsageFact = {
+              runId,
+              attempt,
+              source: "litellm",
+              billingAccountId: caller.billingAccountId,
+              virtualKeyId: caller.virtualKeyId,
+              inputTokens: result.usage.promptTokens,
+              outputTokens: result.usage.completionTokens,
+              // Optional fields: only include when defined (exactOptionalPropertyTypes)
+              ...(result.litellmCallId && {
+                usageUnitId: result.litellmCallId,
+              }),
+              ...(result.model && { model: result.model }),
+              ...(result.providerCostUsd !== undefined && {
+                costUsd: result.providerCostUsd,
+              }),
+            };
+            const usageEvent: UsageReportEvent = { type: "usage_report", fact };
+            yield usageEvent;
+
+            this.log.debug(
+              { runId, usageUnitId: fact.usageUnitId, costUsd: fact.costUsd },
+              "InProcGraphExecutorAdapter: emitted usage_report"
+            );
+          }
+
+          // 3. Emit done event per GRAPH_FINALIZATION_ONCE
           const doneEvent: DoneEvent = { type: "done" };
           yield doneEvent;
           return;
@@ -226,7 +279,27 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
       }
     }
 
-    // If stream ends without done event, emit one
+    // If stream ends without done event, await final and emit events
+    const result = await final;
+    if (result.ok) {
+      const fact: UsageFact = {
+        runId,
+        attempt,
+        source: "litellm",
+        billingAccountId: caller.billingAccountId,
+        virtualKeyId: caller.virtualKeyId,
+        inputTokens: result.usage.promptTokens,
+        outputTokens: result.usage.completionTokens,
+        // Optional fields: only include when defined (exactOptionalPropertyTypes)
+        ...(result.litellmCallId && { usageUnitId: result.litellmCallId }),
+        ...(result.model && { model: result.model }),
+        ...(result.providerCostUsd !== undefined && {
+          costUsd: result.providerCostUsd,
+        }),
+      };
+      const usageEvent: UsageReportEvent = { type: "usage_report", fact };
+      yield usageEvent;
+    }
     const doneEvent: DoneEvent = { type: "done" };
     yield doneEvent;
   }
