@@ -17,9 +17,11 @@
 
 6. **GRAPH_FINALIZATION_ONCE**: Graph emits exactly one `done` event and resolves `final` exactly once per run attempt.
 
-7. **BILLING_INDEPENDENT_OF_CLIENT**: Billing commits occur server-side regardless of client connection state. `AiRuntimeService` uses a pump+fanout pattern: a single pump consumes the upstream `AsyncIterable` to completion, broadcasting events to subscribers (UI + billing). UI disconnect or slow consumption does not stop the pump. Billing subscriber never drops events.
+7. **BILLING_INDEPENDENT_OF_CLIENT**: Billing commits occur server-side regardless of client connection state. `AiRuntimeService` uses a StreamDriver + Fanout pattern via `RunEventRelay`: a StreamDriver consumes the upstream `AsyncIterable` to completion, broadcasting events to subscribers (UI + billing). UI disconnect or slow consumption does not stop the StreamDriver. Billing subscriber never drops events.
 
 8. **P0_ATTEMPT_FREEZE**: In P0, `attempt` is always 0. No code path increments attempt. Full attempt/retry semantics require run persistence (P1). The `attempt` field exists in schema and `UsageFact` for forward compatibility but is frozen at 0.
+
+9. **RUNID_IS_CANONICAL**: `runId` is the canonical execution identity. `ingressRequestId` is optional delivery-layer correlation (HTTP/SSE/worker/queue). P0: they coincidentally equal (no run persistence). P1: many `ingressRequestId`s per `runId` (reconnect/resume). No business logic relies on `ingressRequestId == runId`. Never use `ingressRequestId` for idempotency.
 
 ---
 
@@ -29,15 +31,15 @@
 
 Refactor billing for run-centric idempotency. Wrap existing LLM path behind `GraphExecutorPort`.
 
-- [ ] Create `GraphExecutorPort` interface in `src/ports/graph-executor.port.ts`
+- [x] Create `GraphExecutorPort` interface in `src/ports/graph-executor.port.ts`
 - [ ] Create `InProcGraphExecutorAdapter` wrapping existing streaming/completion path
-- [ ] Implement event pump + fanout in `AiRuntimeService` (billing-independent consumption)
+- [ ] Implement `RunEventRelay` (StreamDriver + Fanout) in `AiRuntimeService` (billing-independent consumption)
 - [ ] Refactor `completion.ts`: emit `usage_report` event only, remove `recordBilling()` call
-- [ ] Add `UsageFact` type in `src/types/usage.ts` (type only, no functions)
-- [ ] Add `computeIdempotencyKey(UsageFact)` in `billing.ts` (per types layer policy)
-- [ ] Add `UsageReportEvent` to AiEvent union
-- [ ] Add `commitUsageFact()` to `billing.ts` — sole ledger writer
-- [ ] Schema: add `run_id`, `attempt` columns; `UNIQUE(source_system, source_reference)`
+- [x] Add `UsageFact` type in `src/types/usage.ts` (type only, no functions)
+- [x] Add `computeIdempotencyKey(UsageFact)` in `billing.ts` (per types layer policy)
+- [x] Add `UsageReportEvent` to AiEvent union
+- [x] Add `commitUsageFact()` to `billing.ts` — sole ledger writer
+- [x] Schema: add `run_id`, `attempt` columns; `UNIQUE(source_system, source_reference)`
 - [ ] Add depcruise rule + grep test for ONE_LEDGER_WRITER
 - [ ] Add idempotency test: replay usage_report twice → 1 row
 
@@ -54,7 +56,7 @@ Refactor billing for run-centric idempotency. Wrap existing LLM path behind `Gra
 - [ ] Create `ClaudeGraphExecutorAdapter` implementing `GraphExecutorPort`
 - [ ] Translate Claude SDK events → AiEvents
 - [ ] Emit `usage_report` with `message.id`-based `usageUnitId`
-- [ ] Add `anthropic_sdk` to `SOURCE_SYSTEMS` enum
+- [x] Add `anthropic_sdk` to `SOURCE_SYSTEMS` enum
 
 ### Future: External Engine Adapters
 
@@ -64,25 +66,25 @@ n8n/Flowise adapters — build only if demand materializes and engines route LLM
 
 ## File Pointers (P0 Scope)
 
-| File                                              | Change                                                              |
-| ------------------------------------------------- | ------------------------------------------------------------------- |
-| `src/ports/graph-executor.port.ts`                | New: `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`       |
-| `src/ports/index.ts`                              | Re-export `GraphExecutorPort`                                       |
-| `src/adapters/server/ai/inproc-graph.adapter.ts`  | New: `InProcGraphExecutorAdapter`                                   |
-| `src/types/usage.ts`                              | New: `UsageFact` type (no functions per types layer policy)         |
-| `src/types/billing.ts`                            | Add `'anthropic_sdk'` to `SOURCE_SYSTEMS`                           |
-| `src/features/ai/types.ts`                        | Add `UsageReportEvent` (contains `UsageFact`)                       |
-| `src/features/ai/services/completion.ts`          | Refactor: emit `usage_report`, remove `recordBilling()` call        |
-| `src/features/ai/services/billing.ts`             | Add `commitUsageFact()`, `computeIdempotencyKey()` (functions here) |
-| `src/features/ai/services/ai_runtime.ts`          | Add event pump + fanout (billing-independent consumption)           |
-| `src/shared/db/schema.billing.ts`                 | Add `run_id`, `attempt` columns; change uniqueness constraints      |
-| `src/bootstrap/container.ts`                      | Wire `InProcGraphExecutorAdapter`                                   |
-| `src/features/ai/graphs/langgraph-smoke.graph.ts` | New: minimal LangGraph graph (P1)                                   |
-| `.dependency-cruiser.cjs`                         | Add ONE_LEDGER_WRITER rule                                          |
-| `tests/ports/graph-executor.port.spec.ts`         | New: port contract test                                             |
-| `tests/stack/ai/one-ledger-writer.test.ts`        | New: grep for `.recordChargeReceipt(` call sites                    |
-| `tests/stack/ai/billing-idempotency.test.ts`      | New: replay usage_report twice, assert 1 row                        |
-| `tests/stack/ai/billing-disconnect.test.ts`       | New: pump completes billing even if UI subscriber disconnects       |
+| File                                              | Change                                                                |
+| ------------------------------------------------- | --------------------------------------------------------------------- |
+| `src/ports/graph-executor.port.ts`                | New: `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`         |
+| `src/ports/index.ts`                              | Re-export `GraphExecutorPort`                                         |
+| `src/adapters/server/ai/inproc-graph.adapter.ts`  | New: `InProcGraphExecutorAdapter`                                     |
+| `src/types/usage.ts`                              | New: `UsageFact` type (no functions per types layer policy)           |
+| `src/types/billing.ts`                            | Add `'anthropic_sdk'` to `SOURCE_SYSTEMS`                             |
+| `src/features/ai/types.ts`                        | Add `UsageReportEvent` (contains `UsageFact`)                         |
+| `src/features/ai/services/completion.ts`          | Refactor: emit `usage_report`, remove `recordBilling()` call          |
+| `src/features/ai/services/billing.ts`             | Add `commitUsageFact()`, `computeIdempotencyKey()` (functions here)   |
+| `src/features/ai/services/ai_runtime.ts`          | Add `RunEventRelay` (StreamDriver + Fanout)                           |
+| `src/shared/db/schema.billing.ts`                 | Add `run_id`, `attempt` columns; change uniqueness constraints        |
+| `src/bootstrap/container.ts`                      | Wire `InProcGraphExecutorAdapter`                                     |
+| `src/features/ai/graphs/langgraph-smoke.graph.ts` | New: minimal LangGraph graph (P1)                                     |
+| `.dependency-cruiser.cjs`                         | Add ONE_LEDGER_WRITER rule                                            |
+| `tests/ports/graph-executor.port.spec.ts`         | New: port contract test                                               |
+| `tests/stack/ai/one-ledger-writer.test.ts`        | New: grep for `.recordChargeReceipt(` call sites                      |
+| `tests/stack/ai/billing-idempotency.test.ts`      | New: replay usage_report twice, assert 1 row                          |
+| `tests/stack/ai/billing-disconnect.test.ts`       | New: StreamDriver completes billing even if UI subscriber disconnects |
 
 ---
 
@@ -156,8 +158,8 @@ SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
 │ 1. Generate run_id; set attempt=0 (P0: no persistence)              │
 │ 2. Select adapter from GraphRegistry by graph name                  │
 │ 3. Call adapter.runGraph(request) → get stream                      │
-│ 4. Start PUMP that consumes upstream AsyncIterable to completion    │
-│ 5. FANOUT events to subscribers:                                    │
+│ 4. Start RunEventRelay.pump() to consume upstream to completion     │
+│ 5. Fanout events to subscribers:                                    │
 │    ├── UI subscriber → returned to route (may disconnect)           │
 │    └── Billing subscriber → commits charges (never drops events)    │
 │ 6. Return { uiStream, final }                                       │
@@ -170,7 +172,7 @@ SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
 │ ──────────────               │ │ ──────────────────                 │
 │ - Receives broadcast events  │ │ - Receives broadcast events        │
 │ - Client disconnect = stops  │ │ - Runs to completion (never stops) │
-│   receiving, pump continues  │ │ - On usage_report → commitUsageFact│
+│   receiving, driver continues│ │ - On usage_report → commitUsageFact│
 │                              │ │ - On done/error → finalize         │
 └──────────────────────────────┘ └────────────────────────────────────┘
                                               │
@@ -197,7 +199,7 @@ SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
 
 **Pricing policy:** `commitUsageFact()` applies the markup via `llmPricingPolicy.ts`. See [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) for credit unit standard (`CREDITS_PER_USD = 10_000_000`) and markup factor.
 
-**Why pump pattern?** AsyncIterable cannot be safely consumed by two independent readers. The pump is a single consumer that reads upstream to completion, broadcasting each event to subscribers via internal queues. Per BILLING_INDEPENDENT_OF_CLIENT: if UI subscriber disconnects, pump continues and billing subscriber still receives all events.
+**Why StreamDriver + Fanout?** AsyncIterable cannot be safely consumed by two independent readers. The StreamDriver (internal `pump()` loop in `RunEventRelay`) is a single consumer that reads upstream to completion, broadcasting each event to subscribers via internal queues. Per BILLING_INDEPENDENT_OF_CLIENT: if UI subscriber disconnects, the driver continues and billing subscriber still receives all events.
 
 **Why run-centric?** Graphs have multiple LLM calls. Billing must be attributed to usage units, not requests. Idempotency key includes run context to prevent cross-run collisions.
 
@@ -436,4 +438,4 @@ function commitUsageFact(fact: UsageFact, callIndex: number): void {
 ---
 
 **Last Updated**: 2025-12-22
-**Status**: Draft (Rev 4 - billing-subscriber-assigned callIndex, usageUnitId optional, ownership clarity table)
+**Status**: Draft (Rev 6 - requestId→ingressRequestId, attempt in port, schema migration ready)
