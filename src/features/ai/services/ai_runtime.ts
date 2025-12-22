@@ -8,9 +8,9 @@
  * Invariants:
  *   - UNIFIED_GRAPH_EXECUTOR: All execution via GraphExecutorPort.runGraph()
  *   - BILLING_INDEPENDENT_OF_CLIENT: RunEventRelay pumps to completion; UI disconnect doesn't stop billing
- *   - AI_RUNTIME_EMITS_AIEVENTS: Only emits AiEvents (text_delta, tool_call_*, done); usage_report filtered out
+ *   - AI_RUNTIME_EMITS_AIEVENTS: Only emits AiEvents (text_delta, tool_call_*, done/error); usage_report filtered out
+ *   - PROTOCOL_TERMINATION: uiStream terminates on done/error events, not pumpDone (prevents hang)
  *   - Must NOT import app/*, adapters/*, or contracts/*
- *   - Route layer maps AiEvents to assistant-stream format
  * Side-effects: IO (via injected services)
  * Notes: Per GRAPH_EXECUTION.md P0 implementation
  * Links: ../types.ts, billing.ts, GRAPH_EXECUTION.md
@@ -205,23 +205,36 @@ class RunEventRelay {
 
   /**
    * Internal pump loop. Consumes upstream to completion.
+   * Uses try/finally to guarantee pumpDone is set even on errors.
+   * Emits error event on failure so uiStream terminates on protocol, not pumpDone.
    */
   private async pump(): Promise<void> {
-    for await (const event of this.upstream) {
-      // Billing subscriber: process usage_report events
-      if (event.type === "usage_report") {
-        await this.handleBilling(event);
-        // Don't forward usage_report to UI
-        continue;
-      }
+    try {
+      for await (const event of this.upstream) {
+        // Billing subscriber: process usage_report events
+        if (event.type === "usage_report") {
+          await this.handleBilling(event);
+          // Don't forward usage_report to UI
+          continue;
+        }
 
-      // UI subscriber: queue all other events
-      this.uiQueue.push(event);
+        // UI subscriber: queue all other events
+        this.uiQueue.push(event);
+        this.notifyUi();
+      }
+    } catch (err) {
+      // Emit error event so uiStream terminates on protocol
+      const errorEvent: AiEvent = {
+        type: "error",
+        error: err instanceof Error ? err.message : "pump_error",
+      };
+      this.uiQueue.push(errorEvent);
+      this.notifyUi();
+      throw err; // Re-throw for startPump's catch handler to log
+    } finally {
+      this.pumpDone = true;
       this.notifyUi();
     }
-
-    this.pumpDone = true;
-    this.notifyUi();
   }
 
   /**
@@ -254,27 +267,29 @@ class RunEventRelay {
    * UI stream: yields events from queue, filters out usage_report.
    * Safe to abandon - pump continues regardless.
    *
-   * Race-safe: re-checks pumpDone and queue length AFTER installing resolver
-   * to prevent hang if pump finishes between the check and await.
+   * CRITICAL: Terminates on protocol events (done/error), NOT on pumpDone.
+   * This eliminates hangs where done is delivered but pump hasn't set pumpDone yet.
    */
   async *uiStream(): AsyncIterable<AiEvent> {
     while (true) {
-      // Drain queue
+      // Drain queue, terminating on protocol events
       while (this.uiQueue.length > 0) {
         const event = this.uiQueue.shift();
-        if (event) yield event;
+        if (event) {
+          yield event;
+          // Terminate immediately on terminal events (protocol-level termination)
+          if (event.type === "done" || event.type === "error") {
+            return;
+          }
+        }
       }
 
-      // Check if pump is done
+      // Escape hatch: pumpDone without terminal event (should not happen in normal flow)
       if (this.pumpDone) {
         return;
       }
 
       // Wait for more events with race-safe re-check
-      // Must install resolver THEN re-check pumpDone/queue to avoid:
-      // 1. Check pumpDone (false)
-      // 2. Pump finishes, calls notifyUi() (uiResolve still null!)
-      // 3. Install resolver → hangs forever
       await new Promise<void>((resolve) => {
         this.uiResolve = resolve;
         // Re-check after installing resolver (race-safe)

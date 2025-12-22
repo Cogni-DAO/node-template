@@ -78,6 +78,17 @@ export interface DoneEvent {
 }
 
 /**
+ * Stream error.
+ * Emitted by runtime when an unrecoverable error occurs during streaming.
+ * Terminal event: uiStream returns immediately after yielding this.
+ */
+export interface ErrorEvent {
+  readonly type: "error";
+  /** Error message or code */
+  readonly error: string;
+}
+
+/**
  * Union of all AI events emitted by ai_runtime and graph executors.
  * Per AI_RUNTIME_EMITS_AIEVENTS: runtime emits these only; route maps to wire protocol.
  *
@@ -88,4 +99,5 @@ export type AiEvent =
   | ToolCallStartEvent
   | ToolCallResultEvent
   | UsageReportEvent
-  | DoneEvent;
+  | DoneEvent
+  | ErrorEvent;

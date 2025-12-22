@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/unit/features/ai/services/ai-runtime-relay.test`
  * Purpose: Unit tests for RunEventRelay race conditions in ai_runtime.ts
- * Scope: Tests that uiStream() does not hang when pump finishes between drain and wait.
+ * Scope: Tests that uiStream terminates on protocol events (done/error), not pumpDone.
  * Invariants: BILLING_INDEPENDENT_OF_CLIENT (pump runs to completion)
  * Side-effects: none
  * Links: Tests RunEventRelay in ai_runtime.ts, GRAPH_EXECUTION.md
@@ -27,7 +27,12 @@ import type {
 } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeNoopLogger } from "@/shared/observability";
-import type { AiEvent, DoneEvent, TextDeltaEvent } from "@/types/ai-events";
+import type {
+  AiEvent,
+  DoneEvent,
+  ErrorEvent,
+  TextDeltaEvent,
+} from "@/types/ai-events";
 
 // Mock serverEnv
 vi.mock("@/shared/env", () => ({
@@ -73,6 +78,149 @@ describe("RunEventRelay race conditions", () => {
       },
     };
   }
+
+  /**
+   * Create a graph executor where the upstream continues AFTER yielding done.
+   * This simulates production: LLM yields done, but iterator doesn't return immediately
+   * (e.g., adapter awaits final promise before returning).
+   * Key: uiStream must terminate on done event, not wait for pumpDone.
+   */
+  function createDelayedReturnGraphExecutor(
+    events: AiEvent[],
+    delayAfterDoneMs: number
+  ): GraphExecutorPort {
+    return {
+      runGraph(_req: GraphRunRequest): GraphRunResult {
+        async function* slowReturnStream(): AsyncIterable<AiEvent> {
+          for (const event of events) {
+            yield event;
+            // After yielding done, delay before iterator returns
+            // This simulates pump not setting pumpDone yet
+            if (event.type === "done") {
+              await new Promise((r) => setTimeout(r, delayAfterDoneMs));
+            }
+          }
+        }
+
+        return {
+          stream: slowReturnStream(),
+          final: Promise.resolve({
+            ok: true as const,
+            runId: "run-123",
+            requestId: "req-123",
+            usage: { promptTokens: 10, completionTokens: 5 },
+            finishReason: "stop",
+          }),
+        };
+      },
+    };
+  }
+
+  it("uiStream terminates on done event BEFORE pumpDone is set", async () => {
+    // CRITICAL: This test verifies that uiStream terminates on the done event
+    // itself, NOT by waiting for pumpDone to flip. The upstream continues
+    // for 500ms after yielding done, so if uiStream waits for pumpDone, it hangs.
+
+    const events: AiEvent[] = [
+      { type: "text_delta", delta: "Hello" } satisfies TextDeltaEvent,
+      { type: "done" } satisfies DoneEvent,
+    ];
+
+    // Upstream delays 500ms after done before returning (pumpDone not set yet)
+    const graphExecutor = createDelayedReturnGraphExecutor(events, 500);
+    const accountService = createMockAccountServiceWithDefaults();
+
+    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const ctx = createTestCtx();
+
+    const { stream } = runtime.runChatStream(
+      {
+        messages: [createUserMessage("Test")],
+        model: TEST_MODEL_ID,
+        caller: {
+          billingAccountId: "billing-123",
+          virtualKeyId: "vk-123",
+          requestId: ctx.reqId,
+          traceId: ctx.traceId,
+        },
+      },
+      ctx
+    );
+
+    const collectedEvents: AiEvent[] = [];
+
+    // If uiStream waits for pumpDone (500ms delay), this will timeout
+    // If uiStream terminates on done event, it completes in <100ms
+    const TIMEOUT_MS = 200;
+    const startMs = performance.now();
+
+    const timeoutPromise = new Promise<"timeout">((resolve) =>
+      setTimeout(() => resolve("timeout"), TIMEOUT_MS)
+    );
+
+    const consumePromise = (async () => {
+      for await (const event of stream) {
+        collectedEvents.push(event);
+      }
+      return "completed";
+    })();
+
+    const result = await Promise.race([consumePromise, timeoutPromise]);
+    const elapsedMs = performance.now() - startMs;
+
+    // Assert: completed (didn't timeout waiting for pumpDone)
+    expect(result).toBe("completed");
+    // Assert: completed quickly (< 200ms, not waiting for 500ms delay)
+    expect(elapsedMs).toBeLessThan(TIMEOUT_MS);
+    // Assert: received all events
+    expect(collectedEvents).toHaveLength(2);
+    expect(collectedEvents[1]).toEqual({ type: "done" });
+  });
+
+  it("uiStream terminates on error event", async () => {
+    // Error events are also terminal - uiStream should return immediately
+
+    const events: AiEvent[] = [
+      { type: "text_delta", delta: "Partial" } satisfies TextDeltaEvent,
+      { type: "error", error: "upstream_failed" } satisfies ErrorEvent,
+    ];
+
+    const graphExecutor = createImmediateGraphExecutor(events);
+    const accountService = createMockAccountServiceWithDefaults();
+
+    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const ctx = createTestCtx();
+
+    const { stream } = runtime.runChatStream(
+      {
+        messages: [createUserMessage("Test")],
+        model: TEST_MODEL_ID,
+        caller: {
+          billingAccountId: "billing-123",
+          virtualKeyId: "vk-123",
+          requestId: ctx.reqId,
+          traceId: ctx.traceId,
+        },
+      },
+      ctx
+    );
+
+    const collectedEvents: AiEvent[] = [];
+    for await (const event of stream) {
+      collectedEvents.push(event);
+    }
+
+    // Assert: terminated on error
+    expect(collectedEvents).toHaveLength(2);
+    expect(collectedEvents[0]).toEqual({
+      type: "text_delta",
+      delta: "Partial",
+    });
+    expect(collectedEvents[1]).toEqual({
+      type: "error",
+      error: "upstream_failed",
+    });
+  });
 
   it("uiStream does not hang when pump finishes immediately after done event", async () => {
     // This test verifies the race-safe fix: uiStream should exit even if

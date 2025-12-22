@@ -10,6 +10,7 @@
  *   - GRAPH_LLM_VIA_COMPLETION: Delegates to completion.executeStream for billing/telemetry
  *   - P0_ATTEMPT_FREEZE: attempt is always 0 (no run persistence)
  *   - GRAPH_FINALIZATION_ONCE: Exactly one done event and final resolution per run
+ *   - NO_AWAIT_FINAL_IN_LOOP: Must break out of for-await before awaiting final (prevents deadlock)
  * Side-effects: IO (via injected completion function)
  * Links: ports/graph-executor.port.ts, features/ai/services/completion.ts, GRAPH_EXECUTION.md
  * @public
@@ -225,6 +226,11 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
     const completionResult = await getCompletionPromise();
     const { stream, final } = completionResult;
 
+    // CRITICAL: Do NOT await final inside this loop - causes deadlock.
+    // LiteLLM's final resolves in its finally block, which only runs when
+    // the iterator closes. Break out of loop first, then await final.
+    let sawDone = false;
+
     for await (const event of stream) {
       switch (event.type) {
         case "text_delta": {
@@ -239,47 +245,14 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
           // Errors handled via final promise, not stream events
           this.log.warn({ runId, error: event }, "Stream error event");
           break;
-        case "done": {
-          // 1. Await final to get billing data
-          const result = await final;
-
-          // 2. Emit usage_report if successful (billing subscriber will process)
-          if (result.ok) {
-            const fact: UsageFact = {
-              runId,
-              attempt,
-              source: "litellm",
-              billingAccountId: caller.billingAccountId,
-              virtualKeyId: caller.virtualKeyId,
-              inputTokens: result.usage.promptTokens,
-              outputTokens: result.usage.completionTokens,
-              // Optional fields: only include when defined (exactOptionalPropertyTypes)
-              ...(result.litellmCallId && {
-                usageUnitId: result.litellmCallId,
-              }),
-              ...(result.model && { model: result.model }),
-              ...(result.providerCostUsd !== undefined && {
-                costUsd: result.providerCostUsd,
-              }),
-            };
-            const usageEvent: UsageReportEvent = { type: "usage_report", fact };
-            yield usageEvent;
-
-            this.log.debug(
-              { runId, usageUnitId: fact.usageUnitId, costUsd: fact.costUsd },
-              "InProcGraphExecutorAdapter: emitted usage_report"
-            );
-          }
-
-          // 3. Emit done event per GRAPH_FINALIZATION_ONCE
-          const doneEvent: DoneEvent = { type: "done" };
-          yield doneEvent;
-          return;
-        }
+        case "done":
+          sawDone = true;
+          break;
       }
+      if (sawDone) break;
     }
 
-    // If stream ends without done event, await final and emit events
+    // Finalize: await final (now safe - iterator closed), emit usage_report + done
     const result = await final;
     if (result.ok) {
       const fact: UsageFact = {
