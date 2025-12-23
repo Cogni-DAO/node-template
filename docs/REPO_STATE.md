@@ -1,6 +1,6 @@
 # Repository State Summary
 
-**Assessment Date:** 2025-12-03
+**Assessment Date:** 2025-12-11
 **Core Mission:** Crypto-metered AI infrastructure where users pay DAO wallet → get credits → consume LLM → billing tracked with dual-cost accounting
 
 **Related Documentation:**
@@ -10,8 +10,25 @@
 - [Security & Auth Spec](./SECURITY_AUTH_SPEC.md) - SIWE authentication architecture
 - [Payments Design](./PAYMENTS_DESIGN.md) - Native USDC payment architecture
 - [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
-- [Payments Ponder Verification](./PAYMENTS_PONDER_VERIFICATION.md) - **Required for production security**
+- [Activity Metrics](./ACTIVITY_METRICS.md) - Usage dashboard and charge receipt design
+- [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
+- [Chain Configuration](./CHAIN_CONFIG.md) - Policy for binding Web2 code to DAO-approved actions
 - [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
+
+### Overall Assessment
+
+| Area                     | Status | Notes                                                                                                        |
+| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------ |
+| Payment + Billing Loop   | 80%    | Flow works with real RPC verification. Needs comprehensive smoke/integration/e2e tests of payments + RPC     |
+| Web2 Security            | 70%    | **EVM RPC verification implemented**, needs monitoring & smoke tests                                         |
+| Web3 Governance          | 30%    | `repoSpec.server.ts` enforces repo-spec. Needs hardening. External services required (git-review, git-admin) |
+| External API Readiness   | 30%    | Service-auth only, API keys on roadmap                                                                       |
+| Observability            | 70%    | User Activity dashboard complete, need Admin Grafana metrics dashboards                                      |
+| AI Infrastructure Wiring | 50%    | Code docs, logs MCP server. Missing: Langfuse, Evals, LangGraph, assistant-ui/CopilotKit tool use rendering  |
+| AI Intelligence          | 10%    | Simple system prompt, no tool usage, no workflows                                                            |
+| Company Automations      | 40%    | Thick CI/CD test infra foundation. No automated data analysis, coding, or AI actions                         |
+
+The system accepts USDC payments with real EVM RPC verification, tracks LLM costs with profit margins, and provides full activity visibility. Service-auth architecture means all LLM calls use shared master key (per-user keys on roadmap). AI infrastructure is basic (streaming chat only), automation is primarily CI/CD gates with no autonomous agents yet.
 
 ---
 
@@ -31,19 +48,22 @@ wagmi + RainbowKit client-side wallet connection. Chain locked to Base mainnet (
 
 ### 3. Native USDC Payments ✅
 
+x
 Intent-based payment flow: create intent → user transfers USDC → submit txHash → verify → credit account.
 
 - State machine: `CREATED_INTENT` → `PENDING_UNVERIFIED` → `CREDITED` (+ terminal: `REJECTED`, `FAILED`)
 - Two-port design: `PaymentAttemptRepository` + `OnChainVerifier`
 - Idempotency enforced at DB level
 
-**Security Note:** ⚠️ **MVP trust model: OnChainVerifier adapter is STUBBED (always returns VERIFIED). Real Ponder-backed verification required for production. See [Post-MVP Security Hardening](#11-post-mvp-security-hardening-).**
+**Security Note:**: EvmRpcOnChainVerifierAdapter implemented with viem RPC verification. Validates transactions against canonical config (chain, recipient, token, amount).\*\*
 
 **Reference:** [PAYMENTS_DESIGN.md](./PAYMENTS_DESIGN.md)
 
 ### 4. Database Schema (Billing Layer) ✅
 
-Tables: `users`, `billing_accounts`, `virtual_keys`, `credit_ledger`, `llm_usage`, `payment_intents`, `payment_attempts`, `payment_events`
+Tables: `users`, `billing_accounts`, `virtual_keys`, `credit_ledger`, `charge_receipts`, `payment_intents`, `payment_attempts`, `payment_events`
+
+**Architecture:** Service-auth model where `virtual_keys` acts as FK/scope handle for billing attribution. All outbound LLM calls use `LITELLM_MASTER_KEY` from env.
 
 **Reference:** [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md)
 
@@ -65,61 +85,101 @@ Balance display + native USDC payment flow. Live data with React Query cache inv
 
 assistant-ui powered streaming chat with credit-metered billing.
 
-### 8. Observability Infrastructure ✅
+### 8. Activity Dashboard ✅
+
+Full usage tracking dashboard with LiteLLM integration.
+
+- `/api/v1/activity` endpoint with LiteLLM `/spend/logs` integration
+- Time-range selector with bounded range-scan
+- Aggregation by hour/day/week/month
+- USD cost display from charge receipts
+- Join key: `litellm_call_id` links telemetry to billing
+
+**Reference:** [ACTIVITY_METRICS.md](./ACTIVITY_METRICS.md)
+
+### 9. Observability Infrastructure ✅
 
 Pino structured logging → Alloy → local Loki (dev) or Grafana Cloud (preview/prod).
 
+Prometheus metrics export with HTTP and LLM instrumentation.
+
 **Reference:** [OBSERVABILITY.md](./OBSERVABILITY.md)
+
+### 10. Generic Charge Ledger ✅
+
+Charge receipts support categorization beyond LLM charges:
+
+- `charge_reason` field for economic/billing categories
+- `source_system` + `source_reference` for generic linking to external systems
+- Supports future integration with Stripe, payment processors, etc.
+
+**Reference:** src/shared/db/schema.billing.ts:133-137
 
 ---
 
 ## ⚠️ What's PARTIALLY COMPLETE (Code Exists, Needs Work)
 
-### 9. Account API Keys ⚠️
+### 11. Runtime Secret Validation ⚠️
 
-- ✅ Virtual keys provisioned automatically on account creation
-- ✅ Completion endpoint uses virtual keys internally
-- ❌ No user-facing API key management (list/create/revoke)
-- ❌ No API key authentication middleware for external clients
+- ✅ `LITELLM_MASTER_KEY` validation deferred to runtime (enables `next build` without secrets)
+- ✅ `assertRuntimeSecrets()` called at adapter boundaries
+- ⚠️ Memoization in production only (test env re-validates each call)
 
-**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented)
-
-### 10. Usage Tracking & History ⚠️
-
-- ✅ `llm_usage` table tracks every LLM call with costs
-- ✅ `credit_ledger` provides audit trail
-- ❌ No user-facing usage history endpoint or analytics
+**Reference:** src/shared/env/invariants.ts
 
 ---
 
 ## ❌ What's NOT STARTED
 
-### 11. Post-MVP Security Hardening ❌
+### 12. App API Key Management (Roadmap) ❌
 
-**Current Trust Model (MVP):**
+**Current State (Service-Auth MVP):**
+
+- ✅ Auth.js session-only auth for `/api/v1/*`
+- ✅ Outbound LLM calls use service auth (`LITELLM_MASTER_KEY`)
+- ✅ `virtual_keys` table exists as internal FK/scope handle for ledger/receipts
+- ❌ No per-user API keys
+- ❌ No per-key spend attribution
+- ❌ No user-facing key management endpoints
+
+**Roadmap (Target System):**
+
+Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribution.
+
+- Add `app_api_keys` table (hash-only, show-once plaintext)
+- Add `app_api_key_id` FK to `credit_ledger` and `charge_receipts`
+- Add endpoints: `POST /api/v1/keys`, `GET /api/v1/keys`, `DELETE /api/v1/keys/:id`
+- Add auth middleware: `/api/v1/*` accepts session OR `Authorization: Bearer <app_api_key>`
+- Update LLM port: resolve `{billing_account_id, app_api_key_id}` → mapped LiteLLM virtual key
+
+**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented), [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [SECURITY_AUTH_SPEC.md](./SECURITY_AUTH_SPEC.md)
+
+### 13. Post-MVP Security Hardening ⚠️
+
+**Current Trust Model:**
 
 - ✅ SIWE-authenticated session resolves billing account
 - ✅ Payment flow structure in place (intent → submit → verify)
-- ⚠️ **OnChainVerifier is STUBBED** - always returns VERIFIED without real on-chain validation
-- ⚠️ No automatic reconciliation with on-chain data
+- ✅ **EvmRpcOnChainVerifierAdapter implemented** - Real viem RPC verification with canonical config validation
+- ✅ Wired in DI container for all non-test environments
+- ⚠️ Needs comprehensive smoke tests against known-good transactions
 
-**Security Gap:** Backend trusts txHash submission without cryptographic proof. Mitigated by session auth, idempotency, and manual monitoring.
+**Security Status:** Backend performs cryptographic verification via EVM RPC. Validates chain, recipient, token, amount, and confirmations.
 
-**Required for Production - See [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md):**
+**Remaining for Production Hardening - See [PAYMENTS_DESIGN.md Phase 3](./PAYMENTS_DESIGN.md#phase-3-evm-rpc-verification-next---direct-rpc-with-viem):**
 
-- [ ] Deploy Ponder indexer for USDC Transfer events
-- [ ] Implement real verification in `PonderOnChainVerifierAdapter`
-- [ ] Build reconciliation service comparing on-chain vs `credit_ledger`
-- [ ] Add monitoring and alerts for discrepancies
+- [ ] Add smoke tests against known-good txs on Sepolia/Base
+- [ ] Validate all failure modes in integration tests
+- [ ] Monitoring and alerting for verification failures
+- [ ] Rate limiting on RPC calls to prevent cost spikes
 
-### 12. Operational Hardening ❌
+### 14. Operational Hardening ❌
 
-- [ ] Rate limiting on payment and AI endpoints
+- [ ] Rate limiting on payment and AI endpoints (public routes have basic rate limiting)
 - [ ] Monitoring dashboards (Grafana)
-- [ ] Prometheus metrics
 - [ ] Runbooks for common scenarios
 
-### 13. Route Protection & Cleanup ❌
+### 15. Route Protection & Cleanup ❌
 
 - [ ] Add middleware for route protection (currently using layout guards only)
 - [ ] Comprehensive API authentication tests
@@ -148,26 +208,16 @@ Pino structured logging → Alloy → local Loki (dev) or Grafana Cloud (preview
 - Credits ledger and balance updates
 - Dual-cost LLM billing with profit margin enforcement
 - AI chat with assistant-ui
+- Activity dashboard with LiteLLM integration
 - Structured logging → Grafana Cloud
+- Prometheus metrics export
 
 ### ⚠️ Partial
 
-- Account API keys (internal only, no user management)
-- Usage tracking (stored but no user-facing endpoints)
+- Runtime secret validation (works, test memoization edge case)
 
 ### ❌ Not Started (Critical for Production)
 
-- **Ponder on-chain verification** (see [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md))
-- Account API key management
-- Usage history endpoints
-- Rate limiting & monitoring
-
-### Overall Assessment
-
-| Area                   | Status | Notes                            |
-| ---------------------- | ------ | -------------------------------- |
-| Payment + Billing Loop | 80%    | Flow works, verification stubbed |
-| Production Security    | 40%    | **Need Ponder verification**     |
-| External API Readiness | 60%    | Need API key management          |
-
-The system accepts USDC payments and tracks LLM costs with profit margins. Requires Ponder verification for production-grade fraud prevention and API key management for external users.
+- App API key management (roadmap)
+- Rate limiting & monitoring dashboards
+- Comprehensive payment verification smoke tests

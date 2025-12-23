@@ -3,15 +3,19 @@
 
 /**
  * Module: `@shared/db/schema.billing`
- * Purpose: Billing tables schema with nullable cost fields and billing status discrimination.
- * Scope: Defines billing_accounts, virtual_keys, credit_ledger, llm_usage, payment_attempts, payment_events. Does not include auth identity tables.
+ * Purpose: Billing tables schema with minimal charge_receipts for audit trail.
+ * Scope: Defines billing_accounts, virtual_keys, credit_ledger, charge_receipts, payment_attempts, payment_events. Does not include auth identity tables.
  * Invariants:
  * - Credits are BIGINT.
  * - billing_accounts.owner_user_id FK → auth.users(id).
  * - payment_attempts has partial unique index on (chain_id, tx_hash) where tx_hash is not null.
- * - credit_ledger(reference) is unique for widget_payment.
+ * - credit_ledger(reference) is unique for widget_payment and charge_receipt.
+ * - charge_receipts: UNIQUE(source_system, source_reference) for run-centric idempotency
+ * - charge_receipts.request_id is NOT unique (multiple receipts per request allowed for graphs)
+ * - charge_receipts has run_id, attempt columns for run-level queries
+ * - charge_receipts uses (source_system, source_reference) for generic linking to external systems
  * Side-effects: none (schema definitions only)
- * Links: docs/PAYMENTS_DESIGN.md
+ * Links: docs/PAYMENTS_DESIGN.md, docs/ACTIVITY_METRICS.md, docs/GRAPH_EXECUTION.md, types/billing.ts
  * @public
  */
 
@@ -30,6 +34,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { CHARGE_REASONS, SOURCE_SYSTEMS } from "@/types/billing";
 import { users } from "./schema.auth";
 
 export const billingAccounts = pgTable("billing_accounts", {
@@ -44,12 +49,16 @@ export const billingAccounts = pgTable("billing_accounts", {
     .defaultNow(),
 });
 
+/**
+ * Virtual keys table - scope/FK handle for billing attribution.
+ * MVP: service-auth only (no per-user keys). When real API keys are introduced,
+ * add key_hash column for hashed credentials.
+ */
 export const virtualKeys = pgTable("virtual_keys", {
   id: uuid("id").defaultRandom().primaryKey(),
   billingAccountId: text("billing_account_id")
     .notNull()
     .references(() => billingAccounts.id, { onDelete: "cascade" }),
-  litellmVirtualKey: text("litellm_virtual_key").notNull(),
   label: text("label").default("Default"),
   isDefault: boolean("is_default").notNull().default(false),
   active: boolean("active").notNull().default(true),
@@ -87,11 +96,28 @@ export const creditLedger = pgTable(
     paymentRefUnique: uniqueIndex("credit_ledger_payment_ref_unique")
       .on(table.reference)
       .where(sql`${table.reason} = 'widget_payment'`),
+    /** Idempotency guard for charge_receipt entries per ACTIVITY_METRICS.md */
+    chargeReceiptRefUnique: uniqueIndex(
+      "credit_ledger_charge_receipt_ref_unique"
+    )
+      .on(table.reference)
+      .where(sql`${table.reason} = 'charge_receipt'`),
   })
 );
 
-export const llmUsage = pgTable(
-  "llm_usage",
+/**
+ * Charge receipts - minimal audit-focused table.
+ * LiteLLM is canonical for telemetry (model/tokens). We only store billing data.
+ * See docs/ACTIVITY_METRICS.md, docs/GRAPH_EXECUTION.md for design rationale.
+ *
+ * Per GRAPH_EXECUTION.md:
+ * - run_id: Canonical execution identity (groups multiple LLM calls)
+ * - attempt: Retry attempt number (P0: always 0)
+ * - Idempotency: UNIQUE(source_system, source_reference) where source_reference = runId/attempt/usageUnitId
+ * - ingress_request_id: Optional delivery correlation (debug only, never for idempotency)
+ */
+export const chargeReceipts = pgTable(
+  "charge_receipts",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     billingAccountId: text("billing_account_id")
@@ -100,28 +126,61 @@ export const llmUsage = pgTable(
     virtualKeyId: uuid("virtual_key_id")
       .notNull()
       .references(() => virtualKeys.id, { onDelete: "cascade" }),
-    requestId: text("request_id"),
-    model: text("model"),
-    promptTokens: integer("prompt_tokens"),
-    completionTokens: integer("completion_tokens"),
-    providerCostUsd: numeric("provider_cost_usd"),
-    providerCostCredits: bigint("provider_cost_credits", {
-      mode: "bigint",
-    }),
-    userPriceCredits: bigint("user_price_credits", {
-      mode: "bigint",
-    }),
-    markupFactor: numeric("markup_factor"),
-    billingStatus: text("billing_status").notNull().default("needs_review"),
-    usage: jsonb("usage").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    /** Canonical execution identity - groups all LLM calls in one graph execution */
+    runId: text("run_id").notNull(),
+    /** Retry attempt number (P0: always 0; enables future retry semantics) */
+    attempt: integer("attempt").notNull(),
+    /** Ingress request correlation (nullable, debug only). P0: coincidentally equals runId; P1: many per runId */
+    ingressRequestId: text("ingress_request_id"),
+    /** LiteLLM call ID for forensic correlation (x-litellm-call-id header) */
+    litellmCallId: text("litellm_call_id"),
+    /** Credits debited from user balance */
+    chargedCredits: bigint("charged_credits", { mode: "bigint" }).notNull(),
+    /** Observational USD cost from LiteLLM (header or usage.cost) */
+    responseCostUsd: numeric("response_cost_usd"),
+    /** How this receipt was generated: 'response' | 'stream' */
+    provenance: text("provenance").notNull(),
+    /** Economic/billing category for accounting and analytics */
+    chargeReason: text("charge_reason", { enum: CHARGE_REASONS }).notNull(),
+    /** External system that originated this charge (e.g. 'litellm', 'anthropic_sdk') */
+    sourceSystem: text("source_system", { enum: SOURCE_SYSTEMS }).notNull(),
+    /** Idempotency key: runId/attempt/usageUnitId (unique per source_system) */
+    sourceReference: text("source_reference").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => ({
-    billingAccountIdx: index("llm_usage_billing_account_idx").on(
+    billingAccountIdx: index("charge_receipts_billing_account_idx").on(
       table.billingAccountId
     ),
-    virtualKeyIdx: index("llm_usage_virtual_key_idx").on(table.virtualKeyId),
-    requestIdx: index("llm_usage_request_idx").on(table.requestId),
+    virtualKeyIdx: index("charge_receipts_virtual_key_idx").on(
+      table.virtualKeyId
+    ),
+    // Index for aggregation: Filter by account + range scan on createdAt
+    aggregationIdx: index("charge_receipts_aggregation_idx").on(
+      table.billingAccountId,
+      table.createdAt
+    ),
+    // Index for pagination: Filter by account + order by createdAt DESC, id DESC
+    paginationIdx: index("charge_receipts_pagination_idx").on(
+      table.billingAccountId,
+      table.createdAt,
+      table.id
+    ),
+    // Index for ingress request correlation (debug queries only)
+    ingressRequestIdx: index("charge_receipts_ingress_request_idx").on(
+      table.ingressRequestId
+    ),
+    // Index for run-level queries: Filter by run_id + attempt
+    runAttemptIdx: index("charge_receipts_run_attempt_idx").on(
+      table.runId,
+      table.attempt
+    ),
+    // UNIQUE constraint for idempotency: (source_system, source_reference)
+    sourceIdempotencyUnique: uniqueIndex(
+      "charge_receipts_source_idempotency_unique"
+    ).on(table.sourceSystem, table.sourceReference),
   })
 );
 

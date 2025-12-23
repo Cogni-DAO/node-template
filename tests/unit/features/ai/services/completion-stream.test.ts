@@ -4,8 +4,8 @@
 /**
  * Module: `@tests/unit/features/ai/services/completion-stream.test`
  * Purpose: Unit tests for the streaming execution path in the completion feature service.
- * Scope: Verifies orchestration of streaming, atomic billing, and event propagation. Does not test real LLM integration.
- * Invariants: Billing must occur exactly once at the end of the stream.
+ * Scope: Verifies orchestration of streaming and event propagation. Does not test real LLM integration.
+ * Invariants: Per GRAPH_EXECUTION.md, billing occurs via RunEventRelay (tested in stack tests, not here).
  * Side-effects: none
  * Links: Tests executeStream in completion.ts
  * @internal
@@ -14,6 +14,7 @@
 import {
   createMockAccountServiceWithDefaults,
   createUserMessage,
+  FakeAiTelemetryAdapter,
   FakeClock,
   FakeLlmService,
   TEST_MODEL_ID,
@@ -25,10 +26,12 @@ import type { LlmCaller } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeNoopLogger } from "@/shared/observability";
 
+// Helper to create fake telemetry for tests
+const createFakeAiTelemetry = () => new FakeAiTelemetryAdapter();
+
 // Mock serverEnv
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    CREDITS_PER_USDC: 1000,
     USER_PRICE_MARKUP_FACTOR: 1.5,
   }),
 }));
@@ -37,7 +40,8 @@ describe("features/ai/services/completion (stream)", () => {
   const createTestCaller = (): LlmCaller => ({
     billingAccountId: "billing-test-user",
     virtualKeyId: "virtual-key-123",
-    litellmVirtualKey: "vk-test-key",
+    requestId: "req-test",
+    traceId: "trace-test",
   });
 
   it("should orchestrate streaming flow and bill on completion", async () => {
@@ -51,6 +55,7 @@ describe("features/ai/services/completion (stream)", () => {
     const testCtx: RequestContext = {
       log: makeNoopLogger(),
       reqId: "test-req-123",
+      traceId: "00000000000000000000000000000000",
       routeId: "test.route",
       clock,
     };
@@ -65,6 +70,8 @@ describe("features/ai/services/completion (stream)", () => {
       clock,
       caller,
       ctx: testCtx,
+      aiTelemetry: createFakeAiTelemetry(),
+      langfuse: undefined,
     });
 
     // Consume stream
@@ -77,27 +84,16 @@ describe("features/ai/services/completion (stream)", () => {
 
     const result = await final;
 
-    // Assert
+    // Assert - stream content and final result shape
     expect(chunks).toEqual(["Streamed response"]);
-    expect(result.message).toEqual({
-      role: "assistant",
-      content: "Streamed response",
-      timestamp: "2025-01-01T12:00:00.000Z",
+    expect(result).toMatchObject({
+      ok: true,
+      requestId: expect.any(String),
+      usage: { promptTokens: 10, completionTokens: 10 },
+      finishReason: "stop",
     });
-    expect(result.requestId).toBeDefined();
 
-    // Verify billing call
-    expect(accountService.recordLlmUsage).toHaveBeenCalledTimes(1);
-    const mockCalls = vi.mocked(accountService.recordLlmUsage).mock.calls;
-    expect(mockCalls.length).toBeGreaterThan(0);
-    const billingCall = mockCalls[0]?.[0];
-    expect(billingCall).toBeDefined();
-    expect(billingCall).toMatchObject({
-      billingAccountId: "billing-test-user",
-      requestId: result.requestId, // Idempotency check
-      metadata: {
-        system: "ai_completion_stream",
-      },
-    });
+    // Note: Billing now occurs via RunEventRelay → commitUsageFact() (per GRAPH_EXECUTION.md)
+    // See tests/stack/ai/billing-*.stack.test.ts for billing flow tests
   });
 });

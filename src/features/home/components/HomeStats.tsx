@@ -25,10 +25,10 @@ interface StatItem {
 }
 
 const STATS: StatItem[] = [
-  { value: "25T", label: "Monthly Tokens" },
-  { value: "5M+", label: "Global Users" },
-  { value: "60+", label: "Active Providers" },
-  { value: "300+", label: "Models" },
+  { value: "0%", label: "Payment Fees" },
+  { value: "1", label: "Starter Kit" },
+  { value: "2", label: "Critical Services" },
+  { value: "12k+", label: "Community-Source Files" },
 ];
 
 export function HomeStats(): ReactElement {

@@ -14,10 +14,17 @@ services:
     container_name: app
     restart: always
     networks:
-      - web
+      - cogni-edge
+      - internal
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - APP_ENV=${APP_ENV}
+      # Required vars - fail fast at compose level if missing
+      - APP_ENV=${APP_ENV?APP_ENV is required}
+      - AUTH_SECRET=${AUTH_SECRET?AUTH_SECRET is required}
+      - EVM_RPC_URL=${EVM_RPC_URL?EVM_RPC_URL is required}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY?LITELLM_MASTER_KEY is required}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY?OPENROUTER_API_KEY is required}
+      # Vars with sensible defaults
       - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-${APP_BASE_URL:-https://localhost}}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -26,13 +33,13 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - LITELLM_BASE_URL=http://litellm:4000
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - DEFAULT_MODEL=${DEFAULT_MODEL}
-      - AUTH_SECRET=${AUTH_SECRET}
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
-      - METRICS_TOKEN=${METRICS_TOKEN:-}
+      # Optional vars - pass-through only if set in host (absent = undefined, not empty string)
+      - METRICS_TOKEN
+      - LANGFUSE_PUBLIC_KEY
+      - LANGFUSE_SECRET_KEY
+      - LANGFUSE_BASE_URL
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,11 +47,11 @@ services:
         condition: service_healthy
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    image: ghcr.io/berriai/litellm@sha256:7e7816d58c265c182be5f3568ed8e5d999f11a5deda1d85e8e347a18bc578f64
     container_name: litellm
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     ports:
       - "4000:4000"
     environment:
@@ -58,10 +65,10 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -qO- http://127.0.0.1:4000/health/readiness || exit 1",
+          'python3 -c "import urllib.request,sys; r=urllib.request.urlopen(''http://127.0.0.1:4000/health/readiness'', timeout=1); sys.exit(0 if r.status==200 else 1)"',
         ]
       interval: 10s
-      timeout: 2s
+      timeout: 3s
       retries: 3
       start_period: 30s
 
@@ -70,14 +77,14 @@ services:
     container_name: caddy
     restart: always
     networks:
-      - web
+      - cogni-edge
     ports:
       - "80:80"
       - "443:443"
     environment:
       - DOMAIN=${DOMAIN}
     volumes:
-      - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
+      - ../edge/configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -89,7 +96,7 @@ services:
     container_name: postgres
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cogni_template_dev}
       POSTGRES_USER: ${POSTGRES_USER:-user}
@@ -123,7 +130,7 @@ services:
       - bootstrap
     restart: "no"
     networks:
-      - web
+      - cogni-edge
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
@@ -151,7 +158,7 @@ services:
       - bootstrap
     restart: "no"
     networks:
-      - web
+      - cogni-edge
     environment:
       # Env contract matches runtime compose (DATABASE_URL + component vars)
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}}
@@ -169,7 +176,7 @@ services:
     container_name: loki
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     ports:
       - "127.0.0.1:3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
@@ -181,7 +188,7 @@ services:
     container_name: grafana
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     ports:
       - "127.0.0.1:3001:3000"
     volumes:
@@ -198,7 +205,7 @@ services:
     container_name: alloy
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     ports:
       - "127.0.0.1:12345:12345"
     volumes:
@@ -224,8 +231,11 @@ services:
       - loki
 
 networks:
-  web:
-    name: web
+  cogni-edge:
+    name: cogni-edge
+    external: true
+  internal:
+    name: internal
     external: false
 
 volumes:

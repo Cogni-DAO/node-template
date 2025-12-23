@@ -16,6 +16,7 @@
 import { ZodError, z } from "zod";
 
 import { buildDatabaseUrl } from "@/shared/db";
+import { assertEnvInvariants } from "./invariants";
 
 export interface EnvValidationMeta {
   code: "INVALID_ENV";
@@ -34,7 +35,7 @@ export class EnvValidationError extends Error {
 }
 
 // Server schema with all environment variables
-const serverSchema = z.object({
+export const serverSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
@@ -43,6 +44,9 @@ const serverSchema = z.object({
   APP_ENV: z.enum(["test", "production"]),
   APP_BASE_URL: z.string().url().optional(),
   DOMAIN: z.string().optional(),
+
+  // Deployment environment (for observability labels and analytics filtering)
+  DEPLOY_ENVIRONMENT: z.string().optional(),
 
   // Service identity for observability (multi-service deployments)
   SERVICE_NAME: z.string().default("app"),
@@ -57,7 +61,6 @@ const serverSchema = z.object({
         : "http://localhost:4000"
     ),
   LITELLM_MASTER_KEY: z.string().min(1).optional(),
-  DEFAULT_MODEL: z.string().default("gemini-2.5-flash"),
 
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
   // Wallet link MVP - single API key for all wallets (temporary)
@@ -65,7 +68,6 @@ const serverSchema = z.object({
 
   // Billing (Stage 6.5)
   USER_PRICE_MARKUP_FACTOR: z.coerce.number().min(1.0).default(2.0),
-  CREDITS_PER_USDC: z.coerce.number().int().positive().default(1000),
 
   // Database connection: either provide DATABASE_URL directly OR component pieces
   DATABASE_URL: z.string().url().optional(),
@@ -87,6 +89,28 @@ const serverSchema = z.object({
   // Metrics (Stage 9) - Prometheus scraping (min 32 chars to reduce weak-token risk)
   // Note: PROMETHEUS_* vars are Alloy-only (infra); app only needs the scrape token.
   METRICS_TOKEN: z.string().min(32).optional(),
+
+  // Public Analytics (Stage 9.5) - Mimir queries for public /analytics page
+  // Optional: only required when analytics feature is enabled
+  MIMIR_URL: z.string().url().optional(),
+  MIMIR_USER: z.string().min(1).optional(),
+  MIMIR_TOKEN: z.string().min(1).optional(),
+  ANALYTICS_K_THRESHOLD: z.coerce.number().int().positive().default(50),
+  ANALYTICS_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
+  // EVM RPC - On-chain verification (Phase 3)
+  // Required for production/preview/dev; not used in test mode (FakeEvmOnchainClient)
+  EVM_RPC_URL: z.string().url().optional(),
+
+  // Langfuse (AI observability) - Optional
+  // Only required when Langfuse tracing is enabled
+  LANGFUSE_PUBLIC_KEY: z.string().min(1).optional(),
+  LANGFUSE_SECRET_KEY: z.string().min(1).optional(),
+  LANGFUSE_BASE_URL: z.string().url().optional(),
+
+  // AI Telemetry - Router policy version for reproducibility
+  // Per AI_SETUP_SPEC.md: semver or git SHA identifying model routing policy
+  ROUTER_POLICY_VERSION: z.string().default("1.0.0"),
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {
@@ -107,6 +131,9 @@ export function serverEnv(): ServerEnv {
       const isTest = parsed.NODE_ENV === "test";
       const isProd = parsed.NODE_ENV === "production";
       const isTestMode = parsed.APP_ENV === "test";
+
+      // Cross-field invariants (beyond Zod schema)
+      assertEnvInvariants(parsed);
 
       // Handle DATABASE_URL: use provided URL or construct from component pieces
       let DATABASE_URL: string;

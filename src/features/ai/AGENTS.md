@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-03
-- **Status:** draft
+- **Last reviewed:** 2025-12-23
+- **Status:** stable
 
 ## Purpose
 
@@ -16,6 +16,9 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 - [Root AGENTS.md](../../../AGENTS.md)
 - [Architecture](../../../docs/ARCHITECTURE.md)
+- [AI Setup Spec](../../../docs/AI_SETUP_SPEC.md) (P0/P1 checklists, invariants)
+- [LangGraph Server](../../../docs/LANGGRAPH_SERVER.md) (external runtime, adapter implementation)
+- [LangGraph Patterns](../../../docs/LANGGRAPH_AI.md) (graph patterns, anti-patterns)
 - [Chat subfeature](./chat/AGENTS.md)
 - **Related:** [../payments/](../payments/) (credits), [../../contracts/](../../contracts/) (ai.completion.v1, ai.chat.v1, ai.models.v1)
 
@@ -31,41 +34,73 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 ## Public Surface
 
-- **Exports (via public.ts):**
+- **Exports (via public.ts/public.server.ts):**
   - `ChatRuntimeProvider` (chat runtime state)
   - `ModelPicker` (model selection dialog)
   - `ChatComposerExtras` (composer toolbar with model selection)
   - `useModels` (React Query hook for models list)
   - `getPreferredModelId`, `setPreferredModelId`, `validatePreferredModel` (localStorage preferences)
+  - `StreamFinalResult` (discriminated union for stream completion: ok with usage/finishReason, or error)
+  - `AiEvent` (union of all AI runtime events: text_delta, tool events, done)
+  - `createAiRuntime` (AI runtime orchestrator via public.server.ts)
+  - `toolRunner` (tool execution; owns toolCallId; emits tool lifecycle AiEvents)
+  - `createChatRunner` (graph runner factory for chat graph, via public.server.ts)
+  - `getToolsForGraph` (tool registry lookup)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
-  - `/api/v1/ai/chat` (POST) - chat endpoint (streaming support via SSE)
+  - `/api/v1/ai/chat` (POST) - chat endpoint (P1: consumes AiEvents, maps to assistant-stream format)
   - `/api/v1/ai/models` (GET) - list available models with tier info
+  - `/api/v1/activity` (GET) - usage statistics and logs
+- **Subdirectories:**
+  - `tools/` - Tool contracts and implementations (Zod schemas + execute functions). See [tools/AGENTS.md](./tools/AGENTS.md).
+  - `runners/` - Graph runner factories for bootstrap wiring. See [runners/AGENTS.md](./runners/AGENTS.md).
+  - `graphs/` - Graph definitions (chat.graph.ts with agentic tool loop)
+  - Note: LangGraph graphs live in `apps/langgraph-service/` (external process), NOT here. See [LANGGRAPH_SERVER.md](../../../docs/LANGGRAPH_SERVER.md).
+  - `services/` - AI service modules:
+    - `completion.ts` - Orchestrator with internal DRY helpers (execute, executeStream)
+    - `message-preparation.ts` - Message filtering, validation, fallbackPromptHash
+    - `preflight-credit-check.ts` - Upper-bound credit estimation
+    - `billing.ts` - Non-blocking charge receipt recording (commitUsageFact, recordBilling)
+    - `telemetry.ts` - DB + Langfuse writes (ai_invocation_summaries)
+    - `metrics.ts` - Prometheus metric recording
+    - `ai_runtime.ts` - AI runtime orchestration with RunEventRelay (pump+fanout pattern)
+    - `run-id-factory.ts` - Run identity factory (P0: runId = reqId)
+    - `llmPricingPolicy.ts` - Pricing markup calculation
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
-- **Files considered API:** public.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
+- **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, tool-runner.ts, tool-registry.ts, runners/chat.runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 
 ## Ports
 
-- **Uses ports:** LlmCaller (via services/completion.ts)
+- **Uses ports:** GraphExecutorPort (runGraph), AccountService (recordChargeReceipt), LlmService (completion, completionStream), AiTelemetryPort (recordInvocation), LangfusePort (createTrace, recordGeneration)
 - **Implements ports:** none
-- **Contracts:** ai.completion.v1, ai.chat.v1, ai.models.v1
+- **Contracts:** ai.completion.v1, ai.chat.v1, ai.models.v1, ai.activity.v1
 
 ## Responsibilities
 
 - **This feature does:**
-  - Provide AI completion services with credit metering (invariant gate for free models)
+  - Provide AI completion services with preflight credit gating and non-blocking post-call billing
+  - Apply pricing policy (markup factor from env) via llmPricingPolicy service
   - Provide chat UI integration via assistant-ui
   - Expose model selection UI with localStorage persistence
   - Fetch and cache available models list (server-side cache with SWR)
   - Validate selected models against server-side allowlist
   - Transform between wire formats and domain DTOs
   - Delegate to LlmCaller port for actual LLM calls
+  - Record charge receipts via AccountService.recordChargeReceipt (per ACTIVITY_METRICS.md)
+  - Record AI invocation telemetry via AiTelemetryPort (per AI_SETUP_SPEC.md)
+  - Create Langfuse traces for observability (optional, env-gated)
+  - Provide createAiRuntime as single AI entrypoint via GraphExecutorPort
+  - Use RunEventRelay for pump+fanout pattern (billing independent of UI)
+  - Execute tools via toolRunner — owns toolCallId, emits AiEvents, redacts payloads
+  - Provide graph runner factories via createChatRunner (for bootstrap wiring)
 
 - **This feature does not:**
   - Implement LLM adapters (owned by adapters/server/ai)
   - Manage credits/billing (owned by features/accounts)
   - Persist chat messages to database (planned for v2)
-  - Implement streaming (supported in v1 via SSE)
+  - Map AiEvents to wire protocol (owned by route layer)
+  - Compute promptHash (owned by litellm.adapter.ts, InProc path only)
+  - Host LangGraph graph code (owned by apps/langgraph-service/)
 
 ## Usage
 
@@ -115,3 +150,4 @@ import { Thread } from "@/components/kit/chat";
 - Message persistence planned for v2 with smart windowing
 - Model validation implements UX-001 (graceful fallback to default)
 - Server cache implements PERF-001 (no per-request network calls)
+- Post-call billing is non-blocking per ACTIVITY_METRICS.md design

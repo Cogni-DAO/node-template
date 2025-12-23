@@ -56,6 +56,9 @@ platform/infra/
         └── configs/               # Service configuration files
             ├── litellm.config.yaml
             └── alloy-config.alloy
+    └── sourcecred/                 # SourceCred instance
+        ├── docker-compose.sourcecred.yml
+        └── instance/               # SourceCred configuration and data
 ```
 
 ## Container Stack
@@ -77,6 +80,15 @@ platform/infra/
 - `alloy`: Log collection and forwarding
 - `db-provision`: Database user/schema provisioning (bootstrap profile)
 - `db-migrate`: Database migrations via dedicated migrator image (bootstrap profile)
+- `sourcecred`: Cred analysis and UI (separate compose project, shares network)
+  > **Note**: SourceCred uses an immutable runner image. To update runtime version:
+  >
+  > 1. Run: `./platform/infra/services/sourcecred/release.sh sc<VER>-node<VER>-<DATE>`
+  >    (Example: `./platform/infra/services/sourcecred/release.sh sc0.11.2-node18-2025-12-07`)
+  > 2. Invariant: Requires `docker login ghcr.io` with push access.
+  > 3. Update `docker-compose.sourcecred.yml` to use the new tag.
+  >    - Package: https://github.com/orgs/Cogni-DAO/packages/container/package/cogni-sourcecred-runner
+  >    - Pull: `docker pull ghcr.io/cogni-dao/cogni-sourcecred-runner:sc0.11.2-node18-2025-12-07`
 
 **Registry Authentication**:
 
@@ -169,8 +181,9 @@ POSTGRES_DB=${APP_DB_NAME}
 
 ## Health Validation
 
-1. **Container healthchecks**: Docker HEALTHCHECK in Dockerfile
-2. **App health**: `https://${domain}/health` successful curl
+1. **Container healthchecks**: Docker HEALTHCHECK uses `/readyz` (full validation)
+2. **Deployment readiness**: `https://${domain}/readyz` successful curl (hard gate)
+3. **Liveness probe**: `/livez` available for fast boot verification
 
 ## Current State
 
@@ -181,6 +194,7 @@ POSTGRES_DB=${APP_DB_NAME}
 
 ## Related Documentation
 
+- [Node CI/CD Contract](../../docs/NODE_CI_CD_CONTRACT.md) - CI/CD invariants, portability, Jenkins path
 - [CI/CD Pipeline Flow](../../docs/CI-CD.md) - Branch model, workflows, and deployment automation
 - [Application Architecture](../../docs/ARCHITECTURE.md) - Hexagonal design and code organization
 - [DEPLOY.md](DEPLOY.md) - Step-by-step deployment guide

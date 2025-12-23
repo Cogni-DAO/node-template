@@ -16,28 +16,54 @@ import type { Logger } from "pino";
 
 import {
   DrizzleAccountService,
+  DrizzleAiTelemetryAdapter,
   DrizzlePaymentAttemptRepository,
+  EvmRpcOnChainVerifierAdapter,
   getDb,
+  LangfuseAdapter,
+  LiteLlmActivityUsageAdapter,
   LiteLlmAdapter,
-  PonderOnChainVerifierAdapter,
+  LiteLlmUsageServiceAdapter,
+  type MimirAdapterConfig,
+  MimirMetricsAdapter,
   SystemClock,
+  ViemEvmOnchainClient,
+  ViemTreasuryAdapter,
 } from "@/adapters/server";
-import { FakeLlmAdapter, getTestOnChainVerifier } from "@/adapters/test";
+import {
+  FakeLlmAdapter,
+  FakeMetricsAdapter,
+  getTestEvmOnchainClient,
+  getTestOnChainVerifier,
+} from "@/adapters/test";
+import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import type {
   AccountService,
+  AiTelemetryPort,
   Clock,
+  LangfusePort,
   LlmService,
+  MetricsQueryPort,
   OnChainVerifier,
   PaymentAttemptRepository,
+  TreasuryReadPort,
+  UsageLogEntry,
+  UsageLogsByRangeParams,
+  UsageService,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
+import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
 export type UnhandledErrorPolicy = "rethrow" | "respond_500";
 
 export interface ContainerConfig {
   /** How to handle unhandled errors in route wrappers: rethrow for dev/test, respond_500 for production safety */
   unhandledErrorPolicy: UnhandledErrorPolicy;
+  /** Rate limit bypass config for stack tests; only enabled when APP_ENV=test */
+  rateLimitBypass: RateLimitBypassConfig;
+  /** Deploy environment for metrics/logging (e.g., "local", "preview", "production") */
+  DEPLOY_ENVIRONMENT: string;
 }
 
 export interface Container {
@@ -45,16 +71,38 @@ export interface Container {
   config: ContainerConfig;
   llmService: LlmService;
   accountService: AccountService;
+  usageService: UsageService;
   clock: Clock;
   paymentAttemptRepository: PaymentAttemptRepository;
   onChainVerifier: OnChainVerifier;
+  evmOnchainClient: EvmOnchainClient;
+  metricsQuery: MetricsQueryPort;
+  treasuryReadPort: TreasuryReadPort;
+  /** AI telemetry DB writer - always wired */
+  aiTelemetry: AiTelemetryPort;
+  /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
+  langfuse: LangfusePort | undefined;
 }
 
 // Feature-specific dependency types
-export type AiCompletionDeps = Pick<
+// AI adapter deps: used internally by createInProcGraphExecutor
+export type AiAdapterDeps = Pick<
   Container,
-  "llmService" | "accountService" | "clock"
+  "llmService" | "accountService" | "clock" | "aiTelemetry" | "langfuse"
 >;
+
+/**
+ * Activity dashboard dependencies.
+ * Note: usageService requires listUsageLogsByRange (only on LiteLlmUsageServiceAdapter, not general UsageService).
+ */
+export type ActivityDeps = {
+  usageService: UsageService & {
+    listUsageLogsByRange(
+      params: UsageLogsByRangeParams
+    ): Promise<{ logs: UsageLogEntry[] }>;
+  };
+  accountService: AccountService;
+};
 
 // Module-level singleton
 let _container: Container | null = null;
@@ -98,19 +146,79 @@ function createContainer(): Container {
     ? new FakeLlmAdapter()
     : new LiteLlmAdapter();
 
-  // OnChainVerifier: test uses singleton fake (configurable from tests), production uses Ponder stub (real Ponder in Phase 3)
+  // EvmOnchainClient: test uses singleton fake (configurable from tests), production uses viem RPC
+  const evmOnchainClient = env.isTestMode
+    ? getTestEvmOnchainClient()
+    : new ViemEvmOnchainClient();
+
+  // OnChainVerifier: test uses singleton fake (configurable from tests), production uses EVM RPC verifier
   const onChainVerifier = env.isTestMode
     ? getTestOnChainVerifier()
-    : new PonderOnChainVerifierAdapter();
+    : new EvmRpcOnChainVerifierAdapter(evmOnchainClient);
+
+  // MetricsQuery: test uses fake adapter, production uses Mimir
+  const metricsQuery: MetricsQueryPort = env.isTestMode
+    ? new FakeMetricsAdapter()
+    : (() => {
+        // Mimir config is optional - only required when analytics feature is enabled
+        if (!env.MIMIR_URL || !env.MIMIR_USER || !env.MIMIR_TOKEN) {
+          // Return fake adapter if Mimir not configured (graceful degradation)
+          log.warn(
+            "MIMIR_URL/USER/TOKEN not configured; analytics queries will return empty results"
+          );
+          return new FakeMetricsAdapter();
+        }
+        const mimirConfig: MimirAdapterConfig = {
+          url: env.MIMIR_URL,
+          username: env.MIMIR_USER,
+          password: env.MIMIR_TOKEN,
+          timeoutMs: env.ANALYTICS_QUERY_TIMEOUT_MS,
+        };
+        return new MimirMetricsAdapter(mimirConfig);
+      })();
 
   // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
   const accountService = new DrizzleAccountService(db);
   const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
 
+  // UsageService: P1 - LiteLLM is canonical usage log source for Activity (no fallback)
+  const usageService = new LiteLlmUsageServiceAdapter(
+    new LiteLlmActivityUsageAdapter()
+  );
+
+  // TreasuryReadPort: always uses ViemTreasuryAdapter (no test fake needed - mocked at port level in tests)
+  const treasuryReadPort = new ViemTreasuryAdapter(evmOnchainClient);
+
+  // AI Telemetry: DrizzleAiTelemetryAdapter always wired (per AI_SETUP_SPEC.md)
+  const aiTelemetry = new DrizzleAiTelemetryAdapter(db);
+
+  // Langfuse: only wired when LANGFUSE_SECRET_KEY is set (optional)
+  // Environment passed for trace filtering (separates dev/preview/prod data)
+  const langfuse: Container["langfuse"] =
+    env.LANGFUSE_SECRET_KEY && env.LANGFUSE_PUBLIC_KEY
+      ? new LangfuseAdapter({
+          publicKey: env.LANGFUSE_PUBLIC_KEY,
+          secretKey: env.LANGFUSE_SECRET_KEY,
+          ...(env.LANGFUSE_BASE_URL ? { baseUrl: env.LANGFUSE_BASE_URL } : {}),
+          environment: env.DEPLOY_ENVIRONMENT ?? "local",
+        })
+      : undefined;
+
+  const clock = new SystemClock();
+
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
   const config: ContainerConfig = {
     unhandledErrorPolicy: env.isProd ? "respond_500" : "rethrow",
+    // Rate limit bypass: only enabled in test mode (APP_ENV=test)
+    // Security: Production builds will never enable bypass regardless of header
+    rateLimitBypass: {
+      enabled: env.isTestMode,
+      headerName: "x-stack-test",
+      headerValue: "1",
+    },
+    // Deploy environment for metrics/logging
+    DEPLOY_ENVIRONMENT: env.DEPLOY_ENVIRONMENT ?? "local",
   };
 
   return {
@@ -118,21 +226,37 @@ function createContainer(): Container {
     config,
     llmService,
     accountService,
-    clock: new SystemClock(),
+    usageService,
+    clock,
     paymentAttemptRepository,
     onChainVerifier,
+    evmOnchainClient,
+    metricsQuery,
+    treasuryReadPort,
+    aiTelemetry,
+    langfuse,
   };
 }
 
 /**
- * Resolves dependencies for AI completion feature
- * Returns subset of Container needed for AI operations
+ * Resolves dependencies for AI adapter construction.
+ * Used by graph-executor.factory.ts.
  */
-export function resolveAiDeps(): AiCompletionDeps {
+export function resolveAiAdapterDeps(): AiAdapterDeps {
   const container = getContainer();
   return {
     llmService: container.llmService,
     accountService: container.accountService,
     clock: container.clock,
+    aiTelemetry: container.aiTelemetry,
+    langfuse: container.langfuse,
+  };
+}
+
+export function resolveActivityDeps(): ActivityDeps {
+  const container = getContainer();
+  return {
+    usageService: container.usageService as ActivityDeps["usageService"],
+    accountService: container.accountService,
   };
 }

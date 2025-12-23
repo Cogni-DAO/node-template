@@ -12,9 +12,11 @@
  * @public
  */
 
+export { FakeAiTelemetryAdapter } from "@/adapters/test";
 export {
   createMockAccountService,
   createMockAccountServiceWithDefaults,
+  type MockAccountServiceOptions,
 } from "./accounts/mock-account.service";
 export * from "./ai/fakes";
 export { FakeClock } from "./fake-clock";

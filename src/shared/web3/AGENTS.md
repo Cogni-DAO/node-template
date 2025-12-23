@@ -5,17 +5,17 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-26
-- **Status:** draft
+- **Last reviewed:** 2025-12-13
+- **Status:** stable
 
 ## Purpose
 
-Shared blockchain configuration for web3 integrations. Provides hardcoded Base mainnet chain constants for DePay widgets and wagmi providers.
+Shared blockchain configuration for web3 integrations. Provides Base mainnet chain constants, EVM RPC client interface, and Node Formation primitives (ABIs, bytecode, OSx addresses).
 
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [DePay Payments](../../../docs/DEPAY_PAYMENTS.md)
+- [Chain Configuration](../../../docs/CHAIN_CONFIG.md)
 - [Repo Spec](.cogni/repo-spec.yaml)
 
 ## Boundaries
@@ -40,15 +40,20 @@ Shared blockchain configuration for web3 integrations. Provides hardcoded Base m
 ## Public Surface
 
 - **Exports:**
-  - `CHAIN` - wagmi Chain object for Base mainnet (imported from wagmi/chains)
-  - `CHAIN_ID` - Base mainnet chain ID (8453)
+  - `CHAIN` - wagmi Chain object for Base mainnet
+  - `CHAIN_ID` - Chain ID constant
   - `getChainId()` - Function returning chain ID
-  - `DEPAY_BLOCKCHAIN` - DePay blockchain identifier ("base")
-  - `USDC_TOKEN_ADDRESS` - Official USDC contract on Base mainnet
-- **Routes (if any):** none
-- **CLI (if any):** none
-- **Env/Config keys:** none (chain hardcoded to Base; NEXT_PUBLIC_CHAIN_ID removed)
-- **Files considered API:** chain.ts, index.ts
+  - `USDC_TOKEN_ADDRESS` - USDC contract address
+  - `MIN_CONFIRMATIONS` - Payment verification confirmations
+  - `VERIFY_THROTTLE_SECONDS` - Verification polling throttle
+  - `ERC20_ABI` - Generic ERC20 ABI
+  - `EvmOnchainClient` - Infrastructure interface for EVM RPC operations
+  - `getAddressExplorerUrl()`, `getTransactionExplorerUrl()` - Block explorer URLs
+  - `node-formation/*` - Node Formation ABIs, bytecode, OSx addresses (see node-formation/AGENTS.md)
+- **Routes:** none
+- **CLI:** none
+- **Env/Config keys:** none (chain hardcoded)
+- **Files considered API:** chain.ts, evm-wagmi.ts, erc20-abi.ts, block-explorer.ts, wagmi.config.ts, onchain/, node-formation/, index.ts
 
 ## Ports (optional)
 
@@ -64,7 +69,7 @@ Shared blockchain configuration for web3 integrations. Provides hardcoded Base m
 ## Usage
 
 ```typescript
-import { CHAIN_ID, DEPAY_BLOCKCHAIN, USDC_TOKEN_ADDRESS } from "@/shared/web3";
+import { CHAIN, CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 ```
 
 ## Standards
@@ -87,6 +92,12 @@ import { CHAIN_ID, DEPAY_BLOCKCHAIN, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 
 ## Notes
 
-- Chain locked to Base mainnet (8453) for MVP
-- If supporting multiple chains, this module must be refactored to accept chain selection
+- Chain locked to Base mainnet (8453)
+- wagmi.config.ts exists for client-side wallet config but NOT exported from index.ts (prevents server-side import)
+- EvmOnchainClient extended with getBytecode() and readContract() for Node Formation verification
+- node-formation/ subdirectory contains P0 DAO formation primitives (isolated from payment/treasury code)
+- evm-wagmi.ts separates wagmi types from framework-agnostic chain.ts
+- EvmOnchainClient is an infrastructure seam (NOT a domain port) shared by multiple adapters
+- Production uses ViemEvmOnchainClient with lazy initialization (allows builds without EVM_RPC_URL)
+- Tests use FakeEvmOnchainClient (no RPC calls, no URL needed)
 - Build fails if repo-spec chain_id mismatches app CHAIN_ID

@@ -33,12 +33,21 @@ export { Badge } from "./kit/data-display/Badge";
 export { GithubButton } from "./kit/data-display/GithubButton";
 export { TerminalFrame } from "./kit/data-display/TerminalFrame";
 export { Alert, AlertDescription, AlertTitle } from "./kit/feedback/Alert";
+export {
+  ErrorAlert,
+  type ErrorAlertProps,
+  type ErrorAlertRef,
+} from "./kit/feedback/ErrorAlert";
 export { HintText } from "./kit/feedback/HintText";
 export { Progress } from "./kit/feedback/Progress";
 export { Button } from "./kit/inputs/Button";
 export { Input } from "./kit/inputs/Input";
 export { ModeToggle } from "./kit/inputs/ModeToggle";
 export { SplitInput } from "./kit/inputs/SplitInput";
+export {
+  type TimeRange,
+  TimeRangeSelector,
+} from "./kit/inputs/TimeRangeSelector";
 export {
   Card,
   CardContent,
@@ -48,7 +57,6 @@ export {
   CardTitle,
 } from "./kit/layout/Card";
 export { Container } from "./kit/layout/Container";
-export { Header } from "./kit/layout/Header";
 export { PageContainer } from "./kit/layout/PageContainer";
 export { SectionCard } from "./kit/layout/SectionCard";
 export { MobileNav } from "./kit/navigation/MobileNav";

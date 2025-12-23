@@ -27,14 +27,14 @@ import {
   UsdcPaymentFlow,
 } from "@/components";
 import {
-  CREDITS_PER_CENT,
+  creditsToUsd,
   useCreditsSummary,
   usePaymentFlow,
 } from "@/features/payments/public";
 import { isValidAmountInput, parseDollarsToCents } from "@/shared/utils/money";
 
 function formatDollars(credits: number): string {
-  const dollars = credits / (CREDITS_PER_CENT * 100);
+  const dollars = creditsToUsd(credits);
   return dollars.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

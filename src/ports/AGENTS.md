@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-04
-- **Status:** draft
+- **Last reviewed:** 2025-12-23
+- **Status:** stable
 
 ## Purpose
 
@@ -37,14 +37,24 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 ## Public Surface
 
 - **Exports:**
-  - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordLlmUsage, listCreditLedgerEntries, findCreditLedgerEntryByReference)
-  - LlmService (completion, completionStream with CompletionStreamParams including abortSignal)
+  - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listCreditLedgerEntries, findCreditLedgerEntryByReference)
+  - LlmService (completion, completionStream with CompletionStreamParams including abortSignal, tools, toolChoice; returns providerCostUsd, litellmCallId, toolCalls)
+  - GraphExecutorPort (runGraph → stream + completion promise; unified graph execution per GRAPH_EXECUTION.md)
+  - GraphRunRequest, GraphRunResult, GraphFinal (graph execution types)
+  - UsageService (getUsageStats, listUsageLogs; legacy aggregation interface)
+  - ActivityUsagePort (getSpendLogs, getSpendChart; LiteLLM-only telemetry for Activity dashboard)
+  - UsageLogEntry, UsageLogsByRangeParams (types for log fetching)
   - ChatDeltaEvent (text_delta | error | done)
   - PaymentAttemptRepository (create, findById, findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent)
   - OnChainVerifier (verify transaction against expected parameters)
+  - MetricsQueryPort (queryRange, queryInstant for Prometheus-compatible backends)
+  - AiTelemetryPort (recordInvocation for ai_invocation_summaries DB writes)
+  - LangfusePort (createTrace, recordGeneration, flush for optional Langfuse integration)
   - Clock (now)
-  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError)
-  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
+  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError, ActivityUsageUnavailableError)
+  - LlmError, LlmErrorKind (typed error classification from status codes)
+  - LlmToolDefinition, LlmToolCall, LlmToolChoice (tool calling types)
+  - Types (ChargeReceiptParams, ChargeReceiptProvenance, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config:** none
@@ -92,3 +102,5 @@ These tests are separate from edge tests for src/contracts/\*\*
 - PaymentAttemptRepository enforces ownership (findById filters by billingAccountId)
 - OnChainVerifier is generic (no blockchain-specific types), returns VerificationResult with status (VERIFIED | PENDING | FAILED)
 - Port-level errors are thrown by adapters, caught and translated by feature layer
+- recordChargeReceipt is non-blocking (never throws InsufficientCredits post-call per ACTIVITY_METRICS.md)
+- ActivityUsagePort is for Activity dashboard (distinct from observability/Grafana telemetry); single implementation (LiteLLM) by design; throws ActivityUsageUnavailableError on failures (for 503 mapping)

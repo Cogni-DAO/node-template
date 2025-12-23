@@ -1,6 +1,6 @@
 # Cogni-Template Architecture
 
-**Core Mission**: A crypto-metered AI infrastructure loop where chat is just one client. DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
+**Core Mission**: A new Developer can fork + spawn a DAO-governed, AI-optimized, CI/CD-enabled service in one click: A crypto-metered AI infrastructure loop where Webapp chat is just one client (API, MCP, mobile app). DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
 
 This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. Dependency-cruiser enforces these rules (e.g. no `app → core`, no `adapters → core`, `/types` remain domain-agnostic). See [.dependency-cruiser.cjs](../.dependency-cruiser.cjs) for boundary rules, [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for enforcement tests, and [ARCHITECTURE_ENFORCEMENT_GAPS.md](ARCHITECTURE_ENFORCEMENT_GAPS.md) for current enforcement status.
 
@@ -36,10 +36,12 @@ Every dependency points inward.
 
 - Hexagonal: [Alistair Cockburn's System Design](https://www.geeksforgeeks.org/system-design/hexagonal-architecture-system-design/)
 - Infrastructure: [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md)
+- Chain Configuration: [CHAIN_CONFIG.md](CHAIN_CONFIG.md)
 - Accounts & Credits: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
 - API Endpoints: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
 - Wallet Integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
 - Billing Evolution: [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
+- Activity Metrics: [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md)
 
 ### Vertical slicing
 
@@ -79,6 +81,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **tests/** → Unit (core/features with mocked ports), integration (adapters), contract (port compliance), setup.
 - **e2e/** → Playwright API/UI specs.
 - **scripts/** → Migrations, seeds, generators.
+- **packages/** → Internal shared packages (pure libraries, no `src/` imports).
 
 ## Configuration Directories
 
@@ -104,19 +107,22 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] eslint.config.mjs # eslint config (tailwind, UI governance, import rules)
 [x] commitlint.config.cjs # conventional commits enforcement
 [x] src/styles/tailwind.css # Tailwind v4 CSS-first config (@theme, @utility, @custom-variant)
-[x] tsconfig.json # typescript + alias paths
-[x] tsconfig.eslint.json # eslint typescript config
+[x] tsconfig.base.json # shared compiler options + path aliases
+[x] tsconfig.json # solution-style for tsc -b (project references only)
+[x] tsconfig.app.json # app typecheck (src/, scripts/)
+[x] tsconfig.scripts.json # tsx tooling path resolution
+[x] tsconfig.eslint.json # ESLint parser config
 [x] package.json # deps, scripts, engines (db scripts added)
 [x] drizzle.config.ts # database migrations config
 [x] Dockerfile # reproducible build
-[x] .dockerignore # ignore node_modules, artifacts, .env.\*
+[x] .dockerignore # ignore node*modules, artifacts, .env.\*
 [x] LICENSE # OSS license
 [x] CODEOWNERS # review ownership
 [x] SECURITY.md # disclosure policy
 [x] CONTRIBUTING.md # contribution standards
 [x] README.md # overview
 [ ] CHANGELOG.md # releases
-[x] src/proxy.ts # Auth proxy for /api/v1/ai/\* routes
+[x] src/proxy.ts # Auth proxy for /api/v1/* (except /api/v1/public/\_)
 [x] vitest.config.mts # unit/integration
 [x] vitest.api.config.mts # API integration tests
 [x] playwright.config.ts # UI/e2e
@@ -132,7 +138,6 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── ENVIRONMENTS.md # environment configuration
 [x] ├── ERROR_HANDLING_ARCHITECTURE.md # error handling patterns
 [x] ├── FEATURE_DEVELOPMENT_GUIDE.md # feature development workflows
-[x] ├── IMPLEMENTATION_PLAN.md # implementation roadmap
 [x] ├── SETUP.md # developer setup guide
 [x] ├── STYLE.md # code style guide
 [x] ├── TESTING.md # testing strategy
@@ -149,6 +154,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ └── akash/ # Akash provider configs
 [x] │ ├── services/
 [x] │ │ ├── runtime/ # Docker Compose for local dev (postgres, litellm)
+[x] │ │ ├── sourcecred/ # SourceCred instance (cred analysis)
 [x] │ │ └── loki-promtail/ # Log aggregation stack
 [ ] │ ├── stacks/
 [ ] │ │ └── local-compose/ # Local development stack
@@ -168,9 +174,10 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 
 [x] src/
 [x] ├── auth.ts # Auth.js configuration (SIWE credentials provider)
-[x] ├── proxy.ts # Auth proxy for /api/v1/ai/_ routes
+[x] ├── proxy.ts # Auth proxy for /api/v1/_ (except /api/v1/public/_)
 [x] ├── bootstrap/ # composition root (DI)
 [x] │ ├── container.ts # wires adapters → ports
+[x] │ ├── graph-executor.factory.ts # GraphExecutorPort factory
 [ ] │ └── config.ts # Zod-validated env
 [ ] │
 [x] ├── contracts/ # operation contracts (edge IO)
@@ -181,7 +188,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── payments.intent.v1.contract.ts # payment intent creation
 [x] │ ├── payments.submit.v1.contract.ts # payment submission
 [x] │ ├── payments.status.v1.contract.ts # payment status
-[x] │ ├── payments.credits._.v1.contract.ts # credits summary/confirm
+[x] │ ├── payments.credits.\_.v1.contract.ts # credits summary/confirm
 [x] │ └── meta.\*.v1.contract.ts # health, route-manifest
 [ ] │
 [x] ├── mcp/ # MCP host (future)
@@ -215,7 +222,11 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── features/ # application services
 [x] │ ├── home/ # home page data
 [x] │ ├── ai/ # AI services
-[x] │ │ ├── services/ # completion service
+[x] │ │ ├── services/ # completion, billing, ai_runtime, telemetry
+[x] │ │ ├── graphs/ # Graph definitions (chat.graph.ts)
+[x] │ │ ├── prompts/ # Prompt templates
+[x] │ │ ├── tool-runner.ts # Tool execution (sole toolCallId owner)
+[x] │ │ ├── tool-registry.ts # Tool contracts registry
 [x] │ │ ├── chat/ # streaming chat (assistant-ui)
 [x] │ │ │ ├── providers/
 [x] │ │ │ └── components/
@@ -266,22 +277,27 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [ ] │
 [x] ├── ports/ # contracts (minimal interfaces)
 [x] │ ├── llm.port.ts # LLM service interface (LlmCaller)
+[x] │ ├── graph-executor.port.ts # GraphExecutorPort (unified graph execution)
+[x] │ ├── ai-telemetry.port.ts # AiTelemetryPort (ai_invocation_summaries)
 [x] │ ├── clock.port.ts # Clock { now(): Date }
 [x] │ ├── accounts.port.ts # AccountService interface (create, debit, credit)
 [x] │ ├── payment-attempt.port.ts # PaymentAttemptRepository interface
-[x] │ ├── onchain-verifier.port.ts # OnChainVerifier interface (stubbed for MVP)
+[x] │ ├── onchain-verifier.port.ts # OnChainVerifier interface (real EVM RPC verification)
 [x] │ └── index.ts # port exports
 [ ] │ ├── wallet.port.ts # WalletService { verifySignature(...) }
 [ ] │ ├── auth.port.ts # AuthService { issueNonce, verifySiwe, session }
 [ ] │ ├── apikey.port.ts # ApiKeyRepo { create, revoke, findByHash }
-[ ] │ ├── usage.port.ts # UsageRepo { recordUsage, findByApiKey }
+[x] │ ├── usage.port.ts # UsageService, ActivityUsagePort (Activity dashboard)
 [ ] │ ├── telemetry.port.ts # Telemetry { trace, event, span }
 [ ] │ ├── ratelimit.port.ts # RateLimiter { take(key, points) }
 [ ] │ └── rng.port.ts # Rng { uuid(): string }
 [ ] │
 [x] ├── adapters/ # infrastructure implementations (no UI)
 [x] │ ├── server/
-[x] │ │ ├── ai/litellm.adapter.ts # LLM service impl
+[x] │ │ ├── ai/litellm.adapter.ts # LLM completion service
+[x] │ │ ├── ai/inproc-graph.adapter.ts # InProcGraphExecutorAdapter (unified execution)
+[x] │ │ ├── ai/litellm.activity-usage.adapter.ts # Activity dashboard (LiteLLM /spend/logs)
+[x] │ │ ├── ai/litellm.usage-service.adapter.ts # UsageService bridge
 [x] │ │ ├── accounts/ # account service implementation
 [x] │ │ │ └── drizzle.adapter.ts # database-backed AccountService
 [x] │ │ ├── db/ # database client and connection
@@ -291,7 +307,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ │ └── index.ts # db exports
 [x] │ │ ├── payments/ # payment adapters
 [x] │ │ │ ├── drizzle-payment-attempt.adapter.ts
-[x] │ │ │ └── ponder-onchain-verifier.adapter.ts # stubbed for MVP
+[x] │ │ │ └── ponder-onchain-verifier.adapter.ts # legacy stub (replaced by evm-rpc-onchain-verifier.adapter.ts)
 [x] │ │ ├── time/system.adapter.ts # system clock
 [x] │ │ └── index.ts # server adapter exports
 [x] │ └── test/ # fake implementations for CI
@@ -323,7 +339,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ ├── AGENTS.md
 [x] │ │ ├── schema.ts # schema exports
 [x] │ │ ├── schema.auth.ts # auth tables
-[x] │ │ ├── schema.billing.ts # billing tables (billing_accounts, credit_ledger, llm_usage)
+[x] │ │ ├── schema.billing.ts # billing tables (billing_accounts, credit_ledger, charge_receipts)
 [x] │ │ └── index.ts
 [x] │ ├── constants/
 [x] │ │ └── index.ts
@@ -338,10 +354,8 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── web3/ # chain config, USDC addresses
 [x] │ ├── config/ # repo-spec config helpers
 [x] │ └── index.ts
-[ ] │ ├── schemas/
-[ ] │ │ ├── api.ts # request/response DTOs
-[ ] │ │ ├── usage.ts # usage schema
-[ ] │ │ └── mappers.ts # DTO ↔ domain translators
+[x] │ ├── schemas/
+[x] │ │ └── litellm.spend-logs.schema.ts # Zod schemas for LiteLLM /spend/logs API
 [ ] │ └── crypto.ts
 [ ] │
 [x] ├── components/ # shared presentational UI
@@ -456,7 +470,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 5. **Telemetry** to Langfuse and logs to Pino.
 6. **Balance view** in protected UI.
 
-LangGraph, Loki/Grafana, Akash/IaC move to v2.
+Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for graph architecture.
 
 ---
 
@@ -496,7 +510,8 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 
 - **Contracts are edge-only.** Inner layers never import `src/contracts/**`. Breaking change → new `...vN` id.
 - **Routes must validate IO.** Parse input before calling the use-case. Parse output before responding. Fail closed.
-- **Auth is centralized.** Use one `guard()` for session/API-key scopes, rate-limit, idempotency. No per-route ad-hoc checks.
+- **Auth is centralized.** `src/proxy.ts` enforces session auth on `/api/v1/*` except `/api/v1/public/*`. Public routes MUST use `wrapPublicRoute()` (auto-applies rate limiting + cache headers). No per-route ad-hoc auth.
+- **Public API namespace (`/api/v1/public/*`).** All routes here use `wrapPublicRoute()` for mandatory rate limiting (10 req/min/IP), cache headers, and metrics. CI enforcement via `tests/meta/public-route-enforcement.test.ts`. No sensitive data access allowed.
 - **Observability is mandatory.** Trace every call with `contractId`, `subject`, and cost/usage. Log denials.
 - **Adapters are pure infra.** No UI, no business rules. Implement ports only. Promote creeping helpers into ports or core.
 
@@ -505,6 +520,12 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 ## Related Documentation
 
 - [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
+- [Graph Execution](GRAPH_EXECUTION.md) - GraphExecutorPort, billing idempotency, pump+fanout pattern
+- [AI Setup Spec](AI_SETUP_SPEC.md) - AI correlation IDs, telemetry invariants, P0/P1 checklists
+- [LangGraph Server](LANGGRAPH_SERVER.md) - External LangGraph Server runtime, adapter implementation
+- [LangGraph AI Guide](LANGGRAPH_AI.md) - Graph patterns and anti-patterns
+- [Tool Use Spec](TOOL_USE_SPEC.md) - Tool execution invariants, first tool checklist
+- [Packages Architecture](PACKAGES_ARCHITECTURE.md) - Internal packages, isolation boundaries, and CI/CD setup
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
 - [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
@@ -513,3 +534,5 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 - [Model Selection](MODEL_SELECTION.md) - Dynamic model fetching from LiteLLM, validation, and UI integration
 - [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
+- [Build Architecture](BUILD_ARCHITECTURE.md) - Monorepo build order, Docker strategy, and workspace package handling
+- [Route Runtime Policy](RUNTIME_POLICY.md) - When to use Node.js vs Edge runtime in API routes

@@ -61,11 +61,21 @@ describe("app/_facades/payments/credits.server", () => {
       accountService,
       // Unused in this facade, but required by Container type
       log: {} as never,
-      config: { unhandledErrorPolicy: "rethrow" },
+      config: {
+        unhandledErrorPolicy: "rethrow",
+        rateLimitBypass: { enabled: false, headerName: "", headerValue: "" },
+        DEPLOY_ENVIRONMENT: "test",
+      },
       llmService: {} as never,
       clock: testCtx.clock as never,
       paymentAttemptRepository: {} as never,
       onChainVerifier: {} as never,
+      evmOnchainClient: {} as never,
+      usageService: {} as never,
+      metricsQuery: {} as never,
+      treasuryReadPort: {} as never,
+      aiTelemetry: {} as never,
+      langfuse: undefined,
     });
   });
 
@@ -75,7 +85,6 @@ describe("app/_facades/payments/credits.server", () => {
       ownerUserId: sessionUser.id,
       balanceCredits: 0,
       defaultVirtualKeyId: "vk-1",
-      litellmVirtualKey: "vk-test",
     });
 
     mockConfirmCreditsPayment.mockResolvedValue({

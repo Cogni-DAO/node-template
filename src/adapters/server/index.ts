@@ -12,9 +12,34 @@
  * @public
  */
 
+export type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 export { DrizzleAccountService } from "./accounts/drizzle.adapter";
+export { DrizzleUsageAdapter } from "./accounts/drizzle.usage.adapter";
+export {
+  type CompletionStreamFn,
+  type CompletionStreamParams,
+  type CompletionStreamResult,
+  type CompletionUnitExecutor,
+  type GraphResolverFn,
+  InProcGraphExecutorAdapter,
+  type InProcGraphExecutorDeps,
+} from "./ai/inproc-graph.adapter";
+export { LiteLlmActivityUsageAdapter } from "./ai/litellm.activity-usage.adapter";
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
+export { LiteLlmUsageServiceAdapter } from "./ai/litellm.usage-service.adapter";
+export { DrizzleAiTelemetryAdapter } from "./ai-telemetry/drizzle.adapter";
+export {
+  LangfuseAdapter,
+  type LangfuseAdapterConfig,
+} from "./ai-telemetry/langfuse.adapter";
 export { type Database, getDb } from "./db/client";
+export {
+  type MimirAdapterConfig,
+  MimirMetricsAdapter,
+} from "./metrics/mimir.adapter";
+export { ViemEvmOnchainClient } from "./onchain/viem-evm-onchain-client.adapter";
+export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";
 export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
+export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifier.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
 export { SystemClock } from "./time/system.adapter";

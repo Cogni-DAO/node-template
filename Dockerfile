@@ -1,25 +1,30 @@
+# syntax=docker/dockerfile:1.7-labs
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-# Base image – shared between deps and builder
+# Base image – shared across stages
 FROM node:20-alpine AS base
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
-# 1) Dependencies (full, including dev) – cached by package.json + pnpm-lock.yaml
-FROM base AS deps
+# Builder: full workspace install + build
+# Cache efficiency relies on BuildKit pnpm-store mount (packages pre-fetched)
+FROM base AS builder
 RUN apk add --no-cache g++ make python3
-COPY package.json pnpm-lock.yaml ./
+
+# 1. Copy dependency manifests first (maximizes install layer caching)
+#    --parents preserves directory structure with wildcards (BuildKit feature)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --parents packages/*/package.json ./
+
 # Use official node dist to avoid unofficial-builds.nodejs.org flakiness
 ENV npm_config_disturl=https://nodejs.org/dist
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+
+# 2. Install dependencies (cached when manifests unchanged)
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile
 
-# 2) Build – reuse node_modules from deps
-FROM base AS builder
-WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
+# 3. Copy full source (filtered by .dockerignore)
 COPY . .
 
 ARG APP_ENV=production
@@ -28,43 +33,35 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production \
     APP_ENV=${APP_ENV}
 
-# Build-time DB env for NextAuth + Drizzle adapter validation during `pnpm build`.
-# No actual DB connection is made at build time; these values satisfy config validation only.
-# Runtime containers will override with real credentials.
-ENV DATABASE_URL="postgresql://build_user:build_pass@build-host.invalid:5432/build_db" \
-    AUTH_SECRET="build-time-secret-min-32-chars-long-placeholder"
+# Build all workspace packages (brute-force, not graph-scoped)
+# Required: package exports point to dist/, must exist before Next.js build
+# Uses canonical packages:build: tsup (JS) + tsc -b (declarations) + validation
+RUN pnpm packages:build
 
-# Persist Next's build cache across Docker builds (huge win for rebuilds)
-RUN --mount=type=cache,target=/app/.next/cache \
-    pnpm build
-    
-# 3) Migrator – minimal image for running database migrations via drizzle-kit
+# Build-time placeholder for AUTH_SECRET (required by env validation during Next.js page collection)
+# Not a real secret; runtime containers must provide real AUTH_SECRET via deployment env
+ARG AUTH_SECRET_BUILD="build-time-placeholder-min-32-chars-xxxxxxxxxxxxxxxx"
+ENV AUTH_SECRET=${AUTH_SECRET_BUILD}
+
+# Build workspace root (Next.js app)
+RUN --mount=type=cache,id=next-cache,target=/app/.next/cache,sharing=locked \
+    pnpm -w build
+
+# Migrator – minimal image for database migrations via drizzle-kit
 FROM base AS migrator
 WORKDIR /app
 
-# Install build tools for native dependencies
-RUN apk add --no-cache g++ make python3
-
-# Ensure pnpm is non-interactive and available
-ENV PATH="/usr/local/bin:${PATH}"
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-# Use official node dist to avoid unofficial-builds.nodejs.org flakiness
-ENV npm_config_disturl=https://nodejs.org/dist
-
-# Install deps from lockfile (pinned versions, includes drizzle-kit)
-COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod=false
-
-# Copy only files required by drizzle.config.ts and migrate command
-COPY drizzle.config.ts ./
-COPY src/shared/db ./src/shared/db
-COPY src/adapters/server/db/migrations ./src/adapters/server/db/migrations
+# Copy from builder (includes built workspace packages)
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/drizzle.config.ts ./
+COPY --from=builder /app/src/shared/db ./src/shared/db
+COPY --from=builder /app/src/adapters/server/db/migrations ./src/adapters/server/db/migrations
 
 # Run canonical migration script (drizzle-kit migrate)
 CMD ["pnpm", "db:migrate:container"]
 
-# 4) Runtime – lean production image (no migration tooling)
+# Runner – lean production image
 FROM node:20-alpine AS runner
 WORKDIR /app
 
@@ -90,6 +87,6 @@ USER nextjs
 EXPOSE 3000
 
 HEALTHCHECK --interval=10s --timeout=2s --start-period=15s --retries=3 \
-CMD curl -fsS http://0.0.0.0:3000/health || exit 1
+CMD curl -fsS http://0.0.0.0:3000/readyz || exit 1
 
 CMD ["node", "server.js"]

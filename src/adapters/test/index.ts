@@ -13,6 +13,13 @@
  */
 
 export { FakeLlmAdapter } from "./ai/fake-llm.adapter";
+export { FakeAiTelemetryAdapter } from "./ai-telemetry/fake-ai-telemetry.adapter";
+export { FakeMetricsAdapter } from "./metrics/fake-metrics.adapter";
+export {
+  FakeEvmOnchainClient,
+  getTestEvmOnchainClient,
+  resetTestEvmOnchainClient,
+} from "./onchain/fake-evm-onchain-client.adapter";
 export {
   FakeOnChainVerifierAdapter,
   getTestOnChainVerifier,

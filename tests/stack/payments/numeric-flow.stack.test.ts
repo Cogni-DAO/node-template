@@ -5,7 +5,7 @@
  * Module: `@tests/stack/payments/numeric-flow`
  * Purpose: Stack tests verifying numeric flow from UI cents → intent amount_usd_cents → amount_raw → ledger credits delta.
  * Scope: Tests complete numeric flow for $1 and $50 payments with exact conversions at each step. Does not test error cases or UI rendering.
- * Invariants: UI cents → backend cents → raw USDC → credits all match; no float math; CREDITS_PER_CENT = 10 constant holds.
+ * Invariants: UI cents → backend cents → raw USDC → credits all match; no float math; uses usdCentsToCredits().
  * Side-effects: IO (database writes, facade calls)
  * Notes: Validates conversion formulas: 1 cent = 10,000 raw USDC units; 1 cent = 10 credits.
  * Links: docs/PAYMENTS_DESIGN.md
@@ -27,13 +27,14 @@ import {
   createPaymentIntentFacade,
   submitPaymentTxHashFacade,
 } from "@/app/_facades/payments/attempts.server";
-import { CREDITS_PER_CENT } from "@/core";
+import { usdCentsToCredits } from "@/core";
 import type { SessionUser } from "@/shared/auth";
 import {
   billingAccounts,
   creditLedger,
   paymentAttempts,
 } from "@/shared/db/schema.billing";
+import { CHAIN_ID } from "@/shared/web3/chain";
 
 describe("Payment Numeric Flow Validation", () => {
   let testUserId: string;
@@ -68,21 +69,21 @@ describe("Payment Numeric Flow Validation", () => {
   });
 
   describe("$1 Payment Flow", () => {
-    it("correctly converts 100 cents → 1,000,000 raw USDC → 1,000 credits", async () => {
+    it("correctly converts 100 cents → 1,000,000 raw USDC → 10,000,000 credits", async () => {
       // NOTE: DB uses BIGINT for amount columns; tests normalize via asNumber().
       // Safe because max values < 2^53 (JavaScript safe integer limit).
       const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       const amountUsdCents = 100; // $1.00
       const expectedAmountRaw = 1_000_000n; // 100 cents * 10,000
-      const expectedCredits = 1_000; // 100 cents * 10
+      const expectedCredits = 10_000_000; // $1 * 10,000,000 credits/USD (protocol constant)
 
       // Configure verifier to return VERIFIED with correct values
       verifier.setVerified({
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: expectedAmountRaw,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Step 1: Create intent
@@ -131,7 +132,7 @@ describe("Payment Numeric Flow Validation", () => {
 
       // Step 6: Verify ledger entry has correct credits
       const ledgerEntry = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0x1dollar"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0x1dollar`),
       });
 
       if (!ledgerEntry) {
@@ -156,30 +157,30 @@ describe("Payment Numeric Flow Validation", () => {
 
       // Step 8: Assert exact conversion formula
       expect(BigInt(amountUsdCents) * 10_000n).toBe(expectedAmountRaw);
-      expect(amountUsdCents * CREDITS_PER_CENT).toBe(expectedCredits);
+      expect(Number(usdCentsToCredits(amountUsdCents))).toBe(expectedCredits);
 
       // Step 9: Assert UI display formula matches backend constant
       // UI button text: "formatCredits(amountCents * CREDITS_PER_CENT) credits"
       // This ensures UI can never drift from backend conversion rate
-      const uiDisplayCredits = amountUsdCents * CREDITS_PER_CENT;
+      const uiDisplayCredits = Number(usdCentsToCredits(amountUsdCents));
       expect(uiDisplayCredits).toBe(expectedCredits);
     });
   });
 
   describe("$50 Payment Flow", () => {
-    it("correctly converts 5000 cents → 50,000,000 raw USDC → 50,000 credits", async () => {
+    it("correctly converts 5000 cents → 50,000,000 raw USDC → 500,000,000 credits", async () => {
       const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       const amountUsdCents = 5000; // $50.00
       const expectedAmountRaw = 50_000_000n; // 5000 cents * 10,000
-      const expectedCredits = 50_000; // 5000 cents * 10
+      const expectedCredits = 500_000_000; // $50 * 10,000,000 credits/USD (protocol constant)
 
       // Configure verifier to return VERIFIED with correct values
       verifier.setVerified({
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: expectedAmountRaw,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Step 1: Create intent
@@ -228,7 +229,7 @@ describe("Payment Numeric Flow Validation", () => {
 
       // Step 6: Verify ledger entry has correct credits
       const ledgerEntry = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0x50dollars"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0x50dollars`),
       });
 
       if (!ledgerEntry) {
@@ -253,12 +254,12 @@ describe("Payment Numeric Flow Validation", () => {
 
       // Step 8: Assert exact conversion formula
       expect(BigInt(amountUsdCents) * 10_000n).toBe(expectedAmountRaw);
-      expect(amountUsdCents * CREDITS_PER_CENT).toBe(expectedCredits);
+      expect(Number(usdCentsToCredits(amountUsdCents))).toBe(expectedCredits);
 
       // Step 9: Assert UI display formula matches backend constant
       // UI button text: "formatCredits(amountCents * CREDITS_PER_CENT) credits"
       // This ensures UI can never drift from backend conversion rate
-      const uiDisplayCredits = amountUsdCents * CREDITS_PER_CENT;
+      const uiDisplayCredits = Number(usdCentsToCredits(amountUsdCents));
       expect(uiDisplayCredits).toBe(expectedCredits);
     });
   });

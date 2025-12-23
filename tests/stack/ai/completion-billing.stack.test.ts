@@ -4,11 +4,11 @@
 /**
  * Module: `@tests/stack/ai/completion-billing.stack`
  * Purpose: Verify end-to-end billing flow for AI completion calls in the development stack.
- * Scope: Integration test hitting /api/v1/ai/completion that asserts llm_usage row creation, credit_ledger debit, and balance_credits update. Does not test production deployment.
- * Invariants: Successful LLM call creates llm_usage row; credit_ledger records debit; balance is atomically updated.
+ * Scope: Integration test hitting /api/v1/ai/completion that asserts charge_receipt row creation, credit_ledger debit, and balance_credits update. Does not test production deployment.
+ * Invariants: Successful LLM call creates charge_receipt row; credit_ledger records debit; balance is atomically updated.
  * Side-effects: IO (database writes via container, LiteLLM calls)
  * Notes: Requires dev stack running (pnpm dev:stack:db:setup). Uses real DB and LiteLLM. Mocks session.
- * Links: docs/BILLING_EVOLUTION.md
+ * Links: docs/ACTIVITY_METRICS.md
  * @public
  */
 
@@ -29,14 +29,14 @@ import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import type { SessionUser } from "@/shared/auth/session";
 import {
   billingAccounts,
+  chargeReceipts,
   creditLedger,
-  llmUsage,
   users,
   virtualKeys,
 } from "@/shared/db/schema";
 
 describe("Completion Billing Stack Test", () => {
-  it("should create llm_usage row, credit_ledger debit, and update balance on successful completion", async () => {
+  it("should create charge_receipt row, credit_ledger debit, and update balance on successful completion", async () => {
     // Arrange
     const mockSessionUser: SessionUser = {
       id: "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e", // Valid UUID v4
@@ -56,18 +56,18 @@ describe("Completion Billing Stack Test", () => {
     });
 
     // Seed billing account with sufficient credits
+    // Protocol scale: 10M credits = $1 USD. Seed with $10 worth for safety margin.
     const billingAccountId = "billing-stack-test-account";
-    const initialBalance = 10000n; // 10,000 credits
+    const initialBalance = 100_000_000n; // 100M credits = $10 (protocol scale)
     await db.insert(billingAccounts).values({
       id: billingAccountId,
       ownerUserId: mockSessionUser.id,
       balanceCredits: initialBalance,
     });
 
-    // Seed virtual key
+    // Seed virtual key (scope/FK handle only)
     await db.insert(virtualKeys).values({
       billingAccountId,
-      litellmVirtualKey: "stack-test-billing-vk",
       isDefault: true,
     });
 
@@ -99,15 +99,16 @@ describe("Completion Billing Stack Test", () => {
     expect(validated.message.content).toBeTruthy();
     expect(validated.message.timestamp).toBeTruthy();
 
-    // Assert - llm_usage row created
-    const usageRows = await db
+    // Assert - charge_receipt row created (per ACTIVITY_METRICS.md)
+    // NOTE: No model/tokens/billingStatus - LiteLLM is canonical for telemetry
+    const receiptRows = await db
       .select()
-      .from(llmUsage)
-      .where(eq(llmUsage.billingAccountId, billingAccountId));
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.billingAccountId, billingAccountId));
 
-    expect(usageRows.length).toBeGreaterThan(0);
-    const [usageRow] = usageRows;
-    if (!usageRow) throw new Error("No usage row");
+    expect(receiptRows.length).toBeGreaterThan(0);
+    const [receipt] = receiptRows;
+    if (!receipt) throw new Error("No charge receipt row");
 
     // Get the virtual key to verify
     const vkRows = await db
@@ -119,28 +120,11 @@ describe("Completion Billing Stack Test", () => {
     if (!vk) throw new Error("No virtual key");
     const virtualKeyId = vk.id;
 
-    expect(usageRow.virtualKeyId).toBe(virtualKeyId);
-    expect(usageRow.model).toBeTruthy();
-    expect(usageRow.promptTokens).toBeGreaterThan(0);
-    expect(usageRow.completionTokens).toBeGreaterThan(0);
-    expect(usageRow.billingStatus).toBe("billed");
-    expect(usageRow.providerCostCredits).not.toBeNull();
-    expect(usageRow.userPriceCredits).not.toBeNull();
-
-    // Type guard assertions for non-null cost fields
-    if (
-      usageRow.providerCostCredits === null ||
-      usageRow.userPriceCredits === null
-    ) {
-      throw new Error("Cost fields must not be null when billingStatus=billed");
-    }
-
-    expect(usageRow.providerCostCredits).toBeGreaterThan(0n);
-    expect(usageRow.userPriceCredits).toBeGreaterThan(0n);
-    // Invariant: user price >= provider cost
-    expect(usageRow.userPriceCredits).toBeGreaterThanOrEqual(
-      usageRow.providerCostCredits
-    );
+    // Minimal charge_receipt fields per ACTIVITY_METRICS.md
+    expect(receipt.virtualKeyId).toBe(virtualKeyId);
+    expect(receipt.runId).toBeTruthy();
+    expect(receipt.provenance).toBe("stream"); // Per UNIFIED_GRAPH_EXECUTOR: all execution flows through streaming
+    expect(receipt.chargedCredits).toBeGreaterThanOrEqual(0n);
 
     // Assert - credit_ledger debit created
     const ledgerRows = await db
@@ -149,7 +133,7 @@ describe("Completion Billing Stack Test", () => {
       .where(
         and(
           eq(creditLedger.billingAccountId, billingAccountId),
-          eq(creditLedger.reason, "llm_usage")
+          eq(creditLedger.reason, "charge_receipt")
         )
       );
 
@@ -157,8 +141,11 @@ describe("Completion Billing Stack Test", () => {
     const [ledgerRow] = ledgerRows;
     if (!ledgerRow) throw new Error("No ledger row");
     expect(ledgerRow.virtualKeyId).toBe(virtualKeyId);
-    expect(ledgerRow.amount).toBeLessThan(0n); // Debit is negative
-    expect(ledgerRow.amount).toBe(-usageRow.userPriceCredits); // Matches usage
+    expect(ledgerRow.amount).toBeLessThanOrEqual(0n); // Debit is negative or zero (free models)
+    // Charge receipt's chargedCredits should match ledger debit magnitude
+    expect(BigInt(Math.abs(Number(ledgerRow.amount)))).toBe(
+      receipt.chargedCredits
+    );
 
     // Assert - balance_credits updated
     const updatedAccount = await db
@@ -171,14 +158,14 @@ describe("Completion Billing Stack Test", () => {
     if (!account) throw new Error("No account");
     const finalBalance = account.balanceCredits;
     expect(finalBalance).toBe(initialBalance + ledgerRow.amount); // initial - cost
-    expect(finalBalance).toBeLessThan(initialBalance); // Balance decreased
-    expect(finalBalance).toBeGreaterThan(0n); // Still positive
+    expect(finalBalance).toBeLessThanOrEqual(initialBalance); // Balance decreased or unchanged (free model)
+    expect(finalBalance).toBeGreaterThanOrEqual(0n); // Non-negative
 
     // Assert - balanceAfter matches final balance
     expect(ledgerRow.balanceAfter).toBe(finalBalance);
   });
 
-  it("should fail with insufficient credits and not create records", async () => {
+  it("should fail with insufficient credits (preflight gating) and not create records", async () => {
     // Arrange
     const mockSessionUser: SessionUser = {
       id: "c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f", // Valid UUID v4
@@ -204,10 +191,9 @@ describe("Completion Billing Stack Test", () => {
       balanceCredits: 0n, // No credits
     });
 
-    // Seed virtual key
+    // Seed virtual key (scope/FK handle only)
     await db.insert(virtualKeys).values({
       billingAccountId,
-      litellmVirtualKey: "stack-test-insufficient-vk",
       isDefault: true,
     });
 
@@ -227,11 +213,11 @@ describe("Completion Billing Stack Test", () => {
     // Assert - Request failed
     expect(response.status).toBe(402); // Payment Required or similar
 
-    // Assert - NO llm_usage row created (transaction rolled back)
+    // Assert - NO charge_receipt row created (transaction rolled back)
     const usageRows = await db
       .select()
-      .from(llmUsage)
-      .where(eq(llmUsage.billingAccountId, billingAccountId));
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.billingAccountId, billingAccountId));
 
     expect(usageRows.length).toBe(0);
 

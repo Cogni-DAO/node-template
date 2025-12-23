@@ -12,7 +12,7 @@
  * @public
  */
 
-export { CREDITS_PER_CENT } from "@/core";
+export { creditsToUsd, usdCentsToCredits } from "@/core";
 export type { PaymentFlowPhase, PaymentFlowState } from "@/types/payments";
 export type { PaymentsFeatureError } from "./errors";
 export {

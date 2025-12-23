@@ -20,6 +20,7 @@ import { DeepSeekIcon } from "../icons/providers/DeepSeekIcon";
 import { GeminiIcon } from "../icons/providers/GeminiIcon";
 import { KimiIcon } from "../icons/providers/KimiIcon";
 import { MinimaxIcon } from "../icons/providers/MinimaxIcon";
+import { MistralIcon } from "../icons/providers/MistralIcon";
 import { NovaIcon } from "../icons/providers/NovaIcon";
 import { OpenAIIcon } from "../icons/providers/OpenAIIcon";
 import { QwenIcon } from "../icons/providers/QwenIcon";
@@ -38,6 +39,7 @@ const PROVIDER_ICONS = {
   google: GeminiIcon,
   kimi: KimiIcon,
   minimax: MinimaxIcon,
+  mistral: MistralIcon,
   openai: OpenAIIcon,
   qwen: QwenIcon,
   xai: XAIIcon,

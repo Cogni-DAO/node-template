@@ -18,6 +18,7 @@ import {
   createMixedRoleConversation,
   createMockAccountServiceWithDefaults,
   createUserMessage,
+  FakeAiTelemetryAdapter,
   FakeClock,
   FakeLlmService,
   TEST_MODEL_ID,
@@ -31,6 +32,9 @@ import { InsufficientCreditsPortError } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeNoopLogger } from "@/shared/observability";
 
+// Helper to create fake telemetry for tests
+const createFakeAiTelemetry = () => new FakeAiTelemetryAdapter();
+
 // Mock model catalog
 vi.mock("@/shared/ai/model-catalog.server", () => ({
   isModelFree: vi.fn().mockImplementation(async (modelId: string) => {
@@ -42,7 +46,6 @@ vi.mock("@/shared/ai/model-catalog.server", () => ({
 // Mock serverEnv
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    CREDITS_PER_USDC: 1000, // 1 credit = $0.001
     USER_PRICE_MARKUP_FACTOR: 1.5,
   }),
 }));
@@ -52,7 +55,8 @@ describe("features/ai/services/completion", () => {
   const createTestCaller = (): LlmCaller => ({
     billingAccountId: "billing-test-user",
     virtualKeyId: "virtual-key-123",
-    litellmVirtualKey: "vk-test-key",
+    requestId: "req-test",
+    traceId: "trace-test",
   });
 
   describe("execute", () => {
@@ -65,6 +69,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -78,7 +83,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert
@@ -87,7 +94,8 @@ describe("features/ai/services/completion", () => {
         content: "AI response",
         timestamp: "2025-01-01T12:00:00.000Z",
       });
-      expect(result.requestId).toBeDefined();
+      // P0 invariant: returned requestId MUST equal ctx.reqId (stable per request entry)
+      expect(result.requestId).toBe(testCtx.reqId);
       expect(llmService.wasCalled()).toBe(true);
 
       // Critical invariant: exactly one system message in LLM payload
@@ -99,7 +107,7 @@ describe("features/ai/services/completion", () => {
       expect(payload?.messages[0]?.role).toBe("system");
       expect(payload?.messages[0]?.content).toContain("You are Cogni");
 
-      expect(accountService.recordLlmUsage).toHaveBeenCalled();
+      // Note: Billing now occurs via RunEventRelay → commitUsageFact() (per GRAPH_EXECUTION.md)
     });
 
     it("should strip malicious client system messages and inject baseline only", async () => {
@@ -111,6 +119,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -124,7 +133,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert - Critical invariant: exactly one system message with baseline content
@@ -150,6 +161,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -164,7 +176,9 @@ describe("features/ai/services/completion", () => {
           accountService,
           clock,
           caller,
-          testCtx
+          testCtx,
+          createFakeAiTelemetry(),
+          undefined
         )
       ).rejects.toThrow(ChatValidationError);
       expect(llmService.wasCalled()).toBe(false); // Should not call LLM
@@ -184,6 +198,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -197,7 +212,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert - should trim to fit MAX_MESSAGE_CHARS (4000)
@@ -230,6 +247,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -243,7 +261,9 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert
@@ -260,6 +280,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -273,11 +294,94 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert
       expect(result.message.timestamp).toBe(fixedTime);
+    });
+
+    it("should use ctx.reqId for telemetry requestId (P0 stability)", async () => {
+      // Arrange
+      const messages = [createUserMessage("Hello")];
+      const llmService = new FakeLlmService({ responseContent: "Hi there" });
+      const clock = new FakeClock();
+      const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "stable-request-id-12345",
+        traceId: "00000000000000000000000000000000",
+        routeId: "test.route",
+        clock,
+      };
+      const telemetry = createFakeAiTelemetry();
+
+      // Act
+      const accountService = createMockAccountServiceWithDefaults();
+      const result = await execute(
+        messages,
+        TEST_MODEL_ID,
+        llmService,
+        accountService,
+        clock,
+        caller,
+        testCtx,
+        telemetry,
+        undefined
+      );
+
+      // Assert - P0 invariants
+      // 1. Returned requestId equals ctx.reqId
+      expect(result.requestId).toBe(testCtx.reqId);
+
+      // 2. Telemetry records ctx.reqId
+      const lastInvocation = telemetry.getLast();
+      expect(lastInvocation).toBeDefined();
+      expect(lastInvocation?.requestId).toBe(testCtx.reqId);
+
+      // Note: Billing now occurs via RunEventRelay → commitUsageFact() (per GRAPH_EXECUTION.md)
+    });
+
+    it("should use adapter promptHash when available (canonical hash)", async () => {
+      // Arrange
+      const messages = [createUserMessage("Hello")];
+      const adapterPromptHash =
+        "adapter-canonical-hash-64chars-padded-to-64-chars-1234567890abc";
+      const llmService = new FakeLlmService({
+        responseContent: "Hi there",
+        promptHash: adapterPromptHash, // Adapter returns its canonical hash
+      });
+      const clock = new FakeClock();
+      const caller = createTestCaller();
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
+        routeId: "test.route",
+        clock,
+      };
+      const telemetry = createFakeAiTelemetry();
+
+      // Act
+      const accountService = createMockAccountServiceWithDefaults();
+      await execute(
+        messages,
+        TEST_MODEL_ID,
+        llmService,
+        accountService,
+        clock,
+        caller,
+        testCtx,
+        telemetry,
+        undefined
+      );
+
+      // Assert - Telemetry should use adapter's hash (source of truth)
+      const lastInvocation = telemetry.getLast();
+      expect(lastInvocation).toBeDefined();
+      expect(lastInvocation?.promptHash).toBe(adapterPromptHash);
     });
 
     it("should propagate LLM service errors", async () => {
@@ -292,6 +396,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -306,7 +411,9 @@ describe("features/ai/services/completion", () => {
           accountService,
           clock,
           caller,
-          testCtx
+          testCtx,
+          createFakeAiTelemetry(),
+          undefined
         )
       ).rejects.toThrow("LLM service unavailable");
     });
@@ -322,6 +429,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -338,22 +446,16 @@ describe("features/ai/services/completion", () => {
         accountService,
         clock,
         caller,
-        testCtx
+        testCtx,
+        createFakeAiTelemetry(),
+        undefined
       );
 
       // Assert
       expect(result.message.content).toBe("Free response");
       expect(llmService.wasCalled()).toBe(true);
 
-      // Verify usage recorded with 0 cost
-      expect(accountService.recordLlmUsage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          billingStatus: "billed",
-          providerCostUsd: 0,
-          providerCostCredits: 0n,
-          userPriceCredits: 0n,
-        })
-      );
+      // Note: Billing (including free model receipts) now occurs via RunEventRelay
     });
 
     it("should block paid model execution with zero balance", async () => {
@@ -365,6 +467,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
         routeId: "test.route",
         clock,
       };
@@ -382,7 +485,9 @@ describe("features/ai/services/completion", () => {
           accountService,
           clock,
           caller,
-          testCtx
+          testCtx,
+          createFakeAiTelemetry(),
+          undefined
         )
       ).rejects.toThrow(InsufficientCreditsPortError);
 

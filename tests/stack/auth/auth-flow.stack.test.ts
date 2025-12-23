@@ -53,17 +53,17 @@ describe("Auth Flow Stack Test", () => {
     });
 
     // Seed billing account with credits
+    // Protocol scale: 10M credits = $1 USD. Seed with $10 worth for safety margin.
     const billingAccountId = "stack-test-billing-id";
     await db.insert(billingAccounts).values({
       id: billingAccountId,
       ownerUserId: mockSessionUser.id,
-      balanceCredits: 1000n, // Sufficient credits
+      balanceCredits: 100_000_000n, // 100M credits = $10 (protocol scale)
     });
 
-    // Seed virtual key
+    // Seed virtual key (scope/FK handle only)
     await db.insert(virtualKeys).values({
       billingAccountId,
-      litellmVirtualKey: "stack-test-vk",
       isDefault: true,
     });
 

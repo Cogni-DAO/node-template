@@ -13,7 +13,11 @@
  */
 
 import { TEST_MODEL_ID } from "@tests/_fakes";
-import { setupCompletionFacadeTest } from "@tests/_fixtures/ai/completion-facade-setup";
+import {
+  createContainerMock,
+  createMockAiAdapterDeps,
+  setupCompletionFacadeTest,
+} from "@tests/_fixtures/ai/completion-facade-setup";
 import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
@@ -24,7 +28,6 @@ import { makeNoopLogger } from "@/shared/observability";
 // Mock serverEnv (following pattern from completion.test.ts)
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    CREDITS_PER_USDC: 1000,
     USER_PRICE_MARKUP_FACTOR: 1.5,
   }),
 }));
@@ -32,13 +35,11 @@ vi.mock("@/shared/env", () => ({
 describe("completion facade contract", () => {
   it("should return exact shape matching aiCompletionOperation.output", async () => {
     // Arrange - Use reusable fixture
-    const { llmService, accountService, clock, mockBillingAccount } =
-      setupCompletionFacadeTest();
+    const { mockBillingAccount, clock } = setupCompletionFacadeTest();
+    const mockDeps = createMockAiAdapterDeps();
 
-    // Mock bootstrap container
-    vi.doMock("@/bootstrap/container", () => ({
-      resolveAiDeps: () => ({ llmService, accountService, clock }),
-    }));
+    // Mock bootstrap container with proper AiAdapterDeps shape
+    vi.doMock("@/bootstrap/container", () => createContainerMock(mockDeps));
 
     // Mock auth mapping
     vi.doMock("@/lib/auth/mapping", () => ({
@@ -53,6 +54,7 @@ describe("completion facade contract", () => {
     const testCtx: RequestContext = {
       log: makeNoopLogger(),
       reqId: "test-req-123",
+      traceId: "00000000000000000000000000000000",
       routeId: "test.route",
       clock,
     };
@@ -79,12 +81,11 @@ describe("completion facade contract", () => {
 
   it("should provide type safety via contract inference", async () => {
     // Arrange - Use reusable fixture
-    const { llmService, accountService, clock, mockBillingAccount } =
-      setupCompletionFacadeTest();
+    const { mockBillingAccount, clock } = setupCompletionFacadeTest();
+    const mockDeps = createMockAiAdapterDeps();
 
-    vi.doMock("@/bootstrap/container", () => ({
-      resolveAiDeps: () => ({ llmService, accountService, clock }),
-    }));
+    // Mock bootstrap container with proper AiAdapterDeps shape
+    vi.doMock("@/bootstrap/container", () => createContainerMock(mockDeps));
 
     vi.doMock("@/lib/auth/mapping", () => ({
       getOrCreateBillingAccountForUser: vi
@@ -97,6 +98,7 @@ describe("completion facade contract", () => {
     const testCtx: RequestContext = {
       log: makeNoopLogger(),
       reqId: "test-req-456",
+      traceId: "00000000000000000000000000000000",
       routeId: "test.route",
       clock,
     };

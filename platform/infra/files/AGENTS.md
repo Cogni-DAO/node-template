@@ -51,7 +51,7 @@ Shared templates and utility scripts for infrastructure deployments across all p
 Minimal local commands:
 
 ```bash
-scripts/wait-for-health.sh https://example.com/health
+scripts/wait-for-health.sh https://example.com/readyz
 scripts/ensure-docker-volumes.sh
 ```
 

@@ -5,9 +5,9 @@
  * Module: `@adapters/server/ai/litellm`
  * Purpose: Unit tests for LiteLLM adapter with mocked HTTP calls and error handling.
  * Scope: Tests adapter logic, parameter handling, response parsing, missing cost handling. Does NOT test real LiteLLM service.
- * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; warns on missing cost
+ * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; model param required (no env fallback)
  * Side-effects: none (mocked fetch)
- * Notes: Tests defaults, error handling, timeout enforcement, response mapping, console.warn spy for cost warnings
+ * Notes: Tests error handling, timeout enforcement, response mapping, missing model validation. No DEFAULT_MODEL - model must be explicitly provided.
  * Links: src/adapters/server/ai/litellm.adapter.ts, LlmService port
  * @public
  */
@@ -17,11 +17,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LiteLlmAdapter } from "@/adapters/server/ai/litellm.adapter";
 import type { LlmCaller, LlmService } from "@/ports";
 
-// Mock the serverEnv module
+// Mock the serverEnv module - LITELLM_BASE_URL and LITELLM_MASTER_KEY needed
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    DEFAULT_MODEL: "gpt-3.5-turbo",
     LITELLM_BASE_URL: "https://api.test-litellm.com",
+    LITELLM_MASTER_KEY: "test-master-key-secret",
   }),
 }));
 
@@ -30,7 +30,8 @@ describe("LiteLlmAdapter", () => {
   const testCaller: LlmCaller = {
     billingAccountId: "test-user-123",
     virtualKeyId: "vk-test-1",
-    litellmVirtualKey: "test-api-key-456",
+    requestId: "req-test-abc",
+    traceId: "trace-test-xyz",
   };
 
   // Mock fetch globally
@@ -44,6 +45,7 @@ describe("LiteLlmAdapter", () => {
 
   describe("completion method", () => {
     const basicParams = {
+      model: "gpt-3.5-turbo", // model is required (no env fallback)
       messages: [{ role: "user" as const, content: "Hello world" }],
       caller: testCaller,
     };
@@ -67,7 +69,7 @@ describe("LiteLlmAdapter", () => {
       response_cost: 0.0002,
     };
 
-    it("sends correct request to LiteLLM API", async () => {
+    it("sends correct request to LiteLLM API with master key auth", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         headers: new Headers(),
@@ -82,14 +84,19 @@ describe("LiteLlmAdapter", () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: "Bearer test-api-key-456",
+            Authorization: "Bearer test-master-key-secret", // Uses master key, not per-user virtual key
           },
           body: JSON.stringify({
-            model: "gpt-3.5-turbo", // default from env
+            model: "gpt-3.5-turbo", // explicitly provided (required)
             messages: [{ role: "user", content: "Hello world" }],
             temperature: 0.7, // default
             max_tokens: 2048, // default
-            user: "test-user-123",
+            user: "test-user-123", // billingAccountId for cost attribution
+            metadata: {
+              cogni_billing_account_id: "test-user-123",
+              request_id: "req-test-abc",
+              trace_id: "trace-test-xyz",
+            },
           }),
           signal: expect.any(AbortSignal),
         }
@@ -121,6 +128,11 @@ describe("LiteLlmAdapter", () => {
         temperature: 0.2,
         max_tokens: 1024,
         user: "test-user-123",
+        metadata: {
+          cogni_billing_account_id: "test-user-123",
+          request_id: "req-test-abc",
+          trace_id: "trace-test-xyz",
+        },
       });
     });
 
@@ -149,6 +161,11 @@ describe("LiteLlmAdapter", () => {
           totalTokens: 18,
         },
         providerCostUsd: 0.0002,
+        litellmCallId: "chatcmpl-test-123", // From response.id, used for joining with /spend/logs
+        // New fields per AI_SETUP_SPEC.md
+        promptHash: expect.any(String), // SHA-256 hash of canonical payload
+        resolvedProvider: "openai", // Inferred from "gpt-" prefix in model name
+        resolvedModel: "gpt-3.5-turbo", // From response (defaults to request model)
       });
     });
 
@@ -222,7 +239,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: LiteLLM API error: 401 Unauthorized"
+        "LiteLLM API error: 401 Unauthorized"
       );
     });
 
@@ -245,7 +262,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM"
+        "Invalid response from LiteLLM"
       );
     });
 
@@ -263,7 +280,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM"
+        "Invalid response from LiteLLM"
       );
     });
 
@@ -271,7 +288,7 @@ describe("LiteLlmAdapter", () => {
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Network error"
+        "LiteLLM network error: Network error"
       );
     });
 
@@ -281,6 +298,20 @@ describe("LiteLlmAdapter", () => {
       await expect(adapter.completion(basicParams)).rejects.toThrow(
         "LiteLLM completion failed: Unknown error"
       );
+    });
+
+    it("throws error when model parameter is missing", async () => {
+      const paramsWithoutModel = {
+        messages: [{ role: "user" as const, content: "Hello" }],
+        caller: testCaller,
+      };
+
+      await expect(adapter.completion(paramsWithoutModel)).rejects.toThrow(
+        "LiteLLM completion requires model parameter"
+      );
+
+      // Verify fetch was never called
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it("handles different finish reasons", async () => {
@@ -356,6 +387,40 @@ describe("LiteLlmAdapter", () => {
     });
   });
 
+  describe("AI_SETUP_SPEC.md: Correlation ID propagation", () => {
+    it("includes request_id and trace_id in LiteLLM metadata", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers(),
+        json: async () => ({
+          id: "test",
+          choices: [{ message: { content: "test" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }),
+      });
+
+      await adapter.completion({
+        model: "test-model",
+        messages: [{ role: "user", content: "test" }],
+        caller: {
+          billingAccountId: "acc-123",
+          virtualKeyId: "vk-456",
+          requestId: "req-correlation-test",
+          traceId: "trace-correlation-test",
+        },
+      });
+
+      const requestBody = JSON.parse(
+        mockFetch.mock.calls[0]?.[1]?.body as string
+      );
+      expect(requestBody.metadata).toEqual({
+        cogni_billing_account_id: "acc-123",
+        request_id: "req-correlation-test",
+        trace_id: "trace-correlation-test",
+      });
+    });
+  });
+
   describe("LlmService interface compliance", () => {
     it("implements LlmService interface correctly", () => {
       const service: LlmService = adapter;
@@ -374,6 +439,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       const result = adapter.completion({
+        model: "test-model", // model is required
         messages: [{ role: "user", content: "test" }],
         caller: testCaller,
       });

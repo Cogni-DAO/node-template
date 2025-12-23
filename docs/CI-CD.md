@@ -4,6 +4,35 @@
 
 Automated staging→release→main workflow with fork-safe CI/CD and E2E-triggered promotions.
 
+## Critical TODOs
+
+**P0 - Production Reliability**:
+
+- [ ] **Post-deploy verification and rollback**: Add automated smoke tests to `deploy-production.yml` after deploy completes; on failure, automatically redeploy last known-good `prod-<sha>` and mark bad release as blocked. Current state: green pipeline means "deploy finished", not "prod is healthy".
+- [ ] **Image scanning and signing**: Integrate container scanning into `build-prod.yml` (fail on high/critical CVEs) and sign images (cosign or equivalent); `deploy-production.yml` must refuse unsigned/unverified images.
+
+**P1 - Optimization and Maintainability**:
+
+- [ ] **Edge routing CI validation**: Add CI job that starts full stack (including SourceCred) and validates edge Caddyfile routes via smoke tests: `/health`, `/api/v1/public/*`, `/sourcecred/`. Prevents edge config drift from breaking local/CI.
+- [ ] **Config as code validation**: Enforce env schema validation in CI (type-check + required keys), block deploy if invalid, surface staging/prod config diffs during release promotion.
+- [ ] **Refactor `deploy.sh`**: Split 600+ line monolith into composable modules (edge, runtime, sourcecred, cleanup functions).
+- [ ] **Complete migrator fingerprinting**:
+  - [x] `compute_migrator_fingerprint.sh`: Generates stable 12-char content hash
+  - [x] `ci.yaml` (stack-test): Pull by fingerprint, build only if missing
+  - [x] `build-prod.yml`: Compute fingerprint, dual-tag and push migrator
+  - [ ] `staging-preview.yml`: Add fingerprint computation and dual tagging
+  - [ ] `deploy-production.yml`: Compute fingerprint, pass to deploy.sh
+  - [ ] `deploy.sh`: Pull `migrate-${FINGERPRINT}` instead of coupled tag
+  - [ ] Remove legacy coupled `-migrate` tags after all envs use fingerprints
+  - [ ] `build.sh`/`push.sh`: Optionally skip build/push if fingerprint exists remotely
+
+**Non-goals** (defer until needed):
+
+- Per-PR ephemeral environments for every feature branch (not mission-critical at current scale)
+- Full blue/green or traffic-split canaries (staging+release gating sufficient for now)
+
+---
+
 ## Branch Model
 
 - **Feature branches** (`feat/`, `fix/`, `chore/`, etc.) → `staging` (via PR)
@@ -39,9 +68,9 @@ push to staging → staging-preview.yml
 **Jobs:** `build → test-image → push → deploy → e2e → promote`
 
 - Builds Docker image
-- Tests container health (startup + health endpoint with hardcoded test env)
+- Tests liveness (/livez gate with minimal env, pre-push validation)
 - Pushes validated image to GHCR
-- Deploys to preview environment
+- Deploys to preview environment (readiness hard-gate on /readyz)
 - Runs full Playwright E2E tests
 - **If E2E passes:** auto-creates release branch + PR to main
 
@@ -75,6 +104,39 @@ push to main → build-prod.yml (build → test → push) → deploy-production.
 - **Enforced:** Workflow prevents bypass of staging gate
 - **Rollback-ready:** Any prod image can be redeployed
 - **History preservation:** Feature branches auto-archived as tags after merge
+
+## TypeScript Package Build Strategy
+
+**Rule**: If a step imports `@cogni/*` packages, run `pnpm packages:build` first.
+
+**Applies to**:
+
+- CI jobs running typecheck/tests
+- Dockerfile before `next build`
+
+**Canonical command**: `pnpm packages:build` runs tsup (JS), tsc -b (declarations), and validation atomically. Same command in local dev, CI, and Docker.
+
+**Current**: Each context builds independently (~1-2s overhead). Future: Turborepo remote caching when scale justifies complexity.
+
+## Image Tagging Strategy
+
+**App images**: Commit-based
+
+- `prod-${GITHUB_SHA}` or `preview-${GITHUB_SHA}`
+
+**Migrator images**: Dual-tagged for backward compatibility during transition
+
+- `prod-${GITHUB_SHA}-migrate` (deploy consumption, legacy)
+- `migrate-${FINGERPRINT}` (content-addressed, CI caching - partial implementation)
+
+**SourceCred** (manual image release, auto-deployed via deploy.sh):
+
+- Immutable image: `ghcr.io/cogni-dao/cogni-sourcecred-runner:sc0.11.2-node18-2025-12-07`
+- Image built from Dockerfile with `CMD ["yarn", "start"]` (invokes sourcecred via node_modules)
+- Deployed automatically during `deploy.sh` runs (not gated by app build workflow)
+- Image release process: `platform/infra/services/sourcecred/release.sh`
+- Version: v0 (prototype)
+- Long-term: Planned deprecation
 
 ## Branch Management
 

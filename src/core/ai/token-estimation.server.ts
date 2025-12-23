@@ -13,7 +13,8 @@
 
 import type { Message } from "@/core";
 
-export const DEFAULT_MAX_COMPLETION_TOKENS = 2048;
+// Conservative estimate for completion tokens (most responses are 200-400 tokens)
+export const DEFAULT_MAX_COMPLETION_TOKENS = 512;
 export const CHARS_PER_TOKEN_ESTIMATE = 4;
 export const ESTIMATED_USD_PER_1K_TOKENS = 0.002; // $0.002 per 1k tokens (blended rate)
 

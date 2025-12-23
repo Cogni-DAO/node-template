@@ -1,7 +1,8 @@
 // UI GOVERNANCE ONLY
 // All other linting (TS, imports, React, a11y, boundaries, etc.) handled by Biome
-// ESLint reduced to: UI token governance + Tailwind rules + no-inline-styles
+// ESLint reduced to: UI token governance + Tailwind rules + no-inline-styles + chain governance
 import tsParser from "@typescript-eslint/parser";
+import chainGovernance from "./eslint/chain-governance.config.mjs";
 import tests from "./eslint/tests.config.mjs";
 import uiGovernance from "./eslint/ui-governance.config.mjs";
 
@@ -26,6 +27,7 @@ export default [
       "**/.env*",
       "**/*.yaml",
       "**/*.yml",
+      "platform/infra/services/sourcecred/instance/**",
     ],
   },
   // Parser config for UI files ONLY - no rules, just enables TS/JSX parsing
@@ -43,5 +45,6 @@ export default [
     },
   },
   ...uiGovernance,
+  ...chainGovernance,
   ...tests,
 ];

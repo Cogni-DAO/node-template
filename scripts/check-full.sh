@@ -123,7 +123,7 @@ fi
 # Step 0: Verify .env.test exists
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "0/6" "Verifying .env.test configuration..."
+log_step "0/5" "Verifying .env.test configuration..."
 
 if [ ! -f .env.test ]; then
   log_error ".env.test not found. Create it from .env.test.example"
@@ -138,7 +138,7 @@ export CHECK_FULL_MODE=true
 # Step 1: Pre-flight checks
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "1/6" "Pre-flight checks..."
+log_step "1/5" "Pre-flight checks..."
 
 set +e  # Don't fail fast for port checks
 if ! check_port 55432; then
@@ -158,7 +158,7 @@ set -e  # Re-enable fail fast
 # Step 2: Start test stack
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "2/6" "Starting test stack..."
+log_step "2/5" "Starting test stack..."
 step_start=$(date +%s)
 
 if [ "$SKIP_BUILD" = true ]; then
@@ -175,7 +175,7 @@ log_success "$step_duration"
 # Step 3: Provision and migrate test database
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "3/6" "Provisioning test database..."
+log_step "3/5" "Provisioning test database..."
 step_start=$(date +%s)
 
 pnpm docker:test:stack:setup
@@ -184,10 +184,24 @@ step_duration=$(($(date +%s) - step_start))
 log_success "$step_duration"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 4: Run test suites (same order as CI)
+# Step 4: Build workspace packages (required for host-run tests)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "4/6" "Running test suites..."
+log_step "4/5" "Building workspace packages (JS + declarations)..."
+step_start=$(date +%s)
+
+# Canonical command: tsup (JS) + tsc -b (declarations) + validation
+# Docker build creates dist/ inside container; tests run on host and need host dist/
+pnpm packages:build
+
+step_duration=$(($(date +%s) - step_start))
+log_success "$step_duration"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 5: Run test suites (same order as CI)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+log_step "5/5" "Running test suites..."
 
 # Unit tests (fast, no infrastructure)
 echo ""

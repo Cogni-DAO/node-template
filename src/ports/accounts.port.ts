@@ -3,14 +3,20 @@
 
 /**
  * Module: `@ports/accounts`
- * Purpose: Billing account service port interface with discriminated union types for LLM billing and port-level errors.
- * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management with type-safe billing discrimination. Does not implement business logic.
- * Invariants: All operations atomic; billing accounts own virtual keys; ledger integrity preserved; billingStatus discriminates cost fields
+ * Purpose: Billing account service port interface with charge receipt recording and port-level errors.
+ * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management. Does not implement business logic.
+ * Invariants:
+ * - All operations atomic; billing accounts own virtual keys; ledger integrity preserved
+ * - charge receipts are idempotent by request_id
+ * - ChargeReceiptParams requires explicit chargeReason, sourceSystem, sourceReference (no defaults)
+ * - listChargeReceipts returns sourceSystem/sourceReference for generic linking (no litellmCallId)
  * Side-effects: none (interface definition only)
- * Notes: Uses BilledLlmUsageParams and NeedsReviewLlmUsageParams for type-safe recordLlmUsage; implemented by database adapters
- * Links: Implemented by DrizzleAccountService, used by completion feature and auth mapping
+ * Notes: recordChargeReceipt is non-blocking (never throws InsufficientCredits post-call per ACTIVITY_METRICS.md)
+ * Links: Implemented by DrizzleAccountService, used by completion feature and auth mapping, types/billing.ts (enums)
  * @public
  */
+
+import type { ChargeReason, SourceSystem } from "@/types/billing";
 
 /**
  * Port-level error thrown by adapters when billing account has insufficient credits
@@ -88,7 +94,6 @@ export interface BillingAccount {
   ownerUserId: string;
   balanceCredits: number;
   defaultVirtualKeyId: string;
-  litellmVirtualKey: string;
 }
 
 export interface CreditLedgerEntry {
@@ -104,35 +109,45 @@ export interface CreditLedgerEntry {
 }
 
 /**
- * LLM usage with cost data - billed to user account
+ * Provenance indicates how the charge receipt was generated.
+ * - 'response': Non-streaming completion response
+ * - 'stream': Streaming completion final result
  */
-export type BilledLlmUsageParams = {
-  billingStatus: "billed";
-  billingAccountId: string;
-  virtualKeyId: string;
-  requestId: string;
-  model: string;
-  promptTokens: number;
-  completionTokens: number;
-  providerCostUsd: number;
-  providerCostCredits: bigint;
-  userPriceCredits: bigint;
-  markupFactorApplied: number;
-  metadata?: Record<string, unknown>;
-};
+export type ChargeReceiptProvenance = "response" | "stream";
 
 /**
- * LLM usage without cost data - recorded but not billed
+ * Charge receipt params - minimal audit-focused fields per ACTIVITY_METRICS.md
+ * No model/tokens/usage JSONB - LiteLLM is canonical for telemetry
+ *
+ * Per GRAPH_EXECUTION.md:
+ * - runId: Canonical execution identity (groups multiple LLM calls)
+ * - attempt: Retry attempt number (P0: always 0)
+ * - sourceReference: Idempotency key = runId/attempt/usageUnitId
+ * - ingressRequestId: Optional delivery-layer correlation (P0: equals runId; P1: many per runId)
  */
-export type NeedsReviewLlmUsageParams = {
-  billingStatus: "needs_review";
+export type ChargeReceiptParams = {
   billingAccountId: string;
   virtualKeyId: string;
-  requestId: string;
-  model: string;
-  promptTokens: number;
-  completionTokens: number;
-  metadata?: Record<string, unknown>;
+  /** Canonical execution identity - groups all LLM calls in one graph execution */
+  runId: string;
+  /** Retry attempt number (P0: always 0; enables future retry semantics) */
+  attempt: number;
+  /** Ingress request correlation (optional, debug only). P0: equals runId; P1: many per runId (reconnect/resume) */
+  ingressRequestId?: string;
+  /** Credits debited from user balance */
+  chargedCredits: bigint;
+  /** Observational USD cost from LiteLLM (header or usage.cost) - null if unavailable */
+  responseCostUsd: number | null;
+  /** LiteLLM call ID for forensic correlation (x-litellm-call-id header) */
+  litellmCallId: string | null;
+  /** How this receipt was generated */
+  provenance: ChargeReceiptProvenance;
+  /** Economic/billing category for accounting and analytics */
+  chargeReason: ChargeReason;
+  /** External system that originated this charge */
+  sourceSystem: SourceSystem;
+  /** Idempotency key: runId/attempt/usageUnitId (unique per source_system) */
+  sourceReference: string;
 };
 
 export interface AccountService {
@@ -188,13 +203,15 @@ export interface AccountService {
   }): Promise<CreditLedgerEntry[]>;
 
   /**
-   * Records LLM usage with discriminated billing status.
-   * - billingStatus: "billed" → records usage + debits credits atomically (throws InsufficientCreditsPortError if insufficient)
-   * - billingStatus: "needs_review" → records usage only (no credit debit, no cost fields)
+   * Records a charge receipt for an LLM call.
+   * Atomic: writes charge_receipt + debits credit_ledger in transaction.
+   * Idempotent: request_id as PK prevents duplicate inserts.
+   *
+   * INVARIANT: This method must NEVER throw InsufficientCreditsPortError.
+   * Post-call billing is non-blocking per ACTIVITY_METRICS.md.
+   * If balance goes negative, log critical but complete the write.
    */
-  recordLlmUsage(
-    params: BilledLlmUsageParams | NeedsReviewLlmUsageParams
-  ): Promise<void>;
+  recordChargeReceipt(params: ChargeReceiptParams): Promise<void>;
 
   /**
    * Lookup a specific credit ledger entry by reference and reason for idempotency checks.
@@ -204,4 +221,27 @@ export interface AccountService {
     reason: string;
     reference: string;
   }): Promise<CreditLedgerEntry | null>;
+
+  /**
+   * List charge receipts for a billing account (for Activity dashboard spend join).
+   * Returns litellmCallId for joining with LiteLLM usage logs, plus sourceSystem for filtering.
+   */
+  listChargeReceipts(params: {
+    billingAccountId: string;
+    from: Date;
+    to: Date;
+    limit?: number;
+  }): Promise<
+    Array<{
+      /** LiteLLM call ID for Activity join (null if missing) */
+      litellmCallId: string | null;
+      /** Credits charged as decimal string */
+      chargedCredits: string;
+      /** User cost in USD (with markup) as decimal string */
+      responseCostUsd: string | null;
+      /** Source system for filtering joins */
+      sourceSystem: SourceSystem;
+      createdAt: Date;
+    }>
+  >;
 }

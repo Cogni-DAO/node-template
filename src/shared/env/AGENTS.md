@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-06
+- **Last reviewed:** 2025-12-10
 - **Status:** draft
 
 ## Purpose
@@ -42,6 +42,7 @@ Single source of truth for environment variables. Lazy validation with Zod preve
 
 - `server.ts`: serverEnv() (unified lazy function)
 - `client.ts`: clientEnv (typed object)
+- `invariants.ts`: assertEnvInvariants(), assertRuntimeSecrets(), RuntimeSecretError
 - `index.ts`: re-exports + getEnv, requireEnv
 
 **Files considered API:** server.ts, client.ts, index.ts
@@ -52,6 +53,7 @@ Single source of truth for environment variables. Lazy validation with Zod preve
 
 - `server.ts` → server-only vars via lazy serverEnv() function. Never import from client code.
 - `client.ts` → public, browser-safe vars (NEXT*PUBLIC*\* only).
+- `invariants.ts` → cross-field validation and runtime secret checks. assertEnvInvariants() runs after Zod parse. assertRuntimeSecrets() validates secrets at adapter boundaries (not during build).
 - `index.ts` → re-exports and tiny helpers.
 
 ## Vars by layer
@@ -63,6 +65,7 @@ Unified serverEnv() provides all vars:
 - NODE_ENV (development|test|production, default development)
 - APP_ENV (test|production)
 - SERVICE_NAME (default: "app") - for observability service label
+- DEPLOY_ENVIRONMENT - deployment env label for metrics and analytics filtering
 - POSTGRES_USER
 - POSTGRES_PASSWORD
 - POSTGRES_DB
@@ -70,7 +73,6 @@ Unified serverEnv() provides all vars:
 - DB_PORT (default: 5432)
 - LITELLM_BASE_URL (url, auto-detects: localhost:4000 for dev, litellm:4000 for production)
 - LITELLM_MASTER_KEY
-- DEFAULT_MODEL (default: gemini-2.5-flash)
 - PORT (default 3000)
 - PINO_LOG_LEVEL (trace|debug|info|warn|error, default info)
 
@@ -84,6 +86,11 @@ Optional:
 - OPENROUTER_API_KEY (for LiteLLM providers)
 - AUTH_SECRET (≥32 chars) - TODO: when session management added
 - METRICS*TOKEN (≥32 chars) - Bearer auth for /api/metrics endpoint (PROMETHEUS*\* are Alloy-only; not in app)
+- MIMIR_URL (url) - Grafana Cloud Mimir endpoint for analytics queries
+- MIMIR_USER - Basic auth username for Mimir
+- MIMIR_TOKEN - Basic auth password/token for Mimir
+- ANALYTICS_K_THRESHOLD (int, default 50) - K-anonymity threshold for public analytics
+- ANALYTICS_QUERY_TIMEOUT_MS (int, default 5000) - Mimir query timeout
 
 **Public client (client.ts)**
 
@@ -143,5 +150,7 @@ Bump Last reviewed date. Ensure pnpm lint && pnpm typecheck pass.
 ## Notes
 
 - Lazy serverEnv() function prevents build-time database access
+- assertRuntimeSecrets() validates secrets only at runtime (adapter methods, /health) to allow build without secrets
+- Production-only memoization in assertRuntimeSecrets() prevents test false-passes while optimizing runtime
 - AUTH_SECRET rotation can be added later via AUTH_SECRETS CSV when session management is implemented
 - LITELLM_BASE_URL automatically detects deployment context (local dev vs Docker network)

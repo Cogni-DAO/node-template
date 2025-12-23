@@ -31,7 +31,13 @@ export {
   ESTIMATED_USD_PER_1K_TOKENS,
   estimateTotalTokens,
 } from "./ai/token-estimation.server";
-export { calculateUserPriceCredits, usdToCredits } from "./billing/pricing";
+export {
+  CREDITS_PER_USD,
+  calculateLlmUserCharge,
+  creditsToUsd,
+  usdCentsToCredits,
+  usdToCredits,
+} from "./billing/pricing";
 export type { Conversation, Message, MessageRole } from "./chat/model";
 export {
   assertMessageLength,
@@ -40,6 +46,7 @@ export {
   filterSystemMessages,
   MAX_MESSAGE_CHARS,
   normalizeMessageRole,
+  pickDefaultModel,
   trimConversationHistory,
 } from "./chat/rules";
 export type {
@@ -49,7 +56,6 @@ export type {
   PaymentErrorCode,
 } from "./payments/public";
 export {
-  CREDITS_PER_CENT,
   InvalidStateTransitionError,
   isIntentExpired,
   isInvalidStateTransitionError,

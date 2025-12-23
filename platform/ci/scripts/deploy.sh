@@ -42,6 +42,12 @@ on_fail() {
 
       echo "=== logs: litellm ==="
       docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm || true
+
+      echo "=== sourcecred compose ps ==="
+      docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml ps || true
+
+      echo "=== logs: sourcecred ==="
+      docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs --tail 200 sourcecred || true
 EOF
   fi
 
@@ -183,6 +189,8 @@ REQUIRED_SECRETS=(
     "APP_DB_USER"
     "APP_DB_PASSWORD"
     "APP_DB_NAME"
+    "SOURCECRED_GITHUB_TOKEN"
+    "EVM_RPC_URL"
 )
 
 # Check required environment variables (not secrets)
@@ -236,6 +244,9 @@ OPTIONAL_SECRETS=(
     "PROMETHEUS_REMOTE_WRITE_URL"
     "PROMETHEUS_USERNAME"
     "PROMETHEUS_PASSWORD"
+    "LANGFUSE_PUBLIC_KEY"
+    "LANGFUSE_SECRET_KEY"
+    "LANGFUSE_BASE_URL"
 )
 
 for secret in "${OPTIONAL_SECRETS[@]}"; do
@@ -281,6 +292,7 @@ set -euo pipefail
 # Compose shortcuts (explicit project names, no global export)
 EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml"
 RUNTIME_COMPOSE="docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml"
+SOURCECRED_COMPOSE="docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml"
 
 log_info() {
     echo -e "\033[0;32m[INFO]\033[0m $1"
@@ -360,6 +372,13 @@ hash_file() {
   fi
 }
 
+# Append env var to file only if value is non-empty
+# Usage: append_env_if_set FILE KEY VALUE
+append_env_if_set() {
+    local file="${1:?file required}" key="${2:?key required}" val="${3-}"
+    [[ -n "$val" ]] && printf '%s=%s\n' "$key" "$val" >> "$file"
+}
+
 log_info "Setting up deployment environment on VM..."
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -379,7 +398,9 @@ DOMAIN=${DOMAIN}
 ENV_EOF
 
 # Runtime env (full app config)
-cat > /opt/cogni-template-runtime/.env << ENV_EOF
+RUNTIME_ENV=/opt/cogni-template-runtime/.env
+cat > "$RUNTIME_ENV" << ENV_EOF
+# Required vars
 DOMAIN=${DOMAIN}
 APP_ENV=${APP_ENV}
 APP_IMAGE=${APP_IMAGE}
@@ -396,14 +417,24 @@ APP_DB_USER=${APP_DB_USER}
 APP_DB_PASSWORD=${APP_DB_PASSWORD}
 APP_DB_NAME=${APP_DB_NAME}
 DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
-DEFAULT_MODEL=${DEFAULT_MODEL:-}
-LOKI_WRITE_URL=${GRAFANA_CLOUD_LOKI_URL:-}
-LOKI_USERNAME=${GRAFANA_CLOUD_LOKI_USER:-}
-LOKI_PASSWORD=${GRAFANA_CLOUD_LOKI_API_KEY:-}
-METRICS_TOKEN=${METRICS_TOKEN:-}
-PROMETHEUS_REMOTE_WRITE_URL=${PROMETHEUS_REMOTE_WRITE_URL:-}
-PROMETHEUS_USERNAME=${PROMETHEUS_USERNAME:-}
-PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD:-}
+EVM_RPC_URL=${EVM_RPC_URL}
+ENV_EOF
+
+# Optional observability vars - only written if set (empty string breaks Zod validation)
+append_env_if_set "$RUNTIME_ENV" LOKI_WRITE_URL "${GRAFANA_CLOUD_LOKI_URL-}"
+append_env_if_set "$RUNTIME_ENV" LOKI_USERNAME "${GRAFANA_CLOUD_LOKI_USER-}"
+append_env_if_set "$RUNTIME_ENV" LOKI_PASSWORD "${GRAFANA_CLOUD_LOKI_API_KEY-}"
+append_env_if_set "$RUNTIME_ENV" METRICS_TOKEN "${METRICS_TOKEN-}"
+append_env_if_set "$RUNTIME_ENV" PROMETHEUS_REMOTE_WRITE_URL "${PROMETHEUS_REMOTE_WRITE_URL-}"
+append_env_if_set "$RUNTIME_ENV" PROMETHEUS_USERNAME "${PROMETHEUS_USERNAME-}"
+append_env_if_set "$RUNTIME_ENV" PROMETHEUS_PASSWORD "${PROMETHEUS_PASSWORD-}"
+append_env_if_set "$RUNTIME_ENV" LANGFUSE_PUBLIC_KEY "${LANGFUSE_PUBLIC_KEY-}"
+append_env_if_set "$RUNTIME_ENV" LANGFUSE_SECRET_KEY "${LANGFUSE_SECRET_KEY-}"
+append_env_if_set "$RUNTIME_ENV" LANGFUSE_BASE_URL "${LANGFUSE_BASE_URL-}"
+
+# SourceCred env
+cat > /opt/cogni-template-sourcecred/.env << ENV_EOF
+SOURCECRED_GITHUB_TOKEN=${SOURCECRED_GITHUB_TOKEN}
 ENV_EOF
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -434,6 +465,8 @@ else
     fi
   fi
 fi
+
+# (Step 2.5 removed - Moved to after Disk Cleanup)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 3: Authenticate to GHCR
@@ -486,6 +519,68 @@ if [[ "$DISK_USAGE" -ge 70 ]]; then
 else
   log_info "Disk usage at ${DISK_USAGE}% - no cleanup needed"
 fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 5.5: Deploy SourceCred (After cleanup, before app pull)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "Deploying SourceCred stack..."
+
+# Pre-flight: Check Token
+token=$(sed -n 's/^SOURCECRED_GITHUB_TOKEN=//p' /opt/cogni-template-sourcecred/.env | head -n1)
+if [[ -z "${token:-}" ]]; then
+   log_error "SOURCECRED_GITHUB_TOKEN empty in /opt/cogni-template-sourcecred/.env"
+   exit 1
+fi
+
+# Pre-flight: Inspect Config (fail fast if config is obviously wrong)
+log_info "SourceCred Configuration:"
+grep -C 2 "repositories" /opt/cogni-template-sourcecred/instance/config/plugins/sourcecred/github/config.json || log_warn "Could not read GitHub config"
+
+# 3. Pull image (Immutable Artifact - SC-invariant-2)
+log_info "Pulling SourceCred image..."
+$SOURCECRED_COMPOSE pull sourcecred
+
+# 4. Start service
+log_info "Starting SourceCred container..."
+$SOURCECRED_COMPOSE up -d
+
+# 4. Verify readiness (fail-fast, check config availability - SC-3)
+log_info "Waiting for SourceCred readiness..."
+
+deadline=$((SECONDS+300))
+while true; do
+    if (( SECONDS >= deadline )); then
+        log_error "SourceCred failed to become ready (timeout)"
+        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
+        exit 1
+    fi
+
+    # Fail fast if container crashed (SC-invariant-3)
+    cid="$($SOURCECRED_COMPOSE ps -q sourcecred || true)"
+    if [[ -z "$cid" ]]; then
+        status="missing"
+        restarting="false"
+    else
+        container_info="$(docker inspect -f '{{.State.Status}} {{.State.Restarting}}' "$cid" 2>/dev/null || echo 'missing false')"
+        status="${container_info%% *}"
+        restarting="${container_info##* }"
+    fi
+
+    # Treat exited/dead/restarting/missing as failure; allow created/running to keep trying
+    if [[ "$status" == "exited" || "$status" == "dead" || "$status" == "missing" || "$restarting" == "true" ]]; then
+        log_error "SourceCred container failed early (State: $status, Restarting: $restarting)"
+        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
+        exit 1
+    fi
+
+    # Simple HTTP readiness: check one config file via host-mapped port 6006
+    if wget -qO- http://localhost:6006/config/weights.json >/dev/null 2>&1; then
+        log_info "SourceCred is ready (weights.json reachable on port 6006)"
+        break
+    fi
+
+    sleep 2
+done
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6: Validate images exist (fail fast)
@@ -574,6 +669,8 @@ echo "=== Edge stack ==="
 $EDGE_COMPOSE ps
 echo "=== Runtime stack ==="
 $RUNTIME_COMPOSE ps
+echo "=== SourceCred stack ==="
+$SOURCECRED_COMPOSE ps
 
 emit_deployment_event "deployment.complete" "success" "Deployment completed successfully"
 log_info "✅ Deployment complete!"
@@ -584,7 +681,7 @@ chmod +x "$ARTIFACT_DIR/deploy-remote.sh"
 
 # Deploy bundles to VM via rsync
 log_info "Deploying edge and runtime bundles to VM..."
-ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime"
+ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime /opt/cogni-template-sourcecred"
 
 # Upload edge bundle (rarely changes - Caddy config only)
 rsync -av -e "ssh $SSH_OPTS" \
@@ -596,10 +693,15 @@ rsync -av -e "ssh $SSH_OPTS" \
   "$REPO_ROOT/platform/infra/services/runtime/" \
   root@"$VM_HOST":/opt/cogni-template-runtime/
 
+# Upload sourcecred bundle
+rsync -av -e "ssh $SSH_OPTS" \
+  "$REPO_ROOT/platform/infra/services/sourcecred/" \
+  root@"$VM_HOST":/opt/cogni-template-sourcecred/
+
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."
@@ -612,19 +714,32 @@ check_url() {
   local label="$2"
 
   for i in $(seq 1 "$max_attempts"); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    # Capture response body and HTTP status
+    local response
+    local http_code
+    response=$(curl -sS -w "\n%{http_code}" "$url" 2>&1)
+    http_code=$(echo "$response" | tail -n1)
+    local body=$(echo "$response" | sed '$d')
+
+    if [ "$http_code" = "200" ]; then
       log_info "✅ $label health check passed: $url"
       return 0
     fi
-    log_warn "Attempt ${i}/${max_attempts}: $label not ready yet, waiting ${sleep_seconds}s..."
+
+    log_warn "Attempt ${i}/${max_attempts}: $label not ready yet (HTTP $http_code), waiting ${sleep_seconds}s..."
+    if [ $i -eq $max_attempts ]; then
+      # On final attempt, show response body for debugging
+      log_error "❌ $label did not become ready after $((max_attempts * sleep_seconds))s: $url"
+      log_error "HTTP Status: $http_code"
+      log_error "Response body: $body"
+    fi
     sleep "$sleep_seconds"
   done
 
-  log_error "❌ $label did not become ready after $((max_attempts * sleep_seconds))s: $url"
   return 1
 }
 
-check_url "https://$DOMAIN/health" "App"
+check_url "https://$DOMAIN/readyz" "App (readiness)"
 
 # Store deployment metadata
 log_info "Recording deployment metadata..."
@@ -645,7 +760,8 @@ log_info "✅ Docker Compose deployment complete!"
 log_info ""
 log_info "🌐 Application URLs:"
 log_info "  - Main App: https://$DOMAIN"
-log_info "  - Health Check: https://$DOMAIN/health"
+log_info "  - Readiness Check: https://$DOMAIN/readyz"
+log_info "  - Liveness Check: https://$DOMAIN/livez"
 log_info ""
 log_info "📁 Deployment artifacts in $ARTIFACT_DIR:"
 log_info "  - deployment.json: Deployment metadata"
@@ -654,4 +770,5 @@ log_info ""
 log_info "🔧 Deployment management:"
 log_info "  - SSH access: ssh root@$VM_HOST"
 log_info "  - Edge logs: docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml logs"
-log_info "  - Runtime logs: docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs"
+log_info "  - Runtime logs: docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs
+  - SourceCred logs: docker compose --project-name cogni-sourcecred -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs"

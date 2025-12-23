@@ -32,9 +32,10 @@ import { cn } from "@/shared/util/cn";
 // Allow customization of welcome message via children prop
 export interface ThreadProps {
   welcomeMessage?: ReactNode;
+  errorMessage?: ReactNode;
 }
 
-export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
+export const Thread: FC<ThreadProps> = ({ welcomeMessage, errorMessage }) => {
   return (
     <ThreadPrimitive.Root
       className="aui-root aui-thread-root @container flex h-full min-h-0 flex-col overflow-hidden bg-background"
@@ -57,6 +58,12 @@ export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
             AssistantMessage,
           }}
         />
+
+        {errorMessage && (
+          <div className="fade-in relative mx-auto w-full max-w-[var(--thread-max-width)] animate-in py-4 duration-150 ease-out">
+            {errorMessage}
+          </div>
+        )}
       </ThreadPrimitive.Viewport>
 
       {/* Composer is sibling after Viewport - always pinned at bottom */}
@@ -132,13 +139,13 @@ const ThreadSuggestions: FC = () => {
           >
             <Button
               variant="ghost"
-              className="aui-thread-welcome-suggestion h-auto w-full flex-col items-start justify-start gap-1 rounded-3xl border px-5 py-4 text-left text-sm dark:hover:bg-accent/60"
+              className="aui-thread-welcome-suggestion h-auto w-full flex-col items-start justify-start gap-1 overflow-hidden rounded-3xl border px-5 py-4 text-left text-sm dark:hover:bg-accent/60"
               aria-label={suggestedAction.action}
             >
-              <span className="aui-thread-welcome-suggestion-text-1 font-medium">
+              <span className="aui-thread-welcome-suggestion-text-1 w-full truncate font-medium">
                 {suggestedAction.title}
               </span>
-              <span className="aui-thread-welcome-suggestion-text-2 text-muted-foreground">
+              <span className="aui-thread-welcome-suggestion-text-2 w-full truncate text-muted-foreground">
                 {suggestedAction.label}
               </span>
             </Button>

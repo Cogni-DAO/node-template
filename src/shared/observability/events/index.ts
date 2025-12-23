@@ -26,6 +26,9 @@ export const EVENT_NAMES = {
   AI_CHAT_STREAM_CLOSED: "ai.chat_stream_closed",
   AI_CHAT_CLIENT_ABORTED: "ai.chat_client_aborted",
   AI_MODELS_LIST_SUCCESS: "ai.models_list_success",
+  AI_ACTIVITY_QUERY_COMPLETED: "ai.activity.query_completed",
+  AI_BILLING_COMMIT_COMPLETE: "ai.billing.commit_complete",
+  AI_RELAY_PUMP_ERROR: "ai.relay.pump_error",
 
   // AI Domain - Client
   CLIENT_CHAT_MODEL_INVALID_RETRY: "client.chat.model_invalid_retry",
@@ -53,13 +56,16 @@ export const EVENT_NAMES = {
     "client.payments.flow_wallet_write_error",
   CLIENT_PAYMENTS_FLOW_RECEIPT_ERROR: "client.payments.flow_receipt_error",
 
+  // Setup Domain - Server
+  SETUP_DAO_VERIFY_COMPLETE: "setup.dao_verify_complete",
+
   // Adapter Events
   ADAPTER_LITELLM_COMPLETION_RESULT: "adapter.litellm.completion_result",
   ADAPTER_LITELLM_STREAM_RESULT: "adapter.litellm.stream_result",
+  ADAPTER_LITELLM_USAGE_ERROR: "adapter.litellm.usage_error",
 
   // Invariant Warnings
   INV_PROVIDER_META_MODEL_MISSING: "inv_provider_meta_model_missing",
-  INV_DEFAULT_MODEL_NOT_IN_CATALOG: "inv_default_model_not_in_catalog",
   INV_MODELS_CONTRACT_VALIDATION_FAILED:
     "inv_models_contract_validation_failed",
 

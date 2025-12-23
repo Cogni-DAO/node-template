@@ -44,20 +44,38 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Pointers
 
+### Core Architecture
+
 - [Technical Roadmap](ROADMAP.md)
-- [Developer Setup](docs/SETUP.md)
+- [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md)
+- [MVP Deliverables](docs/MVP_DELIVERABLES.md)
+- [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)
+- [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Observability](docs/OBSERVABILITY.md)
 - [Services Migration Guide](docs/SERVICES_MIGRATION.md)
+
+### AI & Evals
+
+- [AI Setup Spec](docs/AI_SETUP_SPEC.md)
+- [LangGraph Server](docs/LANGGRAPH_SERVER.md)
+- [LangGraph Patterns](docs/LANGGRAPH_AI.md)
+- [AI Evals](docs/AI_EVALS.md)
+
+### Development
+
+- [Developer Setup](docs/SETUP.md)
 - [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
 - [Database & Migration Architecture](docs/DATABASES.md)
 - [Testing Strategy](docs/TESTING.md)
-- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
 - [Feature Development Guide](docs/FEATURE_DEVELOPMENT_GUIDE.md)
 - [UI Implementation Guide](docs/UI_IMPLEMENTATION_GUIDE.md)
+- [Style & Lint Rules](docs/STYLE.md)
+
+### Operations
+
+- [Observability](docs/OBSERVABILITY.md)
 - [Repo Specification](.cogni/repo-spec.yaml)
 - [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md)
-- [Style & Lint Rules](docs/STYLE.md)
 
 ## Usage
 
@@ -70,9 +88,11 @@ pnpm docker:dev:stack         # start all services containerized (with build)
 pnpm docker:dev:stack:fast    # start all services containerized (skip build for speed)
 pnpm docker:test:stack        # start all services containerized in test mode (with build)
 pnpm docker:test:stack:fast   # start all services containerized in test mode (skip build)
-pnpm docker:stack             # start full production simulation locally (https://localhost - browser will warn about cert)
-pnpm docker:stack:fast        # start production simulation (skip build for speed)
+pnpm docker:stack             # start full stack locally (with build)
+pnpm docker:stack:fast        # start full stack locally (skip build)
 pnpm build                    # build for production
+pnpm packages:build           # build workspace packages (tsup JS + tsc declarations)
+pnpm packages:clean           # clean package dist/ and .tsbuildinfo
 pnpm check                    # lint + type + format validation (fast, no infra)
 pnpm check:full               # CI-parity gate: full docker build, stack launch + all test suites
 pnpm check:full:fast          # Same as check:full but skip Docker rebuild

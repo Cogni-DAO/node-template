@@ -49,6 +49,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace packages
+        run: pnpm packages:build
+
       - name: Repository policy check
         run: pnpm check:root-layout
 
@@ -123,6 +126,8 @@ jobs:
       LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+      EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+      SOURCECRED_GITHUB_TOKEN: ${{ secrets.SOURCECRED_GITHUB_TOKEN }}
       VM_HOST: ${{ secrets.VM_HOST }}
       GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
       GHCR_USERNAME: Cogni-1729
@@ -133,6 +138,9 @@ jobs:
       PROMETHEUS_REMOTE_WRITE_URL: ${{ secrets.PROMETHEUS_REMOTE_WRITE_URL }}
       PROMETHEUS_USERNAME: ${{ secrets.PROMETHEUS_USERNAME }}
       PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
       NEXT_TELEMETRY_DISABLED: 1
     steps:
       - name: Checkout

@@ -7,8 +7,8 @@
  * Scope: Provides Zod schema and types for models list endpoint wire format. Does not implement business logic or validation beyond schema definition.
  * Invariants: Contract remains stable; breaking changes require new version. All consumers use z.infer types.
  * Side-effects: none
- * Notes: Includes tier/isFree for future homepage filtering and defaultModelId for client fallback.
- * Links: /api/v1/ai/models route, useModels hook
+ * Notes: Includes tier/isFree for credit-based filtering, isZdr for privacy badge, and defaultModelId for client fallback.
+ * Links: /api/v1/ai/models route, useModels hook, https://openrouter.ai/docs/guides/features/zdr
  * @internal
  */
 
@@ -19,29 +19,33 @@ import { z } from "zod";
  * - id: Model identifier (model_name alias from config)
  * - name: Optional display name from model_info.display_name
  * - isFree: Tier classification from model_info.is_free
+ * - isZdr: Zero Data Retention flag from model_info.is_zdr
  * - providerKey: Provider identifier for icon rendering (from model_info.provider_key)
  */
 export const ModelSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
   isFree: z.boolean(),
+  isZdr: z.boolean(),
   providerKey: z.string().optional(),
 });
 
 /**
  * Models list response
  * - models: Array of available models
- * - defaultModelId: Fallback model ID for 409 retry and initial selection
+ * - defaultPreferredModelId: Server's preferred default model (from catalog metadata.cogni.default_preferred tag, null if catalog empty)
+ * - defaultFreeModelId: Free model to use when user has zero credits (from catalog metadata.cogni.default_free tag, null if no free models)
  */
 export const aiModelsOperation = {
   id: "ai.models.v1",
   summary: "List available AI models",
   description:
-    "Returns list of available LiteLLM models with tier information and default model ID",
+    "Returns list of available LiteLLM models with tier information and default model IDs computed from catalog metadata",
   input: z.object({}), // No input, GET request
   output: z.object({
     models: z.array(ModelSchema),
-    defaultModelId: z.string(),
+    defaultPreferredModelId: z.string().nullable(),
+    defaultFreeModelId: z.string().nullable(),
   }),
 } as const;
 

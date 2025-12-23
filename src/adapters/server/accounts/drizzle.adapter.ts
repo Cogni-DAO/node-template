@@ -3,39 +3,45 @@
 
 /**
  * Module: `@adapters/server/accounts/drizzle`
- * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations with discriminated billing flow.
- * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Branches on billingStatus to debit or record. Does not compute pricing.
- * Invariants: Atomic ops; ledger source of truth; balance cached; UUID v4 validated; billed debits, needs_review skips
+ * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations with charge receipt recording.
+ * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Does not compute pricing.
+ * Invariants:
+ * - Atomic ops; ledger source of truth; balance cached; UUID v4 validated
+ * - IDEMPOTENT_CHARGES: (source_system, source_reference) is idempotency key per GRAPH_EXECUTION.md
+ * - Persists chargeReason, sourceSystem, runId to charge_receipts (required fields)
+ * - listChargeReceipts returns sourceSystem for Activity UI join
  * Side-effects: IO (database operations)
- * Notes: Uses transactions for consistency, throws port errors for business rule violations, supports nullable cost fields in llm_usage
- * Links: Implements AccountService port, uses shared database schema
+ * Notes: Uses transactions for consistency; recordChargeReceipt is non-blocking (never throws InsufficientCredits per ACTIVITY_METRICS.md)
+ * Links: Implements AccountService port, uses shared database schema, docs/ACTIVITY_METRICS.md, docs/GRAPH_EXECUTION.md, types/billing.ts
  * @public
  */
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import type { Database } from "@/adapters/server/db/client";
 import {
   type AccountService,
-  type BilledLlmUsageParams,
   type BillingAccount,
   BillingAccountNotFoundPortError,
+  type ChargeReceiptParams,
   type CreditLedgerEntry,
   InsufficientCreditsPortError,
-  type NeedsReviewLlmUsageParams,
   VirtualKeyNotFoundPortError,
 } from "@/ports";
 import {
   billingAccounts,
+  chargeReceipts,
   creditLedger,
-  llmUsage,
   virtualKeys,
 } from "@/shared/db";
-
 import { serverEnv } from "@/shared/env";
+import { makeLogger } from "@/shared/observability";
 import { isValidUuid } from "@/shared/util";
+import type { SourceSystem } from "@/types/billing";
+
+const logger = makeLogger({ component: "DrizzleAccountService" });
 
 interface QueryableDb extends Pick<Database, "query" | "insert"> {
   query: Database["query"];
@@ -44,7 +50,6 @@ interface QueryableDb extends Pick<Database, "query" | "insert"> {
 
 interface VirtualKeyRow {
   id: string;
-  litellmVirtualKey: string;
 }
 
 type CreditLedgerRow = typeof creditLedger.$inferSelect;
@@ -80,7 +85,6 @@ export class DrizzleAccountService implements AccountService {
           ownerUserId: existingAccount.ownerUserId,
           balanceCredits: this.toNumber(existingAccount.balanceCredits),
           defaultVirtualKeyId: defaultKey.id,
-          litellmVirtualKey: defaultKey.litellmVirtualKey,
         };
       }
 
@@ -104,7 +108,6 @@ export class DrizzleAccountService implements AccountService {
         ownerUserId: userId,
         balanceCredits: 0,
         defaultVirtualKeyId: createdKey.id,
-        litellmVirtualKey: createdKey.litellmVirtualKey,
       };
     });
   }
@@ -178,10 +181,27 @@ export class DrizzleAccountService implements AccountService {
     });
   }
 
-  async recordLlmUsage(
-    params: BilledLlmUsageParams | NeedsReviewLlmUsageParams
-  ): Promise<void> {
+  async recordChargeReceipt(params: ChargeReceiptParams): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // Idempotency check: (source_system, source_reference) per GRAPH_EXECUTION.md
+      // This prevents double-debits on retries
+      const existing = await tx.query.chargeReceipts.findFirst({
+        where: and(
+          eq(chargeReceipts.sourceSystem, params.sourceSystem),
+          eq(chargeReceipts.sourceReference, params.sourceReference)
+        ),
+      });
+      if (existing) {
+        logger.debug(
+          {
+            sourceSystem: params.sourceSystem,
+            sourceReference: params.sourceReference,
+          },
+          "recordChargeReceipt: idempotent return - receipt already exists"
+        );
+        return;
+      }
+
       await this.ensureBillingAccountExists(tx, params.billingAccountId);
       await this.ensureVirtualKeyExists(
         tx,
@@ -189,86 +209,63 @@ export class DrizzleAccountService implements AccountService {
         params.virtualKeyId
       );
 
-      if (params.billingStatus === "billed") {
-        // Insert usage record with cost data
-        await tx.insert(llmUsage).values({
-          billingAccountId: params.billingAccountId,
-          virtualKeyId: params.virtualKeyId,
-          requestId: params.requestId,
-          model: params.model,
-          promptTokens: params.promptTokens,
-          completionTokens: params.completionTokens,
-          providerCostUsd: params.providerCostUsd.toString(),
-          providerCostCredits: params.providerCostCredits,
-          userPriceCredits: params.userPriceCredits,
-          markupFactor: params.markupFactorApplied.toString(),
-          billingStatus: "billed",
-          usage: {
-            promptTokens: params.promptTokens,
-            completionTokens: params.completionTokens,
-            totalTokens: params.promptTokens + params.completionTokens,
+      // Insert charge receipt (unique constraint on source_system, source_reference ensures no duplicates)
+      await tx.insert(chargeReceipts).values({
+        billingAccountId: params.billingAccountId,
+        virtualKeyId: params.virtualKeyId,
+        runId: params.runId,
+        attempt: params.attempt,
+        ingressRequestId: params.ingressRequestId ?? null, // Optional ingress correlation
+        litellmCallId: params.litellmCallId,
+        chargedCredits: params.chargedCredits,
+        responseCostUsd: params.responseCostUsd?.toString() ?? null,
+        provenance: params.provenance,
+        chargeReason: params.chargeReason,
+        sourceSystem: params.sourceSystem,
+        sourceReference: params.sourceReference,
+      });
+
+      // Debit credits atomically (negative amount)
+      const debitAmount = -params.chargedCredits;
+
+      const [updatedAccount] = await tx
+        .update(billingAccounts)
+        .set({
+          balanceCredits: sql`${billingAccounts.balanceCredits} + ${debitAmount}`,
+        })
+        .where(eq(billingAccounts.id, params.billingAccountId))
+        .returning({ balanceCredits: billingAccounts.balanceCredits });
+
+      if (!updatedAccount) {
+        throw new BillingAccountNotFoundPortError(params.billingAccountId);
+      }
+
+      const newBalance = updatedAccount.balanceCredits;
+
+      // Insert ledger entry (unique partial index ensures no duplicates for charge_receipt reason)
+      // reference = sourceReference for idempotent ledger writes per GRAPH_EXECUTION.md
+      await tx.insert(creditLedger).values({
+        billingAccountId: params.billingAccountId,
+        virtualKeyId: params.virtualKeyId,
+        amount: debitAmount,
+        balanceAfter: newBalance,
+        reason: "charge_receipt",
+        reference: params.sourceReference,
+        metadata: null,
+      });
+
+      // INVARIANT: Never throw InsufficientCreditsPortError in post-call path
+      // Log critical if balance goes negative, but complete the write
+      if (newBalance < 0n) {
+        logger.error(
+          {
+            billingAccountId: params.billingAccountId,
+            sourceReference: params.sourceReference,
+            chargedCredits: Number(params.chargedCredits),
+            newBalance: Number(newBalance),
           },
-        });
-
-        // Debit credits atomically
-        const debitAmount = -params.userPriceCredits;
-
-        const [updatedAccount] = await tx
-          .update(billingAccounts)
-          .set({
-            balanceCredits: sql`${billingAccounts.balanceCredits} + ${debitAmount}`,
-          })
-          .where(eq(billingAccounts.id, params.billingAccountId))
-          .returning({ balanceCredits: billingAccounts.balanceCredits });
-
-        if (!updatedAccount) {
-          throw new BillingAccountNotFoundPortError(params.billingAccountId);
-        }
-
-        const newBalance = updatedAccount.balanceCredits;
-
-        await tx.insert(creditLedger).values({
-          billingAccountId: params.billingAccountId,
-          virtualKeyId: params.virtualKeyId,
-          amount: debitAmount,
-          balanceAfter: newBalance,
-          reason: "llm_usage",
-          reference: params.requestId,
-          metadata: params.metadata ?? null,
-        });
-
-        // Check balance after debit
-        if (newBalance < 0n) {
-          const costNum = Number(params.userPriceCredits);
-          const balanceNum = Number(newBalance);
-          const previousBalance = balanceNum + costNum;
-
-          throw new InsufficientCreditsPortError(
-            params.billingAccountId,
-            costNum,
-            previousBalance < 0 ? 0 : previousBalance
-          );
-        }
-      } else {
-        // Insert usage record without cost data, no credit debit
-        await tx.insert(llmUsage).values({
-          billingAccountId: params.billingAccountId,
-          virtualKeyId: params.virtualKeyId,
-          requestId: params.requestId,
-          model: params.model,
-          promptTokens: params.promptTokens,
-          completionTokens: params.completionTokens,
-          providerCostUsd: null,
-          providerCostCredits: null,
-          userPriceCredits: null,
-          markupFactor: null,
-          billingStatus: "needs_review",
-          usage: {
-            promptTokens: params.promptTokens,
-            completionTokens: params.completionTokens,
-            totalTokens: params.promptTokens + params.completionTokens,
-          },
-        });
+          "inv_post_call_negative_balance: Charge receipt recorded with negative balance"
+        );
       }
     });
   }
@@ -417,7 +414,6 @@ export class DrizzleAccountService implements AccountService {
 
     return {
       id: defaultKey.id,
-      litellmVirtualKey: defaultKey.litellmVirtualKey,
     };
   }
 
@@ -426,68 +422,17 @@ export class DrizzleAccountService implements AccountService {
     billingAccountId: string,
     params: { label?: string }
   ): Promise<VirtualKeyRow> {
-    const env = serverEnv();
-
-    // In test mode, avoid network calls and generate deterministic key
-    if (env.isTestMode) {
-      const fakeKey = this.generateVirtualKey(billingAccountId);
-      const [created] = await tx
-        .insert(virtualKeys)
-        .values({
-          billingAccountId,
-          litellmVirtualKey: fakeKey,
-          label: params.label ?? "Default",
-          isDefault: true,
-          active: true,
-        })
-        .returning({
-          id: virtualKeys.id,
-          litellmVirtualKey: virtualKeys.litellmVirtualKey,
-        });
-
-      if (!created) {
-        throw new VirtualKeyNotFoundPortError(billingAccountId);
-      }
-
-      return created;
-    }
-
-    const response = await fetch(`${env.LITELLM_BASE_URL}/key/generate`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.LITELLM_MASTER_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        metadata: { cogni_billing_account_id: billingAccountId },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed to generate LiteLLM virtual key: ${response.status} ${response.statusText}`
-      );
-    }
-
-    const json = (await response.json()) as { key?: string };
-    const litellmVirtualKey = json.key;
-
-    if (!litellmVirtualKey) {
-      throw new Error("LiteLLM response missing key");
-    }
-
+    // MVP: virtual_keys is scope/FK handle only. Auth uses LITELLM_MASTER_KEY from env.
     const [created] = await tx
       .insert(virtualKeys)
       .values({
         billingAccountId,
-        litellmVirtualKey,
         label: params.label ?? "Default",
         isDefault: true,
         active: true,
       })
       .returning({
         id: virtualKeys.id,
-        litellmVirtualKey: virtualKeys.litellmVirtualKey,
       });
 
     if (!created) {
@@ -499,11 +444,6 @@ export class DrizzleAccountService implements AccountService {
 
   private toNumber(value: number | string | bigint): number {
     return typeof value === "number" ? value : Number(value);
-  }
-
-  private generateVirtualKey(billingAccountId: string): string {
-    const randomSegment = randomBytes(16).toString("base64url");
-    return `vk-${billingAccountId.slice(0, 8)}-${randomSegment}`;
   }
 
   private normalizeAmount(
@@ -529,5 +469,49 @@ export class DrizzleAccountService implements AccountService {
       metadata: (row.metadata as Record<string, unknown> | null) ?? null,
       createdAt: row.createdAt,
     };
+  }
+
+  async listChargeReceipts(params: {
+    billingAccountId: string;
+    from: Date;
+    to: Date;
+    limit?: number;
+  }): Promise<
+    Array<{
+      litellmCallId: string | null;
+      chargedCredits: string;
+      responseCostUsd: string | null;
+      sourceSystem: SourceSystem;
+      createdAt: Date;
+    }>
+  > {
+    const take = Math.min(params.limit ?? 100, 1000);
+
+    const rows = await this.db
+      .select({
+        litellmCallId: chargeReceipts.litellmCallId,
+        chargedCredits: chargeReceipts.chargedCredits,
+        responseCostUsd: chargeReceipts.responseCostUsd,
+        sourceSystem: chargeReceipts.sourceSystem,
+        createdAt: chargeReceipts.createdAt,
+      })
+      .from(chargeReceipts)
+      .where(
+        and(
+          eq(chargeReceipts.billingAccountId, params.billingAccountId),
+          gte(chargeReceipts.createdAt, params.from),
+          lt(chargeReceipts.createdAt, params.to)
+        )
+      )
+      .orderBy(desc(chargeReceipts.createdAt))
+      .limit(take);
+
+    return rows.map((r) => ({
+      litellmCallId: r.litellmCallId,
+      chargedCredits: String(r.chargedCredits),
+      responseCostUsd: r.responseCostUsd ? String(r.responseCostUsd) : null,
+      sourceSystem: r.sourceSystem as SourceSystem,
+      createdAt: r.createdAt,
+    }));
   }
 }

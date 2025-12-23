@@ -29,6 +29,7 @@ import {
 } from "@/app/_facades/payments/attempts.server";
 import type { SessionUser } from "@/shared/auth";
 import { creditLedger, paymentAttempts } from "@/shared/db/schema.billing";
+import { CHAIN_ID } from "@/shared/web3/chain";
 
 describe("MVP Payment Scenarios (9 critical flows)", () => {
   let testUserId: string;
@@ -98,7 +99,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: `0x${"9".repeat(40)}`, // Different from session wallet
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Create intent
@@ -111,7 +112,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
       );
 
       expect(intent.attemptId).toBeDefined();
-      expect(intent.chainId).toBe(11155111);
+      expect(intent.chainId).toBe(CHAIN_ID);
 
       // Submit txHash - should be REJECTED due to sender mismatch
       const result = await submitPaymentTxHashFacade(
@@ -130,7 +131,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
       // Assert no credit_ledger entry
       const ledger = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0xabc123"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0xabc123`),
       });
       expect(ledger).toBeUndefined();
 
@@ -174,7 +175,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
       // Assert no credit_ledger entry
       const ledger = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0xdef456"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0xdef456`),
       });
       expect(ledger).toBeUndefined();
     });
@@ -335,7 +336,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS from adapter
       });
 
       const result2 = await getPaymentStatusFacade(
@@ -350,10 +351,10 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
       // Verify ledger entry exists
       const ledger = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0xconfirm123"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0xconfirm123`),
       });
       expect(ledger).toBeTruthy();
-      expect(Number(ledger?.amount)).toBe(5000); // 500 cents * 10 = 5000 credits
+      expect(Number(ledger?.amount)).toBe(50_000_000); // $5 * 10,000,000 credits/USD
     });
   });
 
@@ -365,7 +366,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       const intent = await createPaymentIntentFacade(
@@ -401,7 +402,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
       // Verify only one ledger entry exists (idempotency)
       const ledgerEntries = await db.query.creditLedger.findMany({
-        where: eq(creditLedger.reference, "11155111:0xidempotent123"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0xidempotent123`),
       });
       expect(ledgerEntries).toHaveLength(1);
     });
@@ -415,7 +416,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Create first attempt and bind hash
@@ -459,7 +460,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
       // Verify only one ledger entry exists (first attempt only)
       const ledgerEntries = await db.query.creditLedger.findMany({
-        where: eq(creditLedger.reference, "11155111:0xduplicate123"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0xduplicate123`),
       });
       expect(ledgerEntries).toHaveLength(1);
     });
@@ -473,7 +474,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       const intent = await createPaymentIntentFacade(
@@ -495,7 +496,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
       // Bidirectional invariant: CREDITED ↔ ledger entry
       const ledger = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0xatomic123"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0xatomic123`),
       });
 
       const attempt = await db.query.paymentAttempts.findFirst({
@@ -505,7 +506,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
       if (attempt?.status === "CREDITED") {
         // If CREDITED, ledger MUST exist with correct amount
         expect(ledger).toBeTruthy();
-        expect(Number(ledger?.amount)).toBe(5000); // 500 cents * 10 = 5000 credits
+        expect(Number(ledger?.amount)).toBe(50_000_000); // $5 * 10,000,000 credits/USD
         expect(ledger?.reason).toBe("widget_payment");
       } else {
         // If not CREDITED, ledger MUST NOT exist
@@ -522,7 +523,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: `0x${"9".repeat(40)}`, // Different from session wallet
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       const intent = await createPaymentIntentFacade(
@@ -546,7 +547,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
       // No ledger entry for rejected payment
       const ledger = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0xrejected456"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0xrejected456`),
       });
       expect(ledger).toBeUndefined();
 
@@ -566,7 +567,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Create attempt with user1

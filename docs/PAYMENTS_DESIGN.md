@@ -1,10 +1,12 @@
 # Payments: USDC with Backend Verification
 
-**MVP Chain:** Ethereum Sepolia (11155111) — **Phase 3 Chain:** Base mainnet (8453)
+**MVP Chain:** Ethereum Sepolia (11155111) — **Production Chain:** Base mainnet (8453)
 
 **Status:** Design phase - ready for implementation
 
-**Purpose:** MVP payment system with durable state machine, two-port architecture (PaymentAttemptRepository + OnChainVerifier), stub verification on Ethereum Sepolia. Real Ponder-backed verification deferred to Phase 3 (Base mainnet).
+**Purpose:** Production payment system with durable state machine, two-port architecture (PaymentAttemptRepository + OnChainVerifier). Real EVM RPC verification implemented via viem.
+
+**Chain Policy:** Sepolia is test-only for development and temporary test fixtures. Production deployments MUST use Base mainnet. The `RepoSpecChainName` enum supports both chains during the transition period; Sepolia support will be removed once the DAO is fully deployed on Base.
 
 ---
 
@@ -38,10 +40,10 @@
 **Adapters:**
 
 - [x] Create `adapters/server/payments/drizzle-payment-attempt.adapter.ts` (PaymentAttemptRepository)
-- [x] Create `adapters/server/payments/ponder-onchain-verifier.adapter.ts` (OnChainVerifier - stubbed now, real Ponder in Phase 3)
+- [x] Create `adapters/server/payments/evm-rpc-onchain-verifier.adapter.ts` (OnChainVerifier - real EVM RPC verification via viem)
 - [x] Create `adapters/test/payments/fake-onchain-verifier.adapter.ts` (OnChainVerifier - deterministic fake for tests)
 - [x] Export from `adapters/server/index.ts` and `adapters/test/index.ts`
-- [x] Wire in `bootstrap/container.ts`: production uses PonderOnChainVerifierAdapter, test uses FakeOnChainVerifierAdapter
+- [x] Wire in `bootstrap/container.ts`: production uses EvmRpcOnChainVerifierAdapter, test uses FakeOnChainVerifierAdapter
 
 **Feature Service:**
 
@@ -64,7 +66,7 @@
 **Constants** (add to `src/shared/web3/chain.ts`):
 
 - `MIN_PAYMENT_CENTS = 100`, `MAX_PAYMENT_CENTS = 1_000_000` (in core/payments/rules.ts)
-- [x] `MIN_CONFIRMATIONS = 5`
+- [x] `MIN_CONFIRMATIONS` - Defined in `src/shared/web3/chain.ts`
 - `PAYMENT_INTENT_TTL_MS = 30 * 60 * 1000` (in core/payments/rules.ts)
 - `PENDING_UNVERIFIED_TTL_MS = 24 * 60 * 60 * 1000` (in core/payments/rules.ts)
 - [x] `VERIFY_THROTTLE_SECONDS = 10` (GET polling throttle)
@@ -126,35 +128,62 @@
 
 ---
 
-### Phase 3: Ponder-Backed Verification (Post-MVP - Deferred)
+### Phase 3: EVM RPC Verification ✅ COMPLETE
 
-**Objective:** Wire real Ponder queries into PonderOnChainVerifierAdapter. Switch to Base mainnet.
+**Objective:** Implement real on-chain verification using direct RPC queries via viem. No indexer dependency.
 
-- [ ] Deploy Ponder indexer for USDC Transfer events to DAO wallet
-- [ ] Implement real verification logic in `ponder-onchain-verifier.adapter.ts`
-- [ ] Update `.cogni/repo-spec.yaml` chain_id to Base mainnet (8453)
-- [ ] Add failure handling: sender mismatch, wrong token, insufficient amount, reorgs
+**Implementation:**
+
+- [x] Create `adapters/server/payments/evm-rpc-onchain-verifier.adapter.ts` implementing OnChainVerifier port
+- [x] Inject `EvmOnchainClient` dependency (see [ONCHAIN_READERS.md](ONCHAIN_READERS.md#shared-evm-infrastructure))
+- [x] Read canonical config:
+  - `chainId` from `getPaymentConfig().chainId` (sourced from `.cogni/repo-spec.yaml` `cogni_dao.chain_id`, validated against `CHAIN_ID` constant)
+  - `receivingAddress` from `getPaymentConfig().receivingAddress` (sourced from `.cogni/repo-spec.yaml` `payments_in.credits_topup.receiving_address`)
+  - `tokenAddress` from `USDC_TOKEN_ADDRESS` constant (`@/shared/web3/chain`)
+- [x] Assert caller params match canonical config (immediate failure if mismatch)
+- [x] Use `EvmOnchainClient` for all RPC operations: getTransaction, getTransactionReceipt, getBlockNumber
+- [x] Decode ERC20 Transfer log, compute confirmations
+- [x] Map failure conditions to PaymentErrorCode (see section 5)
+
+**Wiring & Tests:**
+
+- [x] Wire DI in `bootstrap/container.ts`:
+  - `APP_ENV=test` → FakeOnChainVerifierAdapter (in-memory, no RPC)
+  - `APP_ENV=production|preview|dev` → EvmRpcOnChainVerifierAdapter with ViemEvmOnchainClient
+- [x] Wire EvmOnchainClient in DI:
+  - `APP_ENV=test` → FakeEvmOnchainClient
+  - `APP_ENV=production|preview|dev` → ViemEvmOnchainClient
+- [ ] Add smoke test: run EvmRpcOnChainVerifierAdapter against known-good tx on Sepolia/Base testnet
+- [x] Unit tests: use FakeEvmOnchainClient to simulate all verification branches (success, pending, each failure mode)
+
+**Invariants:**
+
+- FakeOnChainVerifierAdapter NEVER used in production/preview/dev
+- Production verification ONLY runs on chain + receiving address from `getWidgetConfig()` (sourced from `.cogni/repo-spec.yaml`)
+- Token address sourced from `USDC_TOKEN_ADDRESS` constant (chain-specific)
+- EvmRpcOnChainVerifierAdapter MUST use EvmOnchainClient (never call viem/RPC directly)
+- Unit tests MUST use FakeEvmOnchainClient (no RPC calls in unit tests)
+- Payment service NEVER grants credits unless `status === 'VERIFIED'`
 
 ---
 
-### Phase 4: Reconciliation & Hardening (Post-MVP - Deferred)
+### Phase 4: Operational Hardening (Post-MVP - Deferred)
 
-See [PAYMENTS_PONDER_VERIFICATION.md](PAYMENTS_PONDER_VERIFICATION.md)
-
-- [ ] Reconciliation job compares `payment_attempts` (CREDITED) vs Ponder-indexed transfers
 - [ ] Clear stuck PENDING attempts after max verification TTL
 - [ ] Monitoring and alerting for verification failures
 - [ ] Audit log queries for dispute resolution
+- [ ] Rate limiting on RPC calls to prevent cost spikes
+- [ ] Fallback RPC endpoints for reliability
 
 ---
 
 ## 2. MVP Summary
 
-**Objective:** Accept USDC payments on Ethereum Sepolia with stub verification. Real Ponder-backed verification on Base mainnet in Phase 3.
+**Objective:** Accept USDC payments with OnChainVerifier port abstraction. MVP: stub verification. Phase 3: direct RPC verification via viem.
 
-**Scope:** Single chain (Ethereum Sepolia 11155111), single token (USDC), single payment type (credit_topup). No multi-chain, refunds, partial fills, or subscriptions.
+**Scope:** Single chain (configured via repo-spec.yaml: Ethereum Sepolia 11155111 for testing, Base mainnet 8453 for production). Single token (USDC), single payment type (credit_topup). No multi-chain, refunds, partial fills, or subscriptions.
 
-**Flow:** Client creates attempt → executes on-chain USDC transfer → submits txHash → backend calls OnChainVerifier (stubbed: always VERIFIED) → credits balance.
+**Flow:** Client creates attempt → executes on-chain USDC transfer → submits txHash → backend calls OnChainVerifier (real EVM RPC verification via viem) → credits balance.
 
 **Endpoints:**
 
@@ -168,8 +197,8 @@ See [PAYMENTS_PONDER_VERIFICATION.md](PAYMENTS_PONDER_VERIFICATION.md)
 
 **Three Invariants:**
 
-1. **Sender binding:** Receipt sender MUST match session wallet (Phase 3 - stubbed in MVP)
-2. **Receipt validation:** Token/recipient/amount MUST be verified via OnChainVerifier (Phase 3 - stubbed in MVP)
+1. **Sender binding:** Receipt sender MUST match session wallet (enforced by OnChainVerifier in Phase 3)
+2. **Receipt validation:** Token/recipient/amount MUST be verified via OnChainVerifier port (real EVM RPC verification via viem)
 3. **Exactly-once credit:** DB constraints MUST prevent double-credit
 
 ---
@@ -179,8 +208,8 @@ See [PAYMENTS_PONDER_VERIFICATION.md](PAYMENTS_PONDER_VERIFICATION.md)
 ### Security Invariants
 
 - **MUST** capture `from_address` from SIWE session wallet at attempt creation (checksum via `getAddress()`)
-- **MUST** call OnChainVerifier port before crediting (stubbed in MVP, real Ponder in Phase 3)
-- **MUST** match token_address to canonical USDC on configured chain (Ethereum Sepolia for MVP)
+- **MUST** call OnChainVerifier port before crediting (real EVM RPC verification via viem)
+- **MUST** match token_address to canonical USDC on configured chain
 - **MUST** require `amount >= expected_usdc_amount` (enforced by OnChainVerifier in Phase 3)
 - **MUST** never trust client-supplied txHash for crediting - verification is backend-only
 
@@ -344,24 +373,23 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 
 **Status values:** `VERIFIED` | `PENDING` | `FAILED`
 
-**MVP (PonderOnChainVerifierAdapter stubbed):** Always returns `{ status: VERIFIED }` - real validation deferred to Phase 3.
+**Production (EvmRpcOnChainVerifierAdapter):** Direct RPC verification with canonical config validation:
 
-**Phase 3+ (PonderOnChainVerifierAdapter real):** Queries Ponder-indexed USDC Transfer events on Base mainnet (8453):
+1. **Validate caller params against canonical config:**
+   - Read: `chainId` from `getPaymentConfig().chainId`, `receivingAddress` from `getPaymentConfig().receivingAddress`, `tokenAddress` from `USDC_TOKEN_ADDRESS`
+   - If `chainId !== config.chainId` → return `FAILED` (error_code: `INVALID_CHAIN`)
+   - If `expectedTo !== config.receivingAddress` → return `FAILED` (error_code: `INVALID_RECIPIENT`)
+   - If `expectedToken !== config.tokenAddress` → return `FAILED` (error_code: `INVALID_TOKEN`)
 
-- [ ] Query Ponder for Transfer event matching txHash
-  - If not indexed → stay PENDING_UNVERIFIED (error_code: `RECEIPT_NOT_FOUND`)
-- [ ] Validate indexed event: tx succeeded, sufficient confirmations
-  - If reverted → transition to FAILED (error_code: `TX_REVERTED`)
-- [ ] Verify sender from indexed data: `from === attempt.from_address`
-  - If mismatch → transition to REJECTED (error_code: `SENDER_MISMATCH`)
-- [ ] Verify recipient from indexed data: `to === DAO_WALLET`
-  - If mismatch → transition to REJECTED (error_code: `INVALID_RECIPIENT`)
-- [ ] Verify amount from indexed data: `value >= attempt.amountRaw`
-  - If insufficient → transition to REJECTED (error_code: `INSUFFICIENT_AMOUNT`)
-- [ ] **Atomic settle:** Settlement MUST be exactly-once and atomic. Implemented exclusively inside `confirmCreditsPayment()` which performs ledger insert + balance update + attempt CREDITED transition in one DB transaction. Pass composite reference: `clientPaymentId = "${chainId}:${txHash}"` for chain-aware idempotency.
-- [ ] Log event to `payment_events` (after successful credit)
+2. **Query chain via EvmOnchainClient:** (see [On-Chain Infrastructure](ONCHAIN_READERS.md#shared-evm-infrastructure))
+   - Fetch transaction and receipt, decode ERC20 Transfer log, compute confirmations
+   - Return `PENDING` if confirmations < MIN_CONFIRMATIONS
+   - Return `FAILED` with specific error code for: TX_NOT_FOUND, TX_REVERTED, TOKEN_TRANSFER_NOT_FOUND, SENDER_MISMATCH, RECIPIENT_MISMATCH, AMOUNT_MISMATCH
 
-**Chain verification (Phase 3):** If txHash on wrong chain, Ponder won't find it → stays PENDING_UNVERIFIED → times out.
+3. **Return VERIFIED:** All validations passed
+   - Return `{ status: VERIFIED, actualFrom, actualTo, actualAmount }`
+
+**Atomic settlement:** Implemented exclusively inside `confirmCreditsPayment()` which performs ledger insert + balance update + attempt CREDITED transition in one DB transaction. Pass composite reference: `clientPaymentId = "${chainId}:${txHash}"` for chain-aware idempotency. Log event to `payment_events` after successful credit.
 
 **PENDING_UNVERIFIED timeout:** Prevents zombie attempts. After 24h from submit (or N verification attempts), transition to FAILED with error_code `RECEIPT_NOT_FOUND`.
 
@@ -452,13 +480,21 @@ WHERE reason = 'widget_payment';
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal architecture boundaries
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) - Credit accounting
-- [PAYMENTS_PONDER_VERIFICATION.md](PAYMENTS_PONDER_VERIFICATION.md) - Post-MVP reconciliation
+- [ONCHAIN_READERS.md](ONCHAIN_READERS.md) - On-chain data intelligence (treasury, ownership)
 
 **Key Config:**
 
-- `src/shared/web3/chain.ts` - USDC_TOKEN_ADDRESS, CHAIN_ID, payment constants (Ethereum Sepolia for MVP)
-- `src/shared/config/repoSpec.server.ts` - `getWidgetConfig().receivingAddress` for DAO wallet
-- `.cogni/repo-spec.yaml` - Governance-managed receiving address and chain_id (update to 8453 in Phase 3)
+- `.cogni/repo-spec.yaml` - Governance-managed configuration:
+  - `cogni_dao.chain_id` - Chain ID as string (e.g., "11155111" for Ethereum Sepolia, "8453" for Base mainnet)
+  - `payments_in.credits_topup.receiving_address` - DAO wallet receiving address
+  - `payments_in.credits_topup.allowed_chains` - Chain names (e.g., ["Sepolia"])
+  - `payments_in.credits_topup.allowed_tokens` - Token names (e.g., ["USDC"])
+  - `payments_in.credits_topup.provider` - Payment provider identifier
+- `src/shared/config/repoSpec.server.ts` - Server-side reader: `getPaymentConfig()` returns `{ chainId, receivingAddress, provider }`
+- `src/shared/web3/chain.ts` - Hardcoded constants:
+  - `CHAIN_ID` - Must match `cogni_dao.chain_id` from repo-spec
+  - `USDC_TOKEN_ADDRESS` - Token contract address for configured chain
+  - `MIN_CONFIRMATIONS`, `VERIFY_THROTTLE_SECONDS` - Payment constants
 
 **Existing Credit Logic:**
 
@@ -474,4 +510,4 @@ WHERE reason = 'widget_payment';
 - Conversion: 1 USDC = 100 cents = 1,000 credits
 
 **Error Codes:**
-`SENDER_MISMATCH`, `INVALID_TOKEN`, `INVALID_RECIPIENT`, `INSUFFICIENT_AMOUNT`, `INSUFFICIENT_CONFIRMATIONS`, `TX_REVERTED`, `RECEIPT_NOT_FOUND`, `INTENT_EXPIRED`, `RPC_ERROR`
+`TX_NOT_FOUND`, `TX_REVERTED`, `TOKEN_TRANSFER_NOT_FOUND`, `SENDER_MISMATCH`, `RECIPIENT_MISMATCH`, `AMOUNT_MISMATCH`, `INSUFFICIENT_CONFIRMATIONS`, `RECEIPT_NOT_FOUND`, `INTENT_EXPIRED`, `RPC_ERROR`
