@@ -1,386 +1,457 @@
 # LangGraph AI Guide
 
-> How to create and maintain agentic graph workflows.
+> How to create and execute LangGraph agentic workflows (InProc and Server paths).
 
 > [!IMPORTANT]
-> **LangGraph graphs execute in an external LangGraph Server process.** Next.js never imports graph modules. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for runtime architecture. `LangGraphServerAdapter` implements `GraphExecutorPort`, preserving unified billing/telemetry.
+> All LangChain code lives in `packages/langgraph-graphs/`. Next.js (`src/`) never imports `@langchain/*`. Both InProc and Server executors implement `GraphExecutorPort` for unified billing/telemetry.
 
 ## Overview
 
-Graph definitions live in `apps/langgraph-service/` (feature-sliced within that service). Next.js only communicates with LangGraph Server via adapter—no graph code in the Next.js codebase.
+LangGraph graphs can execute via two paths:
 
-**Runtime architecture:**
+| Path       | Adapter                      | Use Case                                             |
+| ---------- | ---------------------------- | ---------------------------------------------------- |
+| **InProc** | `InProcGraphExecutorAdapter` | Next.js process; billing via executeCompletionUnit() |
+| **Server** | `LangGraphServerAdapter`     | External LangGraph Server container                  |
 
-- **Next.js:** Uses assistant-ui Data Stream Protocol (`@assistant-ui/react-data-stream`)
-- **LangGraph Server:** External process executes graphs, owns thread state/checkpoints
-- **Adapter:** `LangGraphServerAdapter` translates server streams → AiEvents
-
-**Key Principle:** All AI execution flows through `GraphExecutorPort`. The executor choice (LangGraph Server, Claude SDK, InProc) is an implementation detail behind the unified interface.
+**Key Principle:** All AI execution flows through `GraphExecutorPort`. The executor choice is an implementation detail behind the unified interface. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for billing/tracking patterns.
 
 ---
 
-## AI Runtime Architecture
+## Package Structure
 
-All AI execution flows through `GraphExecutorPort` per the **UNIFIED_GRAPH_EXECUTOR** invariant. There is no "graph vs direct LLM decision" — everything goes through the same port.
+```
+packages/
+├── ai-core/                          # Executor-agnostic primitives (NO LangChain)
+│   └── src/
+│       ├── completion/types.ts       # CompletionFn, CompletionResult
+│       ├── messages/message.ts       # Message, MessageToolCall
+│       ├── events/ai-events.ts       # AiEvent union
+│       └── usage/usage.ts            # UsageFact, ExecutorType
+│
+├── ai-tools/                         # Pure tool definitions (NO LangChain)
+│   └── src/
+│       ├── index.ts                  # Barrel export
+│       ├── tool-runner.ts            # ToolContract, BoundTool, toolRunner logic
+│       └── tools/
+│           └── get-time.ts           # Pure impl: () => { iso, unixMs, tz }
+│
+└── langgraph-graphs/                 # ALL LangChain code lives here
+    └── src/
+        ├── graphs/                   # Graph definitions (tools, prompts)
+        │   └── chat/                 # Chat graph (executes LangGraph AI internally)
+        │       ├── tools.ts          # Tool definitions
+        │       └── prompts.ts        # System prompts
+        ├── runtime/                  # Shared LangChain utilities
+        │   ├── completion-unit-llm.ts # CompletionUnitLLM, toBaseMessage, fromBaseMessage
+        │   ├── langchain-tools.ts    # toLangChainTool(), toLangChainTools()
+        │   └── subgraph-tool.ts      # createSubgraphTool()
+        └── inproc/                   # InProc execution
+            ├── chat.ts               # createChatGraph(llm) factory
+            └── runner.ts             # createInProcChatRunner()
+```
 
-**Route → ai_runtime → GraphExecutorPort → Adapter**
+### Subpath Exports
 
-| Component          | Location                                         | Responsibility                                   |
-| ------------------ | ------------------------------------------------ | ------------------------------------------------ |
-| Route              | `src/app/api/v1/ai/chat/route.ts`                | Maps AiEvents → Data Stream Protocol             |
-| AI Runtime         | `src/features/ai/services/ai_runtime.ts`         | Creates runId, manages RunEventRelay for billing |
-| GraphExecutorPort  | `src/ports/graph-executor.port.ts`               | Unified execution interface                      |
-| InProcGraphAdapter | `src/adapters/server/ai/inproc-graph.adapter.ts` | Wraps LLM completion, emits usage_report         |
+```typescript
+// Graph definitions (Server path imports)
+import { chatGraph } from "@cogni/langgraph-graphs/graphs";
 
-**Route responsibilities:**
+// Runtime utilities (converters, LLM wrapper)
+import {
+  CompletionUnitLLM,
+  toBaseMessage,
+  fromBaseMessage,
+} from "@cogni/langgraph-graphs/runtime";
 
-- Consumes AiEvents from ai_runtime
-- Maps AiEvents → Data Stream Protocol using official assistant-ui helper
-- Applies final transport-level truncation if needed
+// InProc execution (Next.js adapter imports)
+import {
+  createInProcChatRunner,
+  createChatGraph,
+} from "@cogni/langgraph-graphs/inproc";
+```
 
-**AI Runtime responsibilities:**
+---
 
-- Generates `runId` for graph executions
-- Manages `RunEventRelay` for pump+fanout (billing independent of client)
-- Returns `AsyncIterable<AiEvent>` — must yield immediately, no buffering
-- Does NOT map to wire protocol (that's route's job)
+## Core Invariants
+
+1. **NO_LANGCHAIN_IN_SRC**: `src/**` cannot import `@langchain/*`. Enforced by dependency-cruiser.
+2. **PACKAGES_NO_SRC_IMPORTS**: `packages/**` cannot import from `src/**`. Enforced by dependency-cruiser.
+3. **SINGLE_COMPLETIONFN**: Only `@cogni/ai-core` exports `CompletionFn`. All executors use this signature.
+4. **FINAL_GATES_COMPLETION**: `final` must not resolve until the graph run completes and the token queue is closed; runner must finalize correctly even if the consumer stops early.
+5. **RESULT_REFLECTS_OUTCOME**: `runner.final.ok` must match stream success/failure (deferred promise pattern).
+6. **CANCEL_PROPAGATION**: If the consumer stops/cancels the stream, runner must abort underlying completion/graph execution (via AbortSignal or equivalent) and close the queue to avoid leaked work.
+7. **ENV_FREE_EXPORTS**: Package exports never read `env.ts` or instantiate provider SDKs directly.
+8. **SINGLE_AIEVENT_CONTRACT**: Both InProc and Server executors emit identical AiEvent semantics at the GraphExecutorPort boundary. Executor-specific raw translation is permitted; shared mapping helpers encouraged. Conformance tests verify equivalent event sequences.
+9. **NO_AWAIT_IN_TOKEN_PATH**: The path from LLM token emission to AiEvent yield must not await I/O or slow operations. Use synchronous queue push to prevent backpressure-induced stream aborts.
+10. **NO_DIRECT_MODEL_CALLS_IN_INPROC_GRAPH_CODE**: In InProc execution, all model calls must go through `CompletionUnitLLM` (via injected `CompletionFn`). No direct `ChatOpenAI`/`initChatModel`/provider SDK calls in graph or tool code. This ensures billing/streaming/telemetry are never bypassed.
+11. **DRAIN_BEFORE_FINAL**: Stream must be fully consumed before awaiting final (prevents deadlock).
+
+---
+
+## InProc Execution Path
+
+InProc executes LangGraph within the Next.js process with billing through the adapter layer.
+
+### Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Facade / AI Runtime                                                  │
+│ - Creates GraphRunRequest with messages, model, caller               │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ Bootstrap Factory (graph-executor.factory.ts)                        │
+│ - createInProcGraphExecutor() wires GraphResolverFn                  │
+│ - Routes "chat" → createLangGraphRunner(adapter)                     │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ InProcGraphExecutorAdapter                                           │
+│ - Wraps executeCompletionUnit → ai-core CompletionFn                 │
+│ - Calls createInProcChatRunner() from package                        │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ @cogni/langgraph-graphs/inproc                                       │
+│ - runner.ts: createInProcChatRunner(completionFn, req)               │
+│ - Creates CompletionUnitLLM with injected CompletionFn + tokenSink   │
+│ - Creates graph with createChatGraph(llm)                            │
+│ - Executes via graph.invoke() (NOT stream/streamEvents)              │
+│ - Tokens emitted via tokenSink.push() (sync)                         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### CompletionUnitLLM
+
+`CompletionUnitLLM` (`runtime/completion-unit-llm.ts`) is a LangChain `BaseChatModel` wrapper that routes LLM calls through injected `CompletionFn`:
+
+```typescript
+export class CompletionUnitLLM extends BaseChatModel {
+  constructor(
+    completionFn: CompletionFn,
+    modelId: string,
+    tokenSink?: { push: (event: AiEvent) => void } // Sync push for streaming
+  ) {}
+
+  async _generate(messages: BaseMessage[]): Promise<ChatResult> {
+    // Convert BaseMessage → ai-core Message via fromBaseMessage()
+    // Call completionFn, drain stream, push tokens to tokenSink (sync)
+    // Collect results for billing aggregation
+  }
+
+  getCollectedResults(): CompletionUnitGenerateResult[] {
+    // Returns all LLM call results for usage_report emission
+  }
+
+  // NOTE: _streamResponseChunks() exists but is NOT called when using
+  // createReactAgent (which uses invoke() internally). Token streaming
+  // is achieved via tokenSink injection in _generate().
+}
+```
+
+### Canonical Converters
+
+```typescript
+// ai-core Message → LangChain BaseMessage
+export function toBaseMessage(msg: Message): BaseMessage;
+
+// LangChain BaseMessage → ai-core Message
+export function fromBaseMessage(msg: BaseMessage): Message;
+```
+
+### createInProcChatRunner (inproc/runner.ts)
+
+Main entry point for InProc execution:
+
+```typescript
+export function createInProcChatRunner(
+  completionFn: CompletionFn,
+  req: InProcGraphRequest
+): { stream: AsyncIterable<AiEvent>; final: Promise<GraphResult> };
+```
+
+**Deferred Promise Pattern:** Uses shared deferred promise so `final` reflects actual execution outcome even if stream is not fully consumed.
+
+---
+
+## Server Execution Path
+
+Server path calls external LangGraph Agent Server via SDK. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for infrastructure details.
+
+### Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Facade / AI Runtime                                                  │
+│ - Creates GraphRunRequest with messages, model, caller               │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ LangGraphServerAdapter                                               │
+│ - Derives tenant-scoped thread_id (UUIDv5)                           │
+│ - Calls SDK client.runs.stream()                                     │
+│ - Translates messages-tuple chunks → AiEvents                        │
+│ - Emits usage_report with accumulated tokens                         │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ LangGraph Server (External Process)                                  │
+│ - Executes graph, owns thread state/checkpoints                      │
+│ - Routes LLM calls through LiteLLM proxy                             │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Billing Contract Divergence (P0 Known Issue)
+
+| Field                       | InProc | Server |
+| --------------------------- | ------ | ------ |
+| usageUnitId (litellmCallId) | Yes    | No     |
+| costUsd                     | Yes    | No     |
+| model (resolved)            | Yes    | No     |
+| inputTokens / outputTokens  | Yes    | Yes    |
+
+**Decision needed:** Mark server path non-reconcilable for P0, OR enhance server to emit full billing facts.
 
 ---
 
 ## Creating a New Graph
 
-### File Structure
+### 1. Define Graph in Package
+
+Create graph definition in `packages/langgraph-graphs/src/graphs/<name>/`:
 
 ```
-apps/langgraph-service/
-└── src/
-    └── graphs/
-        └── <feature>/
-            ├── <graph>.graph.ts      # Graph definition (LangGraph native)
-            ├── <graph>.prompt.ts     # Prompt templates
-            └── tools/                # Tool definitions for LangGraph
-                └── <tool>.ts
-
-src/features/<feature>/ai/
-└── tools/
-    └── <tool>.tool.ts                # Tool contracts (InProc adapter only)
+packages/langgraph-graphs/src/graphs/my-agent/
+├── graph.ts          # Graph for Server path
+├── tools.ts          # Tool definitions (Zod schemas)
+└── prompts.ts        # System prompts
 ```
 
-**Note:** Graph code lives in `apps/langgraph-service/`, NOT in `src/features/`. Next.js never imports graph modules.
+### 2. Create InProc Factory (if needed)
 
-**Tool ownership by executor:**
+If graph needs InProc execution with injected LLM:
 
-- **`langgraph_server`:** Tool definitions live in `apps/langgraph-service/`. LangGraph Server executes tools internally.
-- **`inproc`:** Tool contracts in `src/features/` for validation/redaction when streaming tool events to UI.
+```typescript
+// packages/langgraph-graphs/src/inproc/my-agent.ts
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { myAgentTools, MY_AGENT_PROMPT } from "../graphs/my-agent";
 
-### Step-by-Step
-
-1. **Create graph definition** in `apps/langgraph-service/src/graphs/<feature>/<graph>.graph.ts`
-   - Use LangGraph native patterns
-   - Tool definitions for LangGraph; contracts in Next.js for validation
-
-2. **Create prompt templates** in `apps/langgraph-service/src/graphs/<feature>/<graph>.prompt.ts`
-   - Versioned text; tracked in git
-   - `prompt_hash` computed by LangGraph Server or adapter
-
-3. **Configure assistant ID** in environment
-   - Add `AI_LANGGRAPH_ASSISTANT_ID_<FEATURE>` config
-   - Maps feature → assistant/graph deployment
-
-4. **Next.js calls via adapter** (never imports graph)
-   - Route calls ai_runtime; runtime selects `LangGraphServerAdapter`
-   - Adapter calls LangGraph Server, translates stream → AiEvents
-
----
-
-## Caller Types
-
-| Type             | Required Fields                                                      | Usage                              |
-| ---------------- | -------------------------------------------------------------------- | ---------------------------------- |
-| `LlmCaller`      | `billingAccountId`, `virtualKeyId`, `requestId`, `traceId`           | Direct LLM calls (no graph)        |
-| `GraphLlmCaller` | All above + `graphRunId`, `graphName`, `graphVersion` (all required) | LLM calls within a graph execution |
-
-**Type safety invariant:** `LlmCaller` has NO `graphRunId` field. `GraphLlmCaller` extends `LlmCaller` with REQUIRED graph fields. Do NOT make `graphRunId` optional on base type.
-
----
-
-## Prompt Hash Canonicalization
-
-### Location
-
-`src/shared/ai/prompt-hash.ts` — canonical implementation
-
-### Canonical Payload Fields
-
-| Field                 | Included         | Notes                                          |
-| --------------------- | ---------------- | ---------------------------------------------- |
-| `prompt_hash_version` | Yes              | Version tag embedded in payload (e.g., `'v1'`) |
-| `model`               | Yes              | Model identifier                               |
-| `messages`            | Yes              | Array of `{ role, content }`                   |
-| `temperature`         | Yes              | Float                                          |
-| `max_tokens`          | Yes              | Integer                                        |
-| `tools`               | Yes (if present) | Tool definitions array                         |
-
-### Excluded from Hash
-
-- `request_id`, `trace_id`, `user`, `metadata` (correlation/billing fields)
-
-### Single Computation Site (InProc Only)
-
-**Invariant:** For `inproc` executor, only `src/adapters/server/ai/litellm.adapter.ts` computes `promptHash`. For `langgraph_server`, promptHash is not available in P0—LangGraph Server owns its own telemetry.
-
----
-
-## Graph Execution Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ ROUTE (src/app/api/v1/ai/chat/route.ts)                             │
-│ - Calls ai_runtime.runChatStream()                                  │
-│ - Consumes AiEvents from runtime                                    │
-│ - Maps AiEvents → Data Stream Protocol (official helper)            │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ AI RUNTIME (src/features/ai/services/ai_runtime.ts)                 │
-│ - Generates runId, derives tenant-scoped thread_id                  │
-│ - Selects adapter via GraphExecutorPort                             │
-│ - RunEventRelay: pumps stream to completion (billing-independent)   │
-│ - Fans out: UI subscriber + billing subscriber (+ history optional) │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ GRAPH EXECUTOR PORT (src/ports/graph-executor.port.ts)              │
-│ - Unified interface for all graph execution                         │
-│ - Returns { stream: AsyncIterable<AiEvent>, final: Promise }        │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-            ┌─────────────────┼─────────────────┐
-            ▼                 ▼                 ▼
-┌───────────────────┐ ┌───────────────┐ ┌───────────────────┐
-│ LangGraphServer   │ │ InProc        │ │ ClaudeSdk         │
-│ Adapter (P0)      │ │ Adapter       │ │ Adapter (P2)      │
-│ ─────────────     │ │ ─────         │ │ ───────           │
-│ Calls external    │ │ Wraps         │ │ Calls Anthropic   │
-│ LangGraph Server  │ │ completion.ts │ │ SDK directly      │
-│ via HTTP/WS       │ │               │ │                   │
-└───────────────────┘ └───────────────┘ └───────────────────┘
-            │                 │                 │
-            └─────────────────┼─────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ ALL ADAPTERS EMIT (normalized):                                     │
-│ - AiEvents (text_delta, assistant_final, done, error)               │
-│ - usage_report with UsageFact (executorType required)               │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ TELEMETRY (src/features/ai/services/telemetry.ts)                   │
-│ - Writes ai_invocation_summaries row per LLM call                   │
-│ - Enforces: if graphRunId → graph_name + graph_version non-null     │
-└─────────────────────────────────────────────────────────────────────┘
+export function createMyAgentGraph(llm: BaseChatModel) {
+  return createReactAgent({
+    llm,
+    tools: [...myAgentTools],
+    prompt: MY_AGENT_PROMPT,
+  });
+}
 ```
 
-**Note:** Per `P0_NO_TOOL_EVENT_STREAMING`: LangGraph Server adapter emits `text_delta`, `assistant_final`, `usage_report`, `done` only. Tool events (`tool_call_start`/`tool_call_result`) are `inproc` executor only in P0. ToolRunner is InProc-specific.
+### 3. Add Runner (InProc path)
 
----
+Create runner in `packages/langgraph-graphs/src/inproc/`:
 
-## Streaming Integration (Chat Route)
+```typescript
+// Similar to runner.ts but using createMyAgentGraph
+export function createInProcMyAgentRunner(
+  completionFn: CompletionFn,
+  req: InProcGraphRequest
+): { stream: AsyncIterable<AiEvent>; final: Promise<GraphResult> };
+```
 
-**Separation of concerns:**
+### 4. Wire in Bootstrap Factory
 
-- **ai_runtime** emits AiEvents (text_delta, tool_call_start, tool_call_result, usage_report, done)
-- **route.ts** maps AiEvents → Data Stream Protocol using official assistant-ui helper
+```typescript
+// src/bootstrap/graph-executor.factory.ts
+const graphResolver: GraphResolverFn = (graphName, adapter) => {
+  if (graphName === "chat") return createLangGraphRunner(adapter);
+  if (graphName === "my-agent") return createMyAgentRunner(adapter);
+  return undefined;
+};
+```
 
-Do NOT invent custom SSE event vocabulary. Do NOT encode protocol in runtime.
+### 5. Export from Package Index
 
-### AiEvent Types (Runtime Output)
-
-| Event              | Fields                                        | Emitter                   |
-| ------------------ | --------------------------------------------- | ------------------------- |
-| `text_delta`       | `delta: string`                               | Adapter (from LLM stream) |
-| `tool_call_start`  | `toolCallId`, `toolName`, `args`              | ToolRunner                |
-| `tool_call_result` | `toolCallId`, `result` (redacted), `isError?` | ToolRunner                |
-| `usage_report`     | `fact: UsageFact`                             | Adapter (for billing)     |
-| `done`             | —                                             | Adapter                   |
-
-### Wire Format (Route Output)
-
-Route maps AiEvents to assistant-ui Data Stream Protocol:
-
-- **Text deltas:** assistant-ui text chunk type
-- **Tool calls:** assistant-ui tool-call parts with stable `toolCallId`
-- **Tool results:** assistant-ui tool-result parts with redacted output
-
-### Tool UI Registration
-
-- Tool names are stable API identifiers (snake_case)
-- Every tool has Zod `inputSchema` and `outputSchema`
-- Frontend components keyed by `toolName`; provide `ToolFallback` for unregistered tools
-- Stream only UI-safe content: summaries, references, execution status; redact secrets/large payloads
-
-### ToolCallId Stability
-
-**Model-initiated:** Use model's `tool_call.id` directly
-
-**Graph-initiated:** Generate UUID at tool-runner boundary; same `toolCallId` across all stream chunks (start→args→result)
-
-**Never use `span_id` as `toolCallId`** — span_id is for tracing UI only.
-
-### Stream Redaction
-
-**Redaction ownership:**
-
-- **ToolRunner** redacts tool payloads per allowlist before emitting AiEvents
-- **Route** may apply final transport-level truncation as last-mile enforcement
-
-**Prod:** Redact full payloads; stream summaries + references + status only
-
-**Eval/CI:** Capture full artifacts out-of-band (Langfuse datasets or `evals/artifacts/` files); stream redacted payloads same as prod
-
-**Allowlist per tool:** Define which result fields are UI-safe (e.g., `query`, `resultCount`, `topUrl` for search; redact full documents)
-
----
-
-## Correlation ID Requirements
-
-### Essential (Always Required)
-
-| ID              | Scope                     | Persisted To                             |
-| --------------- | ------------------------- | ---------------------------------------- |
-| `request_id`    | One per inbound request   | ai_invocation_summaries, charge_receipts |
-| `trace_id`      | One per distributed trace | ai_invocation_summaries                  |
-| `invocation_id` | One per LLM call attempt  | ai_invocation_summaries (UNIQUE)         |
-
-### Essential for Graphs
-
-| ID              | Scope                   | Persisted To            |
-| --------------- | ----------------------- | ----------------------- |
-| `graph_run_id`  | One per graph execution | ai_invocation_summaries |
-| `graph_name`    | Graph identifier        | ai_invocation_summaries |
-| `graph_version` | Git SHA at build        | ai_invocation_summaries |
-
-**Enforcement:** If `graph_run_id` is present, `graph_name` and `graph_version` must be non-null.
-
-### Nice-to-Have (Nullable)
-
-| ID                  | Scope             | Notes                                 |
-| ------------------- | ----------------- | ------------------------------------- |
-| `langfuse_trace_id` | Langfuse-specific | Equals trace_id when Langfuse enabled |
-| `litellm_call_id`   | LiteLLM call ID   | Null on errors; join to /spend/logs   |
+```typescript
+// packages/langgraph-graphs/src/inproc/index.ts
+export { createMyAgentGraph } from "./my-agent";
+export { createInProcMyAgentRunner } from "./my-agent-runner";
+```
 
 ---
 
 ## Tool Structure
 
-### Contract + Implementation (feature-scoped)
+### Definition Location
 
-| File                                   | Contents                                          |
-| -------------------------------------- | ------------------------------------------------- |
-| `src/features/ai/tools/<tool>.tool.ts` | Zod schemas, allowlist, pure `execute()` function |
+| Executor   | Tool Location                                          | Notes                        |
+| ---------- | ------------------------------------------------------ | ---------------------------- |
+| **InProc** | `packages/langgraph-graphs/src/graphs/<name>/tools.ts` | Executed in Next.js process  |
+| **Server** | Same package location                                  | Executed in LangGraph Server |
 
-Tool implementations receive port dependencies via injection. No direct adapter imports.
+### Tool Contract Pattern
 
-### Registry (in features)
+```typescript
+// packages/langgraph-graphs/src/graphs/chat/tools.ts
+import { z } from "zod";
+import { tool } from "@langchain/core/tools";
 
-| File                               | Contents                     |
-| ---------------------------------- | ---------------------------- |
-| `src/features/ai/tool-registry.ts` | Name→BoundTool map, bindings |
+export const webSearchTool = tool(
+  async ({ query }) => {
+    // Tool implementation
+    return JSON.stringify(results);
+  },
+  {
+    name: "web_search",
+    description: "Search the web for information",
+    schema: z.object({
+      query: z.string().describe("Search query"),
+    }),
+  }
+);
 
-### ToolRunner Execution
+export const chatTools = [webSearchTool];
+```
 
-**Return shape:** `{ok:true, value}` | `{ok:false, errorCode, safeMessage}`
+### Tool Separation of Concerns
 
-**Error codes:** `validation` | `execution` | `unavailable` | `redaction_failed`
+| Package                   | Owns                                       | Dependencies                         |
+| ------------------------- | ------------------------------------------ | ------------------------------------ |
+| `@cogni/ai-tools`         | Pure tool logic, schemas (Zod), allowlists | `zod` only                           |
+| `@cogni/langgraph-graphs` | LangChain `tool()` wrappers                | `@cogni/ai-tools`, `@langchain/core` |
 
-**Pipeline order (fixed):**
+### LangChain Tool Wrapping
 
-1. Validate args (Zod inputSchema)
-2. Execute tool implementation
-3. Validate result (Zod outputSchema)
-4. Redact per allowlist (hard-fail if missing)
-5. Emit `tool_call_result` AiEvent
-6. Return result shape
+```typescript
+// packages/langgraph-graphs/src/runtime/langchain-tools.ts
+export function toLangChainTool(opts: {
+  contract: ToolContract;
+  exec: (name: string, args: unknown) => Promise<string>;
+  eventSink?: { push: (event: AiEvent) => void };
+  toolCallIdFactory?: () => string;
+}): StructuredTool;
 
-**Invariant:** Validation/redaction failures still emit `tool_call_result` error event with same `toolCallId`. Never pass-through unknown fields.
-
-### Drift Guardrail
-
-If a tool contract is used by 2+ features or any Operator service, move to shared location:
-
-- **Temporary:** `src/shared/ai/contracts/`
-- **Post-split:** Package in `packages/`
-
-**Port guidance:** One port per external system, NOT per tool.
-
-| Port              | Backs Tools            |
-| ----------------- | ---------------------- |
-| `KnowledgePort`   | RAG search, doc lookup |
-| `WebResearchPort` | Web search, URL fetch  |
-| `RepoPort`        | Code search, file read |
-| `McpPort`         | MCP server calls       |
-
-### UI Registration
-
-Tool names are stable API contracts:
-
-- Zod schemas for `inputSchema` and `outputSchema` serve both UI rendering and eval validation
-- Frontend component registry by `toolName` (e.g., `knowledge_search` → `<KnowledgeSearchUI />`)
-- Always provide `ToolFallback` for unregistered tools in the UI
-- Never stream full artifacts; stream summaries with reference IDs/URLs instead
+export function toLangChainTools(opts: {
+  registry: ToolRegistry;
+  eventSink?: { push: (event: AiEvent) => void };
+  // ...deps
+}): StructuredTool[];
+```
 
 ---
 
-## When to Package
+## langgraph.json Configuration
 
-Create packages only when criteria are met:
+For Server path, graphs are registered in `packages/langgraph-server/langgraph.json`:
 
-| Criterion                  | When to Package                                      |
-| -------------------------- | ---------------------------------------------------- |
-| **Cross-repo stability**   | Node + Operator need same contract (post-split)      |
-| **Multi-deployable reuse** | Same code consumed by 2+ services without divergence |
-| **Boundary enforcement**   | Hard isolation needed (no IO imports)                |
+```json
+{
+  "node_version": "20",
+  "graphs": {
+    "chat": "./src/index.ts:chatGraph",
+    "my-agent": "./src/index.ts:myAgentGraph"
+  },
+  "env": ".env"
+}
+```
 
-**Do NOT package:**
+The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/graphs`.
 
-- Graphs before proven cross-service reuse
-- Tool contracts used by single feature
-- Patterns used only once
+---
+
+## Implementation Checklist
+
+### P0: InProc LangGraph Execution
+
+- [ ] Create `@cogni/ai-core` with canonical types (CompletionFn, Message, AiEvent, UsageFact)
+- [ ] Create `@cogni/langgraph-graphs` package structure
+- [ ] Implement `CompletionUnitLLM` wrapper in runtime
+- [ ] Implement `toBaseMessage()` / `fromBaseMessage()` converters
+- [ ] Implement `createInProcChatRunner()` in inproc
+- [ ] Implement `createChatGraph(llm)` factory in inproc
+- [ ] Create `langgraph-runner.ts` thin adapter (NO `@langchain` imports)
+- [ ] Wire `createLangGraphRunner()` in bootstrap factory
+- [ ] Add dependency-cruiser rules (NO_LANGCHAIN_IN_SRC, PACKAGES_NO_SRC_IMPORTS)
+- [ ] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
+
+### P0: Server Path
+
+- [ ] Create `LangGraphServerAdapter` implementing `GraphExecutorPort`
+- [ ] Implement `thread_id` derivation (UUIDv5, tenant-scoped)
+- [ ] Implement SDK streaming with usage accumulation
+- [ ] Resolve billing contract divergence (missing usageUnitId/costUsd)
+
+### P0: InProc Token Streaming (SINGLE_AIEVENT_CONTRACT)
+
+InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens flow from `CompletionUnitLLM` → queue → AiEvent yield. Server keeps SDK SSE streaming.
+
+**Translation Ownership:**
+
+| Component             | Owns                                                            | Shared Helpers                                                        |
+| --------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Server Adapter**    | SSE decoding, `{event, data}` envelope parsing                  | Content extraction, AiEvent constructors                              |
+| **InProc Runner**     | Token queue lifecycle, `invoke()` orchestration, final emission | Content extraction, AiEvent constructors                              |
+| **Shared (runtime/)** | —                                                               | `extractTextContent()`, `createTextDeltaEvent()`, `accumulateUsage()` |
+
+**Token Flow:**
+
+- InProc: `CompletionUnitLLM._generate()` → `tokenSink.push()` (sync) → AsyncQueue → yield AiEvent
+- Server: SDK `client.runs.stream()` → SSE → `translateChunk()` → yield AiEvent
+- Both paths emit identical AiEvent sequences at GraphExecutorPort boundary
+
+**Remaining:**
+
+- [ ] Factor shared helper functions: `extractTextContent()`, `accumulateUsage()`
+- [ ] Add conformance test: same prompt → both paths emit comparable AiEvent sequences
+- [ ] Verify stack tests: `text_delta` events appear BEFORE `done` event
+
+### P0: Tool Support
+
+- [ ] Create `packages/ai-tools` package (NO `@langchain`, NO `src` imports)
+- [ ] Move tool contracts + pure implementations to `packages/ai-tools`
+- [ ] Create `toLangChainTool()` wrapper in `packages/langgraph-graphs/src/runtime/`
+- [ ] Update `createChatGraph(llm, tools)` to accept injected tools
+- [ ] Wire `toolExec` function in `langgraph-runner.ts` (passes to package APIs)
+- [ ] Add stack test: tool_call_start/tool_call_result events emitted
+
+### P1: Multi-Graph Support
+
+- [ ] Add second graph type to prove pattern
+- [ ] Document graph registration workflow
+- [ ] Add eval harness for graph comparison
 
 ---
 
 ## Anti-Patterns
 
-1. **No graph imports in Next.js** — All graph code in `apps/langgraph-service/`. Next.js communicates via adapter only.
-2. **No raw thread_id from client** — Always derive server-side with tenant prefix (`${accountId}:${threadKey}`)
-3. **No graphs in routes** — Routes call ai_runtime; runtime uses GraphExecutorPort
-4. **No multiple done events** — Adapter emits exactly one `done` and resolves `final` exactly once per run
-5. **No port-per-tool** — Ports per external system; tools compose on top
-6. **No optional graphRunId in graph APIs** — Use distinct caller types with required fields
-7. **No span_id persistence** — span_id is for tracing UI only; not a durable join key
-8. **No premature packaging** — Package only after proven cross-service reuse
-9. **No full tool artifacts in user stream** — Stream UI-safe summaries + status + references; capture full artifacts out-of-band
-10. **No custom SSE event vocabulary** — Route maps AiEvents to Data Stream Protocol via official helper
-11. **No protocol encoding in runtime** — Runtime emits AiEvents only; route handles wire protocol
-12. **No rebuild of LangGraph Server capabilities** — Use checkpoints/threads/runs as-is; don't duplicate in `run_artifacts`
-13. **No executor-specific billing logic** — `UsageFact` is normalized; adapters translate to common shape
+1. **No `@langchain` imports in `src/`** — All LangChain code in `packages/langgraph-graphs/`
+2. **No hardcoded models in graphs** — Model comes from `GraphRunRequest.model` → `config.configurable.model`
+3. **No direct `ChatOpenAI` in InProc** — Use `CompletionUnitLLM` wrapper for billing
+4. **No raw `thread_id` from client** — Always derive server-side with tenant prefix
+5. **No `done` emission in completion unit** — Only graph-level runner emits `done`
+6. **No env reads in package exports** — Inject dependencies, don't read `env.ts`
+7. **No `await` in token sink** — `tokenSink.push()` must be synchronous; async causes backpressure aborts
+8. **No `streamEvents()` for InProc** — Use `invoke()` + AsyncQueue; `streamEvents()` has Pregel lifecycle issues
+9. **No circular dependencies** — `ai-tools` must not import `langgraph-graphs`; only `langgraph-graphs` wraps `ai-tools` into LangChain tools
+10. **No nested `done`/`final` from subgraphs** — Subgraph invocation runs in "subgraph mode" (no `done`); parent run owns `done`/`final`
 
 ---
 
-## Related Docs
+## Related Documents
 
-- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — External runtime MVP, adapter implementation
-- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P0/P1/P2 checklists, ID map, invariants
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Billing idempotency, pump+fanout
-- [USAGE_HISTORY.md](USAGE_HISTORY.md) — Artifact caching (executor-agnostic)
+- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Executor-agnostic billing, tracking, UI/UX patterns
+- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — Infrastructure: Docker, Redis, container deployment
+- [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md) — Testing strategy for both executors
+- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution invariants
-- [AI_EVALS.md](AI_EVALS.md) — Eval harness structure, CI gates
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal layers
 
 ---
 
-**Last Updated**: 2025-12-22
-**Status**: Design Approved (External Runtime)
+**Last Updated**: 2025-12-29
+**Status**: Draft (Rev 7 - invoke + AsyncQueue pattern, tool support planned)
