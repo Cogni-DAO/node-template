@@ -43,9 +43,13 @@ if ! command -v pnpm >/dev/null 2>&1; then
     exit 1
 fi
 
-# Install dependencies (triggers postinstall → packages:build)
+# Install dependencies
 log_info "Installing project dependencies..."
 pnpm install
+
+# Build workspace packages (required before app can import from them)
+log_info "Building workspace packages..."
+pnpm packages:build
 
 # Set up git hooks (if prepare script exists)
 if grep -q '"prepare"' package.json 2>/dev/null; then

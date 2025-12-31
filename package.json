@@ -99,7 +99,6 @@
     "env:check": "tsx --tsconfig tsconfig.scripts.json scripts/check-runtime-env.ts",
     "validate:chain": "tsx --no-cache --tsconfig tsconfig.scripts.json scripts/validate-chain-config.ts",
     "knip": "dotenv -e .env.local -- knip --include files,exports,dependencies",
-    "postinstall": "pnpm packages:build",
     "prepare": "husky"
   },
   "engines": {
