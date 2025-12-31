@@ -63,9 +63,9 @@ echo -e "${GREEN}╚════════════════════
 
 # Determine step count
 if [[ "$INSTALL_ALL" == "true" ]]; then
-    TOTAL_STEPS=4
+    TOTAL_STEPS=5
 else
-    TOTAL_STEPS=2
+    TOTAL_STEPS=3
 fi
 
 CURRENT_STEP=0
@@ -79,6 +79,11 @@ log_step "Step ${CURRENT_STEP}/${TOTAL_STEPS}: Installing Node.js & pnpm (via Vo
 ((CURRENT_STEP++))
 log_step "Step ${CURRENT_STEP}/${TOTAL_STEPS}: Installing Docker"
 "$INSTALL_DIR/install-docker.sh"
+
+# Step 3: Project dependencies and packages
+((CURRENT_STEP++))
+log_step "Step ${CURRENT_STEP}/${TOTAL_STEPS}: Installing project dependencies"
+"$INSTALL_DIR/install-project.sh"
 
 # Optional: OpenTofu (infrastructure)
 if [[ "$INSTALL_ALL" == "true" ]]; then
@@ -98,8 +103,7 @@ echo -e "\n${GREEN}╔═══════════════════�
 echo -e "${GREEN}║              Installation Complete!                          ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}\n"
 
-log_info "All tools installed successfully."
-log_info "Project dependencies installed and git hooks configured."
+log_info "All tools and dependencies installed successfully."
 
 if [[ "$INSTALL_ALL" != "true" ]]; then
     log_info "Note: Run with --all to also install OpenTofu and REUSE."

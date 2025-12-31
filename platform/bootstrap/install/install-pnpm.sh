@@ -127,11 +127,4 @@ install_volta
 install_node
 install_pnpm
 
-# Install Node.js dependencies and setup git hooks
-log_info "Installing Node.js dependencies..."
-pnpm install
-
-log_info "Setting up git hooks..."
-pnpm prepare
-
-log_info "✅ Node.js/pnpm installation complete!"
+log_info "✅ Volta/Node/pnpm installation complete!"

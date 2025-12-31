@@ -35,10 +35,11 @@ Adds OpenTofu (infrastructure) and REUSE (license compliance) for fork owners de
 Located in `install/`:
 
 ```bash
-platform/bootstrap/install/install-pnpm.sh    # Volta + Node 20 + pnpm + deps
-platform/bootstrap/install/install-docker.sh  # Docker Desktop + daemon check
-platform/bootstrap/install/install-tofu.sh    # OpenTofu
-platform/bootstrap/install/install-reuse.sh   # REUSE tool
+platform/bootstrap/install/install-pnpm.sh     # Volta + Node 20 + pnpm
+platform/bootstrap/install/install-docker.sh   # Docker Desktop + daemon check
+platform/bootstrap/install/install-project.sh  # pnpm install + packages:build + git hooks
+platform/bootstrap/install/install-tofu.sh     # OpenTofu
+platform/bootstrap/install/install-reuse.sh    # REUSE tool
 ```
 
 Additional scripts:
