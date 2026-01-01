@@ -153,7 +153,6 @@ echo ""
 read -p "Set up development environment? (Y/n) " -n 1 -r
 echo ""
 
-DEV_SETUP_SUCCESS=false
 if [[ ! $REPLY =~ ^[Nn]$ ]]; then
     log_step "Setting up Development Environment"
     log_info "Starting infrastructure containers..."
@@ -161,7 +160,6 @@ if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         log_info "Provisioning and migrating dev database..."
         if pnpm db:setup; then
             log_info "✓ Dev environment ready"
-            DEV_SETUP_SUCCESS=true
         else
             log_error "Failed to set up dev database"
         fi
@@ -186,26 +184,13 @@ if [[ ! $REPLY =~ ^[Nn]$ ]]; then
     fi
 fi
 
-# Offer to start dev server if dev setup succeeded
-if [[ "$DEV_SETUP_SUCCESS" == "true" ]]; then
-    echo ""
-    read -p "Start the development server now? (y/N) " -n 1 -r
-    echo ""
-
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        log_step "Starting Development Server"
-        log_info "Running: pnpm dev"
-        log_info "Press Ctrl+C to stop when done."
-        echo ""
-        pnpm dev
-    fi
-fi
-
 echo ""
 log_info "Setup complete! Quick reference:"
 echo ""
-echo "  pnpm dev:stack          # Start dev (infra + Next.js)"
+echo "  pnpm dev:stack          # Start dev server (infra + Next.js)"
 echo "  pnpm dev                # Start Next.js only (infra already running)"
+echo "  pnpm dev:stack:test     # Start test server (test infra + Next.js)"
+echo "  pnpm test:stack:dev     # Run stack tests against test server"
 echo "  pnpm check              # Lint + type + format validation"
-echo "  pnpm check:full         # Full CI-parity test suite"
+echo "  pnpm check:full         # Full CI-parity test suite, docker build + test stack"
 echo ""
