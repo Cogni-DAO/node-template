@@ -145,24 +145,67 @@ log_info "✓ Docker compose $(docker compose version --short)"
 # Ensure .env.local exists
 "$SCRIPT_DIR/simple-local-env-setup.sh"
 
-# Prompt to start dev stack
+# Prompt for first-time environment setup
 echo ""
-read -p "Would you like to start the development stack now? (y/N) " -n 1 -r
+log_info "First-time setup provisions databases and runs migrations."
+log_info "This is required before running the app or tests."
+echo ""
+read -p "Set up development environment? (Y/n) " -n 1 -r
 echo ""
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    log_step "Starting Development Stack"
-    log_info "Running: pnpm dev:stack"
-    log_info "This will start: PostgreSQL, LiteLLM, and Next.js dev server"
-    log_info "Press Ctrl+C to stop the stack when done."
-    echo ""
-    pnpm dev:stack
-else
-    echo ""
-    log_info "Setup complete! To start developing:"
-    echo ""
-    echo "  pnpm dev:stack    # Start full dev stack (DB + LiteLLM + Next.js)"
-    echo "  pnpm dev          # Start Next.js only (requires external DB)"
-    echo "  pnpm check        # Run lint + type + format validation"
-    echo ""
+DEV_SETUP_SUCCESS=false
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    log_step "Setting up Development Environment"
+    log_info "Starting infrastructure containers..."
+    if pnpm dev:infra; then
+        log_info "Provisioning and migrating dev database..."
+        if pnpm db:setup; then
+            log_info "✓ Dev environment ready"
+            DEV_SETUP_SUCCESS=true
+        else
+            log_error "Failed to set up dev database"
+        fi
+    else
+        log_error "Failed to start dev infrastructure"
+    fi
 fi
+
+echo ""
+read -p "Set up test environment? (Y/n) " -n 1 -r
+echo ""
+
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    log_step "Setting up Test Environment"
+    log_info "Starting test containers and provisioning test database..."
+    if pnpm docker:test:stack:setup; then
+        log_info "✓ Test environment ready"
+        log_info "Stopping test containers (will restart when needed)..."
+        pnpm docker:test:stack:down
+    else
+        log_error "Failed to set up test environment"
+    fi
+fi
+
+# Offer to start dev server if dev setup succeeded
+if [[ "$DEV_SETUP_SUCCESS" == "true" ]]; then
+    echo ""
+    read -p "Start the development server now? (y/N) " -n 1 -r
+    echo ""
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        log_step "Starting Development Server"
+        log_info "Running: pnpm dev"
+        log_info "Press Ctrl+C to stop when done."
+        echo ""
+        pnpm dev
+    fi
+fi
+
+echo ""
+log_info "Setup complete! Quick reference:"
+echo ""
+echo "  pnpm dev:stack          # Start dev (infra + Next.js)"
+echo "  pnpm dev                # Start Next.js only (infra already running)"
+echo "  pnpm check              # Lint + type + format validation"
+echo "  pnpm check:full         # Full CI-parity test suite"
+echo ""
