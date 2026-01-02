@@ -93,8 +93,8 @@ cat > terraform.preview.tfvars << EOF
 environment     = "preview"
 vm_name_prefix  = "cogni-template"
 project_id      = "${CHERRY_PROJECT_ID}"
-plan            = "cloud_vps_1"
-region          = "eu_nord_1"
+plan            = "B1-1-1gb-20s-shared"
+region          = "LT-Siauliai"
 public_key_path = "keys/cogni_template_preview_deploy.pub"
 EOF
 
@@ -119,8 +119,8 @@ cat > terraform.production.tfvars << EOF
 environment     = "production"
 vm_name_prefix  = "cogni-template"
 project_id      = "${CHERRY_PROJECT_ID}"
-plan            = "cloud_vps_1"
-region          = "eu_nord_1"
+plan            = "B1-1-1gb-20s-shared"
+region          = "LT-Siauliai"
 public_key_path = "keys/cogni_template_production_deploy.pub"
 EOF
 
@@ -244,6 +244,39 @@ curl -I https://cognidao.org/readyz
 # SSH into VMs if needed
 ssh -i ~/.ssh/cogni_template_preview_deploy root@$PREVIEW_IP
 ssh -i ~/.ssh/cogni_template_production_deploy root@$PROD_IP
+```
+
+---
+
+## SSH Reference
+
+Quick commands for admin access to VMs.
+
+### Connect to VMs
+
+```bash
+# Preview
+ssh -i ~/.ssh/cogni_template_preview_deploy root@<PREVIEW_IP>
+
+# Production
+ssh -i ~/.ssh/cogni_template_production_deploy root@<PROD_IP>
+```
+
+> **Tip**: Get current IPs from GitHub Secrets or `tofu output -raw vm_host` in the appropriate workspace.
+
+### Docker Compose Locations (on VM)
+
+| Stack                            | Path                                             | Project Name    |
+| -------------------------------- | ------------------------------------------------ | --------------- |
+| Edge (Caddy/TLS)                 | `/opt/cogni-template-edge/docker-compose.yml`    | `cogni-edge`    |
+| Runtime (app, postgres, litellm) | `/opt/cogni-template-runtime/docker-compose.yml` | `cogni-runtime` |
+
+```bash
+# Example: view runtime logs
+docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 100
+
+# Example: restart edge stack
+docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml restart
 ```
 
 ---
