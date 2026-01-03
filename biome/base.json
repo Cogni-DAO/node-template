@@ -64,7 +64,9 @@
                   "launchdarkly-react-client-sdk",
                   "configcat-node",
                   "configcat-js",
-                  "crisp-sdk-web"
+                  "crisp-sdk-web",
+                  "@langchain/**",
+                  "langchain/**"
                 ],
                 "message": "Vendor SDK imports are restricted to infra adapters"
               },
@@ -111,7 +113,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/infra/**"],
+      "includes": ["src/infra/**", "packages/langgraph-graphs/**"],
       "linter": {
         "rules": {
           "style": {

@@ -22,21 +22,21 @@ LangGraph graphs can execute via two paths:
 
 ```
 packages/
-├── ai-core/                          # Executor-agnostic primitives (NO LangChain)
+├── ai-core/                          # Executor-agnostic primitives (NO LangChain) ✓
 │   └── src/
-│       ├── completion/types.ts       # CompletionFn, CompletionResult
-│       ├── messages/message.ts       # Message, MessageToolCall
-│       ├── events/ai-events.ts       # AiEvent union
-│       └── usage/usage.ts            # UsageFact, ExecutorType
+│       ├── events/ai-events.ts       # AiEvent union ✓
+│       ├── usage/usage.ts            # UsageFact, ExecutorType ✓
+│       ├── completion/types.ts       # CompletionFn, CompletionResult (planned)
+│       └── messages/message.ts       # Message, MessageToolCall (planned)
 │
-├── ai-tools/                         # Pure tool definitions (NO LangChain)
+├── ai-tools/                         # Pure tool definitions (NO LangChain) ✓
 │   └── src/
 │       ├── index.ts                  # Barrel export
-│       ├── tool-runner.ts            # ToolContract, BoundTool, toolRunner logic
+│       ├── types.ts                  # ToolContract, BoundTool, ToolResult
 │       └── tools/
-│           └── get-time.ts           # Pure impl: () => { iso, unixMs, tz }
+│           └── get-current-time.ts   # Pure impl: () => { currentTime }
 │
-└── langgraph-graphs/                 # ALL LangChain code lives here
+└── langgraph-graphs/                 # ALL LangChain code lives here (planned)
     └── src/
         ├── graphs/                   # Graph definitions (tools, prompts)
         │   └── chat/                 # Chat graph (executes LangGraph AI internally)
@@ -413,8 +413,8 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 
 ### P0: Tool Support
 
-- [ ] Create `packages/ai-tools` package (NO `@langchain`, NO `src` imports)
-- [ ] Move tool contracts + pure implementations to `packages/ai-tools`
+- [x] Create `packages/ai-tools` package (NO `@langchain`, NO `src` imports)
+- [x] Move tool contracts + pure implementations to `packages/ai-tools`
 - [ ] Create `toLangChainTool()` wrapper in `packages/langgraph-graphs/src/runtime/`
 - [ ] Update `createChatGraph(llm, tools)` to accept injected tools
 - [ ] Wire `toolExec` function in `langgraph-runner.ts` (passes to package APIs)
