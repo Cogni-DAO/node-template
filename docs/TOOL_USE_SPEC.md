@@ -7,19 +7,21 @@
 
 1. **TOOLS_VIA_TOOLRUNNER**: All tool execution through `toolRunner.exec()`. No direct calls.
 
-2. **TOOLS_FEATURE_SCOPED**: Tool contracts + implementations in `features/ai/tools/`. Pure functions injected with ports.
+2. **TOOLS_IN_PACKAGES**: Tool contracts + implementations in `@cogni/ai-tools`. LangChain wrappers in `@cogni/langgraph-graphs/runtime`. No tool definitions in `src/**`.
 
-3. **TOOLS_IO_VIA_PORTS**: Tools needing IO receive port dependencies. No direct adapter imports.
+3. **TOOLS_IO_VIA_CAPABILITIES**: Tools receive IO capabilities as injected interfaces (defined in packages). No direct adapter/env imports in tool code. Capabilities are bound to adapters in composition roots.
 
 4. **REDACTION_REQUIRED**: Every tool defines allowlist. Missing = error event.
 
 5. **TOOLCALLID_STABLE**: Same ID across start→result. Model-provided or UUID at boundary.
 
-6. **NO_LANGGRAPH_RUNTIME**: Hand-rolled agentic loop. No `@langchain/langgraph` dependency.
+6. **LANGGRAPH_OWNS_GRAPHS**: Agentic loops via `@cogni/langgraph-graphs`. No `@langchain/*` imports in `src/**`. See [LANGGRAPH_AI.md](LANGGRAPH_AI.md).
 
 7. **STREAM_VIA_ASSISTANT_STREAM**: Use `assistant-stream` package only. No custom SSE.
 
 8. **ADAPTER_ASSEMBLES_TOOLCALLS**: `litellm.adapter.ts` is the single assembler of streamed `tool_call` deltas into `final.toolCalls`. Assembly state is scoped to a single `completionStream()` call and reset between calls. Graph executes tools only from `final.toolCalls`, never from raw deltas.
+
+9. **BINDING_IN_COMPOSITION_ROOT**: Tool binding (connecting contracts to ports/deps) occurs only in composition roots: `src/bootstrap/**` (Next.js) or `packages/langgraph-server/**` (LangGraph Server). Features and packages never instantiate bound tools.
 
 ---
 
@@ -40,12 +42,15 @@
 - [ ] Parse SSE `delta.tool_calls` and emit `tool_call_delta` events
 - [ ] Accumulate tool calls and include in final result
 
-**Feature layer:**
+**Package layer:**
 
-- [ ] Create `get_current_time` tool in `features/ai/tools/get-current-time.tool.ts`
-- [ ] Register tool in `tool-registry.ts` with contract + implementation
-- [ ] Add `getLlmToolDefinitions()` converter (contract → LlmToolDefinition)
-- [ ] Implement agentic loop in `chat.graph.ts` (LLM→tool→LLM cycle)
+- [x] Create `get_current_time` tool in `@cogni/ai-tools/tools/get-current-time.ts`
+- [ ] Create `toLangChainTool()` converter in `@cogni/langgraph-graphs/runtime/`
+- [ ] Implement agentic loop in `@cogni/langgraph-graphs/inproc/` (LLM→tool→LLM cycle)
+
+**Bootstrap layer:**
+
+- [ ] Create `src/bootstrap/ai/tools.bindings.ts` for tool binding with ports
 
 **Route layer:**
 
@@ -76,15 +81,16 @@
 
 ## File Pointers (P0)
 
-| File                                                | Change                                                           |
-| --------------------------------------------------- | ---------------------------------------------------------------- |
-| `src/ports/llm.port.ts`                             | Add `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta` types |
-| `src/adapters/server/ai/litellm.adapter.ts`         | Parse `delta.tool_calls` in SSE stream, emit `tool_call_delta`   |
-| `src/features/ai/tools/get-current-time.tool.ts`    | New: contract + pure implementation                              |
-| `src/features/ai/tool-registry.ts`                  | Register tool, add `getLlmToolDefinitions()` converter           |
-| `src/features/ai/graphs/chat.graph.ts`              | Agentic loop: accumulate deltas, execute tools, loop             |
-| `src/app/api/v1/ai/chat/route.ts`                   | Uncomment `addToolCallPart()` handling (lines 275-285)           |
-| `src/features/ai/components/tools/ToolFallback.tsx` | New: generic tool result UI component (optional for MVP)         |
+| File                                                 | Change                                                           |
+| ---------------------------------------------------- | ---------------------------------------------------------------- |
+| `src/ports/llm.port.ts`                              | Add `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta` types |
+| `src/adapters/server/ai/litellm.adapter.ts`          | Parse `delta.tool_calls` in SSE stream, emit `tool_call_delta`   |
+| `@cogni/ai-tools/tools/get-current-time.ts`          | Contract + implementation with capability injection              |
+| `@cogni/ai-tools/capabilities/*.ts`                  | Capability interfaces (e.g., Clock) for tool IO                  |
+| `@cogni/langgraph-graphs/runtime/langchain-tools.ts` | `toLangChainTool()` wrapper for LangGraph execution              |
+| `src/bootstrap/ai/tools.bindings.ts`                 | Bind capabilities → adapters for Next.js runtime                 |
+| `src/app/api/v1/ai/chat/route.ts`                    | Uncomment `addToolCallPart()` handling (lines 275-285)           |
+| `src/features/ai/components/tools/ToolFallback.tsx`  | New: generic tool result UI component (optional for MVP)         |
 
 ---
 
@@ -92,15 +98,17 @@
 
 ### 1. Tool Architecture
 
-| Layer          | Location                       | Owns                              |
-| -------------- | ------------------------------ | --------------------------------- |
-| Contract       | `features/ai/tools/*.tool.ts`  | Zod schema, allowlist, name       |
-| Implementation | `features/ai/tools/*.tool.ts`  | `execute()` (pure, receives port) |
-| Registry       | `features/ai/tool-registry.ts` | Name→BoundTool map                |
-| IO Port        | `ports/*.port.ts`              | Interface for tools needing IO    |
-| IO Adapter     | `adapters/server/**`           | Port implementation               |
+| Layer            | Location                               | Owns                                                |
+| ---------------- | -------------------------------------- | --------------------------------------------------- |
+| Contract         | `@cogni/ai-tools/tools/*.ts`           | Zod schema, allowlist, name, description            |
+| Implementation   | `@cogni/ai-tools/tools/*.ts`           | `execute(ctx, args)` — IO via injected capabilities |
+| Capability iface | `@cogni/ai-tools/capabilities/*.ts`    | Minimal interfaces tools depend on (e.g., Clock)    |
+| LangChain wrap   | `@cogni/langgraph-graphs/runtime/`     | `toLangChainTool()` converter                       |
+| Binding (Next)   | `src/bootstrap/**`                     | Wire capabilities → adapters for Next.js runtime    |
+| Binding (Server) | `packages/langgraph-server/bootstrap/` | Wire capabilities → adapters for LangGraph Server   |
+| IO Adapter       | `src/adapters/server/**`               | Capability implementation                           |
 
-**Rule:** Tools stay in features. IO via ports only. No adapter imports in tools.
+**Rule:** Tool contracts in packages. IO allowed only via injected capabilities — no adapter/env imports in tools. Binding in composition roots only. No tool definitions in `src/**`.
 
 **Note:** LLM port tool types (`LlmToolDefinition`, `LlmToolCall`, etc.) are OpenAI-compatible internal DTOs. LiteLLM uses OpenAI format, so no mapping needed for MVP. A future Anthropic direct adapter would map `tools[].input_schema` and `tool_use`/`tool_result` content blocks into these internal types.
 
@@ -214,11 +222,10 @@ When `toolCall.function.arguments` is invalid JSON:
 
 | Component                | Location                             | Status                                         |
 | ------------------------ | ------------------------------------ | ---------------------------------------------- |
-| AiEvent types            | `features/ai/types.ts`               | ✓ Complete                                     |
-| ToolContract, BoundTool  | `features/ai/types.ts`               | ✓ Complete                                     |
+| AiEvent types            | `@cogni/ai-core`                     | ✓ Complete                                     |
+| ToolContract, BoundTool  | `@cogni/ai-tools`                    | ✓ Complete                                     |
+| get_current_time tool    | `@cogni/ai-tools/tools/`             | ✓ Complete                                     |
 | tool-runner.ts           | `features/ai/tool-runner.ts`         | ✓ Complete pipeline                            |
-| tool-registry.ts         | `features/ai/tool-registry.ts`       | ✓ Empty skeleton                               |
-| chat.graph.ts            | `features/ai/graphs/chat.graph.ts`   | ✓ Empty skeleton                               |
 | Route tool handling      | `app/api/v1/ai/chat/route.ts`        | ✓ Written but commented (264-285)              |
 | ai_runtime.ts            | `features/ai/services/ai_runtime.ts` | ✓ Uses GraphExecutorPort (no tool routing yet) |
 | LlmCaller/GraphLlmCaller | `ports/llm.port.ts`                  | ✓ Types defined                                |
@@ -233,5 +240,5 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-**Last Updated**: 2025-12-22
-**Status**: Draft
+**Last Updated**: 2026-01-03
+**Status**: Draft (aligned with LANGGRAPH_AI.md)
