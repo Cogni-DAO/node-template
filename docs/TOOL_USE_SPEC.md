@@ -5,31 +5,63 @@
 
 ## Core Invariants
 
-1. **TOOLS_VIA_TOOLRUNNER**: All tool execution through `toolRunner.exec()`. No direct calls.
+1. **TOOLS_VIA_TOOLRUNNER**: All tool execution flows through `toolRunner.exec()` for InProc execution. LangChain tool wrappers (`@cogni/langgraph-graphs`) must delegate to `toolRunner.exec()` to preserve validation/redaction pipeline. No direct tool implementation calls.
 
-2. **TOOLS_FEATURE_SCOPED**: Tool contracts + implementations in `features/ai/tools/`. Pure functions injected with ports.
+2. **TOOLS_IN_PACKAGES**: Tool contracts + implementations in `@cogni/ai-tools`. Wire DTOs (OpenAI-shaped) in `@cogni/ai-core`. LangChain wrappers in `@cogni/langgraph-graphs/runtime`. Binding in composition roots only. No tool definitions in `src/**`.
 
-3. **TOOLS_IO_VIA_PORTS**: Tools needing IO receive port dependencies. No direct adapter imports.
+3. **TOOLS_IO_VIA_CAPABILITIES**: Tools receive IO capabilities as injected interfaces (defined in packages). No direct adapter/env imports in tool code. Capabilities are bound to adapters in composition roots.
 
-4. **REDACTION_REQUIRED**: Every tool defines allowlist. Missing = error event.
+4. **REDACTION_REQUIRED**: Every tool must define deterministic redaction for UI/telemetry outputs. Allowlist is the required mechanism—output fields not in allowlist are stripped. Missing redaction config = error event, not silent pass-through.
 
 5. **TOOLCALLID_STABLE**: Same ID across start→result. Model-provided or UUID at boundary.
 
-6. **NO_LANGGRAPH_RUNTIME**: Hand-rolled agentic loop. No `@langchain/langgraph` dependency.
+6. **LANGGRAPH_OWNS_GRAPHS**: Agentic loops via `@cogni/langgraph-graphs`. No `@langchain/*` imports in `src/**`. See [LANGGRAPH_AI.md](LANGGRAPH_AI.md).
 
 7. **STREAM_VIA_ASSISTANT_STREAM**: Use `assistant-stream` package only. No custom SSE.
 
 8. **ADAPTER_ASSEMBLES_TOOLCALLS**: `litellm.adapter.ts` is the single assembler of streamed `tool_call` deltas into `final.toolCalls`. Assembly state is scoped to a single `completionStream()` call and reset between calls. Graph executes tools only from `final.toolCalls`, never from raw deltas.
 
+9. **BINDING_IN_COMPOSITION_ROOT**: Tool binding (connecting contracts to ports/deps) occurs only in composition roots: `src/bootstrap/**` (Next.js) or `packages/langgraph-server/**` (LangGraph Server). Features and packages never instantiate bound tools.
+
+10. **OPENAI_WIRE_DTOS_CANONICAL**: All tool wire DTOs (tool definitions, tool calls, deltas, tool result messages) use canonical OpenAI-shaped types defined in `@cogni/ai-core/tooling/openai-wire-dtos.ts`. Adapters may map provider formats (e.g., Anthropic `tool_use`/`tool_result`) to/from these DTOs at boundaries; no other module defines wire tool shapes.
+
+11. **JSON_SCHEMA7_PARAMETERS**: Tool definition `parameters` field uses full JSONSchema7 (not a simplified subset). Tool input schemas must compile deterministically from Zod → JSON Schema for wire emission. Use `zod-to-json-schema` or equivalent.
+
+12. **NO_MANUAL_SCHEMA_DUPLICATION**: No hand-written JSON Schema objects alongside Zod schemas. The `parameters` field in wire DTOs must be derived from the contract's Zod schema via `getToolJsonSchema(contract)`. Manual duplication causes drift.
+
+13. **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**: Golden fixture tests enforce OpenAI wire conformance: exact key sets (no extra keys), required fields for tool definitions, correct `tool_calls` delta assembly, and correct tool result message formation. Tests assert structure, not JSON key ordering.
+
 ---
 
 ## Implementation Checklist
+
+### P0: OpenAI Wire Format Alignment
+
+Per invariants **OPENAI_WIRE_DTOS_CANONICAL**, **JSON_SCHEMA7_PARAMETERS**, **NO_MANUAL_SCHEMA_DUPLICATION**, **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**:
+
+**Wire DTO layer (`@cogni/ai-core`):**
+
+- [ ] Create `@cogni/ai-core/tooling/openai-wire-dtos.ts` with canonical OpenAI types
+- [ ] Replace simplified `JsonSchemaObject` with proper `JSONSchema7` import
+- [ ] Migrate `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta`, `LlmToolChoice` from `llm.port.ts`
+
+**Schema compilation (`@cogni/ai-tools`):**
+
+- [ ] Add `zod-to-json-schema` dependency
+- [ ] Create `getToolJsonSchema(contract)` in `@cogni/ai-tools/schema.ts`
+- [ ] Remove manual JSON Schema in `chat.runner.ts` — derive from contract
+
+**Golden fixtures (`tests/contracts/`):**
+
+- [ ] `openai-tool-wire-format.test.ts` — tool definition serialization (exact keys, no extras)
+- [ ] `tool-call-delta-assembly.test.ts` — stream delta accumulation matches OpenAI SSE format
+- [ ] `tool-result-message.test.ts` — `{ role: "tool", content: string, tool_call_id }` format
 
 ### P0: First Tool End-to-End
 
 **Port layer:**
 
-- [ ] Add tool types to `llm.port.ts`: `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta`, `LlmToolChoice`
+- [x] Add tool types to `llm.port.ts`: `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta`, `LlmToolChoice` (migrate to ai-core)
 - [ ] Extend `CompletionStreamParams` with `tools?: LlmToolDefinition[]` and `toolChoice?: LlmToolChoice`
 - [ ] Add `tool_call_delta` event to `ChatDeltaEvent` union
 - [ ] Add `toolCalls?: LlmToolCall[]` to `LlmCompletionResult`
@@ -40,16 +72,20 @@
 - [ ] Parse SSE `delta.tool_calls` and emit `tool_call_delta` events
 - [ ] Accumulate tool calls and include in final result
 
-**Feature layer:**
+**Package layer:**
 
-- [ ] Create `get_current_time` tool in `features/ai/tools/get-current-time.tool.ts`
-- [ ] Register tool in `tool-registry.ts` with contract + implementation
-- [ ] Add `getLlmToolDefinitions()` converter (contract → LlmToolDefinition)
-- [ ] Implement agentic loop in `chat.graph.ts` (LLM→tool→LLM cycle)
+- [x] Create `get_current_time` tool in `@cogni/ai-tools/tools/get-current-time.ts`
+- [x] Create `@cogni/ai-tools` package with ToolContract, BoundTool types
+- [ ] Create `toLangChainTool()` converter in `@cogni/langgraph-graphs/runtime/`
+- [ ] Implement agentic loop in `@cogni/langgraph-graphs/inproc/` (LLM→tool→LLM cycle)
+
+**Bootstrap layer:**
+
+- [ ] Create `src/bootstrap/ai/tools.bindings.ts` for tool binding with ports
 
 **Route layer:**
 
-- [ ] Uncomment route tool handling (lines 275-285) using `controller.addToolCallPart()`
+- [x] Route tool handling using `controller.addToolCallPart()` (lines 274-294)
 
 **UI layer (optional for MVP):**
 
@@ -76,15 +112,20 @@
 
 ## File Pointers (P0)
 
-| File                                                | Change                                                           |
-| --------------------------------------------------- | ---------------------------------------------------------------- |
-| `src/ports/llm.port.ts`                             | Add `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta` types |
-| `src/adapters/server/ai/litellm.adapter.ts`         | Parse `delta.tool_calls` in SSE stream, emit `tool_call_delta`   |
-| `src/features/ai/tools/get-current-time.tool.ts`    | New: contract + pure implementation                              |
-| `src/features/ai/tool-registry.ts`                  | Register tool, add `getLlmToolDefinitions()` converter           |
-| `src/features/ai/graphs/chat.graph.ts`              | Agentic loop: accumulate deltas, execute tools, loop             |
-| `src/app/api/v1/ai/chat/route.ts`                   | Uncomment `addToolCallPart()` handling (lines 275-285)           |
-| `src/features/ai/components/tools/ToolFallback.tsx` | New: generic tool result UI component (optional for MVP)         |
+| File                                                 | Change                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------ |
+| `@cogni/ai-core/tooling/openai-wire-dtos.ts`         | New: canonical OpenAI-shaped tool types (definitions, calls, etc.) |
+| `@cogni/ai-tools/schema.ts`                          | New: `getToolJsonSchema(contract)` — Zod → JSONSchema7 compiler    |
+| `src/ports/llm.port.ts`                              | Migrate tool types to `@cogni/ai-core`, re-export for compat       |
+| `src/adapters/server/ai/litellm.adapter.ts`          | Parse `delta.tool_calls` in SSE stream, emit `tool_call_delta`     |
+| `src/features/ai/runners/chat.runner.ts`             | Remove manual JSON Schema, use `getToolJsonSchema()`               |
+| `@cogni/ai-tools/tools/get-current-time.ts`          | Contract + implementation with capability injection                |
+| `@cogni/ai-tools/capabilities/*.ts`                  | Capability interfaces (e.g., Clock) for tool IO                    |
+| `@cogni/langgraph-graphs/runtime/langchain-tools.ts` | `toLangChainTool()` wrapper for LangGraph execution                |
+| `src/bootstrap/ai/tools.bindings.ts`                 | Bind capabilities → adapters for Next.js runtime                   |
+| `src/app/api/v1/ai/chat/route.ts`                    | Uncomment `addToolCallPart()` handling (lines 275-285)             |
+| `src/features/ai/components/tools/ToolFallback.tsx`  | New: generic tool result UI component (optional for MVP)           |
+| `tests/contracts/openai-tool-wire-format.test.ts`    | New: golden fixture tests for wire format conformance              |
 
 ---
 
@@ -92,17 +133,26 @@
 
 ### 1. Tool Architecture
 
-| Layer          | Location                       | Owns                              |
-| -------------- | ------------------------------ | --------------------------------- |
-| Contract       | `features/ai/tools/*.tool.ts`  | Zod schema, allowlist, name       |
-| Implementation | `features/ai/tools/*.tool.ts`  | `execute()` (pure, receives port) |
-| Registry       | `features/ai/tool-registry.ts` | Name→BoundTool map                |
-| IO Port        | `ports/*.port.ts`              | Interface for tools needing IO    |
-| IO Adapter     | `adapters/server/**`           | Port implementation               |
+| Layer            | Location                                     | Owns                                                                  |
+| ---------------- | -------------------------------------------- | --------------------------------------------------------------------- |
+| Wire DTOs        | `@cogni/ai-core/tooling/openai-wire-dtos.ts` | OpenAI-shaped types: tool definitions, calls, deltas, result messages |
+| Contract         | `@cogni/ai-tools/tools/*.ts`                 | Zod schema, allowlist, name, description, redaction                   |
+| Implementation   | `@cogni/ai-tools/tools/*.ts`                 | `execute(ctx, args)` — IO via injected capabilities                   |
+| Schema compiler  | `@cogni/ai-tools/schema.ts`                  | `getToolJsonSchema(contract)` — Zod → JSONSchema7                     |
+| Capability iface | `@cogni/ai-tools/capabilities/*.ts`          | Minimal interfaces tools depend on (e.g., Clock)                      |
+| LangChain wrap   | `@cogni/langgraph-graphs/runtime/`           | `toLangChainTool()` converter (delegates to toolRunner)               |
+| Binding (Next)   | `src/bootstrap/**`                           | Wire capabilities → adapters for Next.js runtime                      |
+| Binding (Server) | `packages/langgraph-server/bootstrap/`       | Wire capabilities → adapters for LangGraph Server                     |
+| IO Adapter       | `src/adapters/server/**`                     | Capability implementation                                             |
 
-**Rule:** Tools stay in features. IO via ports only. No adapter imports in tools.
+**Rules:**
 
-**Note:** LLM port tool types (`LlmToolDefinition`, `LlmToolCall`, etc.) are OpenAI-compatible internal DTOs. LiteLLM uses OpenAI format, so no mapping needed for MVP. A future Anthropic direct adapter would map `tools[].input_schema` and `tool_use`/`tool_result` content blocks into these internal types.
+- Tool contracts in `@cogni/ai-tools`. Wire DTOs in `@cogni/ai-core`. No tool definitions in `src/**`.
+- IO allowed only via injected capabilities — no adapter/env imports in tools.
+- Binding in composition roots only.
+- Wire DTO layer is OpenAI-shaped; adapters map provider-specific formats (Anthropic, etc.) at boundaries.
+
+**Note:** Per **OPENAI_WIRE_DTOS_CANONICAL**, `@cogni/ai-core` owns the canonical OpenAI wire format. The current `LlmToolDefinition`, `LlmToolCall`, etc. in `llm.port.ts` will migrate to this location. Future Anthropic direct adapter would map `tools[].input_schema` and `tool_use`/`tool_result` content blocks into these canonical DTOs.
 
 ### 2. assistant-stream Tool API
 
@@ -214,12 +264,11 @@ When `toolCall.function.arguments` is invalid JSON:
 
 | Component                | Location                             | Status                                         |
 | ------------------------ | ------------------------------------ | ---------------------------------------------- |
-| AiEvent types            | `features/ai/types.ts`               | ✓ Complete                                     |
-| ToolContract, BoundTool  | `features/ai/types.ts`               | ✓ Complete                                     |
+| AiEvent types            | `@cogni/ai-core`                     | ✓ Complete                                     |
+| ToolContract, BoundTool  | `@cogni/ai-tools`                    | ✓ Complete                                     |
+| get_current_time tool    | `@cogni/ai-tools/tools/`             | ✓ Complete                                     |
 | tool-runner.ts           | `features/ai/tool-runner.ts`         | ✓ Complete pipeline                            |
-| tool-registry.ts         | `features/ai/tool-registry.ts`       | ✓ Empty skeleton                               |
-| chat.graph.ts            | `features/ai/graphs/chat.graph.ts`   | ✓ Empty skeleton                               |
-| Route tool handling      | `app/api/v1/ai/chat/route.ts`        | ✓ Written but commented (264-285)              |
+| Route tool handling      | `app/api/v1/ai/chat/route.ts`        | ✓ Active (lines 274-294)                       |
 | ai_runtime.ts            | `features/ai/services/ai_runtime.ts` | ✓ Uses GraphExecutorPort (no tool routing yet) |
 | LlmCaller/GraphLlmCaller | `ports/llm.port.ts`                  | ✓ Types defined                                |
 
@@ -233,5 +282,5 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-**Last Updated**: 2025-12-22
-**Status**: Draft
+**Last Updated**: 2026-01-03
+**Status**: Draft (aligned with LANGGRAPH_AI.md)
