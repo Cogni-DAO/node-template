@@ -2,22 +2,21 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@features/ai/tools/get-current-time`
+ * Module: `@cogni/ai-tools/tools/get-current-time`
  * Purpose: Simple tool that returns the current UTC time.
  * Scope: First tool for testing agentic loop. Does not have IO dependencies (pure).
  * Invariants:
- *   - Pure function, no side effects
+ *   - Pure function, no side effects beyond Date.now()
  *   - Returns ISO 8601 format timestamp
  *   - No sensitive data (full output in allowlist)
+ *   - NO LangChain imports (LangChain wrapping in langgraph-graphs)
  * Side-effects: none
  * Notes: Per TOOL_USE_SPEC.md P0 first tool requirement
- * Links: tool-registry.ts, tool-runner.ts, TOOL_USE_SPEC.md
+ * Links: TOOL_USE_SPEC.md, LANGGRAPH_AI.md
  * @public
  */
 
 import { z } from "zod";
-
-import type { JsonSchemaObject, LlmToolDefinition } from "@/ports";
 
 import type { BoundTool, ToolContract, ToolImplementation } from "../types";
 
@@ -57,6 +56,7 @@ export const getCurrentTimeContract: ToolContract<
   GetCurrentTimeRedacted
 > = {
   name: GET_CURRENT_TIME_NAME,
+  description: "Get the current UTC time. Returns the time in ISO 8601 format.",
 
   validateInput: (input: unknown): GetCurrentTimeInput => {
     // Accept empty object or undefined/null (no required params)
@@ -107,31 +107,4 @@ export const getCurrentTimeBoundTool: BoundTool<
 > = {
   contract: getCurrentTimeContract,
   implementation: getCurrentTimeImplementation,
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LLM Tool Definition (OpenAI-compatible format)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * JSON Schema for tool parameters (OpenAI function-calling format)
- */
-export const getCurrentTimeJsonSchema: JsonSchemaObject = {
-  type: "object",
-  properties: {},
-  required: [],
-  additionalProperties: false,
-};
-
-/**
- * LLM tool definition for get_current_time
- */
-export const getCurrentTimeLlmDefinition: LlmToolDefinition = {
-  type: "function",
-  function: {
-    name: GET_CURRENT_TIME_NAME,
-    description:
-      "Get the current UTC time. Returns the time in ISO 8601 format.",
-    parameters: getCurrentTimeJsonSchema,
-  },
 };

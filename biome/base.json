@@ -64,7 +64,9 @@
                   "launchdarkly-react-client-sdk",
                   "configcat-node",
                   "configcat-js",
-                  "crisp-sdk-web"
+                  "crisp-sdk-web",
+                  "@langchain/**",
+                  "langchain/**"
                 ],
                 "message": "Vendor SDK imports are restricted to infra adapters"
               },
@@ -111,7 +113,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/infra/**"],
+      "includes": ["src/infra/**", "packages/langgraph-graphs/**"],
       "linter": {
         "rules": {
           "style": {
@@ -192,8 +194,11 @@
     {
       "includes": [
         "packages/ai-core/tsup.config.ts",
+        "packages/ai-tools/tsup.config.ts",
+        "packages/ai-tools/vitest.config.ts",
         "packages/aragon-osx/tsup.config.ts",
-        "packages/cogni-contracts/tsup.config.ts"
+        "packages/cogni-contracts/tsup.config.ts",
+        "vitest.workspace.ts"
       ],
       "linter": {
         "rules": {
