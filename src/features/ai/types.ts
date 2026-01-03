@@ -4,7 +4,7 @@
 /**
  * Module: `@features/ai/types`
  * Purpose: Internal type definitions for AI feature streaming and tool lifecycle.
- * Scope: Re-exports AiEvent types from @/types/ai-events, defines StreamFinalResult and tool-runner types. Feature-internal, NOT in shared/.
+ * Scope: Re-exports AiEvent types from @/types/ai-events, re-exports tool types from @cogni/ai-tools. Feature-internal, NOT in shared/.
  * Invariants:
  *   - AiEvents are the ONLY output type from ai_runtime
  *   - toolCallId must be stable across start→result lifecycle
@@ -16,6 +16,14 @@
  * @internal
  */
 
+// Re-export tool types from @cogni/ai-tools package
+export type {
+  BoundTool,
+  ToolContract,
+  ToolErrorCode,
+  ToolImplementation,
+  ToolResult,
+} from "@cogni/ai-tools";
 // Re-export shared AI event types from types layer
 export type {
   AiEvent,
@@ -58,65 +66,3 @@ export type StreamFinalResult =
       readonly requestId: string;
       readonly error: "timeout" | "aborted" | "internal";
     };
-
-/**
- * Tool execution result shape.
- * Per TOOLRUNNER_RESULT_SHAPE: exec() returns this discriminated union.
- */
-export type ToolResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | {
-      readonly ok: false;
-      readonly errorCode: ToolErrorCode;
-      readonly safeMessage: string;
-    };
-
-/**
- * Tool error codes.
- * Per TOOLRUNNER_RESULT_SHAPE: standardized error classification.
- */
-export type ToolErrorCode =
-  | "validation"
-  | "execution"
-  | "unavailable"
-  | "redaction_failed";
-
-/**
- * Tool contract definition.
- * Defines schema and interface for a tool without implementation.
- */
-export interface ToolContract<
-  TName extends string,
-  TInput,
-  TOutput,
-  TRedacted,
-> {
-  /** Stable tool name (snake_case) */
-  readonly name: TName;
-  /** Validate input args, throws on invalid */
-  readonly validateInput: (input: unknown) => TInput;
-  /** Validate output, throws on invalid */
-  readonly validateOutput: (output: unknown) => TOutput;
-  /** Redact output to UI-safe fields */
-  readonly redact: (output: TOutput) => TRedacted;
-  /** Allowlisted fields that appear in redacted output */
-  readonly allowlist: ReadonlyArray<keyof TOutput>;
-}
-
-/**
- * Tool implementation interface.
- * Adapters implement this; receives validated input, returns raw output.
- */
-export interface ToolImplementation<TInput, TOutput> {
-  /** Execute the tool with validated input */
-  readonly execute: (input: TInput) => Promise<TOutput>;
-}
-
-/**
- * Bound tool: contract + implementation together.
- * Created by bootstrap, consumed by tool-runner.
- */
-export interface BoundTool<TName extends string, TInput, TOutput, TRedacted> {
-  readonly contract: ToolContract<TName, TInput, TOutput, TRedacted>;
-  readonly implementation: ToolImplementation<TInput, TOutput>;
-}

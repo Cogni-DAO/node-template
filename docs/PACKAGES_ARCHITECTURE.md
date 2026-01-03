@@ -76,6 +76,19 @@ When adding a new package:
 
 6. **Dependency-cruiser** — Add forbidden rules in `.dependency-cruiser.cjs` if the package must not import from `src/`.
 
+7. **Biome config** — Add `packages/<name>/tsup.config.ts` to the `noDefaultExport` override in `biome/base.json`:
+
+   ```json
+   {
+     "includes": [
+       "packages/ai-core/tsup.config.ts",
+       "packages/<name>/tsup.config.ts",
+       ...
+     ],
+     "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
+   }
+   ```
+
 ## Canonical CI Flow
 
 **TypeScript project references (`tsc -b`) is the default way packages are built and type-checked in CI.**
@@ -112,10 +125,12 @@ TypeScript project references build packages incrementally using `.tsbuildinfo` 
 
 ## Existing Packages
 
-| Package                  | Target     | Purpose                                          |
-| ------------------------ | ---------- | ------------------------------------------------ |
-| `@cogni/aragon-osx`      | isomorphic | Aragon OSx encoding, addresses, receipt decoders |
-| `@cogni/cogni-contracts` | isomorphic | Cogni-owned contract ABI and bytecode constants  |
+| Package                  | Target     | Purpose                                                |
+| ------------------------ | ---------- | ------------------------------------------------------ |
+| `@cogni/ai-core`         | isomorphic | AI event types, UsageFact, ExecutorType for billing    |
+| `@cogni/ai-tools`        | isomorphic | Pure tool contracts and implementations (NO LangChain) |
+| `@cogni/aragon-osx`      | isomorphic | Aragon OSx encoding, addresses, receipt decoders       |
+| `@cogni/cogni-contracts` | isomorphic | Cogni-owned contract ABI and bytecode constants        |
 
 ## Related Docs
 
