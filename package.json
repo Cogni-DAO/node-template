@@ -124,6 +124,7 @@
     "@assistant-ui/react-markdown": "^0.11.6",
     "@auth/drizzle-adapter": "^1.7.0",
     "@cogni/ai-core": "workspace:*",
+    "@cogni/ai-tools": "workspace:*",
     "@cogni/aragon-osx": "workspace:*",
     "@cogni/cogni-contracts": "workspace:*",
     "@opentelemetry/api": "^1.9.0",
