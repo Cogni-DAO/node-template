@@ -387,3 +387,9 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 | `SONAR_TOKEN`                          | SonarCloud token                |
 | `ACTIONS_AUTOMATION_BOT_PAT`           | Bot PAT for automation          |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | WalletConnect project ID        |
+
+---
+
+## Future Roadmap
+
+- [ ] **Golden image via Packer**: Bake Docker+Compose into a snapshot image instead of boot-time installs. Eliminates nondeterministic failures from upstream repo/CDN issues. Cloud-init becomes config-only.
