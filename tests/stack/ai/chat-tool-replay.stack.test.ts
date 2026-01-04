@@ -4,12 +4,12 @@
 /**
  * Module: `@tests/stack/ai/chat-tool-replay.stack`
  * Purpose: Verify chat route handles multi-turn tool replay (role:'tool' messages) correctly.
- * Scope: Tests route → toMessageDtos → completionStream pipeline for tool message handling.
+ * Scope: Tests route → toMessageDtos → completionStream pipeline for tool message handling. Does not test actual LLM calls or billing.
  * Invariants:
  *   - role:'tool' messages with toolCallId reach facade as MessageDto
  *   - Tool events (tool_call_start, tool_call_result) appear in Data Stream Protocol output
  *   - Second user message after tool call doesn't cause 400/500
- * Side-effects: None (mocked facade)
+ * Side-effects: none
  * Notes: Uses vi.doMock + vi.resetModules to mock dynamic imports. Per TOOL_USE_SPEC.md P0.
  * Links: src/app/api/v1/ai/chat/route.ts, docs/TOOL_USE_SPEC.md
  * @public

@@ -395,28 +395,64 @@ export const POST = wrapRouteHandlerWithLogging(
             >();
 
             for await (const event of deltaStream) {
+              // Guard: stop writing if client aborted
+              if (request.signal.aborted) break;
+
               if (event.type === "text_delta") {
                 controller.appendText(event.delta);
               } else if (event.type === "tool_call_start") {
                 // MVP: Stream tool lifecycle to UI
+                // NOTE: Do NOT pass args to addToolCallPart - it closes argsText immediately,
+                // causing setResponse() to fail (double-close). Manually append args instead.
                 const toolCtrl = controller.addToolCallPart({
                   toolCallId: event.toolCallId,
                   toolName: event.toolName,
-                  args: event.args as Parameters<
-                    typeof controller.addToolCallPart
-                  >[0] extends { args: infer A }
-                    ? A
-                    : never,
                 });
+                // Stream args text without closing (setResponse will close it)
+                if (event.args != null) {
+                  // Invariant: assistant-stream must provide argsText.append
+                  if (typeof toolCtrl.argsText?.append !== "function") {
+                    throw new Error(
+                      "assistant-stream API contract violated: toolCtrl.argsText.append is not a function"
+                    );
+                  }
+                  toolCtrl.argsText.append(JSON.stringify(event.args));
+                }
                 toolCallControllers.set(event.toolCallId, toolCtrl);
               } else if (event.type === "tool_call_result") {
                 // Set tool result (completes the tool call in UI)
+                // Must await: setResponse enqueues async after Promise.resolve()
                 const toolCtrl = toolCallControllers.get(event.toolCallId);
-                toolCtrl?.setResponse({
-                  result: event.result as Parameters<
-                    NonNullable<typeof toolCtrl>["setResponse"]
-                  >[0]["result"],
-                });
+                if (!toolCtrl) {
+                  ctx.log.warn(
+                    { toolCallId: event.toolCallId },
+                    "tool_call_result without matching tool_call_start"
+                  );
+                  continue;
+                }
+                try {
+                  await toolCtrl.setResponse({
+                    result: event.result as Parameters<
+                      typeof toolCtrl.setResponse
+                    >[0]["result"],
+                  });
+                } catch (err) {
+                  // Only swallow closed-controller errors when client has aborted
+                  // Otherwise, surface the error as it indicates a streaming bug
+                  const isClosedError =
+                    err instanceof Error &&
+                    (err.message.includes("Controller is already closed") ||
+                      (err as NodeJS.ErrnoException).code ===
+                        "ERR_INVALID_STATE");
+                  if (isClosedError && request.signal.aborted) {
+                    ctx.log.debug(
+                      { toolCallId: event.toolCallId },
+                      "setResponse after controller closed (client abort)"
+                    );
+                  } else {
+                    throw err;
+                  }
+                }
               }
             }
 
