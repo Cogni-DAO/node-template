@@ -16,6 +16,10 @@
     "./graphs": {
       "types": "./dist/graphs/index.d.ts",
       "import": "./dist/graphs/index.js"
+    },
+    "./inproc": {
+      "types": "./dist/inproc/index.d.ts",
+      "import": "./dist/inproc/index.js"
     }
   },
   "types": "./dist/index.d.ts",

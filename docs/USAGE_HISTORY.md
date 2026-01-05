@@ -13,7 +13,7 @@
 
 4. **USER_ARTIFACT_AT_START**: User input artifact persisted immediately on run start (before execution). Survives graph crash.
 
-5. **ASSISTANT_FINAL_SINGLE_EMIT**: Executors emit exactly one `assistant_final` event per run with final content. HistoryWriter persists it directly—no delta parsing. Duplicate events are idempotent (logged, not stored twice).
+5. **ASSISTANT_FINAL_SINGLE_EMIT**: On success, executors emit exactly one `assistant_final` event with final content. On error, no event is emitted. HistoryWriter persists it directly—no delta parsing. Duplicate events are idempotent (logged, not stored twice).
 
 6. **NO_DELTA_STORAGE**: P0 does NOT persist streaming deltas. Only user input + final assistant output. Delta storage is P2+ if needed for replay UX.
 

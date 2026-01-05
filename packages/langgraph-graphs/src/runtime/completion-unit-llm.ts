@@ -112,18 +112,20 @@ export class CompletionUnitLLM extends BaseChatModel {
   /**
    * Generate a response from the LLM.
    * Routes through injected CompletionFn for billing/streaming.
+   * Per CANCEL_PROPAGATION: passes abort signal to completionFn.
    */
   async _generate(
     messages: BaseMessage[],
-    _options?: BaseChatModelCallOptions
+    options?: BaseChatModelCallOptions
   ): Promise<ChatResult> {
     // Convert LangChain messages to app format
     const appMessages = messages.map(fromBaseMessage);
 
-    // Call completion function
+    // Call completion function with abort signal per CANCEL_PROPAGATION
     const { stream, final } = this.completionFn({
       messages: appMessages,
       model: this.modelId,
+      abortSignal: options?.signal,
       // Tools are handled by LangGraph, not passed here
     });
 

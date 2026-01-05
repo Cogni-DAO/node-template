@@ -91,7 +91,7 @@ import {
 11. **INTERNAL_DRAIN_BEFORE_RESOLVE**: CompletionUnitLLM must drain provider stream before resolving its internal promise. This is an implementation detail; consumers may cancel early per CANCEL_PROPAGATION.
 12. **SINGLE_QUEUE_PER_RUN**: Each graph run owns exactly one AsyncQueue. Tool events and LLM events flow to the same queue. The runner creates the queue and binds emit callbacks; adapters (`InProcGraphExecutorAdapter`, `LangGraphServerAdapter`) do not create queues.
 13. **CORRELATION_ID_PROPAGATION**: Adapters must use `req.caller.traceId` and `req.ingressRequestId` from GraphRunRequest. Never generate new trace/request IDs in adapters or runners.
-14. **ASSISTANT_FINAL_REQUIRED**: All executors must emit exactly one `assistant_final` event per run with the complete assistant response. Required for USAGE_HISTORY persistence. InProc extracts from graph state; Server extracts from final SDK message.
+14. **ASSISTANT_FINAL_REQUIRED**: On success, all executors must emit exactly one `assistant_final` event with the complete assistant response. On error, no `assistant_final` is emitted (there is no complete response to persist). InProc extracts from graph state; Server extracts from final SDK message.
 
 15. **SUBSCRIBER_FANOUT_NON_BLOCKING**: RunEventRelay fans out via per-subscriber bounded queues. Slow subscribers (History, Billing) never block UI streaming. Each subscriber runs to completion independently.
 
@@ -388,8 +388,9 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 **Implementation sequence:**
 
 1. **Phase 2a: Package smoke test**
-   - [ ] Create `/inproc` subpath export in package.json
-   - [ ] Implement `createInProcChatRunner()` in `packages/langgraph-graphs/src/inproc/runner.ts`
+   - [x] Create `/inproc` subpath export in package.json
+   - [x] Implement `createInProcChatRunner()` in `packages/langgraph-graphs/src/inproc/runner.ts`
+   - [x] Add `AssistantFinalEvent` to `@cogni/ai-core` AiEvent union
    - [ ] Add conformance test: verify AiEvent sequence (`text_delta`\*, `usage_report`, `assistant_final`, `done`)
    - [ ] Verify exactly one `assistant_final` event per run
 
