@@ -9,11 +9,11 @@
 
 2. **PARALLEL_TO_BILLING**: HistoryWriterSubscriber consumes AiEvent stream alongside BillingSubscriber. Neither depends on the other. Both are idempotent. RunEventRelay fans out via per-subscriber queues (non-blocking); slow subscribers do not block UI streaming.
 
-3. **IDEMPOTENT_WRITES**: `UNIQUE(run_id, artifact_key)` prevents duplicate inserts on in-process event duplication. Adapter uses `ON CONFLICT DO NOTHING`, then SELECTs existing row to compare `content_hash`. If hash mismatch, emit error metric (runId + artifactKey only, never content/hashes). Same pattern as billing. **Note:** This handles same-process duplicate delivery, not crash recovery—there is no persistent event log in P0.
+3. **IDEMPOTENT_WRITES**: `UNIQUE(account_id, run_id, artifact_key)` prevents duplicate inserts on in-process event duplication. Tenant-scoped uniqueness avoids cross-tenant collisions if run_id is ever mis-scoped. Adapter uses `ON CONFLICT DO NOTHING`, then SELECTs existing row to compare `content_hash`. If hash mismatch, emit error metric (runId + artifactKey only, never content/hashes). Same pattern as billing. **Note:** This handles same-process duplicate delivery, not crash recovery—there is no persistent event log in P0.
 
 4. **USER_ARTIFACT_AT_START**: User input artifact persisted immediately on run start (before execution). Survives graph crash.
 
-5. **ASSISTANT_FINAL_SINGLE_EMIT**: Executors emit exactly one `assistant_final` event per run with final content. HistoryWriter persists it directly—no delta parsing. Duplicate events are idempotent (logged, not stored twice).
+5. **ASSISTANT_FINAL_SINGLE_EMIT**: On success, executors emit exactly one `assistant_final` event with final content. On error, no event is emitted. HistoryWriter persists it directly—no delta parsing. Duplicate events are idempotent (logged, not stored twice).
 
 6. **NO_DELTA_STORAGE**: P0 does NOT persist streaming deltas. Only user input + final assistant output. Delta storage is P2+ if needed for replay UX.
 

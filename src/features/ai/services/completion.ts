@@ -305,8 +305,8 @@ export interface ExecuteStreamParams {
   aiTelemetry: AiTelemetryPort;
   langfuse: LangfusePort | undefined;
   abortSignal?: AbortSignal;
-  /** Optional tools for function calling */
-  tools?: import("@/ports").LlmToolDefinition[];
+  /** Optional tools for function calling (readonly for immutability) */
+  tools?: readonly import("@/ports").LlmToolDefinition[];
   /** Optional tool choice policy */
   toolChoice?: import("@/ports").LlmToolChoice;
 }

@@ -17,8 +17,6 @@
  * @public
  */
 
-import { randomUUID } from "node:crypto";
-
 import type {
   AiEvent,
   BoundTool,
@@ -26,6 +24,19 @@ import type {
   ToolCallStartEvent,
   ToolResult,
 } from "./types";
+
+/** Charset for provider-compatible tool call IDs */
+const TOOL_ID_CHARS =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+/** Generate 9-char alphanumeric tool call ID (provider-compatible) */
+function generateToolCallId(): string {
+  const bytes = new Uint8Array(9);
+  crypto.getRandomValues(bytes);
+  let id = "";
+  for (const b of bytes) id += TOOL_ID_CHARS[b % TOOL_ID_CHARS.length];
+  return id;
+}
 
 /**
  * Callback for emitting AiEvents during tool execution.
@@ -69,8 +80,8 @@ export function createToolRunner<
     rawArgs: unknown,
     options?: ToolExecOptions
   ): Promise<ToolResult<Record<string, unknown>>> {
-    // Generate stable toolCallId (model-provided or UUID)
-    const toolCallId = options?.modelToolCallId ?? randomUUID();
+    // Generate stable toolCallId (model-provided or 9-char alphanumeric)
+    const toolCallId = options?.modelToolCallId ?? generateToolCallId();
 
     // Look up bound tool
     const boundTool = boundTools[toolName];
