@@ -33,11 +33,13 @@ type OpenAIToolDef = ReturnType<typeof convertToOpenAITool>;
 /**
  * Completion function signature injected from adapter.
  * Per GRAPH_LLM_VIA_COMPLETION: graph calls this, not LLM SDK directly.
+ *
+ * Generic TTool allows src/ to use LlmToolDefinition while package defaults to unknown.
  */
-export type CompletionFn = (params: {
+export type CompletionFn<TTool = unknown> = (params: {
   messages: Message[];
   model: string;
-  tools?: unknown[];
+  tools?: readonly TTool[];
   abortSignal?: AbortSignal;
 }) => {
   /** Stream of AiEvents (text_delta, usage_report) */

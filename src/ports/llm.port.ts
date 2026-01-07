@@ -123,8 +123,8 @@ export interface CompletionStreamParams {
   maxTokens?: number;
   caller: LlmCaller;
   abortSignal?: AbortSignal;
-  /** Tool definitions for function calling */
-  tools?: LlmToolDefinition[];
+  /** Tool definitions for function calling (readonly - never mutated) */
+  tools?: readonly LlmToolDefinition[];
   /** Tool choice strategy */
   toolChoice?: LlmToolChoice;
 }
@@ -134,6 +134,40 @@ export type ChatDeltaEvent =
   | { type: "tool_call_delta"; delta: LlmToolCallDelta }
   | { type: "error"; error: string }
   | { type: "done" };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Completion Unit Result (for graph execution)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Discriminated union for completion unit final result.
+ * Used by graph runners to handle LLM call outcomes.
+ * - ok: true → success with usage/finishReason/toolCalls
+ * - ok: false → error with stable error code
+ */
+export type CompletionFinalResult =
+  | {
+      readonly ok: true;
+      readonly requestId: string;
+      readonly usage: {
+        readonly promptTokens: number;
+        readonly completionTokens: number;
+      };
+      readonly finishReason: string;
+      /** Resolved model ID for billing */
+      readonly model?: string;
+      /** Provider cost in USD */
+      readonly providerCostUsd?: number;
+      /** LiteLLM call ID for idempotent billing */
+      readonly litellmCallId?: string;
+      /** Tool calls requested by LLM (when finishReason === "tool_calls") */
+      readonly toolCalls?: LlmToolCall[];
+    }
+  | {
+      readonly ok: false;
+      readonly requestId: string;
+      readonly error: "timeout" | "aborted" | "internal";
+    };
 
 /**
  * Result type for LLM completion operations.

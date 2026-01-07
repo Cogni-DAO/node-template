@@ -16,7 +16,10 @@
 
 // Chat graph runners (for facade to build resolver)
 export { createChatRunner } from "./runners/chat.runner";
-export { createLangGraphChatRunner } from "./runners/langgraph-chat.runner";
+export {
+  type CompletionUnitAdapter,
+  createLangGraphChatRunner,
+} from "./runners/langgraph-chat.runner";
 // Activity validation (for app facade)
 export { validateActivityRange } from "./services/activity";
 // AI runtime (P1: single AI entrypoint for streaming)

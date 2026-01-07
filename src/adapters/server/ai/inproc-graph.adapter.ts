@@ -23,6 +23,7 @@ import type {
   AiTelemetryPort,
   ChatDeltaEvent,
   Clock,
+  CompletionFinalResult,
   GraphExecutorPort,
   GraphFinal,
   GraphRunRequest,
@@ -55,36 +56,12 @@ export interface InProcGraphExecutorDeps {
 /**
  * Completion stream result shape.
  * Includes billing fields for GraphExecutorAdapter to emit usage_report.
+ * Uses CompletionFinalResult from ports (canonical discriminated union).
  */
 export interface CompletionStreamResult {
   stream: AsyncIterable<ChatDeltaEvent>;
   final: Promise<CompletionFinalResult>;
 }
-
-/**
- * Completion final result shape.
- * Includes toolCalls for agentic graph runners.
- */
-export type CompletionFinalResult =
-  | {
-      ok: true;
-      requestId: string;
-      usage: { promptTokens: number; completionTokens: number };
-      finishReason: string;
-      /** Resolved model ID for billing */
-      model?: string;
-      /** Provider cost in USD */
-      providerCostUsd?: number;
-      /** LiteLLM call ID for idempotent billing */
-      litellmCallId?: string;
-      /** Tool calls requested by LLM (when finishReason === "tool_calls") */
-      toolCalls?: import("@/ports").LlmToolCall[];
-    }
-  | {
-      ok: false;
-      requestId: string;
-      error: "timeout" | "aborted" | "internal";
-    };
 
 /**
  * Completion stream parameters.
@@ -101,7 +78,7 @@ export interface CompletionStreamParams {
   langfuse: LangfusePort | undefined;
   abortSignal?: AbortSignal;
   /** Tool definitions for LLM (optional) */
-  tools?: import("@/ports").LlmToolDefinition[];
+  tools?: readonly import("@/ports").LlmToolDefinition[];
   /** Tool choice for LLM (optional) */
   toolChoice?: import("@/ports").LlmToolChoice;
 }
@@ -120,7 +97,7 @@ export interface CompletionUnitParams {
     ingressRequestId: string;
   };
   abortSignal?: AbortSignal;
-  tools?: import("@/ports").LlmToolDefinition[];
+  tools?: readonly import("@/ports").LlmToolDefinition[];
   toolChoice?: import("@/ports").LlmToolChoice;
 }
 

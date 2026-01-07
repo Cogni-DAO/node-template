@@ -4,7 +4,7 @@
 /**
  * Module: `@features/ai/runners/langgraph-chat.runner`
  * Purpose: Adapter wiring createInProcChatRunner from @cogni/langgraph-graphs to existing infrastructure.
- * Scope: Wraps executeCompletionUnit as CompletionFn, wires toolRunner, returns GraphRunResult.
+ * Scope: Wraps executeCompletionUnit as CompletionFn, wires toolRunner, returns GraphRunResult; does not contain graph orchestration logic.
  * Invariants:
  *   - GRAPH_LLM_VIA_COMPLETION: completionUnit provided by adapter
  *   - TOOLS_FROM_PACKAGES: tools imported from @cogni/ai-tools
@@ -14,6 +14,7 @@
  * @internal
  */
 
+import type { ToolContract } from "@cogni/ai-tools";
 import {
   type BoundTool,
   GET_CURRENT_TIME_NAME,
@@ -29,7 +30,13 @@ import {
   type Message,
 } from "@cogni/langgraph-graphs/inproc";
 
-import type { GraphFinal, GraphRunRequest, GraphRunResult } from "@/ports";
+import type {
+  CompletionFinalResult,
+  GraphFinal,
+  GraphRunRequest,
+  GraphRunResult,
+  LlmToolDefinition,
+} from "@/ports";
 
 import { createToolRunner } from "../tool-runner";
 import type { AiEvent } from "../types";
@@ -52,6 +59,7 @@ const CHAT_GRAPH_TOOL_CONTRACTS = [getCurrentTimeContract];
 /**
  * Adapter interface for executing a single completion unit.
  * Matches InProcGraphExecutorAdapter.executeCompletionUnit signature.
+ * Uses CompletionFinalResult from ports (canonical discriminated union).
  */
 export interface CompletionUnitAdapter {
   executeCompletionUnit(params: {
@@ -64,23 +72,12 @@ export interface CompletionUnitAdapter {
       ingressRequestId: string;
     };
     abortSignal?: AbortSignal;
-    tools?: import("@/ports").LlmToolDefinition[];
+    tools?: LlmToolDefinition[];
     toolChoice?: import("@/ports").LlmToolChoice;
   }): {
     stream: AsyncIterable<AiEvent>;
-    final: Promise<CompletionUnitFinalResult>;
+    final: Promise<CompletionFinalResult>;
   };
-}
-
-interface CompletionUnitFinalResult {
-  ok: true;
-  requestId: string;
-  usage: { promptTokens: number; completionTokens: number };
-  finishReason: string;
-  model?: string;
-  providerCostUsd?: number;
-  litellmCallId?: string;
-  toolCalls?: Array<{ id: string; name: string; arguments: string }>;
 }
 
 /** GraphRunnerFn type - matches adapter's expected signature. */
@@ -103,15 +100,21 @@ export function createLangGraphChatRunner(
 
     // Wrap adapter.executeCompletionUnit as CompletionFn
     // Per TOOLS_VIA_BINDTOOLS: forward tools from LangGraph to LLM
-    const completionFn: CompletionFn = (params) => {
+    // Generic specifies LlmToolDefinition so params.tools is properly typed
+    const completionFn: CompletionFn<LlmToolDefinition> = (params) => {
       const result = adapter.executeCompletionUnit({
         messages: params.messages as GraphRunRequest["messages"],
         model: params.model,
         caller,
         runContext: { runId, attempt, ingressRequestId },
-        abortSignal: params.abortSignal,
+        // Conditional spreads for exactOptionalPropertyTypes
+        ...(params.abortSignal !== undefined && {
+          abortSignal: params.abortSignal,
+        }),
         // Forward tools to LLM (bound via CompletionUnitLLM.bindTools)
-        ...(params.tools && params.tools.length > 0 && { tools: params.tools }),
+        // tools is now readonly LlmToolDefinition[] via generic
+        ...(params.tools &&
+          params.tools.length > 0 && { tools: [...params.tools] }),
       });
 
       return {
@@ -127,25 +130,33 @@ export function createLangGraphChatRunner(
       return async (name: string, args: unknown, toolCallId?: string) => {
         // P0: toolCallId is undefined (toolRunner generates)
         // P1: pass providerToolCallId from AIMessage.tool_calls
-        return toolRunner.exec(name, args, { modelToolCallId: toolCallId });
+        // Conditional spread for exactOptionalPropertyTypes
+        if (toolCallId !== undefined) {
+          return toolRunner.exec(name, args, { modelToolCallId: toolCallId });
+        }
+        return toolRunner.exec(name, args);
       };
     };
 
     // Build request for package runner
+    // Conditional spreads for exactOptionalPropertyTypes
     const inprocRequest: InProcGraphRequest = {
       runId,
       messages: messages as Message[],
       model,
-      abortSignal,
-      traceId: caller.traceId,
-      ingressRequestId,
+      ...(abortSignal !== undefined && { abortSignal }),
+      ...(caller.traceId !== undefined && { traceId: caller.traceId }),
+      ...(ingressRequestId !== undefined && { ingressRequestId }),
     };
 
     // Execute via package runner
     const { stream, final } = createInProcChatRunner({
       completionFn,
       createToolExecFn,
-      toolContracts: CHAT_GRAPH_TOOL_CONTRACTS,
+      // Cast: concrete ToolContract types satisfy generic constraint
+      toolContracts: CHAT_GRAPH_TOOL_CONTRACTS as ReadonlyArray<
+        ToolContract<string, unknown, unknown, unknown>
+      >,
       request: inprocRequest,
     });
 
@@ -157,23 +168,37 @@ export function createLangGraphChatRunner(
 }
 
 /**
- * Map CompletionUnitFinalResult to CompletionResult (package format).
+ * Map CompletionFinalResult to CompletionResult (package format).
+ * Handles discriminated union with proper narrowing.
  */
 async function mapToCompletionResult(
-  final: Promise<CompletionUnitFinalResult>
+  final: Promise<CompletionFinalResult>
 ): Promise<CompletionResult> {
   const result = await final;
+
+  // Handle error case
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error,
+    };
+  }
+
+  // Success case - map with conditional spreads for exactOptionalPropertyTypes
   return {
-    ok: result.ok,
+    ok: true,
     content: "", // Content comes from stream, not final for tool-calling flows
-    toolCalls: result.toolCalls,
-    usage: result.usage,
-    finishReason: result.finishReason,
+    ...(result.toolCalls !== undefined && { toolCalls: result.toolCalls }),
+    ...(result.usage !== undefined && { usage: result.usage }),
+    ...(result.finishReason !== undefined && {
+      finishReason: result.finishReason,
+    }),
   };
 }
 
 /**
  * Map package's GraphResult to port's GraphFinal.
+ * Handles exactOptionalPropertyTypes with conditional spreads.
  */
 async function mapToGraphFinal(
   final: Promise<GraphResult>,
@@ -186,8 +211,11 @@ async function mapToGraphFinal(
       ok: true,
       runId,
       requestId,
-      usage: result.usage,
-      finishReason: result.finishReason,
+      // Conditional spreads for exactOptionalPropertyTypes
+      ...(result.usage !== undefined && { usage: result.usage }),
+      ...(result.finishReason !== undefined && {
+        finishReason: result.finishReason,
+      }),
     };
   }
   // Map to stable error codes per GraphFinal type

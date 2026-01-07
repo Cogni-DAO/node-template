@@ -44,6 +44,7 @@ export type {
 } from "./graph-executor.port";
 export type {
   ChatDeltaEvent,
+  CompletionFinalResult,
   CompletionStreamParams,
   GraphLlmCaller,
   JsonSchemaObject,

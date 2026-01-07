@@ -24,7 +24,7 @@ import { CompletionUnitLLM } from "../runtime/completion-unit-llm";
 import { toLangChainTools } from "../runtime/langchain-tools";
 import { toBaseMessage } from "../runtime/message-converters";
 
-import type { GraphResult, InProcRunnerOptions } from "./types";
+import type { CompletionFn, GraphResult, InProcRunnerOptions } from "./types";
 
 /**
  * Extract text content from final assistant message.
@@ -65,7 +65,9 @@ function extractAssistantContent(messages: BaseMessage[]): string {
  * @param opts - Runner options
  * @returns { stream, final } - AsyncIterable of events and Promise of result
  */
-export function createInProcChatRunner(opts: InProcRunnerOptions): {
+export function createInProcChatRunner<TTool = unknown>(
+  opts: InProcRunnerOptions<TTool>
+): {
   stream: AsyncIterable<AiEvent>;
   final: Promise<GraphResult>;
 } {
@@ -80,7 +82,12 @@ export function createInProcChatRunner(opts: InProcRunnerOptions): {
 
   const tokenSink = { push: emit };
   const toolExecFn = createToolExecFn(emit);
-  const llm = new CompletionUnitLLM(completionFn, request.model, tokenSink);
+  // Cast: CompletionUnitLLM converts tools to OpenAI format internally; tool type erased at boundary
+  const llm = new CompletionUnitLLM(
+    completionFn as CompletionFn<unknown>,
+    request.model,
+    tokenSink
+  );
   const tools = toLangChainTools({
     contracts: toolContracts,
     exec: toolExecFn,

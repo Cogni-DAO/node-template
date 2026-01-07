@@ -65,10 +65,11 @@ export interface InProcGraphRequest {
 /**
  * Options for createInProcChatRunner.
  * Runner creates queue internally, passes emit to createToolExecFn.
+ * Generic TTool allows src/ to specify LlmToolDefinition while package defaults to unknown.
  */
-export interface InProcRunnerOptions {
+export interface InProcRunnerOptions<TTool = unknown> {
   /** Per-LLM-call completion function (called N times in agentic loop) */
-  readonly completionFn: CompletionFn;
+  readonly completionFn: CompletionFn<TTool>;
 
   /**
    * Factory that receives emit callback and returns ToolExecFn.

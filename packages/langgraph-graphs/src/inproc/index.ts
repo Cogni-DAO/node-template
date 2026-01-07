@@ -17,6 +17,7 @@ export { createInProcChatRunner } from "./runner";
 // Types
 export type {
   CompletionFn,
+  CompletionResult,
   GraphResult,
   InProcGraphRequest,
   InProcRunnerOptions,
