@@ -47,16 +47,26 @@ export type CompletionFn = (params: {
 };
 
 /**
+ * Tool call in OpenAI format (matches LlmToolCall in ports).
+ * Defined here to avoid src/ imports per PACKAGES_NO_SRC_IMPORTS.
+ */
+export interface ToolCall {
+  readonly id: string;
+  readonly type: "function";
+  readonly function: {
+    readonly name: string;
+    readonly arguments: string;
+  };
+}
+
+/**
  * Result from completion function.
  */
 export interface CompletionResult {
   readonly ok: boolean;
   readonly content?: string;
-  readonly toolCalls?: Array<{
-    id: string;
-    name: string;
-    arguments: string;
-  }>;
+  /** Tool calls in OpenAI format (nested function.name/arguments) */
+  readonly toolCalls?: ToolCall[];
   readonly usage?: {
     promptTokens: number;
     completionTokens: number;
@@ -161,15 +171,26 @@ export class CompletionUnitLLM extends BaseChatModel {
     }
 
     // Build AIMessage from result
+    // Invariant: tool calls must have function.name (provider contract)
     // Default empty arguments to "{}" to handle tools with no parameters
     const aiMessage = new AIMessage({
       content: result.content ?? "",
-      tool_calls: result.toolCalls?.map((tc) => ({
-        id: tc.id,
-        name: tc.name,
-        args: JSON.parse(tc.arguments || "{}") as Record<string, unknown>,
-        type: "tool_call" as const,
-      })),
+      tool_calls: result.toolCalls?.map((tc, i) => {
+        if (!tc.function?.name) {
+          throw new Error(
+            `[CompletionUnitLLM] missing toolCall function.name at index ${i}`
+          );
+        }
+        return {
+          id: tc.id,
+          name: tc.function.name,
+          args: JSON.parse(tc.function.arguments || "{}") as Record<
+            string,
+            unknown
+          >,
+          type: "tool_call" as const,
+        };
+      }),
     });
 
     return {

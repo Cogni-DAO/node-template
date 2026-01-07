@@ -19,11 +19,12 @@ import type { ToolContract } from "@cogni/ai-tools";
 import type {
   CompletionFn,
   CompletionResult,
+  ToolCall,
 } from "../runtime/completion-unit-llm";
 import type { Message } from "../runtime/message-converters";
 
 // Re-export for convenience
-export type { CompletionFn, CompletionResult, Message };
+export type { CompletionFn, CompletionResult, Message, ToolCall };
 
 /**
  * Result from tool execution via exec function.

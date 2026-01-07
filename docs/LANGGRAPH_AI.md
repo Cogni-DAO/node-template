@@ -470,6 +470,8 @@ Remaining wiring tracked in Phase 2c above.
 
 - [ ] **Stream controller "already closed" error** — Chat with Tool usage -> new message -> `TypeError: Invalid state: Controller is already closed` fires on client abort/disconnect but does not block execution. The `createAssistantStreamResponse()` callback in `src/app/api/v1/ai/chat/route.ts` attempts writes after stream termination. Fix: wrap controller writes to catch `ERR_INVALID_STATE`, check `request.signal.aborted` before writes, skip finalization on abort. Tracked as non-blocking; stream completes successfully despite error.
 
+- [ ] **P1: Tool call ID architecture** — P0 workaround generates canonical `toolCallId` at adapter finalization (`src/adapters/server/ai/litellm.adapter.ts:662`) using `acc.id || randomUUID()`. This works but conflates `providerToolCallId` (optional, for telemetry) with `canonicalToolCallId` (required, for correlation). P1 should: (1) preserve `providerToolCallId` as optional metadata, (2) generate `canonicalToolCallId` at tool invocation boundary in graph layer, (3) use canonical ID consistently for `assistant.tool_calls[].id` and `tool.tool_call_id`.
+
 ---
 
 ## Related Documents
