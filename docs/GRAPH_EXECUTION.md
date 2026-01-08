@@ -27,6 +27,121 @@
 
 11. **BILLABLE_AI_THROUGH_EXECUTOR**: Production code paths that emit `UsageFact` must execute via `AiRuntimeService` → `GraphExecutorPort`. Direct `completion.executeStream()` calls outside executor internals bypass billing/telemetry pipeline and are prohibited. Enforced by stack test (`no-direct-completion-executestream.stack.test.ts`).
 
+12. **THREAD_RUN_SHAPED_PORT**: GraphExecutorPort mirrors LangGraph Server primitives (`listGraphs()`, `createThread()`, `createRun()`, `streamRun()`). InProc implements threads/runs ephemerally but preserves IDs and shapes for future Server parity.
+
+13. **GRAPH_ID_NAMESPACED**: Graph IDs are globally unique and stable, namespaced as `${providerId}:${graphName}` (e.g., `langgraph:chat`, `claude_agents:planner`).
+
+14. **PROVIDER_AGGREGATION**: `AggregatingGraphExecutor` routes `graphId → GraphProvider`. App uses only the aggregator; no facade-level graph conditionals.
+
+15. **REGISTRY_INJECTED**: Graph registry is injected into providers, not hard-coded. Registry entries must be pure factories (adapter-injected deps only) for deterministic testing.
+
+16. **NO_LANGCHAIN_IN_ADAPTERS_ROOT**: LangChain imports are isolated to `src/adapters/server/ai/langgraph/**`. Other adapter code must not import `@langchain/*`.
+
+17. **TOOL_EXEC_TYPES_IN_AI_CORE**: `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` are canonical in `@cogni/ai-core`. `src/ports` re-exports. Adapters import from `@cogni/ai-core` or `@/ports`.
+
+---
+
+## Graph Registry & Provider Architecture
+
+### File Tree Map
+
+```
+packages/
+├── ai-core/                                  # Executor-agnostic primitives (NO LangChain)
+│   └── src/
+│       ├── events/ai-events.ts               # AiEvent union (canonical) ✓
+│       ├── usage/usage.ts                    # UsageFact, ExecutorType ✓
+│       ├── tooling/                          # NEW: Tool execution types
+│       │   ├── types.ts                      # ToolExecFn, ToolExecResult, EmitAiEvent
+│       │   └── index.ts                      # Barrel export
+│       └── index.ts                          # Package barrel
+│
+├── ai-tools/                                 # Pure tool contracts (NO LangChain, NO src imports) ✓
+│   └── src/
+│       ├── types.ts                          # ToolContract, BoundTool, ToolResult
+│       └── tools/*.ts                        # Pure tool implementations
+│
+└── langgraph-graphs/                         # ALL LangChain code lives here ✓
+    └── src/
+        ├── graphs/                           # Graph factories (stable import surface)
+        │   ├── index.ts                      # Barrel: all graphs
+        │   ├── chat/                         # Chat graph ✓
+        │   └── research/                     # NEW: Graph #2
+        ├── runtime/                          # Shared LangChain utilities ✓
+        └── inproc/                           # InProc execution ✓
+            └── runner.ts                     # createInProcChatRunner()
+
+src/
+├── ports/
+│   ├── graph-executor.port.ts                # GraphExecutorPort (thread/run shaped)
+│   ├── graph-provider.port.ts                # NEW: GraphProvider interface
+│   ├── tool-exec.port.ts                     # NEW: Re-export ToolExecFn from ai-core
+│   └── index.ts                              # Barrel export
+│
+├── adapters/server/ai/
+│   ├── inproc-graph.adapter.ts               # InProcGraphExecutorAdapter (refactored)
+│   ├── aggregating-executor.ts               # NEW: AggregatingGraphExecutor
+│   ├── graph-registry.ts                     # NEW: Injectable graph registry
+│   └── langgraph/                            # NEW: LangGraph-specific bindings
+│       ├── index.ts                          # Barrel export
+│       ├── langgraph-inproc.provider.ts      # NEW: LangGraphInProcProvider
+│       ├── chat.graph.ts                     # MOVED from features/ai/runners/ (renamed)
+│       ├── research.graph.ts                 # NEW: Graph #2 binding
+│       └── tool-registry.ts                  # NEW: Graph-specific tool bindings
+│
+├── shared/ai/
+│   └── tool-runner.ts                        # MOVED from features/ai/ (adapters can import)
+│
+├── features/ai/
+│   ├── services/
+│   │   ├── ai_runtime.ts                     # Uses AggregatingGraphExecutor (no graph knowledge)
+│   │   └── billing.ts                        # ONE_LEDGER_WRITER ✓
+│   └── runners/                              # TO BE DELETED after move
+│       └── langgraph-chat.runner.ts          # DEPRECATED → adapters/langgraph/chat.graph.ts
+│
+├── bootstrap/
+│   ├── container.ts                          # Wires providers + aggregator
+│   └── graph-executor.factory.ts             # SIMPLIFIED: no graphResolver param
+│
+└── app/_facades/ai/
+    └── completion.server.ts                  # Graph-agnostic (no graph selection logic)
+```
+
+### Key Interfaces
+
+```typescript
+// src/ports/graph-provider.port.ts
+interface GraphProvider {
+  readonly providerId: string;
+  listGraphs(): GraphDescriptor[];
+  createThread(accountId: string): Promise<Thread>;
+  createRun(threadId: string, req: RunRequest): RunHandle;
+  streamRun(runId: string): AsyncIterable<AiEvent>;
+}
+
+interface GraphDescriptor {
+  readonly graphId: string; // Namespaced: "langgraph:chat"
+  readonly displayName: string;
+  readonly description: string;
+  readonly capabilities: GraphCapabilities;
+}
+
+interface GraphCapabilities {
+  readonly supportsStreaming: boolean;
+  readonly supportsTools: boolean;
+  readonly supportsMemory: boolean; // Thread persistence
+}
+
+// src/adapters/server/ai/aggregating-executor.ts
+class AggregatingGraphExecutor implements GraphExecutorPort {
+  constructor(providers: GraphProvider[]) {
+    // Build Map<graphId, provider>
+  }
+  listGraphs(): GraphDescriptor[];
+  // Routes to provider based on graphId prefix
+}
+```
+
 ---
 
 ## MVP Invariants (LangGraph InProc)
@@ -46,22 +161,82 @@ These invariants govern the in-process LangGraph execution path:
 
 ## Implementation Checklist
 
-### P0: Run-Centric Billing + GraphExecutorPort
+### P0: Run-Centric Billing + GraphExecutorPort (✅ Complete)
 
 Refactor billing for run-centric idempotency. Wrap existing LLM path behind `GraphExecutorPort`.
 
-- [ ] Create `GraphExecutorPort` interface in `src/ports/graph-executor.port.ts`
-- [ ] Create `InProcGraphExecutorAdapter` wrapping existing streaming/completion path
-- [ ] Implement `RunEventRelay` (StreamDriver + Fanout) in `AiRuntimeService` (billing-independent consumption)
-- [ ] Refactor `completion.ts`: remove `recordBilling()` call; return usage fields in final (litellmCallId, costUsd, tokens)
-- [ ] Refactor `InProcGraphExecutorAdapter`: emit `usage_report` AiEvent from final BEFORE done
-- [ ] Add `UsageFact` type in `src/types/usage.ts` (type only, no functions)
-- [ ] Add `computeIdempotencyKey(UsageFact)` in `billing.ts` (per types layer policy)
-- [ ] Add `UsageReportEvent` to AiEvent union
-- [ ] Add `commitUsageFact()` to `billing.ts` — sole ledger writer
-- [ ] Schema: add `run_id`, `attempt` columns; `UNIQUE(source_system, source_reference)`
+- [x] Create `GraphExecutorPort` interface in `src/ports/graph-executor.port.ts`
+- [x] Create `InProcGraphExecutorAdapter` wrapping existing streaming/completion path
+- [x] Implement `RunEventRelay` (StreamDriver + Fanout) in `AiRuntimeService` (billing-independent consumption)
+- [x] Refactor `completion.ts`: remove `recordBilling()` call; return usage fields in final (litellmCallId, costUsd, tokens)
+- [x] Refactor `InProcGraphExecutorAdapter`: emit `usage_report` AiEvent from final BEFORE done
+- [x] Add `UsageFact` type in `src/types/usage.ts` (type only, no functions)
+- [x] Add `computeIdempotencyKey(UsageFact)` in `billing.ts` (per types layer policy)
+- [x] Add `UsageReportEvent` to AiEvent union
+- [x] Add `commitUsageFact()` to `billing.ts` — sole ledger writer
+- [x] Schema: add `run_id`, `attempt` columns; `UNIQUE(source_system, source_reference)`
 - [ ] Add grep test for ONE_LEDGER_WRITER (depcruise impractical—see §5)
 - [ ] Add idempotency test: replay with same (source_system, source_reference) → 1 row
+
+### P0: Graph Registry & Provider Architecture (Current)
+
+Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph support with LangGraph Server parity.
+
+**Phase 1: Boundary Types**
+
+- [ ] Add `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` to `@cogni/ai-core/tooling/types.ts`
+- [ ] Export from `@cogni/ai-core` barrel
+- [ ] Create `src/ports/tool-exec.port.ts` re-exporting from `@cogni/ai-core`
+- [ ] Define/retain exactly one `CompletionFinalResult` union (`ok:true | ok:false`) — delete all duplicates
+- [ ] Ensure failures use the union, not fake usage/finishReason patches
+- [ ] Verify single run streaming event contract used by both InProc and future Server adapter
+
+**Phase 2: Move LangGraph Wiring to Adapters**
+
+- [ ] Create `src/adapters/server/ai/langgraph/` directory
+- [ ] Move `features/ai/runners/langgraph-chat.runner.ts` → `adapters/server/ai/langgraph/chat.graph.ts` (rename)
+- [ ] Move `features/ai/tool-runner.ts` → `src/shared/ai/tool-runner.ts` (adapters can import shared/)
+- [ ] Update imports in moved files to use `@cogni/ai-core` for tool exec types
+- [ ] Create `langgraph/tool-registry.ts` for graph-specific tool bindings
+- [ ] Delete `src/features/ai/runners/` directory after move
+- [ ] Verify dep-cruiser passes (no adapters→features imports)
+
+**Phase 3: Thread/Run-Shaped Port**
+
+- [ ] Create `src/ports/graph-provider.port.ts` with `GraphProvider` interface
+- [ ] Add `listGraphs()`, `createThread()`, `createRun()`, `streamRun()` to interface
+- [ ] Define `GraphDescriptor` with `graphId`, `displayName`, `description`, `capabilities`
+- [ ] Define `GraphCapabilities` with `supportsStreaming`, `supportsTools`, `supportsMemory`
+- [ ] Create `src/adapters/server/ai/aggregating-executor.ts` implementing aggregation
+- [ ] Implement `LangGraphInProcProvider` in `adapters/server/ai/langgraph/`
+- [ ] InProc implements threads/runs ephemerally (in-memory) but preserves IDs and shapes
+- [ ] Route/UI should use `threadId` + `runId` flow (even if ephemeral)
+
+**Phase 4: Composition Root Wiring**
+
+- [ ] Create `src/adapters/server/ai/graph-registry.ts` with injectable registry
+- [ ] Registry entries must be pure factories (adapter-injected deps only)
+- [ ] Update `bootstrap/container.ts` to instantiate providers + aggregator
+- [ ] Remove `graphResolver` parameter from `createInProcGraphExecutor()`
+- [ ] Update `completion.server.ts` facade to be graph-agnostic (no graph selection logic)
+- [ ] Inject registry into providers (no hard-coded const in adapter)
+
+**Phase 5: Graph #2 Enablement**
+
+- [ ] Create `packages/langgraph-graphs/src/graphs/research/` (Graph #2 factory)
+- [ ] Implement `createResearchGraph()` in package
+- [ ] Create `adapters/server/ai/langgraph/research.graph.ts` binding
+- [ ] Register `langgraph:research` in injectable registry
+- [ ] Expose via `listGraphs()` on aggregator
+- [ ] UI adds graph selector → sends `graphId` when creating run
+- [ ] E2E test: verify graph switching works
+
+**Non-Regression Rules**
+
+- [ ] Do NOT change `toolCallId` behavior during this refactor
+- [ ] Do NOT change tool schema shapes
+- [ ] Relocate + rewire imports only; no runtime logic changes
+- [ ] Existing LangGraph chat tests must pass unchanged
 
 ### P1: Run Persistence + Attempt Semantics
 
