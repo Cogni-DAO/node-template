@@ -23,9 +23,9 @@ import {
 } from "../src/tools/get-current-time";
 
 describe("get_current_time contract", () => {
-  it("has correct name", () => {
-    expect(getCurrentTimeContract.name).toBe("get_current_time");
-    expect(GET_CURRENT_TIME_NAME).toBe("get_current_time");
+  it("has correct name (namespaced per TOOL_ID_NAMESPACED, double-underscore for provider compat)", () => {
+    expect(getCurrentTimeContract.name).toBe("core__get_current_time");
+    expect(GET_CURRENT_TIME_NAME).toBe("core__get_current_time");
   });
 
   it("has description for LLM", () => {

@@ -412,8 +412,11 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern per feedback. This 
 
 **Phase 3a: Boundary Types**
 
-- [ ] Add `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` to `@cogni/ai-core/tooling/types.ts`
-- [ ] Export from `@cogni/ai-core` barrel
+- [x] Add `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` to `@cogni/ai-core/tooling/types.ts`
+- [x] Add `ToolEffect` type to `@cogni/ai-core/tooling/types.ts`
+- [x] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
+- [x] Add `policy_denied` to `ToolErrorCode` union
+- [x] Export from `@cogni/ai-core` barrel
 - [ ] Create `src/ports/tool-exec.port.ts` re-exporting from `@cogni/ai-core`
 - [ ] Define/retain exactly one `CompletionFinalResult` union — delete duplicates
 

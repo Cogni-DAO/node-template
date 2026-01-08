@@ -16,6 +16,14 @@
 
 import type { JSONSchema7 } from "json-schema";
 
+import type { AiEvent } from "../events/ai-events";
+
+/**
+ * Tool effect level for policy decisions.
+ * Per EFFECT_TYPED invariant: every tool declares its side-effect level.
+ */
+export type ToolEffect = "read_only" | "state_change" | "external_side_effect";
+
 /**
  * Redaction mode for tool output.
  * P0 supports only top_level_only — filter top-level keys by allowlist.
@@ -42,12 +50,14 @@ export interface ToolRedactionConfig {
  * JSONSchema subset. Disallow oneOf/anyOf/allOf/not/if-then-else/patternProperties.
  */
 export interface ToolSpec {
-  /** Stable tool name (snake_case) */
+  /** Stable tool name (snake_case, namespaced: core:tool_name) */
   readonly name: string;
   /** Human-readable description for LLM */
   readonly description: string;
   /** JSONSchema7 for input validation (compiled from Zod) */
   readonly inputSchema: JSONSchema7;
+  /** Side-effect level for policy decisions */
+  readonly effect: ToolEffect;
   /** Redaction config for output */
   readonly redaction: ToolRedactionConfig;
   /**
@@ -67,7 +77,8 @@ export type ToolErrorCode =
   | "unavailable"
   | "redaction_failed"
   | "invalid_json"
-  | "timeout";
+  | "timeout"
+  | "policy_denied";
 
 /**
  * Tool invocation record — captures full lifecycle of a tool call.
@@ -104,3 +115,41 @@ export interface ToolInvocationRecord {
    */
   readonly raw?: unknown;
 }
+
+// -----------------------------------------------------------------------------
+// Tool Execution Types (canonical location per TOOL_EXEC_TYPES_IN_AI_CORE)
+// -----------------------------------------------------------------------------
+
+/**
+ * Callback for emitting AiEvents during tool execution.
+ * Used by tool-runner to stream events to runtime.
+ * Per TOOL_EXEC_TYPES_IN_AI_CORE: canonical definition in @cogni/ai-core.
+ */
+export type EmitAiEvent = (event: AiEvent) => void;
+
+/**
+ * Tool execution result shape.
+ * Per TOOLRUNNER_RESULT_SHAPE: exec() returns this discriminated union.
+ */
+export type ToolExecResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | {
+      readonly ok: false;
+      readonly errorCode: ToolErrorCode;
+      readonly safeMessage: string;
+    };
+
+/**
+ * Tool execution function signature.
+ * Used by graphs to invoke tools via toolRunner.
+ *
+ * @param toolName - Namespaced tool name (e.g., "core:get_current_time")
+ * @param args - Tool arguments (validated by caller)
+ * @param toolCallId - Optional model-provided tool call ID
+ * @returns Tool result with redacted value on success, error info on failure
+ */
+export type ToolExecFn = (
+  toolName: string,
+  args: unknown,
+  toolCallId?: string
+) => Promise<ToolExecResult<Record<string, unknown>>>;

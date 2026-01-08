@@ -41,7 +41,7 @@
 
 15. **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**: Golden fixture tests enforce wire conformance per adapter: exact key sets (no extra keys), required fields for tool definitions, correct delta assembly, and correct result message formation. Tests assert structure, not JSON key ordering.
 
-16. **TOOL_ID_NAMESPACED**: Tool IDs use namespaced format to prevent collisions: `core:get_current_time`, `mcp:<server>:<tool>`. Core tools use `core:` prefix. MCP-discovered tools use `mcp:<serverId>:<toolName>`. This enables safe aggregation from multiple tool sources.
+16. **TOOL_ID_NAMESPACED**: Tool IDs use namespaced format to prevent collisions: `core__get_current_time`, `mcp__<server>__<tool>`. Uses double-underscore `__` separator for LLM provider compatibility (OpenAI allows only `[a-zA-Z0-9_-]+`). Core tools use `core__` prefix. MCP-discovered tools use `mcp__<serverId>__<toolName>`. This enables safe aggregation from multiple tool sources.
 
 17. **EFFECT_TYPED**: Every `ToolContract` declares its effect level via `effect: ToolEffect`:
     - `read_only` — pure computation or read-only data access
@@ -152,7 +152,7 @@ Per invariants **EFFECT_TYPED**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**, **TOOL
 - [ ] Create `ToolCatalog` interface in `src/shared/ai/tool-catalog.ts`
 - [ ] Update `toolRunner.exec()` to accept and enforce `ToolPolicy`
 - [ ] Add `policy_denied` to `ToolErrorCode` union
-- [ ] Add namespace prefix to tool names (`core:get_current_time`)
+- [x] Add namespace prefix to tool names (`core__get_current_time`)
 - [ ] Add test: deny-by-default (unknown tool name must fail)
 - [ ] Add test: policy filter (tool in contracts but not in policy must not execute)
 

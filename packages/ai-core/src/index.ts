@@ -29,8 +29,12 @@ export type {
 } from "./events/ai-events";
 // Tooling types
 export type {
+  EmitAiEvent,
   RedactionMode,
+  ToolEffect,
   ToolErrorCode,
+  ToolExecFn,
+  ToolExecResult,
   ToolInvocationRecord,
   ToolRedactionConfig,
   ToolSpec,

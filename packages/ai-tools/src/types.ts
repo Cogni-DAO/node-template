@@ -15,6 +15,7 @@
  * @public
  */
 
+import type { ToolEffect } from "@cogni/ai-core";
 import type { z } from "zod";
 
 /**
@@ -37,7 +38,8 @@ export type ToolErrorCode =
   | "validation"
   | "execution"
   | "unavailable"
-  | "redaction_failed";
+  | "redaction_failed"
+  | "policy_denied";
 
 /**
  * Tool contract definition.
@@ -55,10 +57,12 @@ export interface ToolContract<
   TOutput,
   TRedacted,
 > {
-  /** Stable tool name (snake_case) */
+  /** Stable tool name (snake_case, namespaced: core:tool_name) */
   readonly name: TName;
   /** Human-readable description for LLM */
   readonly description: string;
+  /** Side-effect level for policy decisions */
+  readonly effect: ToolEffect;
   /**
    * Zod schema for input validation.
    * Source of truth — used by LangChain wrappers and compiled to JSONSchema7.

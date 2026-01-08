@@ -191,8 +191,11 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 
 **Phase 1: Boundary Types**
 
-- [ ] Add `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` to `@cogni/ai-core/tooling/types.ts`
-- [ ] Export from `@cogni/ai-core` barrel
+- [x] Add `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` to `@cogni/ai-core/tooling/types.ts`
+- [x] Add `ToolEffect` type to `@cogni/ai-core/tooling/types.ts`
+- [x] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
+- [x] Add `policy_denied` to `ToolErrorCode` union
+- [x] Export from `@cogni/ai-core` barrel
 - [ ] Create `src/ports/tool-exec.port.ts` re-exporting from `@cogni/ai-core`
 - [ ] Define/retain exactly one `CompletionFinalResult` union (`ok:true | ok:false`) — delete all duplicates
 - [ ] Ensure failures use the union, not fake usage/finishReason patches
@@ -203,7 +206,6 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [ ] Create `src/adapters/server/ai/langgraph/` directory
 - [ ] Move `features/ai/tool-runner.ts` → `src/shared/ai/tool-runner.ts` (adapters can import shared/)
 - [ ] Update imports in moved files to use `@cogni/ai-core` for tool exec types
-- [ ] Create `langgraph/tool-registry.ts` for shared tool bindings
 - [ ] Delete `src/features/ai/runners/` directory (logic absorbed by provider)
 - [ ] Verify dep-cruiser passes (no adapters→features imports)
 - NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`
