@@ -71,6 +71,20 @@ export interface UsageReportEvent {
 }
 
 /**
+ * Final assistant response for history persistence.
+ * Emitted exactly once per run with the complete assistant message content.
+ * Per ASSISTANT_FINAL_REQUIRED: all executors must emit this event.
+ *
+ * IMPORTANT: HistoryWriterSubscriber consumes this for run_artifacts persistence.
+ * Relay provides run context (runId, threadId, accountId) - NOT included in event.
+ */
+export interface AssistantFinalEvent {
+  readonly type: "assistant_final";
+  /** Complete assistant response content */
+  readonly content: string;
+}
+
+/**
  * Stream completed.
  * Emitted by runtime when the entire response is done.
  */
@@ -100,5 +114,6 @@ export type AiEvent =
   | ToolCallStartEvent
   | ToolCallResultEvent
   | UsageReportEvent
+  | AssistantFinalEvent
   | DoneEvent
   | ErrorEvent;

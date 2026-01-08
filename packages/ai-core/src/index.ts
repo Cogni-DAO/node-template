@@ -19,6 +19,7 @@ export type { RunContext } from "./context/run-context";
 // Event types
 export type {
   AiEvent,
+  AssistantFinalEvent,
   DoneEvent,
   ErrorEvent,
   TextDeltaEvent,

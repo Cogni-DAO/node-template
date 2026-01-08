@@ -14,7 +14,12 @@
 import { defineConfig } from "tsup";
 
 export const tsupConfig = defineConfig({
-  entry: ["src/index.ts", "src/runtime/index.ts", "src/graphs/index.ts"],
+  entry: [
+    "src/index.ts",
+    "src/runtime/index.ts",
+    "src/graphs/index.ts",
+    "src/inproc/index.ts",
+  ],
   format: ["esm"],
   dts: false, // tsc -b emits per-file declarations; tsup handles JS only
   clean: false, // preserve .d.ts files from tsc -b (incremental builds)
