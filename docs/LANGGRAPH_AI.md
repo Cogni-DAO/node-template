@@ -97,6 +97,31 @@ import {
 
 ---
 
+## Type Boundaries (Phase 3+)
+
+When implementing GraphProvider and catalog infrastructure, respect these boundaries:
+
+| Type                                              | Defined In                       | Used By                                   |
+| ------------------------------------------------- | -------------------------------- | ----------------------------------------- |
+| `GraphRunRequest`, `GraphRunResult`               | `@/ports`                        | `GraphExecutorPort`, `GraphProvider`      |
+| `GraphDescriptor`, `GraphCapabilities`            | `graph-provider.ts`              | All providers, aggregator                 |
+| `LangGraphCatalogEntry<T>`, `LangGraphCatalog<T>` | `langgraph/catalog.ts`           | `LangGraphInProcProvider` only            |
+| `CreateGraphFn`                                   | `@cogni/langgraph-graphs/inproc` | `LangGraphInProcProvider` only (internal) |
+
+**Key Rules:**
+
+1. **NO_PARALLEL_REQUEST_TYPES**: `GraphProvider.runGraph()` uses `GraphRunRequest`/`GraphRunResult` from `@/ports`. Do not create provider-specific request/result types.
+
+2. **CATALOG_DECOUPLED_FROM_EXECUTION_MODE**: `langgraph/catalog.ts` does NOT import from `@cogni/langgraph-graphs/inproc`. Catalog uses generic `TFactory` type; provider binds concrete type internally.
+
+3. **CATALOG_VS_REGISTRY**: Use "Catalog" for static collections built at bootstrap. Reserve "Registry" for systems supporting runtime registration/discovery lifecycle.
+
+4. **PROVIDER_SPECIFIC_CATALOG**: `LangGraphCatalog` is specific to LangGraph providers. `LangGraphServerProvider` (P2) discovers graphs remotely and does NOT use catalog types — only shares `GraphDescriptor` shapes.
+
+5. **CATALOG_SINGLE_SOURCE_OF_TRUTH**: The catalog is exported by `@cogni/langgraph-graphs`, not constructed in `bootstrap/container.ts`. Bootstrap imports and injects; it does not build per-graph entries. Adding a graph means adding to the package export.
+
+---
+
 ## P0 Persistence Integration
 
 > **Principle:** Prove runner correctness (AiEvent sequence) before persistence infrastructure.
@@ -433,13 +458,13 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern per feedback. This 
 
 - [ ] Create internal `GraphProvider` interface in `src/adapters/server/ai/graph-provider.ts`
 - [ ] Create `AggregatingGraphExecutor` implementing aggregation
-- [ ] Implement `LangGraphInProcProvider` with injected registry
-- [ ] Provider uses `Map<graphName, { toolContracts, graphFactory }>`
+- [ ] Implement `LangGraphInProcProvider` with injected catalog
+- [ ] Provider uses `LangGraphCatalog<CreateGraphFn>` imported from `@cogni/langgraph-graphs`
 - NOTE: Thread/run-shaped API (`createThread()`, `createRun()`, `streamRun()`) deferred to P1
 
 **Phase 3d: Composition Root Wiring**
 
-- [ ] Create injectable `graph-registry.ts` (no hard-coded const)
+- [ ] Import catalog from `@cogni/langgraph-graphs` (do NOT build entries in bootstrap)
 - [ ] Remove `graphResolver` param from `createInProcGraphExecutor()` — facade is graph-agnostic
 - [ ] Update `completion.server.ts` to delete all graph selection logic
 
@@ -489,7 +514,7 @@ Remaining wiring tracked in Phase 2c above.
 
 - [ ] Create `packages/langgraph-graphs/src/graphs/research/` (Graph #2 factory)
 - [ ] Implement `createResearchGraph()` in package
-- [ ] Add `langgraph:research` entry to injectable registry (NOT a separate adapter file)
+- [ ] Add `langgraph:research` entry to catalog exported by `@cogni/langgraph-graphs` (single source of truth)
 - [ ] Expose via `listGraphs()` on aggregator
 - [ ] UI adds graph selector → sends `graphId` when creating run
 - [ ] E2E test: verify graph switching works
@@ -530,7 +555,7 @@ Remaining wiring tracked in Phase 2c above.
   - [ ] **Delete runner**: `langgraph-chat.runner.ts` → delete; logic absorbed by `LangGraphInProcProvider`
   - [ ] **Move tool-runner**: `features/ai/tool-runner.ts` → `shared/ai/tool-runner.ts` (adapters can import shared/)
   - [ ] **Fix types**: Move `ToolExecFn`/`EmitAiEvent` to `@cogni/ai-core` so adapters can legally import
-  - [ ] **No per-graph files**: Provider uses injected registry, not per-graph adapter modules
+  - [ ] **No per-graph files**: Provider uses imported catalog, not per-graph adapter modules
 
 ---
 

@@ -17,7 +17,7 @@
 
 6. **GRAPH_FINALIZATION_ONCE**: Graph emits exactly one `done` event and resolves `final` exactly once per run attempt.
 
-7. **USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT**: Adapter emits at most one `usage_report` per `(runId, attempt, usageUnitId)`. DB uniqueness constraint is a safety net, not a substitute for correct event semantics.
+7. **USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT**: Adapter emits at most one `usage_report` per `(runId, attempt, usageUnitId)`. Adapters may emit 1..N `usage_report` events per run depending on execution granularity (see §MVP Invariants). DB uniqueness constraint is a safety net, not a substitute for correct event semantics.
 
 8. **BILLING_INDEPENDENT_OF_CLIENT**: Billing commits occur server-side regardless of client connection state. `AiRuntimeService` uses a StreamDriver + Fanout pattern via `RunEventRelay`: a StreamDriver consumes the upstream `AsyncIterable` to completion, broadcasting events to subscribers (UI + billing). UI disconnect or slow consumption does not stop the StreamDriver. Billing subscriber never drops events.
 
@@ -33,7 +33,7 @@
 
 14. **PROVIDER_AGGREGATION**: `AggregatingGraphExecutor` routes `graphId → GraphProvider`. App uses only the aggregator; no facade-level graph conditionals.
 
-15. **REGISTRY_INJECTED**: Graph registry is injected into providers, not hard-coded. Registry entries must be pure factories (adapter-injected deps only) for deterministic testing.
+15. **CATALOG_INJECTED**: Graph catalog is injected into providers, not hard-coded. Catalog entries must be pure factories (adapter-injected deps only) for deterministic testing.
 
 16. **NO_LANGCHAIN_IN_ADAPTERS_ROOT**: LangChain imports are isolated to `src/adapters/server/ai/langgraph/**`. Other adapter code must not import `@langchain/*`.
 
@@ -47,9 +47,11 @@
 
 19. **USAGE_UNIT_ID_MANDATORY**: For billable paths, adapters MUST provide `usageUnitId` in `UsageFact`. The fallback path (generating `MISSING:${runId}/${callIndex}`) is an ERROR condition that logs `billing.missing_usage_unit_id` metric and must be investigated. This is NOT a normal operation path.
 
+20. **CATALOG_STATIC_IN_P0**: P0 uses static catalog exported by `@cogni/langgraph-graphs`. Runtime graph discovery/registration is deferred to P1/P2. Adding a graph requires updating the package export, not runtime registration.
+
 ---
 
-## Graph Registry & Provider Architecture
+## Graph Catalog & Provider Architecture
 
 ### File Tree Map
 
@@ -89,10 +91,10 @@ src/
 ├── adapters/server/ai/
 │   ├── inproc-graph.adapter.ts               # InProcGraphExecutorAdapter (refactored)
 │   ├── aggregating-executor.ts               # NEW: AggregatingGraphExecutor
-│   ├── graph-registry.ts                     # NEW: Injectable graph registry (graphId → factory)
 │   └── langgraph/                            # NEW: LangGraph-specific bindings
 │       ├── index.ts                          # Barrel export
-│       └── langgraph-inproc.provider.ts      # NEW: Single provider with injected registry
+│       ├── catalog.ts                        # LangGraphCatalog<TFactory> types (no inproc imports)
+│       └── inproc.provider.ts                # LangGraphInProcProvider with injected catalog
 │   # NOTE: NO per-graph files — graphs live in packages/
 │   # NOTE: NO tool-registry — graphs import ToolContracts directly; policy in tool-runner
 │
@@ -156,7 +158,7 @@ class AggregatingGraphExecutor implements GraphExecutorPort {
 These invariants govern the in-process LangGraph execution path:
 
 - **GRAPH_FINALIZATION_ONCE**: Exactly one `done` per runId; completion-units never emit `done`.
-- **USAGE_EMIT_ON_FINAL_ONLY**: Emit exactly one `usage_report` per run; aggregate multi-call usage internally for P0.
+- **USAGE_UNIT_GRANULARITY_ADAPTER_DEFINED**: Adapters emit 1..N `usage_report` events per run. InProc emits per-completion-unit (`usageUnitId=litellmCallId`). External adapters (LangGraph Server, Claude SDK, n8n) emit one aggregate (`usageUnitId=provider_run_id` or `message.id`). `USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT` prevents duplicates; billing handles any valid 1..N sequence.
 - **BILLING_SEAM_IS_EXECUTE_COMPLETION_UNIT**: No direct provider/LiteLLM SDK calls from langgraph graphs; all billable calls go through `executeCompletionUnit`.
 - **REQUEST_ID_FLOW_REQUIRED**: `CompletionResult` must carry `requestId` (or define deterministic mapping) to satisfy `GraphFinal.requestId` + tracing.
 - **MODEL_CONSISTENCY**: Model string must be the same through request→LiteLLM→`UsageFact.model`; never infer later.
@@ -185,7 +187,7 @@ Refactor billing for run-centric idempotency. Wrap existing LLM path behind `Gra
 - [ ] Add grep test for ONE_LEDGER_WRITER (depcruise impractical—see §5)
 - [ ] Add idempotency test: replay with same (source_system, source_reference) → 1 row
 
-### P0: Graph Registry & Provider Architecture (Current)
+### P0: Graph Catalog & Provider Architecture (Current)
 
 Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph support with LangGraph Server parity.
 
@@ -218,26 +220,40 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 
 - [ ] Create `src/adapters/server/ai/graph-provider.ts` with internal `GraphProvider` interface
 - [ ] Define `GraphDescriptor` with `graphId`, `displayName`, `description`, `capabilities`
-- [ ] Create `src/adapters/server/ai/aggregating-executor.ts` implementing aggregation
-- [ ] Implement `LangGraphInProcProvider` in `adapters/server/ai/langgraph/`
-- [ ] Provider uses injected registry: `Map<graphName, { toolContracts, graphFactory }>`
+- [ ] Define `GraphCapabilities` with `supportsStreaming`, `supportsTools`, `supportsMemory`
+- [ ] `GraphProvider.runGraph()` uses same `GraphRunRequest`/`GraphRunResult` as `GraphExecutorPort` — no parallel types
+- [ ] Create `src/adapters/server/ai/aggregating-executor.ts` implementing `GraphExecutorPort`
+- [ ] Implement `LangGraphInProcProvider` in `adapters/server/ai/langgraph/inproc.provider.ts`
+- [ ] Provider uses injected catalog: `LangGraphCatalog<CreateGraphFn>` (see Phase 4)
 - NOTE: Thread/run-shaped API (`createThread()`, `createRun()`, `streamRun()`) deferred to P1
+
+**Type Boundaries (Critical):**
+
+- `GraphProvider.runGraph` reuses `GraphRunRequest`/`GraphRunResult` from `@/ports` — do NOT create parallel types
+- Catalog types do NOT depend on execution-mode packages (`@cogni/langgraph-graphs/inproc`)
+- Provider binds concrete factory type internally; catalog stores opaque `TFactory`
 
 **Phase 4: Composition Root Wiring**
 
-- [ ] Create `src/adapters/server/ai/graph-registry.ts` with injectable registry
-- [ ] Registry entries: `{ toolContracts: ToolContract[], graphFactory: CreateGraphFn }`
-- [ ] Update `bootstrap/container.ts` to instantiate providers + aggregator
+- [ ] Create `src/adapters/server/ai/langgraph/catalog.ts`:
+  - `LangGraphCatalogEntry<TFactory>` with generic factory type (opaque — only provider interprets it)
+  - `LangGraphCatalog<TFactory>` type alias
+  - NOTE: Does NOT import from `@cogni/langgraph-graphs/inproc` — stable config surface
+- [ ] Export catalog from `@cogni/langgraph-graphs` (single source of truth for graph definitions)
+- [ ] Update `bootstrap/container.ts`:
+  - Import catalog from `@cogni/langgraph-graphs` (do NOT build entries here)
+  - Instantiate `LangGraphInProcProvider` with imported catalog
+  - Instantiate `AggregatingGraphExecutor` with providers
+  - NOTE: Bootstrap wires providers, not per-graph registration
 - [ ] Remove `graphResolver` parameter from `createInProcGraphExecutor()` — facade is graph-agnostic
 - [ ] Update `completion.server.ts` facade: delete all graph selection logic
-- [ ] Inject registry into providers (no hard-coded const in adapter)
 
 **Phase 5: Graph #2 Enablement**
 
 - [ ] Create `packages/langgraph-graphs/src/graphs/research/` (Graph #2 factory)
 - [ ] Implement `createResearchGraph()` in package
-- [ ] Add `langgraph:research` entry to injectable registry (NOT a separate adapter file)
-- [ ] Expose via `listGraphs()` on aggregator
+- [ ] Add `research` entry to catalog exported by `@cogni/langgraph-graphs` (single source of truth)
+- [ ] Expose via `listGraphs()` on aggregator (bootstrap re-imports updated catalog automatically)
 - [ ] UI adds graph selector → sends `graphId` when creating run
 - [ ] E2E test: verify graph switching works
 
@@ -362,7 +378,7 @@ SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
 │ AiRuntimeService.runGraph(request)                                  │
 │ ─────────────────────────────────────                               │
 │ 1. Generate run_id; set attempt=0 (P0: no persistence)              │
-│ 2. Select adapter from GraphRegistry by graph name                  │
+│ 2. Route to provider via AggregatingGraphExecutor (by graphId)      │
 │ 3. Call adapter.runGraph(request) → get stream                      │
 │ 4. Start RunEventRelay.pump() to consume upstream to completion     │
 │ 5. Fanout events to subscribers:                                    │
@@ -523,6 +539,8 @@ export interface GraphRunResult {
 ```
 
 **Why non-async?** The method returns a stream handle immediately; actual execution happens as the stream is consumed. Avoids nested `Promise<Promise<...>>`.
+
+**Usage aggregation:** `GraphFinal.totalUsage` aggregates all `usage_report` events for UI/analytics display. Billing uses individual `usage_report` events (1..N per run); `totalUsage` is a convenience summary, not the billing source of truth.
 
 ---
 
