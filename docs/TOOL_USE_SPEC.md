@@ -144,17 +144,17 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 
 Per invariants **EFFECT_TYPED**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**, **TOOL_ID_NAMESPACED**:
 
-- [ ] Add `ToolEffect` type to `@cogni/ai-core/tooling/types.ts`
-- [ ] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
-- [ ] Add `effect: ToolEffect` field to `ToolSpec` in `@cogni/ai-core`
-- [ ] Update existing tools with effect declarations (`get_current_time` → `read_only`)
-- [ ] Create `ToolPolicy` interface in `src/shared/ai/tool-policy.ts`
-- [ ] Create `ToolCatalog` interface in `src/shared/ai/tool-catalog.ts`
-- [ ] Update `toolRunner.exec()` to accept and enforce `ToolPolicy`
-- [ ] Add `policy_denied` to `ToolErrorCode` union
+- [x] Add `ToolEffect` type to `@cogni/ai-core/tooling/types.ts`
+- [x] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
+- [x] Add `effect: ToolEffect` field to `ToolSpec` in `@cogni/ai-core`
+- [x] Update existing tools with effect declarations (`get_current_time` → `read_only`)
+- [x] Create `ToolPolicy` interface in `src/shared/ai/tool-policy.ts`
+- [x] Create `ToolCatalog` interface in `src/shared/ai/tool-catalog.ts`
+- [x] Update `toolRunner.exec()` to accept and enforce `ToolPolicy`
+- [x] Add `policy_denied` to `ToolErrorCode` union
 - [x] Add namespace prefix to tool names (`core__get_current_time`)
-- [ ] Add test: deny-by-default (unknown tool name must fail)
-- [ ] Add test: policy filter (tool in contracts but not in policy must not execute)
+- [x] Add test: deny-by-default (unknown tool name must fail)
+- [x] Add test: policy filter (tool in contracts but not in policy must not execute)
 
 ### P1: Tool Ecosystem + ToolCatalog
 

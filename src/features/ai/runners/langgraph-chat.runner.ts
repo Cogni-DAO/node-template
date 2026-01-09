@@ -37,8 +37,9 @@ import type {
   GraphRunResult,
   LlmToolDefinition,
 } from "@/ports";
-
+import { createToolAllowlistPolicy } from "@/shared/ai/tool-policy";
 import { createToolRunner } from "@/shared/ai/tool-runner";
+
 import type { AiEvent } from "../types";
 
 type AnyBoundTool = BoundTool<
@@ -55,6 +56,12 @@ const CHAT_GRAPH_BOUND_TOOLS: Record<string, AnyBoundTool> = {
 
 /** Tool contracts for LangGraph wrapping */
 const CHAT_GRAPH_TOOL_CONTRACTS = [getCurrentTimeContract];
+
+/**
+ * Policy for chat graph tools.
+ * Per DENY_BY_DEFAULT: only explicitly allowed tools can execute.
+ */
+const CHAT_GRAPH_POLICY = createToolAllowlistPolicy([GET_CURRENT_TIME_NAME]);
 
 /**
  * Adapter interface for executing a single completion unit.
@@ -125,8 +132,12 @@ export function createLangGraphChatRunner(
 
     // Factory that creates toolExecFn with emit callback bound
     // Per TOOLCALLID_STABLE: toolRunner generates ID if not provided by wrapper
+    // Per DENY_BY_DEFAULT: policy must be explicitly provided
     const createToolExecFn = (emit: (e: AiEvent) => void) => {
-      const toolRunner = createToolRunner(CHAT_GRAPH_BOUND_TOOLS, emit);
+      const toolRunner = createToolRunner(CHAT_GRAPH_BOUND_TOOLS, emit, {
+        policy: CHAT_GRAPH_POLICY,
+        ctx: { runId },
+      });
       return async (name: string, args: unknown, toolCallId?: string) => {
         // P0: toolCallId is undefined (toolRunner generates)
         // P1: pass providerToolCallId from AIMessage.tool_calls

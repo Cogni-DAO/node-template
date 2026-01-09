@@ -80,12 +80,14 @@ export function createTestToolContract(
     validateInputThrows?: boolean;
     validateOutputThrows?: boolean;
     allowlist?: readonly string[];
+    effect?: "read_only" | "state_change" | "external_side_effect";
   } = {}
 ): ToolContract<string, TestToolInput, TestToolOutput, TestToolRedacted> {
   const name = options.name ?? TEST_TOOL_NAME;
   return {
     name,
     description: "A test tool for testing",
+    effect: options.effect ?? "read_only",
     inputSchema: options.validateInputThrows
       ? ThrowingInputSchema
       : TestToolInputSchema,
@@ -136,6 +138,7 @@ export function createTestBoundTool(
     validateOutputThrows?: boolean;
     executionThrows?: boolean;
     allowlist?: readonly string[];
+    effect?: "read_only" | "state_change" | "external_side_effect";
   } = {}
 ): BoundTool<string, TestToolInput, TestToolOutput, TestToolRedacted> {
   return {
@@ -144,6 +147,7 @@ export function createTestBoundTool(
       validateInputThrows: options.validateInputThrows,
       validateOutputThrows: options.validateOutputThrows,
       allowlist: options.allowlist,
+      effect: options.effect,
     }),
     implementation: createTestToolImplementation({
       result: options.result,

@@ -206,6 +206,10 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [ ] Create `src/adapters/server/ai/langgraph/` directory
 - [x] Move `features/ai/tool-runner.ts` → `src/shared/ai/tool-runner.ts` (adapters can import shared/)
 - [x] Update imports in moved files to use `@cogni/ai-core` for tool exec types
+- [x] Create `src/shared/ai/tool-policy.ts` with `ToolPolicy`, `DENY_ALL_POLICY`, `createToolAllowlistPolicy()`
+- [x] Create `src/shared/ai/tool-catalog.ts` with `ToolCatalog`, `EMPTY_CATALOG`, `createToolCatalog()`
+- [x] Update `tool-runner.ts` to enforce policy (DENY_BY_DEFAULT)
+- [x] Update `langgraph-chat.runner.ts` to pass policy + ctx to tool runner
 - [ ] Delete `src/features/ai/runners/` directory (logic absorbed by provider)
 - [ ] Verify dep-cruiser passes (no adapters→features imports)
 - NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`

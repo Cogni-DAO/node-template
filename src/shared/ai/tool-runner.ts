@@ -3,17 +3,18 @@
 
 /**
  * Module: `@shared/ai/tool-runner`
- * Purpose: Tool execution with AiEvent emission and payload redaction.
+ * Purpose: Tool execution with AiEvent emission, policy enforcement, and payload redaction.
  * Scope: Sole owner of toolCallId generation; executes tools via injected implementations. Does not import adapters.
  * Invariants:
  *   - GRAPHS_USE_TOOLRUNNER_ONLY: Graphs invoke tools exclusively through toolRunner.exec()
  *   - TOOLCALL_ID_STABLE: Same toolCallId across start→result
  *   - TOOLRUNNER_ALLOWLIST_HARD_FAIL: Missing allowlist or redaction failure → error event
  *   - TOOLRUNNER_RESULT_SHAPE: Returns {ok:true, value} | {ok:false, errorCode, safeMessage}
- *   - TOOLRUNNER_PIPELINE_ORDER: validate args → execute → validate result → redact → emit → return
+ *   - TOOLRUNNER_PIPELINE_ORDER: policy check → validate args → execute → validate result → redact → emit → return
+ *   - DENY_BY_DEFAULT: Default to DenyAllPolicy if no policy provided
  * Side-effects: none (AiEvent emission via injected callback is caller's responsibility)
  * Notes: Per AI_SETUP_SPEC.md P1 invariants. Moved from features/ai to shared/ai per TOOL_EXEC_TYPES_IN_AI_CORE.
- * Links: @cogni/ai-core, @cogni/ai-tools, AI_SETUP_SPEC.md
+ * Links: @cogni/ai-core, @cogni/ai-tools, AI_SETUP_SPEC.md, TOOL_USE_SPEC.md
  * @public
  */
 
@@ -23,6 +24,12 @@ import type {
   ToolCallStartEvent,
 } from "@cogni/ai-core";
 import type { BoundTool, ToolResult } from "@cogni/ai-tools";
+
+import {
+  DENY_ALL_POLICY,
+  type ToolPolicy,
+  type ToolPolicyContext,
+} from "./tool-policy";
 
 /** Charset for provider-compatible tool call IDs */
 const TOOL_ID_CHARS =
@@ -46,11 +53,33 @@ export interface ToolExecOptions {
 }
 
 /**
+ * Configuration for tool runner creation.
+ */
+export interface ToolRunnerConfig {
+  /**
+   * Policy for tool execution.
+   * Default: DENY_ALL_POLICY (rejects all tools per DENY_BY_DEFAULT invariant)
+   */
+  readonly policy?: ToolPolicy;
+
+  /**
+   * Context for policy decisions.
+   * Default: { runId: 'unknown' }
+   */
+  readonly ctx?: ToolPolicyContext;
+}
+
+/**
  * Create a tool runner instance with the given bound tools.
  * The runner executes tools and emits AiEvents via the provided callback.
  *
+ * Per DENY_BY_DEFAULT: if no policy is provided, defaults to DENY_ALL_POLICY
+ * which rejects all tool invocations. Callers must explicitly provide a policy
+ * with allowedTools to enable tool execution.
+ *
  * @param boundTools - Map of tool name to bound tool (contract + implementation)
  * @param emit - Callback to emit AiEvents
+ * @param config - Optional configuration (policy, ctx)
  * @returns Tool runner with exec method
  */
 export function createToolRunner<
@@ -58,7 +87,10 @@ export function createToolRunner<
     string,
     BoundTool<string, unknown, unknown, Record<string, unknown>>
   >,
->(boundTools: TTools, emit: EmitAiEvent) {
+>(boundTools: TTools, emit: EmitAiEvent, config?: ToolRunnerConfig) {
+  // Default to DENY_ALL_POLICY per DENY_BY_DEFAULT invariant
+  const policy = config?.policy ?? DENY_ALL_POLICY;
+  const ctx = config?.ctx ?? { runId: "unknown" };
   /**
    * Execute a tool by name with given arguments.
    * Follows fixed pipeline per TOOLRUNNER_PIPELINE_ORDER.
@@ -95,7 +127,25 @@ export function createToolRunner<
 
     const { contract, implementation } = boundTool;
 
-    // 1. Validate args via inputSchema
+    // 1. Policy check (DENY_BY_DEFAULT)
+    const decision = policy.decide(ctx, toolName, contract.effect);
+    if (decision === "deny" || decision === "require_approval") {
+      // P0: require_approval treated as deny (human-in-the-loop is P1)
+      const errorEvent: ToolCallResultEvent = {
+        type: "tool_call_result",
+        toolCallId,
+        result: { error: `Tool '${toolName}' is not allowed by policy` },
+        isError: true,
+      };
+      emit(errorEvent);
+      return {
+        ok: false,
+        errorCode: "policy_denied",
+        safeMessage: `Tool '${toolName}' is not allowed by current policy`,
+      };
+    }
+
+    // 2. Validate args via inputSchema
     let validatedInput: unknown;
     try {
       validatedInput = contract.inputSchema.parse(rawArgs);
@@ -116,7 +166,7 @@ export function createToolRunner<
       };
     }
 
-    // Emit tool_call_start with validated (possibly redacted) args
+    // 3. Emit tool_call_start with validated (possibly redacted) args
     const startEvent: ToolCallStartEvent = {
       type: "tool_call_start",
       toolCallId,
@@ -125,7 +175,7 @@ export function createToolRunner<
     };
     emit(startEvent);
 
-    // 2. Execute tool
+    // 4. Execute tool
     let rawOutput: unknown;
     try {
       rawOutput = await implementation.execute(validatedInput);
@@ -146,7 +196,7 @@ export function createToolRunner<
       };
     }
 
-    // 3. Validate result via outputSchema
+    // 5. Validate result via outputSchema
     let validatedOutput: unknown;
     try {
       validatedOutput = contract.outputSchema.parse(rawOutput);
@@ -167,7 +217,7 @@ export function createToolRunner<
       };
     }
 
-    // 4. Redact per allowlist (hard-fail if missing/fails)
+    // 6. Redact per allowlist (hard-fail if missing/fails)
     let redactedOutput: Record<string, unknown>;
     try {
       if (contract.allowlist.length === 0) {
@@ -191,7 +241,7 @@ export function createToolRunner<
       };
     }
 
-    // 5. Emit tool_call_result with redacted output
+    // 7. Emit tool_call_result with redacted output
     const resultEvent: ToolCallResultEvent = {
       type: "tool_call_result",
       toolCallId,
@@ -199,7 +249,7 @@ export function createToolRunner<
     };
     emit(resultEvent);
 
-    // 6. Return result
+    // 8. Return result
     return {
       ok: true,
       value: redactedOutput,

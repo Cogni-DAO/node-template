@@ -3,15 +3,16 @@
 
 /**
  * Module: `@tests/unit/features/ai/tool-runner.test`
- * Purpose: Tests tool-runner execution pipeline with validation, redaction, and event emission.
+ * Purpose: Tests tool-runner execution pipeline with validation, redaction, policy enforcement, and event emission.
  * Scope: Unit tests for createToolRunner. Does NOT test LLM integration or graph orchestration.
  * Invariants:
- *   - TOOLRUNNER_PIPELINE_ORDER: validate → execute → validate → redact → emit → return
+ *   - TOOLRUNNER_PIPELINE_ORDER: policy check → validate → execute → validate → redact → emit → return
  *   - TOOLCALL_ID_STABLE: Same toolCallId across start→result events
+ *   - DENY_BY_DEFAULT: Default policy rejects all tools
  *   - Event ordering: tool_call_start ALWAYS before tool_call_result
  * Side-effects: none
  * Notes: MVP tool use tests per TOOL_USE_SPEC.md
- * Links: tool-runner.ts, types.ts
+ * Links: tool-runner.ts, tool-policy.ts
  * @public
  */
 
@@ -27,7 +28,15 @@ import type {
   ToolCallResultEvent,
   ToolCallStartEvent,
 } from "@/features/ai/types";
+import { createToolAllowlistPolicy } from "@/shared/ai/tool-policy";
 import { createToolRunner } from "@/shared/ai/tool-runner";
+
+/**
+ * Test policy that allows TEST_TOOL_NAME.
+ * Used by most tests to avoid DENY_BY_DEFAULT behavior.
+ */
+const TEST_POLICY = createToolAllowlistPolicy([TEST_TOOL_NAME]);
+const TEST_CTX = { runId: "test-run-123" };
 
 describe("features/ai/tool-runner", () => {
   describe("exec()", () => {
@@ -37,7 +46,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act
@@ -55,7 +65,10 @@ describe("features/ai/tool-runner", () => {
     it("returns ok:false with errorCode 'unavailable' for unknown tool", async () => {
       // Arrange
       const collector = createEventCollector();
-      const runner = createToolRunner({}, collector.emit);
+      const runner = createToolRunner({}, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec("unknown_tool", { value: "test" });
@@ -74,7 +87,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act
@@ -93,7 +107,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act
@@ -112,7 +127,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act
@@ -124,6 +140,48 @@ describe("features/ai/tool-runner", () => {
         expect(result.errorCode).toBe("redaction_failed");
       }
     });
+
+    it("returns ok:false with errorCode 'policy_denied' when tool not in policy allowlist", async () => {
+      // Arrange - policy allows only TEST_TOOL_NAME, but tool is different
+      const boundTool = createTestBoundTool();
+      const collector = createEventCollector();
+      const restrictivePolicy = createToolAllowlistPolicy(["other_tool_only"]);
+      const runner = createToolRunner(
+        { [TEST_TOOL_NAME]: boundTool },
+        collector.emit,
+        { policy: restrictivePolicy, ctx: TEST_CTX }
+      );
+
+      // Act
+      const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
+
+      // Assert - DENY_BY_DEFAULT invariant
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errorCode).toBe("policy_denied");
+        expect(result.safeMessage).toContain("not allowed by current policy");
+      }
+    });
+
+    it("returns ok:false with errorCode 'policy_denied' when using default DENY_ALL_POLICY", async () => {
+      // Arrange - no policy provided, defaults to DENY_ALL_POLICY
+      const boundTool = createTestBoundTool();
+      const collector = createEventCollector();
+      const runner = createToolRunner(
+        { [TEST_TOOL_NAME]: boundTool },
+        collector.emit
+        // No config - uses DENY_ALL_POLICY
+      );
+
+      // Act
+      const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
+
+      // Assert - DENY_BY_DEFAULT invariant
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errorCode).toBe("policy_denied");
+      }
+    });
   });
 
   describe("event emission", () => {
@@ -133,7 +191,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act
@@ -160,7 +219,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act
@@ -187,7 +247,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act
@@ -209,7 +270,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
       const customToolCallId = "call_stable_id_789";
 
@@ -235,7 +297,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act
@@ -258,7 +321,8 @@ describe("features/ai/tool-runner", () => {
       const collector = createEventCollector();
       const runner = createToolRunner(
         { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
+        collector.emit,
+        { policy: TEST_POLICY, ctx: TEST_CTX }
       );
 
       // Act - no modelToolCallId provided
@@ -273,6 +337,34 @@ describe("features/ai/tool-runner", () => {
       expect(startEvent.toolCallId.length).toBeGreaterThan(0);
       // Both events should have same ID
       expect(startEvent.toolCallId).toBe(resultEvent.toolCallId);
+    });
+
+    it("emits tool_call_result with isError:true when policy denies tool", async () => {
+      // Arrange
+      const boundTool = createTestBoundTool();
+      const collector = createEventCollector();
+      const restrictivePolicy = createToolAllowlistPolicy(["other_tool"]);
+      const runner = createToolRunner(
+        { [TEST_TOOL_NAME]: boundTool },
+        collector.emit,
+        { policy: restrictivePolicy, ctx: TEST_CTX }
+      );
+
+      // Act
+      await runner.exec(
+        TEST_TOOL_NAME,
+        { value: "test" },
+        { modelToolCallId: TEST_TOOL_CALL_ID }
+      );
+
+      // Assert - Policy denial emits error event
+      const resultEvents = collector.getByType("tool_call_result");
+      expect(resultEvents).toHaveLength(1);
+      expect(resultEvents[0].isError).toBe(true);
+      expect(resultEvents[0].result).toHaveProperty("error");
+      // No start event should be emitted for policy-denied tools
+      const startEvents = collector.getByType("tool_call_start");
+      expect(startEvents).toHaveLength(0);
     });
   });
 });
