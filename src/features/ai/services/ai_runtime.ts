@@ -96,8 +96,15 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
     // Create RunContext for relay subscribers (per RELAY_PROVIDES_CONTEXT)
     const runContext: RunContext = { runId, attempt, ingressRequestId };
 
+    // Per GRAPH_ID_NAMESPACED: graphIds are ${providerId}:${graphName}
+    // P0: LangGraph is sole provider, so we namespace here. and 'chat' is the only graph. eventually, avoid default graph
+    // Already-namespaced IDs pass through; raw names get "langgraph:" prefix.
+    const resolvedGraphId = graphName?.includes(":")
+      ? graphName
+      : `langgraph:${graphName ?? "chat"}`;
+
     log.debug(
-      { runId, ingressRequestId, model, graphName },
+      { runId, ingressRequestId, model, graphName: resolvedGraphId },
       "runChatStream starting"
     );
 
@@ -109,7 +116,7 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
       model,
       caller,
       ...(abortSignal && { abortSignal }),
-      ...(graphName && { graphName }),
+      graphName: resolvedGraphId,
     });
 
     // Create RunEventRelay for pump+fanout pattern (context provided to subscribers)

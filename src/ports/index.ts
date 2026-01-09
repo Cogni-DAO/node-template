@@ -55,6 +55,7 @@ export type {
   LlmToolCallDelta,
   LlmToolChoice,
   LlmToolDefinition,
+  Message,
 } from "./llm.port";
 export type {
   InstantQueryParams,

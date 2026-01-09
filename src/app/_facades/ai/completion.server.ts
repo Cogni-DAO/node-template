@@ -20,15 +20,11 @@
 import type { z } from "zod";
 
 import { resolveAiAdapterDeps } from "@/bootstrap/container";
-import { createInProcGraphExecutor } from "@/bootstrap/graph-executor.factory";
+import { createGraphExecutor } from "@/bootstrap/graph-executor.factory";
 import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
 // Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
-import {
-  createLangGraphChatRunner,
-  type MessageDto,
-  toCoreMessages,
-} from "@/features/ai/public.server";
+import { type MessageDto, toCoreMessages } from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { LlmCaller } from "@/ports";
 import {
@@ -125,18 +121,13 @@ export async function completionStream(
 }> {
   // Per UNIFIED_GRAPH_EXECUTOR: use bootstrap factory (app → bootstrap → adapters)
   // Facade CANNOT import adapters - architecture boundary enforced by depcruise
+  // Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes by graphId to providers
   const { accountService, clock } = resolveAiAdapterDeps();
   const { executeStream } = await import("@/features/ai/public.server");
 
-  // Build graph resolver: "chat" → LangGraph runner, else undefined (falls back to default)
-  // Resolver receives adapter from bootstrap, facade imports runner from features
-  const graphResolver = (
-    graphName: string,
-    adapter: Parameters<typeof createLangGraphChatRunner>[0]
-  ) => (graphName === "chat" ? createLangGraphChatRunner(adapter) : undefined);
-
-  // Create graph executor via bootstrap factory with resolver
-  const graphExecutor = createInProcGraphExecutor(executeStream, graphResolver);
+  // Create graph executor via bootstrap factory
+  // Routing is handled by AggregatingGraphExecutor - facade is graph-agnostic
+  const graphExecutor = createGraphExecutor(executeStream);
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
