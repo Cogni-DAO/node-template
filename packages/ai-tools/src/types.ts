@@ -7,6 +7,7 @@
  * Scope: Defines ToolContract, ToolImplementation, BoundTool. Does NOT import @langchain.
  * Invariants:
  *   - Pure types only, no runtime logic
+ *   - EFFECT_TYPED: ToolContract includes `effect: ToolEffect` for policy decisions
  *   - NO LangChain imports (LangChain wrapping lives in langgraph-graphs)
  *   - Tools are pure functions with Zod validation
  *   - inputSchema is the source of truth; validateInput derives from it

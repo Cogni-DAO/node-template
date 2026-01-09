@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-19
-- **Status:** stable
+- **Last reviewed:** 2026-01-09
+- **Status:** draft
 
 ## Purpose
 
-Shared AI utilities for prompt hashing and model catalog. Pure functions used by litellm.adapter.ts.
+Shared AI utilities for prompt hashing, model catalog, and tool execution. Pure functions used by adapters and features.
 
 ## Pointers
 
@@ -35,16 +35,16 @@ Shared AI utilities for prompt hashing and model catalog. Pure functions used by
 
 ## Public Surface
 
-- **Exports:** `computePromptHash`, `PROMPT_HASH_VERSION`, `isModelAllowed`, `getDefaults`
+- **Exports:** `computePromptHash`, `PROMPT_HASH_VERSION`, `isModelAllowed`, `getDefaults`, `createToolRunner`, `ToolRunner`, `EmitAiEvent`
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** `LITELLM_BASE_URL` (model-catalog.server.ts)
-- **Files considered API:** prompt-hash.ts, model-catalog.server.ts
+- **Files considered API:** prompt-hash.ts, model-catalog.server.ts, tool-runner.ts
 
 ## Responsibilities
 
-- This directory **does:** Compute deterministic prompt hashes, validate models against cached allowlist
-- This directory **does not:** Perform direct IO, compute hashes outside adapter layer
+- This directory **does:** Compute deterministic prompt hashes, validate models against cached allowlist, execute tools with validation/redaction
+- This directory **does not:** Perform direct IO, import from adapters or features
 
 ## Usage
 
@@ -59,7 +59,7 @@ pnpm test tests/unit/shared/ai
 
 ## Dependencies
 
-- **Internal:** none
+- **Internal:** @cogni/ai-core, @cogni/ai-tools
 - **External:** node:crypto
 
 ## Change Protocol

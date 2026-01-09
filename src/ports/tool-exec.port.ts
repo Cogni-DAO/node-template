@@ -4,7 +4,7 @@
 /**
  * Module: `@ports/tool-exec`
  * Purpose: Re-export tool execution types from @cogni/ai-core for src/ consumers.
- * Scope: Pure re-export; no additional types or logic.
+ * Scope: Pure re-export. Does not define new types or contain logic.
  * Invariants:
  *   - TOOL_EXEC_TYPES_IN_AI_CORE: Canonical definitions in @cogni/ai-core
  * Side-effects: none

@@ -3,14 +3,16 @@
 
 /**
  * Module: `@cogni/ai-core/tooling/types`
- * Purpose: Canonical semantic types for tool definitions and invocations.
- * Scope: Framework-agnostic types for tool definitions. Does NOT import Zod — uses JSONSchema7 for wire formats.
+ * Purpose: Canonical semantic types for tool definitions, invocations, and execution.
+ * Scope: Framework-agnostic types for tool definitions and execution. Does NOT import Zod — uses JSONSchema7 for wire formats.
  * Invariants:
  *   - TOOL_SEMANTICS_CANONICAL: These are the canonical types; wire formats are adapters
+ *   - TOOL_EXEC_TYPES_IN_AI_CORE: ToolExecFn, ToolExecResult, EmitAiEvent defined here
+ *   - EFFECT_TYPED: ToolEffect declares side-effect level for policy decisions
  *   - No Zod dependency — compiled from @cogni/ai-tools via toToolSpec()
  *   - ToolSpec uses JSONSchema7 for inputSchema (compiled from Zod)
  * Side-effects: none (types only)
- * Links: TOOL_USE_SPEC.md
+ * Links: TOOL_USE_SPEC.md, GRAPH_EXECUTION.md
  * @public
  */
 

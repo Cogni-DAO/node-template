@@ -6,6 +6,8 @@
  * Purpose: Simple tool that returns the current UTC time.
  * Scope: First tool for testing agentic loop. Does not have IO dependencies (pure).
  * Invariants:
+ *   - TOOL_ID_NAMESPACED: ID is `core__get_current_time` (double-underscore for provider compat)
+ *   - EFFECT_TYPED: effect is `read_only` (pure computation)
  *   - Pure function, no side effects beyond Date.now()
  *   - Returns ISO 8601 format timestamp
  *   - No sensitive data (full output in allowlist)
