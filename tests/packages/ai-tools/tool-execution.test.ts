@@ -120,9 +120,9 @@ describe("ai-tools integration: tool execution lifecycle", () => {
     }
   });
 
-  it("tool name matches expected constant", () => {
+  it("tool name matches expected constant (namespaced, double-underscore for provider compat)", () => {
     expect(getCurrentTimeBoundTool.contract.name).toBe(GET_CURRENT_TIME_NAME);
-    expect(GET_CURRENT_TIME_NAME).toBe("get_current_time");
+    expect(GET_CURRENT_TIME_NAME).toBe("core__get_current_time");
   });
 
   it("allowlist is enforced in redacted output", async () => {

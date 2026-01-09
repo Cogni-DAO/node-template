@@ -53,6 +53,7 @@ export function toToolSpec(
       name: contract.name,
       description: contract.description,
       inputSchema,
+      effect: contract.effect,
       redaction: {
         mode: "top_level_only",
         allowlist: contract.allowlist as readonly string[],
