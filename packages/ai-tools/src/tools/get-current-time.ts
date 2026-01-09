@@ -6,6 +6,8 @@
  * Purpose: Simple tool that returns the current UTC time.
  * Scope: First tool for testing agentic loop. Does not have IO dependencies (pure).
  * Invariants:
+ *   - TOOL_ID_NAMESPACED: ID is `core__get_current_time` (double-underscore for provider compat)
+ *   - EFFECT_TYPED: effect is `read_only` (pure computation)
  *   - Pure function, no side effects beyond Date.now()
  *   - Returns ISO 8601 format timestamp
  *   - No sensitive data (full output in allowlist)
@@ -47,7 +49,11 @@ export type GetCurrentTimeRedacted = GetCurrentTimeOutput;
 // Contract
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const GET_CURRENT_TIME_NAME = "get_current_time" as const;
+/**
+ * Namespaced tool ID per TOOL_ID_NAMESPACED invariant.
+ * Uses double-underscore separator (provider-compatible: OpenAI allows [a-zA-Z0-9_-]+)
+ */
+export const GET_CURRENT_TIME_NAME = "core__get_current_time" as const;
 
 export const getCurrentTimeContract: ToolContract<
   typeof GET_CURRENT_TIME_NAME,
@@ -57,6 +63,7 @@ export const getCurrentTimeContract: ToolContract<
 > = {
   name: GET_CURRENT_TIME_NAME,
   description: "Get the current UTC time. Returns the time in ISO 8601 format.",
+  effect: "read_only",
   inputSchema: GetCurrentTimeInputSchema,
   outputSchema: GetCurrentTimeOutputSchema,
 
