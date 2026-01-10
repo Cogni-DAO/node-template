@@ -12,6 +12,7 @@
  * @public
  */
 
+export type { GraphId } from "@cogni/ai-core";
 export {
   type AccountService,
   type BillingAccount,

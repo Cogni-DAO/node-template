@@ -38,7 +38,11 @@ export interface GraphRunRequest {
   readonly caller: LlmCaller;
   /** Optional abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
-  /** Graph name to execute (default: "chat") */
+  /**
+   * Fully-qualified graph ID (e.g., "langgraph:chat").
+   * Required - executor fails fast if not provided.
+   * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
+   */
   readonly graphName?: string;
 }
 
