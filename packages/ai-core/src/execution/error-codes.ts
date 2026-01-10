@@ -15,12 +15,14 @@
 
 /**
  * Canonical error codes for AI execution failures.
+ * - invalid_request: Required input missing or malformed (client error)
  * - timeout: Request exceeded time limit
  * - aborted: Request was cancelled (e.g., AbortSignal)
- * - internal: Unexpected error during execution
+ * - internal: Unexpected error during execution (server fault)
  * - insufficient_credits: Billing account lacks sufficient credits
  */
 export type AiExecutionErrorCode =
+  | "invalid_request"
   | "timeout"
   | "aborted"
   | "internal"

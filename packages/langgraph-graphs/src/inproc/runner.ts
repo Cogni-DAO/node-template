@@ -120,12 +120,13 @@ export function createInProcGraphRunner<TTool = unknown>(
 
       return { ok: true, usage, finishReason: "stop" };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
       const isAbort = error instanceof Error && error.name === "AbortError";
+      const code = isAbort ? "aborted" : "internal";
 
-      emit({ type: "error", error: isAbort ? "aborted" : message });
+      // Per ERROR_NORMALIZATION: emit code only, not message
+      emit({ type: "error", error: code });
 
-      return { ok: false, error: isAbort ? "aborted" : "internal" };
+      return { ok: false, error: code };
     } finally {
       queue.close();
     }

@@ -17,6 +17,7 @@
 import type { Logger } from "pino";
 
 import type {
+  AiExecutionErrorCode,
   GraphExecutorPort,
   GraphRunRequest,
   GraphRunResult,
@@ -87,20 +88,27 @@ export class AggregatingGraphExecutor implements GraphExecutorPort {
       "AggregatingGraphExecutor.runGraph routing"
     );
 
-    // Find provider that can handle this graphId
-    // graphName in request is the full graphId (e.g., "langgraph:chat")
-    if (graphName) {
-      const provider = this.providers.find((p) => p.canHandle(graphName));
-      if (provider) {
-        this.log.debug(
-          { runId, graphName, providerId: provider.providerId },
-          "Routing to provider"
-        );
-        return provider.runGraph(req);
-      }
+    // Validate required input
+    if (!graphName) {
+      this.log.warn({ runId }, "graphName is required but was not provided");
+      return this.createErrorResult(
+        runId,
+        req.ingressRequestId,
+        "invalid_request"
+      );
     }
 
-    // No provider found for graphId
+    // Find provider that can handle this graphId
+    const provider = this.providers.find((p) => p.canHandle(graphName));
+    if (provider) {
+      this.log.debug(
+        { runId, graphName, providerId: provider.providerId },
+        "Routing to provider"
+      );
+      return provider.runGraph(req);
+    }
+
+    // No provider found - server configuration issue
     this.log.error(
       {
         runId,
@@ -109,32 +117,35 @@ export class AggregatingGraphExecutor implements GraphExecutorPort {
       },
       "No provider found for graphId"
     );
+    return this.createErrorResult(runId, req.ingressRequestId, "internal");
+  }
 
-    // Return error result
-    const errorResult: GraphRunResult = {
-      stream: this.createErrorStream(
-        `No provider found for graph: ${graphName ?? "undefined"}`
-      ),
+  /**
+   * Create error result with typed code.
+   */
+  private createErrorResult(
+    runId: string,
+    requestId: string,
+    code: AiExecutionErrorCode
+  ): GraphRunResult {
+    return {
+      stream: this.createErrorStream(code),
       final: Promise.resolve({
         ok: false,
         runId,
-        requestId: req.ingressRequestId,
-        error: "internal" as const,
+        requestId,
+        error: code,
       }),
     };
-    return errorResult;
   }
 
   /**
    * Create an error stream that yields error event then done.
    */
   private async *createErrorStream(
-    message: string
+    code: AiExecutionErrorCode
   ): AsyncIterable<import("@/types/ai-events").AiEvent> {
-    yield {
-      type: "error",
-      error: message,
-    } as import("@/types/ai-events").ErrorEvent;
-    yield { type: "done" } as import("@/types/ai-events").DoneEvent;
+    yield { type: "error", error: code };
+    yield { type: "done" };
   }
 }

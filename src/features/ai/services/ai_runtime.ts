@@ -239,7 +239,7 @@ class RunEventRelay {
       // Emit error event so uiStream terminates on protocol
       const errorEvent: AiEvent = {
         type: "error",
-        error: err instanceof Error ? err.message : "pump_error",
+        error: "internal",
       };
       this.uiQueue.push(errorEvent);
       this.notifyUi();

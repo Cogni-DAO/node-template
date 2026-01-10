@@ -28,6 +28,7 @@ import {
 import type { Logger } from "pino";
 
 import type {
+  AiExecutionErrorCode,
   CompletionFinalResult,
   GraphFinal,
   GraphRunRequest,
@@ -152,16 +153,14 @@ export class LangGraphInProcProvider implements GraphProvider {
     // Extract graph name from graphId (e.g., "langgraph:chat" → "chat")
     const graphName = this.extractGraphName(graphId);
     if (!graphName) {
-      return this.createErrorResult(runId, ingressRequestId, `Invalid graphId`);
+      this.log.error({ runId, graphId }, "Invalid graphId format");
+      return this.createErrorResult(runId, ingressRequestId);
     }
 
     const entry = this.catalog[graphName] as ProviderCatalogEntry | undefined;
     if (!entry) {
-      return this.createErrorResult(
-        runId,
-        ingressRequestId,
-        `Graph not found: ${graphName}`
-      );
+      this.log.error({ runId, graphName }, "Graph not found in catalog");
+      return this.createErrorResult(runId, ingressRequestId);
     }
 
     this.log.debug(
@@ -317,14 +316,15 @@ export class LangGraphInProcProvider implements GraphProvider {
 
   /**
    * Create error result for invalid requests.
+   * Per ERROR_NORMALIZATION: details logged, stream gets code only.
    */
   private createErrorResult(
     runId: string,
     requestId: string,
-    message: string
+    code: AiExecutionErrorCode = "internal"
   ): GraphRunResult {
     const errorStream = (async function* () {
-      yield { type: "error" as const, error: message };
+      yield { type: "error" as const, error: code };
       yield { type: "done" as const };
     })();
 
@@ -334,7 +334,7 @@ export class LangGraphInProcProvider implements GraphProvider {
         ok: false as const,
         runId,
         requestId,
-        error: "internal" as const,
+        error: code,
       }),
     };
   }
