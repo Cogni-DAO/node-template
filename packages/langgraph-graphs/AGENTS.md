@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-07
+- **Last reviewed:** 2026-01-10
 - **Status:** draft
 
 ## Purpose
@@ -42,11 +42,13 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
 ## Public Surface
 
 - **Exports (subpaths):**
-  - `@cogni/langgraph-graphs` — Barrel re-export of common types
+  - `@cogni/langgraph-graphs` — Barrel re-export of common types plus:
+    - `LANGGRAPH_CATALOG` — Graph catalog with registered graphs and metadata
   - `@cogni/langgraph-graphs/inproc` — InProc execution runner:
-    - `createInProcChatRunner()` — InProc graph runner factory for Next.js server runtime
+    - `createInProcGraphRunner()` — Generic InProc graph runner factory
     - `InProcRunnerOptions`, `InProcGraphRequest`, `GraphResult` — Runner types
     - `CompletionFn`, `CompletionResult` — Injected completion function types
+    - `CreateGraphFn`, `CreateGraphOptions` — Graph factory types
     - `ToolExecFn`, `ToolExecResult` — Tool execution types
   - `@cogni/langgraph-graphs/runtime` — LangChain utilities:
     - `toLangChainTools()` — Convert tool contracts to LangChain DynamicStructuredTool

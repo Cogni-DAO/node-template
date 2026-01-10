@@ -61,7 +61,8 @@ packages/
 │   └── src/
 │       ├── events/ai-events.ts               # AiEvent union (canonical) ✓
 │       ├── usage/usage.ts                    # UsageFact, ExecutorType ✓
-│       ├── tooling/                          # NEW: Tool execution types
+│       ├── execution/error-codes.ts          # AiExecutionErrorCode (canonical) ✓
+│       ├── tooling/                          # Tool execution types ✓
 │       │   ├── types.ts                      # ToolExecFn, ToolExecResult, EmitAiEvent
 │       │   └── index.ts                      # Barrel export
 │       └── index.ts                          # Package barrel
@@ -73,13 +74,15 @@ packages/
 │
 └── langgraph-graphs/                         # ALL LangChain code lives here ✓
     └── src/
+        ├── catalog.ts                        # LANGGRAPH_CATALOG (single source of truth) ✓
         ├── graphs/                           # Graph factories (stable import surface)
         │   ├── index.ts                      # Barrel: all graphs
         │   ├── chat/                         # Chat graph ✓
-        │   └── research/                     # NEW: Graph #2
+        │   └── research/                     # Phase 5: Graph #2
         ├── runtime/                          # Shared LangChain utilities ✓
         └── inproc/                           # InProc execution ✓
-            └── runner.ts                     # createInProcChatRunner()
+            ├── runner.ts                     # createInProcGraphRunner() ✓
+            └── types.ts                      # InProcRunnerOptions, GraphResult ✓
 
 src/
 ├── ports/
@@ -104,7 +107,8 @@ src/
 ├── features/ai/
 │   └── services/
 │       ├── ai_runtime.ts                     # Uses AggregatingGraphExecutor (no graph knowledge) ✓
-│       └── billing.ts                        # ONE_LEDGER_WRITER ✓
+│       ├── billing.ts                        # ONE_LEDGER_WRITER ✓
+│       └── preflight-credit-check.ts         # Facade-level credit validation ✓
 │   # NOTE: runners/ DELETED — logic absorbed by LangGraphInProcProvider
 │
 ├── bootstrap/
@@ -186,7 +190,7 @@ Refactor billing for run-centric idempotency. Wrap existing LLM path behind `Gra
 - [ ] Add grep test for ONE_LEDGER_WRITER (depcruise impractical—see §5)
 - [ ] Add idempotency test: replay with same (source_system, source_reference) → 1 row
 
-### P0: Graph Catalog & Provider Architecture (Current)
+### P0: Graph Catalog & Provider Architecture (✅ Complete)
 
 Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph support with LangGraph Server parity.
 
@@ -256,12 +260,12 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [ ] UI adds graph selector → sends `graphId` when creating run
 - [ ] E2E test: verify graph switching works
 
-**Non-Regression Rules**
+**Non-Regression Rules** (✅ Verified)
 
-- [ ] Do NOT change `toolCallId` behavior during this refactor
-- [ ] Do NOT change tool schema shapes
-- [ ] Relocate + rewire imports only; no runtime logic changes
-- [ ] Existing LangGraph chat tests must pass unchanged
+- [x] Do NOT change `toolCallId` behavior during this refactor
+- [x] Do NOT change tool schema shapes
+- [x] Relocate + rewire imports only; no runtime logic changes
+- [x] Existing LangGraph chat tests must pass unchanged
 
 ### P1: Run Persistence + Attempt Semantics
 
@@ -735,5 +739,5 @@ interface GraphDeps {
 
 ---
 
-**Last Updated**: 2026-01-08
-**Status**: Draft (Rev 10 - Reconciled GraphProvider/Port API; deferred thread/run to P1; added FANOUT_LOSSINESS + USAGE_UNIT_ID_MANDATORY invariants; removed per-graph adapter files)
+**Last Updated**: 2026-01-10
+**Status**: Draft (Rev 11 - Phase 3 complete; preflight credit check added; AiExecutionErrorCode in ai-core)

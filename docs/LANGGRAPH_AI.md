@@ -429,7 +429,7 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
    - [x] Wire `toolExec` via `createToolExecFn` factory pattern
    - [ ] Add stack test: `tool_call_start`/`tool_call_result` events emitted
 
-### P0: Architecture Refactor (Phase 3 — Current)
+### P0: Architecture Refactor (Phase 3 — ✅ Complete)
 
 > See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for full checklist with file tree map.
 
@@ -510,7 +510,7 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Token fl
 
 Remaining wiring tracked in Phase 2c above.
 
-### P0: Graph #2 Enablement (Phase 4 — After Architecture Refactor)
+### P0: Graph #2 Enablement (Phase 4 — Ready)
 
 - [ ] Create `packages/langgraph-graphs/src/graphs/research/` (Graph #2 factory)
 - [ ] Implement `createResearchGraph()` in package
@@ -570,5 +570,5 @@ Remaining wiring tracked in Phase 2c above.
 
 ---
 
-**Last Updated**: 2026-01-08
-**Status**: Draft (Rev 12 - Phase 3 aligned with GRAPH_EXECUTION.md; deferred thread/run to P1; removed per-graph adapter files)
+**Last Updated**: 2026-01-10
+**Status**: Draft (Rev 13 - Phase 3 complete; Phase 4 ready for Graph #2)
