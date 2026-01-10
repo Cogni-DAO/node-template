@@ -93,12 +93,12 @@ pnpm --filter @cogni/langgraph-graphs test
 ## Change Protocol
 
 - Update this file when public exports change
-- Changes to graph contracts require updating `src/features/ai/runners/`
+- Changes to graph contracts require updating `src/adapters/server/ai/langgraph/inproc.provider.ts`
 - Coordinate with LANGGRAPH_AI.md invariants
 
 ## Notes
 
 - Per NO_LANGCHAIN_IN_SRC: `src/**` cannot import `@langchain/*` — only this package
 - Per PACKAGES_NO_SRC_IMPORTS: This package cannot import from `src/**`
-- Runners that wire this package live in `src/features/ai/runners/`
+- `LangGraphInProcProvider` in `src/adapters/server/ai/langgraph/` wires this package
 - Package isolation enables LangGraph Server to import graphs without Next.js deps

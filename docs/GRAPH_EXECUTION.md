@@ -102,11 +102,10 @@ src/
 │   └── tool-runner.ts                        # MOVED from features/ai/ (adapters can import)
 │
 ├── features/ai/
-│   ├── services/
-│   │   ├── ai_runtime.ts                     # Uses AggregatingGraphExecutor (no graph knowledge)
-│   │   └── billing.ts                        # ONE_LEDGER_WRITER ✓
-│   └── runners/                              # TO BE DELETED after move
-│       └── langgraph-chat.runner.ts          # DEPRECATED → delete; logic absorbed by provider
+│   └── services/
+│       ├── ai_runtime.ts                     # Uses AggregatingGraphExecutor (no graph knowledge) ✓
+│       └── billing.ts                        # ONE_LEDGER_WRITER ✓
+│   # NOTE: runners/ DELETED — logic absorbed by LangGraphInProcProvider
 │
 ├── bootstrap/
 │   ├── container.ts                          # Wires providers + aggregator
@@ -205,26 +204,26 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 
 **Phase 2: Move LangGraph Wiring to Adapters**
 
-- [ ] Create `src/adapters/server/ai/langgraph/` directory
+- [x] Create `src/adapters/server/ai/langgraph/` directory
 - [x] Move `features/ai/tool-runner.ts` → `src/shared/ai/tool-runner.ts` (adapters can import shared/)
 - [x] Update imports in moved files to use `@cogni/ai-core` for tool exec types
 - [x] Create `src/shared/ai/tool-policy.ts` with `ToolPolicy`, `DENY_ALL_POLICY`, `createToolAllowlistPolicy()`
 - [x] Create `src/shared/ai/tool-catalog.ts` with `ToolCatalog`, `EMPTY_CATALOG`, `createToolCatalog()`
 - [x] Update `tool-runner.ts` to enforce policy (DENY_BY_DEFAULT)
 - [x] Update `langgraph-chat.runner.ts` to pass policy + ctx to tool runner
-- [ ] Delete `src/features/ai/runners/` directory (logic absorbed by provider)
-- [ ] Verify dep-cruiser passes (no adapters→features imports)
+- [x] Delete `src/features/ai/runners/` directory (logic absorbed by provider)
+- [x] Verify dep-cruiser passes (no adapters→features imports)
 - NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`
 
 **Phase 3: Provider + Aggregator (P0 Scope)**
 
-- [ ] Create `src/adapters/server/ai/graph-provider.ts` with internal `GraphProvider` interface
-- [ ] Define `GraphDescriptor` with `graphId`, `displayName`, `description`, `capabilities`
-- [ ] Define `GraphCapabilities` with `supportsStreaming`, `supportsTools`, `supportsMemory`
-- [ ] `GraphProvider.runGraph()` uses same `GraphRunRequest`/`GraphRunResult` as `GraphExecutorPort` — no parallel types
-- [ ] Create `src/adapters/server/ai/aggregating-executor.ts` implementing `GraphExecutorPort`
-- [ ] Implement `LangGraphInProcProvider` in `adapters/server/ai/langgraph/inproc.provider.ts`
-- [ ] Provider uses injected catalog: `LangGraphCatalog<CreateGraphFn>` (see Phase 4)
+- [x] Create `src/adapters/server/ai/graph-provider.ts` with internal `GraphProvider` interface
+- [x] Define `GraphDescriptor` with `graphId`, `displayName`, `description`, `capabilities`
+- [x] Define `GraphCapabilities` with `supportsStreaming`, `supportsTools`, `supportsMemory`
+- [x] `GraphProvider.runGraph()` uses same `GraphRunRequest`/`GraphRunResult` as `GraphExecutorPort` — no parallel types
+- [x] Create `src/adapters/server/ai/aggregating-executor.ts` implementing `GraphExecutorPort`
+- [x] Implement `LangGraphInProcProvider` in `adapters/server/ai/langgraph/inproc.provider.ts`
+- [x] Provider uses injected catalog: `LangGraphCatalog<CreateGraphFn>` (see Phase 4)
 - NOTE: Thread/run-shaped API (`createThread()`, `createRun()`, `streamRun()`) deferred to P1
 
 **Type Boundaries (Critical):**
@@ -235,18 +234,18 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 
 **Phase 4: Composition Root Wiring**
 
-- [ ] Create `src/adapters/server/ai/langgraph/catalog.ts`:
+- [x] Create `src/adapters/server/ai/langgraph/catalog.ts`:
   - `LangGraphCatalogEntry<TFactory>` with generic factory type (opaque — only provider interprets it)
   - `LangGraphCatalog<TFactory>` type alias
   - NOTE: Does NOT import from `@cogni/langgraph-graphs/inproc` — stable config surface
-- [ ] Export catalog from `@cogni/langgraph-graphs` (single source of truth for graph definitions)
-- [ ] Update `bootstrap/container.ts`:
-  - Import catalog from `@cogni/langgraph-graphs` (do NOT build entries here)
-  - Instantiate `LangGraphInProcProvider` with imported catalog
+- [x] Export catalog from `@cogni/langgraph-graphs` (single source of truth for graph definitions)
+- [x] Update `bootstrap/graph-executor.factory.ts`:
+  - Provider imports catalog from `@cogni/langgraph-graphs` internally
+  - Instantiate `LangGraphInProcProvider` with adapter
   - Instantiate `AggregatingGraphExecutor` with providers
   - NOTE: Bootstrap wires providers, not per-graph registration
-- [ ] Remove `graphResolver` parameter from `createInProcGraphExecutor()` — facade is graph-agnostic
-- [ ] Update `completion.server.ts` facade: delete all graph selection logic
+- [x] Remove `graphResolver` parameter — renamed to `createGraphExecutor()` (facade is graph-agnostic)
+- [x] Update `completion.server.ts` facade: delete all graph selection logic
 
 **Phase 5: Graph #2 Enablement**
 

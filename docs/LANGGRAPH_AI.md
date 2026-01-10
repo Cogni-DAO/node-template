@@ -423,7 +423,7 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
    - [x] Wire via `graphResolver` in bootstrap factory
    - [x] Route stays pure translator (AiEvent → assistant-stream)
    - [ ] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
-   - [ ] Delete deprecated `executeChatGraph()` after E2E passes
+   - [x] Delete deprecated `executeChatGraph()` — removed with `src/features/ai/graphs/` directory
 
 3. **Phase 2c: Tool events** — ✅ Complete (pending tests)
    - [x] Wire `toolExec` via `createToolExecFn` factory pattern
@@ -447,26 +447,26 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern per feedback. This 
 
 **Phase 3b: Move LangGraph Wiring to Adapters**
 
-- [ ] Create `src/adapters/server/ai/langgraph/` directory
+- [x] Create `src/adapters/server/ai/langgraph/` directory
 - [x] Move `tool-runner.ts` → `src/shared/ai/tool-runner.ts`
-- [ ] Delete `src/features/ai/runners/` (logic absorbed by provider)
-- [ ] Verify dep-cruiser: no adapters→features imports
+- [x] Delete `src/features/ai/runners/` (logic absorbed by provider)
+- [x] Verify dep-cruiser: no adapters→features imports
 - NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`
 - NOTE: NO tool-registry — graphs import ToolContracts directly; policy enforced in tool-runner
 
 **Phase 3c: Provider + Aggregator (P0 Scope)**
 
-- [ ] Create internal `GraphProvider` interface in `src/adapters/server/ai/graph-provider.ts`
-- [ ] Create `AggregatingGraphExecutor` implementing aggregation
-- [ ] Implement `LangGraphInProcProvider` with injected catalog
-- [ ] Provider uses `LangGraphCatalog<CreateGraphFn>` imported from `@cogni/langgraph-graphs`
+- [x] Create internal `GraphProvider` interface in `src/adapters/server/ai/graph-provider.ts`
+- [x] Create `AggregatingGraphExecutor` implementing aggregation
+- [x] Implement `LangGraphInProcProvider` with injected catalog
+- [x] Provider uses `LangGraphCatalog<CreateGraphFn>` imported from `@cogni/langgraph-graphs`
 - NOTE: Thread/run-shaped API (`createThread()`, `createRun()`, `streamRun()`) deferred to P1
 
 **Phase 3d: Composition Root Wiring**
 
-- [ ] Import catalog from `@cogni/langgraph-graphs` (do NOT build entries in bootstrap)
-- [ ] Remove `graphResolver` param from `createInProcGraphExecutor()` — facade is graph-agnostic
-- [ ] Update `completion.server.ts` to delete all graph selection logic
+- [x] Import catalog from `@cogni/langgraph-graphs` (provider imports internally, not bootstrap)
+- [x] Remove `graphResolver` param — renamed to `createGraphExecutor()` (facade is graph-agnostic)
+- [x] Update `completion.server.ts` to delete all graph selection logic
 
 **Non-Regression:**
 
@@ -551,11 +551,11 @@ Remaining wiring tracked in Phase 2c above.
 
 - [ ] **P1: Tool call ID architecture** — P0 workaround generates canonical `toolCallId` at adapter finalization (`src/adapters/server/ai/litellm.adapter.ts:662`) using `acc.id || randomUUID()`. This works but conflates `providerToolCallId` (optional, for telemetry) with `canonicalToolCallId` (required, for correlation). P1 should: (1) preserve `providerToolCallId` as optional metadata, (2) generate `canonicalToolCallId` at tool invocation boundary in graph layer, (3) use canonical ID consistently for `assistant.tool_calls[].id` and `tool.tool_call_id`.
 
-- [ ] **P0: Runner/Adapter architecture split** — Current `langgraph-chat.runner.ts` violates layer boundaries. **Now tracked in Phase 3 checklist above.** Summary:
-  - [ ] **Delete runner**: `langgraph-chat.runner.ts` → delete; logic absorbed by `LangGraphInProcProvider`
-  - [ ] **Move tool-runner**: `features/ai/tool-runner.ts` → `shared/ai/tool-runner.ts` (adapters can import shared/)
-  - [ ] **Fix types**: Move `ToolExecFn`/`EmitAiEvent` to `@cogni/ai-core` so adapters can legally import
-  - [ ] **No per-graph files**: Provider uses imported catalog, not per-graph adapter modules
+- [x] **P0: Runner/Adapter architecture split** — ~~Current `langgraph-chat.runner.ts` violates layer boundaries.~~ **RESOLVED in Phase 3.** Summary:
+  - [x] **Delete runner**: `langgraph-chat.runner.ts` → deleted; logic absorbed by `LangGraphInProcProvider`
+  - [x] **Move tool-runner**: `features/ai/tool-runner.ts` → `shared/ai/tool-runner.ts` (adapters can import shared/)
+  - [x] **Fix types**: `ToolExecFn`/`EmitAiEvent` moved to `@cogni/ai-core`; adapters import legally
+  - [x] **No per-graph files**: Provider uses imported catalog from `@cogni/langgraph-graphs`
 
 ---
 
