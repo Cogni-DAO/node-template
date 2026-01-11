@@ -97,11 +97,12 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
     const runContext: RunContext = { runId, attempt, ingressRequestId };
 
     // Per GRAPH_ID_NAMESPACED: graphIds are ${providerId}:${graphName}
-    // P0: LangGraph is sole provider, so we namespace here. and 'chat' is the only graph. eventually, avoid default graph
+    // P0: LangGraph is sole provider, so we namespace here. Default graph is 'poet'.
     // Already-namespaced IDs pass through; raw names get "langgraph:" prefix.
+    // TODO: Remove default - if no graphName passed, fail fast instead of defaulting
     const resolvedGraphId = graphName?.includes(":")
       ? graphName
-      : `langgraph:${graphName ?? "chat"}`;
+      : `langgraph:${graphName ?? "poet"}`;
 
     log.debug(
       { runId, ingressRequestId, model, graphName: resolvedGraphId },

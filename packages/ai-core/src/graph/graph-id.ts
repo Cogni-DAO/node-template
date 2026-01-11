@@ -14,7 +14,7 @@
 
 /**
  * Namespaced graph identifier.
- * Format: "${providerId}:${graphName}" (e.g., "langgraph:chat", "claude_sdk:planner")
+ * Format: "${providerId}:${graphName}" (e.g., "langgraph:poet", "claude_sdk:planner")
  *
  * Per GRAPH_ID_NAMESPACED invariant from GRAPH_EXECUTION.md.
  */

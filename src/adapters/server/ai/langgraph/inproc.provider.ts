@@ -150,7 +150,7 @@ export class LangGraphInProcProvider implements GraphProvider {
       req;
     const graphId = req.graphName;
 
-    // Extract graph name from graphId (e.g., "langgraph:chat" → "chat")
+    // Extract graph name from graphId (e.g., "langgraph:poet" → "poet")
     const graphName = this.extractGraphName(graphId);
     if (!graphName) {
       this.log.error({ runId, graphId }, "Invalid graphId format");
@@ -226,7 +226,7 @@ export class LangGraphInProcProvider implements GraphProvider {
 
   /**
    * Extract graph name from namespaced graphId.
-   * Per GRAPH_ID_NAMESPACED: "langgraph:chat" → "chat"
+   * Per GRAPH_ID_NAMESPACED: "langgraph:poet" → "poet"
    */
   private extractGraphName(graphId: string | undefined): string | undefined {
     if (!graphId) return undefined;

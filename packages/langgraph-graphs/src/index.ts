@@ -25,7 +25,7 @@ export {
 } from "./catalog";
 
 // Re-export graph constants and factories
-export { CHAT_GRAPH_NAME } from "./graphs/index";
+export { POET_GRAPH_NAME } from "./graphs/index";
 
 // Re-export inproc runner (all LangChain logic contained in package)
 export { createInProcGraphRunner } from "./inproc/runner";

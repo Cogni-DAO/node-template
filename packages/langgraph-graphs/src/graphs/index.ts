@@ -14,12 +14,12 @@
  * @public
  */
 
-// Chat graph
+// Poet graph (poetic AI assistant)
 export {
-  CHAT_GRAPH_NAME,
-  type ChatGraph,
-  createChatGraph,
-} from "./chat/graph";
+  createPoetGraph,
+  POET_GRAPH_NAME,
+  type PoetGraph,
+} from "./poet/graph";
 // Ponderer graph (philosophical thinker)
 export {
   createPondererGraph,

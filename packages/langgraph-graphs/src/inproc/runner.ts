@@ -100,7 +100,7 @@ export function createInProcGraphRunner<TTool = unknown>(
     contracts: toolContracts,
     exec: toolExecFn,
   });
-  // Use factory from catalog instead of hardcoded createChatGraph
+  // Use factory from catalog instead of hardcoded graph
   const graph = createGraph({ llm, tools });
 
   const final = (async (): Promise<GraphResult> => {

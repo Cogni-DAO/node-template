@@ -29,7 +29,7 @@
 
 12. **P0_MINIMAL_PORT**: P0 `GraphExecutorPort` exposes only `runGraph()`. Thread/run-shaped primitives (`createThread()`, `createRun()`, `streamRun()`) are provider-internal in P0; promote to external port in P1 when run persistence lands. `listGraphs()` may be added for discovery but is not required for P0.
 
-13. **GRAPH_ID_NAMESPACED**: Graph IDs are globally unique and stable, namespaced as `${providerId}:${graphName}` (e.g., `langgraph:chat`, `claude_agents:planner`).
+13. **GRAPH_ID_NAMESPACED**: Graph IDs are globally unique and stable, namespaced as `${providerId}:${graphName}` (e.g., `langgraph:poet`, `claude_agents:planner`).
 
 14. **PROVIDER_AGGREGATION**: `AggregatingGraphExecutor` routes `graphId → GraphProvider`. App uses only the aggregator; no facade-level graph conditionals.
 
@@ -79,8 +79,9 @@ packages/
         ├── catalog.ts                        # LANGGRAPH_CATALOG (single source of truth) ✓
         ├── graphs/                           # Graph factories (stable import surface)
         │   ├── index.ts                      # Barrel: all graphs
-        │   ├── chat/                         # Chat graph ✓
-        │   └── research/                     # Phase 5: Graph #2
+        │   ├── poet/                         # Poet graph ✓
+        │   ├── ponderer/                     # Ponderer graph ✓
+        │   └── research/                     # Phase 5: Graph #3
         ├── runtime/                          # Shared LangChain utilities ✓
         └── inproc/                           # InProc execution ✓
             ├── runner.ts                     # createInProcGraphRunner() ✓
@@ -134,7 +135,7 @@ interface GraphProvider {
 }
 
 interface GraphDescriptor {
-  readonly graphId: string; // Namespaced: "langgraph:chat"
+  readonly graphId: string; // Namespaced: "langgraph:poet"
   readonly displayName: string;
   readonly description: string;
   readonly capabilities: GraphCapabilities;

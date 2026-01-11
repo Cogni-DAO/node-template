@@ -42,7 +42,7 @@ export type PondererGraph = InvokableGraph<
 /**
  * Create a philosophical ponderer agent graph.
  *
- * Same structure as chat graph but with philosophical system prompt.
+ * Same structure as poet graph but with philosophical system prompt.
  * Uses createReactAgent with tool-calling loop.
  *
  * @param opts - Options with LLM and tools

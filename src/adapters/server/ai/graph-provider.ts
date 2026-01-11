@@ -34,7 +34,7 @@ export interface GraphCapabilities {
  * Returned by GraphProvider.listGraphs().
  */
 export interface GraphDescriptor {
-  /** Namespaced graph ID: "${providerId}:${graphName}" (e.g., "langgraph:chat") */
+  /** Namespaced graph ID: "${providerId}:${graphName}" (e.g., "langgraph:poet") */
   readonly graphId: string;
   /** Human-readable name for UI display */
   readonly displayName: string;
@@ -67,7 +67,7 @@ export interface GraphProvider {
    * Check if this provider handles the given graphId.
    * Used by aggregator for routing.
    *
-   * @param graphId - Namespaced graph ID (e.g., "langgraph:chat")
+   * @param graphId - Namespaced graph ID (e.g., "langgraph:poet")
    * @returns true if this provider handles the graph
    */
   canHandle(graphId: string): boolean;

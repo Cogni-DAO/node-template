@@ -57,7 +57,7 @@ export type CompiledGraph = InvokableGraph<
  * Used by LangGraphInProcProvider to create graphs from catalog entries.
  *
  * Each graph type exports a factory matching this signature:
- * - createChatGraph: Creates React agent for chat
+ * - createPoetGraph: Creates React agent for poet
  * - createResearchGraph: Creates research agent (Phase 5)
  */
 export type CreateGraphFn = (opts: CreateGraphOptions) => CompiledGraph;

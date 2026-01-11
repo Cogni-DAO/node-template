@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/graphs/chat/graph`
- * Purpose: Simple React agent graph factory for chat functionality.
+ * Module: `@cogni/langgraph-graphs/graphs/poet/graph`
+ * Purpose: Poetic AI assistant graph factory.
  * Scope: Creates LangGraph React agent with injected LLM and tools. Does NOT execute graphs or read env.
  * Invariants:
  *   - Pure factory function — no side effects, no env reads
@@ -23,21 +23,21 @@ import {
   type MessageGraphInput,
   type MessageGraphOutput,
 } from "../types";
-import { CHAT_SYSTEM_PROMPT } from "./prompts";
+import { POET_SYSTEM_PROMPT } from "./prompts";
 
 /**
  * Graph name constant for routing.
  */
-export const CHAT_GRAPH_NAME = "chat" as const;
+export const POET_GRAPH_NAME = "poet" as const;
 
 /**
- * Chat graph type alias.
+ * Poet graph type alias.
  * Uses shared InvokableGraph interface — no per-graph interface duplication.
  */
-export type ChatGraph = InvokableGraph<MessageGraphInput, MessageGraphOutput>;
+export type PoetGraph = InvokableGraph<MessageGraphInput, MessageGraphOutput>;
 
 /**
- * Create a simple React agent graph for chat.
+ * Create a poetic AI assistant graph.
  *
  * This is the simplest possible LangGraph agent:
  * - Uses createReactAgent (prebuilt pattern)
@@ -51,14 +51,14 @@ export type ChatGraph = InvokableGraph<MessageGraphInput, MessageGraphOutput>;
  * ```typescript
  * const llm = new CompletionUnitLLM(completionFn, "gpt-4");
  * const tools = toLangChainTools({ contracts, exec: toolRunner.exec });
- * const graph = createChatGraph({ llm, tools });
+ * const graph = createPoetGraph({ llm, tools });
  *
  * const result = await graph.invoke({
  *   messages: [new HumanMessage("What time is it?")]
  * });
  * ```
  */
-export function createChatGraph(opts: CreateReactAgentGraphOptions): ChatGraph {
+export function createPoetGraph(opts: CreateReactAgentGraphOptions): PoetGraph {
   const { llm, tools } = opts;
 
   // Use LangGraph's prebuilt React agent
@@ -69,7 +69,7 @@ export function createChatGraph(opts: CreateReactAgentGraphOptions): ChatGraph {
   const agent = createReactAgent({
     llm,
     tools: [...tools], // Spread readonly array to mutable for LangGraph
-    messageModifier: CHAT_SYSTEM_PROMPT,
+    messageModifier: POET_SYSTEM_PROMPT,
   });
 
   // Centralized cast with runtime assertion

@@ -20,7 +20,7 @@ import {
   getCurrentTimeBoundTool,
 } from "@cogni/ai-tools";
 
-import { CHAT_GRAPH_NAME, createChatGraph } from "./graphs/chat/graph";
+import { createPoetGraph, POET_GRAPH_NAME } from "./graphs/poet/graph";
 import {
   createPondererGraph,
   PONDERER_GRAPH_NAME,
@@ -61,21 +61,21 @@ interface CatalogEntry {
  */
 export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
   /**
-   * Chat graph - simple React agent for conversational AI.
+   * Poet graph - poetic AI assistant.
    * Uses createReactAgent with tool-calling loop.
    */
-  [CHAT_GRAPH_NAME]: {
-    displayName: "Chat",
-    description: "Conversational AI assistant with tool-calling capabilities",
+  [POET_GRAPH_NAME]: {
+    displayName: "Poet",
+    description: "Poetic AI assistant with structured verse responses",
     boundTools: {
       [GET_CURRENT_TIME_NAME]: getCurrentTimeBoundTool as AnyBoundTool,
     },
-    graphFactory: createChatGraph,
+    graphFactory: createPoetGraph,
   },
 
   /**
    * Ponderer graph - philosophical thinker agent.
-   * Same tools as chat, but with philosophical system prompt.
+   * Same tools as poet, but with philosophical system prompt.
    */
   [PONDERER_GRAPH_NAME]: {
     displayName: "Ponderer",
@@ -102,7 +102,7 @@ export const LANGGRAPH_PROVIDER_ID = "langgraph" as const;
  * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
  */
 export const LANGGRAPH_GRAPH_IDS = {
-  chat: `${LANGGRAPH_PROVIDER_ID}:${CHAT_GRAPH_NAME}`,
+  poet: `${LANGGRAPH_PROVIDER_ID}:${POET_GRAPH_NAME}`,
   ponderer: `${LANGGRAPH_PROVIDER_ID}:${PONDERER_GRAPH_NAME}`,
 } as const;
 
@@ -115,4 +115,4 @@ export type LangGraphGraphId =
 /**
  * Default graph ID.
  */
-export const DEFAULT_LANGGRAPH_GRAPH_ID = LANGGRAPH_GRAPH_IDS.chat;
+export const DEFAULT_LANGGRAPH_GRAPH_ID = LANGGRAPH_GRAPH_IDS.poet;

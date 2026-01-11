@@ -132,7 +132,7 @@ describe("AggregatingGraphExecutor", () => {
       ]);
 
       // Route to langgraph provider
-      const request1 = createTestRequest({ graphName: "langgraph:chat" });
+      const request1 = createTestRequest({ graphName: "langgraph:poet" });
       aggregator.runGraph(request1);
       expect(langGraphProvider.runGraph).toHaveBeenCalledWith(request1);
       expect(claudeProvider.runGraph).not.toHaveBeenCalled();
@@ -148,7 +148,7 @@ describe("AggregatingGraphExecutor", () => {
     });
 
     it("lists all graphs from all providers", () => {
-      const provider1 = createMockProvider("langgraph", ["chat", "research"]);
+      const provider1 = createMockProvider("langgraph", ["poet", "research"]);
       const provider2 = createMockProvider("claude_sdk", ["planner"]);
       const aggregator = new AggregatingGraphExecutor([provider1, provider2]);
 
@@ -156,7 +156,7 @@ describe("AggregatingGraphExecutor", () => {
 
       expect(graphs).toHaveLength(3);
       expect(graphs.map((g) => g.graphId)).toEqual([
-        "langgraph:chat",
+        "langgraph:poet",
         "langgraph:research",
         "claude_sdk:planner",
       ]);

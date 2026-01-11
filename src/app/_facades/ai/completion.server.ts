@@ -47,7 +47,7 @@ interface CompletionInput {
   messages: MessageDto[];
   model: string;
   sessionUser: SessionUser;
-  /** Graph name to execute (default: "chat") */
+  /** Graph name to execute (default: "poet") */
   graphName?: string;
 }
 

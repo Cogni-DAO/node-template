@@ -33,7 +33,7 @@ import { cn } from "@/shared/util/cn";
  * Matches GraphDescriptor from adapter layer but simplified for UI.
  */
 export interface GraphOption {
-  /** Fully-qualified graph ID (e.g., "langgraph:chat") */
+  /** Fully-qualified graph ID (e.g., "langgraph:poet") */
   readonly graphId: GraphId;
   /** Human-readable name */
   readonly displayName: string;

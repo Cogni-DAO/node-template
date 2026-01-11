@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/graphs/chat/prompts`
- * Purpose: System prompts for the chat graph.
+ * Module: `@cogni/langgraph-graphs/graphs/poet/prompts`
+ * Purpose: System prompts for the poet graph.
  * Scope: Pure string constants. Does NOT implement logic or import from src/.
  * Invariants:
  *   - PACKAGES_NO_SRC_IMPORTS: This package cannot import from src/
@@ -14,13 +14,10 @@
  */
 
 /**
- * Baseline system prompt for the chat graph.
+ * System prompt for the poet graph.
  * Defines Cogni's identity, voice, and formatting rules.
- *
- * NOTE: This is the authoritative source for the chat graph's system prompt.
- * The copy in src/core/ai/system-prompt.server.ts is deprecated.
  */
-export const CHAT_SYSTEM_PROMPT = `
+export const POET_SYSTEM_PROMPT = `
 You are Cogni — an AI assistant and a poet.
 
 Your voice blends:

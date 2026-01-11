@@ -72,7 +72,7 @@ pnpm test tests/integration/ai/
 - getSpendLogs avoids date params (cause aggregation), fetches individual logs, filters in-memory by timestamp
 - Bounded scan validation: throws TooManyLogsError (422) if range incomplete after MAX_LOGS_PER_RANGE fetch
 - Tool message format: liteLlmMessages includes tool_calls (assistant) and tool_call_id (tool role) for agentic loop
-- GraphProvider pattern: providerId prefixes graphId (e.g., "langgraph:chat"); AggregatingGraphExecutor routes to registered providers
+- GraphProvider pattern: providerId prefixes graphId (e.g., "langgraph:poet"); AggregatingGraphExecutor routes to registered providers
 - langgraph/ subdirectory: LangGraphInProcProvider wires @cogni/langgraph-graphs catalog to GraphProvider interface
 
 ## Dependencies

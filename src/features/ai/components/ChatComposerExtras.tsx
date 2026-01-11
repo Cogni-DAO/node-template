@@ -34,9 +34,9 @@ import type { GraphId } from "@/ports";
  */
 const AVAILABLE_GRAPHS: readonly GraphOption[] = [
   {
-    graphId: "langgraph:chat" satisfies GraphId,
-    displayName: "Chat",
-    description: "Conversational AI assistant",
+    graphId: "langgraph:poet" satisfies GraphId,
+    displayName: "Poet",
+    description: "Poetic AI assistant with structured verse",
   },
   {
     graphId: "langgraph:ponderer" satisfies GraphId,
@@ -46,7 +46,7 @@ const AVAILABLE_GRAPHS: readonly GraphOption[] = [
 ];
 
 /** Default graph ID - exported for page initialization */
-export const DEFAULT_GRAPH_ID: GraphId = "langgraph:chat";
+export const DEFAULT_GRAPH_ID: GraphId = "langgraph:poet";
 
 export interface ChatComposerExtrasProps {
   selectedModel: string;

@@ -39,7 +39,7 @@ export interface GraphRunRequest {
   /** Optional abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
   /**
-   * Fully-qualified graph ID (e.g., "langgraph:chat").
+   * Fully-qualified graph ID (e.g., "langgraph:poet").
    * Required - executor fails fast if not provided.
    * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
    */
