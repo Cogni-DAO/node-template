@@ -4,21 +4,25 @@
 /**
  * Module: `@cogni/langgraph-graphs/graphs/chat/graph`
  * Purpose: Simple React agent graph factory for chat functionality.
- * Scope: Creates LangGraph React agent with injected LLM and tools. Does not execute graphs or read env.
+ * Scope: Creates LangGraph React agent with injected LLM and tools. Does NOT execute graphs or read env.
  * Invariants:
  *   - Pure factory function — no side effects, no env reads
  *   - LLM and tools are injected, not instantiated
- *   - Returns LangGraph CompiledGraph
+ *   - Uses shared InvokableGraph type (no per-graph interface duplication)
  * Side-effects: none
- * Links: LANGGRAPH_AI.md
+ * Links: LANGGRAPH_AI.md, AGENT_DEVELOPMENT_GUIDE.md
  * @public
  */
 
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import type { BaseMessage } from "@langchain/core/messages";
-import type { StructuredToolInterface } from "@langchain/core/tools";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
+import {
+  asInvokableGraph,
+  type CreateReactAgentGraphOptions,
+  type InvokableGraph,
+  type MessageGraphInput,
+  type MessageGraphOutput,
+} from "../types";
 import { CHAT_SYSTEM_PROMPT } from "./prompts";
 
 /**
@@ -27,26 +31,10 @@ import { CHAT_SYSTEM_PROMPT } from "./prompts";
 export const CHAT_GRAPH_NAME = "chat" as const;
 
 /**
- * Options for createChatGraph.
+ * Chat graph type alias.
+ * Uses shared InvokableGraph interface — no per-graph interface duplication.
  */
-export interface CreateChatGraphOptions {
-  /** LLM instance (should be CompletionUnitLLM for billing) */
-  readonly llm: BaseChatModel;
-  /** Tools wrapped via toLangChainTools() */
-  readonly tools: StructuredToolInterface[];
-}
-
-/**
- * Minimal structural interface for compiled graph.
- * Exposes only the methods we actually use, avoiding LangGraph's complex generics.
- * This is a type firewall — LangGraph internals don't leak into our domain.
- */
-export interface ChatGraph {
-  invoke(
-    input: { messages: BaseMessage[] },
-    config?: { signal?: AbortSignal }
-  ): Promise<{ messages: BaseMessage[] }>;
-}
+export type ChatGraph = InvokableGraph<MessageGraphInput, MessageGraphOutput>;
 
 /**
  * Create a simple React agent graph for chat.
@@ -70,7 +58,7 @@ export interface ChatGraph {
  * });
  * ```
  */
-export function createChatGraph(opts: CreateChatGraphOptions): ChatGraph {
+export function createChatGraph(opts: CreateReactAgentGraphOptions): ChatGraph {
   const { llm, tools } = opts;
 
   // Use LangGraph's prebuilt React agent
@@ -80,10 +68,10 @@ export function createChatGraph(opts: CreateChatGraphOptions): ChatGraph {
   // 3. If no tool calls, return final response
   const agent = createReactAgent({
     llm,
-    tools,
+    tools: [...tools], // Spread readonly array to mutable for LangGraph
     messageModifier: CHAT_SYSTEM_PROMPT,
   });
 
-  // Cast to our minimal structural interface
-  return agent as unknown as ChatGraph;
+  // Centralized cast with runtime assertion
+  return asInvokableGraph<MessageGraphInput, MessageGraphOutput>(agent);
 }

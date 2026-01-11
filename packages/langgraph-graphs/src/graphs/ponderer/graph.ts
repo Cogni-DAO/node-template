@@ -4,21 +4,25 @@
 /**
  * Module: `@cogni/langgraph-graphs/graphs/ponderer/graph`
  * Purpose: Philosophical thinker agent graph factory.
- * Scope: Creates LangGraph React agent with philosophical system prompt. Does not execute graphs or read env.
+ * Scope: Creates LangGraph React agent with philosophical system prompt. Does NOT execute graphs or read env.
  * Invariants:
  *   - Pure factory function — no side effects, no env reads
  *   - LLM and tools are injected, not instantiated
- *   - Returns LangGraph CompiledGraph
+ *   - Uses shared InvokableGraph type (no per-graph interface duplication)
  * Side-effects: none
- * Links: LANGGRAPH_AI.md
+ * Links: LANGGRAPH_AI.md, AGENT_DEVELOPMENT_GUIDE.md
  * @public
  */
 
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import type { BaseMessage } from "@langchain/core/messages";
-import type { StructuredToolInterface } from "@langchain/core/tools";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
+import {
+  asInvokableGraph,
+  type CreateReactAgentGraphOptions,
+  type InvokableGraph,
+  type MessageGraphInput,
+  type MessageGraphOutput,
+} from "../types";
 import { PONDERER_SYSTEM_PROMPT } from "./prompts";
 
 /**
@@ -27,25 +31,13 @@ import { PONDERER_SYSTEM_PROMPT } from "./prompts";
 export const PONDERER_GRAPH_NAME = "ponderer" as const;
 
 /**
- * Options for createPondererGraph.
+ * Ponderer graph type alias.
+ * Uses shared InvokableGraph interface — no per-graph interface duplication.
  */
-export interface CreatePondererGraphOptions {
-  /** LLM instance (should be CompletionUnitLLM for billing) */
-  readonly llm: BaseChatModel;
-  /** Tools wrapped via toLangChainTools() */
-  readonly tools: StructuredToolInterface[];
-}
-
-/**
- * Minimal structural interface for compiled graph.
- * Exposes only the methods we actually use, avoiding LangGraph's complex generics.
- */
-export interface PondererGraph {
-  invoke(
-    input: { messages: BaseMessage[] },
-    config?: { signal?: AbortSignal }
-  ): Promise<{ messages: BaseMessage[] }>;
-}
+export type PondererGraph = InvokableGraph<
+  MessageGraphInput,
+  MessageGraphOutput
+>;
 
 /**
  * Create a philosophical ponderer agent graph.
@@ -57,15 +49,16 @@ export interface PondererGraph {
  * @returns Compiled LangGraph ready for invoke()
  */
 export function createPondererGraph(
-  opts: CreatePondererGraphOptions
+  opts: CreateReactAgentGraphOptions
 ): PondererGraph {
   const { llm, tools } = opts;
 
   const agent = createReactAgent({
     llm,
-    tools,
+    tools: [...tools], // Spread readonly array to mutable for LangGraph
     messageModifier: PONDERER_SYSTEM_PROMPT,
   });
 
-  return agent as unknown as PondererGraph;
+  // Centralized cast with runtime assertion
+  return asInvokableGraph<MessageGraphInput, MessageGraphOutput>(agent);
 }

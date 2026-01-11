@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-11
+- **Last reviewed:** 2026-01-12
 - **Status:** draft
 
 ## Purpose
@@ -55,10 +55,13 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
     - `CompletionUnitLLM` — BaseChatModel wrapper for billing integration
     - `toBaseMessage()`, `fromBaseMessage()` — Message converters
     - `AsyncQueue` — Simple async queue for streaming
-  - `@cogni/langgraph-graphs/graphs` — Graph factories:
-    - `createChatGraph()` — Simple React agent factory
-    - `createPondererGraph()` — Philosophical thinker agent factory
+  - `@cogni/langgraph-graphs/graphs` — Graph factories and shared types:
+    - `createChatGraph()`, `createPondererGraph()` — React agent factories
     - `CHAT_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants
+    - `InvokableGraph<I,O>` — Type firewall (Pick<RunnableInterface, "invoke">)
+    - `GraphInvokeOptions` — Alias to Partial<RunnableConfig>
+    - `CreateReactAgentGraphOptions` — Base factory options
+    - `asInvokableGraph()` — Centralized cast with runtime assertion
 - **CLI:** none
 - **Env/Config keys:** none (all deps injected)
 - **Files considered API:** `index.ts`, `inproc/index.ts`, `runtime/index.ts`, `graphs/index.ts`

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-01-11
+- **Last reviewed:** 2026-01-12
 - **Status:** stable
 
 ## Purpose
@@ -44,8 +44,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `StreamFinalResult` (discriminated union for stream completion: ok with usage/finishReason, or error)
   - `AiEvent` (union of all AI runtime events: text_delta, tool events, done)
   - `createAiRuntime` (AI runtime orchestrator via public.server.ts)
-  - `toolRunner` (tool execution; owns toolCallId; emits tool lifecycle AiEvents)
-  - `createChatRunner` (graph runner factory for chat graph, via public.server.ts)
+  - `createToolRunner` (tool execution factory; owns toolCallId; emits tool lifecycle AiEvents)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
   - `/api/v1/ai/chat` (POST) - chat endpoint (P1: consumes AiEvents, maps to assistant-stream format)
@@ -90,8 +89,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - Create Langfuse traces for observability (optional, env-gated)
   - Provide createAiRuntime as single AI entrypoint via GraphExecutorPort
   - Use RunEventRelay for pump+fanout pattern (billing independent of UI)
-  - Execute tools via toolRunner — owns toolCallId, emits AiEvents, redacts payloads
-  - Provide graph runner factories via createChatRunner (for bootstrap wiring)
+  - Execute tools via createToolRunner — owns toolCallId, emits AiEvents, redacts payloads
 
 - **This feature does not:**
   - Implement LLM adapters (owned by adapters/server/ai)

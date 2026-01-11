@@ -8,7 +8,7 @@ Use this structure for simple agents with one ReAct loop.
 
 ```
 packages/langgraph-graphs/src/graphs/<name>/
-├── graph.ts      # Factory: createXxxGraph(opts) → CompiledGraph
+├── graph.ts      # Factory: createXxxGraph(opts) → InvokableGraph
 └── prompts.ts    # System prompt constant(s)
 ```
 
@@ -26,28 +26,47 @@ cp -r packages/langgraph-graphs/src/graphs/ponderer packages/langgraph-graphs/sr
 export const MY_AGENT_SYSTEM_PROMPT = `Your system prompt here.` as const;
 ```
 
-**2. `graph.ts`** — Import prompt, rename exports:
+**2. `graph.ts`** — Import shared types and prompt:
 
 ```typescript
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import {
+  asInvokableGraph,
+  type CreateReactAgentGraphOptions,
+  type InvokableGraph,
+  type MessageGraphInput,
+  type MessageGraphOutput,
+} from "../types";
 import { MY_AGENT_SYSTEM_PROMPT } from "./prompts";
 
 export const MY_AGENT_GRAPH_NAME = "my-agent" as const;
 
+// Type alias using shared InvokableGraph — no per-graph interface duplication
+export type MyAgentGraph = InvokableGraph<
+  MessageGraphInput,
+  MessageGraphOutput
+>;
+
 export function createMyAgentGraph(
-  opts: CreateMyAgentGraphOptions
+  opts: CreateReactAgentGraphOptions
 ): MyAgentGraph {
-  return createReactAgent({
+  const agent = createReactAgent({
     llm: opts.llm,
-    tools: opts.tools,
+    tools: [...opts.tools], // Spread readonly to mutable
     messageModifier: MY_AGENT_SYSTEM_PROMPT,
-  }) as unknown as MyAgentGraph;
+  });
+  return asInvokableGraph<MessageGraphInput, MessageGraphOutput>(agent);
 }
 ```
 
 **3. `packages/langgraph-graphs/src/graphs/index.ts`** — Add export:
 
 ```typescript
-export { createMyAgentGraph, MY_AGENT_GRAPH_NAME } from "./my-agent/graph";
+export {
+  createMyAgentGraph,
+  MY_AGENT_GRAPH_NAME,
+  type MyAgentGraph,
+} from "./my-agent/graph";
 ```
 
 **4. `packages/langgraph-graphs/src/catalog.ts`** — Add catalog entry:
@@ -66,6 +85,20 @@ export { createMyAgentGraph, MY_AGENT_GRAPH_NAME } from "./my-agent/graph";
 ```bash
 pnpm packages:build && pnpm check
 ```
+
+## Shared Types
+
+All graphs use shared types from `packages/langgraph-graphs/src/graphs/types.ts`:
+
+| Type                           | Purpose                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `InvokableGraph<I, O>`         | Type firewall: `Pick<RunnableInterface, "invoke">` from `@langchain/core` |
+| `GraphInvokeOptions`           | Alias to `Partial<RunnableConfig>` (signal, configurable, metadata, etc.) |
+| `CreateReactAgentGraphOptions` | Base options: `{ llm, tools }`                                            |
+| `MessageGraphInput/Output`     | Standard message-based I/O types                                          |
+| `asInvokableGraph()`           | Centralized cast with runtime assertion                                   |
+
+> **LangChain Alignment:** `GraphInvokeOptions` and `InvokableGraph` are aliases to upstream `@langchain/core` types, not custom definitions. This ensures compatibility with future LangGraph features (thread_id, callbacks, etc.).
 
 ## Deprecation Warning
 

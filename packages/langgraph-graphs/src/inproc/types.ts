@@ -8,6 +8,7 @@
  * Invariants:
  *   - PACKAGES_NO_SRC_IMPORTS: No imports from src/**
  *   - Single queue pattern: runner creates queue, passes emit to caller's factory
+ *   - LANGCHAIN_ALIGNED: Graph types aligned with graphs/types.ts
  * Side-effects: none
  * Links: LANGGRAPH_AI.md
  * @public
@@ -15,10 +16,13 @@
 
 import type { AiEvent, AiExecutionErrorCode } from "@cogni/ai-core";
 import type { ToolContract } from "@cogni/ai-tools";
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import type { BaseMessage } from "@langchain/core/messages";
-import type { StructuredToolInterface } from "@langchain/core/tools";
-
+// Import shared graph types from graphs/types.ts (single source of truth)
+import type {
+  CreateReactAgentGraphOptions,
+  InvokableGraph,
+  MessageGraphInput,
+  MessageGraphOutput,
+} from "../graphs/types";
 import type {
   CompletionFn,
   CompletionResult,
@@ -30,30 +34,23 @@ import type { Message } from "../runtime/message-converters";
 export type { CompletionFn, CompletionResult, Message, ToolCall };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Graph Factory Types
+// Graph Factory Types (aliased from graphs/types.ts)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Options passed to graph factory functions.
- * Minimal interface that all graph factories must accept.
+ * Alias to shared CreateReactAgentGraphOptions.
  */
-export interface CreateGraphOptions {
-  /** LLM instance (typically CompletionUnitLLM for billing) */
-  readonly llm: BaseChatModel;
-  /** Tools wrapped via toLangChainTools() */
-  readonly tools: StructuredToolInterface[];
-}
+export type CreateGraphOptions = CreateReactAgentGraphOptions;
 
 /**
  * Minimal structural interface for compiled graphs.
- * Exposes only invoke() method — LangGraph internals don't leak.
+ * Alias to shared InvokableGraph with message-based I/O.
  */
-export interface CompiledGraph {
-  invoke(
-    input: { messages: BaseMessage[] },
-    config?: { signal?: AbortSignal }
-  ): Promise<{ messages: BaseMessage[] }>;
-}
+export type CompiledGraph = InvokableGraph<
+  MessageGraphInput,
+  MessageGraphOutput
+>;
 
 /**
  * Graph factory function signature.
