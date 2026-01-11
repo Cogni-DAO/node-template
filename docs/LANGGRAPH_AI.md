@@ -255,12 +255,28 @@ Server path is deferred until InProc proves correctness. See [LANGGRAPH_SERVER.m
 
 ## Creating a New Graph
 
-### 1. Create Graph Folder
+> **Quick Start:** See [AGENT_DEVELOPMENT_GUIDE.md](AGENT_DEVELOPMENT_GUIDE.md) for step-by-step Tier 1 instructions.
+
+### Tier 1: Single-Node Agent (Default)
+
+For simple agents with one ReAct loop, use minimal structure:
 
 ```
 packages/langgraph-graphs/src/graphs/my-agent/
-├── graph.ts    # createMyAgentGraph(llm, tools) factory
-├── llm.ts      # LLM config for this graph
+├── graph.ts      # createMyAgentGraph(llm, tools) factory
+└── prompts.ts    # System prompt constant(s)
+```
+
+**Template:** Copy from `ponderer/`. Graph imports prompt from `prompts.ts` and uses it directly (no override mechanism).
+
+### Tier 2: Composed Graphs (Future)
+
+For multi-node graphs with custom routing, per-node models, or subgraph composition:
+
+```
+packages/langgraph-graphs/src/graphs/my-agent/
+├── graph.ts    # createMyAgentGraph(llm, tools) factory — wiring only
+├── llm.ts      # LLM config / model provider for this graph
 ├── tools.ts    # Tool selection (imports from @cogni/ai-tools, wraps via toLangChainTools)
 ├── prompts.ts  # System prompts
 └── index.ts    # Barrel export
@@ -268,7 +284,13 @@ packages/langgraph-graphs/src/graphs/my-agent/
 
 **Note:** `tools.ts` imports contracts from `@cogni/ai-tools` and wraps them for this graph. It does NOT define tool contracts.
 
-### 2. Export from Graphs Barrel
+### Deprecation Warning
+
+> **`createReactAgent` from `@langchain/langgraph/prebuilt` is deprecated/migrated.**
+> LangGraph v1 moves this to `langchain` package. Pin versions in `package.json`.
+> Future migration to `createAgent` from `langchain` is expected.
+
+### 1. Export from Graphs Barrel
 
 ```typescript
 // packages/langgraph-graphs/src/graphs/index.ts
@@ -277,18 +299,19 @@ export { myAgentGraph } from "./my-agent";
 
 Runners import only from `@cogni/langgraph-graphs/graphs` (never internals).
 
-### 3. Update InProc Resolver
+### 2. Add Catalog Entry (InProc)
 
 ```typescript
-// src/bootstrap/graph-executor.factory.ts
-const graphResolver: GraphResolverFn = (graphId, adapter) => {
-  if (graphId === "chat") return createChatRunner(adapter);
-  if (graphId === "my-agent") return createMyAgentRunner(adapter);
-  return undefined;
-};
+// packages/langgraph-graphs/src/catalog.ts
+[MY_AGENT_GRAPH_NAME]: {
+  displayName: "My Agent",
+  description: "What this agent does",
+  boundTools: { [GET_CURRENT_TIME_NAME]: getCurrentTimeBoundTool },
+  graphFactory: createMyAgentGraph,
+},
 ```
 
-### 4. (If Server) Add to langgraph.json
+### 3. (If Server) Add to langgraph.json
 
 ```json
 // packages/langgraph-server/langgraph.json
@@ -561,6 +584,7 @@ Remaining wiring tracked in Phase 2c above.
 
 ## Related Documents
 
+- [AGENT_DEVELOPMENT_GUIDE.md](AGENT_DEVELOPMENT_GUIDE.md) — Quick start for adding new agent graphs
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Executor-agnostic billing, tracking, UI/UX patterns
 - [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — Infrastructure: Docker, Redis, container deployment
 - [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md) — Testing strategy for both executors
@@ -570,5 +594,5 @@ Remaining wiring tracked in Phase 2c above.
 
 ---
 
-**Last Updated**: 2026-01-10
-**Status**: Draft (Rev 13 - Phase 3 complete; Phase 4 ready for Graph #2)
+**Last Updated**: 2026-01-11
+**Status**: Draft (Rev 14 - Tier 1/2 structure; AGENT_DEVELOPMENT_GUIDE.md added)
