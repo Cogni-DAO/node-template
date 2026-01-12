@@ -17,7 +17,13 @@
  */
 
 import { Langfuse } from "langfuse";
-import type { InvocationStatus, LangfusePort, LlmErrorKind } from "@/ports";
+import type {
+  CreateTraceWithIOParams,
+  InvocationStatus,
+  LangfusePort,
+  LangfuseSpanHandle,
+  LlmErrorKind,
+} from "@/ports";
 
 export interface LangfuseAdapterConfig {
   publicKey: string;
@@ -27,29 +33,8 @@ export interface LangfuseAdapterConfig {
   environment?: string;
 }
 
-/**
- * Extended trace creation params for observability decorator.
- */
-export interface CreateTraceWithIOParams {
-  traceId: string;
-  sessionId?: string;
-  userId?: string;
-  input: unknown;
-  tags: string[];
-  metadata: Record<string, unknown>;
-}
-
-/**
- * Span handle for tool instrumentation.
- */
-export interface LangfuseSpanHandle {
-  spanId: string;
-  end: (params: {
-    output?: unknown;
-    level?: "DEFAULT" | "WARNING" | "ERROR";
-    metadata?: Record<string, unknown>;
-  }) => void;
-}
+// Re-export port types for convenience (canonical source is @/ports)
+export type { CreateTraceWithIOParams, LangfuseSpanHandle };
 
 /**
  * Langfuse SDK implementation of LangfusePort.
