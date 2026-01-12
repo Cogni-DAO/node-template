@@ -448,9 +448,10 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
    - [x] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
    - [x] Delete deprecated `executeChatGraph()` — removed with `src/features/ai/graphs/` directory
 
-3. **Phase 2c: Tool events** — ✅ Complete (pending tests)
+3. **Phase 2c: Tool events** — ✅ Complete
    - [x] Wire `toolExec` via `createToolExecFn` factory pattern
-   - [ ] Add stack test: `tool_call_start`/`tool_call_result` events emitted
+   - [x] Add integration test: `tool_call_start`/`tool_call_result` events emitted (package seam test)
+   - [ ] TODO: Add stack test with catalog mock + stateful CompletionUnitAdapter (validates full provider path)
 
 ### P0: Architecture Refactor (Phase 3 — ✅ Complete)
 
