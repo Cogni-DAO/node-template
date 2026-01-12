@@ -3,15 +3,16 @@
 
 /**
  * Module: `@adapters/server/ai-telemetry/langfuse.adapter`
- * Purpose: Langfuse SDK implementation of LangfusePort for trace correlation.
- * Scope: Create Langfuse traces with OTel trace ID; optional (only when LANGFUSE_SECRET_KEY set). Does NOT handle DB writes.
+ * Purpose: Langfuse SDK implementation of LangfusePort for trace correlation and observability.
+ * Scope: Create Langfuse traces with OTel trace ID, update I/O, manage tool spans. Does NOT handle DB writes.
  * Invariants:
- *   - Uses OTel traceId as Langfuse trace ID for correlation
+ *   - LANGFUSE_OTEL_TRACE_CORRELATION: Uses OTel traceId as Langfuse trace ID
+ *   - LANGFUSE_NON_NULL_IO: Traces have non-null input/output
+ *   - LANGFUSE_TERMINAL_ONCE_GUARD: Output set exactly once on terminal
  *   - flush() only if trace was created; never await on request path
- *   - createTrace() throws on failure; caller handles graceful degradation
  * Side-effects: IO (Langfuse API calls)
- * Notes: Per AI_SETUP_SPEC.md P0 scope
- * Links: LangfusePort, OTel traceId correlation
+ * Notes: Per AI_SETUP_SPEC.md and OBSERVABILITY.md#langfuse-integration
+ * Links: LangfusePort, ObservabilityGraphExecutorDecorator
  * @public
  */
 
@@ -27,18 +28,46 @@ export interface LangfuseAdapterConfig {
 }
 
 /**
+ * Extended trace creation params for observability decorator.
+ */
+export interface CreateTraceWithIOParams {
+  traceId: string;
+  sessionId?: string;
+  userId?: string;
+  input: unknown;
+  tags: string[];
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Span handle for tool instrumentation.
+ */
+export interface LangfuseSpanHandle {
+  spanId: string;
+  end: (params: {
+    output?: unknown;
+    level?: "DEFAULT" | "WARNING" | "ERROR";
+    metadata?: Record<string, unknown>;
+  }) => void;
+}
+
+/**
  * Langfuse SDK implementation of LangfusePort.
  * Optional adapter - only wired when LANGFUSE_SECRET_KEY is set.
  *
- * Per AI_SETUP_SPEC.md:
+ * Per AI_SETUP_SPEC.md and OBSERVABILITY.md:
  * - Creates trace with id = OTel traceId (same ID for correlation)
+ * - Supports input/output on traces for visibility
+ * - Tool spans for tool execution tracking
  * - Flush only if trace created; never await on request path
  */
 export class LangfuseAdapter implements LangfusePort {
   private readonly langfuse: Langfuse;
   private readonly activeTraces = new Set<string>();
+  readonly environment: string;
 
   constructor(config: LangfuseAdapterConfig) {
+    this.environment = config.environment ?? "local";
     this.langfuse = new Langfuse({
       publicKey: config.publicKey,
       secretKey: config.secretKey,
@@ -149,6 +178,106 @@ export class LangfuseAdapter implements LangfusePort {
       console.error("[LangfuseAdapter] flush failed:", error);
       // Clear anyway to prevent memory leak
       this.activeTraces.clear();
+    }
+  }
+
+  // =========================================================================
+  // Extended methods for ObservabilityGraphExecutorDecorator
+  // =========================================================================
+
+  /**
+   * Create a Langfuse trace with full I/O context.
+   * Per LANGFUSE_NON_NULL_IO: input is set at creation; output on terminal.
+   *
+   * @param params - Trace creation params with input and metadata
+   * @returns The trace ID (same as input traceId)
+   */
+  createTraceWithIO(params: CreateTraceWithIOParams): string {
+    try {
+      this.langfuse.trace({
+        id: params.traceId,
+        name: "graph-execution",
+        input: params.input,
+        ...(params.sessionId ? { sessionId: params.sessionId } : {}),
+        ...(params.userId ? { userId: params.userId } : {}),
+        tags: params.tags,
+        metadata: params.metadata,
+      });
+      this.activeTraces.add(params.traceId);
+      return params.traceId;
+    } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: Langfuse errors should be visible
+      console.error("[LangfuseAdapter] createTraceWithIO failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update trace output on terminal resolution.
+   * Per LANGFUSE_TERMINAL_ONCE_GUARD: called exactly once per trace.
+   *
+   * @param traceId - The trace to update
+   * @param output - Scrubbed output content
+   */
+  updateTraceOutput(traceId: string, output: unknown): void {
+    try {
+      this.langfuse.trace({
+        id: traceId,
+        output,
+      });
+    } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: Langfuse errors should be visible
+      console.error("[LangfuseAdapter] updateTraceOutput failed:", error);
+    }
+  }
+
+  /**
+   * Create a span for tool execution.
+   * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: tool spans visible in Langfuse, not logged.
+   *
+   * @param params - Span creation params
+   * @returns Span handle with end() method
+   */
+  startSpan(params: {
+    traceId: string;
+    name: string;
+    input?: unknown;
+    metadata?: Record<string, unknown>;
+  }): LangfuseSpanHandle {
+    const spanId = `span_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    try {
+      const span = this.langfuse.span({
+        id: spanId,
+        traceId: params.traceId,
+        name: params.name,
+        input: params.input,
+        metadata: params.metadata,
+      });
+
+      return {
+        spanId,
+        end: (endParams) => {
+          try {
+            span.end({
+              output: endParams.output,
+              ...(endParams.level && { level: endParams.level }),
+              ...(endParams.metadata && { metadata: endParams.metadata }),
+            });
+          } catch (error) {
+            // biome-ignore lint/suspicious/noConsole: Langfuse errors should be visible
+            console.error("[LangfuseAdapter] span.end failed:", error);
+          }
+        },
+      };
+    } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: Langfuse errors should be visible
+      console.error("[LangfuseAdapter] startSpan failed:", error);
+      // Return no-op handle on failure
+      return {
+        spanId,
+        end: () => {},
+      };
     }
   }
 }

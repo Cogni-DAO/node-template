@@ -28,10 +28,12 @@ export {
 } from "./accounts.port";
 export {
   type AiTelemetryPort,
+  type CreateTraceWithIOParams,
   classifyLlmErrorFromStatus,
   type InvocationStatus,
   isLlmError,
   type LangfusePort,
+  type LangfuseSpanHandle,
   LlmError,
   type LlmErrorKind,
   type RecordInvocationParams,

@@ -98,6 +98,12 @@ export interface LlmCaller {
   requestId: string;
   /** OTel trace ID - for LiteLLM metadata propagation */
   traceId: string;
+  /** Session ID for Langfuse session grouping (<=200 chars) */
+  sessionId?: string;
+  /** Stable user ID for Langfuse user grouping (not email - internal ID) */
+  userId?: string;
+  /** Per-user opt-out: true => Langfuse receives hashes only, no readable content */
+  maskContent?: boolean;
 }
 
 /**
