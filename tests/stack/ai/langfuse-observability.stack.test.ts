@@ -82,6 +82,8 @@ class SpyLangfusePort implements LangfusePort {
       tokensOut?: number;
       latencyMs: number;
       status: "success" | "error";
+      input?: unknown;
+      output?: unknown;
     }
   ): void {
     this.generations.push({ traceId, generation });
@@ -736,6 +738,141 @@ describe("Langfuse Observability Stack Tests", () => {
         expect(lastMsg).not.toContain(sensitiveApiKey);
         expect(lastMsg).toContain("[REDACTED_SK_KEY]");
       }
+    });
+  });
+
+  describe("GENERATION_UNDER_EXISTING_TRACE contract", () => {
+    it("records generation with tokens under graph-execution trace (same traceId)", async () => {
+      // Arrange
+      const db = getDb();
+      const { user } = await seedAuthenticatedUser(
+        db,
+        { id: randomUUID() },
+        { balanceCredits: 100_000_000 }
+      );
+
+      if (!user.walletAddress) throw new Error("walletAddress required");
+
+      const mockSessionUser: SessionUser = {
+        id: user.id,
+        walletAddress: user.walletAddress,
+      };
+      vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
+
+      const modelsReq = new NextRequest(
+        "http://localhost:3000/api/v1/ai/models"
+      );
+      const modelsRes = await modelsGET(modelsReq);
+      const { defaultPreferredModelId: modelId } = await modelsRes.json();
+
+      // Act
+      const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          threadId: randomUUID(),
+          clientRequestId: randomUUID(),
+          model: modelId,
+          stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Say hello briefly." }],
+            },
+          ],
+        }),
+      });
+
+      const res = await chatPOST(req);
+      expect(res.status).toBe(200);
+
+      // Consume stream fully
+      for await (const e of readDataStreamEvents(res)) {
+        if (isFinishMessageEvent(e)) break;
+      }
+
+      // Assert: One trace via createTraceWithIO (graph-execution), NOT createTrace (llm-completion)
+      expect(langfuseSpy.tracesWithIO.length).toBe(1);
+      expect(langfuseSpy.traces.length).toBe(0); // No llm-completion traces
+
+      // Assert: Generation recorded with same traceId as the trace
+      expect(langfuseSpy.generations.length).toBe(1);
+      const trace = langfuseSpy.tracesWithIO[0];
+      const generation = langfuseSpy.generations[0];
+
+      expect(generation?.traceId).toBe(trace?.traceId);
+
+      // Assert: Generation has token counts > 0
+      const genData = generation?.generation as {
+        tokensIn?: number;
+        tokensOut?: number;
+        status: string;
+      };
+      expect(genData?.status).toBe("success");
+      expect(genData?.tokensIn).toBeGreaterThan(0);
+      expect(genData?.tokensOut).toBeGreaterThan(0);
+    });
+
+    it("generation traceId matches trace output traceId", async () => {
+      // Arrange
+      const db = getDb();
+      const { user } = await seedAuthenticatedUser(
+        db,
+        { id: randomUUID() },
+        { balanceCredits: 100_000_000 }
+      );
+
+      if (!user.walletAddress) throw new Error("walletAddress required");
+
+      const mockSessionUser: SessionUser = {
+        id: user.id,
+        walletAddress: user.walletAddress,
+      };
+      vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
+
+      const modelsReq = new NextRequest(
+        "http://localhost:3000/api/v1/ai/models"
+      );
+      const modelsRes = await modelsGET(modelsReq);
+      const { defaultPreferredModelId: modelId } = await modelsRes.json();
+
+      // Act
+      const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          threadId: randomUUID(),
+          clientRequestId: randomUUID(),
+          model: modelId,
+          stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hi" }],
+            },
+          ],
+        }),
+      });
+
+      const res = await chatPOST(req);
+      expect(res.status).toBe(200);
+
+      for await (const e of readDataStreamEvents(res)) {
+        if (isFinishMessageEvent(e)) break;
+      }
+
+      // Assert: All three calls use the same traceId
+      expect(langfuseSpy.tracesWithIO.length).toBe(1);
+      expect(langfuseSpy.traceOutputs.length).toBe(1);
+      expect(langfuseSpy.generations.length).toBe(1);
+
+      const traceId = langfuseSpy.tracesWithIO[0]?.traceId;
+      expect(langfuseSpy.traceOutputs[0]?.traceId).toBe(traceId);
+      expect(langfuseSpy.generations[0]?.traceId).toBe(traceId);
     });
   });
 });

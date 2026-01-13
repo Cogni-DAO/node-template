@@ -169,6 +169,8 @@ export type CompletionFinalResult =
       readonly litellmCallId?: string;
       /** Tool calls requested by LLM (when finishReason === "tool_calls") */
       readonly toolCalls?: LlmToolCall[];
+      /** Assistant response content (for trace output) */
+      readonly content?: string;
     }
   | {
       readonly ok: false;

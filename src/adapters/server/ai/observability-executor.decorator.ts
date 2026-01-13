@@ -158,6 +158,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
     /**
      * Resolve terminal outcome exactly once.
      * Per LANGFUSE_TERMINAL_ONCE_GUARD: first resolution wins.
+     * Per FINAL_CONTENT_OVER_STREAM: prefer final.content over stream-captured content.
      */
     const resolveTerminal = async (
       outcome: NonNullable<TerminalState["outcome"]>,
@@ -165,6 +166,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
         error?: string;
         finishReason?: string;
         usage?: { promptTokens: number; completionTokens: number };
+        content?: string;
       }
     ): Promise<void> => {
       // Once-guard
@@ -178,8 +180,11 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
         delete terminal.finalizationTimer;
       }
 
+      // Prefer final.content (deterministic) over stream-captured (unreliable)
+      const outputContent = details.content ?? assistantFinalContent;
+
       // Scrub output for Langfuse
-      const scrubbedOutput = scrubTraceOutput(assistantFinalContent, {
+      const scrubbedOutput = scrubTraceOutput(outputContent, {
         status: outcome,
         ...(details.finishReason && { finishReason: details.finishReason }),
         ...(details.error && { errorCode: details.error }),
@@ -255,6 +260,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
           await resolveTerminal("success", {
             ...(final.finishReason && { finishReason: final.finishReason }),
             ...(final.usage && { usage: final.usage }),
+            ...(final.content && { content: final.content }),
           });
         } else {
           await resolveTerminal("error", {

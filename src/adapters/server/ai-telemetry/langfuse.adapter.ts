@@ -92,6 +92,7 @@ export class LangfuseAdapter implements LangfusePort {
 
   /**
    * Record generation metrics on the trace.
+   * Per GENERATION_UNDER_EXISTING_TRACE: attaches to trace created by decorator.
    */
   recordGeneration(
     traceId: string,
@@ -103,6 +104,8 @@ export class LangfuseAdapter implements LangfusePort {
       providerCostUsd?: number;
       status: InvocationStatus;
       errorCode?: LlmErrorKind;
+      input?: unknown;
+      output?: unknown;
     }
   ): void {
     try {
@@ -118,6 +121,14 @@ export class LangfuseAdapter implements LangfusePort {
         },
         level: generation.status === "error" ? "ERROR" : "DEFAULT",
       };
+
+      // Include input/output for generation visibility
+      if (generation.input !== undefined) {
+        generationParams.input = generation.input;
+      }
+      if (generation.output !== undefined) {
+        generationParams.output = generation.output;
+      }
 
       // Only include usage if we have token data
       if (generation.tokensIn != null || generation.tokensOut != null) {

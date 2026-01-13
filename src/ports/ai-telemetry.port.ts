@@ -184,9 +184,10 @@ export interface LangfusePort {
 
   /**
    * Record generation metrics on the trace.
+   * Per GENERATION_UNDER_EXISTING_TRACE: attaches to trace created by decorator.
    *
    * @param traceId - The trace to update
-   * @param generation - Generation metrics
+   * @param generation - Generation metrics and optional content
    */
   recordGeneration(
     traceId: string,
@@ -198,6 +199,10 @@ export interface LangfusePort {
       providerCostUsd?: number;
       status: InvocationStatus;
       errorCode?: LlmErrorKind;
+      /** Optional scrubbed input for generation visibility */
+      input?: unknown;
+      /** Optional scrubbed output for generation visibility */
+      output?: unknown;
     }
   ): void;
 

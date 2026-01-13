@@ -3,16 +3,17 @@
 
 /**
  * Module: `@features/ai/services/telemetry`
- * Purpose: Record AI invocation to DB and Langfuse.
- * Scope: Create Langfuse trace, record generation metrics, write to ai_invocation_summaries. Does NOT perform billing or LLM calls.
+ * Purpose: Record AI invocation to DB and Langfuse generation observations.
+ * Scope: Record generation metrics under existing trace, write to ai_invocation_summaries. Does NOT create traces (decorator does) or perform LLM calls.
  * Invariants:
  *   - Called on BOTH success AND error paths
  *   - PROMPTHASH_DUAL_RESOLUTION: resolvedPromptHash = canonicalPromptHash ?? fallbackPromptHash
+ *   - GENERATION_UNDER_EXISTING_TRACE: recordGeneration attaches to trace created by ObservabilityGraphExecutorDecorator
  *   - Langfuse flush is fire-and-forget (never awaited on request path)
  *   - Never throws (telemetry should not block response)
  * Side-effects: IO (writes to DB via AiTelemetryPort, Langfuse via LangfusePort)
- * Notes: Per COMPLETION_REFACTOR_PLAN.md P2 extraction. P1-ready with graph fields.
- * Links: completion.ts, ports/ai-telemetry.port.ts, AI_SETUP_SPEC.md
+ * Notes: Trace created by decorator; this service only records generation observation.
+ * Links: completion.ts, ports/ai-telemetry.port.ts, AI_SETUP_SPEC.md, observability-executor.decorator.ts
  * @public
  */
 
@@ -69,13 +70,17 @@ export interface TelemetryContextError extends TelemetryContextBase {
 export type TelemetryContext = TelemetryContextSuccess | TelemetryContextError;
 
 /**
- * Record AI invocation telemetry to DB and Langfuse.
+ * Record AI invocation telemetry to DB and Langfuse generation observation.
  *
  * Called on both success and error paths.
  * Never throws - telemetry should not block user response.
  *
+ * Per GENERATION_UNDER_EXISTING_TRACE: recordGeneration attaches to trace
+ * created by ObservabilityGraphExecutorDecorator. Does NOT create new trace.
+ *
  * Invariants:
  * - PROMPTHASH_DUAL_RESOLUTION: resolvedPromptHash = canonicalPromptHash ?? fallbackPromptHash
+ * - GENERATION_UNDER_EXISTING_TRACE: generation attaches to existing graph-execution trace
  * - Langfuse flush is fire-and-forget (never awaited on request path)
  * - Never throws (catches all errors internally)
  *
@@ -83,7 +88,7 @@ export type TelemetryContext = TelemetryContextSuccess | TelemetryContextError;
  * @param aiTelemetry - DB telemetry port
  * @param langfuse - Optional Langfuse port (env-gated)
  * @param log - Logger for error reporting
- * @returns langfuseTraceId if created, undefined otherwise
+ * @returns traceId (for DB record correlation)
  */
 export async function recordTelemetry(
   context: TelemetryContext,
@@ -110,16 +115,10 @@ export async function recordTelemetry(
   const resolvedModel =
     status === "success" ? (context.resolvedModel ?? model) : model;
 
-  // Create Langfuse trace first to capture langfuseTraceId for DB record
-  let langfuseTraceId: string | undefined;
+  // Record Langfuse generation under existing trace (created by decorator)
+  // Per GENERATION_UNDER_EXISTING_TRACE: no createTrace() - trace already exists
   if (langfuse) {
     try {
-      langfuseTraceId = await langfuse.createTrace(traceId, {
-        requestId,
-        model: resolvedModel,
-        promptHash: resolvedPromptHash,
-      });
-
       if (status === "success") {
         langfuse.recordGeneration(traceId, {
           model: resolvedModel,
@@ -148,13 +147,16 @@ export async function recordTelemetry(
       langfuse
         .flush()
         .catch((err) => log.warn({ err }, "Langfuse flush failed"));
-    } catch {
+    } catch (err) {
       // Langfuse failure shouldn't block request - DB telemetry still written
-      langfuseTraceId = undefined;
+      log.warn({ err, traceId }, "Langfuse recordGeneration failed");
     }
   }
 
   // Record to DB
+  // langfuseTraceId = traceId when Langfuse is enabled (trace created by decorator)
+  const langfuseTraceId = langfuse ? traceId : undefined;
+
   try {
     if (status === "success") {
       await aiTelemetry.recordInvocation({
