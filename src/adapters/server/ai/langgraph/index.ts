@@ -19,7 +19,13 @@ export type {
   LangGraphCatalogEntry,
 } from "./catalog";
 
-// Provider
+// Discovery-only provider (no execution deps)
+export {
+  LANGGRAPH_CATALOG_PROVIDER_ID,
+  LangGraphCatalogProvider,
+} from "./catalog.provider";
+
+// Execution provider (requires CompletionUnitAdapter)
 export {
   type CompletionUnitAdapter,
   LANGGRAPH_PROVIDER_ID,

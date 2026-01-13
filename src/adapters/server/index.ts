@@ -31,13 +31,17 @@ export {
   InProcGraphExecutorAdapter,
   type InProcGraphExecutorDeps,
 } from "./ai/inproc-graph.adapter";
-// LangGraph provider
+// LangGraph providers
 export {
   type AnyBoundTool,
   type CompletionUnitAdapter,
+  // Discovery-only provider (no execution deps)
+  LANGGRAPH_CATALOG_PROVIDER_ID,
+  // Execution provider (requires CompletionUnitAdapter)
   LANGGRAPH_PROVIDER_ID,
   type LangGraphCatalog,
   type LangGraphCatalogEntry,
+  LangGraphCatalogProvider,
   LangGraphInProcProvider,
 } from "./ai/langgraph";
 export { LiteLlmActivityUsageAdapter } from "./ai/litellm.activity-usage.adapter";
