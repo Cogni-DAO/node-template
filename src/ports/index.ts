@@ -27,6 +27,11 @@ export {
   VirtualKeyNotFoundPortError,
 } from "./accounts.port";
 export type {
+  AgentCapabilities,
+  AgentCatalogPort,
+  AgentDescriptor,
+} from "./agent-catalog.port";
+export type {
   AiTelemetryPort,
   CreateTraceWithIOParams,
   InvocationStatus,
@@ -37,8 +42,6 @@ export type {
 export type { Clock } from "./clock.port";
 export type {
   AiExecutionErrorCode,
-  GraphCapabilities,
-  GraphDescriptor,
   GraphExecutorPort,
   GraphFinal,
   GraphRunRequest,

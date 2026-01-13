@@ -10,8 +10,8 @@
  * - GRAPH_FINALIZATION_ONCE: Exactly one done event and final resolution per run
  * - P0_ATTEMPT_FREEZE: attempt is always 0 in P0
  * - GRAPH_ID_NAMESPACED: graphId format is ${providerId}:${graphName}
- * - UI_ONLY_TALKS_TO_PORT: UI calls listGraphs() via port; does not know providers
  * Side-effects: none (interface only)
+ * Notes: Discovery (listAgents) is in AgentCatalogPort, not here.
  * Links: InProcCompletionUnitAdapter, GRAPH_EXECUTION.md, @/types/ai-events.ts
  * @public
  */
@@ -23,36 +23,6 @@ import type { LlmCaller } from "./llm.port";
 
 // Re-export canonical error code type from ai-core
 export type { AiExecutionErrorCode } from "@cogni/ai-core";
-
-/**
- * Graph capabilities exposed in descriptor.
- * Used for UI display and feature gating.
- */
-export interface GraphCapabilities {
-  /** Whether the graph supports streaming responses */
-  readonly supportsStreaming: boolean;
-  /** Whether the graph supports tool execution */
-  readonly supportsTools: boolean;
-  /** Whether the graph supports thread persistence (memory) */
-  readonly supportsMemory: boolean;
-}
-
-/**
- * Graph descriptor for discovery and UI display.
- * Returned by GraphExecutorPort.listGraphs().
- *
- * Per GRAPH_ID_NAMESPACED: graphId format is "${providerId}:${graphName}" (e.g., "langgraph:poet").
- */
-export interface GraphDescriptor {
-  /** Namespaced graph ID: "${providerId}:${graphName}" (e.g., "langgraph:poet") */
-  readonly graphId: string;
-  /** Human-readable name for UI display */
-  readonly displayName: string;
-  /** Description of what this graph does */
-  readonly description: string;
-  /** Graph capabilities */
-  readonly capabilities: GraphCapabilities;
-}
 
 /**
  * Request to execute a graph.
@@ -71,11 +41,11 @@ export interface GraphRunRequest {
   /** Optional abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
   /**
-   * Fully-qualified graph ID (e.g., "langgraph:poet").
+   * Fully-qualified graph ID for routing (e.g., "langgraph:poet").
    * Required - executor fails fast if not provided.
    * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
    */
-  readonly graphName?: string;
+  readonly graphId: string;
 }
 
 /**
@@ -118,19 +88,10 @@ export interface GraphRunResult {
  *
  * Non-async method: returns stream handle immediately.
  * Actual execution happens as the stream is consumed.
+ *
+ * Note: Discovery (listing agents) is in AgentCatalogPort, not here.
  */
 export interface GraphExecutorPort {
-  /**
-   * List all available graphs from all providers.
-   * Used for discovery and UI graph selector.
-   *
-   * Per UI_ONLY_TALKS_TO_PORT: UI calls this method; does not know providers.
-   * Per GRAPH_ID_NAMESPACED: graphIds are stable across execution backends.
-   *
-   * @returns Array of graph descriptors
-   */
-  listGraphs(): readonly GraphDescriptor[];
-
   /**
    * Execute a graph with the given request.
    * Returns stream handle immediately; consume stream to drive execution.
