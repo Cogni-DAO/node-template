@@ -24,6 +24,13 @@ export {
   UnknownApiKeyError,
 } from "./accounts/public";
 export {
+  classifyLlmErrorFromStatus,
+  isLlmError,
+  LlmError,
+  type LlmErrorKind,
+  normalizeErrorToExecutionCode,
+} from "./ai/errors";
+export {
   applyBaselineSystemPrompt,
   BASELINE_SYSTEM_PROMPT,
 } from "./ai/system-prompt.server";

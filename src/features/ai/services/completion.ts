@@ -20,6 +20,7 @@
 import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
 import type { Message } from "@/core";
+import { isLlmError, normalizeErrorToExecutionCode } from "@/core";
 import type { StreamFinalResult } from "@/features/ai/types";
 import type {
   AccountService,
@@ -30,17 +31,12 @@ import type {
   LlmCompletionResult,
   LlmService,
 } from "@/ports";
-import { LlmError } from "@/ports";
 import {
   computePromptHash,
   DEFAULT_MAX_TOKENS,
   DEFAULT_TEMPERATURE,
 } from "@/shared/ai/prompt-hash";
-import {
-  type AiLlmCallEvent,
-  classifyLlmError,
-  type RequestContext,
-} from "@/shared/observability";
+import type { AiLlmCallEvent, RequestContext } from "@/shared/observability";
 // recordBilling removed: billing now via RunEventRelay + commitUsageFact (GRAPH_EXECUTION.md)
 import { recordMetrics } from "./metrics";
 import { recordTelemetry } from "./telemetry";
@@ -189,18 +185,20 @@ async function handleLlmError(
 
   const durationMs = performance.now() - llmStart;
 
-  // Record error metric
-  const errorCode = classifyLlmError(error);
+  // Normalize error ONCE at this boundary
+  const executionCode = normalizeErrorToExecutionCode(error);
+
+  // Record error metric with normalized code
   await recordMetrics({
     model: requestedModel,
     durationMs,
     isError: true,
-    errorCode,
+    errorCode: executionCode,
   });
 
   // Record error telemetry
   const latencyMs = Math.max(0, Math.round(durationMs));
-  const errorKind = error instanceof LlmError ? error.kind : "unknown";
+  const errorKind = isLlmError(error) ? error.kind : "unknown";
   await recordTelemetry(
     {
       invocationId,
@@ -371,12 +369,12 @@ export async function executeStream({
       log.error({ err: error, requestId }, "Stream execution failed");
       await handleLlmError(error, postCallContext, log);
 
-      // Return discriminated union instead of throwing
-      const isAborted = error instanceof Error && error.name === "AbortError";
+      // Return discriminated union with normalized error code
+      // Per ERROR_NORMALIZATION_ONCE: normalize here, propagate everywhere
       return {
         ok: false as const,
         requestId,
-        error: isAborted ? ("aborted" as const) : ("internal" as const),
+        error: normalizeErrorToExecutionCode(error),
       };
     });
 

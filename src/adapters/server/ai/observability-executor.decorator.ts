@@ -18,12 +18,13 @@
 import { randomUUID } from "node:crypto";
 
 import type { Logger } from "pino";
-import type {
-  GraphExecutorPort,
-  GraphFinal,
-  GraphRunRequest,
-  GraphRunResult,
-  LangfusePort,
+import {
+  type GraphExecutorPort,
+  type GraphFinal,
+  type GraphRunRequest,
+  type GraphRunResult,
+  type LangfusePort,
+  normalizeErrorToExecutionCode,
 } from "@/ports";
 import {
   applyUserMaskingPreference,
@@ -268,11 +269,13 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
         }
         return final;
       })
-      .catch(async (err: Error) => {
+      .catch(async (err: unknown) => {
         handleStreamEnd();
-        const isAbort = err?.name === "AbortError";
-        await resolveTerminal(isAbort ? "aborted" : "error", {
-          error: isAbort ? "aborted" : "internal",
+        // Normalize error using typed LlmError when available (e.g., rate_limit, timeout)
+        // Per ERROR_NORMALIZATION_ONCE: this is the last common point before the route
+        const errorCode = normalizeErrorToExecutionCode(err);
+        await resolveTerminal(errorCode === "aborted" ? "aborted" : "error", {
+          error: errorCode,
         });
         throw err;
       });

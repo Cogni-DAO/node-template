@@ -19,6 +19,7 @@
  * - not_found: Requested resource (e.g., graph) does not exist (client error)
  * - timeout: Request exceeded time limit
  * - aborted: Request was cancelled (e.g., AbortSignal)
+ * - rate_limit: Provider rate limit exceeded (HTTP 429)
  * - internal: Unexpected error during execution (server fault)
  * - insufficient_credits: Billing account lacks sufficient credits
  */
@@ -27,5 +28,6 @@ export type AiExecutionErrorCode =
   | "not_found"
   | "timeout"
   | "aborted"
+  | "rate_limit"
   | "internal"
   | "insufficient_credits";

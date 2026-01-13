@@ -17,7 +17,8 @@
  */
 
 import type { Logger } from "pino";
-import type { AiTelemetryPort, LangfusePort, LlmErrorKind } from "@/ports";
+import type { LlmErrorKind } from "@/core";
+import type { AiTelemetryPort, LangfusePort } from "@/ports";
 import { serverEnv } from "@/shared/env";
 
 /**
