@@ -129,8 +129,39 @@ export interface AiTelemetryPort {
 }
 
 /**
+ * Parameters for creating a trace with full I/O context.
+ * Per LANGFUSE_NON_NULL_IO: input is set at creation; output on terminal.
+ */
+export interface CreateTraceWithIOParams {
+  traceId: string;
+  sessionId?: string;
+  userId?: string;
+  input: unknown;
+  tags: string[];
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Span handle for tool instrumentation.
+ * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: spans visible in Langfuse, not logged.
+ */
+export interface LangfuseSpanHandle {
+  spanId: string;
+  end: (params: {
+    output?: unknown;
+    level?: "DEFAULT" | "WARNING" | "ERROR";
+    metadata?: Record<string, unknown>;
+  }) => void;
+}
+
+/**
  * Port for optional Langfuse SDK integration.
  * Only wired when LANGFUSE_SECRET_KEY is set.
+ *
+ * Per OBSERVABILITY.md#langfuse-integration:
+ * - Creates trace with scrubbed input at start
+ * - Updates trace with scrubbed output on terminal
+ * - Tool spans for tool execution tracking
  */
 export interface LangfusePort {
   /**
@@ -153,9 +184,10 @@ export interface LangfusePort {
 
   /**
    * Record generation metrics on the trace.
+   * Per GENERATION_UNDER_EXISTING_TRACE: attaches to trace created by decorator.
    *
    * @param traceId - The trace to update
-   * @param generation - Generation metrics
+   * @param generation - Generation metrics and optional content
    */
   recordGeneration(
     traceId: string,
@@ -167,6 +199,10 @@ export interface LangfusePort {
       providerCostUsd?: number;
       status: InvocationStatus;
       errorCode?: LlmErrorKind;
+      /** Optional scrubbed input for generation visibility */
+      input?: unknown;
+      /** Optional scrubbed output for generation visibility */
+      output?: unknown;
     }
   ): void;
 
@@ -175,4 +211,41 @@ export interface LangfusePort {
    * Only call if trace was created; never await on request path.
    */
   flush(): Promise<void>;
+
+  // =========================================================================
+  // Extended methods for ObservabilityGraphExecutorDecorator + ToolRunner
+  // Per OBSERVABILITY.md#langfuse-integration
+  // =========================================================================
+
+  /**
+   * Create a Langfuse trace with full I/O context.
+   * Per LANGFUSE_NON_NULL_IO: input is set at creation; output on terminal.
+   *
+   * @param params - Trace creation params with input and metadata
+   * @returns The trace ID (same as input traceId)
+   */
+  createTraceWithIO(params: CreateTraceWithIOParams): string;
+
+  /**
+   * Update trace output on terminal resolution.
+   * Per LANGFUSE_TERMINAL_ONCE_GUARD: called exactly once per trace.
+   *
+   * @param traceId - The trace to update
+   * @param output - Scrubbed output content
+   */
+  updateTraceOutput(traceId: string, output: unknown): void;
+
+  /**
+   * Create a span for tool execution.
+   * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: tool spans visible in Langfuse, not logged.
+   *
+   * @param params - Span creation params
+   * @returns Span handle with end() method
+   */
+  startSpan(params: {
+    traceId: string;
+    name: string;
+    input?: unknown;
+    metadata?: Record<string, unknown>;
+  }): LangfuseSpanHandle;
 }

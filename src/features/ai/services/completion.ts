@@ -354,7 +354,7 @@ export async function executeStream({
         finishReason: result.finishReason ?? "stop",
       };
 
-      // Add billing fields and tool calls only when present (exactOptionalPropertyTypes compliance)
+      // Add billing fields, tool calls, and content when present (exactOptionalPropertyTypes compliance)
       return {
         ...baseResult,
         ...(modelId && { model: modelId }),
@@ -364,6 +364,7 @@ export async function executeStream({
         ...(result.litellmCallId && { litellmCallId: result.litellmCallId }),
         ...(result.toolCalls &&
           result.toolCalls.length > 0 && { toolCalls: result.toolCalls }),
+        ...(result.message?.content && { content: result.message.content }),
       };
     })
     .catch(async (error) => {

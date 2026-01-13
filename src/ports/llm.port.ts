@@ -98,6 +98,12 @@ export interface LlmCaller {
   requestId: string;
   /** OTel trace ID - for LiteLLM metadata propagation */
   traceId: string;
+  /** Session ID for Langfuse session grouping (<=200 chars) */
+  sessionId?: string;
+  /** Stable user ID for Langfuse user grouping (not email - internal ID) */
+  userId?: string;
+  /** Per-user opt-out: true => Langfuse receives hashes only, no readable content */
+  maskContent?: boolean;
 }
 
 /**
@@ -163,6 +169,8 @@ export type CompletionFinalResult =
       readonly litellmCallId?: string;
       /** Tool calls requested by LLM (when finishReason === "tool_calls") */
       readonly toolCalls?: LlmToolCall[];
+      /** Assistant response content (for trace output) */
+      readonly content?: string;
     }
   | {
       readonly ok: false;
