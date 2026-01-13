@@ -208,6 +208,8 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 **Purpose:** Langfuse is the canonical visibility surface for prompts/responses + tool usage + outcomes. Logs (Loki) contain only IDs/hashes; Langfuse contains scrubbed content for debugging.
 
+**Architecture:** App creates trace (scrubbed I/O) via `ObservabilityGraphExecutorDecorator`; LiteLLM creates generation observations (full messages, tokens, latency) via its `success_callback: ["langfuse"]` integration. Generations attach to app trace via `existing_trace_id` in LiteLLM metadata.
+
 ### Langfuse Invariants
 
 1. **LANGFUSE_NO_PROMPTS_IN_LOKI:** Prompts/responses only in Langfuse (scrubbed), never in Loki logs
@@ -264,17 +266,17 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 **NOT logged:** Tool span creation/completion (visible in Langfuse UI only)
 
-### Implementation Checklist
+### Implementation Status
 
-- [ ] Add `LANGFUSE_TRACE_CREATED`, `LANGFUSE_TRACE_COMPLETED` to `EVENT_NAMES` (`src/shared/observability/events/index.ts`)
-- [ ] Create structured redaction utility (`src/shared/ai/langfuse-scrubbing.ts`)
-- [ ] Create `ObservabilityGraphExecutorDecorator` (`src/adapters/server/ai/observability-executor.decorator.ts`)
-- [ ] Add `startSpan()`, `endSpan()`, `updateTraceOutput()` to `LangfuseAdapter` (`src/adapters/server/ai-telemetry/langfuse.adapter.ts`)
-- [ ] Add Langfuse span instrumentation to `createToolRunner()` (`src/shared/ai/tool-runner.ts`)
-- [ ] Add `sessionId`, `userId`, `maskContent` to `LlmCaller` interface (`src/ports/llm.port.ts`)
-- [ ] Wire decorator in `container.ts` (`src/bootstrap/container.ts`)
-- [ ] Validate traceId format (32-hex) with fallback (`src/adapters/server/ai/observability-executor.decorator.ts`)
-- [ ] Add stack test: trace with non-null IO and terminal outcome (`tests/stack/ai/langfuse-observability.stack.test.ts`)
+- [x] Add `LANGFUSE_TRACE_CREATED`, `LANGFUSE_TRACE_COMPLETED` to `EVENT_NAMES` (`src/shared/observability/events/index.ts`)
+- [x] Create structured redaction utility (`src/shared/ai/langfuse-scrubbing.ts`)
+- [x] Create `ObservabilityGraphExecutorDecorator` (`src/adapters/server/ai/observability-executor.decorator.ts`)
+- [x] Add `startSpan()`, `updateTraceOutput()` to `LangfuseAdapter` (`src/adapters/server/ai-telemetry/langfuse.adapter.ts`)
+- [x] Add span infrastructure to `createToolRunner()` (`src/shared/ai/tool-runner.ts`) — wiring deferred (tool visibility via generation messages)
+- [x] Add `sessionId`, `userId`, `maskContent` to `LlmCaller` interface (`src/ports/llm.port.ts`)
+- [x] Wire decorator in `graph-executor.factory.ts` (`src/bootstrap/graph-executor.factory.ts`)
+- [x] Validate traceId format (32-hex) with fallback (`src/adapters/server/ai/observability-executor.decorator.ts`)
+- [x] Add stack test: trace with non-null IO and terminal outcome (`tests/stack/ai/langfuse-observability.stack.test.ts`)
 
 ### Langfuse API Verification
 

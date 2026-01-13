@@ -118,7 +118,13 @@ export function createInProcGraphRunner<TTool = unknown>(
       emit({ type: "assistant_final", content: assistantContent });
       emit({ type: "done" });
 
-      return { ok: true, usage, finishReason: "stop" };
+      // Omit usage when undefined (never default to zeros)
+      return {
+        ok: true,
+        finishReason: "stop",
+        content: assistantContent,
+        ...(usage !== undefined && { usage }),
+      };
     } catch (error) {
       const isAbort = error instanceof Error && error.name === "AbortError";
       const code = isAbort ? "aborted" : "internal";

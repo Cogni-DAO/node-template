@@ -103,10 +103,10 @@ export class CompletionUnitLLM extends BaseChatModel {
   private tokenSink?: TokenSink;
   /** Bound tools in OpenAI format, set via bindTools() */
   private boundTools?: OpenAIToolDef[];
-  private collectedUsage: {
-    promptTokens: number;
-    completionTokens: number;
-  } = { promptTokens: 0, completionTokens: 0 };
+  /** Accumulated usage across all LLM calls. Undefined until first call reports usage. */
+  private collectedUsage:
+    | { promptTokens: number; completionTokens: number }
+    | undefined = undefined;
 
   static lc_name(): string {
     return "CompletionUnitLLM";
@@ -177,8 +177,11 @@ export class CompletionUnitLLM extends BaseChatModel {
       throw new Error(result.error ?? "Completion failed");
     }
 
-    // Accumulate usage
+    // Accumulate usage (initialize on first call with usage)
     if (result.usage) {
+      if (this.collectedUsage === undefined) {
+        this.collectedUsage = { promptTokens: 0, completionTokens: 0 };
+      }
       this.collectedUsage.promptTokens += result.usage.promptTokens;
       this.collectedUsage.completionTokens += result.usage.completionTokens;
     }
@@ -224,17 +227,19 @@ export class CompletionUnitLLM extends BaseChatModel {
 
   /**
    * Get accumulated usage across all LLM calls.
-   * Used for final usage_report emission.
+   * Returns undefined if no calls reported usage.
    */
-  getCollectedUsage(): { promptTokens: number; completionTokens: number } {
-    return { ...this.collectedUsage };
+  getCollectedUsage():
+    | { promptTokens: number; completionTokens: number }
+    | undefined {
+    return this.collectedUsage ? { ...this.collectedUsage } : undefined;
   }
 
   /**
    * Reset collected usage (for testing).
    */
   resetUsage(): void {
-    this.collectedUsage = { promptTokens: 0, completionTokens: 0 };
+    this.collectedUsage = undefined;
   }
 
   /**

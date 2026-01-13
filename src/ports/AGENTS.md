@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-23
+- **Last reviewed:** 2026-01-13
 - **Status:** stable
 
 ## Purpose
@@ -49,7 +49,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - OnChainVerifier (verify transaction against expected parameters)
   - MetricsQueryPort (queryRange, queryInstant for Prometheus-compatible backends)
   - AiTelemetryPort (recordInvocation for ai_invocation_summaries DB writes)
-  - LangfusePort (createTrace, recordGeneration, flush for optional Langfuse integration)
+  - LangfusePort (createTrace, createTraceWithIO, updateTraceOutput, startSpan, recordGeneration, flush for optional Langfuse integration)
   - Clock (now)
   - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError, ActivityUsageUnavailableError)
   - LlmError, LlmErrorKind (typed error classification from status codes)

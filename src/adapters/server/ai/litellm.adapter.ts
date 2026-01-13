@@ -119,7 +119,14 @@ export class LiteLlmAdapter implements LlmService {
     const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
 
     // Extract caller data for user attribution and correlation (cost tracking in LiteLLM)
-    const { billingAccountId, requestId, traceId } = params.caller;
+    const {
+      billingAccountId,
+      requestId,
+      traceId,
+      sessionId,
+      userId,
+      maskContent,
+    } = params.caller;
 
     // Canonical messages for prompt hash (role + content only per AI_SETUP_SPEC.md)
     const canonicalMessages = params.messages.map((msg) => ({
@@ -168,7 +175,11 @@ export class LiteLlmAdapter implements LlmService {
       metadata: {
         cogni_billing_account_id: billingAccountId,
         request_id: requestId,
-        trace_id: traceId,
+        // existing_trace_id: attach observations to decorator's trace without modifying it
+        existing_trace_id: traceId,
+        ...(sessionId && { session_id: sessionId }),
+        ...(userId && { trace_user_id: userId }),
+        ...(maskContent && { mask_input: true, mask_output: true }),
       },
     };
 
@@ -310,7 +321,14 @@ export class LiteLlmAdapter implements LlmService {
     const model = params.model;
     const temperature = params.temperature ?? DEFAULT_TEMPERATURE;
     const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
-    const { billingAccountId, requestId, traceId } = params.caller;
+    const {
+      billingAccountId,
+      requestId,
+      traceId,
+      sessionId,
+      userId,
+      maskContent,
+    } = params.caller;
 
     // Canonical messages for prompt hash (role + content only per AI_SETUP_SPEC.md)
     const canonicalMessages = params.messages.map((msg) => ({
@@ -360,7 +378,11 @@ export class LiteLlmAdapter implements LlmService {
       metadata: {
         cogni_billing_account_id: billingAccountId,
         request_id: requestId,
-        trace_id: traceId,
+        // existing_trace_id: attach observations to decorator's trace without modifying it
+        existing_trace_id: traceId,
+        ...(sessionId && { session_id: sessionId }),
+        ...(userId && { trace_user_id: userId }),
+        ...(maskContent && { mask_input: true, mask_output: true }),
       },
       stream: true,
       stream_options: { include_usage: true }, // Request usage in stream if supported
