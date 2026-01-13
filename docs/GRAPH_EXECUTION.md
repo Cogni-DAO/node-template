@@ -27,9 +27,9 @@
 
 11. **BILLABLE_AI_THROUGH_EXECUTOR**: Production code paths that emit `UsageFact` must execute via `AiRuntimeService` → `GraphExecutorPort`. Direct `completion.executeStream()` calls outside executor internals bypass billing/telemetry pipeline and are prohibited. Enforced by stack test (`no-direct-completion-executestream.stack.test.ts`).
 
-12. **P0_MINIMAL_PORT**: P0 `GraphExecutorPort` exposes `runGraph()` and `listGraphs()`. Thread/run-shaped primitives (`createThread()`, `createRun()`, `streamRun()`) are provider-internal in P0; promote to external port in P1 when run persistence lands.
+12. **P0_MINIMAL_PORT**: P0 `GraphExecutorPort` exposes `runGraph()` only. Discovery is via separate `AgentCatalogPort.listAgents()`. Thread/run-shaped primitives (`createThread()`, `createRun()`, `streamRun()`) are provider-internal in P0; promote to external port in P1 when run persistence lands.
 
-13. **DISCOVERY_NO_EXECUTION_DEPS**: Discovery providers do not require execution infrastructure. `LangGraphCatalogProvider` reads from catalog but cannot execute. Routes use discovery factories, not execution factories.
+13. **DISCOVERY_NO_EXECUTION_DEPS**: Discovery providers do not require execution infrastructure. `AgentCatalogProvider` implementations read from catalog but cannot execute. Routes use discovery factories, not execution factories.
 
 14. **COMPLETION_UNIT_NOT_PORT**: `InProcCompletionUnitAdapter` is a `CompletionUnitAdapter`, not a `GraphExecutorPort`. It provides `executeCompletionUnit()` for providers but does not implement the full port interface.
 
@@ -93,18 +93,21 @@ packages/
 
 src/
 ├── ports/
-│   ├── graph-executor.port.ts                # GraphExecutorPort (P0: runGraph only)
-│   ├── tool-exec.port.ts                     # NEW: Re-export ToolExecFn from ai-core
+│   ├── agent-catalog.port.ts                 # AgentCatalogPort, AgentDescriptor ✓
+│   ├── graph-executor.port.ts                # GraphExecutorPort (runGraph only)
+│   ├── tool-exec.port.ts                     # Re-export ToolExecFn from ai-core
 │   └── index.ts                              # Barrel export
 │   # NOTE: GraphProvider is INTERNAL to adapters in P0, not a public port
 │
 ├── adapters/server/ai/
-│   ├── inproc-completion-unit.adapter.ts               # CompletionUnitAdapter (NOT GraphExecutorPort)
+│   ├── agent-catalog.provider.ts             # AgentCatalogProvider interface (internal) ✓
+│   ├── aggregating-agent-catalog.ts          # AggregatingAgentCatalog ✓
+│   ├── inproc-completion-unit.adapter.ts     # CompletionUnitAdapter (NOT GraphExecutorPort)
 │   ├── aggregating-executor.ts               # AggregatingGraphExecutor
 │   └── langgraph/                            # LangGraph-specific bindings
 │       ├── index.ts                          # Barrel export
 │       ├── catalog.ts                        # LangGraphCatalog<TFactory> types (no inproc imports)
-│       ├── catalog.provider.ts               # LangGraphCatalogProvider (discovery-only) ✓
+│       ├── inproc-agent-catalog.provider.ts  # LangGraphInProcAgentCatalogProvider (discovery) ✓
 │       └── inproc.provider.ts                # LangGraphInProcProvider with injected catalog
 │   # NOTE: NO per-graph files — graphs live in packages/
 │   # NOTE: NO tool-registry — graphs import ToolContracts directly; policy in tool-runner
@@ -122,7 +125,7 @@ src/
 ├── bootstrap/
 │   ├── container.ts                          # Wires providers + aggregator
 │   ├── graph-executor.factory.ts             # Execution factory (requires completion deps)
-│   └── graph-discovery.ts                    # Discovery factory (no execution deps) ✓
+│   └── agent-discovery.ts                    # Discovery factory (no execution deps) ✓
 │
 └── app/_facades/ai/
     └── completion.server.ts                  # Graph-agnostic (no graph selection logic)
@@ -131,26 +134,26 @@ src/
 ### Key Interfaces
 
 ```typescript
+// src/ports/agent-catalog.port.ts (PUBLIC PORT)
+interface AgentCatalogPort {
+  listAgents(): readonly AgentDescriptor[];
+}
+
+interface AgentDescriptor {
+  readonly agentId: string; // P0: === graphId
+  readonly graphId: string; // Internal routing
+  readonly displayName: string;
+  readonly description: string;
+  readonly capabilities: AgentCapabilities;
+}
+
 // src/adapters/server/ai/graph-provider.ts (INTERNAL — not a public port in P0)
 // P0: Provider-internal interface for aggregator routing. Thread/run shapes deferred to P1.
 interface GraphProvider {
   readonly providerId: string;
-  listGraphs(): GraphDescriptor[];
-  // P1: Add createThread(), createRun(), streamRun() when persistence lands
+  canHandle(graphId: string): boolean;
   runGraph(req: GraphRunRequest): GraphRunResult; // P0: minimal API
-}
-
-interface GraphDescriptor {
-  readonly graphId: string; // Namespaced: "langgraph:poet"
-  readonly displayName: string;
-  readonly description: string;
-  readonly capabilities: GraphCapabilities;
-}
-
-interface GraphCapabilities {
-  readonly supportsStreaming: boolean;
-  readonly supportsTools: boolean;
-  readonly supportsMemory: boolean; // Thread persistence
+  // P1: Add createThread(), createRun(), streamRun() when persistence lands
 }
 
 // src/adapters/server/ai/aggregating-executor.ts
@@ -158,42 +161,47 @@ class AggregatingGraphExecutor implements GraphExecutorPort {
   constructor(providers: GraphProvider[]) {
     // Build Map<graphId, provider>
   }
-  listGraphs(): GraphDescriptor[];
   // Routes to provider based on graphId prefix
+}
+
+// src/adapters/server/ai/aggregating-agent-catalog.ts
+class AggregatingAgentCatalog implements AgentCatalogPort {
+  constructor(providers: AgentCatalogProvider[]) {}
+  listAgents(): readonly AgentDescriptor[];
 }
 ```
 
 ---
 
-## Graph Discovery
+## Agent Discovery
 
 > See [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) for full discovery architecture.
 
-Discovery is decoupled from execution. Routes use discovery factories that don't require execution infrastructure.
+Discovery is decoupled from execution via `AgentCatalogPort`. Routes use discovery factories that don't require execution infrastructure.
 
 ### Discovery Pipeline
 
 ```
-Route (/api/v1/ai/graphs)
+Route (/api/v1/ai/agents)
      │
      ▼
-listGraphsForApi() [bootstrap/graph-discovery.ts]
+listAgentsForApi() [bootstrap/agent-discovery.ts]
      │
      ▼
-AggregatingGraphExecutor.listGraphs()
+AggregatingAgentCatalog.listAgents()
      │
      ▼
-GraphProvider[].listGraphs() (fanout)
+AgentCatalogProvider[].listAgents() (fanout)
      │
-     └──► LangGraphCatalogProvider → reads LANGGRAPH_CATALOG
+     └──► LangGraphInProcAgentCatalogProvider → reads LANGGRAPH_CATALOG
 ```
 
 ### Provider Types
 
-| Provider                   | Purpose        | runGraph()                  |
-| -------------------------- | -------------- | --------------------------- |
-| `LangGraphCatalogProvider` | Discovery-only | Throws                      |
-| `LangGraphInProcProvider`  | Execution      | Executes via package runner |
+| Provider                              | Port                | Purpose   |
+| ------------------------------------- | ------------------- | --------- |
+| `LangGraphInProcAgentCatalogProvider` | `AgentCatalogPort`  | Discovery |
+| `LangGraphInProcProvider`             | `GraphExecutorPort` | Execution |
 
 ### Key Invariants
 
@@ -298,14 +306,17 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [x] Remove `graphResolver` parameter — renamed to `createGraphExecutor()` (facade is graph-agnostic)
 - [x] Update `completion.server.ts` facade: delete all graph selection logic
 
-**Phase 5: Graph Discovery Pipeline (✅ Complete)**
+**Phase 5: Agent Discovery Pipeline (✅ Complete)**
 
 > See [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) for full architecture.
 
-- [x] Create `LangGraphCatalogProvider` (discovery-only, throws on `runGraph()`)
-- [x] Create `src/bootstrap/graph-discovery.ts` with `listGraphsForApi()`
-- [x] Update `/api/v1/ai/graphs` route to use `listGraphsForApi()`
-- [x] Remove `GraphExecutorPort` from `InProcCompletionUnitAdapter` (make it `CompletionUnitAdapter` only)
+- [x] Create `AgentCatalogPort` interface in `src/ports/agent-catalog.port.ts`
+- [x] Create `AgentDescriptor` with `agentId`, `graphId`, `displayName`, `description`, `capabilities`
+- [x] Create `LangGraphInProcAgentCatalogProvider` (discovery-only)
+- [x] Create `AggregatingAgentCatalog` implementing `AgentCatalogPort`
+- [x] Create `src/bootstrap/agent-discovery.ts` with `listAgentsForApi()`
+- [x] Create `/api/v1/ai/agents` route using `listAgentsForApi()`
+- [x] Remove `listGraphs()` from `GraphExecutorPort` (it's execution-only now)
 - [x] Update `src/adapters/server/index.ts` exports
 - [x] Update deadlock test to use `executeCompletionUnit` not `runGraph`
 
@@ -330,7 +341,7 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [ ] Add `graph_runs` table for run persistence (enables attempt semantics)
 - [ ] Add `attempt-semantics.test.ts`: resume does not change attempt
 - [ ] Add stack test: graph emits `usage_report`, billing records charge
-- [ ] Replace hardcoded UI graph list with API fetch from `GraphExecutorPort.listGraphs()`
+- [ ] Replace hardcoded UI agent list with API fetch from `/api/v1/ai/agents`
 
 **Note:** Graph-specific integration tests are documented in [LANGGRAPH_AI.md](LANGGRAPH_AI.md) and [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md).
 
@@ -799,5 +810,5 @@ interface GraphDeps {
 
 ---
 
-**Last Updated**: 2026-01-13
-**Status**: Draft (Rev 12 - Phase 5 discovery pipeline; AGENT_DISCOVERY.md added)
+**Last Updated**: 2026-01-14
+**Status**: Draft (Rev 13 - AgentCatalogPort; AgentDescriptor; /api/v1/ai/agents)

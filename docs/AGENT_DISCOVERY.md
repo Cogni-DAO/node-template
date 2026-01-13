@@ -9,18 +9,18 @@ Agent discovery enables the UI and API to list all available graph agents withou
 **Key Principle:** Route calls discovery helper, which uses aggregator to fan out to providers. Route never imports adapters directly.
 
 ```
-Route (/api/v1/ai/graphs)
+Route (/api/v1/ai/agents)
      │
      ▼
-listGraphsForApi() [bootstrap/graph-discovery.ts]
+listAgentsForApi() [bootstrap/agent-discovery.ts]
      │
      ▼
-AggregatingGraphExecutor.listGraphs()
+AggregatingAgentCatalog.listAgents()
      │
      ▼
-GraphProvider[].listGraphs() (fanout)
+AgentCatalogProvider[].listAgents() (fanout)
      │
-     └──► LangGraphCatalogProvider → reads LANGGRAPH_CATALOG
+     └──► LangGraphInProcAgentCatalogProvider → reads LANGGRAPH_CATALOG
 ```
 
 ---
@@ -31,15 +31,17 @@ GraphProvider[].listGraphs() (fanout)
 
 2. **DISCOVERY_NO_EXECUTION_DEPS**: Discovery providers do not require execution infrastructure (no `CompletionStreamFn`, no tool runners). `runGraph()` throws if called.
 
-3. **REGISTRY_SEPARATION**: Discovery-only providers are never registered in the execution registry. Execution providers may implement `listGraphs()` but are wired separately.
+3. **REGISTRY_SEPARATION**: Discovery-only providers are never registered in the execution registry. Execution providers may implement `listAgents()` but are wired separately.
 
-4. **GRAPH_ID_STABLE**: `graphId` format is `${providerId}:${graphName}` (e.g., `langgraph:poet`). Stable across execution backends.
+4. **P0_AGENT_GRAPH_IDENTITY**: `agentId === graphId` in P0 (one agent per graph). P1+ may decouple when multi-assistant support lands.
 
-5. **CAPABILITIES_CONSERVATIVE**: Only set capability flags for what is truly supported. Do not guess or over-promise.
+5. **AGENT_ID_STABLE**: `agentId` format is `${providerId}:${graphName}` (e.g., `langgraph:poet`). Stable across execution backends.
 
-6. **DEDUPE_BY_GRAPHID**: If multiple providers return the same `graphId`, log error and prefer first provider in registry order.
+6. **CAPABILITIES_CONSERVATIVE**: Only set capability flags for what is truly supported. Do not guess or over-promise.
 
-7. **SORT_FOR_STABILITY**: Output sorted by `displayName` (or `graphId`) for stable UI rendering.
+7. **DEDUPE_BY_AGENTID**: If multiple providers return the same `agentId`, log error and prefer first provider in registry order.
+
+8. **SORT_FOR_STABILITY**: Output sorted by `displayName` (or `agentId`) for stable UI rendering.
 
 ---
 
@@ -47,20 +49,23 @@ GraphProvider[].listGraphs() (fanout)
 
 ### Phase 0: MVP (✅ Complete)
 
-- [x] Create `LangGraphCatalogProvider` (discovery-only, no execution deps)
-- [x] Create `src/bootstrap/graph-discovery.ts` with `listGraphsForApi()`
-- [x] Update route to use `listGraphsForApi()` instead of direct catalog import
-- [x] Remove `GraphExecutorPort` from `InProcCompletionUnitAdapter` (it's a `CompletionUnitAdapter`)
+- [x] Create `AgentCatalogPort` interface in `src/ports/agent-catalog.port.ts`
+- [x] Create `AgentDescriptor` with `agentId`, `graphId`, `displayName`, `description`, `capabilities`
+- [x] Create `LangGraphInProcAgentCatalogProvider` (discovery-only, no execution deps)
+- [x] Create `src/bootstrap/agent-discovery.ts` with `listAgentsForApi()`
+- [x] Create `/api/v1/ai/agents` route using `listAgentsForApi()`
+- [x] Create `AggregatingAgentCatalog` implementing `AgentCatalogPort`
+- [x] Remove `listGraphs()` from `GraphExecutorPort` (it's execution-only now)
 - [x] Keep `DEFAULT_LANGGRAPH_GRAPH_ID` as app default (temporary, from package)
 
 ### Phase 1: Discovery/Execution Split
 
-- [ ] Create `createGraphProvidersForDiscovery()` factory in bootstrap
-- [ ] Create `createGraphProvidersForExecution(completionStreamFn)` factory in bootstrap
+- [x] Create `AgentCatalogPort` separate from `GraphExecutorPort`
+- [ ] Create `createAgentCatalogProvidersForDiscovery()` factory in bootstrap
 - [ ] Add bootstrap-time assertion: discovery providers never in execution registry
 - [ ] Add unit test: execution registry contains no discovery-only providers
-- [ ] Make `defaultGraphId` app-configurable via env override
-- [ ] Validate `defaultGraphId` exists in returned graphs
+- [ ] Make `defaultAgentId` app-configurable via env override
+- [ ] Validate `defaultAgentId` exists in returned agents
 
 ### Phase 2: LangGraph Server Discovery
 
@@ -72,7 +77,7 @@ GraphProvider[].listGraphs() (fanout)
 
 - [ ] Claude SDK catalog adapter (if/when available)
 - [ ] n8n/Flowise discovery (if demand materializes)
-- [ ] Adapter-agnostic `AgentDescriptor` with `providerRef` for adapter-specific data
+- [ ] Add `providerRef` to `AgentDescriptor` for adapter-specific data
 
 ---
 
@@ -80,59 +85,52 @@ GraphProvider[].listGraphs() (fanout)
 
 ```
 src/
+├── ports/
+│   ├── agent-catalog.port.ts      # AgentCatalogPort, AgentDescriptor
+│   └── graph-executor.port.ts     # GraphExecutorPort (execution only)
+│
 ├── bootstrap/
-│   ├── graph-discovery.ts         # Discovery factory (no execution deps)
+│   ├── agent-discovery.ts         # Discovery factory (no execution deps)
 │   └── graph-executor.factory.ts  # Execution factory (with completion deps)
 │
 ├── adapters/server/ai/
-│   ├── graph-provider.ts          # GraphProvider interface (internal)
+│   ├── agent-catalog.provider.ts  # AgentCatalogProvider interface (internal)
+│   ├── aggregating-agent-catalog.ts # AggregatingAgentCatalog
 │   ├── aggregating-executor.ts    # AggregatingGraphExecutor
 │   ├── inproc-completion-unit.adapter.ts # CompletionUnitAdapter (NOT GraphExecutorPort)
 │   └── langgraph/
-│       ├── catalog.provider.ts    # LangGraphCatalogProvider (discovery-only)
+│       ├── inproc-agent-catalog.provider.ts # LangGraphInProcAgentCatalogProvider (discovery)
 │       └── inproc.provider.ts     # LangGraphInProcProvider (execution)
 │
-└── app/api/v1/ai/graphs/
-    └── route.ts                   # Uses listGraphsForApi() from bootstrap
+└── app/api/v1/ai/agents/
+    └── route.ts                   # Uses listAgentsForApi() from bootstrap
 ```
 
 ---
 
 ## Provider Types
 
-### Discovery-Only Provider
+### Discovery Provider (AgentCatalogProvider)
 
-Implements `GraphProvider` but only for discovery. Throws on execution.
+Implements `AgentCatalogProvider` for discovery. No execution capability.
 
 ```typescript
-class LangGraphCatalogProvider implements GraphProvider {
+class LangGraphInProcAgentCatalogProvider implements AgentCatalogProvider {
   readonly providerId = "langgraph";
 
-  listGraphs(): readonly GraphDescriptor[] {
-    // Read from LANGGRAPH_CATALOG
-  }
-
-  canHandle(graphId: string): boolean {
-    // Check if graphId matches catalog
-  }
-
-  runGraph(): GraphRunResult {
-    throw new Error("Discovery-only provider");
+  listAgents(): readonly AgentDescriptor[] {
+    // Read from LANGGRAPH_CATALOG, map to AgentDescriptor
   }
 }
 ```
 
-### Execution Provider
+### Execution Provider (GraphProvider)
 
-Implements full `GraphProvider` with execution capability.
+Implements `GraphProvider` for execution. May also implement discovery.
 
 ```typescript
 class LangGraphInProcProvider implements GraphProvider {
   constructor(private adapter: CompletionUnitAdapter) {}
-
-  listGraphs(): readonly GraphDescriptor[] {
-    // Read from LANGGRAPH_CATALOG
-  }
 
   canHandle(graphId: string): boolean {
     // Check if graphId matches catalog
@@ -146,26 +144,27 @@ class LangGraphInProcProvider implements GraphProvider {
 
 ---
 
-## Future: Agent vs Graph Naming
+## AgentDescriptor Shape
 
-P0 uses `GraphDescriptor` for stability. Future phases may rename to `AgentDescriptor` to align with LangGraph Server's "Assistant" concept:
+`AgentDescriptor` aligns with LangGraph Server's "Assistant" concept:
 
-- **P0**: `agentId === graphId` (1 agent per graph)
-- **P1+**: `agentId` can represent assistant/config variants
+- **P0**: `agentId === graphId` (enforced by `P0_AGENT_GRAPH_IDENTITY` invariant)
+- **P1+**: `agentId` becomes stable, may reference multiple assistants per graph
 
 ```typescript
-// Future shape (P1+)
+// src/ports/agent-catalog.port.ts
 interface AgentDescriptor {
-  agentId: string; // Stable identifier
-  graphId: string; // Internal reference
+  agentId: string; // Stable identifier (P0: === graphId)
+  graphId: string; // Internal routing reference
   displayName: string;
   description: string;
   capabilities: AgentCapabilities;
-  providerRef?: {
-    // Provider-specific reference
-    providerId: string;
-    ref: unknown; // e.g., { assistantId } for LangGraph Server
-  };
+}
+
+// GET /api/v1/ai/agents response
+interface ListAgentsResponse {
+  agents: AgentDescriptor[];
+  defaultAgentId: string;
 }
 ```
 
@@ -179,5 +178,5 @@ interface AgentDescriptor {
 
 ---
 
-**Last Updated**: 2026-01-13
-**Status**: Draft (P0 implementation in progress)
+**Last Updated**: 2026-01-14
+**Status**: Draft (P0 complete — AgentCatalogPort, AgentDescriptor, /api/v1/ai/agents)
