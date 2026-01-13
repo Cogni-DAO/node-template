@@ -26,8 +26,15 @@ export type {
   ToolCallStartEvent,
   UsageReportEvent,
 } from "./events/ai-events";
-// Execution types
-export type { AiExecutionErrorCode } from "./execution/error-codes";
+// Execution types and utilities
+export {
+  AI_EXECUTION_ERROR_CODES,
+  AiExecutionError,
+  type AiExecutionErrorCode,
+  isAiExecutionError,
+  isAiExecutionErrorCode,
+  normalizeErrorToExecutionCode,
+} from "./execution/error-codes";
 // Graph types
 export type { GraphId } from "./graph/graph-id";
 // Tooling types

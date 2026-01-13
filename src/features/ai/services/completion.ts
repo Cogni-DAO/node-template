@@ -11,9 +11,10 @@
  * - Credit check at facade level (preflightCreditCheck), not in executeStream
  * - Post-call billing via RunEventRelay → usage_report events
  * - request_id is stable per request entry (ctx.reqId), NOT regenerated per LLM call
+ * - ERROR_NORMALIZATION_ONCE: Connection-time errors caught and normalized via try/catch
  * Side-effects: IO (via ports)
  * Notes: Uses adapter promptHash when available (canonical); fallback hash for error-path only
- * Links: Called by adapters via GraphExecutorPort, uses core domain and ports
+ * Links: Called by adapters via GraphExecutorPort, uses core domain and ports, ERROR_HANDLING_ARCHITECTURE.md
  * @public
  */
 
@@ -318,14 +319,43 @@ export async function executeStream({
   log.debug({ messageCount: messages.length }, "starting LLM stream");
 
   // Per GRAPH_OWNS_MESSAGES: pass messages through unchanged
-  const { stream, final } = await llmService.completionStream({
-    messages,
-    model,
-    caller,
-    ...(abortSignal && { abortSignal }),
-    ...(tools && tools.length > 0 && { tools }),
-    ...(toolChoice && { toolChoice }),
-  });
+  // Wrap in try/catch for connection-time errors (e.g., 429 before stream starts)
+  let stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
+  let final: Promise<import("@/ports").LlmCompletionResult>;
+
+  try {
+    const result = await llmService.completionStream({
+      messages,
+      model,
+      caller,
+      ...(abortSignal && { abortSignal }),
+      ...(tools && tools.length > 0 && { tools }),
+      ...(toolChoice && { toolChoice }),
+    });
+    stream = result.stream;
+    final = result.final;
+  } catch (error) {
+    // Connection-time error (e.g., HTTP 429 before streaming starts)
+    log.error({ err: error, requestId }, "Stream connection failed");
+    await handleLlmError(error, postCallContext, log);
+
+    // Create error stream that emits error + done
+    const errorCode = normalizeErrorToExecutionCode(error);
+    const errorStream = (async function* () {
+      yield { type: "error" as const, error: errorCode };
+      yield { type: "done" as const };
+    })();
+
+    // Return normalized error result
+    return {
+      stream: errorStream,
+      final: Promise.resolve({
+        ok: false as const,
+        requestId,
+        error: errorCode,
+      }),
+    };
+  }
 
   // Wrap final promise to handle billing/telemetry
   // INVARIANT: STREAMING_SIDE_EFFECTS_ONCE - side effects fire ONLY from this promise

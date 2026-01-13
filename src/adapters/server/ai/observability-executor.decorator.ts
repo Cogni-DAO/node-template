@@ -10,8 +10,9 @@
  *   - LANGFUSE_TERMINAL_ONCE_GUARD: Exactly one terminal outcome per trace
  *   - LANGFUSE_NON_NULL_IO: Non-null input at start, non-null output on terminal
  *   - LANGFUSE_SCRUB_BEFORE_SEND: All content scrubbed before Langfuse
+ *   - ERROR_NORMALIZATION_ONCE: Catch block uses normalizeErrorToExecutionCode()
  * Side-effects: IO (Langfuse API calls via adapter)
- * Links: OBSERVABILITY.md#langfuse-integration, LangfuseAdapter
+ * Links: OBSERVABILITY.md#langfuse-integration, LangfuseAdapter, ERROR_HANDLING_ARCHITECTURE.md
  * @public
  */
 

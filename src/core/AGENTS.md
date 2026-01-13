@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-30
+- **Last reviewed:** 2026-01-13
 - **Status:** draft
 
 ## Purpose
@@ -44,12 +44,13 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
   - Billing functions (CREDITS_PER_USD, usdToCredits, usdCentsToCredits, creditsToUsd, calculateLlmUserCharge)
   - Payment constants (MIN_PAYMENT_CENTS, MAX_PAYMENT_CENTS, PAYMENT_INTENT_TTL_MS, PENDING_UNVERIFIED_TTL_MS)
   - Domain errors (InsufficientCreditsError, PaymentIntentExpiredError, PaymentVerificationError, etc.)
+  - LLM errors (LlmError, LlmErrorKind, classifyLlmErrorFromStatus, isLlmError, normalizeErrorToExecutionCode)
   - Utilities (USDC conversion, message builders, payment state checkers)
   - AI utilities (system prompt application, token estimation)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** public.ts, payments/public.ts, billing/public.ts, chat/public.ts, accounts/public.ts
+- **Files considered API:** public.ts, payments/public.ts, billing/public.ts, chat/public.ts, accounts/public.ts, ai/errors.ts
 
 ## Ports (optional)
 
