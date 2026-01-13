@@ -19,9 +19,9 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { isLlmError, normalizeErrorToExecutionCode } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import type { Message } from "@/core";
-import { isLlmError, normalizeErrorToExecutionCode } from "@/core";
 import type { StreamFinalResult } from "@/features/ai/types";
 import type {
   AccountService,

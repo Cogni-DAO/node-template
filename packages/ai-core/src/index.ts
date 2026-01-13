@@ -35,6 +35,13 @@ export {
   isAiExecutionErrorCode,
   normalizeErrorToExecutionCode,
 } from "./execution/error-codes";
+// LLM error types (thrown by adapters, classified by normalizer)
+export {
+  classifyLlmErrorFromStatus,
+  isLlmError,
+  LlmError,
+  type LlmErrorKind,
+} from "./execution/llm-errors";
 // Graph types
 export type { GraphId } from "./graph/graph-id";
 // Tooling types

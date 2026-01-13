@@ -23,13 +23,8 @@ export {
   isUnknownApiKeyError,
   UnknownApiKeyError,
 } from "./accounts/public";
-export {
-  classifyLlmErrorFromStatus,
-  isLlmError,
-  LlmError,
-  type LlmErrorKind,
-  normalizeErrorToExecutionCode,
-} from "./ai/errors";
+// LLM error types moved to @cogni/ai-core (SINGLE_SOURCE_OF_TRUTH)
+// Import directly from @cogni/ai-core or via @/ports
 export {
   applyBaselineSystemPrompt,
   BASELINE_SYSTEM_PROMPT,

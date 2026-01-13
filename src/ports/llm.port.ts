@@ -17,16 +17,15 @@ import type { Message } from "@/core";
 
 // Re-export types used in port interfaces
 export type { AiExecutionErrorCode } from "@cogni/ai-core";
-export type { Message } from "@/core";
 // Re-export LLM error types for adapters (adapters can only import from ports)
-// Features should import directly from @/core
 export {
   classifyLlmErrorFromStatus,
   isLlmError,
   LlmError,
   type LlmErrorKind,
   normalizeErrorToExecutionCode,
-} from "@/core";
+} from "@cogni/ai-core";
+export type { Message } from "@/core";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tool Types (OpenAI-compatible format for LiteLLM)

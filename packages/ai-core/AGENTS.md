@@ -53,6 +53,7 @@ Executor-agnostic AI primitives, and minimal type helpers for cross-process comm
   - `AiExecutionErrorCode`, `AI_EXECUTION_ERROR_CODES` - Canonical error codes and runtime array
   - `AiExecutionError`, `isAiExecutionError` - Structured error class and type guard
   - `isAiExecutionErrorCode`, `normalizeErrorToExecutionCode` - Validation and normalization utilities
+  - `LlmError`, `LlmErrorKind`, `isLlmError`, `classifyLlmErrorFromStatus` - LLM adapter error types
   - `GraphId` - Namespaced graph identifier type (format: `${providerId}:${graphName}`)
 - **CLI:** none
 - **Env/Config keys:** none

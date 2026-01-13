@@ -121,17 +121,20 @@ try {
 
 AI/LLM errors follow a specialized pattern with **single-point normalization** to stable error codes.
 
-**Error Types:**
+**Error Types (all in `@cogni/ai-core`):**
 
-- `LlmError` (`src/core/ai/errors.ts`) — Thrown by adapters; captures `kind` (timeout, rate_limited, provider_4xx, etc.) and optional HTTP `status`
-- `AiExecutionErrorCode` (`packages/ai-core`) — Stable contract: `invalid_request`, `not_found`, `timeout`, `aborted`, `rate_limit`, `internal`, `insufficient_credits`
+- `LlmError` — Thrown by adapters; captures `kind` (timeout, rate_limited, provider_4xx, etc.) and optional HTTP `status`
+- `AiExecutionError` — Carries structured `code` field through call chains (thrown by CompletionUnitLLM)
+- `AiExecutionErrorCode` — Stable contract: `invalid_request`, `not_found`, `timeout`, `aborted`, `rate_limit`, `internal`, `insufficient_credits`
 
 **Error Flow:**
 
 1. Adapter throws `LlmError` with kind + status at HTTP/SSE boundary
-2. `completion.ts` catches, calls `normalizeErrorToExecutionCode()` ONCE
-3. Returns `{ ok: false, error: AiExecutionErrorCode }` to all consumers
-4. Metrics, logs, and responses consume the pre-normalized code
+2. `CompletionUnitLLM` catches, throws `AiExecutionError` with structured code
+3. Graph runner catches, calls `normalizeErrorToExecutionCode()` for any error type
+4. `completion.ts` catches connection-time errors, normalizes via same function
+5. Returns `{ ok: false, error: AiExecutionErrorCode }` to all consumers
+6. Metrics, logs, and responses consume the pre-normalized code
 
 **Invariants:**
 
@@ -139,17 +142,18 @@ AI/LLM errors follow a specialized pattern with **single-point normalization** t
 - **NO_RAW_THROW_PAST_COMPLETION:** `completion.ts` catches all errors, normalizes, returns structured result
 - **METRICS_NO_HEURISTICS:** Metrics receive pre-normalized codes, never introspect error objects
 
-**Normalization Priority:** AbortError → status 429/408 → LlmError.kind fallback → "internal"
+**Normalization Priority:** AbortError → AiExecutionError.code → LlmError (status 429/408 → kind fallback) → "internal"
 
 **Structured Boundary Logging:** Adapters emit `adapter.litellm.http_error` / `adapter.litellm.sse_error` with `{statusCode, kind, requestId, traceId, model}`. Raw provider messages stay in Langfuse only.
 
 **Import Paths:**
 
-| Consumer | Import From                                                                       |
-| -------- | --------------------------------------------------------------------------------- |
-| Features | `@/core` — `normalizeErrorToExecutionCode`, `isLlmError`, `LlmError`              |
-| Adapters | `@/ports` — re-exports `LlmError`, `classifyLlmErrorFromStatus` (arch constraint) |
-| Metrics  | Receives `AiExecutionErrorCode` directly (no error introspection)                 |
+| Consumer | Import From                                                                        |
+| -------- | ---------------------------------------------------------------------------------- |
+| Packages | `@cogni/ai-core` — canonical source for all error types and normalization          |
+| Features | `@cogni/ai-core` — `normalizeErrorToExecutionCode`, `isLlmError`, `LlmError`       |
+| Adapters | `@/ports` — re-exports from `@cogni/ai-core` (arch constraint: adapters use ports) |
+| Metrics  | Receives `AiExecutionErrorCode` directly (no error introspection)                  |
 
 ---
 

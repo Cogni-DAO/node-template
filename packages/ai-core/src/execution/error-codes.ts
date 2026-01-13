@@ -9,10 +9,13 @@
  *   - SINGLE_SOURCE_OF_TRUTH: All error codes defined here, imported everywhere else
  *   - ERROR_NORMALIZATION_ONCE: normalizeErrorToExecutionCode() is the canonical normalizer
  *   - AiExecutionError carries structured code through call chains
+ *   - Recognizes both AiExecutionError (.code) and LlmError (.kind, .status)
  * Side-effects: none
- * Links: GRAPH_EXECUTION.md, ERROR_HANDLING_ARCHITECTURE.md
+ * Links: GRAPH_EXECUTION.md, ERROR_HANDLING_ARCHITECTURE.md, llm-errors.ts
  * @public
  */
+
+import { isLlmError } from "./llm-errors";
 
 /**
  * Canonical error codes for AI execution failures.
@@ -71,17 +74,12 @@ export function isAiExecutionError(error: unknown): error is AiExecutionError {
 
 /**
  * Normalize any error to stable AiExecutionErrorCode.
- * Uses duck-typing to check for error properties without requiring class imports.
  *
  * Priority:
  * 1. AbortError → "aborted"
- * 2. AiExecutionError or error with valid 'code' field → use code
- * 3. Error with status 429 → "rate_limit"
- * 4. Error with status 408 → "timeout"
- * 5. Error with kind "rate_limited" → "rate_limit"
- * 6. Error with kind "timeout" → "timeout"
- * 7. Error with kind "aborted" → "aborted"
- * 8. Default → "internal"
+ * 2. AiExecutionError (.code field) → use code
+ * 3. LlmError (.status, .kind) → map to code
+ * 4. Default → "internal"
  */
 export function normalizeErrorToExecutionCode(
   error: unknown
@@ -91,24 +89,31 @@ export function normalizeErrorToExecutionCode(
     return "aborted";
   }
 
+  // AiExecutionError with structured code
   if (error instanceof Error) {
-    // Check for structured 'code' field (AiExecutionError or duck-typed)
     const errorWithCode = error as { code?: unknown };
     if (isAiExecutionErrorCode(errorWithCode.code)) {
       return errorWithCode.code;
     }
+  }
 
-    // Duck-type check for LlmError-like errors (has kind and/or status)
-    const errorWithProps = error as { kind?: string; status?: number };
-
+  // LlmError with status/kind classification
+  if (isLlmError(error)) {
     // Status-first (most reliable - HTTP status code)
-    if (errorWithProps.status === 429) return "rate_limit";
-    if (errorWithProps.status === 408) return "timeout";
+    if (error.status === 429) return "rate_limit";
+    if (error.status === 408) return "timeout";
 
-    // Kind fallback (LlmErrorKind values)
-    if (errorWithProps.kind === "rate_limited") return "rate_limit";
-    if (errorWithProps.kind === "timeout") return "timeout";
-    if (errorWithProps.kind === "aborted") return "aborted";
+    // Kind fallback
+    switch (error.kind) {
+      case "rate_limited":
+        return "rate_limit";
+      case "timeout":
+        return "timeout";
+      case "aborted":
+        return "aborted";
+      default:
+        return "internal";
+    }
   }
 
   // Unknown error type
