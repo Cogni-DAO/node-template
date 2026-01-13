@@ -276,6 +276,14 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 - [ ] Validate traceId format (32-hex) with fallback (`src/adapters/server/ai/observability-executor.decorator.ts`)
 - [ ] Add stack test: trace with non-null IO and terminal outcome (`tests/stack/ai/langfuse-observability.stack.test.ts`)
 
+### Langfuse API Verification
+
+Query recent traces (requires `LANGFUSE_*` vars in `.env.local`):
+
+```bash
+pnpm langfuse:trace
+```
+
 ---
 
 ## References
