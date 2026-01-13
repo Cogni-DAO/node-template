@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Logger } from "pino";
 import {
+  type GraphDescriptor,
   type GraphExecutorPort,
   type GraphFinal,
   type GraphRunRequest,
@@ -328,11 +329,9 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
 
   /**
    * Delegate listGraphs to inner executor.
+   * Per UI_ONLY_TALKS_TO_PORT: UI calls this method via port; does not know providers.
    */
-  listGraphs() {
-    if ("listGraphs" in this.inner) {
-      return (this.inner as { listGraphs: () => unknown }).listGraphs();
-    }
-    return [];
+  listGraphs(): readonly GraphDescriptor[] {
+    return this.inner.listGraphs();
   }
 }

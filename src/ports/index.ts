@@ -37,6 +37,8 @@ export type {
 export type { Clock } from "./clock.port";
 export type {
   AiExecutionErrorCode,
+  GraphCapabilities,
+  GraphDescriptor,
   GraphExecutorPort,
   GraphFinal,
   GraphRunRequest,

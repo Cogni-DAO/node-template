@@ -14,35 +14,10 @@
  * @internal
  */
 
-import type { GraphRunRequest, GraphRunResult } from "@/ports";
+import type { GraphDescriptor, GraphRunRequest, GraphRunResult } from "@/ports";
 
-/**
- * Graph capabilities exposed in descriptor.
- * Used for UI display and feature gating.
- */
-export interface GraphCapabilities {
-  /** Whether the graph supports streaming responses */
-  readonly supportsStreaming: boolean;
-  /** Whether the graph supports tool execution */
-  readonly supportsTools: boolean;
-  /** Whether the graph supports thread persistence (memory) */
-  readonly supportsMemory: boolean;
-}
-
-/**
- * Graph descriptor for discovery and UI display.
- * Returned by GraphProvider.listGraphs().
- */
-export interface GraphDescriptor {
-  /** Namespaced graph ID: "${providerId}:${graphName}" (e.g., "langgraph:poet") */
-  readonly graphId: string;
-  /** Human-readable name for UI display */
-  readonly displayName: string;
-  /** Description of what this graph does */
-  readonly description: string;
-  /** Graph capabilities */
-  readonly capabilities: GraphCapabilities;
-}
+// Re-export port types for provider implementations
+export type { GraphCapabilities, GraphDescriptor } from "@/ports";
 
 /**
  * Internal interface for graph execution providers.

@@ -18,13 +18,14 @@ import type { Logger } from "pino";
 
 import type {
   AiExecutionErrorCode,
+  GraphDescriptor,
   GraphExecutorPort,
   GraphRunRequest,
   GraphRunResult,
 } from "@/ports";
 import { makeLogger } from "@/shared/observability";
 
-import type { GraphDescriptor, GraphProvider } from "./graph-provider";
+import type { GraphProvider } from "./graph-provider";
 
 /**
  * Aggregating graph executor that routes to providers by graphId.
