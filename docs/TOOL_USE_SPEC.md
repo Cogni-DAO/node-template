@@ -5,7 +5,7 @@
 
 ## Core Invariants
 
-1. **TOOLS_VIA_TOOLRUNNER**: All tool execution flows through `toolRunner.exec()` for InProc execution. LangChain tool wrappers (`@cogni/langgraph-graphs`) must delegate to `toolRunner.exec()` to preserve validation/redaction pipeline. No direct tool implementation calls.
+1. **TOOLS_VIA_TOOLRUNNER**: All tool execution flows through `toolRunner.exec()` for ALL executors (InProc, langgraph dev, server). LangChain tool wrappers (`@cogni/langgraph-graphs`) must delegate to `toolRunner.exec()` to preserve validation/redaction pipeline. No direct tool implementation calls. No executor-specific bypass paths.
 
 2. **TOOLS_IN_PACKAGES**: Tool contracts + implementations in `@cogni/ai-tools`. Semantic types (`ToolSpec`, `ToolInvocationRecord`) in `@cogni/ai-core/tooling/`. Wire adapters (OpenAI/Anthropic encoders/decoders) in adapters layer. LangChain wrappers in `@cogni/langgraph-graphs/runtime`. Binding in composition roots only. No tool definitions in `src/**`.
 
@@ -56,6 +56,14 @@
 20. **DENY_BY_DEFAULT**: If a tool is not explicitly enabled by `ToolPolicy.allowedTools`, `toolRunner.exec()` rejects the call with error code `policy_denied`. Unknown or disabled tools fail loudly, never pass silently.
 
 21. **MCP_UNTRUSTED_BY_DEFAULT**: MCP-discovered tools are treated as untrusted. They must be explicitly allowlisted per server and per tool. Newly discovered tools (via `tools/list_changed`) are NOT auto-enabled; policy must be updated explicitly. See [MCP security guidance](https://modelcontextprotocol.io/docs/concepts/security).
+
+22. **TOOL_ID_STABILITY**: Tool IDs in `TOOL_CATALOG` are canonical and stable. ID collisions throw at catalog construction time. Never silently overwrite. Format: `core__<tool_name>` for core tools, `mcp__<server>__<tool>` for MCP tools.
+
+23. **TOOL_CONFIG_PROPAGATION**: LangChain tool wrappers receive `RunnableConfig` as 3rd parameter. Wrappers MUST accept and use config for per-run authorization via `configurable.toolIds`. Same policy/redaction path for all executors (InProc, langgraph dev, server).
+
+24. **TOOL_CATALOG_IS_CANONICAL**: `TOOL_CATALOG: Record<string, BoundTool>` in `@cogni/ai-tools/catalog.ts` is the single source of truth for all tool definitions. `langgraph-graphs` only wraps tools from this catalog; it does not define tool contracts.
+
+25. **TOOL_SAME_PATH_ALL_EXECUTORS**: Same policy/redaction/audit path for dev, server, and InProc. No executor-specific bypass paths (e.g., no dev.ts that skips policy). `toLangChainTool` wrapper enforces `configurable.toolIds` allowlist for all executors.
 
 ---
 
@@ -460,5 +468,5 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-**Last Updated**: 2026-01-08
-**Status**: Draft (Rev 2 - Added ToolEffect, ToolPolicy, ToolCatalog; deny-by-default; MCP/graph-as-tool roadmap)
+**Last Updated**: 2026-01-14
+**Status**: Draft (Rev 3 - Added TOOL_ID_STABILITY, TOOL_CONFIG_PROPAGATION, TOOL_CATALOG_IS_CANONICAL, TOOL_SAME_PATH_ALL_EXECUTORS)
