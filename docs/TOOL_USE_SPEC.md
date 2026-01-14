@@ -156,8 +156,9 @@ Per invariants **EFFECT_TYPED**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**, **TOOL
 - [x] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
 - [x] Add `effect: ToolEffect` field to `ToolSpec` in `@cogni/ai-core`
 - [x] Update existing tools with effect declarations (`get_current_time` → `read_only`)
-- [x] Create `ToolPolicy` interface in `src/shared/ai/tool-policy.ts`
+- [x] Create `ToolPolicy` interface in `@cogni/ai-core/tooling/runtime/tool-policy.ts`
 - [x] Create `ToolCatalog` interface in `src/shared/ai/tool-catalog.ts`
+- [x] Move `tool-runner.ts` to `@cogni/ai-core/tooling/tool-runner.ts`
 - [x] Update `toolRunner.exec()` to accept and enforce `ToolPolicy`
 - [x] Add `policy_denied` to `ToolErrorCode` union
 - [x] Add namespace prefix to tool names (`core__get_current_time`)
@@ -234,21 +235,22 @@ Per invariant **MCP_UNTRUSTED_BY_DEFAULT**:
 
 ### 1. Tool Architecture
 
-| Layer            | Location                               | Owns                                                                        |
-| ---------------- | -------------------------------------- | --------------------------------------------------------------------------- |
-| Semantic types   | `@cogni/ai-core/tooling/types.ts`      | `ToolSpec`, `ToolEffect`, `ToolExecResult`, `ToolInvocationRecord` — no Zod |
-| Contract         | `@cogni/ai-tools/tools/*.ts`           | Zod schema, allowlist, name, description, effect, redaction                 |
-| Implementation   | `@cogni/ai-tools/tools/*.ts`           | `execute(ctx, args)` — IO via injected capabilities                         |
-| Schema compiler  | `@cogni/ai-tools/schema.ts`            | `toToolSpec(contract)` — compiles Zod → ToolSpec with JSONSchema7           |
-| Wire encoder     | `src/adapters/server/ai/*-encoder.ts`  | `ToolSpec` → provider wire format (OpenAI, Anthropic)                       |
-| Wire decoder     | `src/adapters/server/ai/*-decoder.ts`  | Provider response → `ToolInvocationRecord` + AiEvents                       |
-| Policy           | `src/shared/ai/tool-policy.ts`         | `ToolPolicy` — allowlist, effect requirements, budgets                      |
-| Catalog          | `src/shared/ai/tool-catalog.ts`        | `ToolCatalog` — explicit tool visibility for LLM                            |
-| Capability iface | `@cogni/ai-tools/capabilities/*.ts`    | Minimal interfaces tools depend on (e.g., Clock)                            |
-| LangChain wrap   | `@cogni/langgraph-graphs/runtime/`     | `toLangChainTool()` converter (delegates to toolRunner)                     |
-| Binding (Next)   | `src/bootstrap/**`                     | Wire capabilities → adapters for Next.js runtime                            |
-| Binding (Server) | `packages/langgraph-server/bootstrap/` | Wire capabilities → adapters for LangGraph Server                           |
-| IO Adapter       | `src/adapters/server/**`               | Capability implementation                                                   |
+| Layer            | Location                                        | Owns                                                                        |
+| ---------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
+| Semantic types   | `@cogni/ai-core/tooling/types.ts`               | `ToolSpec`, `ToolEffect`, `ToolExecResult`, `ToolInvocationRecord` — no Zod |
+| Contract         | `@cogni/ai-tools/tools/*.ts`                    | Zod schema, allowlist, name, description, effect, redaction                 |
+| Implementation   | `@cogni/ai-tools/tools/*.ts`                    | `execute(ctx, args)` — IO via injected capabilities                         |
+| Schema compiler  | `@cogni/ai-tools/schema.ts`                     | `toToolSpec(contract)` — compiles Zod → ToolSpec with JSONSchema7           |
+| Wire encoder     | `src/adapters/server/ai/*-encoder.ts`           | `ToolSpec` → provider wire format (OpenAI, Anthropic)                       |
+| Wire decoder     | `src/adapters/server/ai/*-decoder.ts`           | Provider response → `ToolInvocationRecord` + AiEvents                       |
+| Policy           | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | `ToolPolicy` — allowlist, effect requirements, budgets                      |
+| Catalog          | `src/shared/ai/tool-catalog.ts`                 | `ToolCatalog` — explicit tool visibility for LLM                            |
+| Runner           | `@cogni/ai-core/tooling/tool-runner.ts`         | `createToolRunner` — canonical execution pipeline                           |
+| Capability iface | `@cogni/ai-tools/capabilities/*.ts`             | Minimal interfaces tools depend on (e.g., Clock)                            |
+| LangChain wrap   | `@cogni/langgraph-graphs/runtime/`              | `toLangChainTool()` converter (delegates to toolRunner)                     |
+| Binding (Next)   | `src/bootstrap/**`                              | Wire capabilities → adapters for Next.js runtime                            |
+| Binding (Server) | `packages/langgraph-server/bootstrap/`          | Wire capabilities → adapters for LangGraph Server                           |
+| IO Adapter       | `src/adapters/server/**`                        | Capability implementation                                                   |
 
 **Rules:**
 
@@ -287,7 +289,7 @@ interface ToolContract<...> {
   redaction: RedactionConfig;
 }
 
-// src/shared/ai/tool-policy.ts (P0 implementation)
+// @cogni/ai-core/tooling/runtime/tool-policy.ts (canonical location)
 type ToolPolicyDecision = 'allow' | 'deny' | 'require_approval';
 
 /** Minimal context for policy decisions. P0: runId only. P1+: add caller, tenant, role. */
@@ -441,15 +443,16 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ## Existing Infrastructure (✓ Built)
 
-| Component                | Location                             | Status                                         |
-| ------------------------ | ------------------------------------ | ---------------------------------------------- |
-| AiEvent types            | `@cogni/ai-core`                     | ✓ Complete                                     |
-| ToolContract, BoundTool  | `@cogni/ai-tools`                    | ✓ Complete                                     |
-| get_current_time tool    | `@cogni/ai-tools/tools/`             | ✓ Complete                                     |
-| tool-runner.ts           | `features/ai/tool-runner.ts`         | ✓ Complete pipeline                            |
-| Route tool handling      | `app/api/v1/ai/chat/route.ts`        | ✓ Active (lines 274-294)                       |
-| ai_runtime.ts            | `features/ai/services/ai_runtime.ts` | ✓ Uses GraphExecutorPort (no tool routing yet) |
-| LlmCaller/GraphLlmCaller | `ports/llm.port.ts`                  | ✓ Types defined                                |
+| Component                | Location                                        | Status                                         |
+| ------------------------ | ----------------------------------------------- | ---------------------------------------------- |
+| AiEvent types            | `@cogni/ai-core`                                | ✓ Complete                                     |
+| ToolContract, BoundTool  | `@cogni/ai-tools`                               | ✓ Complete                                     |
+| get_current_time tool    | `@cogni/ai-tools/tools/`                        | ✓ Complete                                     |
+| tool-runner.ts           | `@cogni/ai-core/tooling/tool-runner.ts`         | ✓ Complete pipeline (canonical location)       |
+| tool-policy.ts           | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ✓ ToolPolicy, createToolAllowlistPolicy        |
+| Route tool handling      | `app/api/v1/ai/chat/route.ts`                   | ✓ Active (lines 274-294)                       |
+| ai_runtime.ts            | `features/ai/services/ai_runtime.ts`            | ✓ Uses GraphExecutorPort (no tool routing yet) |
+| LlmCaller/GraphLlmCaller | `ports/llm.port.ts`                             | ✓ Types defined                                |
 
 ---
 

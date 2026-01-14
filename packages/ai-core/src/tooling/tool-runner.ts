@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/ai-core/tooling/tool-runner`
  * Purpose: Tool execution with AiEvent emission, policy enforcement, and payload redaction.
- * Scope: Sole owner of toolCallId generation; executes tools via injected implementations.
+ * Scope: Sole owner of toolCallId generation; executes tools via injected implementations. Does not import from src/ or perform observability scrubbing.
  * Invariants:
  *   - GRAPHS_USE_TOOLRUNNER_ONLY: Graphs invoke tools exclusively through toolRunner.exec()
  *   - TOOLCALL_ID_STABLE: Same toolCallId across start→result

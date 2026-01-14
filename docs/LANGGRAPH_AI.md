@@ -39,7 +39,12 @@ packages/
 │   └── src/
 │       ├── events/ai-events.ts       # AiEvent union
 │       ├── usage/usage.ts            # UsageFact, ExecutorType
-│       └── configurable/             # GraphRunConfig schema
+│       ├── configurable/             # GraphRunConfig schema
+│       └── tooling/                  # Tool execution types + runtime
+│           ├── types.ts              # ToolExecFn, BoundToolRuntime, EmitAiEvent
+│           ├── tool-runner.ts        # createToolRunner (canonical pipeline)
+│           ├── ai-span.ts            # AiSpanPort (observability interface)
+│           └── runtime/tool-policy.ts # ToolPolicy, createToolAllowlistPolicy
 │
 ├── ai-tools/                         # Pure tool definitions (NO LangChain)
 │   └── src/

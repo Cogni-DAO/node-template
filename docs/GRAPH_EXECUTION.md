@@ -95,9 +95,11 @@ packages/
 │       ├── events/ai-events.ts               # AiEvent union (canonical) ✓
 │       ├── usage/usage.ts                    # UsageFact, ExecutorType ✓
 │       ├── execution/error-codes.ts          # AiExecutionErrorCode (canonical) ✓
-│       ├── tooling/                          # Tool execution types ✓
-│       │   ├── types.ts                      # ToolExecFn, ToolExecResult, EmitAiEvent
-│       │   └── index.ts                      # Barrel export
+│       ├── tooling/                          # Tool execution types + runtime ✓
+│       │   ├── types.ts                      # ToolExecFn, ToolExecResult, EmitAiEvent, BoundToolRuntime
+│       │   ├── tool-runner.ts                # createToolRunner (canonical location)
+│       │   ├── ai-span.ts                    # AiSpanPort (observability interface)
+│       │   └── runtime/tool-policy.ts        # ToolPolicy, createToolAllowlistPolicy
 │       └── index.ts                          # Package barrel
 │
 ├── ai-tools/                                 # Pure tool contracts (NO LangChain, NO src imports) ✓
@@ -138,10 +140,7 @@ src/
 │       ├── inproc-agent-catalog.provider.ts  # LangGraphInProcAgentCatalogProvider (discovery) ✓
 │       └── inproc.provider.ts                # LangGraphInProcProvider with injected catalog
 │   # NOTE: NO per-graph files — graphs live in packages/
-│   # NOTE: NO tool-registry — graphs import ToolContracts directly; policy in tool-runner
-│
-├── shared/ai/
-│   └── tool-runner.ts                        # MOVED from features/ai/ (adapters can import)
+│   # NOTE: NO tool-registry — graphs import ToolContracts directly; policy via @cogni/ai-core
 │
 ├── features/ai/
 │   └── services/
@@ -292,10 +291,10 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 **Phase 2: Move LangGraph Wiring to Adapters**
 
 - [x] Create `src/adapters/server/ai/langgraph/` directory
-- [x] Move `features/ai/tool-runner.ts` → `src/shared/ai/tool-runner.ts` (adapters can import shared/)
-- [x] Update imports in moved files to use `@cogni/ai-core` for tool exec types
-- [x] Create `src/shared/ai/tool-policy.ts` with `ToolPolicy`, `DENY_ALL_POLICY`, `createToolAllowlistPolicy()`
-- [x] Create `src/shared/ai/tool-catalog.ts` with `ToolCatalog`, `EMPTY_CATALOG`, `createToolCatalog()`
+- [x] Move `tool-runner.ts` → `@cogni/ai-core/tooling/tool-runner.ts` (canonical location)
+- [x] Move `tool-policy.ts` → `@cogni/ai-core/tooling/runtime/tool-policy.ts`
+- [x] Add `BoundToolRuntime`, `ToolContractRuntime` to ai-core (no Zod dependency)
+- [x] Add `spanInput`/`spanOutput` hooks for adapter-provided scrubbing
 - [x] Update `tool-runner.ts` to enforce policy (DENY_BY_DEFAULT)
 - [x] Update `langgraph-chat.runner.ts` to pass policy + ctx to tool runner
 - [x] Delete `src/features/ai/runners/` directory (logic absorbed by provider)

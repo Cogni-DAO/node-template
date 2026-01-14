@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-05
+- **Last reviewed:** 2026-01-15
 - **Status:** draft
 
 ## Purpose
@@ -48,9 +48,11 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
   - `GET_CURRENT_TIME_NAME` - Tool name constant
   - `toToolSpec()` - Compile ToolContract to ToolSpec (Zod → JSONSchema7)
   - `toToolSpecs()` - Compile multiple contracts
+  - `TOOL_CATALOG` - Singleton catalog of all registered tools (Record<string, CatalogBoundTool>)
+  - `createToolCatalog()`, `getToolById()`, `getToolIds()`, `hasToolId()` - Catalog accessors
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** `index.ts`, `types.ts`, `schema.ts`, `tools/*.ts`
+- **Files considered API:** `index.ts`, `types.ts`, `schema.ts`, `catalog.ts`, `tools/*.ts`
 
 ## Ports
 
