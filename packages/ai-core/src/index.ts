@@ -60,16 +60,28 @@ export {
   type ToolPolicyContext,
   type ToolPolicyDecision,
 } from "./tooling/runtime/tool-policy";
+// Tool runner
+export {
+  createToolRunner,
+  type ToolExecOptions,
+  type ToolRunner,
+  type ToolRunnerConfig,
+} from "./tooling/tool-runner";
 // Tooling types
 export type {
+  BoundToolRuntime,
   EmitAiEvent,
+  ParseableSchema,
   RedactionMode,
+  ToolContractRuntime,
   ToolEffect,
   ToolErrorCode,
   ToolExecFn,
   ToolExecResult,
+  ToolImplementationRuntime,
   ToolInvocationRecord,
   ToolRedactionConfig,
+  ToolResult,
   ToolSpec,
 } from "./tooling/types";
 // Usage types

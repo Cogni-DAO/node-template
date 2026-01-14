@@ -119,6 +119,59 @@ export interface ToolInvocationRecord {
 }
 
 // -----------------------------------------------------------------------------
+// Tool Contract Runtime Types (minimal interface for tool-runner)
+// -----------------------------------------------------------------------------
+
+/**
+ * Minimal schema interface for tool-runner.
+ * Compatible with Zod schemas but doesn't require Zod import.
+ */
+export interface ParseableSchema {
+  parse(input: unknown): unknown;
+}
+
+/**
+ * Minimal tool contract interface for tool-runner.
+ * ai-tools implements this with full Zod schemas; ai-core only sees this interface.
+ * Policy/allowlist belongs in ToolPolicy, not here.
+ */
+export interface ToolContractRuntime {
+  readonly name: string;
+  readonly effect: ToolEffect;
+  readonly inputSchema: ParseableSchema;
+  readonly outputSchema: ParseableSchema;
+  readonly redact: (output: unknown) => unknown;
+}
+
+/**
+ * Minimal tool implementation interface for tool-runner.
+ */
+export interface ToolImplementationRuntime {
+  readonly execute: (input: unknown) => Promise<unknown>;
+}
+
+/**
+ * Bound tool: contract + implementation.
+ * This is the runtime interface consumed by tool-runner.
+ */
+export interface BoundToolRuntime {
+  readonly contract: ToolContractRuntime;
+  readonly implementation: ToolImplementationRuntime;
+}
+
+/**
+ * Tool result from implementation (pre-redaction).
+ * Structurally identical to ToolExecResult but semantically distinct layer.
+ */
+export type ToolResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | {
+      readonly ok: false;
+      readonly errorCode: ToolErrorCode;
+      readonly safeMessage: string;
+    };
+
+// -----------------------------------------------------------------------------
 // Tool Execution Types (canonical location per TOOL_EXEC_TYPES_IN_AI_CORE)
 // -----------------------------------------------------------------------------
 

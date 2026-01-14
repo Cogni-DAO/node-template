@@ -274,11 +274,22 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 - [x] Create structured redaction utility (`src/shared/ai/langfuse-scrubbing.ts`)
 - [x] Create `ObservabilityGraphExecutorDecorator` (`src/adapters/server/ai/observability-executor.decorator.ts`)
 - [x] Add `startSpan()`, `updateTraceOutput()` to `LangfuseAdapter` (`src/adapters/server/ai-telemetry/langfuse.adapter.ts`)
-- [x] Add span infrastructure to `createToolRunner()` (`src/shared/ai/tool-runner.ts`) — wiring deferred (tool visibility via generation messages)
+- [x] Add span infrastructure to `createToolRunner()` (`@cogni/ai-core/tooling/tool-runner.ts`) — wiring deferred (tool visibility via generation messages)
 - [x] Add `sessionId`, `userId`, `maskContent` to `LlmCaller` interface (`src/ports/llm.port.ts`)
 - [x] Wire decorator in `graph-executor.factory.ts` (`src/bootstrap/graph-executor.factory.ts`)
 - [x] Validate traceId format (32-hex) with fallback (`src/adapters/server/ai/observability-executor.decorator.ts`)
 - [x] Add stack test: trace with non-null IO and terminal outcome (`tests/stack/ai/langfuse-observability.stack.test.ts`)
+
+### Tool Span Payload Policy
+
+**Invariant:** `@cogni/ai-core` emits metadata-only spans by default (toolCallId, toolName, effect, status, elapsedMs, errorCode). Raw args/results are never sent from ai-core.
+
+**Adapter responsibility:** Langfuse adapter may attach scrubbed+size-capped payload via `spanInput`/`spanOutput` hooks. Adapters must enforce size caps + masking before sending.
+
+**Open work:**
+
+- [ ] Review tool-runner span scrubbing: ensure `spanInput`/`spanOutput` hooks are wired from composition root with langfuse-scrubbing functions
+- [ ] Move `langfuse-scrubbing.ts` from `src/shared/ai/` to `src/adapters/observability/langfuse/` (adapter layer owns vendor-specific scrubbing)
 
 ### Langfuse API Verification
 

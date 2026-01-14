@@ -16,7 +16,7 @@
  * @public
  */
 
-import { createToolAllowlistPolicy } from "@cogni/ai-core";
+import { createToolAllowlistPolicy, createToolRunner } from "@cogni/ai-core";
 import {
   createEventCollector,
   createTestBoundTool,
@@ -28,7 +28,6 @@ import type {
   ToolCallResultEvent,
   ToolCallStartEvent,
 } from "@/features/ai/types";
-import { createToolRunner } from "@/shared/ai/tool-runner";
 
 /**
  * Test policy that allows TEST_TOOL_NAME.
@@ -120,25 +119,8 @@ describe("features/ai/tool-runner", () => {
       }
     });
 
-    it("returns ok:false with errorCode 'redaction_failed' when allowlist is empty", async () => {
-      // Arrange
-      const boundTool = createTestBoundTool({ allowlist: [] });
-      const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
-
-      // Act
-      const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
-
-      // Assert
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.errorCode).toBe("redaction_failed");
-      }
-    });
+    // NOTE: Empty allowlist check removed from tool-runner.
+    // Allowlist enforcement is now in contract.redact() or ToolPolicy.
 
     it("returns ok:false with errorCode 'policy_denied' when tool not in policy allowlist", async () => {
       // Arrange - policy allows only TEST_TOOL_NAME, but tool is different

@@ -17,7 +17,7 @@
  */
 
 import type { AiEvent } from "@cogni/ai-core";
-import { createToolAllowlistPolicy } from "@cogni/ai-core";
+import { createToolAllowlistPolicy, createToolRunner } from "@cogni/ai-core";
 import {
   type CompletionFn,
   type CreateGraphFn,
@@ -37,7 +37,6 @@ import type {
   LlmToolDefinition,
   Message,
 } from "@/ports";
-import { createToolRunner } from "@/shared/ai/tool-runner";
 import { makeLogger } from "@/shared/observability";
 
 import type { GraphProvider } from "../graph-provider";
