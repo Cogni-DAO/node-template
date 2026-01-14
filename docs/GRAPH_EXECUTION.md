@@ -3,6 +3,18 @@
 > [!CRITICAL]
 > All graph execution flows through `GraphExecutorPort`. Billing is run-centric with idempotency enforced by `(source_system, source_reference)` where `source_reference` includes `run_id/attempt`.
 
+## Architecture Contract
+
+| Category             | Status         | Notes                                             |
+| -------------------- | -------------- | ------------------------------------------------- |
+| **Invariants 1-23**  | ✅ Implemented | Core billing, execution, discovery                |
+| **Invariants 24-31** | 📋 Contract    | Compiled exports + configurable; impl in progress |
+| **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration         |
+
+**Open Work:** See [P1: Compiled Graph Execution](#p1-compiled-graph-execution) checklist.
+
+---
+
 ## Core Invariants
 
 1. **UNIFIED_GRAPH_EXECUTOR**: All graphs (in-proc LangGraph, Claude SDK, future n8n/Flowise) execute via `GraphExecutorPort.runGraph()`. No execution path bypasses this interface.
@@ -37,23 +49,38 @@
 
 16. **PROVIDER_AGGREGATION**: `AggregatingGraphExecutor` routes `graphId → GraphProvider`. App uses only the aggregator; no facade-level graph conditionals.
 
-17. **CATALOG_INJECTED**: Graph catalog is injected into providers, not hard-coded. Catalog entries must be pure factories (adapter-injected deps only) for deterministic testing.
+17. **CATALOG_COMPILED_EXPORTS**: Catalog entries reference compiled graphs (no constructor args). Runtime config passes via `RunnableConfig.configurable`. Providers invoke compiled graphs; they do not inject LLM/tools at construction.
 
 18. **NO_LANGCHAIN_IN_ADAPTERS_ROOT**: LangChain imports are isolated to `src/adapters/server/ai/langgraph/**`. Other adapter code must not import `@langchain/*`.
 
 19. **TOOL_EXEC_TYPES_IN_AI_CORE**: `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` are canonical in `@cogni/ai-core`. `src/ports` re-exports. Adapters import from `@cogni/ai-core` or `@/ports`.
 
 20. **FANOUT_LOSSINESS**: StreamDriver fans out to subscribers with different guarantees:
-    - **Billing subscriber**: Unbounded queue, never drops events, runs to completion. This is authoritative.
+    - **Billing subscriber**: Bounded queue with backpressure; if queue fills, driver blocks (never drops billing events). P1: durable spill to worker.
     - **UI subscriber**: Bounded queue, may disconnect; driver continues regardless. Best-effort delivery.
     - **History subscriber**: Bounded queue, may drop on backpressure. Best-effort cache.
-      Only billing is lossless; UI/History are best-effort.
 
 21. **USAGE_UNIT_ID_MANDATORY**: For billable paths, adapters MUST provide `usageUnitId` in `UsageFact`. The fallback path (generating `MISSING:${runId}/${callIndex}`) is an ERROR condition that logs `billing.missing_usage_unit_id` metric and must be investigated. This is NOT a normal operation path.
 
 22. **CATALOG_STATIC_IN_P0**: P0 uses static catalog exported by `@cogni/langgraph-graphs`. Runtime graph discovery/registration is deferred to P1/P2. Adding a graph requires updating the package export, not runtime registration.
 
 23. **GRAPH_OWNS_MESSAGES**: Graphs are the single authority for all messages they construct — system prompts, multi-node context, tool instructions, etc. The completion/execution layer (`executeStream`) must pass messages through unmodified — no filtering, no injection. Security filtering of untrusted client input (stripping system messages) happens at the HTTP/API boundary before `GraphExecutorPort.runGraph()` is called, not in the execution layer.
+
+24. **SERVER_FIRST_PARITY**: Prove patterns on `langgraph dev` first. Server behavior is authoritative; InProc implements parity.
+
+25. **CONFIGURABLE_IS_JSON**: `config.configurable` must be JSON-serializable (no functions, no object instances). Executors access non-serializable runtime context via `AsyncLocalStorage`.
+
+26. **TOOLS_BY_ID**: `configurable.toolIds: string[]` is a **capability allowlist**, not a registry lookup. Tool schemas are bound at graph compile time; `toolIds` gates which tools may execute at runtime. `toLangChainTool` wrapper checks this allowlist and returns `policy_denied` (via existing `ToolExecResult`) if tool not in list. OAuth/MCP auth is resolved from ALS runtime context, never from configurable.
+
+27. **EXECUTOR_OWNS_TRANSPORT**: Executor decides LLM routing (CompletionUnitLLM vs ChatOpenAI). Graph code is transport-agnostic.
+
+28. **RUNTIME_CONTEXT_VIA_ALS**: InProc runtime context (`completionFn`, `tokenSink`) accessed via `AsyncLocalStorage` per run, not global singleton.
+
+29. **RUNID_SERVER_AUTHORITY**: `runId` is generated server-side at ingress. Client-provided `runId` is ignored. No `runId` reuse in P0. This is required for idempotency and attempt-freeze safety.
+
+30. **NO_SECRETS_IN_CONFIGURABLE_OR_CONTEXT**: `configurable` and ALS context must never contain raw secrets (API keys, tokens, credentials). Only opaque reference IDs (e.g., `virtualKeyId`, `connectionId`). Secrets resolved from secure store inside tool runner/runtime at execution time.
+
+31. **BILLING_BOUNDED_BACKPRESSURE**: Billing subscriber uses bounded queue. If backpressure occurs, driver blocks (preserving lossless guarantee) rather than unbounded memory growth. P1: durable event spill or worker-based ingestion.
 
 ---
 
@@ -68,28 +95,31 @@ packages/
 │       ├── events/ai-events.ts               # AiEvent union (canonical) ✓
 │       ├── usage/usage.ts                    # UsageFact, ExecutorType ✓
 │       ├── execution/error-codes.ts          # AiExecutionErrorCode (canonical) ✓
-│       ├── tooling/                          # Tool execution types ✓
-│       │   ├── types.ts                      # ToolExecFn, ToolExecResult, EmitAiEvent
-│       │   └── index.ts                      # Barrel export
+│       ├── tooling/                          # Tool execution types + runtime ✓
+│       │   ├── types.ts                      # ToolExecFn, ToolExecResult, EmitAiEvent, BoundToolRuntime
+│       │   ├── tool-runner.ts                # createToolRunner (canonical location)
+│       │   ├── ai-span.ts                    # AiSpanPort (observability interface)
+│       │   └── runtime/tool-policy.ts        # ToolPolicy, createToolAllowlistPolicy
 │       └── index.ts                          # Package barrel
 │
 ├── ai-tools/                                 # Pure tool contracts (NO LangChain, NO src imports) ✓
 │   └── src/
 │       ├── types.ts                          # ToolContract, BoundTool, ToolResult
+│       ├── catalog.ts                        # TOOL_CATALOG: Record<string, BoundTool> (canonical registry)
 │       └── tools/*.ts                        # Pure tool implementations
 │
 └── langgraph-graphs/                         # ALL LangChain code lives here ✓
     └── src/
         ├── catalog.ts                        # LANGGRAPH_CATALOG (single source of truth) ✓
-        ├── graphs/                           # Graph factories (stable import surface)
-        │   ├── index.ts                      # Barrel: all graphs
-        │   ├── poet/                         # Poet graph ✓
-        │   ├── ponderer/                     # Ponderer graph ✓
-        │   └── research/                     # Phase 5: Graph #3
-        ├── runtime/                          # Shared LangChain utilities ✓
-        └── inproc/                           # InProc execution ✓
-            ├── runner.ts                     # createInProcGraphRunner() ✓
-            └── types.ts                      # InProcRunnerOptions, GraphResult ✓
+        ├── graphs/                           # Compiled graph exports (no-arg)
+        │   ├── index.ts                      # Barrel: all compiled graphs
+        │   ├── poet/graph.ts                 # export const poetGraph = ...compile()
+        │   ├── ponderer/graph.ts             # export const pondererGraph = ...compile()
+        │   └── research/graph.ts             # Graph #3 (compiled)
+        └── runtime/                          # Runtime utilities ✓
+            ├── completion-unit-llm.ts        # CompletionUnitLLM wraps completionFn
+            ├── inproc-runtime.ts             # AsyncLocalStorage context
+            └── langchain-tools.ts            # toLangChainTool() with config param + allowlist check
 
 src/
 ├── ports/
@@ -106,14 +136,11 @@ src/
 │   ├── aggregating-executor.ts               # AggregatingGraphExecutor
 │   └── langgraph/                            # LangGraph-specific bindings
 │       ├── index.ts                          # Barrel export
-│       ├── catalog.ts                        # LangGraphCatalog<TFactory> types (no inproc imports)
+│       ├── catalog.ts                        # LangGraphCatalog types (references compiled exports)
 │       ├── inproc-agent-catalog.provider.ts  # LangGraphInProcAgentCatalogProvider (discovery) ✓
 │       └── inproc.provider.ts                # LangGraphInProcProvider with injected catalog
 │   # NOTE: NO per-graph files — graphs live in packages/
-│   # NOTE: NO tool-registry — graphs import ToolContracts directly; policy in tool-runner
-│
-├── shared/ai/
-│   └── tool-runner.ts                        # MOVED from features/ai/ (adapters can import)
+│   # NOTE: NO tool-registry — graphs import ToolContracts directly; policy via @cogni/ai-core
 │
 ├── features/ai/
 │   └── services/
@@ -264,10 +291,10 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 **Phase 2: Move LangGraph Wiring to Adapters**
 
 - [x] Create `src/adapters/server/ai/langgraph/` directory
-- [x] Move `features/ai/tool-runner.ts` → `src/shared/ai/tool-runner.ts` (adapters can import shared/)
-- [x] Update imports in moved files to use `@cogni/ai-core` for tool exec types
-- [x] Create `src/shared/ai/tool-policy.ts` with `ToolPolicy`, `DENY_ALL_POLICY`, `createToolAllowlistPolicy()`
-- [x] Create `src/shared/ai/tool-catalog.ts` with `ToolCatalog`, `EMPTY_CATALOG`, `createToolCatalog()`
+- [x] Move `tool-runner.ts` → `@cogni/ai-core/tooling/tool-runner.ts` (canonical location)
+- [x] Move `tool-policy.ts` → `@cogni/ai-core/tooling/runtime/tool-policy.ts`
+- [x] Add `BoundToolRuntime`, `ToolContractRuntime` to ai-core (no Zod dependency)
+- [x] Add `spanInput`/`spanOutput` hooks for adapter-provided scrubbing
 - [x] Update `tool-runner.ts` to enforce policy (DENY_BY_DEFAULT)
 - [x] Update `langgraph-chat.runner.ts` to pass policy + ctx to tool runner
 - [x] Delete `src/features/ai/runners/` directory (logic absorbed by provider)
@@ -282,28 +309,25 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [x] `GraphProvider.runGraph()` uses same `GraphRunRequest`/`GraphRunResult` as `GraphExecutorPort` — no parallel types
 - [x] Create `src/adapters/server/ai/aggregating-executor.ts` implementing `GraphExecutorPort`
 - [x] Implement `LangGraphInProcProvider` in `adapters/server/ai/langgraph/inproc.provider.ts`
-- [x] Provider uses injected catalog: `LangGraphCatalog<CreateGraphFn>` (see Phase 4)
+- [x] Provider uses catalog referencing compiled graph exports
 - NOTE: Thread/run-shaped API (`createThread()`, `createRun()`, `streamRun()`) deferred to P1
 
 **Type Boundaries (Critical):**
 
 - `GraphProvider.runGraph` reuses `GraphRunRequest`/`GraphRunResult` from `@/ports` — do NOT create parallel types
-- Catalog types do NOT depend on execution-mode packages (`@cogni/langgraph-graphs/inproc`)
-- Provider binds concrete factory type internally; catalog stores opaque `TFactory`
+- Catalog entries reference compiled graph exports, not factory functions
+- Runtime config via `configurable`; non-serializable context via `AsyncLocalStorage`
 
 **Phase 4: Composition Root Wiring**
 
 - [x] Create `src/adapters/server/ai/langgraph/catalog.ts`:
-  - `LangGraphCatalogEntry<TFactory>` with generic factory type (opaque — only provider interprets it)
-  - `LangGraphCatalog<TFactory>` type alias
-  - NOTE: Does NOT import from `@cogni/langgraph-graphs/inproc` — stable config surface
+  - `LangGraphCatalogEntry` with compiled graph reference
+  - `LangGraphCatalog` type alias
 - [x] Export catalog from `@cogni/langgraph-graphs` (single source of truth for graph definitions)
 - [x] Update `bootstrap/graph-executor.factory.ts`:
   - Provider imports catalog from `@cogni/langgraph-graphs` internally
   - Instantiate `LangGraphInProcProvider` with adapter
   - Instantiate `AggregatingGraphExecutor` with providers
-  - NOTE: Bootstrap wires providers, not per-graph registration
-- [x] Remove `graphResolver` parameter — renamed to `createGraphExecutor()` (facade is graph-agnostic)
 - [x] Update `completion.server.ts` facade: delete all graph selection logic
 
 **Phase 5: Agent Discovery Pipeline (✅ Complete)**
@@ -344,6 +368,32 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [ ] Replace hardcoded UI agent list with API fetch from `/api/v1/ai/agents`
 
 **Note:** Graph-specific integration tests are documented in [LANGGRAPH_AI.md](LANGGRAPH_AI.md) and [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md).
+
+### P1: Compiled Graph Execution
+
+Migrate all graphs to compiled exports + `RunnableConfig.configurable`. Enables unified graph artifacts across InProc and Server.
+
+**Type Placement:**
+
+| Type             | Package                                  | Rationale                                                   |
+| ---------------- | ---------------------------------------- | ----------------------------------------------------------- |
+| `GraphRunConfig` | `@cogni/ai-core`                         | JSON-serializable; shared across all adapters               |
+| `InProcRuntime`  | `packages/langgraph-graphs/src/runtime/` | LangGraph-specific; holds `completionFn`, `tokenSink`       |
+| `TOOL_CATALOG`   | `@cogni/ai-tools/catalog.ts`             | Canonical tool registry; `langgraph-graphs` wraps from here |
+
+**Implementation Checklist:**
+
+- [x] Define `GraphRunConfig` schema in `@cogni/ai-core` (Zod): `model`, `runId`, `attempt`, `billingAccountId`, `virtualKeyId`, `traceId?`, `toolIds?`
+- [x] Create `InProcRuntime` with `AsyncLocalStorage` in `packages/langgraph-graphs/src/runtime/`
+- [x] Add `TOOL_CATALOG: Record<string, BoundTool>` to `@cogni/ai-tools/catalog.ts`
+- [ ] Fix `toLangChainTool` to accept `config` param, check `configurable.toolIds` allowlist, return `policy_denied` via `ToolExecResult`
+- [ ] Refactor `ponderer` graph to compiled no-arg export with one tool (proof of concept)
+- [ ] Prove end-to-end in `langgraph dev`: compiled export + configurable model + tool by ID
+- [ ] Refactor `LangGraphInProcProvider` to use ALS context + invoke with `{ configurable }`
+- [ ] Verify billing still works via `completionFn` → LiteLLM headers
+- [ ] Update `langgraph.json` to point to compiled exports
+- [ ] Stack test: same graph works in both InProc and langgraph dev
+- [ ] Delete legacy factory exports and dev.ts workaround
 
 ### P2: Claude Agent SDK Adapter
 
@@ -771,21 +821,26 @@ function commitUsageFact(fact: UsageFact, callIndex: number): void {
 
 **P0 ships with `inproc` as the only customer-billable executor.** The `langgraph_server` executor is gated as internal/experimental until it can emit stable `usageUnitId` (prefer `litellmCallId`) + `costUsd` + resolved model.
 
-### Graph Contract Requirement
+### Graph Contract
 
-**Required seam:** Define/enforce a per-graph contract — graphs are pure functions over injected dependencies:
+Graphs export compiled artifacts with no constructor arguments. Runtime config via `RunnableConfig.configurable`:
 
 ```typescript
-interface GraphDeps {
-  llm: BaseChatModel; // Injected, not instantiated
-  tools: StructuredTool[]; // Injected, not hardcoded
-  runContext: RunContext; // Caller, tracing, billing
-  policy: GraphPolicy; // Model selection, rate limits
-  abortSignal?: AbortSignal; // Cancellation propagation
-}
+// Graph export (packages/langgraph-graphs/src/graphs/*/graph.ts)
+export const myGraph = workflow.compile(); // No args
+
+// Invocation with configurable
+await myGraph.invoke(messages, {
+  configurable: {
+    model: "gpt-4o",
+    runId: "run-123",
+    toolIds: ["get_current_time", "web_search"],
+    // ... GraphRunConfig fields (JSON-serializable)
+  },
+});
 ```
 
-**Invariant:** No env reads or provider SDKs in graph code. Event semantics + billing guarantee must be tested per-graph.
+**Invariant:** No env reads or provider SDKs in graph code. LLM/tools resolved at invoke time via registry + ALS context.
 
 ### Risk Flags
 
@@ -796,6 +851,14 @@ interface GraphDeps {
 3. **Server path without usageUnitId breaks idempotency** — If server path is exposed to customers without fix, duplicate charges are possible on retry. Gate behind feature flag until resolved.
 
 ---
+
+## Sources
+
+- https://langchain-ai.github.io/langgraphjs/how-tos/configuration/
+- https://github.com/langchain-ai/langgraph/issues/5023
+- https://nodejs.org/api/async_context.html
+- https://osekelvin22.medium.com/avoid-dependency-injection-drilling-with-async-local-storage-in-nodejs-and-nestjs-22d325ee9ef4
+- https://wempe.dev/blog/nodejs-async-local-storage-context
 
 ## Related Documents
 
@@ -811,4 +874,4 @@ interface GraphDeps {
 ---
 
 **Last Updated**: 2026-01-14
-**Status**: Draft (Rev 13 - AgentCatalogPort; AgentDescriptor; /api/v1/ai/agents)
+**Status**: Draft (Rev 16 - TOOLS_BY_ID is allowlist not registry; TOOL_CATALOG in ai-tools; remove ToolRegistry refs)

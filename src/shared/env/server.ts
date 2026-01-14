@@ -111,6 +111,11 @@ export const serverSchema = z.object({
   // AI Telemetry - Router policy version for reproducibility
   // Per AI_SETUP_SPEC.md: semver or git SHA identifying model routing policy
   ROUTER_POLICY_VERSION: z.string().default("1.0.0"),
+
+  // LangGraph Dev Server - Optional
+  // When set, graph execution uses langgraph dev server instead of in-process
+  // Per LANGGRAPH_SERVER.md MVP: default port 2024 for langgraph dev
+  LANGGRAPH_DEV_URL: z.string().url().optional(),
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

@@ -14,13 +14,13 @@
  * @public
  */
 
-// Tool runner (for bootstrap wiring)
+// Tool runner (for bootstrap wiring) - canonical source is @cogni/ai-core
 export type {
   EmitAiEvent,
   ToolExecOptions,
   ToolRunner,
-} from "@/shared/ai/tool-runner";
-export { createToolRunner } from "@/shared/ai/tool-runner";
+} from "@cogni/ai-core";
+export { createToolRunner } from "@cogni/ai-core";
 // Activity validation (for app facade)
 export { validateActivityRange } from "./services/activity";
 // AI runtime (P1: single AI entrypoint for streaming)

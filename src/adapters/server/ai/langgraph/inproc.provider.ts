@@ -9,6 +9,7 @@
  *   - NO_LANGCHAIN_IN_SRC: No @langchain imports; delegates to package runner
  *   - GRAPH_ID_NAMESPACED: graphId format is "langgraph:${graphName}"
  *   - CATALOG_SINGLE_SOURCE_OF_TRUTH: Uses catalog from @cogni/langgraph-graphs
+ *   - TOOL_CATALOG_IS_CANONICAL: Resolves BoundTool from TOOL_CATALOG using entry.toolIds
  *   - DENY_BY_DEFAULT: Tool policy explicitly provided per graph
  * Side-effects: IO (executes graphs via package runner)
  * Notes: Discovery is in LangGraphInProcAgentCatalogProvider, not here.
@@ -17,6 +18,8 @@
  */
 
 import type { AiEvent } from "@cogni/ai-core";
+import { createToolAllowlistPolicy, createToolRunner } from "@cogni/ai-core";
+import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
 import {
   type CompletionFn,
   type CreateGraphFn,
@@ -27,7 +30,6 @@ import {
   type ToolExecFn,
 } from "@cogni/langgraph-graphs";
 import type { Logger } from "pino";
-
 import type {
   AiExecutionErrorCode,
   CompletionFinalResult,
@@ -37,14 +39,12 @@ import type {
   LlmToolDefinition,
   Message,
 } from "@/ports";
-import { createToolAllowlistPolicy } from "@/shared/ai/tool-policy";
-import { createToolRunner } from "@/shared/ai/tool-runner";
 import { makeLogger } from "@/shared/observability";
 
 import type { GraphProvider } from "../graph-provider";
 import type { CompletionUnitParams } from "../inproc-completion-unit.adapter";
 
-import type { AnyBoundTool, LangGraphCatalog } from "./catalog";
+import type { LangGraphCatalog } from "./catalog";
 
 /**
  * Provider ID for LangGraph in-process execution.
@@ -63,13 +63,13 @@ export interface CompletionUnitAdapter {
 }
 
 /**
- * Catalog entry with bound tools for this provider.
- * Extends package catalog with bound tools from @cogni/ai-tools.
+ * Catalog entry shape (matches LangGraphCatalogEntry<CreateGraphFn>).
+ * Per TOOL_CATALOG_IS_CANONICAL: tools referenced by ID, resolved from TOOL_CATALOG.
  */
 interface ProviderCatalogEntry {
   readonly displayName: string;
   readonly description: string;
-  readonly boundTools: Readonly<Record<string, AnyBoundTool>>;
+  readonly toolIds: readonly string[];
   readonly graphFactory: CreateGraphFn;
 }
 
@@ -146,20 +146,40 @@ export class LangGraphInProcProvider implements GraphProvider {
     // Create completion function wrapping adapter
     const completionFn = this.createCompletionFn(req);
 
+    // P0 Contract: undefined => catalog default, [] => deny-all, [...] => exact
+    const catalogToolIds = entry.toolIds;
+    const toolIds: readonly string[] = req.toolIds ?? catalogToolIds;
+    if (req.toolIds === undefined) {
+      this.log.debug(
+        { runId, graphName, catalogToolIds },
+        "toolIds undefined; using catalog default per P0 contract"
+      );
+    }
+
+    // Resolve boundTools from TOOL_CATALOG (per TOOL_CATALOG_IS_CANONICAL)
+    const boundTools: Record<string, CatalogBoundTool> = {};
+    for (const toolId of catalogToolIds) {
+      const tool = TOOL_CATALOG[toolId];
+      if (tool) {
+        boundTools[toolId] = tool;
+      } else {
+        this.log.error(
+          { runId, graphName, toolId },
+          "Tool not found in TOOL_CATALOG; graph misconfigured"
+        );
+      }
+    }
+
     // Create tool execution function factory
+    // Uses same toolIds for ToolRunner policy as configurable
     const createToolExecFn = (emit: (e: AiEvent) => void): ToolExecFn => {
-      const toolNames = Object.keys(entry.boundTools);
-      const policy = createToolAllowlistPolicy(toolNames);
-      const toolRunner = createToolRunner(entry.boundTools, emit, {
+      const policy = createToolAllowlistPolicy(toolIds);
+      const toolRunner = createToolRunner(boundTools, emit, {
         policy,
         ctx: { runId },
       });
 
-      return async (
-        name: string,
-        args: unknown,
-        toolCallId?: string
-      ): Promise<{ ok: boolean; value?: unknown; errorCode?: string }> => {
+      return async (name, args, toolCallId) => {
         const result =
           toolCallId !== undefined
             ? await toolRunner.exec(name, args, { modelToolCallId: toolCallId })
@@ -168,10 +188,8 @@ export class LangGraphInProcProvider implements GraphProvider {
       };
     };
 
-    // Extract tool contracts
-    const toolContracts = Object.values(entry.boundTools).map(
-      (bt) => bt.contract
-    );
+    // Extract tool contracts from resolved boundTools
+    const toolContracts = Object.values(boundTools).map((bt) => bt.contract);
 
     // Build request for package runner
     // Use conditional spreads for exactOptionalPropertyTypes
@@ -182,6 +200,8 @@ export class LangGraphInProcProvider implements GraphProvider {
       ...(abortSignal !== undefined && { abortSignal }),
       ...(caller.traceId !== undefined && { traceId: caller.traceId }),
       ...(ingressRequestId !== undefined && { ingressRequestId }),
+      // Pass same toolIds to configurable (wrapper early-deny matches ToolRunner policy)
+      configurable: { toolIds },
     };
 
     // Delegate to package runner — all LangChain logic is there
