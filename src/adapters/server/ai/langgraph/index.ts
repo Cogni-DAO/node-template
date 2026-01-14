@@ -18,6 +18,16 @@ export type {
   LangGraphCatalog,
   LangGraphCatalogEntry,
 } from "./catalog";
+export type {
+  LangGraphDevClientConfig,
+  LangGraphDevProviderConfig,
+} from "./dev";
+// Dev server providers (langgraph dev, port 2024)
+export {
+  createLangGraphDevClient,
+  LangGraphDevAgentCatalogProvider,
+  LangGraphDevProvider,
+} from "./dev";
 // Execution provider (requires CompletionUnitAdapter)
 export {
   type CompletionUnitAdapter,

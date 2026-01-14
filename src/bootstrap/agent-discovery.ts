@@ -17,9 +17,11 @@
 
 import {
   AggregatingAgentCatalog,
+  LangGraphDevAgentCatalogProvider,
   LangGraphInProcAgentCatalogProvider,
 } from "@/adapters/server";
 import type { AgentDescriptor } from "@/ports";
+import { serverEnv } from "@/shared/env";
 
 /**
  * Create discovery-only aggregator.
@@ -28,15 +30,20 @@ import type { AgentDescriptor } from "@/ports";
  * with discovery-only providers. It does NOT require CompletionStreamFn
  * or any execution infrastructure.
  *
- * Per REGISTRY_SEPARATION: Uses LangGraphInProcAgentCatalogProvider (discovery-only),
- * not LangGraphInProcProvider (execution).
+ * Per REGISTRY_SEPARATION: Uses discovery-only providers (not execution providers).
+ * Per MUTUAL_EXCLUSION: Register exactly one langgraph provider (InProc XOR Dev) based on env.
  *
  * @returns Aggregator that can list agents
  */
 export function createAgentCatalog(): {
   listAgents(): readonly AgentDescriptor[];
 } {
-  const providers = [new LangGraphInProcAgentCatalogProvider()];
+  // Per MUTUAL_EXCLUSION: choose provider based on LANGGRAPH_DEV_URL env
+  const devUrl = serverEnv().LANGGRAPH_DEV_URL;
+  const providers = devUrl
+    ? [new LangGraphDevAgentCatalogProvider()]
+    : [new LangGraphInProcAgentCatalogProvider()];
+
   return new AggregatingAgentCatalog(providers);
 }
 

@@ -34,12 +34,18 @@ export {
 export {
   type AnyBoundTool,
   type CompletionUnitAdapter,
+  // Dev server providers (langgraph dev, port 2024)
+  createLangGraphDevClient,
   // Discovery-only provider (no execution deps)
   LANGGRAPH_INPROC_AGENT_CATALOG_PROVIDER_ID,
   // Execution provider (requires CompletionUnitAdapter)
   LANGGRAPH_PROVIDER_ID,
   type LangGraphCatalog,
   type LangGraphCatalogEntry,
+  LangGraphDevAgentCatalogProvider,
+  type LangGraphDevClientConfig,
+  LangGraphDevProvider,
+  type LangGraphDevProviderConfig,
   LangGraphInProcAgentCatalogProvider,
   LangGraphInProcProvider,
 } from "./ai/langgraph";
