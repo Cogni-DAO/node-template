@@ -15,15 +15,20 @@
  * @public
  */
 
+import { LANGGRAPH_CATALOG } from "@cogni/langgraph-graphs";
+
 import {
   AggregatingGraphExecutor,
   type CompletionStreamFn,
+  createLangGraphDevClient,
   InProcCompletionUnitAdapter,
+  LangGraphDevProvider,
   LangGraphInProcProvider,
   ObservabilityGraphExecutorDecorator,
 } from "@/adapters/server";
 
 import type { GraphExecutorPort } from "@/ports";
+import { serverEnv } from "@/shared/env";
 
 import { getContainer, resolveAiAdapterDeps } from "./container";
 
@@ -32,6 +37,7 @@ import { getContainer, resolveAiAdapterDeps } from "./container";
  * Per UNIFIED_GRAPH_EXECUTOR: all graph execution flows through GraphExecutorPort.
  * Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes by graphId to providers.
  * Per CATALOG_SINGLE_SOURCE_OF_TRUTH: Provider imports catalog from @cogni/langgraph-graphs.
+ * Per MUTUAL_EXCLUSION: Register exactly one langgraph provider (InProc XOR Dev) based on env.
  *
  * Architecture boundary: Facade calls this factory (app → bootstrap),
  * factory creates aggregator (bootstrap → adapters). Facade never imports adapters.
@@ -45,16 +51,13 @@ export function createGraphExecutor(
   const deps = resolveAiAdapterDeps();
   const container = getContainer();
 
-  // Create InProcCompletionUnitAdapter for completion units
-  const inprocAdapter = new InProcCompletionUnitAdapter(
-    deps,
-    completionStreamFn
-  );
+  // Per MUTUAL_EXCLUSION: choose provider based on LANGGRAPH_DEV_URL env
+  const devUrl = serverEnv().LANGGRAPH_DEV_URL;
+  const langGraphProvider = devUrl
+    ? createDevProvider(devUrl)
+    : createInProcProvider(deps, completionStreamFn);
 
-  // Create LangGraph provider (imports catalog from package internally)
-  const langGraphProvider = new LangGraphInProcProvider(inprocAdapter);
-
-  // Create aggregating executor with all providers
+  // Create aggregating executor with single langgraph provider
   const aggregator = new AggregatingGraphExecutor([langGraphProvider]);
 
   // Wrap with observability decorator for Langfuse traces
@@ -67,6 +70,30 @@ export function createGraphExecutor(
   );
 
   return decorated;
+}
+
+/**
+ * Create InProc provider for in-process graph execution.
+ */
+function createInProcProvider(
+  deps: ReturnType<typeof resolveAiAdapterDeps>,
+  completionStreamFn: CompletionStreamFn
+): LangGraphInProcProvider {
+  const inprocAdapter = new InProcCompletionUnitAdapter(
+    deps,
+    completionStreamFn
+  );
+  return new LangGraphInProcProvider(inprocAdapter);
+}
+
+/**
+ * Create Dev provider for langgraph dev server execution.
+ * Per MVP_DEV_ONLY: connects to langgraph dev (port 2024).
+ */
+function createDevProvider(apiUrl: string): LangGraphDevProvider {
+  const client = createLangGraphDevClient({ apiUrl });
+  const availableGraphs = Object.keys(LANGGRAPH_CATALOG);
+  return new LangGraphDevProvider(client, { availableGraphs });
 }
 
 /**

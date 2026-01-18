@@ -3,6 +3,133 @@
 > [!CRITICAL]
 > LangGraph graphs execute in an external LangGraph Server process. Next.js never imports graph modules. `LangGraphServerAdapter` implements `GraphExecutorPort`, translating server streams to `AiEvent` and emitting `UsageFact` for billing. **LangGraph Server routes ALL LLM calls through LiteLLM proxy for unified billing/spend attribution.**
 
+---
+
+## Phased Implementation
+
+This document covers two execution backends for LangGraph graphs:
+
+| Phase   | Backend              | Purpose                            | Persistence      | Billing                 |
+| ------- | -------------------- | ---------------------------------- | ---------------- | ----------------------- |
+| **MVP** | `langgraph dev`      | Local development, graph iteration | In-memory        | Best-effort (no parity) |
+| **P1**  | `langgraph build/up` | Production-like, Docker            | Postgres + Redis | Full parity required    |
+
+**MVP Scope:** Connect to `langgraph dev` server for development workflows. In-memory checkpointer. Same graphIds as InProc. Internal/experimental only—not customer-billable.
+
+**P1 Scope:** Full production server with Docker, Postgres checkpointer, Redis, LiteLLM billing parity.
+
+---
+
+## MVP: LangGraph Dev Adapter
+
+> [!NOTE]
+> MVP enables local development with `langgraph dev`. For production deployment, see P1 sections below.
+
+### MVP Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ LANGGRAPH_DEV_URL not set (default)                                    │
+│ ───────────────────────────────────                                    │
+│ GraphExecutorPort → AggregatingGraphExecutor                           │
+│   └─> LangGraphInProcProvider (providerId: "langgraph")                │
+│                                                                        │
+│ AgentCatalogPort → AggregatingAgentCatalog                             │
+│   └─> LangGraphInProcAgentCatalogProvider (providerId: "langgraph")    │
+├────────────────────────────────────────────────────────────────────────┤
+│ LANGGRAPH_DEV_URL=http://localhost:2024                                │
+│ ───────────────────────────────────────                                │
+│ GraphExecutorPort → AggregatingGraphExecutor                           │
+│   └─> LangGraphDevProvider (providerId: "langgraph")  ← SAME ID        │
+│                                                                        │
+│ AgentCatalogPort → AggregatingAgentCatalog                             │
+│   └─> LangGraphDevAgentCatalogProvider (providerId: "langgraph")       │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key invariant:** `providerId = "langgraph"` for both InProc and Dev. GraphIds stay stable (`langgraph:poet`, `langgraph:ponderer`). Backend swaps via env, not graphId.
+
+### MVP Ports
+
+| Port | Purpose                                        |
+| ---- | ---------------------------------------------- |
+| 2024 | `langgraph dev` (in-memory, local development) |
+| 8123 | `langgraph up` / Docker (P1, production-like)  |
+
+### MVP Environment Variables
+
+| Variable            | Purpose                           | Default             |
+| ------------------- | --------------------------------- | ------------------- |
+| `LANGGRAPH_DEV_URL` | Enables dev server execution path | unset (uses InProc) |
+
+### MVP Invariants
+
+1. **STABLE_GRAPH_IDS**: GraphIds are `langgraph:{graphName}` regardless of backend (InProc or Dev)
+2. **MUTUAL_EXCLUSION**: Register exactly one `langgraph` provider per aggregator (InProc XOR Dev)
+3. **THREAD_ID_IS_UUID**: Thread IDs must be UUIDv5 derived from `(billingAccountId, threadKey)`
+4. **SDK_CHUNK_SHAPE**: SDK stream uses `chunk.event` + `chunk.data` (not `event.type`)
+5. **CATALOG_MANUAL_SYNC_P0**: `LANGGRAPH_CATALOG` and `langgraph.json` manually synced in MVP
+
+### MVP File Pointers
+
+| File                                                             | Purpose                                        |
+| ---------------------------------------------------------------- | ---------------------------------------------- |
+| `src/adapters/server/ai/langgraph/dev/provider.ts`               | `LangGraphDevProvider` (execution)             |
+| `src/adapters/server/ai/langgraph/dev/agent-catalog.provider.ts` | `LangGraphDevAgentCatalogProvider` (discovery) |
+| `src/adapters/server/ai/langgraph/dev/client.ts`                 | SDK client factory                             |
+| `src/adapters/server/ai/langgraph/dev/thread.ts`                 | UUIDv5 thread derivation                       |
+| `src/adapters/server/ai/langgraph/dev/stream-translator.ts`      | SDK → AiEvent translation                      |
+| `packages/langgraph-graphs/langgraph.json`                       | Graph registration for dev server              |
+| `src/bootstrap/graph-executor.factory.ts`                        | Env-based provider selection                   |
+| `src/bootstrap/agent-discovery.ts`                               | Env-based provider selection                   |
+
+### MVP Implementation Checklist
+
+- [x] Add `@langchain/langgraph-sdk` to root `package.json`
+- [x] Add `@langchain/langgraph-cli` devDep to `packages/langgraph-graphs/package.json`
+- [x] Create `packages/langgraph-graphs/langgraph.json` with graph registration
+- [x] Add `langgraph:dev` script to root `package.json`
+- [x] Create `src/adapters/server/ai/langgraph/dev/client.ts` SDK client factory
+- [x] Create `src/adapters/server/ai/langgraph/dev/thread.ts` UUIDv5 derivation
+- [x] Create `src/adapters/server/ai/langgraph/dev/stream-translator.ts` SDK → AiEvent
+- [x] Create `src/adapters/server/ai/langgraph/dev/provider.ts` `LangGraphDevProvider`
+- [x] Create `src/adapters/server/ai/langgraph/dev/agent-catalog.provider.ts` discovery
+- [x] Update `src/bootstrap/graph-executor.factory.ts` env-based selection
+- [x] Update `src/bootstrap/agent-discovery.ts` env-based selection
+- [x] Add `LANGGRAPH_DEV_URL` to `.env.local.example`
+- [x] Smoke test: `pnpm langgraph:dev` + chat request streams correctly
+
+### MVP Known Limitations
+
+| Limitation                | Impact                                      | Resolution                          |
+| ------------------------- | ------------------------------------------- | ----------------------------------- |
+| **No tool calling**       | Agents cannot use tools (major regression)  | P1: LangGraph configurable pattern  |
+| No `usageUnitId`          | Billing uses fallback path                  | P1: LiteLLM header capture          |
+| No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture          |
+| No tool event streaming   | Tools run server-side only                  | P1: Tool event translation          |
+| In-memory only            | No persistence across restarts              | P1: Postgres checkpointer           |
+| Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation           |
+| Hardcoded model in dev.ts | Client's requested model ignored            | P1: LangGraph configurable pattern  |
+| Non-AI messages dropped   | Only `type: "ai"` chunks extracted          | P1: Read SDK docs, handle all types |
+
+### MVP Catalog Alignment
+
+**P0 (Manual):** When adding a graph, update both:
+
+1. `packages/langgraph-graphs/src/catalog.ts` (`LANGGRAPH_CATALOG`)
+2. `packages/langgraph-graphs/langgraph.json`
+
+Keys must match (e.g., `"poet"` in both places).
+
+**P1 (Automated):** Build-time generation from `LANGGRAPH_CATALOG` → `langgraph.json`.
+
+---
+
+## P1: LangGraph Server (Production)
+
+> [!NOTE]
+> P1 adds Docker deployment, Postgres persistence, and billing parity. Requires MVP completion first.
+
 ## Architecture Boundaries
 
 One canonical way to run LangGraph graphs (dev, container, hosted) such that:
@@ -44,13 +171,13 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 ### Threads + State
 
-6. **THREAD_ID_TENANT_SCOPED**: For stateful runs, thread identity is derived server-side:
+6. **THREAD_ID_TENANT_SCOPED**: For stateful runs, thread identity is derived server-side as UUIDv5:
 
    ```
    thread_id = uuidv5("${billingAccountId}:${threadKey}", COGNI_THREAD_NAMESPACE)
    ```
 
-   Never accept raw `thread_id` from the client. LangGraph persistence is keyed on `thread_id`—this is the privacy boundary.
+   Per LangGraph API: `thread_id` must be UUID format. Never accept raw `thread_id` from the client. LangGraph persistence is keyed on `thread_id`—this is the privacy boundary. See `src/adapters/server/ai/langgraph/dev/thread.ts`.
 
 7. **THREAD_MUST_EXIST_IF_THREAD_ID_IS_STRING**: If you pass a string `threadId` to `runs.stream()`, you must ensure the thread exists first (idempotently). Use the SDK thread create with "do nothing if exists".
 
@@ -323,11 +450,13 @@ langgraph-server:
 
 ---
 
-## Implementation Checklist
+## P1 Implementation Checklist
 
-### P0: LangGraph Server MVP
+### P1: LangGraph Server (Docker + Postgres)
 
-Deploy LangGraph Server; wire to LiteLLM; implement adapter; preserve unified billing.
+Deploy LangGraph Server in Docker; wire to LiteLLM; implement full adapter with billing parity.
+
+**Prerequisites:** MVP (langgraph dev) must be complete first.
 
 **Dependency order:** Shared Contracts → Package Scaffold → Container → Postgres → LiteLLM → Graph → Adapter → Tests
 
@@ -488,20 +617,15 @@ Extract cross-process types to `packages/ai-core/` so `packages/langgraph-server
 
 ### 2. Thread ID Derivation
 
-```typescript
-// In ai_runtime.ts
-function deriveThreadId(
-  accountId: string,
-  threadKey?: string,
-  runId?: string
-): string {
-  const key = threadKey ?? runId;
-  if (!key) throw new Error("threadKey or runId required");
-  return `${accountId}:${key}`;
-}
-```
+Per LangGraph API: `thread_id` must be `string<uuid>` format. Use UUIDv5 for deterministic derivation.
 
-**Why tenant-prefixed?** LangGraph checkpoints contain real state/PII. Thread ID is the isolation boundary. Without prefix, a malicious client could access another tenant's thread.
+**Implementation:** `src/adapters/server/ai/langgraph/dev/thread.ts`
+
+**Derivation:** `uuidv5("${billingAccountId}:${threadKey}", COGNI_THREAD_NAMESPACE)`
+
+**Why UUIDv5?** LangGraph API requires UUID format. Deterministic derivation ensures same thread across restarts.
+
+**Why tenant-prefixed input?** LangGraph checkpoints contain real state/PII. Thread ID is the isolation boundary. Without tenant prefix, a malicious client could access another tenant's thread.
 
 ### 3. What LangGraph Server Provides (Don't Rebuild)
 
@@ -576,5 +700,5 @@ When this spec is implemented, you can validate quickly:
 
 ---
 
-**Last Updated**: 2026-01-05
-**Status**: Draft (P0 Design) — External Runtime + SDK-based streaming; billing parity gap documented
+**Last Updated**: 2026-01-14
+**Status**: MVP In Progress — langgraph dev adapter; P1 for Docker + billing parity

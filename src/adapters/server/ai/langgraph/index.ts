@@ -13,11 +13,17 @@
  */
 
 // Catalog types (generic, no inproc imports)
+export type { LangGraphCatalog, LangGraphCatalogEntry } from "./catalog";
 export type {
-  AnyBoundTool,
-  LangGraphCatalog,
-  LangGraphCatalogEntry,
-} from "./catalog";
+  LangGraphDevClientConfig,
+  LangGraphDevProviderConfig,
+} from "./dev";
+// Dev server providers (langgraph dev, port 2024)
+export {
+  createLangGraphDevClient,
+  LangGraphDevAgentCatalogProvider,
+  LangGraphDevProvider,
+} from "./dev";
 // Execution provider (requires CompletionUnitAdapter)
 export {
   type CompletionUnitAdapter,

@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-13
+- **Last reviewed:** 2026-01-15
 - **Status:** draft
 
 ## Purpose
 
-Executor-agnostic AI primitives, and minimal type helpers for cross-process communication. Defines `AiEvent`, `UsageFact`, `ExecutorType`, `RunContext`, and `SourceSystem`. Used by Next.js app and all `GraphExecutorPort` adapters (InProc, LangGraph Server, Claude SDK).
+**AI_CORE_IS_KERNEL:** The runtime kernel for AI graph execution. Contains executor-agnostic primitives, tool execution runtime, and minimal type helpers for cross-process communication. Defines `AiEvent`, `UsageFact`, `ExecutorType`, `RunContext`, `SourceSystem`, and the canonical `createToolRunner` pipeline. Used by Next.js app and all `GraphExecutorPort` adapters (InProc, LangGraph Server, Claude SDK).
 
 ## Pointers
 
@@ -50,11 +50,17 @@ Executor-agnostic AI primitives, and minimal type helpers for cross-process comm
   - `ToolSpec` - Canonical tool definition (JSONSchema7 inputSchema)
   - `ToolInvocationRecord` - Tool execution record (timing, result, error)
   - `ToolRedactionConfig` - Redaction config for tool output
+  - `createToolRunner` - Canonical tool execution pipeline (policy enforcement, validation, redaction)
+  - `ToolPolicy`, `createToolAllowlistPolicy`, `DENY_ALL_POLICY` - Tool policy interface and helpers
+  - `BoundToolRuntime`, `ToolContractRuntime` - Minimal runtime interfaces (no Zod dependency)
+  - `AiSpanPort` - Observability interface for tool span instrumentation
   - `AiExecutionErrorCode`, `AI_EXECUTION_ERROR_CODES` - Canonical error codes and runtime array
   - `AiExecutionError`, `isAiExecutionError` - Structured error class and type guard
   - `isAiExecutionErrorCode`, `normalizeErrorToExecutionCode` - Validation and normalization utilities
   - `LlmError`, `LlmErrorKind`, `isLlmError`, `classifyLlmErrorFromStatus` - LLM adapter error types
   - `GraphId` - Namespaced graph identifier type (format: `${providerId}:${graphName}`)
+  - `GraphRunConfig` - Per-run config passed via RunnableConfig.configurable (model, toolIds, etc.)
+  - `ToolExecFn`, `ToolExecResult` - Tool execution function signature and result types
 - **CLI:** none
 - **Env/Config keys:** none
 - **Files considered API:** `index.ts`, `events/*.ts`, `usage/*.ts`, `context/*.ts`, `billing/*.ts`, `tooling/*.ts`, `execution/*.ts`, `graph/*.ts`
@@ -66,8 +72,8 @@ Executor-agnostic AI primitives, and minimal type helpers for cross-process comm
 
 ## Responsibilities
 
-- This directory **does**: Define cross-process AI event, billing, and error types; provide type guards and error normalization utilities
-- This directory **does not**: Implement business logic, make I/O calls, depend on src/
+- This directory **does**: Define cross-process AI event, billing, and error types; provide type guards and error normalization utilities; implement the canonical tool execution pipeline (createToolRunner)
+- This directory **does not**: Make I/O calls, depend on src/, import LangChain/Langfuse SDKs, perform observability scrubbing (that's adapter responsibility)
 
 ## Usage
 
@@ -78,15 +84,24 @@ pnpm --filter @cogni/ai-core build
 
 ## Standards
 
-- Types and minimal runtime utilities (type guards, error class, normalization)
+- Types and minimal runtime utilities (type guards, error class, normalization, tool-runner)
 - All exports must work in both browser and Node.js
 - SINGLE_SOURCE_OF_TRUTH: These types must NOT be redefined elsewhere
 - ERROR_NORMALIZATION_ONCE: normalizeErrorToExecutionCode() is the canonical normalizer
+- SPAN_METADATA_ONLY: tool-runner emits metadata-only spans; adapters provide scrubbing via spanInput/spanOutput hooks
+
+## Dependency Policy
+
+**Allowed:** `zod` (GraphRunConfig validation), `json-schema` (types)
+
+**Forbidden:** `@langchain/*`, `langfuse`, `@cogni/ai-tools` (ai-core defines interfaces; ai-tools implements)
+
+**Future:** Post-MVP, consider `ai-core-primitives` (pure types) vs `ai-core-runtime` (Zod, tool-runner) split.
 
 ## Dependencies
 
 - **Internal:** none (standalone package)
-- **External:** none
+- **External:** `zod` (runtime), `json-schema` (types)
 
 ## Change Protocol
 

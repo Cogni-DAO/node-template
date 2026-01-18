@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@shared/ai/tool-runner`
+ * Module: `@cogni/ai-core/tooling/tool-runner`
  * Purpose: Tool execution with AiEvent emission, policy enforcement, and payload redaction.
- * Scope: Sole owner of toolCallId generation; executes tools via injected implementations. Does not import adapters.
+ * Scope: Sole owner of toolCallId generation; executes tools via injected implementations. Does not import from src/ or perform observability scrubbing.
  * Invariants:
  *   - GRAPHS_USE_TOOLRUNNER_ONLY: Graphs invoke tools exclusively through toolRunner.exec()
  *   - TOOLCALL_ID_STABLE: Same toolCallId across start→result
@@ -12,31 +12,23 @@
  *   - TOOLRUNNER_RESULT_SHAPE: Returns {ok:true, value} | {ok:false, errorCode, safeMessage}
  *   - TOOLRUNNER_PIPELINE_ORDER: tool lookup → policy check → validate args → execute → validate result → redact → emit → return
  *   - DENY_BY_DEFAULT: Default to DenyAllPolicy if no policy provided
+ *   - SPAN_PORT_HANDLES_SCRUBBING: ai-core passes raw data to spanPort; adapter handles scrubbing/truncation
  * Side-effects: none (AiEvent emission via injected callback is caller's responsibility)
- * Notes: Per AI_SETUP_SPEC.md P1 invariants. Moved from features/ai to shared/ai per TOOL_EXEC_TYPES_IN_AI_CORE.
- * Links: @cogni/ai-core, @cogni/ai-tools, AI_SETUP_SPEC.md, TOOL_USE_SPEC.md
+ * Links: @cogni/ai-tools, AI_SETUP_SPEC.md, TOOL_USE_SPEC.md
  * @public
  */
 
 import type {
-  EmitAiEvent,
   ToolCallResultEvent,
   ToolCallStartEvent,
-} from "@cogni/ai-core";
-import type { BoundTool, ToolResult } from "@cogni/ai-tools";
-
-import type { AiSpanPort } from "@/types/ai-span";
-
-import {
-  applyToolMaskingPreference,
-  scrubToolInput,
-  scrubToolOutput,
-} from "./langfuse-scrubbing";
+} from "../events/ai-events";
+import type { AiSpanPort } from "./ai-span";
 import {
   DENY_ALL_POLICY,
   type ToolPolicy,
   type ToolPolicyContext,
-} from "./tool-policy";
+} from "./runtime/tool-policy";
+import type { BoundToolRuntime, EmitAiEvent, ToolResult } from "./types";
 
 /** Charset for provider-compatible tool call IDs */
 const TOOL_ID_CHARS =
@@ -77,7 +69,7 @@ export interface ToolRunnerConfig {
 
   /**
    * Optional span port for tool instrumentation.
-   * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: spans visible in observability surface, not logged.
+   * Per SPAN_METADATA_ONLY: ai-core emits metadata-only spans by default.
    */
   readonly spanPort?: AiSpanPort;
 
@@ -88,10 +80,18 @@ export interface ToolRunnerConfig {
   readonly traceId?: string;
 
   /**
-   * Per-user content masking preference.
-   * If true, tool args/results are hashed only, not scrubbed content.
+   * Optional hook to prepare span input payload.
+   * If provided, adapter is responsible for scrubbing/size-capping.
+   * Hook failures are swallowed (instrumentation must not break execution).
    */
-  readonly maskContent?: boolean;
+  readonly spanInput?: (args: unknown) => unknown;
+
+  /**
+   * Optional hook to prepare span output payload.
+   * If provided, adapter is responsible for scrubbing/size-capping.
+   * Hook failures are swallowed (instrumentation must not break execution).
+   */
+  readonly spanOutput?: (result: unknown) => unknown;
 }
 
 /**
@@ -108,19 +108,17 @@ export interface ToolRunnerConfig {
  * @returns Tool runner with exec method
  */
 export function createToolRunner<
-  TTools extends Record<
-    string,
-    BoundTool<string, unknown, unknown, Record<string, unknown>>
-  >,
+  TTools extends Record<string, BoundToolRuntime>,
 >(boundTools: TTools, emit: EmitAiEvent, config?: ToolRunnerConfig) {
   // Default to DENY_ALL_POLICY per DENY_BY_DEFAULT invariant
   const policy = config?.policy ?? DENY_ALL_POLICY;
   // Default ctx for P0; P1+ will require explicit ctx for tenant/role-based policy
   const ctx = config?.ctx ?? { runId: "toolrunner_default" };
-  // Span instrumentation (optional)
+  // Span instrumentation (optional) - per SPAN_METADATA_ONLY, ai-core emits metadata only
   const spanPort = config?.spanPort;
   const traceId = config?.traceId;
-  const maskContent = config?.maskContent ?? false;
+  const spanInput = config?.spanInput;
+  const spanOutput = config?.spanOutput;
 
   /**
    * Execute a tool by name with given arguments.
@@ -142,19 +140,24 @@ export function createToolRunner<
     const execStartTime = performance.now();
 
     // Create span for tool (if configured)
-    // Per LANGFUSE_TOOL_SPANS_NOT_LOGS: spans visible in observability surface, NOT logged
-    const scrubbedInput = scrubToolInput(rawArgs);
-    const scrubbedSpanInput = applyToolMaskingPreference(
-      scrubbedInput,
-      maskContent
-    );
+    // Per SPAN_METADATA_ONLY: metadata only by default; hook provides scrubbed payload
+    let hookInput: unknown;
+    let hookInputFailed = false;
+    if (spanInput) {
+      try {
+        hookInput = spanInput(rawArgs);
+      } catch {
+        // Swallow hook failures - instrumentation must not break execution
+        hookInputFailed = true;
+      }
+    }
     const span =
       spanPort && traceId
         ? spanPort.startSpan({
             traceId,
             name: `tool:${toolName}`,
-            input: scrubbedSpanInput,
-            metadata: { toolCallId },
+            input: hookInput, // undefined if no hook or hook failed
+            metadata: { toolCallId, hookInputFailed },
           })
         : undefined;
 
@@ -295,12 +298,9 @@ export function createToolRunner<
       };
     }
 
-    // 6. Redact per allowlist (hard-fail if missing/fails)
-    let redactedOutput: Record<string, unknown>;
+    // 6. Redact output (contract.redact handles allowlist internally)
+    let redactedOutput: unknown;
     try {
-      if (contract.allowlist.length === 0) {
-        throw new Error(`Tool '${toolName}' has no allowlist defined`);
-      }
       redactedOutput = contract.redact(validatedOutput);
     } catch (err) {
       const safeMessage =
@@ -321,28 +321,37 @@ export function createToolRunner<
     }
 
     // 7. Emit tool_call_result with redacted output
+    // Cast: contract.redact is responsible for returning correct shape
+    const safeResult = redactedOutput as Record<string, unknown>;
     const resultEvent: ToolCallResultEvent = {
       type: "tool_call_result",
       toolCallId,
-      result: redactedOutput,
+      result: safeResult,
     };
     emit(resultEvent);
 
     // 8. End span with success
-    const scrubbedOutput = scrubToolOutput(redactedOutput);
-    const scrubbedSpanOutput = applyToolMaskingPreference(
-      scrubbedOutput,
-      maskContent
-    );
-    endSpan(scrubbedSpanOutput, "DEFAULT", {
+    // Per SPAN_METADATA_ONLY: metadata only by default; hook provides scrubbed payload
+    let hookOutput: unknown;
+    let hookOutputFailed = false;
+    if (spanOutput) {
+      try {
+        hookOutput = spanOutput(redactedOutput);
+      } catch {
+        // Swallow hook failures - instrumentation must not break execution
+        hookOutputFailed = true;
+      }
+    }
+    endSpan(hookOutput, "DEFAULT", {
       effect: contract.effect,
       policyDecision: "allow",
+      hookOutputFailed,
     });
 
     // 9. Return result
     return {
       ok: true,
-      value: redactedOutput,
+      value: safeResult,
     };
   }
 
@@ -353,6 +362,3 @@ export function createToolRunner<
  * Type for the tool runner instance.
  */
 export type ToolRunner = ReturnType<typeof createToolRunner>;
-
-// Re-export EmitAiEvent for convenience (canonical source is @cogni/ai-core)
-export type { EmitAiEvent } from "@cogni/ai-core";

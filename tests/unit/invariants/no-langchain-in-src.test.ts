@@ -6,9 +6,10 @@
  * Purpose: Tripwire test verifying NO_LANGCHAIN_IN_SRC invariant.
  * Scope: Grep-based smoke test ensuring @langchain imports stay in packages/langgraph-graphs/. Does NOT verify runtime behavior or import correctness.
  * Invariants:
- *   - NO_LANGCHAIN_IN_SRC: src/** must not import @langchain/*
+ *   - NO_LANGCHAIN_IN_SRC: src/** must not import @langchain/* (except SDK in dev adapter)
+ *   - OFFICIAL_SDK_ONLY: @langchain/langgraph-sdk allowed in langgraph dev adapter
  * Side-effects: none (read-only grep)
- * Links: LANGGRAPH_AI.md, GRAPH_EXECUTION.md
+ * Links: LANGGRAPH_AI.md, GRAPH_EXECUTION.md, LANGGRAPH_SERVER.md
  * @internal
  */
 
@@ -27,14 +28,16 @@ describe("NO_LANGCHAIN_IN_SRC invariant", () => {
     // Filter out lines that are:
     // - Comments (// or * at start after line number)
     // - Empty lines
+    // - Allowed SDK imports in langgraph dev adapter (per OFFICIAL_SDK_ONLY)
     const actualImports = result
       .split("\n")
       .filter(Boolean)
       .filter((line) => {
-        // Extract content after line number (format: "file:num:content")
-        const match = line.match(/^[^:]+:\d+:(.*)$/);
+        // Extract file path and content (format: "file:num:content")
+        const match = line.match(/^([^:]+):\d+:(.*)$/);
         if (!match) return false;
-        const content = match[1].trim();
+        const filePath = match[1];
+        const content = match[2].trim();
 
         // Skip if it's a comment
         if (content.startsWith("//")) return false;
@@ -43,6 +46,15 @@ describe("NO_LANGCHAIN_IN_SRC invariant", () => {
 
         // Skip documentation references (in JSDoc or module headers)
         if (content.includes("@langchain/*")) return false;
+
+        // Per OFFICIAL_SDK_ONLY: Allow @langchain/langgraph-sdk in langgraph dev adapter
+        // This is the only allowed SDK import outside packages/
+        if (
+          filePath.includes("src/adapters/server/ai/langgraph/dev/") &&
+          content.includes("@langchain/langgraph-sdk")
+        ) {
+          return false;
+        }
 
         return true;
       });

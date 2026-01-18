@@ -12,3 +12,6 @@ node_modules/
 # Test
 coverage/
 .vitest/
+
+# LangGraph API
+.langgraph_api

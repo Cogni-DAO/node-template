@@ -13,6 +13,12 @@
 
 // Billing types
 export { SOURCE_SYSTEMS, type SourceSystem } from "./billing/source-system";
+// Configurable types
+export {
+  type GraphRunConfig,
+  GraphRunConfigSchema,
+  type PartialGraphRunConfig,
+} from "./configurable/graph-run-config";
 // Context types
 export type { RunContext } from "./context/run-context";
 // Event types
@@ -44,16 +50,38 @@ export {
 } from "./execution/llm-errors";
 // Graph types
 export type { GraphId } from "./graph/graph-id";
+// Span types (observability)
+export type { AiSpanHandle, AiSpanPort } from "./tooling/ai-span";
+// Tool policy (runtime)
+export {
+  createToolAllowlistPolicy,
+  DENY_ALL_POLICY,
+  type ToolPolicy,
+  type ToolPolicyContext,
+  type ToolPolicyDecision,
+} from "./tooling/runtime/tool-policy";
+// Tool runner
+export {
+  createToolRunner,
+  type ToolExecOptions,
+  type ToolRunner,
+  type ToolRunnerConfig,
+} from "./tooling/tool-runner";
 // Tooling types
 export type {
+  BoundToolRuntime,
   EmitAiEvent,
+  ParseableSchema,
   RedactionMode,
+  ToolContractRuntime,
   ToolEffect,
   ToolErrorCode,
   ToolExecFn,
   ToolExecResult,
+  ToolImplementationRuntime,
   ToolInvocationRecord,
   ToolRedactionConfig,
+  ToolResult,
   ToolSpec,
 } from "./tooling/types";
 // Usage types

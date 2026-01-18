@@ -16,6 +16,7 @@
 // Re-export from canonical source (per SINGLE_SOURCE_OF_TRUTH invariant)
 export type {
   AiEvent,
+  AssistantFinalEvent,
   DoneEvent,
   ErrorEvent,
   TextDeltaEvent,

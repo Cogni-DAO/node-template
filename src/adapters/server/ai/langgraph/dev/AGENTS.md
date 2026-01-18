@@ -1,0 +1,84 @@
+# langgraph/dev · AGENTS.md
+
+> Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
+
+## Metadata
+
+- **Owners:** @Cogni-DAO
+- **Last reviewed:** 2026-01-15
+- **Status:** draft
+
+## Purpose
+
+LangGraph dev server adapter. Connects to external `langgraph dev` server (port 2024) for local development. Translates SDK streams to AiEvent format and derives tenant-scoped thread IDs.
+
+## Pointers
+
+- [LangGraph Server Design](../../../../../docs/LANGGRAPH_SERVER.md)
+- [Graph Execution](../../../../../docs/GRAPH_EXECUTION.md)
+- [Parent ai/ AGENTS.md](../AGENTS.md)
+
+## Boundaries
+
+```json
+{
+  "layer": "adapters/server",
+  "may_import": ["adapters/server", "ports", "shared", "types"],
+  "must_not_import": ["app", "features", "core"]
+}
+```
+
+## Public Surface
+
+- **Exports:**
+  - `LangGraphDevProvider` — Implements GraphProvider for dev server execution
+  - `LangGraphDevAgentCatalogProvider` — Implements AgentCatalogProvider for dev server discovery
+  - `createDevClient()` — SDK client factory
+  - `deriveThreadId()` — UUIDv5 thread derivation from billingAccountId + threadKey
+  - `translateSdkStreamToAiEvents()` — SDK stream to AiEvent translation
+- **CLI:** none
+- **Env/Config keys:** `LANGGRAPH_DEV_URL` (enables dev server path when set)
+- **Files considered API:** `index.ts`, `provider.ts`, `agent-catalog.provider.ts`
+
+## Ports
+
+- **Uses ports:** none
+- **Implements ports:** GraphProvider (via `LangGraphDevProvider`), AgentCatalogProvider (via `LangGraphDevAgentCatalogProvider`)
+- **Contracts:** none (dev-only adapter)
+
+## Responsibilities
+
+- This directory **does**: Connect to langgraph dev server via @langchain/langgraph-sdk, translate SDK streams to AiEvent, derive tenant-scoped thread IDs
+- This directory **does not**: Execute graphs directly, import @langchain/\* (SDK only), handle billing (dev server is not customer-billable)
+
+## Usage
+
+```bash
+# Start langgraph dev server
+pnpm langgraph:dev
+
+# Set env to enable dev adapter
+LANGGRAPH_DEV_URL=http://localhost:2024
+```
+
+## Standards
+
+- STABLE_GRAPH_IDS: graphIds are `langgraph:{graphName}` regardless of backend
+- THREAD_ID_IS_UUID: Thread IDs are UUIDv5 derived from `(billingAccountId, threadKey)`
+- SDK_CHUNK_SHAPE: SDK stream uses `chunk.event` + `chunk.data` (not `event.type`)
+- MVP: No tool calling, no billing parity (see LANGGRAPH_SERVER.md limitations)
+
+## Dependencies
+
+- **Internal:** ports, shared/env, shared/observability/logging
+- **External:** @langchain/langgraph-sdk, uuid
+
+## Change Protocol
+
+- Update this file when exports or env keys change
+- Coordinate with LANGGRAPH_SERVER.md invariants
+
+## Notes
+
+- Per MUTUAL_EXCLUSION: Register exactly one `langgraph` provider per aggregator (InProc XOR Dev)
+- Dev adapter is MVP only; P1 uses Docker-based langgraph server with full billing parity
