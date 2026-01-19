@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-27
+- **Last reviewed:** 2026-01-19
 - **Status:** stable
 
 ## Purpose
@@ -41,7 +41,8 @@ Database schema definitions and URL construction utilities. Provides framework-a
 **Exports:**
 
 - `db-url.ts`: buildDatabaseUrl, DbEnvInput (pure functions and types)
-- `schema.ts`: Drizzle schema definitions
+- `schema.ts`: Drizzle schema definitions (re-exports all schema modules)
+- `schema.scheduling.ts`: Scheduling tables (execution_grants, schedules, schedule_runs)
 - `index.ts`: re-exports all public APIs
 
 **Files considered API:** db-url.ts, schema.ts, index.ts
