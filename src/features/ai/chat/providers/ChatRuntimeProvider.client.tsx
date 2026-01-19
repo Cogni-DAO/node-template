@@ -17,7 +17,13 @@
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useDataStreamRuntime } from "@assistant-ui/react-data-stream";
 import { useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { ChatError } from "@/contracts/error.chat.v1.contract";
 import type { GraphId } from "@/ports";
@@ -54,6 +60,15 @@ export function ChatRuntimeProvider({
   const selectedModelRef = useRef(selectedModel);
   const selectedGraphRef = useRef(selectedGraph);
 
+  // Thread ID state for multi-turn conversation with LangGraph Server
+  // Keyed by stateKey for future thread switching/forks support (see chat/AGENTS.md)
+  // Server generates threadId on first request, we capture from X-Thread-Id and reuse
+  const [threadIdByStateKey, setThreadIdByStateKey] = useState<
+    Record<string, string>
+  >({});
+  const activeStateKey = "default"; // Placeholder for future state/thread selection
+  const threadId = threadIdByStateKey[activeStateKey];
+
   // Keep refs in sync
   useEffect(() => {
     selectedModelRef.current = selectedModel;
@@ -63,9 +78,19 @@ export function ChatRuntimeProvider({
     selectedGraphRef.current = selectedGraph;
   }, [selectedGraph]);
 
-  // Handle response errors
+  // Handle response - capture threadId and handle errors
   const handleResponse = useCallback(
     async (response: Response) => {
+      // Capture threadId from response header for thread continuity
+      // Server generates threadId on first request, we reuse it for subsequent requests
+      const newThreadId = response.headers.get("X-Thread-Id");
+      if (newThreadId && newThreadId !== threadId) {
+        setThreadIdByStateKey((prev) => ({
+          ...prev,
+          [activeStateKey]: newThreadId,
+        }));
+      }
+
       if (response.status === 401) {
         onAuthExpired?.();
         throw new Error("Unauthorized");
@@ -96,7 +121,7 @@ export function ChatRuntimeProvider({
         throw new Error(body.error || "Request failed");
       }
     },
-    [defaultModelId, onAuthExpired, onError]
+    [defaultModelId, onAuthExpired, onError, threadId]
   );
 
   // Handle stream finish - invalidate credits query
@@ -106,9 +131,12 @@ export function ChatRuntimeProvider({
 
   const runtime = useDataStreamRuntime({
     api: "/api/v1/ai/chat",
+    // body must be object (not function) - assistant-ui limitation
+    // threadId from state; state change triggers re-render with new body
     body: {
       model: selectedModel,
       graphName: selectedGraph,
+      ...(threadId ? { threadId } : {}),
     },
     onResponse: handleResponse,
     onFinish: handleFinish,

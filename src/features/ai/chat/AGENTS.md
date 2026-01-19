@@ -96,6 +96,56 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 
 **Critical v2 Note:** Message storage + context optimization required. Current implementation sends all messages on every request (unbounded growth). v2 needs smart windowing, summarization, or embedding-based retrieval.
 
+## Thread State Management
+
+### P0 Design (Current)
+
+**Contract:**
+
+- Request: `threadId?: string` in JSON body (optional)
+- Response: `X-Thread-Id` header (always returned)
+- Server generates `threadId` if absent; client reuses for multi-turn
+
+**UI State Pattern:**
+
+```typescript
+// Future-safe: keyed by stateKey for thread switching/forks
+const [threadIdByStateKey, setThreadIdByStateKey] = useState<Record<string, string>>({});
+const activeStateKey = "default"; // Placeholder for future state/thread selection
+const threadId = threadIdByStateKey[activeStateKey];
+
+// body MUST be object (assistant-ui limitation), not function
+body: { model, graphName, ...(threadId ? { threadId } : {}) }
+
+// onResponse captures server-generated threadId
+setThreadIdByStateKey(prev => ({ ...prev, [activeStateKey]: newThreadId }));
+```
+
+**Why `threadIdByStateKey` map (not single state)?**
+
+- Trivially migrates when thread list/switching added
+- Supports forks/reruns (multiple states per session)
+- No refactor needed for v2 state store
+
+### Naming Convention
+
+| Layer        | Field       | Notes                                               |
+| ------------ | ----------- | --------------------------------------------------- |
+| UI State     | `stateKey`  | App-level key for state/thread selection            |
+| API/Contract | `threadId`  | Client-facing identifier sent to server             |
+| Port/Adapter | `threadKey` | Internal; derive UUIDv5 from (accountId, threadKey) |
+| LangGraph    | `thread_id` | UUID format required by LangGraph API               |
+
+**TODO(P1):** Consider unifying port/adapter to `threadId` to reduce translation.
+
+### Progression
+
+| Phase  | Capability                          | threadId Ownership                   |
+| ------ | ----------------------------------- | ------------------------------------ |
+| **P0** | Single conversation, no persistence | ChatRuntimeProvider local state      |
+| **P1** | Thread list UI, URL routing         | Lift to page-level state or context  |
+| **P2** | Persistence, forks, history         | Conversation store (Zustand/context) |
+
 ## Usage
 
 ```typescript
