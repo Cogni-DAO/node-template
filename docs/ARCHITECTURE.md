@@ -81,10 +81,11 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **tests/** → Unit (core/features with mocked ports), integration (adapters), contract (port compliance), setup.
 - **e2e/** → Playwright API/UI specs.
 - **scripts/** → Migrations, seeds, generators.
-- **packages/** → Internal shared packages (pure libraries, no `src/` imports).
+- **packages/** → Pure libraries (no `src/` imports, no process lifecycle). See [Packages Architecture](PACKAGES_ARCHITECTURE.md).
   - `ai-core/` → Executor-agnostic AI primitives (AiEvent, UsageFact, tool schemas)
   - `langgraph-server/` → LangGraph.js service code (HTTP API, event normalization)
   - `langgraph-graphs/` → Feature-sliced graph definitions (Next.js must NOT import)
+- **services/** → Deployable workers/servers with own lifecycle. See [Packages vs Services](PACKAGES_ARCHITECTURE.md#packages-vs-services).
 
 ## Configuration Directories
 
