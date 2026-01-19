@@ -19,33 +19,133 @@
 
 7. **SKIP_MISSED_RUNS**: P0 does not backfill missed runs. Producer-chain scheduling means each run enqueues the next—if the chain breaks (worker down), only the next future slot is scheduled on recovery.
 
+8. **RECONCILER_GUARANTEES_CHAIN**: Reconciler task runs on worker startup AND self-reschedules every 5 minutes via `add_job(run_at=now+5m)`. For each enabled schedule where `next_run_at IS NULL OR next_run_at < now()`, it computes the next future slot and enqueues with `job_key=scheduleId:slot`. The NULL check handles edge cases like re-enable after disable. This guarantees chain recovery after crashes without relying on PRODUCER_ENQUEUES_NEXT alone.
+
+9. **GRANT_SCOPES_CONSTRAIN_GRAPHS**: Every `ExecutionGrant` specifies which `graphId`s it can execute via scopes. Worker task validates grant scope includes the schedule's `graphId` before calling `GraphExecutorPort.runGraph()`. Scope format: `graph:execute:{graphId}` or `graph:execute:*` for wildcard (requires explicit user consent).
+
+10. **RUN_LEDGER_FOR_GOVERNANCE**: Every scheduled execution creates a `schedule_runs` record with status progression (pending→running→success/error). This execution ledger enables debugging, audit trails, and governance loops.
+
+---
+
+## Worker Architecture
+
+### Phase 1: Entry Point in `src/` (Current)
+
+The scheduler worker runs as a **separate Node.js process** but its entry point lives in `src/` to satisfy monorepo architecture rules (`packages/` cannot import from `src/`).
+
+```
+src/
+└── scripts/
+    └── run-scheduler-worker.ts    ← Entry point (CAN import from src/)
+        ├── imports @/bootstrap/container
+        ├── imports @/bootstrap/graph-executor.factory
+        ├── imports @/shared/env, @/shared/observability
+        └── calls task factories from @cogni/scheduler-worker
+
+packages/scheduler-worker/
+├── src/
+│   ├── tasks/
+│   │   ├── execute-run.ts         ← Pure task factory (NO src/ imports)
+│   │   └── reconcile.ts           ← Pure task factory (NO src/ imports)
+│   ├── schemas/
+│   │   └── payloads.ts            ← Zod schemas for payloads
+│   ├── utils/
+│   │   └── cron.ts                ← Cron utilities
+│   └── index.ts                   ← Exports task factories + utils
+└── package.json
+```
+
+**Why this structure?**
+
+- `packages/**` must not import from `src/**` (enforced by `pnpm arch:check`)
+- Task factories use dependency injection—they receive ports/adapters, don't import them
+- Entry script in `src/` resolves deps from bootstrap container, passes to task factories
+- Worker process runs via `pnpm scheduler:dev` which executes `src/scripts/run-scheduler-worker.ts`
+
+### Phase 2: Package Extraction (Future PR)
+
+Once MVP is proven, extract shared code to packages for better modularity:
+
+| Extract From                         | Extract To              | Contents            |
+| ------------------------------------ | ----------------------- | ------------------- |
+| `src/types/scheduling.ts`            | `@cogni/scheduler-core` | Types + Zod schemas |
+| `src/ports/scheduling/*`             | `@cogni/scheduler-core` | Port interfaces     |
+| `src/adapters/server/scheduling/*`   | `@cogni/db-client`      | Drizzle adapters    |
+| `src/shared/db/schema.scheduling.ts` | `@cogni/db-client`      | DB schema           |
+| `src/shared/observability`           | `@cogni/observability`  | Logger factory      |
+
+After extraction:
+
+- Both `src/` (Next.js) and `packages/scheduler-worker/` import from shared packages
+- Worker entry point can move to `packages/scheduler-worker/src/worker.ts`
+- Full architectural symmetry achieved
+
+**Defer until:** MVP runs end-to-end and proves value.
+
 ---
 
 ## Implementation Checklist
 
 ### P0: MVP Critical — Schedules + Grants + Worker
 
-- [ ] Define `ExecutionGrant` type in `src/types/scheduling.ts`
-- [ ] Create `ExecutionGrantPort` in `src/ports/execution-grant.port.ts`
-- [ ] Create `ScheduleManagerPort` in `src/ports/schedule-manager.port.ts`
-- [ ] Add `schedules` table (owner, graphId, input, cron, timezone, grantId, enabled, nextRunAt)
-- [ ] Add `execution_grants` table (userId, billingAccountId, scopes, expiresAt, revokedAt)
-- [ ] Implement `DrizzleScheduleManagerAdapter` in `src/adapters/server/scheduling/`
-- [ ] Implement `DrizzleExecutionGrantAdapter` in `src/adapters/server/scheduling/`
-- [ ] Create `/api/v1/schedules` CRUD routes (POST, GET, PATCH, DELETE)
-- [ ] Wire ports in `bootstrap/container.ts`
-- [ ] Create `packages/scheduler-worker/` with Graphile Worker task
-- [ ] Implement `executeScheduledRun` task calling `GraphExecutorPort`
-- [ ] Add `pnpm scheduler:dev` script for local development
+#### Types & Schema
+
+- [x] Define `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` types in `src/types/scheduling.ts`
+- [x] Add `execution_grants` table (userId, billingAccountId, scopes, expiresAt, revokedAt)
+- [x] Add `schedules` table (owner, graphId, input, cron, timezone, grantId, enabled, nextRunAt)
+- [x] Add `schedule_runs` table (scheduleId, runId, scheduledFor, startedAt, completedAt, status)
+- [x] Run migration: `pnpm drizzle-kit generate`
+
+#### Ports
+
+- [x] Create `JobQueuePort` (generic `enqueueJob(taskId, payload, runAt, jobKey, queueName)`)
+- [x] Create `ExecutionGrantPort` (with `validateGrantForGraph`, `deleteGrant` for cleanup)
+- [x] Create `ScheduleManagerPort`
+- [x] Create `ScheduleRunRepository` (run ledger)
+
+#### Adapters
+
+- [x] Implement `DrizzleJobQueueAdapter` (encapsulates `add_job` SQL)
+- [x] Implement `DrizzleExecutionGrantAdapter`
+- [x] Implement `DrizzleScheduleManagerAdapter` (atomic grant+schedule+enqueue)
+- [x] Implement `DrizzleScheduleRunAdapter`
+
+#### Bootstrap & Routes
+
+- [x] Wire ports in `bootstrap/container.ts`
+- [x] Create contracts: `schedules.create.v1`, `schedules.list.v1`, `schedules.update.v1`, `schedules.delete.v1`
+- [x] Create `/api/v1/schedules` routes (POST, GET)
+- [x] Create `/api/v1/schedules/[scheduleId]` routes (PATCH, DELETE)
+
+#### Worker Package
+
+- [x] Create `packages/scheduler-worker/` with task factories
+- [x] Implement `createExecuteScheduledRunTask` with Zod validation (v0: stub logs + marks complete)
+- [x] Implement `createReconcileSchedulesTask`
+- [x] Add Zod payload schemas (`ExecuteScheduledRunPayloadSchema`, etc.)
+- [x] Add `pnpm scheduler:dev` script for local development
+- [x] Verify `pnpm arch:check` passes (zero `packages/** → src/**` violations)
+
+#### Graph Execution Endpoint (next PR)
+
+- [ ] `POST /api/internal/graphs/{graphId}:run` — service-auth endpoint for worker to call
+- [ ] Worker calls via HTTP with `executionGrantId`; endpoint resolves caller context, runs graph, returns `{runId, traceId, ok, errorCode?}`
+
+#### Atomicity & Cleanup
+
+- [ ] Ensure `createSchedule` is atomic: grant+schedule+enqueue in single transaction OR compensating `deleteGrant` on failure
+- [ ] Remove `virtualKeyId` from `ExecutionGrant` (resolve at runtime via AccountService)
 
 #### Chores
 
 - [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
 - [ ] Documentation updates [document.md](../.agent/workflows/document.md)
+- [ ] (Phase 2) Remove `src/scripts/` layer and `.dependency-cruiser.cjs` scripts rule after worker moves to `services/scheduler-worker`
+- [ ] (Phase 2) Remove `@cogni/scheduler-worker` from root `package.json` dependencies after worker becomes standalone service
+- [ ] (Phase 2) Add `error_code` column to `schedule_runs` following ai-core pattern (`SCHEDULE_RUN_ERROR_CODES` enum, e.g., `grant_expired`, `grant_revoked`, `rate_limit`, `timeout`, `internal`)
 
-### P1: Run History + Concurrency Policies
+### P1: Concurrency Policies + Runs API
 
-- [ ] Add `schedule_runs` table (scheduleId, runId, scheduledFor, startedAt, completedAt, status)
 - [ ] Expose `/api/v1/schedules/:id/runs` read-only endpoint
 - [ ] Add `concurrencyPolicy` column (Allow, Forbid, Replace)
 - [ ] Implement Replace policy (cancel previous, start new)
@@ -59,22 +159,60 @@
 
 ---
 
+## Test Infrastructure
+
+### Current State (P0)
+
+Stack tests for schedule CRUD are **skipped** because they require the `graphile_worker` schema to exist. The schema is created when the scheduler worker starts, not by Drizzle migrations.
+
+| Test Type                                             | Status     | Notes                             |
+| ----------------------------------------------------- | ---------- | --------------------------------- |
+| Unit tests (`packages/scheduler-worker/tests/`)       | ✅ Pass    | Mocked deps, no DB                |
+| Contract tests (`tests/contract/schedules.*.test.ts`) | ✅ Pass    | Schema validation only            |
+| Stack tests (`tests/stack/scheduling/`)               | ⏭️ Skipped | Requires `graphile_worker` schema |
+
+### V1 Improvement
+
+Add Graphile Worker to test stack infrastructure:
+
+```bash
+# Option A: Schema-only (lightweight)
+pnpm exec graphile-worker --schema-only --connection "$TEST_DATABASE_URL"
+
+# Option B: Full worker (integration tests)
+# Add to dev:stack:test alongside next dev
+```
+
+**Files to update:**
+
+- `package.json` — Add `db:setup:test:worker` script
+- `tests/stack/scheduling/schedules-crud.stack.test.ts` — Remove `.skip`
+
+---
+
 ## File Pointers (P0 Scope)
 
-| File                                                 | Change                                           |
-| ---------------------------------------------------- | ------------------------------------------------ |
-| `src/types/scheduling.ts`                            | New: `ExecutionGrant`, `ScheduleSpec` types      |
-| `src/ports/execution-grant.port.ts`                  | New: `ExecutionGrantPort` interface              |
-| `src/ports/schedule-manager.port.ts`                 | New: `ScheduleManagerPort` interface             |
-| `src/shared/db/schema.scheduling.ts`                 | New: `schedules`, `execution_grants` tables      |
-| `src/adapters/server/scheduling/drizzle.adapter.ts`  | New: `DrizzleScheduleManagerAdapter`             |
-| `src/adapters/server/scheduling/grant.adapter.ts`    | New: `DrizzleExecutionGrantAdapter`              |
-| `src/app/api/v1/schedules/route.ts`                  | New: POST (create), GET (list)                   |
-| `src/app/api/v1/schedules/[scheduleId]/route.ts`     | New: PATCH (update), DELETE                      |
-| `src/contracts/schedules.*.v1.contract.ts`           | New: Schedule CRUD contracts                     |
-| `src/bootstrap/container.ts`                         | Wire `ScheduleManagerPort`, `ExecutionGrantPort` |
-| `packages/scheduler-worker/`                         | New: Graphile Worker package                     |
-| `packages/scheduler-worker/src/tasks/execute-run.ts` | New: `executeScheduledRun` task                  |
+| File                                                          | Purpose                                                 |
+| ------------------------------------------------------------- | ------------------------------------------------------- |
+| `src/types/scheduling.ts`                                     | `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` types   |
+| `src/shared/db/schema.scheduling.ts`                          | `execution_grants`, `schedules`, `schedule_runs` tables |
+| `src/ports/scheduling/job-queue.port.ts`                      | `JobQueuePort` (generic `enqueueJob`)                   |
+| `src/ports/scheduling/execution-grant.port.ts`                | `ExecutionGrantPort` + `validateGrantForGraph`          |
+| `src/ports/scheduling/schedule-manager.port.ts`               | `ScheduleManagerPort` interface                         |
+| `src/ports/scheduling/schedule-run.port.ts`                   | `ScheduleRunRepository` (run ledger)                    |
+| `src/adapters/server/scheduling/drizzle-job-queue.adapter.ts` | `DrizzleJobQueueAdapter` (encapsulates `add_job` SQL)   |
+| `src/adapters/server/scheduling/drizzle-grant.adapter.ts`     | `DrizzleExecutionGrantAdapter`                          |
+| `src/adapters/server/scheduling/drizzle-schedule.adapter.ts`  | `DrizzleScheduleManagerAdapter`                         |
+| `src/adapters/server/scheduling/drizzle-run.adapter.ts`       | `DrizzleScheduleRunAdapter`                             |
+| `src/contracts/schedules.*.v1.contract.ts`                    | Schedule CRUD contracts (4 files)                       |
+| `src/app/api/v1/schedules/route.ts`                           | POST (create), GET (list)                               |
+| `src/app/api/v1/schedules/[scheduleId]/route.ts`              | PATCH (update), DELETE                                  |
+| `src/bootstrap/container.ts`                                  | Wire all scheduling ports                               |
+| `src/scripts/run-scheduler-worker.ts`                         | Worker entry point (wires deps, calls task factories)   |
+| `packages/scheduler-worker/src/tasks/execute-run.ts`          | `createExecuteScheduledRunTask` factory                 |
+| `packages/scheduler-worker/src/tasks/reconcile.ts`            | `createReconcileSchedulesTask` factory                  |
+| `packages/scheduler-worker/src/schemas/payloads.ts`           | Zod schemas for task payloads                           |
+| `packages/scheduler-worker/src/utils/cron.ts`                 | `computeNextCronTime` utility                           |
 
 ---
 
@@ -82,17 +220,19 @@
 
 ### `execution_grants` table
 
-| Column               | Type        | Constraints                   | Notes                     |
-| -------------------- | ----------- | ----------------------------- | ------------------------- |
-| `id`                 | uuid        | PK                            | Grant identity            |
-| `user_id`            | text        | NOT NULL, FK users            | Grant owner               |
-| `billing_account_id` | text        | NOT NULL, FK billing_accounts | Charge target             |
-| `scopes`             | text[]      | NOT NULL                      | e.g., `["graph:execute"]` |
-| `expires_at`         | timestamptz | NULL                          | Optional expiration       |
-| `revoked_at`         | timestamptz | NULL                          | Soft revocation timestamp |
-| `created_at`         | timestamptz | NOT NULL, default now()       |                           |
+| Column               | Type        | Constraints                   | Notes                                    |
+| -------------------- | ----------- | ----------------------------- | ---------------------------------------- |
+| `id`                 | uuid        | PK                            | Grant identity                           |
+| `user_id`            | text        | NOT NULL, FK users            | Grant owner                              |
+| `billing_account_id` | text        | NOT NULL, FK billing_accounts | Charge target                            |
+| `scopes`             | text[]      | NOT NULL                      | e.g., `["graph:execute:langgraph:poet"]` |
+| `expires_at`         | timestamptz | NULL                          | Optional expiration                      |
+| `revoked_at`         | timestamptz | NULL                          | Soft revocation timestamp                |
+| `created_at`         | timestamptz | NOT NULL, default now()       |                                          |
 
 **Indexes:** `idx_grants_user_id`, `idx_grants_billing_account_id`
+
+**Scope format:** `graph:execute:{graphId}` or `graph:execute:*` for wildcard.
 
 ### `schedules` table
 
@@ -111,11 +251,28 @@
 | `created_at`         | timestamptz | NOT NULL, default now()       |                               |
 | `updated_at`         | timestamptz | NOT NULL, default now()       |                               |
 
-**Indexes:** `idx_schedules_owner`, `idx_schedules_next_run` (for bootstrap query)
+**Indexes:** `idx_schedules_owner`, `idx_schedules_next_run` (for reconciler query), `idx_schedules_grant`
 
-**Forbidden columns:**
+**Forbidden columns:** `session_id`, `oauth_token`, `api_key`, `secret` — Never store credentials
 
-- `session_id`, `oauth_token`, `api_key`, `secret` — Never store credentials
+### `schedule_runs` table (P0)
+
+| Column              | Type        | Constraints                 | Notes                              |
+| ------------------- | ----------- | --------------------------- | ---------------------------------- |
+| `id`                | uuid        | PK                          | Run record identity                |
+| `schedule_id`       | uuid        | NOT NULL, FK schedules      | Parent schedule                    |
+| `run_id`            | text        | NOT NULL                    | GraphExecutorPort runId            |
+| `scheduled_for`     | timestamptz | NOT NULL                    | Intended execution time (job slot) |
+| `started_at`        | timestamptz | NULL                        | Actual start time                  |
+| `completed_at`      | timestamptz | NULL                        | Completion time                    |
+| `status`            | text        | NOT NULL, default 'pending' | pending/running/success/error      |
+| `attempt_count`     | integer     | NOT NULL, default 0         | Retry attempts (for future use)    |
+| `langfuse_trace_id` | text        | NULL                        | Observability correlation          |
+| `error_message`     | text        | NULL                        | Error details if failed            |
+
+**Indexes:** `idx_runs_schedule`, `idx_runs_scheduled_for`, `idx_runs_run_id`
+
+**Unique constraint:** `UNIQUE(schedule_id, scheduled_for)` prevents duplicate run records per slot
 
 ---
 
@@ -247,146 +404,97 @@ Worker builds `LlmCaller` from grant + billing account. Grant stores `billingAcc
 
 ## Port Interfaces
 
-### ExecutionGrantPort
+Port definitions live in `src/ports/scheduling/`. Future: move to `@cogni/scheduler-core`.
 
-```typescript
-export interface ExecutionGrant {
-  readonly id: string;
-  readonly userId: string;
-  readonly billingAccountId: string;
-  readonly scopes: readonly string[];
-  readonly expiresAt: Date | null;
-  readonly revokedAt: Date | null;
-  readonly createdAt: Date;
-}
+| Port                    | File                                            | Key Methods                                                                                 |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `JobQueuePort`          | `src/ports/scheduling/job-queue.port.ts`        | `enqueueJob(taskId, payload, runAt, jobKey, queueName?)`                                    |
+| `ExecutionGrantPort`    | `src/ports/scheduling/execution-grant.port.ts`  | `createGrant`, `validateGrantForGraph`, `deleteGrant`                                       |
+| `ScheduleManagerPort`   | `src/ports/scheduling/schedule-manager.port.ts` | `createSchedule`, `listSchedules`, `updateSchedule`, `deleteSchedule`, `findStaleSchedules` |
+| `ScheduleRunRepository` | `src/ports/scheduling/schedule-run.port.ts`     | `createRun`, `markRunStarted`, `markRunCompleted`                                           |
 
-export interface ExecutionGrantPort {
-  createGrant(input: {
-    userId: string;
-    billingAccountId: string;
-    scopes: readonly string[];
-    expiresAt?: Date;
-  }): Promise<ExecutionGrant>;
+**Design notes:**
 
-  validateGrant(grantId: string): Promise<ExecutionGrant>;
-  // Throws GrantExpiredError or GrantRevokedError
-
-  revokeGrant(grantId: string): Promise<void>;
-}
-```
-
-### ScheduleManagerPort
-
-```typescript
-export interface ScheduleSpec {
-  readonly id: string;
-  readonly ownerUserId: string;
-  readonly executionGrantId: string;
-  readonly graphId: string;
-  readonly input: unknown;
-  readonly cron: string;
-  readonly timezone: string;
-  readonly enabled: boolean;
-  readonly nextRunAt: Date | null;
-  readonly lastRunAt: Date | null;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}
-
-export interface ScheduleManagerPort {
-  createSchedule(
-    callerUserId: string,
-    input: { graphId: string; input: unknown; cron: string; timezone: string }
-  ): Promise<ScheduleSpec>;
-
-  listSchedules(callerUserId: string): Promise<readonly ScheduleSpec[]>;
-
-  updateSchedule(
-    callerUserId: string,
-    scheduleId: string,
-    patch: Partial<{
-      input: unknown;
-      cron: string;
-      timezone: string;
-      enabled: boolean;
-    }>
-  ): Promise<ScheduleSpec>;
-
-  deleteSchedule(callerUserId: string, scheduleId: string): Promise<void>;
-}
-```
+- `JobQueuePort.enqueueJob()` is generic (taskId-based), not graph-specific—enables future non-graph scheduled jobs
+- `ExecutionGrantPort.deleteGrant()` exists for atomicity cleanup when schedule creation fails mid-transaction
+- `ScheduleRunRepository` is separate from `ScheduleManagerPort` per single-responsibility (run ledger vs schedule CRUD)
 
 ---
 
-## Worker Task (Pseudo-code)
+## Grant Authorization
 
-```typescript
-// packages/scheduler-worker/src/tasks/execute-scheduled-run.ts
-import { type Task } from "graphile-worker";
+### Boundary Principle
 
-interface Payload {
-  scheduleId: string;
-  scheduledFor: string; // ISO timestamp
-}
+**Worker knows resources, not scopes.** The scheduler-worker package receives `(grantId, graphId)` and delegates authorization to the adapter layer. Scope format (`graph:execute:{graphId}`) is owned exclusively by `ExecutionGrantPort` implementations.
 
-export const executeScheduledRun: Task = async (payload, helpers) => {
-  const { scheduleId, scheduledFor } = payload as Payload;
+### File Pointers
 
-  // 1. Load schedule
-  const schedule = await scheduleRepo.findById(scheduleId);
-  if (!schedule || !schedule.enabled) {
-    helpers.logger.info("Schedule disabled or deleted, skipping");
-    return;
-  }
+| Layer            | File                                                      | Responsibility                                                   |
+| ---------------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| Worker task      | `packages/scheduler-worker/src/tasks/execute-run.ts`      | Calls `validateGrantForGraph(grantId, graphId)` before execution |
+| Worker interface | `packages/scheduler-worker/src/worker.ts`                 | Declares `validateGrantForGraph` in `ExecuteRunDeps`             |
+| Wiring           | `src/scripts/run-scheduler-worker.ts`                     | Pass-through to `executionGrantPort.validateGrantForGraph`       |
+| Port             | `src/ports/scheduling/execution-grant.port.ts`            | Defines `validateGrantForGraph(grantId, graphId)` contract       |
+| Adapter          | `src/adapters/server/scheduling/drizzle-grant.adapter.ts` | Owns scope format, checks `graph:execute:{graphId}` or wildcard  |
+| Schema           | `src/shared/db/schema.scheduling.ts`                      | `scopes` column in `execution_grants` table                      |
 
-  // 2. Validate grant
-  const grant = await grantPort.validateGrant(schedule.executionGrantId);
+### Invariants
 
-  // 3. Build caller (virtualKeyId via AccountService)
-  const caller = await buildCallerFromGrant(grant);
+1. **SCOPE_FORMAT_CENTRALIZED**: Only `DrizzleExecutionGrantAdapter` knows scope string format. Worker and wiring layers pass `graphId` only.
+2. **VALIDATE_BEFORE_EXECUTE**: `execute-run.ts` must call `validateGrantForGraph` after loading schedule, before any execution logic.
+3. **SKIP_ON_GRANT_FAILURE**: On validation failure, mark run as `skipped` with error message, enqueue next run, return early.
+4. **NO_SCOPE_PARSING_IN_WORKER**: Worker package must never import or construct scope strings.
 
-  // 4. Execute graph
-  const runId = crypto.randomUUID();
-  await scheduleRepo.markRunStarted(scheduleId, scheduledFor);
+### Authorization Flow
 
-  try {
-    const result = graphExecutor.runGraph({
-      runId,
-      ingressRequestId: runId,
-      graphId: schedule.graphId,
-      messages: schedule.input.messages ?? [],
-      model: schedule.input.model ?? "default",
-      caller,
-    });
-    for await (const _event of result.stream) {
-      /* drain */
-    }
-    await result.final;
-    await scheduleRepo.markRunCompleted(scheduleId, scheduledFor, "success");
-  } catch (error) {
-    await scheduleRepo.markRunCompleted(scheduleId, scheduledFor, "error");
-    throw error; // Graphile Worker handles retry
-  }
-
-  // 5. Enqueue next run (PRODUCER_ENQUEUES_NEXT)
-  await enqueueNextRun(schedule, helpers);
-};
-
-async function enqueueNextRun(schedule: ScheduleSpec, helpers: Helpers) {
-  const nextRunAt = computeNextCronTime(schedule.cron, schedule.timezone);
-  await helpers.addJob(
-    "execute_scheduled_run",
-    { scheduleId: schedule.id, scheduledFor: nextRunAt.toISOString() },
-    {
-      queueName: schedule.id, // serialization (no overlap)
-      runAt: nextRunAt,
-      jobKey: `${schedule.id}:${nextRunAt.toISOString()}`, // slot dedupe
-      jobKeyMode: "replace",
-    }
-  );
-  await scheduleRepo.updateNextRunAt(schedule.id, nextRunAt);
-}
 ```
+execute-run.ts
+  │
+  ├─ 1. Load schedule (includes executionGrantId, graphId)
+  │
+  ├─ 2. deps.validateGrantForGraph(grantId, graphId)
+  │     │
+  │     └─ run-scheduler-worker.ts (pass-through)
+  │         │
+  │         └─ executionGrantPort.validateGrantForGraph(grantId, graphId)
+  │             │
+  │             └─ DrizzleExecutionGrantAdapter
+  │                 ├─ Check grant exists, not expired, not revoked
+  │                 └─ Check scopes includes "graph:execute:{graphId}" OR "graph:execute:*"
+  │
+  ├─ 3a. On success → proceed to execution
+  │
+  └─ 3b. On failure → markRunCompleted("skipped"), enqueue next, return
+```
+
+### Roadmap
+
+| Phase            | Scope                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| **P0 (current)** | Single resource type (`graph:execute`), exact match or wildcard                     |
+| **P1**           | Grant expiration enforcement, revocation propagation                                |
+| **P2**           | Additional resource types via new port methods (e.g., `validateGrantForWorkflow`)   |
+| **P3**           | Fine-grained scopes (e.g., `graph:execute:langgraph:*` for provider-level wildcard) |
+
+---
+
+## Worker Tasks
+
+Task implementations use dependency injection via factory functions. Payloads are validated with Zod schemas at task entry.
+
+| Task                    | Current Location                                     | Future Location                                                      |
+| ----------------------- | ---------------------------------------------------- | -------------------------------------------------------------------- |
+| `execute_scheduled_run` | `packages/scheduler-worker/src/tasks/execute-run.ts` | Same                                                                 |
+| `reconcile_schedules`   | `packages/scheduler-worker/src/tasks/reconcile.ts`   | Same                                                                 |
+| Zod payload schemas     | `packages/scheduler-worker/src/schemas/payloads.ts`  | `@cogni/scheduler-core`                                              |
+| Worker entry point      | `src/scripts/run-scheduler-worker.ts`                | `packages/scheduler-worker/src/worker.ts` (after package extraction) |
+
+**Key implementation details:**
+
+- Tasks call `Schema.parse(payload)` before processing (no `as` casts)
+- `virtualKeyId` resolved at runtime via `AccountService.getDefaultVirtualKeyForUser()`
+- Stream fully drained before awaiting `result.final` (per GRAPH_EXECUTION.md)
+- Errors thrown to trigger Graphile Worker retry semantics
 
 ---
 
@@ -421,5 +529,5 @@ async function enqueueNextRun(schedule: ScheduleSpec, helpers: Helpers) {
 
 ---
 
-**Last Updated**: 2026-01-14
-**Status**: Draft
+**Last Updated**: 2026-01-19
+**Status**: Draft (P0 in progress)

@@ -18,6 +18,26 @@ Create a package when code is:
 
 **Do NOT create a package for:** UI components, feature services, adapters, or anything importing from `src/`.
 
+## Packages vs Services
+
+> Packages are pure libraries. Deployables belong in `services/`.
+
+### Smell Test: Not a Package If It...
+
+- Listens on a port
+- Runs a worker loop
+- Has its own Docker image
+- Owns environment variables or health checks
+
+### Directory Rule
+
+| Directory   | Contains                             | May Import From       |
+| ----------- | ------------------------------------ | --------------------- |
+| `packages/` | Pure libraries, no process lifecycle | Other packages        |
+| `services/` | Entry points, env, signal handling   | `packages/`, own code |
+
+**Dependency rule:** `services → packages` allowed; `packages → services` forbidden.
+
 ## Package Structure
 
 ```
