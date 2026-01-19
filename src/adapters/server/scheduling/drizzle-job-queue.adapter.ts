@@ -35,29 +35,50 @@ export class DrizzleJobQueueAdapter implements JobQueuePort {
     // Build payload as JSON string for Graphile Worker
     const payloadJson = JSON.stringify(payload);
 
-    if (queueName) {
-      await this.db.execute(sql`
-        SELECT graphile_worker.add_job(
-          ${taskId},
-          ${payloadJson}::jsonb,
-          queue_name => ${queueName},
-          run_at => ${runAtIso}::timestamptz,
-          job_key => ${jobKey},
-          job_key_mode => 'replace'
-        )
-      `);
-    } else {
-      await this.db.execute(sql`
-        SELECT graphile_worker.add_job(
-          ${taskId},
-          ${payloadJson}::jsonb,
-          run_at => ${runAtIso}::timestamptz,
-          job_key => ${jobKey},
-          job_key_mode => 'replace'
-        )
-      `);
-    }
+    // Casts match graphile_worker.add_job signature (verified via \df):
+    // identifier text, payload json, queue_name text, run_at timestamptz,
+    // max_attempts int, job_key text, priority int, flags text[], job_key_mode text
+    try {
+      if (queueName) {
+        await this.db.execute(sql`
+          SELECT graphile_worker.add_job(
+            ${taskId}::text,
+            ${payloadJson}::json,
+            queue_name => ${queueName}::text,
+            run_at => ${runAtIso}::timestamptz,
+            job_key => ${jobKey}::text,
+            job_key_mode => 'replace'::text
+          )
+        `);
+      } else {
+        await this.db.execute(sql`
+          SELECT graphile_worker.add_job(
+            ${taskId}::text,
+            ${payloadJson}::json,
+            run_at => ${runAtIso}::timestamptz,
+            job_key => ${jobKey}::text,
+            job_key_mode => 'replace'::text
+          )
+        `);
+      }
 
-    logger.info({ taskId, jobKey }, "Job enqueued");
+      logger.info({ taskId, jobKey }, "Job enqueued");
+    } catch (error) {
+      // Log the full error including the cause (actual PostgreSQL error)
+      const cause =
+        error instanceof Error
+          ? (error as Error & { cause?: unknown }).cause
+          : undefined;
+      logger.error(
+        {
+          taskId,
+          jobKey,
+          error: String(error),
+          cause: cause ? String(cause) : undefined,
+        },
+        "Failed to enqueue job"
+      );
+      throw error;
+    }
   }
 }
