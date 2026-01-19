@@ -46,7 +46,7 @@ export interface AiRuntimeInput {
    * Thread key for multi-turn conversation state.
    * Passed to GraphExecutorPort; adapter decides semantics.
    */
-  readonly threadKey?: string;
+  readonly stateKey?: string;
 }
 
 /**
@@ -91,8 +91,7 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
     input: AiRuntimeInput,
     ctx: RequestContext
   ): AiRuntimeResult {
-    const { messages, model, caller, abortSignal, graphName, threadKey } =
-      input;
+    const { messages, model, caller, abortSignal, graphName, stateKey } = input;
     const log = ctx.log.child({ feature: "ai.runtime" });
 
     // Create run identity via factory (P0: runId = ingressRequestId = ctx.reqId)
@@ -124,7 +123,7 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
       caller,
       ...(abortSignal && { abortSignal }),
       graphId: resolvedGraphId,
-      ...(threadKey && { threadKey }),
+      ...(stateKey && { stateKey }),
     });
 
     // Create RunEventRelay for pump+fanout pattern (context provided to subscribers)

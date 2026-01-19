@@ -3,10 +3,10 @@
 
 /**
  * Module: `@tests/unit/adapters/server/ai/langgraph/dev/provider.spec`
- * Purpose: Unit tests for LangGraphDevProvider threadKey requirements.
- * Scope: Tests threadKey validation, input filtering, error handling. Does NOT test real SDK calls.
+ * Purpose: Unit tests for LangGraphDevProvider stateKey requirements.
+ * Scope: Tests stateKey validation, input filtering, error handling. Does NOT test real SDK calls.
  * Invariants:
- *   - THREAD_KEY_REQUIRED: Missing threadKey returns invalid_request error
+ *   - THREAD_KEY_REQUIRED: Missing stateKey returns invalid_request error
  *   - STATEFUL_ONLY: Only last user message sent to server
  * Side-effects: none (mocked SDK)
  * Links: src/adapters/server/ai/langgraph/dev/provider.ts, LANGGRAPH_SERVER.md
@@ -92,8 +92,8 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
   });
 
   describe("THREAD_KEY_REQUIRED invariant", () => {
-    it("returns invalid_request error when threadKey is missing", async () => {
-      const request = createTestRequest({ threadKey: undefined });
+    it("returns invalid_request error when stateKey is missing", async () => {
+      const request = createTestRequest({ stateKey: undefined });
 
       const result = provider.runGraph(request);
 
@@ -114,8 +114,8 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
       expect(final.error).toBe("invalid_request");
     });
 
-    it("returns invalid_request error when threadKey is empty string", async () => {
-      const request = createTestRequest({ threadKey: "" });
+    it("returns invalid_request error when stateKey is empty string", async () => {
+      const request = createTestRequest({ stateKey: "" });
 
       const result = provider.runGraph(request);
 
@@ -130,8 +130,8 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
       expect(final.ok).toBe(false);
     });
 
-    it("proceeds when threadKey is provided", async () => {
-      const request = createTestRequest({ threadKey: "valid-thread-key" });
+    it("proceeds when stateKey is provided", async () => {
+      const request = createTestRequest({ stateKey: "valid-thread-key" });
 
       const result = provider.runGraph(request);
 
@@ -159,7 +159,7 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
 
       const request = createTestRequest({
         messages,
-        threadKey: "test-thread",
+        stateKey: "test-thread",
       });
 
       provider.runGraph(request);
@@ -190,7 +190,7 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
     it("handles conversation with only one user message", async () => {
       const request = createTestRequest({
         messages: [createUserMessage("Only message")],
-        threadKey: "test-thread",
+        stateKey: "test-thread",
       });
 
       const result = provider.runGraph(request);
@@ -220,7 +220,7 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
           { role: "assistant" as const, content: "Assistant only" },
           { role: "system" as const, content: "System message" },
         ],
-        threadKey: "test-thread",
+        stateKey: "test-thread",
       });
 
       const result = provider.runGraph(request);
@@ -239,7 +239,7 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
 
   describe("thread derivation", () => {
     it("creates thread with tenant-scoped ID", async () => {
-      const request = createTestRequest({ threadKey: "my-thread" });
+      const request = createTestRequest({ stateKey: "my-thread" });
 
       const result = provider.runGraph(request);
       for await (const _ of result.stream) {
@@ -255,15 +255,15 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
           ifExists: "do_nothing",
           metadata: {
             billingAccountId: TEST_BILLING_ACCOUNT_ID,
-            threadKey: "my-thread",
+            stateKey: "my-thread",
           },
         })
       );
     });
 
-    it("uses same threadId for same billingAccountId + threadKey", async () => {
-      const request1 = createTestRequest({ threadKey: "same-thread" });
-      const request2 = createTestRequest({ threadKey: "same-thread" });
+    it("uses same threadId for same billingAccountId + stateKey", async () => {
+      const request1 = createTestRequest({ stateKey: "same-thread" });
+      const request2 = createTestRequest({ stateKey: "same-thread" });
 
       // Run twice
       const result1 = provider.runGraph(request1);
@@ -284,7 +284,7 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
 
     it("uses different threadId for different billingAccountId", async () => {
       const request1 = createTestRequest({
-        threadKey: "same-thread",
+        stateKey: "same-thread",
         caller: {
           billingAccountId: "tenant-a",
           virtualKeyId: TEST_VIRTUAL_KEY_ID,
@@ -294,7 +294,7 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
       });
 
       const request2 = createTestRequest({
-        threadKey: "same-thread",
+        stateKey: "same-thread",
         caller: {
           billingAccountId: "tenant-b",
           virtualKeyId: TEST_VIRTUAL_KEY_ID,
@@ -325,7 +325,7 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
     it("returns not_found for unknown graph", async () => {
       const request = createTestRequest({
         graphId: "langgraph:unknown-graph",
-        threadKey: "test-thread",
+        stateKey: "test-thread",
       });
 
       const result = provider.runGraph(request);
@@ -345,7 +345,7 @@ describe("adapters/server/ai/langgraph/dev/provider", () => {
     it("returns invalid_request for malformed graphId", async () => {
       const request = createTestRequest({
         graphId: "invalid-format", // Missing "langgraph:" prefix
-        threadKey: "test-thread",
+        stateKey: "test-thread",
       });
 
       const result = provider.runGraph(request);

@@ -58,7 +58,7 @@ export interface GraphRunRequest {
    * - InProc: ignored (no thread state. should become required soon)
    * - LangGraph Server: required (derive threadId, send only new input)
    */
-  readonly threadKey?: string;
+  readonly stateKey?: string;
 }
 
 /**

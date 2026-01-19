@@ -9,7 +9,7 @@
  *   - STABLE_GRAPH_IDS: providerId = "langgraph" (same as InProc)
  *   - MUTUAL_EXCLUSION: Either this or InProc registered, never both
  *   - OFFICIAL_SDK_ONLY: Uses @langchain/langgraph-sdk Client
- *   - THREAD_KEY_REQUIRED: threadKey required; derive threadId deterministically
+ *   - THREAD_KEY_REQUIRED: stateKey required; derive threadId deterministically
  *   - STATEFUL_ONLY: Always send only last user message; server owns thread state
  *   - TOOL_CATALOG_IS_CANONICAL: Reads entry.toolIds for default catalog tools
  * Side-effects: IO (network calls to langgraph dev server)
@@ -98,17 +98,17 @@ export class LangGraphDevProvider implements GraphProvider {
    * Execute a graph run via langgraph dev server.
    *
    * Per OFFICIAL_SDK_ONLY: uses Client.runs.stream().
-   * Per THREAD_KEY_REQUIRED: threadKey must be provided.
+   * Per THREAD_KEY_REQUIRED: stateKey must be provided.
    * Per STATEFUL_ONLY: send only last user message; server owns thread state.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, ingressRequestId, graphId, caller, threadKey } = req;
+    const { runId, ingressRequestId, graphId, caller, stateKey } = req;
 
     // Per THREAD_KEY_REQUIRED: fail fast if not provided
-    if (!threadKey) {
+    if (!stateKey) {
       this.log.error(
         { runId, graphId },
-        "threadKey required for LangGraph Server"
+        "stateKey required for LangGraph Server"
       );
       return this.createErrorResult(runId, ingressRequestId, "invalid_request");
     }
@@ -126,15 +126,15 @@ export class LangGraphDevProvider implements GraphProvider {
     }
 
     this.log.debug(
-      { runId, graphName, threadKey, messageCount: req.messages.length },
+      { runId, graphName, stateKey, messageCount: req.messages.length },
       "LangGraphDevProvider.runGraph starting"
     );
 
-    // Derive thread ID (UUIDv5) from (billingAccountId, threadKey)
-    const threadId = deriveThreadUuid(caller.billingAccountId, threadKey);
+    // Derive thread ID (UUIDv5) from (billingAccountId, stateKey)
+    const threadId = deriveThreadUuid(caller.billingAccountId, stateKey);
     const threadMetadata = buildThreadMetadata(
       caller.billingAccountId,
-      threadKey
+      stateKey
     );
 
     // Create stream and final promise
@@ -158,7 +158,7 @@ export class LangGraphDevProvider implements GraphProvider {
     req: GraphRunRequest,
     graphName: string,
     threadId: string,
-    threadMetadata: { billingAccountId: string; threadKey: string }
+    threadMetadata: { billingAccountId: string; stateKey: string }
   ): GraphRunResult {
     const { runId, ingressRequestId, messages, caller, toolIds } = req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
@@ -226,7 +226,7 @@ export class LangGraphDevProvider implements GraphProvider {
   private async *createStreamWithFinalState(
     graphName: string,
     threadId: string,
-    threadMetadata: { billingAccountId: string; threadKey: string },
+    threadMetadata: { billingAccountId: string; stateKey: string },
     messages: GraphRunRequest["messages"],
     ctx: { runId: string; attempt: number; caller: GraphRunRequest["caller"] },
     state: {

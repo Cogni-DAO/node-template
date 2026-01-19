@@ -35,17 +35,17 @@ describe("adapters/server/ai/langgraph/dev/thread", () => {
 
     it("is deterministic - same inputs produce same output", () => {
       const billingAccountId = "acc-deterministic-test";
-      const threadKey = "thread-key-123";
+      const stateKey = "thread-key-123";
 
-      const result1 = deriveThreadUuid(billingAccountId, threadKey);
-      const result2 = deriveThreadUuid(billingAccountId, threadKey);
-      const result3 = deriveThreadUuid(billingAccountId, threadKey);
+      const result1 = deriveThreadUuid(billingAccountId, stateKey);
+      const result2 = deriveThreadUuid(billingAccountId, stateKey);
+      const result3 = deriveThreadUuid(billingAccountId, stateKey);
 
       expect(result1).toBe(result2);
       expect(result2).toBe(result3);
     });
 
-    it("different threadKey produces different UUID", () => {
+    it("different stateKey produces different UUID", () => {
       const billingAccountId = "acc-same";
 
       const result1 = deriveThreadUuid(billingAccountId, "thread-1");
@@ -55,36 +55,33 @@ describe("adapters/server/ai/langgraph/dev/thread", () => {
     });
 
     describe("tenant isolation (THREAD_ID_TENANT_SCOPED)", () => {
-      it("same threadKey, different billingAccountId → different threadId", () => {
-        const threadKey = "shared-thread-key";
+      it("same stateKey, different billingAccountId → different threadId", () => {
+        const stateKey = "shared-thread-key";
 
-        const tenantA = deriveThreadUuid("tenant-a", threadKey);
-        const tenantB = deriveThreadUuid("tenant-b", threadKey);
+        const tenantA = deriveThreadUuid("tenant-a", stateKey);
+        const tenantB = deriveThreadUuid("tenant-b", stateKey);
 
         expect(tenantA).not.toBe(tenantB);
       });
 
       it("prevents cross-tenant thread access with identical keys", () => {
-        // Simulates attack vector: attacker guesses victim's threadKey
+        // Simulates attack vector: attacker guesses victim's stateKey
         const victimAccount = "victim-billing-account-id";
         const attackerAccount = "attacker-billing-account-id";
-        const guessedThreadKey = "common-thread-key";
+        const guessedstateKey = "common-thread-key";
 
-        const victimThreadId = deriveThreadUuid(
-          victimAccount,
-          guessedThreadKey
-        );
+        const victimThreadId = deriveThreadUuid(victimAccount, guessedstateKey);
         const attackerThreadId = deriveThreadUuid(
           attackerAccount,
-          guessedThreadKey
+          guessedstateKey
         );
 
-        // Even with same threadKey, UUIDs differ → no cross-tenant access
+        // Even with same stateKey, UUIDs differ → no cross-tenant access
         expect(victimThreadId).not.toBe(attackerThreadId);
       });
 
       it("produces distinct UUIDs for multiple tenants", () => {
-        const threadKey = "conversation-1";
+        const stateKey = "conversation-1";
         const tenants = [
           "tenant-alpha",
           "tenant-beta",
@@ -92,7 +89,7 @@ describe("adapters/server/ai/langgraph/dev/thread", () => {
           "tenant-delta",
         ];
 
-        const threadIds = tenants.map((t) => deriveThreadUuid(t, threadKey));
+        const threadIds = tenants.map((t) => deriveThreadUuid(t, stateKey));
         const uniqueIds = new Set(threadIds);
 
         // All should be unique
@@ -120,24 +117,24 @@ describe("adapters/server/ai/langgraph/dev/thread", () => {
   describe("buildThreadMetadata", () => {
     it("returns metadata object with correct fields", () => {
       const billingAccountId = "acc-123";
-      const threadKey = "thread-456";
+      const stateKey = "thread-456";
 
-      const metadata = buildThreadMetadata(billingAccountId, threadKey);
+      const metadata = buildThreadMetadata(billingAccountId, stateKey);
 
       expect(metadata).toEqual({
         billingAccountId: "acc-123",
-        threadKey: "thread-456",
+        stateKey: "thread-456",
       });
     });
 
     it("preserves original values without transformation", () => {
       const billingAccountId = "UPPER-case-123";
-      const threadKey = "Special_Chars-./";
+      const stateKey = "Special_Chars-./";
 
-      const metadata = buildThreadMetadata(billingAccountId, threadKey);
+      const metadata = buildThreadMetadata(billingAccountId, stateKey);
 
       expect(metadata.billingAccountId).toBe(billingAccountId);
-      expect(metadata.threadKey).toBe(threadKey);
+      expect(metadata.stateKey).toBe(stateKey);
     });
   });
 });

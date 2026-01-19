@@ -66,7 +66,7 @@ This document covers two execution backends for LangGraph graphs:
 
 1. **STABLE_GRAPH_IDS**: GraphIds are `langgraph:{graphName}` regardless of backend (InProc or Dev)
 2. **MUTUAL_EXCLUSION**: Register exactly one `langgraph` provider per aggregator (InProc XOR Dev)
-3. **THREAD_KEY_REQUIRED**: `threadKey` is required; derive `threadId` deterministically from `(billingAccountId, threadKey)`. Always send only new user input; server owns thread state. Tools work per-run.
+3. **THREAD_KEY_REQUIRED**: `stateKey` is required; derive `threadId` deterministically from `(billingAccountId, stateKey)`. Always send only new user input; server owns thread state. Tools work per-run.
 4. **SDK_CHUNK_SHAPE**: SDK stream uses `chunk.event` + `chunk.data` (not `event.type`)
 5. **CATALOG_MANUAL_SYNC_P0**: `LANGGRAPH_CATALOG` and `langgraph.json` manually synced in MVP
 6. **DUAL_RUN_IDS**: Our `runId` (billing/trace) is distinct from LangGraph `run_id` (reconnection/resume). Capture LangGraph `run_id` from the `metadata` stream event if `joinStream`/`lastEventId` reconnection is needed.
@@ -174,7 +174,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 6. **THREAD_ID_TENANT_SCOPED**: For stateful runs, thread identity is derived server-side as UUIDv5:
 
    ```
-   thread_id = uuidv5("${billingAccountId}:${threadKey}", COGNI_THREAD_NAMESPACE)
+   thread_id = uuidv5("${billingAccountId}:${stateKey}", COGNI_THREAD_NAMESPACE)
    ```
 
    Per LangGraph API: `thread_id` must be UUID format. Never accept raw `thread_id` from the client. LangGraph persistence is keyed on `thread_id`—this is the privacy boundary. See `src/adapters/server/ai/langgraph/dev/thread.ts`.
@@ -182,11 +182,11 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 7. **THREAD_MUST_EXIST_IF_THREAD_ID_IS_STRING**: If you pass a string `threadId` to `runs.stream()`, you must ensure the thread exists first (idempotently). Use the SDK thread create with "do nothing if exists".
 
 8. **P0_THREAD_POLICY**: P0 supports stateful threads (because your product needs multi-turn).
-   - If `threadKey` is present → reuse thread
+   - If `stateKey` is present → reuse thread
    - Else fallback to a deterministic key for "ephemeral" (not runId unless you explicitly want "each run is a new thread")
    - If you really want stateless P0: `runs.stream(null, ...)` exists. That's valid, but it deliberately drops conversation continuity.
 
-9. **LANGGRAPH_IS_CANONICAL_STATE**: For `langgraph_server` executor, LangGraph Server owns canonical thread state/checkpoints. Any local `run_artifacts` are cache only—never reconstruct conversation from them. When `threadKey` provided, send only new user input (server has prior context).
+9. **LANGGRAPH_IS_CANONICAL_STATE**: For `langgraph_server` executor, LangGraph Server owns canonical thread state/checkpoints. Any local `run_artifacts` are cache only—never reconstruct conversation from them. When `stateKey` provided, send only new user input (server has prior context).
 
 ### Billing + Per-User Credentials
 
@@ -254,7 +254,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 - `runId`, `attempt`, `ingressRequestId`, `caller` (billingAccountId, virtualKeyId, traceId)
 - `messages[]`, `model`, `graphName?`
-- `threadKey?` (server-derived; never client-supplied)
+- `stateKey?` (server-derived; never client-supplied)
 
 ### GraphRunResult
 
@@ -329,7 +329,7 @@ In other words: graphs are parameterized by runtime config, not `.env` alone.
 interface LangGraphRunRequest {
   accountId: string; // Tenant ID for thread_id derivation
   runId: string; // Unique run ID (Next.js generates)
-  threadKey?: string; // Optional thread key for continuation
+  stateKey?: string; // Optional thread key for continuation
   model: string; // LiteLLM alias (from allowlist)
   messages: Array<{ role: string; content: string }>;
   requestId: string; // Correlation ID
@@ -358,7 +358,7 @@ interface LangGraphRunRequest {
 ### Thread ID derivation (inside service)
 
 ```typescript
-const threadId = `${request.accountId}:${request.threadKey ?? request.runId}`;
+const threadId = `${request.accountId}:${request.stateKey ?? request.runId}`;
 ```
 
 ---
@@ -519,8 +519,8 @@ Extract cross-process types to `packages/ai-core/` so `packages/langgraph-server
 #### Step 7: Minimal Graph + Endpoint
 
 - [ ] Create chat graph in `packages/langgraph-graphs/graphs/chat/`
-- [ ] Expose run endpoint accepting: `{ accountId, runId, threadKey?, model, messages[], requestId, traceId }`
-- [ ] Derive `thread_id` server-side as `${accountId}:${threadKey || runId}`
+- [ ] Expose run endpoint accepting: `{ accountId, runId, stateKey?, model, messages[], requestId, traceId }`
+- [ ] Derive `thread_id` server-side as `${accountId}:${stateKey || runId}`
 - [ ] Return SSE stream with text deltas + final message + done
 
 #### Step 8: LangGraphServerAdapter
@@ -621,7 +621,7 @@ Per LangGraph API: `thread_id` must be `string<uuid>` format. Use UUIDv5 for det
 
 **Implementation:** `src/adapters/server/ai/langgraph/dev/thread.ts`
 
-**Derivation:** `uuidv5("${billingAccountId}:${threadKey}", COGNI_THREAD_NAMESPACE)`
+**Derivation:** `uuidv5("${billingAccountId}:${stateKey}", COGNI_THREAD_NAMESPACE)`
 
 **Why UUIDv5?** LangGraph API requires UUID format. Deterministic derivation ensures same thread across restarts.
 

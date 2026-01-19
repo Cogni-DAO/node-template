@@ -198,7 +198,7 @@ export async function completionStream(
         caller,
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
         ...(input.graphName ? { graphName: input.graphName } : {}),
-        ...(input.threadId ? { threadKey: input.threadId } : {}),
+        ...(input.threadId ? { stateKey: input.threadId } : {}),
       },
       enrichedCtx
     );

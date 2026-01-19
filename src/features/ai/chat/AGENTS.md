@@ -124,12 +124,12 @@ setThreadIdByStateKey(prev => ({ ...prev, [activeStateKey]: newThreadId }));
 
 ### Naming Convention
 
-| Layer        | Field       | Notes                                               |
-| ------------ | ----------- | --------------------------------------------------- |
-| UI State     | `stateKey`  | App-level key for state/thread selection            |
-| API/Contract | `threadId`  | Client-facing identifier sent to server             |
-| Port/Adapter | `threadKey` | Internal; derive UUIDv5 from (accountId, threadKey) |
-| LangGraph    | `thread_id` | UUID format required by LangGraph API               |
+| Layer        | Field       | Notes                                              |
+| ------------ | ----------- | -------------------------------------------------- |
+| UI State     | `stateKey`  | App-level key for state/thread selection           |
+| API/Contract | `threadId`  | Client-facing identifier sent to server            |
+| Port/Adapter | `stateKey`  | Internal; derive UUIDv5 from (accountId, stateKey) |
+| LangGraph    | `thread_id` | UUID format required by LangGraph API              |
 
 **TODO(P1):** Consider unifying port/adapter to `threadId` to reduce translation.
 
