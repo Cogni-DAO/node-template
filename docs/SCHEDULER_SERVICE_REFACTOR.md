@@ -169,16 +169,16 @@ billing.ts     → imports from refs, extends with billing-specific tables
 
 #### `packages/db-client/`
 
-- [ ] Create `package.json` depending on `@cogni/scheduler-core`, `@cogni/db-schema`
-- [ ] Create `tsconfig.json` with composite mode
-- [ ] Create `tsup.config.ts`
+- [x] Create `package.json` depending on `@cogni/scheduler-core`, `@cogni/db-schema`
+- [x] Create `tsconfig.json` with composite mode
+- [x] Create `tsup.config.ts`
 - [ ] Create `vitest.config.ts`
-- [ ] Create `src/client.ts` with `createDbClient(connectionString)`
-- [ ] Create `src/adapters/*.ts` (from `src/adapters/server/scheduling/*.ts`)
-- [ ] Create `src/index.ts` — exports client, adapters, and re-exports scheduling schema
-- [ ] Add to root `tsconfig.json` references
-- [ ] Add to root `package.json` dependencies
-- [ ] Add to `biome/base.json` noDefaultExport override
+- [x] Create `src/client.ts` with `createDbClient(connectionString)` and `LoggerLike` interface
+- [x] Create `src/adapters/*.ts` (from `src/adapters/server/scheduling/*.ts`)
+- [x] Create `src/index.ts` — exports client, adapters, and re-exports scheduling schema
+- [x] Add to root `tsconfig.json` references
+- [x] Add to root `package.json` dependencies
+- [x] Add to `biome/base.json` noDefaultExport override
 - [ ] Add dependency-cruiser rule: `no-db-client-to-src`
 
 ### Phase 2: Create Service
