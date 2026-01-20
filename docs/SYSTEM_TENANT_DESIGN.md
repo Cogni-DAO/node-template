@@ -19,6 +19,16 @@
 
 7. **DATA_ISOLATION_BY_TENANT**: All persisted data keyed by `billing_account_id`. Customer data NEVER stored under system tenant — even if system-initiated. Existing ACCOUNTS_DESIGN.md Owner vs Actor rules apply.
 
+8. **POLICY_RESOLVER_DEFENSE_IN_DEPTH**: Per GRAPH_EXECUTION.md #26, `configurable.toolIds` is the runtime allowlist enforced by `toLangChainTool`. `PolicyResolverPort.resolvePolicy(tenantId)` provides the **authoritative maximum** allowlist. Tool-runner validates: tool must be in BOTH `configurable.toolIds` AND resolved policy. Route cannot expand beyond PolicyResolverPort; it can only restrict.
+
+9. **TENANT_CONTEXT_REQUIRED**: `ToolPolicyContext.tenantId` is REQUIRED for all production execution paths. Tool-runner MUST deny/throw if `tenantId` is missing. Only tests may omit via explicit `TestPolicyContextBuilder` that documents the bypass.
+
+10. **IS_SYSTEM_TENANT_METADATA_ONLY**: `is_system_tenant` is metadata for selecting default policy — NEVER an authorization branch. No code path may check `if (isSystemTenant) { grant privilege }`. Privilege comes from the resolved policy's allowlist/effect gates/budgets, not the boolean.
+
+11. **SIDE_EFFECT_TOOL_IDEMPOTENCY**: Side-effect tools (broadcast posts, git actions, payments) MUST be idempotent. Adapters require `idempotencyKey = ${tenantId}/${runId}/${toolCallId}` and dedupe at adapter boundary. Retries return cached result, not re-execute.
+
+12. **SYSTEM_TENANT_STARTUP_CHECK**: Application startup MUST verify `cogni_system` billing account exists. Fail fast with clear error if missing — do not fail at runtime when governance loop attempts to run.
+
 ---
 
 ## What Already Exists
@@ -31,17 +41,19 @@ The codebase already has the primitives needed:
 | `ToolPolicy`             | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ✅ Has `allowedTools`, `requireApprovalForEffects`, `budgets` |
 | `ToolEffect`             | `@cogni/ai-core/tooling/types.ts`               | ✅ Has `read_only`, `state_change`, `external_side_effect`    |
 | `ToolPolicyContext`      | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ✅ Has `runId`, notes P1 expansion                            |
+| `configurable.toolIds`   | GRAPH_EXECUTION.md #26, TOOL_USE_SPEC.md #23    | ✅ Runtime allowlist enforced by `toLangChainTool`            |
 | `ExecutionGrant`         | `src/types/scheduling.ts`                       | ✅ Has `billingAccountId`, `scopes`, `userId`                 |
 | `RUNID_SERVER_AUTHORITY` | GRAPH_EXECUTION.md #29                          | ✅ Client runId ignored                                       |
 
 **What's missing:**
 
-| Gap                               | Fix                                         |
-| --------------------------------- | ------------------------------------------- |
-| No `is_system_tenant` flag        | Add column to `billing_accounts`            |
-| No `cogni_system` record          | Add seed/migration                          |
-| No tenant-based policy resolution | Extend `ToolPolicyContext` with tenant info |
-| No spend alerting for system      | Add monitoring (P1)                         |
+| Gap                               | Fix                                              |
+| --------------------------------- | ------------------------------------------------ |
+| No `is_system_tenant` flag        | Add column to `billing_accounts`                 |
+| No `cogni_system` record          | Add idempotent seed + startup healthcheck        |
+| No `PolicyResolverPort`           | Add port for authoritative policy resolution     |
+| No required `tenantId` in context | Make required + test escape hatch                |
+| No side-effect tool idempotency   | Add idempotency key + dedupe at adapter boundary |
 
 ---
 
@@ -55,29 +67,76 @@ The codebase already has the primitives needed:
 | ------------------ | ------- | ----------------------- |
 | `is_system_tenant` | boolean | NOT NULL, default false |
 
-**Constraint:** Check constraint or RLS — `is_system_tenant=true` accounts have different access patterns (no `owner_user_id` required).
+**Constraint:** `is_system_tenant` is metadata only — no RLS or authorization logic branches on this field.
 
-**System tenant bootstrap:**
+**System tenant bootstrap (idempotent):**
 
 ```sql
+-- Run in migration AND seed (idempotent via ON CONFLICT)
 INSERT INTO billing_accounts (id, owner_user_id, is_system_tenant, balance_credits, created_at, updated_at)
 VALUES ('cogni_system', NULL, true, 0, now(), now())
 ON CONFLICT (id) DO NOTHING;
 ```
 
-### ToolPolicyContext (extension)
-
-Extend existing `ToolPolicyContext` (don't create new abstraction):
+**Startup healthcheck:**
 
 ```typescript
-// @cogni/ai-core/tooling/runtime/tool-policy.ts — extend existing interface
+// In app bootstrap (src/bootstrap/healthchecks.ts)
+async function verifySystemTenantExists(db: DbClient): Promise<void> {
+  const result = await db.query.billingAccounts.findFirst({
+    where: eq(billingAccounts.id, "cogni_system"),
+  });
+  if (!result) {
+    throw new Error(
+      "FATAL: cogni_system billing account missing. Run migrations/seeds."
+    );
+  }
+}
+```
+
+### ToolPolicyContext (extension)
+
+Extend existing `ToolPolicyContext` with REQUIRED `tenantId`:
+
+```typescript
+// @cogni/ai-core/tooling/runtime/tool-policy.ts
+
 export interface ToolPolicyContext {
   readonly runId: string;
-  // P1 additions for tenant-aware policy:
-  readonly tenantId?: string; // billing_account_id
-  readonly isSystemTenant?: boolean; // for policy selection
-  readonly actorType?: "user" | "system" | "webhook";
-  readonly actorId?: string;
+  /** REQUIRED: billing_account_id. Tool-runner denies if missing. */
+  readonly tenantId: string;
+  /** Actor who initiated (audit trail) */
+  readonly actorType: "user" | "system" | "webhook";
+  readonly actorId: string;
+  /** Tool call ID for idempotency key construction */
+  readonly toolCallId: string;
+}
+
+// Test escape hatch (explicit bypass for unit tests only)
+export function createTestPolicyContext(
+  overrides: Partial<ToolPolicyContext> & { runId: string }
+): ToolPolicyContext {
+  return {
+    tenantId: "test_tenant",
+    actorType: "system",
+    actorId: "test",
+    toolCallId: "test_call",
+    ...overrides,
+  };
+}
+```
+
+### PolicyResolverPort
+
+```typescript
+// src/ports/policy-resolver.port.ts
+
+export interface PolicyResolverPort {
+  /**
+   * Resolve authoritative policy for a tenant.
+   * This is the single source of truth — tool-runner calls this, not route-passed toolIds.
+   */
+  resolvePolicy(tenantId: string): Promise<ToolPolicy>;
 }
 ```
 
@@ -87,28 +146,38 @@ export interface ToolPolicyContext {
 
 ### P0: MVP — System Tenant Foundation
 
-**Schema:**
+**Schema & Bootstrap:**
 
 - [ ] Add `is_system_tenant` boolean column to `billing_accounts` (default false)
-- [ ] Add migration
-- [ ] Add seed script: create `cogni_system` billing account with `is_system_tenant=true`
+- [ ] Add migration that creates column AND inserts `cogni_system` (idempotent)
+- [ ] Add startup healthcheck: fail if `cogni_system` missing
 - [ ] Add to `pnpm dev:stack:test:setup`
 
-**Policy resolution:**
+**PolicyResolverPort (single source of truth):**
 
-- [ ] Create `resolveTenantPolicy(billingAccountId): ToolPolicy` helper
+- [ ] Create `PolicyResolverPort` interface in `src/ports/`
+- [ ] Implement `DrizzlePolicyResolverAdapter` — loads tenant, selects policy based on `is_system_tenant`
 - [ ] System tenant policy: explicit allowlist (enumerate governance tools), high budget caps
 - [ ] Customer tenant policy: default allowlist, standard budget, `requireApprovalForEffects: ['external_side_effect']`
+- [ ] Update tool-runner to call `PolicyResolverPort.resolvePolicy()` — do NOT trust passed `toolIds`
 
-**Extend ToolPolicyContext:**
+**ToolPolicyContext (required tenantId):**
 
-- [ ] Add optional `tenantId`, `isSystemTenant`, `actorType`, `actorId` fields
-- [ ] Update `tool-runner.ts` to pass extended context
-- [ ] Providers populate context from `caller` (already has billingAccountId)
+- [ ] Make `tenantId`, `actorType`, `actorId`, `toolCallId` required fields
+- [ ] Add `createTestPolicyContext()` escape hatch for unit tests
+- [ ] Update tool-runner to deny/throw if `tenantId` missing (defense in depth)
+- [ ] Update providers to populate full context from `caller`
+
+**Side-effect tool idempotency:**
+
+- [ ] Add `tool_execution_results` table: `(idempotency_key PK, result jsonb, created_at)`
+- [ ] Idempotency key format: `${tenantId}/${runId}/${toolCallId}`
+- [ ] Side-effect tool adapters check table before execute, store result after success
+- [ ] On key match: return cached result, do not re-execute
 
 #### Chores
 
-- [ ] Add `tenant_id`, `is_system_tenant`, `actor_type` to traces/logs
+- [ ] Add `tenant_id`, `actor_type` to traces/logs
 - [ ] Documentation: update ACCOUNTS_DESIGN.md (done)
 
 ### P1: Enhanced Policy & Monitoring
@@ -127,14 +196,17 @@ export interface ToolPolicyContext {
 
 ## File Pointers (P0 Scope)
 
-| File                                                          | Change                                |
-| ------------------------------------------------------------- | ------------------------------------- |
-| `src/shared/db/schema.billing.ts`                             | Add `is_system_tenant` column         |
-| `src/adapters/server/db/migrations/XXXX_add_system_tenant.ts` | New migration                         |
-| `scripts/seed-system-tenant.ts`                               | New: bootstrap `cogni_system` account |
-| `packages/ai-core/src/tooling/runtime/tool-policy.ts`         | Extend `ToolPolicyContext`            |
-| `src/features/ai/services/tenant-policy.ts`                   | New: `resolveTenantPolicy()`          |
-| `packages/ai-core/src/tooling/tool-runner.ts`                 | Pass extended context                 |
+| File                                                          | Change                                             |
+| ------------------------------------------------------------- | -------------------------------------------------- |
+| `src/shared/db/schema.billing.ts`                             | Add `is_system_tenant` column                      |
+| `src/adapters/server/db/migrations/XXXX_add_system_tenant.ts` | Migration + idempotent seed                        |
+| `src/bootstrap/healthchecks.ts`                               | New: startup check for `cogni_system`              |
+| `src/ports/policy-resolver.port.ts`                           | New: `PolicyResolverPort` interface                |
+| `src/adapters/server/policy/drizzle-policy-resolver.ts`       | New: policy resolution implementation              |
+| `packages/ai-core/src/tooling/runtime/tool-policy.ts`         | Required `tenantId` + test escape hatch            |
+| `packages/ai-core/src/tooling/tool-runner.ts`                 | Call PolicyResolverPort, deny if no tenantId       |
+| `src/shared/db/schema.tool-execution.ts`                      | New: `tool_execution_results` for idempotency      |
+| `src/adapters/server/ai/tool-idempotency.adapter.ts`          | New: idempotency check/store for side-effect tools |
 
 ---
 
@@ -150,68 +222,93 @@ export interface ToolPolicyContext {
 
 **Rule:** Use boolean for P0. If we need org/team types later, we can add without breaking existing code.
 
-### 2. Why explicit allowlist (not wildcard)?
+**Guardrail:** `is_system_tenant` is ONLY used to select default policy. Never `if (isSystemTenant) { allow }`.
 
-Wildcard `*` for system tools creates a privilege escalation vector:
+### 2. Why PolicyResolverPort (defense in depth)?
 
-- If a tool has a bug allowing arbitrary action, system tenant can exploit it
-- If tool injection becomes possible, system tenant amplifies the attack
-- No audit trail of "what tools does system actually use"
+Per GRAPH_EXECUTION.md #26, `configurable.toolIds` is the existing enforcement via `toLangChainTool`. Adding `PolicyResolverPort` provides defense in depth:
 
-**Rule:** System tenant enumerates its tools: `['broadcast_cogni', 'cred_payout', 'git_review_comment', ...]`
+- Route bug could expand toolIds beyond tenant's actual allowlist
+- Second gate catches this: PolicyResolverPort returns authoritative max
+- Both checks must pass: tool in `configurable.toolIds` AND in resolved policy
 
-### 3. Why high caps (not unlimited)?
+**Rule:** `configurable.toolIds` can restrict (subset), but cannot expand beyond what `PolicyResolverPort.resolvePolicy(tenantId)` returns. First gate is existing behavior; second gate is new.
 
-Unlimited budget for system tenant means:
+### 3. Why required tenantId (not optional)?
 
-- Runaway loop = unbounded spend
-- No alerting threshold to catch bugs
-- No kill switch trigger
+Optional `tenantId` means production code could accidentally execute without tenant context:
 
-**Rule:** System tenant has `budgetCredits: 100_000_000_000` (10K USD equivalent) with:
+- Bypasses billing attribution
+- Bypasses policy enforcement
+- Silent failure mode
 
-- Alert at 50% spend
-- Kill switch at 90%
-- Per-tool rate limits (e.g., max 100 calls/hour for expensive tools)
+**Rule:** `tenantId` is required. Tests use explicit `createTestPolicyContext()` that documents the bypass.
 
-### 4. Policy Resolution Flow
+### 4. Why side-effect tool idempotency?
+
+Without idempotency:
+
+- Graph retry = duplicate GitHub comment
+- Stream replay = duplicate broadcast post
+- Network timeout + retry = duplicate payment
+
+**Rule:** Side-effect tools use `idempotencyKey = ${tenantId}/${runId}/${toolCallId}`. Adapter checks before execute, stores after success. Mirrors billing idempotency pattern.
+
+### 5. Policy Resolution Flow (Defense in Depth)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Route/Facade (server-side)                                          │
 │ ────────────────────────────                                        │
 │ 1. Authenticate: session → userId, API key → billingAccountId, etc │
-│ 2. Load billing account: is_system_tenant?                          │
-│ 3. Resolve policy: resolveTenantPolicy(billingAccountId)            │
-│ 4. Build caller: { billingAccountId, virtualKeyId }                 │
-│ 5. Call graphExecutor.runGraph({ ..., caller, toolIds: policy.allowedTools })
+│ 2. Build caller: { billingAccountId, virtualKeyId }                 │
+│ 3. Build configurable: { toolIds: [...], model, ... }               │
+│ 4. Call graphExecutor.runGraph({ ..., caller, configurable })       │
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Tool Runner (at execution time)                                      │
-│ ─────────────────────────────                                        │
-│ 1. Receive extended context: { runId, tenantId, isSystemTenant, ...}│
-│ 2. Check allowlist: toolId in policy.allowedTools?                  │
-│ 3. Check effect: if effect in requireApprovalForEffects → interrupt │
-│ 4. Execute + emit receipt                                           │
+│ toLangChainTool (per GRAPH_EXECUTION.md #26) — FIRST GATE           │
+│ ─────────────────────────────────────────────────────────           │
+│ - Check: toolId in configurable.toolIds?                            │
+│ - If not: return policy_denied (existing behavior)                  │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ Tool Runner — SECOND GATE (defense in depth)                         │
+│ ────────────────────────────────────────────                         │
+│ 1. Validate context: tenantId present? (deny if missing)            │
+│ 2. Resolve max policy: PolicyResolverPort.resolvePolicy(tenantId)   │
+│ 3. Check: toolId in resolvedPolicy.allowedTools?                    │
+│ 4. Check effect: if effect in requireApprovalForEffects → interrupt │
+│ 5. Check idempotency: side-effect? check tool_execution_results     │
+│ 6. Execute tool                                                      │
+│ 7. Store idempotency result (if side-effect)                        │
+│ 8. Emit receipt                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key:** Tenant context is resolved from auth at ingress. Client never provides it.
+**Defense in depth:**
+
+- `configurable.toolIds` = route's requested subset (first gate, per GRAPH_EXECUTION.md #26)
+- `PolicyResolverPort` = authoritative max allowlist (second gate, new)
+- Route can restrict but not expand; both checks must pass
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern                         | Why Forbidden                                                             |
-| ------------------------------------ | ------------------------------------------------------------------------- |
-| Client-provided tenant/actor context | Spoofable; resolved server-side from auth only                            |
-| Wildcard tool allowlist for system   | Privilege escalation vector                                               |
-| Unlimited budget for system          | No alerting, no kill switch                                               |
-| Boolean `requireHilForSideEffects`   | Use `ToolEffect` levels with `requireApprovalForEffects` array            |
-| RLS based on `owner_user_id`         | System tenant has NULL owner; use tenant membership (P1)                  |
-| New `RunContext` abstraction         | Extends existing `ToolPolicyContext`; billing context already in `caller` |
+| Anti-Pattern                              | Why Forbidden                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------ |
+| Client-provided tenant/actor context      | Spoofable; resolved server-side from auth only                           |
+| Wildcard tool allowlist for system        | Privilege escalation vector                                              |
+| Unlimited budget for system               | No alerting, no kill switch                                              |
+| `if (isSystemTenant) { allow privilege }` | is_system_tenant is metadata for defaults only; policy grants privilege  |
+| Route-passed toolIds as ONLY authority    | Defense in depth: must also check PolicyResolverPort max allowlist       |
+| Optional tenantId in ToolPolicyContext    | Silent bypass of billing/policy; must be required with test escape hatch |
+| Side-effect tools without idempotency     | Retries cause duplicate posts/payments/actions                           |
+| Fail at runtime if system tenant missing  | Startup healthcheck catches this early                                   |
 
 ---
 
@@ -225,4 +322,4 @@ Unlimited budget for system tenant means:
 ---
 
 **Last Updated**: 2026-01-20
-**Status**: Draft — Revised per security review
+**Status**: Draft — P0 fixes applied per security review
