@@ -21,53 +21,121 @@
 
 ### Orchestration (Temporal)
 
-1. **TEMPORAL_DETERMINISM**: No I/O, network calls, or LLM invocations inside Workflow code. All external calls (DB, LLM, APIs) run in Activities only. Violating this breaks replay on deploy/restart.
+> See [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) for canonical Temporal patterns, anti-patterns, and code examples.
 
-2. **TEMPORAL_SCHEDULES_DEFAULT**: Use Temporal Schedules for recurring collection and detection runs. Not cron jobs, not external schedulers. Schedules provide pause/resume, backfill, and operational visibility.
+1. **TEMPORAL_DETERMINISM**: No I/O in Workflow code. All external calls run in Activities. (See TEMPORAL_PATTERNS.md)
 
-3. **ACTIVITY_IDEMPOTENCY**: All Activities must be idempotent. Temporal retries Activities on failure. Use idempotency keys for side effects: `${workflowId}/${activityId}/${attempt}`.
+2. **TEMPORAL_SCHEDULES_DEFAULT**: Use Temporal Schedules for recurring collection and detection. (See TEMPORAL_PATTERNS.md)
+
+3. **ACTIVITY_IDEMPOTENCY**: All Activities must be idempotent. (See TEMPORAL_PATTERNS.md)
+
+### Trigger Model
+
+4. **TRIGGERS_ARE_SIGNALS**: All external triggers (webhooks, human updates, CI events) MUST normalize to CloudEvents SignalEvents via SignalWritePort. No trigger directly runs an agent. Triggers → Signals → Router → Incidents → Agent.
+
+5. **DUAL_PATH_ROUTING**: IncidentRouterWorkflow can be started by (a) Temporal Schedule (backstop, every 1-5m) OR (b) webhook fast-path (immediate after ingest). Same workflow, two initiation modes.
+
+6. **TRIGGER_PRIORITY_POLICY**: Map `(source, type)` → `immediate | scheduled`. High-severity signals (e.g., `ci.e2e.failed`, `deploy.prod.failed`) trigger immediate router run; others wait for scheduled sweep.
+
+7. **ROUTER_IDEMPOTENCY**: IncidentRouterWorkflow uses stable workflowId = `router:${scope}:${timeBucket}`. Concurrent starts dedupe via Temporal. Router processes signals since last cursor.
 
 ### Signal Ingestion
 
-4. **CLOUDEVENTS_1_0_PLUS_GOVERNANCE**: All signals use CloudEvents 1.0 envelope. Required: `id`, `source`, `type`, `specversion`. Governance extensions require: `time`, `data`, `domain`, `severity`, plus provenance fields. Non-conforming events rejected at ingest.
+8. **CLOUDEVENTS_1_0_PLUS_GOVERNANCE**: All signals use CloudEvents 1.0 envelope. Required: `id`, `source`, `type`, `specversion`. Governance extensions require: `time`, `data`, `domain`, `severity`, plus provenance fields. Non-conforming events rejected at ingest.
 
-5. **IDEMPOTENT_INGEST**: `SignalEvent.id` is globally unique. Re-ingesting same ID = no-op. Ingest returns `{accepted, deduplicated, rejected}` counts.
+9. **IDEMPOTENT_INGEST**: `SignalEvent.id` is globally unique. Re-ingesting same ID = no-op. Ingest returns `{accepted, deduplicated, rejected}` counts.
 
-6. **PROVENANCE_REQUIRED**: Every signal includes `producer`, `producerVersion`, `retrievedAt`. `authRef` is opaque (adapter-owned credential reference). Missing provenance = rejected.
+10. **PROVENANCE_REQUIRED**: Every signal includes `producer`, `producerVersion`, `retrievedAt`. `authRef` is opaque (adapter-owned credential reference). Missing provenance = rejected.
 
-7. **SOURCE_ADAPTER_PATTERN**: One adapter per system-of-record. Adapters define streams with cursor semantics. `collect()` is replay-safe (same cursor = same or superset events). Activities call adapters; adapters never call Activities.
+11. **SOURCE_ADAPTER_PATTERN**: One adapter per system-of-record. Adapters define streams with cursor semantics. `collect()` is replay-safe (same cursor = same or superset events). Activities call adapters; adapters never call Activities.
+
+12. **WEBHOOK_IDEMPOTENCY**: Webhook-derived SignalEvent.id = `{source}:{delivery_id}:{entity_id}` when delivery_id exists. If no delivery_id: `{source}:{entity_id}:{hash(canonical_payload)}`.
 
 ### Brief Generation
 
-8. **BUDGET_ENFORCED**: GovernanceBrief generation enforces `maxItemsTotal` and per-domain caps. Over-budget items dropped with reason logged.
+13. **BUDGET_ENFORCED**: GovernanceBrief generation enforces `maxItemsTotal` and per-domain caps. Over-budget items dropped with reason logged.
 
-9. **DIFF_FIRST**: Briefs include `deltaFromBriefId` referencing previous brief. Items have stable IDs for change detection. Agents see what's new, not everything.
+14. **DIFF_FIRST**: Briefs include `deltaFromBriefId` referencing previous brief. Items have stable IDs for change detection. Agents see what's new, not everything.
 
-10. **CITATIONS_REQUIRED**: Every BriefItem cites one or more `SignalEvent.id`s. Claims without citations = generation bug.
+15. **CITATIONS_REQUIRED**: Every BriefItem cites one or more `SignalEvent.id`s. Claims without citations = generation bug.
 
-11. **ACCOUNTABILITY**: Brief includes `dropped: { reason: count }` map. Agents know what was excluded and why.
+16. **ACCOUNTABILITY**: Brief includes `dropped: { reason: count }` map. Agents know what was excluded and why.
 
 ### Metrics Access
 
-12. **GOVERNED_METRICS**: MetricsQueryPort enforces per-metric policy: `maxLookbackDays`, `maxResultRows`, `allowedDimensions`. No unbounded queries.
+17. **GOVERNED_METRICS**: MetricsQueryPort enforces per-metric policy: `maxLookbackDays`, `maxResultRows`, `allowedDimensions`. No unbounded queries.
 
-13. **QUERY_PROVENANCE**: Metric query responses include `queryRef`, `executedAt`, `cached`. Audit trail for reproducibility.
+18. **QUERY_PROVENANCE**: Metric query responses include `queryRef`, `executedAt`, `cached`. Audit trail for reproducibility.
 
 ### Agent Execution
 
-14. **INCIDENT_GATES_AGENT**: LLM governance agent runs ONLY on `incident_open`, `severity_change`, or `incident_close`. Deterministic detector workflow runs on Schedule; agent workflow is triggered by incident events.
+19. **INCIDENT_GATES_AGENT**: LLM governance agent runs ONLY on `incident_open`, `severity_change`, or `incident_close`. Deterministic router workflow runs on Schedule + fast-path; agent workflow is triggered by incident lifecycle events only.
 
-15. **EDO_ONLY_ON_DECISION**: Event-Decision-Outcome records written ONLY when agent recommends action or requests approval. Silence is success.
+20. **EDO_ONLY_ON_DECISION**: Event-Decision-Outcome records written ONLY when agent recommends action or requests approval. Silence is success.
 
-16. **HUMAN_REVIEW_REQUIRED_MVP**: All proposed actions go to human review queue. No auto-execute in MVP.
+21. **HUMAN_REVIEW_REQUIRED_MVP**: All proposed actions go to human review queue (Plane via MCP). No auto-execute in MVP.
 
-17. **SYSTEM_TENANT_EXECUTION**: Governance runs execute as `cogni_system` tenant through `GraphExecutorPort`. Per SYSTEM_TENANT_DESIGN.md.
+22. **SYSTEM_TENANT_EXECUTION**: Governance runs execute as `cogni_system` tenant through `GraphExecutorPort`. Per SYSTEM_TENANT_DESIGN.md.
 
-18. **WORK_ITEM_VIA_MCP**: Agents create/update work items in Plane exclusively through MCP tools. Provider-portable.
+23. **COOLDOWN_PER_INCIDENT**: Enforce cooldown (e.g., 15m) per `incident_key` to prevent repeated agent runs on flappy signals.
 
 ---
 
 ## Architecture
+
+### Trigger Flow (MVP)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TRIGGER SOURCES                                                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│ WEBHOOKS (Push)              │ ADAPTERS (Poll)                           │
+│ - GitHub Actions webhooks    │ - Prometheus alerts (every 5m)            │
+│ - GitLab CI webhooks         │ - LiteLLM spend (every 5m)                │
+│ - Plane work item updates    │ - Loki error fingerprints (every 5m)     │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ SIGNAL INGEST (SignalWritePort)                                          │
+│ ─────────────────────────────────                                        │
+│ - ALL triggers normalize to CloudEvents SignalEvents                     │
+│ - Idempotent write (same ID = no-op)                                     │
+│ - Webhook handler checks TriggerPriorityPolicy after ingest              │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌──────────────────────────────┐ ┌────────────────────────────────────────┐
+│ IMMEDIATE PATH               │ │ SCHEDULED PATH (Backstop)              │
+│ ────────────────             │ │ ─────────────────────────              │
+│ If (source,type) in          │ │ Temporal Schedule fires                │
+│ immediate_triggers:          │ │ every 1-5m per scope                   │
+│ → Start IncidentRouterWF     │ │ → Start IncidentRouterWF               │
+│   immediately after ingest   │ │   (same workflow, scheduled start)     │
+└──────────────────────────────┘ └────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ INCIDENT ROUTER WORKFLOW (Deterministic)                                 │
+│ ────────────────────────────────────────                                 │
+│ - workflowId = router:${scope}:${timeBucket} (idempotent)               │
+│ - Queries signals since last cursor                                      │
+│ - Queries metrics for threshold checks                                   │
+│ - Evaluates thresholds (NO I/O in workflow code)                        │
+│ - Opens/updates/closes incidents via Activity                            │
+│ - On lifecycle event → starts GovernanceAgentWorkflow                    │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ (incident_open | severity_change | incident_close)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ GOVERNANCE AGENT WORKFLOW                                                │
+│ ─────────────────────────────                                            │
+│ - Triggered ONLY by incident lifecycle events                            │
+│ - Generates brief, runs LLM agent, writes EDO                            │
+│ - Posts to human review queue (Plane via MCP)                            │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Data Flow
 
@@ -84,13 +152,14 @@
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ SOURCE ADAPTERS (packages/data-sources/<source>/)                        │
-│ ─────────────────────────────────────────────────                        │
+│ SOURCE ADAPTERS (src/adapters/server/governance/sources/)                │
+│ ─────────────────────────────────────────────────────────                │
 │ - One adapter per system-of-record                                       │
 │ - Multiple streams per adapter (e.g., github: prs, issues, actions)      │
 │ - Cursor-based collection (time watermark OR provider token)             │
 │ - Transforms raw data → CloudEvents SignalEvent                          │
 │ - collect() is replay-safe: same cursor → same/superset events           │
+│ - handleWebhook() for push sources (idempotent via delivery_id)          │
 └─────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -153,50 +222,57 @@
 
 ### Temporal Workflow Blueprint
 
+> See [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) for canonical patterns and code examples.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ SCHEDULED WORKFLOWS (Temporal Schedules)                                 │
+│ COLLECTION WORKFLOWS (Temporal Schedules, every 5m)                      │
 └─────────────────────────────────────────────────────────────────────────┘
 
-Schedule: every 5m
-    │
-    ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ CollectSourceStreamWorkflow(source, streamId)                            │
 │ ──────────────────────────────────────────────                           │
-│ Workflow: Load cursor from DB                                            │
+│ Activity: loadCursor(source, streamId)                                   │
 │ Activity: adapter.collect(streamId, cursor) → events[]                   │
 │ Activity: SignalWritePort.ingest(events) → result                        │
-│ Workflow: Save cursor to DB                                              │
+│ Activity: saveCursor(source, streamId, nextCursor)                       │
 └─────────────────────────────────────────────────────────────────────────┘
 
-Schedule: every 1-5m
+┌─────────────────────────────────────────────────────────────────────────┐
+│ INCIDENT ROUTER (Dual-Path: Schedule Backstop + Webhook Fast-Path)       │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Started by: Schedule (every 1-5m) OR Webhook handler (immediate)
+workflowId: router:${scope}:${timeBucket} (idempotent start)
     │
     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ GuardrailDetectorWorkflow(scope)                                         │
-│ ─────────────────────────────────                                        │
-│ Activity: MetricsQueryPort.query(guardrail metrics)                      │
-│ Activity: SignalReadPort.query(recent signals for scope)                 │
-│ Workflow: Deterministic threshold checks (NO I/O here)                   │
-│ Activity: IncidentStorePort.openOrUpdate() or .close()                   │
-│ Workflow: If lifecycle event → startChildWorkflow(GovernanceAgent)       │
+│ IncidentRouterWorkflow(scope)                                            │
+│ ─────────────────────────────                                            │
+│ Activity: queryMetrics(scope, guardrail metrics)                         │
+│ Activity: querySignals(scope, since lastCursor)                          │
+│ Workflow: evaluateThresholds(signals, metrics) → incidents (NO I/O)      │
+│ for each incident:                                                       │
+│   Activity: upsertIncident() → lifecycleEvent | null                     │
+│   Workflow: if lifecycleEvent → startChild(GovernanceAgentWorkflow)      │
+│ Activity: advanceCursor(scope)                                           │
 └─────────────────────────────────────────────────────────────────────────┘
 
-Triggered by: incident lifecycle event (from parent or signal)
-    │
-    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ GOVERNANCE AGENT (Triggered by incident lifecycle event ONLY)            │
+└─────────────────────────────────────────────────────────────────────────┘
+
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ GovernanceAgentWorkflow(incidentId, eventType)                           │
 │ ──────────────────────────────────────────────                           │
-│ Activity: IncidentStorePort.shouldRunAgent(cooldown check)               │
-│ Workflow: If cooldown not elapsed → exit early                           │
-│ Activity: GovernanceBriefPort.generate(window, domains, budget)          │
-│ Activity: GraphExecutorPort.runGraph(briefContext) → agentOutput         │
-│ Workflow: Parse output (deterministic)                                   │
-│ Activity: If action → GovernanceEdoPort.append(edo)                      │
-│ Activity: If action → WorkItemPort.create(item) via Plane MCP            │
-│ Activity: IncidentStorePort.markBriefed()                                │
+│ Activity: checkCooldown(incidentId) → shouldRun                          │
+│ Workflow: if !shouldRun → return early                                   │
+│ Activity: generateBrief(incidentId, window, domains, budget)             │
+│ Activity: runGovernanceGraph(brief) → agentOutput (via GraphExecutorPort)│
+│ Workflow: parseOutput(agentOutput) (deterministic)                       │
+│ Activity: if hasAction → appendEdo(edo)                                  │
+│ Activity: if hasAction → createWorkItem(item) via Plane MCP              │
+│ Activity: markBriefed(incidentId)                                        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -205,7 +281,8 @@ Triggered by: incident lifecycle event (from parent or signal)
 - Workflows contain only deterministic logic (conditionals, loops, state)
 - All I/O (DB, LLM, API calls) happens in Activities
 - Activities are idempotent and retryable
-- Child workflows for incident-triggered agent runs
+- IncidentRouterWorkflow uses stable workflowId for idempotent concurrent starts
+- GovernanceAgentWorkflow triggered ONLY by incident lifecycle events
 
 ---
 
@@ -445,6 +522,23 @@ export interface StreamCursor {
 | BACKWARDS_COMPAT_N_VERSIONS   | Parsers must handle N-1 schema versions gracefully                        |
 | REPLAY_SAFE_COLLECT           | `collect(cursor)` with same cursor must return same or superset events    |
 | ACTIVITIES_CALL_ADAPTERS      | Adapters are called from Temporal Activities, never from Workflows        |
+
+**Event Type Naming Convention:**
+
+Pattern: `{source}.{entity}.{action}` or `{source}.{category}.{signal}`
+
+| Source           | Example Types                                                        | Notes                              |
+| ---------------- | -------------------------------------------------------------------- | ---------------------------------- |
+| `github.webhook` | `github.webhook.pull_request`, `github.webhook.workflow_run`         | Webhook-delivered events           |
+| `github.poll`    | `github.poll.pr.updated`, `github.poll.issue.created`                | Polled events                      |
+| `gitlab.webhook` | `gitlab.webhook.pipeline`, `gitlab.webhook.merge_request`            |                                    |
+| `ci`             | `ci.e2e.failed`, `ci.e2e.passed`, `ci.build.failed`                  | CI system events (source-agnostic) |
+| `deploy`         | `deploy.preview.failed`, `deploy.prod.failed`, `deploy.prod.healthy` | Deployment events                  |
+| `prometheus`     | `prometheus.alert.firing`, `prometheus.alert.resolved`               |                                    |
+| `litellm`        | `litellm.spend.threshold_exceeded`                                   |                                    |
+| `plane`          | `plane.work_item.updated`, `plane.work_item.label_changed`           |                                    |
+
+**MVP Trigger Sources (P0):** Limit to 3 sources: (1) CI e2e fail, (2) prod error-rate alert, (3) LiteLLM spend spike OR Plane `needs-governance` label.
 
 ### GovernanceBriefPort
 
@@ -883,15 +977,22 @@ Agents need: what changed? what's new? what escalated? Not everything.
 
 ---
 
+## Known Issues
+
+- [ ] Existing `MetricsQueryPort` is PromQL-specific; rename/refactor needed before `GovernedMetricsPort` can be added. See [introspection/2026-01-21-cross-spec-alignment-review.md](introspection/2026-01-21-cross-spec-alignment-review.md).
+
+---
+
 ## Related Documents
 
+- [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) — Canonical Temporal patterns and anti-patterns
 - [SYSTEM_TENANT_DESIGN.md](SYSTEM_TENANT_DESIGN.md) — System tenant foundation
-- [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — Job queue patterns
+- [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — Scheduled graph execution
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort
 - [OBSERVABILITY.md](OBSERVABILITY.md) — Prometheus, Loki
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — MCP tool contracts
 
 ---
 
-**Last Updated**: 2026-01-20
+**Last Updated**: 2026-01-21
 **Status**: Draft — Pending Architecture Review
