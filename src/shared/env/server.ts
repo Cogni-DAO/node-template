@@ -90,6 +90,12 @@ export const serverSchema = z.object({
   // Note: PROMETHEUS_* vars are Alloy-only (infra); app only needs the scrape token.
   METRICS_TOKEN: z.string().min(32).optional(),
 
+  // Scheduler API token - Bearer auth for scheduler-worker → internal graph execution API
+  // Per SCHEDULER_SPEC.md: scheduler worker authenticates via shared secret to call
+  // POST /api/internal/graphs/{graphId}/runs. Min 32 chars to reduce weak-token risk.
+  // Required: Internal execution API will not function without this token.
+  SCHEDULER_API_TOKEN: z.string().min(32),
+
   // Public Analytics (Stage 9.5) - Mimir queries for public /analytics page
   // Optional: only required when analytics feature is enabled
   MIMIR_URL: z.string().url().optional(),
