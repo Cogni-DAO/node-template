@@ -31,21 +31,25 @@
 
 ### Temporal-Specific Invariants
 
-10. **WORKFLOW_ID_INCLUDES_TIMESTAMP**: Temporal workflowId = `{scheduleId}:{TemporalScheduledStartTime}`. Each scheduled slot gets a unique workflow. `scheduleId` remains the business key for correlation. Temporal overlap=SKIP ensures only one active workflow per schedule at a time.
+10. **NAMESPACE_PER_ENV**: Temporal namespace = `cogni-{APP_ENV}` (cogni-test, cogni-production). Single `scheduler-tasks` task queue per namespace.
 
-11. **SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS**: Slot deduplication handled by `execution_requests` table with key = `scheduleId:TemporalScheduledStartTime`. The internal API idempotency layer (request_hash check) is the correctness guarantee—not workflowId uniqueness.
+11. **WORKER_NEVER_CONTROLS_SCHEDULES**: `scheduler-temporal-worker` must not depend on `ScheduleControlPort` or call Temporal schedule APIs. CRUD routes are the single authority. Enforce via dep-cruiser.
 
-11b. **ACTIVITY_IDEMPOTENCY**: All Activities must be idempotent or rely on downstream idempotency. `executeGraphActivity` relies on `execution_requests` table. `updateScheduleRunActivity` must use monotonic status updates (pending→running→success/error, never backwards).
+12. **WORKFLOW_ID_INCLUDES_TIMESTAMP**: Temporal workflowId = `{scheduleId}:{TemporalScheduledStartTime}`. Each scheduled slot gets a unique workflow. `scheduleId` remains the business key for correlation. Temporal overlap=SKIP ensures only one active workflow per schedule at a time.
 
-12. **SCHEDULED_TIMESTAMP_FROM_TEMPORAL**: Activities derive `scheduledFor` from `TemporalScheduledStartTime` search attribute (authoritative source), never from workflow input or wall clock.
+13. **SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS**: Slot deduplication handled by `execution_requests` table with key = `scheduleId:TemporalScheduledStartTime`. The internal API idempotency layer (request_hash check) is the correctness guarantee—not workflowId uniqueness.
 
-13. **CRUD_IS_TEMPORAL_AUTHORITY**: Schedule CRUD endpoints (create/update/enable/disable/delete) are the single authority for Temporal schedule lifecycle. Worker never modifies schedules.
+13b. **ACTIVITY_IDEMPOTENCY**: All Activities must be idempotent or rely on downstream idempotency. `executeGraphActivity` relies on `execution_requests` table. `updateScheduleRunActivity` must use monotonic status updates (pending→running→success/error, never backwards).
 
-14. **NO_WORKER_RECONCILIATION**: Worker executes workflows only. Drift repair is a separate admin command (`pnpm scheduler:reconcile`), not an always-on loop.
+14. **SCHEDULED_TIMESTAMP_FROM_TEMPORAL**: Activities derive `scheduledFor` from `TemporalScheduledStartTime` search attribute (authoritative source), never from workflow input or wall clock.
 
-15. **DB_TIMING_IS_CACHE_ONLY**: `schedules.next_run_at` and `last_run_at` are cache columns for UI/quick-queries. Authoritative timing lives in Temporal. Synced on CRUD only; drift is acceptable.
+15. **CRUD_IS_TEMPORAL_AUTHORITY**: Schedule CRUD endpoints (create/update/enable/disable/delete) are the single authority for Temporal schedule lifecycle. Worker never modifies schedules.
 
-16. **SKIP_MISSED_RUNS**: P0 does not backfill missed runs. Temporal `catchupWindow=0` enforces this.
+16. **NO_WORKER_RECONCILIATION**: Worker executes workflows only. Drift repair is a separate admin command (`pnpm scheduler:reconcile`), not an always-on loop.
+
+17. **DB_TIMING_IS_CACHE_ONLY**: `schedules.next_run_at` and `last_run_at` are cache columns for UI/quick-queries. Authoritative timing lives in Temporal. Synced on CRUD only; drift is acceptable.
+
+18. **SKIP_MISSED_RUNS**: P0 does not backfill missed runs. Temporal `catchupWindow=0` enforces this.
 
 ---
 
@@ -73,25 +77,25 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ CRUD Endpoints (Single Authority for Temporal Schedules)                    │
+│ All Temporal calls go through ScheduleControlPort (vendor-agnostic)         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  POST /api/v1/schedules                                                     │
-│    1. Insert into schedules table                                           │
-│    2. temporalClient.schedule.create({                                      │
-│         scheduleId: dbSchedule.id,                                          │
-│         spec: { cronExpressions: [cron], timezone },                        │
-│         action: { type: 'startWorkflow', workflowId: dbSchedule.id, ... },  │
-│         policies: { overlap: 'SKIP', catchupWindow: 0 }                     │
-│       })                                                                    │
-│    3. Update schedules.temporal_schedule_id                                 │
+│    1. Create ExecutionGrant                                                 │
+│    2. Insert into schedules table                                           │
+│    3. scheduleControl.createSchedule({ scheduleId, cron, timezone, ... })   │
+│       └─► Adapter: overlap=SKIP, catchupWindow=0 (hardcoded)                │
+│    On Temporal failure: rollback DB, return 503                             │
 │                                                                             │
-│  PATCH /api/v1/schedules/:id (enabled=false)                                │
+│  PATCH /api/v1/schedules/:id (enabled toggle)                               │
 │    1. Update DB                                                             │
-│    2. temporalClient.schedule.pause(scheduleId)                             │
+│    2. scheduleControl.pauseSchedule() / resumeSchedule()                    │
+│    On Temporal failure: rollback DB, return 503                             │
 │                                                                             │
 │  DELETE /api/v1/schedules/:id                                               │
-│    1. Delete from DB                                                        │
-│    2. temporalClient.schedule.delete(scheduleId)                            │
+│    1. scheduleControl.deleteSchedule()                                      │
+│    2. Delete from DB (only if Temporal succeeds)                            │
+│    On Temporal failure: return 503, do NOT delete DB                        │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -101,8 +105,8 @@
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  Temporal Cloud (or self-hosted)                                            │
-│    • Namespace: cogni-{env}                                                 │
-│    • TaskQueue: governance-runs                                             │
+│    • Namespace: cogni-{APP_ENV}                                             │
+│    • TaskQueue: scheduler-tasks                                             │
 │    • Schedules: overlap=SKIP, catchupWindow=0                               │
 │                                                                             │
 │  services/scheduler-temporal-worker/                                        │
@@ -194,7 +198,7 @@
 | ------------------- | ----------- | --------------------------- | ------------------------------------- |
 | `id`                | uuid        | PK                          |                                       |
 | `schedule_id`       | uuid        | NOT NULL, FK schedules      |                                       |
-| `run_id`            | text        | **NULL**                    | Set after execution API responds      |
+| `run_id`            | text        | NULL                        | Set after execution API responds      |
 | `scheduled_for`     | timestamptz | NOT NULL                    | From TemporalScheduledStartTime       |
 | `started_at`        | timestamptz | NULL                        |                                       |
 | `completed_at`      | timestamptz | NULL                        |                                       |
@@ -205,6 +209,8 @@
 **Indexes:** `idx_runs_schedule`, `idx_runs_scheduled_for`, `idx_runs_run_id`
 **Unique:** `(schedule_id, scheduled_for)` — one run per slot
 **Pattern:** Idempotent get-or-create via `INSERT ON CONFLICT DO NOTHING` + `SELECT`.
+
+> **Note:** `run_id` is NULL on creation (set after internal API returns). The `ScheduleRunRepository.createRun()` port needs update to accept `runId?: string | null` to match schema.
 
 ### `execution_requests`
 
@@ -217,7 +223,12 @@
 | `created_at`      | timestamptz | NOT NULL    |                                         |
 
 **Purpose:** Persists idempotency as the correctness layer for slot deduplication.
-**Invariant:** If `idempotency_key` exists but `request_hash` differs, reject with 422 (payload mismatch).
+**Invariants:**
+
+- If `idempotency_key` exists but `request_hash` differs, reject with 422 (payload mismatch)
+- If `idempotency_key` exists and `request_hash` matches, return cached `{runId, traceId}` without re-executing
+
+> **TODO (P1):** Currently all executions are stored. Should only store **successful** executions so failed runs can retry. Move `storeRequest()` inside `if (final.ok)` block.
 
 ---
 
@@ -225,33 +236,43 @@
 
 ### Current (Implemented)
 
-| File                                                          | Purpose                                                 |
-| ------------------------------------------------------------- | ------------------------------------------------------- |
-| `packages/scheduler-core/src/types.ts`                        | `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` types   |
-| `packages/db-schema/src/scheduling.ts`                        | `execution_grants`, `schedules`, `schedule_runs` tables |
-| `packages/scheduler-core/src/ports/execution-grant.port.ts`   | `ExecutionGrantPort` + error classes                    |
-| `packages/scheduler-core/src/ports/schedule-manager.port.ts`  | `ScheduleManagerPort` interface                         |
-| `packages/scheduler-core/src/ports/schedule-run.port.ts`      | `ScheduleRunRepository` interface                       |
-| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`    | `DrizzleExecutionGrantAdapter`                          |
-| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts` | `DrizzleScheduleManagerAdapter`                         |
-| `packages/db-client/src/adapters/drizzle-run.adapter.ts`      | `DrizzleScheduleRunAdapter`                             |
-| `src/contracts/schedules.*.v1.contract.ts`                    | Schedule CRUD contracts (4 files)                       |
-| `src/app/api/v1/schedules/route.ts`                           | POST (create), GET (list)                               |
-| `src/app/api/v1/schedules/[scheduleId]/route.ts`              | PATCH (update), DELETE                                  |
-| `src/bootstrap/container.ts`                                  | Wire scheduling ports                                   |
-| `packages/scheduler-core/src/payloads.ts`                     | Zod payload schemas                                     |
+| File                                                                   | Purpose                                                 |
+| ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| `packages/scheduler-core/src/types.ts`                                 | `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` types   |
+| `packages/db-schema/src/scheduling.ts`                                 | `execution_grants`, `schedules`, `schedule_runs` tables |
+| `packages/scheduler-core/src/ports/execution-grant.port.ts`            | `ExecutionGrantPort` + error classes                    |
+| `packages/scheduler-core/src/ports/execution-request.port.ts`          | `ExecutionRequestPort` for idempotency                  |
+| `packages/scheduler-core/src/ports/schedule-manager.port.ts`           | `ScheduleManagerPort` interface                         |
+| `packages/scheduler-core/src/ports/schedule-run.port.ts`               | `ScheduleRunRepository` interface                       |
+| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`             | `DrizzleExecutionGrantAdapter`                          |
+| `packages/db-client/src/adapters/drizzle-execution-request.adapter.ts` | `DrizzleExecutionRequestAdapter`                        |
+| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts`          | `DrizzleScheduleManagerAdapter`                         |
+| `packages/db-client/src/adapters/drizzle-run.adapter.ts`               | `DrizzleScheduleRunAdapter`                             |
+| `src/contracts/schedules.*.v1.contract.ts`                             | Schedule CRUD contracts (4 files)                       |
+| `src/app/api/v1/schedules/route.ts`                                    | POST (create), GET (list)                               |
+| `src/app/api/v1/schedules/[scheduleId]/route.ts`                       | PATCH (update), DELETE                                  |
+| `src/bootstrap/container.ts`                                           | Wire scheduling ports                                   |
+| `packages/scheduler-core/src/payloads.ts`                              | Zod payload schemas                                     |
 
 ### Planned (Temporal Migration)
 
-| File                                                  | Purpose                                |
-| ----------------------------------------------------- | -------------------------------------- |
-| `services/scheduler-temporal-worker/`                 | Temporal worker service                |
-| `services/scheduler-temporal-worker/src/main.ts`      | Worker entry, connects to Temporal     |
-| `services/scheduler-temporal-worker/src/workflows/`   | GovernanceScheduledRunWorkflow         |
-| `services/scheduler-temporal-worker/src/activities/`  | validateGrant, createRun, executeGraph |
-| `src/app/api/internal/graphs/[graphId]/runs/route.ts` | Internal execution endpoint            |
-| `src/contracts/graphs.run.internal.v1.contract.ts`    | Internal execution contract            |
-| `packages/scheduler-core/src/ports/temporal.port.ts`  | TemporalSchedulePort interface         |
+| File                                                            | Purpose                                       |
+| --------------------------------------------------------------- | --------------------------------------------- |
+| `packages/scheduler-core/src/ports/schedule-control.port.ts`    | `ScheduleControlPort` interface (no vendor)   |
+| `src/adapters/server/temporal/client.ts`                        | Temporal client factory                       |
+| `src/adapters/server/temporal/schedule-control.adapter.ts`      | `TemporalScheduleControlAdapter`              |
+| `src/adapters/server/temporal/noop-schedule-control.adapter.ts` | `NoOpScheduleControlAdapter` (`APP_ENV=test`) |
+| `services/scheduler-temporal-worker/`                           | Temporal worker service                       |
+| `services/scheduler-temporal-worker/src/main.ts`                | Worker entry, connects to Temporal            |
+| `services/scheduler-temporal-worker/src/workflows/`             | GovernanceScheduledRunWorkflow                |
+| `services/scheduler-temporal-worker/src/activities/`            | validateGrant, createRun, executeGraph        |
+
+### Implemented (P0)
+
+| File                                                  | Purpose                     |
+| ----------------------------------------------------- | --------------------------- |
+| `src/app/api/internal/graphs/[graphId]/runs/route.ts` | Internal execution endpoint |
+| `src/contracts/graphs.run.internal.v1.contract.ts`    | Internal execution contract |
 
 ### To Delete (Post-Migration)
 
@@ -288,30 +309,53 @@
 
 ### P1: Temporal Migration
 
-**Infrastructure:**
+**1. Port & Types (`@cogni/scheduler-core`):**
 
-- [ ] Stand up Temporal (Cloud preferred, or local dev-server)
-- [ ] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`
-- [ ] Add `@temporalio/client` to app server dependencies
+- [ ] Add `ScheduleControlPort` interface (vendor-agnostic):
+  - `createSchedule(params)` → `Promise<void>` (scheduleId caller-supplied)
+  - `pauseSchedule(scheduleId)` / `resumeSchedule(scheduleId)`
+  - `deleteSchedule(scheduleId)`
+  - `describeSchedule(scheduleId)` → `ScheduleDescription | null`
+- [ ] Add `ScheduleDescription` type: `{ scheduleId, nextRunAtIso, lastRunAtIso, isPaused }`
+- [ ] Add error types: `ScheduleControlUnavailableError`, `ScheduleControlConflictError`
+- [ ] Input as `JsonValue` (not `unknown`), dates as ISO strings
 
-**CRUD → Temporal Integration:**
+**2. Adapter (`src/adapters/server/temporal/`):**
 
-- [ ] Update `POST /api/v1/schedules` to create Temporal schedule (scheduleId = DB id)
-- [ ] Update `PATCH /api/v1/schedules/:id` to pause/unpause Temporal schedule
-- [ ] Update `DELETE /api/v1/schedules/:id` to delete Temporal schedule
-- [ ] Set policies: `overlap: 'SKIP'`, `catchupWindow: 0`
+- [ ] Implement `TemporalScheduleControlAdapter`
+- [ ] Implement `NoOpScheduleControlAdapter` (for `APP_ENV=test`)
+- [ ] Hardcode policies: `overlap: SKIP`, `catchupWindow: 0` (not exposed in port)
+- [ ] Map Temporal errors → port error types
+- [ ] Connection lifecycle via `@temporalio/client`
 
-**Worker Service:**
+**3. Docker Infrastructure:**
 
-- [ ] Create `services/scheduler-temporal-worker/`
+- [ ] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose pinned)
+- [ ] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE=cogni-{APP_ENV}`, `TEMPORAL_TASK_QUEUE=scheduler-tasks`
+- [ ] Health checks for temporal service
+
+**4. CRUD Integration (failure semantics defined):**
+
+- [ ] Update `DrizzleScheduleManagerAdapter`: replace `JobQueuePort` → `ScheduleControlPort`
+- [ ] Wire `ScheduleControlPort` in container.ts (`APP_ENV=test` → NoOp, else → Temporal)
+- [ ] Add `TEMPORAL_*` env vars to `src/shared/env/server.ts` (optional in test mode)
+- [ ] `POST`: grant + DB insert → `createSchedule()`. **On failure: rollback grant+DB, 503**
+- [ ] `PATCH enabled`: DB update → `pauseSchedule()`/`resumeSchedule()`. **On failure: rollback, 503**
+- [ ] `DELETE`: `deleteSchedule()` → DB delete. **On failure: 503, do NOT delete DB**
+- [ ] Stack test: create → describe → pause → resume → delete
+
+**5. Worker Service:**
+
+- [ ] Create `services/scheduler-temporal-worker/` (standalone, no `ScheduleControlPort` dep)
 - [ ] Implement `GovernanceScheduledRunWorkflow`
 - [ ] Implement Activities: `validateGrant`, `createScheduleRun`, `executeGraph`, `updateScheduleRun`
+- [ ] `executeGraphActivity` calls internal API with Bearer + Idempotency-Key
 - [ ] Activities derive `scheduledFor` from `TemporalScheduledStartTime`
 - [ ] Add Dockerfile and docker-compose entry
 
-**Cleanup:**
+**6. Cleanup (after validation):**
 
-- [ ] Delete `services/scheduler-worker/` (Graphile worker)
+- [ ] Delete `services/scheduler-worker/` (Graphile)
 - [ ] Delete `JobQueuePort` and `DrizzleJobQueueAdapter`
 - [ ] Remove Graphile Worker dependencies
 
