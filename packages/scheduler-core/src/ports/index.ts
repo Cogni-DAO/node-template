@@ -24,11 +24,22 @@ export {
   isGrantScopeMismatchError,
 } from "./execution-grant.port";
 export type {
+  ExecutionOutcome,
   ExecutionRequest,
   ExecutionRequestPort,
-  ExecutionRequestResult,
+  IdempotencyCheckResult,
 } from "./execution-request.port";
-export type { EnqueueJobParams, JobQueuePort } from "./job-queue.port";
+export {
+  type CreateScheduleParams,
+  isScheduleControlConflictError,
+  isScheduleControlNotFoundError,
+  isScheduleControlUnavailableError,
+  ScheduleControlConflictError,
+  ScheduleControlNotFoundError,
+  type ScheduleControlPort,
+  ScheduleControlUnavailableError,
+  type ScheduleDescription,
+} from "./schedule-control.port";
 export {
   type CreateScheduleInput,
   InvalidCronExpressionError,

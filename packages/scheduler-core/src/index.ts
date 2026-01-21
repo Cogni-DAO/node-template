@@ -26,18 +26,19 @@ export {
 export {
   // ScheduleManagerPort
   type CreateScheduleInput,
-  // JobQueuePort
-  type EnqueueJobParams,
+  // ScheduleControlPort
+  type CreateScheduleParams,
   // ExecutionGrantPort
   type ExecutionGrantPort,
   // ExecutionRequestPort
+  type ExecutionOutcome,
   type ExecutionRequest,
   type ExecutionRequestPort,
-  type ExecutionRequestResult,
   GrantExpiredError,
   GrantNotFoundError,
   GrantRevokedError,
   GrantScopeMismatchError,
+  type IdempotencyCheckResult,
   InvalidCronExpressionError,
   InvalidTimezoneError,
   isGrantExpiredError,
@@ -47,9 +48,16 @@ export {
   isInvalidCronExpressionError,
   isInvalidTimezoneError,
   isScheduleAccessDeniedError,
+  isScheduleControlConflictError,
+  isScheduleControlNotFoundError,
+  isScheduleControlUnavailableError,
   isScheduleNotFoundError,
-  type JobQueuePort,
   ScheduleAccessDeniedError,
+  ScheduleControlConflictError,
+  ScheduleControlNotFoundError,
+  type ScheduleControlPort,
+  ScheduleControlUnavailableError,
+  type ScheduleDescription,
   type ScheduleManagerPort,
   ScheduleNotFoundError,
   // ScheduleRunRepository
