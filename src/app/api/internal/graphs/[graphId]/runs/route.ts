@@ -300,8 +300,8 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
 
     const final = await result.final;
 
-    // Get trace ID from langfuse if available
-    const traceId = null; // TODO: Extract from observability decorator when available
+    // Use OTel trace ID (same one passed to executor, used by Langfuse decorator)
+    const traceId = ctx.traceId;
 
     // --- 10. Store idempotency record ---
     await container.executionRequestPort.storeRequest(
