@@ -3,45 +3,67 @@
 > [!CRITICAL]
 > Governance agents receive **bounded, cited briefs** — NOT raw data streams. SignalEvents flow through idempotent ingest; GovernanceBriefs are generated with strict budget caps and citation requirements. Every claim traces to source signals.
 
+## MVP Stack
+
+| Layer                   | Tool               | Notes                                  |
+| ----------------------- | ------------------ | -------------------------------------- |
+| Orchestrator            | Temporal OSS       | Schedules + Workflows + Activities     |
+| Metrics Semantic Layer  | Cube Core          | Governed KPI queries                   |
+| Metrics Backend         | Prometheus/Mimir   | Engineering telemetry                  |
+| Log Aggregates          | Grafana Loki       | Fingerprints only, not raw logs        |
+| Work Items              | Plane + MCP Server | Human review queue                     |
+| Storage                 | Postgres           | Primary data store                     |
+| Semantic Retrieval (P1) | pgvector extension | Embeddings over briefs/EDOs for recall |
+
+---
+
 ## Core Invariants
+
+### Orchestration (Temporal)
+
+1. **TEMPORAL_DETERMINISM**: No I/O, network calls, or LLM invocations inside Workflow code. All external calls (DB, LLM, APIs) run in Activities only. Violating this breaks replay on deploy/restart.
+
+2. **TEMPORAL_SCHEDULES_DEFAULT**: Use Temporal Schedules for recurring collection and detection runs. Not cron jobs, not external schedulers. Schedules provide pause/resume, backfill, and operational visibility.
+
+3. **ACTIVITY_IDEMPOTENCY**: All Activities must be idempotent. Temporal retries Activities on failure. Use idempotency keys for side effects: `${workflowId}/${activityId}/${attempt}`.
 
 ### Signal Ingestion
 
-1. **CLOUDEVENTS_ENVELOPE**: All signals use CloudEvents 1.0 schema. Required fields: `id`, `source`, `type`, `specversion`, `time`, `data`. Non-conforming events rejected at ingest.
+4. **CLOUDEVENTS_1_0_PLUS_GOVERNANCE**: All signals use CloudEvents 1.0 envelope. Required: `id`, `source`, `type`, `specversion`. Governance extensions require: `time`, `data`, `domain`, `severity`, plus provenance fields. Non-conforming events rejected at ingest.
 
-2. **IDEMPOTENT_INGEST**: `SignalEvent.id` is globally unique. Re-ingesting same ID = no-op. Ingest returns `{accepted, deduplicated, rejected}` counts.
+5. **IDEMPOTENT_INGEST**: `SignalEvent.id` is globally unique. Re-ingesting same ID = no-op. Ingest returns `{accepted, deduplicated, rejected}` counts.
 
-3. **PROVENANCE_REQUIRED**: Every signal includes `producer`, `producerVersion`, `retrievedAt`. `authRef` is opaque (adapter-owned credential reference). Missing provenance = rejected.
+6. **PROVENANCE_REQUIRED**: Every signal includes `producer`, `producerVersion`, `retrievedAt`. `authRef` is opaque (adapter-owned credential reference). Missing provenance = rejected.
 
-4. **SOURCE_ADAPTER_PATTERN**: One adapter per system-of-record. Adapters define streams with cursor semantics. `collect()` is replay-safe (same cursor = same or superset events).
+7. **SOURCE_ADAPTER_PATTERN**: One adapter per system-of-record. Adapters define streams with cursor semantics. `collect()` is replay-safe (same cursor = same or superset events). Activities call adapters; adapters never call Activities.
 
 ### Brief Generation
 
-5. **BUDGET_ENFORCED**: GovernanceBrief generation enforces `maxItemsTotal` and per-domain caps. Over-budget items dropped with reason logged.
+8. **BUDGET_ENFORCED**: GovernanceBrief generation enforces `maxItemsTotal` and per-domain caps. Over-budget items dropped with reason logged.
 
-6. **DIFF_FIRST**: Briefs include `deltaFromBriefId` referencing previous brief. Items have stable IDs for change detection. Agents see what's new, not everything.
+9. **DIFF_FIRST**: Briefs include `deltaFromBriefId` referencing previous brief. Items have stable IDs for change detection. Agents see what's new, not everything.
 
-7. **CITATIONS_REQUIRED**: Every BriefItem cites one or more `SignalEvent.id`s. Claims without citations = generation bug.
+10. **CITATIONS_REQUIRED**: Every BriefItem cites one or more `SignalEvent.id`s. Claims without citations = generation bug.
 
-8. **ACCOUNTABILITY**: Brief includes `dropped: { reason: count }` map. Agents know what was excluded and why.
+11. **ACCOUNTABILITY**: Brief includes `dropped: { reason: count }` map. Agents know what was excluded and why.
 
 ### Metrics Access
 
-9. **GOVERNED_METRICS**: MetricsQueryPort enforces per-metric policy: `maxLookbackDays`, `maxResultRows`, `allowedDimensions`. No unbounded queries.
+12. **GOVERNED_METRICS**: MetricsQueryPort enforces per-metric policy: `maxLookbackDays`, `maxResultRows`, `allowedDimensions`. No unbounded queries.
 
-10. **QUERY_PROVENANCE**: Metric query responses include `queryRef`, `executedAt`, `cached`. Audit trail for reproducibility.
+13. **QUERY_PROVENANCE**: Metric query responses include `queryRef`, `executedAt`, `cached`. Audit trail for reproducibility.
 
 ### Agent Execution
 
-11. **INCIDENT_GATES_AGENT**: LLM governance agent runs ONLY on `incident_open`, `severity_change`, or `incident_close`. Deterministic detector runs on timer; agent is gated.
+14. **INCIDENT_GATES_AGENT**: LLM governance agent runs ONLY on `incident_open`, `severity_change`, or `incident_close`. Deterministic detector workflow runs on Schedule; agent workflow is triggered by incident events.
 
-12. **EDO_ONLY_ON_DECISION**: Event-Decision-Outcome records written ONLY when agent recommends action or requests approval. Silence is success.
+15. **EDO_ONLY_ON_DECISION**: Event-Decision-Outcome records written ONLY when agent recommends action or requests approval. Silence is success.
 
-13. **HUMAN_REVIEW_REQUIRED_MVP**: All proposed actions go to human review queue. No auto-execute in MVP.
+16. **HUMAN_REVIEW_REQUIRED_MVP**: All proposed actions go to human review queue. No auto-execute in MVP.
 
-14. **SYSTEM_TENANT_EXECUTION**: Governance runs execute as `cogni_system` tenant through `GraphExecutorPort`. Per SYSTEM_TENANT_DESIGN.md.
+17. **SYSTEM_TENANT_EXECUTION**: Governance runs execute as `cogni_system` tenant through `GraphExecutorPort`. Per SYSTEM_TENANT_DESIGN.md.
 
-15. **WORK_ITEM_VIA_MCP**: Agents create/update work items in Plane exclusively through MCP tools. Provider-portable.
+18. **WORK_ITEM_VIA_MCP**: Agents create/update work items in Plane exclusively through MCP tools. Provider-portable.
 
 ---
 
@@ -128,6 +150,62 @@
 ```
 
 **Relationship:** MetricsQueryPort is orthogonal to signal flow. Brief generation MAY query metrics for KPI deltas. Governance agent MAY query metrics for drill-down. All governed, all auditable.
+
+### Temporal Workflow Blueprint
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ SCHEDULED WORKFLOWS (Temporal Schedules)                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Schedule: every 5m
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ CollectSourceStreamWorkflow(source, streamId)                            │
+│ ──────────────────────────────────────────────                           │
+│ Workflow: Load cursor from DB                                            │
+│ Activity: adapter.collect(streamId, cursor) → events[]                   │
+│ Activity: SignalWritePort.ingest(events) → result                        │
+│ Workflow: Save cursor to DB                                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Schedule: every 1-5m
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ GuardrailDetectorWorkflow(scope)                                         │
+│ ─────────────────────────────────                                        │
+│ Activity: MetricsQueryPort.query(guardrail metrics)                      │
+│ Activity: SignalReadPort.query(recent signals for scope)                 │
+│ Workflow: Deterministic threshold checks (NO I/O here)                   │
+│ Activity: IncidentStorePort.openOrUpdate() or .close()                   │
+│ Workflow: If lifecycle event → startChildWorkflow(GovernanceAgent)       │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Triggered by: incident lifecycle event (from parent or signal)
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ GovernanceAgentWorkflow(incidentId, eventType)                           │
+│ ──────────────────────────────────────────────                           │
+│ Activity: IncidentStorePort.shouldRunAgent(cooldown check)               │
+│ Workflow: If cooldown not elapsed → exit early                           │
+│ Activity: GovernanceBriefPort.generate(window, domains, budget)          │
+│ Activity: GraphExecutorPort.runGraph(briefContext) → agentOutput         │
+│ Workflow: Parse output (deterministic)                                   │
+│ Activity: If action → GovernanceEdoPort.append(edo)                      │
+│ Activity: If action → WorkItemPort.create(item) via Plane MCP            │
+│ Activity: IncidentStorePort.markBriefed()                                │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key rules:**
+
+- Workflows contain only deterministic logic (conditionals, loops, state)
+- All I/O (DB, LLM, API calls) happens in Activities
+- Activities are idempotent and retryable
+- Child workflows for incident-triggered agent runs
 
 ---
 
@@ -242,22 +320,22 @@ Configurable thresholds for incident detection.
 
 ## Ports
 
-### SignalIngestPort
+### SignalEvent (Shared Type)
 
 ```typescript
-// src/ports/governance/signal-ingest.port.ts
+// src/ports/governance/signal-event.ts
 
 export interface SignalEvent {
-  // CloudEvents required
+  // CloudEvents 1.0 required
   id: string;
   source: string;
   type: string;
   specversion: "1.0";
+
+  // Governance-required extensions
   time: Date;
   data: Record<string, unknown>;
   datacontenttype: "application/json";
-
-  // Governance extensions
   domain: "engineering" | "product" | "finance" | "operations";
   severity: "info" | "warning" | "critical";
 
@@ -267,6 +345,14 @@ export interface SignalEvent {
   retrievedAt: Date;
   authRef?: string;
 }
+```
+
+### SignalWritePort
+
+Adapters depend on this port only. Write path is separate from read path.
+
+```typescript
+// src/ports/governance/signal-write.port.ts
 
 export interface IngestResult {
   accepted: number;
@@ -275,8 +361,23 @@ export interface IngestResult {
   errors: Array<{ id: string; reason: string }>;
 }
 
-export interface SignalIngestPort {
+export interface SignalWritePort {
+  /**
+   * Idempotent batch ingest. Same ID = no-op.
+   * Validates CloudEvents envelope + provenance.
+   */
   ingest(events: SignalEvent[]): Promise<IngestResult>;
+}
+```
+
+### SignalReadPort
+
+Brief generation and queries depend on this port only.
+
+```typescript
+// src/ports/governance/signal-read.port.ts
+
+export interface SignalReadPort {
   query(params: {
     domains?: string[];
     types?: string[];
@@ -285,6 +386,8 @@ export interface SignalIngestPort {
     before: Date;
     limit: number;
   }): Promise<SignalEvent[]>;
+
+  getById(id: string): Promise<SignalEvent | null>;
 }
 ```
 
@@ -295,11 +398,20 @@ export interface SignalIngestPort {
 
 export interface SourceAdapter {
   readonly source: string;
+  readonly version: string; // Bump on schema changes
+
   streams(): StreamDefinition[];
+
+  /**
+   * Collect signals from a stream starting at cursor.
+   * MUST be replay-safe: same cursor → same or superset events.
+   * MUST generate deterministic event IDs (see eventIdScheme).
+   */
   collect(
     streamId: string,
     cursor: StreamCursor | null
   ): Promise<{ events: SignalEvent[]; nextCursor: StreamCursor }>;
+
   handleWebhook?(payload: unknown): Promise<SignalEvent[]>;
 }
 
@@ -308,6 +420,12 @@ export interface StreamDefinition {
   name: string;
   cursorType: "timestamp" | "token";
   defaultPollInterval: number;
+  /**
+   * How event IDs are constructed. Must be deterministic.
+   * Examples: "github:pr:{repo}:{pr_number}:{updated_at}"
+   *           "prometheus:alert:{alertname}:{fingerprint}:{startsAt}"
+   */
+  eventIdScheme: string;
 }
 
 export interface StreamCursor {
@@ -316,6 +434,17 @@ export interface StreamCursor {
   retrievedAt: Date;
 }
 ```
+
+**Adapter Contract Rules:**
+
+| Rule                          | Description                                                               |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| ONE_ADAPTER_PER_SYSTEM        | One adapter per system-of-record; multiple streams inside                 |
+| DETERMINISTIC_EVENT_IDS       | Event ID must be derivable from source data; same source record = same ID |
+| VERSION_BUMP_ON_SCHEMA_CHANGE | `adapter.version` must increment when payload schema changes              |
+| BACKWARDS_COMPAT_N_VERSIONS   | Parsers must handle N-1 schema versions gracefully                        |
+| REPLAY_SAFE_COLLECT           | `collect(cursor)` with same cursor must return same or superset events    |
+| ACTIVITIES_CALL_ADAPTERS      | Adapters are called from Temporal Activities, never from Workflows        |
 
 ### GovernanceBriefPort
 
@@ -514,32 +643,46 @@ export interface WorkItemPort {
 
 ### P0: Signal Infrastructure Foundation
 
+**Temporal Setup:**
+
+- [ ] Deploy Temporal OSS (dev: docker-compose, prod: managed)
+- [ ] Create `governance` namespace
+- [ ] Configure worker with task queue `governance-tasks`
+
 **Schema & Migrations:**
 
 - [ ] Create `signal_events` table with CloudEvents schema
+- [ ] Create `stream_cursors` table (adapter cursor persistence)
 - [ ] Create `governance_briefs` table
 - [ ] Create `incidents` table with `evidence_signal_ids`
 - [ ] Create `governance_edos` table with `brief_id`, `cited_signals`
 - [ ] Create `guardrail_thresholds` table with defaults
 
-**SignalIngestPort:**
+**Signal Ports (Split):**
 
-- [ ] Create port interface
-- [ ] Implement `DrizzleSignalIngestAdapter`
+- [ ] Create `SignalWritePort` interface
+- [ ] Create `SignalReadPort` interface
+- [ ] Implement `DrizzleSignalWriteAdapter`
+- [ ] Implement `DrizzleSignalReadAdapter`
 - [ ] Idempotent upsert on `id`
 - [ ] CloudEvents envelope validation
 - [ ] Provenance validation (reject if missing)
 
-**First SourceAdapter:**
+**First SourceAdapter + Workflow:**
 
 - [ ] Create `packages/data-sources/` structure
 - [ ] Implement `PrometheusAdapter` with `alerts` stream
-- [ ] Integration test: collect → ingest → query
+- [ ] Deterministic event ID scheme for Prometheus alerts
+- [ ] Create `CollectSourceStreamWorkflow`
+- [ ] Create `collectSignalsActivity` (calls adapter.collect → SignalWritePort.ingest)
+- [ ] Create Temporal Schedule for Prometheus collection (every 5m)
+- [ ] Integration test: Schedule → Workflow → Activity → ingest → query
 
 #### Chores
 
 - [ ] Add `governance.*` events to EVENT_NAMES
 - [ ] Document SourceAdapter pattern in `packages/data-sources/README.md`
+- [ ] Document Temporal workflow patterns in `packages/governance-workflows/README.md`
 
 ### P1: Brief Generation + Metrics Layer
 
@@ -554,6 +697,7 @@ export interface WorkItemPort {
 **MetricsQueryPort:**
 
 - [ ] Create port interface
+- [ ] Deploy Cube Core with Postgres connection
 - [ ] Define MVP metrics (error_rate, p95, llm_cost, queue_depth)
 - [ ] Per-metric access policy enforcement
 - [ ] Query provenance in response
@@ -563,51 +707,112 @@ export interface WorkItemPort {
 - [ ] `GitHubAdapter` (prs, issues, actions streams)
 - [ ] `LiteLLMAdapter` (spend stream)
 - [ ] `LokiAdapter` (error fingerprints only)
+- [ ] Temporal Schedules for each adapter
+
+**Semantic Retrieval (pgvector):**
+
+- [ ] Enable pgvector extension
+- [ ] Add `embedding` column to governance_briefs
+- [ ] Add `embedding` column to governance_edos
+- [ ] Implement similarity search for "similar past incidents"
 
 ### P2: Incident-Gated Agent Execution
 
-**Deterministic Detector:**
+**GuardrailDetectorWorkflow:**
 
-- [ ] Create `GuardrailDetectorService` (threshold checks)
-- [ ] Wire to job queue task (runs every 1-5m)
-- [ ] On incident lifecycle event → queue agent run
+- [ ] Create `GuardrailDetectorWorkflow` (deterministic threshold checks)
+- [ ] Create `queryMetricsActivity` (MetricsQueryPort)
+- [ ] Create `querySignalsActivity` (SignalReadPort)
+- [ ] Create `upsertIncidentActivity` (IncidentStorePort)
+- [ ] Temporal Schedule: every 1-5m per scope
+- [ ] On incident lifecycle event → start child GovernanceAgentWorkflow
 
-**Governance Agent Task:**
+**GovernanceAgentWorkflow:**
 
-- [ ] Check cooldown before running
-- [ ] Generate GovernanceBrief for context
-- [ ] Execute graph via `GraphExecutorPort` (system tenant)
-- [ ] Write EDO with `brief_id` + `cited_signals`
-- [ ] Post to human review queue (Plane via MCP)
+- [ ] Create `GovernanceAgentWorkflow`
+- [ ] Create `checkCooldownActivity`
+- [ ] Create `generateBriefActivity` (GovernanceBriefPort)
+- [ ] Create `runGovernanceGraphActivity` (GraphExecutorPort, system tenant)
+- [ ] Create `appendEdoActivity` (GovernanceEdoPort)
+- [ ] Create `createWorkItemActivity` (WorkItemPort, Plane MCP)
+- [ ] Create `markBriefedActivity` (IncidentStorePort)
 
 ### P3: Future (Do NOT Build Preemptively)
 
 - [ ] Approval-to-execute pipeline
-- [ ] KPI governance loop (weekly)
-- [ ] Baseline deviation detection
+- [ ] KPI governance loop (weekly Schedule)
+- [ ] Baseline deviation detection (replace static thresholds)
 
 ---
 
 ## File Pointers (P0 Scope)
 
-| File                                                              | Change                       |
-| ----------------------------------------------------------------- | ---------------------------- |
-| `src/shared/db/schema.governance.ts`                              | New: all governance tables   |
-| `src/ports/governance/signal-ingest.port.ts`                      | New                          |
-| `src/ports/governance/brief.port.ts`                              | New                          |
-| `src/ports/governance/metrics-query.port.ts`                      | New                          |
-| `src/ports/governance/incident-store.port.ts`                     | New                          |
-| `src/ports/governance/edo-store.port.ts`                          | New                          |
-| `src/adapters/server/governance/drizzle-signal-ingest.adapter.ts` | New                          |
-| `packages/data-sources/types.ts`                                  | New: SourceAdapter interface |
-| `packages/data-sources/prometheus/adapter.ts`                     | New: first adapter           |
-| `packages/data-sources/README.md`                                 | New: adapter dev guide       |
+**Schema & Ports:**
+
+| File                                          | Change                                                                  |
+| --------------------------------------------- | ----------------------------------------------------------------------- |
+| `src/shared/db/schema.governance.ts`          | New: signal_events, stream_cursors, briefs, incidents, edos, thresholds |
+| `src/ports/governance/signal-event.ts`        | New: SignalEvent type                                                   |
+| `src/ports/governance/signal-write.port.ts`   | New: SignalWritePort                                                    |
+| `src/ports/governance/signal-read.port.ts`    | New: SignalReadPort                                                     |
+| `src/ports/governance/brief.port.ts`          | New: GovernanceBriefPort                                                |
+| `src/ports/governance/metrics-query.port.ts`  | New: MetricsQueryPort                                                   |
+| `src/ports/governance/incident-store.port.ts` | New: IncidentStorePort                                                  |
+| `src/ports/governance/edo-store.port.ts`      | New: GovernanceEdoPort                                                  |
+
+**Adapters:**
+
+| File                                                             | Change                       |
+| ---------------------------------------------------------------- | ---------------------------- |
+| `src/adapters/server/governance/drizzle-signal-write.adapter.ts` | New                          |
+| `src/adapters/server/governance/drizzle-signal-read.adapter.ts`  | New                          |
+| `packages/data-sources/types.ts`                                 | New: SourceAdapter interface |
+| `packages/data-sources/prometheus/adapter.ts`                    | New: first adapter           |
+| `packages/data-sources/README.md`                                | New: adapter dev guide       |
+
+**Temporal Workflows & Activities:**
+
+| File                                                                   | Change                              |
+| ---------------------------------------------------------------------- | ----------------------------------- |
+| `packages/governance-workflows/src/workflows/collect-source-stream.ts` | New: CollectSourceStreamWorkflow    |
+| `packages/governance-workflows/src/workflows/guardrail-detector.ts`    | New: GuardrailDetectorWorkflow (P2) |
+| `packages/governance-workflows/src/workflows/governance-agent.ts`      | New: GovernanceAgentWorkflow (P2)   |
+| `packages/governance-workflows/src/activities/collect-signals.ts`      | New: collectSignalsActivity         |
+| `packages/governance-workflows/src/activities/ingest-signals.ts`       | New: ingestSignalsActivity          |
+| `packages/governance-workflows/src/worker.ts`                          | New: Temporal worker entry          |
+| `packages/governance-workflows/README.md`                              | New: workflow patterns              |
+
+**Infrastructure:**
+
+| File                                                     | Change                      |
+| -------------------------------------------------------- | --------------------------- |
+| `platform/infra/services/runtime/docker-compose.dev.yml` | Add: Temporal server        |
+| `platform/infra/temporal/`                               | New: Temporal configuration |
 
 ---
 
 ## Design Decisions
 
-### 1. Why CloudEvents Envelope?
+### 1. Why Temporal for Orchestration?
+
+| Approach         | Pros                                                    | Cons                                            | Verdict |
+| ---------------- | ------------------------------------------------------- | ----------------------------------------------- | ------- |
+| Cron + job queue | Simple, familiar                                        | No visibility, no retry semantics, manual state | Reject  |
+| Prefect          | Good UI, Python-native                                  | Less mature, weaker durability guarantees       | Reject  |
+| Temporal OSS     | Durable execution, Schedules, versioning, replay safety | Learning curve                                  | **Use** |
+
+**Rule:** Temporal provides durable execution with built-in retry, Schedules for recurring work, and replay safety. Workflows are deterministic code; Activities handle I/O.
+
+### 2. Why Split SignalWritePort / SignalReadPort?
+
+| Approach      | Pros                                                    | Cons                                                 | Verdict |
+| ------------- | ------------------------------------------------------- | ---------------------------------------------------- | ------- |
+| Combined port | Fewer files                                             | God-port; adapters pull in read deps they don't need | Reject  |
+| Split ports   | Clean deps; adapters → write-only, curators → read-only | Two interfaces                                       | **Use** |
+
+**Rule:** Adapters depend on `SignalWritePort`. Brief generation depends on `SignalReadPort`. No cross-contamination.
+
+### 3. Why CloudEvents Envelope?
 
 | Approach        | Pros                     | Cons               | Verdict |
 | --------------- | ------------------------ | ------------------ | ------- |
@@ -658,17 +863,23 @@ Agents need: what changed? what's new? what escalated? Not everything.
 
 ## Anti-Patterns
 
-| Anti-Pattern                  | Why Forbidden                     |
-| ----------------------------- | --------------------------------- |
-| Raw logs in context           | Context explosion                 |
-| Unbounded signal queries      | Use budget-enforced briefs        |
-| Claims without citations      | Unauditable                       |
-| Per-endpoint adapters         | Use per-system                    |
-| Direct metric queries         | No governance                     |
-| Agent on fixed timer          | Use incident-gated                |
-| EDO without brief reference   | Can't reproduce context           |
-| Missing provenance            | Reject at ingest                  |
-| Briefs without dropped counts | Agent doesn't know what's missing |
+| Anti-Pattern                  | Why Forbidden                                                       |
+| ----------------------------- | ------------------------------------------------------------------- |
+| I/O in Workflow code          | Breaks Temporal replay; all I/O must be in Activities               |
+| LLM calls in Workflow code    | Non-deterministic; LLM must run in Activities only                  |
+| Cron jobs for scheduling      | Use Temporal Schedules for operational visibility                   |
+| Non-idempotent Activities     | Temporal retries; must be safe to re-execute                        |
+| Combined read/write port      | Dependency bloat; adapters need write-only, curators need read-only |
+| Non-deterministic event IDs   | Duplicate events on re-collection; ID must derive from source data  |
+| Raw logs in context           | Context explosion                                                   |
+| Unbounded signal queries      | Use budget-enforced briefs                                          |
+| Claims without citations      | Unauditable                                                         |
+| Per-endpoint adapters         | Use per-system                                                      |
+| Direct metric queries         | No governance                                                       |
+| Agent on fixed timer          | Use incident-gated via Temporal signals                             |
+| EDO without brief reference   | Can't reproduce context                                             |
+| Missing provenance            | Reject at ingest                                                    |
+| Briefs without dropped counts | Agent doesn't know what's missing                                   |
 
 ---
 
