@@ -146,11 +146,14 @@
 
 ### Idempotency Layers
 
-| Layer         | Key                                     | Storage              | Prevents                |
-| ------------- | --------------------------------------- | -------------------- | ----------------------- |
-| Workflow      | workflowId = scheduleId                 | Temporal             | Concurrent workflows    |
-| Execution API | `scheduleId:TemporalScheduledStartTime` | `execution_requests` | Duplicate runs on retry |
-| Billing       | `runId/attempt/unit`                    | `charge_receipts`    | Duplicate charges       |
+| Layer             | Key                                         | Storage              | Prevents                    |
+| ----------------- | ------------------------------------------- | -------------------- | --------------------------- |
+| Temporal Schedule | scheduleId (DB UUID)                        | Temporal             | Duplicate schedule identity |
+| Workflow          | workflowId = `{scheduleId}:{scheduledFor}`  | Temporal             | Concurrent slot executions  |
+| Execution API     | `{scheduleId}:{TemporalScheduledStartTime}` | `execution_requests` | Duplicate runs on retry     |
+| Billing           | `runId/attempt/unit`                        | `charge_receipts`    | Duplicate charges           |
+
+> **Note:** Temporal `scheduleId` = DB `schedules.id`. Each scheduled slot gets a unique `workflowId` with timestamp suffix. `overlap=SKIP` ensures only one active workflow per schedule at a time.
 
 ---
 
@@ -220,15 +223,18 @@
 | `request_hash`    | text        | NOT NULL    | SHA256 of normalized request payload    |
 | `run_id`          | text        | NOT NULL    |                                         |
 | `trace_id`        | text        | NULL        |                                         |
+| `ok`              | boolean     | NOT NULL    | Execution outcome                       |
+| `error_code`      | text        | NULL        | `AiExecutionErrorCode` if `ok=false`    |
 | `created_at`      | timestamptz | NOT NULL    |                                         |
 
 **Purpose:** Persists idempotency as the correctness layer for slot deduplication.
 **Invariants:**
 
 - If `idempotency_key` exists but `request_hash` differs, reject with 422 (payload mismatch)
-- If `idempotency_key` exists and `request_hash` matches, return cached `{runId, traceId}` without re-executing
+- If `idempotency_key` exists and `request_hash` matches, return cached `{ok, runId, traceId, errorCode}` without re-executing
+- Stores **both success and error outcomes** — retries return the cached outcome
 
-> **TODO (P1):** Currently all executions are stored. Should only store **successful** executions so failed runs can retry. Move `storeRequest()` inside `if (final.ok)` block.
+> **TODO (P1):** Add `ok` and `error_code` columns to schema + migration. Update `storeRequest()` to persist outcome. Update `checkIdempotency()` to return cached outcome. Update route to return cached `ok`/`errorCode` correctly.
 
 ---
 
@@ -317,16 +323,42 @@
   - `deleteSchedule(scheduleId)`
   - `describeSchedule(scheduleId)` → `ScheduleDescription | null`
 - [ ] Add `ScheduleDescription` type: `{ scheduleId, nextRunAtIso, lastRunAtIso, isPaused }`
-- [ ] Add error types: `ScheduleControlUnavailableError`, `ScheduleControlConflictError`
+- [ ] Add error types: `ScheduleControlUnavailableError`, `ScheduleControlConflictError`, `ScheduleControlNotFoundError`
 - [ ] Input as `JsonValue` (not `unknown`), dates as ISO strings
+
+**ScheduleControlPort Idempotency & Error Semantics:**
+
+| Method             | Idempotent? | On Not Found                         | On Already Exists                    |
+| ------------------ | ----------- | ------------------------------------ | ------------------------------------ |
+| `createSchedule`   | No          | N/A                                  | Throw `ScheduleControlConflictError` |
+| `pauseSchedule`    | Yes         | Throw `ScheduleControlNotFoundError` | No-op if already paused              |
+| `resumeSchedule`   | Yes         | Throw `ScheduleControlNotFoundError` | No-op if already running             |
+| `deleteSchedule`   | Yes         | No-op (success)                      | N/A                                  |
+| `describeSchedule` | Yes         | Return `null`                        | N/A                                  |
+
+> **Rationale for CRUD rollback safety:**
+>
+> - `createSchedule` throws on conflict → CRUD can detect partial failure and rollback DB
+> - `deleteSchedule` is idempotent → safe to retry after transient failure
+> - `pause/resume` idempotent → safe for retry; not-found means DB/Temporal drift (503, manual reconcile)
 
 **2. Adapter (`src/adapters/server/temporal/`):**
 
 - [ ] Implement `TemporalScheduleControlAdapter`
 - [ ] Implement `NoOpScheduleControlAdapter` (for `APP_ENV=test`)
 - [ ] Hardcode policies: `overlap: SKIP`, `catchupWindow: 0` (not exposed in port)
-- [ ] Map Temporal errors → port error types
+- [ ] Map Temporal errors → port error types (see table below)
 - [ ] Connection lifecycle via `@temporalio/client`
+
+**Temporal Error Mapping:**
+
+| Temporal Error                   | Port Error                        |
+| -------------------------------- | --------------------------------- |
+| `ScheduleAlreadyRunning`         | `ScheduleControlConflictError`    |
+| `ScheduleNotFoundError`          | `ScheduleControlNotFoundError`    |
+| Connection/timeout errors        | `ScheduleControlUnavailableError` |
+| Schedule already paused (no-op)  | Success (idempotent)              |
+| Schedule already deleted (no-op) | Success (idempotent)              |
 
 **3. Docker Infrastructure:**
 
