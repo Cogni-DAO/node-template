@@ -24,6 +24,7 @@ import {
   assertEvmRpcConfig,
   assertEvmRpcConnectivity,
   assertRuntimeSecrets,
+  assertTemporalConnectivity,
   RuntimeSecretError,
 } from "@/shared/env/invariants";
 import type { RequestContext } from "@/shared/observability";
@@ -73,13 +74,17 @@ export const GET = wrapRouteHandlerWithLogging(
       const env = serverEnv();
       const container = getContainer();
 
-      // MVP readiness: Validate env + runtime secrets + EVM RPC config + connectivity
+      // MVP readiness: Validate env + runtime secrets + EVM RPC + Temporal connectivity
       assertRuntimeSecrets(env);
       assertEvmRpcConfig(env);
 
       // Test RPC connectivity (3s budget, triggers lazy ViemEvmOnchainClient init)
       // This catches missing/invalid EVM_RPC_URL immediately after deploy
       await assertEvmRpcConnectivity(container.evmOnchainClient, env);
+
+      // Test Temporal connectivity (5s budget, triggers lazy connection)
+      // This catches Temporal not running before stack tests execute
+      await assertTemporalConnectivity(container.scheduleControl, env);
 
       const payload = {
         status: "healthy" as const,

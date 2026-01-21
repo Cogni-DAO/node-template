@@ -147,3 +147,49 @@ export async function assertEvmRpcConnectivity(
     );
   }
 }
+
+/**
+ * ScheduleControlPort interface subset needed for connectivity check.
+ * Using minimal interface to avoid circular imports with @cogni/scheduler-core.
+ */
+interface ScheduleControlForHealthCheck {
+  describeSchedule(scheduleId: string): Promise<unknown>;
+}
+
+/**
+ * Tests Temporal connectivity by attempting to describe a non-existent schedule.
+ * Budget: 5 seconds timeout for connection establishment.
+ *
+ * @param scheduleControl - ScheduleControlPort to test
+ * @param env - Server environment for mode check
+ * @throws RuntimeSecretError if Temporal unreachable
+ */
+export async function assertTemporalConnectivity(
+  scheduleControl: ScheduleControlForHealthCheck,
+  env: ParsedEnv
+): Promise<void> {
+  // Test mode may use mocked adapters - skip connectivity check
+  if (env.APP_ENV === "test") return;
+
+  try {
+    // 5 second timeout budget for Temporal connection
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("Temporal connection timeout")), 5000);
+    });
+
+    // describeSchedule returns null for non-existent schedules,
+    // but throws ScheduleControlUnavailableError if Temporal is unreachable
+    await Promise.race([
+      scheduleControl.describeSchedule("__readyz_health_check__"),
+      timeoutPromise,
+    ]);
+    // Success: Temporal is reachable (schedule not found is expected)
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown Temporal error";
+    throw new RuntimeSecretError(
+      `Temporal connectivity check failed: ${message}. ` +
+        "Verify TEMPORAL_ADDRESS is correct and Temporal is running (pnpm dev:infra)."
+    );
+  }
+}
