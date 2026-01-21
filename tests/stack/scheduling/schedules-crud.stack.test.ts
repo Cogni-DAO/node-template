@@ -38,11 +38,11 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 /**
- * P0 Skip: These tests require graphile_worker schema which is created when the
- * scheduler worker starts. For v1, add graphile-worker to test stack infrastructure.
- * See: docs/SCHEDULER_SPEC.md "Test Infrastructure" section
+ * Schedule CRUD tests run against real Temporal infrastructure.
+ * Requires: temporal, temporal-postgres services running (pnpm dev:infra:test)
+ * Tests create real Temporal schedules via TemporalScheduleControlAdapter.
  */
-describe.skip("[scheduling] schedules CRUD", () => {
+describe("[scheduling] schedules CRUD", () => {
   let testActor: TestActor;
 
   beforeEach(async () => {
@@ -53,8 +53,26 @@ describe.skip("[scheduling] schedules CRUD", () => {
   });
 
   afterEach(async () => {
-    // Cleanup: delete user (cascades to billing_accounts, schedules, grants via FK)
+    // Cleanup: Delete schedules via API first (cleans up Temporal + DB)
+    // Then delete user (cascades remaining DB records via FK)
     const db = getDb();
+
+    // Find all schedules for this user and delete via API
+    const userSchedules = await db.query.schedules.findMany({
+      where: eq(schedules.ownerUserId, testActor.user.id),
+    });
+
+    for (const schedule of userSchedules) {
+      const deleteRequest = new NextRequest(
+        `http://localhost:3000/api/v1/schedules/${schedule.id}`,
+        { method: "DELETE" }
+      );
+      await DELETE(deleteRequest, {
+        params: Promise.resolve({ scheduleId: schedule.id }),
+      });
+    }
+
+    // Now delete user (cascades billing_accounts, grants via FK)
     await db.delete(users).where(eq(users.id, testActor.user.id));
 
     vi.clearAllMocks();
