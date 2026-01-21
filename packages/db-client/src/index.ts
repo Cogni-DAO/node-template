@@ -9,7 +9,7 @@
  * - FORBIDDEN: @/shared/env, process.env, Next.js imports
  * - Re-exports ONLY scheduling schema (not auth/billing slices)
  * Side-effects: IO (database operations)
- * Links: docs/SCHEDULER_SERVICE_REFACTOR.md
+ * Links: docs/PACKAGES_ARCHITECTURE.md
  * @public
  */
 

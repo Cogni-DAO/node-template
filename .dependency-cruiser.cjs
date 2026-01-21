@@ -462,7 +462,7 @@ module.exports = {
     },
 
     // =========================================================================
-    // Scheduler package boundary rules (per SCHEDULER_SERVICE_REFACTOR.md)
+    // Scheduler package boundary rules (per PACKAGES_ARCHITECTURE.md)
     // =========================================================================
 
     // db-schema: refs is the root — imports nothing from other slices

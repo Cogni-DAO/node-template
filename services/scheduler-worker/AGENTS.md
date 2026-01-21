@@ -15,7 +15,7 @@
 ## Pointers
 
 - [SCHEDULER_SPEC.md](../../docs/SCHEDULER_SPEC.md) - Full scheduler specification
-- [SCHEDULER_SERVICE_REFACTOR.md](../../docs/SCHEDULER_SERVICE_REFACTOR.md) - Refactor plan
+- [PACKAGES_ARCHITECTURE.md](../../docs/PACKAGES_ARCHITECTURE.md) - Package boundaries
 
 ## Boundaries
 
