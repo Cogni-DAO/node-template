@@ -1,5 +1,5 @@
 {
-  "id": "a51ad7d5-4eaf-4bf5-8d71-db01ce7d1110",
+  "id": "e59e9a7a-3b70-435a-ab2c-4d13480f85b2",
   "prevId": "f1ae6648-6d6a-47ca-8c3c-191211a9d0ad",
   "version": "7",
   "dialect": "postgresql",
@@ -1231,6 +1231,18 @@
         },
         "trace_id": {
           "name": "trace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ok": {
+          "name": "ok",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_code": {
+          "name": "error_code",
           "type": "text",
           "primaryKey": false,
           "notNull": false

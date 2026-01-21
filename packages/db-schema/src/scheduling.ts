@@ -173,10 +173,11 @@ export const scheduleRuns = pgTable(
 
 /**
  * Execution requests - idempotency layer for graph execution via internal API.
- * Per EXECUTION_IDEMPOTENCY_PERSISTED: Persists idempotency key → {runId, traceId}.
+ * Per EXECUTION_IDEMPOTENCY_PERSISTED: Persists idempotency key → {ok, runId, traceId, errorCode}.
  * This is the correctness layer for slot deduplication.
  *
  * Key format: `scheduleId:TemporalScheduledStartTime`
+ * Stores BOTH success and error outcomes - retries return the cached outcome.
  * If idempotency_key exists but request_hash differs, reject with 422 (payload mismatch).
  */
 export const executionRequests = pgTable("execution_requests", {
@@ -188,6 +189,10 @@ export const executionRequests = pgTable("execution_requests", {
   runId: text("run_id").notNull(),
   /** Langfuse trace ID (optional, set when Langfuse is configured) */
   traceId: text("trace_id"),
+  /** Execution outcome: true = success, false = error */
+  ok: boolean("ok").notNull(),
+  /** AiExecutionErrorCode if ok=false, null if ok=true */
+  errorCode: text("error_code"),
   /** When request was first received */
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

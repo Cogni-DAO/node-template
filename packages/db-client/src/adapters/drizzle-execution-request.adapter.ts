@@ -6,7 +6,8 @@
  * Purpose: DrizzleExecutionRequestAdapter for execution request idempotency.
  * Scope: Implements ExecutionRequestPort with Drizzle ORM. Does not contain scheduling logic.
  * Invariants:
- *   - Per EXECUTION_IDEMPOTENCY_PERSISTED: Persists idempotency key → {runId, traceId}
+ *   - Per EXECUTION_IDEMPOTENCY_PERSISTED: Persists idempotency key → {ok, runId, traceId, errorCode}
+ *   - Stores BOTH success and error outcomes - retries return cached outcome
  *   - idempotencyKey uniqueness enforced at DB level (primary key)
  *   - requestHash mismatch detection returns 'mismatch' status
  * Side-effects: IO (database operations)
@@ -14,11 +15,13 @@
  * @public
  */
 
+import { isAiExecutionErrorCode } from "@cogni/ai-core";
 import { executionRequests } from "@cogni/db-schema/scheduling";
 import type {
+  ExecutionOutcome,
   ExecutionRequest,
   ExecutionRequestPort,
-  ExecutionRequestResult,
+  IdempotencyCheckResult,
 } from "@cogni/scheduler-core";
 import { eq } from "drizzle-orm";
 import type { Database, LoggerLike } from "../client";
@@ -41,7 +44,7 @@ export class DrizzleExecutionRequestAdapter implements ExecutionRequestPort {
   async checkIdempotency(
     idempotencyKey: string,
     requestHash: string
-  ): Promise<ExecutionRequestResult> {
+  ): Promise<IdempotencyCheckResult> {
     const existing = await this.db
       .select()
       .from(executionRequests)
@@ -74,9 +77,9 @@ export class DrizzleExecutionRequestAdapter implements ExecutionRequestPort {
       };
     }
 
-    // Hash matches - return cached result
+    // Hash matches - return cached result with outcome
     this.logger.info(
-      { idempotencyKey, runId: record.runId },
+      { idempotencyKey, runId: record.runId, ok: record.ok },
       "Idempotency key hit, returning cached result"
     );
     return {
@@ -89,17 +92,20 @@ export class DrizzleExecutionRequestAdapter implements ExecutionRequestPort {
     idempotencyKey: string,
     requestHash: string,
     runId: string,
-    traceId: string | null
+    traceId: string | null,
+    outcome: ExecutionOutcome
   ): Promise<void> {
     await this.db.insert(executionRequests).values({
       idempotencyKey,
       requestHash,
       runId,
       traceId,
+      ok: outcome.ok,
+      errorCode: outcome.errorCode,
     });
 
     this.logger.info(
-      { idempotencyKey, runId },
+      { idempotencyKey, runId, ok: outcome.ok, errorCode: outcome.errorCode },
       "Stored execution request for idempotency"
     );
   }
@@ -107,11 +113,19 @@ export class DrizzleExecutionRequestAdapter implements ExecutionRequestPort {
   private toExecutionRequest(
     row: typeof executionRequests.$inferSelect
   ): ExecutionRequest {
+    // Validate errorCode is a known AiExecutionErrorCode (or null)
+    const errorCode =
+      row.errorCode && isAiExecutionErrorCode(row.errorCode)
+        ? row.errorCode
+        : null;
+
     return {
       idempotencyKey: row.idempotencyKey,
       requestHash: row.requestHash,
       runId: row.runId,
       traceId: row.traceId,
+      ok: row.ok,
+      errorCode,
       createdAt: row.createdAt,
     };
   }

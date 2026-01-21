@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cogni/ai-core": "workspace:*",
     "@cogni/db-schema": "workspace:*",
     "zod": "^3.23.8"
   },

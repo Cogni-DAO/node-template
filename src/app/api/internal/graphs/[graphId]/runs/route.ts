@@ -174,15 +174,17 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       );
 
     if (idempotencyResult.status === "cached") {
-      // Already processed - return cached result
+      // Already processed - return cached result with original outcome
+      const cached = idempotencyResult.request;
       log.info(
-        { idempotencyKey, runId: idempotencyResult.request.runId },
+        { idempotencyKey, runId: cached.runId, ok: cached.ok },
         "Returning cached result"
       );
       const cachedResponse: InternalGraphRunOutput = {
-        ok: true,
-        runId: idempotencyResult.request.runId,
-        traceId: idempotencyResult.request.traceId,
+        ok: cached.ok,
+        runId: cached.runId,
+        traceId: cached.traceId,
+        ...(cached.errorCode && { error: cached.errorCode }),
       };
       return NextResponse.json(cachedResponse, { status: 200 });
     }
@@ -303,12 +305,13 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     // Use OTel trace ID (same one passed to executor, used by Langfuse decorator)
     const traceId = ctx.traceId;
 
-    // --- 10. Store idempotency record ---
+    // --- 10. Store idempotency record with outcome ---
     await container.executionRequestPort.storeRequest(
       idempotencyKey,
       requestHash,
       runId,
-      traceId
+      traceId,
+      { ok: final.ok, errorCode: final.error ?? null }
     );
 
     // --- 11. Return result ---
