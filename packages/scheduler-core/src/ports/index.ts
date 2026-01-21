@@ -23,6 +23,11 @@ export {
   isGrantRevokedError,
   isGrantScopeMismatchError,
 } from "./execution-grant.port";
+export type {
+  ExecutionRequest,
+  ExecutionRequestPort,
+  ExecutionRequestResult,
+} from "./execution-request.port";
 export type { EnqueueJobParams, JobQueuePort } from "./job-queue.port";
 export {
   type CreateScheduleInput,

@@ -15,7 +15,7 @@
 
 // Re-export scheduling schema (worker gets schema transitively through db-client)
 export * from "@cogni/db-schema/scheduling";
-
+export { DrizzleExecutionRequestAdapter } from "./adapters/drizzle-execution-request.adapter";
 // Adapters
 export { DrizzleExecutionGrantAdapter } from "./adapters/drizzle-grant.adapter";
 export { DrizzleJobQueueAdapter } from "./adapters/drizzle-job-queue.adapter";

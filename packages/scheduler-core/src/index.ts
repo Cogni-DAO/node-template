@@ -30,6 +30,10 @@ export {
   type EnqueueJobParams,
   // ExecutionGrantPort
   type ExecutionGrantPort,
+  // ExecutionRequestPort
+  type ExecutionRequest,
+  type ExecutionRequestPort,
+  type ExecutionRequestResult,
   GrantExpiredError,
   GrantNotFoundError,
   GrantRevokedError,

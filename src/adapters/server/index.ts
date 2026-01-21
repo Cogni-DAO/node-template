@@ -15,6 +15,7 @@
 // Scheduling adapters - re-exported from @cogni/db-client package
 export {
   DrizzleExecutionGrantAdapter,
+  DrizzleExecutionRequestAdapter,
   DrizzleJobQueueAdapter,
   DrizzleScheduleManagerAdapter,
   DrizzleScheduleRunAdapter,
