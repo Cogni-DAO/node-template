@@ -9,6 +9,7 @@
 2. **IMAGE_IMMUTABILITY**: Tags are `{env}-{sha}-{service}` or content-addressed fingerprints; never `:latest`
 3. **MANIFEST_DRIVEN_DEPLOY**: Environment promotion = manifest change (GitOps), not rebuild
 4. **NO_COUPLED_PIPELINES**: Service deploys independent of Next.js app pipeline
+5. **ROLLBACK_BY_REVERT**: Deployments repo revert restores previous digest (GitOps rollback)
 
 ---
 
@@ -22,12 +23,11 @@
 >
 > **Exemption:** Temporarily violates `NO_COUPLED_PIPELINES`—service build runs in app pipeline as bridge.
 
-- [ ] Add `build-service.sh` script (scheduler-worker only)
+- [ ] Add `build-service.sh` script (scheduler-worker only, uses `docker build` like app)
 - [ ] Extend `build-prod.yml` to build scheduler-worker after app
-- [ ] Extend `push.sh` to push service image
-- [ ] Add SCHEDULER_WORKER_IMAGE to `deploy-production.yml` inputs (pass **digest**, not tag)
-- [ ] Wire scheduler-worker into `deploy.sh` (pull by digest + compose up)
-- [ ] Pin compose to image digest (`image: ghcr.io/...@sha256:...`) for reproducible rollback
+- [ ] Extend `push.sh` to push service image, capture digest from push output or `docker inspect --format='{{index .RepoDigests 0}}'`
+- [ ] Pass SCHEDULER_WORKER_IMAGE as full digest ref (`ghcr.io/...@sha256:...`) through workflow outputs
+- [ ] Wire scheduler-worker into `deploy.sh` (env var substitution, same pattern as APP_IMAGE)
 - [ ] Add `/version` endpoint (returns `{ sha, service, buildTs, imageDigest }`)
 - [ ] Validate `/livez` + `/readyz` in staging-preview E2E
 - [ ] Add smoke test exercising real service behavior (beyond health endpoints)
@@ -62,8 +62,10 @@
 - [ ] Install Argo CD on k3s
 - [ ] Argo app-of-apps or ApplicationSet pattern for multi-service management
 - [ ] Promotion flow: PR to change image digest in overlay → Argo syncs
-- [ ] Secrets strategy: SOPS/age for encrypted secrets in repo OR ExternalSecrets operator
+- [ ] Kustomize images use `@sha256:` digests (foundational GitOps hygiene)
+- [ ] Secrets strategy: SOPS/age for encrypted secrets in repo (single-node k3s MVP)
 - [ ] Storage plan: PVCs for stateful deps (postgres data), backup strategy
+- [ ] ArgoCD manages apps only; infra (k3s, ingress, cert-manager) via OpenTofu + bootstrap manifests
 - [ ] Retire SSH deploy for services (keep for app until P2)
 
 ### P2: Supply Chain + Progressive Delivery
@@ -73,7 +75,7 @@
 - [ ] Optional: Argo Rollouts for canary/blue-green
 - [ ] Migrate Next.js app to k3s (retire Compose entirely)
 
-> Note: Digest pinning starts in P0 (Compose) and P1 (Kustomize). P2 adds signing verification.
+> P2 adds signing on top of P0/P1 digest pinning.
 
 ### P3: CI Portability (Dagger)
 
@@ -92,15 +94,15 @@
 
 ## File Pointers (P0 Scope)
 
-| File                                      | Change                                                        |
-| ----------------------------------------- | ------------------------------------------------------------- |
-| `platform/ci/scripts/build-service.sh`    | New: build scheduler-worker Dockerfile, output digest         |
-| `platform/ci/scripts/push.sh`             | Add service image push, capture digest                        |
-| `platform/ci/scripts/deploy.sh`           | Pull scheduler-worker by digest, compose up                   |
-| `.github/workflows/build-prod.yml`        | Add service build job, output SCHEDULER_WORKER_IMAGE (digest) |
-| `.github/workflows/deploy-production.yml` | Accept SCHEDULER_WORKER_IMAGE digest input                    |
-| `services/scheduler-worker/src/health.ts` | Add `/version` endpoint with imageDigest                      |
-| `docker-compose.yml`                      | Pin scheduler-worker to digest, add stop_grace_period         |
+| File                                      | Change                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `platform/ci/scripts/build-service.sh`    | New: build scheduler-worker Dockerfile                                         |
+| `platform/ci/scripts/push.sh`             | Push scheduler-worker, capture digest via inspect                              |
+| `platform/ci/scripts/deploy.sh`           | Accept SCHEDULER_WORKER_IMAGE env var, wire into compose                       |
+| `.github/workflows/build-prod.yml`        | Add scheduler-worker build+push, output digest ref                             |
+| `.github/workflows/deploy-production.yml` | Accept SCHEDULER_WORKER_IMAGE digest input                                     |
+| `services/scheduler-worker/src/health.ts` | Add `/version` endpoint                                                        |
+| `docker-compose.yml`                      | Add scheduler-worker service with `$SCHEDULER_WORKER_IMAGE`, stop_grace_period |
 
 ---
 
@@ -159,14 +161,14 @@ Future (P1+): Content fingerprinting like migrator (`{service}-{fingerprint}`).
 
 ## Recommended Stack
 
-| Concern   | Tool           | Notes                                   |
-| --------- | -------------- | --------------------------------------- |
-| IaC       | OpenTofu       | OSS Terraform fork                      |
-| Runtime   | k3s            | Lightweight k8s for single-node start   |
-| CI        | Dagger (P3)    | Pipelines-as-code, runner-agnostic      |
-| CD        | Argo CD        | GitOps, state reconciliation            |
-| Manifests | Kustomize      | Overlay model, no templating complexity |
-| Signing   | cosign keyless | OIDC-based, no key management           |
+| Concern   | Tool           | Notes                                 |
+| --------- | -------------- | ------------------------------------- |
+| IaC       | OpenTofu       | OSS Terraform fork                    |
+| Runtime   | k3s            | Lightweight k8s for single-node start |
+| CI        | Dagger (P3)    | Pipelines-as-code, runner-agnostic    |
+| CD        | Argo CD        | GitOps, state reconciliation          |
+| Manifests | Kustomize      | Overlay model, minimal patches        |
+| Signing   | cosign keyless | OIDC-based, no key management         |
 
 ---
 
