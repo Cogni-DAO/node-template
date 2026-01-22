@@ -262,16 +262,16 @@
 
 ### Planned (Temporal Migration)
 
-| File                                                            | Purpose                                       |
-| --------------------------------------------------------------- | --------------------------------------------- |
-| `packages/scheduler-core/src/ports/schedule-control.port.ts`    | `ScheduleControlPort` interface (no vendor)   |
-| `src/adapters/server/temporal/client.ts`                        | Temporal client factory                       |
-| `src/adapters/server/temporal/schedule-control.adapter.ts`      | `TemporalScheduleControlAdapter`              |
-| `src/adapters/server/temporal/noop-schedule-control.adapter.ts` | `NoOpScheduleControlAdapter` (`APP_ENV=test`) |
-| `services/scheduler-temporal-worker/`                           | Temporal worker service                       |
-| `services/scheduler-temporal-worker/src/main.ts`                | Worker entry, connects to Temporal            |
-| `services/scheduler-temporal-worker/src/workflows/`             | GovernanceScheduledRunWorkflow                |
-| `services/scheduler-temporal-worker/src/activities/`            | validateGrant, createRun, executeGraph        |
+| File                                                         | Purpose                                        |
+| ------------------------------------------------------------ | ---------------------------------------------- |
+| `packages/scheduler-core/src/ports/schedule-control.port.ts` | `ScheduleControlPort` interface (no vendor)    |
+| `src/adapters/server/temporal/client.ts`                     | Temporal client factory                        |
+| `src/adapters/server/temporal/schedule-control.adapter.ts`   | `TemporalScheduleControlAdapter`               |
+| `src/adapters/server/temporal/schedule-control.adapter.ts`   | `TemporalScheduleControlAdapter` (always used) |
+| `services/scheduler-temporal-worker/`                        | Temporal worker service                        |
+| `services/scheduler-temporal-worker/src/main.ts`             | Worker entry, connects to Temporal             |
+| `services/scheduler-temporal-worker/src/workflows/`          | GovernanceScheduledRunWorkflow                 |
+| `services/scheduler-temporal-worker/src/activities/`         | validateGrant, createRun, executeGraph         |
 
 ### Implemented (P0)
 
@@ -345,7 +345,7 @@
 **2. Adapter (`src/adapters/server/temporal/`):** ✅
 
 - [x] Implement `TemporalScheduleControlAdapter`
-- [x] Implement `NoOpScheduleControlAdapter` (for `APP_ENV=test`)
+- [x] Implement `TemporalScheduleControlAdapter`
 - [x] Hardcode policies: `overlap: SKIP`, `catchupWindow: 0` (not exposed in port)
 - [x] Map Temporal errors → port error types (see table below)
 - [x] Connection lifecycle via `@temporalio/client`
@@ -360,16 +360,18 @@
 | Schedule already paused (no-op)  | Success (idempotent)              |
 | Schedule already deleted (no-op) | Success (idempotent)              |
 
-**3. Docker Infrastructure:**
+**3. Docker Infrastructure:** ✅
 
-- [ ] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose pinned)
+- [x] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose v1.29.1 pinned)
 - [x] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE=cogni-{APP_ENV}`, `TEMPORAL_TASK_QUEUE=scheduler-tasks`
-- [ ] Health checks for temporal service
+- [x] Health checks for temporal service (gRPC health via `temporal operator cluster health`)
+- [x] Add `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD` to deploy.sh + GitHub workflows
+- [x] Sync dev + prod compose files
 
 **4. CRUD Integration (failure semantics defined):** ✅
 
 - [x] Update `DrizzleScheduleManagerAdapter`: replace `JobQueuePort` → `ScheduleControlPort`
-- [x] Wire `ScheduleControlPort` in container.ts (`APP_ENV=test` → NoOp, else → Temporal)
+- [x] Wire `ScheduleControlPort` in container.ts (Temporal required, no fallback)
 - [x] Add `TEMPORAL_*` env vars to `src/shared/env/server.ts` (optional in test mode)
 - [x] `POST`: grant + DB insert → `createSchedule()`. **On failure: rollback grant+DB, 503**
 - [x] `PATCH enabled`: DB update → `pauseSchedule()`/`resumeSchedule()`. **On failure: rollback, 503**
@@ -456,5 +458,5 @@
 
 ---
 
-**Last Updated**: 2026-01-21
-**Status**: P0 internal execution API complete; P1 Temporal migration is next
+**Last Updated**: 2026-01-22
+**Status**: P1 Docker infrastructure complete; Worker service is next

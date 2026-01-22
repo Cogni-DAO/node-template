@@ -3,10 +3,10 @@
 
 /**
  * Module: `@app/readyz`
- * Purpose: HTTP endpoint providing readiness check with full validation (env, secrets, EVM RPC config).
- * Scope: Returns service readiness status; validates env, runtime secrets, and EVM RPC URL. MVP: env+secrets+RPC config only. Does not check DB connectivity yet.
- * Invariants: Always returns valid readyz schema; force-dynamic runtime; returns 503 if env/secrets/RPC config invalid.
- * Side-effects: IO (HTTP response, structured logging)
+ * Purpose: HTTP endpoint providing readiness check with full validation (env, secrets, EVM RPC, Temporal).
+ * Scope: Returns service readiness status; validates env, runtime secrets, EVM RPC connectivity, and Temporal connectivity. Does not check DB connectivity yet.
+ * Invariants: Always returns valid readyz schema; force-dynamic runtime; returns 503 if env/secrets/infra connectivity invalid.
+ * Side-effects: IO (HTTP response, structured logging, network calls to RPC and Temporal)
  * Notes: Used by Docker HEALTHCHECK, deployment validation, K8s readiness probes.
  *        HTTP status is primary truth: 200 = ready, 503 = not ready.
  *        Logs readiness failures for deployment debugging.
@@ -24,6 +24,8 @@ import {
   assertEvmRpcConfig,
   assertEvmRpcConnectivity,
   assertRuntimeSecrets,
+  assertTemporalConnectivity,
+  InfraConnectivityError,
   RuntimeSecretError,
 } from "@/shared/env/invariants";
 import type { RequestContext } from "@/shared/observability";
@@ -36,7 +38,11 @@ export const dynamic = "force-dynamic";
  */
 function logReadinessFailure(
   ctx: RequestContext,
-  error: EnvValidationError | RuntimeSecretError | Error
+  error:
+    | EnvValidationError
+    | RuntimeSecretError
+    | InfraConnectivityError
+    | Error
 ): void {
   if (error instanceof EnvValidationError) {
     ctx.log.error(
@@ -54,6 +60,14 @@ function logReadinessFailure(
         message: error.message,
       },
       "readiness check failed: missing runtime secret"
+    );
+  } else if (error instanceof InfraConnectivityError) {
+    ctx.log.error(
+      {
+        reason: error.code,
+        message: error.message,
+      },
+      "readiness check failed: infrastructure unreachable"
     );
   } else {
     ctx.log.error(
@@ -73,13 +87,17 @@ export const GET = wrapRouteHandlerWithLogging(
       const env = serverEnv();
       const container = getContainer();
 
-      // MVP readiness: Validate env + runtime secrets + EVM RPC config + connectivity
+      // MVP readiness: Validate env + runtime secrets + EVM RPC + Temporal connectivity
       assertRuntimeSecrets(env);
       assertEvmRpcConfig(env);
 
       // Test RPC connectivity (3s budget, triggers lazy ViemEvmOnchainClient init)
       // This catches missing/invalid EVM_RPC_URL immediately after deploy
       await assertEvmRpcConnectivity(container.evmOnchainClient, env);
+
+      // Test Temporal connectivity (5s budget, triggers lazy connection)
+      // This catches Temporal not running before stack tests execute
+      await assertTemporalConnectivity(container.scheduleControl, env);
 
       const payload = {
         status: "healthy" as const,
@@ -109,6 +127,22 @@ export const GET = wrapRouteHandlerWithLogging(
 
       // Runtime secret validation failures (typed error from assertRuntimeSecrets)
       if (error instanceof RuntimeSecretError) {
+        logReadinessFailure(ctx, error);
+        return new NextResponse(
+          JSON.stringify({
+            status: "error",
+            reason: error.code,
+            message: error.message,
+          }),
+          {
+            status: 503, // Service Unavailable - not ready
+            headers: { "content-type": "application/json" },
+          }
+        );
+      }
+
+      // Infrastructure connectivity failures (Temporal, etc.)
+      if (error instanceof InfraConnectivityError) {
         logReadinessFailure(ctx, error);
         return new NextResponse(
           JSON.stringify({
