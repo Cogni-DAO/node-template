@@ -172,7 +172,7 @@ export function createActivities(deps: ActivityDeps) {
       // Handle HTTP errors (401, 403, 404, 422)
       const errorText = await response.text();
       logger.error(
-        { status: response.status, scheduleId, graphId },
+        { status: response.status, scheduleId, graphId, url, errorText },
         "Internal API returned error"
       );
       throw new Error(`Internal API error: ${response.status} - ${errorText}`);
