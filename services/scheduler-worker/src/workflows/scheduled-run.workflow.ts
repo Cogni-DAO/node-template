@@ -14,7 +14,7 @@
  * @internal
  */
 
-import { proxyActivities, uuid4 } from "@temporalio/workflow";
+import { proxyActivities, uuid4, workflowInfo } from "@temporalio/workflow";
 
 import type { Activities } from "../activities/index.js";
 
@@ -36,7 +36,7 @@ const {
 
 /**
  * Input for GovernanceScheduledRunWorkflow.
- * Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: scheduledFor comes from Temporal Schedule.
+ * Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: scheduledFor derived from search attribute, not input.
  */
 export interface ScheduledRunWorkflowInput {
   /** Schedule ID (DB UUID, also Temporal scheduleId) */
@@ -47,11 +47,6 @@ export interface ScheduledRunWorkflowInput {
   executionGrantId: string;
   /** Graph input payload */
   input: Record<string, unknown>;
-  /**
-   * Scheduled start time (ISO string).
-   * Set by Schedule action from TemporalScheduledStartTime.
-   */
-  scheduledFor: string;
 }
 
 /**
@@ -70,13 +65,15 @@ export interface ScheduledRunWorkflowInput {
 export async function GovernanceScheduledRunWorkflow(
   input: ScheduledRunWorkflowInput
 ): Promise<void> {
-  const {
-    scheduleId,
-    graphId,
-    executionGrantId,
-    input: graphInput,
-    scheduledFor,
-  } = input;
+  const { scheduleId, graphId, executionGrantId, input: graphInput } = input;
+
+  // Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: Get scheduledFor from Temporal search attribute
+  // When workflow is started by a Schedule, TemporalScheduledStartTime is automatically set
+  const info = workflowInfo();
+  const scheduledStartTime = info.searchAttributes
+    ?.TemporalScheduledStartTime as Date[] | undefined;
+  const scheduledFor =
+    scheduledStartTime?.[0]?.toISOString() ?? new Date().toISOString();
 
   // Generate run ID (deterministic via Temporal's uuid4)
   const runId = uuid4();
