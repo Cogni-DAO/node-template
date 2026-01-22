@@ -22,6 +22,9 @@ export const REDACT_PATHS = [
   "apiKey",
   "api_key",
   "AUTH_SECRET",
+  // Scheduler-worker specific secrets
+  "schedulerApiToken",
+  "config.schedulerApiToken",
   // HTTP headers
   "req.headers.authorization",
   "req.headers.cookie",

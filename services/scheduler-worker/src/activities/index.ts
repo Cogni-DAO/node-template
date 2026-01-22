@@ -20,7 +20,7 @@ import type {
   DrizzleExecutionGrantAdapter,
   DrizzleScheduleRunAdapter,
 } from "@cogni/db-client";
-import { ApplicationFailure } from "@temporalio/activity";
+import { ApplicationFailure, activityInfo } from "@temporalio/activity";
 import type { Logger } from "pino";
 
 /**
@@ -88,6 +88,21 @@ export interface UpdateScheduleRunInput {
 }
 
 /**
+ * Gets workflow correlation bindings for structured logging.
+ * Per OBSERVABILITY_ALIGNMENT: every activity logs workflowId and temporalRunId.
+ */
+function getWorkflowCorrelation(): {
+  workflowId: string;
+  temporalRunId: string;
+} {
+  const info = activityInfo();
+  return {
+    workflowId: info.workflowExecution.workflowId,
+    temporalRunId: info.workflowExecution.runId,
+  };
+}
+
+/**
  * Creates activity functions with injected dependencies.
  * Per Temporal patterns: activities are plain async functions.
  */
@@ -103,12 +118,19 @@ export function createActivities(deps: ActivityDeps) {
     input: ValidateGrantInput
   ): Promise<void> {
     const { grantId, graphId } = input;
-    logger.info({ grantId, graphId }, "Validating grant for graph");
+    const correlation = getWorkflowCorrelation();
+    logger.info(
+      { ...correlation, grantId, graphId },
+      "Validating grant for graph"
+    );
 
     // This throws on validation failure
     await grantAdapter.validateGrantForGraph(grantId, graphId);
 
-    logger.info({ grantId, graphId }, "Grant validated successfully");
+    logger.info(
+      { ...correlation, grantId, graphId },
+      "Grant validated successfully"
+    );
   }
 
   /**
@@ -120,7 +142,11 @@ export function createActivities(deps: ActivityDeps) {
     input: CreateScheduleRunInput
   ): Promise<void> {
     const { scheduleId, runId, scheduledFor } = input;
-    logger.info({ scheduleId, runId, scheduledFor }, "Creating schedule run");
+    const correlation = getWorkflowCorrelation();
+    logger.info(
+      { ...correlation, scheduleId, runId, scheduledFor },
+      "Creating schedule run"
+    );
 
     await runAdapter.createRun({
       scheduleId,
@@ -128,7 +154,7 @@ export function createActivities(deps: ActivityDeps) {
       scheduledFor: new Date(scheduledFor),
     });
 
-    logger.info({ runId }, "Schedule run created");
+    logger.info({ ...correlation, runId }, "Schedule run created");
   }
 
   /**
@@ -147,6 +173,7 @@ export function createActivities(deps: ActivityDeps) {
       scheduledFor,
       runId,
     } = input;
+    const correlation = getWorkflowCorrelation();
 
     // Per SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS
     const idempotencyKey = `${scheduleId}:${scheduledFor}`;
@@ -154,7 +181,7 @@ export function createActivities(deps: ActivityDeps) {
     const url = `${config.appBaseUrl}/api/internal/graphs/${graphId}/runs`;
 
     logger.info(
-      { scheduleId, graphId, runId, idempotencyKey },
+      { ...correlation, scheduleId, graphId, runId, idempotencyKey },
       "Calling internal graph execution API"
     );
 
@@ -176,7 +203,14 @@ export function createActivities(deps: ActivityDeps) {
       // Handle HTTP errors
       const errorText = await response.text();
       logger.error(
-        { status: response.status, scheduleId, graphId, runId, url, errorText },
+        {
+          ...correlation,
+          status: response.status,
+          scheduleId,
+          graphId,
+          runId,
+          errorText,
+        },
         "Internal API returned error"
       );
 
@@ -200,12 +234,13 @@ export function createActivities(deps: ActivityDeps) {
 
     if (result.ok) {
       logger.info(
-        { scheduleId, graphId, runId: result.runId },
+        { ...correlation, scheduleId, graphId, runId: result.runId },
         "Graph execution completed successfully"
       );
     } else {
       logger.warn(
         {
+          ...correlation,
           scheduleId,
           graphId,
           runId: result.runId,
@@ -226,7 +261,11 @@ export function createActivities(deps: ActivityDeps) {
     input: UpdateScheduleRunInput
   ): Promise<void> {
     const { runId, status, traceId, errorMessage } = input;
-    logger.info({ runId, status }, "Updating schedule run status");
+    const correlation = getWorkflowCorrelation();
+    logger.info(
+      { ...correlation, runId, status },
+      "Updating schedule run status"
+    );
 
     if (status === "running") {
       await runAdapter.markRunStarted(runId, traceId ?? undefined);
@@ -234,7 +273,10 @@ export function createActivities(deps: ActivityDeps) {
       await runAdapter.markRunCompleted(runId, status, errorMessage);
     }
 
-    logger.info({ runId, status }, "Schedule run status updated");
+    logger.info(
+      { ...correlation, runId, status },
+      "Schedule run status updated"
+    );
   }
 
   return {
