@@ -90,6 +90,18 @@
 
 **Scope:** Dagger = CI (build/test/push). ArgoCD = CD (state reconciliation). Do NOT use Dagger for push-based deploy.
 
+### P4: CI Acceleration (NX)
+
+> Optimize CI task selection/caching. Only after CD is stable.
+
+- [ ] Spike: Evaluate NX vs Turborepo (NX preferred for structure enforcement + affected graph)
+- [ ] Add NX targets for build/test/lint per package/service
+- [ ] Implement affected-only task execution (`nx affected:build`)
+- [ ] Add remote cache (NX Cloud or self-hosted)
+- [ ] Keep image builds explicit initially; integrate with Dagger later
+
+**Why deferred:** NX solves CI time/cost, not deployment correctness. GitOps must be stable first.
+
 ---
 
 ## File Pointers (P0 Scope)
