@@ -518,5 +518,23 @@ module.exports = {
       },
       comment: "adapters must not import the composition root",
     },
+
+    // =========================================================================
+    // Scheduler worker boundary rules (per SCHEDULER_SPEC.md)
+    // =========================================================================
+
+    // scheduler-worker must not import schedule-control modules (WORKER_NEVER_CONTROLS_SCHEDULES)
+    {
+      name: "no-worker-schedule-control",
+      severity: "error",
+      from: {
+        path: "^services/scheduler-worker/",
+      },
+      to: {
+        path: ["schedule-control", "ScheduleControl"],
+      },
+      comment:
+        "Per WORKER_NEVER_CONTROLS_SCHEDULES: worker executes workflows only, CRUD endpoints are schedule authority",
+    },
   ],
 };
