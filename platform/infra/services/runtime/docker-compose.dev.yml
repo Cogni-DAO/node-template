@@ -350,7 +350,9 @@ services:
       # Database for activities
       - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
       # Internal API (scheduler-worker → app)
-      - APP_BASE_URL=http://app:3000
+      # Default: http://app:3000 for Docker-based stacks
+      # Override: http://host.docker.internal:3000 for test:stack:dev (app on host)
+      - APP_BASE_URL=${SCHEDULER_APP_BASE_URL:-http://app:3000}
       - SCHEDULER_API_TOKEN=${SCHEDULER_API_TOKEN?SCHEDULER_API_TOKEN is required}
       # Observability
       - LOG_LEVEL=${PINO_LOG_LEVEL:-info}
