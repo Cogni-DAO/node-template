@@ -20,6 +20,7 @@ import type {
   DrizzleExecutionGrantAdapter,
   DrizzleScheduleRunAdapter,
 } from "@cogni/db-client";
+import { ApplicationFailure } from "@temporalio/activity";
 import type { Logger } from "pino";
 
 /**
@@ -63,6 +64,7 @@ export interface ExecuteGraphInput {
   executionGrantId: string;
   input: Record<string, unknown>;
   scheduledFor: string; // ISO string - used for idempotency key
+  runId: string; // Canonical runId shared with schedule_runs and charge_receipts
 }
 
 /**
@@ -143,6 +145,7 @@ export function createActivities(deps: ActivityDeps) {
       executionGrantId,
       input: graphInput,
       scheduledFor,
+      runId,
     } = input;
 
     // Per SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS
@@ -151,7 +154,7 @@ export function createActivities(deps: ActivityDeps) {
     const url = `${config.appBaseUrl}/api/internal/graphs/${graphId}/runs`;
 
     logger.info(
-      { scheduleId, graphId, idempotencyKey },
+      { scheduleId, graphId, runId, idempotencyKey },
       "Calling internal graph execution API"
     );
 
@@ -165,17 +168,32 @@ export function createActivities(deps: ActivityDeps) {
       body: JSON.stringify({
         executionGrantId,
         input: graphInput,
+        runId, // Pass canonical runId to internal API
       }),
     });
 
     if (!response.ok) {
-      // Handle HTTP errors (401, 403, 404, 422)
+      // Handle HTTP errors
       const errorText = await response.text();
       logger.error(
-        { status: response.status, scheduleId, graphId, url, errorText },
+        { status: response.status, scheduleId, graphId, runId, url, errorText },
         "Internal API returned error"
       );
-      throw new Error(`Internal API error: ${response.status} - ${errorText}`);
+
+      // 4xx errors are non-retryable (auth, validation, business logic failures)
+      // 5xx errors and network errors should be retried
+      if (response.status >= 400 && response.status < 500) {
+        throw ApplicationFailure.nonRetryable(
+          `Internal API client error: ${response.status} - ${errorText}`,
+          "InternalApiClientError",
+          { status: response.status, scheduleId, graphId, runId }
+        );
+      }
+
+      // 5xx errors - let Temporal retry
+      throw new Error(
+        `Internal API server error: ${response.status} - ${errorText}`
+      );
     }
 
     const result = (await response.json()) as ExecuteGraphOutput;

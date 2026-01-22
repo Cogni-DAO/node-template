@@ -23,14 +23,25 @@ import {
 
 import type { Activities } from "../activities/index.js";
 
-// Proxy activities with retry policy
+// Proxy short activities with 1 minute timeout
 const {
   validateGrantActivity,
   createScheduleRunActivity,
-  executeGraphActivity,
   updateScheduleRunActivity,
 } = proxyActivities<Activities>({
   startToCloseTimeout: "1 minute",
+  retry: {
+    initialInterval: "1 second",
+    maximumInterval: "30 seconds",
+    backoffCoefficient: 2,
+    maximumAttempts: 3,
+  },
+});
+
+// Proxy executeGraphActivity with longer timeout for LLM execution
+// LLM calls can take 30-120+ seconds depending on model and input size
+const { executeGraphActivity } = proxyActivities<Activities>({
+  startToCloseTimeout: "5 minutes",
   retry: {
     initialInterval: "1 second",
     maximumInterval: "30 seconds",
@@ -110,6 +121,7 @@ export async function GovernanceScheduledRunWorkflow(
   await updateScheduleRunActivity({ runId, status: "running" });
 
   // 4. Execute graph via internal API
+  // Pass canonical runId to internal API for correlation with schedule_runs
   try {
     const result = await executeGraphActivity({
       scheduleId,
@@ -117,6 +129,7 @@ export async function GovernanceScheduledRunWorkflow(
       executionGrantId,
       input: graphInput,
       scheduledFor,
+      runId,
     });
 
     // 5. Mark run as success/error based on result
