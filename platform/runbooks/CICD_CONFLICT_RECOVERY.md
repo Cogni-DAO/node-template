@@ -54,3 +54,9 @@ git push
 - [ ] Protect `release/*`: disallow merge commits, linear history only
 - [ ] CI guard: fail `release/*` if any commit has >1 parent
 - [ ] Enable "Do not allow bypassing" on `main` branch protection
+
+---
+
+## Related Incidents
+
+- [2026-01-25: Main-Staging Divergence](../../docs/postmortems/2026-01-25-main-staging-divergence.md) — EVM RPC features lost due to forbidden main→release merge
