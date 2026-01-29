@@ -395,8 +395,8 @@ server.ts (langgraph dev)     inproc.ts (Next.js)
     ↓                                ↓
 top-level await initChatModel  createInProcEntrypoint() [sync]
     ↓                                ↓
-createServerEntrypoint() [sync]  CompletionUnitModel (Runnable)
-(receives pre-built LLM)        (reads model from configurable in invoke())
+createServerEntrypoint() [sync]  CompletionUnitLLM (Runnable)
+(receives pre-built LLM)        (model from configurable, deps from ALS)
     ↓                                ↓
     └──────── graph.invoke(input, { configurable: { model, toolIds } }) ────────┘
 ```
@@ -434,7 +434,7 @@ createServerEntrypoint() [sync]  CompletionUnitModel (Runnable)
 └──────────────────────────────────┘ └────────────────────────────────┘
 ```
 
-- [ ] `CompletionUnitModel`: Replace `BaseChatModel` with `Runnable`-based implementation; read `model` from `configurable` in `invoke()` (per #37); read `completionFn`/`tokenSink` from ALS; throw if ALS missing or model missing from configurable
+- [x] `CompletionUnitLLM`: Replace `BaseChatModel` with `Runnable`-based implementation; read `model` from `configurable` in `invoke()` (per #37); read `completionFn`/`tokenSink` from ALS; throw if ALS missing or model missing from configurable
 - [x] `makeLangChainTools`: single core impl with `execResolver: (config) => ToolExecFn`; allowlist check via `configurable.toolIds`
 - [x] `toLangChainToolsServer({ contracts, toolExecFn })`: wrapper; execResolver returns captured `toolExecFn`
 - [x] `toLangChainToolsInProc({ contracts })`: wrapper; execResolver reads `toolExecFn` from ALS

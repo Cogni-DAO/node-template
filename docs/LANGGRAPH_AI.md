@@ -68,7 +68,7 @@ packages/
         │       ├── inproc.ts         # Next.js entrypoint
         │       └── prompts.ts        # System prompts
         └── runtime/                  # Runtime utilities
-            ├── completion-unit-llm.ts # CompletionUnitLLM (no-arg; reads model/completionFn/tokenSink from ALS)
+            ├── completion-unit-llm.ts # CompletionUnitLLM (Runnable-based; model from configurable, deps from ALS)
             ├── inproc-runtime.ts     # AsyncLocalStorage context
             ├── server-entrypoint.ts  # createServerEntrypoint() helper (sync)
             ├── inproc-entrypoint.ts  # createInProcEntrypoint() helper (sync)
@@ -177,33 +177,24 @@ InProc executes LangGraph within the Next.js server runtime with billing through
 
 ### CompletionUnitLLM
 
-`CompletionUnitLLM` (`runtime/completion-unit-llm.ts`) wraps LLM calls through `CompletionFn` for billing/streaming.
+`CompletionUnitLLM` (`runtime/completion-unit-llm.ts`) is a `Runnable`-based wrapper that routes LLM calls through the ALS-provided `CompletionFn` for billing/streaming integration.
 
-```typescript
-export class CompletionUnitLLM extends BaseChatModel {
-  // No-arg constructor — reads from ALS at invoke time:
-  //   - model, completionFn, tokenSink from getInProcRuntime()
-  // Note: model in ALS because LangChain strips configurable before _generate()
-  // Throws fast if ALS context missing
-  // Converts BaseMessage ↔ ai-core Message
-  // Pushes tokens to tokenSink (sync) for streaming
-}
-```
+**Key design:**
+
+- Extends `Runnable` (not `BaseChatModel`) so `configurable` is available in `invoke()`
+- Model read from `config.configurable.model` per invariants #35/#37
+- Non-serializable deps (`completionFn`, `tokenSink`) from ALS
+- Includes `_modelType()` for LangGraph duck-typing compatibility
+- Fails fast if ALS context or model missing
 
 ### Runtime Context
 
-```typescript
-// Provider sets up context before invoke (model in ALS, not just configurable)
-runWithInProcContext(
-  { model, completionFn, tokenSink, toolExecFn },
-  async () => {
-    await graph.invoke(messages, { configurable });
-  }
-);
+The provider sets up ALS context before graph invocation. Per #35 NO_MODEL_IN_ALS, the runtime holds only non-serializable dependencies (`completionFn`, `tokenSink`, `toolExecFn`). Model travels via `configurable`.
 
-// Graph nodes access context
-const { model, completionFn, tokenSink } = getInProcRuntime();
-```
+**Files:**
+
+- `runtime/inproc-runtime.ts` — `InProcRuntime` interface, `runWithInProcContext()`, `getInProcRuntime()`
+- `runtime/completion-unit-llm.ts` — `CompletionUnitLLM` implementation
 
 ---
 
@@ -324,7 +315,7 @@ export { myAgentGraph } from "./my-agent/inproc";
 Both paths use the same factory (`graph.ts`) and invoke signature (`{ configurable }`). Entrypoints differ by LLM wiring:
 
 - `server.ts` — For `langgraph dev`: top-level await builds LLM via `initChatModel`; helper is sync
-- `inproc.ts` — For Next.js: no-arg `CompletionUnitLLM` (reads `model`/`completionFn`/`tokenSink` from ALS at invoke time)
+- `inproc.ts` — For Next.js: no-arg `CompletionUnitLLM` (reads `model` from `configurable`, deps from ALS at invoke time)
 
 Entrypoint logic is centralized in shared helpers. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) invariants #33-34.
 
@@ -404,7 +395,7 @@ Server path deferred until InProc proves correctness. See [LANGGRAPH_SERVER.md](
 7. **No `await` in token sink** — `tokenSink.push()` must be synchronous
 8. **No `streamEvents()` for InProc** — Use `invoke()` + AsyncQueue
 9. **No forked tool wrapper logic** — Single `makeLangChainTools` impl; thin wrappers resolve `toolExecFn` differently
-10. **No constructor args on `CompletionUnitLLM`** — Reads from ALS at invoke time (model in ALS because LangChain strips configurable before \_generate)
+10. **No constructor args on `CompletionUnitLLM`** — No-arg constructor; reads model from `configurable` and deps from ALS at invoke time
 
 ---
 
