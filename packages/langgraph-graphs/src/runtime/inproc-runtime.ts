@@ -4,10 +4,11 @@
 /**
  * Module: `@cogni/langgraph-graphs/runtime/inproc-runtime`
  * Purpose: Per-run runtime context using AsyncLocalStorage for InProc execution.
- * Scope: Holds model, completionFn, tokenSink, toolExecFn per run. Does not execute tools or LLM calls directly.
+ * Scope: Holds completionFn, tokenSink, toolExecFn per run. Does not execute tools or LLM calls directly.
  * Invariants:
  *   - RUNTIME_CONTEXT_VIA_ALS: Context accessed via ALS, not global singleton
- *   - MODEL_VIA_ALS: Model stored in ALS because LangChain strips configurable before _generate()
+ *   - NO_MODEL_IN_ALS (#35): Model comes from configurable.model, never ALS
+ *   - ALS_ONLY_FOR_NON_SERIALIZABLE_DEPS (#36): ALS holds only completionFn, tokenSink, toolExecFn
  *   - One runtime per run — no cross-run leakage
  *   - Throws if accessed outside of runWithInProcContext
  * Side-effects: none (AsyncLocalStorage is per-run isolation)
@@ -24,12 +25,9 @@ import type { CompletionFn } from "./completion-unit-llm";
 /**
  * InProc runtime context.
  * Holds per-run dependencies that cannot travel through RunnableConfig.configurable
- * (functions, object instances) plus model which LangChain strips before _generate().
+ * (functions, object instances). Per #35/#36: model is NOT stored here.
  */
 export interface InProcRuntime {
-  /** Model identifier for this run (LangChain strips configurable before _generate) */
-  readonly model: string;
-
   /** Completion function routed through executeCompletionUnit for billing */
   readonly completionFn: CompletionFn;
 

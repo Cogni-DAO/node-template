@@ -60,7 +60,7 @@ packages/
         │   ├── poet/
         │   │   ├── graph.ts          # Pure factory: createPoetGraph({ llm, tools })
         │   │   ├── server.ts         # langgraph dev entrypoint (initChatModel)
-        │   │   ├── inproc.ts         # Next.js entrypoint (CompletionUnitLLM via ALS)
+        │   │   ├── inproc.ts         # Next.js entrypoint (CompletionUnitModel reads configurable)
         │   │   └── prompts.ts        # System prompts
         │   └── <agent>/
         │       ├── graph.ts          # Pure factory

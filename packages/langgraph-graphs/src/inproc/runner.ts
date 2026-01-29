@@ -7,14 +7,15 @@
  * Scope: Creates queue, wires dependencies, executes graph via ALS context, emits events. Does NOT import from src/.
  * Invariants:
  *   - SINGLE_QUEUE_PER_RUN: Runner creates queue, passes emit to createToolExecFn
- *   - RUNTIME_CONTEXT_VIA_ALS: Sets up ALS context (including model) before graph invocation
- *   - MODEL_VIA_ALS: Passes request.configurable.model into ALS for CompletionUnitLLM
+ *   - RUNTIME_CONTEXT_VIA_ALS: Sets up ALS context (completionFn, tokenSink, toolExecFn) before graph invocation
+ *   - NO_MODEL_IN_ALS (#35): Model comes from configurable.model, never ALS
  *   - ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event on success; none on error
  *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
  *   - RESULT_REFLECTS_OUTCOME: final.ok matches stream success/failure
  *   - ERROR_NORMALIZATION_ONCE: Catch block uses normalizeErrorToExecutionCode()
+ *   - USAGE_AGGREGATION_PER_RUN: Usage aggregated from usage_report events, not LLM instance
  * Side-effects: IO (executes graph, emits events)
- * Links: LANGGRAPH_AI.md, ERROR_HANDLING_ARCHITECTURE.md
+ * Links: LANGGRAPH_AI.md, ERROR_HANDLING_ARCHITECTURE.md, GRAPH_EXECUTION.md
  * @public
  */
 
@@ -92,7 +93,22 @@ export function createInProcGraphRunner<TTool = unknown>(
   // SINGLE_QUEUE_PER_RUN: Runner creates queue, all events flow here
   const queue = new AsyncQueue<AiEvent>();
 
+  // Per-run usage aggregation (concurrency-safe: one runner per run)
+  // Accumulated from usage_report events, not LLM instance
+  let collectedUsage: {
+    promptTokens: number;
+    completionTokens: number;
+  } | null = null;
+
   const emit = (e: AiEvent): void => {
+    // Aggregate usage from usage_report events (per USAGE_AGGREGATION_PER_RUN)
+    if (e.type === "usage_report" && e.fact?.inputTokens !== undefined) {
+      if (collectedUsage === null) {
+        collectedUsage = { promptTokens: 0, completionTokens: 0 };
+      }
+      collectedUsage.promptTokens += e.fact.inputTokens ?? 0;
+      collectedUsage.completionTokens += e.fact.outputTokens ?? 0;
+    }
     queue.push(e);
   };
 
@@ -116,11 +132,10 @@ export function createInProcGraphRunner<TTool = unknown>(
       const messages = request.messages.map(toBaseMessage);
 
       // Set up ALS context and invoke graph
-      // Per RUNTIME_CONTEXT_VIA_ALS: CompletionUnitLLM reads model/completionFn/tokenSink from ALS
-      // Note: model is in ALS because LangChain strips configurable before _generate()
+      // Per #35 NO_MODEL_IN_ALS: model comes from configurable, not ALS
+      // Per #36 ALS_ONLY_FOR_NON_SERIALIZABLE_DEPS: ALS holds only completionFn, tokenSink, toolExecFn
       const result = await runWithInProcContext(
         {
-          model: request.configurable.model,
           completionFn: completionFn as CompletionFn<unknown>,
           tokenSink,
           toolExecFn,
@@ -136,18 +151,18 @@ export function createInProcGraphRunner<TTool = unknown>(
       );
 
       const assistantContent = extractAssistantContent(result.messages);
-      const usage = llm.getCollectedUsage();
 
       // ASSISTANT_FINAL_REQUIRED: exactly one per run
       emit({ type: "assistant_final", content: assistantContent });
       emit({ type: "done" });
 
-      // Omit usage when undefined (never default to zeros)
+      // Omit usage when null (never default to zeros)
+      // Per USAGE_AGGREGATION_PER_RUN: usage aggregated from usage_report events
       return {
         ok: true,
         finishReason: "stop",
         content: assistantContent,
-        ...(usage !== undefined && { usage }),
+        ...(collectedUsage !== null && { usage: collectedUsage }),
       };
     } catch (error) {
       // Normalize error using duck-typed LlmError detection (kind/status properties)

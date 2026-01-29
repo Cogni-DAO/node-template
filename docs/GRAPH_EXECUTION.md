@@ -8,7 +8,8 @@
 | Category             | Status         | Notes                                       |
 | -------------------- | -------------- | ------------------------------------------- |
 | **Invariants 1-23**  | ✅ Implemented | Core billing, execution, discovery          |
-| **Invariants 24-32** | 📋 Contract    | Compiled exports, configurable, connections |
+| **Invariants 24-34** | 📋 Contract    | Compiled exports, configurable, connections |
+| **Invariants 35-37** | 📋 Contract    | Model via configurable, ALS constraints     |
 | **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration   |
 
 **Open Work:** See [P1: Compiled Graph Execution](#p1-compiled-graph-execution) checklist.
@@ -87,6 +88,12 @@
 33. **UNIFIED_INVOKE_SIGNATURE**: Both adapters (InProc, LangGraph Server) call `graph.invoke(input, { configurable: GraphRunConfig })` with identical input/config shapes. Wiring (LLM, tools) is centralized in shared entrypoint helpers, not per-graph bespoke code.
 
 34. **NO_PER_GRAPH_ENTRYPOINT_WIRING**: Entrypoint logic (LLM creation, tool binding, ALS setup) is implemented once in shared helpers (`createServerEntrypoint`, `createInProcEntrypoint`) and reused by all graphs. Graphs export pure factories only. This prevents drift into two graph ecosystems.
+
+35. **NO_MODEL_IN_ALS**: Model MUST NOT be stored in ALS. Model comes from `configurable.model` only. ALS holds non-serializable deps (functions, sinks), not run parameters.
+
+36. **ALS_ONLY_FOR_NON_SERIALIZABLE_DEPS**: Run-scoped ALS contains ONLY: `completionFn`, `tokenSink`, `toolExecFn`. Never: `model`, `toolIds`, or other serializable config values.
+
+37. **MODEL_READ_FROM_CONFIGURABLE_AT_RUNNABLE_BOUNDARY**: Model resolution happens in `Runnable.invoke()`, reading directly from `config.configurable.model`. Never resolve model inside internal methods (`_generate()`). This enables InProc to use a `Runnable`-based model (not `BaseChatModel`) that reads configurable at the correct boundary.
 
 ---
 
@@ -388,19 +395,19 @@ server.ts (langgraph dev)     inproc.ts (Next.js)
     ↓                                ↓
 top-level await initChatModel  createInProcEntrypoint() [sync]
     ↓                                ↓
-createServerEntrypoint() [sync]  no-arg CompletionUnitLLM
-(receives pre-built LLM)        (reads model/completionFn/tokenSink from ALS)
+createServerEntrypoint() [sync]  CompletionUnitModel (Runnable)
+(receives pre-built LLM)        (reads model from configurable in invoke())
     ↓                                ↓
-    └──────── graph.invoke(input, { configurable }) ────────┘
+    └──────── graph.invoke(input, { configurable: { model, toolIds } }) ────────┘
 ```
 
 **Type Placement:**
 
-| Type             | Package                                  | Rationale                                                                    |
-| ---------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
-| `GraphRunConfig` | `@cogni/ai-core`                         | JSON-serializable; shared across all adapters                                |
-| `InProcRuntime`  | `packages/langgraph-graphs/src/runtime/` | LangGraph-specific; holds `model`, `completionFn`, `tokenSink`, `toolExecFn` |
-| `TOOL_CATALOG`   | `@cogni/ai-tools/catalog.ts`             | Canonical tool registry; `langgraph-graphs` wraps from here                  |
+| Type             | Package                                  | Rationale                                                                              |
+| ---------------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| `GraphRunConfig` | `@cogni/ai-core`                         | JSON-serializable; shared across all adapters                                          |
+| `InProcRuntime`  | `packages/langgraph-graphs/src/runtime/` | LangGraph-specific; holds `completionFn`, `tokenSink`, `toolExecFn` (NO model per #35) |
+| `TOOL_CATALOG`   | `@cogni/ai-tools/catalog.ts`             | Canonical tool registry; `langgraph-graphs` wraps from here                            |
 
 **Implementation Checklist:**
 
@@ -427,7 +434,7 @@ createServerEntrypoint() [sync]  no-arg CompletionUnitLLM
 └──────────────────────────────────┘ └────────────────────────────────┘
 ```
 
-- [x] `CompletionUnitLLM`: no-arg constructor; read `model`/`completionFn`/`tokenSink` from ALS in `_generate()`; throw if ALS missing (model in ALS because LangChain strips configurable before \_generate)
+- [ ] `CompletionUnitModel`: Replace `BaseChatModel` with `Runnable`-based implementation; read `model` from `configurable` in `invoke()` (per #37); read `completionFn`/`tokenSink` from ALS; throw if ALS missing or model missing from configurable
 - [x] `makeLangChainTools`: single core impl with `execResolver: (config) => ToolExecFn`; allowlist check via `configurable.toolIds`
 - [x] `toLangChainToolsServer({ contracts, toolExecFn })`: wrapper; execResolver returns captured `toolExecFn`
 - [x] `toLangChainToolsInProc({ contracts })`: wrapper; execResolver reads `toolExecFn` from ALS
