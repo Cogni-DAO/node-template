@@ -6,11 +6,12 @@
  * Purpose: LangChain BaseChatModel wrapper that routes LLM calls through ALS-provided CompletionFn.
  * Scope: Enables billing/streaming integration via executeCompletionUnit pattern. Does not call LLM providers directly.
  * Invariants:
- *   - NO_CONSTRUCTOR_ARGS: No completionFn/tokenSink/model in constructor; read from ALS + configurable
+ *   - NO_CONSTRUCTOR_ARGS: No completionFn/tokenSink/model in constructor; all read from ALS
+ *   - MODEL_VIA_ALS: Model read from ALS (LangChain strips configurable before _generate)
  *   - NO_DIRECT_MODEL_CALLS: All LLM calls go through ALS-provided CompletionFn
  *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
  *   - THROWS_AI_EXECUTION_ERROR: On completion failure, throws AiExecutionError with structured code
- *   - THROWS_FAST_IF_MISSING: Throws immediately if ALS context or model missing
+ *   - THROWS_FAST_IF_MISSING: Throws immediately if ALS context missing
  * Side-effects: none (effects via ALS-injected deps)
  * Links: LANGGRAPH_AI.md, ERROR_HANDLING_ARCHITECTURE.md
  * @public

@@ -7,7 +7,8 @@
  * Scope: Creates queue, wires dependencies, executes graph via ALS context, emits events. Does NOT import from src/.
  * Invariants:
  *   - SINGLE_QUEUE_PER_RUN: Runner creates queue, passes emit to createToolExecFn
- *   - RUNTIME_CONTEXT_VIA_ALS: Sets up ALS context before graph invocation
+ *   - RUNTIME_CONTEXT_VIA_ALS: Sets up ALS context (including model) before graph invocation
+ *   - MODEL_VIA_ALS: Passes request.configurable.model into ALS for CompletionUnitLLM
  *   - ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event on success; none on error
  *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
  *   - RESULT_REFLECTS_OUTCOME: final.ok matches stream success/failure

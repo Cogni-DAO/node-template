@@ -389,18 +389,18 @@ server.ts (langgraph dev)     inproc.ts (Next.js)
 top-level await initChatModel  createInProcEntrypoint() [sync]
     ↓                                ↓
 createServerEntrypoint() [sync]  no-arg CompletionUnitLLM
-(receives pre-built LLM)        (reads ALS + configurable.model)
+(receives pre-built LLM)        (reads model/completionFn/tokenSink from ALS)
     ↓                                ↓
     └──────── graph.invoke(input, { configurable }) ────────┘
 ```
 
 **Type Placement:**
 
-| Type             | Package                                  | Rationale                                                   |
-| ---------------- | ---------------------------------------- | ----------------------------------------------------------- |
-| `GraphRunConfig` | `@cogni/ai-core`                         | JSON-serializable; shared across all adapters               |
-| `InProcRuntime`  | `packages/langgraph-graphs/src/runtime/` | LangGraph-specific; holds `completionFn`, `tokenSink`       |
-| `TOOL_CATALOG`   | `@cogni/ai-tools/catalog.ts`             | Canonical tool registry; `langgraph-graphs` wraps from here |
+| Type             | Package                                  | Rationale                                                                    |
+| ---------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `GraphRunConfig` | `@cogni/ai-core`                         | JSON-serializable; shared across all adapters                                |
+| `InProcRuntime`  | `packages/langgraph-graphs/src/runtime/` | LangGraph-specific; holds `model`, `completionFn`, `tokenSink`, `toolExecFn` |
+| `TOOL_CATALOG`   | `@cogni/ai-tools/catalog.ts`             | Canonical tool registry; `langgraph-graphs` wraps from here                  |
 
 **Implementation Checklist:**
 
@@ -427,12 +427,12 @@ createServerEntrypoint() [sync]  no-arg CompletionUnitLLM
 └──────────────────────────────────┘ └────────────────────────────────┘
 ```
 
-- [ ] `CompletionUnitLLM`: no-arg constructor; read `completionFn`/`tokenSink` from ALS in `_generate()`, `model` from `config.configurable.model`; throw if ALS or model missing
-- [ ] `makeLangChainTools`: single core impl with `execResolver: (config) => ToolExecFn`; allowlist check via `configurable.toolIds`
-- [ ] `toLangChainToolsServer({ contracts, toolExecFn })`: wrapper; execResolver returns captured `toolExecFn`
-- [ ] `toLangChainToolsInProc({ contracts })`: wrapper; execResolver reads `toolExecFn` from ALS
-- [ ] Create `createServerEntrypoint()` helper (sync; receives pre-built LLM)
-- [ ] Create `createInProcEntrypoint()` helper (sync; creates no-arg CompletionUnitLLM)
+- [x] `CompletionUnitLLM`: no-arg constructor; read `model`/`completionFn`/`tokenSink` from ALS in `_generate()`; throw if ALS missing (model in ALS because LangChain strips configurable before \_generate)
+- [x] `makeLangChainTools`: single core impl with `execResolver: (config) => ToolExecFn`; allowlist check via `configurable.toolIds`
+- [x] `toLangChainToolsServer({ contracts, toolExecFn })`: wrapper; execResolver returns captured `toolExecFn`
+- [x] `toLangChainToolsInProc({ contracts })`: wrapper; execResolver reads `toolExecFn` from ALS
+- [x] Create `createServerEntrypoint()` helper (sync; receives pre-built LLM)
+- [x] Create `createInProcEntrypoint()` helper (sync; creates no-arg CompletionUnitLLM)
 - [ ] `server.ts`: top-level await for `initChatModel`; call `createServerEntrypoint()`; export graph (not Promise)
 - [ ] `inproc.ts`: call `createInProcEntrypoint()`; export graph
 - [ ] Refactor `LangGraphInProcProvider` to use inproc entrypoints with ALS context

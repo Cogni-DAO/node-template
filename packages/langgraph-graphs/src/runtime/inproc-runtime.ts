@@ -4,9 +4,10 @@
 /**
  * Module: `@cogni/langgraph-graphs/runtime/inproc-runtime`
  * Purpose: Per-run runtime context using AsyncLocalStorage for InProc execution.
- * Scope: Holds completionFn, tokenSink, toolExecFn per run. Does not execute tools or LLM calls directly.
+ * Scope: Holds model, completionFn, tokenSink, toolExecFn per run. Does not execute tools or LLM calls directly.
  * Invariants:
  *   - RUNTIME_CONTEXT_VIA_ALS: Context accessed via ALS, not global singleton
+ *   - MODEL_VIA_ALS: Model stored in ALS because LangChain strips configurable before _generate()
  *   - One runtime per run — no cross-run leakage
  *   - Throws if accessed outside of runWithInProcContext
  * Side-effects: none (AsyncLocalStorage is per-run isolation)
