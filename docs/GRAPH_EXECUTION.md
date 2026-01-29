@@ -9,7 +9,8 @@
 | -------------------- | -------------- | ------------------------------------------- |
 | **Invariants 1-23**  | ✅ Implemented | Core billing, execution, discovery          |
 | **Invariants 24-34** | 📋 Contract    | Compiled exports, configurable, connections |
-| **Invariants 35-37** | 📋 Contract    | Model via configurable, ALS constraints     |
+| **Invariants 35-37** | ✅ Implemented | Model via configurable, ALS constraints     |
+| **Invariants 38-40** | 📋 Contract    | Node-keyed config, shared resolvers         |
 | **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration   |
 
 **Open Work:** See [P1: Compiled Graph Execution](#p1-compiled-graph-execution) checklist.
@@ -94,6 +95,12 @@
 36. **ALS_ONLY_FOR_NON_SERIALIZABLE_DEPS**: Run-scoped ALS contains ONLY: `completionFn`, `tokenSink`, `toolExecFn`. Never: `model`, `toolIds`, or other serializable config values.
 
 37. **MODEL_READ_FROM_CONFIGURABLE_AT_RUNNABLE_BOUNDARY**: Model resolution happens in `Runnable.invoke()`, reading directly from `config.configurable.model`. Never resolve model inside internal methods (`_generate()`). This enables InProc to use a `Runnable`-based model (not `BaseChatModel`) that reads configurable at the correct boundary.
+
+38. **NODE_KEYED_CONFIG_VIA_FLAT_MAP**: Node-specific overrides use flat keys `<nodeKey>__model` and `<nodeKey>__toolIds` in configurable. Resolution: `configurable[nodeKey__field] ?? configurable[field]`. This keeps configurable JSON-serializable and avoids nested structures that complicate adapter translation.
+
+39. **SHARED_RESOLVERS_FOR_NODE_CONFIG**: Model and toolIds resolution uses shared functions `resolveModel(configurable, nodeKey?)` and `resolveToolIds(configurable, nodeKey?)`. Both `CompletionUnitLLM` and tool wrappers use these resolvers—no duplicate resolution logic.
+
+40. **NODE_KEY_PROPAGATION**: Nodes that need specific config must receive `nodeKey` at construction and pass it through to LLM/tool invocations. Graph factories are responsible for wiring nodeKey; runtime just resolves.
 
 ---
 
@@ -446,6 +453,26 @@ createServerEntrypoint() [sync]  CompletionUnitLLM (Runnable)
 - [ ] Verify billing: inproc path emits `usage_report` with `litellmCallId`/`costUsd`
 - [ ] Stack test: both entrypoints invoke with identical `{ configurable }` shape
 - [ ] Delete dev.ts; update `langgraph.json` to server.ts exports
+
+### P1: Node-Keyed Model & Tool Configuration
+
+Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<nodeKey>__toolIds`. Resolution: override ?? default.
+
+**File Pointers:**
+
+| File                                                           | Change                                                     |
+| -------------------------------------------------------------- | ---------------------------------------------------------- |
+| `packages/langgraph-graphs/src/runtime/config-resolvers.ts`    | New: `resolveModel()`, `resolveToolIds()` shared resolvers |
+| `packages/langgraph-graphs/src/runtime/completion-unit-llm.ts` | Accept optional `nodeKey`; use resolver in `invoke()`      |
+| `packages/langgraph-graphs/src/runtime/langchain-tools.ts`     | Use `resolveToolIds()` for allowlist check                 |
+
+**Checklist:**
+
+- [ ] Create `config-resolvers.ts` with shared resolvers
+- [ ] Update `CompletionUnitLLM` to accept `nodeKey` and use `resolveModel()`
+- [ ] Update tool wrappers to use `resolveToolIds()`
+- [ ] Unit tests: resolver edge cases (missing config, override precedence)
+- [ ] Integration test: two-node graph with `planner__model` override
 
 ### P2: Claude Agent SDK Adapter
 
@@ -926,4 +953,4 @@ await myGraph.invoke(messages, {
 ---
 
 **Last Updated**: 2026-01-29
-**Status**: Draft (Rev 17 - UNIFIED_INVOKE_SIGNATURE, NO_PER_GRAPH_ENTRYPOINT_WIRING; two-entrypoint architecture)
+**Status**: Draft (Rev 18 - NODE_KEYED_CONFIG_VIA_FLAT_MAP; per-node model/toolIds overrides)
