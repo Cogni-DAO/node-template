@@ -25,7 +25,10 @@ import {
   type ToolSpec,
 } from "@cogni/ai-core";
 import type { ToolCapabilities } from "@cogni/ai-tools";
-import { createEventCollector } from "@tests/_fakes/ai/tool-builders";
+import {
+  createEventCollector,
+  createTestToolSource,
+} from "@tests/_fakes/ai/tool-builders";
 import { describe, expect, it, vi } from "vitest";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -154,11 +157,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
       // Arrange
       const { boundTool, callOrder } = createSpyableBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -178,11 +181,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
         validateInputThrows: true,
       });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -204,11 +207,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
         execThrows: true,
       });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -229,11 +232,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
         validateOutputThrows: true,
       });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -253,11 +256,9 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
       // Arrange
       const { boundTool, spies } = createSpyableBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
-        // No config = DENY_ALL_POLICY
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit);
+      // No config = DENY_ALL_POLICY
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -278,11 +279,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
       const { boundTool, spies } = createSpyableBoundToolRuntime();
       const collector = createEventCollector();
       const restrictivePolicy = createToolAllowlistPolicy(["other_tool_only"]);
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: restrictivePolicy, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: restrictivePolicy,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -302,11 +303,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
       const rawOutput = { result: "processed", secret: "SUPER_SECRET_VALUE" };
       const { boundTool, spies } = createSpyableBoundToolRuntime({ rawOutput });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -331,11 +332,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
         redactThrows: true,
       });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -369,11 +370,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
       };
       const { boundTool } = createSpyableBoundToolRuntime({ rawOutput });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -392,11 +393,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
       // Arrange
       const { boundTool, spies } = createSpyableBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(
@@ -418,11 +419,11 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
       // Arrange
       const { boundTool, spies } = createSpyableBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(TEST_TOOL_NAME, { value: "test" });

@@ -18,7 +18,11 @@
  */
 
 import type { AiEvent, BoundToolRuntime } from "@cogni/ai-core";
-import { createToolAllowlistPolicy, createToolRunner } from "@cogni/ai-core";
+import {
+  createStaticToolSourceFromRecord,
+  createToolAllowlistPolicy,
+  createToolRunner,
+} from "@cogni/ai-core";
 import {
   type CatalogBoundTool,
   TOOL_CATALOG,
@@ -181,7 +185,8 @@ export class LangGraphInProcProvider implements GraphProvider {
     // Uses same toolIds for ToolRunner policy as configurable
     const createToolExecFn = (emit: (e: AiEvent) => void): ToolExecFn => {
       const policy = createToolAllowlistPolicy(toolIds);
-      const toolRunner = createToolRunner(runtimeTools, emit, {
+      const source = createStaticToolSourceFromRecord(runtimeTools);
+      const toolRunner = createToolRunner(source, emit, {
         policy,
         ctx: { runId },
       });

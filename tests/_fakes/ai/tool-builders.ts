@@ -12,7 +12,12 @@
  * @public
  */
 
-import type { BoundToolRuntime, ToolInvocationContext } from "@cogni/ai-core";
+import type {
+  BoundToolRuntime,
+  ToolInvocationContext,
+  ToolSourcePort,
+} from "@cogni/ai-core";
+import { createStaticToolSourceFromRecord } from "@cogni/ai-core";
 import type { ToolCapabilities } from "@cogni/ai-tools";
 import { z } from "zod";
 
@@ -213,6 +218,16 @@ export function createTestBoundToolRuntime(
       return contract.redact(validatedOutput as TestToolOutput);
     },
   };
+}
+
+/**
+ * Create a ToolSourcePort from a record of tools (test-only convenience).
+ * Production code must use ToolSourcePort directly - this helper is for tests only.
+ */
+export function createTestToolSource(
+  tools: Record<string, BoundToolRuntime>
+): ToolSourcePort {
+  return createStaticToolSourceFromRecord(tools);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

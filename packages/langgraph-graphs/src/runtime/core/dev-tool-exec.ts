@@ -17,6 +17,7 @@
 import {
   type AiEvent,
   type BoundToolRuntime,
+  createStaticToolSourceFromRecord,
   createToolAllowlistPolicy,
   createToolRunner,
   type ToolExecFn,
@@ -66,8 +67,9 @@ export function createDevToolExecFn(
   // The wrapper check is sufficient for dev server use.
   const allToolIds = Object.keys(runtimeTools);
   const policy = createToolAllowlistPolicy(allToolIds);
+  const source = createStaticToolSourceFromRecord(runtimeTools);
 
-  const toolRunner = createToolRunner(runtimeTools, devEmit, {
+  const toolRunner = createToolRunner(source, devEmit, {
     policy,
     ctx: { runId: "dev_server" },
   });

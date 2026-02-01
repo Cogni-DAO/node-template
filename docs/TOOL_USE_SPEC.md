@@ -188,7 +188,7 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 - [x] Create `BoundToolRuntime` interface: `{ id, spec, effect, validateInput(), exec(), validateOutput(), redact() }`
 - [x] Create `ToolInvocationContext` type with base fields: `{ runId, toolCallId, connectionId? }`
 - [ ] Add identity fields to `ToolInvocationContext` — see P0: RBAC Wiring below
-- [ ] Refactor `createToolRunner()` to accept `ToolSourcePort` instead of raw `boundTools`
+- [x] Refactor `createToolRunner()` to accept `ToolSourcePort` instead of raw `boundTools`
 - [x] toolRunner calls `boundTool.validateInput()` (Zod stays in ai-tools, not ai-core)
 - [x] toolRunner calls `boundTool.exec(validatedArgs, ctx, capabilities)`
 - [x] toolRunner calls `boundTool.validateOutput()` then `boundTool.redact()`

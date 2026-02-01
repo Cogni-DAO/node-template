@@ -23,12 +23,13 @@ import type {
   ToolCallStartEvent,
 } from "../events/ai-events";
 import type { AiSpanPort } from "./ai-span";
+import type { ToolSourcePort } from "./ports/tool-source.port";
 import {
   DENY_ALL_POLICY,
   type ToolPolicy,
   type ToolPolicyContext,
 } from "./runtime/tool-policy";
-import type { BoundToolRuntime, EmitAiEvent, ToolResult } from "./types";
+import type { EmitAiEvent, ToolResult } from "./types";
 
 /** Charset for provider-compatible tool call IDs */
 const TOOL_ID_CHARS =
@@ -95,21 +96,24 @@ export interface ToolRunnerConfig {
 }
 
 /**
- * Create a tool runner instance with the given bound tools.
+ * Create a tool runner instance with the given tool source.
  * The runner executes tools and emits AiEvents via the provided callback.
  *
+ * Per TOOL_SOURCE_RETURNS_BOUND_TOOL: All tool lookups go through ToolSourcePort.
  * Per DENY_BY_DEFAULT: if no policy is provided, defaults to DENY_ALL_POLICY
  * which rejects all tool invocations. Callers must explicitly provide a policy
  * with allowedTools to enable tool execution.
  *
- * @param boundTools - Map of tool name to bound tool (contract + implementation)
+ * @param source - Tool source providing getBoundTool() lookup
  * @param emit - Callback to emit AiEvents
  * @param config - Optional configuration (policy, ctx)
  * @returns Tool runner with exec method
  */
-export function createToolRunner<
-  TTools extends Record<string, BoundToolRuntime>,
->(boundTools: TTools, emit: EmitAiEvent, config?: ToolRunnerConfig) {
+export function createToolRunner(
+  source: ToolSourcePort,
+  emit: EmitAiEvent,
+  config?: ToolRunnerConfig
+) {
   // Default to DENY_ALL_POLICY per DENY_BY_DEFAULT invariant
   const policy = config?.policy ?? DENY_ALL_POLICY;
   // Default ctx for P0; P1+ will require explicit ctx for tenant/role-based policy
@@ -130,8 +134,8 @@ export function createToolRunner<
    * @param options - Execution options (e.g., model-provided toolCallId)
    * @returns ToolResult with redacted value on success, error info on failure
    */
-  async function exec<TName extends keyof TTools & string>(
-    toolName: TName,
+  async function exec(
+    toolName: string,
     rawArgs: unknown,
     options?: ToolExecOptions
   ): Promise<ToolResult<Record<string, unknown>>> {
@@ -178,8 +182,8 @@ export function createToolRunner<
       });
     };
 
-    // Look up bound tool
-    const boundTool = boundTools[toolName];
+    // Look up bound tool via ToolSourcePort (per TOOL_SOURCE_RETURNS_BOUND_TOOL)
+    const boundTool = source.getBoundTool(toolName);
     if (!boundTool) {
       const errorEvent: ToolCallResultEvent = {
         type: "tool_call_result",
