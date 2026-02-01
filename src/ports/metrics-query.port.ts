@@ -136,8 +136,8 @@ export interface TemplateQueryParams {
   template: MetricTemplate;
   /** Service name (must be in allowlist) */
   service: string;
-  /** Deployment environment */
-  environment: "development" | "staging" | "production";
+  /** Deployment environment (must match Alloy DEPLOY_ENVIRONMENT values) */
+  environment: "local" | "preview" | "production";
   /** Time window for the query */
   window: MetricWindow;
 }

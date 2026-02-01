@@ -53,8 +53,8 @@ describe("[ai] core__metrics_query tool", () => {
 
     const inputParams = {
       template: "request_rate" as const,
-      service: "cogni-app",
-      environment: "development" as const,
+      service: "cogni-template",
+      environment: "local" as const,
       window: "5m" as const,
     };
 

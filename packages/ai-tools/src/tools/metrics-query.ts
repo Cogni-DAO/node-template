@@ -31,6 +31,7 @@ import type { BoundTool, ToolContract, ToolImplementation } from "../types";
  * Input schema for metrics query tool.
  * Per GOVERNED_METRICS: Only predefined templates allowed.
  */
+// TODO: Extract allowed values to shared metrics-catalog.ts to sync with Alloy config + mimir adapter
 export const MetricsQueryInputSchema = z.object({
   template: z
     .enum([
@@ -43,7 +44,7 @@ export const MetricsQueryInputSchema = z.object({
     .describe("Predefined metric template to query"),
   service: z.string().max(64).describe("Service name to query metrics for"),
   environment: z
-    .enum(["development", "staging", "production"])
+    .enum(["local", "preview", "production"]) // Must match Alloy DEPLOY_ENVIRONMENT values
     .describe("Deployment environment"),
   window: z
     .enum(["5m", "15m", "1h", "6h"])
@@ -118,8 +119,7 @@ export const metricsQueryContract: ToolContract<
   description:
     "Query system metrics using predefined templates. Returns request rates, error rates, " +
     "and latency percentiles for specified services. Available templates: request_rate, " +
-    "error_rate, latency_p50, latency_p95, latency_p99. Available services: cogni-app, " +
-    "langgraph-server, litellm.",
+    "error_rate, latency_p50, latency_p95, latency_p99. Available services: cogni-template.",
   effect: "read_only",
   inputSchema: MetricsQueryInputSchema,
   outputSchema: MetricsQueryOutputSchema,

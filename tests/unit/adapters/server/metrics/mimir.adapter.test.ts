@@ -397,7 +397,7 @@ describe("MimirMetricsAdapter", () => {
       try {
         await adapter.queryTemplate({
           template: "nonexistent_template" as never,
-          service: "cogni-app",
+          service: "cogni-template",
           environment: "production",
           window: "5m",
         });
@@ -423,14 +423,16 @@ describe("MimirMetricsAdapter", () => {
           status: "success",
           data: {
             resultType: "matrix",
-            result: [{ metric: { service: "cogni-app" }, values: manyPoints }],
+            result: [
+              { metric: { service: "cogni-template" }, values: manyPoints },
+            ],
           },
         }),
       });
 
       const params = {
         template: "request_rate" as const,
-        service: "cogni-app",
+        service: "cogni-template",
         environment: "production" as const,
         window: "5m" as const,
       };

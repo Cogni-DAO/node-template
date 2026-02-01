@@ -30,9 +30,10 @@ import type {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Template Query Configuration (GOVERNED_METRICS)
+// TODO: Extract to shared metrics-catalog.ts to sync with Alloy config + tool description
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ALLOWED_SERVICES = ["cogni-app", "langgraph-server", "litellm"] as const;
+const ALLOWED_SERVICES = ["cogni-template"] as const; // Must match Alloy scrape targets
 const ALLOWED_TEMPLATES: readonly MetricTemplate[] = [
   "request_rate",
   "error_rate",
@@ -60,18 +61,18 @@ const WINDOW_STEP: Record<MetricWindow, string> = {
 /** Max data points enforced before query */
 const MAX_POINTS = 100;
 
-/** Template → PromQL mapping */
+/** Template → PromQL mapping. Labels: app (not service), env (not environment) */
 const TEMPLATE_PROMQL: Record<MetricTemplate, string> = {
   request_rate:
-    'sum(rate(http_requests_total{service="{service}", environment="{environment}"}[{window}]))',
+    'sum(rate(http_requests_total{app="{service}", env="{environment}"}[{window}]))',
   error_rate:
-    'sum(rate(http_requests_total{service="{service}", environment="{environment}", status=~"5.."}[{window}])) / sum(rate(http_requests_total{service="{service}", environment="{environment}"}[{window}])) * 100',
+    'sum(rate(http_requests_total{app="{service}", env="{environment}", status=~"5.."}[{window}])) / sum(rate(http_requests_total{app="{service}", env="{environment}"}[{window}])) * 100',
   latency_p50:
-    'histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{service="{service}", environment="{environment}"}[{window}])) by (le))',
+    'histogram_quantile(0.50, sum(rate(http_request_duration_ms_bucket{app="{service}", env="{environment}"}[{window}])) by (le))',
   latency_p95:
-    'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="{service}", environment="{environment}"}[{window}])) by (le))',
+    'histogram_quantile(0.95, sum(rate(http_request_duration_ms_bucket{app="{service}", env="{environment}"}[{window}])) by (le))',
   latency_p99:
-    'histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service="{service}", environment="{environment}"}[{window}])) by (le))',
+    'histogram_quantile(0.99, sum(rate(http_request_duration_ms_bucket{app="{service}", env="{environment}"}[{window}])) by (le))',
 };
 
 /**

@@ -309,6 +309,12 @@ Reused:
 
 ---
 
+## Known Issues
+
+- [ ] **Metrics label coupling**: Alloy config labels (`app`, `env`) must match `mimir.adapter.ts` PromQL selectors and `ai-tools/metrics-query` tool description. No shared catalog yet — manual sync required.
+
+---
+
 ## Acceptance Criteria
 
 | Requirement                                               | Verification                          |
