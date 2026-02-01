@@ -19,6 +19,8 @@ Add tools that AI agents can invoke. Tools are defined in `@cogni/ai-tools`, bou
 | 5   | **EFFECT_TYPED**: Every tool declares `read_only`, `state_change`, or `external_side_effect`.             | TOOL_USE_SPEC #17      |
 | 6   | **NO_REACHABLE_STUBS**: Stubs exist for dev; must never be reachable at runtime.                          | tool-source.factory.ts |
 | 7   | **FAIL_FAST_BINDINGS**: Missing binding throws at startup, not at first invocation.                       | tool-source.factory.ts |
+| 8   | **TOOL_FILE_PURITY**: No env, no clients, no src/\*\* imports, no secrets.                                | TOOL_USE_SPEC #34      |
+| 9   | **NO_DEFAULT_EXECUTABLE_CATALOG**: ai-tools exports contracts only, no default executable catalog.        | TOOL_USE_SPEC #35      |
 
 ---
 
@@ -177,7 +179,7 @@ it("executes via adapter", async () => {
 
 ## Related
 
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — 34 invariants, full implementation checklist
+- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — 37 invariants, full implementation checklist
 - [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — Authenticated tools design
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph patterns, tool execution flow
 

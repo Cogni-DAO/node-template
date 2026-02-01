@@ -19,7 +19,7 @@
 
 7. **STREAM_VIA_ASSISTANT_STREAM**: Use `assistant-stream` package only. No custom SSE.
 
-8. **DECODER_ASSEMBLES_TOOLCALLS**: Wire decoders (e.g., `OpenAIToolDecoder`) are the single assemblers of streamed tool deltas into `ToolInvocationRecord`. `litellm.adapter.ts` delegates to the decoder; it does not implement assembly logic itself. Assembly state is scoped to a single decode session and reset between calls. Graph executes tools only from decoded records, never from raw deltas.
+8. **DECODER_ASSEMBLES_TOOLCALLS**: For non-LangGraph streaming executors, wire decoders (e.g., `OpenAIToolDecoder`) are the single assemblers of streamed tool deltas into `ToolInvocationRecord`. `litellm.adapter.ts` delegates to the decoder; it does not implement assembly logic itself. Assembly state is scoped to a single decode session and reset between calls. Graph executes tools only from decoded records, never from raw deltas. _(P0 uses LangGraph's internal assembly; explicit decoders are P1.)_
 
 9. **BINDING_IN_COMPOSITION_ROOT**: Tool binding (connecting contracts to ports/deps) occurs only in composition roots: `src/bootstrap/**` (Next.js) or `packages/langgraph-server/**` (LangGraph Server). Features and packages never instantiate bound tools.
 
@@ -27,19 +27,19 @@
     - `ToolSpec { name, description, inputSchema: JSONSchema7, redaction, effect }` — tool definition (compiled schema, no Zod runtime)
     - `ToolEffect = 'read_only' | 'state_change' | 'external_side_effect'` — side-effect level for policy
     - `ToolInvocationRecord { toolCallId, name, args, result, error, startedAt, endedAt, raw?: unknown }` — execution record
-      `inputSchema` must conform to P0-supported JSONSchema subset; disallow `oneOf`/`anyOf`/`allOf`/`not`/`if-then-else`/`patternProperties`/complex `$ref`. Enforced by `validateToolSchemaP0()` tests.
+      `inputSchema` uses `JSONSchema7` type for compatibility; P1 enforces a restricted subset (disallows `oneOf`/`anyOf`/`allOf`/`not`/`if-then-else`/`patternProperties`/complex `$ref`) via `validateToolSchemaP0()` tests.
       `raw` preserves provider-native payload for observability only; must be redacted/omitted from UI/logs, and must never influence execution or billing.
       These live in `@cogni/ai-core/tooling/`. Zod stays in `@cogni/ai-tools`; compile to JSONSchema7 before passing to core.
 
 11. **WIRE_FORMATS_ARE_ADAPTERS**: Wire DTOs (OpenAI function-calling, Anthropic tool_use/tool_result) are adapter concerns, not core types. Encoders convert `ToolSpec` → provider wire format. Decoders convert provider responses → `ToolInvocationRecord` + tool AiEvents. This enables Anthropic richness (attachments, content blocks) without core rewrites.
 
-12. **OPENAI_WIRE_V1_SUPPORTED**: OpenAI function-calling format is the P0 wire protocol (via LiteLLM). `OpenAIToolEncoder(ToolSpec)` produces `tools[]`. `OpenAIToolDecoder(stream)` assembles deltas into `ToolInvocationRecord`. Anthropic wire support is P1.
+12. **OPENAI_WIRE_V1_SUPPORTED**: OpenAI function-calling format is the P0 wire protocol (via LiteLLM). For non-LangGraph streaming executors, `OpenAIToolEncoder(ToolSpec)` produces `tools[]` and `OpenAIToolDecoder(stream)` assembles deltas into `ToolInvocationRecord`. Anthropic wire support is P1. _(P0 uses LangGraph's internal wire handling; explicit encoder/decoder are P1.)_
 
-13. **JSON_SCHEMA7_PARAMETERS**: Tool definition `parameters` field uses full JSONSchema7 (not a simplified subset). Tool input schemas must compile deterministically from Zod → JSON Schema for wire emission. Use `zod-to-json-schema` or equivalent.
+13. **JSON_SCHEMA7_PARAMETERS**: Tool definition `parameters` field uses `JSONSchema7` type. Tool input schemas must compile deterministically from Zod → JSON Schema for wire emission via `zod-to-json-schema`. P1 adds runtime validation rejecting unsupported constructs (see #10).
 
 14. **NO_MANUAL_SCHEMA_DUPLICATION**: No hand-written JSON Schema objects alongside Zod schemas. The `parameters` field in wire DTOs must be derived from the contract's Zod schema via `getToolJsonSchema(contract)`. Manual duplication causes drift.
 
-15. **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**: Golden fixture tests enforce wire conformance per adapter: exact key sets (no extra keys), required fields for tool definitions, correct delta assembly, and correct result message formation. Tests assert structure, not JSON key ordering.
+15. **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**: For non-LangGraph streaming executors, golden fixture tests enforce wire conformance per adapter: exact key sets (no extra keys), required fields for tool definitions, correct delta assembly, and correct result message formation. Tests assert structure, not JSON key ordering. _(P1: when explicit encoder/decoder are implemented.)_
 
 16. **TOOL_ID_NAMESPACED**: Tool IDs use namespaced format to prevent collisions: `core__get_current_time`, `mcp__<server>__<tool>`. Uses double-underscore `__` separator for LLM provider compatibility (OpenAI allows only `[a-zA-Z0-9_-]+`). Core tools use `core__` prefix. MCP-discovered tools use `mcp__<serverId>__<toolName>`. This enables safe aggregation from multiple tool sources.
 
@@ -57,11 +57,11 @@
 
 21. **MCP_UNTRUSTED_BY_DEFAULT**: MCP-discovered tools are treated as untrusted. They must be explicitly allowlisted per server and per tool. Newly discovered tools (via `tools/list_changed`) are NOT auto-enabled; policy must be updated explicitly. See [MCP security guidance](https://modelcontextprotocol.io/docs/concepts/security).
 
-22. **TOOL_ID_STABILITY**: Tool IDs in `TOOL_CATALOG` are canonical and stable. ID collisions throw at catalog construction time. Never silently overwrite. Format: `core__<tool_name>` for core tools, `mcp__<server>__<tool>` for MCP tools.
+22. **TOOL_ID_STABILITY**: Tool IDs in `TOOL_CONTRACTS` are canonical and stable. ID collisions throw at catalog construction time. Never silently overwrite. Format: `core__<tool_name>` for core tools, `mcp__<server>__<tool>` for MCP tools.
 
 23. **TOOL_CONFIG_PROPAGATION**: LangChain tool wrappers receive `RunnableConfig` as 3rd parameter. Wrappers MUST accept and use config for per-run authorization via `configurable.toolIds`. Same policy/redaction path for all executors (InProc, langgraph dev, server).
 
-24. **TOOL_CATALOG_IS_CANONICAL**: `TOOL_CATALOG: Record<string, BoundTool>` in `@cogni/ai-tools/catalog.ts` is the single source of truth for all tool definitions. `langgraph-graphs` only wraps tools from this catalog; it does not define tool contracts.
+24. **TOOL_CONTRACTS_ARE_CANONICAL**: `TOOL_CONTRACTS` in `@cogni/ai-tools` is the single source of truth for tool definitions (name, schema, effect, redaction). `@cogni/ai-tools` does NOT export a default executable catalog. Each runtime builds its own `ToolSourcePort` by binding capabilities in its composition root. `langgraph-graphs` wraps tools from the runtime-bound source; it does not define tool contracts.
 
 25. **TOOL_SAME_PATH_ALL_EXECUTORS**: Same policy/redaction/audit path for dev, server, and InProc. No executor-specific bypass paths (e.g., no dev.ts that skips policy). `toLangChainTool` wrapper enforces `configurable.toolIds` allowlist for all executors.
 
@@ -77,9 +77,17 @@
 
 31. **ARCH_SINGLE_EXECUTION_PATH**: All tool implementations execute ONLY through `toolRunner.exec()`. No direct `tool.func()` calls in LangChain wrappers, no direct MCP `callTool()` invocations, no executor-specific bypass paths. Enforced by architectural grep tests that fail on bypass patterns.
 
-32. **AUTHZ_CHECK_BEFORE_TOOL_EXEC**: `toolRunner.exec()` must call `AuthorizationPort.check(actor, subject?, 'tool.execute', tool:{toolId}, ctx)` BEFORE tool execution. When subject is present (agent acting on behalf of user), both permission AND delegation are verified. No bypass paths. See [RBAC_SPEC.md](RBAC_SPEC.md).
+32. **AUTHZ_CHECK_BEFORE_TOOL_EXEC** _(P1 enforcement; documented now)_: `toolRunner.exec()` must call `AuthorizationPort.check(actor, subject?, 'tool.execute', tool:{toolId}, ctx)` BEFORE tool execution. When subject is present (agent acting on behalf of user), both permission AND delegation are verified. No bypass paths. See [RBAC_SPEC.md](RBAC_SPEC.md).
 
-33. **CONTEXT_HAS_IDENTITY**: Every `ToolInvocationContext` must include `{ actorId, tenantId }` and optionally `{ subjectId, graphId }`. No anonymous tool execution. `subjectId` is set ONLY by server (not from request params) per OBO_SUBJECT_MUST_BE_BOUND. These fields are references only — no secrets.
+33. **CONTEXT_HAS_IDENTITY** _(P1 enforcement; documented now)_: Every `ToolInvocationContext` must include `{ actorId, tenantId }` and optionally `{ subjectId, graphId }`. No anonymous tool execution. `subjectId` is set ONLY by server (not from request params) per OBO_SUBJECT_MUST_BE_BOUND. These fields are references only — no secrets.
+
+34. **TOOL_FILE_PURITY**: Tool files must not read env, instantiate clients, import `src/**`, or access secrets. All I/O through capabilities passed to `execute(validatedArgs, ctx, caps)`.
+
+35. **NO_DEFAULT_EXECUTABLE_CATALOG**: `@cogni/ai-tools` must not export any default executable `TOOL_CATALOG` or runnable stubs as defaults. It may export `ToolContracts` and unbound tool runtimes that require capabilities injection. Every runtime (Next.js, langgraph dev/server, sandbox) must build its own `ToolSourcePort` by binding real capabilities in its composition root.
+
+36. **RUNTIME_BINDS_ALL**: Every runtime executing tools must implement `createCapabilities(env)` and `createToolSource(contracts, caps)`. No tool execution without capability binding.
+
+37. **CAPABILITY_OWNS_SECRETS** _(P1 enforcement; documented now)_: Capabilities are injectable interfaces. Secrets/env access only inside runtime composition roots, never in tool files or ai-tools package.
 
 ---
 
@@ -133,7 +141,7 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 
 **Provider layer:**
 
-- [x] `LangGraphInProcProvider` wires tools from `TOOL_CATALOG` to graph
+- [x] `LangGraphInProcProvider` wires tools from runtime-bound `ToolSourcePort` to graph
 - [x] `createToolRunner()` with policy enforcement at runtime
 
 **Contract layer:**
@@ -196,7 +204,7 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 **StaticToolSource (`@cogni/ai-core/tooling/sources/`):**
 
 - [x] Create `StaticToolSource` implementing `ToolSourcePort`
-- [ ] Wraps `TOOL_CATALOG` from `@cogni/ai-tools`
+- [x] Wraps `TOOL_CONTRACTS` from `@cogni/ai-tools`; runtime binds with capabilities
 - [x] Export from ai-core barrel
 
 **Connection authorization (`@cogni/ai-core/tooling/`):**
@@ -326,7 +334,7 @@ Per invariant **MCP_UNTRUSTED_BY_DEFAULT**:
 | ----------------------------------------------------- | ------------------------------------------------------------------------ |
 | `@cogni/ai-core/tooling/ports/tool-source.port.ts`    | New: `ToolSourcePort` interface with `getBoundTool()`, `listToolSpecs()` |
 | `@cogni/ai-core/tooling/types.ts`                     | Add: `BoundToolRuntime`, `ToolInvocationContext`, `ToolCapabilities`     |
-| `@cogni/ai-core/tooling/sources/static.source.ts`     | New: `StaticToolSource` wrapping TOOL_CATALOG                            |
+| `@cogni/ai-core/tooling/sources/static.source.ts`     | New: `StaticToolSource` wrapping TOOL_CONTRACTS; runtime binds caps      |
 | `@cogni/ai-tools/capabilities/auth.ts`                | New: `AuthCapability` interface for broker-backed auth                   |
 | `@cogni/ai-tools/capabilities/index.ts`               | New: capability barrel exports                                           |
 | `tests/arch/tool-single-execution-path.test.ts`       | New: grep for direct tool.func() calls outside toolRunner                |
@@ -691,5 +699,5 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-**Last Updated**: 2026-01-29
-**Status**: Draft (Rev 5 - Added ToolSourcePort architecture, BoundToolRuntime interface, capability-based auth, grant intersection enforcement, arch tests)
+**Last Updated**: 2026-02-02
+**Status**: Draft (Rev 6 - Added invariants #34-37 for tool file purity/capability ownership; aligned #24 with NO_DEFAULT_EXECUTABLE_CATALOG; scoped encoder/decoder invariants to P1)
