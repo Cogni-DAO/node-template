@@ -180,19 +180,19 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 
 **ToolSourcePort abstraction (`@cogni/ai-core/tooling/`):**
 
-- [ ] Create `ToolSourcePort` interface with `getBoundTool(toolId)` and `listToolSpecs()`
-- [ ] Create `BoundToolRuntime` interface: `{ id, spec, effect, validateInput(), exec(), validateOutput(), redact() }`
-- [ ] Create `ToolInvocationContext` type with references-only fields: `{ runId, toolCallId, connectionId? }`
+- [x] Create `ToolSourcePort` interface with `getBoundTool(toolId)` and `listToolSpecs()`
+- [x] Create `BoundToolRuntime` interface: `{ id, spec, effect, validateInput(), exec(), validateOutput(), redact() }`
+- [x] Create `ToolInvocationContext` type with references-only fields: `{ runId, toolCallId, connectionId? }`
 - [ ] Refactor `createToolRunner()` to accept `ToolSourcePort` instead of raw `boundTools`
-- [ ] toolRunner calls `boundTool.validateInput()` (Zod stays in ai-tools, not ai-core)
-- [ ] toolRunner calls `boundTool.exec(validatedArgs, ctx, capabilities)`
-- [ ] toolRunner calls `boundTool.validateOutput()` then `boundTool.redact()`
+- [x] toolRunner calls `boundTool.validateInput()` (Zod stays in ai-tools, not ai-core)
+- [x] toolRunner calls `boundTool.exec(validatedArgs, ctx, capabilities)`
+- [x] toolRunner calls `boundTool.validateOutput()` then `boundTool.redact()`
 
 **StaticToolSource (`@cogni/ai-core/tooling/sources/`):**
 
-- [ ] Create `StaticToolSource` implementing `ToolSourcePort`
+- [x] Create `StaticToolSource` implementing `ToolSourcePort`
 - [ ] Wraps `TOOL_CATALOG` from `@cogni/ai-tools`
-- [ ] Export from ai-core barrel
+- [x] Export from ai-core barrel
 
 **Connection authorization (`@cogni/ai-core/tooling/`):**
 
@@ -204,7 +204,7 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 
 **Capability-based auth (`@cogni/ai-tools/capabilities/`):**
 
-- [ ] Create `AuthCapability` interface: `getAccessToken(connectionId): Promise<string>`
+- [x] Create `AuthCapability` interface: `getAccessToken(connectionId): Promise<string>`
 - [ ] Create `ConnectionClientFactory` interface: `for(connectionId): AuthenticatedClient`
 - [ ] Tools declare capability dependencies in contract: `capabilities: ['auth']`
 - [ ] Composition root binds capabilities to broker-backed implementations
