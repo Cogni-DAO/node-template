@@ -74,16 +74,18 @@ export function createGraphExecutor(
 
 /**
  * Create InProc provider for in-process graph execution.
+ * Per CAPABILITY_INJECTION: toolSource contains real implementations with I/O.
  */
 function createInProcProvider(
   deps: ReturnType<typeof resolveAiAdapterDeps>,
   completionStreamFn: CompletionStreamFn
 ): LangGraphInProcProvider {
+  const container = getContainer();
   const inprocAdapter = new InProcCompletionUnitAdapter(
     deps,
     completionStreamFn
   );
-  return new LangGraphInProcProvider(inprocAdapter);
+  return new LangGraphInProcProvider(inprocAdapter, container.toolSource);
 }
 
 /**

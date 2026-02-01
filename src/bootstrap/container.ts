@@ -12,6 +12,8 @@
  * @public
  */
 
+import type { ToolSourcePort } from "@cogni/ai-core";
+import type { MetricsCapability } from "@cogni/ai-tools";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
@@ -41,6 +43,9 @@ import {
   getTestEvmOnchainClient,
   getTestOnChainVerifier,
 } from "@/adapters/test";
+import { createToolBindings } from "@/bootstrap/ai/tool-bindings";
+import { createBoundToolSource } from "@/bootstrap/ai/tool-source.factory";
+import { createMetricsCapability } from "@/bootstrap/capabilities/metrics";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import type {
   AccountService,
@@ -97,6 +102,10 @@ export interface Container {
   executionRequestPort: ExecutionRequestPort;
   scheduleRunRepository: ScheduleRunRepository;
   scheduleManager: ScheduleManagerPort;
+  /** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
+  metricsCapability: MetricsCapability;
+  /** Tool source with real implementations for AI tool execution */
+  toolSource: ToolSourcePort;
 }
 
 // Feature-specific dependency types
@@ -258,6 +267,13 @@ function createContainer(): Container {
     log.child({ component: "DrizzleScheduleManagerAdapter" })
   );
 
+  // MetricsCapability for AI tools (requires PROMETHEUS_URL)
+  const metricsCapability = createMetricsCapability(env);
+
+  // ToolSource with real implementations (per CAPABILITY_INJECTION)
+  const toolBindings = createToolBindings({ metricsCapability });
+  const toolSource = createBoundToolSource(toolBindings);
+
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
   const config: ContainerConfig = {
     unhandledErrorPolicy: env.isProd ? "respond_500" : "rethrow",
@@ -291,6 +307,8 @@ function createContainer(): Container {
     executionRequestPort,
     scheduleRunRepository,
     scheduleManager,
+    metricsCapability,
+    toolSource,
   };
 }
 
