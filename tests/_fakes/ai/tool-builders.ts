@@ -195,23 +195,6 @@ export function createTestBoundToolRuntime(
     requiresConnection: false,
     capabilities: [],
 
-    // Legacy fields for backward compatibility
-    contract: {
-      name: contract.name,
-      effect: contract.effect,
-      inputSchema: {
-        parse: (input: unknown) => contract.inputSchema.parse(input),
-      },
-      outputSchema: {
-        parse: (output: unknown) => contract.outputSchema.parse(output),
-      },
-      redact: (output: unknown) => contract.redact(output as TestToolOutput),
-    },
-    implementation: {
-      execute: (input: unknown) =>
-        implementation.execute(input as TestToolInput),
-    },
-
     // Method-based interface
     validateInput(rawArgs: unknown): unknown {
       return contract.inputSchema.parse(rawArgs);

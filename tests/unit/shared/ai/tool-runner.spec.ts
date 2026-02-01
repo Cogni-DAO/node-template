@@ -162,7 +162,7 @@ describe("createToolRunner", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Create a bound tool runtime with spyable implementation.
+ * Create a bound tool runtime with spyable exec method.
  */
 function createSpyableBoundTool() {
   const executeSpy = vi
@@ -173,10 +173,6 @@ function createSpyableBoundTool() {
     }));
 
   const boundTool = createTestBoundToolRuntime();
-  // Replace implementation with spy (legacy interface)
-  (boundTool.implementation as { execute: typeof executeSpy }).execute =
-    executeSpy;
-  // Also replace exec method for new interface
   boundTool.exec = async (args) => executeSpy(args);
 
   return { boundTool, executeSpy };

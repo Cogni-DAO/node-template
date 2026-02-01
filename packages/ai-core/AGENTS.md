@@ -52,7 +52,7 @@
   - `ToolRedactionConfig` - Redaction config for tool output
   - `createToolRunner` - Canonical tool execution pipeline (policy enforcement, validation, redaction)
   - `ToolPolicy`, `createToolAllowlistPolicy`, `DENY_ALL_POLICY` - Tool policy interface and helpers
-  - `BoundToolRuntime`, `ToolContractRuntime` - Minimal runtime interfaces (no Zod dependency)
+  - `BoundToolRuntime` - Minimal runtime interface (no Zod dependency)
   - `AiSpanPort` - Observability interface for tool span instrumentation
   - `AiExecutionErrorCode`, `AI_EXECUTION_ERROR_CODES` - Canonical error codes and runtime array
   - `AiExecutionError`, `isAiExecutionError` - Structured error class and type guard

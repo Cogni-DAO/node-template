@@ -174,32 +174,6 @@ export interface ParseableSchema {
 }
 
 /**
- * Minimal tool contract interface for tool-runner (LEGACY).
- * ai-tools implements this with full Zod schemas; ai-core only sees this interface.
- * Policy/allowlist belongs in ToolPolicy, not here.
- *
- * @deprecated Use BoundToolRuntime methods instead. This interface is retained
- * for backward compatibility during migration.
- */
-export interface ToolContractRuntime {
-  readonly name: string;
-  readonly effect: ToolEffect;
-  readonly inputSchema: ParseableSchema;
-  readonly outputSchema: ParseableSchema;
-  readonly redact: (output: unknown) => unknown;
-}
-
-/**
- * Minimal tool implementation interface for tool-runner (LEGACY).
- *
- * @deprecated Use BoundToolRuntime.exec() instead. This interface is retained
- * for backward compatibility during migration.
- */
-export interface ToolImplementationRuntime {
-  readonly execute: (input: unknown) => Promise<unknown>;
-}
-
-/**
  * Bound tool runtime interface.
  *
  * Per TOOL_SOURCE_RETURNS_BOUND_TOOL (TOOL_USE_SPEC.md #27):
@@ -224,15 +198,6 @@ export interface BoundToolRuntime {
 
   /** Capability dependencies (e.g., ['auth', 'clock']) */
   readonly capabilities: readonly string[];
-
-  // --- Legacy fields for backward compatibility ---
-  // TODO: Remove after full migration to method-based interface
-
-  /** @deprecated Use methods directly */
-  readonly contract: ToolContractRuntime;
-
-  /** @deprecated Use exec() method */
-  readonly implementation: ToolImplementationRuntime;
 
   // --- Method-based interface ---
 

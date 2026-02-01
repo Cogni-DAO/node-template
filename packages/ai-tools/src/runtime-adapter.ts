@@ -70,24 +70,6 @@ export function toBoundToolRuntime(
   const capabilities =
     options?.capabilities ?? (requiresConnection ? ["auth"] : []);
 
-  // Build legacy-compatible contract runtime
-  const legacyContract = {
-    name: contract.name,
-    effect: contract.effect,
-    inputSchema: {
-      parse: (input: unknown) => contract.inputSchema.parse(input),
-    },
-    outputSchema: {
-      parse: (output: unknown) => contract.outputSchema.parse(output),
-    },
-    redact: (output: unknown) => contract.redact(output as never),
-  };
-
-  // Build legacy-compatible implementation runtime
-  const legacyImplementation = {
-    execute: (input: unknown) => implementation.execute(input as never),
-  };
-
   return {
     // Identity
     id: contract.name,
@@ -95,10 +77,6 @@ export function toBoundToolRuntime(
     effect: contract.effect,
     requiresConnection,
     capabilities,
-
-    // Legacy fields for backward compatibility
-    contract: legacyContract,
-    implementation: legacyImplementation,
 
     // Method-based interface
     validateInput(rawArgs: unknown): unknown {
