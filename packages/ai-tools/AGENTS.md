@@ -45,14 +45,13 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
   - `BoundTool` - Contract + implementation bundled together
   - `CatalogBoundTool` - Type alias for TOOL_CATALOG entries (type-erased BoundTool)
   - `ToolResult`, `ToolErrorCode` - Execution result types
-  - `getCurrentTimeBoundTool` - First tool implementation
-  - `GET_CURRENT_TIME_NAME` - Tool name constant
-  - `toToolSpec()` - Compile ToolContract to ToolSpec (Zod → JSONSchema7)
-  - `toToolSpecs()` - Compile multiple contracts
+  - `getCurrentTimeBoundTool`, `GET_CURRENT_TIME_NAME` - Time tool
+  - `metricsQueryBoundTool`, `METRICS_QUERY_NAME`, `createMetricsQueryImplementation` - Metrics query tool
+  - `toToolSpec()`, `toToolSpecs()` - Compile ToolContract to ToolSpec (Zod → JSONSchema7)
   - `TOOL_CATALOG` - Singleton catalog of all registered tools (Record<string, CatalogBoundTool>)
   - `createToolCatalog()`, `getToolById()`, `getToolIds()`, `hasToolId()` - Catalog accessors
-  - `toBoundToolRuntime()`, `toBoundToolRuntimes()`, `createBoundToolRuntimeMap()` - Runtime adapter converters
-  - `ToolCapabilities`, `AuthCapability`, `ClockCapability` - Capability interfaces for tool injection
+  - `toBoundToolRuntime()`, `contractToRuntime()` - Runtime adapter converters (contractToRuntime for DI)
+  - `ToolCapabilities`, `AuthCapability`, `ClockCapability`, `MetricsCapability` - Capability interfaces
 - **CLI:** none
 - **Env/Config keys:** none
 - **Files considered API:** `index.ts`, `types.ts`, `schema.ts`, `catalog.ts`, `runtime-adapter.ts`, `capabilities/*.ts`, `tools/*.ts`

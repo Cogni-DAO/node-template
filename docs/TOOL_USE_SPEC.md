@@ -67,7 +67,7 @@
 
 26. **CONNECTION_ID_ONLY**: Tools requiring external auth receive `connectionId` (opaque reference), never raw credentials. Connection Broker resolves tokens at invocation time. No secrets in `configurable`, `ToolPolicyContext`, or ALS context. Applies to all authenticated tools regardless of source (`@cogni/ai-tools` or MCP). See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
 
-27. **TOOL_SOURCE_RETURNS_BOUND_TOOL**: `ToolSourcePort.getBoundTool(toolId)` returns a `BoundToolRuntime` object that owns validation, execution, and redaction logic. `toolRunner` orchestrates the pipeline (policy → validate → exec → validate output → redact → emit events) but never imports Zod or performs schema operations directly. This keeps `@cogni/ai-core` semantic-only while `@cogni/ai-tools` owns schema logic.
+27. **TOOL_SOURCE_RETURNS_BOUND_TOOL**: `ToolSourcePort.getBoundTool(toolId)` returns a `BoundToolRuntime` object that owns validation, execution, and redaction logic. `toolRunner` orchestrates the pipeline (policy → validate → exec → validate output → redact → emit events) but never imports Zod or performs schema operations directly. This keeps `@cogni/ai-core` semantic-only while `@cogni/ai-tools` owns schema logic. **NOTE:** Fail-fast binding MUST apply only to enabled tool IDs for the current env/tenant. Do not require bindings for disabled/optional tools.
 
 28. **NO_SECRETS_IN_CONTEXT**: `ToolInvocationContext`, `RunnableConfig.configurable`, and ALS context must NEVER contain secrets (access tokens, API keys, refresh tokens, Authorization headers, provider secret blobs). Only opaque reference IDs (`connectionId`, `virtualKeyId`) are permitted. Secrets resolved via capability interfaces at invocation time. Enforced by negative test cases + static checks.
 
@@ -198,6 +198,7 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 - [x] Create `StaticToolSource` implementing `ToolSourcePort`
 - [ ] Wraps `TOOL_CATALOG` from `@cogni/ai-tools`
 - [x] Export from ai-core barrel
+- [ ] Enabled-tool gating: fail-fast only for enabled tool IDs, not entire catalog
 
 **Connection authorization (`@cogni/ai-core/tooling/`):**
 
@@ -663,6 +664,7 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ## Related Documents
 
+- [TOOLS_AUTHORING.md](TOOLS_AUTHORING.md) — Practical guide: how to add a new tool
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry invariants
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Architecture, anti-patterns
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing, pump+fanout

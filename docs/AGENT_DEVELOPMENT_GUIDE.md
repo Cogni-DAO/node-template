@@ -56,5 +56,6 @@ For multi-node graphs with node-keyed configuration, see [GRAPH_EXECUTION.md](GR
 
 ## Related
 
+- [TOOLS_AUTHORING.md](TOOLS_AUTHORING.md) — Adding new tools for agents
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Architecture patterns
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Execution invariants
