@@ -283,9 +283,9 @@ describe("MimirMetricsAdapter", () => {
           {
             metric: { job: "test" },
             values: [
-              { timestamp: 1000, value: 1 },
-              { timestamp: 2000, value: 2 },
-            ],
+              [1000, "1"],
+              [2000, "2"],
+            ] as [number, string][],
           },
         ],
       };
@@ -385,6 +385,69 @@ describe("MimirMetricsAdapter", () => {
       });
 
       expect(result).toEqual(mockData);
+    });
+  });
+
+  describe("queryTemplate", () => {
+    it("should throw UNKNOWN_TEMPLATE error for invalid template", async () => {
+      const { TemplateQueryError } = await import(
+        "@/adapters/server/metrics/mimir.adapter"
+      );
+
+      try {
+        await adapter.queryTemplate({
+          template: "nonexistent_template" as never,
+          service: "cogni-template",
+          environment: "production",
+          window: "5m",
+        });
+        expect.fail("Should have thrown");
+      } catch (error) {
+        expect(error).toBeInstanceOf(TemplateQueryError);
+        expect((error as InstanceType<typeof TemplateQueryError>).code).toBe(
+          "UNKNOWN_TEMPLATE"
+        );
+      }
+    });
+
+    it("should generate deterministic queryRef and enforce maxPoints", async () => {
+      // Mock successful range query with many points (Prometheus tuple format)
+      const manyPoints: [number, string][] = Array.from(
+        { length: 150 },
+        (_, i) => [1000 + i * 60, String(i)]
+      );
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: "success",
+          data: {
+            resultType: "matrix",
+            result: [
+              { metric: { service: "cogni-template" }, values: manyPoints },
+            ],
+          },
+        }),
+      });
+
+      const params = {
+        template: "request_rate" as const,
+        service: "cogni-template",
+        environment: "production" as const,
+        window: "5m" as const,
+      };
+
+      // Call twice with same params
+      const result1 = await adapter.queryTemplate(params);
+      const result2 = await adapter.queryTemplate(params);
+
+      // queryRef should be deterministic (same for same inputs in same minute)
+      expect(result1.queryRef).toMatch(/^mqt_[a-f0-9]{12}$/);
+      expect(result1.queryRef).toBe(result2.queryRef);
+
+      // maxPoints enforcement: 150 input points should be truncated to 100
+      expect(result1.series.length).toBeLessThanOrEqual(100);
+      expect(result1.truncated).toBe(true);
     });
   });
 });

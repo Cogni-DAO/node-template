@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-01-14
+- **Last reviewed:** 2026-02-01
 - **Status:** stable
 
 ## Purpose
@@ -50,11 +50,11 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 - **Exports:**
   - `getContainer()` - Singleton DI container with logger and config
   - `resetContainer()` - Reset singleton (tests only)
-  - `Container` interface - Ports + logger + config (includes metricsQuery port)
+  - `Container` interface - Ports + logger + config (includes metricsQuery, metricsCapability, toolSource)
   - `ContainerConfig` interface - Runtime config (unhandledErrorPolicy, rateLimitBypass, DEPLOY_ENVIRONMENT)
   - `UnhandledErrorPolicy` type - `"rethrow" | "respond_500"`
   - `resolveAiAdapterDeps()` - AI adapter dependencies for factory
-  - `createInProcGraphExecutor()` - Factory for GraphExecutorPort (from `graph-executor.factory.ts`)
+  - `createGraphExecutor()` - Factory for GraphExecutorPort (from `graph-executor.factory.ts`)
   - `createAgentCatalog()`, `listAgentsForApi()` - Discovery factory (from `agent-discovery.ts`)
   - `wrapRouteHandlerWithLogging()` - Route logging wrapper with metrics (from `http/`)
   - `wrapPublicRoute()` - Lazy singleton wrapper for public routes with rate limiting (from `http/`)
@@ -65,6 +65,12 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 - **CLI:** none
 - **Env/Config keys:** none (uses `@/shared/env`)
 - **Files considered API:** `container.ts`, `graph-executor.factory.ts`, `agent-discovery.ts`, `http/index.ts`, `http/wrapPublicRoute.ts`, `http/rateLimiter.ts`
+
+**Subdirectories:**
+
+- `ai/` - AI tool bindings and tool source factory
+- `capabilities/` - Capability factories (e.g., MetricsCapability)
+- `http/` - Route wrappers and rate limiting
 
 ## Responsibilities
 

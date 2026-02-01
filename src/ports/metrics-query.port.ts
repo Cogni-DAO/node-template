@@ -14,19 +14,16 @@
 
 /**
  * Single data point in a Prometheus time series.
- * Timestamp is Unix seconds (Prometheus format), value is numeric or null.
+ * Per Prometheus HTTP API: [unix_timestamp_seconds, sample_value_string] tuple.
  */
-export interface PrometheusDataPoint {
-  timestamp: number; // Unix timestamp in seconds
-  value: number | null; // Metric value or null (no data)
-}
+export type PrometheusDataPoint = [number, string];
 
 /**
  * Time series result with metric labels and data points.
  */
 export interface PrometheusTimeSeries {
   metric: Record<string, string>; // Label key-value pairs
-  values: PrometheusDataPoint[]; // Array of [timestamp, value] points
+  values: PrometheusDataPoint[]; // Array of [timestamp, value_string] tuples
 }
 
 /**
@@ -95,4 +92,90 @@ export interface MetricsQueryPort {
    * Returns metric values at a single point in time.
    */
   queryInstant(params: InstantQueryParams): Promise<PrometheusInstantResult>;
+
+  /**
+   * Execute a template-based metrics query.
+   * Per GOVERNED_METRICS: Only predefined templates allowed, no free-form PromQL.
+   *
+   * @param params - Template query parameters
+   * @returns Query result with summary and time series
+   * @throws If service/environment not in allowlist or query fails
+   */
+  queryTemplate?(params: TemplateQueryParams): Promise<TemplateQueryResult>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Template Query Types (for AI tool access)
+// Per GOVERNED_METRICS invariant: Only predefined templates, no free-form PromQL
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Predefined metric query templates.
+ * Per GOVERNED_METRICS: Only these templates are allowed.
+ */
+export type MetricTemplate =
+  | "request_rate"
+  | "error_rate"
+  | "latency_p50"
+  | "latency_p95"
+  | "latency_p99";
+
+/**
+ * Time window for metric queries.
+ */
+export type MetricWindow = "5m" | "15m" | "1h" | "6h";
+
+/**
+ * Parameters for template-based metrics queries.
+ */
+export interface TemplateQueryParams {
+  /** Predefined template to execute */
+  template: MetricTemplate;
+  /** Service name (must be in allowlist) */
+  service: string;
+  /** Deployment environment (must match Alloy DEPLOY_ENVIRONMENT values) */
+  environment: "local" | "preview" | "production";
+  /** Time window for the query */
+  window: MetricWindow;
+}
+
+/**
+ * Single data point in a metric time series.
+ */
+export interface TemplateDataPoint {
+  /** ISO 8601 timestamp */
+  timestamp: string;
+  /** Metric value */
+  value: number;
+}
+
+/**
+ * Summary statistics for the queried metric.
+ */
+export interface TemplateSummary {
+  /** Current value at end of window */
+  current: number;
+  /** Previous value (start of window), if available */
+  previous?: number;
+  /** Percent change from previous to current */
+  changePercent?: number;
+}
+
+/**
+ * Result from a template-based metrics query.
+ * Per QUERY_PROVENANCE: Always includes queryRef for audit trail.
+ */
+export interface TemplateQueryResult {
+  /** Unique query reference for audit trail */
+  queryRef: string;
+  /** ISO 8601 timestamp when query was executed */
+  executedAt: string;
+  /** Whether result came from cache */
+  cached: boolean;
+  /** Summary statistics */
+  summary: TemplateSummary;
+  /** Time series data points (max 100) */
+  series: TemplateDataPoint[];
+  /** Whether series was truncated due to limits */
+  truncated: boolean;
 }
