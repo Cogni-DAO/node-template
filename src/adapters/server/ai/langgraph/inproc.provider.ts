@@ -17,17 +17,13 @@
  * @internal
  */
 
-import type { AiEvent, BoundToolRuntime } from "@cogni/ai-core";
+import type { AiEvent, BoundToolRuntime, ToolSourcePort } from "@cogni/ai-core";
 import {
   createStaticToolSourceFromRecord,
   createToolAllowlistPolicy,
   createToolRunner,
 } from "@cogni/ai-core";
-import {
-  type CatalogBoundTool,
-  TOOL_CATALOG,
-  toBoundToolRuntime,
-} from "@cogni/ai-tools";
+import { TOOL_CATALOG } from "@cogni/ai-tools";
 import {
   type CompletionFn,
   type CreateGraphFn,
@@ -97,7 +93,10 @@ export class LangGraphInProcProvider implements GraphProvider {
   private readonly log: Logger;
   private readonly catalog: LangGraphCatalog<CreateGraphFn>;
 
-  constructor(private readonly adapter: CompletionUnitAdapter) {
+  constructor(
+    private readonly adapter: CompletionUnitAdapter,
+    private readonly toolSource: ToolSourcePort
+  ) {
     this.log = makeLogger({ component: "LangGraphInProcProvider" });
 
     // Use catalog from package (single source of truth)
@@ -164,22 +163,26 @@ export class LangGraphInProcProvider implements GraphProvider {
       );
     }
 
-    // Resolve boundTools from TOOL_CATALOG (per TOOL_CATALOG_IS_CANONICAL)
-    // Convert to BoundToolRuntime for toolRunner (per TOOL_SOURCE_RETURNS_BOUND_TOOL)
+    // Resolve BoundToolRuntime from injected toolSource (per TOOL_SOURCE_RETURNS_BOUND_TOOL)
+    // Per CAPABILITY_INJECTION: toolSource contains real implementations with I/O
     const runtimeTools: Record<string, BoundToolRuntime> = {};
-    const catalogTools: CatalogBoundTool[] = [];
     for (const toolId of catalogToolIds) {
-      const tool = TOOL_CATALOG[toolId];
-      if (tool) {
-        runtimeTools[toolId] = toBoundToolRuntime(tool);
-        catalogTools.push(tool);
+      const runtime = this.toolSource.getBoundTool(toolId);
+      if (runtime) {
+        runtimeTools[toolId] = runtime;
       } else {
         this.log.error(
           { runId, graphName, toolId },
-          "Tool not found in TOOL_CATALOG; graph misconfigured"
+          "Tool not found in toolSource; graph misconfigured"
         );
       }
     }
+
+    // Get catalog tools for contract extraction (still from TOOL_CATALOG)
+    // Type predicate ensures catalogTools is CatalogBoundTool[] not (CatalogBoundTool | undefined)[]
+    const catalogTools = catalogToolIds
+      .map((id) => TOOL_CATALOG[id])
+      .filter((bt): bt is NonNullable<typeof bt> => bt !== undefined);
 
     // Create tool execution function factory
     // Uses same toolIds for ToolRunner policy as configurable
