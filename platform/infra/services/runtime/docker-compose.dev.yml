@@ -35,6 +35,7 @@ services:
       - LITELLM_BASE_URL=http://litellm:4000
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+      - DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
       # Optional vars - pass-through only if set in host (absent = undefined, not empty string)
       - METRICS_TOKEN
       - SCHEDULER_API_TOKEN
