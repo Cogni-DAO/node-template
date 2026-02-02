@@ -22,33 +22,49 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 on_fail() {
   code=$?
-  echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "[ERROR] deploy failed (exit $code)"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   emit_deployment_event "deployment.failed" "failed" "Deployment failed with exit code $code"
 
   if [[ -n "${VM_HOST:-}" ]]; then
-    ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
-      echo "=== edge compose ps ==="
-      docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml ps || true
+    echo ""
+    echo "=== VM disk state ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "df -h / 2>/dev/null || true" || true
 
-      echo "=== runtime compose ps ==="
-      docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml ps || true
+    echo ""
+    echo "=== .env files (redacted) ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "head -5 /opt/cogni-template-runtime/.env 2>/dev/null | sed 's/=.*/=***/' || echo '(.env not found)'" || true
 
-      echo "=== logs: caddy (edge) ==="
-      docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml logs --tail 80 caddy || true
+    echo ""
+    echo "=== edge compose ps ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml ps 2>&1 || true" || true
 
-      echo "=== logs: app ==="
-      docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 app || true
+    echo ""
+    echo "=== runtime compose ps ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml ps 2>&1 || true" || true
 
-      echo "=== logs: litellm ==="
-      docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm || true
+    echo ""
+    echo "=== logs: caddy (edge) ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml logs --tail 8 caddy 2>&1 || true" || true
 
-      echo "=== sourcecred compose ps ==="
-      docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml ps || true
+    echo ""
+    echo "=== logs: app ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 app 2>&1 || true" || true
 
-      echo "=== logs: sourcecred ==="
-      docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs --tail 200 sourcecred || true
-EOF
+    echo ""
+    echo "=== logs: litellm ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm 2>&1 || true" || true
+
+    echo ""
+    echo "=== sourcecred compose ps ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml ps 2>&1 || true" || true
+
+    echo ""
+    echo "=== logs: sourcecred ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs --tail 200 sourcecred 2>&1 || true" || true
   fi
 
   exit "$code"
@@ -300,6 +316,11 @@ cat > "$ARTIFACT_DIR/deploy-remote.sh" << 'EOF'
 set -euo pipefail
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Error capture: Show exactly what failed (line number + command)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+trap 'echo -e "\033[0;31m[FATAL]\033[0m Script failed at line $LINENO: $BASH_COMMAND" >&2' ERR
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step -1: Docker prerequisite gate (fail fast if VM not bootstrapped)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 prereq_failed() {
@@ -547,36 +568,23 @@ else
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 5: Disk cleanup BEFORE pull (prevents extraction failures)
+# Step 5: Require 10GB free before pull (fail-fast disk gate)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
-if [[ "$DISK_USAGE" -ge 70 ]]; then
-  log_warn "Disk usage at ${DISK_USAGE}% (>= 70%) - cleaning old images..."
-  log_info "Disk before cleanup:"
-  df -h / /var/lib/docker /var/lib/containerd 2>/dev/null || df -h /
+AVAIL_GB=$(df -BG / | tail -1 | awk '{print $4}' | tr -d G)
+log_info "Free space before pull: ${AVAIL_GB}GB"
 
-  # Protected IDs: running containers + keep-last (full sha256 format)
-  PROTECT_IDS=$(
-    {
-      docker ps -q | xargs -r docker inspect --format '{{.Image}}' 2>/dev/null
-      docker images --no-trunc --format '{{.ID}}' --filter 'reference=cogni-runtime:keep-last' 2>/dev/null
-    } | sort -u
-  )
+if [ "$AVAIL_GB" -lt 10 ]; then
+  log_warn "Low disk (${AVAIL_GB}GB free). Running aggressive cleanup..."
+  docker system prune -af || true
+  journalctl --vacuum-time=3d || true
 
-  # Remove unprotected ghcr.io/cogni-dao/cogni-template* images
-  comm -23 \
-    <(docker images --no-trunc --filter 'reference=ghcr.io/cogni-dao/cogni-template*' --format '{{.ID}}' | sort -u) \
-    <(echo "$PROTECT_IDS") \
-  | xargs -r docker rmi -f 2>/dev/null || true
+  AVAIL_GB=$(df -BG / | tail -1 | awk '{print $4}' | tr -d G)
+  log_info "Free space after cleanup: ${AVAIL_GB}GB"
 
-  docker container prune -f >/dev/null 2>&1 || true
-  docker builder prune -af >/dev/null 2>&1 || true
-
-  log_info "Disk after cleanup:"
-  df -h / /var/lib/docker /var/lib/containerd 2>/dev/null || df -h /
-  log_info "Cleanup complete"
-else
-  log_info "Disk usage at ${DISK_USAGE}% - no cleanup needed"
+  if [ "$AVAIL_GB" -lt 10 ]; then
+    log_error "Insufficient disk after cleanup (${AVAIL_GB}GB free). Increase disk or move /var/lib/containerd to dedicated volume."
+    exit 1
+  fi
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -765,8 +773,8 @@ ssh $SSH_OPTS root@"$VM_HOST" \
 # Health validation
 log_info "Validating deployment health..."
 
-max_attempts=3
-sleep_seconds=3
+max_attempts=6
+sleep_seconds=5
 
 check_url() {
   local url="$1"
