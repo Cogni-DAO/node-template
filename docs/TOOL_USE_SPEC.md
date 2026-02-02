@@ -73,9 +73,11 @@
 
 28. **NO_SECRETS_IN_CONTEXT**: `ToolInvocationContext`, `RunnableConfig.configurable`, and ALS context must NEVER contain secrets (access tokens, API keys, refresh tokens, Authorization headers, provider secret blobs). Only opaque reference IDs (`connectionId`, `virtualKeyId`) are permitted. Secrets resolved via capability interfaces at invocation time. Enforced by negative test cases + static checks.
 
-29. **AUTH_VIA_CAPABILITY_INTERFACE**: Tools requiring external auth receive credentials through injected capability interfaces (e.g., `AuthCapability.getAccessToken(connectionId)`, `ConnectionClientFactory.for(connectionId)`), NOT via context fields. This prevents secret leakage into logs/traces/exceptions. Capabilities are injected at composition root; tools declare capability dependencies in contract.
+29. **AUTH_VIA_CAPABILITY_INTERFACE**: Tools requiring external auth receive credentials through injected capability interfaces, NOT via context fields. This prevents secret leakage into logs/traces/exceptions. Capabilities are injected at composition root; tools declare capability dependencies in contract.
 
-30. **GRANT_INTERSECTION_REQUIRED**: `toolRunner.exec()` computes `effectiveAllowedConnectionIds = executionGrant.allowedConnectionIds ∩ request.allowedConnectionIds`. Tool invocation's `connectionId` must be in this intersection BEFORE broker resolution or external calls. Missing/empty intersection = `policy_denied`. Prevents confused-deputy and UI-driven escalation attacks.
+29a. **AUTH_CAPABILITY_INVOCATION_SCOPED**: `AuthCapability` is constructed inside `toolRunner.exec()` per invocation, bound to `ctx.connectionId`. Methods take NO connectionId parameter—the capability is pre-bound to the single authorized connection. Never cache or reuse across invocations. Tool cannot request credentials for a different connectionId than the one validated via grant intersection.
+
+30. **GRANT_INTERSECTION_REQUIRED**: `toolRunner.exec()` computes `effectiveConnectionIds = grant.allowedConnectionIds ∩ request.connectionIds`. Tool invocation's `connectionId` must be in this intersection BEFORE broker resolution or external calls. Missing/empty intersection = `policy_denied`. Prevents confused-deputy and UI-driven escalation attacks.
 
 31. **ARCH_SINGLE_EXECUTION_PATH**: All tool implementations execute ONLY through `toolRunner.exec()`. No direct `tool.func()` calls in LangChain wrappers, no direct MCP `callTool()` invocations, no executor-specific bypass paths. Enforced by architectural grep tests that fail on bypass patterns.
 
@@ -220,12 +222,12 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 - [ ] Add `allowedConnectionIds?: string[]` to `GraphRunConfig`
 - [ ] Add `executionGrant?: { allowedConnectionIds: string[] }` to toolRunner config
 - [ ] Implement `computeEffectiveConnections(grant, request)` → intersection
-- [ ] Validate `connectionId ∈ effectiveAllowed` BEFORE broker resolve
+- [ ] Validate `connectionId ∈ effectiveConnectionIds` BEFORE broker resolve
 - [ ] Return `policy_denied` if connectionId not in intersection or intersection empty
 
 **Capability-based auth (`@cogni/ai-tools/capabilities/`):**
 
-- [x] Create `AuthCapability` interface: `getAccessToken(connectionId): Promise<string>`
+- [x] Create `AuthCapability` interface: invocation-scoped, no connectionId param (per #29a)
 - [ ] Create `ConnectionClientFactory` interface: `for(connectionId): AuthenticatedClient`
 - [ ] Tools declare capability dependencies in contract: `capabilities: ['auth']`
 - [ ] Composition root binds capabilities to broker-backed implementations
@@ -250,7 +252,7 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 - [ ] Add `tenantId: string` to `ToolInvocationContext`
 - [ ] Inject `AuthorizationPort` into `createToolRunner()` config
 - [ ] Call `authz.check(actor, subject?, 'tool.execute', tool:{id}, ctx)` before step 4 in pipeline
-- [ ] Add `authz_denied` to `ToolErrorCode` union
+- [ ] Add `authz_denied` and `authz_unavailable` to `ToolErrorCode` union (per RBAC_SPEC.md#6)
 - [ ] Arch test: `authz-at-tool-exec.test.ts` — grep for tool.exec without authz check
 - [ ] See [RBAC_SPEC.md](RBAC_SPEC.md) for full AuthorizationPort interface
 
@@ -529,9 +531,12 @@ interface ToolCapabilities {
   // Extensible for future capabilities
 }
 
+/** Invocation-scoped capability — bound to ctx.connectionId, no param needed */
 interface AuthCapability {
-  getAccessToken(connectionId: string): Promise<string>;
-  getAuthHeaders(connectionId: string): Promise<Record<string, string>>;
+  /** Get access token for the bound connection (per AUTH_CAPABILITY_INVOCATION_SCOPED) */
+  getAccessToken(): Promise<string>;
+  /** Get auth headers for the bound connection */
+  getAuthHeaders(): Promise<Record<string, string>>;
 }
 ```
 
@@ -551,7 +556,7 @@ toolRunner.exec(toolId, rawArgs, ctx)
     │
     ├─ 4. If boundTool.requiresConnection:
     │      ├─ Validate ctx.connectionId exists (uuid-validated at boundary)
-    │      ├─ Check connectionId ∈ effectiveAllowed (grant ∩ request)
+    │      ├─ Check connectionId ∈ effectiveConnectionIds (grant ∩ request)
     │      └─ Fail fast → { ok: false, errorCode: 'policy_denied' }
     │
     ├─ 5. boundTool.validateInput(rawArgs) → validatedArgs
@@ -712,4 +717,4 @@ When `toolCall.function.arguments` is invalid JSON:
 ---
 
 **Last Updated**: 2026-02-02
-**Status**: Draft (Rev 7 - Added #26a CONNECTION_ID_VIA_CONTEXT with schema rejection; split Future Invariants section for P1+ invariants; clarified ToolCatalog single-source derivation from ToolSourcePort; marked authz step as [P1] in pipeline)
+**Status**: Draft (Rev 9 - #29a per-invocation construction requirement; canonical naming: effectiveConnectionIds, grant.allowedConnectionIds ∩ request.connectionIds)
