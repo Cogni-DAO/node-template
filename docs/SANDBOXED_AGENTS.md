@@ -1,33 +1,49 @@
 # Sandboxed Agent System
 
 > [!CRITICAL]
-> Sandbox is a **GraphProvider** routed via `AggregatingGraphExecutor`. Host owns the LLM loop; sandbox is a command executor only. NOT user-invocable—requires system `ExecutionGrant` with `allowSandbox` gate. Secrets never enter sandbox.
+> Sandbox is a **GraphProvider** routed via `AggregatingGraphExecutor`. NOT user-invocable—requires system `ExecutionGrant` with `allowSandbox` gate. Secrets never enter sandbox. P0: host owns LLM loop. P0.5+: LLM calls via CogniGateway → host → LiteLLM.
 
-## Core Invariants
+## Core Invariants (All Phases)
 
-1. **SANDBOX_IS_GRAPH_PROVIDER**: Sandbox implements `GraphProvider`, registered in `AggregatingGraphExecutor`. Temporal schedules/invokes graph runs, doesn't create separate executor path.
+1. **SANDBOX_IS_GRAPH_PROVIDER**: Sandbox implements `GraphProvider`, registered in `AggregatingGraphExecutor`.
 
-2. **HOST_OWNS_LLM_LOOP**: The host-side GraphProvider runs the LLM conversation loop. Sandbox receives structured commands (clone, exec, test, commit) and returns results. No autonomous agent inside sandbox in P0.
+2. **SYSTEM_GRANT_REQUIRED**: Requires `ExecutionGrant` with `allowSandbox: true`. NOT user-invocable.
 
-3. **SYSTEM_GRANT_REQUIRED**: Sandbox graphs require `ExecutionGrant` with `allowSandbox: true`. NOT accessible via user-facing chat API. Reject invocation without valid system grant.
+3. **SECRETS_HOST_ONLY**: No tokens in sandbox FS/env/logs. Host resolves credentials.
 
-4. **SECRETS_HOST_ONLY**: No GitHub tokens, OAuth credentials, or API keys in sandbox FS/env. P0 uses only non-auth read-only tools. Host resolves credentials for repo clone/push operations.
+4. **NETWORK_DEFAULT_DENY**: Sandbox runs `network=none`. All external IO via gateway only.
 
-5. **TOOL_EXEC_VIA_GATEWAY**: Sandbox calls tools via `cogni-tool` CLI → ToolGateway (unix socket) → host `toolRunner.exec()`. Single enforcement chokepoint preserved. No direct network or tool bypass.
+5. **HOST_SIDE_CLONE**: Host clones repo into workspace volume. Sandbox never has Git credentials.
 
-6. **NETWORK_DEFAULT_DENY**: Sandbox container runs with `network_mode: none`. All external access via ToolGateway only.
+6. **APPEND_ONLY_AUDIT**: All gateway traffic logged by host. Sandbox self-report not trusted.
 
-7. **HOST_SIDE_CLONE**: Host clones repo into workspace volume. Sandbox mounts workspace read-write but never has Git credentials. Push via host-side `RepoPort`.
+7. **WRITE_PATH_IS_BRANCH**: Push to branch by default. PR creation only when explicitly requested.
 
-8. **APPEND_ONLY_AUDIT**: Every run produces append-only audit artifacts (commands, exit codes, scrubbed outputs). Host-written, not sandbox self-report.
+## P0.5+ Invariants
 
-9. **WRITE_PATH_IS_BRANCH**: Default = push commits to branch. PR creation only when explicitly requested. Never auto-PR.
+8. **LLM_VIA_GATEWAY_ONLY**: Sandbox calls LLM ONLY via CogniGateway → host → LiteLLM. Never run models in-sandbox.
+
+9. **HOST_INJECTS_BILLING_HEADER**: Gateway injects `x-litellm-end-user-id: ${runId}/${attempt}`. Client-sent headers ignored.
+
+---
+
+## Phase Definitions
+
+| Phase    | LLM Location | Gateway      | Description                                                  |
+| -------- | ------------ | ------------ | ------------------------------------------------------------ |
+| **P0**   | Host         | ToolGateway  | Host owns LLM loop. Sandbox is command executor.             |
+| **P0.5** | Sandbox      | CogniGateway | Agent in sandbox calls LLM via gateway. No auth tools.       |
+| **P1**   | Sandbox      | CogniGateway | Clawdbot runtime + authenticated tools via ConnectionBroker. |
+
+> **Confusion Avoidance**: If LLM calls originate inside sandbox, that's P0.5+, not P0.
 
 ---
 
 ## Implementation Checklist
 
-### P0: Sandbox GraphProvider Loop
+### P0: Host-Owned LLM Loop
+
+Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls from sandbox).
 
 #### Infrastructure
 
@@ -47,25 +63,18 @@
 - [ ] Create `src/ports/sandbox-runner.port.ts`:
   ```typescript
   interface SandboxRunnerPort {
-    run(spec: SandboxRunSpec): Promise<SandboxRunResult>;
+    execCommand(spec: SandboxCommandSpec): Promise<SandboxCommandResult>;
   }
-  interface SandboxRunSpec {
+  interface SandboxCommandSpec {
     runId: string;
     workspacePath: string; // Pre-cloned by host
-    taskInput: string;
-    graphId: string;
-    billingAccountId: string;
-    actorId: string;
-    tenantId: string;
-    toolIds: readonly string[]; // P0: non-auth read-only only
+    command: { type: "exec" | "read" | "write"; args: Record<string, unknown> };
     limits: { maxRuntimeSec: number; maxMemoryMb: number };
   }
-  interface SandboxRunResult {
+  interface SandboxCommandResult {
     ok: boolean;
-    bundle?: { patches: string[]; commitMessages: string[] };
-    logs: string;
-    auditLog: AuditEntry[]; // Host-written command audit
-    errorCode?: "timeout" | "oom_killed" | "internal" | "task_failed";
+    output?: string;
+    errorCode?: "timeout" | "oom_killed" | "internal" | "command_failed";
   }
   ```
 - [ ] Create `src/ports/repo.port.ts`:
@@ -114,10 +123,11 @@
   - `runGraph()`:
     1. Validate grant has `allowSandbox: true`
     2. Call `repoPort.cloneToWorkspace()` (host-side clone)
-    3. **Host runs LLM loop**, sends commands to sandbox via gateway
-    4. Call `sandboxRunner.run()` for each command batch
-    5. Collect patches, optionally push branch
-    6. Return `GraphRunResult` (stream + final)
+    3. **Host runs LLM loop**, generates commands
+    4. Call `sandboxRunner.execCommand()` for each command
+    5. Feed results back to LLM, repeat until done
+    6. Collect patches, optionally push branch
+    7. Return `GraphRunResult` (stream + final)
 
 #### Bootstrap (`src/bootstrap/`)
 
@@ -148,12 +158,67 @@
 - [ ] Observability: `sandbox.run.*` Prometheus metrics
 - [ ] Documentation updates
 
-### P1: Clawdbot Agent Runtime
+### P0.5: CogniGateway LLM Routing
 
-- [ ] Clawdbot runs inside sandbox container as the agent runtime
-- [ ] Clawdbot calls `cogni-tool` for external IO (tools via gateway)
-- [ ] Implement `GitHubRepoAdapter` for `RepoPort` (uses host-side credentials)
-- [ ] Add authenticated tools via `ConnectionBrokerPort` integration
+**Trigger**: When agent runtime inside sandbox needs to call LLM itself.
+
+**Scope**: Extend ToolGateway to proxy LLM calls.
+
+#### CogniGateway Contract
+
+- Expose `/v1/*` (LLM) + `/tool/exec` over localhost in sandbox
+- Forward over mounted unix socket to host
+- Host injects `x-litellm-end-user-id: ${runId}/${attempt}` (ignore client-sent)
+- Redact + audit all LLM/tool traffic at host
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ SANDBOX (network=none)                                              │
+│ ──────────────────────                                              │
+│  Agent Runtime (Clawdbot, etc.)                                     │
+│    ├─ LLM: http://localhost:8080/v1/chat/completions                │
+│    └─ Tools: cogni-tool exec <tool> <args>                          │
+│                                                                     │
+│  cogni-gateway-sidecar (localhost:8080 + unix socket)               │
+└────┼────────────────────────────────────────────────────────────────┘
+     │ unix socket to host
+     ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ HOST: CogniGatewayServer                                            │
+│ ─────────────────────────                                           │
+│  /v1/* → LiteLLM proxy + inject x-litellm-end-user-id + audit       │
+│  /tool/exec → toolRunner.exec() + policy + audit                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Implementation
+
+- [ ] Extend `tool-gateway.server.ts` → `cogni-gateway.server.ts`
+- [ ] Add `/v1/chat/completions` handler:
+  - Validate runId from socket context
+  - Inject `x-litellm-end-user-id: ${runId}/${attempt}`
+  - Forward to LiteLLM (host-side)
+  - Audit log (model, tokens, cost)
+  - Support streaming
+- [ ] Create `cogni-gateway-sidecar` for in-container forwarding
+- [ ] Update sandbox Dockerfile to include sidecar
+
+#### Merge Gates (P0.5)
+
+- [ ] `curl google.com` from sandbox fails
+- [ ] LLM request reaches LiteLLM with injected `end-user-id`
+- [ ] Usage headers/logs attribute to runId
+- [ ] No secrets in sandbox logs/artifacts
+
+### P1: Clawdbot Agent Runtime + Authenticated Tools
+
+- [ ] Clawdbot runs inside sandbox, uses CogniGateway for LLM
+- [ ] Clawdbot config: `baseUrl: http://localhost:8080` (gateway sidecar)
+- [ ] Implement `GitHubRepoAdapter` for `RepoPort` via ConnectionBroker
+- [ ] Add authenticated tools via ConnectionBroker integration
+- [ ] Persistent workspace option for long-running DAO agents
 
 ### P2: Full Agent Autonomy (Do NOT Build Yet)
 
@@ -221,23 +286,23 @@
 
 **Why**: Keeps P0 simple. Host controls all LLM I/O, billing, and orchestration. Sandbox is a pure command executor with no autonomy.
 
-### 2. P1/P2: Clawdbot Inside Sandbox
+### 2. P0.5+: Agent Runtime Inside Sandbox
 
-**Decision**: Clawdbot becomes the agent runtime inside sandbox in P1/P2.
+**Decision**: Agent runtime (any, including Clawdbot) runs inside sandbox via CogniGateway.
 
 ```
-P1/P2:
+P0.5+:
 ┌─────────────────────────────────────────────────────────────────────┐
-│ SANDBOX: Clawdbot Runtime (network=none)                            │
-│ ────────────────────────────────────────                            │
-│ - Clawdbot runs as agent process                                    │
-│ - LLM calls routed via cogni-tool → ToolGateway → host LiteLLM      │
-│ - External tools via cogni-tool → ToolGateway → host toolRunner     │
+│ SANDBOX: Agent Runtime (network=none)                               │
+│ ─────────────────────────────────────                               │
+│ - Agent runs as process (Clawdbot, custom, etc.)                    │
+│ - LLM: http://localhost:8080 → CogniGateway → host LiteLLM          │
+│ - Tools: cogni-tool exec → CogniGateway → host toolRunner           │
 │ - Autonomous within sandbox, but all IO through gateway             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why**: Clawdbot already has sandbox mode, skill persistence, and workspace management. Reuse rather than rebuild.
+**Why P1 uses Clawdbot**: Already has sandbox mode, skill persistence, workspace management. Reuse rather than rebuild.
 
 ### 3. No ConnectionBroker in P0
 
@@ -272,18 +337,18 @@ HOST: repoPort.pushBranchFromPatches()
 
 ## Anti-Patterns
 
-| Pattern                          | Problem                                |
-| -------------------------------- | -------------------------------------- |
-| Autonomous agent in sandbox (P0) | Host must own LLM loop in P0           |
-| GitHub token in sandbox env      | Credential exfiltration risk           |
-| Clone inside sandbox             | Needs credentials; clone on host       |
-| Direct network from sandbox      | Bypasses tool policy, no audit         |
-| Auth tools in P0                 | Requires ConnectionBroker; defer to P1 |
-| Auto-PR every run                | Noisy, no review gate                  |
-| Shell tool in ToolGateway        | Escapes all policy                     |
-| Sandbox self-reported audit      | Can't trust; host must write audit     |
-| runId from sandbox input         | Must be host-generated                 |
-| Wire into user chat API          | Must require system grant              |
+| Pattern                     | Problem                                     |
+| --------------------------- | ------------------------------------------- |
+| LLM calls from sandbox (P0) | P0 = host owns LLM loop. Use P0.5+ for this |
+| GitHub token in sandbox env | Credential exfiltration risk                |
+| Clone inside sandbox        | Needs credentials; clone on host            |
+| Direct network from sandbox | Bypasses gateway policy, no audit           |
+| Auth tools before P1        | Requires ConnectionBroker; defer to P1      |
+| Auto-PR every run           | Noisy, no review gate                       |
+| Shell tool in gateway       | Escapes all policy                          |
+| Sandbox self-reported audit | Can't trust; host must write audit          |
+| runId from sandbox input    | Must be host-generated                      |
+| Wire into user chat API     | Must require system grant                   |
 
 ---
 
@@ -304,7 +369,7 @@ HOST: repoPort.pushBranchFromPatches()
 
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution, DENY_BY_DEFAULT
-- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — Clawdbot runtime (P1/P2 agent)
+- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — Clawdbot runtime (P0.5+ agent option)
 - [RBAC_SPEC.md](RBAC_SPEC.md) — ExecutionGrant, allowSandbox gate
 - [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — ConnectionBroker (P1)
 
