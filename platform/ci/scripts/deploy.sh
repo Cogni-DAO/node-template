@@ -22,33 +22,49 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 on_fail() {
   code=$?
-  echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "[ERROR] deploy failed (exit $code)"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   emit_deployment_event "deployment.failed" "failed" "Deployment failed with exit code $code"
 
   if [[ -n "${VM_HOST:-}" ]]; then
-    ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
-      echo "=== edge compose ps ==="
-      docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml ps || true
+    echo ""
+    echo "=== VM disk state ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "df -h / 2>/dev/null || true" || true
 
-      echo "=== runtime compose ps ==="
-      docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml ps || true
+    echo ""
+    echo "=== .env files (redacted) ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "head -5 /opt/cogni-template-runtime/.env 2>/dev/null | sed 's/=.*/=***/' || echo '(.env not found)'" || true
 
-      echo "=== logs: caddy (edge) ==="
-      docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml logs --tail 80 caddy || true
+    echo ""
+    echo "=== edge compose ps ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml ps 2>&1 || true" || true
 
-      echo "=== logs: app ==="
-      docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 app || true
+    echo ""
+    echo "=== runtime compose ps ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml ps 2>&1 || true" || true
 
-      echo "=== logs: litellm ==="
-      docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm || true
+    echo ""
+    echo "=== logs: caddy (edge) ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml logs --tail 8 caddy 2>&1 || true" || true
 
-      echo "=== sourcecred compose ps ==="
-      docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml ps || true
+    echo ""
+    echo "=== logs: app ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 app 2>&1 || true" || true
 
-      echo "=== logs: sourcecred ==="
-      docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs --tail 200 sourcecred || true
-EOF
+    echo ""
+    echo "=== logs: litellm ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm 2>&1 || true" || true
+
+    echo ""
+    echo "=== sourcecred compose ps ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml ps 2>&1 || true" || true
+
+    echo ""
+    echo "=== logs: sourcecred ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs --tail 200 sourcecred 2>&1 || true" || true
   fi
 
   exit "$code"
@@ -298,6 +314,11 @@ cat > "$ARTIFACT_DIR/deploy-remote.sh" << 'EOF'
 #   - App deploys use pull-while-running, no `compose down` unless emergency prune
 
 set -euo pipefail
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Error capture: Show exactly what failed (line number + command)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+trap 'echo -e "\033[0;31m[FATAL]\033[0m Script failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step -1: Docker prerequisite gate (fail fast if VM not bootstrapped)
