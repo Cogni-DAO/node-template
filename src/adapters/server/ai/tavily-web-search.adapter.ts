@@ -19,6 +19,10 @@ import type {
   WebSearchResult,
 } from "@cogni/ai-tools";
 
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
+
+const logger = makeLogger({ component: "TavilyWebSearchAdapter" });
+
 /**
  * Tavily API response shape.
  * Note: Optional fields may be null or undefined depending on request params.
@@ -83,6 +87,15 @@ export class TavilyWebSearchAdapter implements WebSearchCapability {
       });
 
       if (!response.ok) {
+        logger.error(
+          {
+            event: EVENT_NAMES.ADAPTER_TAVILY_ERROR,
+            dep: "tavily",
+            reasonCode: "http_error",
+            status: response.status,
+          },
+          EVENT_NAMES.ADAPTER_TAVILY_ERROR
+        );
         const errorText = await response.text();
         throw new Error(`Tavily API error (${response.status}): ${errorText}`);
       }
@@ -101,6 +114,38 @@ export class TavilyWebSearchAdapter implements WebSearchCapability {
           ...(r.raw_content != null && { rawContent: r.raw_content }),
         })),
       };
+    } catch (error) {
+      // Log network-level errors (timeout, DNS, connection refused, etc.)
+      if (error instanceof Error && error.name === "AbortError") {
+        logger.error(
+          {
+            event: EVENT_NAMES.ADAPTER_TAVILY_ERROR,
+            dep: "tavily",
+            reasonCode: "timeout",
+            durationMs: this.timeoutMs,
+          },
+          EVENT_NAMES.ADAPTER_TAVILY_ERROR
+        );
+      } else if (
+        error instanceof Error &&
+        error.message.startsWith("Tavily API error")
+      ) {
+        // Already logged above, just re-throw
+      } else {
+        const reasonCode =
+          error instanceof Error && error.message === "fetch failed"
+            ? "network_error"
+            : "unknown_error";
+        logger.error(
+          {
+            event: EVENT_NAMES.ADAPTER_TAVILY_ERROR,
+            dep: "tavily",
+            reasonCode,
+          },
+          EVENT_NAMES.ADAPTER_TAVILY_ERROR
+        );
+      }
+      throw error;
     } finally {
       clearTimeout(timeoutId);
     }
