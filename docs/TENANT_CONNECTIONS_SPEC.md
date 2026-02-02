@@ -19,7 +19,7 @@
 
 7. **REFRESH_WITH_TIMEOUT**: Background refresh preferred (jittered window before expiry). Synchronous refresh allowed with bounded timeout. On timeout/failure: typed error, metric emitted, tool invocation fails.
 
-8. **CONNECTION_IN_CONTEXT_NOT_ARGS**: Authenticated tool invocations specify `connectionId` via `ToolInvocationContext` (out-of-band), NOT in tool args. This keeps tool input schemas pure business args, reduces injection surface, and prevents schema pollution. `connectionId` is uuid-validated at toolRunner boundary.
+8. **CONNECTION_IN_CONTEXT_NOT_ARGS**: Authenticated tool invocations specify `connectionId` via `ToolInvocationContext` (out-of-band), NOT in tool args. This keeps tool input schemas pure business args, reduces injection surface, and prevents schema pollution. `connectionId` is uuid-validated at toolRunner boundary. See also [TOOL_USE_SPEC.md#26a](TOOL_USE_SPEC.md) (CONNECTION_ID_VIA_CONTEXT) for schema rejection at derivation time.
 
 9. **AUTH_VIA_CAPABILITY_NOT_CONTEXT**: Broker outputs (access tokens, API keys, headers) must NEVER be placed into `ToolInvocationContext`, `RunnableConfig`, or ALS context. Tools receive auth via injected capability interfaces (e.g., `AuthCapability.getAccessToken(connectionId)`). This prevents secret leakage into logs, traces, telemetry, and exception messages.
 
@@ -220,5 +220,5 @@ Tool calls: await capabilities.auth.getAccessToken("conn-1")
 
 ---
 
-**Last Updated**: 2026-01-29
-**Status**: Draft (Rev 2 - Added CONNECTION_IN_CONTEXT_NOT_ARGS, AUTH_VIA_CAPABILITY_NOT_CONTEXT, GRANT_INTERSECTION_BEFORE_RESOLVE; P0 checklist for capability auth)
+**Last Updated**: 2026-02-02
+**Status**: Draft (Rev 3 - Added cross-reference to TOOL_USE_SPEC.md#26a for schema rejection enforcement)
