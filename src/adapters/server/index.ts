@@ -85,6 +85,8 @@ export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";
 export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
 export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifier.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
+// Sandbox adapters
+export { SandboxRunnerAdapter } from "./sandbox";
 // Temporal adapters - schedule control
 export {
   TemporalScheduleControlAdapter,
