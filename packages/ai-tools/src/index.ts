@@ -11,6 +11,29 @@
  * @public
  */
 
+export type {
+  AuthCapability,
+  ClockCapability,
+  MetricDataPoint,
+  MetricQueryResult,
+  MetricSummary,
+  MetricsCapability,
+  MetricTemplate,
+  MetricWindow,
+  TemplateQueryParams,
+  ToolCapabilities,
+  WebSearchCapability,
+  WebSearchParams,
+  WebSearchResult,
+  // Note: WebSearchResultItem exported from tools/web-search to avoid duplicate
+  WebSearchTopic,
+} from "./capabilities";
+// Capabilities
+export {
+  createFixedClock,
+  stubAuthCapability,
+  systemClock,
+} from "./capabilities";
 // Tool catalog
 export {
   type CatalogBoundTool,
@@ -21,6 +44,8 @@ export {
   TOOL_CATALOG,
   type ToolCatalog,
 } from "./catalog";
+// Runtime adapter
+export { contractToRuntime, toBoundToolRuntime } from "./runtime-adapter";
 // Schema compilation
 export {
   type ToToolSpecResult,
@@ -40,6 +65,38 @@ export {
   getCurrentTimeContract,
   getCurrentTimeImplementation,
 } from "./tools/get-current-time";
+export {
+  createMetricsQueryImplementation,
+  METRICS_QUERY_NAME,
+  type MetricsDataPoint,
+  MetricsDataPointSchema,
+  type MetricsQueryDeps,
+  type MetricsQueryInput,
+  MetricsQueryInputSchema,
+  type MetricsQueryOutput,
+  MetricsQueryOutputSchema,
+  type MetricsQueryRedacted,
+  type MetricsSummary,
+  MetricsSummarySchema,
+  metricsQueryBoundTool,
+  metricsQueryContract,
+  metricsQueryStubImplementation,
+} from "./tools/metrics-query";
+export {
+  createWebSearchImplementation,
+  WEB_SEARCH_NAME,
+  type WebSearchDeps,
+  type WebSearchInput,
+  WebSearchInputSchema,
+  type WebSearchOutput,
+  WebSearchOutputSchema,
+  type WebSearchRedacted,
+  type WebSearchResultItem,
+  WebSearchResultItemSchema,
+  webSearchBoundTool,
+  webSearchContract,
+  webSearchStubImplementation,
+} from "./tools/web-search";
 // Tool types
 export type {
   BoundTool,

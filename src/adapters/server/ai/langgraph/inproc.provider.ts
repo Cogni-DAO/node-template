@@ -17,9 +17,13 @@
  * @internal
  */
 
-import type { AiEvent } from "@cogni/ai-core";
-import { createToolAllowlistPolicy, createToolRunner } from "@cogni/ai-core";
-import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
+import type { AiEvent, BoundToolRuntime, ToolSourcePort } from "@cogni/ai-core";
+import {
+  createStaticToolSourceFromRecord,
+  createToolAllowlistPolicy,
+  createToolRunner,
+} from "@cogni/ai-core";
+import { TOOL_CATALOG } from "@cogni/ai-tools";
 import {
   type CompletionFn,
   type CreateGraphFn,
@@ -39,7 +43,7 @@ import type {
   LlmToolDefinition,
   Message,
 } from "@/ports";
-import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 import type { GraphProvider } from "../graph-provider";
 import type { CompletionUnitParams } from "../inproc-completion-unit.adapter";
@@ -89,7 +93,10 @@ export class LangGraphInProcProvider implements GraphProvider {
   private readonly log: Logger;
   private readonly catalog: LangGraphCatalog<CreateGraphFn>;
 
-  constructor(private readonly adapter: CompletionUnitAdapter) {
+  constructor(
+    private readonly adapter: CompletionUnitAdapter,
+    private readonly toolSource: ToolSourcePort
+  ) {
     this.log = makeLogger({ component: "LangGraphInProcProvider" });
 
     // Use catalog from package (single source of truth)
@@ -156,25 +163,33 @@ export class LangGraphInProcProvider implements GraphProvider {
       );
     }
 
-    // Resolve boundTools from TOOL_CATALOG (per TOOL_CATALOG_IS_CANONICAL)
-    const boundTools: Record<string, CatalogBoundTool> = {};
+    // Resolve BoundToolRuntime from injected toolSource (per TOOL_SOURCE_RETURNS_BOUND_TOOL)
+    // Per CAPABILITY_INJECTION: toolSource contains real implementations with I/O
+    const runtimeTools: Record<string, BoundToolRuntime> = {};
     for (const toolId of catalogToolIds) {
-      const tool = TOOL_CATALOG[toolId];
-      if (tool) {
-        boundTools[toolId] = tool;
+      const runtime = this.toolSource.getBoundTool(toolId);
+      if (runtime) {
+        runtimeTools[toolId] = runtime;
       } else {
         this.log.error(
           { runId, graphName, toolId },
-          "Tool not found in TOOL_CATALOG; graph misconfigured"
+          "Tool not found in toolSource; graph misconfigured"
         );
       }
     }
+
+    // Get catalog tools for contract extraction (still from TOOL_CATALOG)
+    // Type predicate ensures catalogTools is CatalogBoundTool[] not (CatalogBoundTool | undefined)[]
+    const catalogTools = catalogToolIds
+      .map((id) => TOOL_CATALOG[id])
+      .filter((bt): bt is NonNullable<typeof bt> => bt !== undefined);
 
     // Create tool execution function factory
     // Uses same toolIds for ToolRunner policy as configurable
     const createToolExecFn = (emit: (e: AiEvent) => void): ToolExecFn => {
       const policy = createToolAllowlistPolicy(toolIds);
-      const toolRunner = createToolRunner(boundTools, emit, {
+      const source = createStaticToolSourceFromRecord(runtimeTools);
+      const toolRunner = createToolRunner(source, emit, {
         policy,
         ctx: { runId },
       });
@@ -188,8 +203,8 @@ export class LangGraphInProcProvider implements GraphProvider {
       };
     };
 
-    // Extract tool contracts from resolved boundTools
-    const toolContracts = Object.values(boundTools).map((bt) => bt.contract);
+    // Extract tool contracts from resolved catalog tools
+    const toolContracts = catalogTools.map((bt) => bt.contract);
 
     // Build request for package runner
     // Use conditional spreads for exactOptionalPropertyTypes
@@ -213,7 +228,12 @@ export class LangGraphInProcProvider implements GraphProvider {
     });
 
     // Map package result to GraphFinal
-    const mappedFinal = this.mapToGraphFinal(final, runId, ingressRequestId);
+    const mappedFinal = this.mapToGraphFinal(
+      final,
+      runId,
+      ingressRequestId,
+      graphName
+    );
 
     return { stream, final: mappedFinal };
   }
@@ -274,15 +294,30 @@ export class LangGraphInProcProvider implements GraphProvider {
   /**
    * Map package GraphResult to port GraphFinal.
    * GraphResult.error is now AiExecutionErrorCode - direct passthrough.
+   * Logs errors at adapter boundary for debugging.
    */
   private async mapToGraphFinal(
     final: Promise<GraphResult>,
     runId: string,
-    requestId: string
+    requestId: string,
+    graphName: string
   ): Promise<GraphFinal> {
     const result = await final;
 
     if (!result.ok) {
+      // Log error at adapter boundary (per OBSERVABILITY.md: adapter ERROR log)
+      this.log.error(
+        {
+          runId,
+          reqId: requestId,
+          graphName,
+          errorCode: result.error ?? "internal",
+          errorMessage: result.errorMessage,
+          event: EVENT_NAMES.ADAPTER_LANGGRAPH_INPROC_ERROR,
+        },
+        EVENT_NAMES.ADAPTER_LANGGRAPH_INPROC_ERROR
+      );
+
       // Direct passthrough - GraphResult.error is already AiExecutionErrorCode
       return { ok: false, runId, requestId, error: result.error ?? "internal" };
     }

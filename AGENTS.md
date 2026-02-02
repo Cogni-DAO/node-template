@@ -52,11 +52,15 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)
 - [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Authorization (RBAC/ReBAC)](docs/RBAC_SPEC.md)
+- [Tenant Connections](docs/TENANT_CONNECTIONS_SPEC.md)
+- [Tool Use Spec](docs/TOOL_USE_SPEC.md)
 - [Services Migration Guide](docs/SERVICES_MIGRATION.md)
 
 ### AI & Evals
 
 - [AI Setup Spec](docs/AI_SETUP_SPEC.md)
+- [Tools Authoring](docs/TOOLS_AUTHORING.md)
 - [Graph Execution](docs/GRAPH_EXECUTION.md)
 - [LangGraph Server](docs/LANGGRAPH_SERVER.md)
 - [LangGraph Patterns](docs/LANGGRAPH_AI.md)

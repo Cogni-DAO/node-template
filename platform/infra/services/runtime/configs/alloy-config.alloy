@@ -11,6 +11,7 @@ discovery.docker "containers" {
 }
 
 // Relabel discovered containers with strict cardinality
+// TODO: Labels (app, env) must match mimir.adapter.ts + ai-tools metrics-query description
 discovery.relabel "docker_logs" {
   targets = discovery.docker.containers.targets
 

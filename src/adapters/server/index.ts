@@ -62,6 +62,10 @@ export { LiteLlmUsageServiceAdapter } from "./ai/litellm.usage-service.adapter";
 export type { ObservabilityDecoratorConfig } from "./ai/observability-executor.decorator";
 // Observability decorator for Langfuse traces
 export { ObservabilityGraphExecutorDecorator } from "./ai/observability-executor.decorator";
+export {
+  TavilyWebSearchAdapter,
+  type TavilyWebSearchConfig,
+} from "./ai/tavily-web-search.adapter";
 export { DrizzleAiTelemetryAdapter } from "./ai-telemetry/drizzle.adapter";
 export {
   type CreateTraceWithIOParams,
@@ -73,6 +77,8 @@ export { type Database, getDb } from "./db/client";
 export {
   type MimirAdapterConfig,
   MimirMetricsAdapter,
+  TemplateQueryError,
+  type TemplateQueryErrorCode,
 } from "./metrics/mimir.adapter";
 export { ViemEvmOnchainClient } from "./onchain/viem-evm-onchain-client.adapter";
 export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";

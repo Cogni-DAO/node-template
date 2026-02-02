@@ -18,6 +18,17 @@ import { ZodError, z } from "zod";
 import { buildDatabaseUrl } from "@/shared/db";
 import { assertEnvInvariants } from "./invariants";
 
+// Env vars are strings - empty string "" should be treated as "not set" for optional fields.
+// Docker-compose passes through empty strings from shell even when .env file omits the var.
+// Note: whitespace-only strings are kept as-is (will fail validation, not silently accepted).
+const emptyToUndefined = (v: unknown) =>
+  typeof v === "string" && v === "" ? undefined : v;
+const optionalUrl = z.preprocess(emptyToUndefined, z.string().url().optional());
+const optionalString = z.preprocess(
+  emptyToUndefined,
+  z.string().min(1).optional()
+);
+
 export interface EnvValidationMeta {
   code: "INVALID_ENV";
   missing: string[];
@@ -96,11 +107,14 @@ export const serverSchema = z.object({
   // Required: Internal execution API will not function without this token.
   SCHEDULER_API_TOKEN: z.string().min(32),
 
-  // Public Analytics (Stage 9.5) - Mimir queries for public /analytics page
-  // Optional: only required when analytics feature is enabled
-  MIMIR_URL: z.string().url().optional(),
-  MIMIR_USER: z.string().min(1).optional(),
-  MIMIR_TOKEN: z.string().min(1).optional(),
+  // Prometheus Query (Grafana Cloud) - READ path for app metrics queries
+  // Query URL derived from PROMETHEUS_REMOTE_WRITE_URL (must end with /api/prom/push)
+  // Or set PROMETHEUS_QUERY_URL explicitly for non-standard endpoints
+  // Security: Use read-only token, separate from Alloy's write token
+  PROMETHEUS_REMOTE_WRITE_URL: optionalUrl,
+  PROMETHEUS_QUERY_URL: optionalUrl,
+  PROMETHEUS_READ_USERNAME: optionalString,
+  PROMETHEUS_READ_PASSWORD: optionalString,
   ANALYTICS_K_THRESHOLD: z.coerce.number().int().positive().default(50),
   ANALYTICS_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 
@@ -122,6 +136,10 @@ export const serverSchema = z.object({
   // When set, graph execution uses langgraph dev server instead of in-process
   // Per LANGGRAPH_SERVER.md MVP: default port 2024 for langgraph dev
   LANGGRAPH_DEV_URL: z.string().url().optional(),
+
+  // Tavily Web Search - Optional
+  // Required for research graph web search capability
+  TAVILY_API_KEY: z.string().min(1).optional(),
 
   // Temporal (Schedule orchestration) - Required
   // Per SCHEDULER_SPEC.md: Temporal is required infrastructure, no fallback

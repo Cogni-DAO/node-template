@@ -37,6 +37,7 @@ services:
       - LITELLM_BASE_URL=http://litellm:4000
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+      - DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
       # Optional vars - pass-through only if set in host (absent = undefined, not empty string)
       - METRICS_TOKEN
       - SCHEDULER_API_TOKEN
@@ -44,6 +45,11 @@ services:
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+      # Prometheus query (for analytics/AI tools) - read-only credentials
+      - PROMETHEUS_REMOTE_WRITE_URL
+      - PROMETHEUS_QUERY_URL
+      - PROMETHEUS_READ_USERNAME
+      - PROMETHEUS_READ_PASSWORD
       # Temporal schedule orchestration (required)
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV}

@@ -5,15 +5,14 @@
 
 ## MVP Stack
 
-| Layer                   | Tool               | Notes                                  |
-| ----------------------- | ------------------ | -------------------------------------- |
-| Orchestrator            | Temporal OSS       | Schedules + Workflows + Activities     |
-| Metrics Semantic Layer  | Cube Core          | Governed KPI queries                   |
-| Metrics Backend         | Prometheus/Mimir   | Engineering telemetry                  |
-| Log Aggregates          | Grafana Loki       | Fingerprints only, not raw logs        |
-| Work Items              | Plane + MCP Server | Human review queue                     |
-| Storage                 | Postgres           | Primary data store                     |
-| Semantic Retrieval (P1) | pgvector extension | Embeddings over briefs/EDOs for recall |
+| Layer                   | Tool                                         | Notes                                      |
+| ----------------------- | -------------------------------------------- | ------------------------------------------ |
+| Orchestrator            | Temporal OSS                                 | Schedules + Workflows + Activities         |
+| Metrics                 | Prometheus/Mimir + existing MetricsQueryPort | Governed template queries (no Cube in MVP) |
+| Log Aggregates          | Grafana Loki                                 | Fingerprints only, not raw logs            |
+| Work Items              | Plane + MCP Server                           | Human review queue                         |
+| Storage                 | Postgres                                     | Primary data store                         |
+| Semantic Retrieval (P1) | pgvector extension                           | Embeddings over briefs/EDOs for recall     |
 
 ---
 
@@ -35,7 +34,7 @@
 
 5. **DUAL_PATH_ROUTING**: IncidentRouterWorkflow can be started by (a) Temporal Schedule (backstop, every 1-5m) OR (b) webhook fast-path (immediate after ingest). Same workflow, two initiation modes.
 
-6. **TRIGGER_PRIORITY_POLICY**: Map `(source, type)` → `immediate | scheduled`. High-severity signals (e.g., `ci.e2e.failed`, `deploy.prod.failed`) trigger immediate router run; others wait for scheduled sweep.
+6. **TRIGGER_PRIORITY_POLICY**: Immediate path ONLY for alert lifecycle signals (`prometheus.alert.firing`, `prometheus.alert.resolved`). All other signals use scheduled sweep. No arbitrary (source, type) → immediate mappings.
 
 7. **ROUTER_IDEMPOTENCY**: IncidentRouterWorkflow uses stable workflowId = `router:${scope}:${timeBucket}`. Concurrent starts dedupe via Temporal. Router processes signals since last cursor.
 
@@ -67,17 +66,29 @@
 
 18. **QUERY_PROVENANCE**: Metric query responses include `queryRef`, `executedAt`, `cached`. Audit trail for reproducibility.
 
+19. **TOOLS_TEMPLATE_ONLY**: Governance tools (`core__metrics_query`) may ONLY use `queryTemplate`. Raw methods (`queryRange`, `queryInstant`) are adapter/internal only. Runtime guard: throw `METRICS_RAW_QUERY_FORBIDDEN` if governance context attempts raw query.
+
+20. **QUERY_TEMPLATE_REQUIRED**: `queryTemplate` is mandatory on MetricsQueryPort (not optional). All adapters must implement it. Build fails if missing.
+
+### Event Time Semantics
+
+21. **TIME_IS_TRUTH**: CloudEvents `time` (event time) is semantic truth for diff/brief windows. `retrievedAt` and `created_at` are operational metadata only.
+
+22. **SKEW_REJECTION**: Events with `time > now + 5m` are rejected at ingest (future timestamps invalid). Late arrivals (`retrievedAt > time + 24h`) are logged but processed normally.
+
+23. **BRIEF_WINDOWS_USE_EVENT_TIME**: Brief generation queries `time BETWEEN windowStart AND windowEnd`, not `created_at` or `retrievedAt`.
+
 ### Agent Execution
 
-19. **INCIDENT_GATES_AGENT**: LLM governance agent runs ONLY on `incident_open`, `severity_change`, or `incident_close`. Deterministic router workflow runs on Schedule + fast-path; agent workflow is triggered by incident lifecycle events only.
+24. **INCIDENT_GATES_AGENT**: LLM governance agent runs ONLY on `incident_open`, `severity_change`, or `incident_close`. Deterministic router workflow runs on Schedule + fast-path; agent workflow is triggered by incident lifecycle events only.
 
-20. **EDO_ONLY_ON_DECISION**: Event-Decision-Outcome records written ONLY when agent recommends action or requests approval. Silence is success.
+25. **EDO_ONLY_ON_DECISION**: Event-Decision-Outcome records written ONLY when agent recommends action or requests approval. Silence is success.
 
-21. **HUMAN_REVIEW_REQUIRED_MVP**: All proposed actions go to human review queue (Plane via MCP). No auto-execute in MVP.
+26. **HUMAN_REVIEW_REQUIRED_MVP**: All proposed actions go to human review queue (Plane via MCP). No auto-execute in MVP.
 
-22. **SYSTEM_TENANT_EXECUTION**: Governance runs execute as `cogni_system` tenant through `GraphExecutorPort`. Per SYSTEM_TENANT_DESIGN.md.
+27. **SYSTEM_TENANT_EXECUTION**: Governance runs execute as `cogni_system` tenant through `GraphExecutorPort`. Per SYSTEM_TENANT_DESIGN.md.
 
-23. **COOLDOWN_PER_INCIDENT**: Enforce cooldown (e.g., 15m) per `incident_key` to prevent repeated agent runs on flappy signals.
+28. **COOLDOWN_PER_INCIDENT**: Enforce cooldown (e.g., 15m) per `incident_key` to prevent repeated agent runs on flappy signals.
 
 ---
 
@@ -109,10 +120,10 @@
 ┌──────────────────────────────┐ ┌────────────────────────────────────────┐
 │ IMMEDIATE PATH               │ │ SCHEDULED PATH (Backstop)              │
 │ ────────────────             │ │ ─────────────────────────              │
-│ If (source,type) in          │ │ Temporal Schedule fires                │
-│ immediate_triggers:          │ │ every 1-5m per scope                   │
-│ → Start IncidentRouterWF     │ │ → Start IncidentRouterWF               │
-│   immediately after ingest   │ │   (same workflow, scheduled start)     │
+│ ONLY for alert lifecycle:    │ │ Temporal Schedule fires                │
+│ prometheus.alert.firing      │ │ every 1-5m per scope                   │
+│ prometheus.alert.resolved    │ │ → Start IncidentRouterWF               │
+│ → Start IncidentRouterWF     │ │   (same workflow, scheduled start)     │
 └──────────────────────────────┘ └────────────────────────────────────────┘
                               │
                               ▼
@@ -120,9 +131,8 @@
 │ INCIDENT ROUTER WORKFLOW (Deterministic)                                 │
 │ ────────────────────────────────────────                                 │
 │ - workflowId = router:${scope}:${timeBucket} (idempotent)               │
-│ - Queries signals since last cursor                                      │
-│ - Queries metrics for threshold checks                                   │
-│ - Evaluates thresholds (NO I/O in workflow code)                        │
+│ - Queries alert signals since last cursor (prometheus.alert.*)          │
+│ - Correlates alert state → incident lifecycle (NO internal thresholds)  │
 │ - Opens/updates/closes incidents via Activity                            │
 │ - On lifecycle event → starts GovernanceAgentWorkflow                    │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -164,7 +174,7 @@
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ SIGNAL INGEST (SignalIngestPort)                                         │
+│ SIGNAL INGEST (SignalWritePort)                                          │
 │ ───────────────────────────────                                          │
 │ - Validates CloudEvents envelope                                         │
 │ - Idempotent write to signal_events table                                │
@@ -200,25 +210,16 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ SEMANTIC LAYER (Cube Core or equivalent)                                 │
-│ ─────────────────────────────────────────                                │
-│ - Pre-defined metrics with business logic                                │
-│ - Consistent calculations across consumers                               │
-│ - Access control per metric                                              │
-└─────────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ METRICS QUERY PORT                                                       │
-│ ──────────────────                                                       │
-│ - listMetrics(): available metrics for caller                            │
-│ - describeMetric(id): dimensions, granularity, policy                    │
-│ - query(q): governed execution with caps                                 │
-│ - Optional: emit metrics.query.executed SignalEvent for audit            │
+│ EXISTING METRICSQUERYPORT (src/ports/metrics-query.port.ts)              │
+│ ─────────────────────────────────────────────────────────                │
+│ - Template-only queries (no raw PromQL)                                  │
+│ - Fixed windows, max datapoints, max series enforced                     │
+│ - MimirMetricsAdapter handles auth + timeout                             │
+│ - Governance adds: per-run rate limits at capability layer               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Relationship:** MetricsQueryPort is orthogonal to signal flow. Brief generation MAY query metrics for KPI deltas. Governance agent MAY query metrics for drill-down. All governed, all auditable.
+**Relationship:** MetricsQueryPort is orthogonal to signal flow. Brief generation MAY query metrics for KPI deltas. Governance agent MAY query metrics for drill-down via `core__metrics_query` tool. All governed, all auditable.
 
 ### Temporal Workflow Blueprint
 
@@ -249,11 +250,10 @@ workflowId: router:${scope}:${timeBucket} (idempotent start)
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ IncidentRouterWorkflow(scope)                                            │
 │ ─────────────────────────────                                            │
-│ Activity: queryMetrics(scope, guardrail metrics)                         │
-│ Activity: querySignals(scope, since lastCursor)                          │
-│ Workflow: evaluateThresholds(signals, metrics) → incidents (NO I/O)      │
-│ for each incident:                                                       │
-│   Activity: upsertIncident() → lifecycleEvent | null                     │
+│ Activity: queryAlertSignals(scope, since lastCursor) → alertEvents[]     │
+│ Workflow: correlateAlertState(alertEvents) → incidentUpdates[] (NO I/O)  │
+│ for each incidentUpdate:                                                 │
+│   Activity: upsertIncident(update) → lifecycleEvent | null               │
 │   Workflow: if lifecycleEvent → startChild(GovernanceAgentWorkflow)      │
 │ Activity: advanceCursor(scope)                                           │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -267,7 +267,7 @@ workflowId: router:${scope}:${timeBucket} (idempotent start)
 │ ──────────────────────────────────────────────                           │
 │ Activity: checkCooldown(incidentId) → shouldRun                          │
 │ Workflow: if !shouldRun → return early                                   │
-│ Activity: generateBrief(incidentId, window, domains, budget)             │
+│ Activity: generateBrief(preset: "incident_brief", incidentId)            │
 │ Activity: runGovernanceGraph(brief) → agentOutput (via GraphExecutorPort)│
 │ Workflow: parseOutput(agentOutput) (deterministic)                       │
 │ Activity: if hasAction → appendEdo(edo)                                  │
@@ -336,22 +336,45 @@ Generated briefs with budget enforcement.
 
 Tracks incident lifecycle for governance gating.
 
-| Column                | Type        | Constraints      | Notes                             |
-| --------------------- | ----------- | ---------------- | --------------------------------- |
-| `id`                  | uuid        | PK               |                                   |
-| `incident_key`        | text        | UNIQUE, NOT NULL | `{scope}:{signal}:{window_start}` |
-| `scope`               | text        | NOT NULL         |                                   |
-| `signal`              | text        | NOT NULL         | `error_rate_high`, `p95_breach`   |
-| `severity`            | text        | NOT NULL         | `warning`, `critical`             |
-| `status`              | text        | NOT NULL         | `open`, `resolved`                |
-| `opened_at`           | timestamptz | NOT NULL         |                                   |
-| `resolved_at`         | timestamptz | NULL             |                                   |
-| `last_brief_at`       | timestamptz | NULL             | For cooldown enforcement          |
-| `evidence_signal_ids` | text[]      | NOT NULL         | SignalEvent IDs that triggered    |
-| `created_at`          | timestamptz | NOT NULL         |                                   |
-| `updated_at`          | timestamptz | NOT NULL         |                                   |
+| Column          | Type        | Constraints | Notes                                                        |
+| --------------- | ----------- | ----------- | ------------------------------------------------------------ |
+| `id`            | uuid        | PK          |                                                              |
+| `incident_key`  | text        | NOT NULL    | `{scope}:{signal}:{fingerprint}` (derived, for display/logs) |
+| `scope`         | text        | NOT NULL    |                                                              |
+| `signal`        | text        | NOT NULL    | `error_rate_high`, `p95_breach`                              |
+| `fingerprint`   | text        | NOT NULL    | Alertmanager fingerprint or labelset hash                    |
+| `severity`      | text        | NOT NULL    | `warning`, `critical`                                        |
+| `status`        | text        | NOT NULL    | `open`, `resolved`                                           |
+| `opened_at`     | timestamptz | NOT NULL    |                                                              |
+| `resolved_at`   | timestamptz | NULL        |                                                              |
+| `last_brief_at` | timestamptz | NULL        | For cooldown enforcement                                     |
+| `created_at`    | timestamptz | NOT NULL    |                                                              |
+| `updated_at`    | timestamptz | NOT NULL    |                                                              |
 
-**Indexes:** `idx_incidents_key`, `idx_incidents_scope_status`
+**Indexes:** `idx_incidents_scope_status`
+**Unique Constraint:** `UNIQUE(scope, signal, fingerprint)` — DB-level source of truth. `incident_key` is derived string for display/logging only (no separate index needed).
+
+**Incident Key Fingerprint:** The `fingerprint` derives from the alerting source:
+
+- Alertmanager alerts: use `fingerprint` from alert payload (stable hash of alertname + labels)
+- Custom signals: use `sha256(canonical_json(labelset))` of identifying labels
+
+This ensures a persistent condition (e.g., high error rate) creates ONE incident that accumulates evidence over time, not a new incident per time window.
+
+### incident_evidence
+
+Normalized evidence storage with hard cap (N=100 most recent per incident, enforced at app layer in IncidentStorePort).
+
+| Column        | Type        | Constraints                | Notes                   |
+| ------------- | ----------- | -------------------------- | ----------------------- |
+| `incident_id` | uuid        | FK incidents, NOT NULL     |                         |
+| `signal_id`   | text        | FK signal_events, NOT NULL |                         |
+| `created_at`  | timestamptz | NOT NULL                   | When evidence was added |
+
+**Primary Key:** `(incident_id, signal_id)`
+**Indexes:** `idx_incident_evidence_incident_id`
+
+**Retention (app-layer only, no DB triggers):** `IncidentStorePort.openOrUpdate()` enforces N=100 cap: after inserting new evidence, SELECT oldest rows over cap and DELETE. No database triggers.
 
 ### governance_edos
 
@@ -376,22 +399,9 @@ Event-Decision-Outcome records with full provenance.
 
 **Key additions:** `brief_id` and `cited_signals` for full provenance chain.
 
-### guardrail_thresholds
+---
 
-Configurable thresholds for incident detection.
-
-| Column               | Type        | Constraints            | Notes              |
-| -------------------- | ----------- | ---------------------- | ------------------ |
-| `id`                 | uuid        | PK                     |                    |
-| `scope`              | text        | NOT NULL               | `*` for global     |
-| `signal`             | text        | NOT NULL               | `error_rate`, etc. |
-| `warning_threshold`  | numeric     | NOT NULL               |                    |
-| `critical_threshold` | numeric     | NOT NULL               |                    |
-| `enabled`            | boolean     | NOT NULL, default true |                    |
-| `created_at`         | timestamptz | NOT NULL               |                    |
-| `updated_at`         | timestamptz | NOT NULL               |                    |
-
-**Unique:** `(scope, signal)`
+> **MVP Detection Decision:** Prometheus/Alertmanager is the single source of truth for detection in MVP. The router correlates `prometheus.alert.firing` and `prometheus.alert.resolved` SignalEvents into incident lifecycle transitions. **No internal threshold evaluation.** Internal threshold rules (guardrail_thresholds table) moved to P1 backlog.
 
 ---
 
@@ -572,14 +582,21 @@ export interface GovernanceBrief {
   generatedAt: Date;
 }
 
+/**
+ * Brief presets define budget/domains/metrics server-side.
+ * Agent cannot tune these parameters arbitrarily.
+ */
+export type BriefPreset = "incident_brief" | "weekly_review" | "daily_digest";
+
 export interface GovernanceBriefPort {
+  /**
+   * Generate brief using server-side preset.
+   * Presets define window calculation, domains, budget, and included metrics.
+   */
   generate(params: {
-    windowStart: Date;
-    windowEnd: Date;
-    domains: string[];
-    budget: BriefBudget;
-    deltaFromBriefId?: string;
-    includeMetrics?: string[];
+    preset: BriefPreset;
+    incidentId?: string; // For incident_brief: incident context
+    reviewWindowDays?: 1 | 7; // For weekly_review/daily_digest
   }): Promise<GovernanceBrief>;
   get(briefId: string): Promise<GovernanceBrief | null>;
   list(params: {
@@ -590,48 +607,28 @@ export interface GovernanceBriefPort {
 }
 ```
 
-### MetricsQueryPort
+### Metrics Access (Governance)
 
-```typescript
-// src/ports/governance/metrics-query.port.ts
+> **No new port.** Governance uses the existing `MetricsQueryPort` (`src/ports/metrics-query.port.ts`) and `MimirMetricsAdapter` (`src/adapters/server/metrics/mimir.adapter.ts`). Hard budgets already enforced server-side.
 
-export interface MetricDefinition {
-  id: string;
-  name: string;
-  description: string;
-  unit: string;
-  dimensions: string[];
-  granularities: ("hour" | "day" | "week" | "month")[];
-  maxLookbackDays: number;
-  maxResultRows: number;
-  allowedDimensions: string[];
-}
+**Existing Enforcement (in `src/adapters/server/metrics/mimir.adapter.ts`):**
 
-export interface MetricQuery {
-  metricId: string;
-  dimensions?: Record<string, string>;
-  granularity: "hour" | "day" | "week" | "month";
-  from: Date;
-  to: Date;
-}
+| Budget             | Lines            | Implementation                                       |
+| ------------------ | ---------------- | ---------------------------------------------------- |
+| Fixed windows      | 46-59            | `WINDOW_SECONDS` + `WINDOW_STEP` (5m/15m/1h/6h only) |
+| Max datapoints     | 62, 211-212      | `MAX_POINTS = 100`, `series.slice(0, MAX_POINTS)`    |
+| Max series         | 202-207          | Fails closed: `MULTI_SERIES_RESULT` error if > 1     |
+| Timeout            | 284-288, 315-316 | `timeoutMs` via AbortController                      |
+| Service allowlist  | 36, 175-179      | `ALLOWED_SERVICES`, rejects unknown                  |
+| Template allowlist | 37-43, 167-172   | `ALLOWED_TEMPLATES`, no raw PromQL                   |
 
-export interface MetricQueryResult {
-  queryRef: string;
-  executedAt: Date;
-  cached: boolean;
-  data: Array<{
-    timestamp: Date;
-    value: number;
-    dimensions: Record<string, string>;
-  }>;
-}
+**P0 Additions for Governance (capability layer):**
 
-export interface MetricsQueryPort {
-  listMetrics(): Promise<MetricDefinition[]>;
-  describeMetric(metricId: string): Promise<MetricDefinition | null>;
-  query(q: MetricQuery): Promise<MetricQueryResult>;
-}
-```
+| Budget             | Where to enforce            | Implementation                                |
+| ------------------ | --------------------------- | --------------------------------------------- |
+| Rate limit per run | `MetricsCapability` wrapper | Max N queries per governance run              |
+| Max wall time      | `GovernanceAgentWorkflow`   | Activity timeout on graph execution           |
+| Max tool calls     | Tool runner config          | Cap `core__metrics_query` calls per graph run |
 
 ### IncidentStorePort
 
@@ -640,15 +637,16 @@ export interface MetricsQueryPort {
 
 export interface Incident {
   id: string;
-  incidentKey: string;
+  incidentKey: string; // {scope}:{signal}:{fingerprint}
   scope: string;
   signal: string;
+  fingerprint: string; // Alertmanager fingerprint or labelset hash
   severity: "warning" | "critical";
   status: "open" | "resolved";
   openedAt: Date;
   resolvedAt: Date | null;
   lastBriefAt: Date | null;
-  evidenceSignalIds: string[];
+  // Evidence via incident_evidence join table (N=100 cap)
 }
 
 export type IncidentLifecycleEvent =
@@ -657,17 +655,24 @@ export type IncidentLifecycleEvent =
   | { type: "incident_close"; incident: Incident };
 
 export interface IncidentStorePort {
+  /**
+   * Open or update incident. Adds evidence to join table (N=100 cap enforced here).
+   */
   openOrUpdate(
-    incidentKey: string,
+    incidentKey: string, // {scope}:{signal}:{fingerprint}
     severity: "warning" | "critical",
-    evidenceSignalIds: string[]
+    evidenceSignalIds: string[] // Added to incident_evidence, capped at N=100
   ): Promise<IncidentLifecycleEvent | null>;
+  /**
+   * Close incident. Adds final evidence to join table.
+   */
   close(
     incidentKey: string,
     evidenceSignalIds: string[]
   ): Promise<IncidentLifecycleEvent | null>;
   getOpenByScope(scope: string): Promise<Incident[]>;
   getRecent(scope: string, limit: number): Promise<Incident[]>;
+  getEvidence(incidentId: string, limit?: number): Promise<string[]>; // Query join table
   shouldRunAgent(incidentId: string, cooldownMinutes: number): Promise<boolean>;
   markBriefed(incidentId: string): Promise<void>;
 }
@@ -739,7 +744,7 @@ export interface WorkItemPort {
 
 **Temporal Setup:**
 
-- [ ] Deploy Temporal OSS (dev: docker-compose, prod: managed)
+- [x] Deploy Temporal OSS (dev: docker-compose, prod: managed)
 - [ ] Create `governance` namespace
 - [ ] Configure worker with task queue `governance-tasks`
 
@@ -748,9 +753,9 @@ export interface WorkItemPort {
 - [ ] Create `signal_events` table with CloudEvents schema
 - [ ] Create `stream_cursors` table (adapter cursor persistence)
 - [ ] Create `governance_briefs` table
-- [ ] Create `incidents` table with `evidence_signal_ids`
+- [ ] Create `incidents` table with fingerprint-based `incident_key`
+- [ ] Create `incident_evidence` join table (N=100 cap)
 - [ ] Create `governance_edos` table with `brief_id`, `cited_signals`
-- [ ] Create `guardrail_thresholds` table with defaults
 
 **Signal Ports (Split):**
 
@@ -788,13 +793,11 @@ export interface WorkItemPort {
 - [ ] Citation requirement enforcement
 - [ ] Dropped reason accounting
 
-**MetricsQueryPort:**
+**Metrics (uses existing port):**
 
-- [ ] Create port interface
-- [ ] Deploy Cube Core with Postgres connection
-- [ ] Define MVP metrics (error_rate, p95, llm_cost, queue_depth)
-- [ ] Per-metric access policy enforcement
-- [ ] Query provenance in response
+- [ ] Add governance rate limits to `MetricsCapability` wrapper
+- [ ] Add per-run tool call budget to graph executor config
+- [ ] Extend templates if needed (MVP: error_rate, latency_p95 already exist)
 
 **Additional SourceAdapters:**
 
@@ -812,11 +815,10 @@ export interface WorkItemPort {
 
 ### P2: Incident-Gated Agent Execution
 
-**GuardrailDetectorWorkflow:**
+**IncidentRouterWorkflow:**
 
-- [ ] Create `GuardrailDetectorWorkflow` (deterministic threshold checks)
-- [ ] Create `queryMetricsActivity` (MetricsQueryPort)
-- [ ] Create `querySignalsActivity` (SignalReadPort)
+- [ ] Create `IncidentRouterWorkflow` (correlates alert signals → incidents)
+- [ ] Create `queryAlertSignalsActivity` (SignalReadPort, filter `prometheus.alert.*`)
 - [ ] Create `upsertIncidentActivity` (IncidentStorePort)
 - [ ] Temporal Schedule: every 1-5m per scope
 - [ ] On incident lifecycle event → start child GovernanceAgentWorkflow
@@ -825,7 +827,7 @@ export interface WorkItemPort {
 
 - [ ] Create `GovernanceAgentWorkflow`
 - [ ] Create `checkCooldownActivity`
-- [ ] Create `generateBriefActivity` (GovernanceBriefPort)
+- [ ] Create `generateBriefActivity` (GovernanceBriefPort, preset-based)
 - [ ] Create `runGovernanceGraphActivity` (GraphExecutorPort, system tenant)
 - [ ] Create `appendEdoActivity` (GovernanceEdoPort)
 - [ ] Create `createWorkItemActivity` (WorkItemPort, Plane MCP)
@@ -843,16 +845,16 @@ export interface WorkItemPort {
 
 **Schema & Ports:**
 
-| File                                          | Change                                                                  |
-| --------------------------------------------- | ----------------------------------------------------------------------- |
-| `src/shared/db/schema.governance.ts`          | New: signal_events, stream_cursors, briefs, incidents, edos, thresholds |
-| `src/ports/governance/signal-event.ts`        | New: SignalEvent type                                                   |
-| `src/ports/governance/signal-write.port.ts`   | New: SignalWritePort                                                    |
-| `src/ports/governance/signal-read.port.ts`    | New: SignalReadPort                                                     |
-| `src/ports/governance/brief.port.ts`          | New: GovernanceBriefPort                                                |
-| `src/ports/governance/metrics-query.port.ts`  | New: MetricsQueryPort                                                   |
-| `src/ports/governance/incident-store.port.ts` | New: IncidentStorePort                                                  |
-| `src/ports/governance/edo-store.port.ts`      | New: GovernanceEdoPort                                                  |
+| File                                          | Change                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------ |
+| `src/shared/db/schema.governance.ts`          | New: signal_events, stream_cursors, briefs, incidents, incident_evidence, edos |
+| `src/ports/governance/signal-event.ts`        | New: SignalEvent type                                                          |
+| `src/ports/governance/signal-write.port.ts`   | New: SignalWritePort                                                           |
+| `src/ports/governance/signal-read.port.ts`    | New: SignalReadPort                                                            |
+| `src/ports/governance/brief.port.ts`          | New: GovernanceBriefPort                                                       |
+| `src/ports/governance/incident-store.port.ts` | New: IncidentStorePort                                                         |
+| `src/bootstrap/capabilities/metrics.ts`       | Existing: Add governance rate limit config                                     |
+| `src/ports/governance/edo-store.port.ts`      | New: GovernanceEdoPort                                                         |
 
 **Adapters:**
 
@@ -866,15 +868,15 @@ export interface WorkItemPort {
 
 **Temporal Workflows & Activities:**
 
-| File                                                                   | Change                              |
-| ---------------------------------------------------------------------- | ----------------------------------- |
-| `packages/governance-workflows/src/workflows/collect-source-stream.ts` | New: CollectSourceStreamWorkflow    |
-| `packages/governance-workflows/src/workflows/guardrail-detector.ts`    | New: GuardrailDetectorWorkflow (P2) |
-| `packages/governance-workflows/src/workflows/governance-agent.ts`      | New: GovernanceAgentWorkflow (P2)   |
-| `packages/governance-workflows/src/activities/collect-signals.ts`      | New: collectSignalsActivity         |
-| `packages/governance-workflows/src/activities/ingest-signals.ts`       | New: ingestSignalsActivity          |
-| `packages/governance-workflows/src/worker.ts`                          | New: Temporal worker entry          |
-| `packages/governance-workflows/README.md`                              | New: workflow patterns              |
+| File                                                                   | Change                            |
+| ---------------------------------------------------------------------- | --------------------------------- |
+| `packages/governance-workflows/src/workflows/collect-source-stream.ts` | New: CollectSourceStreamWorkflow  |
+| `packages/governance-workflows/src/workflows/incident-router.ts`       | New: IncidentRouterWorkflow (P2)  |
+| `packages/governance-workflows/src/workflows/governance-agent.ts`      | New: GovernanceAgentWorkflow (P2) |
+| `packages/governance-workflows/src/activities/collect-signals.ts`      | New: collectSignalsActivity       |
+| `packages/governance-workflows/src/activities/ingest-signals.ts`       | New: ingestSignalsActivity        |
+| `packages/governance-workflows/src/worker.ts`                          | New: Temporal worker entry        |
+| `packages/governance-workflows/README.md`                              | New: workflow patterns            |
 
 **Infrastructure:**
 
@@ -977,14 +979,57 @@ Agents need: what changed? what's new? what escalated? Not everything.
 
 ---
 
+## P1 Backlog (Post-MVP)
+
+The following items were identified during architecture review and are deferred from MVP:
+
+### P1-ADAPTER-VERSIONING
+
+- Define N=1 compatibility (current + previous version only)
+- `producer_version` already stored on events
+- Migration strategy: admin CLI command for reprocessing, not automatic
+
+### P1-TRIGGER-PRIORITY
+
+- Refine priority based on incident lifecycle transitions (open/escalate/resolve)
+- Current: immediate path for high-severity signals
+- Future: immediate only for state transitions, not raw signal ingestion
+
+### P1-THRESHOLDS-INTERNAL
+
+- Internal threshold rules via `guardrail_thresholds` table (if external alerts insufficient)
+- Removed from MVP per P0-DETECTION-SOURCE decision
+- Only implement if Prometheus/Alertmanager rules prove inadequate
+
+### P1-PORT-UNIFICATION
+
+- Unify metrics querying behind single MetricsQueryPort via policy catalogs
+- Public analytics catalog vs governance catalog (same port, different policies)
+- No parallel ports; use policy wrappers on existing `src/ports/metrics-query.port.ts`
+
+### P1-RATE-LIMITING
+
+- Add per caller/tenant rate limiting to MetricsQueryPort
+- Gap identified in P0-METRICS-BUDGETS; other budgets already enforced
+
+### P1-METRICS-PORT-REFACTOR
+
+- [ ] Split `MetricsQueryPort` into `InternalPrometheusQueryPort` (raw, adapter-only) and `GovernedMetricsQueryPort` (template-only, tools/agents)
+- [ ] Normalize timestamp types (Date vs ISO string) across port interfaces
+- [ ] Normalize error contract: return domain errors or Result type, not adapter-specific exceptions
+- Currently mitigated by P0 runtime guard (TOOLS_TEMPLATE_ONLY invariant)
+
+---
+
 ## Known Issues
 
-- [ ] Existing `MetricsQueryPort` is PromQL-specific; rename/refactor needed before `GovernedMetricsPort` can be added. See [introspection/2026-01-21-cross-spec-alignment-review.md](introspection/2026-01-21-cross-spec-alignment-review.md).
+- [ ] Rate limiting per run/tenant not yet implemented in MimirMetricsAdapter (P1-RATE-LIMITING)
 
 ---
 
 ## Related Documents
 
+- [GOV_DATA_COLLECTORS.md](GOV_DATA_COLLECTORS.md) — SourceAdapter registry (Prometheus, OpenRouter, etc.)
 - [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) — Canonical Temporal patterns and anti-patterns
 - [SYSTEM_TENANT_DESIGN.md](SYSTEM_TENANT_DESIGN.md) — System tenant foundation
 - [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — Scheduled graph execution
@@ -994,5 +1039,5 @@ Agents need: what changed? what's new? what escalated? Not everything.
 
 ---
 
-**Last Updated**: 2026-01-21
-**Status**: Draft — Pending Architecture Review
+**Last Updated**: 2026-02-02
+**Status**: Draft — P0 Fixes Applied (incident_key, detection-source, evidence, time-semantics, brief-presets, metrics-budgets)
