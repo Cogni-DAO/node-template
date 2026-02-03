@@ -74,6 +74,28 @@ export interface RepoOpenResult {
 }
 
 /**
+ * Parameters for listing repository files.
+ */
+export interface RepoListParams {
+  /** Optional glob pattern (git pathspec rules, NOT minimatch). Passed to `git ls-files -- <glob>`. */
+  glob?: string;
+  /** Maximum paths to return (1-5000, default 2000) */
+  limit?: number;
+}
+
+/**
+ * Result from listing repository files.
+ */
+export interface RepoListResult {
+  /** File paths relative to repo root (no leading ./) */
+  paths: string[];
+  /** HEAD sha (7 chars) */
+  sha: string;
+  /** True if results were truncated at limit */
+  truncated: boolean;
+}
+
+/**
  * Parameters for opening a file.
  */
 export interface RepoOpenParams {
@@ -110,6 +132,15 @@ export interface RepoCapability {
    * @throws If file not found, path invalid, or file exceeds size limit
    */
   open(params: RepoOpenParams): Promise<RepoOpenResult>;
+
+  /**
+   * List repository files, optionally filtered by glob pattern.
+   *
+   * @param params - List parameters (glob, limit)
+   * @returns File paths with sha and truncation metadata
+   * @throws If repository is unavailable or git binary not found
+   */
+  list(params: RepoListParams): Promise<RepoListResult>;
 
   /**
    * Get current HEAD sha (7 chars).
