@@ -4,7 +4,7 @@
 /**
  * Module: `@shared/ai/guards`
  * Purpose: Pure validation guards for AI responses.
- * Scope: Citation validation and content safety checks. Does not perform IO or modify state.
+ * Scope: Citation validation for Brain-mode. Does not perform IO or modify state.
  * Invariants: All guard functions are pure — no side-effects, no network calls.
  * Side-effects: none
  * Links: docs/COGNI_BRAIN_SPEC.md (citation format and guard flow)
@@ -12,11 +12,9 @@
  */
 
 export {
-  type CitationValidationOptions,
-  type CitationValidationResult,
   INSUFFICIENT_CITATION_MESSAGE,
   needsCitationRetry,
   type ParsedCitation,
   parseCitation,
-  validateResponseCitations,
+  validateSources,
 } from "./citation.guard";
