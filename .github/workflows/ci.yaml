@@ -341,7 +341,7 @@ jobs:
           # Temporal services required for schedule CRUD + execution tests
           # scheduler-worker required for workflow execution tests
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
-            up -d app postgres litellm caddy temporal-postgres temporal temporal-ui scheduler-worker
+            up -d app postgres litellm caddy temporal-postgres temporal temporal-ui scheduler-worker git-sync
 
       - name: Run migrations
         run: |

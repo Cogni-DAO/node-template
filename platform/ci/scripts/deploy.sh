@@ -675,15 +675,6 @@ log_info "[$(date -u +%H:%M:%S)] Pull complete"
 emit_deployment_event "deployment.pull_complete" "success" "Images pulled successfully"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 7.5: Sync repo for brain tools (COGNI_BRAIN_SPEC.md Step 4)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "[$(date -u +%H:%M:%S)] Syncing repository at ${COGNI_REPO_REF:-HEAD}..."
-emit_deployment_event "deployment.repo_sync_started" "in_progress" "Syncing repo for brain tools"
-$RUNTIME_COMPOSE --profile bootstrap run --rm git-sync
-log_info "[$(date -u +%H:%M:%S)] Repo sync complete"
-emit_deployment_event "deployment.repo_sync_complete" "success" "Repo synced successfully"
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 8: Start/update postgres (must be healthy before migrations)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Bringing up postgres..."

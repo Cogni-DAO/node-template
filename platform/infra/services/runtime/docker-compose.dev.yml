@@ -49,7 +49,7 @@ services:
       - PROMETHEUS_READ_USERNAME
       - PROMETHEUS_READ_PASSWORD
       # Brain repo tools (COGNI_BRAIN_SPEC.md Step 4)
-      - COGNI_REPO_PATH=/repo/current
+      - COGNI_REPO_PATH=${COGNI_REPO_PATH:-/repo/current}
       # Temporal schedule orchestration (per SCHEDULER_SPEC.md)
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
@@ -63,6 +63,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      git-sync:
+        condition: service_completed_successfully
 
   litellm:
     image: ghcr.io/berriai/litellm@sha256:7e7816d58c265c182be5f3568ed8e5d999f11a5deda1d85e8e347a18bc578f64
