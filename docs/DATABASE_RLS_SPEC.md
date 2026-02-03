@@ -9,9 +9,9 @@
 
 2. **SET_LOCAL_PER_TRANSACTION**: Every application database call runs inside an explicit `BEGIN`/`COMMIT` transaction. The first statement is `SET LOCAL app.current_user_id = $1` where `$1` is the authenticated user ID from the session JWT. Without an explicit transaction, PostgreSQL autocommit wraps each statement in its own implicit transaction — so `SET LOCAL` would apply only to itself and be lost before the next query. This is the safety net: forgetting the wrapper means queries run with no `app.current_user_id` set, and RLS returns zero rows.
 
-3. **SERVICE_ROLE_BYPASSES_RLS**: A dedicated `app_service` PostgreSQL role (used by scheduler workers and internal services) has `BYPASSRLS`. The standard `app_user` role does not. Two roles, same database, different RLS enforcement.
+3. **SERVICE_BYPASS_CONTAINED**: A dedicated `app_service` PostgreSQL role (used by scheduler workers and internal services) has `BYPASSRLS`. The standard `app_user` role does not. Two roles, same database, different RLS enforcement. The service role **must** use a separate password (`APP_DB_SERVICE_PASSWORD`) that is never present in the web runtime environment — if `app_user` credentials leak, the attacker cannot escalate to the BYPASSRLS role.
 
-4. **LEAST_PRIVILEGE_APP_ROLE**: The `app_user` role has `SELECT, INSERT, UPDATE, DELETE` on application tables only. No `DROP`, `TRUNCATE`, `CREATE`, `ALTER`. Migrations run as root, never as `app_user`.
+4. **LEAST_PRIVILEGE_APP_ROLE**: The `app_user` role has `SELECT, INSERT, UPDATE, DELETE` on application tables only. No `DROP`, `TRUNCATE`, `CREATE`, `ALTER`. Migrations currently run as `app_user` (DB owner, via drizzle-kit + `DATABASE_URL`). Separating the migrator role from the runtime role is a P1 hardening item. On PG 15+, `REVOKE CREATE ON SCHEMA public` is best-practice signaling only — `app_user` inherits `CREATE` via `pg_database_owner` as DB owner.
 
 5. **SSL_REQUIRED_NON_LOCAL**: Any `DATABASE_URL` not pointing to `localhost` or `127.0.0.1` must include `sslmode=require` (or stricter). Enforced by Zod refine at boot.
 
@@ -36,8 +36,12 @@
 #### Application Plumbing (SET LOCAL)
 
 - [x] Create `withTenantScope(userId, fn)` helper wrapping Drizzle transaction + `SET LOCAL`
-- [ ] Wire into all DB adapter methods that touch user-scoped tables
+- [ ] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_user_service, BYPASSRLS)
+- [ ] Move `withTenantScope` / `setTenantContext` to `packages/db-client` (generic over `Database` type so both Next.js and worker services share scoping semantics)
+- [ ] Import boundary: depcruiser rule blocks `createServiceDbClient` import from Next.js web runtime code
+- [ ] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below)
 - [ ] Ensure `userId` originates from session JWT (server-side), never from request body
+- [ ] SIWE auth callback (`src/auth.ts`) uses `serviceDb` for pre-auth wallet lookup
 
 #### SSL Enforcement
 
@@ -49,7 +53,9 @@
 - [x] Integration test: two users, `SET LOCAL` to user A, assert cannot read user B's `billing_accounts`
 - [x] Integration test: `SET LOCAL` to user A, assert cannot read user B's row in `users`
 - [x] Integration test: missing `SET LOCAL` → zero rows returned (not error)
-- [ ] Integration test: `app_service` role can read both users' data
+- [x] Integration test: `app_service` role can read both users' data
+- [x] Integration test: cross-tenant INSERT rejected by `WITH CHECK` policy
+- [x] Integration test: production `withTenantScope` / `setTenantContext` helpers verified
 
 #### Chores
 
@@ -58,6 +64,9 @@
 
 ### P1: Audit + Hardening
 
+- [ ] Separate migrator role from runtime role (currently both use `app_user` as DB owner)
+- [ ] Transfer DB ownership away from `app_user` to a dedicated admin role (fixes PG 15+ `REVOKE CREATE` no-op)
+- [ ] Credential rotation support: `provision.sh` should `ALTER ROLE ... PASSWORD` for existing roles, not skip them
 - [ ] Add `pg_audit` or application-level query logging for RLS-filtered queries
 - [ ] Add `sslmode=verify-full` support with CA cert for production
 - [ ] Evaluate `pgcrypto` for column-level encryption on `schedules.input` (may contain secrets)
@@ -214,15 +223,22 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 **Decision:** Standardize on `app.current_user_id` as the single RLS session variable. Update `USAGE_HISTORY.md` to align when that feature is implemented.
 
-### 5. `tenant-scope.ts` Lives in `src/adapters/server/db/`, Not `packages/db-client/`
+### 5. Dual DB Client in `packages/db-client`
 
-The `withTenantScope` / `setTenantContext` helpers live in the web-app adapter layer, not the `@cogni/db-client` package, because:
+**Current state:** `tenant-scope.ts` lives in `src/adapters/server/db/` and is typed against the full-schema `Database`. `packages/db-client` has a single `createDbClient(url)` factory typed against `schedulingSchema` only.
 
-- **Dependency boundary:** `packages/` cannot import `src/` (enforced by dependency-cruiser). The helpers use the full-schema `Database` type from `src/adapters/server/db/drizzle.client.ts`.
-- **Type incompatibility:** `@cogni/db-client` defines `Database` over `schedulingSchema` only. The app defines `Database` over the full schema. These are different types.
-- **Tenant scoping is a web-app concern.** The scheduler worker runs as `app_service` (BYPASSRLS) and never sets `app.current_user_id`. Only request-scoped web-app code needs tenant context.
+**Target state (P0):** `packages/db-client` exports:
 
-**When this might change:** If a second user-facing service (not the scheduler) needs to share the same database with RLS enforcement, the helpers should move to a shared package (e.g., `@cogni/db-rls`) that defines a schema-agnostic `withTenantScope<Db>(db: Db, userId, fn)` generic. Until then, one consumer = one location.
+- `createAppDbClient(url)` — app_user connection, RLS enforced
+- `createServiceDbClient(url)` — app_user_service connection, BYPASSRLS
+- `withTenantScope<Db>(db, userId, fn)` and `setTenantContext<Tx>(tx, userId)` — generic over any Drizzle `Database` type so both Next.js (full schema) and workers (scheduling schema) share scoping semantics
+- Adapters that accept an injected `db` handle
+
+**Enforcement:** dependency-cruiser rule blocks `createServiceDbClient` import from Next.js web runtime code. Workers may import either client. This is the minimal enforcement of the app_user vs BYPASSRLS boundary — not new architecture, just packaging the separation already committed to in `provision.sh`.
+
+### 6. `users.id` UUID Assumption
+
+`tenant-scope.ts` validates `userId` against a strict UUID v4 regex before interpolating via `sql.raw()`. The `users.id` column is `text`, not `uuid` — so the schema allows non-UUID values. The UUID validation is a defense-in-depth measure against SQL injection (SET LOCAL cannot use `$1` parameterized placeholders). If user IDs ever deviate from UUID format (e.g., wallet addresses used as IDs), `withTenantScope` will reject them and must be updated.
 
 ---
 
