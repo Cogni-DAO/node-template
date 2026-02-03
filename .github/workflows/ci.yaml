@@ -158,6 +158,14 @@ jobs:
       - name: Build workspace packages
         run: pnpm packages:build
 
+      - name: Install ripgrep
+        uses: taiki-e/install-action@735e5933943122c5ac182670a935f54a949265c1 # v2
+        with:
+          tool: ripgrep
+
+      - name: Verify ripgrep
+        run: rg --version
+
       - name: Build sandbox runtime image
         run: pnpm sandbox:docker:build
 
