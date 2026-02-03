@@ -3,15 +3,16 @@
 
 /**
  * Module: `@adapters/server/repo/ripgrep.adapter`
- * Purpose: Ripgrep-based repository access implementing RepoCapability.
+ * Purpose: Ripgrep-based code search and file open adapter.
  * Scope: Spawns `rg --json` (no shell) for search, reads files for open. Does NOT define tool contracts.
  * Invariants:
  *   - REPO_READ_ONLY: Read-only access, no writes
  *   - REPO_ROOT_ONLY: All paths validated to be within repo root (rejects .., symlinks)
- *   - SHA_STAMPED: All results include HEAD sha7
+ *   - SHA_STAMPED: All results include HEAD sha7 (injected via getSha callback)
  *   - HARD_BOUNDS: search≤50 hits, snippet≤20 lines, open≤200 lines, max 256KB
- *   - NO_EXEC_IN_BRAIN: Only spawns `rg` and `git rev-parse` with fixed flags
+ *   - NO_EXEC_IN_BRAIN: Only spawns `rg` with fixed flags
  *   - RG_BINARY_NOT_NPM: Uses system `rg` binary
+ *   - PATH_CANONICAL: All output paths use canonical format (no leading ./)
  * Side-effects: IO (subprocess execution, file reads)
  * Links: COGNI_BRAIN_SPEC.md
  * @internal
@@ -23,7 +24,6 @@ import { join, normalize, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import type {
-  RepoCapability,
   RepoOpenParams,
   RepoOpenResult,
   RepoSearchHit,
@@ -76,6 +76,13 @@ interface RgEnd {
 type RgLine = RgMatch | RgEnd | { type: string };
 
 /**
+ * Strip leading "./" from a path to produce canonical format.
+ */
+function canonicalizePath(p: string): string {
+  return p.startsWith("./") ? p.slice(2) : p;
+}
+
+/**
  * Configuration for RipgrepAdapter.
  */
 export interface RipgrepAdapterConfig {
@@ -83,8 +90,8 @@ export interface RipgrepAdapterConfig {
   repoRoot: string;
   /** Repository identifier (e.g., "main") */
   repoId: string;
-  /** Optional SHA override (from COGNI_REPO_SHA env) */
-  shaOverride?: string;
+  /** Callback to get HEAD sha7 (owned by GitLsFilesAdapter) */
+  getSha: () => Promise<string>;
   /** Execution timeout in milliseconds (default: 30000) */
   timeoutMs?: number;
 }
@@ -108,22 +115,24 @@ export class RepoPathError extends Error {
 }
 
 /**
- * Ripgrep adapter implementing RepoCapability.
+ * Ripgrep adapter for code search and file open.
  *
  * Per RG_BINARY_NOT_NPM: Uses system `rg` binary via child_process.
  * Per REPO_ROOT_ONLY: All paths validated before access.
+ *
+ * Does not implement RepoCapability directly — the bootstrap factory
+ * composes this with GitLsFilesAdapter to form the full capability.
  */
-export class RipgrepAdapter implements RepoCapability {
+export class RipgrepAdapter {
   private readonly repoRoot: string;
   private readonly repoId: string;
-  private readonly shaOverride: string | undefined;
   private readonly timeoutMs: number;
-  private cachedSha: string | undefined;
+  readonly getSha: () => Promise<string>;
 
   constructor(config: RipgrepAdapterConfig) {
     this.repoRoot = resolve(config.repoRoot);
     this.repoId = config.repoId;
-    this.shaOverride = config.shaOverride;
+    this.getSha = config.getSha;
     this.timeoutMs = config.timeoutMs ?? 30000;
   }
 
@@ -185,39 +194,6 @@ export class RipgrepAdapter implements RepoCapability {
     }
 
     return realPath;
-  }
-
-  /**
-   * Get current HEAD sha (7 chars).
-   */
-  async getSha(): Promise<string> {
-    // Use cached value if available
-    if (this.cachedSha) {
-      return this.cachedSha;
-    }
-
-    // Use override from environment if set
-    if (this.shaOverride) {
-      this.cachedSha = this.shaOverride.slice(0, 7);
-      return this.cachedSha;
-    }
-
-    // P0 assumes .git exists; COGNI_REPO_SHA override deferred until mounts without .git.
-    try {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["-C", this.repoRoot, "rev-parse", "HEAD"],
-        { timeout: 5000 }
-      );
-      this.cachedSha = stdout.trim().slice(0, 7);
-      return this.cachedSha;
-    } catch (cause) {
-      throw new Error(
-        `Failed to resolve git SHA for repo at ${this.repoRoot}. ` +
-          "Ensure .git exists or set COGNI_REPO_SHA when mounting without .git.",
-        { cause }
-      );
-    }
   }
 
   /**
@@ -304,7 +280,8 @@ export class RipgrepAdapter implements RepoCapability {
         const parsed = JSON.parse(line) as RgLine;
         if (parsed.type === "match") {
           const match = parsed as RgMatch;
-          const path = match.data.path.text;
+          // Canonicalize path: rg with "." root may emit "./src/foo.ts"
+          const path = canonicalizePath(match.data.path.text);
           const lineNum = match.data.line_number;
           const lineText = match.data.lines.text;
 
@@ -405,7 +382,7 @@ export class RipgrepAdapter implements RepoCapability {
 
     return {
       repoId: this.repoId,
-      path: params.path,
+      path: canonicalizePath(params.path),
       sha,
       lineStart,
       lineEnd,

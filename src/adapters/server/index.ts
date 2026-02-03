@@ -86,6 +86,8 @@ export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-atte
 export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifier.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
 export {
+  GitLsFilesAdapter,
+  type GitLsFilesAdapterConfig,
   RepoPathError,
   RipgrepAdapter,
   type RipgrepAdapterConfig,

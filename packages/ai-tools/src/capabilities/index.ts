@@ -27,6 +27,8 @@ export type {
 // Repository capability (per COGNI_BRAIN_SPEC)
 export type {
   RepoCapability,
+  RepoListParams,
+  RepoListResult,
   RepoOpenParams,
   RepoOpenResult,
   RepoSearchHit,

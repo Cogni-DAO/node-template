@@ -4,30 +4,35 @@
 /**
  * Module: `@tests/stack/brain/repo-mount`
  * Purpose: Smoke test proving repo mount wiring works end-to-end in the stack.
- * Scope: Verifies COGNI_REPO_PATH resolves to a valid repo, RipgrepAdapter can open and search files. Does not test citation guard or DI container wiring.
+ * Scope: Verifies COGNI_REPO_PATH resolves to a valid repo, adapters can open and search files. Does not test citation guard or DI container wiring.
  * Invariants:
  *   - SHA_STAMPED: results include sha7
  *   - REPO_ROOT_ONLY: adapter validates paths within repo root
  *   - HARD_BOUNDS: search results bounded per spec
  * Side-effects: IO (rg/git subprocesses, file reads)
- * Links: docs/COGNI_BRAIN_SPEC.md (Step 4), src/adapters/server/repo/ripgrep.adapter.ts
+ * Links: docs/COGNI_BRAIN_SPEC.md (Step 4), src/adapters/server/repo/
  * @public
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { RipgrepAdapter } from "@/adapters/server";
+import { GitLsFilesAdapter, RipgrepAdapter } from "@/adapters/server";
 
 const REPO_PATH = process.env.COGNI_REPO_PATH;
 
 describe("Brain repo mount smoke test", () => {
+  let gitAdapter: GitLsFilesAdapter;
   let adapter: RipgrepAdapter;
 
   beforeAll(() => {
     if (!REPO_PATH) throw new Error("COGNI_REPO_PATH is not set");
+    gitAdapter = new GitLsFilesAdapter({
+      repoRoot: REPO_PATH,
+    });
     adapter = new RipgrepAdapter({
       repoRoot: REPO_PATH,
       repoId: "main",
+      getSha: () => gitAdapter.getSha(),
       timeoutMs: 2_000,
     });
   });
@@ -37,8 +42,8 @@ describe("Brain repo mount smoke test", () => {
     expect(REPO_PATH).not.toBe("");
   });
 
-  it("RipgrepAdapter.getSha() returns a 7-char hex sha", async () => {
-    const sha = await adapter.getSha();
+  it("GitLsFilesAdapter.getSha() returns a 7-char hex sha", async () => {
+    const sha = await gitAdapter.getSha();
     expect(sha).toMatch(/^[0-9a-f]{7}$/);
   });
 

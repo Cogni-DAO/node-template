@@ -74,6 +74,7 @@
 ### P1: Production Hardening
 
 - [ ] Add git-fetch cron/webhook to keep `/repo` at HEAD
+- [ ] Full git clone volume for history tools (`git log`, `git show`); P0 snapshot is depth=1, no history
 - [ ] Add `core__repo_symbol` tool (tree-sitter index) if needed
 - [ ] Structured docs index with trust_level metadata
 
@@ -257,6 +258,7 @@ Review findings from code review on 2026-02-03. Ordered by severity.
 | [ ]    | MEDIUM   | Context lines wasted (`-C 10` parsed but discarded)                | Performance        | `ripgrep.adapter.ts:search()`       |
 | [ ]    | MEDIUM   | `--max-count` is per-file not total                                | HARD_BOUNDS (weak) | `ripgrep.adapter.ts:search()`       |
 | [ ]    | MEDIUM   | Test adapter imported in production bundle                         | Layering (minor)   | `bootstrap/capabilities/repo.ts`    |
+| [ ]    | MEDIUM   | `shaOverride` not wired from bootstrap env (`COGNI_REPO_SHA`)      | SHA_STAMPED        | `bootstrap/capabilities/repo.ts`    |
 
 ---
 
