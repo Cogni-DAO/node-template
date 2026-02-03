@@ -21,11 +21,16 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/adapters/server/db/client";
-import { getDb } from "@/adapters/server/db/client";
+import {
+  getDb,
+  withTenantScope as productionWithTenantScope,
+  setTenantContext,
+} from "@/adapters/server/db/client";
 import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
 
-// Role name matching provision.sh convention
+// Role names matching provision.sh convention
 const APP_USER_ROLE = "app_user_test";
+const APP_SERVICE_ROLE = "app_user_service_test";
 
 interface TestTenant {
   userId: string;
@@ -88,6 +93,24 @@ describe("RLS Tenant Isolation", () => {
     await db.execute(
       sql.raw(
         `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${APP_USER_ROLE}"`
+      )
+    );
+
+    // Create a BYPASSRLS role for service bypass testing (idempotent).
+    await db.execute(
+      sql.raw(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_SERVICE_ROLE}') THEN
+          CREATE ROLE "${APP_SERVICE_ROLE}" NOLOGIN BYPASSRLS;
+        END IF;
+      END
+      $$;
+    `)
+    );
+    await db.execute(
+      sql.raw(
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${APP_SERVICE_ROLE}"`
       )
     );
 
@@ -225,6 +248,75 @@ describe("RLS Tenant Isolation", () => {
         tx.select().from(virtualKeys)
       );
       expect(rows).toHaveLength(0);
+    });
+  });
+
+  describe("write-path WITH CHECK enforcement", () => {
+    it("cross-tenant INSERT is rejected by RLS policy", async () => {
+      let caught: unknown;
+      try {
+        await withTenantScope(db, tenantA.userId, (tx) =>
+          tx.insert(billingAccounts).values({
+            id: randomUUID(),
+            ownerUserId: tenantB.userId, // User A trying to write as User B
+            balanceCredits: 0n,
+          })
+        );
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeDefined();
+      // Drizzle wraps postgres.js errors: err.cause has the PG error with code + message
+      const cause = (caught as { cause?: { code?: string } }).cause;
+      expect(cause?.code).toBe("42501"); // insufficient_privilege (RLS WITH CHECK)
+    });
+  });
+
+  describe("production tenant-scope helpers", () => {
+    it("withTenantScope rejects non-UUID userId before SQL", async () => {
+      await expect(
+        productionWithTenantScope(db, "not-a-uuid", async () => {})
+      ).rejects.toThrow("invalid userId format");
+    });
+
+    it("withTenantScope sets current_setting correctly", async () => {
+      const validId = randomUUID();
+      const result = await productionWithTenantScope(
+        db,
+        validId,
+        async (tx) => {
+          const rows = await tx.execute(
+            sql`SELECT current_setting('app.current_user_id') AS uid`
+          );
+          return rows[0] as { uid: string };
+        }
+      );
+      expect(result.uid).toBe(validId);
+    });
+
+    it("setTenantContext sets current_setting in existing transaction", async () => {
+      const validId = randomUUID();
+      const result = await db.transaction(async (tx) => {
+        await setTenantContext(tx, validId);
+        const rows = await tx.execute(
+          sql`SELECT current_setting('app.current_user_id') AS uid`
+        );
+        return rows[0] as { uid: string };
+      });
+      expect(result.uid).toBe(validId);
+    });
+  });
+
+  describe("service role BYPASSRLS", () => {
+    it("service role sees all tenants' data without tenant context", async () => {
+      const rows = await db.transaction(async (tx) => {
+        await tx.execute(sql.raw(`SET LOCAL ROLE "${APP_SERVICE_ROLE}"`));
+        // Deliberately NOT setting app.current_user_id
+        return tx.select().from(billingAccounts);
+      });
+      const ids = rows.map((r) => r.id);
+      expect(ids).toContain(tenantA.billingAccountId);
+      expect(ids).toContain(tenantB.billingAccountId);
     });
   });
 });

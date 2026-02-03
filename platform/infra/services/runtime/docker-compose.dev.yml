@@ -165,6 +165,7 @@ services:
       APP_DB_NAME: ${POSTGRES_DB:-cogni_template_dev}
       APP_DB_USER: ${POSTGRES_USER:-user}
       APP_DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      APP_DB_SERVICE_PASSWORD: ${APP_DB_SERVICE_PASSWORD:-service_password}
       LITELLM_DB_NAME: litellm_dev
     volumes:
       - ./postgres-init/provision.sh:/app/provision.sh:ro
@@ -391,8 +392,8 @@ services:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
-      # Database for activities
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
+      # Database: service role (BYPASSRLS) for cross-tenant scheduler operations
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
       # Internal API (scheduler-worker → app)
       # Default: http://app:3000 for Docker-based stacks
       # Override: http://host.docker.internal:3000 for test:stack:dev (app on host)
