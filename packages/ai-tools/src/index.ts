@@ -21,6 +21,8 @@ export type {
   MetricTemplate,
   MetricWindow,
   RepoCapability,
+  RepoListParams,
+  RepoListResult,
   RepoOpenParams,
   RepoOpenResult,
   RepoSearchHit,
@@ -90,6 +92,19 @@ export {
   metricsQueryContract,
   metricsQueryStubImplementation,
 } from "./tools/metrics-query";
+export {
+  createRepoListImplementation,
+  REPO_LIST_NAME,
+  type RepoListDeps,
+  type RepoListInput,
+  RepoListInputSchema,
+  type RepoListOutput,
+  RepoListOutputSchema,
+  type RepoListRedacted,
+  repoListBoundTool,
+  repoListContract,
+  repoListStubImplementation,
+} from "./tools/repo-list";
 export {
   createRepoOpenImplementation,
   REPO_OPEN_NAME,
