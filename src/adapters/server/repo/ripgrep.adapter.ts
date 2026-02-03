@@ -113,7 +113,7 @@ export class RepoPathError extends Error {
  * Per RG_BINARY_NOT_NPM: Uses system `rg` binary via child_process.
  * Per REPO_ROOT_ONLY: All paths validated before access.
  */
-export class RipgrepAdapter implements RepoCapability {
+export class RipgrepAdapter implements Omit<RepoCapability, "list"> {
   private readonly repoRoot: string;
   private readonly repoId: string;
   private readonly shaOverride: string | undefined;

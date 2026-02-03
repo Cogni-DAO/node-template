@@ -15,6 +15,8 @@
 
 import type {
   RepoCapability,
+  RepoListParams,
+  RepoListResult,
   RepoOpenParams,
   RepoOpenResult,
   RepoSearchParams,
@@ -31,6 +33,7 @@ const FAKE_SHA = "abc1234";
 export class FakeRepoAdapter implements RepoCapability {
   private searchCallCount = 0;
   private openCallCount = 0;
+  private listCallCount = 0;
 
   async search(params: RepoSearchParams): Promise<RepoSearchResult> {
     this.searchCallCount++;
@@ -44,6 +47,25 @@ export class FakeRepoAdapter implements RepoCapability {
       sha: FAKE_SHA,
     }));
     return { query: params.query, hits };
+  }
+
+  async list(params: RepoListParams): Promise<RepoListResult> {
+    this.listCallCount++;
+    const allPaths = [
+      "README.md",
+      "LICENSE.md",
+      "package.json",
+      "src/index.ts",
+      "src/utils.ts",
+    ];
+    const limit = Math.min(params.limit ?? 2000, 5000);
+    const filtered = params.glob
+      ? allPaths.filter((p) =>
+          p.includes(params.glob?.replace(/\*/g, "") ?? "")
+        )
+      : allPaths;
+    const paths = filtered.slice(0, limit);
+    return { paths, sha: FAKE_SHA, truncated: filtered.length > limit };
   }
 
   async open(params: RepoOpenParams): Promise<RepoOpenResult> {
@@ -72,8 +94,13 @@ export class FakeRepoAdapter implements RepoCapability {
     return this.openCallCount;
   }
 
+  getListCallCount(): number {
+    return this.listCallCount;
+  }
+
   resetCallCounts(): void {
     this.searchCallCount = 0;
     this.openCallCount = 0;
+    this.listCallCount = 0;
   }
 }

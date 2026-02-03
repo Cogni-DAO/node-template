@@ -12,6 +12,10 @@
  */
 
 export {
+  GitLsFilesAdapter,
+  type GitLsFilesAdapterConfig,
+} from "./git-ls-files.adapter";
+export {
   RepoPathError,
   RipgrepAdapter,
   type RipgrepAdapterConfig,
