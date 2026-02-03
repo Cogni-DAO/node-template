@@ -36,9 +36,9 @@
 #### Application Plumbing (SET LOCAL)
 
 - [x] Create `withTenantScope(userId, fn)` helper wrapping Drizzle transaction + `SET LOCAL`
-- [ ] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_user_service, BYPASSRLS)
-- [ ] Move `withTenantScope` / `setTenantContext` to `packages/db-client` (generic over `Database` type so both Next.js and worker services share scoping semantics)
-- [ ] Import boundary: depcruiser rule blocks `createServiceDbClient` import from Next.js web runtime code
+- [x] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_user_service, BYPASSRLS)
+- [x] Move `withTenantScope` / `setTenantContext` to `packages/db-client` (generic over `Database` type so both Next.js and worker services share scoping semantics)
+- [~] Import boundary: depcruiser cannot enforce named-import restrictions (both exports share the same entrypoint). Enforcement is environmental: `APP_DB_SERVICE_PASSWORD` absent from web runtime. P1: evaluate sub-path export for static enforcement.
 - [ ] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below)
 - [ ] Ensure `userId` originates from session JWT (server-side), never from request body
 - [ ] SIWE auth callback (`src/auth.ts`) uses `serviceDb` for pre-auth wallet lookup

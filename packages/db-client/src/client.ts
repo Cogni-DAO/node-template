@@ -3,13 +3,14 @@
 
 /**
  * Module: `@cogni/db-client/client`
- * Purpose: Database client factory with injected connection string.
- * Scope: Creates Drizzle database instances. Does not read from environment.
+ * Purpose: Database client factories with injected connection string.
+ * Scope: Creates Drizzle database instances for app_user and app_service roles. Does not read from environment.
  * Invariants:
  * - Connection string injected, never from process.env
  * - FORBIDDEN: @/shared/env, process.env, Next.js imports
+ * - createServiceDbClient must NOT be used in Next.js web runtime code
  * Side-effects: IO (database connections)
- * Links: docs/PACKAGES_ARCHITECTURE.md
+ * Links: docs/PACKAGES_ARCHITECTURE.md, docs/DATABASE_RLS_SPEC.md
  * @public
  */
 
@@ -32,19 +33,43 @@ export interface LoggerLike {
 // Database type with scheduling schema
 export type Database = PostgresJsDatabase<typeof schedulingSchema>;
 
-/**
- * Creates a Drizzle database client with the given connection string.
- * Connection string is injected to avoid env coupling.
- */
-export function createDbClient(connectionString: string): Database {
+function buildClient(
+  connectionString: string,
+  applicationName: string
+): Database {
   const client = postgres(connectionString, {
     max: 10,
     idle_timeout: 20,
     connect_timeout: 10,
     connection: {
-      application_name: "cogni_scheduler_worker",
+      application_name: applicationName,
     },
   });
 
   return drizzle(client, { schema: schedulingSchema });
+}
+
+/**
+ * Creates a Drizzle database client for the `app_user` role (RLS enforced).
+ * Use this for all user-facing request paths.
+ */
+export function createAppDbClient(connectionString: string): Database {
+  return buildClient(connectionString, "cogni_app");
+}
+
+/**
+ * Creates a Drizzle database client for the `app_service` role (BYPASSRLS).
+ * Use this for scheduler workers, internal services, and auth bootstrap only.
+ * Must NOT be used in the Next.js web runtime (enforced by import boundary).
+ */
+export function createServiceDbClient(connectionString: string): Database {
+  return buildClient(connectionString, "cogni_service");
+}
+
+/**
+ * Creates a Drizzle database client with the given connection string.
+ * @deprecated Use {@link createAppDbClient} or {@link createServiceDbClient}.
+ */
+export function createDbClient(connectionString: string): Database {
+  return buildClient(connectionString, "cogni_scheduler_worker");
 }

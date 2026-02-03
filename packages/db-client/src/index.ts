@@ -20,5 +20,13 @@ export { DrizzleExecutionRequestAdapter } from "./adapters/drizzle-execution-req
 export { DrizzleExecutionGrantAdapter } from "./adapters/drizzle-grant.adapter";
 export { DrizzleScheduleRunAdapter } from "./adapters/drizzle-run.adapter";
 export { DrizzleScheduleManagerAdapter } from "./adapters/drizzle-schedule.adapter";
-// Client factory
-export { createDbClient, type Database, type LoggerLike } from "./client";
+// Client factories
+export {
+  createAppDbClient,
+  createDbClient,
+  createServiceDbClient,
+  type Database,
+  type LoggerLike,
+} from "./client";
+// Tenant-scope helpers (generic over any Drizzle schema)
+export { setTenantContext, withTenantScope } from "./tenant-scope";

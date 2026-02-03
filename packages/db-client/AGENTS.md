@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2026-01-21
+- **Last reviewed:** 2026-02-03
 - **Status:** stable
 
 ## Purpose
@@ -15,6 +15,7 @@ Database client factory and Drizzle adapter implementations for scheduling domai
 ## Pointers
 
 - [SCHEDULER_SPEC.md](../../docs/SCHEDULER_SPEC.md): Scheduling architecture and invariants
+- [DATABASE_RLS_SPEC.md](../../docs/DATABASE_RLS_SPEC.md): RLS tenant isolation design
 - [PACKAGES_ARCHITECTURE.md](../../docs/PACKAGES_ARCHITECTURE.md): Package isolation boundaries
 - [scheduler-core](../scheduler-core): Port interfaces implemented by adapters
 
@@ -41,7 +42,11 @@ Database client factory and Drizzle adapter implementations for scheduling domai
 ## Public Surface
 
 - **Exports:**
-  - `createDbClient(url, logger?)` - Database client factory
+  - `createAppDbClient(url)` - Client factory for `app_user` role (RLS enforced)
+  - `createServiceDbClient(url)` - Client factory for `app_service` role (BYPASSRLS)
+  - `createDbClient(url)` - Deprecated alias (backward compat)
+  - `withTenantScope(db, userId, fn)` - Transaction wrapper setting RLS context (generic over schema)
+  - `setTenantContext(tx, userId)` - Sets RLS context in existing transaction (generic over schema)
   - `Database` - Drizzle client type
   - `LoggerLike` - Logger interface for client factory
   - `DrizzleScheduleManagerAdapter` - Implements `ScheduleManagerPort`

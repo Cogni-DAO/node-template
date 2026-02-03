@@ -504,6 +504,13 @@ module.exports = {
         "db-client contains postgres/drizzle; only server layers may import",
     },
 
+    // NOTE: createServiceDbClient import boundary (DATABASE_RLS_SPEC.md §3)
+    // depcruiser cannot enforce named-import restrictions — both createAppDbClient
+    // and createServiceDbClient are exported from the same @cogni/db-client entrypoint.
+    // Enforcement is environmental: APP_DB_SERVICE_PASSWORD is absent from the
+    // web runtime env, so createServiceDbClient would fail to connect.
+    // P1: evaluate sub-path export (@cogni/db-client/service) for static enforcement.
+
     // =========================================================================
     // Services internal clean architecture (opt-in when folders exist)
     // =========================================================================
