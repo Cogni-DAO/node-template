@@ -40,9 +40,9 @@
 - [x] Create `core__repo_search` tool: query → `[{ path, lineStart, lineEnd, snippet, sha }]`
 - [x] Create `core__repo_open` tool: path + lines → `{ path, sha, content }`
 - [x] Add both tools to `TOOL_CATALOG`
-- [ ] Integration tests: search returns bounded results with sha7
-- [ ] Integration tests: open rejects `..` paths and symlink escapes outside root
-- [ ] Integration tests: sha7 from `git rev-parse` OR `COGNI_REPO_SHA` fallback
+- [x] Integration tests: search returns bounded results with sha7
+- [x] Integration tests: open rejects `..` paths and symlink escapes outside root
+- [x] Integration tests: sha7 from `git rev-parse` OR `COGNI_REPO_SHA` fallback
 
 **Step 3: Citation guard**
 
@@ -61,10 +61,15 @@
 - [x] Add `COGNI_REPO_URL` + `COGNI_REPO_REF` to CI workflows (`staging-preview.yml`, `deploy-production.yml`)
 - [x] Smoke test: app boots with `COGNI_REPO_PATH=/repo/current`, `repo.open(package.json)` returns sha
 
+**Step 5: MVP Agent Graph uses brain**
+
+- [x] Simple React agent that has the repo_search and repo_open tools (`packages/langgraph-graphs/src/graphs/brain/`)
+- [ ] Agent bound by citation_guard (deferred — prompt-level enforcement only in v0)
+
 #### Chores
 
 - [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../.agent/workflows/document.md)
+- [x] Documentation updates [document.md](../.agent/workflows/document.md)
 
 ### P1: Production Hardening
 
@@ -95,6 +100,9 @@
 | `packages/ai-tools/src/tools/repo-open.ts`               | core\_\_repo_open tool contract             |
 | `packages/ai-tools/src/catalog.ts`                       | Add repo tools to TOOL_CATALOG              |
 | `src/shared/ai/guards/citation.guard.ts`                 | Citation enforcement (pure validation)      |
+| `packages/langgraph-graphs/src/graphs/brain/graph.ts`    | Brain ReAct agent graph factory             |
+| `packages/langgraph-graphs/src/graphs/brain/prompts.ts`  | Brain system prompt                         |
+| `packages/langgraph-graphs/src/graphs/brain/tools.ts`    | Brain tool IDs (repo_search, repo_open)     |
 | `Dockerfile`                                             | Install ripgrep + git in runner stage       |
 | `platform/infra/services/runtime/docker-compose.yml`     | git-sync service + repo_data volume         |
 | `platform/infra/services/runtime/docker-compose.dev.yml` | Bind-mount repo root for local dev          |
@@ -253,4 +261,4 @@ Review findings from code review on 2026-02-03. Ordered by severity.
 ---
 
 **Last Updated**: 2026-02-03
-**Status**: Draft
+**Status**: P0 MVP functional (brain graph + tools + deployment wiring complete; citation guard wiring deferred)
