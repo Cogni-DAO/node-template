@@ -50,10 +50,15 @@ services:
       - PROMETHEUS_QUERY_URL
       - PROMETHEUS_READ_USERNAME
       - PROMETHEUS_READ_PASSWORD
+      # Brain repo tools (COGNI_BRAIN_SPEC.md Step 4)
+      - COGNI_REPO_PATH=/repo/current
+      - COGNI_REPO_SHA=${COGNI_REPO_REF:-}
       # Temporal schedule orchestration (required)
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
+    volumes:
+      - repo_data:/repo:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -149,6 +154,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  git-sync:
+    image: registry.k8s.io/git-sync/git-sync:v4.4.0
+    user: "0:0"
+    profiles:
+      - bootstrap
+    restart: "no"
+    volumes:
+      - repo_data:/repo
+    environment:
+      - GITSYNC_REPO=${COGNI_REPO_URL}
+      - GITSYNC_REF=${COGNI_REPO_REF}
+      - GITSYNC_ROOT=/repo
+      - GITSYNC_LINK=current
+      - GITSYNC_ONE_TIME=true
+      - GITSYNC_DEPTH=1
+      - GITSYNC_USERNAME=${GHCR_USERNAME:-}
+      - GITSYNC_PASSWORD=${GHCR_DEPLOY_TOKEN:-}
 
   alloy:
     image: grafana/alloy:v1.9.2
@@ -315,3 +338,5 @@ volumes:
     name: alloy_data
   temporal_postgres_data:
     name: temporal_postgres_data
+  repo_data:
+    name: repo_data
