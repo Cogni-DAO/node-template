@@ -358,10 +358,24 @@ export class RipgrepAdapter implements RepoCapability {
    * Open a file and retrieve content.
    */
   async open(params: RepoOpenParams): Promise<RepoOpenResult> {
-    const sha = await this.getSha();
-
-    // Validate path
-    const realPath = await this.validatePath(params.path);
+    let sha: string;
+    let realPath: string;
+    try {
+      sha = await this.getSha();
+      realPath = await this.validatePath(params.path);
+    } catch (error) {
+      const reasonCode =
+        error instanceof RepoPathError ? error.code : "open_failed";
+      logger.error(
+        {
+          event: EVENT_NAMES.ADAPTER_RIPGREP_ERROR,
+          reasonCode,
+          path: params.path,
+        },
+        "Ripgrep open failed"
+      );
+      throw error;
+    }
 
     // Read file
     const content = await readFile(realPath, "utf-8");
