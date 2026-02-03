@@ -34,6 +34,9 @@ Object.assign(process.env, {
   TEMPORAL_NAMESPACE: process.env.TEMPORAL_NAMESPACE ?? "test-namespace",
 });
 
+// server-only throws at import time outside Next.js server context; stub it for Vitest
+vi.mock("server-only", () => ({}));
+
 // Minimal RainbowKit mock to prevent browser-only dependencies from loading in Node
 vi.mock("@rainbow-me/rainbowkit", () => ({
   getDefaultConfig: vi.fn(() => ({
