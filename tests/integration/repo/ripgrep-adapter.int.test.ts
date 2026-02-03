@@ -19,7 +19,11 @@ import * as path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { RepoPathError, RipgrepAdapter } from "@/adapters/server/repo";
+import {
+  GitLsFilesAdapter,
+  RepoPathError,
+  RipgrepAdapter,
+} from "@/adapters/server/repo";
 
 import {
   assertBinariesAvailable,
@@ -30,12 +34,18 @@ import {
 } from "./fixtures/temp-git-repo";
 
 let repo: TempGitRepo;
+let gitAdapter: GitLsFilesAdapter;
 let adapter: RipgrepAdapter;
 
 beforeAll(() => {
   assertBinariesAvailable();
   repo = createTempGitRepo();
-  adapter = new RipgrepAdapter({ repoRoot: repo.root, repoId: "main" });
+  gitAdapter = new GitLsFilesAdapter({ repoRoot: repo.root });
+  adapter = new RipgrepAdapter({
+    repoRoot: repo.root,
+    repoId: "main",
+    getSha: () => gitAdapter.getSha(),
+  });
 });
 
 afterAll(() => {

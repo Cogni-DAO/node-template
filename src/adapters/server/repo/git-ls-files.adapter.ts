@@ -3,14 +3,14 @@
 
 /**
  * Module: `@adapters/server/repo/git-ls-files.adapter`
- * Purpose: Git ls-files based file listing for RepoCapability.list().
- * Scope: Spawns `git ls-files` (no shell) for path discovery. Does NOT define tool contracts.
+ * Purpose: Git-based repository adapter for file listing and SHA resolution.
+ * Scope: Spawns `git ls-files` and `git rev-parse` (no shell). Does NOT define tool contracts.
  * Invariants:
  *   - REPO_READ_ONLY: Read-only access, no writes
  *   - SHA_STAMPED: All results include HEAD sha7
  *   - HARD_BOUNDS: max 5000 paths per request
  *   - NO_EXEC_IN_BRAIN: Only spawns `git` with fixed flags
- *   - SINGLE_RESPONSIBILITY: Only handles file listing (search/open live in RipgrepAdapter)
+ *   - SINGLE_RESPONSIBILITY: Owns git concerns (ls-files + rev-parse). Search/open live in RipgrepAdapter.
  * Side-effects: IO (subprocess execution)
  * Links: COGNI_BRAIN_SPEC.md
  * @internal
@@ -37,27 +37,71 @@ const MAX_LIMIT = 5000;
 export interface GitLsFilesAdapterConfig {
   /** Absolute path to repository root */
   repoRoot: string;
-  /** Callback to get HEAD sha (shared with RipgrepAdapter for single canonical source) */
-  getSha: () => Promise<string>;
+  /** Optional SHA override (from COGNI_REPO_SHA env) for mounts without .git */
+  shaOverride?: string;
   /** Execution timeout in milliseconds (default: 30000) */
   timeoutMs?: number;
 }
 
 /**
- * Git ls-files adapter for listing repository files.
+ * Git adapter for file listing and SHA resolution.
  *
- * Dedicated adapter for file discovery via `git ls-files`.
- * Separated from RipgrepAdapter to maintain single responsibility.
+ * Owns git concerns: `git ls-files` for path discovery,
+ * `git rev-parse HEAD` for SHA resolution.
+ * Separated from RipgrepAdapter to keep each adapter honest about its backend.
  */
 export class GitLsFilesAdapter {
   private readonly repoRoot: string;
-  private readonly getSha: () => Promise<string>;
+  private readonly shaOverride: string | undefined;
   private readonly timeoutMs: number;
+  private cachedSha: string | undefined;
 
   constructor(config: GitLsFilesAdapterConfig) {
     this.repoRoot = resolve(config.repoRoot);
-    this.getSha = config.getSha;
+    this.shaOverride = config.shaOverride;
     this.timeoutMs = config.timeoutMs ?? 30000;
+  }
+
+  /**
+   * Get current HEAD sha (7 chars).
+   *
+   * Canonical source of truth for SHA across all repo adapters.
+   * Supports COGNI_REPO_SHA override for mounts without .git.
+   */
+  async getSha(): Promise<string> {
+    if (this.cachedSha) {
+      return this.cachedSha;
+    }
+
+    if (this.shaOverride) {
+      this.cachedSha = this.shaOverride.slice(0, 7);
+      return this.cachedSha;
+    }
+
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["-C", this.repoRoot, "rev-parse", "HEAD"],
+        { timeout: this.timeoutMs }
+      );
+      this.cachedSha = stdout.trim().slice(0, 7);
+      return this.cachedSha;
+    } catch (cause) {
+      if (
+        cause instanceof Error &&
+        "code" in cause &&
+        (cause as NodeJS.ErrnoException).code === "ENOENT"
+      ) {
+        throw new Error(
+          "git binary not found. Ensure git is installed and available in PATH."
+        );
+      }
+      throw new Error(
+        `Failed to resolve git SHA for repo at ${this.repoRoot}. ` +
+          "Ensure .git exists or set COGNI_REPO_SHA when mounting without .git.",
+        { cause }
+      );
+    }
   }
 
   /**
@@ -83,7 +127,6 @@ export class GitLsFilesAdapter {
       });
       stdout = result.stdout;
     } catch (error) {
-      // Distinguish git binary not found from other errors
       if (
         error instanceof Error &&
         "code" in error &&

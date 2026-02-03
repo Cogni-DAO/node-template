@@ -74,7 +74,7 @@ export class FakeRepoAdapter implements RepoCapability {
     const lineEnd = params.lineEnd ?? lineStart + 19;
     return {
       repoId: "main",
-      path: params.path,
+      path: params.path.startsWith("./") ? params.path.slice(2) : params.path,
       sha: FAKE_SHA,
       lineStart,
       lineEnd,

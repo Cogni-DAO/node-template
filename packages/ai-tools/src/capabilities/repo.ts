@@ -163,7 +163,8 @@ export interface RepoCapability {
 export function makeRepoCitation(
   hit: Pick<RepoSearchHit, "repoId" | "path" | "lineStart" | "lineEnd" | "sha">
 ): string {
-  return `repo:${hit.repoId}:${hit.path}#L${hit.lineStart}-L${hit.lineEnd}@${hit.sha.slice(0, 7)}`;
+  const path = hit.path.startsWith("./") ? hit.path.slice(2) : hit.path;
+  return `repo:${hit.repoId}:${path}#L${hit.lineStart}-L${hit.lineEnd}@${hit.sha.slice(0, 7)}`;
 }
 
 /**

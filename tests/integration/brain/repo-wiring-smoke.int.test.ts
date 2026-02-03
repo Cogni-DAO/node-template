@@ -19,7 +19,7 @@ import {
   REPO_CITATION_REGEX,
 } from "@cogni/ai-tools";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { RipgrepAdapter } from "@/adapters/server";
+import { GitLsFilesAdapter, RipgrepAdapter } from "@/adapters/server";
 
 import {
   assertBinariesAvailable,
@@ -38,11 +38,17 @@ beforeAll(() => {
   repo = createTempGitRepo();
 
   // Wire capability exactly like production bootstrap does
-  const adapter = new RipgrepAdapter({ repoRoot: repo.root, repoId: "main" });
+  const gitAdapter = new GitLsFilesAdapter({ repoRoot: repo.root });
+  const rgAdapter = new RipgrepAdapter({
+    repoRoot: repo.root,
+    repoId: "main",
+    getSha: () => gitAdapter.getSha(),
+  });
   const repoCapability = {
-    search: (p: Parameters<typeof adapter.search>[0]) => adapter.search(p),
-    open: (p: Parameters<typeof adapter.open>[0]) => adapter.open(p),
-    getSha: () => adapter.getSha(),
+    search: (p: Parameters<typeof rgAdapter.search>[0]) => rgAdapter.search(p),
+    open: (p: Parameters<typeof rgAdapter.open>[0]) => rgAdapter.open(p),
+    list: (p: Parameters<typeof gitAdapter.list>[0]) => gitAdapter.list(p),
+    getSha: () => gitAdapter.getSha(),
   };
 
   searchTool = createRepoSearchImplementation({ repoCapability });
