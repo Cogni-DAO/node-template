@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/unit/shared/ai/citation-guard.test`
  * Purpose: Unit tests for citation guard (Brain-mode retrieval gate).
- * Scope: Pure validation — parseCitation, validateSources, needsCitationRetry.
+ * Scope: Pure validation — parseCitation, validateSources, needsCitationRetry. Does NOT test adapter IO or LLM integration.
  * Invariants: NO_CLAIMS_WITHOUT_CITES, fail-closed on missing sources.
  * Side-effects: none
  * Links: COGNI_BRAIN_SPEC.md, shared/ai/guards/citation.guard.ts
