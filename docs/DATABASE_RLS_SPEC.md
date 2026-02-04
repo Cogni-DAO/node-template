@@ -97,7 +97,8 @@
 | `packages/db-client/src/client.ts`                           | `createAppDbClient` (app-role, root export)                        |
 | `packages/db-client/src/service.ts`                          | `createServiceDbClient` (service-role, `./service` sub-path only)  |
 | `packages/db-client/src/build-client.ts`                     | Shared `buildClient()` factory + `Database` type                   |
-| `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (generic)                   |
+| `packages/db-client/src/actor.ts`                            | `UserActorId`, `SystemActorId`, `ActorId` branded types            |
+| `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (accept `ActorId`)          |
 | `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` singleton (app-role only)                                |
 | `src/adapters/server/db/drizzle.service-client.ts`           | `getServiceDb()` singleton (BYPASSRLS, depcruiser-gated)           |
 | `src/adapters/server/db/tenant-scope.ts`                     | Re-exports from `@cogni/db-client`                                 |
@@ -240,8 +241,8 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 `packages/db-client` uses sub-path exports to separate safe and dangerous factories:
 
-- **Root (`@cogni/db-client`):** `createAppDbClient(url)` (app_user, RLS enforced), `withTenantScope`, `setTenantContext`, `Database` type
-- **Sub-path (`@cogni/db-client/service`):** `createServiceDbClient(url)` (app_service, BYPASSRLS). NOT re-exported from root.
+- **Root (`@cogni/db-client`):** `createAppDbClient(url)`, `withTenantScope`, `setTenantContext`, `Database` type, `UserActorId`/`ActorId`/`UserId` branded types, `toUserId`, `userActor`
+- **Sub-path (`@cogni/db-client/service`):** `createServiceDbClient(url)` (app_service, BYPASSRLS), `SYSTEM_ACTOR`, `SystemActorId`. NOT re-exported from root — user-facing code cannot access system actor identity.
 
 At the adapter layer, singletons are also split:
 
@@ -250,13 +251,14 @@ At the adapter layer, singletons are also split:
 
 **Enforcement (two layers):**
 
-1. **Adapter gate (enforced):** Depcruiser rule `no-service-db-adapter-import` restricts `drizzle.service-client.ts` imports to `src/auth.ts` only. Proven working via arch probe and `pnpm arch:check`.
+1. **Adapter gate (enforced):** Depcruiser rule `no-service-db-adapter-import` restricts `drizzle.service-client.ts` imports to `src/auth.ts` and `src/bootstrap/container.ts` only. Proven working via arch probe and `pnpm arch:check`.
 2. **Package gate (dormant):** Depcruiser rule `no-service-db-package-import` restricts `@cogni/db-client/service` to `drizzle.service-client.ts` only. Currently not enforceable because depcruiser cannot resolve pnpm workspace sub-path exports (imports silently vanish from the graph). Becomes enforceable if depcruiser adds workspace resolution support.
-3. **Environmental (defense-in-depth):** `APP_DB_SERVICE_PASSWORD` is absent from the web runtime environment.
+3. **Type gate (enforced):** `SYSTEM_ACTOR` and `SystemActorId` are exported only from `@cogni/db-client/service`. User-facing ports accept `UserActorId`; `SystemActorId` is rejected at compile time.
+4. **Environmental (defense-in-depth):** `DATABASE_SERVICE_URL` required when `APP_ENV=production` (enforced by `assertEnvInvariants`).
 
 ### 6. `users.id` UUID Assumption
 
-`tenant-scope.ts` validates `userId` against a strict UUID v4 regex before interpolating via `sql.raw()`. The `users.id` column is `text`, not `uuid` — so the schema allows non-UUID values. The UUID validation is a defense-in-depth measure against SQL injection (SET LOCAL cannot use `$1` parameterized placeholders). If user IDs ever deviate from UUID format (e.g., wallet addresses used as IDs), `withTenantScope` will reject them and must be updated.
+`actor.ts` validates raw strings against `UUID_RE` at brand construction time (`toUserId`). `tenant-scope.ts` accepts only branded `ActorId` and interpolates via `sql.raw()`. The `users.id` column is `text`, not `uuid` — so the schema allows non-UUID values. The UUID validation is a defense-in-depth measure against SQL injection (SET LOCAL cannot use `$1` parameterized placeholders). If user IDs ever deviate from UUID format, `toUserId` will reject them.
 
 ---
 

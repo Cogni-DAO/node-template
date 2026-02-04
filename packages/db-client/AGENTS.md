@@ -44,14 +44,18 @@ Database client factory and Drizzle adapter implementations for scheduling domai
 - **Exports (root `@cogni/db-client`):**
   - `createAppDbClient(url)` — client factory for `app_user` role (RLS enforced)
   - `createDbClient(url)` — deprecated alias (backward compat)
-  - `withTenantScope(db, userId, fn)` — transaction wrapper setting RLS context
-  - `setTenantContext(tx, userId)` — sets RLS context in existing transaction
-  - `Database` — Drizzle client type (single source of truth)
-  - `LoggerLike` — logger interface for client factory
+  - `withTenantScope(db, actorId, fn)` — transaction wrapper setting RLS context
+  - `setTenantContext(tx, actorId)` — sets RLS context in existing transaction
+  - `UserActorId`, `ActorId`, `UserId` — branded types for RLS identity
+  - `toUserId(raw)` — validate + brand a raw string as `UserId`
+  - `userActor(userId)` — `UserId` → `UserActorId` for user-initiated ops
+  - `Database`, `LoggerLike` — Drizzle client type and logger interface
   - `DrizzleScheduleManagerAdapter`, `DrizzleExecutionGrantAdapter`, `DrizzleExecutionRequestAdapter`, `DrizzleScheduleRunAdapter`
-  - Re-exports from `@cogni/db-schema/scheduling` (tables, types)
+  - Re-exports from `@cogni/db-schema` (tables, types)
 - **Exports (sub-path `@cogni/db-client/service`):**
-  - `createServiceDbClient(url)` — client factory for `app_service` role (BYPASSRLS). Isolated sub-path to enable static import enforcement via dependency-cruiser.
+  - `createServiceDbClient(url)` — client factory for `app_service` role (BYPASSRLS)
+  - `SYSTEM_ACTOR` — deterministic UUID for system-initiated ops (scheduler, settlement)
+  - `SystemActorId` — branded type for system actors. Physically gated: user-facing code cannot import this.
 - **CLI:** none
 - **Env/Config keys:** none (accepts DATABASE_URL via factory parameter)
 - **Files considered API:** `index.ts` (root), `service.ts` (sub-path)

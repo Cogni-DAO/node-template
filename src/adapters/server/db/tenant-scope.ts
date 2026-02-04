@@ -15,9 +15,9 @@
 
 export {
   type ActorId,
-  SYSTEM_ACTOR,
   setTenantContext,
   toUserId,
+  type UserActorId,
   type UserId,
   userActor,
   withTenantScope,

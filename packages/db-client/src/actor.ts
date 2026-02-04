@@ -20,8 +20,17 @@ import { UUID_RE } from "./tenant-scope";
 /** Branded userId — validated UUID v4, single source of truth for user identity. */
 export type UserId = string & { readonly __brand: "UserId" };
 
-/** Branded actorId — who is performing this operation, for RLS + audit trail. */
-export type ActorId = string & { readonly __brand: "ActorId" };
+/** Actor from a user-initiated operation. Accepted by user-facing AND worker ports. */
+export type UserActorId = string & { readonly __brand: "UserActorId" };
+
+/** Actor from a system-initiated operation. Accepted by worker ports ONLY. */
+export type SystemActorId = string & { readonly __brand: "SystemActorId" };
+
+/**
+ * Union actor type — accepted by withTenantScope/setTenantContext and worker ports.
+ * User-facing ports must use UserActorId to reject SYSTEM_ACTOR at compile time.
+ */
+export type ActorId = UserActorId | SystemActorId;
 
 /** Validate and brand a raw string as UserId. Single entry point. */
 export function toUserId(raw: string): UserId {
@@ -32,13 +41,13 @@ export function toUserId(raw: string): UserId {
 }
 
 /** User-initiated operation (callerUserId, grant.userId, ownerUserId). */
-export function userActor(userId: UserId): ActorId {
-  return userId as unknown as ActorId;
+export function userActor(userId: UserId): UserActorId {
+  return userId as unknown as UserActorId;
 }
 
 /**
  * System-initiated operation (scheduler reconciler, settlement pipeline).
  * Deterministic UUID so SET LOCAL is valid and audit logs are traceable.
  */
-export const SYSTEM_ACTOR: ActorId =
-  "00000000-0000-4000-a000-000000000000" as ActorId;
+export const SYSTEM_ACTOR: SystemActorId =
+  "00000000-0000-4000-a000-000000000000" as SystemActorId;

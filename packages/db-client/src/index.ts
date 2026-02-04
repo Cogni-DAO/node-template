@@ -19,8 +19,8 @@ export * from "@cogni/db-schema";
 // Branded actor types for RLS identity
 export {
   type ActorId,
-  SYSTEM_ACTOR,
   toUserId,
+  type UserActorId,
   type UserId,
   userActor,
 } from "./actor";
