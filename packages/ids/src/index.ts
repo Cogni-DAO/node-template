@@ -4,13 +4,14 @@
 /**
  * Module: `@cogni/ids`
  * Purpose: Branded ID types for compile-time RLS enforcement across the monorepo.
- * Scope: Type definitions, boundary constructors, and constants only. Zero runtime deps beyond type-fest.
+ * Scope: Type definitions and boundary constructors only. Zero runtime deps beyond type-fest.
  * Invariants:
  * - toUserId() is the single entry point for creating a UserId (validated UUID v4)
- * - toActorId() is the single entry point for creating an ActorId (validated UUID v4)
- * - userActor() converts UserId → ActorId without re-parsing
- * - SYSTEM_ACTOR is the only system ActorId constant (deterministic UUID for audit trails)
- * - Only edge code (HTTP handlers, env parsing, test fixtures) should call toUserId/toActorId
+ * - userActor() is the only way to create an ActorId from a UserId
+ * - User-facing ports accept UserId only — SYSTEM_ACTOR (ActorId) is rejected at compile time
+ * - Worker-facing ports accept ActorId
+ * - SYSTEM_ACTOR lives in @cogni/ids/system (import-gated for worker/service code only)
+ * - Only edge code (HTTP handlers, env parsing, test fixtures) should call toUserId()
  * - No `as UserId` / `as ActorId` casts outside test fixtures — enforced by PR review
  * Side-effects: none
  * Links: docs/DATABASE_RLS_SPEC.md
@@ -26,7 +27,7 @@ export const UUID_RE =
 /** Branded user identity — validated UUID v4. Used by user-facing ports. */
 export type UserId = Tagged<string, "UserId">;
 
-/** Branded actor identity — validated UUID v4. Used by worker-facing ports and withTenantScope. */
+/** Branded actor identity — who is performing this operation. Used by worker ports and withTenantScope. */
 export type ActorId = Tagged<string, "ActorId">;
 
 /** Validate and brand a raw string as UserId. Boundary constructor — call at edges only. */
@@ -37,22 +38,7 @@ export function toUserId(raw: string): UserId {
   return raw as UserId;
 }
 
-/** Validate and brand a raw string as ActorId. Boundary constructor — call at edges only. */
-export function toActorId(raw: string): ActorId {
-  if (!UUID_RE.test(raw)) {
-    throw new Error(`Invalid ActorId (expected UUID v4): ${raw}`);
-  }
-  return raw as ActorId;
-}
-
-/** Convert a UserId to an ActorId without re-parsing (already validated). */
+/** Convert a UserId to an ActorId for RLS scoping (no re-parse, already validated). */
 export function userActor(userId: UserId): ActorId {
   return userId as unknown as ActorId;
 }
-
-/**
- * System actor constant for worker/service operations (scheduler, settlement).
- * Deterministic UUID so SET LOCAL is valid and audit logs are traceable.
- */
-export const SYSTEM_ACTOR: ActorId =
-  "00000000-0000-4000-a000-000000000000" as ActorId;
