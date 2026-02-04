@@ -200,7 +200,9 @@ services:
   git-sync:
     image: registry.k8s.io/git-sync/git-sync:v4.4.0
     container_name: git-sync
-    user: "0:0"
+    # Must match app's nextjs UID:GID (1001:1001 from Dockerfile)
+    # so the repo volume ownership aligns — git 2.35.2+ rejects cross-user repos
+    user: "1001:1001"
     restart: "no"
     volumes:
       - repo_data:/repo
