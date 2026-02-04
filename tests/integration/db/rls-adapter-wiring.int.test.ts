@@ -20,7 +20,7 @@ import { randomUUID } from "node:crypto";
 import {
   createAppDbClient,
   type Database,
-  DrizzleScheduleManagerAdapter,
+  DrizzleScheduleUserAdapter,
 } from "@cogni/db-client";
 import {
   billingAccounts,
@@ -159,13 +159,13 @@ describe("RLS Adapter Wiring Gate", () => {
   // Today: adapters don't scope → RLS blocks → tests FAIL.
   // After wiring: adapters scope themselves → tests PASS.
 
-  describe("DrizzleScheduleManagerAdapter", () => {
-    let adapter: DrizzleScheduleManagerAdapter;
+  describe("DrizzleScheduleUserAdapter", () => {
+    let adapter: DrizzleScheduleUserAdapter;
 
     beforeAll(() => {
       // listSchedules only uses this.db — stubs are never called
       // biome-ignore lint/suspicious/noExplicitAny: test stubs for unused ports
-      adapter = new DrizzleScheduleManagerAdapter(rlsDb, {} as any, {} as any);
+      adapter = new DrizzleScheduleUserAdapter(rlsDb, {} as any, {} as any);
     });
 
     // TODO(rls): unskip when adapters call withTenantScope (Commit 2)

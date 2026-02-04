@@ -23,11 +23,12 @@ import type { Logger } from "pino";
 import {
   DrizzleAccountService,
   DrizzleAiTelemetryAdapter,
-  DrizzleExecutionGrantAdapter,
+  DrizzleExecutionGrantUserAdapter,
+  DrizzleExecutionGrantWorkerAdapter,
   DrizzleExecutionRequestAdapter,
   DrizzlePaymentAttemptRepository,
-  DrizzleScheduleManagerAdapter,
   DrizzleScheduleRunAdapter,
+  DrizzleScheduleUserAdapter,
   EvmRpcOnChainVerifierAdapter,
   getDb,
   LangfuseAdapter,
@@ -41,6 +42,7 @@ import {
   ViemEvmOnchainClient,
   ViemTreasuryAdapter,
 } from "@/adapters/server";
+import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import {
   FakeLlmAdapter,
   FakeMetricsAdapter,
@@ -60,15 +62,16 @@ import type {
   AccountService,
   AiTelemetryPort,
   Clock,
-  ExecutionGrantPort,
+  ExecutionGrantUserPort,
+  ExecutionGrantWorkerPort,
   ExecutionRequestPort,
   LangfusePort,
   LlmService,
   MetricsQueryPort,
   OnChainVerifier,
   PaymentAttemptRepository,
-  ScheduleManagerPort,
   ScheduleRunRepository,
+  ScheduleUserPort,
   TreasuryReadPort,
   UsageLogEntry,
   UsageLogsByRangeParams,
@@ -105,12 +108,13 @@ export interface Container {
   aiTelemetry: AiTelemetryPort;
   /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
   langfuse: LangfusePort | undefined;
-  // Scheduling ports
+  // Scheduling ports (split by trust boundary)
   scheduleControl: ScheduleControlPort;
-  executionGrantPort: ExecutionGrantPort;
+  executionGrantPort: ExecutionGrantUserPort;
+  executionGrantWorkerPort: ExecutionGrantWorkerPort;
   executionRequestPort: ExecutionRequestPort;
   scheduleRunRepository: ScheduleRunRepository;
-  scheduleManager: ScheduleManagerPort;
+  scheduleManager: ScheduleUserPort;
   /** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
   metricsCapability: MetricsCapability;
   /** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
@@ -278,23 +282,35 @@ function createContainer(): Container {
       taskQueue: env.TEMPORAL_TASK_QUEUE,
     });
 
-  const executionGrantPort = new DrizzleExecutionGrantAdapter(
+  // Service DB (BYPASSRLS) for worker adapters
+  const serviceDb = getServiceDb();
+
+  // User-facing scheduling (appDb, RLS enforced)
+  const executionGrantPort = new DrizzleExecutionGrantUserAdapter(
     db,
-    log.child({ component: "DrizzleExecutionGrantAdapter" })
+    log.child({ component: "DrizzleExecutionGrantUserAdapter" })
   );
-  const executionRequestPort = new DrizzleExecutionRequestAdapter(
-    db,
-    log.child({ component: "DrizzleExecutionRequestAdapter" })
-  );
-  const scheduleRunRepository = new DrizzleScheduleRunAdapter(
-    db,
-    log.child({ component: "DrizzleScheduleRunAdapter" })
-  );
-  const scheduleManager = new DrizzleScheduleManagerAdapter(
+  const scheduleManager = new DrizzleScheduleUserAdapter(
     db,
     scheduleControl,
     executionGrantPort,
-    log.child({ component: "DrizzleScheduleManagerAdapter" })
+    log.child({ component: "DrizzleScheduleUserAdapter" })
+  );
+
+  // Worker scheduling (serviceDb, BYPASSRLS)
+  const executionGrantWorkerPort = new DrizzleExecutionGrantWorkerAdapter(
+    serviceDb,
+    log.child({ component: "DrizzleExecutionGrantWorkerAdapter" })
+  );
+  const scheduleRunRepository = new DrizzleScheduleRunAdapter(
+    serviceDb,
+    log.child({ component: "DrizzleScheduleRunAdapter" })
+  );
+
+  // Execution request port (not user-scoped — exempt from RLS)
+  const executionRequestPort = new DrizzleExecutionRequestAdapter(
+    db,
+    log.child({ component: "DrizzleExecutionRequestAdapter" })
   );
 
   // MetricsCapability for AI tools (requires PROMETHEUS_URL)
@@ -344,6 +360,7 @@ function createContainer(): Container {
     langfuse,
     scheduleControl,
     executionGrantPort,
+    executionGrantWorkerPort,
     executionRequestPort,
     scheduleRunRepository,
     scheduleManager,
@@ -385,6 +402,7 @@ export type SchedulingDeps = Pick<
   Container,
   | "scheduleControl"
   | "executionGrantPort"
+  | "executionGrantWorkerPort"
   | "scheduleRunRepository"
   | "scheduleManager"
   | "accountService"
@@ -395,6 +413,7 @@ export function resolveSchedulingDeps(): SchedulingDeps {
   return {
     scheduleControl: container.scheduleControl,
     executionGrantPort: container.executionGrantPort,
+    executionGrantWorkerPort: container.executionGrantWorkerPort,
     scheduleRunRepository: container.scheduleRunRepository,
     scheduleManager: container.scheduleManager,
     accountService: container.accountService,
