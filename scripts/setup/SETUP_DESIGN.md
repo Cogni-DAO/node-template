@@ -123,7 +123,7 @@ pnpm setup github --env production
      - `DOMAIN` (prompt user for their domain)
    - **Repository secrets:** (shared across environments)
      - `GHCR_DEPLOY_TOKEN` (prompt user to create GitHub PAT with `read:packages` scope)
-     - `GIT_READ_TOKEN` (fine-grained PAT with `Contents:Read` scope — used by git-sync to clone the repo for brain tools in preview/prod)
+     - `GIT_READ_TOKEN` (fine-grained PAT with `Contents:Read` scope — used by git-sync to HTTPS-clone the repo in CI stack tests, preview, and production. Must be a **repository-level** secret, not environment-scoped, so the CI stack-test job can access it.)
      - `CHERRY_AUTH_TOKEN` (prompt user for Cherry Servers API token)
      - `SONAR_TOKEN` (prompt user to create SonarCloud token)
      - `ACTIONS_AUTOMATION_BOT_PAT` (bot automation PAT, needs Contents:Write, Pull requests:Write, Actions:Read, Metadata:Read)
