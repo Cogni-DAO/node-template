@@ -43,7 +43,6 @@ Database client factory and Drizzle adapter implementations for scheduling domai
 
 - **Exports (root `@cogni/db-client`):**
   - `createAppDbClient(url)` — client factory for `app_user` role (RLS enforced)
-  - `createDbClient(url)` — deprecated alias (backward compat)
   - `withTenantScope(db, actorId, fn)` — transaction wrapper setting RLS context
   - `setTenantContext(tx, actorId)` — sets RLS context in existing transaction
   - `Database`, `LoggerLike` — Drizzle client type and logger interface

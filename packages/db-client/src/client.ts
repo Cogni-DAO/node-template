@@ -36,11 +36,3 @@ export interface LoggerLike {
 export function createAppDbClient(connectionString: string): Database {
   return buildClient(connectionString, "cogni_template_app");
 }
-
-/**
- * Creates a Drizzle database client with the given connection string.
- * @deprecated Use {@link createAppDbClient} or createServiceDbClient from @cogni/db-client/service.
- */
-export function createDbClient(connectionString: string): Database {
-  return buildClient(connectionString, "cogni_scheduler_worker");
-}
