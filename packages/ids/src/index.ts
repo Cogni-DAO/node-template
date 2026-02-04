@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/ids`
  * Purpose: Branded ID types for compile-time RLS enforcement across the monorepo.
- * Scope: Type definitions and boundary constructors only. Zero runtime deps beyond type-fest.
+ * Scope: Type definitions and boundary constructors only. Does not export SYSTEM_ACTOR (lives in @cogni/ids/system sub-path).
  * Invariants:
  * - toUserId() is the single entry point for creating a UserId (validated UUID v4)
  * - userActor() is the only way to create an ActorId from a UserId

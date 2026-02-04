@@ -40,17 +40,17 @@ Branded ID types for compile-time RLS enforcement across the monorepo. Provides 
 
 ## Public Surface
 
-- **Exports:**
+- **Exports (root `@cogni/ids`):**
   - `UserId` — `Tagged<string, "UserId">`, branded user identity for user-facing ports
   - `ActorId` — `Tagged<string, "ActorId">`, branded actor identity for worker-facing ports and `withTenantScope`
   - `toUserId(raw: string): UserId` — boundary constructor, validates UUID v4
-  - `toActorId(raw: string): ActorId` — boundary constructor, validates UUID v4
   - `userActor(userId: UserId): ActorId` — convert UserId to ActorId without re-parsing
-  - `SYSTEM_ACTOR: ActorId` — deterministic UUID for system/worker operations
   - `UUID_RE: RegExp` — UUID v4 validation regex
+- **Exports (sub-path `@cogni/ids/system`):**
+  - `SYSTEM_ACTOR: ActorId` — deterministic UUID for system/worker operations (import-gated)
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** `index.ts`
+- **Files considered API:** `index.ts` (root), `system.ts` (sub-path)
 
 ## Ports
 
@@ -86,3 +86,8 @@ pnpm --filter @cogni/ids build
 - Update this file when ID types or constructors change
 - Coordinate with DATABASE_RLS_SPEC.md
 - Bump **Last reviewed** date
+
+## Notes
+
+- `SYSTEM_ACTOR` lives in `@cogni/ids/system` sub-path (not root) for import-boundary safety
+- No `as UserId` / `as ActorId` casts outside test fixtures

@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/db-client/service`
  * Purpose: Service-role DB client factory (BYPASSRLS).
- * Scope: Exports createServiceDbClient only. SYSTEM_ACTOR now lives in @cogni/ids.
+ * Scope: Exports createServiceDbClient only. Does not export SYSTEM_ACTOR (now in @cogni/ids/system).
  * Invariants:
  * - MUST NOT be imported from Next.js web runtime code (enforced by dependency-cruiser)
  * - Only drizzle.service-client.ts (getServiceDb singleton) and services/ may import this
