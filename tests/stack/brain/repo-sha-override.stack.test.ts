@@ -4,8 +4,8 @@
 /**
  * Module: `@tests/stack/brain/repo-sha-override`
  * Purpose: Regression gate proving COGNI_REPO_SHA override is wired through createRepoCapability.
- * Scope: Validates the production path where git-sync worktree has no usable .git — the adapter
- *        MUST use the env-provided SHA instead of calling `git rev-parse HEAD`.
+ * Scope: Validates the production path where git-sync worktree has no usable .git. Does NOT cover
+ *        git-sync clone lifecycle, network failures, or missing rg binary.
  * Invariants:
  *   - SHA_SOURCE_OF_TRUTH: when COGNI_REPO_SHA is set, getSha() returns it (not git)
  *   - WIRING_GATE: createRepoCapability passes env.COGNI_REPO_SHA → GitLsFilesAdapter.shaOverride
