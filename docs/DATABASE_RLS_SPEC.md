@@ -78,6 +78,8 @@
 - [ ] Evaluate `pgcrypto` for column-level encryption on `schedules.input` (may contain secrets)
 - [ ] Restrict `app_service` grants to only the tables the scheduler actually needs (`execution_grants`, `schedules`, `schedule_runs`, `execution_requests`) instead of all tables
 - [ ] Evaluate `SECURITY DEFINER` functions for the SIWE auth lookup as an alternative to using `app_service` role in the auth callback
+- [ ] **Enforce real role separation in dev**: see design decision 7
+- [ ] Organize service-account (BYPASSRLS) adapters into a `worker/` subdirectory within `packages/db-client/src/adapters/`, so they are not confused with user-facing (RLS-enforced) adapters. Affected: `DrizzleScheduleWorkerAdapter`, `DrizzleExecutionGrantWorkerAdapter`, `DrizzleScheduleRunAdapter` (currently co-located with user adapters in the same files).
 
 ### P2: Per-Table Optimization (Do NOT Build Yet)
 
@@ -97,7 +99,8 @@
 | `packages/db-client/src/client.ts`                           | `createAppDbClient` (app-role, root export)                        |
 | `packages/db-client/src/service.ts`                          | `createServiceDbClient` (service-role, `./service` sub-path only)  |
 | `packages/db-client/src/build-client.ts`                     | Shared `buildClient()` factory + `Database` type                   |
-| `packages/db-client/src/actor.ts`                            | `UserActorId`, `SystemActorId`, `ActorId` branded types            |
+| `packages/ids/src/index.ts`                                  | `UserId`, `ActorId`, `toUserId`, `userActor` branded types         |
+| `packages/ids/src/system.ts`                                 | `SYSTEM_ACTOR: ActorId` (sub-path gated)                           |
 | `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (accept `ActorId`)          |
 | `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` singleton (app-role only)                                |
 | `src/adapters/server/db/drizzle.service-client.ts`           | `getServiceDb()` singleton (BYPASSRLS, depcruiser-gated)           |
@@ -106,6 +109,59 @@
 | `src/shared/env/server.ts`                                   | Add Zod refine rejecting non-localhost URLs without `sslmode`      |
 | `tests/integration/db/rls-tenant-isolation.int.test.ts`      | Cross-tenant isolation + missing-context tests                     |
 | `tests/integration/db/rls-adapter-wiring.int.test.ts`        | Adapter wiring gate (failing until adapters call setTenantContext) |
+
+## File Pointers (Adapter Wiring)
+
+### Commit 2: Schedule + Grant
+
+| File                                                          | Change                                                        | Done |
+| ------------------------------------------------------------- | ------------------------------------------------------------- | ---- |
+| `packages/scheduler-core/src/ports/schedule-manager.port.ts`  | Split → `ScheduleUserPort` + `ScheduleWorkerPort`             | [x]  |
+| `packages/scheduler-core/src/ports/execution-grant.port.ts`   | Split → `ExecutionGrantUserPort` + `ExecutionGrantWorkerPort` | [x]  |
+| `packages/scheduler-core/src/ports/schedule-run.port.ts`      | Add `actorId: ActorId` as first param to all methods          | [x]  |
+| `packages/scheduler-core/src/ports/index.ts`                  | Re-export split port names                                    | [x]  |
+| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts` | Split → User (appDb) + Worker (serviceDb), `withTenantScope`  | [x]  |
+| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`    | Split → User (appDb) + Worker (serviceDb), `withTenantScope`  | [x]  |
+| `packages/db-client/src/adapters/drizzle-run.adapter.ts`      | Add `actorId`, wrap in `withTenantScope`                      | [x]  |
+| `packages/db-client/src/index.ts`                             | Export new adapter classes                                    | [x]  |
+| `src/bootstrap/container.ts`                                  | Import `getServiceDb`, wire dual instances                    | [x]  |
+| `src/app/api/v1/schedules/route.ts`                           | Use `ScheduleUserPort`, `toUserId(sessionUser.id)`            | [x]  |
+| `src/app/api/v1/schedules/[scheduleId]/route.ts`              | Same pattern                                                  | [x]  |
+| `src/app/api/internal/graphs/[graphId]/runs/route.ts`         | Use `executionGrantWorkerPort`, pass `SYSTEM_ACTOR`           | [x]  |
+| `services/scheduler-worker/src/activities/index.ts`           | Import `SYSTEM_ACTOR` from `@cogni/ids/system`                | [x]  |
+| `tests/integration/db/rls-adapter-wiring.int.test.ts`         | Unskip `listSchedules` gate test                              | [x]  |
+| `tests/unit/bootstrap/container.spec.ts`                      | Update for new container interface types                      | [ ]  |
+| `docs/DATABASE_RLS_SPEC.md`                                   | Mark schedule + grant + run rows `[x]` Wired                  | [x]  |
+
+### Commit 3: Accounts
+
+| File                                                       | Change                                                      | Done |
+| ---------------------------------------------------------- | ----------------------------------------------------------- | ---- |
+| `src/ports/accounts.port.ts`                               | Add `callerUserId: UserId` to all methods                   | [ ]  |
+| `src/adapters/server/accounts/drizzle.adapter.ts`          | `withTenantScope` on all methods                            | [ ]  |
+| `src/features/ai/services/billing.ts`                      | Thread `userId` through `BillingContext`, `commitUsageFact` | [ ]  |
+| `src/adapters/server/ai/inproc-completion-unit.adapter.ts` | Set `fact.userId`                                           | [ ]  |
+| `src/app/_facades/ai/completion.server.ts`                 | Thread `sessionUser.id`                                     | [ ]  |
+| `src/app/_facades/ai/activity.server.ts`                   | Thread `sessionUser.id`                                     | [ ]  |
+| `src/app/_facades/payments/credits.server.ts`              | Thread `sessionUser.id`                                     | [ ]  |
+| `src/features/ai/services/preflight-credit-check.ts`       | Add `callerUserId` to params                                | [ ]  |
+| `src/features/payments/services/creditsConfirm.ts`         | Add `callerUserId` to input                                 | [ ]  |
+| `src/features/payments/services/creditsSummary.ts`         | Add `callerUserId` to input                                 | [ ]  |
+| `src/bootstrap/container.ts`                               | Add `serviceAccountService` (serviceDb instance)            | [ ]  |
+| `tests/_fakes/accounts/mock-account.service.ts`            | Update mock signatures                                      | [ ]  |
+| `tests/integration/db/rls-adapter-wiring.int.test.ts`      | Unskip `getOrCreateBillingAccountForUser` gate test         | [ ]  |
+| `docs/DATABASE_RLS_SPEC.md`                                | Mark account rows `[x]` Wired                               | [ ]  |
+
+### Commit 4: Payment Attempts
+
+| File                                                              | Change                                                         | Done |
+| ----------------------------------------------------------------- | -------------------------------------------------------------- | ---- |
+| `src/ports/payment-attempt.port.ts`                               | Split → `PaymentAttemptUserPort` + `PaymentAttemptServicePort` | [ ]  |
+| `src/adapters/server/payments/drizzle-payment-attempt.adapter.ts` | Split → User (appDb) + Service (serviceDb), `withTenantScope`  | [ ]  |
+| `src/features/payments/services/paymentService.ts`                | Dual-repo params, `callerUserId`                               | [ ]  |
+| `src/app/_facades/payments/attempts.server.ts`                    | Pass both repos + `callerUserId`                               | [ ]  |
+| `src/bootstrap/container.ts`                                      | Wire dual payment instances                                    | [ ]  |
+| `docs/DATABASE_RLS_SPEC.md`                                       | Mark all remaining rows `[x]` Wired, update status line        | [ ]  |
 
 ---
 
@@ -241,8 +297,9 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 `packages/db-client` uses sub-path exports to separate safe and dangerous factories:
 
-- **Root (`@cogni/db-client`):** `createAppDbClient(url)`, `withTenantScope`, `setTenantContext`, `Database` type, `UserActorId`/`ActorId`/`UserId` branded types, `toUserId`, `userActor`
-- **Sub-path (`@cogni/db-client/service`):** `createServiceDbClient(url)` (app_service, BYPASSRLS), `SYSTEM_ACTOR`, `SystemActorId`. NOT re-exported from root — user-facing code cannot access system actor identity.
+- **Root (`@cogni/db-client`):** `createAppDbClient(url)`, `withTenantScope`, `setTenantContext`, `Database` type. Branded ID types (`UserId`, `ActorId`, `toUserId`, `userActor`) live in `@cogni/ids`.
+- **Sub-path (`@cogni/db-client/service`):** `createServiceDbClient(url)` (app_service, BYPASSRLS). NOT re-exported from root.
+- **IDs (`@cogni/ids`):** `UserId`, `ActorId`, `toUserId`, `userActor`. Sub-path `@cogni/ids/system` exports `SYSTEM_ACTOR: ActorId` — NOT in root, enforcing import-boundary safety.
 
 At the adapter layer, singletons are also split:
 
@@ -253,14 +310,29 @@ At the adapter layer, singletons are also split:
 
 1. **Adapter gate (enforced):** Depcruiser rule `no-service-db-adapter-import` restricts `drizzle.service-client.ts` imports to `src/auth.ts` and `src/bootstrap/container.ts` only. Proven working via arch probe and `pnpm arch:check`.
 2. **Package gate (dormant):** Depcruiser rule `no-service-db-package-import` restricts `@cogni/db-client/service` to `drizzle.service-client.ts` only. Currently not enforceable because depcruiser cannot resolve pnpm workspace sub-path exports (imports silently vanish from the graph). Becomes enforceable if depcruiser adds workspace resolution support.
-3. **Type gate (enforced):** `SYSTEM_ACTOR` and `SystemActorId` are exported only from `@cogni/db-client/service`. User-facing ports accept `UserActorId`; `SystemActorId` is rejected at compile time.
-4. **Environmental (defense-in-depth):** `DATABASE_SERVICE_URL` required when `APP_ENV=production` (enforced by `assertEnvInvariants`).
+3. **Type gate (enforced):** `SYSTEM_ACTOR` is exported only from `@cogni/ids/system`. User-facing ports accept `UserId`; worker ports accept `ActorId`. Branded types prevent cross-boundary misuse at compile time.
+4. **Environmental (defense-in-depth):** `DATABASE_SERVICE_URL` required in all environments (enforced by Zod schema in `server.ts`).
 
 ### 6. `users.id` UUID Assumption
 
-`actor.ts` validates raw strings against `UUID_RE` at brand construction time (`toUserId`). `tenant-scope.ts` accepts only branded `ActorId` and interpolates via `sql.raw()`. The `users.id` column is `text`, not `uuid` — so the schema allows non-UUID values. The UUID validation is a defense-in-depth measure against SQL injection (SET LOCAL cannot use `$1` parameterized placeholders). If user IDs ever deviate from UUID format, `toUserId` will reject them.
+`@cogni/ids` validates raw strings against `UUID_RE` at brand construction time (`toUserId`). `tenant-scope.ts` accepts only branded `ActorId` and interpolates via `sql.raw()`. The `users.id` column is `text`, not `uuid` — so the schema allows non-UUID values. The UUID validation is a defense-in-depth measure against SQL injection (SET LOCAL cannot use `$1` parameterized placeholders). If user IDs ever deviate from UUID format, `toUserId` will reject them.
 
 ---
+
+### 7. - [ ] **Dev parity: enforce real DB role separation**
+
+      Local dev MUST provision and use two distinct DB roles:
+      - DATABASE_URL  -> app_user (RLS enforced)
+      - DATABASE_SERVICE_URL -> app_service (BYPASSRLS)
+
+      Requirements:
+      1) docker-compose brings up Postgres, then runs provisioning (idempotent) that creates roles/grants/policies BEFORE Next.js starts.
+      2) App consumes TWO explicit DSN secrets only (no ${APP_DB_USER}_service concatenation; no fallback; no DSN construction in runtime code).
+      3) `.env.local.example` shows two different DSNs with different users (and uses the provisioned roles).
+      4) Startup invariants hard-fail if:
+         - DATABASE_URL.user == DATABASE_SERVICE_URL.user
+         - either DSN user is postgres/root/superuser
+         - either DSN is missing
 
 ## Adapter Wiring Tracker
 
@@ -305,36 +377,47 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 | `recordVerificationAttempt(id, …)` | `payment_attempts`, `payment_events` | Yes  | None (internal)          | [ ]    |
 | `logEvent(params)`                 | `payment_events`                     | No   | None (event-only)        | [ ]    |
 
-### `DrizzleExecutionGrantAdapter` (`packages/db-client/…/drizzle-grant.adapter.ts`)
+### `DrizzleExecutionGrantUserAdapter` (`packages/db-client/…/drizzle-grant.adapter.ts`)
 
-| Method                                    | Tables             | Txn? | userId source         | Wired? |
-| ----------------------------------------- | ------------------ | ---- | --------------------- | ------ |
-| `createGrant({ userId, … })`              | `execution_grants` | No   | Direct                | [ ]    |
-| `validateGrant(grantId)`                  | `execution_grants` | No   | None (returns userId) | [ ]    |
-| `validateGrantForGraph(grantId, graphId)` | `execution_grants` | No   | None (delegates)      | [ ]    |
-| `revokeGrant(grantId)`                    | `execution_grants` | No   | None                  | [ ]    |
-| `deleteGrant(grantId)`                    | `execution_grants` | No   | None                  | [ ]    |
+| Method                                 | Tables             | Txn? | userId source | Wired? |
+| -------------------------------------- | ------------------ | ---- | ------------- | ------ |
+| `createGrant({ userId: UserId, … })`   | `execution_grants` | No   | Direct        | [x]    |
+| `revokeGrant(callerUserId: UserId, …)` | `execution_grants` | No   | Direct        | [x]    |
+| `deleteGrant(callerUserId: UserId, …)` | `execution_grants` | No   | Direct        | [x]    |
 
-### `DrizzleScheduleManagerAdapter` (`packages/db-client/…/drizzle-schedule.adapter.ts`)
+### `DrizzleExecutionGrantWorkerAdapter` (`packages/db-client/…/drizzle-grant.adapter.ts`)
 
-| Method                            | Tables                          | Txn? | userId source                      | Wired? |
-| --------------------------------- | ------------------------------- | ---- | ---------------------------------- | ------ |
-| `createSchedule(callerUserId, …)` | `schedules`, `execution_grants` | Yes  | Direct                             | [ ]    |
-| `listSchedules(callerUserId)`     | `schedules`                     | No   | Direct                             | [ ]    |
-| `getSchedule(scheduleId)`         | `schedules`                     | No   | None (returns ownerUserId)         | [ ]    |
-| `updateSchedule(callerUserId, …)` | `schedules`                     | Yes  | Direct                             | [ ]    |
-| `deleteSchedule(callerUserId, …)` | `schedules`, `execution_grants` | Yes  | Direct                             | [ ]    |
-| `updateNextRunAt(scheduleId, …)`  | `schedules`                     | No   | None (worker path — `app_service`) | [ ]    |
-| `updateLastRunAt(scheduleId, …)`  | `schedules`                     | No   | None (worker path — `app_service`) | [ ]    |
-| `findStaleSchedules()`            | `schedules`                     | No   | None (system scan — `app_service`) | [ ]    |
+| Method                                                      | Tables             | Txn? | userId source          | Wired? |
+| ----------------------------------------------------------- | ------------------ | ---- | ---------------------- | ------ |
+| `validateGrant(actorId: ActorId, grantId)`                  | `execution_grants` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `validateGrantForGraph(actorId: ActorId, grantId, graphId)` | `execution_grants` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+
+### `DrizzleScheduleUserAdapter` (`packages/db-client/…/drizzle-schedule.adapter.ts`)
+
+| Method                                    | Tables                          | Txn? | userId source | Wired? |
+| ----------------------------------------- | ------------------------------- | ---- | ------------- | ------ |
+| `createSchedule(callerUserId: UserId, …)` | `schedules`, `execution_grants` | Yes  | Direct        | [x]    |
+| `listSchedules(callerUserId: UserId)`     | `schedules`                     | No   | Direct        | [x]    |
+| `getSchedule(callerUserId: UserId, …)`    | `schedules`                     | No   | Direct        | [x]    |
+| `updateSchedule(callerUserId: UserId, …)` | `schedules`                     | Yes  | Direct        | [x]    |
+| `deleteSchedule(callerUserId: UserId, …)` | `schedules`, `execution_grants` | Yes  | Direct        | [x]    |
+
+### `DrizzleScheduleWorkerAdapter` (`packages/db-client/…/drizzle-schedule.adapter.ts`)
+
+| Method                                      | Tables      | Txn? | userId source          | Wired? |
+| ------------------------------------------- | ----------- | ---- | ---------------------- | ------ |
+| `getScheduleForWorker(actorId: ActorId, …)` | `schedules` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `updateNextRunAt(actorId: ActorId, …)`      | `schedules` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `updateLastRunAt(actorId: ActorId, …)`      | `schedules` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `findStaleSchedules(actorId: ActorId)`      | `schedules` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
 
 ### `DrizzleScheduleRunAdapter` (`packages/db-client/…/drizzle-run.adapter.ts`)
 
-| Method                         | Tables          | Txn? | userId source                      | Wired? |
-| ------------------------------ | --------------- | ---- | ---------------------------------- | ------ |
-| `createRun({ scheduleId, … })` | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
-| `markRunStarted(runId)`        | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
-| `markRunCompleted(runId, …)`   | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
+| Method                                         | Tables          | Txn? | userId source          | Wired? |
+| ---------------------------------------------- | --------------- | ---- | ---------------------- | ------ |
+| `createRun(actorId: ActorId, { … })`           | `schedule_runs` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `markRunStarted(actorId: ActorId, runId, …)`   | `schedule_runs` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `markRunCompleted(actorId: ActorId, runId, …)` | `schedule_runs` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
 
 ### Special: SIWE Auth Callback (`src/auth.ts`)
 

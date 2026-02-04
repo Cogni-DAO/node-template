@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2026-01-21
+- **Last reviewed:** 2026-02-04
 - **Status:** stable
 
 ## Purpose
@@ -35,14 +35,16 @@ Pure TypeScript types and port interfaces for the scheduling domain. Defines con
 }
 ```
 
-**External deps:** `zod` (payload schemas), `type-fest` (JsonValue type).
+**External deps:** `zod` (payload schemas), `type-fest` (JsonValue type). Internal deps: `@cogni/ids`.
 
 ## Public Surface
 
 - **Exports:**
   - `ScheduleControlPort` - Vendor-agnostic schedule lifecycle control (create/pause/resume/delete)
-  - `ScheduleManagerPort` - Schedule CRUD operations with grant management
-  - `ExecutionGrantPort` - Durable grant validation for scheduled runs
+  - `ScheduleUserPort` - User-facing schedule CRUD (callerUserId: UserId)
+  - `ScheduleWorkerPort` - Worker-only schedule reads/updates (actorId: ActorId)
+  - `ExecutionGrantUserPort` - User-facing grant create/revoke/delete (callerUserId: UserId)
+  - `ExecutionGrantWorkerPort` - Worker-only grant validation (actorId: ActorId)
   - `ExecutionRequestPort` - Idempotency layer for execution requests
   - `ScheduleRunRepository` - Schedule run persistence
   - `ScheduleSpec`, `ScheduleRun`, `ExecutionGrant`, `ExecutionRequest` - Domain types
@@ -80,7 +82,7 @@ pnpm --filter @cogni/scheduler-core build
 
 ## Dependencies
 
-- **Internal:** none (standalone package)
+- **Internal:** `@cogni/ids` (branded ID types for port signatures)
 - **External:** `zod` (payload schemas), `type-fest` (JsonValue type)
 
 ## Change Protocol

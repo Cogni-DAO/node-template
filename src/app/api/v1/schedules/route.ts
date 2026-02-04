@@ -13,6 +13,7 @@
  * @public
  */
 
+import { toUserId } from "@cogni/ids";
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -128,7 +129,7 @@ export const POST = wrapRouteHandlerWithLogging(
 
       // Create schedule
       const schedule = await container.scheduleManager.createSchedule(
-        sessionUser.id,
+        toUserId(sessionUser.id),
         account.id,
         {
           graphId: input.graphId,
@@ -167,7 +168,7 @@ export const GET = wrapRouteHandlerWithLogging(
 
       const container = getContainer();
       const schedules = await container.scheduleManager.listSchedules(
-        sessionUser.id
+        toUserId(sessionUser.id)
       );
 
       ctx.log.info({ count: schedules.length }, "schedules.list_success");

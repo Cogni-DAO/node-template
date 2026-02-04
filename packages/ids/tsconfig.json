@@ -14,10 +14,5 @@
     "rootDir": "src"
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "__arch_probes__"],
-  "references": [
-    { "path": "../db-schema" },
-    { "path": "../ids" },
-    { "path": "../scheduler-core" }
-  ]
+  "exclude": ["node_modules", "dist"]
 }

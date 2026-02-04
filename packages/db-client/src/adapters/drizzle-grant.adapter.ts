@@ -3,21 +3,23 @@
 
 /**
  * Module: `@adapters/server/scheduling/grant`
- * Purpose: DrizzleExecutionGrantAdapter for execution grant persistence.
- * Scope: Implements ExecutionGrantPort with Drizzle ORM. Does not contain business logic.
+ * Purpose: Execution grant adapters split by trust boundary — user (appDb, RLS enforced) and worker (serviceDb, BYPASSRLS).
+ * Scope: Implements ExecutionGrantUserPort and ExecutionGrantWorkerPort with Drizzle ORM. Does not contain business logic.
  * Invariants:
  * - Per GRANT_NOT_SESSION: Grants are durable, not session-based
  * - Per GRANT_SCOPES_CONSTRAIN_GRAPHS: Scope format is "graph:execute:{graphId}"
+ * - withTenantScope called on every method (uniform invariant, no-op on serviceDb)
  * Side-effects: IO (database operations)
  * Links: ports/scheduling/execution-grant.port.ts, docs/SCHEDULER_SPEC.md
  * @public
  */
 
 import { executionGrants } from "@cogni/db-schema/scheduling";
-
+import { type ActorId, type UserId, userActor } from "@cogni/ids";
 import {
   type ExecutionGrant,
-  type ExecutionGrantPort,
+  type ExecutionGrantUserPort,
+  type ExecutionGrantWorkerPort,
   GrantExpiredError,
   GrantNotFoundError,
   GrantRevokedError,
@@ -25,116 +27,169 @@ import {
 } from "@cogni/scheduler-core";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Database, LoggerLike } from "../client";
+import { withTenantScope } from "../tenant-scope";
 
-export class DrizzleExecutionGrantAdapter implements ExecutionGrantPort {
+// ── Shared helpers ───────────────────────────────────────────────
+
+const defaultLogger: LoggerLike = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+};
+
+function toGrant(row: typeof executionGrants.$inferSelect): ExecutionGrant {
+  return {
+    id: row.id,
+    userId: row.userId,
+    billingAccountId: row.billingAccountId,
+    scopes: row.scopes,
+    expiresAt: row.expiresAt,
+    revokedAt: row.revokedAt,
+    createdAt: row.createdAt,
+  };
+}
+
+function validateGrantFields(
+  grantId: string,
+  row: typeof executionGrants.$inferSelect
+): ExecutionGrant {
+  const now = new Date();
+
+  if (row.revokedAt) {
+    throw new GrantRevokedError(grantId, row.revokedAt);
+  }
+
+  if (row.expiresAt && row.expiresAt < now) {
+    throw new GrantExpiredError(grantId, row.expiresAt);
+  }
+
+  return toGrant(row);
+}
+
+function checkGrantScopes(
+  grant: ExecutionGrant,
+  graphId: string
+): ExecutionGrant {
+  const hasWildcard = grant.scopes.includes("graph:execute:*");
+  const hasSpecificScope = grant.scopes.includes(`graph:execute:${graphId}`);
+
+  if (!hasWildcard && !hasSpecificScope) {
+    throw new GrantScopeMismatchError(grant.id, graphId, grant.scopes);
+  }
+
+  return grant;
+}
+
+// ── User-facing adapter (appDb, RLS enforced) ────────────────────
+
+export class DrizzleExecutionGrantUserAdapter
+  implements ExecutionGrantUserPort
+{
   private readonly logger: LoggerLike;
 
   constructor(
     private readonly db: Database,
     logger?: LoggerLike
   ) {
-    this.logger = logger ?? {
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      debug: () => {},
-    };
+    this.logger = logger ?? defaultLogger;
   }
 
   async createGrant(input: {
-    userId: string;
+    userId: UserId;
     billingAccountId: string;
     scopes: readonly string[];
     expiresAt?: Date;
   }): Promise<ExecutionGrant> {
-    const [row] = await this.db
-      .insert(executionGrants)
-      .values({
-        userId: input.userId,
-        billingAccountId: input.billingAccountId,
-        scopes: [...input.scopes],
-        expiresAt: input.expiresAt ?? null,
-      })
-      .returning();
+    const actorId = userActor(input.userId);
+    return withTenantScope(this.db, actorId, async (tx) => {
+      const [row] = await tx
+        .insert(executionGrants)
+        .values({
+          userId: input.userId,
+          billingAccountId: input.billingAccountId,
+          scopes: [...input.scopes],
+          expiresAt: input.expiresAt ?? null,
+        })
+        .returning();
 
-    if (!row) {
-      throw new Error("Failed to create execution grant");
-    }
+      if (!row) {
+        throw new Error("Failed to create execution grant");
+      }
 
-    this.logger.info(
-      { grantId: row.id, userId: input.userId },
-      "Created execution grant"
-    );
-
-    return this.toGrant(row);
-  }
-
-  async validateGrant(grantId: string): Promise<ExecutionGrant> {
-    const row = await this.db.query.executionGrants.findFirst({
-      where: eq(executionGrants.id, grantId),
-    });
-
-    if (!row) {
-      throw new GrantNotFoundError(grantId);
-    }
-
-    const now = new Date();
-
-    if (row.revokedAt) {
-      throw new GrantRevokedError(grantId, row.revokedAt);
-    }
-
-    if (row.expiresAt && row.expiresAt < now) {
-      throw new GrantExpiredError(grantId, row.expiresAt);
-    }
-
-    return this.toGrant(row);
-  }
-
-  async validateGrantForGraph(
-    grantId: string,
-    graphId: string
-  ): Promise<ExecutionGrant> {
-    const grant = await this.validateGrant(grantId);
-
-    const hasWildcard = grant.scopes.includes("graph:execute:*");
-    const hasSpecificScope = grant.scopes.includes(`graph:execute:${graphId}`);
-
-    if (!hasWildcard && !hasSpecificScope) {
-      throw new GrantScopeMismatchError(grantId, graphId, grant.scopes);
-    }
-
-    return grant;
-  }
-
-  async revokeGrant(grantId: string): Promise<void> {
-    await this.db
-      .update(executionGrants)
-      .set({ revokedAt: new Date() })
-      .where(
-        and(eq(executionGrants.id, grantId), isNull(executionGrants.revokedAt))
+      this.logger.info(
+        { grantId: row.id, userId: input.userId },
+        "Created execution grant"
       );
+
+      return toGrant(row);
+    });
+  }
+
+  async revokeGrant(callerUserId: UserId, grantId: string): Promise<void> {
+    const actorId = userActor(callerUserId);
+    await withTenantScope(this.db, actorId, async (tx) => {
+      await tx
+        .update(executionGrants)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(executionGrants.id, grantId),
+            isNull(executionGrants.revokedAt)
+          )
+        );
+    });
 
     this.logger.info({ grantId }, "Revoked execution grant");
   }
 
-  async deleteGrant(grantId: string): Promise<void> {
-    await this.db
-      .delete(executionGrants)
-      .where(eq(executionGrants.id, grantId));
+  async deleteGrant(callerUserId: UserId, grantId: string): Promise<void> {
+    const actorId = userActor(callerUserId);
+    await withTenantScope(this.db, actorId, async (tx) => {
+      await tx.delete(executionGrants).where(eq(executionGrants.id, grantId));
+    });
 
     this.logger.info({ grantId }, "Deleted execution grant");
   }
+}
 
-  private toGrant(row: typeof executionGrants.$inferSelect): ExecutionGrant {
-    return {
-      id: row.id,
-      userId: row.userId,
-      billingAccountId: row.billingAccountId,
-      scopes: row.scopes,
-      expiresAt: row.expiresAt,
-      revokedAt: row.revokedAt,
-      createdAt: row.createdAt,
-    };
+// ── Worker adapter (serviceDb, BYPASSRLS — withTenantScope is no-op) ─
+
+export class DrizzleExecutionGrantWorkerAdapter
+  implements ExecutionGrantWorkerPort
+{
+  private readonly logger: LoggerLike;
+
+  constructor(
+    private readonly db: Database,
+    logger?: LoggerLike
+  ) {
+    this.logger = logger ?? defaultLogger;
+  }
+
+  async validateGrant(
+    actorId: ActorId,
+    grantId: string
+  ): Promise<ExecutionGrant> {
+    return withTenantScope(this.db, actorId, async (tx) => {
+      const row = await tx.query.executionGrants.findFirst({
+        where: eq(executionGrants.id, grantId),
+      });
+
+      if (!row) {
+        throw new GrantNotFoundError(grantId);
+      }
+
+      return validateGrantFields(grantId, row);
+    });
+  }
+
+  async validateGrantForGraph(
+    actorId: ActorId,
+    grantId: string,
+    graphId: string
+  ): Promise<ExecutionGrant> {
+    const grant = await this.validateGrant(actorId, grantId);
+    return checkGrantScopes(grant, graphId);
   }
 }

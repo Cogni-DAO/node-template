@@ -16,8 +16,8 @@
  */
 
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { SYSTEM_ACTOR } from "@cogni/ids/system";
 import { NextResponse } from "next/server";
-
 import { getContainer } from "@/bootstrap/container";
 import { createGraphExecutor } from "@/bootstrap/graph-executor.factory";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
@@ -239,10 +239,13 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
 
     // --- 7. Validate grant (defense-in-depth) ---
     let grant: Awaited<
-      ReturnType<typeof container.executionGrantPort.validateGrantForGraph>
+      ReturnType<
+        typeof container.executionGrantWorkerPort.validateGrantForGraph
+      >
     >;
     try {
-      grant = await container.executionGrantPort.validateGrantForGraph(
+      grant = await container.executionGrantWorkerPort.validateGrantForGraph(
+        SYSTEM_ACTOR,
         executionGrantId,
         graphId
       );

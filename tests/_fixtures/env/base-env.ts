@@ -24,6 +24,8 @@ export const CORE_TEST_ENV = {
   POSTGRES_DB: "test_db",
   DB_HOST: "localhost",
   DB_PORT: "5432",
+  // Service role connection (required in all envs per DATABASE_RLS_SPEC.md)
+  DATABASE_SERVICE_URL: "postgresql://app_service:svc@localhost:5432/test_db",
   // Auth
   AUTH_SECRET: "x".repeat(32),
   // LiteLLM

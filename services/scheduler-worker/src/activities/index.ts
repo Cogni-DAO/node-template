@@ -17,9 +17,10 @@
 
 import type {
   createDbClient,
-  DrizzleExecutionGrantAdapter,
+  DrizzleExecutionGrantWorkerAdapter,
   DrizzleScheduleRunAdapter,
 } from "@cogni/db-client";
+import { SYSTEM_ACTOR } from "@cogni/ids/system";
 import { ApplicationFailure, activityInfo } from "@temporalio/activity";
 import type { Logger } from "pino";
 
@@ -29,7 +30,7 @@ import type { Logger } from "pino";
  */
 export interface ActivityDeps {
   db: ReturnType<typeof createDbClient>;
-  grantAdapter: DrizzleExecutionGrantAdapter;
+  grantAdapter: DrizzleExecutionGrantWorkerAdapter;
   runAdapter: DrizzleScheduleRunAdapter;
   config: {
     appBaseUrl: string;
@@ -125,7 +126,7 @@ export function createActivities(deps: ActivityDeps) {
     );
 
     // This throws on validation failure
-    await grantAdapter.validateGrantForGraph(grantId, graphId);
+    await grantAdapter.validateGrantForGraph(SYSTEM_ACTOR, grantId, graphId);
 
     logger.info(
       { ...correlation, grantId, graphId },
@@ -148,7 +149,7 @@ export function createActivities(deps: ActivityDeps) {
       "Creating schedule run"
     );
 
-    await runAdapter.createRun({
+    await runAdapter.createRun(SYSTEM_ACTOR, {
       scheduleId,
       runId,
       scheduledFor: new Date(scheduledFor),
@@ -268,9 +269,18 @@ export function createActivities(deps: ActivityDeps) {
     );
 
     if (status === "running") {
-      await runAdapter.markRunStarted(runId, traceId ?? undefined);
+      await runAdapter.markRunStarted(
+        SYSTEM_ACTOR,
+        runId,
+        traceId ?? undefined
+      );
     } else {
-      await runAdapter.markRunCompleted(runId, status, errorMessage);
+      await runAdapter.markRunCompleted(
+        SYSTEM_ACTOR,
+        runId,
+        status,
+        errorMessage
+      );
     }
 
     logger.info(
