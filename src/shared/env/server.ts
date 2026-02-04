@@ -200,7 +200,14 @@ export function serverEnv(): ServerEnv {
           try {
             const dbUrl = new URL(DATABASE_URL);
             const host = dbUrl.hostname;
-            const isLocal = host === "localhost" || host === "127.0.0.1";
+            // Docker Compose services use bare hostname "postgres" on the internal
+            // network (docker-compose.dev.yml / docker-compose.yml). This is safe
+            // in non-production (dev, test, CI stack-tests) but must still require
+            // sslmode in production where "postgres" would be a real remote host.
+            const isLocal =
+              host === "localhost" ||
+              host === "127.0.0.1" ||
+              (!isProd && host === "postgres");
             if (!isLocal && !dbUrl.searchParams.has("sslmode")) {
               throw new Error(
                 `DATABASE_URL points to non-localhost host "${host}" but is missing sslmode= parameter. ` +
@@ -238,7 +245,11 @@ export function serverEnv(): ServerEnv {
         try {
           const svcUrl = new URL(parsed.DATABASE_SERVICE_URL);
           const host = svcUrl.hostname;
-          const isLocal = host === "localhost" || host === "127.0.0.1";
+          // Same Docker Compose allowance as DATABASE_URL above.
+          const isLocal =
+            host === "localhost" ||
+            host === "127.0.0.1" ||
+            (!isProd && host === "postgres");
           if (!isLocal && !svcUrl.searchParams.has("sslmode")) {
             throw new Error(
               `DATABASE_SERVICE_URL points to non-localhost host "${host}" but is missing sslmode= parameter. ` +
