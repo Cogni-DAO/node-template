@@ -3,14 +3,16 @@
 
 /**
  * Module: `@ports/payment-attempt`
- * Purpose: Payment attempt repository port for persistence and audit logging.
+ * Purpose: Payment attempt repository ports for persistence and audit logging, split by trust boundary.
  * Scope: Defines contracts for payment attempt lifecycle and event logging. Does not implement persistence logic.
  * Invariants:
- * - findById enforces ownership; feature layer MUST enforce ownership before calling mutating methods.
+ * - PaymentAttemptUserRepository: RLS-enforced via withTenantScope; UserId bound at construction.
+ * - PaymentAttemptServiceRepository: BYPASSRLS; service methods include billingAccountId anchor for defense-in-depth.
+ * - findById enforces ownership; service mutators verify billingAccountId in the same query.
  * - Attempts are immutable once txHash is bound.
  * Side-effects: none (interface definition only)
  * Notes: Adapters throw port-level errors; feature layer translates to domain errors.
- * Links: Implemented by DrizzlePaymentAttemptRepository, used by payment feature services
+ * Links: Implemented by UserDrizzlePaymentAttemptRepository + ServiceDrizzlePaymentAttemptRepository
  * @public
  */
 
@@ -112,96 +114,104 @@ export interface LogPaymentEventParams {
   metadata?: Record<string, unknown>;
 }
 
+// ---------------------------------------------------------------------------
+// User-facing port (RLS enforced, UserId bound at construction)
+// ---------------------------------------------------------------------------
+
 /**
- * Payment attempt repository port
- * Abstracts persistence layer for payment attempts and audit events
+ * User-scoped payment attempt repository.
+ * Adapter wraps all queries in withTenantScope for RLS enforcement.
+ * Only exposes methods that operate within a single tenant's billing accounts.
  */
-export interface PaymentAttemptRepository {
+export interface PaymentAttemptUserRepository {
   /**
-   * Creates a new payment attempt
-   * Sets status to CREATED_INTENT and generates unique ID
-   *
-   * @param params - Attempt creation parameters
-   * @returns Created payment attempt
+   * Creates a new payment attempt within the tenant's billing account.
+   * Sets status to CREATED_INTENT and generates unique ID.
+   * RLS ensures billingAccountId belongs to the scoped user.
    */
   create(params: CreatePaymentAttemptParams): Promise<PaymentAttempt>;
 
   /**
-   * Finds payment attempt by ID with ownership enforcement
-   * Returns null if not found or not owned by billingAccountId
-   *
-   * @param id - Attempt ID
-   * @param billingAccountId - Billing account that must own the attempt
-   * @returns Payment attempt or null
+   * Finds payment attempt by ID with ownership enforcement.
+   * Returns null if not found or not owned by billingAccountId.
+   * RLS provides additional tenant isolation beyond the billingAccountId filter.
    */
   findById(
     id: string,
     billingAccountId: string
   ): Promise<PaymentAttempt | null>;
+}
 
+// ---------------------------------------------------------------------------
+// Service port (BYPASSRLS — cross-user lookups and internal mutations)
+// ---------------------------------------------------------------------------
+
+/**
+ * Service-scoped payment attempt repository.
+ * Adapter uses serviceDb (BYPASSRLS) for cross-user lookups and internal mutations.
+ * Mutating methods include billingAccountId as defense-in-depth tenant anchor
+ * (even though caller already verified ownership via findById on the user repo).
+ */
+export interface PaymentAttemptServiceRepository {
   /**
-   * Finds payment attempt by transaction hash
-   * Used for duplicate detection and idempotency checks
-   *
-   * @param chainId - Chain ID
-   * @param txHash - Transaction hash
-   * @returns Payment attempt or null
+   * Finds payment attempt by transaction hash (cross-user lookup).
+   * Used for duplicate detection and idempotency checks.
+   * Must be cross-user to detect txHash reuse across tenants.
    */
   findByTxHash(chainId: number, txHash: string): Promise<PaymentAttempt | null>;
 
   /**
-   * Updates payment attempt status
-   * Feature service is responsible for validating transitions via core/rules.isValidTransition()
-   * Repository is dumb persistence - just updates status and logs event
+   * Updates payment attempt status with tenant anchor.
+   * Feature service validates transitions via core/rules.isValidTransition().
+   * billingAccountId included in WHERE clause as defense-in-depth.
    *
-   * @param id - Attempt ID
-   * @param status - New status
-   * @param errorCode - Optional error code for terminal failure states
-   * @returns Updated payment attempt
-   * @throws PaymentAttemptNotFoundPortError if not found
+   * @throws PaymentAttemptNotFoundPortError if not found or billingAccountId mismatch
    */
   updateStatus(
     id: string,
+    billingAccountId: string,
     status: PaymentAttemptStatus,
     errorCode?: PaymentErrorCode
   ): Promise<PaymentAttempt>;
 
   /**
-   * Binds transaction hash to payment attempt
-   * Sets txHash, submittedAt, and clears expiresAt
-   * Transitions status to PENDING_UNVERIFIED
+   * Binds transaction hash to payment attempt with tenant anchor.
+   * Sets txHash, submittedAt, and clears expiresAt.
+   * Cross-user duplicate detection remains unscoped (correct for security).
+   * billingAccountId included in update WHERE clause as defense-in-depth.
    *
-   * @param id - Attempt ID
-   * @param txHash - Transaction hash to bind
-   * @param submittedAt - Submission timestamp
-   * @returns Updated payment attempt
-   * @throws PaymentAttemptNotFoundPortError if not found
+   * @throws PaymentAttemptNotFoundPortError if not found or billingAccountId mismatch
    * @throws TxHashAlreadyBoundPortError if hash already used
    */
   bindTxHash(
     id: string,
+    billingAccountId: string,
     txHash: string,
     submittedAt: Date
   ): Promise<PaymentAttempt>;
 
   /**
-   * Records verification attempt
-   * Updates lastVerifyAttemptAt and increments verifyAttemptCount
-   *
-   * @param id - Attempt ID
-   * @param attemptedAt - Verification attempt timestamp
-   * @returns Updated payment attempt
+   * Records verification attempt with tenant anchor.
+   * Updates lastVerifyAttemptAt and increments verifyAttemptCount.
+   * billingAccountId included in WHERE clause as defense-in-depth.
    */
   recordVerificationAttempt(
     id: string,
+    billingAccountId: string,
     attemptedAt: Date
   ): Promise<PaymentAttempt>;
 
   /**
-   * Logs payment event to audit trail
-   * Append-only event log for reconciliation and debugging
-   *
-   * @param params - Event parameters
+   * Logs payment event to audit trail.
+   * Append-only event log for reconciliation and debugging.
    */
   logEvent(params: LogPaymentEventParams): Promise<void>;
 }
+
+/**
+ * @deprecated Use PaymentAttemptUserRepository + PaymentAttemptServiceRepository.
+ * Retained temporarily as a type alias to reduce scope explosion.
+ * Will be removed in the next commit.
+ */
+export type PaymentAttemptRepository = PaymentAttemptUserRepository &
+  PaymentAttemptServiceRepository;

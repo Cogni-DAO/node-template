@@ -26,7 +26,6 @@ import {
   DrizzleExecutionGrantUserAdapter,
   DrizzleExecutionGrantWorkerAdapter,
   DrizzleExecutionRequestAdapter,
-  DrizzlePaymentAttemptRepository,
   DrizzleScheduleRunAdapter,
   DrizzleScheduleUserAdapter,
   EvmRpcOnChainVerifierAdapter,
@@ -40,11 +39,13 @@ import {
   SystemClock,
   TemporalScheduleControlAdapter,
   UserDrizzleAccountService,
+  UserDrizzlePaymentAttemptRepository,
   ViemEvmOnchainClient,
   ViemTreasuryAdapter,
 } from "@/adapters/server";
 import { ServiceDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
+import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 import {
   FakeLlmAdapter,
   FakeMetricsAdapter,
@@ -71,7 +72,8 @@ import type {
   LlmService,
   MetricsQueryPort,
   OnChainVerifier,
-  PaymentAttemptRepository,
+  PaymentAttemptServiceRepository,
+  PaymentAttemptUserRepository,
   ScheduleRunRepository,
   ScheduleUserPort,
   ServiceAccountService,
@@ -103,7 +105,8 @@ export interface Container {
   serviceAccountService: ServiceAccountService;
   usageService: UsageService;
   clock: Clock;
-  paymentAttemptRepository: PaymentAttemptRepository;
+  paymentAttemptsForUser(userId: UserId): PaymentAttemptUserRepository;
+  paymentAttemptServiceRepository: PaymentAttemptServiceRepository;
   onChainVerifier: OnChainVerifier;
   evmOnchainClient: EvmOnchainClient;
   metricsQuery: MetricsQueryPort;
@@ -247,8 +250,6 @@ function createContainer(): Container {
   const serviceAccountService = new ServiceDrizzleAccountService(
     getServiceDb()
   );
-  const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
-
   // UsageService: P1 - LiteLLM is canonical usage log source for Activity (no fallback)
   const usageService = new LiteLlmUsageServiceAdapter(
     new LiteLlmActivityUsageAdapter()
@@ -293,6 +294,8 @@ function createContainer(): Container {
 
   // Service DB (BYPASSRLS) for worker adapters
   const serviceDb = getServiceDb();
+  const paymentAttemptServiceRepository =
+    new ServiceDrizzlePaymentAttemptRepository(serviceDb);
 
   // User-facing scheduling (appDb, RLS enforced)
   const executionGrantPort = new DrizzleExecutionGrantUserAdapter(
@@ -362,7 +365,9 @@ function createContainer(): Container {
     serviceAccountService,
     usageService,
     clock,
-    paymentAttemptRepository,
+    paymentAttemptsForUser: (userId: UserId) =>
+      new UserDrizzlePaymentAttemptRepository(db, userId),
+    paymentAttemptServiceRepository,
     onChainVerifier,
     evmOnchainClient,
     metricsQuery,

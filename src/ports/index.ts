@@ -137,8 +137,11 @@ export {
   type LogPaymentEventParams,
   type PaymentAttempt,
   PaymentAttemptNotFoundPortError,
+  /** @deprecated Use PaymentAttemptUserRepository + PaymentAttemptServiceRepository */
   type PaymentAttemptRepository,
+  type PaymentAttemptServiceRepository,
   type PaymentAttemptStatus,
+  type PaymentAttemptUserRepository,
   type PaymentErrorCode,
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
