@@ -107,6 +107,59 @@
 | `tests/integration/db/rls-tenant-isolation.int.test.ts`      | Cross-tenant isolation + missing-context tests                     |
 | `tests/integration/db/rls-adapter-wiring.int.test.ts`        | Adapter wiring gate (failing until adapters call setTenantContext) |
 
+## File Pointers (Adapter Wiring)
+
+### Commit 2: Schedule + Grant
+
+| File                                                          | Change                                                        | Done |
+| ------------------------------------------------------------- | ------------------------------------------------------------- | ---- |
+| `packages/scheduler-core/src/ports/schedule-manager.port.ts`  | Split → `ScheduleUserPort` + `ScheduleWorkerPort`             | [ ]  |
+| `packages/scheduler-core/src/ports/execution-grant.port.ts`   | Split → `ExecutionGrantUserPort` + `ExecutionGrantWorkerPort` | [ ]  |
+| `packages/scheduler-core/src/ports/schedule-run.port.ts`      | Add `actorId: ActorId` as first param to all methods          | [ ]  |
+| `packages/scheduler-core/src/ports/index.ts`                  | Re-export split port names                                    | [ ]  |
+| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts` | Split → User (appDb) + Worker (serviceDb), `withTenantScope`  | [ ]  |
+| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`    | Split → User (appDb) + Worker (serviceDb), `withTenantScope`  | [ ]  |
+| `packages/db-client/src/adapters/drizzle-run.adapter.ts`      | Add `actorId`, wrap in `withTenantScope`                      | [ ]  |
+| `packages/db-client/src/index.ts`                             | Export new adapter classes                                    | [ ]  |
+| `src/bootstrap/container.ts`                                  | Import `getServiceDb`, wire dual instances                    | [ ]  |
+| `src/app/api/v1/schedules/route.ts`                           | Use `ScheduleUserPort`, `userActor(toUserId(sessionUser.id))` | [ ]  |
+| `src/app/api/v1/schedules/[scheduleId]/route.ts`              | Same pattern                                                  | [ ]  |
+| `src/app/api/internal/graphs/[graphId]/runs/route.ts`         | Use `executionGrantWorkerPort`, pass `ActorId`                | [ ]  |
+| `services/scheduler-worker/src/activities.ts`                 | Import `SYSTEM_ACTOR` from `@cogni/db-client/service`         | [ ]  |
+| `tests/integration/db/rls-adapter-wiring.int.test.ts`         | Unskip `listSchedules` gate test                              | [ ]  |
+| `tests/unit/bootstrap/container.spec.ts`                      | Update for new container interface types                      | [ ]  |
+| `docs/DATABASE_RLS_SPEC.md`                                   | Mark schedule + grant + run rows `[x]` Wired                  | [ ]  |
+
+### Commit 3: Accounts
+
+| File                                                       | Change                                                      | Done |
+| ---------------------------------------------------------- | ----------------------------------------------------------- | ---- |
+| `src/ports/accounts.port.ts`                               | Add `callerUserId: UserActorId` to all methods              | [ ]  |
+| `src/adapters/server/accounts/drizzle.adapter.ts`          | `withTenantScope` on all methods                            | [ ]  |
+| `src/features/ai/services/billing.ts`                      | Thread `userId` through `BillingContext`, `commitUsageFact` | [ ]  |
+| `src/adapters/server/ai/inproc-completion-unit.adapter.ts` | Set `fact.userId`                                           | [ ]  |
+| `src/app/_facades/ai/completion.server.ts`                 | Thread `sessionUser.id`                                     | [ ]  |
+| `src/app/_facades/ai/activity.server.ts`                   | Thread `sessionUser.id`                                     | [ ]  |
+| `src/app/_facades/payments/credits.server.ts`              | Thread `sessionUser.id`                                     | [ ]  |
+| `src/features/ai/services/preflight-credit-check.ts`       | Add `callerUserId` to params                                | [ ]  |
+| `src/features/payments/services/creditsConfirm.ts`         | Add `callerUserId` to input                                 | [ ]  |
+| `src/features/payments/services/creditsSummary.ts`         | Add `callerUserId` to input                                 | [ ]  |
+| `src/bootstrap/container.ts`                               | Add `serviceAccountService` (serviceDb instance)            | [ ]  |
+| `tests/_fakes/accounts/mock-account.service.ts`            | Update mock signatures                                      | [ ]  |
+| `tests/integration/db/rls-adapter-wiring.int.test.ts`      | Unskip `getOrCreateBillingAccountForUser` gate test         | [ ]  |
+| `docs/DATABASE_RLS_SPEC.md`                                | Mark account rows `[x]` Wired                               | [ ]  |
+
+### Commit 4: Payment Attempts
+
+| File                                                              | Change                                                         | Done |
+| ----------------------------------------------------------------- | -------------------------------------------------------------- | ---- |
+| `src/ports/payment-attempt.port.ts`                               | Split → `PaymentAttemptUserPort` + `PaymentAttemptServicePort` | [ ]  |
+| `src/adapters/server/payments/drizzle-payment-attempt.adapter.ts` | Split → User (appDb) + Service (serviceDb), `withTenantScope`  | [ ]  |
+| `src/features/payments/services/paymentService.ts`                | Dual-repo params, `callerUserId`                               | [ ]  |
+| `src/app/_facades/payments/attempts.server.ts`                    | Pass both repos + `callerUserId`                               | [ ]  |
+| `src/bootstrap/container.ts`                                      | Wire dual payment instances                                    | [ ]  |
+| `docs/DATABASE_RLS_SPEC.md`                                       | Mark all remaining rows `[x]` Wired, update status line        | [ ]  |
+
 ---
 
 ## Policy Design
