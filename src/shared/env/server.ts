@@ -169,8 +169,6 @@ export const serverSchema = z.object({
 
 type ServerEnv = z.infer<typeof serverSchema> & {
   DATABASE_URL: string;
-  /** Service role connection URL (BYPASSRLS). Falls back to DATABASE_URL if unset. */
-  DATABASE_SERVICE_URL?: string;
   /** Validated repo root path (resolved from COGNI_REPO_PATH) */
   COGNI_REPO_ROOT: string;
   isDev: boolean;
