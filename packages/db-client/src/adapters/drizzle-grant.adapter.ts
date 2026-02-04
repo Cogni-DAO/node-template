@@ -180,6 +180,7 @@ export class DrizzleExecutionGrantWorkerAdapter
         throw new GrantNotFoundError(grantId);
       }
 
+      this.logger.info({ grantId }, "Validated execution grant");
       return validateGrantFields(grantId, row);
     });
   }
@@ -190,6 +191,10 @@ export class DrizzleExecutionGrantWorkerAdapter
     graphId: string
   ): Promise<ExecutionGrant> {
     const grant = await this.validateGrant(actorId, grantId);
+    this.logger.info(
+      { grantId, graphId },
+      "Validated execution grant for graph"
+    );
     return checkGrantScopes(grant, graphId);
   }
 }
