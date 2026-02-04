@@ -3,61 +3,117 @@
 
 /**
  * Module: `@adapters/server/scheduling/drizzle-schedule`
- * Purpose: DrizzleScheduleManagerAdapter for schedule CRUD operations.
- * Scope: Implements ScheduleManagerPort with Drizzle ORM and ScheduleControlPort for orchestration. Does not contain worker task logic.
+ * Purpose: Schedule adapters split by trust boundary — user (appDb, RLS enforced) and worker (serviceDb, BYPASSRLS).
+ * Scope: Implements ScheduleUserPort and ScheduleWorkerPort with Drizzle ORM. Does not contain worker task logic.
  * Invariants:
  * - Per CRUD_IS_TEMPORAL_AUTHORITY: CRUD endpoints control schedule lifecycle
  * - createSchedule: grant → DB → scheduleControl (on fail: rollback)
  * - updateSchedule (enabled): DB → pause/resume (on fail: rollback DB)
  * - deleteSchedule: scheduleControl → DB (on fail: 503, don't delete DB)
  * - Per DB_TIMING_IS_CACHE_ONLY: next_run_at/last_run_at are cache columns
+ * - withTenantScope called on every method (uniform invariant, no-op on serviceDb)
  * Side-effects: IO (database operations, schedule control RPC)
  * Links: ports/scheduling/schedule-manager.port.ts, docs/SCHEDULER_SPEC.md
  * @public
  */
 
 import { schedules } from "@cogni/db-schema/scheduling";
+import { type ActorId, type UserId, userActor } from "@cogni/ids";
 import {
   type CreateScheduleInput,
-  type ExecutionGrantPort,
+  type ExecutionGrantUserPort,
   InvalidCronExpressionError,
   InvalidTimezoneError,
   ScheduleAccessDeniedError,
   type ScheduleControlPort,
-  type ScheduleManagerPort,
   ScheduleNotFoundError,
   type ScheduleSpec,
+  type ScheduleUserPort,
+  type ScheduleWorkerPort,
   type UpdateScheduleInput,
 } from "@cogni/scheduler-core";
 import cronParser from "cron-parser";
 import { and, eq, isNull, lt, or } from "drizzle-orm";
 import type { JsonValue } from "type-fest";
 import type { Database, LoggerLike } from "../client";
+import { withTenantScope } from "../tenant-scope";
 
-export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
+// ── Shared helpers (module-level) ────────────────────────────────
+
+const defaultLogger: LoggerLike = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+};
+
+function computeNextRun(cron: string, timezone: string): Date {
+  if (!isValidTimezone(timezone)) {
+    throw new InvalidTimezoneError(timezone);
+  }
+
+  try {
+    const interval = cronParser.parseExpression(cron, {
+      currentDate: new Date(),
+      tz: timezone,
+    });
+    return interval.next().toDate();
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new InvalidCronExpressionError(cron, error.message);
+    }
+    throw error;
+  }
+}
+
+function isValidTimezone(timezone: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function toSpec(row: typeof schedules.$inferSelect): ScheduleSpec {
+  return {
+    id: row.id,
+    ownerUserId: row.ownerUserId,
+    executionGrantId: row.executionGrantId,
+    graphId: row.graphId,
+    input: row.input,
+    cron: row.cron,
+    timezone: row.timezone,
+    enabled: row.enabled,
+    nextRunAt: row.nextRunAt,
+    lastRunAt: row.lastRunAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+// ── User-facing adapter (appDb, RLS enforced) ────────────────────
+
+export class DrizzleScheduleUserAdapter implements ScheduleUserPort {
   private readonly logger: LoggerLike;
 
   constructor(
     private readonly db: Database,
     private readonly scheduleControl: ScheduleControlPort,
-    private readonly grantPort: ExecutionGrantPort,
+    private readonly grantPort: ExecutionGrantUserPort,
     logger?: LoggerLike
   ) {
-    this.logger = logger ?? {
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      debug: () => {},
-    };
+    this.logger = logger ?? defaultLogger;
   }
 
   async createSchedule(
-    callerUserId: string,
+    callerUserId: UserId,
     billingAccountId: string,
     input: CreateScheduleInput
   ): Promise<ScheduleSpec> {
+    const actorId = userActor(callerUserId);
     // Validate cron and timezone first (fail fast)
-    const nextRunAt = this.computeNextRun(input.cron, input.timezone);
+    const nextRunAt = computeNextRun(input.cron, input.timezone);
 
     // Create grant OUTSIDE transaction for atomicity cleanup
     // If schedule insert or scheduleControl fails, we hard-delete the grant
@@ -70,8 +126,8 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
     let row: typeof schedules.$inferSelect | undefined;
 
     try {
-      // Insert schedule into DB
-      row = await this.db.transaction(async (tx) => {
+      // Insert schedule into DB with tenant scope
+      row = await withTenantScope(this.db, actorId, async (tx) => {
         const [scheduleRow] = await tx
           .insert(schedules)
           .values({
@@ -108,7 +164,7 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
         "Created schedule"
       );
 
-      return this.toSpec(row);
+      return toSpec(row);
     } catch (error) {
       // Atomicity cleanup: delete DB row if it was created
       if (row) {
@@ -116,7 +172,9 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
           { scheduleId: row.id },
           "Rolling back schedule DB row after scheduleControl failure"
         );
-        await this.db.delete(schedules).where(eq(schedules.id, row.id));
+        await withTenantScope(this.db, actorId, async (tx) => {
+          await tx.delete(schedules).where(eq(schedules.id, row!.id));
+        });
       }
 
       // Atomicity cleanup: hard-delete the orphan grant
@@ -124,33 +182,42 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
         { grantId: grant.id },
         "Cleaning up orphan grant after schedule creation failure"
       );
-      await this.grantPort.deleteGrant(grant.id);
+      await this.grantPort.deleteGrant(callerUserId, grant.id);
       throw error;
     }
   }
 
-  async listSchedules(callerUserId: string): Promise<readonly ScheduleSpec[]> {
-    const rows = await this.db.query.schedules.findMany({
-      where: eq(schedules.ownerUserId, callerUserId),
+  async listSchedules(callerUserId: UserId): Promise<readonly ScheduleSpec[]> {
+    const actorId = userActor(callerUserId);
+    return withTenantScope(this.db, actorId, async (tx) => {
+      const rows = await tx.query.schedules.findMany({
+        where: eq(schedules.ownerUserId, callerUserId),
+      });
+      return rows.map((row) => toSpec(row));
     });
-
-    return rows.map((row) => this.toSpec(row));
   }
 
-  async getSchedule(scheduleId: string): Promise<ScheduleSpec | null> {
-    const row = await this.db.query.schedules.findFirst({
-      where: eq(schedules.id, scheduleId),
+  async getSchedule(
+    callerUserId: UserId,
+    scheduleId: string
+  ): Promise<ScheduleSpec | null> {
+    const actorId = userActor(callerUserId);
+    return withTenantScope(this.db, actorId, async (tx) => {
+      const row = await tx.query.schedules.findFirst({
+        where: eq(schedules.id, scheduleId),
+      });
+      return row ? toSpec(row) : null;
     });
-
-    return row ? this.toSpec(row) : null;
   }
 
   async updateSchedule(
-    callerUserId: string,
+    callerUserId: UserId,
     scheduleId: string,
     patch: UpdateScheduleInput
   ): Promise<ScheduleSpec> {
-    const existing = await this.getSchedule(scheduleId);
+    const actorId = userActor(callerUserId);
+
+    const existing = await this.getSchedule(callerUserId, scheduleId);
     if (!existing) {
       throw new ScheduleNotFoundError(scheduleId);
     }
@@ -182,17 +249,19 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
     const newEnabled = patch.enabled ?? existing.enabled;
 
     if (newEnabled) {
-      updates.nextRunAt = this.computeNextRun(newCron, newTimezone);
+      updates.nextRunAt = computeNextRun(newCron, newTimezone);
     } else {
       updates.nextRunAt = null;
     }
 
-    // Update DB first
-    const [row] = await this.db
-      .update(schedules)
-      .set(updates)
-      .where(eq(schedules.id, scheduleId))
-      .returning();
+    // Update DB first (scoped)
+    const [row] = await withTenantScope(this.db, actorId, async (tx) => {
+      return tx
+        .update(schedules)
+        .set(updates)
+        .where(eq(schedules.id, scheduleId))
+        .returning();
+    });
 
     if (!row) {
       throw new ScheduleNotFoundError(scheduleId);
@@ -203,11 +272,9 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
     try {
       if (patch.enabled !== undefined && patch.enabled !== existing.enabled) {
         if (patch.enabled) {
-          // Enabling: resume the schedule
           await this.scheduleControl.resumeSchedule(scheduleId);
           this.logger.info({ scheduleId }, "Resumed schedule");
         } else {
-          // Disabling: pause the schedule
           await this.scheduleControl.pauseSchedule(scheduleId);
           this.logger.info({ scheduleId }, "Paused schedule");
         }
@@ -218,30 +285,32 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
         { scheduleId, error },
         "Rolling back schedule update after scheduleControl failure"
       );
-      await this.db
-        .update(schedules)
-        .set({
-          input: existing.input,
-          cron: existing.cron,
-          timezone: existing.timezone,
-          enabled: existing.enabled,
-          nextRunAt: existing.nextRunAt,
-          updatedAt: existing.updatedAt,
-        })
-        .where(eq(schedules.id, scheduleId));
+      await withTenantScope(this.db, actorId, async (tx) => {
+        await tx
+          .update(schedules)
+          .set({
+            input: existing.input,
+            cron: existing.cron,
+            timezone: existing.timezone,
+            enabled: existing.enabled,
+            nextRunAt: existing.nextRunAt,
+            updatedAt: existing.updatedAt,
+          })
+          .where(eq(schedules.id, scheduleId));
+      });
       throw error;
     }
 
     this.logger.info({ scheduleId, patch }, "Updated schedule");
 
-    return this.toSpec(row);
+    return toSpec(row);
   }
 
   async deleteSchedule(
-    callerUserId: string,
+    callerUserId: UserId,
     scheduleId: string
   ): Promise<void> {
-    const existing = await this.getSchedule(scheduleId);
+    const existing = await this.getSchedule(callerUserId, scheduleId);
     if (!existing) {
       throw new ScheduleNotFoundError(scheduleId);
     }
@@ -255,88 +324,80 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
     await this.scheduleControl.deleteSchedule(scheduleId);
 
     // Only delete from DB if scheduleControl succeeded
-    await this.db.transaction(async (tx) => {
-      // Revoke the grant
-      await this.grantPort.revokeGrant(existing.executionGrantId);
+    // Revoke the grant (grant adapter self-scopes)
+    await this.grantPort.revokeGrant(callerUserId, existing.executionGrantId);
 
-      // Delete schedule (cascade deletes runs)
+    // Delete schedule (cascade deletes runs)
+    await withTenantScope(this.db, userActor(callerUserId), async (tx) => {
       await tx.delete(schedules).where(eq(schedules.id, scheduleId));
     });
 
     this.logger.info({ scheduleId }, "Deleted schedule");
   }
+}
 
-  async updateNextRunAt(scheduleId: string, nextRunAt: Date): Promise<void> {
-    await this.db
-      .update(schedules)
-      .set({ nextRunAt, updatedAt: new Date() })
-      .where(eq(schedules.id, scheduleId));
+// ── Worker adapter (serviceDb, BYPASSRLS — withTenantScope is no-op) ─
+
+export class DrizzleScheduleWorkerAdapter implements ScheduleWorkerPort {
+  private readonly logger: LoggerLike;
+
+  constructor(
+    private readonly db: Database,
+    logger?: LoggerLike
+  ) {
+    this.logger = logger ?? defaultLogger;
   }
 
-  async updateLastRunAt(scheduleId: string, lastRunAt: Date): Promise<void> {
-    await this.db
-      .update(schedules)
-      .set({ lastRunAt, updatedAt: new Date() })
-      .where(eq(schedules.id, scheduleId));
-  }
-
-  async findStaleSchedules(): Promise<readonly ScheduleSpec[]> {
-    const now = new Date();
-    // Per RECONCILER_GUARANTEES_CHAIN: Include enabled schedules where
-    // next_run_at IS NULL (edge case after re-enable) or next_run_at < now (stale)
-    const rows = await this.db.query.schedules.findMany({
-      where: and(
-        eq(schedules.enabled, true),
-        or(lt(schedules.nextRunAt, now), isNull(schedules.nextRunAt))
-      ),
-    });
-
-    return rows.map((row) => this.toSpec(row));
-  }
-
-  private computeNextRun(cron: string, timezone: string): Date {
-    // Validate timezone first (fail fast with clear domain error)
-    if (!this.isValidTimezone(timezone)) {
-      throw new InvalidTimezoneError(timezone);
-    }
-
-    try {
-      const interval = cronParser.parseExpression(cron, {
-        currentDate: new Date(),
-        tz: timezone,
+  async getScheduleForWorker(
+    actorId: ActorId,
+    scheduleId: string
+  ): Promise<ScheduleSpec | null> {
+    return withTenantScope(this.db, actorId, async (tx) => {
+      const row = await tx.query.schedules.findFirst({
+        where: eq(schedules.id, scheduleId),
       });
-      return interval.next().toDate();
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new InvalidCronExpressionError(cron, error.message);
-      }
-      throw error;
-    }
+      return row ? toSpec(row) : null;
+    });
   }
 
-  private isValidTimezone(timezone: string): boolean {
-    try {
-      Intl.DateTimeFormat(undefined, { timeZone: timezone });
-      return true;
-    } catch {
-      return false;
-    }
+  async updateNextRunAt(
+    actorId: ActorId,
+    scheduleId: string,
+    nextRunAt: Date
+  ): Promise<void> {
+    await withTenantScope(this.db, actorId, async (tx) => {
+      await tx
+        .update(schedules)
+        .set({ nextRunAt, updatedAt: new Date() })
+        .where(eq(schedules.id, scheduleId));
+    });
   }
 
-  private toSpec(row: typeof schedules.$inferSelect): ScheduleSpec {
-    return {
-      id: row.id,
-      ownerUserId: row.ownerUserId,
-      executionGrantId: row.executionGrantId,
-      graphId: row.graphId,
-      input: row.input,
-      cron: row.cron,
-      timezone: row.timezone,
-      enabled: row.enabled,
-      nextRunAt: row.nextRunAt,
-      lastRunAt: row.lastRunAt,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
+  async updateLastRunAt(
+    actorId: ActorId,
+    scheduleId: string,
+    lastRunAt: Date
+  ): Promise<void> {
+    await withTenantScope(this.db, actorId, async (tx) => {
+      await tx
+        .update(schedules)
+        .set({ lastRunAt, updatedAt: new Date() })
+        .where(eq(schedules.id, scheduleId));
+    });
+  }
+
+  async findStaleSchedules(actorId: ActorId): Promise<readonly ScheduleSpec[]> {
+    const now = new Date();
+    return withTenantScope(this.db, actorId, async (tx) => {
+      // Per RECONCILER_GUARANTEES_CHAIN: Include enabled schedules where
+      // next_run_at IS NULL (edge case after re-enable) or next_run_at < now (stale)
+      const rows = await tx.query.schedules.findMany({
+        where: and(
+          eq(schedules.enabled, true),
+          or(lt(schedules.nextRunAt, now), isNull(schedules.nextRunAt))
+        ),
+      });
+      return rows.map((row) => toSpec(row));
+    });
   }
 }
