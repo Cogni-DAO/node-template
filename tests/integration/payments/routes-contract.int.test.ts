@@ -14,10 +14,10 @@
 
 import { randomUUID } from "node:crypto";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getDb } from "@/adapters/server/db/client";
 import {
   getTestOnChainVerifier,
   resetTestOnChainVerifier,
@@ -47,7 +47,6 @@ describe("Payment Routes HTTP Contract Tests", () => {
   let testSessionUser: SessionUser;
   let testUserId: string;
   let testCtx: RequestContext;
-  const db = getDb();
   let walletCounter = 0;
 
   function generateTestWallet(): string {
@@ -63,7 +62,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
     testCtx = makeTestCtx();
 
     // Seed test user with billing account + virtual key (unique wallet per test)
-    const seeded = await seedAuthenticatedUser(db, {
+    const seeded = await seedAuthenticatedUser(getSeedDb(), {
       id: randomUUID(),
       walletAddress: generateTestWallet(),
       name: "Route Test User",
@@ -82,7 +81,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
   afterEach(async () => {
     // Cleanup cascades to billing/payment_attempts via FK
     const { users } = await import("@/shared/db/schema");
-    await db.delete(users).where(eq(users.id, testUserId));
+    await getSeedDb().delete(users).where(eq(users.id, testUserId));
     resetTestOnChainVerifier();
   });
 
@@ -372,7 +371,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
       );
 
       // Try to access with user2
-      const user2 = await seedAuthenticatedUser(db, {
+      const user2 = await seedAuthenticatedUser(getSeedDb(), {
         id: randomUUID(),
         walletAddress: generateTestWallet(),
         name: "User 2",
@@ -402,7 +401,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
       expect(data.error).toMatch(/not found|not owned/i);
 
       // Cleanup user2
-      await db
+      await getSeedDb()
         .delete((await import("@/shared/db/schema")).users)
         .where(
           eq((await import("@/shared/db/schema")).users.id, user2.user.id)
