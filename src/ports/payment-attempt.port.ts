@@ -200,12 +200,6 @@ export interface PaymentAttemptServiceRepository {
     billingAccountId: string,
     attemptedAt: Date
   ): Promise<PaymentAttempt>;
-
-  /**
-   * Logs payment event to audit trail.
-   * Append-only event log for reconciliation and debugging.
-   */
-  logEvent(params: LogPaymentEventParams): Promise<void>;
 }
 
 /**

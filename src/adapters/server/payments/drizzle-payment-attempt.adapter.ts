@@ -326,15 +326,4 @@ export class ServiceDrizzlePaymentAttemptRepository
       return mapRow(updated);
     });
   }
-
-  async logEvent(params: LogPaymentEventParams): Promise<void> {
-    await this.db.insert(paymentEvents).values({
-      attemptId: params.attemptId,
-      eventType: params.eventType,
-      fromStatus: params.fromStatus,
-      toStatus: params.toStatus,
-      errorCode: params.errorCode ?? null,
-      metadata: params.metadata ?? null,
-    });
-  }
 }

@@ -297,9 +297,9 @@ describe.skip("Payment Routes HTTP Contract Tests", () => {
 
       expect(response.status).toBe(409);
       const data = await response.json();
-      expect(data.error).toMatch(/conflict/i);
-      expect(data.details).toHaveProperty("txHash");
-      expect(data.details).toHaveProperty("existingAttemptId");
+      expect(data.error).toMatch(/transaction hash already used/i);
+      // existingAttemptId intentionally omitted from response to prevent cross-tenant info leak
+      expect(data).not.toHaveProperty("details");
     });
 
     it("returns response with status from PaymentAttemptStatus enum", async () => {

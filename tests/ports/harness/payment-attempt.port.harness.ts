@@ -308,33 +308,6 @@ export function registerPaymentAttemptRepositoryContract(
         expect(fetched?.status).toBe("FAILED");
         expect(fetched?.errorCode).toBe("INTENT_EXPIRED");
       });
-
-      it("logEvent appends to audit trail", async () => {
-        const params: CreatePaymentAttemptParams = {
-          billingAccountId: testBillingAccountId,
-          fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-          chainId: CHAIN_ID,
-          token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-          toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
-          amountRaw: 5_000_000n,
-          amountUsdCents: 500,
-          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-        };
-
-        const attempt = await userRepo.create(params);
-
-        // Log event via service repo
-        await serviceRepo.logEvent({
-          attemptId: attempt.id,
-          eventType: "INTENT_CREATED",
-          fromStatus: null,
-          toStatus: "CREATED_INTENT",
-        });
-
-        // Verify event logged (implementation detail - just verify no error)
-        // Actual event retrieval tested at integration level
-        expect(true).toBe(true);
-      });
     });
   });
 }
