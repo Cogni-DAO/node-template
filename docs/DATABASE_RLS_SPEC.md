@@ -294,8 +294,9 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 `packages/db-client` uses sub-path exports to separate safe and dangerous factories:
 
-- **Root (`@cogni/db-client`):** `createAppDbClient(url)`, `withTenantScope`, `setTenantContext`, `Database` type, `UserActorId`/`ActorId`/`UserId` branded types, `toUserId`, `userActor`
-- **Sub-path (`@cogni/db-client/service`):** `createServiceDbClient(url)` (app_service, BYPASSRLS), `SYSTEM_ACTOR`, `SystemActorId`. NOT re-exported from root — user-facing code cannot access system actor identity.
+- **Root (`@cogni/db-client`):** `createAppDbClient(url)`, `withTenantScope`, `setTenantContext`, `Database` type. Branded ID types (`UserId`, `ActorId`, `toUserId`, `userActor`) live in `@cogni/ids`.
+- **Sub-path (`@cogni/db-client/service`):** `createServiceDbClient(url)` (app_service, BYPASSRLS). NOT re-exported from root.
+- **IDs (`@cogni/ids`):** `UserId`, `ActorId`, `toUserId`, `userActor`. Sub-path `@cogni/ids/system` exports `SYSTEM_ACTOR: ActorId` — NOT in root, enforcing import-boundary safety.
 
 At the adapter layer, singletons are also split:
 
@@ -358,36 +359,47 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 | `recordVerificationAttempt(id, …)` | `payment_attempts`, `payment_events` | Yes  | None (internal)          | [ ]    |
 | `logEvent(params)`                 | `payment_events`                     | No   | None (event-only)        | [ ]    |
 
-### `DrizzleExecutionGrantAdapter` (`packages/db-client/…/drizzle-grant.adapter.ts`)
+### `DrizzleExecutionGrantUserAdapter` (`packages/db-client/…/drizzle-grant.adapter.ts`)
 
-| Method                                    | Tables             | Txn? | userId source         | Wired? |
-| ----------------------------------------- | ------------------ | ---- | --------------------- | ------ |
-| `createGrant({ userId, … })`              | `execution_grants` | No   | Direct                | [ ]    |
-| `validateGrant(grantId)`                  | `execution_grants` | No   | None (returns userId) | [ ]    |
-| `validateGrantForGraph(grantId, graphId)` | `execution_grants` | No   | None (delegates)      | [ ]    |
-| `revokeGrant(grantId)`                    | `execution_grants` | No   | None                  | [ ]    |
-| `deleteGrant(grantId)`                    | `execution_grants` | No   | None                  | [ ]    |
+| Method                                 | Tables             | Txn? | userId source | Wired? |
+| -------------------------------------- | ------------------ | ---- | ------------- | ------ |
+| `createGrant({ userId: UserId, … })`   | `execution_grants` | No   | Direct        | [x]    |
+| `revokeGrant(callerUserId: UserId, …)` | `execution_grants` | No   | Direct        | [x]    |
+| `deleteGrant(callerUserId: UserId, …)` | `execution_grants` | No   | Direct        | [x]    |
 
-### `DrizzleScheduleManagerAdapter` (`packages/db-client/…/drizzle-schedule.adapter.ts`)
+### `DrizzleExecutionGrantWorkerAdapter` (`packages/db-client/…/drizzle-grant.adapter.ts`)
 
-| Method                            | Tables                          | Txn? | userId source                      | Wired? |
-| --------------------------------- | ------------------------------- | ---- | ---------------------------------- | ------ |
-| `createSchedule(callerUserId, …)` | `schedules`, `execution_grants` | Yes  | Direct                             | [ ]    |
-| `listSchedules(callerUserId)`     | `schedules`                     | No   | Direct                             | [ ]    |
-| `getSchedule(scheduleId)`         | `schedules`                     | No   | None (returns ownerUserId)         | [ ]    |
-| `updateSchedule(callerUserId, …)` | `schedules`                     | Yes  | Direct                             | [ ]    |
-| `deleteSchedule(callerUserId, …)` | `schedules`, `execution_grants` | Yes  | Direct                             | [ ]    |
-| `updateNextRunAt(scheduleId, …)`  | `schedules`                     | No   | None (worker path — `app_service`) | [ ]    |
-| `updateLastRunAt(scheduleId, …)`  | `schedules`                     | No   | None (worker path — `app_service`) | [ ]    |
-| `findStaleSchedules()`            | `schedules`                     | No   | None (system scan — `app_service`) | [ ]    |
+| Method                                                      | Tables             | Txn? | userId source          | Wired? |
+| ----------------------------------------------------------- | ------------------ | ---- | ---------------------- | ------ |
+| `validateGrant(actorId: ActorId, grantId)`                  | `execution_grants` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `validateGrantForGraph(actorId: ActorId, grantId, graphId)` | `execution_grants` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+
+### `DrizzleScheduleUserAdapter` (`packages/db-client/…/drizzle-schedule.adapter.ts`)
+
+| Method                                    | Tables                          | Txn? | userId source | Wired? |
+| ----------------------------------------- | ------------------------------- | ---- | ------------- | ------ |
+| `createSchedule(callerUserId: UserId, …)` | `schedules`, `execution_grants` | Yes  | Direct        | [x]    |
+| `listSchedules(callerUserId: UserId)`     | `schedules`                     | No   | Direct        | [x]    |
+| `getSchedule(callerUserId: UserId, …)`    | `schedules`                     | No   | Direct        | [x]    |
+| `updateSchedule(callerUserId: UserId, …)` | `schedules`                     | Yes  | Direct        | [x]    |
+| `deleteSchedule(callerUserId: UserId, …)` | `schedules`, `execution_grants` | Yes  | Direct        | [x]    |
+
+### `DrizzleScheduleWorkerAdapter` (`packages/db-client/…/drizzle-schedule.adapter.ts`)
+
+| Method                                      | Tables      | Txn? | userId source          | Wired? |
+| ------------------------------------------- | ----------- | ---- | ---------------------- | ------ |
+| `getScheduleForWorker(actorId: ActorId, …)` | `schedules` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `updateNextRunAt(actorId: ActorId, …)`      | `schedules` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `updateLastRunAt(actorId: ActorId, …)`      | `schedules` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `findStaleSchedules(actorId: ActorId)`      | `schedules` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
 
 ### `DrizzleScheduleRunAdapter` (`packages/db-client/…/drizzle-run.adapter.ts`)
 
-| Method                         | Tables          | Txn? | userId source                      | Wired? |
-| ------------------------------ | --------------- | ---- | ---------------------------------- | ------ |
-| `createRun({ scheduleId, … })` | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
-| `markRunStarted(runId)`        | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
-| `markRunCompleted(runId, …)`   | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
+| Method                                         | Tables          | Txn? | userId source          | Wired? |
+| ---------------------------------------------- | --------------- | ---- | ---------------------- | ------ |
+| `createRun(actorId: ActorId, { … })`           | `schedule_runs` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `markRunStarted(actorId: ActorId, runId, …)`   | `schedule_runs` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
+| `markRunCompleted(actorId: ActorId, runId, …)` | `schedule_runs` | No   | ActorId (SYSTEM_ACTOR) | [x]    |
 
 ### Special: SIWE Auth Callback (`src/auth.ts`)
 
