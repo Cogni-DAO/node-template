@@ -16,10 +16,10 @@
  */
 
 import type {
-  createDbClient,
   DrizzleExecutionGrantWorkerAdapter,
   DrizzleScheduleRunAdapter,
 } from "@cogni/db-client";
+import type { createServiceDbClient } from "@cogni/db-client/service";
 import { SYSTEM_ACTOR } from "@cogni/ids/system";
 import { ApplicationFailure, activityInfo } from "@temporalio/activity";
 import type { Logger } from "pino";
@@ -29,7 +29,7 @@ import type { Logger } from "pino";
  * Activities are created as closures over these deps.
  */
 export interface ActivityDeps {
-  db: ReturnType<typeof createDbClient>;
+  db: ReturnType<typeof createServiceDbClient>;
   grantAdapter: DrizzleExecutionGrantWorkerAdapter;
   runAdapter: DrizzleScheduleRunAdapter;
   config: {

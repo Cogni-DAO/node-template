@@ -16,10 +16,10 @@
  */
 
 import {
-  createDbClient,
   DrizzleExecutionGrantWorkerAdapter,
   DrizzleScheduleRunAdapter,
 } from "@cogni/db-client";
+import { createServiceDbClient } from "@cogni/db-client/service";
 import { NativeConnection, Worker } from "@temporalio/worker";
 import type { Logger } from "pino";
 
@@ -85,7 +85,7 @@ export async function startSchedulerWorker(
   });
 
   // Create database client and adapters for activities
-  const db = createDbClient(databaseUrl);
+  const db = createServiceDbClient(databaseUrl);
   const grantAdapter = new DrizzleExecutionGrantWorkerAdapter(
     db,
     logger.child({ component: "DrizzleExecutionGrantWorkerAdapter" })

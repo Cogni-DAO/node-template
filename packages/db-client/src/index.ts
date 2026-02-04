@@ -31,7 +31,6 @@ export {
 // Client factories (safe surface only — no createServiceDbClient)
 export {
   createAppDbClient,
-  createDbClient,
   type Database,
   type LoggerLike,
 } from "./client";
