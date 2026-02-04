@@ -102,13 +102,15 @@ pnpm setup github --env production
 1. **Create GitHub environment** (`preview` or `production`)
 
 2. **Set all required secrets:**
-   - **Database secrets:** Two-user security model per environment
+   - **Database secrets:** Three-role security model per environment
      - `POSTGRES_ROOT_USER` (postgres)
      - `POSTGRES_ROOT_PASSWORD` (generated hex password)
      - `APP_DB_USER` (cogni_app_preview/cogni_app_production)
      - `APP_DB_PASSWORD` (generated hex password)
+     - `APP_DB_SERVICE_PASSWORD` (generated hex password — BYPASSRLS service role, must differ from APP_DB_PASSWORD)
      - `APP_DB_NAME` (cogni_template_preview/cogni_template_production)
-     - `DATABASE_URL` (postgresql://APP_DB_USER:APP_DB_PASSWORD@postgres:5432/APP_DB_NAME)
+     - `DATABASE_URL` (postgresql://APP_DB_USER:APP_DB_PASSWORD@postgres:5432/APP_DB_NAME — no separate secret needed)
+     - `DATABASE_SERVICE_URL` (is constructed at compose time from `APP_DB_USER`, `APP_DB_SERVICE_PASSWORD`, and `APP_DB_NAME` — no separate secret needed.)
    - **Temporal DB secrets:** Dedicated Postgres for Temporal (self-hosted)
      - `TEMPORAL_DB_USER` (default: temporal)
      - `TEMPORAL_DB_PASSWORD` (generated hex password)

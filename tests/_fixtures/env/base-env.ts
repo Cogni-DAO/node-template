@@ -64,6 +64,7 @@ export const PRODUCTION_VALID_ENV = {
   NODE_ENV: "test", // Keep test for logging silence
   APP_ENV: "production",
   DB_HOST: "postgres",
+  DATABASE_SERVICE_URL: "postgresql://app_service:svc@localhost:5432/test_db",
   EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
   // COGNI_REPO_PATH inherited from CORE_TEST_ENV
 } as const;

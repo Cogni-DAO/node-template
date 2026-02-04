@@ -26,6 +26,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY?OPENROUTER_API_KEY is required}
       # Database configuration: supports both DATABASE_URL (prod) and component vars (local)
       - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_SERVICE_URL=postgresql://${APP_DB_USER}_service:${APP_DB_SERVICE_PASSWORD}@postgres:5432/${APP_DB_NAME}
       - DB_HOST=postgres
       - DB_PORT=5432
       - POSTGRES_USER=${APP_DB_USER}

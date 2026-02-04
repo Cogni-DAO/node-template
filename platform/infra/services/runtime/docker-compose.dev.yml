@@ -189,6 +189,7 @@ services:
     environment:
       # Env contract matches runtime compose (DATABASE_URL + component vars)
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}}
+      - DATABASE_SERVICE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
       - DB_HOST=postgres
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-user}
