@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2026-02-03
+- **Last reviewed:** 2026-02-04
 - **Status:** stable
 
 ## Purpose
@@ -41,22 +41,20 @@ Database client factory and Drizzle adapter implementations for scheduling domai
 
 ## Public Surface
 
-- **Exports:**
-  - `createAppDbClient(url)` - Client factory for `app_user` role (RLS enforced)
-  - `createServiceDbClient(url)` - Client factory for `app_service` role (BYPASSRLS)
-  - `createDbClient(url)` - Deprecated alias (backward compat)
-  - `withTenantScope(db, userId, fn)` - Transaction wrapper setting RLS context (generic over schema)
-  - `setTenantContext(tx, userId)` - Sets RLS context in existing transaction (generic over schema)
-  - `Database` - Drizzle client type
-  - `LoggerLike` - Logger interface for client factory
-  - `DrizzleScheduleManagerAdapter` - Implements `ScheduleManagerPort`
-  - `DrizzleExecutionGrantAdapter` - Implements `ExecutionGrantPort`
-  - `DrizzleExecutionRequestAdapter` - Implements `ExecutionRequestPort`
-  - `DrizzleScheduleRunAdapter` - Implements `ScheduleRunRepository`
+- **Exports (root `@cogni/db-client`):**
+  - `createAppDbClient(url)` — client factory for `app_user` role (RLS enforced)
+  - `createDbClient(url)` — deprecated alias (backward compat)
+  - `withTenantScope(db, userId, fn)` — transaction wrapper setting RLS context
+  - `setTenantContext(tx, userId)` — sets RLS context in existing transaction
+  - `Database` — Drizzle client type (single source of truth)
+  - `LoggerLike` — logger interface for client factory
+  - `DrizzleScheduleManagerAdapter`, `DrizzleExecutionGrantAdapter`, `DrizzleExecutionRequestAdapter`, `DrizzleScheduleRunAdapter`
   - Re-exports from `@cogni/db-schema/scheduling` (tables, types)
+- **Exports (sub-path `@cogni/db-client/service`):**
+  - `createServiceDbClient(url)` — client factory for `app_service` role (BYPASSRLS). Isolated sub-path to enable static import enforcement via dependency-cruiser.
 - **CLI:** none
 - **Env/Config keys:** none (accepts DATABASE_URL via factory parameter)
-- **Files considered API:** `index.ts`
+- **Files considered API:** `index.ts` (root), `service.ts` (sub-path)
 
 ## Ports
 
@@ -97,3 +95,5 @@ pnpm --filter @cogni/db-client build
 
 - Re-exports scheduling schema so consumers (scheduler-worker) get schema transitively
 - All adapters accept a `Database` instance via constructor (dependency injection)
+- `createServiceDbClient` is isolated in `./service` sub-path; root barrel does NOT re-export it
+- `Database` type lives in root only — not exported from `./service`

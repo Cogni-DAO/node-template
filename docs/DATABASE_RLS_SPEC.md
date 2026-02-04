@@ -38,7 +38,7 @@
 - [x] Create `withTenantScope(userId, fn)` helper wrapping Drizzle transaction + `SET LOCAL`
 - [x] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_user_service, BYPASSRLS)
 - [x] Move `withTenantScope` / `setTenantContext` to `packages/db-client` (generic over `Database` type so both Next.js and worker services share scoping semantics)
-- [~] Import boundary: depcruiser cannot enforce named-import restrictions (both exports share the same entrypoint). Enforcement is environmental: `APP_DB_SERVICE_PASSWORD` absent from web runtime. P1: evaluate sub-path export for static enforcement.
+- [x] Import boundary: `createServiceDbClient` isolated in `@cogni/db-client/service` sub-path export. Adapter singleton `getServiceDb` isolated in `drizzle.service-client.ts` (outside barrel). Depcruiser `no-service-db-adapter-import` rule enforces only `auth.ts` may import it. Environmental enforcement (`APP_DB_SERVICE_PASSWORD` absent from web runtime) remains as defense-in-depth.
 - [ ] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below)
 - [ ] Ensure `userId` originates from session JWT (server-side), never from request body
 - [ ] SIWE auth callback (`src/auth.ts`) uses `serviceDb` for pre-auth wallet lookup
@@ -94,9 +94,12 @@
 | `platform/infra/services/runtime/postgres-init/provision.sh` | Add DML grants, `app_service` role, `ALTER DEFAULT PRIVILEGES`     |
 | `src/adapters/server/db/migrations/0004_enable_rls.sql`      | RLS + policies on 10 tables (hand-written SQL migration)           |
 | `packages/db-schema/src/index.ts`                            | Root barrel re-exporting all schema slices                         |
-| `packages/db-client/src/client.ts`                           | `createAppDbClient` + `createServiceDbClient` (full schema)        |
+| `packages/db-client/src/client.ts`                           | `createAppDbClient` (app-role, root export)                        |
+| `packages/db-client/src/service.ts`                          | `createServiceDbClient` (service-role, `./service` sub-path only)  |
+| `packages/db-client/src/build-client.ts`                     | Shared `buildClient()` factory + `Database` type                   |
 | `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (generic)                   |
-| `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` wraps `createAppDbClient(serverEnv().DATABASE_URL)`      |
+| `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` singleton (app-role only)                                |
+| `src/adapters/server/db/drizzle.service-client.ts`           | `getServiceDb()` singleton (BYPASSRLS, depcruiser-gated)           |
 | `src/adapters/server/db/tenant-scope.ts`                     | Re-exports from `@cogni/db-client`                                 |
 | `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs                   |
 | `src/shared/env/server.ts`                                   | Add Zod refine rejecting non-localhost URLs without `sslmode`      |
@@ -233,18 +236,23 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 **Decision:** Standardize on `app.current_user_id` as the single RLS session variable. Update `USAGE_HISTORY.md` to align when that feature is implemented.
 
-### 5. Dual DB Client in `packages/db-client`
+### 5. Dual DB Client with Sub-Path Isolation
 
-`packages/db-client` is the universal DB entrypoint. It imports the full schema from `@cogni/db-schema` (root barrel) and exports:
+`packages/db-client` uses sub-path exports to separate safe and dangerous factories:
 
-- `createAppDbClient(url)` — app_user connection, RLS enforced
-- `createServiceDbClient(url)` — app_user_service connection, BYPASSRLS
-- `withTenantScope<T, TSchema>(db, userId, fn)` and `setTenantContext(tx, userId)` — generic over any Drizzle `Database` type
-- `Database` type — `PostgresJsDatabase<typeof fullSchema>`, single source of truth
+- **Root (`@cogni/db-client`):** `createAppDbClient(url)` (app_user, RLS enforced), `withTenantScope`, `setTenantContext`, `Database` type
+- **Sub-path (`@cogni/db-client/service`):** `createServiceDbClient(url)` (app_service, BYPASSRLS). NOT re-exported from root.
 
-Next.js `getDb()` delegates to `createAppDbClient(serverEnv().DATABASE_URL)` — no separate client construction. `src/adapters/server/db/tenant-scope.ts` re-exports from `@cogni/db-client`.
+At the adapter layer, singletons are also split:
 
-**Enforcement:** depcruiser cannot enforce named-import restrictions (both exports share the same entrypoint). Real enforcement is environmental: `APP_DB_SERVICE_PASSWORD` is absent from the web runtime. P1: evaluate sub-path export for static enforcement.
+- `src/adapters/server/db/drizzle.client.ts` → `getDb()` (app-role, in barrel)
+- `src/adapters/server/db/drizzle.service-client.ts` → `getServiceDb()` (service-role, NOT in barrel)
+
+**Enforcement (two layers):**
+
+1. **Adapter gate (enforced):** Depcruiser rule `no-service-db-adapter-import` restricts `drizzle.service-client.ts` imports to `src/auth.ts` only. Proven working via arch probe and `pnpm arch:check`.
+2. **Package gate (dormant):** Depcruiser rule `no-service-db-package-import` restricts `@cogni/db-client/service` to `drizzle.service-client.ts` only. Currently not enforceable because depcruiser cannot resolve pnpm workspace sub-path exports (imports silently vanish from the graph). Becomes enforceable if depcruiser adds workspace resolution support.
+3. **Environmental (defense-in-depth):** `APP_DB_SERVICE_PASSWORD` is absent from the web runtime environment.
 
 ### 6. `users.id` UUID Assumption
 

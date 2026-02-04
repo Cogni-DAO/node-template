@@ -4,9 +4,7 @@
 /**
  * Module: `@tests/integration/db/rls-adapter-wiring.int.test`
  * Purpose: Gate tests that FAIL until adapters internally call setTenantContext under RLS.
- * Scope: Calls real adapter methods through an RLS-enforced connection with no external
- *        withTenantScope wrapper. The adapter itself must scope its own queries.
- *        Does not test cross-tenant isolation (see rls-tenant-isolation.int.test.ts).
+ * Scope: Calls real adapter methods through an RLS-enforced connection with no external withTenantScope wrapper. Does not test cross-tenant isolation (see rls-tenant-isolation.int.test.ts).
  * Invariants:
  * - Tests FAIL today because adapters don't call setTenantContext yet
  * - Tests PASS once each adapter is wired — that's the gate

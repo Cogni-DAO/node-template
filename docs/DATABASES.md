@@ -92,10 +92,13 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
 
 ## Database Security Architecture
 
-**Two-User Model**: Production deployments use separate PostgreSQL users for administration and application access:
+**Three-Role Model**: Production deployments use separate PostgreSQL roles:
 
 - **Root User** (`POSTGRES_ROOT_USER`): Database server administration, user/database creation
-- **Application User** (`APP_DB_USER`): Runtime application connections, limited to application database
+- **Application User** (`app_user` via `APP_DB_USER`): Runtime web app connections, RLS enforced
+- **Service User** (`app_service` via `APP_DB_SERVICE_PASSWORD`): Priviledged system users, avoid using. Scheduler workers and pre-auth lookups, BYPASSRLS. Connects via `DATABASE_SERVICE_URL`.
+
+See [Database RLS Spec](DATABASE_RLS_SPEC.md) for the dual-client architecture and static import enforcement.
 
 **Container Configuration**: The postgres container runs initialization scripts on first startup:
 
@@ -410,7 +413,7 @@ export default defineConfig({
 
 ### 6.1 Row-Level Security (RLS)
 
-No RLS policies exist today. All tenant isolation is application-layer only (OpenFGA + session auth). If the app layer is bypassed, the database has no secondary isolation. Design and implementation plan: [Database RLS Spec](DATABASE_RLS_SPEC.md).
+RLS is implemented on all user-scoped tables (P0 complete). Tenant isolation uses `SET LOCAL app.current_user_id` per transaction. The `app_user` role has RLS enforced; `app_service` has BYPASSRLS. The `@cogni/db-client` package exposes two sub-path exports (`@cogni/db-client` for app-role, `@cogni/db-client/service` for service-role), and the adapter layer isolates `getServiceDb()` in a depcruiser-gated file. See [Database RLS Spec](DATABASE_RLS_SPEC.md) for full design, adapter wiring tracker, and remaining P1 hardening items.
 
 ### 6.2 SSL Enforcement
 
