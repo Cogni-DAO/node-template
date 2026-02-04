@@ -3,13 +3,14 @@
 
 /**
  * Module: `@cogni/db-client`
- * Purpose: Database client factory and scheduling adapters.
- * Scope: Drizzle client factory + adapter implementations. Does not contain business logic.
+ * Purpose: Safe-surface DB client: app-role factory, adapters, tenant-scope, schema.
+ * Scope: App-role factory, adapters, tenant-scope, schema. Does not export createServiceDbClient (BYPASSRLS) — that lives in @cogni/db-client/service.
  * Invariants:
  * - FORBIDDEN: @/shared/env, process.env, Next.js imports
+ * - createServiceDbClient is NOT re-exported here (use @cogni/db-client/service)
  * - Re-exports full schema (all domain slices)
  * Side-effects: IO (database operations)
- * Links: docs/PACKAGES_ARCHITECTURE.md
+ * Links: docs/PACKAGES_ARCHITECTURE.md, docs/DATABASE_RLS_SPEC.md
  * @public
  */
 
@@ -20,11 +21,10 @@ export { DrizzleExecutionRequestAdapter } from "./adapters/drizzle-execution-req
 export { DrizzleExecutionGrantAdapter } from "./adapters/drizzle-grant.adapter";
 export { DrizzleScheduleRunAdapter } from "./adapters/drizzle-run.adapter";
 export { DrizzleScheduleManagerAdapter } from "./adapters/drizzle-schedule.adapter";
-// Client factories
+// Client factories (safe surface only — no createServiceDbClient)
 export {
   createAppDbClient,
   createDbClient,
-  createServiceDbClient,
   type Database,
   type LoggerLike,
 } from "./client";
