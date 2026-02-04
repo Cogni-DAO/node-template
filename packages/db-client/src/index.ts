@@ -3,22 +3,38 @@
 
 /**
  * Module: `@cogni/db-client`
- * Purpose: Database client factory and scheduling adapters.
- * Scope: Drizzle client factory + adapter implementations. Does not contain business logic.
+ * Purpose: Safe-surface DB client: app-role factory, adapters, tenant-scope, schema.
+ * Scope: App-role factory, adapters, tenant-scope, schema. Does not export createServiceDbClient (BYPASSRLS) — that lives in @cogni/db-client/service.
  * Invariants:
  * - FORBIDDEN: @/shared/env, process.env, Next.js imports
- * - Re-exports ONLY scheduling schema (not auth/billing slices)
+ * - createServiceDbClient is NOT re-exported here (use @cogni/db-client/service)
+ * - Re-exports full schema (all domain slices)
  * Side-effects: IO (database operations)
- * Links: docs/PACKAGES_ARCHITECTURE.md
+ * Links: docs/PACKAGES_ARCHITECTURE.md, docs/DATABASE_RLS_SPEC.md
  * @public
  */
 
-// Re-export scheduling schema (worker gets schema transitively through db-client)
-export * from "@cogni/db-schema/scheduling";
+// Re-export full schema (consumers get all tables transitively through db-client)
+export * from "@cogni/db-schema";
+// Branded actor types for RLS identity
+export {
+  type ActorId,
+  toUserId,
+  type UserActorId,
+  type UserId,
+  userActor,
+} from "./actor";
 export { DrizzleExecutionRequestAdapter } from "./adapters/drizzle-execution-request.adapter";
 // Adapters
 export { DrizzleExecutionGrantAdapter } from "./adapters/drizzle-grant.adapter";
 export { DrizzleScheduleRunAdapter } from "./adapters/drizzle-run.adapter";
 export { DrizzleScheduleManagerAdapter } from "./adapters/drizzle-schedule.adapter";
-// Client factory
-export { createDbClient, type Database, type LoggerLike } from "./client";
+// Client factories (safe surface only — no createServiceDbClient)
+export {
+  createAppDbClient,
+  createDbClient,
+  type Database,
+  type LoggerLike,
+} from "./client";
+// Tenant-scope helpers (generic over any Drizzle schema)
+export { setTenantContext, withTenantScope } from "./tenant-scope";

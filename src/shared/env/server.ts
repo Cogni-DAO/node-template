@@ -87,6 +87,12 @@ export const serverSchema = z.object({
 
   // Database connection: either provide DATABASE_URL directly OR component pieces
   DATABASE_URL: z.string().url().optional(),
+  // Service role connection (app_service with BYPASSRLS) — for pre-auth lookups and worker paths.
+  // Per DATABASE_RLS_SPEC.md: separate credentials from app_user. Falls back to DATABASE_URL if unset.
+  DATABASE_SERVICE_URL: z.preprocess(
+    emptyToUndefined,
+    z.string().url().optional()
+  ),
   POSTGRES_USER: z.string().min(1).optional(),
   POSTGRES_PASSWORD: z.string().min(1).optional(),
   POSTGRES_DB: z.string().min(1).optional(),
@@ -190,6 +196,25 @@ export function serverEnv(): ServerEnv {
       if (parsed.DATABASE_URL) {
         // Direct DATABASE_URL provided (e.g., CI with sqlite://build.db)
         DATABASE_URL = parsed.DATABASE_URL;
+
+        // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: reject non-localhost
+        // PostgreSQL URLs without sslmode= to prevent credential sniffing.
+        if (DATABASE_URL.startsWith("postgresql://")) {
+          try {
+            const dbUrl = new URL(DATABASE_URL);
+            const host = dbUrl.hostname;
+            const isLocal = host === "localhost" || host === "127.0.0.1";
+            if (!isLocal && !dbUrl.searchParams.has("sslmode")) {
+              throw new Error(
+                `DATABASE_URL points to non-localhost host "${host}" but is missing sslmode= parameter. ` +
+                  "Add ?sslmode=require (or stricter) for production safety."
+              );
+            }
+          } catch (e) {
+            // URL parse failure on non-standard schemes (e.g., sqlite://) is fine
+            if (e instanceof Error && e.message.includes("sslmode")) throw e;
+          }
+        }
       } else {
         // Construct from component pieces (e.g., local development)
         if (
@@ -209,6 +234,23 @@ export function serverEnv(): ServerEnv {
           DB_HOST: parsed.DB_HOST,
           DB_PORT: parsed.DB_PORT,
         });
+      }
+
+      // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: enforce sslmode on DATABASE_SERVICE_URL too.
+      if (parsed.DATABASE_SERVICE_URL?.startsWith("postgresql://")) {
+        try {
+          const svcUrl = new URL(parsed.DATABASE_SERVICE_URL);
+          const host = svcUrl.hostname;
+          const isLocal = host === "localhost" || host === "127.0.0.1";
+          if (!isLocal && !svcUrl.searchParams.has("sslmode")) {
+            throw new Error(
+              `DATABASE_SERVICE_URL points to non-localhost host "${host}" but is missing sslmode= parameter. ` +
+                "Add ?sslmode=require (or stricter) for production safety."
+            );
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message.includes("sslmode")) throw e;
+        }
       }
 
       // Resolve COGNI_REPO_ROOT from required COGNI_REPO_PATH (no cwd fallback)

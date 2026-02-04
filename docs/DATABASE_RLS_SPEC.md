@@ -9,9 +9,9 @@
 
 2. **SET_LOCAL_PER_TRANSACTION**: Every application database call runs inside an explicit `BEGIN`/`COMMIT` transaction. The first statement is `SET LOCAL app.current_user_id = $1` where `$1` is the authenticated user ID from the session JWT. Without an explicit transaction, PostgreSQL autocommit wraps each statement in its own implicit transaction — so `SET LOCAL` would apply only to itself and be lost before the next query. This is the safety net: forgetting the wrapper means queries run with no `app.current_user_id` set, and RLS returns zero rows.
 
-3. **SERVICE_ROLE_BYPASSES_RLS**: A dedicated `app_service` PostgreSQL role (used by scheduler workers and internal services) has `BYPASSRLS`. The standard `app_user` role does not. Two roles, same database, different RLS enforcement.
+3. **SERVICE_BYPASS_CONTAINED**: A dedicated `app_service` PostgreSQL role (used by scheduler workers and internal services) has `BYPASSRLS`. The standard `app_user` role does not. Two roles, same database, different RLS enforcement. The service role **must** use a separate password (`APP_DB_SERVICE_PASSWORD`) that is never present in the web runtime environment — if `app_user` credentials leak, the attacker cannot escalate to the BYPASSRLS role.
 
-4. **LEAST_PRIVILEGE_APP_ROLE**: The `app_user` role has `SELECT, INSERT, UPDATE, DELETE` on application tables only. No `DROP`, `TRUNCATE`, `CREATE`, `ALTER`. Migrations run as root, never as `app_user`.
+4. **LEAST_PRIVILEGE_APP_ROLE**: The `app_user` role has `SELECT, INSERT, UPDATE, DELETE` on application tables only. No `DROP`, `TRUNCATE`, `CREATE`, `ALTER`. Migrations currently run as `app_user` (DB owner, via drizzle-kit + `DATABASE_URL`). Separating the migrator role from the runtime role is a P1 hardening item. On PG 15+, `REVOKE CREATE ON SCHEMA public` is best-practice signaling only — `app_user` inherits `CREATE` via `pg_database_owner` as DB owner.
 
 5. **SSL_REQUIRED_NON_LOCAL**: Any `DATABASE_URL` not pointing to `localhost` or `127.0.0.1` must include `sslmode=require` (or stricter). Enforced by Zod refine at boot.
 
@@ -23,33 +23,45 @@
 
 #### Database Roles (provision.sh)
 
-- [ ] Extend `provision.sh` to `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES` to `app_user` (revoke DDL)
-- [ ] Create `app_service` role with `BYPASSRLS` + same DML grants (for scheduler/worker)
-- [ ] `ALTER DEFAULT PRIVILEGES` so future tables get the same grants automatically
+- [x] Extend `provision.sh` to `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES` to `app_user` (revoke DDL)
+- [x] Create `app_service` role with `BYPASSRLS` + same DML grants (for scheduler/worker)
+- [x] `ALTER DEFAULT PRIVILEGES` so future tables get the same grants automatically
 
 #### RLS Policies (Drizzle SQL migration)
 
-- [ ] `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` on `users` + all 9 user-scoped tables (10 total)
-- [ ] Create `tenant_isolation` policy on each table (see Policy Design below)
-- [ ] Exempt `app_service` role via `BYPASSRLS` (no policy exclusion needed)
+- [x] `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` on `users` + all 9 user-scoped tables (10 total)
+- [x] Create `tenant_isolation` policy on each table (see Policy Design below)
+- [x] Exempt `app_service` role via `BYPASSRLS` (no policy exclusion needed)
 
 #### Application Plumbing (SET LOCAL)
 
-- [ ] Create `withTenantScope(userId, fn)` helper wrapping Drizzle transaction + `SET LOCAL`
-- [ ] Wire into all DB adapter methods that touch user-scoped tables
+- [x] Create `withTenantScope(userId, fn)` helper wrapping Drizzle transaction + `SET LOCAL`
+- [x] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_user_service, BYPASSRLS)
+- [x] Move `withTenantScope` / `setTenantContext` to `packages/db-client` (generic over `Database` type so both Next.js and worker services share scoping semantics)
+- [x] Import boundary: `createServiceDbClient` isolated in `@cogni/db-client/service` sub-path export. Adapter singleton `getServiceDb` isolated in `drizzle.service-client.ts` (outside barrel). Depcruiser `no-service-db-adapter-import` rule enforces only `auth.ts` may import it. Environmental enforcement (`APP_DB_SERVICE_PASSWORD` absent from web runtime) remains as defense-in-depth.
+- [ ] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below)
 - [ ] Ensure `userId` originates from session JWT (server-side), never from request body
+- [ ] SIWE auth callback (`src/auth.ts`) uses `serviceDb` for pre-auth wallet lookup
 
 #### SSL Enforcement
 
-- [ ] Add Zod `.refine()` on `DATABASE_URL` rejecting non-localhost URLs without `sslmode=`
-- [ ] Update `buildDatabaseUrl()` to append `?sslmode=require` for non-localhost hosts
+- [x] Add Zod `.refine()` on `DATABASE_URL` rejecting non-localhost URLs without `sslmode=`
+- [x] Update `buildDatabaseUrl()` to append `?sslmode=require` for non-localhost hosts
 
 #### Cross-Tenant Test
 
-- [ ] Integration test: two users, `SET LOCAL` to user A, assert cannot read user B's `billing_accounts`
-- [ ] Integration test: `SET LOCAL` to user A, assert cannot read user B's row in `users`
-- [ ] Integration test: missing `SET LOCAL` → zero rows returned (not error)
-- [ ] Integration test: `app_service` role can read both users' data
+- [x] Integration test: two users, `SET LOCAL` to user A, assert cannot read user B's `billing_accounts`
+- [x] Integration test: `SET LOCAL` to user A, assert cannot read user B's row in `users`
+- [x] Integration test: missing `SET LOCAL` → zero rows returned (not error)
+- [x] Integration test: `app_service` role can read both users' data
+- [x] Integration test: cross-tenant INSERT rejected by `WITH CHECK` policy
+- [x] Integration test: production `withTenantScope` / `setTenantContext` helpers verified
+
+#### Adapter Wiring Gate Test
+
+- [x] Gate test: `DrizzleScheduleManagerAdapter.listSchedules` under RLS-enforced connection (currently failing — adapter does not call `setTenantContext`)
+- [x] Gate test: `DrizzleAccountService.getOrCreateBillingAccountForUser` under RLS-enforced connection (currently failing — 42501 WITH CHECK rejection)
+- [x] Sanity checks: superuser reads seeded schedule and billing account (proves data exists, failure is from RLS)
 
 #### Chores
 
@@ -58,6 +70,9 @@
 
 ### P1: Audit + Hardening
 
+- [ ] Separate migrator role from runtime role (currently both use `app_user` as DB owner)
+- [ ] Transfer DB ownership away from `app_user` to a dedicated admin role (fixes PG 15+ `REVOKE CREATE` no-op)
+- [ ] Credential rotation support: `provision.sh` should `ALTER ROLE ... PASSWORD` for existing roles, not skip them
 - [ ] Add `pg_audit` or application-level query logging for RLS-filtered queries
 - [ ] Add `sslmode=verify-full` support with CA cert for production
 - [ ] Evaluate `pgcrypto` for column-level encryption on `schedules.input` (may contain secrets)
@@ -74,15 +89,23 @@
 
 ## File Pointers (P0 Scope)
 
-| File                                                         | Change                                                         |
-| ------------------------------------------------------------ | -------------------------------------------------------------- |
-| `platform/infra/services/runtime/postgres-init/provision.sh` | Add DML grants, `app_service` role, `ALTER DEFAULT PRIVILEGES` |
-| `src/adapters/server/db/migrations/XXXX_enable_rls.sql`      | New: RLS + policies on 10 tables (hand-written SQL migration)  |
-| `src/adapters/server/db/tenant-scope.ts`                     | New: `withTenantScope(userId, fn)` transaction helper          |
-| `src/adapters/server/db/drizzle.client.ts`                   | Export raw `sql` for `SET LOCAL` execution                     |
-| `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs               |
-| `src/shared/env/server.ts`                                   | Add Zod refine rejecting non-localhost URLs without `sslmode`  |
-| `tests/integration/db/rls-tenant-isolation.int.test.ts`      | New: cross-tenant isolation + missing-context tests            |
+| File                                                         | Change                                                             |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `platform/infra/services/runtime/postgres-init/provision.sh` | Add DML grants, `app_service` role, `ALTER DEFAULT PRIVILEGES`     |
+| `src/adapters/server/db/migrations/0004_enable_rls.sql`      | RLS + policies on 10 tables (hand-written SQL migration)           |
+| `packages/db-schema/src/index.ts`                            | Root barrel re-exporting all schema slices                         |
+| `packages/db-client/src/client.ts`                           | `createAppDbClient` (app-role, root export)                        |
+| `packages/db-client/src/service.ts`                          | `createServiceDbClient` (service-role, `./service` sub-path only)  |
+| `packages/db-client/src/build-client.ts`                     | Shared `buildClient()` factory + `Database` type                   |
+| `packages/db-client/src/actor.ts`                            | `UserActorId`, `SystemActorId`, `ActorId` branded types            |
+| `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (accept `ActorId`)          |
+| `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` singleton (app-role only)                                |
+| `src/adapters/server/db/drizzle.service-client.ts`           | `getServiceDb()` singleton (BYPASSRLS, depcruiser-gated)           |
+| `src/adapters/server/db/tenant-scope.ts`                     | Re-exports from `@cogni/db-client`                                 |
+| `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs                   |
+| `src/shared/env/server.ts`                                   | Add Zod refine rejecting non-localhost URLs without `sslmode`      |
+| `tests/integration/db/rls-tenant-isolation.int.test.ts`      | Cross-tenant isolation + missing-context tests                     |
+| `tests/integration/db/rls-adapter-wiring.int.test.ts`        | Adapter wiring gate (failing until adapters call setTenantContext) |
 
 ---
 
@@ -214,6 +237,111 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 **Decision:** Standardize on `app.current_user_id` as the single RLS session variable. Update `USAGE_HISTORY.md` to align when that feature is implemented.
 
+### 5. Dual DB Client with Sub-Path Isolation
+
+`packages/db-client` uses sub-path exports to separate safe and dangerous factories:
+
+- **Root (`@cogni/db-client`):** `createAppDbClient(url)`, `withTenantScope`, `setTenantContext`, `Database` type, `UserActorId`/`ActorId`/`UserId` branded types, `toUserId`, `userActor`
+- **Sub-path (`@cogni/db-client/service`):** `createServiceDbClient(url)` (app_service, BYPASSRLS), `SYSTEM_ACTOR`, `SystemActorId`. NOT re-exported from root — user-facing code cannot access system actor identity.
+
+At the adapter layer, singletons are also split:
+
+- `src/adapters/server/db/drizzle.client.ts` → `getDb()` (app-role, in barrel)
+- `src/adapters/server/db/drizzle.service-client.ts` → `getServiceDb()` (service-role, NOT in barrel)
+
+**Enforcement (two layers):**
+
+1. **Adapter gate (enforced):** Depcruiser rule `no-service-db-adapter-import` restricts `drizzle.service-client.ts` imports to `src/auth.ts` and `src/bootstrap/container.ts` only. Proven working via arch probe and `pnpm arch:check`.
+2. **Package gate (dormant):** Depcruiser rule `no-service-db-package-import` restricts `@cogni/db-client/service` to `drizzle.service-client.ts` only. Currently not enforceable because depcruiser cannot resolve pnpm workspace sub-path exports (imports silently vanish from the graph). Becomes enforceable if depcruiser adds workspace resolution support.
+3. **Type gate (enforced):** `SYSTEM_ACTOR` and `SystemActorId` are exported only from `@cogni/db-client/service`. User-facing ports accept `UserActorId`; `SystemActorId` is rejected at compile time.
+4. **Environmental (defense-in-depth):** `DATABASE_SERVICE_URL` required when `APP_ENV=production` (enforced by `assertEnvInvariants`).
+
+### 6. `users.id` UUID Assumption
+
+`actor.ts` validates raw strings against `UUID_RE` at brand construction time (`toUserId`). `tenant-scope.ts` accepts only branded `ActorId` and interpolates via `sql.raw()`. The `users.id` column is `text`, not `uuid` — so the schema allows non-UUID values. The UUID validation is a defense-in-depth measure against SQL injection (SET LOCAL cannot use `$1` parameterized placeholders). If user IDs ever deviate from UUID format, `toUserId` will reject them.
+
+---
+
+## Adapter Wiring Tracker
+
+Methods that touch user-scoped tables and need `withTenantScope` / `setTenantContext` wiring. Exempt adapters (`DrizzleAiTelemetryAdapter`, `DrizzleExecutionRequestAdapter`) are omitted.
+
+**Legend — userId availability:**
+
+- **Direct**: method already receives `userId` / `callerUserId`
+- **Via billingAccountId**: caller has it, `SET LOCAL` uses the owning userId
+- **None**: method has only a resource ID; caller must supply userId or use service-role bypass
+
+### `DrizzleAccountService` (`src/adapters/server/accounts/drizzle.adapter.ts`)
+
+| Method                                                   | Tables                                                 | Txn? | userId source        | Wired? |
+| -------------------------------------------------------- | ------------------------------------------------------ | ---- | -------------------- | ------ |
+| `getOrCreateBillingAccountForUser({ userId })`           | `billing_accounts`, `virtual_keys`                     | Yes  | Direct               | [ ]    |
+| `getBillingAccountById(billingAccountId)`                | `billing_accounts`, `virtual_keys`                     | No   | Via billingAccountId | [ ]    |
+| `getBalance(billingAccountId)`                           | `billing_accounts`                                     | No   | Via billingAccountId | [ ]    |
+| `debitForUsage({ billingAccountId, … })`                 | `billing_accounts`, `credit_ledger`                    | Yes  | Via billingAccountId | [ ]    |
+| `recordChargeReceipt(params)`                            | `charge_receipts`, `billing_accounts`, `credit_ledger` | Yes  | Via billingAccountId | [ ]    |
+| `creditAccount({ billingAccountId, … })`                 | `billing_accounts`, `credit_ledger`                    | Yes  | Via billingAccountId | [ ]    |
+| `listCreditLedgerEntries({ billingAccountId })`          | `credit_ledger`                                        | No   | Via billingAccountId | [ ]    |
+| `findCreditLedgerEntryByReference({ billingAccountId })` | `credit_ledger`                                        | No   | Via billingAccountId | [ ]    |
+| `listChargeReceipts({ billingAccountId, … })`            | `charge_receipts`                                      | No   | Via billingAccountId | [ ]    |
+
+### `DrizzleUsageAdapter` (`src/adapters/server/accounts/drizzle.usage.adapter.ts`) — deprecated
+
+| Method                                   | Tables            | Txn? | userId source        | Wired? |
+| ---------------------------------------- | ----------------- | ---- | -------------------- | ------ |
+| `getUsageStats({ billingAccountId, … })` | `charge_receipts` | No   | Via billingAccountId | [ ]    |
+| `listUsageLogs({ billingAccountId, … })` | `charge_receipts` | No   | Via billingAccountId | [ ]    |
+
+### `DrizzlePaymentAttemptRepository` (`src/adapters/server/payments/drizzle-payment-attempt.adapter.ts`)
+
+| Method                             | Tables                               | Txn? | userId source            | Wired? |
+| ---------------------------------- | ------------------------------------ | ---- | ------------------------ | ------ |
+| `create(params)`                   | `payment_attempts`, `payment_events` | Yes  | Via billingAccountId     | [ ]    |
+| `findById(id, billingAccountId)`   | `payment_attempts`                   | No   | Via billingAccountId     | [ ]    |
+| `findByTxHash(chainId, txHash)`    | `payment_attempts`                   | No   | None (cross-user lookup) | [ ]    |
+| `updateStatus(id, status)`         | `payment_attempts`, `payment_events` | Yes  | None (internal)          | [ ]    |
+| `bindTxHash(id, txHash, …)`        | `payment_attempts`, `payment_events` | Yes  | None (internal)          | [ ]    |
+| `recordVerificationAttempt(id, …)` | `payment_attempts`, `payment_events` | Yes  | None (internal)          | [ ]    |
+| `logEvent(params)`                 | `payment_events`                     | No   | None (event-only)        | [ ]    |
+
+### `DrizzleExecutionGrantAdapter` (`packages/db-client/…/drizzle-grant.adapter.ts`)
+
+| Method                                    | Tables             | Txn? | userId source         | Wired? |
+| ----------------------------------------- | ------------------ | ---- | --------------------- | ------ |
+| `createGrant({ userId, … })`              | `execution_grants` | No   | Direct                | [ ]    |
+| `validateGrant(grantId)`                  | `execution_grants` | No   | None (returns userId) | [ ]    |
+| `validateGrantForGraph(grantId, graphId)` | `execution_grants` | No   | None (delegates)      | [ ]    |
+| `revokeGrant(grantId)`                    | `execution_grants` | No   | None                  | [ ]    |
+| `deleteGrant(grantId)`                    | `execution_grants` | No   | None                  | [ ]    |
+
+### `DrizzleScheduleManagerAdapter` (`packages/db-client/…/drizzle-schedule.adapter.ts`)
+
+| Method                            | Tables                          | Txn? | userId source                      | Wired? |
+| --------------------------------- | ------------------------------- | ---- | ---------------------------------- | ------ |
+| `createSchedule(callerUserId, …)` | `schedules`, `execution_grants` | Yes  | Direct                             | [ ]    |
+| `listSchedules(callerUserId)`     | `schedules`                     | No   | Direct                             | [ ]    |
+| `getSchedule(scheduleId)`         | `schedules`                     | No   | None (returns ownerUserId)         | [ ]    |
+| `updateSchedule(callerUserId, …)` | `schedules`                     | Yes  | Direct                             | [ ]    |
+| `deleteSchedule(callerUserId, …)` | `schedules`, `execution_grants` | Yes  | Direct                             | [ ]    |
+| `updateNextRunAt(scheduleId, …)`  | `schedules`                     | No   | None (worker path — `app_service`) | [ ]    |
+| `updateLastRunAt(scheduleId, …)`  | `schedules`                     | No   | None (worker path — `app_service`) | [ ]    |
+| `findStaleSchedules()`            | `schedules`                     | No   | None (system scan — `app_service`) | [ ]    |
+
+### `DrizzleScheduleRunAdapter` (`packages/db-client/…/drizzle-run.adapter.ts`)
+
+| Method                         | Tables          | Txn? | userId source                      | Wired? |
+| ------------------------------ | --------------- | ---- | ---------------------------------- | ------ |
+| `createRun({ scheduleId, … })` | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
+| `markRunStarted(runId)`        | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
+| `markRunCompleted(runId, …)`   | `schedule_runs` | No   | None (worker path — `app_service`) | [ ]    |
+
+### Special: SIWE Auth Callback (`src/auth.ts`)
+
+| Method                        | Tables  | Txn? | userId source                            | Wired? |
+| ----------------------------- | ------- | ---- | ---------------------------------------- | ------ |
+| `authorize(credentials, req)` | `users` | No   | None (pre-auth — must use `app_service`) | [ ]    |
+
 ---
 
 ## Related Documents
@@ -226,5 +354,5 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 ---
 
-**Last Updated**: 2026-02-03
-**Status**: Draft
+**Last Updated**: 2026-02-04
+**Status**: P0 Implemented (dual DB client done; adapter wiring gate test added — failing; wiring pending)

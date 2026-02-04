@@ -23,9 +23,15 @@ LITELLM_DB="${LITELLM_DB_NAME:-litellm_dev}"
 # App User Credentials (required, no defaults)
 APP_USER="${APP_DB_USER:-}"
 APP_PASS="${APP_DB_PASSWORD:-}"
+# Service role uses a separate password (never present in web runtime env)
+APP_SERVICE_PASS="${APP_DB_SERVICE_PASSWORD:-}"
 
 if [ -z "$APP_USER" ] || [ -z "$APP_PASS" ]; then
   echo "❌ ERROR: APP_DB_USER and APP_DB_PASSWORD are required"
+  exit 1
+fi
+if [ -z "$APP_SERVICE_PASS" ]; then
+  echo "❌ ERROR: APP_DB_SERVICE_PASSWORD is required (service role credential, separate from APP_DB_PASSWORD)"
   exit 1
 fi
 
@@ -93,5 +99,49 @@ if [ "$litellm_db_exists" -eq 0 ]; then
 else
   echo "   -> Database '$LITELLM_DB' already exists."
 fi
+
+# ── RLS Role Hardening ──────────────────────────────────────────────────────
+# Per DATABASE_RLS_SPEC.md: app_user gets DML-only; app_service gets BYPASSRLS.
+# Note: Migrations currently run as app_user (DB owner, via drizzle-kit + DATABASE_URL).
+# Future hardening: separate migrator role from runtime role (P1).
+
+echo "🔧 Applying RLS role hardening on '$APP_DB'..."
+
+# Revoke DDL privileges from app_user on public schema (least privilege).
+# Note: On PG 15+, app_user inherits CREATE via pg_database_owner (it owns the DB).
+# This REVOKE is best-practice signaling; true least-privilege requires transferring
+# DB ownership to a dedicated admin role (P1 hardening item).
+run_sql_as_root "$APP_DB" "REVOKE CREATE ON SCHEMA public FROM \"$APP_USER\";"
+
+# Grant DML-only on existing tables
+run_sql_as_root "$APP_DB" "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$APP_USER\";"
+run_sql_as_root "$APP_DB" "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \"$APP_USER\";"
+
+# Ensure future tables (created by app_user during migrations) inherit the same grants.
+# FOR ROLE is required: without it, defaults only apply to objects created by the current
+# session user (postgres), not by app_user who actually runs drizzle-kit migrations.
+run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$APP_USER\";"
+run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO \"$APP_USER\";"
+
+# ── Service Role (scheduler, internal workers) ─────────────────────────────
+# Same DML grants but with BYPASSRLS for cross-tenant operations.
+APP_SERVICE_ROLE="${APP_USER}_service"
+echo "🔧 Checking service role '$APP_SERVICE_ROLE'..."
+service_role_exists=$(run_sql_as_root "postgres" "SELECT 1 FROM pg_roles WHERE rolname = '$APP_SERVICE_ROLE'" | grep -c 1 || true)
+if [ "$service_role_exists" -eq 0 ]; then
+  echo "   -> Creating service role '$APP_SERVICE_ROLE' with BYPASSRLS..."
+  PGPASSWORD="$PG_PASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "postgres" -v ON_ERROR_STOP=1 \
+    -v svc_pass="$APP_SERVICE_PASS" <<SQL
+CREATE ROLE "$APP_SERVICE_ROLE" WITH LOGIN PASSWORD :'svc_pass' BYPASSRLS;
+SQL
+else
+  echo "   -> Service role '$APP_SERVICE_ROLE' already exists."
+fi
+
+# Grant DML to service role on app DB
+run_sql_as_root "$APP_DB" "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$APP_SERVICE_ROLE\";"
+run_sql_as_root "$APP_DB" "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \"$APP_SERVICE_ROLE\";"
+run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$APP_SERVICE_ROLE\";"
+run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO \"$APP_SERVICE_ROLE\";"
 
 echo "✅ Provisioning Complete."

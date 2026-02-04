@@ -60,6 +60,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ### AI & Evals
 
 - [AI Setup Spec](docs/AI_SETUP_SPEC.md)
+- [Prompt Registry Spec](docs/PROMPT_REGISTRY_SPEC.md)
 - [Tools Authoring](docs/TOOLS_AUTHORING.md)
 - [Graph Execution](docs/GRAPH_EXECUTION.md)
 - [LangGraph Server](docs/LANGGRAPH_SERVER.md)
