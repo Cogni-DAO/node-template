@@ -3,12 +3,12 @@
 
 /**
  * Module: `@shared/db/db-url`
- * Purpose: Database URL construction utility for PostgreSQL connections.
- * Scope: Single source of truth for DATABASE_URL construction from env pieces. Safe for both app runtime and tooling. Does not handle connections or validation.
- * Invariants: Pure function; no Next.js/Zod deps; strictly requires POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST.
+ * Purpose: Database URL construction utility for PostgreSQL connections — tooling only.
+ * Scope: Constructs DATABASE_URL from env pieces for tooling scripts. Does not handle connections or runtime validation.
+ * Invariants: Pure function; no Next.js/Zod deps; requires POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST.
  * Side-effects: none
- * Notes: Throws on missing required pieces; no configuration options to keep tooling simple.
- * Links: Used by server env validation and drizzle configuration
+ * Notes: Tooling only (drizzle.config.ts, reset-db.ts, drop-test-db.ts). NOT in barrel — import from `@/shared/db/db-url`.
+ * Links: docs/DATABASE_RLS_SPEC.md (design decision 7)
  * @public
  */
 
