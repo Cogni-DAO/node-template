@@ -146,8 +146,8 @@ vi.mock("@/bootstrap/container", async (importOriginal) => {
         langfuse: langfuseSpy,
       };
     }),
-    resolveAiAdapterDeps: vi.fn(() => {
-      const realDeps = original.resolveAiAdapterDeps();
+    resolveAiAdapterDeps: vi.fn((userId: import("@cogni/ids").UserId) => {
+      const realDeps = original.resolveAiAdapterDeps(userId);
       return {
         ...realDeps,
         langfuse: langfuseSpy,
