@@ -4,9 +4,7 @@ type: adr
 title:
 status: draft
 trust: draft
-decision: proposed
 summary:
-read_when:
 owner:
 created:
 verified:
@@ -15,18 +13,39 @@ tags: []
 
 # ADR: [Title]
 
-## Context
+<!-- Only create an ADR when there is a real fork in the road. Otherwise keep changes inside the spec. -->
 
 ## Decision
 
-## Alternatives Considered
+State the decision clearly in 1-2 sentences.
 
-### Option A
+## Options Considered
 
-### Option B
+### Option A: [Name]
+
+## **Pros:**
+
+## **Cons:**
+
+### Option B: [Name]
+
+## **Pros:**
+
+## **Cons:**
+
+## Rationale
+
+Why was this option chosen over the alternatives?
 
 ## Consequences
 
-### Positive
+What changes as a result of this decision?
 
-### Negative
+- Positive:
+- Negative:
+- Neutral:
+
+## Follow-ups
+
+- [ ] Action item 1
+- [ ] Action item 2
