@@ -30,8 +30,12 @@ interface ParsedEnv {
  * @throws Error if invariants are violated
  */
 export function assertEnvInvariants(env: ParsedEnv): void {
-  // DATABASE_SERVICE_URL is now required in all environments (enforced by Zod schema).
-  // Dev parity: both app_user (RLS) and app_service (BYPASSRLS) DSNs must always be present.
+  // Defense-in-depth: Zod enforces this at parse time, but guard here too
+  // so future cross-field invariants have a clear pattern to follow.
+  // and we dont have to delete this code because of linter warnings
+  if (!env.DATABASE_SERVICE_URL) {
+    throw new Error("DATABASE_SERVICE_URL is required in all environments");
+  }
 }
 
 /**

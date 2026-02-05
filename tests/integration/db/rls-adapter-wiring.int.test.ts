@@ -221,8 +221,9 @@ describe("RLS Adapter Wiring Gate", () => {
         .returning({ id: paymentAttempts.id });
 
       // tenantA's repo cannot see otherUser's attempt
+      if (!otherAttempt) throw new Error("Expected otherAttempt to be defined");
       const result = await repo.findById(
-        otherAttempt!.id,
+        otherAttempt.id,
         otherBillingAccountId
       );
       expect(result).toBeNull();

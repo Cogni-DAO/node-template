@@ -30,7 +30,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
-      - DATABASE_SERVICE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
+      - DATABASE_SERVICE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}?sslmode=disable
       - DB_HOST=postgres
       - DB_PORT=5432
       - LITELLM_BASE_URL=http://litellm:4000
@@ -189,8 +189,8 @@ services:
       - cogni-edge
     environment:
       # Env contract matches runtime compose (DATABASE_URL + component vars)
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}}
-      - DATABASE_SERVICE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}?sslmode=disable}
+      - DATABASE_SERVICE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}?sslmode=disable
       - DB_HOST=postgres
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-user}
@@ -395,7 +395,7 @@ services:
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
       # Database: service role (BYPASSRLS) for cross-tenant scheduler operations
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}?sslmode=disable
       # Internal API (scheduler-worker → app)
       # Default: http://app:3000 for Docker-based stacks
       # Override: http://host.docker.internal:3000 for test:stack:dev (app on host)

@@ -168,12 +168,13 @@ export class DrizzleScheduleUserAdapter implements ScheduleUserPort {
     } catch (error) {
       // Atomicity cleanup: delete DB row if it was created
       if (row) {
+        const rowId = row.id;
         this.logger.warn(
-          { scheduleId: row.id },
+          { scheduleId: rowId },
           "Rolling back schedule DB row after scheduleControl failure"
         );
         await withTenantScope(this.db, actorId, async (tx) => {
-          await tx.delete(schedules).where(eq(schedules.id, row!.id));
+          await tx.delete(schedules).where(eq(schedules.id, rowId));
         });
       }
 
@@ -356,6 +357,10 @@ export class DrizzleScheduleWorkerAdapter implements ScheduleWorkerPort {
       const row = await tx.query.schedules.findFirst({
         where: eq(schedules.id, scheduleId),
       });
+      this.logger.info(
+        { scheduleId, found: !!row },
+        "Fetched schedule for worker"
+      );
       return row ? toSpec(row) : null;
     });
   }
@@ -371,6 +376,10 @@ export class DrizzleScheduleWorkerAdapter implements ScheduleWorkerPort {
         .set({ nextRunAt, updatedAt: new Date() })
         .where(eq(schedules.id, scheduleId));
     });
+    this.logger.info(
+      { scheduleId, nextRunAt: nextRunAt.toISOString() },
+      "Updated nextRunAt"
+    );
   }
 
   async updateLastRunAt(
@@ -384,6 +393,10 @@ export class DrizzleScheduleWorkerAdapter implements ScheduleWorkerPort {
         .set({ lastRunAt, updatedAt: new Date() })
         .where(eq(schedules.id, scheduleId));
     });
+    this.logger.info(
+      { scheduleId, lastRunAt: lastRunAt.toISOString() },
+      "Updated lastRunAt"
+    );
   }
 
   async findStaleSchedules(actorId: ActorId): Promise<readonly ScheduleSpec[]> {
@@ -397,6 +410,7 @@ export class DrizzleScheduleWorkerAdapter implements ScheduleWorkerPort {
           or(lt(schedules.nextRunAt, now), isNull(schedules.nextRunAt))
         ),
       });
+      this.logger.info({ count: rows.length }, "Found stale schedules");
       return rows.map((row) => toSpec(row));
     });
   }
