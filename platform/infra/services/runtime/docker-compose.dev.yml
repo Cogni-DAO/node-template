@@ -24,15 +24,13 @@ services:
       - EVM_RPC_URL=${EVM_RPC_URL?EVM_RPC_URL is required}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY?LITELLM_MASTER_KEY is required}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY?OPENROUTER_API_KEY is required}
+      # Database connections — both required, pass-through only (no DSN construction).
+      # Per DATABASE_RLS_SPEC.md design decision 7: explicit DSNs, no component-piece fallback.
+      - DATABASE_URL=${DATABASE_URL?DATABASE_URL is required}
+      - DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL?DATABASE_SERVICE_URL is required}
       # Vars with sensible defaults
       - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-${APP_BASE_URL:-https://localhost}}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
-      - DATABASE_SERVICE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}?sslmode=disable
-      - DB_HOST=postgres
-      - DB_PORT=5432
       - LITELLM_BASE_URL=http://litellm:4000
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
@@ -188,14 +186,8 @@ services:
     networks:
       - cogni-edge
     environment:
-      # Env contract matches runtime compose (DATABASE_URL + component vars)
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}?sslmode=disable}
-      - DATABASE_SERVICE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}?sslmode=disable
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER:-user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
-      - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
+      # Only DB env var (least-secret exposure). Migrator uses DATABASE_URL directly.
+      - DATABASE_URL=${DATABASE_URL?DATABASE_URL is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -394,8 +386,9 @@ services:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
-      # Database: service role (BYPASSRLS) for cross-tenant scheduler operations
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}?sslmode=disable
+      # Database: service role (BYPASSRLS) for cross-tenant scheduler operations.
+      # Pass through DATABASE_SERVICE_URL — worker needs BYPASSRLS for cross-tenant reads.
+      - DATABASE_URL=${DATABASE_SERVICE_URL?DATABASE_SERVICE_URL is required}
       # Internal API (scheduler-worker → app)
       # Default: http://app:3000 for Docker-based stacks
       # Override: http://host.docker.internal:3000 for test:stack:dev (app on host)
