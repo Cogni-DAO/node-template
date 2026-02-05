@@ -1,102 +1,157 @@
-# Database URL Single Source of Truth
+# Database Configuration: Single Source of Truth
 
 > [!CRITICAL]
-> `DATABASE_URL` and `DATABASE_SERVICE_URL` are the only authoritative secrets. Component vars exist solely for provisioning; they must never reach runtime containers.
+> **Phased Reality:** Runtime containers are DSN-only today. Provisioning is transitioning to DSN-only. Until P1, provisioning uses component vars (`APP_DB_*`, `POSTGRES_ROOT_*`), but these must **never** reach runtime containers.
+
+---
+
+## End State Contract (Target: P2)
+
+Three DSNs are the only database secrets:
+
+| Secret                 | Purpose                          | Consumed By               |
+| ---------------------- | -------------------------------- | ------------------------- |
+| `DATABASE_ROOT_URL`    | Admin/superuser for provisioning | `db-provision` only       |
+| `DATABASE_URL`         | App user (RLS enforced)          | `app`, `migrate`          |
+| `DATABASE_SERVICE_URL` | Service user (BYPASSRLS)         | `app`, `scheduler-worker` |
+
+**No `APP_DB_*` or `POSTGRES_ROOT_*` secrets exist in the end state.**
+
+---
 
 ## Core Invariants
 
-1. **DSN-First**: DSNs are authoritative; generating DSNs from component secrets is forbidden
-2. **Runtime Isolation**: Only `DATABASE_URL` and `DATABASE_SERVICE_URL` are passed to app containers
-3. **Role Isolation**: Usernames in DSNs must differ; forbid `postgres`, `root`, superuser names (deploy-time check)
-4. **No Hardcoded Hosts**: Hostname/port come from environment config, not baked into scripts
+### INV-1: AUTHORITATIVE_INPUTS_PER_PHASE
+
+| Phase        | Provisioning Inputs                                         | Runtime Inputs                         |
+| ------------ | ----------------------------------------------------------- | -------------------------------------- |
+| **P0** (now) | Component vars + `POSTGRES_ROOT_*`                          | `DATABASE_URL`, `DATABASE_SERVICE_URL` |
+| **P1**       | `DATABASE_ROOT_URL`, `DATABASE_URL`, `DATABASE_SERVICE_URL` | `DATABASE_URL`, `DATABASE_SERVICE_URL` |
+| **P2**       | Same as P1                                                  | Same as P1                             |
+
+### INV-2: RUNTIME_DSN_ONLY
+
+Runtime containers (`app`, `scheduler-worker`, `migrate`) receive **only** `DATABASE_URL` and/or `DATABASE_SERVICE_URL`. They never receive:
+
+- `DATABASE_ROOT_URL`
+- `APP_DB_*` component vars
+- `POSTGRES_ROOT_*` credentials
+
+**Enforcement:** CI validation fails if runtime container env blocks contain forbidden vars.
+
+### INV-3: ROLE_ISOLATION
+
+- `DATABASE_URL.username` ≠ `DATABASE_SERVICE_URL.username`
+- Denylist: `{postgres, root, admin, superuser}`
+- **Enforcement:** `validate-dsns.sh` in CI; runtime startup invariant check
+
+### INV-4: NO_HARDCODED_HOSTS_IN_CODE
+
+Provisioner and CI scripts must not assume `postgres:5432` or any specific host/port. Host and port are:
+
+- Parsed from DSNs at runtime (using `URL` class or equivalent)
+- Injected via environment in provisioning lane
+
+**Enforcement:** Code review; no literal `postgres` or `5432` in scripts except in example `.env` files.
 
 ---
 
-## Implementation Checklist
-
-### P0: DSN-First Enforcement
-
-- [ ] Create `platform/ci/scripts/validate-dsns.sh` (checks: distinct users, no superusers, non-empty, masks outputs)
-- [ ] Call validation script from `deploy-production.yml` and `staging-preview.yml`
-- [ ] Remove component vars (`APP_DB_USER`, etc.) from deploy env blocks—provisioner only
-- [ ] Update INFRASTRUCTURE_SETUP.md: DSNs are authoritative, component secrets are provisioning-only
-
-### P1: Component Secret Cleanup
-
-- [ ] Audit provisioner: does it truly need component secrets, or can it parse DSNs?
-- [ ] If provisioner can parse DSNs, delete component secrets from GitHub
-- [ ] **Do NOT delete until provisioner is verified**
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                        | Change                                                        |
-| ------------------------------------------- | ------------------------------------------------------------- |
-| `platform/ci/scripts/validate-dsns.sh`      | New: validation script (testable, greppable)                  |
-| `.github/workflows/deploy-production.yml`   | Call validation script; remove component vars from deploy env |
-| `.github/workflows/staging-preview.yml`     | Call validation script; remove component vars from deploy env |
-| `platform/runbooks/INFRASTRUCTURE_SETUP.md` | DSNs authoritative; component secrets = provisioning-only     |
-
----
-
-## Design Decisions
-
-### 1. Source of Truth
-
-**Rule:** DSNs are authoritative now. Component vars (`APP_DB_USER`, etc.) are legacy provisioning-only. Generating DSNs from component secrets is forbidden.
-
-### 2. Per-Container Env Contract
-
-| Container          | Env Vars                               | Notes                                     |
-| ------------------ | -------------------------------------- | ----------------------------------------- |
-| `app`              | `DATABASE_URL`, `DATABASE_SERVICE_URL` | Both roles available                      |
-| `scheduler-worker` | `DATABASE_URL` (= service DSN)         | BYPASSRLS for background jobs             |
-| `migrate`          | `DATABASE_URL` (= app DSN)             | RLS-enforced migrations                   |
-| `db-provision`     | Component vars only                    | Legacy; only container that receives them |
-
----
-
-### 3. Validation Flow (P0)
+## Provisioning Lane vs Runtime Lane
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ VALIDATE DSNs (platform/ci/scripts/validate-dsns.sh)                │
-│ ────────────────────────────────────────────────────                │
-│ Inputs: DATABASE_URL, DATABASE_SERVICE_URL                          │
-│ Checks:                                                             │
-│   1. Both DSNs are non-empty                                        │
-│   2. Usernames are distinct (bash parameter expansion)              │
-│   3. Usernames ∉ {postgres, root, admin, superuser}                 │
-│   4. Mask DSNs in workflow logs (echo "::add-mask::$DSN")           │
-│ Output: exit 0 on success, exit 1 with message on failure           │
+│ PROVISIONING LANE (db-provision container)                          │
+│ ─────────────────────────────────────────                           │
+│ Responsibilities:                                                   │
+│   - CREATE/ALTER ROLE                                               │
+│   - GRANT privileges                                                │
+│   - ALTER DATABASE ... OWNER                                        │
+│   - ALTER DEFAULT PRIVILEGES                                        │
+│                                                                     │
+│ Credentials (P0): POSTGRES_ROOT_*, APP_DB_*                         │
+│ Credentials (P1+): DATABASE_ROOT_URL, DATABASE_URL,                 │
+│                    DATABASE_SERVICE_URL                             │
+│                                                                     │
+│ Trust boundary: runs once at deploy, before app starts              │
 └─────────────────────────────────────────────────────────────────────┘
                               │
-                              ▼
+                              ▼ provisioning complete
 ┌─────────────────────────────────────────────────────────────────────┐
-│ DEPLOY (only DSNs in env)                                           │
-│ ─────────────────────────                                           │
-│ - DATABASE_URL=${{ secrets.DATABASE_URL }}                          │
-│ - DATABASE_SERVICE_URL=${{ secrets.DATABASE_SERVICE_URL }}          │
-│ - (No APP_DB_USER, APP_DB_PASSWORD, etc.)                           │
+│ RUNTIME LANE (app, scheduler-worker, migrate)                       │
+│ ─────────────────────────────────────────────                       │
+│ Responsibilities:                                                   │
+│   - Serve HTTP traffic                                              │
+│   - Execute background jobs                                         │
+│   - Run migrations (RLS-enforced)                                   │
+│                                                                     │
+│ Credentials: DATABASE_URL, DATABASE_SERVICE_URL only                │
+│                                                                     │
+│ Trust boundary: never has admin privileges                          │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why a script?** Testable, greppable, reusable across workflows. Inline YAML is none of these.
+**PROVISIONING_TRUST_BOUNDARY:** Provisioning credentials (`DATABASE_ROOT_URL` or `POSTGRES_ROOT_*`) must never cross into runtime containers. This is a hard security boundary.
 
 ---
 
-### 4. Hostname Assumptions
+## Per-Container Env Contract
 
-| Environment                     | DB Host     | Notes                             |
-| ------------------------------- | ----------- | --------------------------------- |
-| Local dev (`pnpm dev:stack`)    | `localhost` | Host-network Postgres             |
-| Docker dev (`docker:dev:stack`) | `postgres`  | Docker-internal service name      |
-| Preview/Production              | `postgres`  | Docker-compose service name on VM |
+| Container          | P0 (Now)                               | P1+ (Target)                                                |
+| ------------------ | -------------------------------------- | ----------------------------------------------------------- |
+| `app`              | `DATABASE_URL`, `DATABASE_SERVICE_URL` | Same                                                        |
+| `scheduler-worker` | `DATABASE_URL` (= service DSN)         | Same                                                        |
+| `migrate`          | `DATABASE_URL` (= app DSN)             | Same                                                        |
+| `db-provision`     | `POSTGRES_ROOT_*`, `APP_DB_*`          | `DATABASE_ROOT_URL`, `DATABASE_URL`, `DATABASE_SERVICE_URL` |
 
-**Rule:** Hostname is encoded in the DSN secret per-environment. Scripts must not assume any specific host.
+**Forbidden in runtime containers (all phases):** `APP_DB_*`, `POSTGRES_ROOT_*`, `DATABASE_ROOT_URL`
+
+---
+
+## Roadmap
+
+### P0: Enforce Runtime Isolation (Current)
+
+- [x] Create `validate-dsns.sh` (distinct users, no superusers, non-empty, masks outputs)
+- [x] Call validation script from `deploy-production.yml` and `staging-preview.yml`
+- [ ] Validate runtime env does NOT include `APP_DB_*` / `POSTGRES_ROOT_*` (fail if present)
+- [ ] Update INFRASTRUCTURE_SETUP.md: document two config surfaces (runtime DSNs + provisioning inputs)
+
+**P0 Outcome:** Runtime is DSN-only; provisioning still uses component vars; drift is prevented by CI.
+
+### P1: DSN-Only Provisioning
+
+- [ ] Add `DATABASE_ROOT_URL` secret (admin DSN for provisioning)
+- [ ] Implement Node provisioner (`provision.ts`) that parses all 3 DSNs with `URL()` class
+- [ ] Update `db-provision` container env: only `DATABASE_ROOT_URL`, `DATABASE_URL`, `DATABASE_SERVICE_URL`
+- [ ] Delete `APP_DB_*` usage from provisioner codepath
+
+**P1 Outcome:** Provisioner consumes only DSNs; component vars are dead code.
+
+### P2: Secret Cleanup
+
+- [ ] Delete `APP_DB_*` secrets from GitHub
+- [ ] Delete `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD` secrets
+- [ ] Update docs: "Only 3 DSNs exist"
+- [ ] Add `DATABASE_ROOT_URL` to INFRASTRUCTURE_SETUP.md secret table
+
+**P2 Outcome:** Single source of truth achieved; 3 DSNs are the only database secrets.
+
+### Future: IaC Lane (Optional)
+
+Terraform/OpenTofu can manage role creation as an alternative to CD-time provisioning. This is the preferred long-term approach for production, but CD-time provisioner remains valid if convergent (idempotent).
+
+---
+
+## File Pointers
+
+| File                                        | P0 Change                                                         |
+| ------------------------------------------- | ----------------------------------------------------------------- |
+| `platform/ci/scripts/validate-dsns.sh`      | ✅ Created                                                        |
+| `.github/workflows/deploy-production.yml`   | ✅ Calls validator; TODO: verify no forbidden vars in runtime env |
+| `.github/workflows/staging-preview.yml`     | ✅ Calls validator; TODO: verify no forbidden vars in runtime env |
+| `platform/runbooks/INFRASTRUCTURE_SETUP.md` | Document two config surfaces                                      |
 
 ---
 
 **Last Updated**: 2026-02-05
-**Status**: Draft
+**Status**: In Progress (P0)
