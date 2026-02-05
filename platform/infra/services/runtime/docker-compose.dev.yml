@@ -123,7 +123,7 @@ services:
     networks:
       - cogni-edge
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: postgres
       POSTGRES_USER: ${POSTGRES_ROOT_USER}
       POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
       LITELLM_DB_NAME: litellm_dev
