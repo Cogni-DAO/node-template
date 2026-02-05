@@ -29,6 +29,8 @@ vi.mock("@temporalio/activity", () => ({
   }),
 }));
 
+import { SYSTEM_ACTOR } from "@cogni/ids/system";
+
 import { createActivities } from "../src/activities/index.js";
 import {
   createMockApiSuccessResponse,
@@ -103,6 +105,7 @@ describe("validateGrantActivity", () => {
     });
 
     expect(mockGrantAdapter.validateGrantForGraph).toHaveBeenCalledWith(
+      SYSTEM_ACTOR,
       FIXED_IDS.grantId,
       FIXED_IDS.graphId
     );
@@ -164,7 +167,7 @@ describe("createScheduleRunActivity", () => {
       scheduledFor,
     });
 
-    expect(mockRunAdapter.createRun).toHaveBeenCalledWith({
+    expect(mockRunAdapter.createRun).toHaveBeenCalledWith(SYSTEM_ACTOR, {
       scheduleId: FIXED_IDS.scheduleId,
       runId: FIXED_IDS.runId,
       scheduledFor: new Date(scheduledFor),
@@ -200,6 +203,7 @@ describe("updateScheduleRunActivity", () => {
     });
 
     expect(mockRunAdapter.markRunStarted).toHaveBeenCalledWith(
+      SYSTEM_ACTOR,
       FIXED_IDS.runId,
       "trace-123"
     );
@@ -231,6 +235,7 @@ describe("updateScheduleRunActivity", () => {
     });
 
     expect(mockRunAdapter.markRunCompleted).toHaveBeenCalledWith(
+      SYSTEM_ACTOR,
       FIXED_IDS.runId,
       "success",
       undefined
@@ -264,6 +269,7 @@ describe("updateScheduleRunActivity", () => {
     });
 
     expect(mockRunAdapter.markRunCompleted).toHaveBeenCalledWith(
+      SYSTEM_ACTOR,
       FIXED_IDS.runId,
       "error",
       "Something went wrong"

@@ -13,16 +13,18 @@
  */
 
 // Scheduling adapters - re-exported from @cogni/db-client package
+// Split by trust boundary: User (appDb, RLS enforced), Worker (serviceDb, BYPASSRLS)
 export {
-  DrizzleExecutionGrantAdapter,
+  DrizzleExecutionGrantUserAdapter,
+  DrizzleExecutionGrantWorkerAdapter,
   DrizzleExecutionRequestAdapter,
-  DrizzleScheduleManagerAdapter,
   DrizzleScheduleRunAdapter,
+  DrizzleScheduleUserAdapter,
+  DrizzleScheduleWorkerAdapter,
   type LoggerLike,
 } from "@cogni/db-client";
 export type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
-export { DrizzleAccountService } from "./accounts/drizzle.adapter";
-export { DrizzleUsageAdapter } from "./accounts/drizzle.usage.adapter";
+export { UserDrizzleAccountService } from "./accounts/drizzle.adapter";
 export type { AgentCatalogProvider } from "./ai/agent-catalog.provider";
 // Agent discovery infrastructure
 export { AggregatingAgentCatalog } from "./ai/aggregating-agent-catalog";
@@ -82,7 +84,7 @@ export {
 } from "./metrics/mimir.adapter";
 export { ViemEvmOnchainClient } from "./onchain/viem-evm-onchain-client.adapter";
 export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";
-export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
+export { UserDrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
 export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifier.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
 export {

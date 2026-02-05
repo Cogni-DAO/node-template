@@ -6,7 +6,7 @@
  * Purpose: Transaction helpers that set PostgreSQL RLS tenant context via SET LOCAL.
  * Scope: Generic over any Drizzle PostgresJsDatabase schema type. Does not handle role switching or connection pooling.
  * Invariants:
- * - actorId must be a branded ActorId (UUID validation happens at brand construction in actor.ts)
+ * - actorId must be a branded ActorId (UUID validation happens at brand construction in @cogni/ids)
  * - SET LOCAL scopes the setting to the current transaction only (no cross-request leakage)
  * Side-effects: IO (database transaction)
  * Notes: SET LOCAL does not accept parameterized $1 placeholders in PostgreSQL.
@@ -14,17 +14,13 @@
  *        1. The regex strictly limits the value to hex digits and hyphens
  *        2. The value comes from server-side JWT sessions, never from request body
  *        3. ActorId branded type guarantees the value was validated at construction time
- * Links: docs/DATABASE_RLS_SPEC.md, actor.ts
+ * Links: docs/DATABASE_RLS_SPEC.md, @cogni/ids
  * @public
  */
 
+import type { ActorId } from "@cogni/ids";
 import { type SQL, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import type { ActorId } from "./actor";
-
-/** Single source of truth for UUID v4 validation. Used by actor.ts for branded type construction. */
-export const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Run `fn` inside a Drizzle transaction with `app.current_user_id` set for RLS.

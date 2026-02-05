@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-22
+- **Last reviewed:** 2026-02-04
 - **Status:** draft
 
 ## Purpose
@@ -88,7 +88,7 @@ docker build -f services/scheduler-worker/Dockerfile -t scheduler-worker .
 
 ## Dependencies
 
-- **Internal:** `@cogni/scheduler-core`, `@cogni/db-client`
+- **Internal:** `@cogni/scheduler-core`, `@cogni/db-client`, `@cogni/ids`
 - **External:** `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity`, `pino`, `zod`
 
 ## Change Protocol

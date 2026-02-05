@@ -13,6 +13,6 @@
 
 // Features layer cannot import db-client (server-only package)
 // @ts-expect-error - intentional violation for arch testing
-import { createDbClient } from "@cogni/db-client";
+import { createAppDbClient } from "@cogni/db-client";
 
-export const probe = createDbClient;
+export const probe = createAppDbClient;

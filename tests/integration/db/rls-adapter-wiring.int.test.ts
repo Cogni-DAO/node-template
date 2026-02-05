@@ -6,38 +6,33 @@
  * Purpose: Gate tests that FAIL until adapters internally call setTenantContext under RLS.
  * Scope: Calls real adapter methods through an RLS-enforced connection with no external withTenantScope wrapper. Does not test cross-tenant isolation (see rls-tenant-isolation.int.test.ts).
  * Invariants:
- * - Tests FAIL today because adapters don't call setTenantContext yet
- * - Tests PASS once each adapter is wired — that's the gate
  * - Adapters must scope themselves; the caller does NOT wrap in withTenantScope
+ * - All wiring gates pass (schedules, accounts, payment attempts wired)
  * Side-effects: IO (database operations via testcontainers)
- * Notes: Uses a dedicated LOGIN role (not superuser) so RLS is enforced. Superuser
- *        bypasses RLS even with FORCE, so adapter tests require a real non-superuser connection.
+ * Notes: Uses production app_user role (FORCE RLS via provision.sh) for rlsDb.
+ *        getSeedDb() (app_user_service, BYPASSRLS) handles seed/cleanup.
  * Links: docs/DATABASE_RLS_SPEC.md (Adapter Wiring Tracker), rls-tenant-isolation.int.test.ts
  * @public
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  createAppDbClient,
-  type Database,
-  DrizzleScheduleManagerAdapter,
-} from "@cogni/db-client";
+import { type Database, DrizzleScheduleUserAdapter } from "@cogni/db-client";
 import {
   billingAccounts,
   executionGrants,
+  paymentAttempts,
   schedules,
   users,
   virtualKeys,
 } from "@cogni/db-schema";
+import { toUserId } from "@cogni/ids";
 import { generateTestWallet } from "@tests/_fixtures/auth/db-helpers";
-import { eq, sql } from "drizzle-orm";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
+import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getDb } from "@/adapters/server/db/client";
-
-// Dedicated LOGIN role — not the superuser, so RLS is enforced
-const RLS_ROLE = "app_user_rls_test";
-const RLS_PASSWORD = "rls_test_password";
+import { UserDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 
 interface TestTenant {
   userId: string;
@@ -52,34 +47,10 @@ describe("RLS Adapter Wiring Gate", () => {
   let tenantA: TestTenant;
 
   beforeAll(async () => {
-    superDb = getDb();
-
-    // Create LOGIN role for RLS-enforced connection (idempotent)
-    await superDb.execute(
-      sql.raw(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RLS_ROLE}') THEN
-          CREATE ROLE "${RLS_ROLE}" LOGIN PASSWORD '${RLS_PASSWORD}';
-        END IF;
-      END
-      $$;
-    `)
-    );
-    await superDb.execute(
-      sql.raw(
-        `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${RLS_ROLE}"`
-      )
-    );
-
-    // Build connection as RLS-enforced role
-    const databaseUrl = process.env.DATABASE_URL;
-    if (!databaseUrl) throw new Error("DATABASE_URL not set by testcontainers");
-    const superUrl = new URL(databaseUrl);
-    const rlsUrl = new URL(superUrl.toString());
-    rlsUrl.username = RLS_ROLE;
-    rlsUrl.password = RLS_PASSWORD;
-    rlsDb = createAppDbClient(rlsUrl.toString());
+    // superDb uses service role (BYPASSRLS) for seed/cleanup
+    superDb = getSeedDb();
+    // rlsDb uses app_user role (FORCE RLS) — production roles from provision.sh
+    rlsDb = getDb();
 
     // Seed tenant data as superuser (bypasses RLS)
     tenantA = {
@@ -155,40 +126,110 @@ describe("RLS Adapter Wiring Gate", () => {
   //
   // These tests call adapter methods directly — NO withTenantScope wrapper.
   // The adapter must internally call setTenantContext to pass.
-  //
-  // Today: adapters don't scope → RLS blocks → tests FAIL.
-  // After wiring: adapters scope themselves → tests PASS.
 
-  describe("DrizzleScheduleManagerAdapter", () => {
-    let adapter: DrizzleScheduleManagerAdapter;
+  describe("DrizzleScheduleUserAdapter", () => {
+    let adapter: DrizzleScheduleUserAdapter;
 
     beforeAll(() => {
       // listSchedules only uses this.db — stubs are never called
       // biome-ignore lint/suspicious/noExplicitAny: test stubs for unused ports
-      adapter = new DrizzleScheduleManagerAdapter(rlsDb, {} as any, {} as any);
+      adapter = new DrizzleScheduleUserAdapter(rlsDb, {} as any, {} as any);
     });
 
-    // TODO(rls): unskip when adapters call withTenantScope (Commit 2)
-    it.skip("listSchedules returns schedules for the calling user", async () => {
-      const result = await adapter.listSchedules(tenantA.userId);
+    it("listSchedules returns schedules for the calling user", async () => {
+      const result = await adapter.listSchedules(toUserId(tenantA.userId));
       expect(result.length).toBeGreaterThanOrEqual(1);
       expect(result[0]?.ownerUserId).toBe(tenantA.userId);
     });
   });
 
-  describe("DrizzleAccountService", () => {
-    let service: DrizzleAccountService;
+  describe("UserDrizzleAccountService", () => {
+    let service: UserDrizzleAccountService;
 
     beforeAll(() => {
-      service = new DrizzleAccountService(rlsDb);
+      service = new UserDrizzleAccountService(rlsDb, toUserId(tenantA.userId));
     });
 
-    // TODO(rls): unskip when adapters call withTenantScope (Commit 3)
-    it.skip("getOrCreateBillingAccountForUser returns account for existing user", async () => {
+    it("getOrCreateBillingAccountForUser returns account for existing user", async () => {
       const result = await service.getOrCreateBillingAccountForUser({
         userId: tenantA.userId,
       });
       expect(result.ownerUserId).toBe(tenantA.userId);
+    });
+  });
+
+  describe("UserDrizzlePaymentAttemptRepository", () => {
+    let repo: UserDrizzlePaymentAttemptRepository;
+
+    beforeAll(() => {
+      repo = new UserDrizzlePaymentAttemptRepository(
+        rlsDb,
+        toUserId(tenantA.userId)
+      );
+    });
+
+    it("create succeeds for correct tenant under RLS", async () => {
+      const attempt = await repo.create({
+        billingAccountId: tenantA.billingAccountId,
+        fromAddress: generateTestWallet("rls-gate-pay"),
+        chainId: 84532,
+        token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
+        amountRaw: 5_000_000n,
+        amountUsdCents: 500,
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      });
+
+      expect(attempt.id).toBeDefined();
+      expect(attempt.status).toBe("CREATED_INTENT");
+      expect(attempt.billingAccountId).toBe(tenantA.billingAccountId);
+
+      // Cleanup
+      await superDb
+        .delete(paymentAttempts)
+        .where(eq(paymentAttempts.id, attempt.id));
+    });
+
+    it("findById returns null for other-tenant attempt", async () => {
+      // Seed an attempt via superuser for a different billing account
+      const otherUserId = randomUUID();
+      const otherBillingAccountId = randomUUID();
+
+      await superDb.insert(users).values({
+        id: otherUserId,
+        name: "RLS Gate Other User",
+        walletAddress: generateTestWallet("rls-gate-other"),
+      });
+      await superDb.insert(billingAccounts).values({
+        id: otherBillingAccountId,
+        ownerUserId: otherUserId,
+        balanceCredits: 0n,
+      });
+      const [otherAttempt] = await superDb
+        .insert(paymentAttempts)
+        .values({
+          billingAccountId: otherBillingAccountId,
+          fromAddress: generateTestWallet("rls-gate-other-pay"),
+          chainId: 84532,
+          token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+          toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
+          amountRaw: 5_000_000n,
+          amountUsdCents: 500,
+          status: "CREATED_INTENT",
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        })
+        .returning({ id: paymentAttempts.id });
+
+      // tenantA's repo cannot see otherUser's attempt
+      if (!otherAttempt) throw new Error("Expected otherAttempt to be defined");
+      const result = await repo.findById(
+        otherAttempt.id,
+        otherBillingAccountId
+      );
+      expect(result).toBeNull();
+
+      // Cleanup (CASCADE from users)
+      await superDb.delete(users).where(eq(users.id, otherUserId));
     });
   });
 });

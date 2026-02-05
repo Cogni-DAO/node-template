@@ -6,14 +6,14 @@
  * Purpose: App-layer wiring for payment attempts. Resolves dependencies, delegates to feature services, and maps port types to contract DTOs.
  * Scope: Server-only facade. Handles billing account resolution from session user, maps Date to ISO string for contract compliance; does not perform direct persistence or HTTP handling.
  * Invariants: Billing account from session identity only; return types use z.infer; Date fields map to ISO strings.
- * Side-effects: IO (via PaymentAttemptRepository, AccountService, OnChainVerifier ports).
+ * Side-effects: IO (via PaymentAttemptUserRepository, PaymentAttemptServiceRepository, AccountService, OnChainVerifier ports).
  * Notes: Errors bubble to route handlers for HTTP mapping. Facades own DTO mapping (port types → contract types).
  * Links: docs/PAYMENTS_DESIGN.md, src/contracts/AGENTS.md
  * @public
  */
 
+import { toUserId } from "@cogni/ids";
 import { getAddress } from "viem";
-
 import { getContainer } from "@/bootstrap/container";
 import type { PaymentIntentOutput } from "@/contracts/payments.intent.v1.contract";
 import type { PaymentStatusOutput } from "@/contracts/payments.status.v1.contract";
@@ -50,7 +50,14 @@ export async function createPaymentIntentFacade(
   ctx: RequestContext
 ): Promise<PaymentIntentOutput> {
   const start = performance.now();
-  const { accountService, paymentAttemptRepository, clock } = getContainer();
+  const container = getContainer();
+  const accountService = container.accountsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const userRepo = container.paymentAttemptsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const { clock } = container;
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -86,7 +93,7 @@ export async function createPaymentIntentFacade(
 
   const fromAddress = getAddress(params.sessionUser.walletAddress);
 
-  const result = await createIntent(paymentAttemptRepository, clock, {
+  const result = await createIntent(userRepo, clock, {
     billingAccountId: billingAccount.id,
     fromAddress,
     amountUsdCents: params.amountUsdCents,
@@ -133,8 +140,18 @@ export async function submitPaymentTxHashFacade(
   ctx: RequestContext
 ): Promise<PaymentSubmitOutput> {
   const start = performance.now();
-  const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
-    getContainer();
+  const container = getContainer();
+  const accountService = container.accountsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const userRepo = container.paymentAttemptsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const {
+    paymentAttemptServiceRepository: serviceRepo,
+    onChainVerifier,
+    clock,
+  } = container;
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -169,7 +186,8 @@ export async function submitPaymentTxHashFacade(
   };
 
   const result = await submitTxHash(
-    paymentAttemptRepository,
+    userRepo,
+    serviceRepo,
     accountService,
     onChainVerifier,
     clock,
@@ -222,8 +240,18 @@ export async function getPaymentStatusFacade(
   ctx: RequestContext
 ): Promise<PaymentStatusOutput> {
   const start = performance.now();
-  const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
-    getContainer();
+  const container = getContainer();
+  const accountService = container.accountsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const userRepo = container.paymentAttemptsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const {
+    paymentAttemptServiceRepository: serviceRepo,
+    onChainVerifier,
+    clock,
+  } = container;
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -258,7 +286,8 @@ export async function getPaymentStatusFacade(
   };
 
   const result = await getStatus(
-    paymentAttemptRepository,
+    userRepo,
+    serviceRepo,
     accountService,
     onChainVerifier,
     clock,
