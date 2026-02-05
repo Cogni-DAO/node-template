@@ -256,9 +256,10 @@ jobs:
       TEMPORAL_ADDRESS: localhost:7233
       TEMPORAL_NAMESPACE: cogni-test
       TEMPORAL_TASK_QUEUE: scheduler-tasks
-      # Host-side DSNs for vitest (containers use postgres:5432 internally)
-      # NOTE: DATABASE_URL set per-step to avoid leaking into Docker containers
-      DATABASE_SERVICE_URL: postgresql://user_service:service_password@localhost:55432/cogni_template_test
+      # Container-side DSNs (postgres:5432 = Docker internal DNS)
+      # These are passed to docker-compose for app, migrator, scheduler-worker containers
+      DATABASE_URL: postgresql://user:password@postgres:5432/cogni_template_test?sslmode=disable
+      DATABASE_SERVICE_URL: postgresql://user_service:service_password@postgres:5432/cogni_template_test?sslmode=disable
       # git-sync HTTPS clone (same path as prod — no file:// shortcut)
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
       COGNI_REPO_REF: ${{ github.sha }}
@@ -376,9 +377,10 @@ jobs:
         env:
           # Host-side vitest needs repo checkout; compose uses /repo/current default
           COGNI_REPO_PATH: ${{ github.workspace }}
-          # Host-side DSN for vitest preflight (must NOT be job-level — would leak
-          # into Docker containers like db-migrate which need postgres:5432)
+          # Host-side DSNs for vitest (override job-level container DSNs)
+          # Vitest runs on host, connects via port-forwarded localhost:55432
           DATABASE_URL: postgresql://user:password@localhost:55432/cogni_template_test
+          DATABASE_SERVICE_URL: postgresql://user_service:service_password@localhost:55432/cogni_template_test
         # Note: wait-for-probes.ts globalSetup polls /livez then /readyz before tests run
 
       - name: CI Telemetry
