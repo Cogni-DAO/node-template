@@ -36,7 +36,7 @@
 #### Application Plumbing (SET LOCAL)
 
 - [x] Create `withTenantScope(userId, fn)` helper wrapping Drizzle transaction + `SET LOCAL`
-- [x] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_user_service, BYPASSRLS)
+- [x] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_service, BYPASSRLS)
 - [x] Move `withTenantScope` / `setTenantContext` to `packages/db-client` (generic over `Database` type so both Next.js and worker services share scoping semantics)
 - [x] Import boundary: `createServiceDbClient` isolated in `@cogni/db-client/service` sub-path export. Adapter singleton `getServiceDb` isolated in `drizzle.service-client.ts` (outside barrel). Depcruiser `no-service-db-adapter-import` rule enforces only `auth.ts` may import it. Environmental enforcement (`APP_DB_SERVICE_PASSWORD` absent from web runtime) remains as defense-in-depth.
 - [x] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below). Accounts: done (Commit 3). Payment attempts: done (Commit 4).
@@ -102,7 +102,7 @@
 | `packages/ids/src/index.ts`                                  | `UserId`, `ActorId`, `toUserId`, `userActor` branded types         |
 | `packages/ids/src/system.ts`                                 | `SYSTEM_ACTOR: ActorId` (sub-path gated)                           |
 | `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (accept `ActorId`)          |
-| `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` singleton (app-role only)                                |
+| `src/adapters/server/db/drizzle.client.ts`                   | `getAppDb()` singleton (app-role only)                             |
 | `src/adapters/server/db/drizzle.service-client.ts`           | `getServiceDb()` singleton (BYPASSRLS, depcruiser-gated)           |
 | `src/adapters/server/db/tenant-scope.ts`                     | Re-exports from `@cogni/db-client`                                 |
 | `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs                   |
@@ -319,7 +319,7 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 At the adapter layer, singletons are also split:
 
-- `src/adapters/server/db/drizzle.client.ts` → `getDb()` (app-role, in barrel)
+- `src/adapters/server/db/drizzle.client.ts` → `getAppDb()` (app-role, in barrel)
 - `src/adapters/server/db/drizzle.service-client.ts` → `getServiceDb()` (service-role, NOT in barrel)
 
 **Enforcement (two layers):**
@@ -335,20 +335,33 @@ At the adapter layer, singletons are also split:
 
 ---
 
-### 7. - [ ] **Dev parity: enforce real DB role separation**
+### 7. [x] **Dev parity: enforce real DB role separation**
 
-      Local dev MUST provision and use two distinct DB roles:
-      - DATABASE_URL  -> app_user (RLS enforced)
-      - DATABASE_SERVICE_URL -> app_service (BYPASSRLS)
+Local dev MUST provision and use two distinct DB roles:
 
-      Requirements:
-      1) docker-compose brings up Postgres, then runs provisioning (idempotent) that creates roles/grants/policies BEFORE Next.js starts.
-      2) App consumes TWO explicit DSN secrets only (no ${APP_DB_USER}_service concatenation; no fallback; no DSN construction in runtime code).
-      3) `.env.local.example` shows two different DSNs with different users (and uses the provisioned roles).
-      4) Startup invariants hard-fail if:
-         - DATABASE_URL.user == DATABASE_SERVICE_URL.user
-         - either DSN user is postgres/root/superuser
-         - either DSN is missing
+- `DATABASE_URL` → `app_user` (RLS enforced)
+- `DATABASE_SERVICE_URL` → `app_service` (BYPASSRLS)
+
+**Requirements (all implemented):**
+
+1. **Provisioning before app start**: `docker-compose` runs `db-provision` (via `--profile bootstrap`) which creates roles/grants/policies. The `pnpm docker:stack:setup` command runs this before the main stack.
+
+2. **No DSN construction in runtime**: `src/shared/env/server.ts` requires both `DATABASE_URL` and `DATABASE_SERVICE_URL` as explicit env vars. The `buildDatabaseUrl` fallback path was removed — that function is now tooling-only (drizzle.config.ts, test scripts). `docker-compose.yml` passes DSNs through (`${DATABASE_URL}`, `${DATABASE_SERVICE_URL}`) instead of constructing them from parts.
+
+3. **Example files show distinct users**: `.env.local.example` and `.env.test.example` now show literal DSNs with `app_user` and `app_service` (not shell variable interpolation of the same credentials).
+
+4. **Startup invariants hard-fail**: `src/shared/env/invariants.ts` implements `assertEnvInvariants()` which rejects:
+   - Same user in both DSNs (`DATABASE_URL.user == DATABASE_SERVICE_URL.user`)
+   - Superuser names (`postgres`, `root`, `superuser`, `admin`)
+   - Missing DSNs (also enforced by Zod schema)
+
+**Files changed:**
+
+- `src/shared/env/server.ts` — `DATABASE_URL` required, no component-piece fallback
+- `src/shared/env/invariants.ts` — role separation checks
+- `platform/infra/services/runtime/docker-compose.yml` — pass-through DSNs only
+- `.env.local.example`, `.env.test.example` — distinct users in example DSNs
+- `tests/_fixtures/env/base-env.ts` — test fixtures with distinct users
 
 ## Adapter Wiring Tracker
 

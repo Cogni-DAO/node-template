@@ -13,8 +13,8 @@ set -euo pipefail
 # Configuration from Env
 PG_HOST="${DB_HOST:-postgres}"
 PG_PORT="${DB_PORT:-5432}"
-PG_USER="${POSTGRES_USER:-postgres}"
-PG_PASS="${POSTGRES_PASSWORD:-postgres}"
+PG_USER="${POSTGRES_ROOT_USER:-postgres}"
+PG_PASS="${POSTGRES_ROOT_PASSWORD:-postgres}"
 
 # Target Databases (defaults)
 APP_DB="${APP_DB_NAME:-cogni_template_dev}"
@@ -23,11 +23,16 @@ LITELLM_DB="${LITELLM_DB_NAME:-litellm_dev}"
 # App User Credentials (required, no defaults)
 APP_USER="${APP_DB_USER:-}"
 APP_PASS="${APP_DB_PASSWORD:-}"
-# Service role uses a separate password (never present in web runtime env)
+# Service role: explicit name + separate password (never present in web runtime env)
+APP_SERVICE_USER="${APP_DB_SERVICE_USER:-}"
 APP_SERVICE_PASS="${APP_DB_SERVICE_PASSWORD:-}"
 
 if [ -z "$APP_USER" ] || [ -z "$APP_PASS" ]; then
   echo "❌ ERROR: APP_DB_USER and APP_DB_PASSWORD are required"
+  exit 1
+fi
+if [ -z "$APP_SERVICE_USER" ]; then
+  echo "❌ ERROR: APP_DB_SERVICE_USER is required (explicit service role name)"
   exit 1
 fi
 if [ -z "$APP_SERVICE_PASS" ]; then
@@ -38,6 +43,10 @@ fi
 # Validate identifiers (strict allowlist: alphanumeric + underscore only)
 if ! [[ "$APP_USER" =~ ^[a-zA-Z0-9_]+$ ]]; then
   echo "❌ ERROR: APP_DB_USER contains invalid characters (allowed: a-zA-Z0-9_)"
+  exit 1
+fi
+if ! [[ "$APP_SERVICE_USER" =~ ^[a-zA-Z0-9_]+$ ]]; then
+  echo "❌ ERROR: APP_DB_SERVICE_USER contains invalid characters (allowed: a-zA-Z0-9_)"
   exit 1
 fi
 if ! [[ "$APP_DB" =~ ^[a-zA-Z0-9_]+$ ]]; then
@@ -87,7 +96,11 @@ if [ "$app_db_exists" -eq 0 ]; then
   echo "   -> Creating database '$APP_DB' with owner '$APP_USER'..."
   run_sql_as_root "postgres" "CREATE DATABASE \"$APP_DB\" OWNER \"$APP_USER\";"
 else
-  echo "   -> Database '$APP_DB' already exists."
+  echo "   -> Database '$APP_DB' already exists. Ensuring ownership and privileges..."
+  # Converge ownership (in case DB was created by postgres or another role)
+  run_sql_as_root "postgres" "ALTER DATABASE \"$APP_DB\" OWNER TO \"$APP_USER\";"
+  # Explicit grants for migrations (CREATE = can create schemas)
+  run_sql_as_root "postgres" "GRANT CONNECT, CREATE, TEMP ON DATABASE \"$APP_DB\" TO \"$APP_USER\";"
 fi
 
 # LiteLLM Database Creation (Idempotent, root-owned for litellm service)
@@ -107,11 +120,11 @@ fi
 
 echo "🔧 Applying RLS role hardening on '$APP_DB'..."
 
-# Revoke DDL privileges from app_user on public schema (least privilege).
-# Note: On PG 15+, app_user inherits CREATE via pg_database_owner (it owns the DB).
-# This REVOKE is best-practice signaling; true least-privilege requires transferring
-# DB ownership to a dedicated admin role (P1 hardening item).
-run_sql_as_root "$APP_DB" "REVOKE CREATE ON SCHEMA public FROM \"$APP_USER\";"
+# Ensure app_user owns public schema (converge existing DBs where postgres owns it)
+run_sql_as_root "$APP_DB" "ALTER SCHEMA public OWNER TO \"$APP_USER\";"
+
+# Grant schema usage (needed for queries) + CREATE (needed for migrations to create tables/indexes)
+run_sql_as_root "$APP_DB" "GRANT USAGE, CREATE ON SCHEMA public TO \"$APP_USER\";"
 
 # Grant DML-only on existing tables
 run_sql_as_root "$APP_DB" "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$APP_USER\";"
@@ -125,23 +138,25 @@ run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SC
 
 # ── Service Role (scheduler, internal workers) ─────────────────────────────
 # Same DML grants but with BYPASSRLS for cross-tenant operations.
-APP_SERVICE_ROLE="${APP_USER}_service"
-echo "🔧 Checking service role '$APP_SERVICE_ROLE'..."
-service_role_exists=$(run_sql_as_root "postgres" "SELECT 1 FROM pg_roles WHERE rolname = '$APP_SERVICE_ROLE'" | grep -c 1 || true)
+# Uses explicit APP_DB_SERVICE_USER (no derived naming).
+echo "🔧 Checking service role '$APP_SERVICE_USER'..."
+service_role_exists=$(run_sql_as_root "postgres" "SELECT 1 FROM pg_roles WHERE rolname = '$APP_SERVICE_USER'" | grep -c 1 || true)
 if [ "$service_role_exists" -eq 0 ]; then
-  echo "   -> Creating service role '$APP_SERVICE_ROLE' with BYPASSRLS..."
+  echo "   -> Creating service role '$APP_SERVICE_USER' with BYPASSRLS..."
   PGPASSWORD="$PG_PASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "postgres" -v ON_ERROR_STOP=1 \
     -v svc_pass="$APP_SERVICE_PASS" <<SQL
-CREATE ROLE "$APP_SERVICE_ROLE" WITH LOGIN PASSWORD :'svc_pass' BYPASSRLS;
+CREATE ROLE "$APP_SERVICE_USER" WITH LOGIN PASSWORD :'svc_pass' BYPASSRLS;
 SQL
 else
-  echo "   -> Service role '$APP_SERVICE_ROLE' already exists."
+  echo "   -> Service role '$APP_SERVICE_USER' already exists."
 fi
 
-# Grant DML to service role on app DB
-run_sql_as_root "$APP_DB" "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$APP_SERVICE_ROLE\";"
-run_sql_as_root "$APP_DB" "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \"$APP_SERVICE_ROLE\";"
-run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$APP_SERVICE_ROLE\";"
-run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO \"$APP_SERVICE_ROLE\";"
+# Grant DML + schema usage to service role on app DB
+run_sql_as_root "$APP_DB" "GRANT CONNECT ON DATABASE \"$APP_DB\" TO \"$APP_SERVICE_USER\";"
+run_sql_as_root "$APP_DB" "GRANT USAGE ON SCHEMA public TO \"$APP_SERVICE_USER\";"
+run_sql_as_root "$APP_DB" "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$APP_SERVICE_USER\";"
+run_sql_as_root "$APP_DB" "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \"$APP_SERVICE_USER\";"
+run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$APP_SERVICE_USER\";"
+run_sql_as_root "$APP_DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$APP_USER\" IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO \"$APP_SERVICE_USER\";"
 
 echo "✅ Provisioning Complete."

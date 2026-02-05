@@ -24,14 +24,10 @@ services:
       - EVM_RPC_URL=${EVM_RPC_URL?EVM_RPC_URL is required}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY?LITELLM_MASTER_KEY is required}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY?OPENROUTER_API_KEY is required}
-      # Database configuration: supports both DATABASE_URL (prod) and component vars (local)
-      - DATABASE_URL=${DATABASE_URL}
-      - DATABASE_SERVICE_URL=postgresql://${APP_DB_USER}_service:${APP_DB_SERVICE_PASSWORD}@postgres:5432/${APP_DB_NAME}?sslmode=require
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - POSTGRES_USER=${APP_DB_USER}
-      - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
-      - POSTGRES_DB=${APP_DB_NAME}
+      # Database connections — both required, pass-through only (no DSN construction).
+      # Per DATABASE_RLS_SPEC.md design decision 7: explicit DSNs, no component-piece fallback.
+      - DATABASE_URL=${DATABASE_URL?DATABASE_URL is required}
+      - DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL?DATABASE_SERVICE_URL is required}
       # Vars with sensible defaults
       - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-${APP_BASE_URL:-https://localhost}}
@@ -131,6 +127,7 @@ services:
       APP_DB_NAME: ${APP_DB_NAME}
       APP_DB_USER: ${APP_DB_USER}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      APP_DB_SERVICE_USER: ${APP_DB_SERVICE_USER}
       APP_DB_SERVICE_PASSWORD: ${APP_DB_SERVICE_PASSWORD}
       LITELLM_DB_NAME: litellm
     volumes:
@@ -148,13 +145,8 @@ services:
     networks:
       - internal
     environment:
-      # Only DB env vars (least-secret exposure)
-      - DATABASE_URL=${DATABASE_URL}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - POSTGRES_USER=${APP_DB_USER}
-      - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
-      - POSTGRES_DB=${APP_DB_NAME}
+      # Only DB env var (least-secret exposure). Migrator uses DATABASE_URL directly.
+      - DATABASE_URL=${DATABASE_URL?DATABASE_URL is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -313,8 +305,9 @@ services:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
-      # Database: service role (BYPASSRLS) for cross-tenant scheduler operations
-      - DATABASE_URL=postgresql://${APP_DB_USER}_service:${APP_DB_SERVICE_PASSWORD}@postgres:5432/${APP_DB_NAME}?sslmode=require
+      # Database: service role (BYPASSRLS) for cross-tenant scheduler operations.
+      # Pass through DATABASE_SERVICE_URL — worker needs BYPASSRLS for cross-tenant reads.
+      - DATABASE_URL=${DATABASE_SERVICE_URL?DATABASE_SERVICE_URL is required}
       # Internal API (scheduler-worker → app)
       - APP_BASE_URL=http://app:3000
       - SCHEDULER_API_TOKEN=${SCHEDULER_API_TOKEN}

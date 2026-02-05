@@ -43,7 +43,7 @@ import { POST as submitTxHash } from "@/app/api/v1/payments/attempts/[id]/submit
 import { POST as createIntent } from "@/app/api/v1/payments/intents/route";
 import type { RequestContext } from "@/shared/observability";
 
-// SKIP: DrizzlePaymentAttemptRepository operates via getDb() (FORCE RLS) without
+// SKIP: DrizzlePaymentAttemptRepository operates via getAppDb() (FORCE RLS) without
 // withTenantScope wiring. Un-skip once the adapter calls setTenantContext.
 describe.skip("Payment Routes HTTP Contract Tests", () => {
   let testSessionUser: SessionUser;

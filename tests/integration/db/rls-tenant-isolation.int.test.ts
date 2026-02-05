@@ -9,8 +9,8 @@
  * - User A cannot SELECT user B's billing_accounts, virtual_keys, or users row
  * - Missing SET LOCAL (no tenant context) returns zero rows
  * Side-effects: IO (database operations via testcontainers)
- * Notes: getDb() connects as app_user (FORCE RLS via provision.sh). getSeedDb()
- *        connects as app_user_service (BYPASSRLS) for seed/cleanup.
+ * Notes: getAppDb() connects as app_user (FORCE RLS via provision.sh). getSeedDb()
+ *        connects as app_service (BYPASSRLS) for seed/cleanup.
  * Links: docs/DATABASE_RLS_SPEC.md, src/adapters/server/db/tenant-scope.ts
  * @public
  */
@@ -22,7 +22,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/adapters/server/db/client";
 import {
-  getDb,
+  getAppDb,
   withTenantScope as productionWithTenantScope,
   setTenantContext,
 } from "@/adapters/server/db/client";
@@ -69,7 +69,7 @@ describe("RLS Tenant Isolation", () => {
 
   beforeAll(async () => {
     // app_user (FORCE RLS) for assertion queries; getSeedDb (BYPASSRLS) for seed/cleanup
-    db = getDb();
+    db = getAppDb();
     const seedDb = getSeedDb();
 
     tenantA = {
@@ -267,7 +267,7 @@ describe("RLS Tenant Isolation", () => {
 
   describe("service role BYPASSRLS", () => {
     it("service role sees all tenants' data without tenant context", async () => {
-      // getSeedDb() connects as app_user_service (BYPASSRLS) — no tenant context needed
+      // getSeedDb() connects as app_service (BYPASSRLS) — no tenant context needed
       const rows = await getSeedDb().select().from(billingAccounts);
       const ids = rows.map((r) => r.id);
       expect(ids).toContain(tenantA.billingAccountId);
