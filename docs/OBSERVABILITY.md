@@ -183,11 +183,21 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 ## Current Shortcomings
 
+**Critical (blocks incident detection) — see [Required Observability Spec](OBSERVABILITY_REQUIRED_SPEC.md):**
+
+- ❌ No Node.js process metrics (`collectDefaultMetrics()` not called — heap/RSS/GC invisible)
+- ❌ No heartbeat metric (app death indistinguishable from quiet period)
+- ❌ No container resource limits in compose (unbounded memory → unattributable OOM kills)
+- ❌ No Grafana alert rules (silent outages go undetected)
+- ❌ No container restart/exit-code detection
+- ❌ Dockerfile HEALTHCHECK timeout (2s) shorter than readyz budget (8s)
+- ❌ `/readyz` skips database connectivity check
+
 **Not Yet Implemented:**
 
 - ❌ Client logs not collected (console-only, no shipping pipeline)
 - ❌ No Grafana dashboards
-- ❌ No alerting rules
+- ❌ No OTel trace exporter (SDK initialized, no OTLP endpoint)
 
 **Technical Debt:**
 
@@ -303,6 +313,7 @@ pnpm langfuse:trace
 
 ## References
 
+- [Required Observability Spec](OBSERVABILITY_REQUIRED_SPEC.md) - P0/P1 remediation plan for silent death detection
 - [ALLOY_LOKI_SETUP.md](ALLOY_LOKI_SETUP.md) - Complete infrastructure setup
 - [Observability Guide](.claude/commands/logging.md) - Developer guidelines
 - Grafana Cloud: https://grafana.com/products/cloud/

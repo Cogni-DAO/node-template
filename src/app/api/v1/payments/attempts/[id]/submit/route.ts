@@ -67,11 +67,7 @@ function handleRouteError(
     logRequestWarn(ctx.log, error, "TXHASH_CONFLICT");
     return NextResponse.json(
       {
-        error: "Transaction hash conflict",
-        details: {
-          txHash: error.txHash,
-          existingAttemptId: error.existingAttemptId,
-        },
+        error: "Transaction hash already used by another payment attempt",
       },
       { status: 409 }
     );

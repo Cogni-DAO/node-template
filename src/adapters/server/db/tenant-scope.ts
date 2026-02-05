@@ -13,12 +13,4 @@
  * @public
  */
 
-export {
-  type ActorId,
-  setTenantContext,
-  toUserId,
-  type UserActorId,
-  type UserId,
-  userActor,
-  withTenantScope,
-} from "@cogni/db-client";
+export { setTenantContext, withTenantScope } from "@cogni/db-client";

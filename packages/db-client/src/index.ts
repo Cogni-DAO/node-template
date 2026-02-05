@@ -16,23 +16,21 @@
 
 // Re-export full schema (consumers get all tables transitively through db-client)
 export * from "@cogni/db-schema";
-// Branded actor types for RLS identity
-export {
-  type ActorId,
-  toUserId,
-  type UserActorId,
-  type UserId,
-  userActor,
-} from "./actor";
+// Branded ID types live in @cogni/ids — import directly, not through this barrel.
 export { DrizzleExecutionRequestAdapter } from "./adapters/drizzle-execution-request.adapter";
-// Adapters
-export { DrizzleExecutionGrantAdapter } from "./adapters/drizzle-grant.adapter";
+// Adapters (split by trust boundary: user = appDb/RLS, worker = serviceDb/BYPASSRLS)
+export {
+  DrizzleExecutionGrantUserAdapter,
+  DrizzleExecutionGrantWorkerAdapter,
+} from "./adapters/drizzle-grant.adapter";
 export { DrizzleScheduleRunAdapter } from "./adapters/drizzle-run.adapter";
-export { DrizzleScheduleManagerAdapter } from "./adapters/drizzle-schedule.adapter";
+export {
+  DrizzleScheduleUserAdapter,
+  DrizzleScheduleWorkerAdapter,
+} from "./adapters/drizzle-schedule.adapter";
 // Client factories (safe surface only — no createServiceDbClient)
 export {
   createAppDbClient,
-  createDbClient,
   type Database,
   type LoggerLike,
 } from "./client";

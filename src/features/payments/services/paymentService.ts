@@ -30,7 +30,8 @@ import type {
   AccountService,
   Clock,
   OnChainVerifier,
-  PaymentAttemptRepository,
+  PaymentAttemptServiceRepository,
+  PaymentAttemptUserRepository,
 } from "@/ports";
 import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import type { Logger } from "@/shared/observability";
@@ -97,14 +98,14 @@ export interface GetStatusResult {
  * Creates payment intent with on-chain transfer parameters
  * Validates amount, resolves widget config, creates attempt in CREATED_INTENT state
  *
- * @param repository - PaymentAttemptRepository port for persistence
+ * @param userRepo - User-scoped PaymentAttemptUserRepository (RLS enforced)
  * @param clock - Clock port for deterministic timestamps
  * @param input - Intent parameters (billing account, from address, amount)
  * @returns Intent details with on-chain transfer params (token, to, amountRaw, etc.)
  * @throws Error if amount is invalid
  */
 export async function createIntent(
-  repository: PaymentAttemptRepository,
+  userRepo: PaymentAttemptUserRepository,
   clock: Clock,
   input: CreateIntentInput
 ): Promise<CreateIntentResult> {
@@ -122,7 +123,7 @@ export async function createIntent(
   const now = new Date(clock.now());
   const expiresAt = new Date(now.getTime() + PAYMENT_INTENT_TTL_MS);
 
-  const attempt = await repository.create({
+  const attempt = await userRepo.create({
     billingAccountId: input.billingAccountId,
     fromAddress: input.fromAddress,
     chainId,
@@ -156,7 +157,8 @@ export async function createIntent(
  * Submits transaction hash for verification
  * Binds txHash to attempt, checks expiration, initiates verification
  *
- * @param repository - PaymentAttemptRepository port
+ * @param userRepo - User-scoped PaymentAttemptUserRepository (RLS enforced, for findById)
+ * @param serviceRepo - Service-scoped PaymentAttemptServiceRepository (BYPASSRLS, for mutations)
  * @param accountService - AccountService port for settlement
  * @param onChainVerifier - OnChainVerifier port for verification
  * @param clock - Clock port for timestamps
@@ -166,7 +168,8 @@ export async function createIntent(
  * @throws TxHashAlreadyBoundPortError if txHash already bound to different attempt
  */
 export async function submitTxHash(
-  repository: PaymentAttemptRepository,
+  userRepo: PaymentAttemptUserRepository,
+  serviceRepo: PaymentAttemptServiceRepository,
   accountService: AccountService,
   onChainVerifier: OnChainVerifier,
   clock: Clock,
@@ -175,7 +178,7 @@ export async function submitTxHash(
 ): Promise<SubmitTxHashResult> {
   const now = new Date(clock.now());
 
-  let attempt = await repository.findById(
+  let attempt = await userRepo.findById(
     input.attemptId,
     input.billingAccountId
   );
@@ -197,8 +200,9 @@ export async function submitTxHash(
 
   if (isIntentExpired(attempt, now)) {
     if (isValidTransition(attempt.status, "FAILED")) {
-      attempt = await repository.updateStatus(
+      attempt = await serviceRepo.updateStatus(
         attempt.id,
+        attempt.billingAccountId,
         "FAILED",
         "INTENT_EXPIRED"
       );
@@ -213,11 +217,16 @@ export async function submitTxHash(
     };
   }
 
-  attempt = await repository.bindTxHash(attempt.id, input.txHash, now);
+  attempt = await serviceRepo.bindTxHash(
+    attempt.id,
+    attempt.billingAccountId,
+    input.txHash,
+    now
+  );
 
   attempt = await verifyAndSettle(
     attempt,
-    repository,
+    serviceRepo,
     accountService,
     onChainVerifier,
     clock,
@@ -248,7 +257,8 @@ export async function submitTxHash(
  * Retrieves payment attempt status with throttled verification
  * Checks expiration, verification timeout, throttles verification attempts
  *
- * @param repository - PaymentAttemptRepository port
+ * @param userRepo - User-scoped PaymentAttemptUserRepository (RLS enforced, for findById)
+ * @param serviceRepo - Service-scoped PaymentAttemptServiceRepository (BYPASSRLS, for mutations)
  * @param accountService - AccountService port for settlement
  * @param onChainVerifier - OnChainVerifier port for verification
  * @param clock - Clock port for timestamps
@@ -257,7 +267,8 @@ export async function submitTxHash(
  * @throws PaymentAttemptNotFoundPortError if attempt not found or not owned
  */
 export async function getStatus(
-  repository: PaymentAttemptRepository,
+  userRepo: PaymentAttemptUserRepository,
+  serviceRepo: PaymentAttemptServiceRepository,
   accountService: AccountService,
   onChainVerifier: OnChainVerifier,
   clock: Clock,
@@ -266,7 +277,7 @@ export async function getStatus(
 ): Promise<GetStatusResult> {
   const now = new Date(clock.now());
 
-  let attempt = await repository.findById(
+  let attempt = await userRepo.findById(
     input.attemptId,
     input.billingAccountId
   );
@@ -276,8 +287,9 @@ export async function getStatus(
 
   if (attempt.status === "CREATED_INTENT" && isIntentExpired(attempt, now)) {
     if (isValidTransition(attempt.status, "FAILED")) {
-      attempt = await repository.updateStatus(
+      attempt = await serviceRepo.updateStatus(
         attempt.id,
+        attempt.billingAccountId,
         "FAILED",
         "INTENT_EXPIRED"
       );
@@ -289,8 +301,9 @@ export async function getStatus(
     isVerificationTimedOut(attempt, now)
   ) {
     if (isValidTransition(attempt.status, "FAILED")) {
-      attempt = await repository.updateStatus(
+      attempt = await serviceRepo.updateStatus(
         attempt.id,
+        attempt.billingAccountId,
         "FAILED",
         "RECEIPT_NOT_FOUND"
       );
@@ -304,11 +317,15 @@ export async function getStatus(
         VERIFY_THROTTLE_SECONDS * 1000;
 
     if (shouldVerify) {
-      attempt = await repository.recordVerificationAttempt(attempt.id, now);
+      attempt = await serviceRepo.recordVerificationAttempt(
+        attempt.id,
+        attempt.billingAccountId,
+        now
+      );
 
       attempt = await verifyAndSettle(
         attempt,
-        repository,
+        serviceRepo,
         accountService,
         onChainVerifier,
         clock,
@@ -338,7 +355,7 @@ export async function getStatus(
  * Calls OnChainVerifier port, validates sender (Phase 3), settles via confirmCreditsPayment
  *
  * @param attempt - Current payment attempt
- * @param repository - PaymentAttemptRepository port
+ * @param serviceRepo - Service-scoped PaymentAttemptServiceRepository (BYPASSRLS)
  * @param accountService - AccountService port for settlement
  * @param onChainVerifier - OnChainVerifier port for verification
  * @param clock - Clock port for timestamps
@@ -346,7 +363,7 @@ export async function getStatus(
  */
 async function verifyAndSettle(
   attempt: PaymentAttempt,
-  repository: PaymentAttemptRepository,
+  serviceRepo: PaymentAttemptServiceRepository,
   accountService: AccountService,
   onChainVerifier: OnChainVerifier,
   _clock: Clock,
@@ -376,8 +393,9 @@ async function verifyAndSettle(
       errorCode === "TX_REVERTED" ? "FAILED" : "REJECTED";
 
     if (isValidTransition(attempt.status, targetStatus)) {
-      attempt = await repository.updateStatus(
+      attempt = await serviceRepo.updateStatus(
         attempt.id,
+        attempt.billingAccountId,
         targetStatus,
         errorCode
       );
@@ -393,8 +411,9 @@ async function verifyAndSettle(
         attempt.fromAddress.toLowerCase()
     ) {
       if (isValidTransition(attempt.status, "REJECTED")) {
-        attempt = await repository.updateStatus(
+        attempt = await serviceRepo.updateStatus(
           attempt.id,
+          attempt.billingAccountId,
           "REJECTED",
           "SENDER_MISMATCH"
         );
@@ -420,7 +439,11 @@ async function verifyAndSettle(
       });
 
       if (isValidTransition(attempt.status, "CREDITED")) {
-        attempt = await repository.updateStatus(attempt.id, "CREDITED");
+        attempt = await serviceRepo.updateStatus(
+          attempt.id,
+          attempt.billingAccountId,
+          "CREDITED"
+        );
       }
     } catch (error) {
       log.error(

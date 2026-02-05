@@ -18,7 +18,8 @@ export {
   type CreateScheduleInput,
   type CreateScheduleParams,
   type ExecutionGrant,
-  type ExecutionGrantPort,
+  type ExecutionGrantUserPort,
+  type ExecutionGrantWorkerPort,
   type ExecutionOutcome,
   type ExecutionRequest,
   type ExecutionRequestPort,
@@ -46,12 +47,13 @@ export {
   type ScheduleControlPort,
   ScheduleControlUnavailableError,
   type ScheduleDescription,
-  type ScheduleManagerPort,
   ScheduleNotFoundError,
   type ScheduleRun,
   type ScheduleRunRepository,
   type ScheduleRunStatus,
   type ScheduleSpec,
+  type ScheduleUserPort,
+  type ScheduleWorkerPort,
   type UpdateScheduleInput,
 } from "@cogni/scheduler-core";
 export {
@@ -65,6 +67,7 @@ export {
   isBillingAccountNotFoundPortError,
   isInsufficientCreditsPortError,
   isVirtualKeyNotFoundPortError,
+  type ServiceAccountService,
   VirtualKeyNotFoundPortError,
 } from "./accounts.port";
 export type { AgentCatalogPort, AgentDescriptor } from "./agent-catalog.port";
@@ -134,8 +137,11 @@ export {
   type LogPaymentEventParams,
   type PaymentAttempt,
   PaymentAttemptNotFoundPortError,
+  /** @deprecated Use PaymentAttemptUserRepository + PaymentAttemptServiceRepository */
   type PaymentAttemptRepository,
+  type PaymentAttemptServiceRepository,
   type PaymentAttemptStatus,
+  type PaymentAttemptUserRepository,
   type PaymentErrorCode,
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";

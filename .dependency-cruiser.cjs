@@ -309,13 +309,15 @@ module.exports = {
       name: "no-internal-adapter-imports",
       severity: "error",
       from: {
-        path: "^src/(?!adapters/server/)(?!auth\\.ts$)",
+        path: "^src/(?!adapters/server/)(?!auth\\.ts$)(?!bootstrap/container\\.ts$)",
       },
       to: {
         path: "^src/adapters/server/(?!index\\.ts$).*\\.ts$",
       },
       comment:
-        "Import from @/adapters/server (index.ts), not internal adapter files",
+        "Import from @/adapters/server (index.ts), not internal adapter files. " +
+        "container.ts exempt: composition root wires both trust boundaries " +
+        "(appDb + serviceDb), and getServiceDb is excluded from the barrel by design.",
     },
 
     // adapters/test: must use @/adapters/test (index.ts), not internal files
