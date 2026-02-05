@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Database client singletons and tenant-scoping helpers for PostgreSQL access. App-role (`getDb`) and service-role (`getServiceDb`) singletons are in separate files to enable dependency-cruiser enforcement of BYPASSRLS isolation.
+Database client singletons and tenant-scoping helpers for PostgreSQL access. App-role (`getAppDb`) and service-role (`getServiceDb`) singletons are in separate files to enable dependency-cruiser enforcement of BYPASSRLS isolation.
 
 ## Pointers
 
@@ -29,7 +29,7 @@ Database client singletons and tenant-scoping helpers for PostgreSQL access. App
 
 ## Public Surface
 
-- **Exports (via `client.ts` barrel):** `Database` type, `getDb()`, `setTenantContext`, `withTenantScope`
+- **Exports (via `client.ts` barrel):** `Database` type, `getAppDb()`, `setTenantContext`, `withTenantScope`
 - **Exports (via `drizzle.service-client.ts`, NOT in barrel):** `getServiceDb()` (service-role singleton, BYPASSRLS). Only `src/auth.ts` and `src/bootstrap/container.ts` may import this (enforced by depcruiser `no-service-db-adapter-import` rule).
 - **Routes (if any):** none
 - **CLI (if any):** none
@@ -44,7 +44,7 @@ Database client singletons and tenant-scoping helpers for PostgreSQL access. App
 
 ## Responsibilities
 
-- This directory **does**: Provide configured database singletons (`getDb`, `getServiceDb`) and tenant-scoping helpers for other adapters
+- This directory **does**: Provide configured database singletons (`getAppDb`, `getServiceDb`) and tenant-scoping helpers for other adapters
 - This directory **does not**: Contain business logic or table operations
 - This directory **enforces**: BYPASSRLS isolation — `getServiceDb` is NOT in the barrel, requiring direct import from `drizzle.service-client.ts` with depcruiser allowlisting
 

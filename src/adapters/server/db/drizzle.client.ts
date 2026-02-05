@@ -29,4 +29,4 @@ function createDb(): Database {
 }
 
 // Export lazy database getter to avoid top-level runtime env access
-export const getDb = createDb;
+export const getAppDb = createDb;

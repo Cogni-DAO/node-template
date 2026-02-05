@@ -15,7 +15,7 @@
 import { toUserId } from "@cogni/ids";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { describe } from "vitest";
-import { getDb } from "@/adapters/server/db/client";
+import { getAppDb } from "@/adapters/server/db/client";
 import {
   ServiceDrizzlePaymentAttemptRepository,
   UserDrizzlePaymentAttemptRepository,
@@ -35,7 +35,7 @@ async function makeUserRepo(
   userId: string,
   _harness: TestHarness
 ): Promise<PaymentAttemptUserRepository> {
-  const db = getDb();
+  const db = getAppDb();
   return new UserDrizzlePaymentAttemptRepository(db, toUserId(userId));
 }
 

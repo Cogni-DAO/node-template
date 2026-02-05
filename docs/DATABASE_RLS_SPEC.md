@@ -102,7 +102,7 @@
 | `packages/ids/src/index.ts`                                  | `UserId`, `ActorId`, `toUserId`, `userActor` branded types         |
 | `packages/ids/src/system.ts`                                 | `SYSTEM_ACTOR: ActorId` (sub-path gated)                           |
 | `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (accept `ActorId`)          |
-| `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` singleton (app-role only)                                |
+| `src/adapters/server/db/drizzle.client.ts`                   | `getAppDb()` singleton (app-role only)                             |
 | `src/adapters/server/db/drizzle.service-client.ts`           | `getServiceDb()` singleton (BYPASSRLS, depcruiser-gated)           |
 | `src/adapters/server/db/tenant-scope.ts`                     | Re-exports from `@cogni/db-client`                                 |
 | `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs                   |
@@ -319,7 +319,7 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 At the adapter layer, singletons are also split:
 
-- `src/adapters/server/db/drizzle.client.ts` → `getDb()` (app-role, in barrel)
+- `src/adapters/server/db/drizzle.client.ts` → `getAppDb()` (app-role, in barrel)
 - `src/adapters/server/db/drizzle.service-client.ts` → `getServiceDb()` (service-role, NOT in barrel)
 
 **Enforcement (two layers):**

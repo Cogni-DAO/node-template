@@ -29,7 +29,7 @@ import {
   DrizzleScheduleRunAdapter,
   DrizzleScheduleUserAdapter,
   EvmRpcOnChainVerifierAdapter,
-  getDb,
+  getAppDb,
   LangfuseAdapter,
   LiteLlmActivityUsageAdapter,
   LiteLlmAdapter,
@@ -179,7 +179,7 @@ export function resetContainer(): void {
 
 function createContainer(): Container {
   const env = serverEnv();
-  const db = getDb();
+  const db = getAppDb();
   const log = makeLogger({ service: "cogni-template" });
 
   // Startup log - confirm config in Loki (no URLs/secrets)

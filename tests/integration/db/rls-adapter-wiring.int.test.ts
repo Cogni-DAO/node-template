@@ -31,7 +31,7 @@ import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
-import { getDb } from "@/adapters/server/db/client";
+import { getAppDb } from "@/adapters/server/db/client";
 import { UserDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 
 interface TestTenant {
@@ -50,7 +50,7 @@ describe("RLS Adapter Wiring Gate", () => {
     // superDb uses service role (BYPASSRLS) for seed/cleanup
     superDb = getSeedDb();
     // rlsDb uses app_user role (FORCE RLS) — production roles from provision.sh
-    rlsDb = getDb();
+    rlsDb = getAppDb();
 
     // Seed tenant data as superuser (bypasses RLS)
     tenantA = {
