@@ -1,14 +1,16 @@
-id:: architecture-spec
-type:: spec
-title:: Cogni-Template Architecture
-status:: active
-trust:: draft
-summary:: Clean hex-inspired layering model with crypto-metered AI backend and DAO-governed infrastructure
-read_when:: Understanding codebase structure, dependency rules, or layer boundaries
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags:: architecture
+---
+id: architecture-spec
+type: spec
+title: Cogni-Template Architecture
+status: active
+trust: draft
+summary: Clean hex-inspired layering model with crypto-metered AI backend and DAO-governed infrastructure
+read_when: Understanding codebase structure, dependency rules, or layer boundaries
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: [architecture]
+---
 
 # Cogni-Template Architecture
 

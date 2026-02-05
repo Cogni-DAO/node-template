@@ -1,12 +1,14 @@
-work_item_id:: wi.docs-migration
-work_item_type:: project
-title:: Documentation Migration to Typed Structure
-state:: Active
-summary:: Migrate legacy docs/\*.md files to typed directories with Obsidian YAML frontmatter
-outcome:: All docs in typed directories (spec/, guides/, decisions/), redirect stubs at old paths, all references updated
-assignees:: derekg1729
-created:: 2026-02-05
-updated:: 2026-02-05
+---
+work_item_id: wi.docs-migration
+work_item_type: project
+title: Documentation Migration to Typed Structure
+state: Active
+summary: Migrate legacy docs/*.md files to typed directories with Obsidian YAML frontmatter
+outcome: All docs in typed directories (spec/, guides/, decisions/), redirect stubs at old paths, all references updated
+assignees: derekg1729
+created: 2026-02-05
+updated: 2026-02-05
+---
 
 # Documentation Migration to Typed Structure
 

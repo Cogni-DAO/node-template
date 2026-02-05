@@ -4,25 +4,26 @@
 
 /**
  * Module: `@scripts/validate-docs-metadata`
- * Purpose: Validates Logseq-style properties in /docs and /work directories.
- * Scope: Enforces field requirements, enums, CSV format, field set separation; does NOT validate content.
- * Invariants: /docs uses id/type/status/trust; /work uses work_item_id/work_item_type/state; no YAML frontmatter; no wikilinks.
+ * Purpose: Validates Obsidian-style YAML frontmatter in /docs and /work directories.
+ * Scope: Enforces field requirements, enums, date format, field set separation; does NOT validate content.
+ * Invariants: /docs uses id/type/status/trust; /work uses work_item_id/work_item_type/state; no wikilinks.
  * Side-effects: IO
- * Notes: Follows validate-agents-md.mjs pattern; exits with error code if validation fails.
+ * Notes: Uses `yaml` package for proper YAML parsing. Exits with error code if validation fails.
  * Links: docs/DOCS_ORGANIZATION_PLAN.md
  * @public
  */
 
 import { readFileSync } from "node:fs";
 import fg from "fast-glob";
+import { parse as parseYaml } from "yaml";
 
-// === DOCS ENUMS (Simplified) ===
+// === DOCS ENUMS ===
 const DOC_TYPES = ["spec", "adr", "guide"];
 const DOC_STATUS = ["active", "deprecated", "superseded", "draft"];
 const DOC_TRUST = ["canonical", "reviewed", "draft", "external"];
+const ADR_DECISION = ["proposed", "accepted", "deprecated", "superseded"];
 
-// === WORK ENUMS (Plane-aligned vocabulary, Simplified) ===
-const _WORK_ITEM_TYPES = ["project", "issue"]; // Reserved for future type validation
+// === WORK ENUMS ===
 const PROJECT_STATE = ["Active", "Paused", "Done", "Dropped"];
 const ISSUE_STATE = ["Backlog", "Todo", "In Progress", "Done", "Cancelled"];
 const PRIORITY = ["Urgent", "High", "Medium", "Low", "None"];
@@ -65,51 +66,27 @@ const ISSUE_REQUIRED = [
   "created",
   "updated",
 ];
-// === FORBIDDEN FIELDS (field set separation) ===
+
+// === FORBIDDEN FIELDS ===
 const DOCS_FORBIDDEN = ["work_item_id", "work_item_type", "state", "outcome"];
 const WORK_FORBIDDEN = ["id", "type", "status", "trust", "read_when"];
 
-// === PARSER (Logseq-style key:: value) ===
-function extractProperties(content) {
-  const props = {};
-  const lines = content.split("\n");
-
-  for (const line of lines) {
-    const match = line.match(/^([a-z_]+)::\s*(.*)$/);
-    if (match) {
-      const key = match[1];
-      const value = match[2].trim();
-      if (props[key]) {
-        throw new Error(`duplicate property key: ${key}`);
-      }
-      props[key] = value;
-    } else if (
-      line.startsWith("#") ||
-      (line.trim() && !line.match(/^[a-z_]+::/))
-    ) {
-      break;
-    }
+// === YAML FRONTMATTER PARSER ===
+function extractFrontmatter(content) {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) {
+    throw new Error("missing YAML frontmatter (expected --- delimiters)");
+  }
+  const props = parseYaml(match[1]);
+  if (!props || typeof props !== "object") {
+    throw new Error("invalid YAML frontmatter (expected object)");
   }
   return props;
 }
 
-// === CSV VALIDATOR ===
-function validateCSV(field, value, _file) {
-  if (!value) return;
-  if (/,,/.test(value)) throw new Error(`${field} has empty CSV segment`);
-  if (/^,|,$/.test(value))
-    throw new Error(`${field} has leading/trailing comma`);
-  const segments = value.split(",").map((s) => s.trim());
-  if (segments.some((s) => !s))
-    throw new Error(`${field} has empty CSV segment after trim`);
-}
-
 // === FORBIDDEN PATTERNS ===
-function checkForbidden(_file, content) {
+function checkForbidden(content) {
   const errors = [];
-  if (/^---\s*\n/.test(content)) {
-    errors.push("YAML frontmatter forbidden (use key:: value properties)");
-  }
   if (/\[\[.+?\]\]/.test(content)) {
     errors.push("wikilinks forbidden (use markdown links)");
   }
@@ -117,11 +94,10 @@ function checkForbidden(_file, content) {
 }
 
 // === FIELD SET SEPARATION ===
-function checkFieldSetSeparation(_file, props, isWork) {
+function checkFieldSetSeparation(props, isWork) {
   const errors = [];
   const forbidden = isWork ? WORK_FORBIDDEN : DOCS_FORBIDDEN;
   const tree = isWork ? "/work" : "/docs";
-
   for (const key of forbidden) {
     if (props[key] !== undefined) {
       errors.push(`field "${key}" forbidden in ${tree} (wrong field set)`);
@@ -135,12 +111,13 @@ function validateDoc(file, props, allIds) {
   const errors = [];
 
   for (const key of DOC_REQUIRED) {
-    if (!props[key]) errors.push(`missing required key: ${key}`);
+    if (props[key] === undefined || props[key] === null || props[key] === "") {
+      errors.push(`missing required key: ${key}`);
+    }
   }
 
-  // verified:: required unless status=draft
   if (props.status !== "draft" && !props.verified) {
-    errors.push(`verified:: required when status != draft`);
+    errors.push(`verified required when status != draft`);
   }
 
   if (props.type && !DOC_TYPES.includes(props.type)) {
@@ -152,28 +129,34 @@ function validateDoc(file, props, allIds) {
   if (props.trust && !DOC_TRUST.includes(props.trust)) {
     errors.push(`invalid trust: ${props.trust}`);
   }
+  if (
+    props.type === "adr" &&
+    props.decision &&
+    !ADR_DECISION.includes(props.decision)
+  ) {
+    errors.push(`invalid decision: ${props.decision}`);
+  }
 
-  if (props.created && !DATE_REGEX.test(props.created)) {
+  const created = String(props.created || "");
+  const verified = String(props.verified || "");
+  if (props.created && !DATE_REGEX.test(created)) {
     errors.push(`invalid created date: ${props.created}`);
   }
-  if (props.verified && !DATE_REGEX.test(props.verified)) {
+  if (props.verified && !DATE_REGEX.test(verified)) {
     errors.push(`invalid verified date: ${props.verified}`);
   }
 
-  try {
-    validateCSV("owner", props.owner, file);
-    validateCSV("tags", props.tags, file);
-  } catch (e) {
-    errors.push(e.message);
-  }
-
   // Type must match directory
-  const dirType = file.match(/docs\/([^/]+)\//)?.[1];
-  if (dirType && props.type && dirType !== props.type) {
-    errors.push(`type "${props.type}" does not match directory "${dirType}"`);
+  const dirMatch = file.match(/docs\/([^/]+)\//);
+  const dirType = dirMatch?.[1];
+  const dirTypeMap = { spec: "spec", guides: "guide", decisions: "adr" };
+  const expectedType = dirTypeMap[dirType];
+  if (expectedType && props.type && expectedType !== props.type) {
+    errors.push(
+      `type "${props.type}" does not match directory "${dirType}" (expected "${expectedType}")`
+    );
   }
 
-  // Unique ID check
   if (props.id) {
     if (allIds.has(props.id)) {
       errors.push(
@@ -184,9 +167,7 @@ function validateDoc(file, props, allIds) {
     }
   }
 
-  // Field set separation
-  errors.push(...checkFieldSetSeparation(file, props, false));
-
+  errors.push(...checkFieldSetSeparation(props, false));
   return errors;
 }
 
@@ -194,7 +175,9 @@ function validateProject(file, props, allIds) {
   const errors = [];
 
   for (const key of PROJECT_REQUIRED) {
-    if (!props[key]) errors.push(`missing required key: ${key}`);
+    if (props[key] === undefined || props[key] === null || props[key] === "") {
+      errors.push(`missing required key: ${key}`);
+    }
   }
 
   if (props.work_item_type !== "project") {
@@ -205,33 +188,29 @@ function validateProject(file, props, allIds) {
       `invalid state: ${props.state} (expected: ${PROJECT_STATE.join("|")})`
     );
   }
-  if (props.work_item_id && !props.work_item_id.startsWith("wi.")) {
+  if (props.work_item_id && !String(props.work_item_id).startsWith("wi.")) {
     errors.push(`work_item_id must start with "wi."`);
   }
 
-  if (props.created && !DATE_REGEX.test(props.created)) {
+  const created = String(props.created || "");
+  const updated = String(props.updated || "");
+  if (props.created && !DATE_REGEX.test(created)) {
     errors.push(`invalid created date: ${props.created}`);
   }
-  if (props.updated && !DATE_REGEX.test(props.updated)) {
+  if (props.updated && !DATE_REGEX.test(updated)) {
     errors.push(`invalid updated date: ${props.updated}`);
   }
 
-  try {
-    validateCSV("assignees", props.assignees, file);
-  } catch (e) {
-    errors.push(e.message);
-  }
-
   if (props.work_item_id) {
-    if (allIds.has(props.work_item_id)) {
-      errors.push(`duplicate work_item_id: ${props.work_item_id}`);
+    const id = String(props.work_item_id);
+    if (allIds.has(id)) {
+      errors.push(`duplicate work_item_id: ${id}`);
     } else {
-      allIds.set(props.work_item_id, file);
+      allIds.set(id, file);
     }
   }
 
-  errors.push(...checkFieldSetSeparation(file, props, true));
-
+  errors.push(...checkFieldSetSeparation(props, true));
   return errors;
 }
 
@@ -239,7 +218,9 @@ function validateIssue(file, props, allIds, projectIds) {
   const errors = [];
 
   for (const key of ISSUE_REQUIRED) {
-    if (!props[key]) errors.push(`missing required key: ${key}`);
+    if (props[key] === undefined || props[key] === null || props[key] === "") {
+      errors.push(`missing required key: ${key}`);
+    }
   }
 
   if (props.work_item_type !== "issue") {
@@ -255,43 +236,35 @@ function validateIssue(file, props, allIds, projectIds) {
       `invalid priority: ${props.priority} (expected: ${PRIORITY.join("|")})`
     );
   }
-  if (props.work_item_id && !props.work_item_id.startsWith("wi.")) {
+  if (props.work_item_id && !String(props.work_item_id).startsWith("wi.")) {
     errors.push(`work_item_id must start with "wi."`);
   }
-  if (props.project && !props.project.startsWith("wi.")) {
+  if (props.project && !String(props.project).startsWith("wi.")) {
     errors.push(`project must reference "wi.*"`);
   }
-
-  // Verify project exists
-  if (props.project && !projectIds.has(props.project)) {
+  if (props.project && !projectIds.has(String(props.project))) {
     errors.push(`project "${props.project}" not found`);
   }
 
-  if (props.created && !DATE_REGEX.test(props.created)) {
+  const created = String(props.created || "");
+  const updated = String(props.updated || "");
+  if (props.created && !DATE_REGEX.test(created)) {
     errors.push(`invalid created date: ${props.created}`);
   }
-  if (props.updated && !DATE_REGEX.test(props.updated)) {
+  if (props.updated && !DATE_REGEX.test(updated)) {
     errors.push(`invalid updated date: ${props.updated}`);
   }
 
-  try {
-    validateCSV("assignees", props.assignees, file);
-    validateCSV("labels", props.labels, file);
-    validateCSV("external_refs", props.external_refs, file);
-  } catch (e) {
-    errors.push(e.message);
-  }
-
   if (props.work_item_id) {
-    if (allIds.has(props.work_item_id)) {
-      errors.push(`duplicate work_item_id: ${props.work_item_id}`);
+    const id = String(props.work_item_id);
+    if (allIds.has(id)) {
+      errors.push(`duplicate work_item_id: ${id}`);
     } else {
-      allIds.set(props.work_item_id, file);
+      allIds.set(id, file);
     }
   }
 
-  errors.push(...checkFieldSetSeparation(file, props, true));
-
+  errors.push(...checkFieldSetSeparation(props, true));
   return errors;
 }
 
@@ -301,31 +274,28 @@ async function main() {
   const allIds = new Map();
   const projectIds = new Set();
 
-  // === Phase 1: Collect project IDs first ===
   const projectFiles = await fg(["work/projects/**/*.md"]);
   for (const f of projectFiles) {
     try {
       const content = readFileSync(f, "utf8");
-      const props = extractProperties(content);
-      if (props.work_item_id) projectIds.add(props.work_item_id);
+      const props = extractFrontmatter(content);
+      if (props.work_item_id) projectIds.add(String(props.work_item_id));
     } catch {
       // Ignore parse errors in phase 1
     }
   }
 
-  // === Phase 2: Validate docs ===
   const docFiles = await fg([
     "docs/spec/**/*.md",
     "docs/decisions/adr/**/*.md",
     "docs/guides/**/*.md",
   ]);
-
   for (const f of docFiles) {
     try {
       const content = readFileSync(f, "utf8");
-      const props = extractProperties(content);
+      const props = extractFrontmatter(content);
       const errors = [
-        ...checkForbidden(f, content),
+        ...checkForbidden(content),
         ...validateDoc(f, props, allIds),
       ];
       if (errors.length) {
@@ -338,13 +308,12 @@ async function main() {
     }
   }
 
-  // === Phase 3: Validate projects ===
   for (const f of projectFiles) {
     try {
       const content = readFileSync(f, "utf8");
-      const props = extractProperties(content);
+      const props = extractFrontmatter(content);
       const errors = [
-        ...checkForbidden(f, content),
+        ...checkForbidden(content),
         ...validateProject(f, props, allIds),
       ];
       if (errors.length) {
@@ -357,14 +326,13 @@ async function main() {
     }
   }
 
-  // === Phase 4: Validate issues ===
   const issueFiles = await fg(["work/issues/**/*.md"]);
   for (const f of issueFiles) {
     try {
       const content = readFileSync(f, "utf8");
-      const props = extractProperties(content);
+      const props = extractFrontmatter(content);
       const errors = [
-        ...checkForbidden(f, content),
+        ...checkForbidden(content),
         ...validateIssue(f, props, allIds, projectIds),
       ];
       if (errors.length) {

@@ -1,14 +1,16 @@
-id:: databases-spec
-type:: spec
-title:: Database & Migration Architecture
-status:: active
-trust:: draft
-summary:: Database organization, migration strategies, and URL construction patterns
-read_when:: Working with databases, migrations, or connection configuration
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags:: databases
+---
+id: databases-spec
+type: spec
+title: Database & Migration Architecture
+status: active
+trust: draft
+summary: Database organization, migration strategies, and URL construction patterns
+read_when: Working with databases, migrations, or connection configuration
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: [databases]
+---
 
 # Database & Migration Architecture
 

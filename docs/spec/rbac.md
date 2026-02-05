@@ -1,14 +1,16 @@
-id:: rbac-spec
-type:: spec
-title:: Authorization (RBAC/ReBAC) Design
-status:: active
-trust:: draft
-summary:: OpenFGA-based authorization with actor/subject model and layered permission checks
-read_when:: Implementing authorization checks, tool permissions, or on-behalf-of delegation
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags:: authorization
+---
+id: rbac-spec
+type: spec
+title: Authorization (RBAC/ReBAC) Design
+status: active
+trust: draft
+summary: OpenFGA-based authorization with actor/subject model and layered permission checks
+read_when: Implementing authorization checks, tool permissions, or on-behalf-of delegation
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: [authorization]
+---
 
 # Authorization (RBAC/ReBAC) Design
 

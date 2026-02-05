@@ -1,14 +1,16 @@
-id:: scheduler-spec
-type:: spec
-title:: Scheduled Graph Execution Design
-status:: active
-trust:: draft
-summary:: Temporal-based scheduling system for graph execution via internal HTTP API with durable ExecutionGrants
-read_when:: Implementing scheduled workflows, execution grants, or Temporal integration
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags:: scheduler
+---
+id: scheduler-spec
+type: spec
+title: Scheduled Graph Execution Design
+status: active
+trust: draft
+summary: Temporal-based scheduling system for graph execution via internal HTTP API with durable ExecutionGrants
+read_when: Implementing scheduled workflows, execution grants, or Temporal integration
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: [scheduler]
+---
 
 # Scheduled Graph Execution Design
 

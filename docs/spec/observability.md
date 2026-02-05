@@ -1,14 +1,16 @@
-id:: observability-spec
-type:: spec
-title:: Observability
-status:: active
-trust:: draft
-summary:: JSON logging with event registry, Prometheus metrics, and Alloy shipping to Grafana Cloud
-read_when:: Implementing logging, metrics, or debugging production issues
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags:: observability
+---
+id: observability-spec
+type: spec
+title: Observability
+status: active
+trust: draft
+summary: JSON logging with event registry, Prometheus metrics, and Alloy shipping to Grafana Cloud
+read_when: Implementing logging, metrics, or debugging production issues
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: [observability]
+---
 
 # Observability
 

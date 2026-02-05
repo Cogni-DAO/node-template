@@ -1,14 +1,16 @@
-id:: cogni-brain-spec
-type:: spec
-title:: Cogni-Brain Design
-status:: active
-trust:: draft
-summary:: Read-only repo-aware AI brain for answering questions about code/docs with citation requirements
-read_when:: Implementing repo browsing tools, citation guards, or code analysis features
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags::
+---
+id: cogni-brain-spec
+type: spec
+title: Cogni-Brain Design
+status: active
+trust: draft
+summary: Read-only repo-aware AI brain for answering questions about code/docs with citation requirements
+read_when: Implementing repo browsing tools, citation guards, or code analysis features
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: []
+---
 
 # Cogni-Brain Design
 

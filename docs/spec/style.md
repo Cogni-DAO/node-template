@@ -1,14 +1,16 @@
-id:: style-spec
-type:: spec
-title:: Style Guide
-status:: active
-trust:: draft
-summary:: Code style principles including hexagonal architecture, type safety, and file headers
-read_when:: Writing code, understanding style conventions, or code review
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags::
+---
+id: style-spec
+type: spec
+title: Style Guide
+status: active
+trust: draft
+summary: Code style principles including hexagonal architecture, type safety, and file headers
+read_when: Writing code, understanding style conventions, or code review
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: []
+---
 
 # Style Guide
 

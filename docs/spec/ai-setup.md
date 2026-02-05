@@ -1,14 +1,16 @@
-id:: ai-setup-spec
-type:: spec
-title:: AI Setup Spec
-status:: active
-trust:: draft
-summary:: End-to-end AI correlation ID propagation from Next.js through LangGraph to LiteLLM and Langfuse
-read_when:: Setting up AI pipelines, correlation IDs, or reproducibility tracking
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags:: ai
+---
+id: ai-setup-spec
+type: spec
+title: AI Setup Spec
+status: active
+trust: draft
+summary: End-to-end AI correlation ID propagation from Next.js through LangGraph to LiteLLM and Langfuse
+read_when: Setting up AI pipelines, correlation IDs, or reproducibility tracking
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: [ai]
+---
 
 # AI Setup Spec
 

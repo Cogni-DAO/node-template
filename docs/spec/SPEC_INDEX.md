@@ -1,14 +1,16 @@
-id:: spec-index
-type:: spec
-title:: Specification Index
-status:: draft
-trust:: draft
-summary:: Index of all system specifications in this repository.
-read_when:: You need to find a specification document.
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags:: index, specs
+---
+id: spec-index
+type: spec
+title: Specification Index
+status: draft
+trust: draft
+summary: Index of all system specifications in this repository.
+read_when: You need to find a specification document.
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: [index]
+---
 
 # Specification Index
 

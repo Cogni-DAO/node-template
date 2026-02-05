@@ -1,14 +1,16 @@
-id:: ci-cd-spec
-type:: spec
-title:: CI/CD Pipeline Flow
-status:: active
-trust:: draft
-summary:: Automated staging→release→main workflow with fork-safe CI/CD and E2E-triggered promotions
-read_when:: Understanding deployment pipelines, release workflow, or CI configuration
-owner:: derekg1729
-created:: 2026-02-05
-verified:: 2026-02-05
-tags::
+---
+id: ci-cd-spec
+type: spec
+title: CI/CD Pipeline Flow
+status: active
+trust: draft
+summary: Automated staging→release→main workflow with fork-safe CI/CD and E2E-triggered promotions
+read_when: Understanding deployment pipelines, release workflow, or CI configuration
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: []
+---
 
 # CI/CD Pipeline Flow
 
