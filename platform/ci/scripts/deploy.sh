@@ -44,7 +44,7 @@ on_fail() {
 
     echo ""
     echo "=== runtime compose ps ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml ps 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml ps 2>&1 || true" || true
 
     echo ""
     echo "=== logs: caddy (edge) ==="
@@ -52,11 +52,11 @@ on_fail() {
 
     echo ""
     echo "=== logs: app ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 app 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 app 2>&1 || true" || true
 
     echo ""
     echo "=== logs: litellm ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm 2>&1 || true" || true
 
     echo ""
     echo "=== sourcecred compose ps ==="
@@ -367,7 +367,7 @@ echo -e "\033[0;32m[INFO]\033[0m Docker prerequisites verified"
 
 # Compose shortcuts (explicit project names, no global export)
 EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml"
-RUNTIME_COMPOSE="docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml"
+RUNTIME_COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml"
 SOURCECRED_COMPOSE="docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml"
 
 log_info() {
@@ -850,5 +850,5 @@ log_info ""
 log_info "🔧 Deployment management:"
 log_info "  - SSH access: ssh root@$VM_HOST"
 log_info "  - Edge logs: docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml logs"
-log_info "  - Runtime logs: docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs
+log_info "  - Runtime logs: docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs
   - SourceCred logs: docker compose --project-name cogni-sourcecred -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs"
