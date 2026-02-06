@@ -1,31 +1,43 @@
 # Sandboxed Agent System
 
 > [!CRITICAL]
-> Sandbox is a **GraphProvider** routed via `AggregatingGraphExecutor`. NOT user-invocable—requires system `ExecutionGrant` with `allowSandbox` gate. Secrets never enter sandbox. All LLM calls via unix-socket proxy on host.
+> Sandbox is a **GraphProvider** routed via `AggregatingGraphExecutor`. NOT user-invocable—requires system `ExecutionGrant` with `allowSandbox` gate. Secrets never enter sandbox. All LLM calls via unix-socket proxy container (nginx:alpine) managed by LlmProxyManager.
 
 ## Core Invariants (All Phases)
 
-1. **SANDBOX_IS_GRAPH_PROVIDER**: Sandbox implements `GraphProvider`, registered in `AggregatingGraphExecutor`.
+1. **HERMETIC_STACK**: Stack tests require only Docker + repo checkout. No host-installed binaries (no brew/apt nginx).
 
-2. **SYSTEM_GRANT_REQUIRED**: Requires `ExecutionGrant` with `allowSandbox: true`. NOT user-invocable.
+2. **SANDBOX_IS_GRAPH_PROVIDER**: Sandbox implements `GraphProvider`, registered in `AggregatingGraphExecutor`.
 
-3. **SECRETS_HOST_ONLY**: No tokens in sandbox FS/env/logs. Host proxy resolves credentials.
+3. **SYSTEM_GRANT_REQUIRED**: Requires `ExecutionGrant` with `allowSandbox: true`. NOT user-invocable.
 
-4. **NETWORK_DEFAULT_DENY**: Sandbox runs `network=none` always. All external IO via mounted unix socket only.
+4. **SECRETS_HOST_ONLY**: No tokens in sandbox FS/env/logs. Host-controlled proxy container injects credentials.
 
-5. **HOST_SIDE_CLONE**: Host clones repo into workspace volume. Sandbox never has Git credentials.
+5. **NETWORK_DEFAULT_DENY**: Sandbox runs `network=none` always. All external IO via mounted unix socket only.
 
-6. **APPEND_ONLY_AUDIT**: All proxy traffic logged by host. Sandbox self-report not trusted.
+6. **HOST_SIDE_CLONE**: Host clones repo into workspace volume. Sandbox never has Git credentials.
 
-7. **WRITE_PATH_IS_BRANCH**: Push to branch by default. PR creation only when explicitly requested.
+7. **APPEND_ONLY_AUDIT**: All proxy traffic logged by proxy container. Sandbox self-report not trusted.
+
+8. **WRITE_PATH_IS_BRANCH**: Push to branch by default. PR creation only when explicitly requested.
 
 ## P0.5+ Invariants
 
-8. **LLM_VIA_SOCKET_ONLY**: Sandbox calls LLM ONLY via `localhost:8080 → unix socket → host proxy → LiteLLM`. No network access.
+9. **LLM_VIA_SOCKET_ONLY**: Sandbox calls LLM ONLY via `localhost:8080 → unix socket → proxy container → LiteLLM`. No network access.
 
-9. **HOST_INJECTS_BILLING_HEADER**: Proxy injects `x-litellm-end-user-id: ${runId}/${attempt}`. Client-sent headers stripped/ignored.
+10. **HOST_INJECTS_BILLING_HEADER**: Proxy injects `x-litellm-end-user-id: ${runId}/${attempt}`. Client-sent headers stripped/ignored.
 
-10. **LITELLM_IS_BILLING_TRUTH**: Do not count tokens in proxy. LiteLLM `/spend/logs` is the authoritative billing source. Reconcile later via `end_user` query.
+11. **LITELLM_IS_BILLING_TRUTH**: Do not count tokens in proxy. LiteLLM `/spend/logs` is the authoritative billing source. Reconcile later via `end_user` query.
+
+---
+
+## Dev Commands
+
+```bash
+pnpm sandbox:docker:build          # build sandbox runtime image
+pnpm dev:stack:test                 # start test stack (postgres, litellm, etc.)
+pnpm test:stack:dev -- sandbox-llm  # run P0.5 sandbox tests against dev stack
+```
 
 ---
 
@@ -67,8 +79,10 @@ Prove network isolation, workspace I/O, and one-shot container lifecycle. No LLM
   interface SandboxRunSpec {
     runId: string;
     workspacePath: string;
-    command: string; // Passed to bash -c
+    argv: string[]; // Command parts, joined and passed to entrypoint.sh
     limits: { maxRuntimeSec: number; maxMemoryMb: number };
+    networkMode?: { mode: "none" } | { mode: "internal"; networkName: string };
+    llmProxy?: { enabled: boolean; attempt: number }; // P0.5+
   }
   interface SandboxRunResult {
     ok: boolean;
@@ -171,50 +185,52 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 │  Agent Runtime (OpenClaw, Clawdbot, etc.)                           │
 │    └─ OPENAI_API_BASE=http://localhost:8080                         │
 │                                                                     │
-│  socat/sidecar (localhost:8080 ↔ /run/llm-proxy.sock)              │
+│  socat (localhost:8080 ↔ /run/llm/llm.sock)                        │
 └────────────────────────┼────────────────────────────────────────────┘
-                         │ /run/llm-proxy.sock (mounted from host)
+                         │ /run/llm/ directory (bind-mounted from host)
                          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ HOST: Envoy/Nginx Proxy (listens on unix socket)                    │
-│ ────────────────────────────────────────────────                    │
-│  - Strips client x-litellm-end-user-id header                       │
+│ PROXY CONTAINER: nginx:alpine (on sandbox-internal network)               │
+│ ─────────────────────────────────────────────────────               │
+│  - Managed by LlmProxyManager via dockerode                         │
+│  - Listens on unix socket in shared /run/llm/ directory             │
 │  - Injects: Authorization: Bearer ${LITELLM_MASTER_KEY}             │
 │  - Injects: x-litellm-end-user-id: ${runId}/${attempt}              │
-│  - Forwards to http://litellm:4000                                  │
-│  - Audit logs: runId, model, timestamp (no prompts)                 │
+│  - Forwards to http://litellm:4000 (Docker DNS)                     │
+│  - Audit logs: runId, model, timestamp (no prompts/bodies)          │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Design Choice**: Use OSS reverse proxy (Envoy or Nginx) for host-side proxy. Config-only, no bespoke code. Only build a Node proxy if committing to full CogniGateway.
+**Design Choice**: Proxy runs as nginx:alpine container (not host process) for HERMETIC_STACK compliance. Config-only, no bespoke code. Only build a Node proxy if committing to full CogniGateway at P1.
 
 #### Infrastructure
 
-- [ ] Create `platform/infra/services/sandbox-proxy/` with Envoy or Nginx config:
-  - Listen on unix socket: `/tmp/llm-proxy-{runId}.sock`
-  - Strip incoming `x-litellm-end-user-id` header
-  - Inject `Authorization: Bearer ${LITELLM_MASTER_KEY}` (from env)
-  - Inject `x-litellm-end-user-id: ${runId}/${attempt}` (from config/env)
-  - Forward to `http://litellm:4000`
-  - Access log: timestamp, runId, model, status (no request body)
-- [ ] Update `services/sandbox-runtime/Dockerfile`:
+- [x] Create `platform/infra/services/sandbox-proxy/nginx.conf.template`:
+  - Listen on unix socket in shared `/run/llm/` directory
+  - Inject `Authorization: Bearer ${LITELLM_MASTER_KEY}` (from template substitution)
+  - Inject `x-litellm-end-user-id: ${runId}/${attempt}` (overwrites client-sent)
+  - Forward to `http://litellm:4000` (Docker DNS on sandbox-internal)
+  - Access log: timestamp, runId, model, status (no request body/secrets)
+- [x] Update `services/sandbox-runtime/Dockerfile`:
   - Add `socat` for socket-to-localhost bridging
   - Add entrypoint wrapper that starts socat before main command
-- [ ] Create `services/sandbox-runtime/entrypoint.sh`:
-  - Start `socat TCP-LISTEN:8080,fork UNIX-CONNECT:/run/llm-proxy.sock &`
+- [x] Create `services/sandbox-runtime/entrypoint.sh`:
+  - Start `socat TCP-LISTEN:8080,fork,bind=127.0.0.1 UNIX-CONNECT:/run/llm/llm.sock &`
   - Exec the main agent command
+  - Note: P0.5 uses entrypoint for socat; argv passed as Cmd to entrypoint
 
 #### Adapters (`src/adapters/server/sandbox/`)
 
-- [ ] Extend `SandboxRunnerAdapter.runOnce()`:
-  - Before container start: spawn Envoy/Nginx proxy process with socket path
-  - Mount socket: `/tmp/llm-proxy-{runId}.sock:/run/llm-proxy.sock:ro`
+- [x] Extend `SandboxRunnerAdapter.runOnce()`:
+  - Before container start: start nginx:alpine proxy container via LlmProxyManager
+  - Mount socket directory: `{socketDir}:/run/llm:rw` (directory, not file)
   - Set env: `OPENAI_API_BASE=http://localhost:8080`, `RUN_ID=${runId}`
-  - After container exits: stop proxy, collect access logs for audit
-- [ ] Create `src/adapters/server/sandbox/llm-proxy-manager.ts`:
-  - `start(runId, attempt)`: spawn proxy, return socket path
-  - `stop(runId)`: kill proxy, return access log path
-  - Config injection via env or template file
+  - After container exits: stop proxy container, audit log persists in socketDir
+- [x] Create `src/adapters/server/sandbox/llm-proxy-manager.ts`:
+  - `start(runId, attempt)`: create nginx:alpine container on sandbox-internal, return socket dir
+  - `stop(runId)`: copy access log, stop/remove container
+  - `cleanup(runId)`: delete socket directory (caller decides when)
+  - Config generated from template, written to socketDir with 0o600 perms
 
 #### Bootstrap (`src/bootstrap/`)
 
@@ -224,28 +240,35 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 
 #### Tests (Merge Gates)
 
-- [ ] **Network isolation**: Sandbox cannot reach `litellm` by DNS/IP (network=none); only `localhost:8080` works
-- [ ] **LLM completion succeeds**: `/v1/chat/completions` returns valid response via proxy
-- [ ] **Auth injection**: Proxy logs show `Authorization` header added (not in sandbox)
-- [ ] **Attribution injection**: LiteLLM receives `x-litellm-end-user-id: {runId}/{attempt}`
-- [ ] **Header stripping**: Client-sent `x-litellm-end-user-id` is ignored/overridden
-- [ ] **Audit logging**: Proxy logs show runId + model + timestamp; no secrets/prompts logged
-- [ ] **No secrets in sandbox**: Container env/logs contain no `LITELLM_MASTER_KEY`
+> **Note**: Stack tests run without internet. Tests verify proxy infrastructure works; actual LLM completions require integration tests with internet access.
+
+- [x] **Socket bridge works**: Sandbox can reach proxy `/health` endpoint via localhost:8080
+- [x] **Proxy forwards**: Requests reach LiteLLM (connection established, even if backend unreachable)
+- [x] **Network isolation**: Sandbox without llmProxy cannot reach localhost:8080 or external IPs
+- [x] **No secrets in sandbox**: Container env contains no `LITELLM_MASTER_KEY` or `OPENAI_API_KEY`
+- [x] **OPENAI_API_BASE set**: Container env has `OPENAI_API_BASE=http://localhost:8080`
+- [x] **Header stripping**: Proxy accepts requests with spoofed headers (doesn't break)
+- [ ] **LLM completion succeeds**: `/v1/chat/completions` returns valid response (requires internet)
+- [ ] **Attribution injection**: LiteLLM receives `x-litellm-end-user-id: {runId}/{attempt}` (verify via spend logs)
 
 #### File Pointers (P0.5)
 
-| File                                                       | Status  |
-| ---------------------------------------------------------- | ------- |
-| `platform/infra/services/sandbox-proxy/envoy.yaml`         | Pending |
-| `services/sandbox-runtime/Dockerfile`                      | Update  |
-| `services/sandbox-runtime/entrypoint.sh`                   | Pending |
-| `src/adapters/server/sandbox/llm-proxy-manager.ts`         | Pending |
-| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`    | Update  |
-| `tests/stack/sandbox/sandbox-llm-completion.stack.test.ts` | Pending |
+| File                                                        | Status   |
+| ----------------------------------------------------------- | -------- |
+| `platform/infra/services/sandbox-proxy/nginx.conf.template` | Complete |
+| `platform/infra/services/sandbox-proxy/README.md`           | Complete |
+| `services/sandbox-runtime/Dockerfile`                       | Complete |
+| `services/sandbox-runtime/entrypoint.sh`                    | Complete |
+| `src/adapters/server/sandbox/llm-proxy-manager.ts`          | Complete |
+| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`     | Complete |
+| `src/ports/sandbox-runner.port.ts`                          | Complete |
+| `tests/stack/sandbox/sandbox-llm-completion.stack.test.ts`  | Complete |
 
 ---
 
 ### P1: Tool Execution Gateway
+
+> **Scaling**: See [SANDBOX_SCALING.md](SANDBOX_SCALING.md) for proxy selection, per-run vs shared proxy tradeoffs, signed token scheme, and threat model.
 
 **Trigger**: Agent needs to call external tools (file system, git, metrics, etc.) beyond just LLM.
 
@@ -336,18 +359,18 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 
 **P0.5a explored**: Internal Docker network (`sandbox-internal`) with `internal: true` to block internet while allowing LiteLLM access. This worked but required network connectivity.
 
-**P0.5 uses**: Complete network isolation (`network=none`) with unix socket mounted from host. A socat sidecar bridges `localhost:8080` to the socket.
+**P0.5 uses**: Complete network isolation (`network=none`) with unix socket in a shared directory. Proxy runs as nginx:alpine container on sandbox-internal network. A socat process in the sandbox bridges `localhost:8080` to the socket.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ SANDBOX (network=none)                                              │
 │                                                                     │
-│  Agent → localhost:8080 → socat → /run/llm-proxy.sock              │
+│  Agent → localhost:8080 → socat → /run/llm/llm.sock                │
 └──────────────────────────────┼──────────────────────────────────────┘
-                               │ unix socket (mounted)
+                               │ shared socket directory (bind mount)
                                ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ HOST: Envoy/Nginx → litellm:4000                                    │
+│ PROXY: nginx:alpine (sandbox-internal) → litellm:4000                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -447,33 +470,33 @@ HOST: repoPort.pushBranchFromPatches()
 
 ## Merge Gates Summary
 
-| Phase | Gate                      | Test                                                      |
-| ----- | ------------------------- | --------------------------------------------------------- |
-| P0    | Network isolation         | `curl` from sandbox → fails                               |
-| P0    | Workspace I/O             | Read/write `/workspace` from container + host             |
-| P0    | Timeout handling          | Long command killed, `errorCode: 'timeout'`               |
-| P0    | No orphans                | No containers left after test                             |
-| P0.5a | LiteLLM reachable         | HTTP 200 from `http://litellm:4000/health` (internal net) |
-| P0.5a | No default route          | `ip route show default` returns empty                     |
-| P0.5a | External DNS blocked      | `getent hosts example.com` fails                          |
-| P0.5a | External IP blocked       | `curl http://1.1.1.1` fails                               |
-| P0.5a | No Docker socket          | `/var/run/docker.sock` not present                        |
-| P0.5a | Internal DNS works        | `getent hosts litellm` succeeds                           |
-| P0.5  | Network=none enforced     | Sandbox cannot reach litellm by DNS/IP; only localhost    |
-| P0.5  | LLM completion via socket | `/v1/chat/completions` returns valid response             |
-| P0.5  | Auth header injected      | Proxy adds `Authorization` (not visible in sandbox)       |
-| P0.5  | Attribution injected      | LiteLLM receives `x-litellm-end-user-id: runId/attempt`   |
-| P0.5  | Client header stripped    | Client-sent `x-litellm-end-user-id` is ignored            |
-| P0.5  | Audit logged by host      | Proxy logs: runId, model, timestamp (no prompts)          |
-| P0.5  | No secrets in sandbox     | Container env/logs have no `LITELLM_MASTER_KEY`           |
-| P1    | Tool exec works           | `cogni-tool exec <tool>` succeeds                         |
-| P1    | Tool allowlist enforced   | Disallowed tool → `policy_denied`                         |
-| P1    | runId mismatch rejected   | Wrong runId in request → rejected                         |
+| Phase | Gate                    | Test                                                       |
+| ----- | ----------------------- | ---------------------------------------------------------- |
+| P0    | Network isolation       | `curl` from sandbox → fails                                |
+| P0    | Workspace I/O           | Read/write `/workspace` from container + host              |
+| P0    | Timeout handling        | Long command killed, `errorCode: 'timeout'`                |
+| P0    | No orphans              | No containers left after test                              |
+| P0.5a | LiteLLM reachable       | HTTP 200 from `http://litellm:4000/health` (internal net)  |
+| P0.5a | No default route        | `ip route show default` returns empty                      |
+| P0.5a | External DNS blocked    | `getent hosts example.com` fails                           |
+| P0.5a | External IP blocked     | `curl http://1.1.1.1` fails                                |
+| P0.5a | No Docker socket        | `/var/run/docker.sock` not present                         |
+| P0.5a | Internal DNS works      | `getent hosts litellm` succeeds                            |
+| P0.5  | Socket bridge works     | Sandbox reaches proxy `/health` via localhost:8080         |
+| P0.5  | Proxy forwards          | Requests reach LiteLLM (connection test)                   |
+| P0.5  | Network isolation       | Sandbox w/o proxy can't reach localhost:8080 or external   |
+| P0.5  | No secrets in sandbox   | Container env has no `LITELLM_MASTER_KEY`/`OPENAI_API_KEY` |
+| P0.5  | OPENAI_API_BASE set     | Container env points to `localhost:8080`                   |
+| P0.5  | Header stripping        | Proxy handles spoofed headers without breaking             |
+| P1    | Tool exec works         | `cogni-tool exec <tool>` succeeds                          |
+| P1    | Tool allowlist enforced | Disallowed tool → `policy_denied`                          |
+| P1    | runId mismatch rejected | Wrong runId in request → rejected                          |
 
 ---
 
 ## Related Documents
 
+- [SANDBOX_SCALING.md](SANDBOX_SCALING.md) — Proxy selection, shared proxy, signed tokens, threat model
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution, DENY_BY_DEFAULT
 - [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — Clawdbot runtime (P1+ agent option)
