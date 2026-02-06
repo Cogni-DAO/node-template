@@ -46,6 +46,7 @@ This is a master index of all specs, updated as specs are migrated.
 | model-selection-spec             | Model Selection                    | draft    | ai-graphs  | [model-selection.md](./model-selection.md)                         |
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
 | packages-architecture-spec       | Packages Architecture              | draft    | infra      | [packages-architecture.md](./packages-architecture.md)             |
+| public-analytics-spec            | Public Analytics Page              | draft    | data       | [public-analytics.md](./public-analytics.md)                       |
 | runtime-policy-spec              | Route Runtime Policy               | draft    | deployment | [runtime-policy.md](./runtime-policy.md)                           |
 | temporal-patterns-spec           | Temporal Patterns                  | draft    | ai-graphs  | [temporal-patterns.md](./temporal-patterns.md)                     |
 | security-auth-spec               | Security & Authentication          | draft    | auth       | [security-auth.md](./security-auth.md)                             |

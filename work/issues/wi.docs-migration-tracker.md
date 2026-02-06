@@ -140,7 +140,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | DOCS_ORGANIZATION_PLAN.md            | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | ENVIRONMENTS.md                      | environments.md                | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | ERROR_HANDLING_ARCHITECTURE.md       | error-handling.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| ERROR_HANDLING_IMPROVEMENT_DESIGN.md | -                              | ini.error-handling-improvements.md | -   | -                        | roadmap    | [ ]  | [ ]  |
+| ERROR_HANDLING_IMPROVEMENT_DESIGN.md | -                              | ini.observability-hardening.md     | -   | -                        | roadmap    | [x]  | [ ]  |
 | EXTERNAL_EXECUTOR_BILLING.md         | external-executor-billing.md   | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md   | procedural | [x]  | [ ]  |
 | GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -154,7 +154,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | LANGGRAPH_AI.md                      | langgraph-patterns.md          | -                                  | -   | langgraph-guide.md       | AB+road    | [ ]  | [ ]  |
 | LANGGRAPH_SERVER.md                  | langgraph-server.md            | ini.langgraph-server-production.md | -   | langgraph-server-dev.md  | AB+road    | [ ]  | [ ]  |
 | LINTING_RULES.md                     | -                              | -                                  | -   | linting-migration.md     | snapshot   | [x]  | [ ]  |
-| METRICS_OBSERVABILITY.md             | -                              | ini.public-analytics.md            | -   | -                        | roadmap    | [ ]  | [ ]  |
+| METRICS_OBSERVABILITY.md             | public-analytics.md            | ini.observability-hardening.md     | -   | -                        | AB+road    | [x]  | [ ]  |
 | MODEL_SELECTION.md                   | model-selection.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | MVP_DELIVERABLES.md                  | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | ini.n8n-integration.md             | -   | -                        | roadmap    | [ ]  | [ ]  |
