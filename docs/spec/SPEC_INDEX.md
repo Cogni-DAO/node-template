@@ -34,6 +34,7 @@ This is a master index of all specs, updated as specs are migrated.
 | chain-config-spec                | Chain Configuration                | draft    | web3       | [chain-config.md](./chain-config.md)                               |
 | check-full-spec                  | check:full CI-Parity Gate          | draft    | deployment | [check-full.md](./check-full.md)                                   |
 | claude-sdk-adapter               | Claude Agent SDK Adapter           | draft    | ai-graphs  | [claude-sdk-adapter.md](./claude-sdk-adapter.md)                   |
+| cred-licensing-policy            | Cred Licensing Policy              | draft    | web3       | [cred-licensing-policy.md](./cred-licensing-policy.md)             |
 | dao-enforcement-spec             | DAO Enforcement — Financial Rails  | draft    | web3       | [dao-enforcement.md](./dao-enforcement.md)                         |
 | database-rls-spec                | Database Row-Level Security        | draft    | infra      | [database-rls.md](./database-rls.md)                               |
 | database-url-alignment-spec      | Database URL Alignment             | draft    | infra      | [database-url-alignment.md](./database-url-alignment.md)           |

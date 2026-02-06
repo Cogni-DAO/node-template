@@ -129,10 +129,10 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | CI-CD.md                             | ci-cd.md                       | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | CICD_SERVICES_ROADMAP.md             | -                              | ini.cicd-services-gitops.md        | -   | -                        | roadmap    | [x]  | [ ]  |
 | CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                        | roadmap    | [x]  | [ ]  |
-| CLAWDBOT_ADAPTER_SPEC.md             | clawdbot-adapter.md            | ini.clawdbot-executor.md           | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CLAWDBOT_ADAPTER_SPEC.md             | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | COGNI_BRAIN_SPEC.md                  | cogni-brain.md                 | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
-| CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                        | roadmap    | [x]  | [ ]  |
 | DAO_ENFORCEMENT.md                   | dao-enforcement.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | DATABASES.md                         | databases.md                   | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | DATABASE_RLS_SPEC.md                 | database-rls.md                | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
