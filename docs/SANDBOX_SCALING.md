@@ -8,22 +8,22 @@
 
 ## OSS Proxy Comparison
 
-Evaluated for: unix socket listener, header strip/inject, SSE streaming, dynamic per-request headers, image size, security posture.
+Evaluated for: unix socket bind (proxy listens on socket), header strip/inject, SSE streaming, dynamic per-request headers, config complexity.
+
+> **Note**: "Socket Bind" = proxy binds a listener to a unix socket (our use case). This is distinct from "socket upstream" (proxy connects to a backend via socket), which most proxies support but is not what we need.
 
 | Criterion                       | nginx:alpine | OpenResty:alpine       | Envoy (distroless)       | HAProxy:alpine         | Caddy:alpine | Traefik     |
 | ------------------------------- | ------------ | ---------------------- | ------------------------ | ---------------------- | ------------ | ----------- |
-| **Unix Socket Listener**        | Native       | Native                 | Native (pipe)            | Native (bind)          | Supported    | **NO**      |
+| **Unix Socket Bind (listener)** | Native       | Native                 | Native (pipe address)    | Native (bind)          | Supported    | **NO**      |
 | **Header Strip + Inject**       | Static only  | Static + Dynamic (Lua) | Static + Limited Dynamic | Static + Dynamic (Lua) | Static only  | Static only |
 | **SSE/Streaming**               | Excellent    | Excellent              | Good (needs tuning)      | Good (timeout tuning)  | Good         | Fair        |
-| **Image Size (compressed)**     | **~10 MB**   | ~25-30 MB              | ~50-60 MB                | ~10-12 MB              | ~15-20 MB    | ~50 MB      |
 | **Config Complexity**           | **Very Low** | Low-Moderate           | High                     | Low-Moderate           | Low          | High        |
 | **Dynamic Per-Request Headers** | No           | **YES (Lua)**          | Limited                  | YES (Lua)              | No           | No          |
-| **CVE Frequency**               | Moderate     | Moderate               | **High**                 | Low                    | Very Low     | Low         |
 | **Lua/Scripting**               | None         | **Full LuaJIT**        | Limited Lua filter       | Built-in Lua 5.3       | None         | None        |
 
-**Disqualified**: Traefik -- cannot listen on a unix socket in Docker ([known panic](https://github.com/traefik/traefik/issues/10924)).
+**Disqualified**: Traefik -- cannot bind a listener to a unix socket in Docker ([known panic](https://github.com/traefik/traefik/issues/10924)).
 
-**Eliminated**: Envoy (over-engineered, verbose YAML, frequent CVEs, limited Lua). Caddy (no scripting runtime, requires custom Go module for dynamic headers).
+**Eliminated**: Envoy (over-engineered for this use case, verbose YAML, limited Lua). Caddy (no scripting runtime, requires custom Go module for dynamic headers).
 
 **Viable at scale**: nginx:alpine (static config only), **OpenResty:alpine** (dynamic + static), HAProxy:alpine (dynamic + static).
 
@@ -73,6 +73,8 @@ Single `openresty:alpine` container serving all concurrent sandbox runs. Attribu
 ---
 
 ## Signed Run Token Scheme
+
+> **DO NOT BUILD YET.** This section is P1+ reference material for when the shared proxy pattern is needed (trigger: >~20 concurrent runs). Per-run proxy with static config is correct until then.
 
 For the shared proxy pattern, a minimal HMAC-SHA256 token (no JWT -- avoids unnecessary complexity for internal host-to-proxy trust).
 
@@ -129,17 +131,17 @@ ngx.req.set_header("Authorization", "Bearer " .. LITELLM_KEY)
 
 All mitigations assume core invariants from [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) are enforced.
 
-| Attack                              | Mitigation                                                     | Enforcement Point                                             | Residual Risk                                                          |
-| ----------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Exfiltrate `LITELLM_MASTER_KEY`     | Key only in proxy container env, never in sandbox              | LlmProxyManager + nginx template substitution                 | None -- key physically absent from sandbox                             |
-| Bypass attribution (spoof runId)    | Per-run: static config. Shared: HMAC token verification        | nginx `proxy_set_header` override / OpenResty `access_by_lua` | None -- unconditional override or cryptographic verification           |
-| Reach internet from sandbox         | `NetworkMode: 'none'` -- no network stack                      | SandboxRunnerAdapter container creation                       | None -- kernel-enforced                                                |
-| Pivot to Docker socket              | Socket not mounted, `CapDrop: ALL`, `no-new-privileges`        | SandboxRunnerAdapter security hardening                       | None -- socket physically absent                                       |
-| Poison audit logs                   | Logs written by proxy container, not sandbox                   | nginx `access_log` in proxy container                         | Low -- sandbox could inflate volume via high request count             |
-| Consume unbounded LLM tokens        | P0.5: sandbox timeout. P1+: rate limiting in proxy             | Container `maxRuntimeSec` / OpenResty `lua-resty-limit-req`   | **Accepted in P0.5**. LiteLLM per-key spend limits as backstop         |
-| Cross-run traffic via shared socket | Per-run: unique socket dir. Shared: HMAC token scoped to runId | Filesystem isolation / token expiry + signature               | None with per-run. Low with shared (token replay within expiry window) |
-| Fork bomb / resource exhaustion     | `PidsLimit: 256`, `maxMemoryMb`, `maxRuntimeSec`               | Docker container resource limits                              | Low -- limits kernel-enforced                                          |
-| Exfiltrate workspace data via LLM   | Not mitigated -- inherent to running an agent with LLM access  | None                                                          | **Accepted**. Data classification deferred to P2                       |
+| Attack                              | Mitigation                                                                   | Enforcement Point                                             | Residual Risk                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Exfiltrate `LITELLM_MASTER_KEY`     | Key only in proxy config dir (`conf/`), never in sandbox-mounted `sock/` dir | LlmProxyManager split: `sock/` shared, `conf/` proxy-only     | None -- key physically absent from sandbox                             |
+| Bypass attribution (spoof runId)    | Per-run: static config. Shared: HMAC token verification                      | nginx `proxy_set_header` override / OpenResty `access_by_lua` | None -- unconditional override or cryptographic verification           |
+| Reach internet from sandbox         | `NetworkMode: 'none'` -- no network stack                                    | SandboxRunnerAdapter container creation                       | None -- kernel-enforced                                                |
+| Pivot to Docker socket              | Socket not mounted, `CapDrop: ALL`, `no-new-privileges`                      | SandboxRunnerAdapter security hardening                       | None -- socket physically absent                                       |
+| Poison audit logs                   | Logs written by proxy container, not sandbox                                 | nginx `access_log` in proxy container                         | Low -- sandbox could inflate volume via high request count             |
+| Consume unbounded LLM tokens        | P0.5: sandbox timeout. P1+: rate limiting in proxy                           | Container `maxRuntimeSec` / OpenResty `lua-resty-limit-req`   | **Accepted in P0.5**. LiteLLM per-key spend limits as backstop         |
+| Cross-run traffic via shared socket | Per-run: unique socket dir. Shared: HMAC token scoped to runId               | Filesystem isolation / token expiry + signature               | None with per-run. Low with shared (token replay within expiry window) |
+| Fork bomb / resource exhaustion     | `PidsLimit: 256`, `maxMemoryMb`, `maxRuntimeSec`                             | Docker container resource limits                              | Low -- limits kernel-enforced                                          |
+| Exfiltrate workspace data via LLM   | Not mitigated -- inherent to running an agent with LLM access                | None                                                          | **Accepted**. Data classification deferred to P2                       |
 
 ---
 

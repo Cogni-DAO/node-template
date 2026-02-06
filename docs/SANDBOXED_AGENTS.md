@@ -11,7 +11,7 @@
 
 3. **SYSTEM_GRANT_REQUIRED**: Requires `ExecutionGrant` with `allowSandbox: true`. NOT user-invocable.
 
-4. **SECRETS_HOST_ONLY**: No tokens in sandbox FS/env/logs. Host-controlled proxy container injects credentials.
+4. **SECRETS_HOST_ONLY**: No tokens in sandbox FS/env/logs. Host-controlled proxy container injects credentials. Proxy config (contains keys) is never mounted into sandbox — only the socket directory (`sock/`) is shared.
 
 5. **NETWORK_DEFAULT_DENY**: Sandbox runs `network=none` always. All external IO via mounted unix socket only.
 
@@ -28,6 +28,8 @@
 10. **HOST_INJECTS_BILLING_HEADER**: Proxy injects `x-litellm-end-user-id: ${runId}/${attempt}`. Client-sent headers stripped/ignored.
 
 11. **LITELLM_IS_BILLING_TRUTH**: Do not count tokens in proxy. LiteLLM `/spend/logs` is the authoritative billing source. Reconcile later via `end_user` query.
+
+12. **SANDBOX_RUNID_IS_SESSION**: `runId` = one sandbox session = one `runOnce()` call. All LLM calls within a session share one runId. One proxy per runId. Long-running session semantics (P1.5+) will extend this but never split a session across multiple runIds.
 
 ---
 
@@ -47,7 +49,8 @@ pnpm test:stack:dev -- sandbox-llm  # run P0.5 sandbox tests against dev stack
 | --------- | ------------ | ------------------------- | ------------------------------------------------------------ |
 | **P0**    | none         | N/A                       | Spike: prove network isolation + workspace I/O               |
 | **P0.5a** | internal     | Direct (unauthenticated)  | Spike: prove LiteLLM reachable via internal network          |
-| **P0.5**  | none         | unix socket → OSS proxy   | Agent in sandbox, LLM via socket bridge. No tools.           |
+| **P0.5**  | none         | unix socket → OSS proxy   | Proxy plumbing: socket bridge, nginx container, socat.       |
+| **P0.75** | none         | socket proxy (proven E2E) | Agent runs via graph execution, chat UI, billing verified.   |
 | **P1**    | none         | socket + tool gateway     | Add tool execution gateway for external integrations.        |
 | **P1.5**  | none         | socket + tools + Clawdbot | Clawdbot runtime + authenticated tools via ConnectionBroker. |
 
@@ -179,6 +182,11 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 #### Architecture
 
 ```
+HOST PATHS (per run):
+  {base}/{runId}/sock/llm.sock   ← shared with sandbox
+  {base}/{runId}/conf/nginx.conf ← proxy-only (contains LITELLM_MASTER_KEY)
+  {base}/{runId}/conf/access.log ← proxy-only (audit)
+
 ┌─────────────────────────────────────────────────────────────────────┐
 │ SANDBOX (network=none)                                              │
 │ ──────────────────────                                              │
@@ -186,22 +194,24 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 │    └─ OPENAI_API_BASE=http://localhost:8080                         │
 │                                                                     │
 │  socat (localhost:8080 ↔ /run/llm/llm.sock)                        │
+│  Mounts: sock/ → /run/llm (socket only, no config)                 │
 └────────────────────────┼────────────────────────────────────────────┘
-                         │ /run/llm/ directory (bind-mounted from host)
+                         │ sock/ directory (bind-mounted from host)
                          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ PROXY CONTAINER: nginx:alpine (on sandbox-internal network)               │
+│ PROXY CONTAINER: nginx:alpine (on sandbox-internal network)         │
 │ ─────────────────────────────────────────────────────               │
+│  Mounts: sock/ → /run/llm, conf/nginx.conf → /etc/nginx/nginx.conf │
 │  - Managed by LlmProxyManager via dockerode                         │
-│  - Listens on unix socket in shared /run/llm/ directory             │
+│  - Listens on unix socket in shared sock/ directory                  │
 │  - Injects: Authorization: Bearer ${LITELLM_MASTER_KEY}             │
 │  - Injects: x-litellm-end-user-id: ${runId}/${attempt}              │
 │  - Forwards to http://litellm:4000 (Docker DNS)                     │
-│  - Audit logs: runId, model, timestamp (no prompts/bodies)          │
+│  - Audit logs in conf/ directory (not visible to sandbox)            │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Design Choice**: Proxy runs as nginx:alpine container (not host process) for HERMETIC_STACK compliance. Config-only, no bespoke code. Only build a Node proxy if committing to full CogniGateway at P1.
+**Design Choice**: Proxy runs as nginx:alpine container (not host process) for HERMETIC_STACK compliance. Config-only, no bespoke code. Proxy config is never mounted into sandbox (SECRETS_HOST_ONLY). Only build a Node proxy if committing to full CogniGateway at P1.
 
 #### Infrastructure
 
@@ -223,14 +233,14 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 
 - [x] Extend `SandboxRunnerAdapter.runOnce()`:
   - Before container start: start nginx:alpine proxy container via LlmProxyManager
-  - Mount socket directory: `{socketDir}:/run/llm:rw` (directory, not file)
+  - Mount socket directory only: `{runDir}/sock/:/run/llm:rw` (not config dir)
   - Set env: `OPENAI_API_BASE=http://localhost:8080`, `RUN_ID=${runId}`
-  - After container exits: stop proxy container, audit log persists in socketDir
+  - After container exits: stop proxy container, audit log persists in conf/
 - [x] Create `src/adapters/server/sandbox/llm-proxy-manager.ts`:
   - `start(runId, attempt)`: create nginx:alpine container on sandbox-internal, return socket dir
   - `stop(runId)`: copy access log, stop/remove container
-  - `cleanup(runId)`: delete socket directory (caller decides when)
-  - Config generated from template, written to socketDir with 0o600 perms
+  - `cleanup(runId)`: delete run directory (caller decides when)
+  - Config generated from template, written to conf/ with 0o600 perms (never in sock/)
 
 #### Bootstrap (`src/bootstrap/`)
 
@@ -263,6 +273,103 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 | `src/adapters/server/sandbox/sandbox-runner.adapter.ts`     | Complete |
 | `src/ports/sandbox-runner.port.ts`                          | Complete |
 | `tests/stack/sandbox/sandbox-llm-completion.stack.test.ts`  | Complete |
+
+---
+
+### P0.75: Sandbox Agent via Graph Execution (End-to-End)
+
+**Goal**: User selects sandbox agent in chat UI → message flows through `AggregatingGraphExecutor` → agent runs in sandboxed container with LLM access → response streams back → billing tracked via LiteLLM.
+
+**Trigger**: P0.5 proxy plumbing works. Now prove it's usable: a real agent running in sandbox, invoked through the standard chat pipeline, with verifiable billing.
+
+> **No tool calling.** Agent has LLM access only. Workspace file I/O is local to the container. This phase proves the execution loop; P1 adds tools.
+
+#### Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ Chat UI                                                              │
+│   body: { graphName: "sandbox:agent", model: "...", messages: [...] }│
+└──────────────────┬───────────────────────────────────────────────────┘
+                   ↓
+┌──────────────────────────────────────────────────────────────────────┐
+│ ai_runtime.ts → resolvedGraphId = "sandbox:agent" (passthrough)     │
+│ AggregatingGraphExecutor → SandboxGraphProvider.runGraph(req)       │
+└──────────────────┬───────────────────────────────────────────────────┘
+                   ↓
+┌──────────────────────────────────────────────────────────────────────┐
+│ SandboxGraphProvider                                                 │
+│  1. Write messages → /workspace/.cogni/messages.json                 │
+│  2. SandboxRunnerAdapter.runOnce({ llmProxy: { enabled: true } })   │
+│  3. Agent reads messages, calls OPENAI_API_BASE, prints response    │
+│  4. Collect stdout → emit text_delta AiEvents                       │
+│  5. Query LiteLLM /spend/logs?end_user=${runId}/0 → emit usage     │
+│  6. Return GraphFinal { ok, usage, content }                        │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+#### Agent I/O Protocol (P0.75 — simple, non-streaming)
+
+- **Input**: Provider writes `GraphRunRequest.messages` as JSON to `/workspace/.cogni/messages.json`
+- **Output**: Agent prints assistant response to **stdout** (plain text). Provider wraps as `text_delta`.
+- **Model**: Provider passes `model` via env var `COGNI_MODEL` (agent uses it in API call)
+- **Non-streaming**: P0.75 runs agent to completion, then emits entire response. Streaming deferred.
+
+#### Adapters (`src/adapters/server/sandbox/`)
+
+- [ ] Create `sandbox-graph.provider.ts` implementing `GraphProvider`:
+  - `providerId: "sandbox"`
+  - `canHandle(graphId)`: matches `sandbox:*` prefix
+  - `runGraph(req)`: create tmp workspace → write messages.json → call `SandboxRunnerAdapter.runOnce()` → parse stdout → emit AiEvents → reconcile billing → return `GraphFinal`
+- [ ] Create `sandbox-agent-catalog.provider.ts` implementing `AgentCatalogProvider`:
+  - `listAgents()`: returns `[{ agentId: "sandbox:agent", graphId: "sandbox:agent", name: "Sandbox Agent", description: "LLM agent in isolated container" }]`
+  - Gated by `SANDBOX_ENABLED` env flag (don't show in UI unless enabled)
+
+#### Bootstrap (`src/bootstrap/`)
+
+- [ ] Register `SandboxGraphProvider` in `graph-executor.factory.ts` providers array
+- [ ] Register `SandboxAgentCatalogProvider` in `agent-discovery.ts` providers array
+- [ ] Add `SANDBOX_ENABLED` env flag (default false), gate both registrations
+- [ ] Wire `SandboxRunnerAdapter` + `litellmMasterKey` into provider constructor
+
+#### Agent Runtime (`services/sandbox-runtime/`)
+
+- [ ] Create minimal agent script (`services/sandbox-runtime/agent/run.mjs`):
+  - Read `/workspace/.cogni/messages.json`
+  - Call `${OPENAI_API_BASE}/v1/chat/completions` with messages + `COGNI_MODEL`
+  - Print assistant response content to stdout
+  - Exit 0 on success, non-zero on error (stderr has diagnostics)
+- [ ] Update `Dockerfile` to include agent script at `/agent/run.mjs`
+- [ ] Default `argv` in provider: `["node", "/agent/run.mjs"]`
+
+#### Billing Reconciliation
+
+- [ ] After sandbox exits: query LiteLLM `GET /spend/logs?end_user=${runId}/0` via existing `LiteLlmAdapter`
+  - Extract `completion_tokens`, `prompt_tokens`, `cost` from response
+  - Emit `usage_report` AiEvent with `UsageFact` so `RunEventRelay` commits charge_receipt
+  - If no spend logs found (e.g., agent didn't call LLM): emit zero-cost usage_report, log warning
+- [ ] Verify `charge_receipts` table has entry with `source_reference = ${runId}/0/${litellmCallId}`
+
+#### Tests (Merge Gates)
+
+- [ ] **E2E chat flow**: `POST /api/v1/ai/chat` with `graphName: "sandbox:agent"` → SSE response with assistant text
+- [ ] **Agent catalog**: `GET /api/v1/ai/agents` includes `sandbox:agent` when `SANDBOX_ENABLED=true`
+- [ ] **Billing verified**: After sandbox run, `charge_receipts` table has entry matching `runId`
+- [ ] **LiteLLM spend match**: `x-litellm-end-user-id` header matches `${runId}/0` in LiteLLM logs
+- [ ] **No secrets in response**: Sandbox stdout does not contain `LITELLM_MASTER_KEY`
+- [ ] **Graceful failure**: Agent error (bad model, timeout) returns structured error via `GraphFinal.error`
+
+#### File Pointers (P0.75)
+
+| File                                                            | Status  |
+| --------------------------------------------------------------- | ------- |
+| `src/adapters/server/sandbox/sandbox-graph.provider.ts`         | Pending |
+| `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Pending |
+| `src/bootstrap/graph-executor.factory.ts`                       | Update  |
+| `src/bootstrap/agent-discovery.ts`                              | Update  |
+| `services/sandbox-runtime/agent/run.mjs`                        | Pending |
+| `services/sandbox-runtime/Dockerfile`                           | Update  |
+| `tests/stack/sandbox/sandbox-e2e.stack.test.ts`                 | Pending |
 
 ---
 
@@ -488,6 +595,11 @@ HOST: repoPort.pushBranchFromPatches()
 | P0.5  | No secrets in sandbox   | Container env has no `LITELLM_MASTER_KEY`/`OPENAI_API_KEY` |
 | P0.5  | OPENAI_API_BASE set     | Container env points to `localhost:8080`                   |
 | P0.5  | Header stripping        | Proxy handles spoofed headers without breaking             |
+| P0.75 | E2E chat flow           | `POST /api/v1/ai/chat` with `sandbox:agent` → SSE response |
+| P0.75 | Agent in catalog        | `GET /api/v1/ai/agents` includes `sandbox:agent`           |
+| P0.75 | Billing verified        | `charge_receipts` has entry matching sandbox `runId`       |
+| P0.75 | LiteLLM spend match     | `end_user` in spend logs matches `${runId}/0`              |
+| P0.75 | Graceful failure        | Agent error → structured `GraphFinal.error`                |
 | P1    | Tool exec works         | `cogni-tool exec <tool>` succeeds                          |
 | P1    | Tool allowlist enforced | Disallowed tool → `policy_denied`                          |
 | P1    | runId mismatch rejected | Wrong runId in request → rejected                          |
@@ -506,4 +618,4 @@ HOST: repoPort.pushBranchFromPatches()
 ---
 
 **Last Updated**: 2026-02-06
-**Status**: P0 Complete, P0.5a Complete (spike), P0.5 In Progress
+**Status**: P0 Complete, P0.5a Complete, P0.5 Complete, P0.75 Pending

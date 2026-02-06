@@ -110,18 +110,23 @@ export class LlmProxyManager {
       throw new Error(`Proxy already running for runId: ${runId}`);
     }
 
-    // Create isolated directory for this run's socket
+    // Create isolated directories for this run.
+    // SECRETS_HOST_ONLY: socket dir is shared with sandbox; config dir is proxy-only.
+    // Never put nginx.conf (contains LITELLM_MASTER_KEY) in the socket dir.
     const base = baseDir ?? join(tmpdir(), "cogni-llm-proxy");
-    const socketDir = join(base, runId);
+    const runDir = join(base, runId);
+    const socketDir = join(runDir, "sock");
+    const configDir = join(runDir, "conf");
     const socketName = "llm.sock";
     const socketPath = join(socketDir, socketName);
-    const configPath = join(socketDir, "nginx.conf");
-    const logPath = join(socketDir, "access.log");
+    const configPath = join(configDir, "nginx.conf");
+    const logPath = join(configDir, "access.log");
 
     this.log.debug({ runId, socketDir }, "Starting LLM proxy container");
 
-    // Create socket directory
+    // Create both directories
     mkdirSync(socketDir, { recursive: true, mode: 0o755 });
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
 
     // Generate config from template
     const configContent = this.generateConfig({
@@ -227,23 +232,19 @@ export class LlmProxyManager {
   }
 
   /**
-   * Clean up socket directory for a run.
+   * Clean up run directory (sock/ + conf/) for a run.
    * Call this after stop() when you're done with the logs.
    */
   cleanup(runId: string): void {
     const handle = this.handles.get(runId);
-    if (handle?.socketDir && existsSync(handle.socketDir)) {
+    // Remove parent runDir (contains sock/ + conf/) rather than just socketDir
+    const runDir = handle?.socketDir ? join(handle.socketDir, "..") : undefined;
+    if (runDir && existsSync(runDir)) {
       try {
-        rmSync(handle.socketDir, { recursive: true, force: true });
-        this.log.debug(
-          { runId, socketDir: handle.socketDir },
-          "Cleaned up socket directory"
-        );
+        rmSync(runDir, { recursive: true, force: true });
+        this.log.debug({ runId, runDir }, "Cleaned up run directory");
       } catch (err) {
-        this.log.warn(
-          { runId, error: err },
-          "Failed to cleanup socket directory"
-        );
+        this.log.warn({ runId, error: err }, "Failed to cleanup run directory");
       }
     }
     this.handles.delete(runId);
