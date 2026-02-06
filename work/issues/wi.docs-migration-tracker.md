@@ -170,7 +170,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | PAYMENTS_FRONTEND_DESIGN.md          | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | ini.prompt-registry.md             | -   | -                        | roadmap    | [ ]  | [ ]  |
-| PROPOSAL_LAUNCHER.md                 | proposal-launcher.md           | ini.proposal-launcher.md           | -   | -                        | roadmap    | [ ]  | [ ]  |
+| PROPOSAL_LAUNCHER.md                 | -                              | ini.web3-gov-mvp.md                | -   | -                        | roadmap    | [x]  | [ ]  |
 | RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                        | migrated   | [x]  | [ ]  |
 | REPO_STATE.md                        | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -178,7 +178,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | SCHEDULER_SPEC.md                    | scheduler.md                   | ini.scheduler-evolution.md         | -   | -                        | migrated   | [x]  | [ ]  |
 | SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | SERVICES_ARCHITECTURE.md             | services-architecture.md       | ini.cicd-services-gitops.md        | -   | create-service.md        | as-built   | [x]  | [ ]  |
-| SERVICES_MIGRATION.md                | -                              | ini.services-migration.md          | -   | -                        | roadmap    | [ ]  | [ ]  |
+| SERVICES_MIGRATION.md                | -                              | ini.cicd-services-gitops.md        | -   | -                        | roadmap    | [x]  | [ ]  |
 | SETUP.md                             | -                              | -                                  | -   | developer-setup.md       | procedural | [x]  | [ ]  |
 | SOURCECRED.md                        | sourcecred.md                  | -                                  | -   | sourcecred-operations.md | AB+road    | [ ]  | [ ]  |
 | SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                        | as-built   | [x]  | [ ]  |

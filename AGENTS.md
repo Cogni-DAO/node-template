@@ -62,7 +62,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Authorization (RBAC/ReBAC)](docs/RBAC_SPEC.md)
 - [Tenant Connections](docs/TENANT_CONNECTIONS_SPEC.md)
 - [Tool Use Spec](docs/TOOL_USE_SPEC.md)
-- [Services Migration Guide](docs/SERVICES_MIGRATION.md)
+- [Services Migration (initiative)](work/initiatives/ini.cicd-services-gitops.md)
 
 ### AI & Evals
 
