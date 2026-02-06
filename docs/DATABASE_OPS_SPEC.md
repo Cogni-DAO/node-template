@@ -153,6 +153,8 @@ This initiative covers the database segment of the enterprise security/privacy p
 - [DATABASE_URL_ALIGNMENT_SPEC.md](DATABASE_URL_ALIGNMENT_SPEC.md) — DSN-only end state roadmap
 - [DATABASES.md](DATABASES.md) — Migration architecture, two-image strategy
 - [INFRASTRUCTURE_SETUP.md](../platform/runbooks/INFRASTRUCTURE_SETUP.md) — Secret generation runbook
+- [SUPABASE_EVALUATION.md](SUPABASE_EVALUATION.md) — Full codebase vs. Supabase capability audit
+- [CODE_GATES.md](CODE_GATES.md) — P0 prerequisites (WAL-G, OpenFGA/OPA) before new feature work
 
 ---
 
