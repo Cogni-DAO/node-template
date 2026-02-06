@@ -6,7 +6,7 @@
 # Per SANDBOXED_AGENTS.md P0.5: Starts socat bridge for LLM access, then runs command.
 #
 # Environment:
-#   LLM_PROXY_SOCKET - Path to mounted unix socket (default: /run/llm/llm.sock)
+#   LLM_PROXY_SOCKET - Path to mounted unix socket (default: /llm-sock/llm.sock)
 #   LLM_PROXY_PORT   - Local port for socat to listen on (default: 8080)
 #
 # The socat bridge allows agents to use OPENAI_API_BASE=http://localhost:8080
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-LLM_PROXY_SOCKET="${LLM_PROXY_SOCKET:-/run/llm/llm.sock}"
+LLM_PROXY_SOCKET="${LLM_PROXY_SOCKET:-/llm-sock/llm.sock}"
 LLM_PROXY_PORT="${LLM_PROXY_PORT:-8080}"
 
 # Check if socket exists (indicates LLM proxy is available)
@@ -48,6 +48,12 @@ if [[ -S "$LLM_PROXY_SOCKET" ]]; then
     }
     trap cleanup EXIT
 else
+    if [[ -n "${OPENAI_API_BASE:-}" ]]; then
+        # Proxy was expected (OPENAI_API_BASE set) but socket is missing — fail fast
+        echo "[sandbox] FATAL: OPENAI_API_BASE is set but no socket at ${LLM_PROXY_SOCKET}" >&2
+        echo "[sandbox] Volume may not be mounted. Check Tmpfs vs volume mount ordering." >&2
+        exit 1
+    fi
     echo "[sandbox] No LLM proxy socket found at ${LLM_PROXY_SOCKET}, skipping socat bridge" >&2
 fi
 

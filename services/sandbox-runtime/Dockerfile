@@ -27,5 +27,5 @@ USER sandboxer
 WORKDIR /workspace
 
 # Entrypoint: starts socat bridge, then runs provided command
-# Usage: docker run --rm --network=none -v /tmp/proxy.sock:/run/llm-proxy.sock <image> 'your command'
+# Usage: docker run --rm --network=none --mount type=volume,src=llm-socket-XXX,target=/llm-sock <image> 'your command'
 ENTRYPOINT ["/usr/local/bin/sandbox-entrypoint.sh"]

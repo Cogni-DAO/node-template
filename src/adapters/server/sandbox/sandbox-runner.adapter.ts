@@ -41,8 +41,10 @@ const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 /** Default process limit per container */
 const DEFAULT_PIDS_LIMIT = 256;
 
-/** Socket directory inside container for LLM proxy */
-const CONTAINER_LLM_SOCKET_DIR = "/run/llm";
+/** Socket directory inside container for LLM proxy.
+ *  MUST NOT be under /run — sandbox containers mount tmpfs at /run which would mask
+ *  a volume mount beneath it. Using a top-level path avoids the conflict entirely. */
+const CONTAINER_LLM_SOCKET_DIR = "/llm-sock";
 /** Socket filename inside container */
 const CONTAINER_LLM_SOCKET_NAME = "llm.sock";
 /** Full socket path inside container */
@@ -88,6 +90,14 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
     this.proxyManager = new LlmProxyManager();
   }
 
+  /**
+   * Stop all running proxy containers and release resources.
+   * Call this in test teardown or process exit handlers.
+   */
+  async dispose(): Promise<void> {
+    await this.proxyManager.stopAll();
+  }
+
   async runOnce(spec: SandboxRunSpec): Promise<SandboxRunResult> {
     const {
       runId,
@@ -124,13 +134,15 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
           "litellmMasterKey required in adapter options when llmProxy is enabled"
         );
       }
-      this.log.debug({ runId }, "Starting LLM proxy for sandbox");
+      const t0 = Date.now();
       proxyHandle = await this.proxyManager.start({
         runId,
         attempt: llmProxy.attempt,
         litellmMasterKey: this.litellmMasterKey,
+        billingAccountId: llmProxy.billingAccountId,
         litellmHost: this.litellmHost,
       });
+      this.log.debug({ runId, elapsed: Date.now() - t0 }, "proxy.start done");
     }
 
     this.log.debug(
@@ -146,16 +158,22 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
       "Starting sandbox container"
     );
 
-    // Build bind mounts: workspace (always rw) + additional mounts + optional proxy socket
+    // Build bind mounts: workspace (always rw) + additional mounts
     const binds = [
       `${workspacePath}:/workspace:rw`,
       ...mounts.map((m) => `${m.hostPath}:${m.containerPath}:${m.mode}`),
     ];
 
-    // Add proxy socket directory mount if enabled
-    // Mount the directory (not the socket file) to avoid mount race conditions
+    // Build volume mounts (for socket sharing via Docker volume - hermetic)
+    const volumeMounts: Docker.MountSettings[] = [];
     if (proxyHandle) {
-      binds.push(`${proxyHandle.socketDir}:${CONTAINER_LLM_SOCKET_DIR}:rw`);
+      // Mount the socket volume rw — unix socket connect() requires write permission.
+      volumeMounts.push({
+        Type: "volume",
+        Source: proxyHandle.socketVolume,
+        Target: CONTAINER_LLM_SOCKET_DIR,
+        ReadOnly: false,
+      });
     }
 
     // Build environment variables
@@ -191,15 +209,17 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
           // Memory limit
           Memory: limits.maxMemoryMb * 1024 * 1024,
           MemorySwap: limits.maxMemoryMb * 1024 * 1024, // No swap
-          // Mount workspace + additional mounts + proxy socket
+          // Bind mounts: workspace + additional mounts
           Binds: binds,
+          // Volume mounts: socket volume for proxy (hermetic - works on all platforms)
+          Mounts: volumeMounts.length > 0 ? volumeMounts : undefined,
           // Manual removal - AutoRemove races with log collection
           AutoRemove: false,
           // Security: read-only root filesystem with tmpfs for writable areas
           ReadonlyRootfs: true,
           Tmpfs: {
             "/tmp": "rw,noexec,nosuid,size=64m",
-            // /run needs to be writable but not executable (socket is mounted ro separately)
+            // /run needs to be writable for socat and other runtime files
             "/run": "rw,noexec,nosuid,size=8m",
           },
           // Drop all capabilities
@@ -218,12 +238,26 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
       });
 
       // Start container
+      const t1 = Date.now();
       await container.start();
+      this.log.debug(
+        { runId, elapsed: Date.now() - t1 },
+        "container.start done"
+      );
 
       // Wait for completion with timeout (properly cleaned up)
       const waitResult = await this.waitWithTimeout(
         container,
         limits.maxRuntimeSec * 1000
+      );
+      this.log.debug(
+        {
+          runId,
+          timedOut: waitResult.timedOut,
+          statusCode: waitResult.statusCode,
+          elapsed: Date.now() - t1,
+        },
+        "waitWithTimeout done"
       );
 
       // Handle timeout - kill container first

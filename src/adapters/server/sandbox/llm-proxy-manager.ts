@@ -44,6 +44,8 @@ export interface LlmProxyConfig {
   attempt: number;
   /** LiteLLM master key for authentication */
   litellmMasterKey: string;
+  /** Billing account ID for cost attribution (matches in-proc `user` field). Required for production. */
+  billingAccountId: string;
   /** LiteLLM host:port as seen from proxy container (default: litellm:4000) */
   litellmHost?: string;
   /** Base directory for socket dirs and logs (default: os.tmpdir()/cogni-llm-proxy) */
@@ -52,12 +54,10 @@ export interface LlmProxyConfig {
 
 /** Result of starting an LLM proxy */
 export interface LlmProxyHandle {
-  /** Path to the socket DIRECTORY on host (mount this into sandbox) */
-  socketDir: string;
-  /** Socket filename within the directory */
+  /** Docker volume name for socket sharing (mount this into sandbox) */
+  socketVolume: string;
+  /** Socket filename within the volume */
   socketName: string;
-  /** Full socket path for reference */
-  socketPath: string;
   /** Path to the access log file (after stop) */
   logPath: string;
   /** Path to the generated config file */
@@ -80,61 +80,118 @@ const TEMPLATE_PATH = join(
  *
  * Architecture:
  * - Proxy container runs nginx:alpine on sandbox-internal network
- * - Listens on unix socket in shared directory
- * - Sandbox container (network=none) mounts same directory
+ * - Listens on unix socket in Docker volume (hermetic - works on all platforms)
+ * - Sandbox container (network=none) mounts same volume
  * - socat in sandbox bridges localhost:8080 to socket
  */
+/** Label applied to all proxy containers for sweep-based cleanup */
+const PROXY_LABEL = "cogni.role=llm-proxy";
+
 export class LlmProxyManager {
   private readonly docker: Docker;
   private readonly log: Logger;
   private readonly containers: Map<string, Docker.Container> = new Map();
   private readonly handles: Map<string, LlmProxyHandle> = new Map();
+  private readonly volumes: Map<string, string> = new Map();
 
-  constructor() {
-    this.docker = new Docker();
+  constructor(docker?: Docker) {
+    this.docker = docker ?? new Docker();
     this.log = makeLogger({ component: "LlmProxyManager" });
+  }
+
+  /**
+   * Remove all containers and volumes with cogni.role=llm-proxy label.
+   * Safe to call without an instance — uses Docker API label filter directly.
+   * Call in test beforeAll/afterAll to clean up orphans from crashed runs.
+   */
+  static async cleanupSweep(docker?: Docker): Promise<number> {
+    const d = docker ?? new Docker();
+    const containers = await d.listContainers({
+      all: true,
+      filters: { label: [PROXY_LABEL] },
+    });
+    await Promise.all(
+      containers.map((c) =>
+        d
+          .getContainer(c.Id)
+          .remove({ force: true })
+          .catch(() => {})
+      )
+    );
+    // Clean matching volumes
+    const volumes = await d.listVolumes({
+      filters: { name: ["llm-socket-"] },
+    });
+    await Promise.all(
+      (volumes.Volumes ?? []).map((v) =>
+        d
+          .getVolume(v.Name)
+          .remove()
+          .catch(() => {})
+      )
+    );
+    return containers.length;
   }
 
   /**
    * Start an Nginx proxy container for a sandbox run.
    *
    * @param config - Proxy configuration
-   * @returns Handle with socket directory path for mounting
+   * @returns Handle with socket volume name for mounting
    * @throws If proxy container fails to start
    */
   async start(config: LlmProxyConfig): Promise<LlmProxyHandle> {
-    const { runId, attempt, litellmMasterKey, litellmHost, baseDir } = config;
+    const {
+      runId,
+      attempt,
+      litellmMasterKey,
+      billingAccountId,
+      litellmHost,
+      baseDir,
+    } = config;
 
     // Check if already running
     if (this.containers.has(runId)) {
       throw new Error(`Proxy already running for runId: ${runId}`);
     }
 
-    // Create isolated directories for this run.
-    // SECRETS_HOST_ONLY: socket dir is shared with sandbox; config dir is proxy-only.
-    // Never put nginx.conf (contains LITELLM_MASTER_KEY) in the socket dir.
+    // Create host directory for config and logs (SECRETS_HOST_ONLY: config stays on host)
     const base = baseDir ?? join(tmpdir(), "cogni-llm-proxy");
-    const runDir = join(base, runId);
-    const socketDir = join(runDir, "sock");
-    const configDir = join(runDir, "conf");
+    const configDir = join(base, runId);
     const socketName = "llm.sock";
-    const socketPath = join(socketDir, socketName);
     const configPath = join(configDir, "nginx.conf");
     const logPath = join(configDir, "access.log");
 
-    this.log.debug({ runId, socketDir }, "Starting LLM proxy container");
+    // Create Docker volume for socket sharing (hermetic - works on all platforms)
+    // Using volumes instead of bind mounts avoids macOS osxfs unix socket issues
+    const socketVolume = `llm-socket-${runId}`;
 
-    // Create both directories
-    mkdirSync(socketDir, { recursive: true, mode: 0o755 });
+    this.log.debug({ runId, socketVolume }, "Starting LLM proxy container");
+
+    // Create config directory on host
     mkdirSync(configDir, { recursive: true, mode: 0o700 });
 
+    // Create Docker volume for socket
+    await this.docker.createVolume({ Name: socketVolume });
+    this.volumes.set(runId, socketVolume);
+
     // Generate config from template
+    // Build metadata JSON for LiteLLM (run correlation + Langfuse observability)
+    const metadataJson = JSON.stringify({
+      run_id: runId,
+      attempt,
+      graph_id: "sandbox:agent",
+      // Additional Langfuse fields can be added here
+    });
+
     const configContent = this.generateConfig({
-      socketPath: `/run/llm/${socketName}`, // Path inside container
+      socketPath: `/llm-sock/${socketName}`, // Path inside container
       logPath: "/var/log/nginx/access.log", // Path inside container
       runId,
       attempt,
       litellmMasterKey,
+      billingAccountId, // User's billing account (required)
+      litellmMetadataJson: metadataJson, // Run correlation + observability
       litellmHost: litellmHost ?? "litellm:4000", // Docker DNS
     });
 
@@ -149,38 +206,54 @@ export class LlmProxyManager {
     const container = await this.docker.createContainer({
       Image: NGINX_IMAGE,
       name: containerName,
+      Labels: {
+        "cogni.role": "llm-proxy",
+        "cogni.runId": runId,
+      },
       HostConfig: {
         // Connect to same network as LiteLLM
         NetworkMode: PROXY_NETWORK,
-        // Mount socket directory (rw so nginx can create socket)
-        // Mount config file (ro)
-        Binds: [
-          `${socketDir}:/run/llm:rw`,
-          `${configPath}:/etc/nginx/nginx.conf:ro`,
+        // Mount socket volume (rw so nginx can create socket)
+        // Mount config file (ro) - bind mount is fine for regular files
+        Binds: [`${configPath}:/etc/nginx/nginx.conf:ro`],
+        Mounts: [
+          {
+            Type: "volume",
+            Source: socketVolume,
+            Target: "/llm-sock",
+            ReadOnly: false,
+          },
         ],
-        // Auto-remove disabled - we need to collect logs first
-        AutoRemove: false,
+        AutoRemove: true,
       },
     });
 
-    await container.start();
-
-    // Wait for socket to appear
-    await this.waitForSocket(socketPath, 10000);
-
+    // Register IMMEDIATELY so stopAll/cleanupSweep can find it even if
+    // readiness check fails or the test is aborted mid-flight.
     this.containers.set(runId, container);
+
     const handle: LlmProxyHandle = {
-      socketDir,
+      socketVolume,
       socketName,
-      socketPath,
       logPath,
       configPath,
       containerId: container.id,
     };
     this.handles.set(runId, handle);
 
+    await container.start();
+
+    // Wait for proxy to be ready (5 attempts with exponential backoff: 50-800ms).
+    // On failure: stop container + remove volume so we don't orphan resources.
+    try {
+      await this.waitForProxyReady(container, socketName, 2000);
+    } catch (err) {
+      await this.stop(runId);
+      throw err;
+    }
+
     this.log.info(
-      { runId, socketPath, containerId: container.id },
+      { runId, socketVolume, containerId: container.id },
       "LLM proxy container started"
     );
     return handle;
@@ -195,6 +268,7 @@ export class LlmProxyManager {
   async stop(runId: string): Promise<string | null> {
     const container = this.containers.get(runId);
     const handle = this.handles.get(runId);
+    const volumeName = this.volumes.get(runId);
 
     if (!container) {
       this.log.warn({ runId }, "No proxy container found to stop");
@@ -209,15 +283,20 @@ export class LlmProxyManager {
         await this.copyLogFromContainer(container, handle.logPath);
       }
 
-      // Stop container
-      await container.stop({ t: 5 }).catch(() => {
-        // Container may already be stopped
+      // Stop container (AutoRemove:true will remove it after stop)
+      await container.stop({ t: 2 }).catch(() => {
+        // Container may already be stopped or auto-removed
       });
 
-      // Remove container
-      await container.remove({ force: true }).catch(() => {
-        // Container may already be removed
-      });
+      // Remove Docker volume
+      if (volumeName) {
+        try {
+          await this.docker.getVolume(volumeName).remove();
+        } catch {
+          // Volume may already be removed or in use
+        }
+        this.volumes.delete(runId);
+      }
     } catch (err) {
       this.log.warn({ runId, error: err }, "Error stopping proxy container");
     }
@@ -232,19 +311,24 @@ export class LlmProxyManager {
   }
 
   /**
-   * Clean up run directory (sock/ + conf/) for a run.
+   * Clean up config directory for a run.
    * Call this after stop() when you're done with the logs.
    */
   cleanup(runId: string): void {
     const handle = this.handles.get(runId);
-    // Remove parent runDir (contains sock/ + conf/) rather than just socketDir
-    const runDir = handle?.socketDir ? join(handle.socketDir, "..") : undefined;
-    if (runDir && existsSync(runDir)) {
+    // Remove config directory
+    const configDir = handle?.configPath
+      ? join(handle.configPath, "..")
+      : undefined;
+    if (configDir && existsSync(configDir)) {
       try {
-        rmSync(runDir, { recursive: true, force: true });
-        this.log.debug({ runId, runDir }, "Cleaned up run directory");
+        rmSync(configDir, { recursive: true, force: true });
+        this.log.debug({ runId, configDir }, "Cleaned up config directory");
       } catch (err) {
-        this.log.warn({ runId, error: err }, "Failed to cleanup run directory");
+        this.log.warn(
+          { runId, error: err },
+          "Failed to cleanup config directory"
+        );
       }
     }
     this.handles.delete(runId);
@@ -317,9 +401,19 @@ export class LlmProxyManager {
       const chunks: Buffer[] = [];
 
       await new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          stream.destroy();
+          resolve();
+        }, 1000);
         stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-        stream.on("end", resolve);
-        stream.on("error", resolve); // Don't fail if log collection fails
+        stream.on("end", () => {
+          clearTimeout(timer);
+          resolve();
+        });
+        stream.on("error", () => {
+          clearTimeout(timer);
+          resolve();
+        });
       });
 
       if (chunks.length > 0) {
@@ -341,6 +435,8 @@ export class LlmProxyManager {
     runId: string;
     attempt: number;
     litellmMasterKey: string;
+    billingAccountId: string;
+    litellmMetadataJson: string;
     litellmHost: string;
   }): string {
     // Read template
@@ -356,6 +452,8 @@ export class LlmProxyManager {
       RUN_ID: vars.runId,
       ATTEMPT: String(vars.attempt),
       LITELLM_MASTER_KEY: vars.litellmMasterKey,
+      BILLING_ACCOUNT_ID: vars.billingAccountId,
+      LITELLM_METADATA_JSON: vars.litellmMetadataJson,
       LITELLM_HOST: vars.litellmHost,
     };
 
@@ -372,19 +470,100 @@ export class LlmProxyManager {
   }
 
   /**
-   * Wait for a unix socket to appear (nginx startup).
+   * Wait for proxy to be ready by checking socket inside container.
+   * Uses docker exec to test socket exists in the volume.
+   *
+   * IMPORTANT: exec.start() returns an IncomingMessage stream that MUST be
+   * consumed — otherwise it leaks an HTTP socket from the Node.js agent pool.
+   * After ~5 leaked sockets, all subsequent Docker API calls hang forever.
+   * We await the stream 'end' event (signals exec completion) before inspecting.
    */
-  private async waitForSocket(
-    socketPath: string,
+  private async waitForProxyReady(
+    container: Docker.Container,
+    socketName: string,
     timeoutMs: number
   ): Promise<void> {
+    const socketPath = `/llm-sock/${socketName}`;
     const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      if (existsSync(socketPath)) {
-        return;
+    const backoffs = [50, 100, 200, 400, 800];
+    let lastError: string | undefined;
+
+    for (let attempt = 0; attempt < backoffs.length; attempt++) {
+      if (Date.now() - start >= timeoutMs) break;
+
+      try {
+        const exec = await container.exec({
+          Cmd: ["test", "-S", socketPath],
+          AttachStdout: true,
+          AttachStderr: true,
+        });
+
+        // hijack: true returns a Duplex whose 'end' fires reliably when
+        // the exec finishes (unlike hijack: false IncomingMessage).
+        // AttachStdout/Stderr MUST be true — Docker won't send the HTTP
+        // upgrade response with nothing to attach, causing exec.start to hang.
+        // Bounded await (500ms) + fallback to exec.inspect polling so we
+        // never hang even if the stream doesn't emit 'end'.
+        const stream = await exec.start({ hijack: true, stdin: false });
+        let streamEnded = false;
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(() => resolve(), 500);
+          stream.on("end", () => {
+            streamEnded = true;
+            clearTimeout(timer);
+            resolve();
+          });
+          stream.on("error", () => {
+            clearTimeout(timer);
+            resolve();
+          });
+          stream.resume();
+        });
+
+        // If stream didn't end, poll exec.inspect until ExitCode is set.
+        if (!streamEnded) {
+          stream.destroy();
+          const pollDeadline = Date.now() + 1000;
+          while (Date.now() < pollDeadline) {
+            const info = await exec.inspect();
+            if (info.ExitCode !== null) break;
+            await new Promise((r) => setTimeout(r, 30));
+          }
+        }
+
+        const inspectResult = await exec.inspect();
+        if (inspectResult.ExitCode === 0) {
+          return; // Socket exists
+        }
+        lastError = `test -S exited ${inspectResult.ExitCode}`;
+      } catch (err) {
+        lastError =
+          err instanceof Error ? err.message : "exec failed (unknown)";
       }
-      await new Promise((r) => setTimeout(r, 100));
+
+      await new Promise((r) => setTimeout(r, backoffs[attempt]));
     }
-    throw new Error(`Timeout waiting for proxy socket: ${socketPath}`);
+
+    // Collect container logs for diagnostics
+    let containerLogs = "";
+    try {
+      const logBuf = await container.logs({
+        stdout: true,
+        stderr: true,
+        tail: 20,
+      });
+      containerLogs = Buffer.isBuffer(logBuf)
+        ? logBuf.toString("utf8")
+        : String(logBuf);
+    } catch {
+      /* best-effort */
+    }
+
+    throw new Error(
+      `Timeout waiting for proxy socket: ${socketPath} ` +
+        `(last: ${lastError ?? "no attempts"}, ` +
+        `elapsed: ${Date.now() - start}ms)\n` +
+        `Container logs:\n${containerLogs}`
+    );
   }
 }
