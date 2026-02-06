@@ -108,14 +108,14 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | ACCOUNTS_API_KEY_ENDPOINTS.md        | accounts-api-endpoints.md      | ini.accounts-api-keys.md           | -   | -                        | AB+road    | [ ]  | [ ]  |
 | ACCOUNTS_DESIGN.md                   | accounts-design.md             | ini.accounts-api-keys.md           | -   | -                        | AB+road    | [ ]  | [ ]  |
 | ACTIVITY_METRICS.md                  | activity-metrics.md            | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| AGENTS_CONTEXT.md                    | -                              | -                                  | -   | agents-context.md        | procedural | [ ]  | [ ]  |
-| AGENT_DEVELOPMENT_GUIDE.md           | -                              | -                                  | -   | agent-development.md     | procedural | [ ]  | [ ]  |
+| AGENTS_CONTEXT.md                    | -                              | -                                  | -   | agents-context.md        | procedural | [x]  | [ ]  |
+| AGENT_DEVELOPMENT_GUIDE.md           | -                              | -                                  | -   | agent-development.md     | procedural | [x]  | [ ]  |
 | AGENT_DISCOVERY.md                   | agent-discovery.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                        | roadmap    | [ ]  | [ ]  |
 | AI_EVALS.md                          | ai-evals.md                    | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                        | AB+road    | [ ]  | [ ]  |
 | AI_SETUP_SPEC.md                     | ai-setup.md                    | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
-| ALLOY_LOKI_SETUP.md                  | -                              | -                                  | -   | alloy-loki-setup.md      | procedural | [ ]  | [ ]  |
+| ALLOY_LOKI_SETUP.md                  | -                              | -                                  | -   | alloy-loki-setup.md      | procedural | [x]  | [ ]  |
 | ARCHITECTURE.md                      | architecture.md                | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | ARCHITECTURE_ENFORCEMENT_GAPS.md     | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | AUTHENTICATION.md                    | authentication.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -142,14 +142,14 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | ERROR_HANDLING_ARCHITECTURE.md       | error-handling.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | ERROR_HANDLING_IMPROVEMENT_DESIGN.md | -                              | ini.error-handling-improvements.md | -   | -                        | roadmap    | [ ]  | [ ]  |
 | EXTERNAL_EXECUTOR_BILLING.md         | external-executor-billing.md   | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md   | procedural | [ ]  | [ ]  |
+| FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md   | procedural | [x]  | [ ]  |
 | GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                        | AB+road    | [ ]  | [ ]  |
 | HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                        | AB+road    | [ ]  | [ ]  |
-| INTEGRATION_WALLETS_CREDITS.md       | -                              | -                                  | -   | wallet-auth-setup.md     | procedural | [ ]  | [ ]  |
+| INTEGRATION_WALLETS_CREDITS.md       | -                              | ini.accounts-api-keys.md           | -   | wallet-auth-setup.md     | procedural | [x]  | [ ]  |
 | ISOLATE_LITELLM_DATABASE.md          | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | LANGGRAPH_AI.md                      | langgraph-patterns.md          | -                                  | -   | langgraph-guide.md       | AB+road    | [ ]  | [ ]  |
 | LANGGRAPH_SERVER.md                  | langgraph-server.md            | ini.langgraph-server-production.md | -   | langgraph-server-dev.md  | AB+road    | [ ]  | [ ]  |
@@ -158,7 +158,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | MODEL_SELECTION.md                   | model-selection.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | MVP_DELIVERABLES.md                  | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | ini.n8n-integration.md             | -   | -                        | roadmap    | [ ]  | [ ]  |
-| NEW_PACKAGES.md                      | -                              | -                                  | -   | new-packages.md          | procedural | [ ]  | [ ]  |
+| NEW_PACKAGES.md                      | -                              | -                                  | -   | new-packages.md          | procedural | [x]  | [ ]  |
 | NODE_CI_CD_CONTRACT.md               | node-ci-cd-contract.md         | ini.ci-cd-reusable.md              | -   | -                        | AB+road    | [ ]  | [ ]  |
 | NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md  | AB+road    | [ ]  | [ ]  |
 | NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -179,15 +179,15 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | SERVICES_ARCHITECTURE.md             | services-architecture.md       | ini.cicd-services-gitops.md        | -   | create-service.md        | as-built   | [x]  | [ ]  |
 | SERVICES_MIGRATION.md                | -                              | ini.services-migration.md          | -   | -                        | roadmap    | [ ]  | [ ]  |
-| SETUP.md                             | -                              | -                                  | -   | developer-setup.md       | procedural | [ ]  | [ ]  |
+| SETUP.md                             | -                              | -                                  | -   | developer-setup.md       | procedural | [x]  | [ ]  |
 | SOURCECRED.md                        | sourcecred.md                  | -                                  | -   | sourcecred-operations.md | AB+road    | [ ]  | [ ]  |
 | SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | STYLE.md                             | style.md                       | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
 | TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | ini.tenant-connections.md          | -   | -                        | AB+road    | [ ]  | [ ]  |
-| TESTING.md                           | -                              | -                                  | -   | testing.md               | procedural | [ ]  | [ ]  |
-| TOOLS_AUTHORING.md                   | -                              | -                                  | -   | tools-authoring.md       | procedural | [ ]  | [ ]  |
+| TESTING.md                           | -                              | -                                  | -   | testing.md               | procedural | [x]  | [ ]  |
+| TOOLS_AUTHORING.md                   | -                              | -                                  | -   | tools-authoring.md       | procedural | [x]  | [ ]  |
 | TOOL_USE_SPEC.md                     | tool-use.md                    | ini.tool-use-evolution.md          | -   | -                        | AB+road    | [ ]  | [ ]  |
 | UI_CLEANUP_CHECKLIST.md              | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | UI_CLEANUP_PLAN.md                   | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
