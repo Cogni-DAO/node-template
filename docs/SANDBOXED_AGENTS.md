@@ -27,7 +27,7 @@
 
 10. **HOST_INJECTS_BILLING_HEADERS**: Proxy injects billing + observability headers matching in-proc `LiteLlmAdapter` behavior. Client-sent `x-litellm-*` headers stripped/overwritten. Required headers:
     - `x-litellm-end-user-id: ${billingAccountId}` — matches in-proc `user: billingAccountId` for dashboard parity
-    - `x-litellm-metadata: {"run_id":"...","attempt":0,"user_id":"...","graph_id":"sandbox:agent","existing_trace_id":"...","session_id":"...","trace_user_id":"..."}` — run correlation + Langfuse observability
+    - `x-litellm-spend-logs-metadata: {"run_id":"...","attempt":0,"user_id":"...","graph_id":"sandbox:agent","existing_trace_id":"...","session_id":"...","trace_user_id":"..."}` — run correlation + Langfuse observability
 
 11. **LITELLM_IS_BILLING_TRUTH**: Do not count tokens in proxy. LiteLLM `/spend/logs` is the authoritative billing source. Query by `end_user=billingAccountId`, filter by `metadata.run_id` for per-run reconciliation.
 
@@ -209,7 +209,7 @@ PER-RUN RESOURCES:
 │  - Listens on unix socket in shared Docker volume                   │
 │  - Injects: Authorization: Bearer ${LITELLM_MASTER_KEY}             │
 │  - Injects: x-litellm-end-user-id: ${billingAccountId}              │
-│  - Injects: x-litellm-metadata: {run_id, attempt, Langfuse fields} │
+│  - Injects: x-litellm-spend-logs-metadata: {run_id, attempt, Langfuse fields} │
 │  - Forwards to http://litellm:4000 (Docker DNS)                     │
 │  - Audit logs copied to host on stop (not visible to sandbox)        │
 └─────────────────────────────────────────────────────────────────────┘

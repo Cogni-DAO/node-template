@@ -9,7 +9,7 @@
 
 2. **USAGE_UNIT_IS_PROVIDER_CALL_ID**: Each LLM call has a unique `usageUnitId = spend_logs.request_id`. Multiple charge_receipts per run is expected for multi-step graphs.
 
-3. **SERVER_SETS_IDENTITY_NEVER_CLIENT**: Identity headers/fields are server-set. In-proc: `user` body field. Sandbox: proxy overwrites `x-litellm-end-user-id` + `x-litellm-metadata`. External: `configurable.user`. Client values stripped/ignored.
+3. **SERVER_SETS_IDENTITY_NEVER_CLIENT**: Identity headers/fields are server-set. In-proc: `user` body field. Sandbox: proxy overwrites `x-litellm-end-user-id` + `x-litellm-spend-logs-metadata`. External: `configurable.user`. Client values stripped/ignored.
 
 4. **RECONCILE_AFTER_STREAM_COMPLETES**: Reconciliation triggers after stream ends (success or error). No grace window for MVP—LiteLLM writes are synchronous with response.
 
@@ -19,7 +19,7 @@
 
 7. **IDEMPOTENCY_VIA_SOURCE_REFERENCE**: `source_reference = ${runId}/${attempt}/${provider_call_id}`. Replayed reconciliation is no-op.
 
-8. **METADATA_PARITY**: All executors must produce equivalent LiteLLM metadata. Required fields: `run_id`, `attempt`, `cogni_billing_account_id`, `request_id`. Langfuse fields: `existing_trace_id`, `session_id`, `trace_user_id`. In-proc sets via request body `metadata`; sandbox sets via `x-litellm-metadata` header; external sets via `configurable`.
+8. **METADATA_PARITY**: All executors must produce equivalent LiteLLM metadata. Required fields: `run_id`, `attempt`, `cogni_billing_account_id`, `request_id`. Langfuse fields: `existing_trace_id`, `session_id`, `trace_user_id`. In-proc sets via request body `metadata`; sandbox sets via `x-litellm-spend-logs-metadata` header; external sets via `configurable`.
 
 ---
 
@@ -73,12 +73,12 @@
 | --------------- | -------------------------------------------------------------------------------- |
 | Billing source  | LiteLLM `/spend/logs` API                                                        |
 | Identity field  | `end_user = billingAccountId` (set via `x-litellm-end-user-id`)                  |
-| Run correlation | `metadata.run_id` (set via `x-litellm-metadata` header)                          |
+| Run correlation | `metadata.run_id` (set via `x-litellm-spend-logs-metadata` header)               |
 | Call ID field   | `spend_logs.request_id` (logged in proxy via `$upstream_http_x_litellm_call_id`) |
 | ExecutorType    | `sandbox`                                                                        |
 | SourceSystem    | `litellm`                                                                        |
 
-**Mechanism:** Proxy injects `x-litellm-end-user-id` and `x-litellm-metadata` headers. Both overwrite any client-sent values. Sandbox cannot spoof identity. See [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) invariant #10.
+**Mechanism:** Proxy injects `x-litellm-end-user-id` and `x-litellm-spend-logs-metadata` headers. Both overwrite any client-sent values. Sandbox cannot spoof identity. See [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) invariant #10.
 
 ### Claude SDK — P2
 
