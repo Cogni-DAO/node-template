@@ -80,6 +80,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   ".husky",
   ".mcp.json",
   ".nvmrc",
+  ".obsidian",
   ".prettierignore",
   ".prettierrc",
   ".prettierrc.cjs",
