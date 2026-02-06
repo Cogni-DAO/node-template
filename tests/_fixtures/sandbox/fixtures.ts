@@ -17,7 +17,10 @@ import * as path from "node:path";
 
 import type Docker from "dockerode";
 
-import type { SandboxRunnerAdapter } from "@/adapters/server/sandbox";
+import {
+  LlmProxyManager,
+  type SandboxRunnerAdapter,
+} from "@/adapters/server/sandbox";
 import type { SandboxRunResult } from "@/ports";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,9 +30,10 @@ import type { SandboxRunResult } from "@/ports";
 export const SANDBOX_IMAGE = "cogni-sandbox-runtime:latest";
 export const SANDBOX_INTERNAL_NETWORK = "sandbox-internal";
 
-/** Default limits for sandbox tests - fast timeouts */
+/** Default limits for sandbox tests - tight timeouts to fail fast.
+ *  Full proxy+sandbox flow completes in <1s; 3s is generous headroom. */
 export const DEFAULT_LIMITS = {
-  maxRuntimeSec: 8,
+  maxRuntimeSec: 3,
   maxMemoryMb: 128,
 } as const;
 
@@ -104,6 +108,11 @@ export async function cleanupWorkspace(workspace: string): Promise<void> {
   await fs.rm(workspace, { recursive: true, force: true });
 }
 
+/** Remove orphaned proxy containers/volumes via label filter (cogni.role=llm-proxy) */
+export async function cleanupOrphanedProxies(docker: Docker): Promise<number> {
+  return LlmProxyManager.cleanupSweep(docker);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Runner Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,6 +121,9 @@ export interface RunOptions {
   maxRuntimeSec?: number;
   maxMemoryMb?: number;
 }
+
+/** Test billing account ID for sandbox tests */
+export const TEST_BILLING_ACCOUNT_ID = "test-billing-account";
 
 /** Run command in sandbox with network=none and llmProxy enabled */
 export async function runWithProxy(
@@ -128,7 +140,11 @@ export async function runWithProxy(
       maxMemoryMb: options?.maxMemoryMb ?? DEFAULT_LIMITS.maxMemoryMb,
     },
     networkMode: { mode: "none" },
-    llmProxy: { enabled: true, attempt: 0 },
+    llmProxy: {
+      enabled: true,
+      billingAccountId: TEST_BILLING_ACCOUNT_ID,
+      attempt: 0,
+    },
   });
 }
 

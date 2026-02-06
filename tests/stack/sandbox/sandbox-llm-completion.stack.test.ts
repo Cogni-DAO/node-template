@@ -17,13 +17,18 @@
  */
 
 import Docker from "dockerode";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+// Full proxy+sandbox flow completes in <1s (see scripts/diag-full-flow.mjs).
+// 4s per test is generous; 10s for hooks (setup/teardown touch multiple containers).
+vi.setConfig({ testTimeout: 4_000, hookTimeout: 10_000 });
 
 import { SandboxRunnerAdapter } from "@/adapters/server/sandbox";
 
 import {
   assertLitellmReachable,
   assertSandboxImageExists,
+  cleanupOrphanedProxies,
   cleanupWorkspace,
   createWorkspace,
   runIsolated,
@@ -39,6 +44,9 @@ describe("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   const litellmMasterKey = process.env.LITELLM_MASTER_KEY;
 
   beforeAll(async () => {
+    // Clean up orphaned containers from previous crashed runs
+    await cleanupOrphanedProxies(docker);
+
     if (!litellmMasterKey) {
       console.warn(
         "SKIPPING P0.5 TESTS: LITELLM_MASTER_KEY not set. Start dev stack with: pnpm dev:infra"
@@ -61,9 +69,15 @@ describe("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   });
 
   afterAll(async () => {
+    // Stop any proxy containers still tracked by the manager
+    if (ctx?.runner) {
+      await ctx.runner.dispose();
+    }
     if (ctx?.workspace) {
       await cleanupWorkspace(ctx.workspace);
     }
+    // Belt-and-suspenders: remove any containers that escaped the manager
+    await cleanupOrphanedProxies(docker);
     ctx = null;
   });
 

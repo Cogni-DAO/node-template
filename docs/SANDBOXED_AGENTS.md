@@ -11,7 +11,7 @@
 
 3. **SYSTEM_GRANT_REQUIRED**: Requires `ExecutionGrant` with `allowSandbox: true`. NOT user-invocable.
 
-4. **SECRETS_HOST_ONLY**: No tokens in sandbox FS/env/logs. Host-controlled proxy container injects credentials. Proxy config (contains keys) is never mounted into sandbox — only the socket directory (`sock/`) is shared.
+4. **SECRETS_HOST_ONLY**: No tokens in sandbox FS/env/logs. Host-controlled proxy container injects credentials. Proxy config (contains keys) is never mounted into sandbox — only the socket volume (`/llm-sock`) is shared.
 
 5. **NETWORK_DEFAULT_DENY**: Sandbox runs `network=none` always. All external IO via mounted unix socket only.
 
@@ -25,9 +25,11 @@
 
 9. **LLM_VIA_SOCKET_ONLY**: Sandbox calls LLM ONLY via `localhost:8080 → unix socket → proxy container → LiteLLM`. No network access.
 
-10. **HOST_INJECTS_BILLING_HEADER**: Proxy injects `x-litellm-end-user-id: ${runId}/${attempt}`. Client-sent headers stripped/ignored.
+10. **HOST_INJECTS_BILLING_HEADERS**: Proxy injects billing + observability headers matching in-proc `LiteLlmAdapter` behavior. Client-sent `x-litellm-*` headers stripped/overwritten. Required headers:
+    - `x-litellm-end-user-id: ${billingAccountId}` — matches in-proc `user: billingAccountId` for dashboard parity
+    - `x-litellm-metadata: {"run_id":"...","attempt":0,"user_id":"...","graph_id":"sandbox:agent","existing_trace_id":"...","session_id":"...","trace_user_id":"..."}` — run correlation + Langfuse observability
 
-11. **LITELLM_IS_BILLING_TRUTH**: Do not count tokens in proxy. LiteLLM `/spend/logs` is the authoritative billing source. Reconcile later via `end_user` query.
+11. **LITELLM_IS_BILLING_TRUTH**: Do not count tokens in proxy. LiteLLM `/spend/logs` is the authoritative billing source. Query by `end_user=billingAccountId`, filter by `metadata.run_id` for per-run reconciliation.
 
 12. **SANDBOX_RUNID_IS_SESSION**: `runId` = one sandbox session = one `runOnce()` call. All LLM calls within a session share one runId. One proxy per runId. Long-running session semantics (P1.5+) will extend this but never split a session across multiple runIds.
 
@@ -182,10 +184,10 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 #### Architecture
 
 ```
-HOST PATHS (per run):
-  {base}/{runId}/sock/llm.sock   ← shared with sandbox
-  {base}/{runId}/conf/nginx.conf ← proxy-only (contains LITELLM_MASTER_KEY)
-  {base}/{runId}/conf/access.log ← proxy-only (audit)
+PER-RUN RESOURCES:
+  Docker volume: llm-socket-{runId}   ← shared between proxy + sandbox
+  Host: {base}/{runId}/nginx.conf     ← proxy-only bind mount (contains LITELLM_MASTER_KEY)
+  Host: {base}/{runId}/access.log     ← copied from proxy on stop (audit)
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ SANDBOX (network=none)                                              │
@@ -193,21 +195,23 @@ HOST PATHS (per run):
 │  Agent Runtime (OpenClaw, Clawdbot, etc.)                           │
 │    └─ OPENAI_API_BASE=http://localhost:8080                         │
 │                                                                     │
-│  socat (localhost:8080 ↔ /run/llm/llm.sock)                        │
-│  Mounts: sock/ → /run/llm (socket only, no config)                 │
+│  socat (localhost:8080 ↔ /llm-sock/llm.sock)                       │
+│  Volume: llm-socket-{runId} → /llm-sock (socket only, no config)   │
 └────────────────────────┼────────────────────────────────────────────┘
-                         │ sock/ directory (bind-mounted from host)
+                         │ Docker volume (hermetic, no host bind mount)
                          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ PROXY CONTAINER: nginx:alpine (on sandbox-internal network)         │
 │ ─────────────────────────────────────────────────────               │
-│  Mounts: sock/ → /run/llm, conf/nginx.conf → /etc/nginx/nginx.conf │
+│  Volume: llm-socket-{runId} → /llm-sock                            │
+│  Bind:   {base}/{runId}/nginx.conf → /etc/nginx/nginx.conf:ro      │
 │  - Managed by LlmProxyManager via dockerode                         │
-│  - Listens on unix socket in shared sock/ directory                  │
+│  - Listens on unix socket in shared Docker volume                   │
 │  - Injects: Authorization: Bearer ${LITELLM_MASTER_KEY}             │
-│  - Injects: x-litellm-end-user-id: ${runId}/${attempt}              │
+│  - Injects: x-litellm-end-user-id: ${billingAccountId}              │
+│  - Injects: x-litellm-metadata: {run_id, attempt, Langfuse fields} │
 │  - Forwards to http://litellm:4000 (Docker DNS)                     │
-│  - Audit logs in conf/ directory (not visible to sandbox)            │
+│  - Audit logs copied to host on stop (not visible to sandbox)        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -216,7 +220,7 @@ HOST PATHS (per run):
 #### Infrastructure
 
 - [x] Create `platform/infra/services/sandbox-proxy/nginx.conf.template`:
-  - Listen on unix socket in shared `/run/llm/` directory
+  - Listen on unix socket in shared `/llm-sock/` directory
   - Inject `Authorization: Bearer ${LITELLM_MASTER_KEY}` (from template substitution)
   - Inject `x-litellm-end-user-id: ${runId}/${attempt}` (overwrites client-sent)
   - Forward to `http://litellm:4000` (Docker DNS on sandbox-internal)
@@ -225,7 +229,7 @@ HOST PATHS (per run):
   - Add `socat` for socket-to-localhost bridging
   - Add entrypoint wrapper that starts socat before main command
 - [x] Create `services/sandbox-runtime/entrypoint.sh`:
-  - Start `socat TCP-LISTEN:8080,fork,bind=127.0.0.1 UNIX-CONNECT:/run/llm/llm.sock &`
+  - Start `socat TCP-LISTEN:8080,fork,bind=127.0.0.1 UNIX-CONNECT:/llm-sock/llm.sock &`
   - Exec the main agent command
   - Note: P0.5 uses entrypoint for socat; argv passed as Cmd to entrypoint
 
@@ -233,14 +237,14 @@ HOST PATHS (per run):
 
 - [x] Extend `SandboxRunnerAdapter.runOnce()`:
   - Before container start: start nginx:alpine proxy container via LlmProxyManager
-  - Mount socket directory only: `{runDir}/sock/:/run/llm:rw` (not config dir)
+  - Mount socket volume into sandbox at `/llm-sock:rw` (not config dir)
   - Set env: `OPENAI_API_BASE=http://localhost:8080`, `RUN_ID=${runId}`
   - After container exits: stop proxy container, audit log persists in conf/
 - [x] Create `src/adapters/server/sandbox/llm-proxy-manager.ts`:
-  - `start(runId, attempt)`: create nginx:alpine container on sandbox-internal, return socket dir
-  - `stop(runId)`: copy access log, stop/remove container
-  - `cleanup(runId)`: delete run directory (caller decides when)
-  - Config generated from template, written to conf/ with 0o600 perms (never in sock/)
+  - `start(runId, attempt)`: create nginx:alpine container on sandbox-internal, return Docker volume name
+  - `stop(runId)`: copy access log, stop/remove container and volume
+  - `cleanup(runId)`: delete host config directory (caller decides when)
+  - Config bind-mounted into proxy with 0o600 perms (never in socket volume)
 
 #### Bootstrap (`src/bootstrap/`)
 
@@ -446,6 +450,7 @@ HOST PATHS (per run):
 - [ ] Clawdbot-specific config: `baseUrl: http://localhost:8080`, sandbox mode
 - [ ] Implement `GitHubRepoAdapter` for `RepoPort` via ConnectionBroker
 - [ ] Persistent workspace option for long-running DAO agents
+- [ ] Stop using LITELLM_MASTER_KEY, find better proxy keys
 
 ---
 
@@ -466,15 +471,15 @@ HOST PATHS (per run):
 
 **P0.5a explored**: Internal Docker network (`sandbox-internal`) with `internal: true` to block internet while allowing LiteLLM access. This worked but required network connectivity.
 
-**P0.5 uses**: Complete network isolation (`network=none`) with unix socket in a shared directory. Proxy runs as nginx:alpine container on sandbox-internal network. A socat process in the sandbox bridges `localhost:8080` to the socket.
+**P0.5 uses**: Complete network isolation (`network=none`) with unix socket in a shared Docker volume. Proxy runs as nginx:alpine container on sandbox-internal network. A socat process in the sandbox bridges `localhost:8080` to the socket. Docker volumes (not bind mounts) are used for socket sharing — this avoids macOS osxfs unix socket issues and prevents tmpfs at `/run` from masking the mount.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ SANDBOX (network=none)                                              │
 │                                                                     │
-│  Agent → localhost:8080 → socat → /run/llm/llm.sock                │
+│  Agent → localhost:8080 → socat → /llm-sock/llm.sock               │
 └──────────────────────────────┼──────────────────────────────────────┘
-                               │ shared socket directory (bind mount)
+                               │ shared socket volume (Docker volume)
                                ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ PROXY: nginx:alpine (sandbox-internal) → litellm:4000                     │
@@ -617,5 +622,5 @@ HOST: repoPort.pushBranchFromPatches()
 
 ---
 
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-02-07
 **Status**: P0 Complete, P0.5a Complete, P0.5 Complete, P0.75 Pending
