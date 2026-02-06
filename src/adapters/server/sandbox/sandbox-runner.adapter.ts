@@ -3,14 +3,14 @@
 
 /**
  * Module: `@adapters/server/sandbox/sandbox-runner`
- * Purpose: Docker-based sandbox runner for network-isolated command execution.
- * Scope: Implements SandboxRunnerPort using dockerode for container lifecycle management. Does not manage proxy container lifecycle (delegated to LlmProxyManager).
+ * Purpose: Docker-based sandbox runner for network-isolated command execution with optional LLM proxy.
+ * Scope: Implements SandboxRunnerPort using dockerode. Delegates proxy container lifecycle to LlmProxyManager. Does not handle billing reconciliation or graph execution.
  * Invariants:
  *   - Per SANDBOXED_AGENTS.md P0.5: One-shot containers, ephemeral per command
  *   - Per NETWORK_DEFAULT_DENY: Containers run with NetworkMode: 'none' by default
  *   - Per SECRETS_HOST_ONLY: No credentials passed to container; LLM auth via host proxy
- *   - Per LLM_VIA_SOCKET_ONLY: LLM access via unix socket bridge to host proxy
- * Side-effects: IO (creates/removes Docker containers, spawns proxy processes)
+ *   - Per LLM_VIA_SOCKET_ONLY: LLM access via unix socket bridge (Docker volume at /llm-sock)
+ * Side-effects: IO (creates/removes Docker containers and volumes, starts proxy containers)
  * Links: docs/SANDBOXED_AGENTS.md, src/ports/sandbox-runner.port.ts
  * @internal
  */
