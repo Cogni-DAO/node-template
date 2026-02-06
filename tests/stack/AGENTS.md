@@ -25,7 +25,7 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
   "layer": "tests",
   "may_import": ["app", "adapters", "bootstrap", "shared", "types"],
   "must_not_import": ["features", "core", "ports"],
-  "database_access": "via_getDb_for_assertions"
+  "database_access": "via_getSeedDb_for_seeding_and_assertions"
 }
 ```
 
@@ -34,7 +34,7 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 - **Exports:** none (test-only directory)
 - **Routes (if any):** none
 - **CLI (if any):** pnpm test:stack:dev, pnpm test:stack:docker, pnpm db:migrate:test
-- **Env/Config keys:** TEST_BASE_URL, DATABASE_URL, POSTGRES_DB, APP_ENV, COGNI_REPO_PATH
+- **Env/Config keys:** TEST_BASE_URL, DATABASE_URL, DATABASE_SERVICE_URL, APP_ENV, COGNI_REPO_PATH
 - **Files considered API:** \*.stack.test.ts files
 
 ## Responsibilities
@@ -62,7 +62,7 @@ pnpm test:stack:dev  # or pnpm test:stack:docker
 ## Standards
 
 - **Facade-level testing**: Stack tests call facades directly with real DB and configured fake adapters (APP_ENV=test)
-- Tests use getDb() for direct DB assertions to verify side effects
+- Tests use getSeedDb() (BYPASSRLS) for seeding test data and DB assertions to verify side effects
 - Use .stack.test.ts extension
 - Focus on full vertical slice validation (facade → service → ports → DB)
 - Database is reset automatically between test runs via vitest.stack.config.mts

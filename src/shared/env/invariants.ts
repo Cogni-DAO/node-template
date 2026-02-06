@@ -18,18 +18,87 @@
  */
 interface ParsedEnv {
   APP_ENV: "test" | "production";
+  NODE_ENV: "development" | "test" | "production";
+  DATABASE_URL: string;
+  DATABASE_SERVICE_URL: string;
   LITELLM_MASTER_KEY?: string | undefined;
+}
+
+/**
+ * Usernames that indicate superuser/admin access.
+ * These should never be used for app runtime connections.
+ */
+const SUPERUSER_NAMES = new Set(["postgres", "root", "superuser", "admin"]);
+
+/**
+ * Extracts the username from a PostgreSQL connection URL.
+ * Returns null if the URL is not parseable or has no username.
+ */
+function extractDbUsername(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.username || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Asserts cross-field environment invariants that Zod can't express cleanly.
  * Called after Zod schema validation passes.
  *
+ * Per DATABASE_RLS_SPEC.md design decision 7, enforces:
+ * 1. DATABASE_URL.user !== DATABASE_SERVICE_URL.user (distinct roles)
+ * 2. Neither user is a superuser (postgres, root, etc.)
+ * 3. Both DSNs are present (defense-in-depth, Zod also enforces)
+ *
  * @throws Error if invariants are violated
  */
-export function assertEnvInvariants(_env: ParsedEnv): void {
-  // No cross-field validations needed in MVP
-  // When API keys are introduced, add validation here
+export function assertEnvInvariants(env: ParsedEnv): void {
+  // Defense-in-depth: Zod enforces presence, but guard here too
+  if (!env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is required in all environments");
+  }
+  if (!env.DATABASE_SERVICE_URL) {
+    throw new Error("DATABASE_SERVICE_URL is required in all environments");
+  }
+
+  // Extract usernames for role separation checks
+  const appUser = extractDbUsername(env.DATABASE_URL);
+  const serviceUser = extractDbUsername(env.DATABASE_SERVICE_URL);
+
+  // Only enforce role separation for PostgreSQL URLs
+  // (allows sqlite://build.db for Next.js build, etc.)
+  const isAppPostgres = env.DATABASE_URL.startsWith("postgresql://");
+  const isServicePostgres =
+    env.DATABASE_SERVICE_URL.startsWith("postgresql://");
+
+  if (isAppPostgres && isServicePostgres) {
+    // Check 1: Users must be distinct
+    if (appUser && serviceUser && appUser === serviceUser) {
+      throw new Error(
+        `DATABASE_URL and DATABASE_SERVICE_URL use the same user "${appUser}". ` +
+          "Per DATABASE_RLS_SPEC.md, these must be distinct roles (app_user vs app_service). " +
+          "Run provision.sh to create the required roles, then update your .env file."
+      );
+    }
+
+    // Check 2: Neither user should be a superuser
+    if (appUser && SUPERUSER_NAMES.has(appUser.toLowerCase())) {
+      throw new Error(
+        `DATABASE_URL uses superuser "${appUser}". ` +
+          "Per DATABASE_RLS_SPEC.md, runtime connections must use non-superuser roles (e.g., app_user). " +
+          "Run provision.sh to create the required roles, then update your .env file."
+      );
+    }
+    if (serviceUser && SUPERUSER_NAMES.has(serviceUser.toLowerCase())) {
+      throw new Error(
+        `DATABASE_SERVICE_URL uses superuser "${serviceUser}". ` +
+          "Per DATABASE_RLS_SPEC.md, even service connections should use dedicated roles (e.g., app_service), not superusers. " +
+          "Run provision.sh to create the required roles, then update your .env file."
+      );
+    }
+  }
 }
 
 /**
@@ -200,6 +269,49 @@ export async function assertTemporalConnectivity(
     throw new InfraConnectivityError(
       `Temporal connectivity check failed: ${message}. ` +
         "Verify TEMPORAL_ADDRESS is correct and Temporal is running (pnpm dev:infra)."
+    );
+  }
+}
+
+/**
+ * Extended env interface for scheduler-worker health check
+ */
+interface EnvWithSchedulerWorker extends ParsedEnv {
+  SCHEDULER_WORKER_HEALTH_URL: string;
+}
+
+/**
+ * Tests scheduler-worker connectivity by calling its /readyz endpoint.
+ * Budget: 5 seconds timeout for health check.
+ *
+ * This ensures the Temporal worker is actively polling before stack tests run,
+ * preventing race conditions where schedules are triggered but no worker is ready.
+ *
+ * @param env - Server environment with SCHEDULER_WORKER_HEALTH_URL
+ * @throws InfraConnectivityError if scheduler-worker unreachable or not ready
+ */
+export async function assertSchedulerWorkerConnectivity(
+  env: EnvWithSchedulerWorker
+): Promise<void> {
+  const url = `${env.SCHEDULER_WORKER_HEALTH_URL}/readyz`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    // Success: scheduler-worker is ready and polling Temporal
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown scheduler-worker error";
+    throw new InfraConnectivityError(
+      `Scheduler-worker connectivity check failed: ${message}. ` +
+        `Verify scheduler-worker is running and SCHEDULER_WORKER_HEALTH_URL (${env.SCHEDULER_WORKER_HEALTH_URL}) is correct.`
     );
   }
 }

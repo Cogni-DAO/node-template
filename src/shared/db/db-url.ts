@@ -3,12 +3,12 @@
 
 /**
  * Module: `@shared/db/db-url`
- * Purpose: Database URL construction utility for PostgreSQL connections.
- * Scope: Single source of truth for DATABASE_URL construction from env pieces. Safe for both app runtime and tooling. Does not handle connections or validation.
- * Invariants: Pure function; no Next.js/Zod deps; strictly requires POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST.
+ * Purpose: Database URL construction utility for PostgreSQL connections — tooling only.
+ * Scope: Constructs DATABASE_URL from env pieces for tooling scripts. Does not handle connections or runtime validation.
+ * Invariants: Pure function; no Next.js/Zod deps; requires POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST.
  * Side-effects: none
- * Notes: Throws on missing required pieces; no configuration options to keep tooling simple.
- * Links: Used by server env validation and drizzle configuration
+ * Notes: Tooling only (drizzle.config.ts, reset-db.ts, drop-test-db.ts). NOT in barrel — import from `@/shared/db/db-url`.
+ * Links: docs/DATABASE_RLS_SPEC.md (design decision 7)
  * @public
  */
 
@@ -44,5 +44,14 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
     throw new TypeError(`Invalid DB_PORT value: ${env.DB_PORT}`);
   }
 
-  return `postgresql://${user}:${password}@${host}:${port}/${db}`;
+  const base = `postgresql://${user}:${password}@${host}:${port}/${db}`;
+
+  // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: non-localhost connections
+  // must use sslmode=require (or stricter) to prevent credential sniffing.
+  const isLocalhost = host === "localhost" || host === "127.0.0.1";
+  if (!isLocalhost) {
+    return `${base}?sslmode=require`;
+  }
+
+  return base;
 }

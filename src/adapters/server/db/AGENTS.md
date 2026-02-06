@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-26
+- **Last reviewed:** 2026-02-04
 - **Status:** stable
 
 ## Purpose
 
-Database client configuration and connection management for PostgreSQL access.
+Database client singletons and tenant-scoping helpers for PostgreSQL access. App-role (`getAppDb`) and service-role (`getServiceDb`) singletons are in separate files to enable dependency-cruiser enforcement of BYPASSRLS isolation.
 
 ## Pointers
 
@@ -29,11 +29,12 @@ Database client configuration and connection management for PostgreSQL access.
 
 ## Public Surface
 
-- **Exports:** Database type, db client instance
+- **Exports (via `client.ts` barrel):** `Database` type, `getAppDb()`, `setTenantContext`, `withTenantScope`
+- **Exports (via `drizzle.service-client.ts`, NOT in barrel):** `getServiceDb()` (service-role singleton, BYPASSRLS). Only `src/auth.ts` and `src/bootstrap/container.ts` may import this (enforced by depcruiser `no-service-db-adapter-import` rule).
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** DATABASE_URL
-- **Files considered API:** client.ts, Database type
+- **Env/Config keys:** `DATABASE_URL`, `DATABASE_SERVICE_URL`
+- **Files considered API:** `client.ts` (safe barrel), `drizzle.service-client.ts` (restricted)
 
 ## Ports (optional)
 
@@ -43,8 +44,9 @@ Database client configuration and connection management for PostgreSQL access.
 
 ## Responsibilities
 
-- This directory **does**: Provide configured database client for other adapters
+- This directory **does**: Provide configured database singletons (`getAppDb`, `getServiceDb`) and tenant-scoping helpers for other adapters
 - This directory **does not**: Contain business logic or table operations
+- This directory **enforces**: BYPASSRLS isolation — `getServiceDb` is NOT in the barrel, requiring direct import from `drizzle.service-client.ts` with depcruiser allowlisting
 
 ## Usage
 
@@ -63,7 +65,7 @@ pnpm db:migrate
 
 ## Dependencies
 
-- **Internal:** shared/db (schema)
+- **Internal:** shared/db (schema), shared/env (serverEnv), `@cogni/db-client` (app factory), `@cogni/db-client/service` (service factory)
 - **External:** drizzle-orm, postgres
 
 ## Change Protocol

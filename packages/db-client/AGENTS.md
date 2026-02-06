@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2026-01-21
+- **Last reviewed:** 2026-02-04
 - **Status:** stable
 
 ## Purpose
@@ -15,6 +15,7 @@ Database client factory and Drizzle adapter implementations for scheduling domai
 ## Pointers
 
 - [SCHEDULER_SPEC.md](../../docs/SCHEDULER_SPEC.md): Scheduling architecture and invariants
+- [DATABASE_RLS_SPEC.md](../../docs/DATABASE_RLS_SPEC.md): RLS tenant isolation design
 - [PACKAGES_ARCHITECTURE.md](../../docs/PACKAGES_ARCHITECTURE.md): Package isolation boundaries
 - [scheduler-core](../scheduler-core): Port interfaces implemented by adapters
 
@@ -36,27 +37,29 @@ Database client factory and Drizzle adapter implementations for scheduling domai
 }
 ```
 
-**External deps:** `drizzle-orm`, `postgres`, `type-fest`. Internal deps: `@cogni/db-schema`, `@cogni/scheduler-core`, `@cogni/ai-core`.
+**External deps:** `drizzle-orm`, `postgres`, `type-fest`. Internal deps: `@cogni/db-schema`, `@cogni/scheduler-core`, `@cogni/ai-core`, `@cogni/ids`.
 
 ## Public Surface
 
-- **Exports:**
-  - `createDbClient(url, logger?)` - Database client factory
-  - `Database` - Drizzle client type
-  - `LoggerLike` - Logger interface for client factory
-  - `DrizzleScheduleManagerAdapter` - Implements `ScheduleManagerPort`
-  - `DrizzleExecutionGrantAdapter` - Implements `ExecutionGrantPort`
-  - `DrizzleExecutionRequestAdapter` - Implements `ExecutionRequestPort`
-  - `DrizzleScheduleRunAdapter` - Implements `ScheduleRunRepository`
-  - Re-exports from `@cogni/db-schema/scheduling` (tables, types)
+- **Exports (root `@cogni/db-client`):**
+  - `createAppDbClient(url)` — client factory for `app_user` role (RLS enforced)
+  - `withTenantScope(db, actorId, fn)` — transaction wrapper setting RLS context
+  - `setTenantContext(tx, actorId)` — sets RLS context in existing transaction
+  - `Database`, `LoggerLike` — Drizzle client type and logger interface
+  - `DrizzleScheduleUserAdapter`, `DrizzleScheduleWorkerAdapter` — schedule adapters (split by trust boundary)
+  - `DrizzleExecutionGrantUserAdapter`, `DrizzleExecutionGrantWorkerAdapter` — grant adapters (split by trust boundary)
+  - `DrizzleExecutionRequestAdapter`, `DrizzleScheduleRunAdapter`
+  - Re-exports from `@cogni/db-schema` (tables, types)
+- **Exports (sub-path `@cogni/db-client/service`):**
+  - `createServiceDbClient(url)` — client factory for `app_service` role (BYPASSRLS)
 - **CLI:** none
 - **Env/Config keys:** none (accepts DATABASE_URL via factory parameter)
-- **Files considered API:** `index.ts`
+- **Files considered API:** `index.ts` (root), `service.ts` (sub-path)
 
 ## Ports
 
 - **Uses ports:** none
-- **Implements ports:** `ScheduleManagerPort`, `ExecutionGrantPort`, `ExecutionRequestPort`, `ScheduleRunRepository`
+- **Implements ports:** `ScheduleUserPort`, `ScheduleWorkerPort`, `ExecutionGrantUserPort`, `ExecutionGrantWorkerPort`, `ExecutionRequestPort`, `ScheduleRunRepository`
 - **Contracts:** Contract tests in `tests/contract/<port>.contract.ts`
 
 ## Responsibilities
@@ -79,7 +82,7 @@ pnpm --filter @cogni/db-client build
 
 ## Dependencies
 
-- **Internal:** `@cogni/db-schema`, `@cogni/scheduler-core`, `@cogni/ai-core`
+- **Internal:** `@cogni/db-schema`, `@cogni/scheduler-core`, `@cogni/ai-core`, `@cogni/ids`
 - **External:** `drizzle-orm`, `postgres`, `type-fest`
 
 ## Change Protocol
@@ -92,3 +95,5 @@ pnpm --filter @cogni/db-client build
 
 - Re-exports scheduling schema so consumers (scheduler-worker) get schema transitively
 - All adapters accept a `Database` instance via constructor (dependency injection)
+- `createServiceDbClient` is isolated in `./service` sub-path; root barrel does NOT re-export it
+- `Database` type lives in root only — not exported from `./service`

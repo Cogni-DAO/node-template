@@ -24,14 +24,13 @@ services:
       - EVM_RPC_URL=${EVM_RPC_URL?EVM_RPC_URL is required}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY?LITELLM_MASTER_KEY is required}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY?OPENROUTER_API_KEY is required}
+      # Database connections — both required, pass-through only (no DSN construction).
+      # Per DATABASE_RLS_SPEC.md design decision 7: explicit DSNs, no component-piece fallback.
+      - DATABASE_URL=${DATABASE_URL?DATABASE_URL is required}
+      - DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL?DATABASE_SERVICE_URL is required}
       # Vars with sensible defaults
       - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-${APP_BASE_URL:-https://localhost}}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
-      - DB_HOST=postgres
-      - DB_PORT=5432
       - LITELLM_BASE_URL=http://litellm:4000
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
@@ -55,6 +54,10 @@ services:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
+      # Scheduler-worker health URL (for /readyz dependency check)
+      # Default: http://scheduler-worker:9000 for Docker networks
+      # Override via env for test:stack:dev where app runs on host
+      - SCHEDULER_WORKER_HEALTH_URL=${SCHEDULER_WORKER_HEALTH_URL:-http://scheduler-worker:9000}
     volumes:
       - repo_data:/repo:ro
     depends_on:
@@ -73,12 +76,13 @@ services:
     restart: unless-stopped
     networks:
       - cogni-edge
+      - sandbox-internal # P0.5a: Allow sandbox containers to reach LiteLLM
     ports:
       - "4000:4000"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - LITELLM_DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/litellm_dev
+      - LITELLM_DATABASE_URL=postgresql://${POSTGRES_ROOT_USER}:${POSTGRES_ROOT_PASSWORD}@postgres:5432/litellm_dev
       # Langfuse integration (LiteLLM->Langfuse callback for generation observations)
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
@@ -124,9 +128,9 @@ services:
     networks:
       - cogni-edge
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-cogni_template_dev}
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_ROOT_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
       LITELLM_DB_NAME: litellm_dev
     ports:
       - "55432:5432"
@@ -143,7 +147,7 @@ services:
       - "-c"
       - "log_disconnections=on"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ROOT_USER}"]
       interval: 10s
       timeout: 2s
       retries: 3
@@ -158,13 +162,15 @@ services:
     networks:
       - cogni-edge
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_ROOT_USER: ${POSTGRES_ROOT_USER}
+      POSTGRES_ROOT_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
       DB_HOST: postgres
       DB_PORT: 5432
-      APP_DB_NAME: ${POSTGRES_DB:-cogni_template_dev}
-      APP_DB_USER: ${POSTGRES_USER:-user}
-      APP_DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      APP_DB_NAME: ${APP_DB_NAME}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      APP_DB_SERVICE_USER: ${APP_DB_SERVICE_USER}
+      APP_DB_SERVICE_PASSWORD: ${APP_DB_SERVICE_PASSWORD}
       LITELLM_DB_NAME: litellm_dev
     volumes:
       - ./postgres-init/provision.sh:/app/provision.sh:ro
@@ -186,13 +192,8 @@ services:
     networks:
       - cogni-edge
     environment:
-      # Env contract matches runtime compose (DATABASE_URL + component vars)
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER:-user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
-      - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
+      # Only DB env var (least-secret exposure). Migrator uses DATABASE_URL directly.
+      - DATABASE_URL=${DATABASE_URL?DATABASE_URL is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -386,13 +387,17 @@ services:
     networks:
       - internal
       - cogni-edge
+    ports:
+      - "127.0.0.1:9001:9000" # Health endpoint for stack test wait-for-probes
     environment:
       # Temporal connection
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
-      # Database for activities
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
+      # Database: service role (BYPASSRLS) for cross-tenant scheduler operations.
+      # DATABASE_SERVICE_URL_DOCKER provides Docker-internal URL (postgres:5432) for test scripts.
+      # Falls back to DATABASE_SERVICE_URL for production/non-test contexts.
+      - DATABASE_URL=${DATABASE_SERVICE_URL_DOCKER:-${DATABASE_SERVICE_URL}}
       # Internal API (scheduler-worker → app)
       # Default: http://app:3000 for Docker-based stacks
       # Override: http://host.docker.internal:3000 for test:stack:dev (app on host)
@@ -408,14 +413,15 @@ services:
       temporal:
         condition: service_healthy
     healthcheck:
+      # Check /readyz (not /livez) - returns 200 only when worker is polling Temporal
       test:
         [
           "CMD-SHELL",
-          'node -e "require(''http'').get(''http://localhost:9000/livez'',r=>{process.exit(r.statusCode===200?0:1)})"',
+          'node -e "require(''http'').get(''http://localhost:9000/readyz'',r=>{process.exit(r.statusCode===200?0:1)})"',
         ]
       interval: 10s
       timeout: 2s
-      retries: 3
+      retries: 5
       start_period: 30s
 
 networks:
@@ -425,6 +431,9 @@ networks:
   internal:
     name: internal
     external: false
+  sandbox-internal:
+    name: sandbox-internal
+    internal: true # KEY: No external gateway - prevents internet egress
 
 volumes:
   caddy_data:

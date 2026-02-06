@@ -13,6 +13,7 @@
  * @public
  */
 
+import { toUserId } from "@cogni/ids";
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -152,7 +153,7 @@ export const PATCH = wrapRouteHandlerWithLogging<{
 
       // Update schedule
       const schedule = await container.scheduleManager.updateSchedule(
-        sessionUser.id,
+        toUserId(sessionUser.id),
         scheduleId,
         patch
       );
@@ -189,7 +190,7 @@ export const DELETE = wrapRouteHandlerWithLogging<{
 
       // Delete schedule (also revokes grant)
       await container.scheduleManager.deleteSchedule(
-        sessionUser.id,
+        toUserId(sessionUser.id),
         scheduleId
       );
 

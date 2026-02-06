@@ -14,7 +14,7 @@
 import { defineConfig } from "tsup";
 
 export const tsupConfig = defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/service.ts"],
   format: ["esm"],
   dts: false, // tsc -b emits per-file declarations; tsup handles JS only
   clean: false, // preserve .d.ts files from tsc -b (incremental builds)
@@ -24,6 +24,7 @@ export const tsupConfig = defineConfig({
     "drizzle-orm",
     "postgres",
     "@cogni/db-schema",
+    "@cogni/ids",
     "@cogni/scheduler-core",
   ],
 });

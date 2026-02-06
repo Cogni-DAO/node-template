@@ -132,10 +132,13 @@ jobs:
       GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
       DOMAIN: ${{ vars.DOMAIN }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_SERVICE_URL: ${{ secrets.DATABASE_SERVICE_URL }}
       POSTGRES_ROOT_USER: ${{ secrets.POSTGRES_ROOT_USER }}
       POSTGRES_ROOT_PASSWORD: ${{ secrets.POSTGRES_ROOT_PASSWORD }}
       APP_DB_USER: ${{ secrets.APP_DB_USER }}
       APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
+      APP_DB_SERVICE_USER: ${{ secrets.APP_DB_SERVICE_USER }}
+      APP_DB_SERVICE_PASSWORD: ${{ secrets.APP_DB_SERVICE_PASSWORD }}
       APP_DB_NAME: ${{ secrets.APP_DB_NAME }}
       LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -171,14 +174,14 @@ jobs:
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           echo "${{ secrets.SSH_DEPLOY_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
           # Test SSH connection with full error capture and keepalive
           echo "Testing SSH connection to $VM_HOST..."
           SSH_DEBUG=${SSH_DEBUG:-0}
           SSH_VERBOSE=""; if [ "$SSH_DEBUG" = "1" ]; then SSH_VERBOSE="-vvv"; fi
           set +e
-          OUT=$(ssh $SSH_VERBOSE -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 root@"$VM_HOST" "echo SSH test successful" 2>&1)
+          OUT=$(ssh $SSH_VERBOSE -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 root@"$VM_HOST" "echo SSH test successful" 2>&1)
           RC=$?
           set -e
           echo "$OUT"
@@ -188,6 +191,12 @@ jobs:
             exit 1
           fi
           echo "✅ SSH connection successful"
+
+      - name: Validate DSN secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_SERVICE_URL: ${{ secrets.DATABASE_SERVICE_URL }}
+        run: platform/ci/scripts/validate-dsns.sh
 
       - name: Deploy to preview
         run: platform/ci/scripts/deploy.sh

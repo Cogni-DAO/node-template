@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./service": {
+      "types": "./dist/service.d.ts",
+      "import": "./dist/service.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -16,12 +20,13 @@
   ],
   "scripts": {
     "build": "tsup",
-    "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/index.js')){console.error('ERROR: dist/index.js missing'); process.exit(1)}\"",
+    "postbuild": "node -e \"const fs=require('fs'); for(const f of ['dist/index.js','dist/service.js']){if(!fs.existsSync(f)){console.error('ERROR: '+f+' missing'); process.exit(1)}}\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@cogni/ai-core": "workspace:*",
     "@cogni/db-schema": "workspace:*",
+    "@cogni/ids": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
     "drizzle-orm": "^0.44.7",
     "postgres": "^3.4.5",

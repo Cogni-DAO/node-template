@@ -227,12 +227,19 @@ jobs:
     env:
       NODE_ENV: test
       APP_ENV: test
-      # Database config for test connection to containers (not app config, which connects postgres:5432)
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      # Database provisioning (provision.sh creates roles + databases)
+      # Root credentials for superuser connection
+      POSTGRES_ROOT_USER: postgres
+      POSTGRES_ROOT_PASSWORD: postgres
+      # App role (RLS enforced) - matches DATABASE_URL user
+      APP_DB_USER: user
+      APP_DB_PASSWORD: password
+      # Service role (BYPASSRLS) - matches DATABASE_SERVICE_URL user
+      APP_DB_SERVICE_USER: user_service
+      APP_DB_SERVICE_PASSWORD: service_password
+      # Database name
+      APP_DB_NAME: cogni_template_test
       POSTGRES_DB: cogni_template_test
-      DB_HOST: postgres
-      DB_PORT: 55432
       # Image naming base (APP_IMAGE/MIGRATOR_IMAGE derived in step below)
       IMAGE_NAME: cogni-template-ci
       IMAGE_TAG: ${{ github.sha }}
@@ -249,6 +256,10 @@ jobs:
       TEMPORAL_ADDRESS: localhost:7233
       TEMPORAL_NAMESPACE: cogni-test
       TEMPORAL_TASK_QUEUE: scheduler-tasks
+      # Container-side DSNs (postgres:5432 = Docker internal DNS)
+      # These are passed to docker-compose for app, migrator, scheduler-worker containers
+      DATABASE_URL: postgresql://user:password@postgres:5432/cogni_template_test?sslmode=disable
+      DATABASE_SERVICE_URL: postgresql://user_service:service_password@postgres:5432/cogni_template_test?sslmode=disable
       # git-sync HTTPS clone (same path as prod — no file:// shortcut)
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
       COGNI_REPO_REF: ${{ github.sha }}
@@ -339,6 +350,16 @@ jobs:
           cache-from: type=gha,scope=scheduler-worker
           cache-to: type=gha,mode=max,scope=scheduler-worker
 
+      - name: Pull or build sandbox runtime image
+        run: |
+          SANDBOX_GHCR="ghcr.io/cogni-dao/cogni-template:sandbox-runtime-latest"
+          if docker pull "$SANDBOX_GHCR" 2>/dev/null; then
+            docker tag "$SANDBOX_GHCR" cogni-sandbox-runtime:latest
+          else
+            echo "GHCR pull failed, building locally"
+            pnpm sandbox:docker:build
+          fi
+
       - name: Start app + DB + Temporal stack
         run: |
           docker network create cogni-edge || true
@@ -351,6 +372,11 @@ jobs:
       - name: Probe container-boundary (git-sync volume)
         run: platform/ci/scripts/probe-repo-volume.sh
 
+      - name: Provision database roles
+        run: |
+          docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
+            --profile bootstrap run --rm db-provision
+
       - name: Run migrations
         run: |
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
@@ -361,6 +387,10 @@ jobs:
         env:
           # Host-side vitest needs repo checkout; compose uses /repo/current default
           COGNI_REPO_PATH: ${{ github.workspace }}
+          # Host-side DSNs for vitest (override job-level container DSNs)
+          # Vitest runs on host, connects via port-forwarded localhost:55432
+          DATABASE_URL: postgresql://user:password@localhost:55432/cogni_template_test
+          DATABASE_SERVICE_URL: postgresql://user_service:service_password@localhost:55432/cogni_template_test
         # Note: wait-for-probes.ts globalSetup polls /livez then /readyz before tests run
 
       - name: CI Telemetry

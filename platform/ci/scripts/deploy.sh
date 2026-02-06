@@ -44,7 +44,7 @@ on_fail() {
 
     echo ""
     echo "=== runtime compose ps ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml ps 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml ps 2>&1 || true" || true
 
     echo ""
     echo "=== logs: caddy (edge) ==="
@@ -52,11 +52,11 @@ on_fail() {
 
     echo ""
     echo "=== logs: app ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 app 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 app 2>&1 || true" || true
 
     echo ""
     echo "=== logs: litellm ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm 2>&1 || true" || true
 
     echo ""
     echo "=== sourcecred compose ps ==="
@@ -196,6 +196,7 @@ fi
 REQUIRED_SECRETS=(
     "DOMAIN"
     "DATABASE_URL"
+    "DATABASE_SERVICE_URL"
     "LITELLM_MASTER_KEY"
     "OPENROUTER_API_KEY"
     "AUTH_SECRET"
@@ -204,6 +205,8 @@ REQUIRED_SECRETS=(
     "POSTGRES_ROOT_PASSWORD"
     "APP_DB_USER"
     "APP_DB_PASSWORD"
+    "APP_DB_SERVICE_USER"
+    "APP_DB_SERVICE_PASSWORD"
     "APP_DB_NAME"
     "SOURCECRED_GITHUB_TOKEN"
     "EVM_RPC_URL"
@@ -364,7 +367,7 @@ echo -e "\033[0;32m[INFO]\033[0m Docker prerequisites verified"
 
 # Compose shortcuts (explicit project names, no global export)
 EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml"
-RUNTIME_COMPOSE="docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml"
+RUNTIME_COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml"
 SOURCECRED_COMPOSE="docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml"
 
 log_info() {
@@ -482,6 +485,7 @@ SCHEDULER_WORKER_IMAGE=${SCHEDULER_WORKER_IMAGE}
 APP_BASE_URL=https://${DOMAIN}
 NEXTAUTH_URL=https://${DOMAIN}
 DATABASE_URL=${DATABASE_URL}
+DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL}
 LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 AUTH_SECRET=${AUTH_SECRET}
@@ -489,6 +493,8 @@ POSTGRES_ROOT_USER=${POSTGRES_ROOT_USER}
 POSTGRES_ROOT_PASSWORD=${POSTGRES_ROOT_PASSWORD}
 APP_DB_USER=${APP_DB_USER}
 APP_DB_PASSWORD=${APP_DB_PASSWORD}
+APP_DB_SERVICE_USER=${APP_DB_SERVICE_USER}
+APP_DB_SERVICE_PASSWORD=${APP_DB_SERVICE_PASSWORD}
 APP_DB_NAME=${APP_DB_NAME}
 DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
 EVM_RPC_URL=${EVM_RPC_URL}
@@ -501,6 +507,12 @@ COGNI_REPO_REF=${COGNI_REPO_REF}
 GIT_READ_USERNAME=${GIT_READ_USERNAME}
 GIT_READ_TOKEN=${GIT_READ_TOKEN}
 ENV_EOF
+
+# Verify .env was written
+if ! test -s "$RUNTIME_ENV"; then
+  log_fatal ".env write failed: $RUNTIME_ENV is empty or missing"
+fi
+log_info ".env written: $(wc -c < "$RUNTIME_ENV") bytes, $(wc -l < "$RUNTIME_ENV") lines"
 
 # Optional observability vars - only written if set (empty string breaks Zod validation)
 append_env_if_set "$RUNTIME_ENV" LOKI_WRITE_URL "${GRAFANA_CLOUD_LOKI_URL-}"
@@ -753,6 +765,15 @@ EOF
 # Make deployment script executable
 chmod +x "$ARTIFACT_DIR/deploy-remote.sh"
 
+# Verify heredoc produced a valid file
+if ! test -s "$ARTIFACT_DIR/deploy-remote.sh"; then
+  log_fatal "deploy-remote.sh is empty or missing at $ARTIFACT_DIR/deploy-remote.sh"
+fi
+LOCAL_SIZE=$(wc -c < "$ARTIFACT_DIR/deploy-remote.sh")
+LOCAL_SHA=$(sha256sum "$ARTIFACT_DIR/deploy-remote.sh" | awk '{print $1}')
+log_info "deploy-remote.sh ready: ${LOCAL_SIZE} bytes, sha256=${LOCAL_SHA}"
+
+
 # Deploy bundles to VM via rsync
 log_info "Deploying edge and runtime bundles to VM..."
 ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime /opt/cogni-template-sourcecred"
@@ -774,8 +795,23 @@ rsync -av -e "ssh $SSH_OPTS" \
 
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
+
+# Verify SCP landed correctly
+REMOTE_CHECK=$(ssh $SSH_OPTS root@"$VM_HOST" "echo host=\$(hostname) date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) && sha256sum /tmp/deploy-remote.sh | awk '{print \$1}'" 2>&1) || {
+  log_fatal "SSH to VM failed during SCP verify: $REMOTE_CHECK"
+}
+log_info "VM: ${REMOTE_CHECK%%$'\n'*}"
+REMOTE_SHA=$(echo "$REMOTE_CHECK" | tail -1)
+if [ -z "$REMOTE_SHA" ] || [ ${#REMOTE_SHA} -ne 64 ]; then
+  log_fatal "/tmp/deploy-remote.sh missing or unreadable on VM. SSH output: $REMOTE_CHECK"
+fi
+if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+  log_fatal "deploy-remote.sh sha256 mismatch: local=${LOCAL_SHA} remote=${REMOTE_SHA}"
+fi
+log_info "deploy-remote.sh verified on VM (sha256 match)"
+
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' SCHEDULER_WORKER_IMAGE='$SCHEDULER_WORKER_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' SCHEDULER_WORKER_IMAGE='$SCHEDULER_WORKER_IMAGE' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."
@@ -844,5 +880,5 @@ log_info ""
 log_info "🔧 Deployment management:"
 log_info "  - SSH access: ssh root@$VM_HOST"
 log_info "  - Edge logs: docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml logs"
-log_info "  - Runtime logs: docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs
+log_info "  - Runtime logs: docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs
   - SourceCred logs: docker compose --project-name cogni-sourcecred -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs"

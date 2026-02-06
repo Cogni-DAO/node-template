@@ -3,14 +3,15 @@
 
 /**
  * Module: `@shared/db`
- * Purpose: Barrel export for database schema and URL construction utilities.
- * Scope: Exposes database schema and URL construction utilities. Does not handle connections or migrations.
+ * Purpose: Barrel export for database schema.
+ * Scope: Exposes database schema only. Does not handle connections or migrations.
  * Invariants: Only re-exports public APIs; maintains type safety.
  * Side-effects: none
- * Notes: Used by adapters for database operations
- * Links: Used by adapters for database operations
+ * Notes: Used by adapters for database operations. buildDatabaseUrl is NOT exported here —
+ *        it lives in db-url.ts for tooling-only use (drizzle.config.ts, test scripts).
+ *        Per DATABASE_RLS_SPEC.md design decision 7: no DSN construction in runtime code.
+ * Links: docs/DATABASE_RLS_SPEC.md
  * @public
  */
 
-export * from "./db-url";
 export * from "./schema";

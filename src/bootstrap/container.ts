@@ -18,18 +18,18 @@ import type {
   RepoCapability,
   WebSearchCapability,
 } from "@cogni/ai-tools";
+import type { UserId } from "@cogni/ids";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
-  DrizzleAccountService,
   DrizzleAiTelemetryAdapter,
-  DrizzleExecutionGrantAdapter,
+  DrizzleExecutionGrantUserAdapter,
+  DrizzleExecutionGrantWorkerAdapter,
   DrizzleExecutionRequestAdapter,
-  DrizzlePaymentAttemptRepository,
-  DrizzleScheduleManagerAdapter,
   DrizzleScheduleRunAdapter,
+  DrizzleScheduleUserAdapter,
   EvmRpcOnChainVerifierAdapter,
-  getDb,
+  getAppDb,
   LangfuseAdapter,
   LiteLlmActivityUsageAdapter,
   LiteLlmAdapter,
@@ -38,9 +38,14 @@ import {
   MimirMetricsAdapter,
   SystemClock,
   TemporalScheduleControlAdapter,
+  UserDrizzleAccountService,
+  UserDrizzlePaymentAttemptRepository,
   ViemEvmOnchainClient,
   ViemTreasuryAdapter,
 } from "@/adapters/server";
+import { ServiceDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
+import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
+import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 import {
   FakeLlmAdapter,
   FakeMetricsAdapter,
@@ -60,15 +65,18 @@ import type {
   AccountService,
   AiTelemetryPort,
   Clock,
-  ExecutionGrantPort,
+  ExecutionGrantUserPort,
+  ExecutionGrantWorkerPort,
   ExecutionRequestPort,
   LangfusePort,
   LlmService,
   MetricsQueryPort,
   OnChainVerifier,
-  PaymentAttemptRepository,
-  ScheduleManagerPort,
+  PaymentAttemptServiceRepository,
+  PaymentAttemptUserRepository,
   ScheduleRunRepository,
+  ScheduleUserPort,
+  ServiceAccountService,
   TreasuryReadPort,
   UsageLogEntry,
   UsageLogsByRangeParams,
@@ -93,10 +101,12 @@ export interface Container {
   log: Logger;
   config: ContainerConfig;
   llmService: LlmService;
-  accountService: AccountService;
+  accountsForUser(userId: UserId): AccountService;
+  serviceAccountService: ServiceAccountService;
   usageService: UsageService;
   clock: Clock;
-  paymentAttemptRepository: PaymentAttemptRepository;
+  paymentAttemptsForUser(userId: UserId): PaymentAttemptUserRepository;
+  paymentAttemptServiceRepository: PaymentAttemptServiceRepository;
   onChainVerifier: OnChainVerifier;
   evmOnchainClient: EvmOnchainClient;
   metricsQuery: MetricsQueryPort;
@@ -105,12 +115,13 @@ export interface Container {
   aiTelemetry: AiTelemetryPort;
   /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
   langfuse: LangfusePort | undefined;
-  // Scheduling ports
+  // Scheduling ports (split by trust boundary)
   scheduleControl: ScheduleControlPort;
-  executionGrantPort: ExecutionGrantPort;
+  executionGrantPort: ExecutionGrantUserPort;
+  executionGrantWorkerPort: ExecutionGrantWorkerPort;
   executionRequestPort: ExecutionRequestPort;
   scheduleRunRepository: ScheduleRunRepository;
-  scheduleManager: ScheduleManagerPort;
+  scheduleManager: ScheduleUserPort;
   /** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
   metricsCapability: MetricsCapability;
   /** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
@@ -122,11 +133,14 @@ export interface Container {
 }
 
 // Feature-specific dependency types
-// AI adapter deps: used internally by createInProcGraphExecutor
-export type AiAdapterDeps = Pick<
-  Container,
-  "llmService" | "accountService" | "clock" | "aiTelemetry" | "langfuse"
->;
+// AI adapter deps: used internally by createGraphExecutor
+export type AiAdapterDeps = {
+  llmService: LlmService;
+  accountService: AccountService;
+  clock: Clock;
+  aiTelemetry: AiTelemetryPort;
+  langfuse: LangfusePort | undefined;
+};
 
 /**
  * Activity dashboard dependencies.
@@ -165,7 +179,7 @@ export function resetContainer(): void {
 
 function createContainer(): Container {
   const env = serverEnv();
-  const db = getDb();
+  const db = getAppDb();
   const log = makeLogger({ service: "cogni-template" });
 
   // Startup log - confirm config in Loki (no URLs/secrets)
@@ -233,9 +247,9 @@ function createContainer(): Container {
 
   // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
-  const accountService = new DrizzleAccountService(db);
-  const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
-
+  const serviceAccountService = new ServiceDrizzleAccountService(
+    getServiceDb()
+  );
   // UsageService: P1 - LiteLLM is canonical usage log source for Activity (no fallback)
   const usageService = new LiteLlmUsageServiceAdapter(
     new LiteLlmActivityUsageAdapter()
@@ -278,23 +292,37 @@ function createContainer(): Container {
       taskQueue: env.TEMPORAL_TASK_QUEUE,
     });
 
-  const executionGrantPort = new DrizzleExecutionGrantAdapter(
+  // Service DB (BYPASSRLS) for worker adapters
+  const serviceDb = getServiceDb();
+  const paymentAttemptServiceRepository =
+    new ServiceDrizzlePaymentAttemptRepository(serviceDb);
+
+  // User-facing scheduling (appDb, RLS enforced)
+  const executionGrantPort = new DrizzleExecutionGrantUserAdapter(
     db,
-    log.child({ component: "DrizzleExecutionGrantAdapter" })
+    log.child({ component: "DrizzleExecutionGrantUserAdapter" })
   );
-  const executionRequestPort = new DrizzleExecutionRequestAdapter(
-    db,
-    log.child({ component: "DrizzleExecutionRequestAdapter" })
-  );
-  const scheduleRunRepository = new DrizzleScheduleRunAdapter(
-    db,
-    log.child({ component: "DrizzleScheduleRunAdapter" })
-  );
-  const scheduleManager = new DrizzleScheduleManagerAdapter(
+  const scheduleManager = new DrizzleScheduleUserAdapter(
     db,
     scheduleControl,
     executionGrantPort,
-    log.child({ component: "DrizzleScheduleManagerAdapter" })
+    log.child({ component: "DrizzleScheduleUserAdapter" })
+  );
+
+  // Worker scheduling (serviceDb, BYPASSRLS)
+  const executionGrantWorkerPort = new DrizzleExecutionGrantWorkerAdapter(
+    serviceDb,
+    log.child({ component: "DrizzleExecutionGrantWorkerAdapter" })
+  );
+  const scheduleRunRepository = new DrizzleScheduleRunAdapter(
+    serviceDb,
+    log.child({ component: "DrizzleScheduleRunAdapter" })
+  );
+
+  // Execution request port (not user-scoped — exempt from RLS)
+  const executionRequestPort = new DrizzleExecutionRequestAdapter(
+    db,
+    log.child({ component: "DrizzleExecutionRequestAdapter" })
   );
 
   // MetricsCapability for AI tools (requires PROMETHEUS_URL)
@@ -332,10 +360,14 @@ function createContainer(): Container {
     log,
     config,
     llmService,
-    accountService,
+    accountsForUser: (userId: UserId) =>
+      new UserDrizzleAccountService(db, userId),
+    serviceAccountService,
     usageService,
     clock,
-    paymentAttemptRepository,
+    paymentAttemptsForUser: (userId: UserId) =>
+      new UserDrizzlePaymentAttemptRepository(db, userId),
+    paymentAttemptServiceRepository,
     onChainVerifier,
     evmOnchainClient,
     metricsQuery,
@@ -344,6 +376,7 @@ function createContainer(): Container {
     langfuse,
     scheduleControl,
     executionGrantPort,
+    executionGrantWorkerPort,
     executionRequestPort,
     scheduleRunRepository,
     scheduleManager,
@@ -358,22 +391,22 @@ function createContainer(): Container {
  * Resolves dependencies for AI adapter construction.
  * Used by graph-executor.factory.ts.
  */
-export function resolveAiAdapterDeps(): AiAdapterDeps {
+export function resolveAiAdapterDeps(userId: UserId): AiAdapterDeps {
   const container = getContainer();
   return {
     llmService: container.llmService,
-    accountService: container.accountService,
+    accountService: container.accountsForUser(userId),
     clock: container.clock,
     aiTelemetry: container.aiTelemetry,
     langfuse: container.langfuse,
   };
 }
 
-export function resolveActivityDeps(): ActivityDeps {
+export function resolveActivityDeps(userId: UserId): ActivityDeps {
   const container = getContainer();
   return {
     usageService: container.usageService as ActivityDeps["usageService"],
-    accountService: container.accountService,
+    accountService: container.accountsForUser(userId),
   };
 }
 
@@ -385,9 +418,9 @@ export type SchedulingDeps = Pick<
   Container,
   | "scheduleControl"
   | "executionGrantPort"
+  | "executionGrantWorkerPort"
   | "scheduleRunRepository"
   | "scheduleManager"
-  | "accountService"
 >;
 
 export function resolveSchedulingDeps(): SchedulingDeps {
@@ -395,8 +428,8 @@ export function resolveSchedulingDeps(): SchedulingDeps {
   return {
     scheduleControl: container.scheduleControl,
     executionGrantPort: container.executionGrantPort,
+    executionGrantWorkerPort: container.executionGrantWorkerPort,
     scheduleRunRepository: container.scheduleRunRepository,
     scheduleManager: container.scheduleManager,
-    accountService: container.accountService,
   };
 }

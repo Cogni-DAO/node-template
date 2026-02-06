@@ -28,11 +28,8 @@ function requireEnv(name: string): string {
 }
 
 // Fail fast if CI / local scripts didn't wire env correctly
-requireEnv("DB_HOST");
-requireEnv("DB_PORT");
-requireEnv("POSTGRES_USER");
-requireEnv("POSTGRES_PASSWORD");
-requireEnv("POSTGRES_DB");
+requireEnv("DATABASE_URL");
+requireEnv("DATABASE_SERVICE_URL");
 requireEnv("TEST_BASE_URL");
 
 export default defineConfig({
@@ -41,13 +38,16 @@ export default defineConfig({
     include: ["tests/stack/**/*.stack.test.ts"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    // Global setup: preflight binaries → wait for probes → reset DB (order matters)
+    // Global setup: preflight binaries → wait for probes → preflight DB roles → reset DB (order matters)
     globalSetup: [
       "./tests/stack/setup/preflight-binaries.ts",
       "./tests/stack/setup/wait-for-probes.ts",
+      "./tests/stack/setup/preflight-db-roles.ts",
       "./tests/stack/setup/reset-db.ts",
     ],
     sequence: { concurrent: false },
+    testTimeout: 10_000,
+    hookTimeout: 10_000,
   },
   resolve: {
     alias: {
