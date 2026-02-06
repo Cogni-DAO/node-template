@@ -136,6 +136,7 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 - [x] Fix NETWORK_FLAGS_CONFLICT: use only NetworkMode, remove NetworkDisabled
 - [x] Add SECURITY_HARDENING: no-new-privileges, PidsLimit, ReadonlyRootfs with Tmpfs
 - [x] Add OUTPUT_BOUNDS: truncate logs at configurable max bytes (default 2MB)
+- [ ] Align `sandbox-runtime` CI image with SERVICES_ARCHITECTURE.md (fingerprint tagging, GHA cache, GHCR publish)
 
 #### Tests (Merge Gates)
 
