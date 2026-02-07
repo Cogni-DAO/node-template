@@ -16,6 +16,7 @@
  * @public
  */
 
+import { z } from "zod";
 import type { SourceSystem } from "../billing/source-system";
 
 /**
@@ -69,3 +70,59 @@ export interface UsageFact {
   /** Raw payload for debugging (adapter can stash native IDs here) */
   readonly usageRaw?: Record<string, unknown>;
 }
+
+/**
+ * Strict Zod schema for billing-authoritative executors (inproc, sandbox).
+ * usageUnitId is REQUIRED. Validation failures = billing incomplete = run fails.
+ */
+export const UsageFactStrictSchema = z
+  .object({
+    // Required for idempotency
+    runId: z.string().min(1, "runId required"),
+    attempt: z.number().int().min(0, "attempt must be >= 0"),
+    usageUnitId: z.string().min(1, "usageUnitId required (no fallback)"),
+
+    // Required for billing context
+    source: z.string().min(1, "source required"),
+    executorType: z.enum(["inproc", "sandbox"]), // Only billing-authoritative types
+    billingAccountId: z.string().min(1, "billingAccountId required"),
+    virtualKeyId: z.string().min(1, "virtualKeyId required"),
+
+    // Optional provider details
+    provider: z.string().optional(),
+    model: z.string().optional(),
+
+    // Optional usage metrics
+    inputTokens: z.number().int().min(0).optional(),
+    outputTokens: z.number().int().min(0).optional(),
+    cacheReadTokens: z.number().int().min(0).optional(),
+    cacheWriteTokens: z.number().int().min(0).optional(),
+    costUsd: z.number().min(0).optional(),
+
+    // Optional raw payload
+    usageRaw: z.record(z.unknown()).optional(),
+  })
+  .strict(); // Reject unknown fields
+
+/**
+ * Hints schema for external/telemetry executors (P1: langgraph_server, etc.).
+ * usageUnitId is optional. Validation failures logged but don't block billing.
+ */
+export const UsageFactHintsSchema = z
+  .object({
+    runId: z.string().min(1),
+    attempt: z.number().int().min(0),
+    usageUnitId: z.string().optional(), // Telemetry hint, not authoritative
+
+    source: z.string().min(1),
+    executorType: z.enum(["langgraph_server", "claude_sdk"]), // External types
+    billingAccountId: z.string().min(1),
+    virtualKeyId: z.string().min(1),
+
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    inputTokens: z.number().int().min(0).optional(),
+    outputTokens: z.number().int().min(0).optional(),
+    costUsd: z.number().min(0).optional(),
+  })
+  .passthrough(); // Allow unknown fields from external systems
