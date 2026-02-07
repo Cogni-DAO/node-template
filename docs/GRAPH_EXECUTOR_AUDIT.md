@@ -14,7 +14,7 @@ The current graph execution system demonstrates **strong separation of concerns*
 2. ✅ **Schema Validation**: Zod schemas (strict/hints) enforce UsageFact at ingestion boundary
 3. ✅ **Idempotency Consolidated**: Fallback removed; usageUnitId required for billing-authoritative executors
 4. ❌ **No Contract Tests**: No shared compliance suite for executor implementations
-5. ✅ **Sandbox Billing Complete**: Header capture, executorType "sandbox", graphId propagation
+5. ⚠️ **Sandbox Billing**: Header capture, executorType "sandbox", graphId in UsageFact — DB persistence pending (TODO #4b)
 6. ⚠️ **Dev Provider**: Still defers billing to P1 reconciliation (emits hints-only usage_report)
 
 **Recommendation**: Implement shared contract tests for executor implementations. Transport/Enforcement split deferred to P1.
@@ -39,9 +39,24 @@ The current graph execution system demonstrates **strong separation of concerns*
 
 **Commits**: `9a07f4a3`, `83f1aa75` — `graphId: GraphId` required on `UsageFact` with namespaced validation in strict schema. `GraphRunRequest.graphId` typed as `GraphId` (not `string`). `graphName` required across all contracts (chat, completion) and facade — `.default("poet")` removed. All executors propagate graphId. Internal route validates format at boundary.
 
+**⚠️ Partial**: graphId flows through UsageFact but is NOT yet persisted to `charge_receipts` DB. See TODO #4b.
+
 ---
 
 ## Remaining TODO Items
+
+### [ ] 4b. Persist graphId to charge_receipts DB
+
+**Priority**: P0 (post-stabilization)
+
+`graphId` is on `UsageFact` and validated via Zod schemas, but not yet persisted to the DB. Requires:
+
+- Add `graphId` column to `charge_receipts` table (`packages/db-schema/src/billing.ts`)
+- Add `graphId` to `ChargeReceiptParams` (`src/ports/accounts.port.ts`)
+- Pass `fact.graphId` through `commitUsageFact()` → `recordChargeReceipt()` (`billing.ts`, `drizzle.adapter.ts`)
+- DB migration
+- Stack test: assert `graphId` appears in `charge_receipts` row after completion
+- Verify `graphId` does NOT affect idempotency key (key remains `runId/attempt/usageUnitId`)
 
 ### [ ] 5. Contract Tests for Executor Implementations
 
@@ -61,6 +76,12 @@ Required coverage:
 **Priority**: P1
 
 `executeCompletionUnit` receives `{runId, attempt, ingressRequestId, graphId}` but `createCompletionUnitStream` receives `{runId, attempt, caller, graphId}` — inconsistent context envelope shapes throughout the call chain. Define a single `CompletionRunContext` type.
+
+### [ ] 8. Research Stable Context Envelope Unification
+
+**Priority**: P1
+
+Audit all context envelope shapes across the call chain (`RunContext`, `CompletionUnitParams.runContext`, `createCompletionUnitStream`'s inline type) and determine whether a single `CompletionRunContext` type can replace them. Consider whether `caller` (which carries `billingAccountId`/`virtualKeyId`) should be part of the context or passed separately. Check if `RunContext` from `@cogni/ai-core` can be extended rather than defining a new type. Overlaps with TODO #6 but broader scope — covers the full call chain from facade through relay to adapter.
 
 ### [ ] 7. Remove Legacy `recordBilling()` Function
 
@@ -690,20 +711,20 @@ describe("SandboxGraphProvider", () => {
 
 ## Appendix B: Invariants Registry
 
-| ID                                    | Invariant                                 | Owner                  | File                                  | Status                                      |
-| ------------------------------------- | ----------------------------------------- | ---------------------- | ------------------------------------- | ------------------------------------------- |
-| `ONE_LEDGER_WRITER`                   | Only billing.ts calls recordChargeReceipt | billing.ts             | `src/features/ai/services/billing.ts` | ✅ Implemented                              |
-| `IDEMPOTENT_CHARGES`                  | source_reference prevents duplicates      | DB + billing.ts        | `billing.ts`                          | ✅ Enforced (strict schema, no fallback)    |
-| `ZERO_CREDIT_RECEIPTS`                | Always write receipt, even $0             | billing.ts             | `billing.ts`                          | ✅ Implemented                              |
-| `GRAPH_LLM_VIA_COMPLETION`            | InProc graphs use completion unit         | inproc.provider.ts     | `inproc.provider.ts`                  | ✅ Implemented                              |
-| `BILLING_INDEPENDENT_OF_CLIENT`       | Pump continues regardless of UI           | ai_runtime.ts          | `ai_runtime.ts`                       | ✅ Implemented                              |
-| `GRAPH_FINALIZATION_ONCE`             | Exactly one done event per run            | graph-executor.port.ts | `graph-executor.port.ts`              | ⚠️ isTerminated guard in relay, not in port |
-| `P0_ATTEMPT_FREEZE`                   | attempt always 0 in P0                    | All adapters           | Multiple                              | ✅ Hardcoded everywhere                     |
-| `PROTOCOL_TERMINATION`                | UI stream ends on done/error              | ai_runtime.ts          | `ai_runtime.ts`                       | ✅ Implemented                              |
-| `USAGE_FACT_VALIDATED`                | Zod schema at ingestion boundary          | RunEventRelay          | `ai_runtime.ts`                       | ✅ Strict for inproc/sandbox, hints for ext |
-| `GRAPHID_REQUIRED`                    | graphId on UsageFact, typed in port       | ai-core + port         | `usage.ts`, `graph-executor.port.ts`  | ✅ GraphId type, namespaced validation      |
-| `GRAPHNAME_REQUIRED`                  | graphName required at all boundaries      | contracts + facade     | `ai.chat.v1`, `ai.completion.v1`      | ✅ No defaults, fail fast                   |
-| `EXTERNAL_BILLING_VIA_RECONCILIATION` | Dev provider defers billing               | dev/provider.ts        | `dev/provider.ts`                     | ⚠️ Emits hints-only fact, reconciliation P1 |
+| ID                                    | Invariant                                 | Owner                  | File                                  | Status                                                          |
+| ------------------------------------- | ----------------------------------------- | ---------------------- | ------------------------------------- | --------------------------------------------------------------- |
+| `ONE_LEDGER_WRITER`                   | Only billing.ts calls recordChargeReceipt | billing.ts             | `src/features/ai/services/billing.ts` | ✅ Implemented                                                  |
+| `IDEMPOTENT_CHARGES`                  | source_reference prevents duplicates      | DB + billing.ts        | `billing.ts`                          | ✅ Enforced (strict schema, no fallback)                        |
+| `ZERO_CREDIT_RECEIPTS`                | Always write receipt, even $0             | billing.ts             | `billing.ts`                          | ✅ Implemented                                                  |
+| `GRAPH_LLM_VIA_COMPLETION`            | InProc graphs use completion unit         | inproc.provider.ts     | `inproc.provider.ts`                  | ✅ Implemented                                                  |
+| `BILLING_INDEPENDENT_OF_CLIENT`       | Pump continues regardless of UI           | ai_runtime.ts          | `ai_runtime.ts`                       | ✅ Implemented                                                  |
+| `GRAPH_FINALIZATION_ONCE`             | Exactly one done event per run            | graph-executor.port.ts | `graph-executor.port.ts`              | ⚠️ isTerminated guard in relay, not in port                     |
+| `P0_ATTEMPT_FREEZE`                   | attempt always 0 in P0                    | All adapters           | Multiple                              | ✅ Hardcoded everywhere                                         |
+| `PROTOCOL_TERMINATION`                | UI stream ends on done/error              | ai_runtime.ts          | `ai_runtime.ts`                       | ✅ Implemented                                                  |
+| `USAGE_FACT_VALIDATED`                | Zod schema at ingestion boundary          | RunEventRelay          | `ai_runtime.ts`                       | ✅ Strict for inproc/sandbox, hints for ext                     |
+| `GRAPHID_REQUIRED`                    | graphId on UsageFact, typed in port       | ai-core + port         | `usage.ts`, `graph-executor.port.ts`  | ⚠️ In UsageFact + Zod; NOT in charge_receipts DB yet (TODO #4b) |
+| `GRAPHNAME_REQUIRED`                  | graphName required at all boundaries      | contracts + facade     | `ai.chat.v1`, `ai.completion.v1`      | ✅ No defaults, fail fast                                       |
+| `EXTERNAL_BILLING_VIA_RECONCILIATION` | Dev provider defers billing               | dev/provider.ts        | `dev/provider.ts`                     | ⚠️ Emits hints-only fact, reconciliation P1                     |
 
 ---
 
