@@ -321,10 +321,12 @@ PER-RUN RESOURCES:
 
 #### Adapters (`src/adapters/server/sandbox/`)
 
-- [ ] Create `sandbox-graph.provider.ts` implementing `GraphProvider`:
+- [x] Create `sandbox-graph.provider.ts` implementing `GraphProvider`:
   - `providerId: "sandbox"`
   - `canHandle(graphId)`: matches `sandbox:*` prefix
-  - `runGraph(req)`: create tmp workspace → write messages.json → call `SandboxRunnerAdapter.runOnce()` → parse stdout → emit AiEvents → reconcile billing → return `GraphFinal`
+  - `runGraph(req)`: create tmp workspace (symlink-safe) → write messages.json → call `SandboxRunnerAdapter.runOnce()` → parse stdout → emit AiEvents → return `GraphFinal`
+  - Passes `caller.userId` → proxy → `x-litellm-customer-id` header
+  - Socket dir mounted `:ro` in sandbox (proxy has `:rw`)
 - [ ] Create `sandbox-agent-catalog.provider.ts` implementing `AgentCatalogProvider`:
   - `listAgents()`: returns `[{ agentId: "sandbox:agent", graphId: "sandbox:agent", name: "Sandbox Agent", description: "LLM agent in isolated container" }]`
   - Gated by `SANDBOX_ENABLED` env flag (don't show in UI unless enabled)
@@ -348,10 +350,13 @@ PER-RUN RESOURCES:
 
 #### Billing Reconciliation
 
-- [ ] After sandbox exits: query LiteLLM `GET /spend/logs?end_user=${runId}/0` via existing `LiteLlmAdapter`
-  - Extract `completion_tokens`, `prompt_tokens`, `cost` from response
-  - Emit `usage_report` AiEvent with `UsageFact` so `RunEventRelay` commits charge_receipt
-  - If no spend logs found (e.g., agent didn't call LLM): emit zero-cost usage_report, log warning
+- [x] Proxy injects dual headers: `x-litellm-customer-id` (userId) + `x-litellm-end-user-id` (runId/attempt)
+- [x] Nginx audit log captures `$upstream_http_x_litellm_call_id` for deterministic reconciliation
+- [x] Provider emits `usage_report` AiEvent so `RunEventRelay` commits charge_receipt (P0.75: run-occurred marker; cost from LiteLLM is ground truth)
+- [ ] After sandbox exits: poll LiteLLM `GET /spend/logs/v2` (fallback `/spend/logs`) with timeout to get actual costs
+  - Extract `completion_tokens`, `prompt_tokens`, `cost`, `call_id`
+  - Enrich the `usage_report` with real token counts and cost
+  - If no spend logs found: log warning, keep zero-cost marker
 - [ ] Verify `charge_receipts` table has entry with `source_reference = ${runId}/0/${litellmCallId}`
 
 #### Tests (Merge Gates)
@@ -365,15 +370,15 @@ PER-RUN RESOURCES:
 
 #### File Pointers (P0.75)
 
-| File                                                            | Status  |
-| --------------------------------------------------------------- | ------- |
-| `src/adapters/server/sandbox/sandbox-graph.provider.ts`         | Pending |
-| `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Pending |
-| `src/bootstrap/graph-executor.factory.ts`                       | Update  |
-| `src/bootstrap/agent-discovery.ts`                              | Update  |
-| `services/sandbox-runtime/agent/run.mjs`                        | Pending |
-| `services/sandbox-runtime/Dockerfile`                           | Update  |
-| `tests/stack/sandbox/sandbox-e2e.stack.test.ts`                 | Pending |
+| File                                                            | Status   |
+| --------------------------------------------------------------- | -------- |
+| `src/adapters/server/sandbox/sandbox-graph.provider.ts`         | Complete |
+| `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Pending  |
+| `src/bootstrap/graph-executor.factory.ts`                       | Pending  |
+| `src/bootstrap/agent-discovery.ts`                              | Pending  |
+| `services/sandbox-runtime/agent/run.mjs`                        | Pending  |
+| `services/sandbox-runtime/Dockerfile`                           | Pending  |
+| `tests/stack/sandbox/sandbox-e2e.stack.test.ts`                 | Pending  |
 
 ---
 
@@ -623,4 +628,4 @@ HOST: repoPort.pushBranchFromPatches()
 ---
 
 **Last Updated**: 2026-02-07
-**Status**: P0 Complete, P0.5a Complete, P0.5 Complete, P0.75 Pending
+**Status**: P0 Complete, P0.5a Complete, P0.5 Complete, P0.75 In Progress (provider done, 5 items remaining)
