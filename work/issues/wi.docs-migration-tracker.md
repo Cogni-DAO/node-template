@@ -183,7 +183,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | SOURCECRED.md                        | sourcecred.md                  | -                                  | -   | sourcecred-operations.md | AB+road    | [ ]  | [ ]  |
 | SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | STYLE.md                             | style.md                       | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
-| SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
+| SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | ini.system-tenant-governance.md    | -   | -                        | AB+road    | [x]  | [ ]  |
 | TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | ini.tenant-connections.md          | -   | -                        | AB+road    | [ ]  | [ ]  |
 | TESTING.md                           | -                              | -                                  | -   | testing.md               | procedural | [x]  | [ ]  |
