@@ -20,7 +20,6 @@ import {
   AggregatingAgentCatalog,
   LangGraphDevAgentCatalogProvider,
   LangGraphInProcAgentCatalogProvider,
-  SandboxAgentCatalogProvider,
 } from "@/adapters/server";
 import { SandboxAgentCatalogProvider } from "@/adapters/server/sandbox/sandbox-agent-catalog.provider";
 import type { AgentDescriptor } from "@/ports";
