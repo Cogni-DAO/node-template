@@ -248,8 +248,6 @@ tags: [scheduler]
 - If `idempotency_key` exists and `request_hash` matches, return cached `{ok, runId, traceId, errorCode}` without re-executing
 - Stores **both success and error outcomes** — retries return the cached outcome
 
-> **TODO (P1):** Add `ok` and `error_code` columns to schema + migration. Update `storeRequest()` to persist outcome. Update `checkIdempotency()` to return cached outcome. Update route to return cached `ok`/`errorCode` correctly.
-
 ---
 
 ## File Pointers
@@ -292,131 +290,6 @@ tags: [scheduler]
 | ----------------------------------------------------- | --------------------------- |
 | `src/app/api/internal/graphs/[graphId]/runs/route.ts` | Internal execution endpoint |
 | `src/contracts/graphs.run.internal.v1.contract.ts`    | Internal execution contract |
-
-### Deleted (Graphile Cleanup)
-
-| File                                                           | Reason                               |
-| -------------------------------------------------------------- | ------------------------------------ |
-| `packages/scheduler-core/src/ports/job-queue.port.ts`          | Graphile-specific, replaced          |
-| `packages/db-client/src/adapters/drizzle-job-queue.adapter.ts` | Graphile-specific, replaced          |
-| `services/scheduler-worker/src/tasks/reconcile.ts`             | Temporal handles scheduling natively |
-
----
-
-## Implementation Checklist
-
-### P0: Completed
-
-- [x] Types: `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` in `@cogni/scheduler-core`
-- [x] Schema: `execution_grants`, `schedules`, `schedule_runs` tables
-- [x] Ports: `ExecutionGrantPort`, `ScheduleManagerPort`, `ScheduleRunRepository`
-- [x] Adapters: All Drizzle adapters implemented
-- [x] Routes: `/api/v1/schedules` CRUD endpoints
-- [x] Package extraction complete
-
-### P0: Internal Execution API (Complete)
-
-- [x] `POST /api/internal/graphs/{graphId}/runs` — service-auth endpoint
-- [x] Auth: Bearer `SCHEDULER_API_TOKEN`, constant-time compare
-- [x] Re-validate grant (validity + scope) — defense-in-depth
-- [x] Request: `{ executionGrantId, input }` → Response: `{ runId, traceId, ok, errorCode? }`
-- [x] Create `execution_requests` table with `request_hash`
-- [x] On conflict: if `request_hash` matches return cached; if differs return 422
-- [x] Add `AccountService.getBillingAccountById` for grant → virtualKeyId resolution
-- [x] Stack tests for auth, idempotency, and grant validation
-
-### P1: Temporal Migration
-
-**1. Port & Types (`@cogni/scheduler-core`):** ✅
-
-- [x] Add `ScheduleControlPort` interface (vendor-agnostic):
-  - `createSchedule(params)` → `Promise<void>` (scheduleId caller-supplied)
-  - `pauseSchedule(scheduleId)` / `resumeSchedule(scheduleId)`
-  - `deleteSchedule(scheduleId)`
-  - `describeSchedule(scheduleId)` → `ScheduleDescription | null`
-- [x] Add `ScheduleDescription` type: `{ scheduleId, nextRunAtIso, lastRunAtIso, isPaused }`
-- [x] Add error types: `ScheduleControlUnavailableError`, `ScheduleControlConflictError`, `ScheduleControlNotFoundError`
-- [x] Input as `JsonValue` (not `unknown`), dates as ISO strings
-
-**ScheduleControlPort Idempotency & Error Semantics:**
-
-| Method             | Idempotent? | On Not Found                         | On Already Exists                    |
-| ------------------ | ----------- | ------------------------------------ | ------------------------------------ |
-| `createSchedule`   | No          | N/A                                  | Throw `ScheduleControlConflictError` |
-| `pauseSchedule`    | Yes         | Throw `ScheduleControlNotFoundError` | No-op if already paused              |
-| `resumeSchedule`   | Yes         | Throw `ScheduleControlNotFoundError` | No-op if already running             |
-| `deleteSchedule`   | Yes         | No-op (success)                      | N/A                                  |
-| `describeSchedule` | Yes         | Return `null`                        | N/A                                  |
-
-> **Rationale for CRUD rollback safety:**
->
-> - `createSchedule` throws on conflict → CRUD can detect partial failure and rollback DB
-> - `deleteSchedule` is idempotent → safe to retry after transient failure
-> - `pause/resume` idempotent → safe for retry; not-found means DB/Temporal drift (503, manual reconcile)
-
-**2. Adapter (`src/adapters/server/temporal/`):** ✅
-
-- [x] Implement `TemporalScheduleControlAdapter`
-- [x] Implement `TemporalScheduleControlAdapter`
-- [x] Hardcode policies: `overlap: SKIP`, `catchupWindow: 0` (not exposed in port)
-- [x] Map Temporal errors → port error types (see table below)
-- [x] Connection lifecycle via `@temporalio/client`
-
-**Temporal Error Mapping:**
-
-| Temporal Error                   | Port Error                        |
-| -------------------------------- | --------------------------------- |
-| `ScheduleAlreadyRunning`         | `ScheduleControlConflictError`    |
-| `ScheduleNotFoundError`          | `ScheduleControlNotFoundError`    |
-| Connection/timeout errors        | `ScheduleControlUnavailableError` |
-| Schedule already paused (no-op)  | Success (idempotent)              |
-| Schedule already deleted (no-op) | Success (idempotent)              |
-
-**3. Docker Infrastructure:** ✅
-
-- [x] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose v1.29.1 pinned)
-- [x] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE=cogni-{APP_ENV}`, `TEMPORAL_TASK_QUEUE=scheduler-tasks`
-- [x] Health checks for temporal service (gRPC health via `temporal operator cluster health`)
-- [x] Add `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD` to deploy.sh + GitHub workflows
-- [x] Sync dev + prod compose files
-
-**4. CRUD Integration (failure semantics defined):** ✅
-
-- [x] Update `DrizzleScheduleManagerAdapter`: replace `JobQueuePort` → `ScheduleControlPort`
-- [x] Wire `ScheduleControlPort` in container.ts (Temporal required, no fallback)
-- [x] Add `TEMPORAL_*` env vars to `src/shared/env/server.ts` (optional in test mode)
-- [x] `POST`: grant + DB insert → `createSchedule()`. **On failure: rollback grant+DB, 503**
-- [x] `PATCH enabled`: DB update → `pauseSchedule()`/`resumeSchedule()`. **On failure: rollback, 503**
-- [x] `DELETE`: `deleteSchedule()` → DB delete. **On failure: 503, do NOT delete DB**
-- [ ] Stack test: create → describe → pause → resume → delete
-
-**5. Worker Service:** ✅
-
-- [x] Create `services/scheduler-worker/` (standalone Temporal worker, no `ScheduleControlPort` dep)
-- [x] Implement `GovernanceScheduledRunWorkflow`
-- [x] Implement Activities: `validateGrant`, `createScheduleRun`, `executeGraph`, `updateScheduleRun`
-- [x] `executeGraphActivity` calls internal API with Bearer + Idempotency-Key
-- [x] Activities derive `scheduledFor` from `TemporalScheduledStartTime`
-- [x] Add Dockerfile and docker-compose entry
-
-**6. Cleanup (after validation):** ✅
-
-- [x] Repurpose `services/scheduler-worker/` from Graphile to Temporal
-- [x] Delete `JobQueuePort` and `DrizzleJobQueueAdapter`
-- [x] Remove Graphile Worker dependencies
-
-### P2: HITL Integration
-
-- [ ] Add Signal handler for `plane_review_decision` in workflow
-- [ ] Implement Plane webhook endpoint to signal workflows
-- [ ] Workflow waits for signal, then resumes execution
-
-### P3: Admin Tools
-
-- [ ] `pnpm scheduler:reconcile` — one-shot drift repair command
-- [ ] Compare DB schedules vs Temporal schedules
-- [ ] Report: missing, orphaned, state mismatch
-- [ ] Optional `--fix` flag with audit logging
 
 ---
 
@@ -474,7 +347,6 @@ tags: [scheduler]
 
 - [ ] **Latest trace not displayed in UI**: `schedule_runs.langfuse_trace_id` is populated after execution, but Schedules list API doesn't return run history—UI hardcodes "No runs yet" (`view.tsx:440`)
 
----
+## Related
 
-**Last Updated**: 2026-01-22
-**Status**: P1 complete; scheduler runs in dev with stack test passing. Missing deployment infra (CI/CD, production compose).
+- [Scheduler Evolution Initiative](../../work/initiatives/ini.scheduler-evolution.md) — Roadmap, implementation checklists, P2/P3 plans
