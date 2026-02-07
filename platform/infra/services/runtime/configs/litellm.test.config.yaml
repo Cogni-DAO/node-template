@@ -16,6 +16,8 @@ model_list:
       model: openai/mock-gpt-markdown
       api_base: http://mock-llm:3000
       api_key: "os.environ/OPENROUTER_API_KEY"
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000002
     model_info:
       display_name: "Test Model"
       is_free: false
@@ -44,6 +46,8 @@ model_list:
       model: openai/mock-gpt-markdown
       api_base: http://mock-llm:3000
       api_key: "os.environ/OPENROUTER_API_KEY"
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000002
     model_info:
       display_name: "Paid Test Model"
       is_free: false
@@ -51,3 +55,5 @@ model_list:
 
 general_settings:
   master_key: "os.environ/LITELLM_MASTER_KEY"
+  database_url: "os.environ/LITELLM_DATABASE_URL"
+  database_type: "postgres"
