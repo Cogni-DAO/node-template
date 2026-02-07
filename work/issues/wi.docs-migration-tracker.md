@@ -111,7 +111,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | AGENTS_CONTEXT.md                    | -                              | -                                  | -   | agents-context.md        | procedural | [x]  | [ ]  |
 | AGENT_DEVELOPMENT_GUIDE.md           | -                              | -                                  | -   | agent-development.md     | procedural | [x]  | [ ]  |
 | AGENT_DISCOVERY.md                   | agent-discovery.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                        | roadmap    | [ ]  | [ ]  |
+| AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                        | roadmap    | [x]  | [ ]  |
 | AI_EVALS.md                          | ai-evals.md                    | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                        | AB+road    | [ ]  | [ ]  |
 | AI_SETUP_SPEC.md                     | ai-setup.md                    | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
@@ -121,18 +121,18 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | AUTHENTICATION.md                    | authentication.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | BILLING_EVOLUTION.md                 | billing-evolution.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | BUILD_ARCHITECTURE.md                | build-architecture.md          | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| CACHING.md                           | -                              | ini.caching.md                     | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CACHING.md                           | -                              | ini.performance-efficiency.md      | -   | -                        | roadmap    | [x]  | [ ]  |
 | CHAIN_ACTION_FLOW_UI_SPEC.md         | chain-action-flow-ui.md        | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | CHAIN_CONFIG.md                      | chain-config.md                | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| CHAIN_DEPLOYMENT_TECH_DEBT.md        | -                              | ini.chain-deployment-refactor.md   | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CHAIN_DEPLOYMENT_TECH_DEBT.md        | -                              | ini.chain-deployment-refactor.md   | -   | -                        | roadmap    | [x]  | [ ]  |
 | CHECK_FULL.md                        | check-full.md                  | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | CI-CD.md                             | ci-cd.md                       | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
-| CICD_SERVICES_ROADMAP.md             | -                              | ini.cicd-services-gitops.md        | -   | -                        | roadmap    | [ ]  | [ ]  |
-| CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                        | roadmap    | [ ]  | [ ]  |
-| CLAWDBOT_ADAPTER_SPEC.md             | clawdbot-adapter.md            | ini.clawdbot-executor.md           | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CICD_SERVICES_ROADMAP.md             | -                              | ini.cicd-services-gitops.md        | -   | -                        | roadmap    | [x]  | [ ]  |
+| CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                        | roadmap    | [x]  | [ ]  |
+| CLAWDBOT_ADAPTER_SPEC.md             | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | COGNI_BRAIN_SPEC.md                  | cogni-brain.md                 | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
-| CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                        | roadmap    | [x]  | [ ]  |
 | DAO_ENFORCEMENT.md                   | dao-enforcement.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | DATABASES.md                         | databases.md                   | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | DATABASE_RLS_SPEC.md                 | database-rls.md                | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -140,7 +140,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | DOCS_ORGANIZATION_PLAN.md            | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | ENVIRONMENTS.md                      | environments.md                | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | ERROR_HANDLING_ARCHITECTURE.md       | error-handling.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| ERROR_HANDLING_IMPROVEMENT_DESIGN.md | -                              | ini.error-handling-improvements.md | -   | -                        | roadmap    | [ ]  | [ ]  |
+| ERROR_HANDLING_IMPROVEMENT_DESIGN.md | -                              | ini.observability-hardening.md     | -   | -                        | roadmap    | [x]  | [ ]  |
 | EXTERNAL_EXECUTOR_BILLING.md         | external-executor-billing.md   | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md   | procedural | [x]  | [ ]  |
 | GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -154,10 +154,10 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | LANGGRAPH_AI.md                      | langgraph-patterns.md          | -                                  | -   | langgraph-guide.md       | AB+road    | [ ]  | [ ]  |
 | LANGGRAPH_SERVER.md                  | langgraph-server.md            | ini.langgraph-server-production.md | -   | langgraph-server-dev.md  | AB+road    | [ ]  | [ ]  |
 | LINTING_RULES.md                     | -                              | -                                  | -   | linting-migration.md     | snapshot   | [x]  | [ ]  |
-| METRICS_OBSERVABILITY.md             | -                              | ini.public-analytics.md            | -   | -                        | roadmap    | [ ]  | [ ]  |
+| METRICS_OBSERVABILITY.md             | public-analytics.md            | ini.observability-hardening.md     | -   | -                        | AB+road    | [x]  | [ ]  |
 | MODEL_SELECTION.md                   | model-selection.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | MVP_DELIVERABLES.md                  | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
-| N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | ini.n8n-integration.md             | -   | -                        | roadmap    | [ ]  | [ ]  |
+| N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | ini.n8n-integration.md             | -   | -                        | AB+road    | [x]  | [ ]  |
 | NEW_PACKAGES.md                      | -                              | -                                  | -   | new-packages.md          | procedural | [x]  | [ ]  |
 | NODE_CI_CD_CONTRACT.md               | node-ci-cd-contract.md         | ini.ci-cd-reusable.md              | -   | -                        | AB+road    | [ ]  | [ ]  |
 | NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md  | AB+road    | [ ]  | [ ]  |
@@ -169,8 +169,8 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | PAYMENTS_DESIGN.md                   | payments-design.md             | ini.payments-enhancements.md       | -   | payments-setup.md        | AB+road    | [ ]  | [ ]  |
 | PAYMENTS_FRONTEND_DESIGN.md          | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
-| PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | ini.prompt-registry.md             | -   | -                        | roadmap    | [ ]  | [ ]  |
-| PROPOSAL_LAUNCHER.md                 | proposal-launcher.md           | ini.proposal-launcher.md           | -   | -                        | roadmap    | [ ]  | [ ]  |
+| PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | ini.prompt-registry.md             | -   | -                        | AB+road    | [x]  | [ ]  |
+| PROPOSAL_LAUNCHER.md                 | -                              | ini.web3-gov-mvp.md                | -   | -                        | roadmap    | [x]  | [ ]  |
 | RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                        | migrated   | [x]  | [ ]  |
 | REPO_STATE.md                        | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -178,7 +178,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | SCHEDULER_SPEC.md                    | scheduler.md                   | ini.scheduler-evolution.md         | -   | -                        | migrated   | [x]  | [ ]  |
 | SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | SERVICES_ARCHITECTURE.md             | services-architecture.md       | ini.cicd-services-gitops.md        | -   | create-service.md        | as-built   | [x]  | [ ]  |
-| SERVICES_MIGRATION.md                | -                              | ini.services-migration.md          | -   | -                        | roadmap    | [ ]  | [ ]  |
+| SERVICES_MIGRATION.md                | -                              | ini.cicd-services-gitops.md        | -   | -                        | roadmap    | [x]  | [ ]  |
 | SETUP.md                             | -                              | -                                  | -   | developer-setup.md       | procedural | [x]  | [ ]  |
 | SOURCECRED.md                        | sourcecred.md                  | -                                  | -   | sourcecred-operations.md | AB+road    | [ ]  | [ ]  |
 | SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
