@@ -198,7 +198,7 @@ Already tracked in DATABASE_URL_ALIGNMENT_SPEC.md P1-P2:
 
 | Phase     | Action                                                        | Touches app code?              | Timeline signal                           |
 | --------- | ------------------------------------------------------------- | ------------------------------ | ----------------------------------------- |
-| **P0**    | Add WAL-G backup sidecar (per DATABASE_OPS_SPEC)              | No                             | Before any production data matters        |
+| **P0**    | Add WAL-G backup sidecar (per this initiative)                | No                             | Before any production data matters        |
 | **P1**    | Credential convergence in provision.sh                        | No                             | Next deploy cycle                         |
 | **P2**    | Add pgBouncer between app and Postgres                        | DSN host change only           | When connection count > 20                |
 | **Eval**  | If file storage needed → adopt Supabase Storage (self-hosted) | New adapter                    | When feature requires uploads             |
@@ -209,7 +209,7 @@ Already tracked in DATABASE_URL_ALIGNMENT_SPEC.md P1-P2:
 
 ## Design Notes
 
-- Derived from [Supabase Evaluation](../../docs/spec/supabase-evaluation.md) full codebase vs. Supabase capability audit
+- Derived from [Supabase Evaluation](../../docs/research/supabase-evaluation.md) full codebase vs. Supabase capability audit
 - [Maximize OSS Tools](ini.maximize-oss-tools.md) — WAL-G identified as P0 prerequisite
 - [Database RLS Spec](../../docs/spec/database-rls.md) — P1 credential rotation item
 - [Database URL Alignment](../../docs/spec/database-url-alignment.md) — P3 DSN-only end state
