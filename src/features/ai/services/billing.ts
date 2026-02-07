@@ -203,14 +203,15 @@ export async function commitUsageFact(
   } = fact;
   const { ingressRequestId } = context;
 
-  // Schema validation ensures usageUnitId is present for billing-authoritative executors
-  // External executors may have undefined usageUnitId (validated with hints schema)
+  // External executors (validated with hints schema) may have undefined usageUnitId.
+  // Billing-authoritative executors (strict schema) always have usageUnitId (validation ensures it).
   if (!usageUnitId) {
+    // Skip billing for external executor hints without usageUnitId (telemetry-only, not authoritative)
     log.warn(
       { runId, executorType: fact.executorType },
       "Skipping billing commit: usageUnitId missing (external executor hint)"
     );
-    return; // Skip billing for hints without usageUnitId
+    return;
   }
 
   try {

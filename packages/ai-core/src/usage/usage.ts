@@ -7,7 +7,7 @@
  * Scope: Defines UsageFact and ExecutorType. Does NOT implement functions.
  * Invariants:
  *   - SINGLE_SOURCE_OF_TRUTH: This is the canonical definition; src/types re-exports
- *   - usageUnitId is optional; billing.ts assigns fallback if missing
+ *   - usageUnitId is REQUIRED for billing-authoritative executors (inproc/sandbox), enforced via Zod strict schema. Optional only for external/telemetry executors (hints schema).
  *   - runId + attempt + usageUnitId form the idempotency key (computed by billing.ts)
  *   - source identifies the adapter system (litellm, anthropic_sdk, etc.)
  *   - executorType is REQUIRED for executor-agnostic billing/history
