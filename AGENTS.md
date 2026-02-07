@@ -58,40 +58,40 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [MVP Deliverables](docs/MVP_DELIVERABLES.md)
 - [Node Formation Spec](docs/spec/node-formation.md)
 - [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Authorization (RBAC/ReBAC)](docs/RBAC_SPEC.md)
+- [Architecture](docs/spec/architecture.md)
+- [Authorization (RBAC/ReBAC)](docs/spec/rbac.md)
 - [Tenant Connections](docs/spec/tenant-connections.md)
 - [Tool Use Spec](docs/spec/tool-use.md)
 - [Services Migration (initiative)](work/initiatives/ini.cicd-services-gitops.md)
 
 ### AI & Evals
 
-- [AI Setup Spec](docs/AI_SETUP_SPEC.md)
+- [AI Setup Spec](docs/spec/ai-setup.md)
 - [Prompt Registry Spec](docs/spec/prompt-registry.md)
 - [Tools Authoring](docs/TOOLS_AUTHORING.md)
-- [Graph Execution](docs/GRAPH_EXECUTION.md)
+- [Graph Execution](docs/spec/graph-execution.md)
 - [LangGraph Server](docs/spec/langgraph-server.md)
 - [LangGraph Patterns](docs/spec/langgraph-patterns.md)
 - [Claude SDK Adapter](docs/spec/claude-sdk-adapter.md)
 - [n8n Adapter](docs/spec/n8n-adapter.md)
-- [OpenClaw Sandbox Integration](docs/OPENCLAW_SANDBOX_SPEC.md)
-- [OpenClaw Sandbox Controls](docs/OPENCLAW_SANDBOX_CONTROLS.md)
+- [OpenClaw Sandbox Integration](docs/spec/openclaw-sandbox-spec.md)
+- [OpenClaw Sandbox Controls](docs/spec/openclaw-sandbox-controls.md)
 - [AI Evals](docs/AI_EVALS.md)
 
 ### Development
 
 - [Developer Setup](docs/SETUP.md)
 - [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
-- [Database & Migration Architecture](docs/DATABASES.md)
+- [Database & Migration Architecture](docs/spec/databases.md)
 - [Database RLS Spec](docs/DATABASE_RLS_SPEC.md)
 - [Testing Strategy](docs/TESTING.md)
 - [Feature Development Guide](docs/FEATURE_DEVELOPMENT_GUIDE.md)
 - [UI Implementation Guide](docs/UI_IMPLEMENTATION_GUIDE.md)
-- [Style & Lint Rules](docs/STYLE.md)
+- [Style & Lint Rules](docs/spec/style.md)
 
 ### Operations
 
-- [Observability](docs/OBSERVABILITY.md)
+- [Observability](docs/spec/observability.md)
 - [Repo Specification](.cogni/repo-spec.yaml)
 - [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md)
 

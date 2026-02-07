@@ -50,14 +50,16 @@ external_refs:
 ### Next Steps
 
 - [x] Agent scan: populate destination columns for all unmigrated docs
-- [ ] Proof-of-concept: migrate GRAPH_EXECUTION.md (split → spec + initiative)
+- [x] Proof-of-concept: migrate GRAPH_EXECUTION.md (split → spec + initiative)
 - [ ] Strip roadmap content from `docs/spec/scheduler.md` → initiative
 - [ ] Strip roadmap content from `docs/spec/rbac.md` → initiative
-- [ ] Update `docs/README.md` schema section to match new format
+- [x] Update `docs/README.md` schema section to match new format
 
 ### Migration Process (per doc) — Exact Steps
 
 > This is the battle-tested process used for 14+ successful AB+road migrations. Follow it exactly.
+
+> **NO_DATA_LOSS** — The overriding invariant for every migration. Every sentence, table, code block, checklist item, and diagram in the source doc MUST appear in either the spec or the initiative (or both, for invariants). After each migration: diff the original against the combined output and account for every line. Deletions are only acceptable for formatting artifacts (blank lines, redundant headings) and genuinely obsolete content explicitly called out as such. When in doubt, keep it.
 
 **Step 1: Read and classify.** Read the entire source doc. For each section, classify: as-built design (→ spec), procedural (→ guide), future/planned work (→ initiative), obsolete (→ archive).
 
@@ -65,9 +67,9 @@ external_refs:
 
 **Step 3: Search existing initiatives.** There are 20+ initiatives in `work/initiatives/`. Always `ls work/initiatives/` and check for a topical match before creating a new one. When appending, add a clearly segmented track with `> Source: docs/ORIGINAL.md` attribution.
 
-**Step 4: Route roadmap content to initiative FIRST.** This is the **MOST CRITICAL STEP**. Create or append to an initiative with ALL roadmap content (checklists, phase tables, file pointers for planned changes, future design sections). Use initiative template format: Crawl/Walk/Run deliverable tables. Include code snippets and interface definitions verbatim if they appear in roadmap sections. **Read the initiative back after writing to verify zero data loss.**
+**Step 4: Route roadmap content to initiative FIRST.** This is the **MOST CRITICAL STEP**. Create or append to an initiative with ALL roadmap content (checklists, phase tables, file pointers for planned changes, future design sections). Use initiative template format: Crawl/Walk/Run deliverable tables. Include code snippets and interface definitions verbatim if they appear in roadmap sections. **Read the initiative back after writing to verify zero data loss.** Enforce NO_DATA_LOSS: every sentence from the source must appear ≥95% similar in either the spec or initiative. Minor formatting cleanup is allowed, but no paraphrasing, summarizing, or dropping content.
 
-**Step 5: Surgically clean the spec.** Only AFTER roadmap content is safely in an initiative:
+**Step 5: Surgically clean the spec.** Only AFTER roadmap content is safely in an initiative (NO_DATA_LOSS verified):
 
 - Add YAML frontmatter (see `docs/_templates/spec.md`)
 - Restructure into required headings: Context, Goal, Non-Goals, Core Invariants (SCREAMING_SNAKE IDs), Design (key decisions, architecture diagrams, schemas, file pointers for EXISTING code), Acceptance Checks, Open Questions, Related
@@ -137,7 +139,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | AGENT_DISCOVERY.md                   | agent-discovery.md             | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                       | roadmap    | [x]  | [ ]  |
 | AI_EVALS.md                          | ai-evals.md                    | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
-| AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                       | AB+road    | [ ]  | [ ]  |
+| AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                       | AB+road    | [x]  | [x]  |
 | AI_SETUP_SPEC.md                     | ai-setup.md                    | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | ALLOY_LOKI_SETUP.md                  | -                              | -                                  | -   | alloy-loki-setup.md     | procedural | [x]  | [ ]  |
 | ARCHITECTURE.md                      | architecture.md                | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
@@ -154,10 +156,12 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | CICD_SERVICES_ROADMAP.md             | -                              | ini.cicd-services-gitops.md        | -   | -                       | roadmap    | [x]  | [ ]  |
 | CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                       | roadmap    | [x]  | [ ]  |
 | CLAWDBOT_ADAPTER_SPEC.md             | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
+| CODE_GATES.md                        | -                              | ini.maximize-oss-tools.md          | -   | -                       | snapshot   | [x]  | [x]  |
 | COGNI_BRAIN_SPEC.md                  | cogni-brain.md                 | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                       | snapshot   | [x]  | [ ]  |
 | CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                       | roadmap    | [x]  | [ ]  |
 | DAO_ENFORCEMENT.md                   | dao-enforcement.md             | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
+| DATABASE_OPS_SPEC.md                 | -                              | ini.database-ops.md                | -   | -                       | roadmap    | [x]  | [x]  |
 | DATABASES.md                         | databases.md                   | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | DATABASE_RLS_SPEC.md                 | database-rls.md                | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | DATABASE_URL_ALIGNMENT_SPEC.md       | database-url-alignment.md      | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
@@ -169,7 +173,8 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md  | procedural | [x]  | [ ]  |
 | GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
-| GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                       | AB+road    | [ ]  | [ ]  |
+| GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                       | AB+road    | [x]  | [x]  |
+| GRAPH_EXECUTOR_AUDIT.md              | -                              | ini.graph-execution.md             | -   | -                       | AB+road    | [x]  | [x]  |
 | HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                       | AB+road    | [x]  | [ ]  |
@@ -186,6 +191,8 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | NODE_CI_CD_CONTRACT.md               | node-ci-cd-contract.md         | ini.ci-cd-reusable.md              | -   | -                       | AB+road    | [x]  | [ ]  |
 | NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md | AB+road    | [x]  | [x]  |
 | NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
+| OPENCLAW_SANDBOX_CONTROLS.md         | openclaw-sandbox-controls.md   | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
+| OPENCLAW_SANDBOX_SPEC.md             | openclaw-sandbox-spec.md       | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
 | OBSERVABILITY.md                     | observability.md               | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | OBSERVABILITY_REQUIRED_SPEC.md       | observability-requirements.md  | ini.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [ ]  |
 | ONCHAIN_READERS.md                   | onchain-readers.md             | ini.onchain-indexer.md             | -   | -                       | AB+road    | [x]  | [ ]  |
@@ -195,10 +202,11 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | ini.prompt-registry.md             | -   | -                       | AB+road    | [x]  | [ ]  |
 | PROPOSAL_LAUNCHER.md                 | -                              | ini.web3-gov-mvp.md                | -   | -                       | roadmap    | [x]  | [ ]  |
-| RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                       | migrated   | [x]  | [ ]  |
+| RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                       | AB+road    | [x]  | [ ]  |
 | REPO_STATE.md                        | -                              | -                                  | -   | -                       | snapshot   | [x]  | [ ]  |
 | RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
-| SANDBOXED_AGENTS.md                  | sandboxed-agents.md            | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [ ]  | [ ]  |
+| SANDBOX_SCALING.md                   | sandbox-scaling.md             | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
+| SANDBOXED_AGENTS.md                  | sandboxed-agents.md            | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
 | SCHEDULER_SPEC.md                    | scheduler.md                   | ini.scheduler-evolution.md         | -   | -                       | migrated   | [x]  | [ ]  |
 | SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | SERVICES_ARCHITECTURE.md             | services-architecture.md       | ini.cicd-services-gitops.md        | -   | create-service.md       | as-built   | [x]  | [ ]  |
@@ -207,6 +215,8 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | SOURCECRED.md                        | sourcecred.md                  | ini.sourcecred-onchain.md          | -   | -                       | AB+road    | [x]  | [ ]  |
 | SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | STYLE.md                             | style.md                       | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
+| SUPABASE_EVALUATION.md               | research/supabase-evaluation   | ini.database-ops.md                | -   | -                       | AB+road    | [x]  | [x]  |
+| SYSTEM_TEST_ARCHITECTURE.md          | system-test-architecture.md    | ini.system-test-architecture.md    | -   | -                       | AB+road    | [x]  | [x]  |
 | SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | ini.system-tenant-governance.md    | -   | -                       | AB+road    | [x]  | [ ]  |
 | TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | ini.tenant-connections.md          | -   | -                       | AB+road    | [x]  | [ ]  |

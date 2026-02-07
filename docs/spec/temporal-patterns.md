@@ -254,5 +254,5 @@ _(none)_
 ## Related
 
 - [Scheduler Spec](./scheduler.md) — Scheduled graph execution (user-created)
-- [AI Governance Data](../AI_GOVERNANCE_DATA.md) — Governance signal collection and agent workflows
+- [AI Governance Data](ai-governance-data.md) — Governance signal collection and agent workflows
 - [Services Architecture](./services-architecture.md) — Worker service structure

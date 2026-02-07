@@ -28,6 +28,7 @@ This is a master index of all specs, updated as specs are migrated.
 | agent-discovery-spec             | Agent Discovery Architecture       | draft    | ai-graphs  | [agent-discovery.md](./agent-discovery.md)                         |
 | agent-registry                   | Agent Registry                     | draft    | ai-graphs  | [agent-registry.md](./agent-registry.md)                           |
 | ai-evals-spec                    | AI Architecture and Evals          | draft    | ai-graphs  | [ai-evals.md](./ai-evals.md)                                       |
+| ai-governance-data-spec          | AI Governance Data Design          | draft    | data       | [ai-governance-data.md](./ai-governance-data.md)                   |
 | ai-setup-spec                    | AI Setup Specification             | active   | ai-graphs  | [ai-setup.md](./ai-setup.md)                                       |
 | authentication-spec              | Authentication                     | draft    | auth       | [authentication.md](./authentication.md)                           |
 | billing-evolution-spec           | Billing Evolution                  | draft    | billing    | [billing-evolution.md](./billing-evolution.md)                     |
@@ -43,6 +44,7 @@ This is a master index of all specs, updated as specs are migrated.
 | environments-spec                | Environment & Deployment Modes     | draft    | deployment | [environments.md](./environments.md)                               |
 | error-handling-spec              | Error Handling Architecture        | draft    | meta       | [error-handling.md](./error-handling.md)                           |
 | external-executor-billing-spec   | External Executor Billing          | draft    | billing    | [external-executor-billing.md](./external-executor-billing.md)     |
+| graph-execution-spec             | Graph Execution Design             | draft    | ai-graphs  | [graph-execution.md](./graph-execution.md)                         |
 | git-sync-repo-mount-spec         | Git-Sync Repo Mount                | draft    | deployment | [git-sync-repo-mount.md](./git-sync-repo-mount.md)                 |
 | gov-data-collectors-spec         | Governance Data Collectors         | draft    | data       | [gov-data-collectors.md](./gov-data-collectors.md)                 |
 | spec.health-probes               | Health Probe Separation            | draft    | deployment | [health-probes.md](./health-probes.md)                             |
@@ -55,6 +57,10 @@ This is a master index of all specs, updated as specs are migrated.
 | spec.node-ci-cd-contract         | Node CI/CD Contract                | draft    | deployment | [node-ci-cd-contract.md](./node-ci-cd-contract.md)                 |
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
 | spec.onchain-readers             | On-Chain Treasury & Ownership      | draft    | web3       | [onchain-readers.md](./onchain-readers.md)                         |
+| openclaw-sandbox-controls-spec   | OpenClaw Sandbox Controls Design   | draft    | ai-graphs  | [openclaw-sandbox-controls.md](./openclaw-sandbox-controls.md)     |
+| openclaw-sandbox-spec            | OpenClaw Sandbox Integration       | draft    | ai-graphs  | [openclaw-sandbox-spec.md](./openclaw-sandbox-spec.md)             |
+| sandboxed-agents-spec            | Sandboxed Agent System             | draft    | ai-graphs  | [sandboxed-agents.md](./sandboxed-agents.md)                       |
+| sandbox-scaling-spec             | Sandbox Proxy Scaling Design       | draft    | ai-graphs  | [sandbox-scaling.md](./sandbox-scaling.md)                         |
 | packages-architecture-spec       | Packages Architecture              | draft    | infra      | [packages-architecture.md](./packages-architecture.md)             |
 | payments-design-spec             | Payments: USDC with Backend Verify | draft    | billing    | [payments-design.md](./payments-design.md)                         |
 | prompt-registry-spec             | Prompt Registry                    | draft    | ai-graphs  | [prompt-registry.md](./prompt-registry.md)                         |
@@ -80,6 +86,7 @@ This is a master index of all specs, updated as specs are migrated.
 | docs-work-system-spec            | Docs + Work System Spec            | draft    | infra      | [docs-work-system.md](./docs-work-system.md)                       |
 | architecture-spec                | Cogni-Template Architecture        | active   | meta       | [architecture.md](./architecture.md)                               |
 | style-spec                       | Style Specification                | active   | meta       | [style.md](./style.md)                                             |
+| system-test-architecture-spec    | System Test Architecture           | draft    | deployment | [system-test-architecture.md](./system-test-architecture.md)       |
 | spec.system-tenant               | System Tenant & Governance         | draft    | auth       | [system-tenant.md](./system-tenant.md)                             |
 | development-lifecycle            | Development Lifecycle              | proposed | workflows  | [development-lifecycle.md](./development-lifecycle.md)             |
 

@@ -74,5 +74,5 @@ _(none)_
 
 ## Related
 
-- [AI Governance Data](../../docs/AI_GOVERNANCE_DATA.md) — governance agent layer consuming these signals
+- [AI Governance Data](ai-governance-data.md) — governance agent layer consuming these signals
 - [Observability](./observability.md) — structured logging for collector runs

@@ -1,22 +1,37 @@
+---
+id: graph-execution-spec
+type: spec
+title: Graph Execution Design
+status: draft
+spec_state: draft
+trust: draft
+summary: Unified graph execution via GraphExecutorPort — billing, idempotency, streaming, and provider aggregation.
+read_when: You are working on graph execution, billing, streaming, or adding a new graph/adapter.
+implements:
+owner: derekg1729
+created: 2026-01-29
+verified: 2026-02-07
+tags: [ai-graphs, billing, streaming]
+---
+
 # Graph Execution Design
 
 > [!CRITICAL]
 > All graph execution flows through `GraphExecutorPort`. Billing is run-centric with idempotency enforced by `(source_system, source_reference)` where `source_reference` includes `run_id/attempt`.
 
-## Architecture Contract
+## Context
 
-| Category             | Status         | Notes                                       |
-| -------------------- | -------------- | ------------------------------------------- |
-| **Invariants 1-23**  | ✅ Implemented | Core billing, execution, discovery          |
-| **Invariants 24-34** | 📋 Contract    | Compiled exports, configurable, connections |
-| **Invariants 35-37** | ✅ Implemented | Model via configurable, ALS constraints     |
-| **Invariants 38-40** | 📋 Contract    | Node-keyed config, shared resolvers         |
-| **Invariants 41-47** | ✅ Validated   | External executor billing via end_user      |
-| **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration   |
+The graph execution system unifies all AI execution paths (in-proc LangGraph, Claude SDK, n8n, sandboxed agents) behind a single `GraphExecutorPort` interface. This enables consistent billing, telemetry, and streaming regardless of the underlying execution engine. Billing is run-centric with idempotency enforced at the database level.
 
-**Open Work:** See [P1: Compiled Graph Execution](#p1-compiled-graph-execution) checklist.
+## Goal
 
----
+Provide a single execution interface (`GraphExecutorPort.runGraph()`) that all graph types flow through, with unified billing via `UsageFact`, provider-agnostic streaming via `RunEventRelay`, and idempotent charge recording via `(source_system, source_reference)`.
+
+## Non-Goals
+
+- Runtime graph discovery/registration (P1/P2 — static catalog in P0)
+- Thread/run-shaped API primitives (`createThread()`, `createRun()`, `streamRun()`) — provider-internal in P0
+- Per-graph constructor arguments — graphs export compiled artifacts, runtime config via `configurable`
 
 ## Core Invariants
 
@@ -32,7 +47,7 @@
 
 6. **GRAPH_FINALIZATION_ONCE**: Graph emits exactly one `done` event and resolves `final` exactly once per run attempt.
 
-7. **USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT**: Adapter emits at most one `usage_report` per `(runId, attempt, usageUnitId)`. Adapters may emit 1..N `usage_report` events per run depending on execution granularity (see §MVP Invariants). DB uniqueness constraint is a safety net, not a substitute for correct event semantics.
+7. **USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT**: Adapter emits at most one `usage_report` per `(runId, attempt, usageUnitId)`. Adapters may emit 1..N `usage_report` events per run depending on execution granularity (see MVP Invariants). DB uniqueness constraint is a safety net, not a substitute for correct event semantics.
 
 8. **BILLING_INDEPENDENT_OF_CLIENT**: Billing commits occur server-side regardless of client connection state. `AiRuntimeService` uses a StreamDriver + Fanout pattern via `RunEventRelay`: a StreamDriver consumes the upstream `AsyncIterable` to completion, broadcasting events to subscribers (UI + billing). UI disconnect or slow consumption does not stop the StreamDriver. Billing subscriber never drops events.
 
@@ -85,7 +100,7 @@
 
 31. **BILLING_BOUNDED_BACKPRESSURE**: Billing subscriber uses bounded queue. If backpressure occurs, driver blocks (preserving lossless guarantee) rather than unbounded memory growth. P1: durable event spill or worker-based ingestion.
 
-32. **CONNECTION_IDS_ARE_REFERENCES**: `GraphRunRequest` may carry `connectionIds?: readonly string[]` (P1). These are opaque references resolved by Connection Broker at tool invocation. Per #30, no credentials in request. Per TOOL_USE_SPEC.md #26, same auth path for all tools. See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
+32. **CONNECTION_IDS_ARE_REFERENCES**: `GraphRunRequest` may carry `connectionIds?: readonly string[]` (P1). These are opaque references resolved by Connection Broker at tool invocation. Per #30, no credentials in request. Per TOOL_USE_SPEC.md #26, same auth path for all tools. See [tenant-connections.md](tenant-connections.md).
 
 33. **UNIFIED_INVOKE_SIGNATURE**: Both adapters (InProc, LangGraph Server) call `graph.invoke(input, { configurable: GraphRunConfig })` with identical input/config shapes. Wiring (LLM, tools) is centralized in shared entrypoint helpers, not per-graph bespoke code.
 
@@ -105,7 +120,7 @@
 
 ### External Executor Billing (41-47)
 
-See [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) for full design.
+See [external-executor-billing.md](external-executor-billing.md) for full design.
 
 41. **END_USER_CORRELATION**: External executors set `configurable.user = ${runId}/${attempt}` server-side. LiteLLM stores as `end_user`. Reconciler queries by `end_user`.
 
@@ -121,11 +136,401 @@ See [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) for full design
 
 47. **CONFIGURABLE_USER_IN_SERVER_ENTRYPOINT**: `initChatModel` must include `"user"` in `configurableFields` for external executors.
 
----
+### MVP Invariants (trusted graph execution)
 
-## Graph Catalog & Provider Architecture
+These invariants govern trusted graph execution (no reconciliation needed) like in-proc LangGraph and sandboxed agents:
 
-### File Tree Map
+- **GRAPH_FINALIZATION_ONCE**: Exactly one `done` per runId; completion-units never emit `done`.
+- **USAGE_UNIT_GRANULARITY_ADAPTER_DEFINED**: Adapters emit 1..N `usage_report` events per run. InProc emits per-completion-unit (`usageUnitId=litellmCallId`). External adapters (LangGraph Server, Claude SDK, n8n) emit one aggregate (`usageUnitId=provider_run_id` or `message.id`). `USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT` prevents duplicates; billing handles any valid 1..N sequence.
+- **USAGE_UNIT_IS_LITELLM_CALL_ID**: For trusted executors (inproc, sandbox), `usageUnitId` is captured from LiteLLM's `x-litellm-call-id` response header. This value equals `spend_logs.request_id` in LiteLLM's reconciliation API, enabling idempotent billing and forensic correlation. Manually verified 2026-02-07 against dev stack (`charge_receipts.litellm_call_id` matched `GET /spend/logs?request_id=`). Automated test: `tests/stack/ai/litellm-call-id-mapping.stack.test.ts` (skipped; requires system test infra, see `docs/SYSTEM_TEST_ARCHITECTURE.md`).
+- **BILLING_SEAM_IS_EXECUTE_COMPLETION_UNIT**: No direct provider/LiteLLM SDK calls from langgraph graphs; all billable calls go through `executeCompletionUnit`.
+- **REQUEST_ID_FLOW_REQUIRED**: `CompletionResult` must carry `requestId` (or define deterministic mapping) to satisfy `GraphFinal.requestId` + tracing.
+- **MODEL_CONSISTENCY**: Model string must be the same through request→LiteLLM→`UsageFact.model`; never infer later.
+- **NO_LANGCHAIN_IN_SRC**: `src/**` must not import `@langchain/*`; all LangChain conversions stay in `packages/langgraph-graphs`.
+- **ERROR_NORMALIZATION**: Errors normalized to `timeout|aborted|internal` at GraphExecutor boundary (no freeform string leakage).
+- **DOCS_MATCH_REALITY**: AGENTS.md/docs must be updated or explicitly marked stale to avoid churn.
+
+### Compiled Graph Entrypoint Invariants
+
+- **PURE_GRAPH_FACTORY**: `graph.ts` has no env/ALS/entrypoint wiring
+- **ENTRYPOINT_IS_THIN**: `server.ts` and `cogni-exec.ts` are ~1-liners calling shared helpers
+- **LANGGRAPH_JSON_POINTS_TO_SERVER_ONLY**: `langgraph.json` references `server.ts`, never `cogni-exec.ts`
+- **NO_CROSSING_THE_STREAMS**: `core/` never imports `runtime/cogni/`; `cogni-exec.ts` never uses `initChatModel`/env
+
+## Schema
+
+**Evolve `charge_receipts`** (no new table):
+
+**New columns:**
+
+| Column    | Type | Notes               |
+| --------- | ---- | ------------------- |
+| `run_id`  | text | NOT NULL            |
+| `attempt` | int  | NOT NULL, default 0 |
+
+**Constraint changes:**
+
+- Remove: `UNIQUE(request_id)`
+- Add: `UNIQUE(source_system, source_reference)`
+
+**Index changes:**
+
+- Keep: non-unique index on `request_id` (for correlation queries)
+- Add: index on `(run_id, attempt)` (for run-level queries and analytics)
+
+**Column semantics:**
+
+| Column             | Semantics                                                                 |
+| ------------------ | ------------------------------------------------------------------------- |
+| `source_system`    | Adapter source identifier (e.g., `'litellm'`, `'anthropic_sdk'`)          |
+| `source_reference` | Idempotency key within source: `${run_id}/${attempt}/${usage_unit_id}`    |
+| `run_id`           | Explicit column for joins/queries (duplicated from source_reference)      |
+| `attempt`          | Explicit column for retry analysis (duplicated from source_reference)     |
+| `request_id`       | Original request correlation; no longer unique; multiple receipts allowed |
+
+**Why explicit columns?** Burying `run_id` and `attempt` only in `source_reference` makes queries hard. Explicit columns enable:
+
+```sql
+-- Easy: explicit columns
+SELECT * FROM charge_receipts WHERE run_id = 'run123' AND attempt = 0;
+
+-- Hard: parsing source_reference
+SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
+```
+
+**Why multiple receipts per request?** A graph can make N LLM calls. Each call = one receipt. Idempotency is now scoped to usage unit, not request.
+
+**Adapter responsibility:** Each adapter must provide a stable `usage_unit_id` in `UsageFact`. Billing does not know or care how adapters derive this ID. See adapter-specific notes for mapping details.
+
+## Design
+
+### 1. GraphExecutorPort Scope
+
+| Executor Type  | Adapter                       | LLM Path                    |
+| -------------- | ----------------------------- | --------------------------- |
+| **In-proc**    | `InProcCompletionUnitAdapter` | `completion.executeStream`  |
+| **Claude SDK** | `ClaudeGraphExecutorAdapter`  | Direct to Anthropic API     |
+| **n8n**        | Future adapter                | Via our LLM gateway (ideal) |
+
+**Rule:** All graphs go through `GraphExecutorPort`. In-proc adapter wraps existing code; external adapters emit `UsageFact` directly.
+
+### 2. Execution + Billing Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ AiRuntimeService.runGraph(request)                                  │
+│ ─────────────────────────────────────                               │
+│ 1. Generate run_id; set attempt=0 (P0: no persistence)              │
+│ 2. Route to provider via AggregatingGraphExecutor (by graphId)      │
+│ 3. Call adapter.runGraph(request) → get stream                      │
+│ 4. Start RunEventRelay.pump() to consume upstream to completion     │
+│ 5. Fanout events to subscribers:                                    │
+│    ├── UI subscriber → returned to route (may disconnect)           │
+│    └── Billing subscriber → commits charges (never drops events)    │
+│ 6. Return { uiStream, final }                                       │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌──────────────────────────────┐ ┌────────────────────────────────────┐
+│ UI Subscriber                │ │ Billing Subscriber                 │
+│ ──────────────               │ │ ──────────────────                 │
+│ - Receives broadcast events  │ │ - Receives broadcast events        │
+│ - Client disconnect = stops  │ │ - Runs to completion (never stops) │
+│   receiving, driver continues│ │ - On usage_report → commitUsageFact│
+│                              │ │ - On done/error → finalize         │
+└──────────────────────────────┘ └────────────────────────────────────┘
+                                              │
+                                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ GraphExecutorAdapter (in-proc or external)                          │
+│ ───────────────────────────────────────────                         │
+│ - Emit AiEvents (text_delta, tool_call_*, usage_report, done)       │
+│ - usage_report carries UsageFact with run_id/attempt/usageUnitId    │
+│ - Resolve final with usage_totals                                   │
+└─────────────────────────────────────────────────────────────────────┘
+                                              │
+                                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ BillingService (billing.ts) — never blocking                        │
+│ ─────────────────────────────────────────                           │
+│ - commitUsageFact(fact) called by billing sink                      │
+│ - Apply pricing policy: chargedCredits = llmPricingPolicy(costUsd)  │
+│ - Compute source_reference = computeIdempotencyKey(fact)            │
+│ - Call recordChargeReceipt with source_reference                    │
+│ - DB constraint handles duplicates (no-op on conflict)              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Pricing policy:** `commitUsageFact()` applies the markup via `llmPricingPolicy.ts`. See [billing-evolution.md](billing-evolution.md) for credit unit standard (`CREDITS_PER_USD = 10_000_000`) and markup factor.
+
+**Why StreamDriver + Fanout?** AsyncIterable cannot be safely consumed by two independent readers. The StreamDriver (internal `pump()` loop in `RunEventRelay`) is a single consumer that reads upstream to completion, broadcasting each event to subscribers via internal queues. Per BILLING_INDEPENDENT_OF_CLIENT: if UI subscriber disconnects, the driver continues and billing subscriber still receives all events.
+
+**Why run-centric?** Graphs have multiple LLM calls. Billing must be attributed to usage units, not requests. Idempotency key includes run context to prevent cross-run collisions.
+
+### 3. Idempotency Key Format
+
+```
+source_reference = "${run_id}/${attempt}/${usage_unit_id}"
+```
+
+**Note:** `source` is NOT duplicated in `source_reference` — the `source_system` column already identifies the source. This reduces entropy and simplifies queries.
+
+**Full uniqueness:** `UNIQUE(source_system, source_reference)` enforces global uniqueness.
+
+**Examples:**
+
+| source_system   | source_reference   | Meaning                                      |
+| --------------- | ------------------ | -------------------------------------------- |
+| `litellm`       | `r1/0/call-abc123` | LiteLLM call (usage_unit_id = litellmCallId) |
+| `anthropic_sdk` | `r2/0/msg_xyz`     | Claude SDK (usage_unit_id = message.id)      |
+| `anthropic_sdk` | `r3/1/msg_abc`     | Claude SDK retry (attempt=1)                 |
+| `external`      | `r4/0/run-456`     | External engine (usage_unit_id = run ID)     |
+
+**Single computation point:** `computeIdempotencyKey(UsageFact)` — used by billing.ts only.
+
+```typescript
+// In billing.ts (functions not allowed in types layer)
+function computeIdempotencyKey(fact: UsageFact): string {
+  return `${fact.runId}/${fact.attempt}/${fact.usageUnitId}`;
+}
+```
+
+### 4. UsageFact Type
+
+```typescript
+export interface UsageFact {
+  // Required for idempotency key computation (usageUnitId resolved at commit time)
+  readonly runId: string;
+  readonly attempt: number;
+  readonly usageUnitId?: string; // Adapter-provided stable ID; billing.ts assigns fallback if missing
+
+  // Required for source_system column (NOT in idempotency key)
+  readonly source: SourceSystem; // "litellm" | "anthropic_sdk" | ...
+
+  // Required billing context
+  readonly billingAccountId: string;
+  readonly virtualKeyId: string;
+
+  // Required executor type
+  readonly executorType: ExecutorType; // "langgraph_server" | "claude_sdk" | "inproc"
+
+  // Optional provider details
+  readonly provider?: string;
+  readonly model?: string;
+
+  // Optional usage metrics
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
+  readonly costUsd?: number;
+
+  // Raw payload for debugging (adapter can stash native IDs here)
+  readonly usageRaw?: Record<string, unknown>;
+}
+```
+
+**Adapter contract:** Adapters SHOULD set `usageUnitId` to a stable identifier when available. If missing (`undefined`), `billing.ts` assigns a deterministic fallback at commit time (see Adapter-Specific Notes). Billing uses this field solely for idempotency.
+
+### 5. ONE_LEDGER_WRITER Enforcement
+
+**Enforcement:** Stack test (grep-based). Depcruise rule is impractical because other features legitimately import `AccountService` for read operations (`getBalance`, `creditAccount`, `listCreditLedgerEntries`). The grep test precisely targets `recordChargeReceipt()` call sites.
+
+**Stack test** (`tests/stack/ai/one-ledger-writer.stack.test.ts`):
+
+```typescript
+import { execSync } from "child_process";
+
+test("only billing.ts calls recordChargeReceipt", () => {
+  // grep for actual call sites (not interface definitions)
+  const result = execSync(
+    "grep -rn '\\.recordChargeReceipt(' src/ --include='*.ts' || true",
+    { encoding: "utf-8" }
+  );
+  const callSites = result
+    .split("\n")
+    .filter(Boolean)
+    .filter((line) => !line.includes("billing.ts"))
+    .filter((line) => !line.includes(".port.ts")) // interface def
+    .filter((line) => !line.includes(".adapter.ts")); // implementation
+
+  expect(callSites).toEqual([]);
+});
+```
+
+### 6. GraphExecutorPort Interface
+
+```typescript
+export interface GraphExecutorPort {
+  // Non-async: returns immediately with stream + final promise
+  runGraph(req: GraphRunRequest): GraphRunResult;
+}
+
+export interface GraphRunResult {
+  readonly stream: AsyncIterable<AiEvent>;
+  readonly final: Promise<GraphFinal>;
+}
+```
+
+**Why non-async?** The method returns a stream handle immediately; actual execution happens as the stream is consumed. Avoids nested `Promise<Promise<...>>`.
+
+**Usage aggregation:** `GraphFinal.totalUsage` aggregates all `usage_report` events for UI/analytics display. Billing uses individual `usage_report` events (1..N per run); `totalUsage` is a convenience summary, not the billing source of truth.
+
+### 7. InProcCompletionUnitAdapter
+
+Wraps existing behavior behind `GraphExecutorPort`. Graph routing is handled by `AggregatingGraphExecutor` — this adapter handles only the default single-completion path.
+
+```typescript
+export class InProcCompletionUnitAdapter implements GraphExecutorPort {
+  constructor(
+    private deps: InProcGraphExecutorDeps,
+    private completionStream: CompletionStreamFn
+    // NOTE: No graphResolver — aggregator handles routing
+  ) {}
+
+  runGraph(req: GraphRunRequest): GraphRunResult {
+    // Default: single completion path (no graph orchestration)
+    // ... transform stream, emit usage_report before done
+    return { stream, final };
+  }
+
+  // Exposed for LangGraphInProcProvider to call for multi-step runners
+  executeCompletionUnit(params: CompletionUnitParams): CompletionUnitResult {
+    // Transforms stream, emits usage_report, but NO done event
+    // Caller (provider/runner) controls when to emit done
+  }
+}
+```
+
+**Key points:**
+
+- `AggregatingGraphExecutor` routes by `graphId` prefix → appropriate provider
+- `LangGraphInProcProvider` uses `executeCompletionUnit()` for multi-step graphs
+- Facade is graph-agnostic — no `graphResolver` in bootstrap or facade
+- Enforces `GRAPH_LLM_VIA_COMPLETION` — all LLM calls go through adapter
+- `runId` provided by caller; `attempt` frozen at 0 in P0 (per P0_ATTEMPT_FREEZE)
+
+### 8. executeCompletionUnit Contract
+
+The `executeCompletionUnit()` method must provide a **unified execution boundary** with normalized errors:
+
+1. **Stream never throws** — errors become `ErrorEvent` yields
+2. **Final never rejects** — errors become `{ok: false, ...}` results
+3. **Single authority** — both derive from same operation, error normalized once
+
+This restores the invariant: `stream + final = unified execution boundary with normalized errors`.
+
+The `CogniCompletionAdapter` in the package layer then doesn't need any special error handling — it just consumes a well-behaved stream/final from the adapter boundary.
+
+**Working Billing Flow (Non-LangGraph InProc Path):**
+
+```
+AiRuntime.runChatStream()
+        ↓
+graphExecutor.runGraph() [InProcCompletionUnitAdapter]
+        ↓
+createTransformedStream() [lines 448-512]
+        │
+        ├─ for await (event of innerStream) { yield events }
+        ├─ await final ← AFTER stream completes
+        ├─ yield usage_report { fact: UsageFact } ← WITH costUsd, litellmCallId
+        └─ yield done
+        ↓
+RunEventRelay.pump()
+        │
+        ├─ on usage_report → commitUsageFact() → recordChargeReceipt()
+        └─ on other events → queue to UI
+```
+
+**Key insight:** In the working path, `createTransformedStream()`:
+
+1. Fully drains the inner stream
+2. THEN awaits final (no dual failure channels)
+3. Builds `UsageFact` from final result (has litellmCallId, costUsd, model)
+4. Emits `usage_report` then `done`
+5. Stream never throws to caller — it's self-contained
+
+### 9. Adapter-Specific Notes
+
+#### InProcCompletionUnitAdapter
+
+**usage_unit_id source:** `litellmCallId` from LLM response header (`x-litellm-call-id`)
+
+**Ownership clarity:**
+
+| Component                     | Responsibility                                                                                           |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `completion.ts`               | Returns usage fields in final (litellmCallId, costUsd, tokens); yields `ChatDeltaEvent` only             |
+| `InProcCompletionUnitAdapter` | Emits `usage_report` AiEvent from final BEFORE `done`; owns `UsageFact` construction                     |
+| `billing.ts`                  | Sole ledger writer. Owns `callIndex` counter. Computes fallback `usageUnitId` at commit time if missing. |
+
+**Fallback policy (STRICT):** If `usageUnitId` is missing at `commitUsageFact()` time:
+
+1. **Billing subscriber** maintains a per-run `callIndex` counter (starts at 0)
+2. **At commit time**, if `fact.usageUnitId` is undefined:
+   - Log ERROR with metric `billing.missing_usage_unit_id`
+   - Set `usageUnitId = MISSING:${runId}/${callIndex++}`
+3. **This is an ERROR PATH** — investigate and fix provider integration
+4. **Do NOT** silently accept missing IDs as normal operation
+
+```typescript
+// In billing.ts commitUsageFact() — billing subscriber owns callIndex
+// callIndex is per-run state maintained by the billing subscriber
+function commitUsageFact(fact: UsageFact, callIndex: number): void {
+  let usageUnitId = fact.usageUnitId;
+
+  if (!usageUnitId) {
+    log.error(
+      { runId: fact.runId, model: fact.model, callIndex },
+      "billing.missing_usage_unit_id"
+    );
+    metrics.increment("billing.missing_usage_unit_id");
+    usageUnitId = `MISSING:${fact.runId}/${callIndex}`;
+  }
+
+  const sourceReference = computeIdempotencyKey({ ...fact, usageUnitId });
+  // ... record charge receipt
+}
+```
+
+**Why billing-subscriber-assigned callIndex?**
+
+- `usageUnitId` is formed at emission time (in adapter), but the provider may not have returned the ID yet
+- Fallback must be computed at commit time by billing.ts (the sole ledger writer)
+- `callIndex` is deterministic within a run: same run replayed = same callIndex = same idempotency key = no double billing
+- Using `Date.now()` would break idempotency on replay
+
+### 10. P0 Scope Constraints
+
+#### Billable Executor Scope
+
+**P0 ships with `inproc` as the only customer-billable executor.** The `langgraph_server` executor is gated as internal/experimental until it can emit stable `usageUnitId` (prefer `litellmCallId`) + `costUsd` + resolved model.
+
+#### Graph Contract
+
+Graphs export compiled artifacts with no constructor arguments. Runtime config via `RunnableConfig.configurable`:
+
+```typescript
+// Graph export (packages/langgraph-graphs/src/graphs/*/graph.ts)
+export const myGraph = workflow.compile(); // No args
+
+// Invocation with configurable
+await myGraph.invoke(messages, {
+  configurable: {
+    model: "gpt-4o",
+    runId: "run-123",
+    toolIds: ["get_current_time", "web_search"],
+    // ... GraphRunConfig fields (JSON-serializable)
+  },
+});
+```
+
+**Invariant:** No env reads or provider SDKs in graph code. LLM/tools resolved at invoke time via registry + ALS context.
+
+### Graph Catalog & Provider Architecture
+
+#### File Tree Map
 
 ```
 packages/
@@ -201,7 +606,7 @@ src/
     └── completion.server.ts                  # Graph-agnostic (no graph selection logic)
 ```
 
-### Key Interfaces
+#### Key Interfaces
 
 ```typescript
 // src/ports/agent-catalog.port.ts (PUBLIC PORT)
@@ -241,15 +646,13 @@ class AggregatingAgentCatalog implements AgentCatalogPort {
 }
 ```
 
----
+### Agent Discovery
 
-## Agent Discovery
-
-> See [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) for full discovery architecture.
+> See [agent-discovery.md](agent-discovery.md) for full discovery architecture.
 
 Discovery is decoupled from execution via `AgentCatalogPort`. Routes use discovery factories that don't require execution infrastructure.
 
-### Discovery Pipeline
+#### Discovery Pipeline
 
 ```
 Route (/api/v1/ai/agents)
@@ -266,156 +669,20 @@ AgentCatalogProvider[].listAgents() (fanout)
      └──► LangGraphInProcAgentCatalogProvider → reads LANGGRAPH_CATALOG
 ```
 
-### Provider Types
+#### Provider Types
 
 | Provider                              | Port                | Purpose   |
 | ------------------------------------- | ------------------- | --------- |
 | `LangGraphInProcAgentCatalogProvider` | `AgentCatalogPort`  | Discovery |
 | `LangGraphInProcProvider`             | `GraphExecutorPort` | Execution |
 
-### Key Invariants
+#### Key Invariants
 
 - **DISCOVERY_NO_EXECUTION_DEPS**: Discovery providers don't require `CompletionStreamFn`
 - **REGISTRY_SEPARATION**: Discovery providers never in execution registry
 - **COMPLETION_UNIT_NOT_PORT**: `InProcCompletionUnitAdapter` is `CompletionUnitAdapter`, not `GraphExecutorPort`
 
----
-
-## MVP Invariants (trusted graph execution)
-
-These invariants govern trusted graph execution (no reconciliation needed) like in-proc LangGraph and sandboxed agents:
-
-- **GRAPH_FINALIZATION_ONCE**: Exactly one `done` per runId; completion-units never emit `done`.
-- **USAGE_UNIT_GRANULARITY_ADAPTER_DEFINED**: Adapters emit 1..N `usage_report` events per run. InProc emits per-completion-unit (`usageUnitId=litellmCallId`). External adapters (LangGraph Server, Claude SDK, n8n) emit one aggregate (`usageUnitId=provider_run_id` or `message.id`). `USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT` prevents duplicates; billing handles any valid 1..N sequence.
-- **USAGE_UNIT_IS_LITELLM_CALL_ID**: For trusted executors (inproc, sandbox), `usageUnitId` is captured from LiteLLM's `x-litellm-call-id` response header. This value equals `spend_logs.request_id` in LiteLLM's reconciliation API, enabling idempotent billing and forensic correlation. Manually verified 2026-02-07 against dev stack (`charge_receipts.litellm_call_id` matched `GET /spend/logs?request_id=`). Automated test: `tests/stack/ai/litellm-call-id-mapping.stack.test.ts` (skipped; requires system test infra, see `docs/SYSTEM_TEST_ARCHITECTURE.md`).
-- **BILLING_SEAM_IS_EXECUTE_COMPLETION_UNIT**: No direct provider/LiteLLM SDK calls from langgraph graphs; all billable calls go through `executeCompletionUnit`.
-- **REQUEST_ID_FLOW_REQUIRED**: `CompletionResult` must carry `requestId` (or define deterministic mapping) to satisfy `GraphFinal.requestId` + tracing.
-- **MODEL_CONSISTENCY**: Model string must be the same through request→LiteLLM→`UsageFact.model`; never infer later.
-- **NO_LANGCHAIN_IN_SRC**: `src/**` must not import `@langchain/*`; all LangChain conversions stay in `packages/langgraph-graphs`.
-- **ERROR_NORMALIZATION**: Errors normalized to `timeout|aborted|internal` at GraphExecutor boundary (no freeform string leakage).
-- **DOCS_MATCH_REALITY**: AGENTS.md/docs must be updated or explicitly marked stale to avoid churn.
-
----
-
-## Implementation Checklist
-
-### P0: Run-Centric Billing + GraphExecutorPort (✅ Complete)
-
-Refactor billing for run-centric idempotency. Wrap existing LLM path behind `GraphExecutorPort`.
-
-- [x] Create `GraphExecutorPort` interface in `src/ports/graph-executor.port.ts`
-- [x] Create `InProcCompletionUnitAdapter` wrapping existing streaming/completion path
-- [x] Implement `RunEventRelay` (StreamDriver + Fanout) in `AiRuntimeService` (billing-independent consumption)
-- [x] Refactor `completion.ts`: remove `recordBilling()` call; return usage fields in final (litellmCallId, costUsd, tokens)
-- [x] Refactor `InProcCompletionUnitAdapter`: emit `usage_report` AiEvent from final BEFORE done
-- [x] Add `UsageFact` type in `src/types/usage.ts` (type only, no functions)
-- [x] Add `computeIdempotencyKey(UsageFact)` in `billing.ts` (per types layer policy)
-- [x] Add `UsageReportEvent` to AiEvent union
-- [x] Add `commitUsageFact()` to `billing.ts` — sole ledger writer
-- [x] Schema: add `run_id`, `attempt` columns; `UNIQUE(source_system, source_reference)`
-- [ ] Add grep test for ONE_LEDGER_WRITER (depcruise impractical—see §5)
-- [ ] Add idempotency test: replay with same (source_system, source_reference) → 1 row
-
-### P0: Graph Catalog & Provider Architecture (✅ Complete)
-
-Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph support with LangGraph Server parity.
-
-**Phase 1: Boundary Types**
-
-- [x] Add `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` to `@cogni/ai-core/tooling/types.ts`
-- [x] Add `ToolEffect` type to `@cogni/ai-core/tooling/types.ts`
-- [x] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
-- [x] Add `policy_denied` to `ToolErrorCode` union
-- [x] Export from `@cogni/ai-core` barrel
-- [x] Create `src/ports/tool-exec.port.ts` re-exporting from `@cogni/ai-core`
-- [ ] Define/retain exactly one `CompletionFinalResult` union (`ok:true | ok:false`) — delete all duplicates
-- [ ] Ensure failures use the union, not fake usage/finishReason patches
-- [ ] Verify single run streaming event contract used by both InProc and future Server adapter
-
-**Phase 2: Move LangGraph Wiring to Adapters**
-
-- [x] Create `src/adapters/server/ai/langgraph/` directory
-- [x] Move `tool-runner.ts` → `@cogni/ai-core/tooling/tool-runner.ts` (canonical location)
-- [x] Move `tool-policy.ts` → `@cogni/ai-core/tooling/runtime/tool-policy.ts`
-- [x] Add `BoundToolRuntime`, `ToolContractRuntime` to ai-core (no Zod dependency)
-- [x] Add `spanInput`/`spanOutput` hooks for adapter-provided scrubbing
-- [x] Update `tool-runner.ts` to enforce policy (DENY_BY_DEFAULT)
-- [x] Update `langgraph-chat.runner.ts` to pass policy + ctx to tool runner
-- [x] Delete `src/features/ai/runners/` directory (logic absorbed by provider)
-- [x] Verify dep-cruiser passes (no adapters→features imports)
-- NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`
-
-**Phase 3: Provider + Aggregator (P0 Scope)**
-
-- [x] Create `src/adapters/server/ai/graph-provider.ts` with internal `GraphProvider` interface
-- [x] Define `GraphDescriptor` with `graphId`, `displayName`, `description`, `capabilities`
-- [x] Define `GraphCapabilities` with `supportsStreaming`, `supportsTools`, `supportsMemory`
-- [x] `GraphProvider.runGraph()` uses same `GraphRunRequest`/`GraphRunResult` as `GraphExecutorPort` — no parallel types
-- [x] Create `src/adapters/server/ai/aggregating-executor.ts` implementing `GraphExecutorPort`
-- [x] Implement `LangGraphInProcProvider` in `adapters/server/ai/langgraph/inproc.provider.ts`
-- [x] Provider uses catalog referencing compiled graph exports
-- NOTE: Thread/run-shaped API (`createThread()`, `createRun()`, `streamRun()`) deferred to P1
-
-**Type Boundaries (Critical):**
-
-- `GraphProvider.runGraph` reuses `GraphRunRequest`/`GraphRunResult` from `@/ports` — do NOT create parallel types
-- Catalog entries reference compiled graph exports, not factory functions
-- Runtime config via `configurable`; non-serializable context via `AsyncLocalStorage`
-
-**Phase 4: Composition Root Wiring**
-
-- [x] Create `src/adapters/server/ai/langgraph/catalog.ts`:
-  - `LangGraphCatalogEntry` with compiled graph reference
-  - `LangGraphCatalog` type alias
-- [x] Export catalog from `@cogni/langgraph-graphs` (single source of truth for graph definitions)
-- [x] Update `bootstrap/graph-executor.factory.ts`:
-  - Provider imports catalog from `@cogni/langgraph-graphs` internally
-  - Instantiate `LangGraphInProcProvider` with adapter
-  - Instantiate `AggregatingGraphExecutor` with providers
-- [x] Update `completion.server.ts` facade: delete all graph selection logic
-
-**Phase 5: Agent Discovery Pipeline (✅ Complete)**
-
-> See [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) for full architecture.
-
-- [x] Create `AgentCatalogPort` interface in `src/ports/agent-catalog.port.ts`
-- [x] Create `AgentDescriptor` with `agentId`, `graphId`, `displayName`, `description`, `capabilities`
-- [x] Create `LangGraphInProcAgentCatalogProvider` (discovery-only)
-- [x] Create `AggregatingAgentCatalog` implementing `AgentCatalogPort`
-- [x] Create `src/bootstrap/agent-discovery.ts` with `listAgentsForApi()`
-- [x] Create `/api/v1/ai/agents` route using `listAgentsForApi()`
-- [x] Remove `listGraphs()` from `GraphExecutorPort` (it's execution-only now)
-- [x] Update `src/adapters/server/index.ts` exports
-- [x] Update deadlock test to use `executeCompletionUnit` not `runGraph`
-
-**Phase 6: Graph #2 Enablement**
-
-- [ ] Create `packages/langgraph-graphs/src/graphs/research/` (Graph #2 factory)
-- [ ] Implement `createResearchGraph()` in package
-- [ ] Add `research` entry to catalog exported by `@cogni/langgraph-graphs` (single source of truth)
-- [ ] Expose via `listGraphs()` on aggregator (bootstrap re-imports updated catalog automatically)
-- [ ] UI adds graph selector → sends `graphId` when creating run
-- [ ] E2E test: verify graph switching works
-
-**Non-Regression Rules** (✅ Verified)
-
-- [x] Do NOT change `toolCallId` behavior during this refactor
-- [x] Do NOT change tool schema shapes
-- [x] Relocate + rewire imports only; no runtime logic changes
-- [x] Existing LangGraph chat tests must pass unchanged
-
-### P1: Run Persistence + Attempt Semantics
-
-- [ ] Add `graph_runs` table for run persistence (enables attempt semantics)
-- [ ] Add `attempt-semantics.test.ts`: resume does not change attempt
-- [ ] Add stack test: graph emits `usage_report`, billing records charge
-- [ ] Replace hardcoded UI agent list with API fetch from `/api/v1/ai/agents`
-
-**Note:** Graph-specific integration tests are documented in [LANGGRAPH_AI.md](LANGGRAPH_AI.md) and [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md).
-
-### P1: Compiled Graph Execution
-
-Migrate graphs to pure factories + two entrypoints (server, cogni-exec). Both invoke with `{ configurable: GraphRunConfig }`. Entrypoint logic is centralized in shared helpers per NO_PER_GRAPH_ENTRYPOINT_WIRING.
+### Compiled Graph Execution Architecture
 
 **Per-Graph File Structure:**
 
@@ -426,13 +693,6 @@ graphs/<name>/
 ├── server.ts       # ~1 line: await createServerEntrypoint("name")
 └── cogni-exec.ts   # ~1 line: createCogniEntrypoint("name")
 ```
-
-**Entrypoint Invariants:**
-
-- **PURE_GRAPH_FACTORY**: `graph.ts` has no env/ALS/entrypoint wiring
-- **ENTRYPOINT_IS_THIN**: `server.ts` and `cogni-exec.ts` are ~1-liners calling shared helpers
-- **LANGGRAPH_JSON_POINTS_TO_SERVER_ONLY**: `langgraph.json` references `server.ts`, never `cogni-exec.ts`
-- **NO_CROSSING_THE_STREAMS**: `core/` never imports `runtime/cogni/`; `cogni-exec.ts` never uses `initChatModel`/env
 
 **Architecture:**
 
@@ -456,14 +716,6 @@ initChatModel + captured exec   CogniCompletionAdapter + ALS context
 | `CogniExecContext` | `packages/langgraph-graphs/src/runtime/cogni/` | LangGraph-specific; holds `completionFn`, `tokenSink`, `toolExecFn` (NO model per #35) |
 | `TOOL_CATALOG`     | `@cogni/ai-tools/catalog.ts`                   | Canonical tool registry; `langgraph-graphs` wraps from here                            |
 
-**Implementation Checklist:**
-
-- [x] Define `GraphRunConfig` schema in `@cogni/ai-core` (Zod): `model`, `runId`, `attempt`, `billingAccountId`, `virtualKeyId`, `traceId?`, `toolIds?`
-- [x] Create `CogniExecContext` with `AsyncLocalStorage` in `packages/langgraph-graphs/src/runtime/cogni/`
-- [x] Add `TOOL_CATALOG: Record<string, BoundTool>` to `@cogni/ai-tools/catalog.ts`
-- [x] Runtime model selection via `initChatModel` + `configurableFields` (server.ts/dev.ts)
-- [x] Schema extraction fix (`stateSchema: MessagesAnnotation` in graph factories)
-
 **Tool Wrapper Architecture (single impl, two wrappers):**
 
 ```
@@ -481,519 +733,57 @@ initChatModel + captured exec   CogniCompletionAdapter + ALS context
 └──────────────────────────────────┘ └────────────────────────────────┘
 ```
 
-- [x] `CogniCompletionAdapter`: Replace `BaseChatModel` with `Runnable`-based implementation; read `model` from `configurable` in `invoke()` (per #37); read `completionFn`/`tokenSink` from ALS; throw if ALS missing or model missing from configurable
-- [x] `makeLangChainTools`: single core impl with `execResolver: (config) => ToolExecFn`; allowlist check via `configurable.toolIds`
-- [x] `toLangChainToolsCaptured({ contracts, toolExecFn })`: wrapper; execResolver returns captured `toolExecFn`
-- [x] `toLangChainToolsFromContext({ contracts })`: wrapper; execResolver reads `toolExecFn` from ALS
-- [x] Create `createServerEntrypoint(graphName)` helper in `runtime/core/`
-- [x] Create `createCogniEntrypoint(graphName)` helper in `runtime/cogni/`
-- [x] Per-graph `server.ts`: `export const x = await createServerEntrypoint("name")`
-- [x] Per-graph `cogni-exec.ts`: `export const x = createCogniEntrypoint("name")`
-- [x] Delete `dev.ts` files; update `langgraph.json` to `server.ts` exports
-- [ ] Refactor Cogni provider to import from `cogni-exec.ts` entrypoints
-- [ ] Verify billing: cogni-exec path emits `usage_report` with `litellmCallId`/`costUsd`
-- [ ] Stack test: both entrypoints produce identical graph output for same input
-
-### P1: Node-Keyed Model & Tool Configuration
-
-Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<nodeKey>__toolIds`. Resolution: override ?? default.
-
-**File Pointers:**
-
-| File                                                                | Change                                                     |
-| ------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `packages/langgraph-graphs/src/runtime/config-resolvers.ts`         | New: `resolveModel()`, `resolveToolIds()` shared resolvers |
-| `packages/langgraph-graphs/src/runtime/cogni/completion-adapter.ts` | Accept optional `nodeKey`; use resolver in `invoke()`      |
-| `packages/langgraph-graphs/src/runtime/langchain-tools.ts`          | Use `resolveToolIds()` for allowlist check                 |
-
-**Checklist:**
-
-- [ ] Create `config-resolvers.ts` with shared resolvers
-- [ ] Update `CogniCompletionAdapter` to accept `nodeKey` and use `resolveModel()`
-- [ ] Update tool wrappers to use `resolveToolIds()`
-- [ ] Unit tests: resolver edge cases (missing config, override precedence)
-- [ ] Integration test: two-node graph with `planner__model` override
-
-### P2: Claude Agent SDK Adapter
-
-> See [CLAUDE_SDK_ADAPTER_SPEC.md](CLAUDE_SDK_ADAPTER_SPEC.md) for full specification.
-
-- [ ] Create `ClaudeAgentExecutor` implementing `GraphExecutorPort`
-- [ ] Map SDK `SDKMessage` stream → `AiEvent` stream
-- [ ] Bridge tools via in-process MCP server (`createSdkMcpServer`)
-- [ ] Emit `usage_report` with `session_id`-based `usageUnitId`
-- [ ] Add `anthropic_sdk` to `SOURCE_SYSTEMS` enum
-
-### P2: n8n Workflow Adapter
-
-> See [N8N_ADAPTER_SPEC.md](N8N_ADAPTER_SPEC.md) for full specification.
-
-- [ ] Create `N8nWorkflowExecutor` implementing `GraphExecutorPort`
-- [ ] Invoke n8n workflows via webhook POST
-- [ ] Support sync response mode (wait for completion)
-- [ ] Reconcile billing via LiteLLM spend logs (LLM routed through gateway)
-- [ ] Emit `usage_report` with `execution_id`-based `usageUnitId`
-
-### P2: Clawdbot (Moltbot) Adapter
-
-> See [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) for full specification.
-
-- [ ] Create `ClawdbotExecutorAdapter` implementing `GraphExecutorPort`
-- [ ] Invoke Moltbot Gateway via `/v1/chat/completions` with SSE streaming
-- [ ] Route all LLM calls through LiteLLM (DAO billing via virtual key)
-- [ ] Containment: sandboxing enabled, elevated disabled, egress allowlist
-- [ ] Privileged integrations via Cogni bridge tool (toolRunner.exec)
-- [ ] Reconcile billing via LiteLLM spend logs (end_user correlation)
-
-### Future: Additional External Adapters
-
-Flowise/custom engine adapters — build only if demand materializes and engines route LLM through our gateway.
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                              | Change                                                                 |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `src/ports/graph-executor.port.ts`                                | New: `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`          |
-| `src/ports/index.ts`                                              | Re-export `GraphExecutorPort`                                          |
-| `src/adapters/server/ai/inproc-completion-unit.adapter.ts`        | New: `InProcCompletionUnitAdapter`; emits `usage_report` before `done` |
-| `src/types/usage.ts`                                              | New: `UsageFact` type (no functions per types layer policy)            |
-| `src/types/billing.ts`                                            | Add `'anthropic_sdk'` to `SOURCE_SYSTEMS`                              |
-| `src/features/ai/types.ts`                                        | Add `UsageReportEvent` (contains `UsageFact`)                          |
-| `src/features/ai/services/completion.ts`                          | Remove `recordBilling()`; return usage in final (no AiEvent emission)  |
-| `src/features/ai/services/billing.ts`                             | Add `commitUsageFact()`, `computeIdempotencyKey()` (functions here)    |
-| `src/features/ai/services/ai_runtime.ts`                          | Add `RunEventRelay` (StreamDriver + Fanout)                            |
-| `src/shared/db/schema.billing.ts`                                 | Add `run_id`, `attempt` columns; change uniqueness constraints         |
-| `src/bootstrap/container.ts`                                      | Wire `InProcCompletionUnitAdapter`                                     |
-| `src/bootstrap/graph-executor.factory.ts`                         | Factory for adapter creation (no graphResolver param)                  |
-| `.dependency-cruiser.cjs`                                         | Add ONE_LEDGER_WRITER rule                                             |
-| `tests/ports/graph-executor.port.spec.ts`                         | New: port contract test                                                |
-| `tests/stack/ai/one-ledger-writer.test.ts`                        | New: grep for `.recordChargeReceipt(` call sites                       |
-| `tests/stack/ai/billing-idempotency.test.ts`                      | New: replay usage_report twice, assert 1 row                           |
-| `tests/stack/ai/billing-disconnect.test.ts`                       | New: StreamDriver completes billing even if UI subscriber disconnects  |
-| `tests/stack/ai/no-direct-completion-executestream.stack.test.ts` | New: grep test for BILLABLE_AI_THROUGH_EXECUTOR                        |
-
----
-
-## Schema
-
-**Evolve `charge_receipts`** (no new table):
-
-**New columns:**
-
-| Column    | Type | Notes               |
-| --------- | ---- | ------------------- |
-| `run_id`  | text | NOT NULL            |
-| `attempt` | int  | NOT NULL, default 0 |
-
-**Constraint changes:**
-
-- Remove: `UNIQUE(request_id)`
-- Add: `UNIQUE(source_system, source_reference)`
-
-**Index changes:**
-
-- Keep: non-unique index on `request_id` (for correlation queries)
-- Add: index on `(run_id, attempt)` (for run-level queries and analytics)
-
-**Column semantics:**
-
-| Column             | Semantics                                                                 |
-| ------------------ | ------------------------------------------------------------------------- |
-| `source_system`    | Adapter source identifier (e.g., `'litellm'`, `'anthropic_sdk'`)          |
-| `source_reference` | Idempotency key within source: `${run_id}/${attempt}/${usage_unit_id}`    |
-| `run_id`           | Explicit column for joins/queries (duplicated from source_reference)      |
-| `attempt`          | Explicit column for retry analysis (duplicated from source_reference)     |
-| `request_id`       | Original request correlation; no longer unique; multiple receipts allowed |
-
-**Why explicit columns?** Burying `run_id` and `attempt` only in `source_reference` makes queries hard. Explicit columns enable:
-
-```sql
--- Easy: explicit columns
-SELECT * FROM charge_receipts WHERE run_id = 'run123' AND attempt = 0;
-
--- Hard: parsing source_reference
-SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
-```
-
-**Why multiple receipts per request?** A graph can make N LLM calls. Each call = one receipt. Idempotency is now scoped to usage unit, not request.
-
-**Adapter responsibility:** Each adapter must provide a stable `usage_unit_id` in `UsageFact`. Billing does not know or care how adapters derive this ID. See adapter-specific notes for mapping details.
-
----
-
-## Design Decisions
-
-### 1. GraphExecutorPort Scope
-
-| Executor Type  | Adapter                       | LLM Path                    |
-| -------------- | ----------------------------- | --------------------------- |
-| **In-proc**    | `InProcCompletionUnitAdapter` | `completion.executeStream`  |
-| **Claude SDK** | `ClaudeGraphExecutorAdapter`  | Direct to Anthropic API     |
-| **n8n**        | Future adapter                | Via our LLM gateway (ideal) |
-
-**Rule:** All graphs go through `GraphExecutorPort`. In-proc adapter wraps existing code; external adapters emit `UsageFact` directly.
-
----
-
-### 2. Execution + Billing Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ AiRuntimeService.runGraph(request)                                  │
-│ ─────────────────────────────────────                               │
-│ 1. Generate run_id; set attempt=0 (P0: no persistence)              │
-│ 2. Route to provider via AggregatingGraphExecutor (by graphId)      │
-│ 3. Call adapter.runGraph(request) → get stream                      │
-│ 4. Start RunEventRelay.pump() to consume upstream to completion     │
-│ 5. Fanout events to subscribers:                                    │
-│    ├── UI subscriber → returned to route (may disconnect)           │
-│    └── Billing subscriber → commits charges (never drops events)    │
-│ 6. Return { uiStream, final }                                       │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌──────────────────────────────┐ ┌────────────────────────────────────┐
-│ UI Subscriber                │ │ Billing Subscriber                 │
-│ ──────────────               │ │ ──────────────────                 │
-│ - Receives broadcast events  │ │ - Receives broadcast events        │
-│ - Client disconnect = stops  │ │ - Runs to completion (never stops) │
-│   receiving, driver continues│ │ - On usage_report → commitUsageFact│
-│                              │ │ - On done/error → finalize         │
-└──────────────────────────────┘ └────────────────────────────────────┘
-                                              │
-                                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ GraphExecutorAdapter (in-proc or external)                          │
-│ ───────────────────────────────────────────                         │
-│ - Emit AiEvents (text_delta, tool_call_*, usage_report, done)       │
-│ - usage_report carries UsageFact with run_id/attempt/usageUnitId    │
-│ - Resolve final with usage_totals                                   │
-└─────────────────────────────────────────────────────────────────────┘
-                                              │
-                                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ BillingService (billing.ts) — never blocking                        │
-│ ─────────────────────────────────────────                           │
-│ - commitUsageFact(fact) called by billing sink                      │
-│ - Apply pricing policy: chargedCredits = llmPricingPolicy(costUsd)  │
-│ - Compute source_reference = computeIdempotencyKey(fact)            │
-│ - Call recordChargeReceipt with source_reference                    │
-│ - DB constraint handles duplicates (no-op on conflict)              │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-**Pricing policy:** `commitUsageFact()` applies the markup via `llmPricingPolicy.ts`. See [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) for credit unit standard (`CREDITS_PER_USD = 10_000_000`) and markup factor.
-
-**Why StreamDriver + Fanout?** AsyncIterable cannot be safely consumed by two independent readers. The StreamDriver (internal `pump()` loop in `RunEventRelay`) is a single consumer that reads upstream to completion, broadcasting each event to subscribers via internal queues. Per BILLING_INDEPENDENT_OF_CLIENT: if UI subscriber disconnects, the driver continues and billing subscriber still receives all events.
-
-**Why run-centric?** Graphs have multiple LLM calls. Billing must be attributed to usage units, not requests. Idempotency key includes run context to prevent cross-run collisions.
-
----
-
-### 3. Idempotency Key Format
-
-```
-source_reference = "${run_id}/${attempt}/${usage_unit_id}"
-```
-
-**Note:** `source` is NOT duplicated in `source_reference` — the `source_system` column already identifies the source. This reduces entropy and simplifies queries.
-
-**Full uniqueness:** `UNIQUE(source_system, source_reference)` enforces global uniqueness.
-
-**Examples:**
-
-| source_system   | source_reference   | Meaning                                      |
-| --------------- | ------------------ | -------------------------------------------- |
-| `litellm`       | `r1/0/call-abc123` | LiteLLM call (usage_unit_id = litellmCallId) |
-| `anthropic_sdk` | `r2/0/msg_xyz`     | Claude SDK (usage_unit_id = message.id)      |
-| `anthropic_sdk` | `r3/1/msg_abc`     | Claude SDK retry (attempt=1)                 |
-| `external`      | `r4/0/run-456`     | External engine (usage_unit_id = run ID)     |
-
-**Single computation point:** `computeIdempotencyKey(UsageFact)` — used by billing.ts only.
-
-```typescript
-// In billing.ts (functions not allowed in types layer)
-function computeIdempotencyKey(fact: UsageFact): string {
-  return `${fact.runId}/${fact.attempt}/${fact.usageUnitId}`;
-}
-```
-
----
-
-### 4. UsageFact Type (src/types/usage.ts)
-
-```typescript
-export interface UsageFact {
-  // Required for idempotency key computation (usageUnitId resolved at commit time)
-  readonly runId: string;
-  readonly attempt: number;
-  readonly usageUnitId?: string; // Adapter-provided stable ID; billing.ts assigns fallback if missing
-
-  // Required for source_system column (NOT in idempotency key)
-  readonly source: SourceSystem; // "litellm" | "anthropic_sdk" | ...
-
-  // Required billing context
-  readonly billingAccountId: string;
-  readonly virtualKeyId: string;
-
-  // Required executor type
-  readonly executorType: ExecutorType; // "langgraph_server" | "claude_sdk" | "inproc"
-
-  // Optional provider details
-  readonly provider?: string;
-  readonly model?: string;
-
-  // Optional usage metrics
-  readonly inputTokens?: number;
-  readonly outputTokens?: number;
-  readonly cacheReadTokens?: number;
-  readonly cacheWriteTokens?: number;
-  readonly costUsd?: number;
-
-  // Raw payload for debugging (adapter can stash native IDs here)
-  readonly usageRaw?: Record<string, unknown>;
-}
-```
-
-**Adapter contract:** Adapters SHOULD set `usageUnitId` to a stable identifier when available. If missing (`undefined`), `billing.ts` assigns a deterministic fallback at commit time (see Adapter-Specific Notes). Billing uses this field solely for idempotency.
-
----
-
-### 5. ONE_LEDGER_WRITER Enforcement
-
-**Enforcement:** Stack test (grep-based). Depcruise rule is impractical because other features legitimately import `AccountService` for read operations (`getBalance`, `creditAccount`, `listCreditLedgerEntries`). The grep test precisely targets `recordChargeReceipt()` call sites.
-
-**Stack test** (`tests/stack/ai/one-ledger-writer.stack.test.ts`):
-
-```typescript
-import { execSync } from "child_process";
-
-test("only billing.ts calls recordChargeReceipt", () => {
-  // grep for actual call sites (not interface definitions)
-  const result = execSync(
-    "grep -rn '\\.recordChargeReceipt(' src/ --include='*.ts' || true",
-    { encoding: "utf-8" }
-  );
-  const callSites = result
-    .split("\n")
-    .filter(Boolean)
-    .filter((line) => !line.includes("billing.ts"))
-    .filter((line) => !line.includes(".port.ts")) // interface def
-    .filter((line) => !line.includes(".adapter.ts")); // implementation
-
-  expect(callSites).toEqual([]);
-});
-```
-
----
-
-### 6. GraphExecutorPort Interface
-
-```typescript
-export interface GraphExecutorPort {
-  // Non-async: returns immediately with stream + final promise
-  runGraph(req: GraphRunRequest): GraphRunResult;
-}
-
-export interface GraphRunResult {
-  readonly stream: AsyncIterable<AiEvent>;
-  readonly final: Promise<GraphFinal>;
-}
-```
-
-**Why non-async?** The method returns a stream handle immediately; actual execution happens as the stream is consumed. Avoids nested `Promise<Promise<...>>`.
-
-**Usage aggregation:** `GraphFinal.totalUsage` aggregates all `usage_report` events for UI/analytics display. Billing uses individual `usage_report` events (1..N per run); `totalUsage` is a convenience summary, not the billing source of truth.
-
----
-
-### 7. InProcCompletionUnitAdapter (P0)
-
-Wraps existing behavior behind `GraphExecutorPort`. Graph routing is handled by `AggregatingGraphExecutor` — this adapter handles only the default single-completion path.
-
-```typescript
-export class InProcCompletionUnitAdapter implements GraphExecutorPort {
-  constructor(
-    private deps: InProcGraphExecutorDeps,
-    private completionStream: CompletionStreamFn
-    // NOTE: No graphResolver — aggregator handles routing
-  ) {}
-
-  runGraph(req: GraphRunRequest): GraphRunResult {
-    // Default: single completion path (no graph orchestration)
-    // ... transform stream, emit usage_report before done
-    return { stream, final };
-  }
-
-  // Exposed for LangGraphInProcProvider to call for multi-step runners
-  executeCompletionUnit(params: CompletionUnitParams): CompletionUnitResult {
-    // Transforms stream, emits usage_report, but NO done event
-    // Caller (provider/runner) controls when to emit done
-  }
-}
-```
-
-**Key points:**
-
-- `AggregatingGraphExecutor` routes by `graphId` prefix → appropriate provider
-- `LangGraphInProcProvider` uses `executeCompletionUnit()` for multi-step graphs
-- Facade is graph-agnostic — no `graphResolver` in bootstrap or facade
-- Enforces `GRAPH_LLM_VIA_COMPLETION` — all LLM calls go through adapter
-- `runId` provided by caller; `attempt` frozen at 0 in P0 (per P0_ATTEMPT_FREEZE)
-
----
-
-### 8. executeCompletionUnit Contract
-
-The `executeCompletionUnit()` method must provide a **unified execution boundary** with normalized errors:
-
-1. **Stream never throws** — errors become `ErrorEvent` yields
-2. **Final never rejects** — errors become `{ok: false, ...}` results
-3. **Single authority** — both derive from same operation, error normalized once
-
-This restores the invariant: `stream + final = unified execution boundary with normalized errors`.
-
-The `CogniCompletionAdapter` in the package layer then doesn't need any special error handling — it just consumes a well-behaved stream/final from the adapter boundary.
-
-**Working Billing Flow (Non-LangGraph InProc Path):**
-
-```
-AiRuntime.runChatStream()
-        ↓
-graphExecutor.runGraph() [InProcCompletionUnitAdapter]
-        ↓
-createTransformedStream() [lines 448-512]
-        │
-        ├─ for await (event of innerStream) { yield events }
-        ├─ await final ← AFTER stream completes
-        ├─ yield usage_report { fact: UsageFact } ← WITH costUsd, litellmCallId
-        └─ yield done
-        ↓
-RunEventRelay.pump()
-        │
-        ├─ on usage_report → commitUsageFact() → recordChargeReceipt()
-        └─ on other events → queue to UI
-```
-
-**Key insight:** In the working path, `createTransformedStream()`:
-
-1. Fully drains the inner stream
-2. THEN awaits final (no dual failure channels)
-3. Builds `UsageFact` from final result (has litellmCallId, costUsd, model)
-4. Emits `usage_report` then `done`
-5. Stream never throws to caller — it's self-contained
-
----
-
-## Adapter-Specific Notes
-
-### InProcCompletionUnitAdapter (P0)
-
-**usage_unit_id source:** `litellmCallId` from LLM response header (`x-litellm-call-id`)
-
-**Ownership clarity:**
-
-| Component                     | Responsibility                                                                                           |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `completion.ts`               | Returns usage fields in final (litellmCallId, costUsd, tokens); yields `ChatDeltaEvent` only             |
-| `InProcCompletionUnitAdapter` | Emits `usage_report` AiEvent from final BEFORE `done`; owns `UsageFact` construction                     |
-| `billing.ts`                  | Sole ledger writer. Owns `callIndex` counter. Computes fallback `usageUnitId` at commit time if missing. |
-
-**Fallback policy (STRICT):** If `usageUnitId` is missing at `commitUsageFact()` time:
-
-1. **Billing subscriber** maintains a per-run `callIndex` counter (starts at 0)
-2. **At commit time**, if `fact.usageUnitId` is undefined:
-   - Log ERROR with metric `billing.missing_usage_unit_id`
-   - Set `usageUnitId = MISSING:${runId}/${callIndex++}`
-3. **This is an ERROR PATH** — investigate and fix provider integration
-4. **Do NOT** silently accept missing IDs as normal operation
-
-```typescript
-// In billing.ts commitUsageFact() — billing subscriber owns callIndex
-// callIndex is per-run state maintained by the billing subscriber
-function commitUsageFact(fact: UsageFact, callIndex: number): void {
-  let usageUnitId = fact.usageUnitId;
-
-  if (!usageUnitId) {
-    log.error(
-      { runId: fact.runId, model: fact.model, callIndex },
-      "billing.missing_usage_unit_id"
-    );
-    metrics.increment("billing.missing_usage_unit_id");
-    usageUnitId = `MISSING:${fact.runId}/${callIndex}`;
-  }
-
-  const sourceReference = computeIdempotencyKey({ ...fact, usageUnitId });
-  // ... record charge receipt
-}
-```
-
-**Why billing-subscriber-assigned callIndex?**
-
-- `usageUnitId` is formed at emission time (in adapter), but the provider may not have returned the ID yet
-- Fallback must be computed at commit time by billing.ts (the sole ledger writer)
-- `callIndex` is deterministic within a run: same run replayed = same callIndex = same idempotency key = no double billing
-- Using `Date.now()` would break idempotency on replay
-
-#### Known Issues
-
-- [ ] `usage_report` only emitted on success; error/abort with partial usage not billed (P1: add optional `usage` to error result)
-
-### LangGraphServerAdapter (P0 Gated)
-
-**P0 Constraint:** `langgraph_server` executor is **internal/experimental only** in P0. It cannot be a customer-billable path until it achieves billing-grade `UsageFact` parity.
-
-**Missing for billing parity:**
-
-| Field         | InProc | Server | Notes                                |
-| ------------- | ------ | ------ | ------------------------------------ |
-| `usageUnitId` | Yes    | No     | Requires `x-litellm-call-id` capture |
-| `costUsd`     | Yes    | No     | Requires `x-litellm-response-cost`   |
-| `model`       | Yes    | No     | Requires resolved model from LiteLLM |
-
-**Fix path (if server must be paid in P0):** `langgraph-server` must capture LiteLLM response headers (`call-id`, `response-cost`, `model`, tokens) and emit `usage_report` with `usageUnitId=litellmCallId`. Without this, billing idempotency relies on `callIndex` fallback which is unsafe.
-
----
-
-## P0 Scope Constraints
-
-### Billable Executor Scope
-
-**P0 ships with `inproc` as the only customer-billable executor.** The `langgraph_server` executor is gated as internal/experimental until it can emit stable `usageUnitId` (prefer `litellmCallId`) + `costUsd` + resolved model.
-
-### Graph Contract
-
-Graphs export compiled artifacts with no constructor arguments. Runtime config via `RunnableConfig.configurable`:
-
-```typescript
-// Graph export (packages/langgraph-graphs/src/graphs/*/graph.ts)
-export const myGraph = workflow.compile(); // No args
-
-// Invocation with configurable
-await myGraph.invoke(messages, {
-  configurable: {
-    model: "gpt-4o",
-    runId: "run-123",
-    toolIds: ["get_current_time", "web_search"],
-    // ... GraphRunConfig fields (JSON-serializable)
-  },
-});
-```
-
-**Invariant:** No env reads or provider SDKs in graph code. LLM/tools resolved at invoke time via registry + ALS context.
-
-### Risk Flags
-
-1. **callIndex fallback is nondeterministic under concurrency/resume** — Must remain error-only path and not become normal operation. If `callIndex` fallback frequency exceeds threshold, investigate root cause.
-
-2. **USAGE_EMIT_ON_FINAL_ONLY implies partial failures are unbilled** — Explicitly accepted for P0. If graph fails mid-execution after N LLM calls, those calls are not billed. Add partial-usage reporting in P1 if revenue leakage is material.
-
-3. **Server path without usageUnitId breaks idempotency** — If server path is exposed to customers without fix, duplicate charges are possible on retry. Gate behind feature flag until resolved.
-
----
+### File Pointers
+
+| File                                                              | Purpose                                                           |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `src/ports/graph-executor.port.ts`                                | `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`          |
+| `src/ports/index.ts`                                              | Re-export `GraphExecutorPort`                                     |
+| `src/adapters/server/ai/inproc-completion-unit.adapter.ts`        | `InProcCompletionUnitAdapter`; emits `usage_report` before `done` |
+| `src/types/usage.ts`                                              | `UsageFact` type                                                  |
+| `src/types/billing.ts`                                            | `SOURCE_SYSTEMS` enum                                             |
+| `src/features/ai/types.ts`                                        | `UsageReportEvent` (contains `UsageFact`)                         |
+| `src/features/ai/services/completion.ts`                          | Returns usage in final (no AiEvent emission)                      |
+| `src/features/ai/services/billing.ts`                             | `commitUsageFact()`, `computeIdempotencyKey()`                    |
+| `src/features/ai/services/ai_runtime.ts`                          | `RunEventRelay` (StreamDriver + Fanout)                           |
+| `src/shared/db/schema.billing.ts`                                 | `run_id`, `attempt` columns; uniqueness constraints               |
+| `src/bootstrap/container.ts`                                      | Wires `InProcCompletionUnitAdapter`                               |
+| `src/bootstrap/graph-executor.factory.ts`                         | Factory for adapter creation                                      |
+| `.dependency-cruiser.cjs`                                         | ONE_LEDGER_WRITER rule                                            |
+| `tests/stack/ai/one-ledger-writer.stack.test.ts`                  | Grep for `.recordChargeReceipt(` call sites                       |
+| `tests/stack/ai/billing-idempotency.stack.test.ts`                | Replay usage_report twice, assert 1 row                           |
+| `tests/stack/ai/billing-disconnect.stack.test.ts`                 | StreamDriver completes billing even if UI disconnects             |
+| `tests/stack/ai/no-direct-completion-executestream.stack.test.ts` | Grep test for BILLABLE_AI_THROUGH_EXECUTOR                        |
+
+## Acceptance Checks
+
+**Automated:**
+
+- `pnpm test -- one-ledger-writer` — validates ONE_LEDGER_WRITER invariant
+- `pnpm test -- billing-idempotency` — validates IDEMPOTENT_CHARGES
+- `pnpm test -- billing-disconnect` — validates BILLING_INDEPENDENT_OF_CLIENT
+- `pnpm test -- no-direct-completion-executestream` — validates BILLABLE_AI_THROUGH_EXECUTOR
+- `pnpm check` — lint + type-check passes
+
+## Open Questions
+
+(none)
+
+## Related
+
+- [agent-discovery.md](agent-discovery.md) — Discovery pipeline, provider types
+- [accounts-design.md](accounts-design.md) — Owner vs Actor tenancy rules
+- [ai-setup.md](ai-setup.md) — P1 invariants, telemetry
+- [langgraph-patterns.md](langgraph-patterns.md) — Graph architecture, anti-patterns
+- [tool-use.md](tool-use.md) — Tool execution within graphs
+- [billing-evolution.md](billing-evolution.md) — Credit unit standard, pricing policy, markup
+- [activity-metrics.md](activity-metrics.md) — Activity dashboard join
+- [usage-history.md](usage-history.md) — Message artifact persistence (parallel stream consumer)
+- [claude-sdk-adapter.md](claude-sdk-adapter.md) — Claude Agent SDK adapter design
+- [n8n-adapter.md](n8n-adapter.md) — n8n workflow execution adapter design
+- [tenant-connections.md](tenant-connections.md) — Tenant connections
+- [external-executor-billing.md](external-executor-billing.md) — External executor billing design
+- [Initiative: Graph Execution](../../work/initiatives/ini.graph-execution.md)
 
 ## Sources
 
@@ -1002,22 +792,3 @@ await myGraph.invoke(messages, {
 - https://nodejs.org/api/async_context.html
 - https://osekelvin22.medium.com/avoid-dependency-injection-drilling-with-async-local-storage-in-nodejs-and-nestjs-22d325ee9ef4
 - https://wempe.dev/blog/nodejs-async-local-storage-context
-
-## Related Documents
-
-- [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) — Discovery pipeline, provider types
-- [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Owner vs Actor tenancy rules (`account_id` in relay context)
-- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P1 invariants, telemetry
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph architecture, anti-patterns
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution within graphs
-- [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) — Credit unit standard, pricing policy, markup
-- [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md) — Activity dashboard join
-- [USAGE_HISTORY.md](USAGE_HISTORY.md) — Message artifact persistence (parallel stream consumer)
-- [CLAUDE_SDK_ADAPTER_SPEC.md](CLAUDE_SDK_ADAPTER_SPEC.md) — Claude Agent SDK adapter design (P2)
-- [N8N_ADAPTER_SPEC.md](N8N_ADAPTER_SPEC.md) — n8n workflow execution adapter design (P2)
-- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — Clawdbot (Moltbot) external runtime adapter (P2)
-
----
-
-**Last Updated**: 2026-01-29
-**Status**: Draft (Rev 18 - NODE_KEYED_CONFIG_VIA_FLAT_MAP; per-node model/toolIds overrides)
