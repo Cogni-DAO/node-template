@@ -22,6 +22,8 @@ This is a master index of all specs, updated as specs are migrated.
 
 | ID                               | Title                              | State    | Domain     | Location                                                           |
 | -------------------------------- | ---------------------------------- | -------- | ---------- | ------------------------------------------------------------------ |
+| spec.accounts-api-endpoints      | Accounts & LiteLLM Virtual Keys    | draft    | billing    | [accounts-api-endpoints.md](./accounts-api-endpoints.md)           |
+| spec.accounts-design             | Accounts & Credits System Design   | draft    | billing    | [accounts-design.md](./accounts-design.md)                         |
 | activity-metrics-spec            | Activity Metrics Design            | draft    | billing    | [activity-metrics.md](./activity-metrics.md)                       |
 | agent-discovery-spec             | Agent Discovery Architecture       | draft    | ai-graphs  | [agent-discovery.md](./agent-discovery.md)                         |
 | agent-registry                   | Agent Registry                     | draft    | ai-graphs  | [agent-registry.md](./agent-registry.md)                           |
@@ -46,6 +48,7 @@ This is a master index of all specs, updated as specs are migrated.
 | spec.health-probes               | Health Probe Separation            | draft    | deployment | [health-probes.md](./health-probes.md)                             |
 | model-selection-spec             | Model Selection                    | draft    | ai-graphs  | [model-selection.md](./model-selection.md)                         |
 | n8n-adapter-spec                 | n8n Workflow Execution Adapter     | draft    | ai-graphs  | [n8n-adapter.md](./n8n-adapter.md)                                 |
+| spec.node-ci-cd-contract         | Node CI/CD Contract                | draft    | deployment | [node-ci-cd-contract.md](./node-ci-cd-contract.md)                 |
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
 | packages-architecture-spec       | Packages Architecture              | draft    | infra      | [packages-architecture.md](./packages-architecture.md)             |
 | prompt-registry-spec             | Prompt Registry                    | draft    | ai-graphs  | [prompt-registry.md](./prompt-registry.md)                         |
@@ -54,6 +57,7 @@ This is a master index of all specs, updated as specs are migrated.
 | temporal-patterns-spec           | Temporal Patterns                  | draft    | ai-graphs  | [temporal-patterns.md](./temporal-patterns.md)                     |
 | security-auth-spec               | Security & Authentication          | draft    | auth       | [security-auth.md](./security-auth.md)                             |
 | services-architecture-spec       | Services Architecture              | draft    | deployment | [services-architecture.md](./services-architecture.md)             |
+| spec.sourcecred                  | SourceCred Implementation          | draft    | community  | [sourcecred.md](./sourcecred.md)                                   |
 | sourcecred-config-rationale-spec | SourceCred Configuration Rationale | draft    | community  | [sourcecred-config-rationale.md](./sourcecred-config-rationale.md) |
 | ui-implementation-spec           | UI Implementation                  | draft    | meta       | [ui-implementation.md](./ui-implementation.md)                     |
 | spec.usage-history               | Usage History Design               | draft    | data       | [usage-history.md](./usage-history.md)                             |
@@ -61,6 +65,7 @@ This is a master index of all specs, updated as specs are migrated.
 | cogni-brain-spec                 | Cogni Brain Specification          | proposed | ai-graphs  | [cogni-brain.md](./cogni-brain.md)                                 |
 | rbac-spec                        | RBAC Specification                 | active   | auth       | [rbac.md](./rbac.md)                                               |
 | observability-spec               | Observability Specification        | active   | data       | [observability.md](./observability.md)                             |
+| spec.observability-requirements  | Required Observability Design      | draft    | data       | [observability-requirements.md](./observability-requirements.md)   |
 | ci-cd-spec                       | CI/CD Specification                | active   | deployment | [ci-cd.md](./ci-cd.md)                                             |
 | databases-spec                   | Databases Specification            | active   | infra      | [databases.md](./databases.md)                                     |
 | docs-work-system-spec            | Docs + Work System Spec            | draft    | infra      | [docs-work-system.md](./docs-work-system.md)                       |
@@ -92,7 +97,6 @@ Legacy specs in `/docs/*.md` to be migrated to `/docs/spec/`:
 - TOOL_USE_SPEC.md
 - TENANT_CONNECTIONS_SPEC.md
 - UNIFIED_GRAPH_LAUNCH_SPEC.md
-- OBSERVABILITY_REQUIRED_SPEC.md
 
 ## Adding a Spec
 
