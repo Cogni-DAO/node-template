@@ -35,7 +35,7 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none (image name, litellmMasterKey configurable via constructor)
-- **Files considered API:** index.ts barrel export
+- **Files considered API:** index.ts barrel export (not re-exported from parent server barrel — consumers use subpath imports to avoid Turbopack bundling dockerode native addon chain)
 
 ## Ports
 
