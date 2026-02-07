@@ -30,6 +30,7 @@ node_modules
 
 # IDE
 .vscode/
+.obsidian/
 
 # debug
 npm-debug.log*
