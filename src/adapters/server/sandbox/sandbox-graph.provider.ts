@@ -210,24 +210,36 @@ export class SandboxGraphProvider implements GraphProvider {
         }
 
         const content = envelope.payloads[0]?.text ?? "";
+        const litellmCallId = envelope.meta?.litellmCallId;
 
         // Emit response as text_delta
         if (content) {
           yield { type: "text_delta", delta: content };
         }
 
-        // Emit usage_report for billing
-        // P0.75: charges tracked by LiteLLM via x-litellm-end-user-id header.
-        // We emit a fact so RunEventRelay records the run occurred.
-        // Full cost reconciliation (querying /spend/logs) deferred to P1.
+        // Emit usage_report for billing (ONLY if litellmCallId present)
+        // P0.75: usageUnitId is REQUIRED for billing-authoritative sandbox executor.
+        // Missing call-id = billing incomplete = fail run.
+        if (!litellmCallId) {
+          self.log.error(
+            { runId, model },
+            "CRITICAL: Sandbox agent did not emit litellmCallId - billing incomplete, failing run"
+          );
+          // Throw to fail run (prevents silent under-billing)
+          throw new Error(
+            "Billing failed: sandbox agent missing litellmCallId (x-litellm-call-id header)"
+          );
+        }
+
         const usageFact: UsageFact = {
           runId,
           attempt,
           source: "litellm",
-          executorType: "inproc", // TODO: add "sandbox" to ExecutorType union
+          executorType: "sandbox",
           billingAccountId: caller.billingAccountId,
           virtualKeyId: caller.virtualKeyId,
           model,
+          usageUnitId: litellmCallId, // Required, no fallback
         };
         yield { type: "usage_report", fact: usageFact };
 
