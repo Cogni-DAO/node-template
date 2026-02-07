@@ -12,5 +12,5 @@
  * @public
  */
 
-import { FakeLlmAdapter } from "@/adapters/test/ai/fake-llm.adapter";
-export const probeFail = FakeLlmAdapter;
+import { FakeMetricsAdapter } from "@/adapters/test/metrics/fake-metrics.adapter";
+export const probeFail = FakeMetricsAdapter;

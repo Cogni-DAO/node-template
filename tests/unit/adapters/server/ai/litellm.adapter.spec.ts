@@ -5,7 +5,7 @@
  * Module: `@adapters/server/ai/litellm`
  * Purpose: Unit tests for LiteLLM adapter with mocked HTTP calls and error handling.
  * Scope: Tests adapter logic, parameter handling, response parsing, missing cost handling. Does NOT test real LiteLLM service.
- * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; model param required (no env fallback); USAGE_UNIT_IS_LITELLM_CALL_ID (header-only, no body fallback)
+ * Invariants: No real HTTP calls; deterministic responses; model param required; USAGE_UNIT_IS_LITELLM_CALL_ID
  * Side-effects: none (mocked fetch)
  * Notes: Tests error handling, timeout enforcement, response mapping, missing model validation. No DEFAULT_MODEL - model must be explicitly provided.
  * Links: src/adapters/server/ai/litellm.adapter.ts, LlmService port

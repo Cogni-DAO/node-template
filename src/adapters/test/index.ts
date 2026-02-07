@@ -12,7 +12,6 @@
  * @public
  */
 
-export { FakeLlmAdapter } from "./ai/fake-llm.adapter";
 export { FakeWebSearchAdapter } from "./ai/fake-web-search.adapter";
 export { FakeAiTelemetryAdapter } from "./ai-telemetry/fake-ai-telemetry.adapter";
 export { FakeMetricsAdapter } from "./metrics/fake-metrics.adapter";
