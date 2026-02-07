@@ -297,6 +297,90 @@ Should we add a `max_tokens_per_run` budget? This would require either: (a) rate
 
 OpenClaw skills (in `skills/` directory) provide domain-specific behavior. Skills requiring network access (web search, APIs) are non-functional in the sandbox. Skills that work with local files (coding patterns, documentation) work fine. Need to audit which skills are sandbox-compatible and decide whether to bundle a curated set into the `cogni-sandbox-openclaw` image or strip all skills. Skills add to image size and system prompt length.
 
+### Roadmap — Sandbox Proxy Scaling Track
+
+> Source: docs/SANDBOX_SCALING.md (roadmap content extracted during docs migration)
+
+#### Shared Proxy (P1+): Single Long-Lived OpenResty
+
+**Trigger**: When container overhead becomes measurable (>~20 concurrent sandbox runs) OR when dynamic per-request behavior is needed (rate limiting, tool routing).
+
+Single `openresty:alpine` container serving all concurrent sandbox runs. Attribution via host-minted signed run tokens verified per-request in Lua.
+
+| Property             | Value                                                           |
+| -------------------- | --------------------------------------------------------------- |
+| Attribution trust    | HMAC-SHA256 signed token verified per-request                   |
+| Container overhead   | One proxy, ~10 MB total                                         |
+| Concurrency ceiling  | Thousands of concurrent runs                                    |
+| Audit isolation      | Must parse/filter shared log by runId                           |
+| Secret scoping       | Single proxy holds `LITELLM_MASTER_KEY` + `PROXY_SHARED_SECRET` |
+| Failure blast radius | Proxy crash kills ALL concurrent runs                           |
+
+#### Signed Run Token Scheme (P1+)
+
+> **DO NOT BUILD YET.** This is P1+ reference material for when the shared proxy pattern is needed (trigger: >~20 concurrent runs). Per-run proxy with static config is correct until then.
+
+For the shared proxy pattern, a minimal HMAC-SHA256 token (no JWT — avoids unnecessary complexity for internal host-to-proxy trust).
+
+**Token Format:**
+
+```
+X-Run-Token: {runId}|{attempt}|{expiry}.{base64(HMAC-SHA256(data, PROXY_SHARED_SECRET))}
+```
+
+**Host Side (Node.js):**
+
+```typescript
+import { createHmac } from "crypto";
+
+function mintRunToken(runId: string, attempt: number, secret: string): string {
+  const expiry = Math.floor(Date.now() / 1000) + 86400; // 24h
+  const data = `${runId}|${attempt}|${expiry}`;
+  const sig = createHmac("sha256", secret).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+```
+
+**Proxy Side (OpenResty Lua):**
+
+```lua
+-- access_by_lua_block
+local hmac = require "resty.hmac"
+
+local token = ngx.req.get_headers()["X-Run-Token"]
+if not token then return ngx.exit(401) end
+
+local data_part, sig_part = token:match("^(.+)%.(.+)$")
+if not data_part then return ngx.exit(401) end
+
+local parts = {}
+for p in data_part:gmatch("[^|]+") do parts[#parts+1] = p end
+-- parts = { runId, attempt, expiry }
+
+if tonumber(parts[3]) < ngx.time() then return ngx.exit(401) end
+
+local h = hmac:new(SHARED_SECRET, hmac.ALGOS.SHA256)
+local expected = ngx.encode_base64url(h:final(data_part))
+if expected ~= sig_part then return ngx.exit(401) end
+
+ngx.req.set_header("x-litellm-end-user-id", parts[1] .. "/" .. parts[2])
+ngx.req.set_header("Authorization", "Bearer " .. LITELLM_KEY)
+```
+
+**Dependencies**: [`lua-resty-hmac`](https://github.com/jkeys089/lua-resty-hmac) (15 KB, pure Lua, available via OPM).
+
+#### Migration Plan
+
+| Step                 | When                      | Change                                                                    | Diff Size                                         |
+| -------------------- | ------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------- |
+| 1. Ship P0.5         | Now                       | Current `nginx:alpine` per-run proxy                                      | Already built                                     |
+| 2. Swap image        | When first Lua needed     | Change `nginx:alpine` to `openresty/openresty:alpine` in LlmProxyManager  | 1 line                                            |
+| 3. Add rate limiting | When abuse risk increases | Add `access_by_lua_block` with `lua-resty-limit-req`                      | ~20 lines Lua                                     |
+| 4. Shared proxy      | When concurrency > ~20    | Replace per-run containers with single long-lived OpenResty + HMAC tokens | New `SharedLlmProxyManager` adapter               |
+| 5. CogniGateway      | P1 tool execution         | Node.js gateway: `/v1/*` passthrough + `/tool/exec` endpoint              | New service, replaces proxy for tool-enabled runs |
+
+Each step is independently shippable. Steps 2-3 are backward-compatible with per-run model.
+
 ## Constraints
 
 - HOST_SIDE_GIT_RELAY: All credential-bearing git ops on host, never in sandbox
@@ -317,6 +401,7 @@ OpenClaw skills (in `skills/` directory) provide domain-specific behavior. Skill
 
 - [OpenClaw Sandbox Controls](../../docs/spec/openclaw-sandbox-controls.md) — Invariants 20-25, design decisions, anti-patterns
 - [OpenClaw Sandbox Spec](../../docs/spec/openclaw-sandbox-spec.md) — Invariants 13-19, container image, LLM protocol, I/O protocol, billing
+- [Sandbox Scaling](../../docs/spec/sandbox-scaling.md) — Proxy comparison, per-run architecture, threat model
 
 ## Design Notes
 
