@@ -3,6 +3,25 @@
 > [!CRITICAL]
 > External executors use **async reconciliation** via provider billing APIs. Identity key is `end_user = billingAccountId` (matching in-proc `LiteLlmAdapter`). Run correlation via `metadata.run_id`. Reconcilers call `commitUsageFact()` per LLM call with `usageUnitId = provider_call_id`.
 
+## Inline vs Reconciliation
+
+**Why Reconciliation for External Executors?**
+
+1. External executor is outside the trusted process that makes LLM calls → inline headers/usage may be missing or untrusted during streaming
+2. Streaming UX events are not authoritative → disconnects/retries/partial streams happen; per-call spend logs are authoritative and idempotent
+3. Cannot reliably capture trusted `provider_call_id` + usage inline → reconciliation queries server-controlled billing API after completion
+
+**Rule of Thumb**:
+
+- **Inline OK**: Trusted component sees `provider_call_id` + usage inline AND enforces identity injection (in-proc adapter, sandbox proxy). Works for multi-call graphs.
+- **Reconciliation Required**: Execution is external/untrusted OR cannot reliably capture `provider_call_id` + usage inline (LangGraph Server, remote OpenClaw).
+
+**Examples**:
+
+- ✅ **InProc**: Trusted adapter captures LiteLLM response → inline billing per call
+- ✅ **Sandbox**: Trusted nginx proxy injects headers → inline billing per call (even multi-call OpenClaw agents)
+- ⚠️ **LangGraph Server**: External process, no trusted inline capture → reconciliation after stream completes
+
 ## Core Invariants
 
 1. **END_USER_IS_BILLING_ACCOUNT**: All executors (in-proc, sandbox, external) set `end_user = billingAccountId`. This matches the in-proc `LiteLlmAdapter` (`user: billingAccountId`) and the activity dashboard query (`/spend/logs?end_user=billingAccountId`). Run correlation uses `metadata.run_id`, NOT `end_user`.
