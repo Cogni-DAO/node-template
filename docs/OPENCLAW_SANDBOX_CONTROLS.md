@@ -59,6 +59,13 @@ Agent makes code changes and commits locally inside the sandbox. Host clones bef
 - [ ] Add Grafana dashboard using existing Alloy → Mimir pipeline
 - [ ] **Do NOT build preemptively** — dashboard value requires run volume from P1
 
+### P2: Agentic Evolution
+
+- [ ] Condition: P1 git relay operational, `sandbox:openclaw` producing useful runs
+- [ ] Dashboard-driven agent + skill creation: allow adding new OpenClaw agent personalities (model, skills, system prompt) from the Cogni dashboard. **Note:** config changes require git commit + deployment propagation to reach the full DAO deployment — this is not a hot-reload path.
+- [ ] Leverage OpenClaw's multi-agent routing: OpenClaw natively supports multiple agent configs (`agents.list` in `openclaw.json`) and `--agent <id>` selection. Today we hardcode `--agent main`. Evolve to let the Cogni graph selector choose which OpenClaw personality to invoke per-run (e.g., `researcher`, `coder`, `reviewer`), each with distinct model and skill sets.
+- [ ] Evaluate OpenClaw subagent spawning: a running agent can internally spawn sub-agents for parallel task decomposition (e.g., "research X while coding Y"). This works within our sandbox constraints (same LLM proxy socket, same container lifetime) but needs timeout budgeting — sub-agents share the `--timeout 540` / `maxRuntimeSec: 600` envelope.
+
 ---
 
 ## File Pointers (P0 Scope)
