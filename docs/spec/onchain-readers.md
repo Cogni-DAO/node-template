@@ -1,51 +1,59 @@
+---
+id: spec.onchain-readers
+type: spec
+title: "On-Chain Intelligence: Treasury & Ownership"
+status: draft
+spec_state: draft
+trust: draft
+summary: Read-only on-chain data ports for DAO treasury snapshots and token ownership distribution via hexagonal adapters
+read_when: Adding on-chain read features, implementing treasury UI, or swapping chain adapters
+implements: []
+owner: cogni-dev
+created: 2026-02-03
+verified: null
+tags:
+  - web3
+  - data
+---
+
 # On-Chain Intelligence: Treasury & Ownership
 
-**Purpose:** Read on-chain data for DAO treasury snapshots and token ownership distribution. No payment verification (handled by EvmRpcOnChainVerifierAdapter in payment flow).
+## Context
 
-**Status:** Phase 2 active – Treasury snapshot-on-read for header badge using direct RPC (ETH-only).
+The platform needs to read on-chain data for DAO treasury snapshots and token ownership distribution. This is separate from payment verification (handled by `EvmRpcOnChainVerifierAdapter` in the payment flow). Phase 2 is active: treasury snapshot-on-read for header badge using direct RPC (ETH-only).
 
----
+## Goal
 
-## Invariants
+Define the read-only on-chain data ports, adapter contracts, and UI integration patterns for treasury balance display and token ownership tracking.
 
-**UI-to-Chain Boundaries:**
+## Non-Goals
 
-- UI never calls RPC or indexers directly; all reads go through HTTP API endpoints
-- UI never uses client-side polling (`refetchInterval`) for treasury badge or on-chain displays
-- Snapshot refresh is best-effort with strict timeout; on failure, endpoint returns stale data + `staleWarning: true` instead of failing the request
+- Payment verification (handled by EvmRpcOnChainVerifier in payment flow)
+- Multi-chain support (future — see [ini.onchain-indexer](../../work/initiatives/ini.onchain-indexer.md))
+- Ponder indexer integration (future — see initiative P2)
+- Persistent storage of treasury balances (chain is system of record)
 
-**Data Storage:**
+## Core Invariants
 
-- We do NOT store treasury balances; chain is the system of record
-- Phase 2 reads directly from chain via TreasuryReadPort with strict timeout
-- Any durable history requirement will be met by an indexer (Ponder) in a later phase
+1. **UI_NEVER_CALLS_RPC**: UI never calls RPC or indexers directly; all reads go through HTTP API endpoints.
 
-**Configuration:**
+2. **NO_CLIENT_POLLING**: UI never uses client-side polling (`refetchInterval`) for treasury badge or on-chain displays.
 
-- ChainId and treasuryAddress always flow from `.cogni/repo-spec.yaml` via `getPaymentConfig()` into ports/adapters, never hard-coded in features
-- Treasury address = `getPaymentConfig().receivingAddress` (DAO wallet receiving payments)
+3. **GRACEFUL_DEGRADATION**: Snapshot refresh is best-effort with strict timeout; on failure, endpoint returns stale data + `staleWarning: true` instead of failing the request.
 
-**Port Design:**
+4. **CHAIN_IS_SYSTEM_OF_RECORD**: We do NOT store treasury balances; chain is the system of record. Phase 2 reads directly from chain via TreasuryReadPort with strict timeout.
 
-- Ports (TreasuryReadPort, TokenOwnershipReadPort) are read-only and tech-agnostic
-- Port interfaces remain stable when swapping adapters (viem → Ponder, EVM → Solana)
-- All EVM adapters MUST use EvmOnchainClient (never call viem/RPC directly)
+5. **CONFIG_FROM_REPO_SPEC**: ChainId and treasuryAddress always flow from `.cogni/repo-spec.yaml` via `getPaymentConfig()` into ports/adapters, never hard-coded in features. Treasury address = `getPaymentConfig().receivingAddress` (DAO wallet receiving payments).
 
----
+6. **PORTS_ARE_TECH_AGNOSTIC**: Ports (TreasuryReadPort, TokenOwnershipReadPort) are read-only and tech-agnostic. Port interfaces remain stable when swapping adapters (viem → Ponder, EVM → Solana).
 
-### Implementation Checklist
+7. **EVM_THROUGH_CLIENT**: All EVM adapters MUST use EvmOnchainClient (never call viem/RPC directly).
 
-- [ ] Define `TreasuryReadPort` (src/ports/treasury-read.port.ts) and `TreasurySnapshot` type
-- [ ] Implement `ViemTreasuryAdapter` using `EvmOnchainClient.getBalance` and wire in DI
-- [ ] Implement `GET /api/v1/treasury/snapshot` that calls TreasuryReadPort with strict timeout (3-5s)
-- [ ] Add Zod contract for API endpoint (`src/contracts/treasury.snapshot.v1.contract.ts`)
-- [ ] Add `useTreasuryBalance` hook + `TreasuryBadge` component that calls snapshot API once per page load with no client polling
+## Design
 
----
+### Use Cases
 
-## Use Cases
-
-### 1. Treasury Header Badge (Phase 2 - NOW)
+#### 1. Treasury Header Badge (Phase 2 — Active)
 
 **Port:** `TreasuryReadPort.getTreasurySnapshot({ chainId, treasuryAddress, tokenAddresses? })`
 
@@ -58,46 +66,21 @@
 
 **Implementation (Phase 2):** ETH balance only, using `ViemTreasuryAdapter` → `EvmOnchainClient` with direct chain reads
 
-### 2. Treasury Dashboard (Future)
+#### 2. Treasury Dashboard (Future)
 
 **Port:** `TreasuryReadPort` (same interface, richer queries)
 **Extension:** Reuses snapshot-on-read pattern, adds historical balance charts and multi-token support
 
-### 3. CogniCanary Ownership (Future)
+#### 3. CogniCanary Ownership (Future)
 
 **Port:** `TokenOwnershipReadPort.getOwnershipSnapshot({ chainId, tokenAddress, limitTopN? })`
 
 - **Current:** SourceCred grain ledger → ownership distribution (pre-token)
 - **Future:** On-chain holder tracking when token launches (via Ponder or similar)
 
----
+### Ports
 
-## File Pointers
-
-**Phase 2 Implementation:**
-
-- **Ports:** `src/ports/treasury-read.port.ts`
-- **Adapters:** `src/adapters/server/onchain/viem-treasury.adapter.ts`
-- **API:** `src/app/api/v1/treasury/snapshot/route.ts`, `src/contracts/treasury.snapshot.v1.contract.ts`
-- **Services:** `src/features/treasury/services/treasuryService.ts` (TreasuryReadPort orchestration with timeout)
-- **UI:** `src/components/kit/treasury/TreasuryBadge.tsx`, `src/features/treasury/hooks/useTreasuryBalance.ts`
-
-**Shared Infra:**
-
-- **EvmOnchainClient:** `src/shared/web3/onchain/evm-onchain-client.interface.ts`, `src/adapters/server/onchain/viem-evm-onchain-client.adapter.ts`
-- **Config:** `.cogni/repo-spec.yaml`, `src/shared/config/repoSpec.server.ts`
-
-**Future:**
-
-- `src/ports/token-ownership-read.port.ts`
-- `src/adapters/server/onchain/sourcecred-ownership.adapter.ts`
-- `src/adapters/server/onchain/ponder-treasury.adapter.ts` (if Ponder adopted)
-
----
-
-## Ports
-
-### TreasuryReadPort
+#### TreasuryReadPort
 
 ```typescript
 interface TreasuryReadPort {
@@ -111,7 +94,7 @@ interface TreasuryReadPort {
 
 Returns balance snapshot for specified treasury address and tokens. Chain-agnostic interface; adapter handles EVM vs Solana vs other chains.
 
-### TokenOwnershipReadPort
+#### TokenOwnershipReadPort
 
 ```typescript
 interface TokenOwnershipReadPort {
@@ -125,11 +108,9 @@ interface TokenOwnershipReadPort {
 
 Returns token holder distribution. Phase 2: SourceCred adapter. Future: on-chain indexer adapter when token launches.
 
----
+### Adapters & Infra
 
-## Adapters & Infra
-
-### EvmOnchainClient (Infra Seam)
+#### EvmOnchainClient (Infra Seam)
 
 Internal infra seam (NOT a domain port) wrapping viem for all EVM RPC operations.
 
@@ -146,17 +127,13 @@ Internal infra seam (NOT a domain port) wrapping viem for all EVM RPC operations
 - Treasury snapshots: `ViemTreasuryAdapter` (Phase 2)
 - Future ownership: adapter TBD when token launches
 
-### ViemTreasuryAdapter (Phase 2)
+#### ViemTreasuryAdapter (Phase 2)
 
 Implements `TreasuryReadPort` using `EvmOnchainClient.getBalance()` for ETH and ERC20 `balanceOf` calls for tokens. Validates config from `getPaymentConfig()` before querying chain.
 
----
-
-## Phase 2: Treasury Snapshot-on-Read
+### Phase 2: Treasury Snapshot-on-Read
 
 **Objective:** Display DAO treasury balance in header without client polling or blocking UI on RPC.
-
-### Behavior
 
 **Flow:**
 
@@ -170,9 +147,8 @@ Implements `TreasuryReadPort` using `EvmOnchainClient.getBalance()` for ETH and 
 
 - No persistent storage; chain is the system of record
 - Each request may hit RPC; rely on React Query `staleTime` to prevent redundant calls within same session
-- Historical analytics will be handled by a dedicated indexer (Ponder) in a later phase
 
-### Observability
+#### Observability
 
 **Metrics:**
 
@@ -188,40 +164,44 @@ Implements `TreasuryReadPort` using `EvmOnchainClient.getBalance()` for ETH and 
 
 - RPC failure rate > 20% over 5 minutes
 
----
+### File Pointers
 
-## Future Design
+**Phase 2 Implementation:**
 
-### Multi-Chain (Phase 3)
+| File                                                   | Purpose                                     |
+| ------------------------------------------------------ | ------------------------------------------- |
+| `src/ports/treasury-read.port.ts`                      | TreasuryReadPort interface                  |
+| `src/adapters/server/onchain/viem-treasury.adapter.ts` | ViemTreasuryAdapter (ETH balance via viem)  |
+| `src/app/api/v1/treasury/snapshot/route.ts`            | Public treasury snapshot API endpoint       |
+| `src/contracts/treasury.snapshot.v1.contract.ts`       | Zod contract for snapshot response          |
+| `src/features/treasury/services/treasuryService.ts`    | TreasuryReadPort orchestration with timeout |
+| `src/components/kit/treasury/TreasuryBadge.tsx`        | Treasury balance badge UI component         |
+| `src/features/treasury/hooks/useTreasuryBalance.ts`    | React Query hook for treasury balance       |
 
-- Keep ports chain-agnostic (already accept `chainId` parameter)
-- Implement adapters per chain: `ViemTreasuryAdapter` (all EVM), `SolanaTreasuryAdapter` (Helius/custom)
+**Shared Infra:**
 
-### Ownership Tracking (Post-Token Launch)
+| File                                                             | Purpose                                 |
+| ---------------------------------------------------------------- | --------------------------------------- |
+| `src/shared/web3/onchain/evm-onchain-client.interface.ts`        | EvmOnchainClient interface              |
+| `src/adapters/server/onchain/viem-evm-onchain-client.adapter.ts` | Viem implementation of EvmOnchainClient |
+| `.cogni/repo-spec.yaml`                                          | Chain config source of truth            |
+| `src/shared/config/repoSpec.server.ts`                           | Server-side repo-spec config reader     |
 
-- Switch `TokenOwnershipReadPort` from SourceCred adapter to on-chain indexer
-- Use snapshot-on-read pattern for ownership pie chart (same as treasury badge)
-- Consider Ponder for indexing ERC20 Transfer events → holder balances table
+## Acceptance Checks
 
-### Ponder for Historical Analytics (Optional)
+**Manual:**
 
-**When to Consider:** Need historical treasury balance charts, transaction-level detail, or high-volume dashboard queries
+1. Verify `GET /api/v1/public/treasury/snapshot` returns balance data with strict timeout
+2. Verify timeout/RPC error returns 200 with `staleWarning: true` (not 500)
+3. Verify UI calls snapshot API once per page load with no `refetchInterval`
+4. Verify all EVM calls go through EvmOnchainClient (no direct viem/RPC imports in features)
 
-**Approach:**
+## Open Questions
 
-- Ponder indexes ERC20 Transfer events to/from DAO wallet → persistent balance history in Ponder's own database
-- Swap `ViemTreasuryAdapter` for `PonderTreasuryAdapter`; port interface unchanged
-- Pattern unchanged; Ponder becomes the data source
+_(none)_
 
-**Trade-offs:**
+## Related
 
-- **Pro:** Persistent index, no repeated RPC calls, handles reorgs automatically
-- **Con:** Operational complexity (indexer process, GraphQL endpoint, separate postgres instance)
-- **Decision:** Phase 2 direct RPC pattern sufficient for header badge; defer until historical analytics needed
-
----
-
-**Related Docs:**
-
-- [PAYMENTS_DESIGN.md](PAYMENTS_DESIGN.md) - Payment verification (EvmRpcOnChainVerifier)
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal architecture, ports pattern
+- [payments-design.md](./payments-design.md) — Payment verification (EvmRpcOnChainVerifier)
+- [architecture.md](./architecture.md) — Hexagonal architecture, ports pattern
+- [Initiative: On-Chain Indexer](../../work/initiatives/ini.onchain-indexer.md)
