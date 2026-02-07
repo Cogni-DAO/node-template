@@ -212,7 +212,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | ini.tenant-connections.md          | -   | -                       | AB+road    | [x]  | [ ]  |
 | TESTING.md                           | -                              | -                                  | -   | testing.md              | procedural | [x]  | [ ]  |
 | TOOLS_AUTHORING.md                   | -                              | -                                  | -   | tools-authoring.md      | procedural | [x]  | [ ]  |
-| TOOL_USE_SPEC.md                     | tool-use.md                    | ini.tool-use-evolution.md          | -   | -                       | AB+road    | [ ]  | [ ]  |
+| TOOL_USE_SPEC.md                     | tool-use.md                    | ini.tool-use-evolution.md          | -   | -                       | AB+road    | [x]  | [ ]  |
 | UI_CLEANUP_CHECKLIST.md              | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | UI_CLEANUP_PLAN.md                   | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | UI_IMPLEMENTATION_GUIDE.md           | ui-implementation.md           | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
