@@ -1,16 +1,13 @@
 ---
-id: supabase-evaluation-spec
-type: spec
+id: supabase-evaluation
+type: research
 title: Supabase Evaluation — Engineering Due Diligence
 status: draft
-spec_state: draft
 trust: draft
 summary: Full codebase inventory vs. Supabase capability map. Decision record for adopting only Supabase OSS building blocks (WAL-G, pgBouncer) — not the full platform.
 read_when: Considering Supabase adoption, evaluating database ops primitives, or assessing architecture overlap with managed platforms.
-implements:
 owner: derekg1729
 created: 2026-02-06
-verified: 2026-02-07
 tags: [evaluation, database, infrastructure, supabase]
 ---
 
@@ -124,13 +121,13 @@ Document the engineering due diligence for Supabase adoption, establishing which
 
 ### 2.2 Data & Database Invariants
 
-| Invariant                 | Status               | Where enforced                                                                                | Evidence                                                                                                                                                                            |
-| ------------------------- | -------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **DSN_ONLY_RUNTIME**      | Yes                  | src/shared/env/server.ts requires DATABASE_URL + DATABASE_SERVICE_URL as explicit DSNs        | buildDatabaseUrl() is tooling-only (drizzle.config.ts). Runtime reads DSN directly.                                                                                                 |
-| **ROLE_SEPARATION**       | Yes                  | src/shared/env/invariants.ts assertEnvInvariants()                                            | Three roles: postgres (root, provisioning-only), app_user (RLS enforced), app_service (BYPASSRLS). Boot rejects same-user DSNs or superuser names.                                  |
-| **RLS_ENFORCED**          | Yes (P0 complete)    | src/adapters/server/db/migrations/0004_enable_rls.sql; packages/db-client/src/tenant-scope.ts | 10 tables with tenant_isolation policy. SET LOCAL app.current_user_id per transaction. Missing context = zero rows (fail-closed).                                                   |
-| **PROVISION_CONVERGENCE** | Create-or-skip (gap) | platform/infra/services/runtime/postgres-init/provision.sh                                    | Currently creates roles if missing, does NOT ALTER ROLE ... PASSWORD for existing ones. P1 item in DATABASE_OPS_SPEC.md.                                                            |
-| **BACKUPS_EXIST**         | **NO**               | N/A                                                                                           | docs/DATABASE_OPS_SPEC.md line 2: "No backup exists today. A single docker volume rm or disk failure results in total data loss." WAL-G planned (P0 in that spec), not implemented. |
+| Invariant                 | Status               | Where enforced                                                                                | Evidence                                                                                                                                                                   |
+| ------------------------- | -------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **DSN_ONLY_RUNTIME**      | Yes                  | src/shared/env/server.ts requires DATABASE_URL + DATABASE_SERVICE_URL as explicit DSNs        | buildDatabaseUrl() is tooling-only (drizzle.config.ts). Runtime reads DSN directly.                                                                                        |
+| **ROLE_SEPARATION**       | Yes                  | src/shared/env/invariants.ts assertEnvInvariants()                                            | Three roles: postgres (root, provisioning-only), app_user (RLS enforced), app_service (BYPASSRLS). Boot rejects same-user DSNs or superuser names.                         |
+| **RLS_ENFORCED**          | Yes (P0 complete)    | src/adapters/server/db/migrations/0004_enable_rls.sql; packages/db-client/src/tenant-scope.ts | 10 tables with tenant_isolation policy. SET LOCAL app.current_user_id per transaction. Missing context = zero rows (fail-closed).                                          |
+| **PROVISION_CONVERGENCE** | Create-or-skip (gap) | platform/infra/services/runtime/postgres-init/provision.sh                                    | Currently creates roles if missing, does NOT ALTER ROLE ... PASSWORD for existing ones. P1 item in ini.database-ops.                                                       |
+| **BACKUPS_EXIST**         | **NO**               | N/A                                                                                           | ini.database-ops line 2: "No backup exists today. A single docker volume rm or disk failure results in total data loss." WAL-G planned (P0 in that spec), not implemented. |
 
 ### 2.3 Network & Secrets Invariants
 
@@ -299,11 +296,11 @@ Document the engineering due diligence for Supabase adoption, establishing which
 
 **Entry points (in order):**
 
-1. WAL-G backup sidecar (already specced in docs/DATABASE_OPS_SPEC.md P0)
-2. pgBouncer service (already specced in docs/DATABASE_OPS_SPEC.md P2)
+1. WAL-G backup sidecar (already specced in ini.database-ops P0)
+2. pgBouncer service (already specced in ini.database-ops P2)
 3. Credential convergence in provision.sh (already specced as P1)
 
-**This is what DATABASE_OPS_SPEC.md already recommends** (line 10): "We adopt only Supabase OSS building blocks (WAL-G, optionally Supavisor/pgBouncer) — not the full Supabase self-hosted platform."
+**This is what ini.database-ops already recommends** (line 10): "We adopt only Supabase OSS building blocks (WAL-G, optionally Supavisor/pgBouncer) — not the full Supabase self-hosted platform."
 
 ### Option B: Deeper Adoption — Supabase Hosted as DB Backend
 
@@ -365,8 +362,8 @@ Document the engineering due diligence for Supabase adoption, establishing which
 | #   | Risk                                                                   | Likelihood          | Impact          | Current mitigation          | Proposed mitigation                                               |
 | --- | ---------------------------------------------------------------------- | ------------------- | --------------- | --------------------------- | ----------------------------------------------------------------- |
 | R1  | **Total data loss** (no backups, single volume)                        | Medium              | **Critical**    | None                        | Implement WAL-G (Option A, P0 priority)                           |
-| R2  | **Stale credentials after volume reuse** (provision.sh create-or-skip) | Medium              | High            | Manual reprovision          | Credential convergence (DATABASE_OPS_SPEC P1)                     |
-| R3  | **Connection exhaustion** (no pooler, app-level max 10)                | Low (current scale) | High (at scale) | Application pool cap        | Add pgBouncer (DATABASE_OPS_SPEC P2)                              |
+| R2  | **Stale credentials after volume reuse** (provision.sh create-or-skip) | Medium              | High            | Manual reprovision          | Credential convergence (ini.database-ops P1)                      |
+| R3  | **Connection exhaustion** (no pooler, app-level max 10)                | Low (current scale) | High (at scale) | Application pool cap        | Add pgBouncer (ini.database-ops P2)                               |
 | R4  | **Supabase vendor lock-in** (if hosted adopted)                        | Low                 | Medium          | N/A                         | Use standard PG features only; avoid Supabase-specific extensions |
 | R5  | **Auth migration risk** (if swapping to Supabase Auth)                 | High                | High            | Keep current auth           | Do not swap — SIWE is non-negotiable                              |
 | R6  | **RLS regression** (if rewriting policies)                             | Medium              | High            | 6 integration tests         | Do not rewrite — existing policies proven                         |
@@ -422,7 +419,7 @@ Almost nothing cleanly. Our implementations are tightly integrated with domain-s
 
 ### Bottom Line
 
-**The codebase already made this decision.** docs/DATABASE_OPS_SPEC.md (line 10):
+**The codebase already made this decision.** Per [ini.database-ops](../../work/initiatives/ini.database-ops.md):
 
 > "We adopt **only** Supabase OSS building blocks (WAL-G, optionally Supavisor/pgBouncer) — not the full Supabase self-hosted platform. The application, RLS model, provisioner, and DSN contract are unchanged."
 
@@ -436,39 +433,39 @@ This evaluation confirms that assessment is correct. The overlap between Supabas
 
 ## Appendix: File Citation Index
 
-| Claim                       | File                                                        | Lines/Excerpt                                            |
-| --------------------------- | ----------------------------------------------------------- | -------------------------------------------------------- |
-| SIWE auth implementation    | src/auth.ts                                                 | Lines 54-163: Credentials provider with siwe.verify()    |
-| JWT 30-day sessions         | src/auth.ts                                                 | Line 50: maxAge: 30 _ 24 _ 60 \* 60                      |
-| Proxy auth boundary         | src/proxy.ts                                                | Lines 21-57: getToken() validation on /api/v1/\*         |
-| RLS policies (10 tables)    | src/adapters/server/db/migrations/0004_enable_rls.sql       | 11,171 bytes of ALTER TABLE + CREATE POLICY              |
-| Tenant scoping              | packages/db-client/src/tenant-scope.ts                      | withTenantScope() wraps Drizzle tx + SET LOCAL           |
-| Role separation enforcement | src/shared/env/invariants.ts                                | assertEnvInvariants() rejects same-user DSNs             |
-| No backups                  | docs/DATABASE_OPS_SPEC.md                                   | Line 2: "No backup exists today"                         |
-| WAL-G plan                  | docs/DATABASE_OPS_SPEC.md                                   | Lines 26-83: P0 backups with WAL-G                       |
-| pgBouncer plan              | docs/DATABASE_OPS_SPEC.md                                   | Lines 97-111: P2 connection pooler                       |
-| Supabase OSS only decision  | docs/DATABASE_OPS_SPEC.md                                   | Lines 142-146: "adopt only Supabase OSS building blocks" |
-| 79 event names              | src/shared/observability/events/index.ts                    | EVENT_NAMES const registry                               |
-| Prometheus metrics          | src/shared/observability/server/metrics.ts                  | 8 metrics defined (166 lines)                            |
-| OTel tracing                | src/bootstrap/otel.ts                                       | withRootSpan() + withChildSpan()                         |
-| Sandbox network isolation   | src/adapters/server/sandbox/sandbox-runner.adapter.ts       | NetworkMode: 'none', CapDrop: ["ALL"]                    |
-| Docker compose services     | platform/infra/services/runtime/docker-compose.yml          | 12 services, 352 lines                                   |
-| 3-layer deployment          | platform/runbooks/DEPLOYMENT_ARCHITECTURE.md                | Base (OpenTofu) → Edge (Caddy) → Runtime (compose)       |
-| 6 deployment modes          | docs/ENVIRONMENTS.md                                        | App-only through full Docker stack                       |
-| Drizzle migrations          | drizzle.config.ts + src/adapters/server/db/migrations/      | 4 migration files                                        |
-| Application pool config     | packages/db-client/src/build-client.ts                      | max: 10, idle_timeout: 20                                |
-| Temporal worker             | services/scheduler-worker/src/main.ts                       | 94 lines, graceful shutdown                              |
-| LiteLLM config              | platform/infra/services/runtime/configs/litellm.config.yaml | 204 lines, 20+ models                                    |
-| AI telemetry port           | src/ports/ai-telemetry.port.ts                              | RecordInvocationParams with correlation IDs              |
-| Usage port (LiteLLM API)    | src/ports/usage.port.ts                                     | ActivityUsagePort with spend logs/charts                 |
-| RBAC design (not built)     | docs/RBAC_SPEC.md                                           | OpenFGA, dual-check, actor/subject model                 |
-| Sandbox spec                | docs/spec/sandboxed-agents.md                               | P0 complete, P0.5a complete, P0.5 complete               |
+| Claim                       | File                                                        | Lines/Excerpt                                         |
+| --------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
+| SIWE auth implementation    | src/auth.ts                                                 | Lines 54-163: Credentials provider with siwe.verify() |
+| JWT 30-day sessions         | src/auth.ts                                                 | Line 50: maxAge: 30 _ 24 _ 60 \* 60                   |
+| Proxy auth boundary         | src/proxy.ts                                                | Lines 21-57: getToken() validation on /api/v1/\*      |
+| RLS policies (10 tables)    | src/adapters/server/db/migrations/0004_enable_rls.sql       | 11,171 bytes of ALTER TABLE + CREATE POLICY           |
+| Tenant scoping              | packages/db-client/src/tenant-scope.ts                      | withTenantScope() wraps Drizzle tx + SET LOCAL        |
+| Role separation enforcement | src/shared/env/invariants.ts                                | assertEnvInvariants() rejects same-user DSNs          |
+| No backups                  | work/initiatives/ini.database-ops.md                        | "No backup exists today" (Crawl P0)                   |
+| WAL-G plan                  | work/initiatives/ini.database-ops.md                        | Crawl P0: backups with WAL-G                          |
+| pgBouncer plan              | work/initiatives/ini.database-ops.md                        | Run P2: connection pooler                             |
+| Supabase OSS only decision  | work/initiatives/ini.database-ops.md                        | Goal: "adopt only Supabase OSS building blocks"       |
+| 79 event names              | src/shared/observability/events/index.ts                    | EVENT_NAMES const registry                            |
+| Prometheus metrics          | src/shared/observability/server/metrics.ts                  | 8 metrics defined (166 lines)                         |
+| OTel tracing                | src/bootstrap/otel.ts                                       | withRootSpan() + withChildSpan()                      |
+| Sandbox network isolation   | src/adapters/server/sandbox/sandbox-runner.adapter.ts       | NetworkMode: 'none', CapDrop: ["ALL"]                 |
+| Docker compose services     | platform/infra/services/runtime/docker-compose.yml          | 12 services, 352 lines                                |
+| 3-layer deployment          | platform/runbooks/DEPLOYMENT_ARCHITECTURE.md                | Base (OpenTofu) → Edge (Caddy) → Runtime (compose)    |
+| 6 deployment modes          | docs/ENVIRONMENTS.md                                        | App-only through full Docker stack                    |
+| Drizzle migrations          | drizzle.config.ts + src/adapters/server/db/migrations/      | 4 migration files                                     |
+| Application pool config     | packages/db-client/src/build-client.ts                      | max: 10, idle_timeout: 20                             |
+| Temporal worker             | services/scheduler-worker/src/main.ts                       | 94 lines, graceful shutdown                           |
+| LiteLLM config              | platform/infra/services/runtime/configs/litellm.config.yaml | 204 lines, 20+ models                                 |
+| AI telemetry port           | src/ports/ai-telemetry.port.ts                              | RecordInvocationParams with correlation IDs           |
+| Usage port (LiteLLM API)    | src/ports/usage.port.ts                                     | ActivityUsagePort with spend logs/charts              |
+| RBAC design (not built)     | docs/RBAC_SPEC.md                                           | OpenFGA, dual-check, actor/subject model              |
+| Sandbox spec                | docs/spec/sandboxed-agents.md                               | P0 complete, P0.5a complete, P0.5 complete            |
 
 ## Acceptance Checks
 
 **Manual:**
 
-1. Confirm DATABASE_OPS_SPEC.md aligns with this evaluation's recommendations
+1. Confirm ini.database-ops aligns with this evaluation's recommendations
 2. Confirm no Supabase Auth, PostgREST, or Realtime dependencies exist in the codebase
 
 ## Open Questions
