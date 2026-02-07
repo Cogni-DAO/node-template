@@ -143,6 +143,8 @@ export interface SandboxProgramContract {
       readonly code: string;
       readonly message: string;
     } | null;
+    /** LiteLLM call ID from x-litellm-call-id response header (for billing usageUnitId). */
+    readonly litellmCallId?: string;
   };
 }
 

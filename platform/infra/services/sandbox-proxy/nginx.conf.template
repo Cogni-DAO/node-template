@@ -50,6 +50,10 @@ http {
             proxy_set_header x-litellm-end-user-id "${BILLING_ACCOUNT_ID}";
             proxy_set_header x-litellm-spend-logs-metadata '${LITELLM_METADATA_JSON}';
 
+            # Pass LiteLLM response headers back to sandbox agent
+            proxy_pass_header x-litellm-call-id;
+            proxy_pass_header x-litellm-response-cost;
+
             # Forward to LiteLLM
             proxy_pass http://litellm;
             proxy_http_version 1.1;

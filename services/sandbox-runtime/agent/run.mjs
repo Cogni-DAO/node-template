@@ -75,7 +75,20 @@ if (!res.ok) {
   });
 }
 
+// Capture LiteLLM call ID from response header (for billing usageUnitId)
+const litellmCallId = res.headers.get("x-litellm-call-id");
+
 const data = await res.json();
 const content = data.choices?.[0]?.message?.content ?? "";
 
-emit([{ text: content }]);
+// Emit envelope with litellmCallId in meta (for billing)
+const envelope = {
+  payloads: [{ text: content }],
+  meta: {
+    durationMs: Date.now() - t0,
+    error: null,
+    litellmCallId, // Required for usageUnitId in billing
+  },
+};
+process.stdout.write(JSON.stringify(envelope));
+process.exit(0);

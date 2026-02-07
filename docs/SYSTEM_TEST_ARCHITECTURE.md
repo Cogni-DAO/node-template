@@ -176,6 +176,7 @@ Mock-LLM may emit tool calls as either `tool_calls` (modern) or `function_call` 
 - [ ] Update capability factories (`capabilities/metrics.ts`, `capabilities/web-search.ts`, `capabilities/repo.ts`) to respect overrides
 - [ ] Add system tests for tool capabilities that exercise real (non-fake) capability paths if mock backends exist
 - [ ] Evaluate mock backends for metrics/web-search/repo or decide fakes are sufficient for system tier
+- [ ] Enable `tests/stack/ai/litellm-call-id-mapping.stack.test.ts` with real LiteLLM adapter (currently skipped; requires non-fake mode to verify `x-litellm-call-id === spend_logs.request_id` invariant)
 
 ### P2: E2e Naming + Staging Target (Future)
 
