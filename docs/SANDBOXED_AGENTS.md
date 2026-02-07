@@ -340,13 +340,14 @@ PER-RUN RESOURCES:
 
 #### Agent Runtime (`services/sandbox-runtime/`)
 
-- [ ] Create minimal agent script (`services/sandbox-runtime/agent/run.mjs`):
+- [x] Create minimal agent script (`services/sandbox-runtime/agent/run.mjs`):
   - Read `/workspace/.cogni/messages.json`
   - Call `${OPENAI_API_BASE}/v1/chat/completions` with messages + `COGNI_MODEL`
-  - Print assistant response content to stdout
-  - Exit 0 on success, non-zero on error (stderr has diagnostics)
-- [ ] Update `Dockerfile` to include agent script at `/agent/run.mjs`
-- [ ] Default `argv` in provider: `["node", "/agent/run.mjs"]`
+  - Output `SandboxProgramContract` JSON envelope to stdout (matches OpenClaw `--json`)
+  - Exit 0 on success, non-zero on error (envelope always present for structured parsing)
+- [x] Define `SandboxProgramContract` as port-level type in `sandbox-runner.port.ts`
+- [x] Update `Dockerfile` to include agent script at `/agent/run.mjs`
+- [x] Default `argv` in provider: `["node", "/agent/run.mjs"]`
 
 #### Billing Reconciliation
 
@@ -373,12 +374,34 @@ PER-RUN RESOURCES:
 | File                                                            | Status   |
 | --------------------------------------------------------------- | -------- |
 | `src/adapters/server/sandbox/sandbox-graph.provider.ts`         | Complete |
-| `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Pending  |
-| `src/bootstrap/graph-executor.factory.ts`                       | Pending  |
-| `src/bootstrap/agent-discovery.ts`                              | Pending  |
-| `services/sandbox-runtime/agent/run.mjs`                        | Pending  |
-| `services/sandbox-runtime/Dockerfile`                           | Pending  |
+| `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Complete |
+| `src/bootstrap/graph-executor.factory.ts`                       | Complete |
+| `src/bootstrap/agent-discovery.ts`                              | Complete |
+| `src/ports/sandbox-runner.port.ts` (`SandboxProgramContract`)   | Complete |
+| `services/sandbox-runtime/agent/run.mjs`                        | Complete |
+| `services/sandbox-runtime/Dockerfile`                           | Complete |
 | `tests/stack/sandbox/sandbox-e2e.stack.test.ts`                 | Pending  |
+
+#### Validation (2026-02-07)
+
+E2E smoke test confirmed full pipeline operational:
+
+```
+curl POST /api/v1/ai/chat
+  { graphName: "sandbox:agent", model: "nemotron-nano-30b", messages: [...] }
+
+→ AggregatingGraphExecutor routes to SandboxGraphProvider
+→ Provider writes /workspace/.cogni/messages.json
+→ SandboxRunnerAdapter creates Docker container (network=none, LLM proxy enabled)
+→ entrypoint.sh starts socat bridge (localhost:8080 → /llm-sock/llm.sock)
+→ run.mjs reads messages, calls LiteLLM via proxy, outputs SandboxProgramContract envelope
+→ Provider parses envelope, emits text_delta + usage_report AiEvents
+→ SSE stream delivers response: "Hello, dear friend, welcome back!"
+→ GraphFinal: { ok: true, finishReason: "stop" }
+```
+
+Verified: agent catalog discovery (`GET /api/v1/ai/agents` lists `sandbox:agent`),
+free model passthrough (no credits required), billing headers injected by proxy.
 
 ---
 
@@ -628,4 +651,4 @@ HOST: repoPort.pushBranchFromPatches()
 ---
 
 **Last Updated**: 2026-02-07
-**Status**: P0 Complete, P0.5a Complete, P0.5 Complete, P0.75 In Progress (provider done, 5 items remaining)
+**Status**: P0 Complete, P0.5a Complete, P0.5 Complete, P0.75 Complete (E2E validated, automated tests pending)

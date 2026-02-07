@@ -94,6 +94,13 @@ export {
   RipgrepAdapter,
   type RipgrepAdapterConfig,
 } from "./repo";
+// Sandbox execution infrastructure
+export {
+  SandboxAgentCatalogProvider,
+  SandboxGraphProvider,
+  SandboxRunnerAdapter,
+  type SandboxRunnerAdapterOptions,
+} from "./sandbox";
 // Temporal adapters - schedule control
 export {
   TemporalScheduleControlAdapter,

@@ -33,7 +33,9 @@ import type {
   GraphFinal,
   GraphRunRequest,
   GraphRunResult,
+  SandboxProgramContract,
   SandboxRunnerPort,
+  SandboxRunResult,
 } from "@/ports";
 import { makeLogger } from "@/shared/observability";
 
@@ -178,12 +180,18 @@ export class SandboxGraphProvider implements GraphProvider {
           },
         });
 
-        if (!result.ok) {
+        // Parse SandboxProgramContract envelope from stdout.
+        // Same shape for run.mjs and OpenClaw --json — provider logic is agent-agnostic.
+        const envelope = self.parseEnvelope(runId, result);
+
+        if (!result.ok || envelope.meta.error) {
+          const errInfo = envelope.meta.error;
           self.log.error(
             {
               runId,
               exitCode: result.exitCode,
-              errorCode: result.errorCode,
+              errorCode: result.errorCode ?? errInfo?.code,
+              errorMessage: errInfo?.message,
               stderr: result.stderr.slice(0, 500),
             },
             "Sandbox agent failed"
@@ -201,7 +209,7 @@ export class SandboxGraphProvider implements GraphProvider {
           return;
         }
 
-        const content = result.stdout.trim();
+        const content = envelope.payloads[0]?.text ?? "";
 
         // Emit response as text_delta
         if (content) {
@@ -259,6 +267,33 @@ export class SandboxGraphProvider implements GraphProvider {
     })();
 
     return { stream, final };
+  }
+
+  /**
+   * Parse SandboxProgramContract JSON from stdout.
+   * Tolerant: if stdout isn't valid JSON, returns an error envelope
+   * so the caller handles it uniformly.
+   */
+  private parseEnvelope(
+    runId: string,
+    result: SandboxRunResult
+  ): SandboxProgramContract {
+    const raw = result.stdout.trim();
+    try {
+      return JSON.parse(raw) as SandboxProgramContract;
+    } catch {
+      this.log.warn(
+        { runId, stdoutLen: raw.length, stdoutHead: raw.slice(0, 200) },
+        "Sandbox stdout is not valid SandboxProgramContract JSON"
+      );
+      return {
+        payloads: [],
+        meta: {
+          durationMs: 0,
+          error: { code: "parse_error", message: "stdout is not valid JSON" },
+        },
+      };
+    }
   }
 
   /**

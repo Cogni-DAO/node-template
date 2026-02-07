@@ -21,10 +21,13 @@ import {
   AggregatingGraphExecutor,
   type CompletionStreamFn,
   createLangGraphDevClient,
+  type GraphProvider,
   InProcCompletionUnitAdapter,
   LangGraphDevProvider,
   LangGraphInProcProvider,
   ObservabilityGraphExecutorDecorator,
+  SandboxGraphProvider,
+  SandboxRunnerAdapter,
 } from "@/adapters/server";
 import type { GraphExecutorPort } from "@/ports";
 import { serverEnv } from "@/shared/env";
@@ -60,8 +63,19 @@ export function createGraphExecutor(
     ? createDevProvider(devUrl)
     : createInProcProvider(deps, completionStreamFn);
 
-  // Create aggregating executor with single langgraph provider
-  const aggregator = new AggregatingGraphExecutor([langGraphProvider]);
+  // Build providers array: langgraph always, sandbox when LITELLM_MASTER_KEY present
+  const env = serverEnv();
+  const providers: GraphProvider[] = [langGraphProvider];
+
+  if (env.LITELLM_MASTER_KEY) {
+    const runner = new SandboxRunnerAdapter({
+      litellmMasterKey: env.LITELLM_MASTER_KEY,
+    });
+    providers.push(new SandboxGraphProvider(runner));
+  }
+
+  // Create aggregating executor with all configured providers
+  const aggregator = new AggregatingGraphExecutor(providers);
 
   // Wrap with observability decorator for Langfuse traces
   // Per OBSERVABILITY.md#langfuse-integration: creates trace with I/O, handles terminal states
