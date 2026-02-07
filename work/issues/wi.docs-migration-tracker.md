@@ -190,7 +190,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | OBSERVABILITY_REQUIRED_SPEC.md       | observability-requirements.md  | ini.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [ ]  |
 | ONCHAIN_READERS.md                   | onchain-readers.md             | ini.onchain-indexer.md             | -   | -                       | AB+road    | [x]  | [ ]  |
 | PACKAGES_ARCHITECTURE.md             | packages-architecture.md       | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
-| PAYMENTS_DESIGN.md                   | payments-design.md             | ini.payments-enhancements.md       | -   | payments-setup.md       | AB+road    | [ ]  | [ ]  |
+| PAYMENTS_DESIGN.md                   | payments-design.md             | ini.payments-enhancements.md       | -   | payments-setup.md       | AB+road    | [x]  | [x]  |
 | PAYMENTS_FRONTEND_DESIGN.md          | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | ini.prompt-registry.md             | -   | -                       | AB+road    | [x]  | [ ]  |

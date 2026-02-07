@@ -55,6 +55,7 @@ This is a master index of all specs, updated as specs are migrated.
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
 | spec.onchain-readers             | On-Chain Treasury & Ownership      | draft    | web3       | [onchain-readers.md](./onchain-readers.md)                         |
 | packages-architecture-spec       | Packages Architecture              | draft    | infra      | [packages-architecture.md](./packages-architecture.md)             |
+| payments-design-spec             | Payments: USDC with Backend Verify | draft    | billing    | [payments-design.md](./payments-design.md)                         |
 | prompt-registry-spec             | Prompt Registry                    | draft    | ai-graphs  | [prompt-registry.md](./prompt-registry.md)                         |
 | public-analytics-spec            | Public Analytics Page              | draft    | data       | [public-analytics.md](./public-analytics.md)                       |
 | runtime-policy-spec              | Route Runtime Policy               | draft    | deployment | [runtime-policy.md](./runtime-policy.md)                           |
