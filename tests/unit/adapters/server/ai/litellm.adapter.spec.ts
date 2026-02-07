@@ -5,7 +5,7 @@
  * Module: `@adapters/server/ai/litellm`
  * Purpose: Unit tests for LiteLLM adapter with mocked HTTP calls and error handling.
  * Scope: Tests adapter logic, parameter handling, response parsing, missing cost handling. Does NOT test real LiteLLM service.
- * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; model param required (no env fallback)
+ * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; model param required (no env fallback); USAGE_UNIT_IS_LITELLM_CALL_ID (header-only, no body fallback)
  * Side-effects: none (mocked fetch)
  * Notes: Tests error handling, timeout enforcement, response mapping, missing model validation. No DEFAULT_MODEL - model must be explicitly provided.
  * Links: src/adapters/server/ai/litellm.adapter.ts, LlmService port
@@ -139,6 +139,7 @@ describe("LiteLlmAdapter", () => {
     it("returns properly formatted response with usage and cost from header", async () => {
       const mockHeaders = new Headers();
       mockHeaders.set("x-litellm-response-cost", "0.0002");
+      mockHeaders.set("x-litellm-call-id", "litellm-call-abc-123");
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -161,7 +162,7 @@ describe("LiteLlmAdapter", () => {
           totalTokens: 18,
         },
         providerCostUsd: 0.0002,
-        litellmCallId: "chatcmpl-test-123", // From response.id, used for joining with /spend/logs
+        litellmCallId: "litellm-call-abc-123", // From x-litellm-call-id header only (USAGE_UNIT_IS_LITELLM_CALL_ID)
         // New fields per AI_SETUP_SPEC.md
         promptHash: expect.any(String), // SHA-256 hash of canonical payload
         resolvedProvider: "openai", // Inferred from "gpt-" prefix in model name
