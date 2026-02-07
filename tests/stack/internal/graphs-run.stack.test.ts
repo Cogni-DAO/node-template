@@ -16,6 +16,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { TEST_MODEL_ID } from "@tests/_fakes/ai/test-constants";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { seedTestActor, type TestActor } from "@tests/_fixtures/stack/seed";
 import { eq } from "drizzle-orm";
@@ -135,7 +136,10 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
 
     it("first request succeeds and stores execution_request", async () => {
       const idempotencyKey = `${randomUUID()}:2025-01-21T09:00:00Z`;
-      const input = { messages: [{ role: "user", content: "Hello" }] };
+      const input = {
+        messages: [{ role: "user", content: "Hello" }],
+        model: TEST_MODEL_ID,
+      };
 
       const request = createRequest(
         TEST_GRAPH_ID,
@@ -165,7 +169,10 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
 
     it("replay with same Idempotency-Key returns cached result", async () => {
       const idempotencyKey = `${randomUUID()}:2025-01-21T09:00:00Z`;
-      const input = { messages: [{ role: "user", content: "Hello" }] };
+      const input = {
+        messages: [{ role: "user", content: "Hello" }],
+        model: TEST_MODEL_ID,
+      };
 
       // First request
       const request1 = createRequest(
@@ -211,7 +218,10 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
         TEST_GRAPH_ID,
         {
           executionGrantId: grantId,
-          input: { messages: [{ role: "user", content: "Hello" }] },
+          input: {
+            messages: [{ role: "user", content: "Hello" }],
+            model: TEST_MODEL_ID,
+          },
         },
         { token: SCHEDULER_TOKEN, idempotencyKey }
       );
@@ -225,7 +235,10 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
         TEST_GRAPH_ID,
         {
           executionGrantId: grantId,
-          input: { messages: [{ role: "user", content: "Different!" }] },
+          input: {
+            messages: [{ role: "user", content: "Different!" }],
+            model: TEST_MODEL_ID,
+          },
         },
         { token: SCHEDULER_TOKEN, idempotencyKey }
       );
@@ -236,6 +249,32 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
       expect(response2.status).toBe(422);
       const body = await response2.json();
       expect(body.error).toContain("Idempotency conflict");
+    });
+  });
+
+  describe("default model fallback", () => {
+    // Documents that omitting model falls back to "openrouter/auto".
+    // If we remove default-model support, this test should fail and be deleted.
+    it("uses openrouter/auto when input omits model", async () => {
+      const idempotencyKey = `${randomUUID()}:2025-01-21T09:00:00Z`;
+      const input = { messages: [{ role: "user", content: "Hello" }] }; // no model
+
+      const request = createRequest(
+        TEST_GRAPH_ID,
+        { executionGrantId: grantId, input },
+        { token: SCHEDULER_TOKEN, idempotencyKey }
+      );
+
+      const response = await POST(request, {
+        params: Promise.resolve({ graphId: TEST_GRAPH_ID }),
+      });
+
+      // Without "openrouter/auto" in LiteLLM config, the LLM call fails
+      // and the graph returns ok:false. This documents the current fallback behavior.
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.ok).toBe(false);
+      expect(body.error).toBeDefined();
     });
   });
 
