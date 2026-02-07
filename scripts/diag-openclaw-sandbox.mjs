@@ -1,15 +1,14 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Diagnostic script: OpenClaw in sandbox with LLM proxy.
- * Tests the full flow: workspace setup → proxy start → container run → parse output.
- *
- * Prerequisites:
- *   - cogni-sandbox-openclaw:latest image built
- *   - dev stack running (pnpm dev:stack or pnpm dev:infra)
- *   - LITELLM_MASTER_KEY set in environment
- *
- * Usage: node scripts/diag-openclaw-sandbox.mjs
+ * Module: `@scripts/diag-openclaw-sandbox`
+ * Purpose: Diagnostic script for OpenClaw-in-sandbox with LLM proxy. Tests full flow: workspace setup → proxy start → container run → parse output.
+ * Scope: Standalone diagnostic; not imported by src/. Requires cogni-sandbox-openclaw:latest image, dev stack, LITELLM_MASTER_KEY.
+ * Invariants: Uses LlmProxyManager directly (same path as SandboxRunnerAdapter); container runs with network=none + socket bridge.
+ * Side-effects: IO (Docker containers, tmp workspace, proxy lifecycle)
+ * Links: docs/OPENCLAW_SANDBOX_SPEC.md, src/adapters/server/sandbox/llm-proxy-manager.ts
  */
 
 import * as fs from "node:fs";
