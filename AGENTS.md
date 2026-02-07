@@ -70,7 +70,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Prompt Registry Spec](docs/spec/prompt-registry.md)
 - [Tools Authoring](docs/TOOLS_AUTHORING.md)
 - [Graph Execution](docs/GRAPH_EXECUTION.md)
-- [LangGraph Server](docs/LANGGRAPH_SERVER.md)
+- [LangGraph Server](docs/spec/langgraph-server.md)
 - [LangGraph Patterns](docs/spec/langgraph-patterns.md)
 - [Claude SDK Adapter](docs/CLAUDE_SDK_ADAPTER_SPEC.md)
 - [n8n Adapter](docs/spec/n8n-adapter.md)
