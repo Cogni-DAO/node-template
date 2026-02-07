@@ -169,6 +169,141 @@ Dependency Cruiser rules (`no-adapter-imports-in-core`, `no-db-client-in-adapter
 - **Inline Billing** (P0: InProc, Sandbox): Trusted component captures `provider_call_id` + usage inline per LLM call. Commits per-call UsageFacts during execution.
 - **Reconciliation Billing** (P1: External LangGraph Server): External executor outside trusted boundary. Query `/spend/logs` after stream completes. Server-controlled identity + metadata ensure correctness.
 
+---
+
+## Roadmap — Graph Execution Design Track
+
+> Source: docs/GRAPH_EXECUTION.md (roadmap content extracted during docs migration)
+
+### Crawl (P0) — Remaining Tests & Graph #2
+
+**Goal:** Close remaining test gaps and enable multi-graph support.
+
+| Deliverable                                                                     | Status      | Est | Work Item |
+| ------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Grep test for ONE_LEDGER_WRITER (depcruise impractical)                         | Not Started | 1   | —         |
+| Idempotency test: replay same (source_system, source_reference) → 1 row         | Not Started | 1   | —         |
+| Define/retain exactly one `CompletionFinalResult` union (`ok:true \| ok:false`) | Not Started | 1   | —         |
+| Ensure failures use the union, not fake usage/finishReason patches              | Not Started | 1   | —         |
+| Verify single run streaming event contract (InProc + future Server)             | Not Started | 1   | —         |
+| Graph #2: Create `packages/langgraph-graphs/src/graphs/research/` factory       | Not Started | 1   | —         |
+| Graph #2: Implement `createResearchGraph()` in package                          | Not Started | 1   | —         |
+| Graph #2: Add `research` entry to catalog (`@cogni/langgraph-graphs`)           | Not Started | 1   | —         |
+| Graph #2: Expose via `listGraphs()` on aggregator                               | Not Started | 1   | —         |
+| Graph #2: UI adds graph selector → sends `graphId`                              | Not Started | 1   | —         |
+| Graph #2: E2E test for graph switching                                          | Not Started | 1   | —         |
+
+### Walk (P1) — Run Persistence, Compiled Graphs, Node Config
+
+**Goal:** Add run persistence, complete compiled graph migration, enable per-node model/tool overrides.
+
+#### P1: Run Persistence + Attempt Semantics
+
+| Deliverable                                                             | Status      | Est | Work Item            |
+| ----------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Add `graph_runs` table for run persistence (enables attempt semantics)  | Not Started | 3   | (create at P1 start) |
+| Add `attempt-semantics.test.ts`: resume does not change attempt         | Not Started | 1   | (create at P1 start) |
+| Add stack test: graph emits `usage_report`, billing records charge      | Not Started | 1   | (create at P1 start) |
+| Replace hardcoded UI agent list with API fetch from `/api/v1/ai/agents` | Not Started | 1   | (create at P1 start) |
+
+**Note:** Graph-specific integration tests are documented in [LangGraph Patterns](../../docs/spec/langgraph-patterns.md).
+
+#### P1: Compiled Graph Execution (remaining items)
+
+| Deliverable                                                                         | Status      | Est | Work Item            |
+| ----------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Refactor Cogni provider to import from `cogni-exec.ts` entrypoints                  | Not Started | 2   | (create at P1 start) |
+| Verify billing: cogni-exec path emits `usage_report` with `litellmCallId`/`costUsd` | Not Started | 1   | (create at P1 start) |
+| Stack test: both entrypoints produce identical graph output for same input          | Not Started | 2   | (create at P1 start) |
+
+#### P1: Node-Keyed Model & Tool Configuration
+
+Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<nodeKey>__toolIds`. Resolution: override ?? default.
+
+**File Pointers (planned changes):**
+
+| File                                                                | Change                                                     |
+| ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `packages/langgraph-graphs/src/runtime/config-resolvers.ts`         | New: `resolveModel()`, `resolveToolIds()` shared resolvers |
+| `packages/langgraph-graphs/src/runtime/cogni/completion-adapter.ts` | Accept optional `nodeKey`; use resolver in `invoke()`      |
+| `packages/langgraph-graphs/src/runtime/langchain-tools.ts`          | Use `resolveToolIds()` for allowlist check                 |
+
+| Deliverable                                                               | Status      | Est | Work Item            |
+| ------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Create `config-resolvers.ts` with shared resolvers                        | Not Started | 1   | (create at P1 start) |
+| Update `CogniCompletionAdapter` to accept `nodeKey`, use `resolveModel()` | Not Started | 1   | (create at P1 start) |
+| Update tool wrappers to use `resolveToolIds()`                            | Not Started | 1   | (create at P1 start) |
+| Unit tests: resolver edge cases (missing config, override precedence)     | Not Started | 1   | (create at P1 start) |
+| Integration test: two-node graph with `planner__model` override           | Not Started | 1   | (create at P1 start) |
+
+### Run (P2+) — External Adapters
+
+**Goal:** Add external execution adapters for Claude Agent SDK, n8n, and future engines.
+
+| Deliverable                                                                                   | Status      | Est | Work Item            |
+| --------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Claude Agent SDK Adapter (see [ini.claude-sdk-adapter.md](ini.claude-sdk-adapter.md))         | Not Started | 5   | (create at P2 start) |
+| n8n Workflow Adapter (see [ini.n8n-integration.md](ini.n8n-integration.md))                   | Not Started | 5   | (create at P2 start) |
+| OpenClaw/Clawdbot Adapter (superseded by ini.sandboxed-agents.md; original: Clawdbot/Moltbot) | Superseded  | —   | —                    |
+| Future external adapters (Flowise/custom) — build only if demand materializes                 | Not Started | —   | (create if needed)   |
+
+**P2 Adapter Checklists (from source):**
+
+**Claude Agent SDK:**
+
+- [ ] Create `ClaudeAgentExecutor` implementing `GraphExecutorPort`
+- [ ] Map SDK `SDKMessage` stream → `AiEvent` stream
+- [ ] Bridge tools via in-process MCP server (`createSdkMcpServer`)
+- [ ] Emit `usage_report` with `session_id`-based `usageUnitId`
+- [ ] Add `anthropic_sdk` to `SOURCE_SYSTEMS` enum
+
+**n8n Workflow:**
+
+- [ ] Create `N8nWorkflowExecutor` implementing `GraphExecutorPort`
+- [ ] Invoke n8n workflows via webhook POST
+- [ ] Support sync response mode (wait for completion)
+- [ ] Reconcile billing via LiteLLM spend logs (LLM routed through gateway)
+- [ ] Emit `usage_report` with `execution_id`-based `usageUnitId`
+
+**Clawdbot/Moltbot (superseded by OpenClaw sandbox integration):**
+
+- [ ] Create `ClawdbotExecutorAdapter` implementing `GraphExecutorPort`
+- [ ] Invoke Moltbot Gateway via `/v1/chat/completions` with SSE streaming
+- [ ] Route all LLM calls through LiteLLM (DAO billing via virtual key)
+- [ ] Containment: sandboxing enabled, elevated disabled, egress allowlist
+- [ ] Privileged integrations via Cogni bridge tool (toolRunner.exec)
+- [ ] Reconcile billing via LiteLLM spend logs (end_user correlation)
+
+> Note: Clawdbot/Moltbot adapter has been superseded by the OpenClaw sandbox integration. See [openclaw-sandbox-spec.md](../../docs/spec/openclaw-sandbox-spec.md) and [ini.sandboxed-agents.md](ini.sandboxed-agents.md). These checklist items are preserved for NO_DATA_LOSS but should be considered historical.
+
+### Known Issues & Risk Flags
+
+**Known Issues:**
+
+- [ ] `usage_report` only emitted on success; error/abort with partial usage not billed (P1: add optional `usage` to error result)
+
+**LangGraph Server Adapter — Billing Parity Gap (P0 Gated):**
+
+`langgraph_server` executor is internal/experimental only in P0. Cannot be a customer-billable path until it achieves billing-grade `UsageFact` parity.
+
+| Field         | InProc | Server | Notes                                |
+| ------------- | ------ | ------ | ------------------------------------ |
+| `usageUnitId` | Yes    | No     | Requires `x-litellm-call-id` capture |
+| `costUsd`     | Yes    | No     | Requires `x-litellm-response-cost`   |
+| `model`       | Yes    | No     | Requires resolved model from LiteLLM |
+
+**Fix path (if server must be paid in P0):** `langgraph-server` must capture LiteLLM response headers (`call-id`, `response-cost`, `model`, tokens) and emit `usage_report` with `usageUnitId=litellmCallId`. Without this, billing idempotency relies on `callIndex` fallback which is unsafe.
+
+**Risk Flags:**
+
+1. **callIndex fallback is nondeterministic under concurrency/resume** — Must remain error-only path and not become normal operation. If `callIndex` fallback frequency exceeds threshold, investigate root cause.
+
+2. **USAGE_EMIT_ON_FINAL_ONLY implies partial failures are unbilled** — Explicitly accepted for P0. If graph fails mid-execution after N LLM calls, those calls are not billed. Add partial-usage reporting in P1 if revenue leakage is material.
+
+3. **Server path without usageUnitId breaks idempotency** — If server path is exposed to customers without fix, duplicate charges are possible on retry. Gate behind feature flag until resolved.
+
+---
+
 ## Constraints
 
 - ONE_LEDGER_WRITER: Only `billing.ts` calls `recordChargeReceipt()`
@@ -207,7 +342,7 @@ Dependency Cruiser rules (`no-adapter-imports-in-core`, `no-db-client-in-adapter
 
 ## As-Built Specs
 
-- [Graph Execution](../../docs/GRAPH_EXECUTION.md) — pending migration to `docs/spec/graph-execution.md`
+- [Graph Execution](../../docs/spec/graph-execution.md)
 
 ## Design Notes
 

@@ -44,6 +44,7 @@ This is a master index of all specs, updated as specs are migrated.
 | environments-spec                | Environment & Deployment Modes     | draft    | deployment | [environments.md](./environments.md)                               |
 | error-handling-spec              | Error Handling Architecture        | draft    | meta       | [error-handling.md](./error-handling.md)                           |
 | external-executor-billing-spec   | External Executor Billing          | draft    | billing    | [external-executor-billing.md](./external-executor-billing.md)     |
+| graph-execution-spec             | Graph Execution Design             | draft    | ai-graphs  | [graph-execution.md](./graph-execution.md)                         |
 | git-sync-repo-mount-spec         | Git-Sync Repo Mount                | draft    | deployment | [git-sync-repo-mount.md](./git-sync-repo-mount.md)                 |
 | gov-data-collectors-spec         | Governance Data Collectors         | draft    | data       | [gov-data-collectors.md](./gov-data-collectors.md)                 |
 | spec.health-probes               | Health Probe Separation            | draft    | deployment | [health-probes.md](./health-probes.md)                             |
