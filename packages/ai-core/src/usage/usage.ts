@@ -43,7 +43,10 @@ export interface UsageFact {
   readonly attempt: number;
   /**
    * Adapter-provided stable ID for this usage unit.
-   * For LiteLLM: litellmCallId from x-litellm-call-id header or response body id.
+   * For LiteLLM: captured from `x-litellm-call-id` response header.
+   * USAGE_UNIT_IS_LITELLM_CALL_ID: `x-litellm-call-id === spend_logs.request_id`
+   *   (manually verified 2026-02-07; automated test pending system test infra,
+   *    see tests/stack/ai/litellm-call-id-mapping.stack.test.ts).
    * REQUIRED for billing-authoritative executors (inproc/sandbox) - enforced via Zod validation.
    * Optional for external executors (validated via hints schema).
    */
