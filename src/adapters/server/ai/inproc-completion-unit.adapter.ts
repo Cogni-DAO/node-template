@@ -270,6 +270,18 @@ export class InProcCompletionUnitAdapter {
     // Emit usage_report (but NOT done - caller handles that)
     const result = await final;
     if (result.ok) {
+      // CRITICAL: Missing litellmCallId is a BUG - fail the run deterministically
+      if (!result.litellmCallId) {
+        this.log.error(
+          { runId, model: result.model },
+          "CRITICAL: LiteLLM response missing call ID - billing incomplete, failing run"
+        );
+        // Throw to propagate error to final (fail run, prevent silent under-billing)
+        throw new Error(
+          "Billing failed: LiteLLM response missing call ID (x-litellm-call-id)"
+        );
+      }
+
       const fact: UsageFact = {
         runId,
         attempt,
@@ -279,7 +291,7 @@ export class InProcCompletionUnitAdapter {
         virtualKeyId: caller.virtualKeyId,
         inputTokens: result.usage.promptTokens,
         outputTokens: result.usage.completionTokens,
-        ...(result.litellmCallId && { usageUnitId: result.litellmCallId }),
+        usageUnitId: result.litellmCallId, // Required, no fallback
         ...(result.model && { model: result.model }),
         ...(result.providerCostUsd !== undefined && {
           costUsd: result.providerCostUsd,

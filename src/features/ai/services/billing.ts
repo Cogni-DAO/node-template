@@ -189,22 +189,28 @@ export function computeIdempotencyKey(
  */
 export async function commitUsageFact(
   fact: UsageFact,
-  callIndex: number,
   context: RunContext,
   accountService: AccountService,
   log: Logger
 ): Promise<void> {
-  const { runId, attempt, billingAccountId, virtualKeyId, source } = fact;
+  const {
+    runId,
+    attempt,
+    billingAccountId,
+    virtualKeyId,
+    source,
+    usageUnitId,
+  } = fact;
   const { ingressRequestId } = context;
 
-  // Resolve usageUnitId: adapter-provided or fallback
-  let usageUnitId = fact.usageUnitId;
+  // Schema validation ensures usageUnitId is present for billing-authoritative executors
+  // External executors may have undefined usageUnitId (validated with hints schema)
   if (!usageUnitId) {
-    log.error(
-      { runId, model: fact.model, callIndex },
-      "billing.missing_usage_unit_id"
+    log.warn(
+      { runId, executorType: fact.executorType },
+      "Skipping billing commit: usageUnitId missing (external executor hint)"
     );
-    usageUnitId = `MISSING:${runId}/${callIndex}`;
+    return; // Skip billing for hints without usageUnitId
   }
 
   try {

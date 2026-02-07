@@ -24,6 +24,7 @@ import type { AccountService, GraphExecutorPort, LlmCaller } from "@/ports";
 import { EVENT_NAMES, type RequestContext } from "@/shared/observability";
 import type { AiRelayPumpErrorEvent } from "@/shared/observability/events/ai";
 import type { RunContext } from "@/types/run-context";
+import type { UsageFact } from "@/types/usage";
 import type { AiEvent, StreamFinalResult } from "../types";
 import { commitUsageFact } from "./billing";
 import { createRunIdentity } from "./run-id-factory";
@@ -177,13 +178,11 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
  * - RELAY_PROVIDES_CONTEXT: Subscribers receive RunContext from relay, not from events
  * - Billing subscriber calls commitUsageFact() for each usage_report event
  * - UI stream filters out usage_report events (internal to billing)
- * - callIndex tracked per-run for deterministic fallback usageUnitId
  */
 class RunEventRelay {
   private readonly uiQueue: AiEvent[] = [];
   private uiResolve: (() => void) | null = null;
   private pumpDone = false;
-  private callIndex = 0;
   private isTerminated = false; // Protocol termination guard (done/error seen)
 
   constructor(
@@ -332,10 +331,9 @@ class RunEventRelay {
         }
       }
 
-      // Commit validated fact
+      // Commit validated fact (cast to UsageFact for exactOptionalPropertyTypes compatibility)
       await commitUsageFact(
-        validationResult.data,
-        this.callIndex++,
+        validationResult.data as UsageFact,
         this.context,
         this.accountService,
         this.log
@@ -348,7 +346,7 @@ class RunEventRelay {
 
       // Log other billing errors but don't propagate (non-blocking per invariant)
       this.log.error(
-        { err: error, runId, callIndex: this.callIndex - 1 },
+        { err: error, runId },
         "RunEventRelay: billing commit error swallowed"
       );
     }

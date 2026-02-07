@@ -17,13 +17,17 @@
  */
 
 import { z } from "zod";
-import type { SourceSystem } from "../billing/source-system";
+import { SOURCE_SYSTEMS, type SourceSystem } from "../billing/source-system";
 
 /**
  * Executor type for multi-runtime billing.
  * Per EXECUTOR_TYPE_REQUIRED invariant: all UsageFacts must specify executorType.
  */
-export type ExecutorType = "langgraph_server" | "claude_sdk" | "inproc";
+export type ExecutorType =
+  | "langgraph_server"
+  | "claude_sdk"
+  | "inproc"
+  | "sandbox";
 
 /**
  * Usage fact emitted by graph executors for billing ingestion.
@@ -33,13 +37,14 @@ export type ExecutorType = "langgraph_server" | "claude_sdk" | "inproc";
  * Idempotency: (source_system, source_reference) where source_reference = runId/attempt/usageUnitId
  */
 export interface UsageFact {
-  // Required for idempotency key computation (usageUnitId resolved at commit time)
+  // Required for idempotency key computation
   readonly runId: string;
   readonly attempt: number;
   /**
    * Adapter-provided stable ID for this usage unit.
    * For LiteLLM: litellmCallId from x-litellm-call-id header or response body id.
-   * If undefined, billing.ts assigns fallback: MISSING:${runId}/${callIndex}
+   * REQUIRED for billing-authoritative executors (inproc/sandbox) - enforced via Zod validation.
+   * Optional for external executors (validated via hints schema).
    */
   readonly usageUnitId?: string;
 
@@ -83,7 +88,7 @@ export const UsageFactStrictSchema = z
     usageUnitId: z.string().min(1, "usageUnitId required (no fallback)"),
 
     // Required for billing context
-    source: z.string().min(1, "source required"),
+    source: z.enum(SOURCE_SYSTEMS),
     executorType: z.enum(["inproc", "sandbox"]), // Only billing-authoritative types
     billingAccountId: z.string().min(1, "billingAccountId required"),
     virtualKeyId: z.string().min(1, "virtualKeyId required"),
@@ -100,7 +105,7 @@ export const UsageFactStrictSchema = z
     costUsd: z.number().min(0).optional(),
 
     // Optional raw payload
-    usageRaw: z.record(z.unknown()).optional(),
+    usageRaw: z.record(z.string(), z.unknown()).optional(),
   })
   .strict(); // Reject unknown fields
 
@@ -114,7 +119,7 @@ export const UsageFactHintsSchema = z
     attempt: z.number().int().min(0),
     usageUnitId: z.string().optional(), // Telemetry hint, not authoritative
 
-    source: z.string().min(1),
+    source: z.enum(SOURCE_SYSTEMS),
     executorType: z.enum(["langgraph_server", "claude_sdk"]), // External types
     billingAccountId: z.string().min(1),
     virtualKeyId: z.string().min(1),
