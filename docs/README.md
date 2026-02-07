@@ -34,23 +34,29 @@ tags:: documentation, meta
 
 ## Metadata Format
 
-All docs use `key:: value` properties at the top:
+Docs in `docs/spec/` use YAML frontmatter:
 
-```
-id:: scheduler-spec-v0
-type:: spec
-title:: Scheduled Graph Execution
-status:: active
-trust:: canonical
-summary:: Invariants for Temporal schedules.
-read_when:: Changing scheduling or execution grants.
-owner:: derekg1729
-created:: 2026-01-15
-verified:: 2026-02-05
-tags:: scheduler, temporal
+```yaml
+---
+id: scheduler-spec
+type: spec
+title: Scheduled Graph Execution
+status: active
+spec_state: active
+trust: canonical
+summary: Invariants for Temporal schedules.
+read_when: Changing scheduling or execution grants.
+implements:
+owner: derekg1729
+created: 2026-01-15
+verified: 2026-02-05
+tags: [scheduler, temporal]
+---
 ```
 
-**Required:** `id`, `type`, `title`, `status`, `trust`, `summary`, `read_when`, `owner`, `created`, `verified`
+**Required (specs):** `id`, `type`, `title`, `status`, `spec_state`, `trust`, `summary`, `read_when`, `owner`, `created`, `verified`, `tags`
+
+Work items (`work/initiatives/`, `work/issues/`) use a different field set — see `work/README.md`.
 
 ## Trust Levels
 
@@ -70,10 +76,11 @@ tags:: scheduler, temporal
 
 ## Hard Rules
 
-1. **NO_YAML_FRONTMATTER** — Use `key:: value` only
+1. **YAML_FRONTMATTER** — Use YAML frontmatter (`---` delimiters) for all typed docs
 2. **NO_WIKILINKS** — Use `[text](path)` markdown links
-3. **TYPE_MATCHES_DIR** — `type::` must match parent directory
-4. **UNIQUE_IDS** — Each `id::` unique repo-wide
+3. **TYPE_MATCHES_DIR** — `type` must match parent directory
+4. **UNIQUE_IDS** — Each `id` unique repo-wide
+5. **FIELD_SET_SEPARATION** — Docs fields (`id`, `status`, `trust`) are forbidden in `work/`; work fields (`work_item_id`, `state`) are forbidden in `docs/`
 
 ## Related
 

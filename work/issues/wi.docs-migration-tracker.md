@@ -50,10 +50,10 @@ external_refs:
 ### Next Steps
 
 - [x] Agent scan: populate destination columns for all unmigrated docs
-- [ ] Proof-of-concept: migrate GRAPH_EXECUTION.md (split → spec + initiative)
+- [x] Proof-of-concept: migrate GRAPH_EXECUTION.md (split → spec + initiative)
 - [ ] Strip roadmap content from `docs/spec/scheduler.md` → initiative
 - [ ] Strip roadmap content from `docs/spec/rbac.md` → initiative
-- [ ] Update `docs/README.md` schema section to match new format
+- [x] Update `docs/README.md` schema section to match new format
 
 ### Migration Process (per doc) — Exact Steps
 
