@@ -30,7 +30,7 @@ Shared test fixtures for sandbox container tests (P0, P0.5, P0.5a). Provides run
 
 ## Public Surface
 
-- **Exports:** `SANDBOX_IMAGE`, `DEFAULT_LIMITS`, `SandboxTestContext`, `SandboxTestContextWithProxy`, `uniqueRunId()`, `assertSandboxImageExists()`, `assertInternalNetworkExists()`, `assertLitellmReachable()`, `createWorkspace()`, `cleanupWorkspace()`, `cleanupOrphanedProxies()`, `runWithProxy()`, `runIsolated()`, `runOnInternalNetwork()`, `TEST_BILLING_ACCOUNT_ID`
+- **Exports:** `SANDBOX_IMAGE`, `DEFAULT_LIMITS`, `LLM_ROUNDTRIP_LIMITS`, `SANDBOX_TEST_MODELS`, `SandboxTestContext`, `SandboxTestContextWithProxy`, `uniqueRunId()`, `assertSandboxImageExists()`, `assertInternalNetworkExists()`, `ensureProxyImage()`, `assertLitellmReachable()`, `createWorkspace()`, `cleanupWorkspace()`, `cleanupOrphanedProxies()`, `runWithProxy()`, `runIsolated()`, `runOnInternalNetwork()`, `runAgentWithLlm()`, `TEST_BILLING_ACCOUNT_ID`
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
@@ -38,7 +38,7 @@ Shared test fixtures for sandbox container tests (P0, P0.5, P0.5a). Provides run
 
 ## Responsibilities
 
-- This directory **does**: Provide `runWithProxy()` / `runIsolated()` / `runOnInternalNetwork()` helpers; manage temp workspace creation/cleanup; assert Docker prerequisites (image, network, LiteLLM); clean orphaned proxy containers via label filter; define shared test constants (limits, billing account ID)
+- This directory **does**: Provide `runWithProxy()` / `runIsolated()` / `runOnInternalNetwork()` / `runAgentWithLlm()` helpers; manage temp workspace creation/cleanup; assert Docker prerequisites (image, network, LiteLLM); clean orphaned proxy containers via label filter; define shared test constants (limits, billing account ID, test models)
 - This directory **does not**: Contain test assertions or test logic; manage container lifecycle directly
 
 ## Usage

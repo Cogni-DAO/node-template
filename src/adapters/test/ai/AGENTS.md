@@ -15,7 +15,7 @@ Test double implementations of AI service ports for deterministic testing.
 ## Pointers
 
 - [Real adapters](../../server/ai/)
-- [System Test Architecture](../../../../docs/SYSTEM_TEST_ARCHITECTURE.md)
+- [System Test Architecture](../../../../work/initiatives/ini.system-test-architecture.md)
 
 ## Boundaries
 

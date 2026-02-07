@@ -18,7 +18,7 @@ tags: [testing, dev]
 
 **For stack testing modes and commands, see [Environments Spec](../spec/environments.md).**
 
-**For system integration test design (mock-LLM, adapter overrides), see [SYSTEM_TEST_ARCHITECTURE.md](../SYSTEM_TEST_ARCHITECTURE.md).**
+**For system integration test design (mock-LLM, adapter overrides), see [System Test Architecture](../../work/initiatives/ini.system-test-architecture.md).**
 
 ## When to Use This
 
@@ -41,7 +41,7 @@ You are implementing an adapter that calls external services (APIs, databases, e
 
 When implementing adapters that hit external dependencies (APIs, services, etc.), you must provide both real and fake implementations to enable testing without external calls.
 
-**Exception: LLM** — The LLM adapter (`LiteLlmAdapter`) is always wired. In test stacks, LiteLLM uses `litellm.test.config.yaml` which routes all models to `mock-openai-api` — a lightweight, deterministic, OpenAI-compatible mock with no model weights. See [SYSTEM_TEST_ARCHITECTURE.md](../SYSTEM_TEST_ARCHITECTURE.md).
+**Exception: LLM** — The LLM adapter (`LiteLlmAdapter`) is always wired. In test stacks, LiteLLM uses `litellm.test.config.yaml` which routes all models to `mock-openai-api` — a lightweight, deterministic, OpenAI-compatible mock with no model weights. See [System Test Architecture](../../work/initiatives/ini.system-test-architecture.md).
 
 ### APP_ENV=test Pattern
 

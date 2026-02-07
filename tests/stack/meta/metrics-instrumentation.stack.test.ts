@@ -7,7 +7,7 @@
  * Scope: Black-box HTTP checks for HTTP metrics; in-process route calls for LLM metrics. Does not test metric values or bucket distributions.
  * Invariants: HTTP metrics increment by exactly 1 per request; LLM metrics use low-cardinality labels.
  * Side-effects: IO (HTTP requests, database writes)
- * Notes: Requires running stack for HTTP tests; uses FakeLlmAdapter for LLM tests (APP_ENV=test).
+ * Notes: Requires running stack for HTTP tests; LLM calls route through mock-openai-api (APP_ENV=test).
  * Links: /api/metrics, src/bootstrap/http/wrapRouteHandlerWithLogging.ts
  * @public
  */

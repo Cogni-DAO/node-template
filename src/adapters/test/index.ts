@@ -5,7 +5,7 @@
  * Module: `@adapters/test`
  * Purpose: Barrel exports for test adapter implementations.
  * Scope: Re-exports all test adapters for clean imports. Does not contain logic.
- * Invariants: All test adapters exported; maintains same interface as real adapters.
+ * Invariants: All test adapters exported (except LLM — uses LiteLlmAdapter everywhere).
  * Side-effects: none
  * Notes: Used by bootstrap container for environment-based adapter wiring.
  * Links: Used by src/bootstrap/container.ts
