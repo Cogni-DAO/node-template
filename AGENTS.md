@@ -58,8 +58,8 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [MVP Deliverables](docs/MVP_DELIVERABLES.md)
 - [Node Formation Spec](docs/spec/node-formation.md)
 - [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Authorization (RBAC/ReBAC)](docs/RBAC_SPEC.md)
+- [Architecture](docs/spec/architecture.md)
+- [Authorization (RBAC/ReBAC)](docs/spec/rbac.md)
 - [Tenant Connections](docs/spec/tenant-connections.md)
 - [Tool Use Spec](docs/spec/tool-use.md)
 - [Services Migration (initiative)](work/initiatives/ini.cicd-services-gitops.md)
@@ -82,16 +82,16 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 - [Developer Setup](docs/SETUP.md)
 - [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
-- [Database & Migration Architecture](docs/DATABASES.md)
+- [Database & Migration Architecture](docs/spec/databases.md)
 - [Database RLS Spec](docs/DATABASE_RLS_SPEC.md)
 - [Testing Strategy](docs/TESTING.md)
 - [Feature Development Guide](docs/FEATURE_DEVELOPMENT_GUIDE.md)
 - [UI Implementation Guide](docs/UI_IMPLEMENTATION_GUIDE.md)
-- [Style & Lint Rules](docs/STYLE.md)
+- [Style & Lint Rules](docs/spec/style.md)
 
 ### Operations
 
-- [Observability](docs/OBSERVABILITY.md)
+- [Observability](docs/spec/observability.md)
 - [Repo Specification](.cogni/repo-spec.yaml)
 - [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md)
 
