@@ -172,7 +172,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                       | AB+road    | [ ]  | [ ]  |
 | HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
-| HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                       | AB+road    | [ ]  | [ ]  |
+| HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                       | AB+road    | [x]  | [ ]  |
 | INTEGRATION_WALLETS_CREDITS.md       | -                              | ini.accounts-api-keys.md           | -   | wallet-auth-setup.md    | procedural | [x]  | [ ]  |
 | ISOLATE_LITELLM_DATABASE.md          | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | LANGGRAPH_AI.md                      | langgraph-patterns.md          | (ini.langgraph-server-production)  | -   | -                       | AB+road    | [x]  | [x]  |

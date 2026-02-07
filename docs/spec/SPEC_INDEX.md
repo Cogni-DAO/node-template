@@ -46,6 +46,7 @@ This is a master index of all specs, updated as specs are migrated.
 | git-sync-repo-mount-spec         | Git-Sync Repo Mount                | draft    | deployment | [git-sync-repo-mount.md](./git-sync-repo-mount.md)                 |
 | gov-data-collectors-spec         | Governance Data Collectors         | draft    | data       | [gov-data-collectors.md](./gov-data-collectors.md)                 |
 | spec.health-probes               | Health Probe Separation            | draft    | deployment | [health-probes.md](./health-probes.md)                             |
+| human-in-the-loop-spec           | Human-in-the-Loop (HIL) Design     | draft    | ai-graphs  | [human-in-the-loop.md](./human-in-the-loop.md)                     |
 | langgraph-patterns-spec          | LangGraph Patterns                 | draft    | ai-graphs  | [langgraph-patterns.md](./langgraph-patterns.md)                   |
 | langgraph-server-spec            | LangGraph Server Integration       | draft    | ai-graphs  | [langgraph-server.md](./langgraph-server.md)                       |
 | model-selection-spec             | Model Selection                    | draft    | ai-graphs  | [model-selection.md](./model-selection.md)                         |
