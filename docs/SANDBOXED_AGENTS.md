@@ -222,7 +222,7 @@ PER-RUN RESOURCES:
 - [x] Create `platform/infra/services/sandbox-proxy/nginx.conf.template`:
   - Listen on unix socket in shared `/llm-sock/` directory
   - Inject `Authorization: Bearer ${LITELLM_MASTER_KEY}` (from template substitution)
-  - Inject `x-litellm-end-user-id: ${runId}/${attempt}` (overwrites client-sent)
+  - Inject `x-litellm-end-user-id: ${billingAccountId}` + `x-litellm-spend-logs-metadata` (overwrites client-sent)
   - Forward to `http://litellm:4000` (Docker DNS on sandbox-internal)
   - Access log: timestamp, runId, model, status (no request body/secrets)
 - [x] Update `services/sandbox-runtime/Dockerfile`:
@@ -263,7 +263,7 @@ PER-RUN RESOURCES:
 - [x] **OPENAI_API_BASE set**: Container env has `OPENAI_API_BASE=http://localhost:8080`
 - [x] **Header stripping**: Proxy accepts requests with spoofed headers (doesn't break)
 - [ ] **LLM completion succeeds**: `/v1/chat/completions` returns valid response (requires internet)
-- [ ] **Attribution injection**: LiteLLM receives `x-litellm-end-user-id: {runId}/{attempt}` (verify via spend logs)
+- [ ] **Attribution injection**: LiteLLM receives `x-litellm-end-user-id: ${billingAccountId}` + `x-litellm-spend-logs-metadata` with `run_id` (verify via spend logs)
 
 #### File Pointers (P0.5)
 
@@ -349,15 +349,13 @@ PER-RUN RESOURCES:
 - [x] Update `Dockerfile` to include agent script at `/agent/run.mjs`
 - [x] Default `argv` in provider: `["node", "/agent/run.mjs"]`
 
-#### Billing Reconciliation
+#### Billing (Inline via Trusted Proxy)
 
-- [x] Proxy injects dual headers: `x-litellm-customer-id` (userId) + `x-litellm-end-user-id` (runId/attempt)
-- [x] Nginx audit log captures `$upstream_http_x_litellm_call_id` for deterministic reconciliation
-- [x] Provider emits `usage_report` AiEvent so `RunEventRelay` commits charge_receipt (P0.75: run-occurred marker; cost from LiteLLM is ground truth)
-- [ ] After sandbox exits: poll LiteLLM `GET /spend/logs/v2` (fallback `/spend/logs`) with timeout to get actual costs
-  - Extract `completion_tokens`, `prompt_tokens`, `cost`, `call_id`
-  - Enrich the `usage_report` with real token counts and cost
-  - If no spend logs found: log warning, keep zero-cost marker
+- [x] Proxy injects billing headers: `x-litellm-end-user-id: ${billingAccountId}` + `x-litellm-spend-logs-metadata` (run correlation + Langfuse)
+- [x] Nginx audit log captures `$upstream_http_x_litellm_call_id` for per-call tracing
+- [x] Provider emits `usage_report` AiEvent so `RunEventRelay` commits charge_receipt
+- [ ] Capture `x-litellm-call-id` from proxy response inline for `usageUnitId` (per [GRAPH_EXECUTOR_AUDIT.md](GRAPH_EXECUTOR_AUDIT.md) P0 item #2)
+- [ ] Set `executorType: "sandbox"` in UsageFact (per `UsageFactStrictSchema`)
 - [ ] Verify `charge_receipts` table has entry with `source_reference = ${runId}/0/${litellmCallId}`
 
 #### Tests (Merge Gates)
@@ -365,7 +363,7 @@ PER-RUN RESOURCES:
 - [ ] **E2E chat flow**: `POST /api/v1/ai/chat` with `graphName: "sandbox:agent"` → SSE response with assistant text
 - [ ] **Agent catalog**: `GET /api/v1/ai/agents` includes `sandbox:agent` when `SANDBOX_ENABLED=true`
 - [ ] **Billing verified**: After sandbox run, `charge_receipts` table has entry matching `runId`
-- [ ] **LiteLLM spend match**: `x-litellm-end-user-id` header matches `${runId}/0` in LiteLLM logs
+- [ ] **LiteLLM spend match**: `x-litellm-end-user-id` in spend logs matches `billingAccountId`, `metadata.run_id` matches `runId`
 - [ ] **No secrets in response**: Sandbox stdout does not contain `LITELLM_MASTER_KEY`
 - [ ] **Graceful failure**: Agent error (bad model, timeout) returns structured error via `GraphFinal.error`
 
@@ -538,14 +536,15 @@ free model passthrough (no credits required), billing headers injected by proxy.
 
 ### 3. LiteLLM as Billing Truth (No Proxy Token Counting)
 
-**Decision**: Do not count tokens in the proxy. Inject `x-litellm-end-user-id` header and use LiteLLM `/spend/logs` as authoritative billing source.
+**Decision**: Do not count tokens in the proxy. LiteLLM is the authoritative billing source. `end_user = billingAccountId` everywhere (matches in-proc `LiteLlmAdapter`). Run correlation via `metadata.run_id`.
 
 **Why**:
 
 - Streaming + retries make proxy-side token counting brittle
 - LiteLLM already tracks usage per `end_user`
-- Reconciliation via `GET /spend/logs?end_user=${runId}/${attempt}` is reliable
-- MVP should prove the loop first, optimize billing accuracy later
+- Sandbox bills inline: trusted proxy captures `x-litellm-call-id` per call → `usageUnitId`
+- External executors (P1) reconcile via `GET /spend/logs?end_user=${billingAccountId}`, filter by `metadata.run_id`
+- See [GRAPH_EXECUTOR_AUDIT.md](GRAPH_EXECUTOR_AUDIT.md) for inline vs reconciliation decision guide
 
 ### 4. Agent in Sandbox from P0.5 (Skip Host-Owned Loop)
 
