@@ -139,7 +139,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | AGENT_DISCOVERY.md                   | agent-discovery.md             | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                       | roadmap    | [x]  | [ ]  |
 | AI_EVALS.md                          | ai-evals.md                    | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
-| AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                       | AB+road    | [ ]  | [ ]  |
+| AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                       | AB+road    | [x]  | [x]  |
 | AI_SETUP_SPEC.md                     | ai-setup.md                    | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | ALLOY_LOKI_SETUP.md                  | -                              | -                                  | -   | alloy-loki-setup.md     | procedural | [x]  | [ ]  |
 | ARCHITECTURE.md                      | architecture.md                | -                                  | -   | -                       | migrated   | [x]  | [ ]  |

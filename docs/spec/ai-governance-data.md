@@ -1,7 +1,37 @@
+---
+id: ai-governance-data-spec
+type: spec
+title: AI Governance Data Design
+status: active
+spec_state: draft
+trust: draft
+summary: CloudEvents signal ingestion, budget-enforced briefs, incident-gated governance agents with citations and EDO records
+read_when: Implementing governance data pipelines, signal ingestion, brief generation, or incident routing
+owner: derekg1729
+created: 2026-02-07
+verified: 2026-02-07
+tags: [governance, temporal]
+---
+
 # AI Governance Data Design
 
 > [!CRITICAL]
 > Governance agents receive **bounded, cited briefs** — NOT raw data streams. SignalEvents flow through idempotent ingest; GovernanceBriefs are generated with strict budget caps and citation requirements. Every claim traces to source signals.
+
+## Context
+
+Cogni needs autonomous governance agents that monitor infrastructure, CI, spend, and work-item signals — then make cited recommendations for human review. Without a structured data pipeline, agents would receive unbounded raw data, leading to context explosion, hallucinated claims, and unauditable decisions.
+
+## Goal
+
+Provide a signal-to-decision pipeline: CloudEvents ingestion → budget-enforced brief generation → incident-gated LLM agent execution → cited EDO records → human review queue. All orchestrated by Temporal with deterministic workflows and idempotent activities.
+
+## Non-Goals
+
+- Auto-executing agent recommendations without human review (MVP requires human approval)
+- Raw log ingestion (only fingerprints and aggregates)
+- Internal threshold evaluation (MVP uses Prometheus/Alertmanager as detection source)
+- Real-time streaming (poll-based collection with webhook fast-path for alerts only)
 
 ## MVP Stack
 
@@ -92,7 +122,7 @@
 
 ---
 
-## Architecture
+## Design
 
 ### Trigger Flow (MVP)
 
@@ -738,155 +768,6 @@ export interface WorkItemPort {
 
 ---
 
-## Implementation Checklist
-
-### P0: Signal Infrastructure Foundation
-
-**Temporal Setup:**
-
-- [x] Deploy Temporal OSS (dev: docker-compose, prod: managed)
-- [ ] Create `governance` namespace
-- [ ] Configure worker with task queue `governance-tasks`
-
-**Schema & Migrations:**
-
-- [ ] Create `signal_events` table with CloudEvents schema
-- [ ] Create `stream_cursors` table (adapter cursor persistence)
-- [ ] Create `governance_briefs` table
-- [ ] Create `incidents` table with fingerprint-based `incident_key`
-- [ ] Create `incident_evidence` join table (N=100 cap)
-- [ ] Create `governance_edos` table with `brief_id`, `cited_signals`
-
-**Signal Ports (Split):**
-
-- [ ] Create `SignalWritePort` interface
-- [ ] Create `SignalReadPort` interface
-- [ ] Implement `DrizzleSignalWriteAdapter`
-- [ ] Implement `DrizzleSignalReadAdapter`
-- [ ] Idempotent upsert on `id`
-- [ ] CloudEvents envelope validation
-- [ ] Provenance validation (reject if missing)
-
-**First SourceAdapter + Workflow:**
-
-- [ ] Create `packages/data-sources/` structure
-- [ ] Implement `PrometheusAdapter` with `alerts` stream
-- [ ] Deterministic event ID scheme for Prometheus alerts
-- [ ] Create `CollectSourceStreamWorkflow`
-- [ ] Create `collectSignalsActivity` (calls adapter.collect → SignalWritePort.ingest)
-- [ ] Create Temporal Schedule for Prometheus collection (every 5m)
-- [ ] Integration test: Schedule → Workflow → Activity → ingest → query
-
-#### Chores
-
-- [ ] Add `governance.*` events to EVENT_NAMES
-- [ ] Document SourceAdapter pattern in `packages/data-sources/README.md`
-- [ ] Document Temporal workflow patterns in `packages/governance-workflows/README.md`
-
-### P1: Brief Generation + Metrics Layer
-
-**GovernanceBriefPort:**
-
-- [ ] Create port interface
-- [ ] Implement brief generation with budget enforcement
-- [ ] Diff computation from previous brief
-- [ ] Citation requirement enforcement
-- [ ] Dropped reason accounting
-
-**Metrics (uses existing port):**
-
-- [ ] Add governance rate limits to `MetricsCapability` wrapper
-- [ ] Add per-run tool call budget to graph executor config
-- [ ] Extend templates if needed (MVP: error_rate, latency_p95 already exist)
-
-**Additional SourceAdapters:**
-
-- [ ] `GitHubAdapter` (prs, issues, actions streams)
-- [ ] `LiteLLMAdapter` (spend stream)
-- [ ] `LokiAdapter` (error fingerprints only)
-- [ ] Temporal Schedules for each adapter
-
-**Semantic Retrieval (pgvector):**
-
-- [ ] Enable pgvector extension
-- [ ] Add `embedding` column to governance_briefs
-- [ ] Add `embedding` column to governance_edos
-- [ ] Implement similarity search for "similar past incidents"
-
-### P2: Incident-Gated Agent Execution
-
-**IncidentRouterWorkflow:**
-
-- [ ] Create `IncidentRouterWorkflow` (correlates alert signals → incidents)
-- [ ] Create `queryAlertSignalsActivity` (SignalReadPort, filter `prometheus.alert.*`)
-- [ ] Create `upsertIncidentActivity` (IncidentStorePort)
-- [ ] Temporal Schedule: every 1-5m per scope
-- [ ] On incident lifecycle event → start child GovernanceAgentWorkflow
-
-**GovernanceAgentWorkflow:**
-
-- [ ] Create `GovernanceAgentWorkflow`
-- [ ] Create `checkCooldownActivity`
-- [ ] Create `generateBriefActivity` (GovernanceBriefPort, preset-based)
-- [ ] Create `runGovernanceGraphActivity` (GraphExecutorPort, system tenant)
-- [ ] Create `appendEdoActivity` (GovernanceEdoPort)
-- [ ] Create `createWorkItemActivity` (WorkItemPort, Plane MCP)
-- [ ] Create `markBriefedActivity` (IncidentStorePort)
-
-### P3: Future (Do NOT Build Preemptively)
-
-- [ ] Approval-to-execute pipeline
-- [ ] KPI governance loop (weekly Schedule)
-- [ ] Baseline deviation detection (replace static thresholds)
-
----
-
-## File Pointers (P0 Scope)
-
-**Schema & Ports:**
-
-| File                                          | Change                                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------------ |
-| `src/shared/db/schema.governance.ts`          | New: signal_events, stream_cursors, briefs, incidents, incident_evidence, edos |
-| `src/ports/governance/signal-event.ts`        | New: SignalEvent type                                                          |
-| `src/ports/governance/signal-write.port.ts`   | New: SignalWritePort                                                           |
-| `src/ports/governance/signal-read.port.ts`    | New: SignalReadPort                                                            |
-| `src/ports/governance/brief.port.ts`          | New: GovernanceBriefPort                                                       |
-| `src/ports/governance/incident-store.port.ts` | New: IncidentStorePort                                                         |
-| `src/bootstrap/capabilities/metrics.ts`       | Existing: Add governance rate limit config                                     |
-| `src/ports/governance/edo-store.port.ts`      | New: GovernanceEdoPort                                                         |
-
-**Adapters:**
-
-| File                                                             | Change                       |
-| ---------------------------------------------------------------- | ---------------------------- |
-| `src/adapters/server/governance/drizzle-signal-write.adapter.ts` | New                          |
-| `src/adapters/server/governance/drizzle-signal-read.adapter.ts`  | New                          |
-| `packages/data-sources/types.ts`                                 | New: SourceAdapter interface |
-| `packages/data-sources/prometheus/adapter.ts`                    | New: first adapter           |
-| `packages/data-sources/README.md`                                | New: adapter dev guide       |
-
-**Temporal Workflows & Activities:**
-
-| File                                                                   | Change                            |
-| ---------------------------------------------------------------------- | --------------------------------- |
-| `packages/governance-workflows/src/workflows/collect-source-stream.ts` | New: CollectSourceStreamWorkflow  |
-| `packages/governance-workflows/src/workflows/incident-router.ts`       | New: IncidentRouterWorkflow (P2)  |
-| `packages/governance-workflows/src/workflows/governance-agent.ts`      | New: GovernanceAgentWorkflow (P2) |
-| `packages/governance-workflows/src/activities/collect-signals.ts`      | New: collectSignalsActivity       |
-| `packages/governance-workflows/src/activities/ingest-signals.ts`       | New: ingestSignalsActivity        |
-| `packages/governance-workflows/src/worker.ts`                          | New: Temporal worker entry        |
-| `packages/governance-workflows/README.md`                              | New: workflow patterns            |
-
-**Infrastructure:**
-
-| File                                                     | Change                      |
-| -------------------------------------------------------- | --------------------------- |
-| `platform/infra/services/runtime/docker-compose.dev.yml` | Add: Temporal server        |
-| `platform/infra/temporal/`                               | New: Temporal configuration |
-
----
-
 ## Design Decisions
 
 ### 1. Why Temporal for Orchestration?
@@ -979,47 +860,18 @@ Agents need: what changed? what's new? what escalated? Not everything.
 
 ---
 
-## P1 Backlog (Post-MVP)
+## Acceptance Checks
 
-The following items were identified during architecture review and are deferred from MVP:
+**Automated:**
 
-### P1-ADAPTER-VERSIONING
+- `pnpm check:docs` — validates spec frontmatter and required headings
+- Integration tests for signal ingest idempotency (planned — see [ini.governance-agents](../../work/initiatives/ini.governance-agents.md))
 
-- Define N=1 compatibility (current + previous version only)
-- `producer_version` already stored on events
-- Migration strategy: admin CLI command for reprocessing, not automatic
+**Manual:**
 
-### P1-TRIGGER-PRIORITY
-
-- Refine priority based on incident lifecycle transitions (open/escalate/resolve)
-- Current: immediate path for high-severity signals
-- Future: immediate only for state transitions, not raw signal ingestion
-
-### P1-THRESHOLDS-INTERNAL
-
-- Internal threshold rules via `guardrail_thresholds` table (if external alerts insufficient)
-- Removed from MVP per P0-DETECTION-SOURCE decision
-- Only implement if Prometheus/Alertmanager rules prove inadequate
-
-### P1-PORT-UNIFICATION
-
-- Unify metrics querying behind single MetricsQueryPort via policy catalogs
-- Public analytics catalog vs governance catalog (same port, different policies)
-- No parallel ports; use policy wrappers on existing `src/ports/metrics-query.port.ts`
-
-### P1-RATE-LIMITING
-
-- Add per caller/tenant rate limiting to MetricsQueryPort
-- Gap identified in P0-METRICS-BUDGETS; other budgets already enforced
-
-### P1-METRICS-PORT-REFACTOR
-
-- [ ] Split `MetricsQueryPort` into `InternalPrometheusQueryPort` (raw, adapter-only) and `GovernedMetricsQueryPort` (template-only, tools/agents)
-- [ ] Normalize timestamp types (Date vs ISO string) across port interfaces
-- [ ] Normalize error contract: return domain errors or Result type, not adapter-specific exceptions
-- Currently mitigated by P0 runtime guard (TOOLS_TEMPLATE_ONLY invariant)
-
----
+1. Verify CloudEvents envelope validation rejects missing provenance fields
+2. Verify brief generation respects `maxItemsTotal` and per-domain budget caps
+3. Verify governance agent runs only on incident lifecycle events (not timer)
 
 ## Known Issues
 
@@ -1027,17 +879,13 @@ The following items were identified during architecture review and are deferred 
 
 ---
 
-## Related Documents
+## Related
 
-- [GOV_DATA_COLLECTORS.md](GOV_DATA_COLLECTORS.md) — SourceAdapter registry (Prometheus, OpenRouter, etc.)
-- [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) — Canonical Temporal patterns and anti-patterns
-- [SYSTEM_TENANT_DESIGN.md](SYSTEM_TENANT_DESIGN.md) — System tenant foundation
-- [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — Scheduled graph execution
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort
-- [OBSERVABILITY.md](OBSERVABILITY.md) — Prometheus, Loki
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — MCP tool contracts
-
----
-
-**Last Updated**: 2026-02-02
-**Status**: Draft — P0 Fixes Applied (incident_key, detection-source, evidence, time-semantics, brief-presets, metrics-budgets)
+- **Initiative:** [ini.governance-agents](../../work/initiatives/ini.governance-agents.md) — Roadmap, deliverables, P1 backlog
+- [Governance Data Collectors](gov-data-collectors.md) — SourceAdapter registry
+- [Temporal Patterns](temporal-patterns.md) — Canonical Temporal patterns and anti-patterns
+- [System Tenant Design](system-tenant.md) — System tenant foundation
+- [Scheduler Spec](scheduler.md) — Scheduled graph execution
+- [Graph Execution](../GRAPH_EXECUTION.md) — GraphExecutorPort (pending migration)
+- [Observability](observability.md) — Prometheus, Loki
+- [Tool Use Spec](tool-use.md) — MCP tool contracts

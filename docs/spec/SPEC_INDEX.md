@@ -28,6 +28,7 @@ This is a master index of all specs, updated as specs are migrated.
 | agent-discovery-spec             | Agent Discovery Architecture       | draft    | ai-graphs  | [agent-discovery.md](./agent-discovery.md)                         |
 | agent-registry                   | Agent Registry                     | draft    | ai-graphs  | [agent-registry.md](./agent-registry.md)                           |
 | ai-evals-spec                    | AI Architecture and Evals          | draft    | ai-graphs  | [ai-evals.md](./ai-evals.md)                                       |
+| ai-governance-data-spec          | AI Governance Data Design          | draft    | data       | [ai-governance-data.md](./ai-governance-data.md)                   |
 | ai-setup-spec                    | AI Setup Specification             | active   | ai-graphs  | [ai-setup.md](./ai-setup.md)                                       |
 | authentication-spec              | Authentication                     | draft    | auth       | [authentication.md](./authentication.md)                           |
 | billing-evolution-spec           | Billing Evolution                  | draft    | billing    | [billing-evolution.md](./billing-evolution.md)                     |
