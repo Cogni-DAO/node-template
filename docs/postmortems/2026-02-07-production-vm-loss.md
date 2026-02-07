@@ -1,3 +1,15 @@
+---
+id: pm-2026-02-07-production-vm-loss
+type: postmortem
+title: "Production VM Loss & Complete Outage"
+status: draft
+trust: draft
+summary: CherryServers silently replaced production VM — total data loss (Postgres, Temporal, configs), full outage
+read_when: Investigating hosting reliability, backup strategy, or disaster recovery
+owner: derekg1729
+created: 2026-02-07
+---
+
 # Postmortem: Production VM Loss & Complete Outage
 
 > **WE DO NOT TRUST CHERRYSERVERS. WE NEED TO BACK UP OUR DATA.**
