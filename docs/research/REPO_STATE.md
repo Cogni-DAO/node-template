@@ -35,7 +35,7 @@ tags: [meta]
 | Priority | Spec                                                   | Status        | Enables                                                    |
 | -------- | ------------------------------------------------------ | ------------- | ---------------------------------------------------------- |
 | **1**    | [Scheduler Spec](../spec/scheduler.md)                 | 🔄 P1 Pending | Scheduled graph execution, Temporal migration              |
-| **2**    | [Graph Execution](./GRAPH_EXECUTION.md)                | 🔄 P1 Pending | Core execution envelope, billing, compiled exports         |
+| **2**    | [Graph Execution](../spec/graph-execution.md)                | 🔄 P1 Pending | Core execution envelope, billing, compiled exports         |
 | **3**    | [System Tenant Design](./SYSTEM_TENANT_DESIGN.md)      | 📋 Draft      | Governance loops, PolicyResolverPort, multi-tenancy        |
 | **4**    | [Tool Use Spec](./TOOL_USE_SPEC.md)                    | ✅ P0 Done    | Agentic loop, policy enforcement, local tools              |
 | **5**    | [Tenant Connections](./TENANT_CONNECTIONS_SPEC.md)     | 📋 Draft      | Authenticated tools, OAuth, connectionId broker            |

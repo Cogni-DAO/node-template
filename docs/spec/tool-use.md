@@ -513,6 +513,6 @@ When `toolCall.function.arguments` is invalid JSON:
 - [tools-authoring.md](../guides/tools-authoring.md) — Practical guide: how to add a new tool
 - [ai-setup.md](./ai-setup.md) — Correlation IDs, telemetry invariants
 - [langgraph-patterns.md](./langgraph-patterns.md) — Architecture, anti-patterns
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — GraphExecutorPort, billing, pump+fanout
+- [Graph Execution](graph-execution.md) — GraphExecutorPort, billing, pump+fanout
 - [tenant-connections.md](./tenant-connections.md) — Authenticated tool connections
 - [Initiative: Tool Use Evolution](../../work/initiatives/ini.tool-use-evolution.md)

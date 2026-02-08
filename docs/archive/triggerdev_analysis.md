@@ -272,7 +272,7 @@ The dashboard and SDK ergonomics are nice-to-have, but:
 ### Internal Documents
 
 - [Architecture](../spec/architecture.md)
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
+- [Graph Execution](../spec/graph-execution.md)
 - [Scheduler Spec](../spec/scheduler.md)
 - [Node Formation Spec](../spec/node-formation.md)
 - [TOOL_USE_SPEC.md](../TOOL_USE_SPEC.md)

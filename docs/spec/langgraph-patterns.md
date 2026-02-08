@@ -27,7 +27,7 @@ Define the package boundaries, execution paths, and invariants that govern LangG
 ## Non-Goals
 
 - Server infrastructure details (Docker, Redis, container deployment) — see [LANGGRAPH_SERVER.md](../LANGGRAPH_SERVER.md)
-- Executor-agnostic billing and tracking patterns — see [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
+- Executor-agnostic billing and tracking patterns — see [Graph Execution](graph-execution.md)
 - Step-by-step guide for adding new graphs — see [Agent Development Guide](../guides/agent-development.md)
 
 ## Core Invariants
@@ -61,7 +61,7 @@ Define the package boundaries, execution paths, and invariants that govern LangG
 | **TOOL_CATALOG**        | 📋 Contract    | Canonical registry in `ai-tools`; wrapper checks `toolIds` allowlist |
 | **ALS runtime context** | 📋 Contract    | `getCogniExecContext()` per-run isolation                            |
 
-> See [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) for authoritative invariants and implementation status.
+> See [Graph Execution](graph-execution.md) for authoritative invariants and implementation status.
 
 ### Execution Paths
 
@@ -200,7 +200,7 @@ Key design:
 - Includes `_modelType()` for LangGraph duck-typing compatibility
 - Fails fast if ALS context or model missing
 
-**Runtime Context:** The provider sets up ALS context before graph invocation. Per NO_MODEL_IN_ALS (see [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)), the runtime holds only non-serializable dependencies (`completionFn`, `tokenSink`, `toolExecFn`). Model travels via `configurable`.
+**Runtime Context:** The provider sets up ALS context before graph invocation. Per NO_MODEL_IN_ALS (see [Graph Execution](graph-execution.md)), the runtime holds only non-serializable dependencies (`completionFn`, `tokenSink`, `toolExecFn`). Model travels via `configurable`.
 
 ### Server Execution Path
 
@@ -299,7 +299,7 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 ## Related
 
 - [Agent Development Guide](../guides/agent-development.md) — Step-by-step for adding new agent graphs
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — Executor-agnostic billing, tracking, UI/UX patterns
+- [Graph Execution](graph-execution.md) — Executor-agnostic billing, tracking, UI/UX patterns
 - [LANGGRAPH_SERVER.md](../LANGGRAPH_SERVER.md) — Infrastructure: Docker, Redis, container deployment
 - [Tool Use Spec](./tool-use.md) — Tool execution invariants
 - [Usage History Spec](./usage-history.md) — Run artifacts, assistant_final persistence

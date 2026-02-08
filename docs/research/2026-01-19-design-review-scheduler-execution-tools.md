@@ -429,7 +429,7 @@ CREATE TABLE connections (
 ## Related Documents
 
 - [Scheduler Spec](../spec/scheduler.md)
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
+- [Graph Execution](../spec/graph-execution.md)
 - [TOOL_USE_SPEC.md](../TOOL_USE_SPEC.md)
 - [ROADMAP.md](../../ROADMAP.md)
 - [Architecture](../spec/architecture.md)

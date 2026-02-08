@@ -15,7 +15,7 @@
 ## Pointers
 
 - [LangGraph Server Spec](../../docs/LANGGRAPH_SERVER.md)
-- [Graph Execution](../../docs/GRAPH_EXECUTION.md)
+- [Graph Execution](../../docs/spec/graph-execution.md)
 
 ## Boundaries
 

@@ -29,7 +29,7 @@ tags: [scheduler]
 
 2. **GRANT_NOT_SESSION**: Scheduled runs authenticate via durable `ExecutionGrant` (scoped, revocable, time-limited), never user sessions. Workers never hold `NextAuth` session state.
 
-3. **BILLING_VIA_GRANT**: Every `ExecutionGrant` has a `billingAccountId`. Execution service derives `virtualKeyId` from billing account's default key. All existing billing/idempotency invariants (GRAPH_EXECUTION.md) apply unchanged.
+3. **BILLING_VIA_GRANT**: Every `ExecutionGrant` has a `billingAccountId`. Execution service derives `virtualKeyId` from billing account's default key. All existing billing/idempotency invariants (graph-execution.md) apply unchanged.
 
 4. **GRANT_VALIDATED_TWICE**: Worker validates grant before calling API (fail-fast). Execution service re-validates grant validity + scope (defense-in-depth). Scope format: `graph:execute:{graphId}` or `graph:execute:*`.
 
@@ -329,7 +329,7 @@ tags: [scheduler]
 ## Related Documents
 
 - [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) — Canonical Temporal patterns and anti-patterns
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Execution invariants, billing
+- [Graph Execution](graph-execution.md) — Execution invariants, billing
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Billing account lifecycle
 - [Architecture](architecture.md) — Hexagonal pattern
 - [Packages Architecture](packages-architecture.md) — Package boundaries and rules

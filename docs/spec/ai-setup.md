@@ -468,7 +468,7 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 
 - [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) - External runtime MVP, adapter implementation
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - Graph patterns, anti-patterns
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) - Billing idempotency, pump+fanout pattern
+- [Graph Execution](graph-execution.md) - Billing idempotency, pump+fanout pattern
 - [USAGE_HISTORY.md](USAGE_HISTORY.md) - Artifact caching (executor-agnostic)
 - [AI_EVALS.md](AI_EVALS.md) - Eval harness structure, CI gates
 - [PROMPT_REGISTRY_SPEC.md](PROMPT_REGISTRY_SPEC.md) - Cloud-based prompt management (Langfuse + in-repo fallback)

@@ -15,7 +15,7 @@ LangGraph dev server adapter. Connects to external `langgraph dev` server (port 
 ## Pointers
 
 - [LangGraph Server Design](../../../../../docs/LANGGRAPH_SERVER.md)
-- [Graph Execution](../../../../../docs/GRAPH_EXECUTION.md)
+- [Graph Execution](../../../../../docs/spec/graph-execution.md)
 - [Parent ai/ AGENTS.md](../AGENTS.md)
 
 ## Boundaries

@@ -489,7 +489,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 5. **Telemetry** to Langfuse and logs to Pino.
 6. **Balance view** in protected UI.
 
-Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for graph architecture.
+Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [Graph Execution](graph-execution.md) for graph architecture.
 
 ---
 
@@ -539,7 +539,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](G
 ## Related Documentation
 
 - [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
-- [Graph Execution](GRAPH_EXECUTION.md) - GraphExecutorPort, billing idempotency, pump+fanout pattern
+- [Graph Execution](graph-execution.md) - GraphExecutorPort, billing idempotency, pump+fanout pattern
 - [AI Setup Spec](AI_SETUP_SPEC.md) - AI correlation IDs, telemetry invariants, P0/P1 checklists
 - [LangGraph Server](LANGGRAPH_SERVER.md) - External LangGraph Server runtime, adapter implementation
 - [LangGraph AI Guide](LANGGRAPH_AI.md) - Graph patterns and anti-patterns

@@ -208,5 +208,5 @@ export function useAgents() {
 - [OpenClaw Sandbox Spec](../OPENCLAW_SANDBOX_SPEC.md) — OpenClaw container image, config, I/O protocol (pending migration)
 - [Tenant Connections](tenant-connections.md) — P2 credential management via ConnectionBroker
 - [Sandbox Scaling](../SANDBOX_SCALING.md) — Proxy architecture, threat model (pending migration)
-- [Graph Execution](../GRAPH_EXECUTION.md) — GraphExecutorPort (pending migration)
+- [Graph Execution](graph-execution.md) — GraphExecutorPort (pending migration)
 - [Agent Discovery](agent-discovery.md) — AgentCatalogPort, discovery pipeline

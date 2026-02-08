@@ -886,6 +886,6 @@ Agents need: what changed? what's new? what escalated? Not everything.
 - [Temporal Patterns](temporal-patterns.md) — Canonical Temporal patterns and anti-patterns
 - [System Tenant Design](system-tenant.md) — System tenant foundation
 - [Scheduler Spec](scheduler.md) — Scheduled graph execution
-- [Graph Execution](../GRAPH_EXECUTION.md) — GraphExecutorPort (pending migration)
+- [Graph Execution](graph-execution.md) — GraphExecutorPort (pending migration)
 - [Observability](observability.md) — Prometheus, Loki
 - [Tool Use Spec](tool-use.md) — MCP tool contracts
