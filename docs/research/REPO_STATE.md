@@ -183,7 +183,7 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 - Add auth middleware: `/api/v1/*` accepts session OR `Authorization: Bearer <app_api_key>`
 - Update LLM port: resolve `{billing_account_id, app_api_key_id}` → mapped LiteLLM virtual key
 
-**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented), [Accounts Design](../spec/accounts-design.md), [Security Auth Spec](../spec/security-auth.md)
+**Reference:** [Accounts API Endpoints](../spec/accounts-api-endpoints.md) - Full spec (not implemented), [Accounts Design](../spec/accounts-design.md), [Security Auth Spec](../spec/security-auth.md)
 
 ### 13. Post-MVP Security Hardening ⚠️
 

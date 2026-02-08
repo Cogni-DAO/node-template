@@ -52,7 +52,7 @@ Every dependency points inward.
 - Infrastructure: [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md)
 - Chain Configuration: [Chain Config](chain-config.md)
 - Accounts & Credits: [Accounts Design](accounts-design.md)
-- API Endpoints: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
+- API Endpoints: [Accounts API Endpoints](accounts-api-endpoints.md)
 - Wallet Integration: [Wallet Auth Setup](../guides/wallet-auth-setup.md)
 - Billing Evolution: [Billing Evolution](billing-evolution.md)
 - Activity Metrics: [Activity Metrics](activity-metrics.md)

@@ -22,7 +22,7 @@ Extends accounts design with profit-enforcing billing and provider cost tracking
 **Related docs:**
 
 - System architecture: [Accounts Design](../ACCOUNTS_DESIGN.md)
-- API contracts: [ACCOUNTS_API_KEY_ENDPOINTS.md](../ACCOUNTS_API_KEY_ENDPOINTS.md)
+- API contracts: [Accounts API Endpoints](../ACCOUNTS_API_KEY_ENDPOINTS.md)
 - Wallet integration: [Wallet Auth Setup](../INTEGRATION_WALLETS_CREDITS.md)
 - Usage/Activity Design: [Activity Metrics](./activity-metrics.md)
 - Graph Execution & Idempotency: [Graph Execution](graph-execution.md)
