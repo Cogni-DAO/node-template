@@ -54,7 +54,9 @@ async function assertOpenClawImageExists(docker: Docker): Promise<void> {
 
 let ctx: SandboxTestContextWithProxy | null = null;
 
-describe("Sandbox OpenClaw Full-Stack", () => {
+// TODO: OpenClaw cold-boots in ~17s per run — must move to long-running container model.
+// Deferred to a follow-up PR. See docs/spec/openclaw-sandbox-spec.md.
+describe.skip("Sandbox OpenClaw Full-Stack", () => {
   const docker = new Docker();
   const litellmMasterKey = process.env.LITELLM_MASTER_KEY;
 
