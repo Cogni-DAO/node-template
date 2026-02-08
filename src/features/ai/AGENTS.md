@@ -15,7 +15,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [Architecture](../../../docs/ARCHITECTURE.md)
+- [Architecture](../../../docs/spec/architecture.md)
 - [AI Setup Spec](../../../docs/AI_SETUP_SPEC.md) (P0/P1 checklists, invariants)
 - [LangGraph Server](../../../docs/LANGGRAPH_SERVER.md) (external runtime, adapter implementation)
 - [LangGraph Patterns](../../../docs/LANGGRAPH_AI.md) (graph patterns, anti-patterns)

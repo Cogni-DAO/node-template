@@ -7,7 +7,7 @@
  * Scope: Pure encoding only; does not make RPC calls.
  * Invariants: Encoded layout must match OSx TokenVoting setup contract.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

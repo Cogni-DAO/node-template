@@ -16,7 +16,7 @@ Provides reusable feedback UI components for error states, loading indicators, a
 ## Pointers
 
 - [Parent: Kit Components](../AGENTS.md)
-- [UI Implementation Guide](../../../../docs/UI_IMPLEMENTATION_GUIDE.md)
+- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
 - [Error Handling Architecture](../../../../docs/ERROR_HANDLING_ARCHITECTURE.md)
 
 ## Boundaries

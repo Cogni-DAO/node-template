@@ -7,7 +7,7 @@
  * Scope: Pure constants only; does not read env or make RPC calls.
  * Invariants: Must match deployed contracts on the selected chain.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

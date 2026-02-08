@@ -8,7 +8,7 @@
  * Invariants: Only ui-governance/*, tailwindcss/*, and no-inline-styles/* rules active.
  * Side-effects: none
  * Notes: All TS/import/React/boundaries rules handled by Biome or other tools.
- * Links: docs/ARCHITECTURE.md#styling-invariants, docs/ui-style-spec.json
+ * Links: docs/spec/architecture.md#styling-invariants, docs/ui-style-spec.json
  * @public
  */
 

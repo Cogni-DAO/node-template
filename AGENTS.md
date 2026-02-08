@@ -86,7 +86,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Database RLS Spec](docs/DATABASE_RLS_SPEC.md)
 - [Testing Strategy](docs/TESTING.md)
 - [Feature Development Guide](docs/FEATURE_DEVELOPMENT_GUIDE.md)
-- [UI Implementation Guide](docs/UI_IMPLEMENTATION_GUIDE.md)
+- [UI Implementation Guide](docs/spec/ui-implementation.md)
 - [Style & Lint Rules](docs/spec/style.md)
 
 ### Operations

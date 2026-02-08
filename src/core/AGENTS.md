@@ -15,7 +15,7 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
-- [Architecture](../../docs/ARCHITECTURE.md)
+- [Architecture](../../docs/spec/architecture.md)
 - [Billing Evolution](../../docs/BILLING_EVOLUTION.md)
 
 ## Boundaries

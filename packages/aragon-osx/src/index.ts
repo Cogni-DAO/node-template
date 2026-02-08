@@ -7,7 +7,7 @@
  * Scope: Re-exports only; does not contain implementation logic.
  * Invariants: All public APIs exported from this barrel file.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md, docs/PACKAGES_ARCHITECTURE.md
+ * Links: docs/spec/node-formation.md, docs/PACKAGES_ARCHITECTURE.md
  * @public
  */
 

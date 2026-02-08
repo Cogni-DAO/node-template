@@ -8,7 +8,7 @@
  * Invariants: Forwards ref; accepts aria-* and data-* unchanged; uses semantic tokens only.
  * Side-effects: none (except timer for auto-dismiss)
  * Notes: Feature layer maps domain errors to these generic props.
- * Links: docs/UI_IMPLEMENTATION_GUIDE.md
+ * Links: docs/spec/ui-implementation.md
  * @public
  */
 

@@ -15,7 +15,7 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
 ## Pointers
 
 - [App AGENTS.md](../AGENTS.md)
-- [Architecture](../../../docs/ARCHITECTURE.md)
+- [Architecture](../../../docs/spec/architecture.md)
 - [Feature Development Guide](../../../docs/FEATURE_DEVELOPMENT_GUIDE.md)
 
 ## Boundaries

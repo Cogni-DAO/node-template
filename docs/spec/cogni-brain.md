@@ -178,7 +178,7 @@ function makeRepoCitation(hit: RepoSearchHit | RepoOpenResult): string {
 **Examples**:
 
 - `repo:main:src/features/ai/services/billing.ts#L45-L67@abc1234`
-- `repo:main:docs/ARCHITECTURE.md#L10-L25@abc1234`
+- `repo:main:docs/spec/architecture.md#L10-L25@abc1234`
 
 **Regex**: `\brepo:[a-z0-9_-]+:[^#\s]+#L\d+-L\d+@[0-9a-f]{7}\b`
 

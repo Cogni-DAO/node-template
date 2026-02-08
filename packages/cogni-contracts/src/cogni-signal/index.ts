@@ -7,7 +7,7 @@
  * Scope: Re-exports only; does not define new symbols.
  * Invariants: Must export all public symbols from submodules.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

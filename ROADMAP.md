@@ -92,7 +92,7 @@ Enable anyone to create their own Node (DAO + app). Manual steps remain for infr
 - Server-side tx receipt verification
 - Export deployment record + repo-spec addresses
 
-→ See: [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)
+→ See: [Node Formation Spec](docs/spec/node-formation.md)
 
 ### Phase 0.5: Freeze Node Template
 
@@ -175,12 +175,12 @@ Requirements:
 | -------------------------------------------------------------- | ---------------------------------- |
 | [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md) | Boundaries, invariants, boot seams |
 | [MVP Deliverables](docs/MVP_DELIVERABLES.md)                   | Scope lock, success criteria       |
-| [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)             | DAO formation tooling (Phase 0)    |
+| [Node Formation Spec](docs/spec/node-formation.md)             | DAO formation tooling (Phase 0)    |
 | [AI Setup Spec](docs/AI_SETUP_SPEC.md)                         | AI P0/P1/P2 checklists, invariants |
 | [LangGraph AI](docs/LANGGRAPH_AI.md)                           | How to create a graph in a feature |
 | [AI Architecture & Evals](docs/AI_EVALS.md)                    | LangGraph, Langfuse, eval gates    |
 | [Services Migration Guide](docs/SERVICES_MIGRATION.md)         | Implementation checklist           |
-| [Architecture](docs/ARCHITECTURE.md)                           | Hex architecture details           |
+| [Architecture](docs/spec/architecture.md)                      | Hex architecture details           |
 
 ---
 

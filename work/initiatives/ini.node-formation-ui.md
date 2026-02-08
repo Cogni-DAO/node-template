@@ -15,7 +15,7 @@ labels: [web3, setup, cli]
 
 # Node Formation UI & CLI Tooling
 
-> Source: docs/NODE_FORMATION_SPEC.md
+> Source: docs/spec/node-formation.md
 
 ## Goal
 

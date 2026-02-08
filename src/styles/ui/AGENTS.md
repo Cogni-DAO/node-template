@@ -15,7 +15,7 @@ Domain-split CVA styling factories organized by component type for maintainable 
 ## Pointers
 
 - [Parent styles AGENTS.md](../AGENTS.md)
-- [UI Implementation Guide](../../../docs/UI_IMPLEMENTATION_GUIDE.md)
+- [UI Implementation Guide](../../../docs/spec/ui-implementation.md)
 
 ## Boundaries
 

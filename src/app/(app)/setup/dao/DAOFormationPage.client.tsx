@@ -7,7 +7,7 @@
  * Scope: Renders form for DAO config, triggers formation via useDAOFormation hook, shows dialog for progress. Does not contain transaction logic or state machine implementation.
  * Invariants: Form validation inline; initialHolder defaults to connected wallet address.
  * Side-effects: IO (useDAOFormation hook performs wallet transactions).
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

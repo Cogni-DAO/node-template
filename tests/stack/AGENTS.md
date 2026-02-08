@@ -15,7 +15,7 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
-- [Architecture](../../docs/ARCHITECTURE.md)
+- [Architecture](../../docs/spec/architecture.md)
 - [Testing Documentation](../../docs/TESTING.md)
 
 ## Boundaries

@@ -8,7 +8,7 @@
  * Invariants: Forwards ref; accepts aria-* and data-* unchanged; uses semantic tokens only.
  * Side-effects: none
  * Notes: Extends shadcn default/destructive with success variant for positive feedback states.
- * Links: docs/UI_IMPLEMENTATION_GUIDE.md, docs/PAYMENTS_FRONTEND_DESIGN.md
+ * Links: docs/spec/ui-implementation.md, docs/PAYMENTS_FRONTEND_DESIGN.md
  * @public
  */
 

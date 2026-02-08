@@ -15,7 +15,7 @@ MCP host entrypoint. Registers tools that mirror src/contracts/\*\* operations a
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
-- [Architecture](../../docs/ARCHITECTURE.md)
+- [Architecture](../../docs/spec/architecture.md)
 - [Related ADRs](../../docs/adrs/)
 
 ## Boundaries

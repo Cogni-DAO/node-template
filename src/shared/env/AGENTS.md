@@ -15,7 +15,7 @@ Single source of truth for environment variables. Lazy validation with Zod preve
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [Architecture](../../../docs/ARCHITECTURE.md)
+- [Architecture](../../../docs/spec/architecture.md)
 
 ## Boundaries
 

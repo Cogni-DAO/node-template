@@ -179,5 +179,5 @@
 - ## Related Documentation
 - [CI/CD Pipeline Flow](../../docs/CI-CD.md) - Branch model, workflows, and deployment automation
 - [Infrastructure Setup](INFRASTRUCTURE_SETUP.md) - VM provisioning and disaster recovery
-- [Application Architecture](../../docs/ARCHITECTURE.md) - Hexagonal design and code organization
+- [Application Architecture](../../docs/spec/architecture.md) - Hexagonal design and code organization
 - [Cogni Brain Spec](../../docs/COGNI_BRAIN_SPEC.md) - Brain repo tools, git-sync mount, citation guard
