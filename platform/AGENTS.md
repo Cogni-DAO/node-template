@@ -14,7 +14,6 @@ Platform-level tooling for infrastructure, CI/CD, development environment setup,
 
 ## Pointers
 
-- [DEPLOYMENT_PLAN.md](../docs/DEPLOYMENT_PLAN.md): Current deployment strategy
 - [Architecture](../docs/spec/architecture.md): System architecture overview
 
 ## Boundaries
