@@ -15,7 +15,7 @@ Enforces hexagonal architecture boundaries via dependency-cruiser. Tests validat
 ## Pointers
 
 - [Architecture](../../docs/spec/architecture.md): hexagonal layer definitions
-- [Linting Rules](../../docs/LINTING_RULES.md): boundary enforcement migration status
+- [Linting Rules](../../docs/research/LINTING_RULES.md): boundary enforcement migration status
 - [.dependency-cruiser.cjs](../../.dependency-cruiser.cjs): boundary rules configuration
 
 ## Boundaries

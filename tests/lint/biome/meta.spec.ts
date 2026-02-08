@@ -8,7 +8,7 @@
  * Invariants: Biome specs must not import runEslint; only migrated rules may be unskipped.
  * Side-effects: none
  * Notes: Anti-drift safeguards for test migration hygiene.
- * Links: docs/LINTING_RULES.md, BIOME_TESTING.md
+ * Links: docs/research/LINTING_RULES.md, BIOME_TESTING.md
  * @public
  */
 
@@ -21,7 +21,7 @@ const biomeDir = path.resolve(__dirname);
 const eslintDir = path.resolve(__dirname, "../eslint");
 
 // Hardcoded allowlist of specs allowed to have unskipped tests
-// Update this when migrating a new rule per docs/LINTING_RULES.md
+// Update this when migrating a new rule per docs/research/LINTING_RULES.md
 const ALLOWED_UNSKIPPED_SPECS = new Set([
   "canary.spec.ts", // Commit 2B: noDefaultExport
   "process-env.spec.ts", // Commit 3: noProcessEnv

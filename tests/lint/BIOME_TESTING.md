@@ -8,7 +8,7 @@ Biome tests follow a **frozen migration queue** pattern:
 
 - All ESLint test spec files are copied to `tests/lint/biome/` with `describe.skip`
 - Tests remain skipped until their corresponding rule is migrated from ESLint → Biome
-- When a rule migrates (per `docs/LINTING_RULES.md` commit plan), we:
+- When a rule migrates (per `docs/research/LINTING_RULES.md` commit plan), we:
   1. Unskip the Biome test
   2. Update it to use Biome diagnostics (`lint/style/noDefaultExport` vs `import/no-default-export`)
   3. Ensure it passes
@@ -77,7 +77,7 @@ The `runBiome.ts` test harness provides:
 
 **Required meta-tests (TODO):**
 
-1. **Unskip guard**: Fail if any Biome spec is NOT `describe.skip` and NOT listed as migrated in `docs/LINTING_RULES.md`
+1. **Unskip guard**: Fail if any Biome spec is NOT `describe.skip` and NOT listed as migrated in `docs/research/LINTING_RULES.md`
 2. **Coverage parity**: Fail if `tests/lint/eslint/*.spec.ts` and `tests/lint/biome/*.spec.ts` filenames don't match 1:1
 
 ## Implementation Notes
@@ -97,11 +97,11 @@ When migrating a rule from ESLint to Biome:
    - Update `ruleId` assertions to Biome diagnostic categories
    - Verify test passes
 3. Remove ESLint rule from `eslint/*.config.mjs`
-4. Mark complete in `docs/LINTING_RULES.md`
+4. Mark complete in `docs/research/LINTING_RULES.md`
 5. Delete obsolete ESLint test if no longer needed
 
 ## Related Documentation
 
-- [LINTING_RULES.md](../../docs/LINTING_RULES.md) - Migration roadmap and commit plan
+- [Linting Rules](../../docs/research/LINTING_RULES.md) - Migration roadmap and commit plan
 - [ESLINT_TESTING.md](ESLINT_TESTING.md) - ESLint test patterns and coverage
 - [canary.spec.ts](canary.spec.ts) - Reference Biome test implementation
