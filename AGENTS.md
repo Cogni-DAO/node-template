@@ -76,7 +76,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [n8n Adapter](docs/spec/n8n-adapter.md)
 - [OpenClaw Sandbox Integration](docs/spec/openclaw-sandbox-spec.md)
 - [OpenClaw Sandbox Controls](docs/spec/openclaw-sandbox-controls.md)
-- [AI Evals](docs/AI_EVALS.md)
+- [AI Evals](docs/spec/ai-evals.md)
 
 ### Development
 

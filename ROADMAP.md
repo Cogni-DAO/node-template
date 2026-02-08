@@ -77,7 +77,7 @@ Operator shares CI/CD, observability, deploy invariants, and hex architecture wi
 | Observability | OpenTelemetry (canonical)             |
 | AI Platform   | Langfuse (prompt versioning, eval UI) |
 
-→ See: [AI Architecture & Evals](docs/AI_EVALS.md)
+→ See: [AI Architecture & Evals](docs/spec/ai-evals.md)
 
 ---
 
@@ -178,7 +178,7 @@ Requirements:
 | [Node Formation Spec](docs/spec/node-formation.md)             | DAO formation tooling (Phase 0)    |
 | [AI Setup Spec](docs/spec/ai-setup.md)                         | AI P0/P1/P2 checklists, invariants |
 | [LangGraph AI](docs/spec/langgraph-patterns.md)                           | How to create a graph in a feature |
-| [AI Architecture & Evals](docs/AI_EVALS.md)                    | LangGraph, Langfuse, eval gates    |
+| [AI Architecture & Evals](docs/spec/ai-evals.md)                    | LangGraph, Langfuse, eval gates    |
 | [Services Migration Guide](docs/SERVICES_MIGRATION.md)         | Implementation checklist           |
 | [Architecture](docs/spec/architecture.md)                      | Hex architecture details           |
 
