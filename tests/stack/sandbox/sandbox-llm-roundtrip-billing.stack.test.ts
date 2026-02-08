@@ -110,11 +110,12 @@ describe("Sandbox LLM Round-Trip Billing", () => {
 
     // 2. Verify proxy captured billing data (1 LLM call = 1 entry)
     expect(result.proxyBillingEntries).toBeDefined();
-    expect(result.proxyBillingEntries!.length).toBe(1);
-    const entry = result.proxyBillingEntries![0]!;
-    expect(entry.litellmCallId).toBeTruthy();
-    expect(typeof entry.costUsd).toBe("number");
-    expect(entry.costUsd).toBeGreaterThan(0);
+    expect(result.proxyBillingEntries?.length).toBe(1);
+    const entry = result.proxyBillingEntries?.[0];
+    expect(entry).toBeDefined();
+    expect(entry?.litellmCallId).toBeTruthy();
+    expect(typeof entry?.costUsd).toBe("number");
+    expect(entry?.costUsd).toBeGreaterThan(0);
 
     // 3. Construct UsageFact exactly as SandboxGraphProvider does (sandbox-graph.provider.ts:375-386)
     const runId = randomUUID();
@@ -128,8 +129,8 @@ describe("Sandbox LLM Round-Trip Billing", () => {
       virtualKeyId: "will-be-replaced",
       graphId: "sandbox:agent" as GraphId,
       model: SANDBOX_TEST_MODELS.default,
-      usageUnitId: entry.litellmCallId,
-      ...(entry.costUsd !== undefined && { costUsd: entry.costUsd }),
+      usageUnitId: entry?.litellmCallId ?? "",
+      ...(entry?.costUsd !== undefined && { costUsd: entry.costUsd }),
     };
 
     // 4. Validate with strict schema (same validation RunEventRelay applies)
@@ -165,15 +166,15 @@ describe("Sandbox LLM Round-Trip Billing", () => {
       .where(eq(chargeReceipts.runId, runId));
 
     expect(receipts).toHaveLength(1);
-    const receipt = receipts[0]!;
+    const receipt = receipts[0];
 
     // litellm_call_id in DB must exactly match the proxy audit log value
-    expect(receipt.litellmCallId).toBe(entry.litellmCallId);
-    expect(receipt.sourceSystem).toBe("litellm");
-    expect(receipt.sourceReference).toBe(
-      `${runId}/${attempt}/${entry.litellmCallId}`
+    expect(receipt?.litellmCallId).toBe(entry?.litellmCallId);
+    expect(receipt?.sourceSystem).toBe("litellm");
+    expect(receipt?.sourceReference).toBe(
+      `${runId}/${attempt}/${entry?.litellmCallId}`
     );
-    expect(receipt.chargedCredits).toBeGreaterThan(0n);
-    expect(receipt.chargeReason).toBe("llm_usage");
+    expect(receipt?.chargedCredits).toBeGreaterThan(0n);
+    expect(receipt?.chargeReason).toBe("llm_usage");
   });
 });

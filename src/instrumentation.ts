@@ -90,10 +90,7 @@ export async function register(): Promise<void> {
   // Dev mode (not test): warn if LiteLLM has stale test config from a previous session.
   // Inlined here (not in bootstrap/) because dep-cruiser forbids instrumentation→bootstrap imports.
   // biome-ignore lint/style/noProcessEnv: startup check before config framework
-  if (
-    process.env.NODE_ENV === "development" &&
-    process.env.APP_ENV !== "test"
-  ) {
+  if (process.env.APP_ENV !== "test") {
     (async () => {
       // biome-ignore lint/style/noProcessEnv: startup check before config framework
       const baseUrl = process.env.LITELLM_BASE_URL;
