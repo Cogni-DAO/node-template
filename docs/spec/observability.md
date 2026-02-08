@@ -197,7 +197,7 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 ## Current Shortcomings
 
-**Critical (blocks incident detection) — see [Required Observability Spec](OBSERVABILITY_REQUIRED_SPEC.md):**
+**Critical (blocks incident detection) — see [Required Observability Spec](observability-requirements.md):**
 
 - ❌ No Node.js process metrics (`collectDefaultMetrics()` not called — heap/RSS/GC invisible)
 - ❌ No heartbeat metric (app death indistinguishable from quiet period)
@@ -327,7 +327,7 @@ pnpm langfuse:trace
 
 ## References
 
-- [Required Observability Spec](OBSERVABILITY_REQUIRED_SPEC.md) - P0/P1 remediation plan for silent death detection
+- [Required Observability Spec](observability-requirements.md) - P0/P1 remediation plan for silent death detection
 - [Alloy Loki Setup](../guides/alloy-loki-setup.md) - Complete infrastructure setup
 - [Observability Guide](.claude/commands/logging.md) - Developer guidelines
 - Grafana Cloud: https://grafana.com/products/cloud/
