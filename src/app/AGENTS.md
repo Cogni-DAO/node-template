@@ -16,7 +16,7 @@ Next.js App Router delivery layer. UI pages and API routes that expose features 
 
 - [Root AGENTS.md](../../AGENTS.md)
 - [Architecture](../../docs/spec/architecture.md)
-- [Feature Development Guide](../../docs/FEATURE_DEVELOPMENT_GUIDE.md)
+- [Feature Development Guide](../../docs/guides/feature-development.md)
 
 ## Boundaries
 
