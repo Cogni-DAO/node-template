@@ -293,27 +293,114 @@ ESLint configs, shell scripts, toml files.
 3. Mark `[x]` in the Refs column for every row in the tracker
 4. Commit: `docs(refs): mark all tracker refs as done`
 
-## Safety Rules
+## Battle-Tested Process (per doc)
 
-1. **Never delete content** — only update paths. If a ref points to an obsolete doc, replace with the nearest living equivalent or remove the link (not the surrounding text).
-2. **Preserve `> Source:` lines** — Initiative source attributions (`> Source: docs/ORIGINAL.md`) are provenance records. Don't update these.
-3. **Verify relative paths** — A file at `src/adapters/server/foo/AGENTS.md` needs `../../../../docs/spec/bar.md`. Count the `../` segments. Get this wrong and links break.
-4. **One phase per commit** — Don't bundle AGENTS.md updates with TypeScript updates. Keeps review clean and reverts safe.
-5. **Run `pnpm check:docs` after each commit** — The validator catches broken frontmatter and missing headings.
-6. **Don't touch build artifacts** — `.html`, `.next/`, `dist/` files regenerate automatically. Skip them.
-7. **Don't touch `.claude/settings.local.json`** — Contains git command history, not real refs.
+This workflow was developed through 8 doc migrations. Follow it exactly.
+
+### Step 1: Check the migration tracker
+
+Read `wi.docs-migration-tracker.md` for the doc's row. Note:
+- **Spec column** → primary target is `docs/spec/{value}`
+- **Ini column** → if present, this is a multi-destination doc
+- **Guide column** → if present, procedural content went here
+
+For **multi-destination docs**: code refs (Links comments, AGENTS.md) → spec. Roadmap/TODO refs → ini. Setup/howto refs → guide. Most refs go to spec.
+
+### Step 2: Grep broadly
+
+Search for ALL patterns of the old name — not just `docs/OLD.md`:
+
+```bash
+# In the worktree:
+grep -rn 'OLD_NAME\.md' --include='*.{md,ts,tsx,mjs,sh,toml,yaml}' \
+  --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=dist
+```
+
+This catches:
+- `docs/OLD_NAME.md` — repo-root-relative (most common)
+- `(OLD_NAME.md)` — bare relative within docs/spec/ (same-dir ref)
+- `(../OLD_NAME.md)` — relative from docs/archive/, docs/research/
+- `(./OLD_NAME.md)` — relative from docs/research/
+
+### Step 3: Run targeted sed replacements
+
+Three sed passes per doc:
+
+```bash
+# 1. Repo-root-relative paths (covers Links: comments, most AGENTS.md)
+# EXCLUDE: ini files with > Source: lines, tracker, sweep doc
+find . -type f \( -name '*.md' -o -name '*.ts' -o -name '*.tsx' \
+  -o -name '*.mjs' -o -name '*.toml' -o -name '*.sh' -o -name '*.yaml' \) \
+  ! -path '*/node_modules/*' ! -path '*/.next/*' ! -path '*/dist/*' \
+  ! -path '*/wi.refs-sweep*' ! -path '*/wi.docs-migration-tracker*' \
+  ! -path '*/ini.RELEVANT_INI.md' \
+  -exec sed -i '' 's|docs/OLD_NAME\.md|docs/spec/new-name.md|g' {} +
+
+# 2. Internal relative paths within docs/ subdirs
+find ./docs/spec -name '*.md' -exec sed -i '' \
+  's|(OLD_NAME\.md)|(new-name.md)|g' {} +
+find ./docs/archive -name '*.md' -exec sed -i '' \
+  -e 's|(OLD_NAME\.md)|(../spec/new-name.md)|g' \
+  -e 's|(../OLD_NAME\.md)|(../spec/new-name.md)|g' {} +
+find ./docs/research -name '*.md' -exec sed -i '' \
+  -e 's|(../OLD_NAME\.md)|(../spec/new-name.md)|g' \
+  -e 's|(./OLD_NAME\.md)|(../spec/new-name.md)|g' {} +
+
+# 3. Fix link titles (markdown link text)
+find . -type f -name '*.md' ! -path '*/node_modules/*' \
+  ! -path '*/wi.refs-sweep*' ! -path '*/wi.docs-migration-tracker*' \
+  -exec sed -i '' 's|\[OLD_NAME\.md\]|[Human Readable Title]|g' {} +
+```
+
+### Step 4: Verify
+
+```bash
+grep -rn 'OLD_NAME\.md' --include='*.{md,ts,tsx,mjs,sh,toml,yaml}' \
+  --exclude-dir=node_modules | grep -v 'wi.refs-sweep' | grep -v 'wi.docs-migration-tracker'
+```
+
+Remaining matches should only be:
+- `> Source:` provenance lines in initiatives (correct — don't touch)
+- Prose mentions in code comments (`Per OLD_NAME.md:`) — acceptable to leave
+- Archive migration tables (`DOCS_ORGANIZATION_PLAN.md`) — historical, leave
+- Research doc analysis prose — historical, leave
+
+### Step 5: Stage and commit
+
+```bash
+git add -A  # ONLY safe in an isolated worktree
+git commit -m "docs(refs): update old-name references to docs/spec/new-name.md"
+```
+
+### Step 6: Mark tracker
+
+In `wi.docs-migration-tracker.md`, change `[ ]` to `[x]` in the Refs column for this doc.
+
+## Invariants
+
+1. **ONE_COMMIT_PER_DOC** — Each doc gets its own commit. Never batch multiple docs.
+2. **PRESERVE_SOURCE_LINES** — `> Source: docs/OLD.md` lines in initiatives are provenance. Exclude the ini file from sed by path.
+3. **FIX_LINK_TITLES** — `[OLD_NAME.md](...)` must become `[Human Title](...)`. The sed title pass handles this.
+4. **FIX_INTERNAL_REFS** — Files in `docs/spec/` use bare `(OLD.md)` refs (same dir). Files in `docs/archive/` and `docs/research/` use `(../OLD.md)`. These need separate sed passes with correct relative targets.
+5. **MULTI_DEST_CONTEXT** — For docs split to spec+ini+guide, decide per-ref: code/Links → spec, roadmap → ini, howto → guide. Default to spec.
+6. **USE_WORKTREE** — Work in `/Users/derek/dev/cogni-template-refs-sweep` (branch `refs-sweep-worktree`). Another dev works in the main tree. Use `git add -A` only in the worktree.
+7. **LOWERCASE_COMMIT_SUBJECT** — commitlint rejects uppercase in subject. Use `docs(refs): update lower-case-name references to docs/spec/new.md`.
+8. **SKIP_PROSE_MENTIONS** — Code comments like `Per OLD_NAME.md:` are acceptable to leave. They don't break navigation. Focus on link paths and `* Links:` comments.
+9. **SKIP_ARCHIVE_TABLES** — `DOCS_ORGANIZATION_PLAN.md` has a migration mapping table referencing old names. This is historical — don't touch.
 
 ## Validation
 
-After all phases, this command should return zero results (excluding Source attribution lines and the tracker itself):
+After all docs are done, this command should return zero results (excluding Source lines, tracker, and sweep doc):
 
 ```bash
 grep -rn 'docs/[A-Z][A-Z_]*\.md' \
   --include='*.ts' --include='*.tsx' --include='*.md' \
   --include='*.mjs' --include='*.sh' --include='*.toml' \
   --include='*.yaml' --include='AGENTS.md' \
+  --exclude-dir=node_modules \
   | grep -v 'Source:' \
-  | grep -v 'wi.docs-migration-tracker'
+  | grep -v 'wi.docs-migration-tracker' \
+  | grep -v 'wi.refs-sweep'
 ```
 
 Additionally: `pnpm check:docs` must pass after every commit.
