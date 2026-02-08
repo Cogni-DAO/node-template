@@ -146,6 +146,7 @@ export {
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
 export type {
+  ProxyBillingEntry,
   SandboxErrorCode,
   SandboxLlmProxyConfig,
   SandboxMount,

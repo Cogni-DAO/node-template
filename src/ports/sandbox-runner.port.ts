@@ -63,6 +63,8 @@ export interface SandboxRunSpec {
   readonly runId: string;
   /** Host filesystem path to mount as /workspace in container */
   readonly workspacePath: string;
+  /** Docker image to use for this run. */
+  readonly image: string;
   /**
    * Command arguments to execute.
    * For shell commands, use: ['bash', '-lc', 'your command here']
@@ -104,6 +106,18 @@ export type SandboxErrorCode =
   | "output_truncated";
 
 /**
+ * A single billing entry extracted from the proxy audit log.
+ * Mirrors the inproc flow where the host-side LiteLLM adapter captures
+ * response headers (x-litellm-call-id, x-litellm-response-cost).
+ */
+export interface ProxyBillingEntry {
+  /** LiteLLM call ID from x-litellm-call-id response header (usageUnitId) */
+  readonly litellmCallId: string;
+  /** Provider cost in USD from x-litellm-response-cost response header */
+  readonly costUsd?: number;
+}
+
+/**
  * Result of a sandbox command execution.
  */
 export interface SandboxRunResult {
@@ -119,6 +133,12 @@ export interface SandboxRunResult {
   readonly errorCode?: SandboxErrorCode;
   /** True if output was truncated due to size limits */
   readonly outputTruncated?: boolean;
+  /**
+   * Billing entries extracted from the proxy audit log (host-side).
+   * One entry per LLM call made through the proxy.
+   * Present only when llmProxy was enabled.
+   */
+  readonly proxyBillingEntries?: readonly ProxyBillingEntry[];
 }
 
 /**

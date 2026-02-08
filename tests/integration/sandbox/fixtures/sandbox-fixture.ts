@@ -141,7 +141,7 @@ export function useSandboxFixture(): SandboxFixture {
       return;
     }
 
-    fixture.runner = new SandboxRunnerAdapter({ imageName: SANDBOX_IMAGE });
+    fixture.runner = new SandboxRunnerAdapter();
   });
 
   // Note: No afterEach orphan check - tests run in parallel and would see

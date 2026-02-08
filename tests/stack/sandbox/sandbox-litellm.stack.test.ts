@@ -26,7 +26,6 @@ import {
   cleanupWorkspace,
   createWorkspace,
   runOnInternalNetwork,
-  SANDBOX_IMAGE,
   type SandboxTestContext,
 } from "../../_fixtures/sandbox/fixtures";
 
@@ -40,7 +39,7 @@ describe("Sandbox LiteLLM Reachability (P0.5a)", () => {
     await assertInternalNetworkExists(docker);
 
     ctx = {
-      runner: new SandboxRunnerAdapter({ imageName: SANDBOX_IMAGE }),
+      runner: new SandboxRunnerAdapter(),
       workspace: await createWorkspace("sandbox-litellm"),
       docker,
     };

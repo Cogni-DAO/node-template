@@ -29,12 +29,6 @@ import { makeLogger } from "@/shared/observability";
 
 import { type LlmProxyHandle, LlmProxyManager } from "./llm-proxy-manager";
 
-/**
- * Default Docker image for sandbox containers.
- * Built from services/sandbox-runtime/Dockerfile
- */
-const DEFAULT_SANDBOX_IMAGE = "cogni-sandbox-runtime:latest";
-
 /** Default max output size: 2MB */
 const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
@@ -52,8 +46,6 @@ const CONTAINER_LLM_SOCKET_PATH = `${CONTAINER_LLM_SOCKET_DIR}/${CONTAINER_LLM_S
 
 /** Options for SandboxRunnerAdapter */
 export interface SandboxRunnerAdapterOptions {
-  /** Docker image name (default: cogni-sandbox-runtime:latest) */
-  imageName?: string;
   /** LiteLLM master key for proxy authentication. Required if using llmProxy. */
   litellmMasterKey?: string;
   /** LiteLLM host:port (default: localhost:4000) */
@@ -76,7 +68,6 @@ export interface SandboxRunnerAdapterOptions {
 export class SandboxRunnerAdapter implements SandboxRunnerPort {
   private readonly docker: Docker;
   private readonly log: Logger;
-  private readonly imageName: string;
   private readonly litellmMasterKey: string | undefined;
   private readonly litellmHost: string;
   private readonly proxyManager: LlmProxyManager;
@@ -84,7 +75,6 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
   constructor(options?: SandboxRunnerAdapterOptions) {
     this.docker = new Docker();
     this.log = makeLogger({ component: "SandboxRunnerAdapter" });
-    this.imageName = options?.imageName ?? DEFAULT_SANDBOX_IMAGE;
     this.litellmMasterKey = options?.litellmMasterKey;
     this.litellmHost = options?.litellmHost ?? "litellm:4000"; // Docker DNS
     this.proxyManager = new LlmProxyManager();
@@ -102,6 +92,7 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
     const {
       runId,
       workspacePath,
+      image,
       argv,
       limits,
       mounts = [],
@@ -192,11 +183,12 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
     }
 
     let container: Docker.Container | undefined;
+    let result: SandboxRunResult;
 
     try {
       // Create container with strict isolation and security hardening
       container = await this.docker.createContainer({
-        Image: this.imageName,
+        Image: image,
         name: containerName,
         // The entrypoint.sh handles socat bridge startup, then runs command via bash
         // We pass the command as a single string argument to be run via bash -lc
@@ -268,9 +260,8 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
         } catch {
           // Container may already be stopped
         }
-        // Collect any partial logs
         const logs = await this.collectLogs(container, maxOutputBytes);
-        return {
+        result = {
           ok: false,
           stdout: logs.stdout,
           stderr: logs.stderr || "Command timed out",
@@ -278,46 +269,47 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
           errorCode: "timeout",
           outputTruncated: logs.truncated,
         };
+      } else {
+        // Collect logs after container exits
+        const logs = await this.collectLogs(container, maxOutputBytes);
+
+        // Check if OOM killed
+        const inspection = await container.inspect().catch(() => null);
+        const oomKilled = inspection?.State?.OOMKilled ?? false;
+
+        if (oomKilled) {
+          this.log.warn(
+            { runId, containerName },
+            "Sandbox container OOM killed"
+          );
+          result = {
+            ok: false,
+            stdout: logs.stdout,
+            stderr: logs.stderr,
+            exitCode: waitResult.statusCode,
+            errorCode: "oom_killed",
+            outputTruncated: logs.truncated,
+          };
+        } else {
+          this.log.debug(
+            { runId, containerName, exitCode: waitResult.statusCode },
+            "Sandbox container completed"
+          );
+          result = {
+            ok: waitResult.statusCode === 0,
+            stdout: logs.stdout,
+            stderr: logs.stderr,
+            exitCode: waitResult.statusCode,
+            outputTruncated: logs.truncated,
+          };
+        }
       }
-
-      // Collect logs after container exits
-      const logs = await this.collectLogs(container, maxOutputBytes);
-
-      // Check if OOM killed
-      const inspection = await container.inspect().catch(() => null);
-      const oomKilled = inspection?.State?.OOMKilled ?? false;
-
-      if (oomKilled) {
-        this.log.warn({ runId, containerName }, "Sandbox container OOM killed");
-        return {
-          ok: false,
-          stdout: logs.stdout,
-          stderr: logs.stderr,
-          exitCode: waitResult.statusCode,
-          errorCode: "oom_killed",
-          outputTruncated: logs.truncated,
-        };
-      }
-
-      this.log.debug(
-        { runId, containerName, exitCode: waitResult.statusCode },
-        "Sandbox container completed"
-      );
-
-      return {
-        ok: waitResult.statusCode === 0,
-        stdout: logs.stdout,
-        stderr: logs.stderr,
-        exitCode: waitResult.statusCode,
-        outputTruncated: logs.truncated,
-      };
     } catch (error) {
       this.log.error(
         { runId, containerName, error },
         "Sandbox container execution failed"
       );
-
-      return {
+      result = {
         ok: false,
         stdout: "",
         stderr: error instanceof Error ? error.message : "Unknown error",
@@ -325,7 +317,7 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
         errorCode: "internal",
       };
     } finally {
-      // Always cleanup container
+      // Container cleanup ONLY — always runs
       if (container) {
         try {
           await container.remove({ force: true });
@@ -333,21 +325,27 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
           // Container may already be removed or never started
         }
       }
-      // Stop LLM proxy container (audit log persists in socketDir until explicit cleanup)
-      if (proxyHandle) {
-        try {
-          const logPath = await this.proxyManager.stop(runId);
-          if (logPath) {
-            this.log.debug(
-              { runId, logPath },
-              "LLM proxy stopped, audit log at"
-            );
-          }
-        } catch (err) {
-          this.log.warn({ runId, error: err }, "Failed to stop LLM proxy");
+    }
+
+    // Proxy stop + billing extraction — after container cleanup, before return.
+    // Runs on ALL paths (success, timeout, OOM, error) because any LLM calls
+    // that happened before failure still need billing.
+    if (proxyHandle) {
+      try {
+        const proxyResult = await this.proxyManager.stop(runId);
+        if (proxyResult.logPath) {
+          this.log.debug(
+            { runId, logPath: proxyResult.logPath },
+            "LLM proxy stopped, audit log at"
+          );
         }
+        result = { ...result, proxyBillingEntries: proxyResult.billingEntries };
+      } catch (err) {
+        this.log.warn({ runId, error: err }, "Failed to stop LLM proxy");
       }
     }
+
+    return result;
   }
 
   /**

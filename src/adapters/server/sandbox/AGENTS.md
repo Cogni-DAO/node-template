@@ -34,7 +34,7 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 - **Exports:** `SandboxRunnerAdapter`, `SandboxRunnerAdapterOptions`, `LlmProxyManager`, `LlmProxyConfig`, `LlmProxyHandle`, `SandboxGraphProvider`, `SANDBOX_PROVIDER_ID`, `SandboxAgentCatalogProvider`
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** none (image name, litellmMasterKey configurable via constructor)
+- **Env/Config keys:** none (litellmMasterKey configurable via constructor; image passed per-run via SandboxRunSpec)
 - **Files considered API:** index.ts barrel export (not re-exported from parent server barrel — consumers use subpath imports to avoid Turbopack bundling dockerode native addon chain)
 
 ## Ports
@@ -54,12 +54,12 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 import { SandboxRunnerAdapter } from "@/adapters/server/sandbox";
 
 const runner = new SandboxRunnerAdapter({
-  imageName: "cogni-sandbox-runtime:latest",
   litellmMasterKey: process.env.LITELLM_MASTER_KEY,
 });
 const result = await runner.runOnce({
   runId: "task-123",
   workspacePath: "/tmp/workspace",
+  image: "cogni-sandbox-runtime:latest",
   argv: ["echo hello"],
   limits: { maxRuntimeSec: 30, maxMemoryMb: 256 },
   llmProxy: { enabled: true, billingAccountId: "acct-1", attempt: 0 },

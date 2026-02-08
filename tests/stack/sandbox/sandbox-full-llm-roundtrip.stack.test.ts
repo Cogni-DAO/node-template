@@ -10,6 +10,7 @@
  *   - Per SECRETS_HOST_ONLY: LITELLM_MASTER_KEY never enters sandbox container
  *   - Per HOST_INJECTS_BILLING_HEADER: Proxy injects x-litellm-end-user-id
  *   - Per LLM_VIA_SOCKET_ONLY: LLM access only via localhost:8080 -> socket -> proxy
+ *   - Per PROXY_DRIVEN_BILLING: Billing data (callId + cost) captured from proxy audit log, not agent stdout
  * Side-effects: IO (Docker containers, nginx proxy, filesystem)
  * Links: docs/SANDBOXED_AGENTS.md, docs/SYSTEM_TEST_ARCHITECTURE.md
  * @public
@@ -32,7 +33,6 @@ import {
   createWorkspace,
   ensureProxyImage,
   runAgentWithLlm,
-  SANDBOX_IMAGE,
   SANDBOX_TEST_MODELS,
   type SandboxTestContextWithProxy,
 } from "../../_fixtures/sandbox/fixtures";
@@ -59,7 +59,6 @@ describe("Sandbox Full-Stack LLM Round-Trip", () => {
 
     ctx = {
       runner: new SandboxRunnerAdapter({
-        imageName: SANDBOX_IMAGE,
         litellmMasterKey,
       }),
       workspace: await createWorkspace("sandbox-full-llm"),
@@ -105,12 +104,15 @@ describe("Sandbox Full-Stack LLM Round-Trip", () => {
     // Timing metadata populated
     expect(envelope.meta.durationMs).toBeGreaterThan(0);
 
-    // CRITICAL: litellmCallId proves the full header chain works:
-    //   LiteLLM sets x-litellm-call-id
-    //   → nginx proxy_pass_header forwards it
-    //   → agent captures res.headers.get("x-litellm-call-id")
-    // Without this, SandboxGraphProvider throws (billing incomplete).
-    expect(envelope.meta.litellmCallId).toBeDefined();
-    expect(envelope.meta.litellmCallId).toBeTruthy();
+    // CRITICAL: Proxy-driven billing — host-side proxy audit log captures
+    // x-litellm-call-id and x-litellm-response-cost from LiteLLM responses.
+    // SandboxGraphProvider uses these to emit usage_report events with costUsd.
+    // This proves the full billing chain without depending on agent stdout.
+    expect(result.proxyBillingEntries).toBeDefined();
+    expect(result.proxyBillingEntries!.length).toBe(1); // run.mjs makes exactly 1 LLM call
+    expect(result.proxyBillingEntries![0]!.litellmCallId).toBeTruthy();
+    // Cost should be present (mock-openai-api + litellm test config has input/output costs)
+    expect(typeof result.proxyBillingEntries![0]!.costUsd).toBe("number");
+    expect(result.proxyBillingEntries![0]!.costUsd).toBeGreaterThan(0);
   });
 });
