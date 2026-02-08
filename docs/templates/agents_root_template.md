@@ -36,7 +36,7 @@
 - [Repo Specification](.cogni/repo-spec.yaml) <!-- DAO configuration spec -->
 - [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md)
 - [Feature Spec Template](docs/templates/feature_spec_template.md)
-- [Style & Lint Rules](docs/STYLE.md)
+- [Style & Lint Rules](docs/spec/style.md)
 
 ## Usage
 
