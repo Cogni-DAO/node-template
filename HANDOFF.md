@@ -1,48 +1,76 @@
-# Handoff: Docs Reference Sweep
+# Handoff: Docs Reference Sweep (in progress)
 
 ## Goal
 
-Replace ~560 stale references to old `docs/UPPER_CASE_NAME.md` paths with the new typed paths (`docs/spec/`, `docs/guides/`, `work/initiatives/`). The doc content was migrated in prior PRs — this branch cleans up the references throughout the codebase.
+Replace all stale references to old `docs/UPPER_CASE_NAME.md` paths with the new typed paths (`docs/spec/`, `docs/guides/`, `work/initiatives/`). The doc content was migrated in prior PRs — this branch cleans up the ~560 references scattered across the codebase.
 
-## Status: Ready to execute
+## Status: ~55% complete
 
 - **Branch:** `refactor/docs-ref-updates` (off `staging`)
-- **Staged:** `work/issues/wi.refs-sweep.md` — the full work item with instructions
-- **No commits yet on this branch**
+- **Worktree:** `/Users/derek/dev/cogni-template-refs-sweep` — use this, another dev works in the main tree
+- **15 commits** on branch (15 high-ref-count docs done, ~340 refs fixed)
+- **~220 stale refs remaining** across ~50 docs
+- **Tracker Refs column not yet updated** — needs `[x]` for all completed docs
 
-## What to do
+## What to Do
 
-**Read `work/issues/wi.refs-sweep.md` first** — it contains everything:
+**Read `work/issues/wi.refs-sweep.md` § "Battle-Tested Process"** — it has the exact per-doc workflow with sed commands, 9 invariants, and gotchas learned from the first 15 migrations.
 
-1. A **mapping table** of old → new paths (top 30 by ref count)
-2. **73 ready-to-run sed commands** sorted by ref count (highest first)
-3. A **per-doc workflow**: dry-run grep → sed replace → verify grep
-4. An **exclusion list** of 10 docs needing manual review (obsolete/roadmap-only)
-5. **Safety rules** (preserve `> Source:` attribution lines, skip build artifacts, one phase per commit)
-6. A **verification command** that should return zero when done
+### Remaining mechanical docs (~35 docs, ~150 refs)
 
-### Recommended commit strategy
+Sorted by ref count — these follow the standard process:
 
-The issue suggests phasing by file type (AGENTS.md → .ts → .md → config). But since the sed commands are mechanical and per-doc, you could also:
+| Doc | New Path | Refs |
+|-----|----------|------|
+| STYLE.md | docs/spec/style.md | 10 |
+| OBSERVABILITY.md | docs/spec/observability.md | 9 |
+| FEATURE_DEVELOPMENT_GUIDE.md | docs/guides/feature-development.md | 9 |
+| AUTHENTICATION.md | docs/spec/authentication.md | 9 |
+| TEMPORAL_PATTERNS.md | docs/spec/temporal-patterns.md | 8 |
+| LANGGRAPH_AI.md | docs/spec/langgraph-patterns.md | 7 |
+| LANGGRAPH_SERVER.md | docs/spec/langgraph-server.md | 6 |
+| AI_SETUP_SPEC.md | docs/spec/ai-setup.md | 6 |
+| TESTING.md | docs/guides/testing.md | 5 |
+| SYSTEM_TEST_ARCHITECTURE.md | docs/spec/system-test-architecture.md | 5 |
+| NODE_VS_OPERATOR_CONTRACT.md | docs/spec/node-operator-contract.md | 5 |
+| ENVIRONMENTS.md | docs/spec/environments.md | 5 |
+| + ~23 more with 1-3 refs each | see wi.refs-sweep.md lines 160-204 | ~50 |
 
-- Run ALL 73 sed commands in one pass across all file types
-- Verify with the grep command
-- Handle the 10 manual exclusions separately
-- Commit per logical batch (your call on granularity)
+### Manual exclusions (~70 refs, need judgment)
+
+| Doc | Issue | Refs |
+|-----|-------|------|
+| PAYMENTS_FRONTEND_DESIGN.md | Obsolete — remove links or redirect to payments-design spec | 17 |
+| DEPAY_PAYMENTS.md | Archived — remove links or redirect to docs/archive/ | 12 |
+| CHAIN_DEPLOYMENT_TECH_DEBT.md | Roadmap → `work/initiatives/ini.chain-deployment-refactor.md` | 8 |
+| REPO_STATE.md | Snapshot → `docs/research/REPO_STATE.md` | 8 |
+| LINTING_RULES.md | Snapshot → `docs/research/linting-rules.md` | 7 |
+| SERVICES_MIGRATION.md | Roadmap → `work/initiatives/ini.cicd-services-gitops.md` | 3 |
+| + 4 more with ~1 ref each | see exclusion table in wi.refs-sweep.md | ~4 |
+
+### Final steps after all docs
+
+1. Mark `[x]` in Refs column of `wi.docs-migration-tracker.md` for all completed docs
+2. Run `pnpm check:docs` — must pass
+3. Run validation grep (see wi.refs-sweep.md § Validation) — zero actionable results
+
+## Completed Docs (15)
+
+ARCHITECTURE, UI_IMPLEMENTATION_GUIDE, NODE_FORMATION_SPEC, SCHEDULER_SPEC, PAYMENTS_DESIGN, ACTIVITY_METRICS, ONCHAIN_READERS, DATABASE_RLS_SPEC, SANDBOXED_AGENTS, SECURITY_AUTH_SPEC, PACKAGES_ARCHITECTURE, COGNI_BRAIN_SPEC, GRAPH_EXECUTION, CHAIN_CONFIG, TOOL_USE_SPEC
 
 ## Key Files
 
-| File                                       | Role                                                                       |
-| ------------------------------------------ | -------------------------------------------------------------------------- |
-| `work/issues/wi.refs-sweep.md`             | **The work item** — full instructions, sed commands, exclusion list        |
-| `work/issues/wi.docs-migration-tracker.md` | Source of truth for all old → new mappings (Refs column tracks completion) |
-| `docs/spec/SPEC_INDEX.md`                  | Index of all migrated specs                                                |
+| File | Role |
+|------|------|
+| `work/issues/wi.refs-sweep.md` | **The work item** — full process, sed commands, invariants, exclusion list |
+| `work/issues/wi.docs-migration-tracker.md` | Source of truth — old→new mappings, Refs column tracks completion |
+| `docs/spec/SPEC_INDEX.md` | Index of all migrated specs |
 
-## Context
+## Critical Invariants
 
-- 97 legacy docs were migrated from `docs/*.md` to `docs/spec/`, `docs/guides/`, `docs/research/`, and `work/initiatives/` across PRs #329-#341
-- The migration tracker (`wi.docs-migration-tracker.md`) has a "Refs" column — currently `[ ]` for ~93 docs
-- The sed commands in `wi.refs-sweep.md` handle the straightforward replacements (~490 refs)
-- The remaining ~70 refs are in the "exclusion list" (obsolete docs, roadmap-only redirects) and need manual judgment
-- `pnpm check:docs` must pass after every commit
-- `> Source:` lines in initiatives are provenance records — do NOT update these
+- **ONE_COMMIT_PER_DOC** — each doc gets its own commit
+- **PRESERVE_SOURCE_LINES** — `> Source: docs/OLD.md` in initiatives = provenance, don't touch
+- **FIX_LINK_TITLES** — `[OLD_NAME.md]` → `[Human Readable Title]`
+- **FIX_INTERNAL_REFS** — bare `(OLD.md)` refs inside docs/spec/ and docs/archive/ need separate sed passes
+- **LOWERCASE_COMMIT_SUBJECT** — commitlint rejects uppercase in subject
+- **USE_WORKTREE** — work in `/Users/derek/dev/cogni-template-refs-sweep`, another dev uses the main tree
