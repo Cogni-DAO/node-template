@@ -8,7 +8,7 @@
  * Invariants: All classes use semantic tokens (no raw colors/spacing); follows mobile-first responsive patterns.
  * Side-effects: none
  * Notes: Token compliance enforced by ESLint no-raw-colors + CI ripgrep checks.
- * Links: docs/spec/ui-implementation.md, docs/PAYMENTS_FRONTEND_DESIGN.md
+ * Links: docs/spec/ui-implementation.md, docs/spec/payments-design.md
  * @public
  */
 
