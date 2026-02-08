@@ -15,7 +15,7 @@ labels: [sandbox, openclaw, ai-agents]
 
 # Sandboxed Agents — OpenClaw Integration, Git Relay & Dashboard
 
-> Source: docs/OPENCLAW_SANDBOX_CONTROLS.md (roadmap content extracted during docs migration)
+> Source: docs/spec/openclaw-sandbox-controls.md (roadmap content extracted during docs migration)
 
 ## Goal
 
