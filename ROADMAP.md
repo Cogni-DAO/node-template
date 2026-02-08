@@ -107,7 +107,7 @@ Lock current hex architecture. Document what exists. All code is Node-owned.
 - Establish eval CI gate
 - Add dependency-cruiser rule: Next.js (`src/**`) cannot import `packages/langgraph-graphs/`
 
-→ See: [AI Setup Spec](docs/AI_SETUP_SPEC.md), [LangGraph Server](docs/spec/langgraph-server.md)
+→ See: [AI Setup Spec](docs/spec/ai-setup.md), [LangGraph Server](docs/spec/langgraph-server.md)
 
 ### Phase 2: Operator Services Scaffold
 
@@ -176,7 +176,7 @@ Requirements:
 | [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md) | Boundaries, invariants, boot seams |
 | [MVP Deliverables](docs/MVP_DELIVERABLES.md)                   | Scope lock, success criteria       |
 | [Node Formation Spec](docs/spec/node-formation.md)             | DAO formation tooling (Phase 0)    |
-| [AI Setup Spec](docs/AI_SETUP_SPEC.md)                         | AI P0/P1/P2 checklists, invariants |
+| [AI Setup Spec](docs/spec/ai-setup.md)                         | AI P0/P1/P2 checklists, invariants |
 | [LangGraph AI](docs/spec/langgraph-patterns.md)                           | How to create a graph in a feature |
 | [AI Architecture & Evals](docs/AI_EVALS.md)                    | LangGraph, Langfuse, eval gates    |
 | [Services Migration Guide](docs/SERVICES_MIGRATION.md)         | Implementation checklist           |

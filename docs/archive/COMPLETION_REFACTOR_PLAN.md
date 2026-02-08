@@ -509,7 +509,7 @@ Per `FEATURE_DEVELOPMENT_GUIDE.md`, feature services export `execute`. The new m
 
 ## Related Documents
 
-- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) - P1 invariants
+- [AI Setup](../spec/ai-setup.md) - P1 invariants
 - [FIX_AI_STREAMING_PIPELINE.md](FIX_AI_STREAMING_PIPELINE.md) - Original refactor recommendation
 - [LangGraph Patterns](../spec/langgraph-patterns.md) - Graph architecture
 - [Architecture](../spec/architecture.md) - Hexagonal layers
