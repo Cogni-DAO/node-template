@@ -10,7 +10,7 @@
  * - UNIQUE(schedule_id, scheduled_for) prevents duplicate runs per slot
  * - withTenantScope called on every method (uniform invariant, no-op on serviceDb)
  * Side-effects: IO (database operations)
- * Links: ports/scheduling/schedule-run.port.ts, docs/SCHEDULER_SPEC.md
+ * Links: ports/scheduling/schedule-run.port.ts, docs/spec/scheduler.md
  * @public
  */
 

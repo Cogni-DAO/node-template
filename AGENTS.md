@@ -48,16 +48,16 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 - [Documentation System Guide](docs/README.md) — How to navigate and create docs
 - [Work Management Guide](work/README.md) — Projects, issues, and reviews
-- [Docs Organization Plan](docs/DOCS_ORGANIZATION_PLAN.md) — Full system design
+- [Docs Organization Plan](docs/archive/DOCS_ORGANIZATION_PLAN.md) — Full system design
 - [Spec Index](docs/reference/SPEC_INDEX.md) — Index of all specifications
 
 ### Core Architecture
 
 - [Technical Roadmap](ROADMAP.md)
-- [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md)
-- [MVP Deliverables](docs/MVP_DELIVERABLES.md)
+- [Node vs Operator Contract](docs/spec/node-operator-contract.md)
+- [MVP Deliverables](docs/archive/MVP_DELIVERABLES.md)
 - [Node Formation Spec](docs/spec/node-formation.md)
-- [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
+- [Chain Deployment Tech Debt](work/initiatives/ini.chain-deployment-refactor.md)
 - [Architecture](docs/spec/architecture.md)
 - [Authorization (RBAC/ReBAC)](docs/spec/rbac.md)
 - [Tenant Connections](docs/spec/tenant-connections.md)
@@ -68,7 +68,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 - [AI Setup Spec](docs/spec/ai-setup.md)
 - [Prompt Registry Spec](docs/spec/prompt-registry.md)
-- [Tools Authoring](docs/TOOLS_AUTHORING.md)
+- [Tools Authoring](docs/guides/tools-authoring.md)
 - [Graph Execution](docs/spec/graph-execution.md)
 - [LangGraph Server](docs/spec/langgraph-server.md)
 - [LangGraph Patterns](docs/spec/langgraph-patterns.md)
@@ -76,17 +76,17 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [n8n Adapter](docs/spec/n8n-adapter.md)
 - [OpenClaw Sandbox Integration](docs/spec/openclaw-sandbox-spec.md)
 - [OpenClaw Sandbox Controls](docs/spec/openclaw-sandbox-controls.md)
-- [AI Evals](docs/AI_EVALS.md)
+- [AI Evals](docs/spec/ai-evals.md)
 
 ### Development
 
-- [Developer Setup](docs/SETUP.md)
-- [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
+- [Developer Setup](docs/guides/developer-setup.md)
+- [Environment & Stack Deployment Modes](docs/spec/environments.md)
 - [Database & Migration Architecture](docs/spec/databases.md)
-- [Database RLS Spec](docs/DATABASE_RLS_SPEC.md)
-- [Testing Strategy](docs/TESTING.md)
-- [Feature Development Guide](docs/FEATURE_DEVELOPMENT_GUIDE.md)
-- [UI Implementation Guide](docs/UI_IMPLEMENTATION_GUIDE.md)
+- [Database RLS Spec](docs/spec/database-rls.md)
+- [Testing Strategy](docs/guides/testing.md)
+- [Feature Development Guide](docs/guides/feature-development.md)
+- [UI Implementation Guide](docs/spec/ui-implementation.md)
 - [Style & Lint Rules](docs/spec/style.md)
 
 ### Operations

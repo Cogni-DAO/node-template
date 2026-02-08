@@ -15,7 +15,7 @@ Unit tests for shared layer modules, ensuring validation and type safety across 
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [Architecture](../../../docs/ARCHITECTURE.md)
+- [Architecture](../../../docs/spec/architecture.md)
 - [Tests AGENTS.md](../../AGENTS.md)
 
 ## Boundaries

@@ -473,7 +473,7 @@ packages/langgraph-server/                           ← Service that imports gr
 ## Non-Goals
 
 - Graph patterns and package structure — see [LangGraph Patterns spec](./langgraph-patterns.md)
-- Executor-agnostic billing and tracking — see [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
+- Executor-agnostic billing and tracking — see [Graph Execution](graph-execution.md)
 - Step-by-step setup instructions — see [LangGraph Server Setup guide](../guides/langgraph-server.md)
 
 ## Open Questions
@@ -484,7 +484,7 @@ _(none)_
 
 - [LangGraph Patterns spec](./langgraph-patterns.md) — Package structure, InProc execution, anti-patterns
 - [LangGraph Server Setup guide](../guides/langgraph-server.md) — Dev, container, and hosted setup steps
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — Billing idempotency, pump+fanout
+- [Graph Execution](graph-execution.md) — Billing idempotency, pump+fanout
 - [Usage History spec](./usage-history.md) — Artifact caching (executor-agnostic)
 - [AI Setup spec](./ai-setup.md) — Correlation IDs, telemetry
 - [External Executor Billing spec](./external-executor-billing.md) — Reconciliation pattern

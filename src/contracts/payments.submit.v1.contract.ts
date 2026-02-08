@@ -8,7 +8,7 @@
  * Invariants: txHash must be valid 32-byte hex string; idempotent on same hash for same attempt.
  * Side-effects: none
  * Notes: Status enum imported from /types (canonical source).
- * Links: docs/PAYMENTS_DESIGN.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

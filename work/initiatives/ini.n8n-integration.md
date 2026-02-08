@@ -15,7 +15,7 @@ labels: [ai-graphs, billing]
 
 # n8n Workflow Execution Adapter
 
-> Source: docs/N8N_ADAPTER_SPEC.md — Spec: [n8n-adapter.md](../../docs/spec/n8n-adapter.md)
+> Source: docs/spec/n8n-adapter.md — Spec: [n8n-adapter.md](../../docs/spec/n8n-adapter.md)
 
 ## Goal
 
@@ -78,4 +78,4 @@ When a developer chooses to implement their agent/workflow in n8n, this adapter 
 
 ## Design Notes
 
-Content extracted from `docs/N8N_ADAPTER_SPEC.md` during docs migration. All design content (invariants, schemas, flow diagrams, TypeScript interfaces) preserved in the spec. Implementation checklists routed here.
+Content extracted from `docs/spec/n8n-adapter.md` during docs migration. All design content (invariants, schemas, flow diagrams, TypeScript interfaces) preserved in the spec. Implementation checklists routed here.

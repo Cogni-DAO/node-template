@@ -237,6 +237,6 @@ _(none)_
 ## Related
 
 - [Architecture](./architecture.md) — Hexagonal layers and boundaries
-- [Node Formation Spec](../NODE_FORMATION_SPEC.md) — Uses `@cogni/aragon-osx`
+- [Node Formation Spec](node-formation.md) — Uses `@cogni/aragon-osx`
 - [Services Architecture](./services-architecture.md) — Deployable service contracts
 - [Node vs Operator Contract](./node-operator-contract.md) — Import boundary context

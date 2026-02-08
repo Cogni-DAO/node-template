@@ -14,10 +14,10 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
 
 ## Pointers
 
-- [LangGraph AI Guide](../../docs/LANGGRAPH_AI.md)
-- [Graph Execution](../../docs/GRAPH_EXECUTION.md)
-- [Tool Use Spec](../../docs/TOOL_USE_SPEC.md)
-- [Packages Architecture](../../docs/PACKAGES_ARCHITECTURE.md)
+- [LangGraph AI Guide](../../docs/spec/langgraph-patterns.md)
+- [Graph Execution](../../docs/spec/graph-execution.md)
+- [Tool Use Spec](../../docs/spec/tool-use.md)
+- [Packages Architecture](../../docs/spec/packages-architecture.md)
 
 ## Boundaries
 

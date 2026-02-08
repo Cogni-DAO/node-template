@@ -16,7 +16,7 @@ Integration tests for RipgrepAdapter and GitLsFilesAdapter against real temp git
 
 - [RipgrepAdapter source](../../../src/adapters/server/repo/ripgrep.adapter.ts)
 - [RepoCapability interface](../../../packages/ai-tools/src/capabilities/repo.ts)
-- [COGNI_BRAIN_SPEC](../../../docs/COGNI_BRAIN_SPEC.md)
+- [COGNI_BRAIN_SPEC](../../../docs/spec/cogni-brain.md)
 
 ## Boundaries
 

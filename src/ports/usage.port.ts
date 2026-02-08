@@ -12,7 +12,7 @@
  * - P1: LiteLLM is the single usage log source. No fallback, no telemetrySource field.
  * - Spend = our billing (charged_credits), usage logs = LiteLLM (model/tokens/timestamps).
  * Side-effects: none
- * Links: [LiteLlmActivityUsageAdapter](../adapters/server/ai/litellm.activity-usage.adapter.ts), docs/ACTIVITY_METRICS.md
+ * Links: [LiteLlmActivityUsageAdapter](../adapters/server/ai/litellm.activity-usage.adapter.ts), docs/spec/activity-metrics.md
  * Port naming: ActivityUsagePort is for Activity dashboard, distinct from observability/metrics telemetry.
  * @public
  */

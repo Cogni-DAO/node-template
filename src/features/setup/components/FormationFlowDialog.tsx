@@ -7,7 +7,7 @@
  * Scope: Presentational dialog component. Mirrors PaymentFlowDialog pattern. Does not contain business logic or state management.
  * Invariants: Dismissible when in-flight (no txHash) or terminal; parent handles reset.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

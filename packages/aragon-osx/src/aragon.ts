@@ -7,7 +7,7 @@
  * Scope: Pure constants only; does not make RPC calls or access env.
  * Invariants: Addresses must match the chain deployment.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 
@@ -24,7 +24,7 @@ export const SUPPORTED_CHAIN_IDS = [8453, 11155111] as const;
 export type SupportedChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
 
 /**
- * Hardcoded addresses from docs/NODE_FORMATION_SPEC.md (Appendix).
+ * Hardcoded addresses from docs/spec/node-formation.md (Appendix).
  * OSx v1.4.0 deployments.
  */
 export const ARAGON_OSX_ADDRESSES: Record<

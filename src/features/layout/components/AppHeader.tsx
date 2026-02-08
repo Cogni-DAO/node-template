@@ -10,7 +10,7 @@
  * Notes: Desktop wallet in [data-wallet-slot="desktop"] for CSS (see tailwind.css).
  *        Mobile: px-4 + logo pl-4; logo 24px, text-xl; MobileNav has GitHub + theme.
  *        Lives in features/layout as app-shell composition that knows about treasury, wallet, etc.
- * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx, src/styles/tailwind.css, docs/ONCHAIN_READERS.md
+ * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx, src/styles/tailwind.css, docs/spec/onchain-readers.md
  * @public
  */
 

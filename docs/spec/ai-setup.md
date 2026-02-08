@@ -84,7 +84,7 @@ tags: [ai]
 | `metadata` | `{toolCallId, effect, durationMs, policyDecision}`                   |
 | `level`    | `DEFAULT` / `WARNING` (deny) / `ERROR`                               |
 
-**See:** [OBSERVABILITY.md](OBSERVABILITY.md#langfuse-integration-ai-trace-visibility) for full implementation checklist
+**See:** [Observability](OBSERVABILITY.md#langfuse-integration-ai-trace-visibility) for full implementation checklist
 
 **ID Categories:**
 
@@ -134,7 +134,7 @@ tags: [ai]
 
 ### P1: LangGraph Server Integration
 
-Deploy LangGraph Server as external runtime; implement adapter; preserve unified billing. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for full spec.
+Deploy LangGraph Server as external runtime; implement adapter; preserve unified billing. See [LangGraph Server](langgraph-server.md) for full spec.
 
 **Runtime architecture:**
 
@@ -362,7 +362,7 @@ Build eval harness to validate graph outputs against golden fixtures.
 | Tool contracts + impls | `src/features/ai/tools/`   | Pure functions, receive ports via DI      |
 | Route handlers         | `src/app/`                 | Thin entrypoints calling feature services |
 
-**Graphs start in feature slices.** Packages are NOT required for LangGraph. See [LANGGRAPH_AI.md](LANGGRAPH_AI.md).
+**Graphs start in feature slices.** Packages are NOT required for LangGraph. See [LangGraph Patterns](langgraph-patterns.md).
 
 ### 2. Package Warrant Principles
 
@@ -466,13 +466,13 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 
 ## Related Docs
 
-- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) - External runtime MVP, adapter implementation
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - Graph patterns, anti-patterns
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) - Billing idempotency, pump+fanout pattern
+- [LangGraph Server](langgraph-server.md) - External runtime MVP, adapter implementation
+- [LangGraph Patterns](langgraph-patterns.md) - Graph patterns, anti-patterns
+- [Graph Execution](graph-execution.md) - Billing idempotency, pump+fanout pattern
 - [USAGE_HISTORY.md](USAGE_HISTORY.md) - Artifact caching (executor-agnostic)
-- [AI_EVALS.md](AI_EVALS.md) - Eval harness structure, CI gates
-- [PROMPT_REGISTRY_SPEC.md](PROMPT_REGISTRY_SPEC.md) - Cloud-based prompt management (Langfuse + in-repo fallback)
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal layers
+- [AI Evals](ai-evals.md) - Eval harness structure, CI gates
+- [Prompt Registry](prompt-registry.md) - Cloud-based prompt management (Langfuse + in-repo fallback)
+- [Architecture](architecture.md) - Hexagonal layers
 
 ---
 

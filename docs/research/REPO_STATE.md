@@ -18,31 +18,31 @@ tags: [meta]
 
 **Related Documentation:**
 
-- [Architecture](./ARCHITECTURE.md) - Directory structure and file locations
+- [Architecture](../spec/architecture.md) - Directory structure and file locations
 - [Maximize OSS Tools](../../work/initiatives/ini.maximize-oss-tools.md) - P0 prerequisites (WAL-G, OpenFGA/OPA) before new feature work
-- [Accounts Design](./ACCOUNTS_DESIGN.md) - Identity & billing model
-- [Security & Auth Spec](./SECURITY_AUTH_SPEC.md) - SIWE authentication architecture
-- [Payments Design](./PAYMENTS_DESIGN.md) - Native USDC payment architecture
-- [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
-- [Activity Metrics](./ACTIVITY_METRICS.md) - Usage dashboard and charge receipt design
-- [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
-- [Chain Configuration](./CHAIN_CONFIG.md) - Policy for binding Web2 code to DAO-approved actions
-- [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
+- [Accounts Design](../spec/accounts-design.md) - Identity & billing model
+- [Security & Auth Spec](../spec/security-auth.md) - SIWE authentication architecture
+- [Payments Design](../spec/payments-design.md) - Native USDC payment architecture
+- [Billing Evolution](../spec/billing-evolution.md) - Dual-cost accounting implementation
+- [Activity Metrics](../spec/activity-metrics.md) - Usage dashboard and charge receipt design
+- [On-Chain Readers](../spec/onchain-readers.md) - Treasury snapshots and token ownership intelligence (v2/v3)
+- [Chain Configuration](../spec/chain-config.md) - Policy for binding Web2 code to DAO-approved actions
+- [Observability](../spec/observability.md) - Logging and monitoring infrastructure
 - [AI Governance Data](./AI_GOVERNANCE_DATA.md) - Signal ingest, brief generation, incident-gated governance
 
 ### Spec Implementation Priority
 
-| Priority | Spec                                                   | Status        | Enables                                                    |
-| -------- | ------------------------------------------------------ | ------------- | ---------------------------------------------------------- |
-| **1**    | [Scheduler Spec](./SCHEDULER_SPEC.md)                  | 🔄 P1 Pending | Scheduled graph execution, Temporal migration              |
-| **2**    | [Graph Execution](./GRAPH_EXECUTION.md)                | 🔄 P1 Pending | Core execution envelope, billing, compiled exports         |
-| **3**    | [System Tenant Design](./SYSTEM_TENANT_DESIGN.md)      | 📋 Draft      | Governance loops, PolicyResolverPort, multi-tenancy        |
-| **4**    | [Tool Use Spec](./TOOL_USE_SPEC.md)                    | ✅ P0 Done    | Agentic loop, policy enforcement, local tools              |
-| **5**    | [Tenant Connections](./TENANT_CONNECTIONS_SPEC.md)     | 📋 Draft      | Authenticated tools, OAuth, connectionId broker            |
-| **6**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
-| **7**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)          | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
-| **8**    | [LangGraph Server](./LANGGRAPH_SERVER.md)              | 📋 Contract   | Server deployment mode (P1 for scale)                      |
-| **9**    | [Accounts Design](./ACCOUNTS_DESIGN.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
+| Priority | Spec                                                         | Status        | Enables                                                    |
+| -------- | ------------------------------------------------------------ | ------------- | ---------------------------------------------------------- |
+| **1**    | [Scheduler Spec](../spec/scheduler.md)                       | 🔄 P1 Pending | Scheduled graph execution, Temporal migration              |
+| **2**    | [Graph Execution](../spec/graph-execution.md)                | 🔄 P1 Pending | Core execution envelope, billing, compiled exports         |
+| **3**    | [System Tenant Design](../spec/system-tenant.md)             | 📋 Draft      | Governance loops, PolicyResolverPort, multi-tenancy        |
+| **4**    | [Tool Use Spec](../spec/tool-use.md)                         | ✅ P0 Done    | Agentic loop, policy enforcement, local tools              |
+| **5**    | [Tenant Connections](../spec/tenant-connections.md)          | 📋 Draft      | Authenticated tools, OAuth, connectionId broker            |
+| **6**    | [Human-in-the-Loop](../spec/human-in-the-loop.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
+| **7**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)                | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
+| **8**    | [LangGraph Server](./LANGGRAPH_SERVER.md)                    | 📋 Contract   | Server deployment mode (P1 for scale)                      |
+| **9**    | [Accounts Design](../spec/accounts-design.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
 
 **Legend:** 📋 Draft/Contract | 🔄 In Progress | ✅ Complete
 
@@ -69,13 +69,13 @@ The system accepts USDC payments with real EVM RPC verification, tracks LLM cost
 
 Auth.js + SIWE wallet-first authentication with session management. Sessions resolve to billing accounts.
 
-**Reference:** [SECURITY_AUTH_SPEC.md](./SECURITY_AUTH_SPEC.md)
+**Reference:** [Security Auth Spec](../spec/security-auth.md)
 
 ### 2. Wallet Integration ✅
 
 wagmi + RainbowKit client-side wallet connection. Chain locked to Base mainnet (8453).
 
-**Reference:** [INTEGRATION_WALLETS_CREDITS.md](./INTEGRATION_WALLETS_CREDITS.md)
+**Reference:** [Wallet Auth Setup](../guides/wallet-auth-setup.md)
 
 ### 3. Native USDC Payments ✅
 
@@ -88,7 +88,7 @@ Intent-based payment flow: create intent → user transfers USDC → submit txHa
 
 **Security Note:**: EvmRpcOnChainVerifierAdapter implemented with viem RPC verification. Validates transactions against canonical config (chain, recipient, token, amount).\*\*
 
-**Reference:** [PAYMENTS_DESIGN.md](./PAYMENTS_DESIGN.md)
+**Reference:** [Payments Design](../spec/payments-design.md)
 
 ### 4. Database Schema (Billing Layer) ✅
 
@@ -96,7 +96,7 @@ Tables: `users`, `billing_accounts`, `virtual_keys`, `credit_ledger`, `charge_re
 
 **Architecture:** Service-auth model where `virtual_keys` acts as FK/scope handle for billing attribution. All outbound LLM calls use `LITELLM_MASTER_KEY` from env.
 
-**Reference:** [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md)
+**Reference:** [Accounts Design](../spec/accounts-design.md), [Billing Evolution](../spec/billing-evolution.md)
 
 ### 5. Dual-Cost LLM Billing ✅
 
@@ -106,7 +106,7 @@ Provider cost tracking + user pricing with configurable profit margin (default 2
 - Cost header missing → graceful degradation (free response, logged for review)
 - Invariant: `user_price_credits >= provider_cost_credits` when billed
 
-**Reference:** [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md)
+**Reference:** [Billing Evolution](../spec/billing-evolution.md)
 
 ### 6. Credits Page UI ✅
 
@@ -126,7 +126,7 @@ Full usage tracking dashboard with LiteLLM integration.
 - USD cost display from charge receipts
 - Join key: `litellm_call_id` links telemetry to billing
 
-**Reference:** [ACTIVITY_METRICS.md](./ACTIVITY_METRICS.md)
+**Reference:** [Activity Metrics](../spec/activity-metrics.md)
 
 ### 9. Observability Infrastructure ✅
 
@@ -134,7 +134,7 @@ Pino structured logging → Alloy → local Loki (dev) or Grafana Cloud (preview
 
 Prometheus metrics export with HTTP and LLM instrumentation.
 
-**Reference:** [OBSERVABILITY.md](./OBSERVABILITY.md)
+**Reference:** [Observability](../spec/observability.md)
 
 ### 10. Generic Charge Ledger ✅
 
@@ -183,7 +183,7 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 - Add auth middleware: `/api/v1/*` accepts session OR `Authorization: Bearer <app_api_key>`
 - Update LLM port: resolve `{billing_account_id, app_api_key_id}` → mapped LiteLLM virtual key
 
-**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented), [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [SECURITY_AUTH_SPEC.md](./SECURITY_AUTH_SPEC.md)
+**Reference:** [Accounts API Endpoints](../spec/accounts-api-endpoints.md) - Full spec (not implemented), [Accounts Design](../spec/accounts-design.md), [Security Auth Spec](../spec/security-auth.md)
 
 ### 13. Post-MVP Security Hardening ⚠️
 
@@ -226,7 +226,7 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 
 **Payment Flow:** User creates intent → transfers USDC to DAO wallet → submits txHash → backend verifies (stubbed) → credits account
 
-**Reference:** [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md) - Credit Unit Standard
+**Reference:** [Billing Evolution](../spec/billing-evolution.md) - Credit Unit Standard
 
 ---
 

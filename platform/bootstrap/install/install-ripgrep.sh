@@ -5,7 +5,7 @@
 # Module: platform/bootstrap/install/install-ripgrep.sh
 # Purpose: Install ripgrep (rg) binary. Required by RipgrepAdapter for brain repo search.
 # Usage: bash platform/bootstrap/install/install-ripgrep.sh
-# Links: docs/COGNI_BRAIN_SPEC.md, src/adapters/server/repo/ripgrep.adapter.ts
+# Links: docs/spec/cogni-brain.md, src/adapters/server/repo/ripgrep.adapter.ts
 
 set -euo pipefail
 

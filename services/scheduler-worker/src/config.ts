@@ -11,7 +11,7 @@
  * - SCHEDULER_API_TOKEN required for internal API calls (treat as secret)
  * - Fails fast with clear errors on invalid config
  * Side-effects: Reads process.env
- * Links: services/scheduler-worker/Dockerfile, docs/SCHEDULER_SPEC.md
+ * Links: services/scheduler-worker/Dockerfile, docs/spec/scheduler.md
  * @internal
  */
 

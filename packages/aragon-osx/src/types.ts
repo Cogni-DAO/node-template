@@ -7,7 +7,7 @@
  * Scope: Type definitions only; does not contain runtime code.
  * Invariants: Types must be compatible with viem hex types.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

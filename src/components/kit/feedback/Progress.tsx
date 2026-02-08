@@ -8,7 +8,7 @@
  * Invariants: Forwards ref; accepts value 0-100; uses semantic tokens for colors.
  * Side-effects: none
  * Notes: Wraps Radix UI Progress primitive via shadcn for consistent kit API.
- * Links: docs/UI_IMPLEMENTATION_GUIDE.md
+ * Links: docs/spec/ui-implementation.md
  * @public
  */
 

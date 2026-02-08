@@ -66,4 +66,4 @@ pnpm test tests/integration/
 ## Notes
 
 - LLM adapter (FakeLlmAdapter) was removed — test stacks use real LiteLLM with mock-openai-api backend
-- See docs/SYSTEM_TEST_ARCHITECTURE.md for details
+- See docs/spec/system-test-architecture.md for details

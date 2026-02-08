@@ -7,7 +7,7 @@
  * Scope: Server component only; delegates all client-side behavior to DAOFormationPageClient. Does not perform data fetching or transaction logic.
  * Invariants: Requires authenticated session (wallet connected) via (app) route group.
  * Side-effects: none (server render only)
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

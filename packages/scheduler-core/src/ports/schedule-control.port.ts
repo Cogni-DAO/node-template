@@ -12,7 +12,7 @@
  *   - deleteSchedule is idempotent (no-op if not found)
  *   - pause/resume are idempotent (no-op if already in target state)
  * Side-effects: none (interface definition only)
- * Links: docs/SCHEDULER_SPEC.md, docs/TEMPORAL_PATTERNS.md
+ * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md
  * @public
  */
 

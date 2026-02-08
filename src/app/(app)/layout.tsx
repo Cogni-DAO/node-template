@@ -8,7 +8,7 @@
  * Invariants: Requires valid session to render children; redirects unauthenticated to home; no auto sign-out.
  * Side-effects: IO (NextAuth session retrieval via client hook, Next.js navigation)
  * Notes: All pages under (app)/* require authentication. Auth session is source of truth.
- * Links: docs/SECURITY_AUTH_SPEC.md
+ * Links: docs/spec/security-auth.md
  * @public
  */
 

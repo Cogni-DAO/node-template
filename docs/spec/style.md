@@ -18,7 +18,7 @@ Code style principles for Cogni-Template. Enforcement in config files (`eslint.c
 
 ## Principles
 
-- **Hexagonal Architecture**: Dependencies point inward. See [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Hexagonal Architecture**: Dependencies point inward. See [Architecture](architecture.md).
 - **Type Safety First**: Strict TypeScript, no `any`, explicit return types.
 - **Code as Documentation**: File headers explain contracts.
 
@@ -76,7 +76,7 @@ Use these templates for different file types:
 - [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)
 - [google/gts](https://github.com/google/gts)
 - [TSDoc](https://tsdoc.org/)
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Layer boundaries
+- [Architecture](architecture.md) - Layer boundaries
 - Component tracking managed via code analysis tools
 - `eslint.config.mjs` - Linting rules
 - `tsconfig.base.json` - Shared TypeScript options + path aliases

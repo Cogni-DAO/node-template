@@ -18,7 +18,7 @@ labels:
 
 # Unified Graph Launch — Temporal Execution Path
 
-> Source: docs/UNIFIED_GRAPH_LAUNCH_SPEC.md
+> Source: docs/spec/unified-graph-launch.md
 
 ## Goal
 

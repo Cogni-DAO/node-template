@@ -14,7 +14,7 @@ REST API routes for schedule CRUD operations. Auth-protected endpoints for creat
 
 ## Pointers
 
-- [SCHEDULER_SPEC.md](../../../../../docs/SCHEDULER_SPEC.md)
+- [Scheduler Spec](../../../../../docs/spec/scheduler.md)
 - [Schedule Contracts](../../../../contracts/)
 
 ## Boundaries

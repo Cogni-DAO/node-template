@@ -9,7 +9,7 @@
  * - Only worker services, scheduler activities, and bootstrap/container may import this
  * - User-facing routes import from @cogni/ids (root) which does NOT export SYSTEM_ACTOR
  * Side-effects: none
- * Links: docs/DATABASE_RLS_SPEC.md
+ * Links: docs/spec/database-rls.md
  * @public
  */
 

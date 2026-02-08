@@ -7,7 +7,7 @@
  * Scope: Re-exports only; does not contain logic.
  * Invariants: none
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

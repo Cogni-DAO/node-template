@@ -10,7 +10,7 @@
  *   - createSchedule creates grant + schedule + enqueues job atomically
  *   - Disabled schedules have nextRunAt = null
  * Side-effects: IO (database, job queue)
- * Links: /api/v1/schedules, docs/SCHEDULER_SPEC.md
+ * Links: /api/v1/schedules, docs/spec/scheduler.md
  * @public
  */
 

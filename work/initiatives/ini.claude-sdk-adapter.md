@@ -21,7 +21,7 @@ Wrap the Claude Agent SDK as a `GraphExecutorPort` implementation so developers 
 
 ## Roadmap
 
-> Source: `docs/CLAUDE_SDK_ADAPTER_SPEC.md` — Spec: [claude-sdk-adapter.md](../../docs/spec/claude-sdk-adapter.md) (draft)
+> Source: `docs/spec/claude-sdk-adapter.md` — Spec: [claude-sdk-adapter.md](../../docs/spec/claude-sdk-adapter.md) (draft)
 
 ### Crawl (P0) — Basic Execution
 

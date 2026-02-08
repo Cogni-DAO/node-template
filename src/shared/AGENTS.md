@@ -15,7 +15,7 @@ Low-level building blocks used across the repo. Primitives, DTO mappers, pure ut
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
-- [Architecture](../../docs/ARCHITECTURE.md)
+- [Architecture](../../docs/spec/architecture.md)
 - **Related:** [contracts](../contracts/) (external IO specs), [types](../types/) (compile-time only)
 
 ## Boundaries

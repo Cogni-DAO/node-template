@@ -14,9 +14,9 @@ Database client factory and Drizzle adapter implementations for scheduling domai
 
 ## Pointers
 
-- [SCHEDULER_SPEC.md](../../docs/SCHEDULER_SPEC.md): Scheduling architecture and invariants
-- [DATABASE_RLS_SPEC.md](../../docs/DATABASE_RLS_SPEC.md): RLS tenant isolation design
-- [PACKAGES_ARCHITECTURE.md](../../docs/PACKAGES_ARCHITECTURE.md): Package isolation boundaries
+- [Scheduler Spec](../../docs/spec/scheduler.md): Scheduling architecture and invariants
+- [Database RLS Spec](../../docs/spec/database-rls.md): RLS tenant isolation design
+- [Packages Architecture](../../docs/spec/packages-architecture.md): Package isolation boundaries
 - [scheduler-core](../scheduler-core): Port interfaces implemented by adapters
 
 ## Boundaries

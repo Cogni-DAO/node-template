@@ -17,7 +17,7 @@ Reusable kit wrappers for chat UI components with vendor isolation and compositi
 
 - [Parent: Kit Components](../AGENTS.md)
 - [Chat Feature](../../../features/ai/chat/AGENTS.md)
-- [UI Implementation Guide](../../../../docs/UI_IMPLEMENTATION_GUIDE.md)
+- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
 - **Related:** [../../vendor/assistant-ui/](../../vendor/assistant-ui/) (vendor primitives)
 
 ## Boundaries

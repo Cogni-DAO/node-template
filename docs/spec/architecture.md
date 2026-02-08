@@ -50,12 +50,12 @@ Every dependency points inward.
 
 - Hexagonal: [Alistair Cockburn's System Design](https://www.geeksforgeeks.org/system-design/hexagonal-architecture-system-design/)
 - Infrastructure: [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md)
-- Chain Configuration: [CHAIN_CONFIG.md](CHAIN_CONFIG.md)
-- Accounts & Credits: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
-- API Endpoints: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
-- Wallet Integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
-- Billing Evolution: [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
-- Activity Metrics: [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md)
+- Chain Configuration: [Chain Config](chain-config.md)
+- Accounts & Credits: [Accounts Design](accounts-design.md)
+- API Endpoints: [Accounts API Endpoints](accounts-api-endpoints.md)
+- Wallet Integration: [Wallet Auth Setup](../guides/wallet-auth-setup.md)
+- Billing Evolution: [Billing Evolution](billing-evolution.md)
+- Activity Metrics: [Activity Metrics](activity-metrics.md)
 
 ### Vertical slicing
 
@@ -95,7 +95,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **tests/** → Unit (core/features with mocked ports), integration (adapters), contract (port compliance), setup.
 - **e2e/** → Playwright API/UI specs.
 - **scripts/** → Migrations, seeds, generators.
-- **packages/** → Pure libraries (no `src/` imports, no process lifecycle). See [Packages Architecture](PACKAGES_ARCHITECTURE.md).
+- **packages/** → Pure libraries (no `src/` imports, no process lifecycle). See [Packages Architecture](packages-architecture.md).
   - `ai-core/` → Executor-agnostic AI primitives (AiEvent, UsageFact, tool schemas)
   - `langgraph-server/` → LangGraph.js service code (HTTP API, event normalization)
   - `langgraph-graphs/` → Feature-sliced graph definitions (Next.js must NOT import)
@@ -489,7 +489,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 5. **Telemetry** to Langfuse and logs to Pino.
 6. **Balance view** in protected UI.
 
-Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for graph architecture.
+Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [Graph Execution](graph-execution.md) for graph architecture.
 
 ---
 
@@ -539,23 +539,23 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](G
 ## Related Documentation
 
 - [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
-- [Graph Execution](GRAPH_EXECUTION.md) - GraphExecutorPort, billing idempotency, pump+fanout pattern
-- [AI Setup Spec](AI_SETUP_SPEC.md) - AI correlation IDs, telemetry invariants, P0/P1 checklists
-- [LangGraph Server](LANGGRAPH_SERVER.md) - External LangGraph Server runtime, adapter implementation
-- [LangGraph AI Guide](LANGGRAPH_AI.md) - Graph patterns and anti-patterns
-- [OpenClaw Sandbox Integration](OPENCLAW_SANDBOX_SPEC.md) - OpenClaw sandbox runtime, Docker volume socket bridge, billing attribution
-- [Tool Use Spec](TOOL_USE_SPEC.md) - Tool execution invariants, first tool checklist
-- [Authorization (RBAC/ReBAC)](RBAC_SPEC.md) - Actor/subject model, OpenFGA, dual-check for agent delegation
-- [Tenant Connections](TENANT_CONNECTIONS_SPEC.md) - Connection broker, credential faucet, grant intersection
-- [Packages Architecture](PACKAGES_ARCHITECTURE.md) - Internal packages, isolation boundaries, and CI/CD setup
-- [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
-- [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
-- [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
-- [Database RLS Spec](DATABASE_RLS_SPEC.md) - Row-Level Security design (not yet implemented)
-- [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches
-- [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines
-- [Model Selection](MODEL_SELECTION.md) - Dynamic model fetching from LiteLLM, validation, and UI integration
-- [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
+- [Graph Execution](graph-execution.md) - GraphExecutorPort, billing idempotency, pump+fanout pattern
+- [AI Setup Spec](ai-setup.md) - AI correlation IDs, telemetry invariants, P0/P1 checklists
+- [LangGraph Server](langgraph-server.md) - External LangGraph Server runtime, adapter implementation
+- [LangGraph AI Guide](langgraph-patterns.md) - Graph patterns and anti-patterns
+- [OpenClaw Sandbox Integration](openclaw-sandbox-spec.md) - OpenClaw sandbox runtime, Docker volume socket bridge, billing attribution
+- [Tool Use Spec](tool-use.md) - Tool execution invariants, first tool checklist
+- [Authorization (RBAC/ReBAC)](rbac.md) - Actor/subject model, OpenFGA, dual-check for agent delegation
+- [Tenant Connections](tenant-connections.md) - Connection broker, credential faucet, grant intersection
+- [Packages Architecture](packages-architecture.md) - Internal packages, isolation boundaries, and CI/CD setup
+- [Environment & Stack Deployment Modes](environments.md) - All 6 deployment modes, environment variables, and when to use each
+- [Observability](observability.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
+- [Database & Migration Architecture](databases.md) - Database organization, migration strategies, and URL construction
+- [Database RLS Spec](database-rls.md) - Row-Level Security design (not yet implemented)
+- [Testing Strategy](../guides/testing.md) - Environment-based test adapters and stack testing approaches
+- [Error Handling Architecture](error-handling.md) - Layered error translation patterns and implementation guidelines
+- [Model Selection](model-selection.md) - Dynamic model fetching from LiteLLM, validation, and UI integration
+- [CI/CD Pipeline Flow](ci-cd.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
-- [Build Architecture](BUILD_ARCHITECTURE.md) - Monorepo build order, Docker strategy, and workspace package handling
-- [Route Runtime Policy](RUNTIME_POLICY.md) - When to use Node.js vs Edge runtime in API routes
+- [Build Architecture](build-architecture.md) - Monorepo build order, Docker strategy, and workspace package handling
+- [Route Runtime Policy](runtime-policy.md) - When to use Node.js vs Edge runtime in API routes

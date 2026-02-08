@@ -14,7 +14,7 @@ tags: [web3, setup, dao]
 
 # Node Formation — DAO Setup Guide
 
-> Source: docs/NODE_FORMATION_SPEC.md
+> Source: docs/spec/node-formation.md
 
 ## When to Use This
 

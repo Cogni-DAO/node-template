@@ -7,7 +7,7 @@
  * Scope: Re-exports hooks and types for external consumers. Does not contain implementation logic.
  * Invariants: Only exports public API; internal modules remain private.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

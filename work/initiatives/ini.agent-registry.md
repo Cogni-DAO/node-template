@@ -136,7 +136,7 @@ Evolve the agent discovery pipeline from the current single in-proc LangGraph ca
 
 ## Design Notes
 
-Discovery track content extracted from original `docs/AGENT_DISCOVERY.md` (Phase 1-3 checklists + LangGraph Server Alignment Roadmap) during docs migration. Identity & Registration track content extracted from `docs/AGENT_REGISTRY_SPEC.md` (P0-P2 implementation checklists).
+Discovery track content extracted from original `docs/spec/agent-discovery.md` (Phase 1-3 checklists + LangGraph Server Alignment Roadmap) during docs migration. Identity & Registration track content extracted from `docs/AGENT_REGISTRY_SPEC.md` (P0-P2 implementation checklists).
 
 **P0 simplifications (current):**
 

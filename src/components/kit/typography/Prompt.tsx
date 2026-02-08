@@ -8,7 +8,7 @@
  * Invariants: Forwards all props except className to span element; maintains ref forwarding; blocks className prop.
  * Side-effects: none
  * Notes: Uses CVA factory from \@/styles/ui - no literal classes allowed.
- * Links: src/styles/ui.ts, docs/UI_IMPLEMENTATION_GUIDE.md
+ * Links: src/styles/ui.ts, docs/spec/ui-implementation.md
  * @public
  */
 

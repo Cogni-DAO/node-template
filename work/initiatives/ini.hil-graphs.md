@@ -15,7 +15,7 @@ labels: [ai-graphs, langgraph]
 
 # Human-in-the-Loop Graph Execution
 
-> Source: docs/HUMAN_IN_THE_LOOP.md
+> Source: docs/spec/human-in-the-loop.md
 
 ## Goal
 

@@ -8,7 +8,7 @@
  * Invariants: Billing account resolved from session; foreign key errors map to AUTH_USER_NOT_FOUND; delegates to feature service with correct payload.
  * Side-effects: none
  * Notes: Uses mocked AccountService, createContainer, and feature service.
- * Links: docs/DEPAY_PAYMENTS.md, src/app/_facades/payments/credits.server.ts
+ * Links: docs/spec/payments-design.md, src/app/_facades/payments/credits.server.ts
  * @public
  */
 

@@ -16,7 +16,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
-- [Architecture](../../docs/ARCHITECTURE.md)
+- [Architecture](../../docs/spec/architecture.md)
 
 ## Boundaries
 

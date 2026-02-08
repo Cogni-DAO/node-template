@@ -14,7 +14,7 @@
  * - Only edge code (HTTP handlers, env parsing, test fixtures) should call toUserId()
  * - No `as UserId` / `as ActorId` casts outside test fixtures — enforced by PR review
  * Side-effects: none
- * Links: docs/DATABASE_RLS_SPEC.md
+ * Links: docs/spec/database-rls.md
  * @public
  */
 

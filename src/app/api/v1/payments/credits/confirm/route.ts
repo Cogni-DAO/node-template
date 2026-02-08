@@ -8,7 +8,7 @@
  * Invariants: Billing account derived from session only; idempotent on clientPaymentId.
  * Side-effects: IO (writes credit ledger entries and updates billing balance via AccountService port).
  * Notes: Widget payments are frontend-only; no on-chain verification occurs here (OSS mode).
- * Links: docs/DEPAY_PAYMENTS.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

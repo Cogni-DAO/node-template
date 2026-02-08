@@ -8,7 +8,7 @@
  * Invariants: Returns null for unknown chains; reads explorer URLs from chain.ts CHAINS map.
  * Side-effects: none
  * Notes: All chain-specific config centralized in chain.ts; no parallel maps here.
- * Links: src/shared/web3/chain.ts, docs/PAYMENTS_DESIGN.md
+ * Links: src/shared/web3/chain.ts, docs/spec/payments-design.md
  * @public
  */
 

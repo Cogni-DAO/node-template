@@ -14,8 +14,8 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 
 ## Pointers
 
-- [Architecture](../../docs/ARCHITECTURE.md)
-- [UI Implementation Guide](../../docs/UI_IMPLEMENTATION_GUIDE.md)
+- [Architecture](../../docs/spec/architecture.md)
+- [UI Implementation Guide](../../docs/spec/ui-implementation.md)
 
 ## Boundaries
 
@@ -57,7 +57,7 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 
 ## Usage
 
-**IMPORTANT: If you are making any changes to files in this directory, you must read:** [`docs/UI_IMPLEMENTATION_GUIDE.md`](../../docs/UI_IMPLEMENTATION_GUIDE.md)
+**IMPORTANT: If you are making any changes to files in this directory, you must read:** [`docs/spec/ui-implementation.md`](../../docs/spec/ui-implementation.md)
 
 Minimal local commands:
 
@@ -110,4 +110,4 @@ src/components/
 
 - Promotion policy: colocate → second consumer → promote. Keep root lean.
 - Each file: short header with Purpose, Scope, Invariants. No inline commentary drift.
-- Implementation workflows live in `docs/UI_IMPLEMENTATION_GUIDE.md`.
+- Implementation workflows live in `docs/spec/ui-implementation.md`.

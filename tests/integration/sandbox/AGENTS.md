@@ -15,7 +15,7 @@ Integration tests for sandbox container execution. Proves network isolation, mou
 ## Pointers
 
 - [Sandbox Adapter](../../../src/adapters/server/sandbox/)
-- [Sandbox Spec](../../../docs/SANDBOXED_AGENTS.md)
+- [Sandbox Spec](../../../docs/spec/sandboxed-agents.md)
 - [Parent Integration Tests](../)
 
 ## Boundaries

@@ -15,7 +15,7 @@ Database fixture helpers for integration tests. Provides a service-role (BYPASSR
 ## Pointers
 
 - [testcontainers global setup](../../integration/setup/testcontainers-postgres.global.ts)
-- [DATABASE_RLS_SPEC.md](../../../docs/DATABASE_RLS_SPEC.md): RLS architecture
+- [Database RLS Spec](../../../docs/spec/database-rls.md): RLS architecture
 
 ## Boundaries
 

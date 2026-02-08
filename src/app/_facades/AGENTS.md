@@ -15,7 +15,7 @@ Thin app-layer wrappers that resolve dependencies, bind request context, map DTO
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [Architecture](../../../docs/ARCHITECTURE.md)
+- [Architecture](../../../docs/spec/architecture.md)
 
 ## Boundaries
 

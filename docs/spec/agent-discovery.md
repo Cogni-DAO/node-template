@@ -177,6 +177,6 @@ _(none — planned evolution tracked in ini.agent-registry.md: discovery factory
 
 ## Related
 
-- [Graph Execution](../GRAPH_EXECUTION.md) — Execution invariants, billing flow
+- [Graph Execution](graph-execution.md) — Execution invariants, billing flow
 - [AI Setup](./ai-setup.md) — AI stack configuration
 - [Architecture](./architecture.md) — Hexagonal boundaries

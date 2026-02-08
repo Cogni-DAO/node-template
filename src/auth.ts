@@ -8,7 +8,7 @@
  * Invariants: Uses SIWE (Sign-In with Ethereum) provider with "credentials" ID; returns DB UUID as user ID.
  * Side-effects: IO
  * Notes: Handles session creation, validation, and persistence.
- * Links: docs/AUTHENTICATION.md
+ * Links: docs/spec/authentication.md
  * @public
  */
 

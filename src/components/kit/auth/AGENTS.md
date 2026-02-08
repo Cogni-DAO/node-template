@@ -15,7 +15,7 @@ Authentication UI components. Provides the wallet connection button using Rainbo
 ## Pointers
 
 - [Root AGENTS.md](../../../../AGENTS.md)
-- [Authentication](../../../../docs/AUTHENTICATION.md)
+- [Authentication](../../../../docs/spec/authentication.md)
 
 ## Boundaries
 

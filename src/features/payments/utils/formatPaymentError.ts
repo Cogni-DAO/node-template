@@ -8,7 +8,7 @@
  * Invariants: Never returns raw technical errors; always provides userMessage; debug field for logging only.
  * Side-effects: none
  * Notes: Prioritizes error codes → viem/wagmi types → string matching (fallback).
- * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

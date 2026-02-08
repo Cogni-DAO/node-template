@@ -10,7 +10,7 @@
 #   - Usernames must not be superuser names (postgres, root, admin, superuser)
 #   - Never echo full DSNs; mask them in workflow logs
 # Usage: Called by deploy workflows before SSH to VM
-# Links: docs/DATABASE_URL_ALIGNMENT_SPEC.md
+# Links: docs/spec/database-url-alignment.md
 
 set -euo pipefail
 

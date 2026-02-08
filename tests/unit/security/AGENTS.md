@@ -15,7 +15,7 @@ Security-focused unit tests that enforce architectural invariants and prevent re
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [Security Spec](../../../docs/SECURITY_AUTH_SPEC.md)
+- [Security Spec](../../../docs/spec/security-auth.md)
 
 ## Boundaries
 
@@ -59,7 +59,7 @@ Tests run automatically in CI via `pnpm check`.
 ## Standards
 
 - Tests fail fast on security violations
-- Patterns scanned must be kept in sync with docs/SECURITY_AUTH_SPEC.md
+- Patterns scanned must be kept in sync with docs/spec/security-auth.md
 - Allowlists must be minimal and justified in comments
 
 ## Dependencies

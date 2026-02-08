@@ -10,7 +10,7 @@
  *   - Deletion also revokes the associated grant
  *   - Returns 204 No Content on success
  * Side-effects: none
- * Links: /api/v1/schedules/[scheduleId] route, docs/SCHEDULER_SPEC.md
+ * Links: /api/v1/schedules/[scheduleId] route, docs/spec/scheduler.md
  * @internal
  */
 

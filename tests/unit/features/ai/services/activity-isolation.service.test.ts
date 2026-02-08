@@ -7,7 +7,7 @@
  * Scope: Verifies account isolation at service layer with controlled telemetry. Does not test HTTP or DB.
  * Invariants: User A sees only A's data, User B sees only B's data, no cross-contamination.
  * Side-effects: none (mocked dependencies)
- * Links: src/features/ai/services/activity.ts, docs/ACTIVITY_METRICS.md
+ * Links: src/features/ai/services/activity.ts, docs/spec/activity-metrics.md
  * @public
  */
 

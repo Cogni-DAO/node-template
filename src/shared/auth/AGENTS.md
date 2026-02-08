@@ -15,7 +15,7 @@ Shared authentication types used across app layer and adapters. Provides TypeScr
 ## Pointers
 
 - [Root auth module](../../auth.ts)
-- [Security & Auth Spec](../../../docs/SECURITY_AUTH_SPEC.md)
+- [Security & Auth Spec](../../../docs/spec/security-auth.md)
 - [session.ts](./session.ts) - Session type definitions
 
 ## Boundaries

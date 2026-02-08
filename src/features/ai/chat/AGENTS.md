@@ -17,8 +17,8 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 
 - [Root AGENTS.md](../../../../AGENTS.md)
 - [Parent: AI Feature](../AGENTS.md)
-- [Architecture](../../../../docs/ARCHITECTURE.md)
-- [UI Implementation Guide](../../../../docs/UI_IMPLEMENTATION_GUIDE.md)
+- [Architecture](../../../../docs/spec/architecture.md)
+- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
 - **Related:** [../services/](../services/) (completion, AI logic), [../../payments/](../../payments/) (credits)
 
 ## Boundaries

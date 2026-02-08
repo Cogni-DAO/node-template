@@ -7,7 +7,7 @@
  * Scope: Re-exports Temporal schedule control adapters. Does not contain implementations.
  * Invariants: Named exports only
  * Side-effects: none
- * Links: ScheduleControlPort, docs/SCHEDULER_SPEC.md
+ * Links: ScheduleControlPort, docs/spec/scheduler.md
  * @public
  */
 

@@ -8,7 +8,7 @@
  * Invariants: All exports are types or interfaces; no values or functions.
  * Side-effects: none
  * Notes: Single source of truth for payment types; prevents circular dependencies.
- * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

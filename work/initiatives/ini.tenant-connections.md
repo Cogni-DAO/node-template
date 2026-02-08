@@ -18,7 +18,7 @@ labels:
 
 # Tenant Connections — Encrypted Credential Brokering
 
-> Source: docs/TENANT_CONNECTIONS_SPEC.md
+> Source: docs/spec/tenant-connections.md
 
 ## Goal
 

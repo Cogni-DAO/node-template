@@ -8,7 +8,7 @@
  * Invariants: Validates chain ID against repo-spec config at construction; requires EVM_RPC_URL.
  * Side-effects: IO (RPC calls to EVM node)
  * Notes: Used by EvmRpcOnChainVerifierAdapter and future treasury/ownership adapters.
- * Links: docs/ONCHAIN_READERS.md, docs/PAYMENTS_DESIGN.md
+ * Links: docs/spec/onchain-readers.md, docs/spec/payments-design.md
  * @public
  */
 

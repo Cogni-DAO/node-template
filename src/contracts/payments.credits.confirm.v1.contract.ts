@@ -8,7 +8,7 @@
  * Invariants: amountUsdCents must be positive integer; clientPaymentId must be UUID.
  * Side-effects: none
  * Notes: Billing account is derived from session server-side; not provided in input.
- * Links: docs/DEPAY_PAYMENTS.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

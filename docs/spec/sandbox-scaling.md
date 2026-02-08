@@ -17,7 +17,7 @@ tags: [sandbox, proxy, security]
 
 > Scaling strategy for sandboxed agent LLM gateway. Covers proxy selection, per-run vs shared proxy tradeoffs, trusted attribution at concurrency, and threat model.
 >
-> **Prerequisite**: [SANDBOXED_AGENTS.md](../SANDBOXED_AGENTS.md) for core invariants, current architecture, and phase definitions.
+> **Prerequisite**: [Sandboxed Agents](sandboxed-agents.md) for core invariants, current architecture, and phase definitions.
 
 ## Context
 
@@ -35,7 +35,7 @@ Define the proxy selection rationale, per-run proxy architecture (current), and 
 
 ## Core Invariants
 
-Proxy invariants are enforced via the parent [SANDBOXED_AGENTS.md](../SANDBOXED_AGENTS.md) invariants 1–12. Key relevant invariants:
+Proxy invariants are enforced via the parent [Sandboxed Agents](sandboxed-agents.md) invariants 1–12. Key relevant invariants:
 
 - **SECRETS_HOST_ONLY** (inv 4): `LITELLM_MASTER_KEY` only in proxy config dir, never in sandbox-mounted directories
 - **NETWORK_DEFAULT_DENY** (inv 3): Sandbox containers have `NetworkMode: 'none'`
@@ -90,7 +90,7 @@ One `nginx:alpine` container per sandbox run, with runId/attempt/key baked into 
 
 ### Threat Model
 
-All mitigations assume core invariants from [SANDBOXED_AGENTS.md](../SANDBOXED_AGENTS.md) are enforced.
+All mitigations assume core invariants from [Sandboxed Agents](sandboxed-agents.md) are enforced.
 
 | Attack                              | Mitigation                                                                   | Enforcement Point                                             | Residual Risk                                                          |
 | ----------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -131,7 +131,7 @@ None — all design decisions resolved for P0.5. Future proxy upgrade decisions 
 ## Related
 
 - **Initiative:** [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md) — Proxy scaling migration plan, shared proxy, signed run tokens
-- [Sandboxed Agents](../SANDBOXED_AGENTS.md) — Core sandbox invariants 1–12, phase definitions (pending migration)
+- [Sandboxed Agents](sandboxed-agents.md) — Core sandbox invariants 1–12, phase definitions (pending migration)
 - [OpenClaw Sandbox Spec](openclaw-sandbox-spec.md) — Invariants 13-19, container image, LLM protocol
 - [OpenClaw Sandbox Controls](openclaw-sandbox-controls.md) — Invariants 20-25, dynamic catalog, git relay
 - [External Executor Billing](external-executor-billing.md) — Reconciliation pattern, billing invariants

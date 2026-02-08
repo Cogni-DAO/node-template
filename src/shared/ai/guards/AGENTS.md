@@ -14,7 +14,7 @@ Pure validation guards for Brain-mode AI responses. Checks server-collected sour
 
 ## Pointers
 
-- [COGNI_BRAIN_SPEC](../../../../docs/COGNI_BRAIN_SPEC.md)
+- [COGNI_BRAIN_SPEC](../../../../docs/spec/cogni-brain.md)
 
 ## Boundaries
 

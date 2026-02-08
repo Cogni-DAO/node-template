@@ -15,7 +15,7 @@ Provide fast, reliable verification per layer. Enforce port contracts so any ada
 ## Pointers
 
 - [Root AGENTS.md](../AGENTS.md)
-- [Architecture](../docs/ARCHITECTURE.md)
+- [Architecture](../docs/spec/architecture.md)
 
 ## Boundaries
 

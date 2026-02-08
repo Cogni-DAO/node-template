@@ -7,7 +7,7 @@
  * Scope: Internal — not exported from any package entrypoint. Does not handle connection pooling or env resolution.
  * Invariants: Connection string injected, never from process.env
  * Side-effects: IO (database connections)
- * Links: docs/DATABASE_RLS_SPEC.md
+ * Links: docs/spec/database-rls.md
  * @internal
  */
 

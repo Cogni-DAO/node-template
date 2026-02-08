@@ -14,7 +14,7 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 
 ## Pointers
 
-- [Sandbox Spec](../../../../docs/SANDBOXED_AGENTS.md)
+- [Sandbox Spec](../../../../docs/spec/sandboxed-agents.md)
 - [Sandbox Runtime](../../../../services/sandbox-runtime/)
 - [Port Definition](../../../ports/sandbox-runner.port.ts)
 - [Proxy Config Template](../../../../platform/infra/services/sandbox-proxy/nginx.conf.template)

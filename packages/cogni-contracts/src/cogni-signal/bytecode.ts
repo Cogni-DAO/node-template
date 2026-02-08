@@ -7,7 +7,7 @@
  * Scope: Bytecode constant only; does not include ABI or addresses.
  * Invariants: Bytecode must be 0x-prefixed hex string from solc 0.8.30.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

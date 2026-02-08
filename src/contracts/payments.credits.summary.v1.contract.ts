@@ -8,7 +8,7 @@
  * Invariants: Ledger entries ordered newest first; createdAt serialized as ISO string.
  * Side-effects: none
  * Notes: Billing account resolved from session on server.
- * Links: docs/DEPAY_PAYMENTS.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

@@ -53,7 +53,7 @@ packages/langgraph-graphs/src/graphs/<name>/
 8. Export from `graphs/index.ts`
 9. **P0 workaround:** Add to `AVAILABLE_GRAPHS` in `src/features/ai/components/ChatComposerExtras.tsx`
 
-> **Note:** Step 9 is a temporary workaround. The chat UI uses a hardcoded graph list instead of fetching from `/api/v1/ai/agents`. See [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) P1 checklist for the fix.
+> **Note:** Step 9 is a temporary workaround. The chat UI uses a hardcoded graph list instead of fetching from `/api/v1/ai/agents`. See [Graph Execution](../GRAPH_EXECUTION.md) P1 checklist for the fix.
 
 **Template:** Copy from `ponderer/`
 
@@ -81,7 +81,7 @@ From `packages/langgraph-graphs/src/graphs/types.ts`:
 
 ### Tier 2: Composed Graphs
 
-For multi-node graphs with node-keyed configuration, see [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) § Node-Keyed Model & Tool Configuration.
+For multi-node graphs with node-keyed configuration, see [Graph Execution](../GRAPH_EXECUTION.md) § Node-Keyed Model & Tool Configuration.
 
 ## Verification
 
@@ -105,4 +105,4 @@ Verify your graph appears in the LangGraph Studio UI and responds to test messag
 
 - [Tools Authoring Guide](./tools-authoring.md) — Adding new tools for agents
 - [LangGraph Patterns Spec](../spec/langgraph-patterns.md) — Architecture patterns
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — Execution invariants
+- [Graph Execution](../GRAPH_EXECUTION.md) — Execution invariants

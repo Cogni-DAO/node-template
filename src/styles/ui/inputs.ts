@@ -8,7 +8,7 @@
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings.
  * Side-effects: none
  * Notes: Based on reference repo styling with modern focus states.
- * Links: docs/UI_IMPLEMENTATION_GUIDE.md
+ * Links: docs/spec/ui-implementation.md
  * @public
  */
 

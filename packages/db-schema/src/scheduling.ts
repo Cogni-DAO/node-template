@@ -12,7 +12,7 @@
  * - Per SCHEDULER_SPEC.md: job_key = scheduleId:scheduledFor for Graphile Worker
  * - UNIQUE(schedule_id, scheduled_for) on schedule_runs prevents duplicate run records per slot
  * Side-effects: none (schema definitions only)
- * Links: docs/SCHEDULER_SPEC.md, types/scheduling.ts
+ * Links: docs/spec/scheduler.md, types/scheduling.ts
  * @public
  */
 

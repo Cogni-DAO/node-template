@@ -14,7 +14,7 @@ tags: [ai-graphs, langgraph]
 
 # LangGraph Server Setup
 
-> Source: docs/LANGGRAPH_SERVER.md
+> Source: docs/spec/langgraph-server.md
 
 ## When to Use This
 

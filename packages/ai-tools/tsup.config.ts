@@ -7,7 +7,7 @@
  * Scope: Build tooling only; does not contain runtime code.
  * Invariants: Output must be ESM with type declarations.
  * Side-effects: IO
- * Links: docs/LANGGRAPH_AI.md
+ * Links: docs/spec/langgraph-patterns.md
  * @internal
  */
 

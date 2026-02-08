@@ -10,7 +10,7 @@
  *   - REPO_ROOT_ONLY: adapter validates paths within repo root
  *   - HARD_BOUNDS: search results bounded per spec
  * Side-effects: IO (rg/git subprocesses, file reads)
- * Links: docs/COGNI_BRAIN_SPEC.md (Step 4), src/adapters/server/repo/
+ * Links: docs/spec/cogni-brain.md (Step 4), src/adapters/server/repo/
  * @public
  */
 

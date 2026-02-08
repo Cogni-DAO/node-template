@@ -15,8 +15,8 @@ Deterministic fake implementations of ports for CI and test environments. No ext
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [Architecture](../../../docs/ARCHITECTURE.md)
-- [Testing Documentation](../../../docs/TESTING.md)
+- [Architecture](../../../docs/spec/architecture.md)
+- [Testing Documentation](../../../docs/guides/testing.md)
 
 ## Boundaries
 

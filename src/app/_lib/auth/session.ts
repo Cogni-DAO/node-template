@@ -8,7 +8,7 @@
  * Invariants: Returns null unless both id AND walletAddress are present (wallet-first auth).
  * Side-effects: IO (NextAuth session retrieval)
  * Notes: This resolver is a thin wrapper around NextAuth, enforcing a wallet-first session model.
- * Links: docs/SECURITY_AUTH_SPEC.md
+ * Links: docs/spec/security-auth.md
  * @public
  */
 import { getServerSessionUser } from "@/lib/auth/server";

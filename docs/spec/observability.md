@@ -191,13 +191,13 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 **Labels:** All low-cardinality—`route` (routeId), `method`, `status` (2xx/4xx/5xx), `provider`, `model_class` (free/standard/premium), `code` (`AiExecutionErrorCode` — pre-normalized, no heuristics)
 
-**Error Metrics:** `ai_llm_errors_total` receives pre-normalized `AiExecutionErrorCode` from the completion layer. Metrics never introspect error objects or use string heuristics. See [ERROR_HANDLING_ARCHITECTURE.md](ERROR_HANDLING_ARCHITECTURE.md#ai-execution-errors).
+**Error Metrics:** `ai_llm_errors_total` receives pre-normalized `AiExecutionErrorCode` from the completion layer. Metrics never introspect error objects or use string heuristics. See [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md#ai-execution-errors).
 
 ---
 
 ## Current Shortcomings
 
-**Critical (blocks incident detection) — see [Required Observability Spec](OBSERVABILITY_REQUIRED_SPEC.md):**
+**Critical (blocks incident detection) — see [Required Observability Spec](observability-requirements.md):**
 
 - ❌ No Node.js process metrics (`collectDefaultMetrics()` not called — heap/RSS/GC invisible)
 - ❌ No heartbeat metric (app death indistinguishable from quiet period)
@@ -327,8 +327,8 @@ pnpm langfuse:trace
 
 ## References
 
-- [Required Observability Spec](OBSERVABILITY_REQUIRED_SPEC.md) - P0/P1 remediation plan for silent death detection
-- [ALLOY_LOKI_SETUP.md](ALLOY_LOKI_SETUP.md) - Complete infrastructure setup
+- [Required Observability Spec](observability-requirements.md) - P0/P1 remediation plan for silent death detection
+- [Alloy Loki Setup](../guides/alloy-loki-setup.md) - Complete infrastructure setup
 - [Observability Guide](.claude/commands/logging.md) - Developer guidelines
 - Grafana Cloud: https://grafana.com/products/cloud/
 - Loki docs: https://grafana.com/docs/loki/

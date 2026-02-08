@@ -10,7 +10,7 @@
  * - FORBIDDEN: functions, computations, validation logic, or business rules
  * - Grant scopes constrain which graphIds can be executed (GRANT_SCOPES_CONSTRAIN_GRAPHS)
  * Side-effects: none (constants and types only)
- * Links: docs/SCHEDULER_SPEC.md
+ * Links: docs/spec/scheduler.md
  * @public
  */
 

@@ -8,7 +8,7 @@
  * Invariants: Status values match contract exactly; error codes map to messages.
  * Side-effects: none
  * Notes: Single place backend status strings are interpreted.
- * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

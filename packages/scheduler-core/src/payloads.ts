@@ -10,7 +10,7 @@
  * - Consumer validates at task entry
  * - No `payload as X` casts allowed
  * Side-effects: none
- * Links: docs/SCHEDULER_SPEC.md
+ * Links: docs/spec/scheduler.md
  * @public
  */
 

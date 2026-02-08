@@ -14,7 +14,7 @@ Shared AI utilities for prompt hashing, model catalog, and tool execution. Pure 
 
 ## Pointers
 
-- [AI Setup Spec](../../../docs/AI_SETUP_SPEC.md)
+- [AI Setup Spec](../../../docs/spec/ai-setup.md)
 
 ## Boundaries
 

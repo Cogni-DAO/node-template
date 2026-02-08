@@ -9,7 +9,7 @@
  * - FORBIDDEN: `@/`, `src/`, drizzle-orm, any I/O
  * - ALLOWED: Pure TypeScript types/interfaces only
  * Side-effects: none
- * Links: docs/SCHEDULER_SPEC.md
+ * Links: docs/spec/scheduler.md
  * @public
  */
 

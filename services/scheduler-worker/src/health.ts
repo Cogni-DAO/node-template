@@ -10,7 +10,7 @@
  * - /readyz returns 200 only when ready=true, 503 otherwise
  * - /version returns build metadata (sha, service, buildTs, imageDigest)
  * Side-effects: Binds HTTP server to HEALTH_PORT
- * Links: docs/SERVICES_ARCHITECTURE.md
+ * Links: docs/spec/services-architecture.md
  * @internal
  */
 

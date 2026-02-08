@@ -10,7 +10,7 @@
 
 ## Purpose
 
-PostgreSQL implementations of account service ports for credit accounting and charge receipt recording. Per [ACTIVITY_METRICS.md](../../../../docs/ACTIVITY_METRICS.md), LiteLLM is canonical for telemetry; we store minimal charge receipts.
+PostgreSQL implementations of account service ports for credit accounting and charge receipt recording. Per [Activity Metrics](../../../../docs/spec/activity-metrics.md), LiteLLM is canonical for telemetry; we store minimal charge receipts.
 
 ## Pointers
 

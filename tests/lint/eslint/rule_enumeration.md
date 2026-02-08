@@ -1,6 +1,6 @@
 # Comprehensive Hexagonal Boundary Import Rules
 
-Based on ESLint configuration, ARCHITECTURE.md, and existing test fixtures, here are our **complete hexagonal boundary import rules** with explicit allowed/denied examples:
+Based on ESLint configuration, architecture spec, and existing test fixtures, here are our **complete hexagonal boundary import rules** with explicit allowed/denied examples:
 
 ## **Test Coverage Checklist**
 

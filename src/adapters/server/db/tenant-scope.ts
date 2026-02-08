@@ -9,7 +9,7 @@
  * - actorId must be a branded ActorId (validated at construction time)
  * - SET LOCAL scopes the setting to the current transaction only (no cross-request leakage)
  * Side-effects: none (re-export only)
- * Links: docs/DATABASE_RLS_SPEC.md, packages/db-client/src/tenant-scope.ts
+ * Links: docs/spec/database-rls.md, packages/db-client/src/tenant-scope.ts
  * @public
  */
 

@@ -3,7 +3,7 @@
 > [!CRITICAL]
 > All current code is Node-owned. Operator components will be added to this repo first (monorepo phase), then extracted when criteria are met.
 
-→ See: [Node vs Operator Contract](NODE_VS_OPERATOR_CONTRACT.md) for boundary definitions and full directory structures
+→ See: [Node vs Operator Contract](../spec/node-operator-contract.md) for boundary definitions and full directory structures
 
 ---
 
@@ -55,7 +55,7 @@ Ports define architectural boundaries. This table tracks ownership and future se
 - [ ] Establish prompt template structure
 - [ ] Configure Langfuse integration
 
-→ See: [AI Architecture & Evals](AI_EVALS.md)
+→ See: [AI Architecture & Evals](../spec/ai-evals.md)
 
 ### Phase 1b: Evals Foundation
 
@@ -179,12 +179,12 @@ All routes are Node-owned. Routes are framework artifacts; architectural boundar
 
 ## Related Docs
 
-| Doc                                                       | Purpose                                      |
-| --------------------------------------------------------- | -------------------------------------------- |
-| [Node vs Operator Contract](NODE_VS_OPERATOR_CONTRACT.md) | Boundaries, invariants, directory structures |
-| [MVP Deliverables](MVP_DELIVERABLES.md)                   | Scope lock                                   |
-| [AI Architecture & Evals](AI_EVALS.md)                    | AI structure                                 |
-| [ROADMAP](../ROADMAP.md)                                  | Phase overview                               |
+| Doc                                                            | Purpose                                      |
+| -------------------------------------------------------------- | -------------------------------------------- |
+| [Node vs Operator Contract](../spec/node-operator-contract.md) | Boundaries, invariants, directory structures |
+| [MVP Deliverables](MVP_DELIVERABLES.md)                        | Scope lock                                   |
+| [AI Architecture & Evals](../spec/ai-evals.md)                 | AI structure                                 |
+| [ROADMAP](../ROADMAP.md)                                       | Phase overview                               |
 
 ---
 

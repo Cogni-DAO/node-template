@@ -12,7 +12,7 @@
  * - Pass-through: model, tokens, timestamps from LiteLLM as-is
  * - No local cost recomputation
  * Side-effects: IO (delegates to ActivityUsagePort)
- * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), [UsageService](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
+ * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), [UsageService](../../../../ports/usage.port.ts), docs/spec/activity-metrics.md
  * @internal
  */
 

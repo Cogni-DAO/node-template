@@ -359,7 +359,7 @@ export interface GraphRunRequest {
 
 - [LangGraph Server](../LANGGRAPH_SERVER.md) — External runtime, checkpoint ownership (pending migration)
 - [Accounts Design](../ACCOUNTS_DESIGN.md) — Owner vs Actor tenancy rules (pending migration)
-- [Graph Execution](../GRAPH_EXECUTION.md) — Run-centric billing, RunEventRelay, pump+fanout (pending migration)
+- [Graph Execution](graph-execution.md) — Run-centric billing, RunEventRelay, pump+fanout (pending migration)
 - [AI Setup](./ai-setup.md) — AiEvent types, stream architecture
 - [Architecture](./architecture.md) — Hexagonal layers, port patterns
 - [LangGraph Patterns](../LANGGRAPH_AI.md) — Graph patterns, thread_id tenant-scoping (pending migration)

@@ -8,7 +8,7 @@
  * Invariants: Returns client-visible status (PENDING_VERIFICATION | CONFIRMED | FAILED); verification throttled server-side.
  * Side-effects: none
  * Notes: Status enum imported from /types (canonical source).
- * Links: docs/PAYMENTS_DESIGN.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

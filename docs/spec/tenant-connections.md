@@ -175,6 +175,6 @@ _(none)_
 ## Related
 
 - [tool-use.md](./tool-use.md) — CONNECTION_ID_ONLY invariant, CONNECTION_ID_VIA_CONTEXT
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — No secrets in configurable
+- [Graph Execution](graph-execution.md) — No secrets in configurable
 - [scheduler.md](./scheduler.md) — ExecutionGrant scopes
 - [Initiative: Tenant Connections](../../work/initiatives/ini.tenant-connections.md)

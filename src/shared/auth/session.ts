@@ -8,7 +8,7 @@
  * Invariants: walletAddress is always present (wallet-first auth); id is always DB UUID; contains only serializable primitives; no runtime behavior.
  * Side-effects: none
  * Notes: walletAddress is required - sessions without wallet address are rejected at getSessionUser() boundary.
- * Links: app/_lib/auth/session, docs/SECURITY_AUTH_SPEC.md
+ * Links: app/_lib/auth/session, docs/spec/security-auth.md
  * @public
  */
 export interface SessionUser {

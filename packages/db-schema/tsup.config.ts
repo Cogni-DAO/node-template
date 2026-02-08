@@ -7,7 +7,7 @@
  * Scope: Build tooling only; does not contain runtime code.
  * Invariants: Output must be ESM with type declarations. Separate entrypoints per slice.
  * Side-effects: IO
- * Links: docs/PACKAGES_ARCHITECTURE.md
+ * Links: docs/spec/packages-architecture.md
  * @internal
  */
 

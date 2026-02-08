@@ -416,7 +416,7 @@ volumes:
   - Environment variables
   - Health endpoints
   - Deployment notes
-- [ ] Update `docs/ENVIRONMENTS.md` with service env vars
+- [ ] Update `docs/spec/environments.md` with service env vars
 - [ ] Update the Existing Services table in [Services Architecture Spec](../spec/services-architecture.md)
 
 ## Verification

@@ -1,4 +1,4 @@
-Time to evaluate your design. Read docs/ARCHITECTURE.md, docs/FEATURE_DEVELOPMENT_GUIDE.md, and docs/UI_IMPLEMENTATION_GUIDE.md.
+Time to evaluate your design. Read docs/spec/architecture.md, docs/guides/feature-development.md, and docs/spec/ui-implementation.md.
 
 Find every AGENTS.md file that is in the file path tree of the files you were editing/planning to edit. Re-read the agents.md files, starting at root.
 

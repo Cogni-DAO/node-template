@@ -2,7 +2,7 @@
 
 **⚠️ DEPRECATED:** This document describes the original DePay widget approach. The project has moved to a direct wagmi/viem implementation with backend verification.
 
-**See instead:** [PAYMENTS_DESIGN.md](PAYMENTS_DESIGN.md) - Current payment system design
+**See instead:** [Payments Design](../spec/payments-design.md) - Current payment system design
 
 ---
 
@@ -10,9 +10,9 @@
 
 DePay Widgets was the **initial MVP crypto payment UI** for topping up internal credits. It sat in the **payments layer** and fed the **billing layer** by creating `credit_ledger` entries, but did **not** replace or change the dual-cost billing system defined in:
 
-- [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
-- [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
-- [DAO_ENFORCEMENT.md](DAO_ENFORCEMENT.md) (Binding enforcement rules)
+- [Accounts Design](../spec/accounts-design.md)
+- [Billing Evolution](../spec/billing-evolution.md)
+- [DAO Enforcement](../spec/dao-enforcement.md) (Binding enforcement rules)
 
 Billing = how we track and charge for LLM usage (credits, provider_cost_credits, user_price_credits).
 Payments = how users acquire credits (DePay widgets, on-chain watchers, etc).

@@ -7,7 +7,7 @@
  * Scope: Pure constants; does not make RPC calls.
  * Invariants: Topics computed from keccak256 of canonical signatures.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 
