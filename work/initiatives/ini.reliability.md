@@ -52,7 +52,27 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 | Container memory limits (`mem_limit`) on all services                     | Not Started | 1   |
 | Deploy-to-healthy gate: poll `/readyz` after deploy, fail CI if unhealthy | Not Started | 1   |
 
+## Constraints
+
+- VM is CherryServers 2GB shared — watchdog must be lightweight (no extra containers)
+- No AWS/cloud-native tooling available — must use systemd + curl
+- OTel SDK is only used for trace ID generation (no exporter) — disabling detectors has zero cost
+
+## Dependencies
+
+- [ ] SSH access to production VM (for watchdog install)
+- [ ] Grafana Cloud account (for alert rules)
+
+## As-Built Specs
+
+- [observability.md](../../docs/spec/observability.md) — structured logging, tracing
+- [observability-requirements.md](../../docs/spec/observability-requirements.md) — silent death detection invariants
+
+## Design Notes
+
+Extracted from [postmortem](../../docs/postmortems/2026-02-07-production-vm-loss.md) Feb 7–8. Complements [ini.observability-hardening](ini.observability-hardening.md) — observability = seeing problems, reliability = surviving them.
+
 ## Related
 
-- [ini.observability-hardening](ini.observability-hardening.md) — metrics, dashboards, structured errors (complements this initiative: observability = seeing problems, reliability = surviving them)
+- [ini.observability-hardening](ini.observability-hardening.md)
 - [Postmortem: Feb 7–8 outages](../../docs/postmortems/2026-02-07-production-vm-loss.md)

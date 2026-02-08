@@ -2,13 +2,13 @@
 work_item_id: wi.activity-billing-join
 work_item_type: issue
 title: "/activity dashboard cost column broken — charge_receipts needs linked telemetry"
-state: Open
+state: Backlog
 priority: 1
 estimate: 3
 summary: Activity join on litellm_call_id vs spend_logs.request_id fails for some providers; fix by storing telemetry in our DB at write time
 outcome: /activity shows cost per row from our DB with no LiteLLM API dependency
-assignees:
-initiative:
+assignees: [derekg1729]
+initiative: ini.payments-enhancements
 created: 2026-02-08
 updated: 2026-02-08
 labels: [billing, activity, dashboard]
@@ -70,3 +70,9 @@ llm_charge_details (type-specific, FK to charge_receipts)
 - [ ] Activity facade: replace dual-source fetch with single DB query
 - [ ] Remove LiteLLM `/spend/logs` dependency from Activity path (`LiteLlmActivityUsageAdapter`, `ActivityUsagePort`)
 - [ ] Verify RLS on new table (transitive FK via charge_receipts.billing_account_id)
+
+## Validation
+
+- `/activity` page shows cost per row (not "—")
+- `unjoinedLogCount` drops to 0 in logs
+- No LiteLLM `/spend/logs` API call in Activity path
