@@ -34,6 +34,13 @@ import { makeLogger } from "@/shared/observability";
 /** Nginx image for proxy container */
 const NGINX_IMAGE = "nginx:alpine";
 
+/**
+ * Audit log path INSIDE the proxy container.
+ * MUST NOT use /var/log/nginx/access.log — nginx:alpine symlinks it to /dev/stdout,
+ * so `cat` reads a character device (returns nothing) instead of a file.
+ */
+const CONTAINER_AUDIT_LOG = "/tmp/audit.log";
+
 /** Docker network where LiteLLM is reachable (internal: true — no internet egress) */
 const PROXY_NETWORK = "sandbox-internal";
 
@@ -195,7 +202,7 @@ export class LlmProxyManager {
 
     const configContent = this.generateConfig({
       socketPath: `/llm-sock/${socketName}`, // Path inside container
-      logPath: "/var/log/nginx/access.log", // Path inside container
+      logPath: CONTAINER_AUDIT_LOG, // Path inside container (avoids nginx:alpine symlink)
       runId,
       attempt,
       litellmMasterKey,
@@ -416,7 +423,7 @@ export class LlmProxyManager {
     try {
       // Exec cat to get access log content (container.logs() gives stdout, not file contents)
       const exec = await container.exec({
-        Cmd: ["cat", "/var/log/nginx/access.log"],
+        Cmd: ["cat", CONTAINER_AUDIT_LOG],
         AttachStdout: true,
         AttachStderr: true,
       });
