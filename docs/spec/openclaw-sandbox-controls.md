@@ -35,7 +35,7 @@ Define the invariants and design contracts for sandbox agents that produce code 
 
 ## Core Invariants
 
-> Numbering continues from [OPENCLAW_SANDBOX_SPEC.md](OPENCLAW_SANDBOX_SPEC.md) invariants 13–19.
+> Numbering continues from [OpenClaw Sandbox](openclaw-sandbox-spec.md) invariants 13–19.
 
 20. **HOST_SIDE_GIT_RELAY**: All git operations requiring credentials (clone, push, PR create) execute on the host, never inside the sandbox. Agent commits locally inside the container; host extracts and pushes after container exit.
 

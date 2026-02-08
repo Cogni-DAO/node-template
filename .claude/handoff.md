@@ -131,7 +131,7 @@ A separate developer is implementing `services/sandbox-runtime/agent/run.mjs` �
 
 | File                                                        | What                                         |
 | ----------------------------------------------------------- | -------------------------------------------- |
-| `docs/OPENCLAW_SANDBOX_SPEC.md`                             | Master spec — P0 section has verified steps  |
+| `docs/spec/openclaw-sandbox-spec.md`                             | Master spec — P0 section has verified steps  |
 | `docs/spec/sandboxed-agents.md`                                  | Parent spec — invariants 1-12, phase defs    |
 | `services/sandbox-openclaw/Dockerfile`                      | 6-line thin image (openclaw:local + socat)   |
 | `services/sandbox-openclaw/entrypoint.sh`                   | socat bridge + bash -lc exec                 |

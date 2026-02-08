@@ -8,7 +8,7 @@
  * Scope: Standalone diagnostic; not imported by src/. Requires cogni-sandbox-openclaw:latest image, dev stack, LITELLM_MASTER_KEY.
  * Invariants: Uses LlmProxyManager directly (same path as SandboxRunnerAdapter); container runs with network=none + socket bridge.
  * Side-effects: IO (Docker containers, tmp workspace, proxy lifecycle)
- * Links: docs/OPENCLAW_SANDBOX_SPEC.md, src/adapters/server/sandbox/llm-proxy-manager.ts
+ * Links: docs/spec/openclaw-sandbox-spec.md, src/adapters/server/sandbox/llm-proxy-manager.ts
  */
 
 import * as fs from "node:fs";
