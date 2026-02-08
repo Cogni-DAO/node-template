@@ -310,7 +310,6 @@ describe("LLM Metrics Instrumentation", () => {
   it("increments ai_llm_errors_total on LLM failure", async () => {
     // Skip if not in test mode
     if (process.env.APP_ENV !== "test") {
-      console.log("Skipping LLM error metrics test - requires APP_ENV=test");
       return;
     }
 

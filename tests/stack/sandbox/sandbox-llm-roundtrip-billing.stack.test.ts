@@ -34,7 +34,7 @@ import { seedTestActor } from "@tests/_fixtures/stack/seed";
 import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { SandboxRunnerAdapter } from "@/adapters/server/sandbox";
 import { commitUsageFact } from "@/features/ai/services/billing";
-import { chargeReceipts } from "@/shared/db/schema";
+import { chargeReceipts, llmChargeDetails } from "@/shared/db/schema";
 import { makeLogger } from "@/shared/observability";
 
 import {
@@ -175,5 +175,24 @@ describe("Sandbox LLM Round-Trip Billing", () => {
     );
     expect(receipt?.chargedCredits).toBeGreaterThan(0n);
     expect(receipt?.chargeReason).toBe("llm_usage");
+
+    // 7. Verify linked llm_charge_details row
+    const receiptId = receipt?.id;
+    if (!receiptId) throw new Error("Receipt missing id");
+
+    const details = await db
+      .select()
+      .from(llmChargeDetails)
+      .where(eq(llmChargeDetails.chargeReceiptId, receiptId));
+
+    expect(details).toHaveLength(1);
+    const detail = details[0];
+    expect(detail?.model).toBe(SANDBOX_TEST_MODELS.default);
+    expect(detail?.graphId).toBe("sandbox:agent");
+    expect(detail?.providerCallId).toBe(entry?.litellmCallId);
+    // TODO: tokensIn/tokensOut not available — nginx proxy only captures headers, not response body.
+    // Will be addressed when proxy is replaced.
+    // expect(typeof detail?.tokensIn).toBe("number");
+    // expect(typeof detail?.tokensOut).toBe("number");
   });
 });

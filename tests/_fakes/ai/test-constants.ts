@@ -24,6 +24,7 @@ export const TEST_MODEL_ID = "test-model";
  * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
  */
 export const TEST_GRAPH_NAME = "langgraph:poet";
+export const TEST_GRAPH_NAME_2 = "sandbox:agent";
 
 /**
  * Alternative models for multi-model test scenarios
