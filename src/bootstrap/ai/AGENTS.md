@@ -15,7 +15,7 @@ AI tool bindings and tool source factory. Wires tool implementations with inject
 ## Pointers
 
 - [Tool Use Spec](../../../docs/spec/tool-use.md)
-- [Tools Authoring](../../../docs/TOOLS_AUTHORING.md)
+- [Tools Authoring](../../../docs/guides/tools-authoring.md)
 
 ## Boundaries
 

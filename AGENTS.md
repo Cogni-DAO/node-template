@@ -68,7 +68,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 - [AI Setup Spec](docs/spec/ai-setup.md)
 - [Prompt Registry Spec](docs/spec/prompt-registry.md)
-- [Tools Authoring](docs/TOOLS_AUTHORING.md)
+- [Tools Authoring](docs/guides/tools-authoring.md)
 - [Graph Execution](docs/spec/graph-execution.md)
 - [LangGraph Server](docs/spec/langgraph-server.md)
 - [LangGraph Patterns](docs/spec/langgraph-patterns.md)

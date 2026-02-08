@@ -15,7 +15,7 @@ Capability factories bridging ai-tools interfaces to adapters. Creates environme
 ## Pointers
 
 - [Tool Use Spec](../../../docs/spec/tool-use.md)
-- [Tools Authoring](../../../docs/TOOLS_AUTHORING.md)
+- [Tools Authoring](../../../docs/guides/tools-authoring.md)
 
 ## Boundaries
 
