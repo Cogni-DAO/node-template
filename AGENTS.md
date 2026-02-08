@@ -57,7 +57,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Node vs Operator Contract](docs/spec/node-operator-contract.md)
 - [MVP Deliverables](docs/MVP_DELIVERABLES.md)
 - [Node Formation Spec](docs/spec/node-formation.md)
-- [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
+- [Chain Deployment Tech Debt](work/initiatives/ini.chain-deployment-refactor.md)
 - [Architecture](docs/spec/architecture.md)
 - [Authorization (RBAC/ReBAC)](docs/spec/rbac.md)
 - [Tenant Connections](docs/spec/tenant-connections.md)

@@ -7,7 +7,7 @@
  * Scope: Derives addresses from tx receipts, verifies on-chain state, returns repo-spec YAML; does not modify blockchain state.
  * Invariants: NEVER trusts client-provided addresses; all addresses derived from receipts.
  * Side-effects: IO (RPC reads via viem)
- * Links: docs/spec/node-formation.md, docs/CHAIN_DEPLOYMENT_TECH_DEBT.md
+ * Links: docs/spec/node-formation.md, work/initiatives/ini.chain-deployment-refactor.md
  * @public
  */
 

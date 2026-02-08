@@ -15,7 +15,7 @@ Pure TypeScript package for Cogni-owned contract ABIs, bytecode, and addresses. 
 ## Pointers
 
 - [Node Formation Spec](../../docs/spec/node-formation.md)
-- [Chain Deployment Tech Debt](../../docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
+- [Chain Deployment Tech Debt](../../work/initiatives/ini.chain-deployment-refactor.md)
 
 ## Boundaries
 

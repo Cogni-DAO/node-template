@@ -7,7 +7,7 @@
  * Scope: HTTP requests to /api/setup/verify; does not perform local validation or RPC reads.
  * Invariants: Returns typed Result; never throws.
  * Side-effects: IO (HTTP fetch)
- * Links: docs/spec/node-formation.md, docs/CHAIN_DEPLOYMENT_TECH_DEBT.md
+ * Links: docs/spec/node-formation.md, work/initiatives/ini.chain-deployment-refactor.md
  * @public
  */
 
