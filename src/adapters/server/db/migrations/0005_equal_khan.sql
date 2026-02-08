@@ -10,6 +10,7 @@ CREATE TABLE "llm_charge_details" (
 );
 --> statement-breakpoint
 ALTER TABLE "llm_charge_details" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "llm_charge_details" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 -- Hand-edit: backfill existing rows before enforcing NOT NULL
 ALTER TABLE "charge_receipts" ADD COLUMN "receipt_kind" text NOT NULL DEFAULT 'llm';
 --> statement-breakpoint
