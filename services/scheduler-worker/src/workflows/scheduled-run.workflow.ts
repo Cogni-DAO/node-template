@@ -10,7 +10,7 @@
  *   - Per WORKER_NEVER_CONTROLS_SCHEDULES: Does NOT create/modify/delete schedules
  *   - Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: scheduledFor comes from workflow input (set by Schedule)
  * Side-effects: none (deterministic orchestration only)
- * Links: docs/SCHEDULER_SPEC.md, docs/TEMPORAL_PATTERNS.md
+ * Links: docs/spec/scheduler.md, docs/TEMPORAL_PATTERNS.md
  * @internal
  */
 

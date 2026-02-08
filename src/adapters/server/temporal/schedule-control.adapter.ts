@@ -11,7 +11,7 @@
  *   - Per OVERLAP_SKIP_DEFAULT: Schedules use overlap=SKIP
  *   - Per CATCHUP_WINDOW_ZERO: No backfill (catchupWindow=0)
  * Side-effects: IO (Temporal RPC calls)
- * Links: docs/SCHEDULER_SPEC.md, docs/TEMPORAL_PATTERNS.md, ScheduleControlPort
+ * Links: docs/spec/scheduler.md, docs/TEMPORAL_PATTERNS.md, ScheduleControlPort
  * @public
  */
 

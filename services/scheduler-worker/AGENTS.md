@@ -14,7 +14,7 @@
 
 ## Pointers
 
-- [SCHEDULER_SPEC.md](../../docs/SCHEDULER_SPEC.md) - Full scheduler specification
+- [Scheduler Spec](../../docs/spec/scheduler.md) - Full scheduler specification
 - [TEMPORAL_PATTERNS.md](../../docs/TEMPORAL_PATTERNS.md) - Temporal patterns and anti-patterns
 - [SERVICES_ARCHITECTURE.md](../../docs/SERVICES_ARCHITECTURE.md) - Service structure guidelines
 

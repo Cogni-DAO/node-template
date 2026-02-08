@@ -10,7 +10,7 @@
  * - Per GRANT_SCOPES_CONSTRAIN_GRAPHS: Scope format is "graph:execute:{graphId}"
  * - withTenantScope called on every method (uniform invariant, no-op on serviceDb)
  * Side-effects: IO (database operations)
- * Links: ports/scheduling/execution-grant.port.ts, docs/SCHEDULER_SPEC.md
+ * Links: ports/scheduling/execution-grant.port.ts, docs/spec/scheduler.md
  * @public
  */
 

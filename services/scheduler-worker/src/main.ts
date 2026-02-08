@@ -10,7 +10,7 @@
  *   - Handles SIGTERM/SIGINT for graceful shutdown
  *   - Per READINESS_GATES_LOCALLY: ready=false stops work intake immediately
  * Side-effects: IO (Temporal connection, process signals)
- * Links: docs/SCHEDULER_SPEC.md, docs/SERVICES_ARCHITECTURE.md
+ * Links: docs/spec/scheduler.md, docs/SERVICES_ARCHITECTURE.md
  * @public
  */
 
