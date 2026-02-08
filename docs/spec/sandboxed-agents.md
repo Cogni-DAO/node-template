@@ -252,6 +252,32 @@ HOST: repoPort.pushBranchFromPatches()
 
 **Why**: Credentials stay on host. Sandbox can't exfiltrate tokens.
 
+#### 7. Repo Volume Mount via git-sync
+
+**Decision**: Sandbox containers mount the `repo_data` named Docker volume read-only at `/repo`, the same volume populated by git-sync for the app container.
+
+```
+git-sync → repo_data volume (/repo/<sha> + /repo/current symlink)
+  ├─ app container    → repo_data:/repo:ro  (existing)
+  └─ sandbox container → repo_data:/repo:ro  (via SandboxVolumeMount)
+```
+
+**Port type** (`SandboxVolumeMount` in `sandbox-runner.port.ts`):
+
+```typescript
+interface SandboxVolumeMount {
+  volume: string; // Docker named volume (e.g., "repo_data")
+  containerPath: string; // Mount target (e.g., "/repo")
+  readOnly?: boolean; // Defaults to true
+}
+```
+
+**SHA pinning** is inside the container, not in the port: agents use `/repo/current` (default, whatever git-sync cloned) or `/repo/<sha>` (pinned) via argv/env. The port is SHA-agnostic.
+
+**Submodules**: Handled entirely by git-sync config (`GITSYNC_SUBMODULES=recursive`). The volume mount mechanism is identical regardless of submodule presence.
+
+See [Git-Sync Repo Mount](./git-sync-repo-mount.md) for the full git-sync boot sequence, UID alignment, and CI validation.
+
 ### Anti-Patterns
 
 | Pattern                            | Problem                                          |
@@ -293,6 +319,7 @@ HOST: repoPort.pushBranchFromPatches()
 | `tests/integration/sandbox/network-isolation.int.test.ts`       | P0 network isolation tests                             |
 | `tests/stack/sandbox/sandbox-litellm.stack.test.ts`             | P0.5a LiteLLM reachability tests                       |
 | `tests/stack/sandbox/sandbox-llm-completion.stack.test.ts`      | P0.5 LLM socket bridge tests                           |
+| `docs/spec/git-sync-repo-mount.md`                              | git-sync boot sequence, UID alignment, CI probe        |
 
 ## Acceptance Checks
 
@@ -343,3 +370,4 @@ _(None — spec reflects as-built state)_
 - [Tool Use](./tool-use.md) — Tool execution, DENY_BY_DEFAULT
 - [RBAC](./rbac.md) — ExecutionGrant, allowSandbox gate
 - [Tenant Connections](./tenant-connections.md) — ConnectionBroker (P1.5)
+- [Git-Sync Repo Mount](./git-sync-repo-mount.md) — Boot sequence, UID alignment, CI probe for repo_data volume

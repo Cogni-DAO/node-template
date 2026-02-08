@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-07
+- **Last reviewed:** 2026-02-08
 - **Status:** draft
 
 ## Purpose
@@ -34,7 +34,7 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 - **Exports:** `SandboxRunnerAdapter`, `SandboxRunnerAdapterOptions`, `LlmProxyManager`, `LlmProxyConfig`, `LlmProxyHandle`, `SandboxGraphProvider`, `SANDBOX_PROVIDER_ID`, `SandboxAgentCatalogProvider`
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** none (image name, litellmMasterKey configurable via constructor)
+- **Env/Config keys:** none (litellmMasterKey configurable via constructor; image passed per-run via SandboxRunSpec)
 - **Files considered API:** index.ts barrel export (not re-exported from parent server barrel — consumers use subpath imports to avoid Turbopack bundling dockerode native addon chain)
 
 ## Ports
@@ -45,7 +45,7 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 
 ## Responsibilities
 
-- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; manage LLM proxy containers (nginx:alpine on sandbox-internal network); share socket via Docker volume at `/llm-sock`; inject billing identity and metadata headers; collect stdout/stderr; handle timeouts and OOM; cleanup containers and volumes; route `sandbox:*` graphIds through the graph execution pipeline (SandboxGraphProvider); list sandbox agents in UI catalog (SandboxAgentCatalogProvider)
+- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; manage LLM proxy containers (nginx:alpine on sandbox-internal network); share socket via Docker volume at `/llm-sock`; mount named Docker volumes (e.g., git-sync `repo_data` at `/repo:ro` via `SandboxVolumeMount`); inject billing identity and metadata headers; collect stdout/stderr; handle timeouts and OOM; cleanup containers and volumes; route `sandbox:*` graphIds through the graph execution pipeline (SandboxGraphProvider); list sandbox agents in UI catalog (SandboxAgentCatalogProvider)
 - This directory **does not**: Manage long-lived containers; implement agent logic (agent runs inside container); pass credentials to sandbox containers
 
 ## Usage
@@ -54,12 +54,12 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 import { SandboxRunnerAdapter } from "@/adapters/server/sandbox";
 
 const runner = new SandboxRunnerAdapter({
-  imageName: "cogni-sandbox-runtime:latest",
   litellmMasterKey: process.env.LITELLM_MASTER_KEY,
 });
 const result = await runner.runOnce({
   runId: "task-123",
   workspacePath: "/tmp/workspace",
+  image: "cogni-sandbox-runtime:latest",
   argv: ["echo hello"],
   limits: { maxRuntimeSec: 30, maxMemoryMb: 256 },
   llmProxy: { enabled: true, billingAccountId: "acct-1", attempt: 0 },

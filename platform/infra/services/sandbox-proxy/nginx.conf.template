@@ -24,6 +24,7 @@ http {
     log_format audit '$time_iso8601 runId=${RUN_ID} attempt=${ATTEMPT} '
                      'status=$status bytes=$body_bytes_sent '
                      'model=$http_x_model litellm_call_id=$upstream_http_x_litellm_call_id '
+                     'litellm_response_cost=$upstream_http_x_litellm_response_cost '
                      'upstream_time=$upstream_response_time';
 
     access_log ${ACCESS_LOG_PATH} audit;

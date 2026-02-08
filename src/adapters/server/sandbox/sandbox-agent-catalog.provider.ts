@@ -26,6 +26,13 @@ const SANDBOX_AGENT_DESCRIPTORS: readonly AgentDescriptor[] = [
     description:
       "LLM agent running in isolated container (network=none, LLM via proxy)",
   },
+  {
+    agentId: `${SANDBOX_PROVIDER_ID}:openclaw`,
+    graphId: `${SANDBOX_PROVIDER_ID}:openclaw`,
+    name: "OpenClaw Agent",
+    description:
+      "OpenClaw multi-call agent in isolated container (network=none, LLM via proxy)",
+  },
 ];
 
 /**

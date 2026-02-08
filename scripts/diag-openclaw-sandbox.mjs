@@ -4,17 +4,16 @@
 
 /**
  * Module: `@scripts/diag-openclaw-sandbox`
- * Purpose: Diagnostic script for OpenClaw-in-sandbox with LLM proxy. Tests full flow: workspace setup → proxy start → container run → parse output.
+ * Purpose: Diagnostic script for OpenClaw-in-sandbox via SandboxRunnerAdapter. Tests full flow: workspace setup → adapter.runOnce → parse output.
  * Scope: Standalone diagnostic; not imported by src/. Requires cogni-sandbox-openclaw:latest image, dev stack, LITELLM_MASTER_KEY.
- * Invariants: Uses LlmProxyManager directly (same path as SandboxRunnerAdapter); container runs with network=none + socket bridge.
+ * Invariants: Uses SandboxRunnerAdapter (same path as graph execution pipeline); container runs with network=none + socket bridge.
  * Side-effects: IO (Docker containers, tmp workspace, proxy lifecycle)
- * Links: docs/spec/openclaw-sandbox-spec.md, src/adapters/server/sandbox/llm-proxy-manager.ts
+ * Links: docs/spec/openclaw-sandbox-spec.md, src/adapters/server/sandbox/sandbox-runner.adapter.ts
  */
 
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import Docker from "dockerode";
 
 const OPENCLAW_IMAGE = "cogni-sandbox-openclaw:latest";
 const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY;
@@ -26,7 +25,6 @@ if (!LITELLM_MASTER_KEY) {
   process.exit(1);
 }
 
-const docker = new Docker();
 const runId = `diag-oc-${Date.now()}`;
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "diag-openclaw-"));
 
@@ -107,135 +105,76 @@ fs.writeFileSync(
 
 console.log(`${ts()} workspace prepared`);
 
-// ── Step 2: Start LLM proxy ─────────────────────────────────────────────────
-// Use LlmProxyManager directly (same as SandboxRunnerAdapter does)
-const { LlmProxyManager } = await import(
-  "../src/adapters/server/sandbox/llm-proxy-manager.ts"
+// ── Step 2: Run via SandboxRunnerAdapter ─────────────────────────────────────
+const { SandboxRunnerAdapter } = await import(
+  "../src/adapters/server/sandbox/sandbox-runner.adapter.ts"
 );
 
-const proxyManager = new LlmProxyManager(docker);
-let proxyHandle;
+const runner = new SandboxRunnerAdapter({
+  litellmMasterKey: LITELLM_MASTER_KEY,
+});
+
+const cmd = [
+  "node /app/dist/index.js agent --local --agent main",
+  '--message "$(cat /workspace/.cogni/prompt.txt)"',
+  "--json --timeout 55",
+].join(" ");
 
 try {
-  console.log(`${ts()} starting proxy...`);
-  proxyHandle = await proxyManager.start({
+  console.log(`${ts()} running openclaw via SandboxRunnerAdapter...`);
+  const result = await runner.runOnce({
     runId,
-    attempt: 0,
-    litellmMasterKey: LITELLM_MASTER_KEY,
-    billingAccountId: "diag-openclaw-test",
-    // litellmHost defaults to "litellm:4000" (Docker DNS on sandbox-internal)
-  });
-  console.log(`${ts()} proxy started: volume=${proxyHandle.socketVolume}`);
-} catch (err) {
-  console.error(`${ts()} proxy failed:`, err.message);
-  process.exit(1);
-}
-
-// ── Step 3: Run OpenClaw container ───────────────────────────────────────────
-try {
-  console.log(`${ts()} creating openclaw container...`);
-
-  const cmd = [
-    "node /app/dist/index.js agent --local --agent main",
-    '--message "$(cat /workspace/.cogni/prompt.txt)"',
-    "--json --timeout 55",
-  ].join(" ");
-
-  const container = await docker.createContainer({
-    Image: OPENCLAW_IMAGE,
-    Cmd: [cmd],
-    Env: [
-      "HOME=/workspace",
-      "OPENCLAW_CONFIG_PATH=/workspace/.openclaw/openclaw.json",
-      "OPENCLAW_STATE_DIR=/workspace/.openclaw-state",
-      "OPENCLAW_LOAD_SHELL_ENV=0",
-      "OPENAI_API_BASE=http://localhost:8080",
-      `RUN_ID=${runId}`,
-      "LLM_PROXY_SOCKET=/llm-sock/llm.sock",
-    ],
-    User: "1001:1001", // sandboxer uid (matches SandboxRunnerAdapter)
-    HostConfig: {
-      NetworkMode: "none",
-      Binds: [`${workspace}:/workspace:rw`],
-      Mounts: [
-        {
-          Type: "volume",
-          Source: proxyHandle.socketVolume,
-          Target: "/llm-sock",
-          ReadOnly: false,
-        },
-      ],
-      Memory: 512 * 1024 * 1024, // 512MB
-      ReadonlyRootfs: true,
-      Tmpfs: { "/tmp": "size=64m", "/run": "size=8m" },
-      SecurityOpt: ["no-new-privileges"],
-      CapDrop: ["ALL"],
+    workspacePath: workspace,
+    image: OPENCLAW_IMAGE,
+    argv: [cmd],
+    limits: { maxRuntimeSec: 65, maxMemoryMb: 512 },
+    networkMode: { mode: "none" },
+    llmProxy: {
+      enabled: true,
+      billingAccountId: "diag-openclaw-test",
+      attempt: 0,
+      env: {
+        HOME: "/workspace",
+        OPENCLAW_CONFIG_PATH: "/workspace/.openclaw/openclaw.json",
+        OPENCLAW_STATE_DIR: "/workspace/.openclaw-state",
+        OPENCLAW_LOAD_SHELL_ENV: "0",
+      },
     },
   });
 
-  console.log(`${ts()} starting container...`);
-  await container.start();
+  console.log(
+    `${ts()} container exited: ok=${result.ok} code=${result.exitCode}`
+  );
 
-  console.log(`${ts()} waiting for container to finish (up to 65s)...`);
-  const waitResult = await container.wait();
-  console.log(`${ts()} container exited: code=${waitResult.StatusCode}`);
-
-  // Collect logs
-  const logBuf = await container.logs({ stdout: true, stderr: true });
-  const logs = Buffer.isBuffer(logBuf)
-    ? logBuf.toString("utf8")
-    : String(logBuf);
-
-  // Split stdout/stderr (Docker multiplexes with 8-byte header per frame)
-  // For simplicity, just print everything
-  console.log(`\n${"=".repeat(60)}`);
-  console.log("CONTAINER OUTPUT:");
-  console.log("=".repeat(60));
-  console.log(logs);
-  console.log("=".repeat(60));
-
-  // Try to parse JSON from output
-  const jsonMatch = logs.match(/\{[\s\S]*"payloads"[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      const envelope = JSON.parse(jsonMatch[0]);
-      console.log(`\n${ts()} PARSED ENVELOPE:`);
-      console.log(
-        `  payloads: ${JSON.stringify(envelope.payloads?.map((p) => p.text?.slice(0, 100)))}`
-      );
-      console.log(`  error: ${JSON.stringify(envelope.meta?.error)}`);
-      console.log(`  duration: ${envelope.meta?.durationMs}ms`);
-      console.log(`  model: ${envelope.meta?.agentMeta?.model}`);
-      console.log(`  aborted: ${envelope.meta?.aborted}`);
-    } catch (e) {
-      console.log(`${ts()} JSON parse failed:`, e.message);
-    }
-  } else {
-    console.log(`${ts()} No JSON envelope found in output`);
+  if (result.stderr) {
+    console.log(`\n${"=".repeat(60)}`);
+    console.log("STDERR:");
+    console.log("=".repeat(60));
+    console.log(result.stderr.slice(0, 2000));
+    console.log("=".repeat(60));
   }
 
-  // Cleanup container
-  await container.remove().catch(() => {});
+  // Try to parse JSON envelope from stdout
+  const raw = result.stdout.trim();
+  try {
+    const envelope = JSON.parse(raw);
+    console.log(`\n${ts()} PARSED ENVELOPE:`);
+    console.log(
+      `  payloads: ${JSON.stringify(envelope.payloads?.map((p) => p.text?.slice(0, 100)))}`
+    );
+    console.log(`  error: ${JSON.stringify(envelope.meta?.error)}`);
+    console.log(`  duration: ${envelope.meta?.durationMs}ms`);
+    console.log(`  model: ${envelope.meta?.agentMeta?.model}`);
+    console.log(`  aborted: ${envelope.meta?.aborted}`);
+  } catch {
+    console.log(`\n${ts()} stdout not valid JSON:`);
+    console.log(raw.slice(0, 500));
+  }
 } catch (err) {
-  console.error(`${ts()} container error:`, err.message);
+  console.error(`${ts()} runner error:`, err.message);
 }
 
-// ── Step 4: Stop proxy, check audit log ──────────────────────────────────────
-console.log(`\n${ts()} stopping proxy...`);
-const logPath = await proxyManager.stop(runId);
-if (logPath && fs.existsSync(logPath)) {
-  const auditLog = fs.readFileSync(logPath, "utf8");
-  console.log(`\n${"=".repeat(60)}`);
-  console.log("PROXY AUDIT LOG:");
-  console.log("=".repeat(60));
-  console.log(auditLog || "(empty)");
-  console.log("=".repeat(60));
-} else {
-  console.log(`${ts()} no audit log found`);
-}
-proxyManager.cleanup(runId);
-
-// ── Step 5: Check workspace state ────────────────────────────────────────────
+// ── Step 3: Check workspace state ────────────────────────────────────────────
 console.log(`\n${ts()} workspace files after run:`);
 const walkSync = (dir, prefix = "") => {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -246,6 +185,7 @@ const walkSync = (dir, prefix = "") => {
 };
 walkSync(workspace);
 
-// Cleanup workspace
+// Cleanup
+await runner.dispose();
 fs.rmSync(workspace, { recursive: true, force: true });
 console.log(`\n${ts()} done.`);

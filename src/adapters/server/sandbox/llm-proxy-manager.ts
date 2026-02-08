@@ -28,10 +28,18 @@ import { join } from "node:path";
 import Docker from "dockerode";
 import type { Logger } from "pino";
 
+import type { ProxyBillingEntry } from "@/ports";
 import { makeLogger } from "@/shared/observability";
 
 /** Nginx image for proxy container */
 const NGINX_IMAGE = "nginx:alpine";
+
+/**
+ * Audit log path INSIDE the proxy container.
+ * MUST NOT use /var/log/nginx/access.log — nginx:alpine symlinks it to /dev/stdout,
+ * so `cat` reads a character device (returns nothing) instead of a file.
+ */
+const CONTAINER_AUDIT_LOG = "/tmp/audit.log";
 
 /** Docker network where LiteLLM is reachable (internal: true — no internet egress) */
 const PROXY_NETWORK = "sandbox-internal";
@@ -64,6 +72,14 @@ export interface LlmProxyHandle {
   configPath: string;
   /** Proxy container ID */
   containerId: string;
+}
+
+/** Result of stopping an LLM proxy — includes parsed billing data */
+export interface ProxyStopResult {
+  /** Path to the raw access log file on host */
+  logPath: string | null;
+  /** Billing entries parsed from the proxy audit log (one per LLM call) */
+  billingEntries: readonly ProxyBillingEntry[];
 }
 
 /** Path to the nginx config template */
@@ -186,7 +202,7 @@ export class LlmProxyManager {
 
     const configContent = this.generateConfig({
       socketPath: `/llm-sock/${socketName}`, // Path inside container
-      logPath: "/var/log/nginx/access.log", // Path inside container
+      logPath: CONTAINER_AUDIT_LOG, // Path inside container (avoids nginx:alpine symlink)
       runId,
       attempt,
       litellmMasterKey,
@@ -261,18 +277,23 @@ export class LlmProxyManager {
 
   /**
    * Stop the proxy container for a sandbox run.
+   * Collects the access log and parses billing entries from it.
    *
    * @param runId - The run ID to stop
-   * @returns Path to the access log, or null if not found
+   * @returns Parsed billing entries + log path
    */
-  async stop(runId: string): Promise<string | null> {
+  async stop(runId: string): Promise<ProxyStopResult> {
     const container = this.containers.get(runId);
     const handle = this.handles.get(runId);
     const volumeName = this.volumes.get(runId);
+    const emptyResult: ProxyStopResult = {
+      logPath: handle?.logPath ?? null,
+      billingEntries: [],
+    };
 
     if (!container) {
       this.log.warn({ runId }, "No proxy container found to stop");
-      return handle?.logPath ?? null;
+      return emptyResult;
     }
 
     this.log.debug({ runId }, "Stopping LLM proxy container");
@@ -303,11 +324,20 @@ export class LlmProxyManager {
 
     this.containers.delete(runId);
 
+    // Parse billing entries from the collected audit log
+    const billingEntries = handle?.logPath
+      ? this.parseAuditLog(handle.logPath, runId)
+      : [];
+
     this.log.info(
-      { runId, logPath: handle?.logPath },
+      {
+        runId,
+        logPath: handle?.logPath,
+        billingEntryCount: billingEntries.length,
+      },
       "LLM proxy container stopped"
     );
-    return handle?.logPath ?? null;
+    return { logPath: handle?.logPath ?? null, billingEntries };
   }
 
   /**
@@ -384,6 +414,7 @@ export class LlmProxyManager {
 
   /**
    * Copy access log from container to host.
+   * Demuxes Docker multiplexed frame headers so the file on disk is clean text.
    */
   private async copyLogFromContainer(
     container: Docker.Container,
@@ -392,7 +423,7 @@ export class LlmProxyManager {
     try {
       // Exec cat to get access log content (container.logs() gives stdout, not file contents)
       const exec = await container.exec({
-        Cmd: ["cat", "/var/log/nginx/access.log"],
+        Cmd: ["cat", CONTAINER_AUDIT_LOG],
         AttachStdout: true,
         AttachStderr: true,
       });
@@ -417,13 +448,93 @@ export class LlmProxyManager {
       });
 
       if (chunks.length > 0) {
-        const logContent = Buffer.concat(chunks).toString("utf8");
+        const raw = Buffer.concat(chunks);
+        const logContent = LlmProxyManager.demuxDockerStream(raw);
         writeFileSync(hostLogPath, logContent);
       }
     } catch {
       // Log collection is best-effort
       this.log.debug("Could not collect proxy access log");
     }
+  }
+
+  /**
+   * Extract stdout payload from Docker multiplexed stream buffer.
+   * Docker exec with hijack:true wraps output in 8-byte frame headers:
+   *   Byte 0: stream type (1=stdout, 2=stderr)
+   *   Bytes 1-3: padding
+   *   Bytes 4-7: frame size (big-endian uint32)
+   *   Next frameSize bytes: payload
+   * Returns concatenated stdout payloads as UTF-8 string.
+   */
+  static demuxDockerStream(buffer: Buffer): string {
+    const stdout: Buffer[] = [];
+    let offset = 0;
+
+    while (offset + 8 <= buffer.length) {
+      const streamType = buffer.readUInt8(offset);
+      const frameSize = buffer.readUInt32BE(offset + 4);
+
+      if (offset + 8 + frameSize > buffer.length) break;
+
+      if (streamType === 1) {
+        stdout.push(buffer.subarray(offset + 8, offset + 8 + frameSize));
+      }
+      // streamType 2 = stderr, skip
+
+      offset += 8 + frameSize;
+    }
+
+    return Buffer.concat(stdout).toString("utf8");
+  }
+
+  /**
+   * Parse proxy audit log to extract billing entries.
+   * Each log line has key=value pairs including litellm_call_id and litellm_response_cost.
+   * Only lines with a valid litellm_call_id produce a billing entry.
+   */
+  private parseAuditLog(
+    logPath: string,
+    runId: string
+  ): readonly ProxyBillingEntry[] {
+    if (!existsSync(logPath)) {
+      this.log.debug({ runId, logPath }, "No audit log file to parse");
+      return [];
+    }
+
+    const raw = readFileSync(logPath, "utf-8");
+    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
+    const entries: ProxyBillingEntry[] = [];
+
+    for (const line of lines) {
+      const callIdMatch = line.match(/litellm_call_id=(\S+)/);
+      const callId = callIdMatch?.[1];
+
+      // Skip lines without a call ID (health checks, non-LLM requests)
+      if (!callId || callId === "-") continue;
+
+      const costMatch = line.match(/litellm_response_cost=(\S+)/);
+      const costRaw = costMatch?.[1];
+      let costUsd: number | undefined;
+      if (costRaw && costRaw !== "-") {
+        const parsed = Number.parseFloat(costRaw);
+        if (Number.isFinite(parsed)) {
+          costUsd = parsed;
+        }
+      }
+
+      entries.push(
+        costUsd !== undefined
+          ? { litellmCallId: callId, costUsd }
+          : { litellmCallId: callId }
+      );
+    }
+
+    this.log.debug(
+      { runId, lineCount: lines.length, billingEntryCount: entries.length },
+      "Parsed proxy audit log"
+    );
+    return entries;
   }
 
   /**

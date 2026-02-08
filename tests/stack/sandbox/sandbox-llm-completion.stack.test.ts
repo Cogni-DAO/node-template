@@ -34,7 +34,6 @@ import {
   ensureProxyImage,
   runIsolated,
   runWithProxy,
-  SANDBOX_IMAGE,
   type SandboxTestContextWithProxy,
 } from "../../_fixtures/sandbox/fixtures";
 
@@ -61,7 +60,6 @@ describe("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
 
     ctx = {
       runner: new SandboxRunnerAdapter({
-        imageName: SANDBOX_IMAGE,
         litellmMasterKey,
       }),
       workspace: await createWorkspace("sandbox-llm-completion"),

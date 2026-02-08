@@ -15,6 +15,7 @@ export {
   type LlmProxyConfig,
   type LlmProxyHandle,
   LlmProxyManager,
+  type ProxyStopResult,
 } from "./llm-proxy-manager";
 export { SandboxAgentCatalogProvider } from "./sandbox-agent-catalog.provider";
 export {
