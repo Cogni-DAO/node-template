@@ -8,7 +8,8 @@
  * Invariants:
  * - Activity rows must show responseCostUsd (USD), not chargedCredits (raw credits)
  * - 10M credits = $1 USD (CREDITS_PER_USD constant)
- * - Test uses realistic charge_receipts data (chargedCredits as bigint, responseCostUsd as decimal string)
+ * - Test uses realistic charge_receipts + llm_charge_details data
+ * - Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH: facade reads receipts as primary source
  * Side-effects: none (pure unit test with mocks)
  * Links: src/app/_facades/ai/activity.server.ts, src/core/billing/pricing.ts
  * @internal
@@ -24,17 +25,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CREDITS_PER_USD } from "@/core/billing/pricing";
 
 // Mock the dependencies before importing getActivity
-const mockListUsageLogsByRange = vi.fn();
 const mockListChargeReceipts = vi.fn();
+const mockListLlmChargeDetails = vi.fn();
 const mockGetOrCreateBillingAccountForUser = vi.fn();
 
 vi.mock("@/bootstrap/container", () => ({
   resolveActivityDeps: () => ({
-    usageService: {
-      listUsageLogsByRange: mockListUsageLogsByRange,
-    },
     accountService: {
       listChargeReceipts: mockListChargeReceipts,
+      listLlmChargeDetails: mockListLlmChargeDetails,
     },
   }),
 }));
@@ -52,6 +51,8 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
     mockGetOrCreateBillingAccountForUser.mockResolvedValue({
       id: "billing-test-123",
     });
+    // Default: no LLM details unless overridden
+    mockListLlmChargeDetails.mockResolvedValue([]);
   });
   it("should display responseCostUsd (USD), not chargedCredits (raw credits)", async () => {
     // Realistic scenario: $0.001023 charge = 10,230 credits
@@ -60,31 +61,28 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
     const userCostUsd = providerCostUsd * markupFactor; // = 0.001023 USD
     const chargedCredits = Math.ceil(userCostUsd * CREDITS_PER_USD); // = 10,230 credits
 
-    const mockLog = {
-      id: "litellm-call-123",
-      timestamp: new Date("2024-01-01T12:00:00Z"),
-      model: "anthropic/claude-sonnet-4.5",
-      tokensIn: 298,
-      tokensOut: 340,
-      metadata: {
-        app: "test-app",
-        speed: 45.2,
-        finishReason: "stop",
-      },
-    };
-
     const mockReceipt = {
+      id: "receipt-uuid-123",
       litellmCallId: "litellm-call-123",
       chargedCredits: chargedCredits.toString(), // "10230" (credits)
       responseCostUsd: userCostUsd.toFixed(6), // "0.001023" (USD)
       sourceSystem: "litellm" as const,
+      receiptKind: "llm",
       createdAt: new Date("2024-01-01T12:00:00Z"),
     };
 
-    mockListUsageLogsByRange.mockResolvedValue({
-      logs: [mockLog],
-    });
+    const mockDetail = {
+      chargeReceiptId: "receipt-uuid-123",
+      providerCallId: "litellm-call-123",
+      model: "anthropic/claude-sonnet-4.5",
+      provider: "anthropic",
+      tokensIn: 298,
+      tokensOut: 340,
+      latencyMs: 7500,
+    };
+
     mockListChargeReceipts.mockResolvedValue([mockReceipt]);
+    mockListLlmChargeDetails.mockResolvedValue([mockDetail]);
 
     const input = {
       from: "2024-01-01T00:00:00Z",
@@ -100,6 +98,10 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
     // After fix: displays "$0.001023" (USD)
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]?.cost).toBe("0.001023"); // USD string, not credits
+    expect(result.rows[0]?.id).toBe("receipt-uuid-123"); // stable charge_receipts UUID
+    expect(result.rows[0]?.model).toBe("anthropic/claude-sonnet-4.5");
+    expect(result.rows[0]?.tokensIn).toBe(298);
+    expect(result.rows[0]?.tokensOut).toBe(340);
 
     // Validate spend totals are also in USD
     const expectedSpend = Number.parseFloat(mockReceipt.responseCostUsd);
@@ -119,32 +121,20 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
   });
 
   it("should handle missing responseCostUsd gracefully (show '—')", async () => {
-    const mockLog = {
-      id: "litellm-call-no-cost",
-      timestamp: new Date("2024-01-01T12:00:00Z"),
-      model: "anthropic/claude-sonnet-4.5",
-      tokensIn: 100,
-      tokensOut: 150,
-      metadata: {
-        app: "test-app",
-        speed: 42,
-        finishReason: "stop",
-      },
-    };
-
     // Mock receipt with chargedCredits but NULL responseCostUsd (edge case: degraded billing)
     const mockReceipt = {
+      id: "receipt-uuid-no-cost",
       litellmCallId: "litellm-call-no-cost",
       chargedCredits: "5000", // Has credits but no USD value recorded
       responseCostUsd: null, // NULL in DB
       sourceSystem: "litellm" as const,
+      receiptKind: "llm",
       createdAt: new Date("2024-01-01T12:00:00Z"),
     };
 
-    mockListUsageLogsByRange.mockResolvedValue({
-      logs: [mockLog],
-    });
     mockListChargeReceipts.mockResolvedValue([mockReceipt]);
+    // No detail row either
+    mockListLlmChargeDetails.mockResolvedValue([]);
 
     const input = {
       from: "2024-01-01T00:00:00Z",
@@ -158,67 +148,76 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
     // When responseCostUsd is NULL, display should show "—" (not attempt credits conversion)
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]?.cost).toBe("—");
+    expect(result.rows[0]?.model).toBe("unknown"); // No detail → fallback
 
     // Totals should be zero (no valid cost data)
     expect(result.totals.spend.total).toBe("0.000000");
   });
 
   it("should aggregate multiple charges correctly in USD", async () => {
-    const logs = [
-      {
-        id: "call-1",
-        timestamp: new Date("2024-01-01T12:00:00Z"),
-        model: "gpt-4",
-        tokensIn: 100,
-        tokensOut: 150,
-        metadata: {},
-      },
-      {
-        id: "call-2",
-        timestamp: new Date("2024-01-01T12:15:00Z"),
-        model: "gpt-4",
-        tokensIn: 200,
-        tokensOut: 250,
-        metadata: {},
-      },
-      {
-        id: "call-3",
-        timestamp: new Date("2024-01-01T12:30:00Z"),
-        model: "gpt-4",
-        tokensIn: 50,
-        tokensOut: 75,
-        metadata: {},
-      },
-    ];
-
+    // Adapter returns DESC by createdAt — mock must match real ordering
     const receipts = [
       {
-        litellmCallId: "call-1",
-        chargedCredits: "12340", // 0.001234 USD in credits
-        responseCostUsd: "0.001234",
+        id: "receipt-3",
+        litellmCallId: "call-3",
+        chargedCredits: "9100",
+        responseCostUsd: "0.000910",
         sourceSystem: "litellm" as const,
-        createdAt: new Date("2024-01-01T12:00:00Z"),
+        receiptKind: "llm",
+        createdAt: new Date("2024-01-01T12:30:00Z"),
       },
       {
+        id: "receipt-2",
         litellmCallId: "call-2",
-        chargedCredits: "56780", // 0.005678 USD in credits
+        chargedCredits: "56780",
         responseCostUsd: "0.005678",
         sourceSystem: "litellm" as const,
+        receiptKind: "llm",
         createdAt: new Date("2024-01-01T12:15:00Z"),
       },
       {
-        litellmCallId: "call-3",
-        chargedCredits: "9100", // 0.00091 USD in credits
-        responseCostUsd: "0.000910",
+        id: "receipt-1",
+        litellmCallId: "call-1",
+        chargedCredits: "12340",
+        responseCostUsd: "0.001234",
         sourceSystem: "litellm" as const,
-        createdAt: new Date("2024-01-01T12:30:00Z"),
+        receiptKind: "llm",
+        createdAt: new Date("2024-01-01T12:00:00Z"),
       },
     ];
 
-    mockListUsageLogsByRange.mockResolvedValue({
-      logs,
-    });
+    const details = [
+      {
+        chargeReceiptId: "receipt-1",
+        providerCallId: "call-1",
+        model: "gpt-4",
+        provider: "openai",
+        tokensIn: 100,
+        tokensOut: 150,
+        latencyMs: null,
+      },
+      {
+        chargeReceiptId: "receipt-2",
+        providerCallId: "call-2",
+        model: "gpt-4",
+        provider: "openai",
+        tokensIn: 200,
+        tokensOut: 250,
+        latencyMs: null,
+      },
+      {
+        chargeReceiptId: "receipt-3",
+        providerCallId: "call-3",
+        model: "gpt-4",
+        provider: "openai",
+        tokensIn: 50,
+        tokensOut: 75,
+        latencyMs: null,
+      },
+    ];
+
     mockListChargeReceipts.mockResolvedValue(receipts);
+    mockListLlmChargeDetails.mockResolvedValue(details);
 
     const input = {
       from: "2024-01-01T00:00:00Z",
@@ -231,9 +230,10 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
 
     // Verify individual row costs are in USD
     expect(result.rows).toHaveLength(3);
-    expect(result.rows[0]?.cost).toBe("0.000910"); // call-3 (sorted desc by timestamp)
-    expect(result.rows[1]?.cost).toBe("0.005678"); // call-2
-    expect(result.rows[2]?.cost).toBe("0.001234"); // call-1
+    // Receipts returned DESC by createdAt from adapter, facade paginates in that order
+    expect(result.rows[0]?.cost).toBe("0.000910"); // receipt-3 (latest)
+    expect(result.rows[1]?.cost).toBe("0.005678"); // receipt-2
+    expect(result.rows[2]?.cost).toBe("0.001234"); // receipt-1
 
     // Verify total is sum of USD values, NOT sum of credits
     const expectedTotal = 0.001234 + 0.005678 + 0.00091; // = 0.007822 USD

@@ -77,8 +77,6 @@ import type {
   ScheduleUserPort,
   ServiceAccountService,
   TreasuryReadPort,
-  UsageLogEntry,
-  UsageLogsByRangeParams,
   UsageService,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
@@ -143,14 +141,10 @@ export type AiAdapterDeps = {
 
 /**
  * Activity dashboard dependencies.
- * Note: usageService requires listUsageLogsByRange (only on LiteLlmUsageServiceAdapter, not general UsageService).
+ * Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH: charge_receipts is primary data source.
+ * LLM detail (model/tokens) fetched via listLlmChargeDetails, merged in facade.
  */
 export type ActivityDeps = {
-  usageService: UsageService & {
-    listUsageLogsByRange(
-      params: UsageLogsByRangeParams
-    ): Promise<{ logs: UsageLogEntry[] }>;
-  };
   accountService: AccountService;
 };
 
@@ -402,7 +396,6 @@ export function resolveAiAdapterDeps(userId: UserId): AiAdapterDeps {
 export function resolveActivityDeps(userId: UserId): ActivityDeps {
   const container = getContainer();
   return {
-    usageService: container.usageService as ActivityDeps["usageService"],
     accountService: container.accountsForUser(userId),
   };
 }

@@ -27,6 +27,7 @@ import {
   integer,
   jsonb,
   numeric,
+  pgPolicy,
   pgTable,
   text,
   timestamp,
@@ -147,6 +148,8 @@ export const chargeReceipts = pgTable(
     sourceSystem: text("source_system", { enum: SOURCE_SYSTEMS }).notNull(),
     /** Idempotency key: runId/attempt/usageUnitId (unique per source_system) */
     sourceReference: text("source_reference").notNull(),
+    /** Discriminator for detail table join (e.g. 'llm'). Required at write time, no default. */
+    receiptKind: text("receipt_kind").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -183,6 +186,42 @@ export const chargeReceipts = pgTable(
       "charge_receipts_source_idempotency_unique"
     ).on(table.sourceSystem, table.sourceReference),
   })
+).enableRLS();
+
+/**
+ * LLM-specific detail for charge receipts with receipt_kind='llm'.
+ * 1:1 relationship: charge_receipt_id is both PK and FK.
+ * Stores model, tokens, and provider telemetry captured at billing write time.
+ */
+export const llmChargeDetails = pgTable(
+  "llm_charge_details",
+  {
+    chargeReceiptId: uuid("charge_receipt_id")
+      .primaryKey()
+      .references(() => chargeReceipts.id, { onDelete: "cascade" }),
+    /** External provider call ID (e.g. x-litellm-call-id) for forensic correlation */
+    providerCallId: text("provider_call_id"),
+    /** LLM model used for this call */
+    model: text("model").notNull(),
+    /** Provider name (e.g. "openai", "anthropic") */
+    provider: text("provider"),
+    /** Input token count */
+    tokensIn: integer("tokens_in"),
+    /** Output token count */
+    tokensOut: integer("tokens_out"),
+    /** Call latency in milliseconds */
+    latencyMs: integer("latency_ms"),
+  },
+  (table) => [
+    pgPolicy("tenant_isolation", {
+      using: sql`EXISTS (
+        SELECT 1 FROM charge_receipts cr
+        JOIN billing_accounts ba ON ba.id = cr.billing_account_id
+        WHERE cr.id = ${table.chargeReceiptId}
+          AND ba.owner_user_id = current_setting('app.current_user_id', true)
+      )`,
+    }),
+  ]
 ).enableRLS();
 
 export const paymentAttempts = pgTable(

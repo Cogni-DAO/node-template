@@ -134,6 +134,15 @@ export async function recordBilling(
       chargeReason: "llm_usage",
       sourceSystem: "litellm",
       sourceReference,
+      receiptKind: "llm",
+      llmDetail: {
+        providerCallId: litellmCallId ?? null,
+        model,
+        provider: null, // Not available in BillingContext
+        tokensIn: null, // Not available in BillingContext
+        tokensOut: null, // Not available in BillingContext
+        latencyMs: null,
+      },
     });
   } catch (error) {
     // Post-call billing is best-effort - NEVER block user response
@@ -260,6 +269,15 @@ export async function commitUsageFact(
       chargeReason: "llm_usage",
       sourceSystem: source,
       sourceReference,
+      receiptKind: "llm",
+      llmDetail: {
+        providerCallId: fact.usageUnitId ?? null,
+        model,
+        provider: fact.provider ?? null,
+        tokensIn: fact.inputTokens ?? null,
+        tokensOut: fact.outputTokens ?? null,
+        latencyMs: null, // Not available in UsageFact
+      },
     });
 
     // Log billing commit complete (success path)
