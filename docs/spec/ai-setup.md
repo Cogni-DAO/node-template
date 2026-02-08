@@ -471,7 +471,7 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 - [Graph Execution](graph-execution.md) - Billing idempotency, pump+fanout pattern
 - [USAGE_HISTORY.md](USAGE_HISTORY.md) - Artifact caching (executor-agnostic)
 - [AI Evals](ai-evals.md) - Eval harness structure, CI gates
-- [PROMPT_REGISTRY_SPEC.md](PROMPT_REGISTRY_SPEC.md) - Cloud-based prompt management (Langfuse + in-repo fallback)
+- [Prompt Registry](prompt-registry.md) - Cloud-based prompt management (Langfuse + in-repo fallback)
 - [Architecture](architecture.md) - Hexagonal layers
 
 ---
