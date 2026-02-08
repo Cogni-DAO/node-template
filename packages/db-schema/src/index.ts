@@ -7,7 +7,7 @@
  * Scope: Re-exports only. Does not define any tables.
  * Invariants: Must re-export every slice so the resulting namespace matches src/shared/db/schema.ts.
  * Side-effects: none
- * Links: docs/PACKAGES_ARCHITECTURE.md, docs/DATABASE_RLS_SPEC.md
+ * Links: docs/PACKAGES_ARCHITECTURE.md, docs/spec/database-rls.md
  * @public
  */
 

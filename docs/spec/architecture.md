@@ -551,7 +551,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](G
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
 - [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
-- [Database RLS Spec](DATABASE_RLS_SPEC.md) - Row-Level Security design (not yet implemented)
+- [Database RLS Spec](database-rls.md) - Row-Level Security design (not yet implemented)
 - [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches
 - [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines
 - [Model Selection](MODEL_SELECTION.md) - Dynamic model fetching from LiteLLM, validation, and UI integration

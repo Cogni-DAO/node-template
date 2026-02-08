@@ -78,7 +78,7 @@ This service is gated behind the `bootstrap` profile and runs only when explicit
 
 ## Database URL Configuration
 
-Per [DATABASE_RLS_SPEC.md](DATABASE_RLS_SPEC.md) design decision 7, the runtime app requires **explicit DSN environment variables** — no component-piece fallback.
+Per [Database RLS Spec](database-rls.md) design decision 7, the runtime app requires **explicit DSN environment variables** — no component-piece fallback.
 
 **Required Environment Variables:**
 
@@ -107,7 +107,7 @@ Per [DATABASE_RLS_SPEC.md](DATABASE_RLS_SPEC.md) design decision 7, the runtime 
 - **Application User** (`app_user` via `APP_DB_USER`): Runtime web app connections, RLS enforced
 - **Service User** (`app_service` via `APP_DB_SERVICE_PASSWORD`): Priviledged system users, avoid using. Scheduler workers and pre-auth lookups, BYPASSRLS. Connects via `DATABASE_SERVICE_URL`.
 
-See [Database RLS Spec](DATABASE_RLS_SPEC.md) for the dual-client architecture and static import enforcement.
+See [Database RLS Spec](database-rls.md) for the dual-client architecture and static import enforcement.
 
 **Container Configuration**: The postgres container runs initialization scripts on first startup:
 
@@ -423,15 +423,15 @@ export default defineConfig({
 
 ### 6.1 Row-Level Security (RLS)
 
-RLS is implemented on all user-scoped tables (P0 complete). Tenant isolation uses `SET LOCAL app.current_user_id` per transaction. The `app_user` role has RLS enforced; `app_service` has BYPASSRLS. The `@cogni/db-client` package exposes two sub-path exports (`@cogni/db-client` for app-role, `@cogni/db-client/service` for service-role), and the adapter layer isolates `getServiceDb()` in a depcruiser-gated file. See [Database RLS Spec](DATABASE_RLS_SPEC.md) for full design, adapter wiring tracker, and remaining P1 hardening items.
+RLS is implemented on all user-scoped tables (P0 complete). Tenant isolation uses `SET LOCAL app.current_user_id` per transaction. The `app_user` role has RLS enforced; `app_service` has BYPASSRLS. The `@cogni/db-client` package exposes two sub-path exports (`@cogni/db-client` for app-role, `@cogni/db-client/service` for service-role), and the adapter layer isolates `getServiceDb()` in a depcruiser-gated file. See [Database RLS Spec](database-rls.md) for full design, adapter wiring tracker, and remaining P1 hardening items.
 
 ### 6.2 SSL Enforcement
 
-Non-localhost `DATABASE_URL` values do not currently require `sslmode=require`. Covered in [Database RLS Spec](DATABASE_RLS_SPEC.md).
+Non-localhost `DATABASE_URL` values do not currently require `sslmode=require`. Covered in [Database RLS Spec](database-rls.md).
 
 ### 6.3 Least-Privilege App Role
 
-`provision.sh` creates the `app_user` role but does not restrict it from DDL operations. Production deployments should revoke `CREATE`, `DROP`, `TRUNCATE`, `ALTER` from the app role. Covered in [Database RLS Spec](DATABASE_RLS_SPEC.md).
+`provision.sh` creates the `app_user` role but does not restrict it from DDL operations. Production deployments should revoke `CREATE`, `DROP`, `TRUNCATE`, `ALTER` from the app role. Covered in [Database RLS Spec](database-rls.md).
 
 ### 6.4 Migrator Image Optimization
 
