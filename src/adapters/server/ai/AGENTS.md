@@ -18,7 +18,7 @@ AI service adapters including LiteLLM completion/streaming, usage telemetry, age
 - [AgentCatalogPort](../../../ports/agent-catalog.port.ts)
 - [GraphExecutorPort](../../../ports/graph-executor.port.ts)
 - [ActivityUsagePort](../../../ports/usage.port.ts)
-- [Agent Discovery Design](../../../../docs/AGENT_DISCOVERY.md)
+- [Agent Discovery Design](../../../../docs/spec/agent-discovery.md)
 - [LiteLLM configuration](../../../../../platform/infra/services/litellm/)
 - [Activity Metrics Design](../../../../docs/spec/activity-metrics.md)
 - [Graph Execution Design](../../../../docs/spec/graph-execution.md)
