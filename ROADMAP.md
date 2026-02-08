@@ -177,7 +177,7 @@ Requirements:
 | [MVP Deliverables](docs/MVP_DELIVERABLES.md)                   | Scope lock, success criteria       |
 | [Node Formation Spec](docs/spec/node-formation.md)             | DAO formation tooling (Phase 0)    |
 | [AI Setup Spec](docs/AI_SETUP_SPEC.md)                         | AI P0/P1/P2 checklists, invariants |
-| [LangGraph AI](docs/LANGGRAPH_AI.md)                           | How to create a graph in a feature |
+| [LangGraph AI](docs/spec/langgraph-patterns.md)                           | How to create a graph in a feature |
 | [AI Architecture & Evals](docs/AI_EVALS.md)                    | LangGraph, Langfuse, eval gates    |
 | [Services Migration Guide](docs/SERVICES_MIGRATION.md)         | Implementation checklist           |
 | [Architecture](docs/spec/architecture.md)                      | Hex architecture details           |

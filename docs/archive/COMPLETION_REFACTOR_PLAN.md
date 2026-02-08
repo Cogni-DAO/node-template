@@ -511,7 +511,7 @@ Per `FEATURE_DEVELOPMENT_GUIDE.md`, feature services export `execute`. The new m
 
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) - P1 invariants
 - [FIX_AI_STREAMING_PIPELINE.md](FIX_AI_STREAMING_PIPELINE.md) - Original refactor recommendation
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - Graph architecture
+- [LangGraph Patterns](../spec/langgraph-patterns.md) - Graph architecture
 - [Architecture](../spec/architecture.md) - Hexagonal layers
 
 ---

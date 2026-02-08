@@ -173,7 +173,7 @@ The 800+ line `completion.ts` handles too many concerns. Recommended split:
 
 - [Architecture](../spec/architecture.md) - Hexagonal layers, import rules
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) - P1 invariants and correlation IDs
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - Graph architecture
+- [LangGraph Patterns](../spec/langgraph-patterns.md) - Graph architecture
 - [\_facades/AGENTS.md](../src/app/_facades/AGENTS.md) - App facade pattern
 
 ---

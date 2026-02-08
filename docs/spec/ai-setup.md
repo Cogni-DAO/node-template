@@ -362,7 +362,7 @@ Build eval harness to validate graph outputs against golden fixtures.
 | Tool contracts + impls | `src/features/ai/tools/`   | Pure functions, receive ports via DI      |
 | Route handlers         | `src/app/`                 | Thin entrypoints calling feature services |
 
-**Graphs start in feature slices.** Packages are NOT required for LangGraph. See [LANGGRAPH_AI.md](LANGGRAPH_AI.md).
+**Graphs start in feature slices.** Packages are NOT required for LangGraph. See [LangGraph Patterns](langgraph-patterns.md).
 
 ### 2. Package Warrant Principles
 
@@ -467,7 +467,7 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 ## Related Docs
 
 - [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) - External runtime MVP, adapter implementation
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - Graph patterns, anti-patterns
+- [LangGraph Patterns](langgraph-patterns.md) - Graph patterns, anti-patterns
 - [Graph Execution](graph-execution.md) - Billing idempotency, pump+fanout pattern
 - [USAGE_HISTORY.md](USAGE_HISTORY.md) - Artifact caching (executor-agnostic)
 - [AI_EVALS.md](AI_EVALS.md) - Eval harness structure, CI gates
