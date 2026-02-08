@@ -7,7 +7,7 @@
  * Scope: Wire adapters to ports for runtime dependency injection. Does not handle request-scoped lifecycle.
  * Invariants: All ports wired; single container instance per process; config.unhandledErrorPolicy set by env.
  * Side-effects: IO (initializes logger and emits startup log on first access)
- * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire FakeLlmAdapter; ContainerConfig controls wrapper behavior.
+ * Notes: LLM always uses LiteLlmAdapter; stack tests route to mock-openai-api. ContainerConfig controls wrapper behavior.
  * Links: Used by API routes and other entry points; configure adapters here for DI.
  * @public
  */
@@ -47,7 +47,6 @@ import { ServiceDrizzleAccountService } from "@/adapters/server/accounts/drizzle
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 import {
-  FakeLlmAdapter,
   FakeMetricsAdapter,
   getTestEvmOnchainClient,
   getTestOnChainVerifier,
@@ -192,10 +191,8 @@ function createContainer(): Container {
     "container initialized"
   );
 
-  // Environment-based adapter wiring - single source of truth
-  const llmService = env.isTestMode
-    ? new FakeLlmAdapter()
-    : new LiteLlmAdapter();
+  // LLM adapter: always LiteLlmAdapter (test stacks use mock-openai-api via litellm.test.config.yaml)
+  const llmService = new LiteLlmAdapter();
 
   // EvmOnchainClient: test uses singleton fake (configurable from tests), production uses viem RPC
   const evmOnchainClient = env.isTestMode

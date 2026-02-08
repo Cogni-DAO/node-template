@@ -176,7 +176,7 @@ UI shows explicit "Usage unavailable" state. No fallback to local receipts for t
 ### Known Issues (Resolved)
 
 - [x] **Spend shows provider cost, not user cost.** FIXED: Join receipts by `litellm_call_id`, display `response_cost_usd`.
-- [x] **LiteLLM request ID mismatch.** FIXED: Extract `json.id` from response body (gen-... format).
+- [x] **LiteLLM request ID mismatch.** FIXED: Use `x-litellm-call-id` response header only (USAGE_UNIT_IS_LITELLM_CALL_ID). Response body `id` is not used.
 - [x] **Chart tokens/requests show zeros.** FIXED: Aggregate from individual logs, not LiteLLM buckets.
 - [x] **Total Spend from receipts.** FIXED: Sum `response_cost_usd` from charge receipts.
 - [x] **Old rows show "$—".** Pre-fix rows have UUID in `litellm_call_id`, won't join. Acceptable for MVP.

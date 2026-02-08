@@ -12,5 +12,5 @@
  * @public
  */
 
-import type { FakeLlmAdapter } from "@/adapters/test";
-export type ProbePass = typeof FakeLlmAdapter;
+import type { FakeMetricsAdapter } from "@/adapters/test";
+export type ProbePass = typeof FakeMetricsAdapter;
