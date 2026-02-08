@@ -558,4 +558,4 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [Graph Execution](grap
 - [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
 - [Build Architecture](BUILD_ARCHITECTURE.md) - Monorepo build order, Docker strategy, and workspace package handling
-- [Route Runtime Policy](RUNTIME_POLICY.md) - When to use Node.js vs Edge runtime in API routes
+- [Route Runtime Policy](runtime-policy.md) - When to use Node.js vs Edge runtime in API routes
