@@ -66,7 +66,7 @@ export const virtualKeys = pgTable("virtual_keys", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}).enableRLS();
 
 export const creditLedger = pgTable(
   "credit_ledger",
@@ -104,7 +104,7 @@ export const creditLedger = pgTable(
       .on(table.reference)
       .where(sql`${table.reason} = 'charge_receipt'`),
   })
-);
+).enableRLS();
 
 /**
  * Charge receipts - minimal audit-focused table.
@@ -183,7 +183,7 @@ export const chargeReceipts = pgTable(
       "charge_receipts_source_idempotency_unique"
     ).on(table.sourceSystem, table.sourceReference),
   })
-);
+).enableRLS();
 
 export const paymentAttempts = pgTable(
   "payment_attempts",
@@ -224,7 +224,7 @@ export const paymentAttempts = pgTable(
       table.createdAt
     ),
   })
-);
+).enableRLS();
 
 export const paymentEvents = pgTable(
   "payment_events",
@@ -248,4 +248,4 @@ export const paymentEvents = pgTable(
       table.createdAt
     ),
   })
-);
+).enableRLS();
