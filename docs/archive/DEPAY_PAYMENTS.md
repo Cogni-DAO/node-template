@@ -12,7 +12,7 @@ DePay Widgets was the **initial MVP crypto payment UI** for topping up internal 
 
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
-- [DAO_ENFORCEMENT.md](DAO_ENFORCEMENT.md) (Binding enforcement rules)
+- [DAO Enforcement](../spec/dao-enforcement.md) (Binding enforcement rules)
 
 Billing = how we track and charge for LLM usage (credits, provider_cost_credits, user_price_credits).
 Payments = how users acquire credits (DePay widgets, on-chain watchers, etc).
