@@ -182,7 +182,7 @@ it("executes via adapter", async () => {
 
 ### NOT YET SUPPORTED
 
-- **Authenticated tools (connectionId):** see [TENANT_CONNECTIONS_SPEC.md](../TENANT_CONNECTIONS_SPEC.md)
+- **Authenticated tools (connectionId):** see [Tenant Connections](../TENANT_CONNECTIONS_SPEC.md)
 - **MCP integration:** see [Tool Use Spec](../TOOL_USE_SPEC.md) (ToolSourcePort, P2)
 - **Approval gates:** see [Tool Use Spec](../TOOL_USE_SPEC.md) (effects + policy, P1)
 
@@ -214,6 +214,6 @@ pnpm test               # Run tests including tool integration tests
 ## Related
 
 - [Tool Use Spec](../TOOL_USE_SPEC.md) — 37 invariants, full implementation checklist
-- [TENANT_CONNECTIONS_SPEC.md](../TENANT_CONNECTIONS_SPEC.md) — Authenticated tools design
+- [Tenant Connections](../TENANT_CONNECTIONS_SPEC.md) — Authenticated tools design
 - [LangGraph Patterns](../LANGGRAPH_AI.md) — Graph patterns, tool execution flow
 - [Agent Development Guide](./agent-development.md) — Adding new agent graphs
