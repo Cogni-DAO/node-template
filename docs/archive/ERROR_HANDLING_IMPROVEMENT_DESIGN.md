@@ -546,7 +546,7 @@ jq -r 'select(.errorType == "MODEL_NOT_FOUND") | .provider' logs.json | sort | u
 
 - [ ] Add Grafana dashboard panel for `errorType` distribution
 - [ ] Add alert for high `MODEL_NOT_FOUND` rate (model sunset detection)
-- [ ] Document log query examples in `docs/OBSERVABILITY.md`
+- [ ] Document log query examples in `docs/spec/observability.md`
 
 ---
 

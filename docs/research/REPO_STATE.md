@@ -27,7 +27,7 @@ tags: [meta]
 - [Activity Metrics](../spec/activity-metrics.md) - Usage dashboard and charge receipt design
 - [On-Chain Readers](../spec/onchain-readers.md) - Treasury snapshots and token ownership intelligence (v2/v3)
 - [Chain Configuration](../spec/chain-config.md) - Policy for binding Web2 code to DAO-approved actions
-- [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
+- [Observability](../spec/observability.md) - Logging and monitoring infrastructure
 - [AI Governance Data](./AI_GOVERNANCE_DATA.md) - Signal ingest, brief generation, incident-gated governance
 
 ### Spec Implementation Priority
@@ -134,7 +134,7 @@ Pino structured logging → Alloy → local Loki (dev) or Grafana Cloud (preview
 
 Prometheus metrics export with HTTP and LLM instrumentation.
 
-**Reference:** [OBSERVABILITY.md](./OBSERVABILITY.md)
+**Reference:** [Observability](../spec/observability.md)
 
 ### 10. Generic Charge Ledger ✅
 

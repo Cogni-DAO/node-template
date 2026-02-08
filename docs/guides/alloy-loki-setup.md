@@ -165,7 +165,7 @@ Wait ~30 seconds for services to stabilize.
 3. Create `configs/alloy-config.alloy` with Grafana Cloud endpoint
 4. Test locally with Grafana Cloud
 5. Update documentation:
-   - `docs/OBSERVABILITY.md` — Complete Grafana Cloud setup guide
+   - `docs/spec/observability.md` — Complete Grafana Cloud setup guide
    - `platform/infra/services/runtime/AGENTS.md` — Added setup instructions
 6. Standardize environment files:
    - Merge `.env.example` into `.env.local.example`

@@ -84,7 +84,7 @@ tags: [ai]
 | `metadata` | `{toolCallId, effect, durationMs, policyDecision}`                   |
 | `level`    | `DEFAULT` / `WARNING` (deny) / `ERROR`                               |
 
-**See:** [OBSERVABILITY.md](OBSERVABILITY.md#langfuse-integration-ai-trace-visibility) for full implementation checklist
+**See:** [Observability](OBSERVABILITY.md#langfuse-integration-ai-trace-visibility) for full implementation checklist
 
 **ID Categories:**
 
