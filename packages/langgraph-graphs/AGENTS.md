@@ -17,7 +17,7 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
 - [LangGraph AI Guide](../../docs/LANGGRAPH_AI.md)
 - [Graph Execution](../../docs/GRAPH_EXECUTION.md)
 - [Tool Use Spec](../../docs/TOOL_USE_SPEC.md)
-- [Packages Architecture](../../docs/PACKAGES_ARCHITECTURE.md)
+- [Packages Architecture](../../docs/spec/packages-architecture.md)
 
 ## Boundaries
 

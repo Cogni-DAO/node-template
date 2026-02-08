@@ -15,7 +15,7 @@ Branded ID types for compile-time RLS enforcement across the monorepo. Provides 
 ## Pointers
 
 - [Database RLS Spec](../../docs/spec/database-rls.md): RLS architecture and actor model
-- [PACKAGES_ARCHITECTURE.md](../../docs/PACKAGES_ARCHITECTURE.md): Package conventions
+- [Packages Architecture](../../docs/spec/packages-architecture.md): Package conventions
 
 ## Boundaries
 

@@ -95,7 +95,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **tests/** → Unit (core/features with mocked ports), integration (adapters), contract (port compliance), setup.
 - **e2e/** → Playwright API/UI specs.
 - **scripts/** → Migrations, seeds, generators.
-- **packages/** → Pure libraries (no `src/` imports, no process lifecycle). See [Packages Architecture](PACKAGES_ARCHITECTURE.md).
+- **packages/** → Pure libraries (no `src/` imports, no process lifecycle). See [Packages Architecture](packages-architecture.md).
   - `ai-core/` → Executor-agnostic AI primitives (AiEvent, UsageFact, tool schemas)
   - `langgraph-server/` → LangGraph.js service code (HTTP API, event normalization)
   - `langgraph-graphs/` → Feature-sliced graph definitions (Next.js must NOT import)
@@ -547,7 +547,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](G
 - [Tool Use Spec](TOOL_USE_SPEC.md) - Tool execution invariants, first tool checklist
 - [Authorization (RBAC/ReBAC)](RBAC_SPEC.md) - Actor/subject model, OpenFGA, dual-check for agent delegation
 - [Tenant Connections](TENANT_CONNECTIONS_SPEC.md) - Connection broker, credential faucet, grant intersection
-- [Packages Architecture](PACKAGES_ARCHITECTURE.md) - Internal packages, isolation boundaries, and CI/CD setup
+- [Packages Architecture](packages-architecture.md) - Internal packages, isolation boundaries, and CI/CD setup
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
 - [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction

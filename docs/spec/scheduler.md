@@ -332,7 +332,7 @@ tags: [scheduler]
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Execution invariants, billing
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Billing account lifecycle
 - [Architecture](architecture.md) — Hexagonal pattern
-- [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md) — Package boundaries and rules
+- [Packages Architecture](packages-architecture.md) — Package boundaries and rules
 
 ## Sources
 
