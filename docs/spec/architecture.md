@@ -555,7 +555,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [Graph Execution](grap
 - [Testing Strategy](../guides/testing.md) - Environment-based test adapters and stack testing approaches
 - [Error Handling Architecture](error-handling.md) - Layered error translation patterns and implementation guidelines
 - [Model Selection](model-selection.md) - Dynamic model fetching from LiteLLM, validation, and UI integration
-- [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
+- [CI/CD Pipeline Flow](ci-cd.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
 - [Build Architecture](build-architecture.md) - Monorepo build order, Docker strategy, and workspace package handling
 - [Route Runtime Policy](runtime-policy.md) - When to use Node.js vs Edge runtime in API routes

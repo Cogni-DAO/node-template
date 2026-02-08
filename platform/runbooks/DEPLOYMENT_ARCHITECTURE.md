@@ -95,7 +95,7 @@
 - **Deploy flow**: CI injects `docker login ghcr.io` before `docker compose pull`
 - ## GitHub Actions Workflows
 
-  See [CI-CD.md](../../docs/CI-CD.md) for complete workflow documentation.
+  See [CI/CD](../../docs/spec/ci-cd.md) for complete workflow documentation.
 
   **Key workflows:**
 
@@ -177,7 +177,7 @@
   ***
 
 - ## Related Documentation
-- [CI/CD Pipeline Flow](../../docs/CI-CD.md) - Branch model, workflows, and deployment automation
+- [CI/CD Pipeline Flow](../../docs/spec/ci-cd.md) - Branch model, workflows, and deployment automation
 - [Infrastructure Setup](INFRASTRUCTURE_SETUP.md) - VM provisioning and disaster recovery
 - [Application Architecture](../../docs/spec/architecture.md) - Hexagonal design and code organization
 - [Cogni Brain Spec](../../docs/spec/cogni-brain.md) - Brain repo tools, git-sync mount, citation guard
