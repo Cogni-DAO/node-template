@@ -27,6 +27,20 @@ export interface SandboxMount {
 }
 
 /**
+ * Named Docker volume mount for sandbox containers.
+ * Used for git-sync repo volumes, shared caches, or artifact volumes.
+ * Defaults to read-only — callers must explicitly opt into read-write.
+ */
+export interface SandboxVolumeMount {
+  /** Docker named volume (e.g., "repo_data") */
+  readonly volume: string;
+  /** Path inside container (e.g., "/repo") */
+  readonly containerPath: string;
+  /** Defaults to true. Force explicit override if ever needed. */
+  readonly readOnly?: boolean;
+}
+
+/**
  * Network mode configuration for sandbox containers.
  */
 export interface SandboxNetworkMode {
@@ -63,6 +77,8 @@ export interface SandboxRunSpec {
   readonly runId: string;
   /** Host filesystem path to mount as /workspace in container */
   readonly workspacePath: string;
+  /** Docker image to use for this run. */
+  readonly image: string;
   /**
    * Command arguments to execute.
    * For shell commands, use: ['bash', '-lc', 'your command here']
@@ -78,8 +94,10 @@ export interface SandboxRunSpec {
     /** Maximum combined stdout+stderr bytes (default: 2MB) */
     readonly maxOutputBytes?: number;
   };
-  /** Additional mounts (e.g., repo snapshot at /repo:ro) */
+  /** Additional bind mounts (e.g., host paths) */
   readonly mounts?: readonly SandboxMount[];
+  /** Named Docker volume mounts (e.g., git-sync repo_data at /repo:ro) */
+  readonly volumes?: readonly SandboxVolumeMount[];
   /**
    * Network mode for container. Defaults to { mode: 'none' } for complete isolation.
    * Note: P0.5 uses network=none + llmProxy for LLM access, not internal network.
@@ -104,6 +122,18 @@ export type SandboxErrorCode =
   | "output_truncated";
 
 /**
+ * A single billing entry extracted from the proxy audit log.
+ * Mirrors the inproc flow where the host-side LiteLLM adapter captures
+ * response headers (x-litellm-call-id, x-litellm-response-cost).
+ */
+export interface ProxyBillingEntry {
+  /** LiteLLM call ID from x-litellm-call-id response header (usageUnitId) */
+  readonly litellmCallId: string;
+  /** Provider cost in USD from x-litellm-response-cost response header */
+  readonly costUsd?: number;
+}
+
+/**
  * Result of a sandbox command execution.
  */
 export interface SandboxRunResult {
@@ -119,6 +149,12 @@ export interface SandboxRunResult {
   readonly errorCode?: SandboxErrorCode;
   /** True if output was truncated due to size limits */
   readonly outputTruncated?: boolean;
+  /**
+   * Billing entries extracted from the proxy audit log (host-side).
+   * One entry per LLM call made through the proxy.
+   * Present only when llmProxy was enabled.
+   */
+  readonly proxyBillingEntries?: readonly ProxyBillingEntry[];
 }
 
 /**

@@ -44,25 +44,157 @@ import type { GraphProvider } from "../ai/graph-provider";
 /** Provider ID for sandbox agent execution */
 export const SANDBOX_PROVIDER_ID = "sandbox" as const;
 
-/** Sandbox agent definition */
+/**
+ * Workspace setup context passed to agent-specific workspace preparation functions.
+ */
+interface WorkspaceSetupContext {
+  readonly workspaceDir: string;
+  readonly cogniDir: string;
+  readonly messages: readonly unknown[];
+  readonly model: string;
+  readonly runId: string;
+}
+
+/** Sandbox agent definition with image, limits, and workspace setup */
 interface SandboxAgentEntry {
   readonly name: string;
   readonly description: string;
+  /** Docker image to use for this agent */
+  readonly image: string;
   /** Command to execute in the sandbox container */
   readonly argv: readonly string[];
+  /** Resource limits for the container */
+  readonly limits: {
+    readonly maxRuntimeSec: number;
+    readonly maxMemoryMb: number;
+  };
+  /**
+   * Prepare workspace files before container start.
+   * Default (undefined): writes messages.json to .cogni/
+   * Custom: writes agent-specific config files.
+   */
+  readonly setupWorkspace?: (ctx: WorkspaceSetupContext) => void;
+  /**
+   * Additional env vars to pass via llmProxy.env (merged with COGNI_MODEL).
+   * Used by OpenClaw for HOME, OPENCLAW_CONFIG_PATH, etc.
+   */
+  readonly extraEnv?: (ctx: WorkspaceSetupContext) => Record<string, string>;
+}
+
+/**
+ * OpenClaw config for sandbox execution.
+ * Models.providers.cogni points at the socat → nginx proxy inside the container.
+ * All dangerous tools/features disabled.
+ */
+function makeOpenClawConfig(model: string) {
+  return {
+    models: {
+      mode: "replace",
+      providers: {
+        cogni: {
+          baseUrl: "http://localhost:8080/v1",
+          api: "openai-completions",
+          apiKey: "proxy-handles-auth",
+          models: [
+            {
+              id: model,
+              name: model,
+              reasoning: false,
+              input: ["text"],
+              contextWindow: 200000,
+              maxTokens: 8192,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            },
+          ],
+        },
+      },
+    },
+    agents: {
+      defaults: {
+        model: { primary: `cogni/${model}` },
+        workspace: "/workspace",
+        sandbox: { mode: "off" },
+        skipBootstrap: true,
+        timeoutSeconds: 540,
+      },
+      list: [{ id: "main", default: true, workspace: "/workspace" }],
+    },
+    tools: {
+      elevated: { enabled: false },
+      deny: [
+        "group:web",
+        "browser",
+        "cron",
+        "gateway",
+        "nodes",
+        "sessions_send",
+        "sessions_spawn",
+        "message",
+      ],
+    },
+    cron: { enabled: false },
+    gateway: { mode: "local" },
+  };
 }
 
 /**
  * Registry of known sandbox agents.
- * P0.75: single "agent" entry that runs the minimal LLM agent script.
- * P1+: could be loaded from config or discovered from images.
+ * Each entry fully describes image, limits, argv, and workspace setup.
  */
 const SANDBOX_AGENTS: Record<string, SandboxAgentEntry> = {
   agent: {
     name: "Sandbox Agent",
     description:
       "LLM agent running in isolated container (network=none, LLM via proxy)",
+    image: "cogni-sandbox-runtime:latest",
     argv: ["node", "/agent/run.mjs"],
+    limits: { maxRuntimeSec: 120, maxMemoryMb: 512 },
+  },
+  openclaw: {
+    name: "OpenClaw Agent",
+    description:
+      "OpenClaw multi-call agent in isolated container (network=none, LLM via proxy)",
+    image: "cogni-sandbox-openclaw:latest",
+    argv: [
+      'node /app/dist/index.js agent --local --agent main --message "$(cat /workspace/.cogni/prompt.txt)" --json --timeout 540',
+    ],
+    limits: { maxRuntimeSec: 600, maxMemoryMb: 1024 },
+    setupWorkspace(ctx) {
+      // OpenClaw config + state directories
+      const openclawDir = join(ctx.workspaceDir, ".openclaw");
+      const stateDir = join(ctx.workspaceDir, ".openclaw-state");
+      mkdirSync(openclawDir, { recursive: true });
+      mkdirSync(stateDir, { recursive: true });
+
+      // Write OpenClaw config
+      writeFileSync(
+        join(openclawDir, "openclaw.json"),
+        JSON.stringify(makeOpenClawConfig(ctx.model), null, 2)
+      );
+
+      // Write prompt from last user message
+      const lastUserMsg = [...ctx.messages]
+        .reverse()
+        .find(
+          (m): m is { role: string; content: string } =>
+            typeof m === "object" &&
+            m !== null &&
+            "role" in m &&
+            (m as Record<string, unknown>).role === "user"
+        );
+      writeFileSync(
+        join(ctx.cogniDir, "prompt.txt"),
+        lastUserMsg?.content ?? ""
+      );
+    },
+    extraEnv() {
+      return {
+        HOME: "/workspace",
+        OPENCLAW_CONFIG_PATH: "/workspace/.openclaw/openclaw.json",
+        OPENCLAW_STATE_DIR: "/workspace/.openclaw-state",
+        OPENCLAW_LOAD_SHELL_ENV: "0",
+      };
+    },
   },
 };
 
@@ -153,30 +285,48 @@ export class SandboxGraphProvider implements GraphProvider {
         );
       }
 
-      // Write messages for agent to read (per P0.75 I/O protocol)
-      const messagesPath = join(realCogniDir, "messages.json");
-      writeFileSync(messagesPath, JSON.stringify(messages, null, 2));
+      // Agent-specific workspace setup (or default: write messages.json)
+      const setupCtx: WorkspaceSetupContext = {
+        workspaceDir: realWorkspace,
+        cogniDir: realCogniDir,
+        messages,
+        model,
+        runId,
+      };
+      if (agent.setupWorkspace) {
+        agent.setupWorkspace(setupCtx);
+      } else {
+        // Default: write messages for agent to read (per P0.75 I/O protocol)
+        writeFileSync(
+          join(realCogniDir, "messages.json"),
+          JSON.stringify(messages, null, 2)
+        );
+      }
 
       self.log.debug(
-        { runId, workspaceDir: realWorkspace },
+        { runId, workspaceDir: realWorkspace, agent: agent.name },
         "Workspace prepared"
       );
 
       try {
+        // Build env vars: COGNI_MODEL + agent-specific extras
+        const proxyEnv: Record<string, string> = { COGNI_MODEL: model };
+        if (agent.extraEnv) {
+          Object.assign(proxyEnv, agent.extraEnv(setupCtx));
+        }
+
         // Run agent in sandbox with LLM proxy enabled
         const result = await self.runner.runOnce({
           runId,
           workspacePath: realWorkspace,
+          image: agent.image,
           argv: [...agent.argv],
-          limits: {
-            maxRuntimeSec: 120,
-            maxMemoryMb: 512,
-          },
+          limits: agent.limits,
           llmProxy: {
             enabled: true,
             attempt,
             billingAccountId: caller.billingAccountId,
-            env: { COGNI_MODEL: model },
+            env: proxyEnv,
           },
         });
 
@@ -210,39 +360,42 @@ export class SandboxGraphProvider implements GraphProvider {
         }
 
         const content = envelope.payloads[0]?.text ?? "";
-        const litellmCallId = envelope.meta?.litellmCallId;
 
         // Emit response as text_delta
         if (content) {
           yield { type: "text_delta", delta: content };
         }
 
-        // Emit usage_report for billing (ONLY if litellmCallId present)
-        // P0.75: usageUnitId is REQUIRED for billing-authoritative sandbox executor.
-        // Missing call-id = billing incomplete = fail run.
-        if (!litellmCallId) {
+        // Emit usage_report for billing — driven by proxy audit log, not agent stdout.
+        // Mirrors inproc: host-side infrastructure captures x-litellm-call-id + x-litellm-response-cost.
+        // One usage_report per LLM call (works for single-call and multi-call agents).
+        const billingEntries = result.proxyBillingEntries ?? [];
+        if (billingEntries.length > 0) {
+          for (const entry of billingEntries) {
+            const usageFact: UsageFact = {
+              runId,
+              attempt,
+              source: "litellm",
+              executorType: "sandbox",
+              billingAccountId: caller.billingAccountId,
+              virtualKeyId: caller.virtualKeyId,
+              graphId,
+              model,
+              usageUnitId: entry.litellmCallId,
+              ...(entry.costUsd !== undefined && { costUsd: entry.costUsd }),
+            };
+            yield { type: "usage_report", fact: usageFact };
+          }
+        } else {
+          // No billing entries from proxy — LLM calls may not have happened or log parse failed
           self.log.error(
             { runId, model },
-            "CRITICAL: Sandbox agent did not emit litellmCallId - billing incomplete, failing run"
+            "CRITICAL: No billing entries from proxy audit log - billing incomplete, failing run"
           );
-          // Throw to fail run (prevents silent under-billing)
           throw new Error(
-            "Billing failed: sandbox agent missing litellmCallId (x-litellm-call-id header)"
+            "Billing failed: no proxy billing entries (x-litellm-call-id not found in audit log)"
           );
         }
-
-        const usageFact: UsageFact = {
-          runId,
-          attempt,
-          source: "litellm",
-          executorType: "sandbox",
-          billingAccountId: caller.billingAccountId,
-          virtualKeyId: caller.virtualKeyId,
-          graphId,
-          model,
-          usageUnitId: litellmCallId, // Required, no fallback
-        };
-        yield { type: "usage_report", fact: usageFact };
 
         // Emit assistant_final for history persistence
         yield { type: "assistant_final", content: content || "" };

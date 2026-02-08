@@ -141,6 +141,10 @@ SELECT charged_credits, response_cost_usd FROM charge_receipts;
 
 Cost source: LiteLLM `usage.cost` (stream) or `x-litellm-response-cost` header (non-stream).
 
+## Known Issues
+
+- **/activity cost column broken**: LiteLLM `spend_logs.request_id` ≠ `charge_receipts.litellm_call_id` for some providers → all rows show "—" cost. See [wi.activity-billing-join](../../work/issues/wi.activity-billing-join.md).
+
 ## Open Questions
 
 _(none — planned work tracked in ini.payments-enhancements.md: pre-call max-cost estimation, reconciliation scripts, credit_holds table, on-chain watcher, cents sprawl cleanup, conservative pre-call estimate tuning)_

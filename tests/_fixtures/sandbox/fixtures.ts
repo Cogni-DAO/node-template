@@ -152,6 +152,7 @@ export async function runWithProxy(
   return ctx.runner.runOnce({
     runId: uniqueRunId(),
     workspacePath: ctx.workspace,
+    image: SANDBOX_IMAGE,
     argv: [command],
     limits: {
       maxRuntimeSec: options?.maxRuntimeSec ?? DEFAULT_LIMITS.maxRuntimeSec,
@@ -175,6 +176,7 @@ export async function runIsolated(
   return ctx.runner.runOnce({
     runId: uniqueRunId(),
     workspacePath: ctx.workspace,
+    image: SANDBOX_IMAGE,
     argv: [command],
     limits: {
       maxRuntimeSec: options?.maxRuntimeSec ?? DEFAULT_LIMITS.maxRuntimeSec,
@@ -193,6 +195,7 @@ export async function runOnInternalNetwork(
   return ctx.runner.runOnce({
     runId: uniqueRunId(),
     workspacePath: ctx.workspace,
+    image: SANDBOX_IMAGE,
     argv: [command],
     limits: {
       maxRuntimeSec: options?.maxRuntimeSec ?? DEFAULT_LIMITS.maxRuntimeSec,
@@ -261,6 +264,7 @@ export async function runAgentWithLlm(
   const result = await ctx.runner.runOnce({
     runId: uniqueRunId("agent-llm"),
     workspacePath: ctx.workspace,
+    image: SANDBOX_IMAGE,
     argv: ["node", "/agent/run.mjs"],
     limits: {
       maxRuntimeSec:
