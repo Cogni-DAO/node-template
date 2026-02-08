@@ -328,7 +328,7 @@ pnpm langfuse:trace
 ## References
 
 - [Required Observability Spec](OBSERVABILITY_REQUIRED_SPEC.md) - P0/P1 remediation plan for silent death detection
-- [ALLOY_LOKI_SETUP.md](ALLOY_LOKI_SETUP.md) - Complete infrastructure setup
+- [Alloy Loki Setup](../guides/alloy-loki-setup.md) - Complete infrastructure setup
 - [Observability Guide](.claude/commands/logging.md) - Developer guidelines
 - Grafana Cloud: https://grafana.com/products/cloud/
 - Loki docs: https://grafana.com/docs/loki/
