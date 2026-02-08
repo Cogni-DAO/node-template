@@ -38,7 +38,7 @@ import {
 import { serverEnv } from "@/shared/env";
 
 describe("LiteLLM Call ID → Spend Log Mapping (Contract Test)", () => {
-  // TODO: Enable when system test infra lands (see docs/SYSTEM_TEST_ARCHITECTURE.md)
+  // TODO: Enable when system test infra lands (see docs/spec/system-test-architecture.md)
   // Requires real LiteLLM (not FakeLlmAdapter) to verify the invariant:
   //   x-litellm-call-id response header === spend_logs.request_id field
   // Manually verified 2026-02-07: charge_receipts.litellm_call_id matched

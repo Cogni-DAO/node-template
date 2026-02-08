@@ -11,7 +11,7 @@
  *   - Per HOST_INJECTS_BILLING_HEADER: Proxy injects x-litellm-end-user-id
  *   - Per LLM_VIA_SOCKET_ONLY: LLM access only via localhost:8080 -> socket -> proxy
  * Side-effects: IO (Docker containers, nginx proxy, filesystem)
- * Links: docs/spec/sandboxed-agents.md, docs/SYSTEM_TEST_ARCHITECTURE.md
+ * Links: docs/spec/sandboxed-agents.md, docs/spec/system-test-architecture.md
  * @public
  */
 
