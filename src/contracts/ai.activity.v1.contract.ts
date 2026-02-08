@@ -13,7 +13,7 @@
  * - Cursor is opaque string.
  * - P1: spend = our billing (charged_credits), telemetry = LiteLLM (model/tokens).
  * Side-effects: none
- * Links: [ActivityService](../../features/ai/services/activity.ts), docs/ACTIVITY_METRICS.md
+ * Links: [activity.server.ts](../../app/_facades/ai/activity.server.ts), docs/ACTIVITY_METRICS.md
  * @public
  */
 

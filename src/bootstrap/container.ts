@@ -31,9 +31,7 @@ import {
   EvmRpcOnChainVerifierAdapter,
   getAppDb,
   LangfuseAdapter,
-  LiteLlmActivityUsageAdapter,
   LiteLlmAdapter,
-  LiteLlmUsageServiceAdapter,
   type MimirAdapterConfig,
   MimirMetricsAdapter,
   SystemClock,
@@ -77,7 +75,6 @@ import type {
   ScheduleUserPort,
   ServiceAccountService,
   TreasuryReadPort,
-  UsageService,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
@@ -100,7 +97,6 @@ export interface Container {
   llmService: LlmService;
   accountsForUser(userId: UserId): AccountService;
   serviceAccountService: ServiceAccountService;
-  usageService: UsageService;
   clock: Clock;
   paymentAttemptsForUser(userId: UserId): PaymentAttemptUserRepository;
   paymentAttemptServiceRepository: PaymentAttemptServiceRepository;
@@ -241,11 +237,6 @@ function createContainer(): Container {
   const serviceAccountService = new ServiceDrizzleAccountService(
     getServiceDb()
   );
-  // UsageService: P1 - LiteLLM is canonical usage log source for Activity (no fallback)
-  const usageService = new LiteLlmUsageServiceAdapter(
-    new LiteLlmActivityUsageAdapter()
-  );
-
   // TreasuryReadPort: always uses ViemTreasuryAdapter (no test fake needed - mocked at port level in tests)
   const treasuryReadPort = new ViemTreasuryAdapter(evmOnchainClient);
 
@@ -354,7 +345,6 @@ function createContainer(): Container {
     accountsForUser: (userId: UserId) =>
       new UserDrizzleAccountService(db, userId),
     serviceAccountService,
-    usageService,
     clock,
     paymentAttemptsForUser: (userId: UserId) =>
       new UserDrizzlePaymentAttemptRepository(db, userId),
