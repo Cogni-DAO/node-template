@@ -706,7 +706,7 @@ pnpm test tests/integration/payments/mvp-scenarios.spec.ts
 ## Related Documentation
 
 - [Payments Design](../spec/payments-design.md) - MVP spec & implementation checklist
-- [TESTING.md](TESTING.md) - Test strategy & APP_ENV=test pattern
+- [Testing Strategy](../guides/testing.md) - Test strategy & APP_ENV=test pattern
 - [AGENTS.md](../AGENTS.md) - Workflow principles
 - [tests/AGENTS.md](../tests/AGENTS.md) - Test layer boundaries
 - [tests/unit/core/AGENTS.md](../tests/unit/core/AGENTS.md) - Core unit test standards

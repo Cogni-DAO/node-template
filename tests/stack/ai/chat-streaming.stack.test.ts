@@ -8,7 +8,7 @@
  * Invariants: At least 2 text deltas arrive before completion; deltas arrive incrementally (not buffered); abort stops stream.
  * Side-effects: IO (HTTP requests, database writes via completion facade)
  * Notes: Requires dev stack running (pnpm dev:stack:test). Uses real LiteLLM streaming. Uses assistant-stream Data Stream Protocol.
- * Links: src/app/api/v1/ai/chat/route.ts, docs/TESTING.md
+ * Links: src/app/api/v1/ai/chat/route.ts, docs/guides/testing.md
  * @public
  */
 

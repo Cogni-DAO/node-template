@@ -133,7 +133,7 @@ Unit tests for FakeLlmAdapter:
 | ----------------------------------------------------------------- | ----------- | --- | -------------------- |
 | Deprecation-remove `src/adapters/test/ai/fake-llm.adapter.ts`     | Not Started | 1   | (create at P2 start) |
 | Update `tests/stack/AGENTS.md` and `tests/_fakes/AGENTS.md`       | Not Started | 1   | (create at P2 start) |
-| Update `docs/TESTING.md` to reflect LiteLLM-based test LLM wiring | Not Started | 1   | (create at P2 start) |
+| Update `docs/guides/testing.md` to reflect LiteLLM-based test LLM wiring | Not Started | 1   | (create at P2 start) |
 
 ## Constraints
 

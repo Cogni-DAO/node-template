@@ -84,7 +84,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
 - [Database & Migration Architecture](docs/spec/databases.md)
 - [Database RLS Spec](docs/spec/database-rls.md)
-- [Testing Strategy](docs/TESTING.md)
+- [Testing Strategy](docs/guides/testing.md)
 - [Feature Development Guide](docs/guides/feature-development.md)
 - [UI Implementation Guide](docs/spec/ui-implementation.md)
 - [Style & Lint Rules](docs/spec/style.md)
