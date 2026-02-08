@@ -31,6 +31,7 @@ import {
   billingAccounts,
   chargeReceipts,
   creditLedger,
+  llmChargeDetails,
   users,
   virtualKeys,
 } from "@/shared/db/schema";
@@ -119,6 +120,20 @@ describe("Completion Billing Stack Test", () => {
     expect(receipt.runId).toBeTruthy();
     expect(receipt.provenance).toBe("stream"); // Per UNIFIED_GRAPH_EXECUTOR: all execution flows through streaming
     expect(receipt.chargedCredits).toBeGreaterThanOrEqual(0n);
+
+    // Assert - Linked llm_charge_details row with model, graphId, tokens
+    const details = await db
+      .select()
+      .from(llmChargeDetails)
+      .where(eq(llmChargeDetails.chargeReceiptId, receipt.id));
+
+    expect(details).toHaveLength(1);
+    const detail = details[0];
+    if (!detail) throw new Error("No llm_charge_details row");
+    expect(detail.model).toBeTruthy();
+    expect(detail.graphId).toBeTruthy();
+    expect(typeof detail.tokensIn).toBe("number");
+    expect(typeof detail.tokensOut).toBe("number");
 
     // Assert - credit_ledger debit created
     const ledgerRows = await db
