@@ -16,7 +16,7 @@
 
 - [Scheduler Spec](../../docs/spec/scheduler.md) - Full scheduler specification
 - [Temporal Patterns](../../docs/spec/temporal-patterns.md) - Temporal patterns and anti-patterns
-- [SERVICES_ARCHITECTURE.md](../../docs/SERVICES_ARCHITECTURE.md) - Service structure guidelines
+- [Services Architecture](../../docs/spec/services-architecture.md) - Service structure guidelines
 
 ## Boundaries
 
