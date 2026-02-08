@@ -21,7 +21,7 @@ Extends accounts design with profit-enforcing billing and provider cost tracking
 
 **Related docs:**
 
-- System architecture: [ACCOUNTS_DESIGN.md](../ACCOUNTS_DESIGN.md)
+- System architecture: [Accounts Design](../ACCOUNTS_DESIGN.md)
 - API contracts: [ACCOUNTS_API_KEY_ENDPOINTS.md](../ACCOUNTS_API_KEY_ENDPOINTS.md)
 - Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](../INTEGRATION_WALLETS_CREDITS.md)
 - Usage/Activity Design: [Activity Metrics](./activity-metrics.md)
@@ -149,4 +149,4 @@ _(none — planned work tracked in ini.payments-enhancements.md: pre-call max-co
 
 - [Activity Metrics](./activity-metrics.md)
 - [Graph Execution](graph-execution.md)
-- [ACCOUNTS_DESIGN.md](../ACCOUNTS_DESIGN.md)
+- [Accounts Design](../ACCOUNTS_DESIGN.md)

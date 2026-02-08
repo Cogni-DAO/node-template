@@ -20,7 +20,7 @@ tags: [meta]
 
 - [Architecture](../spec/architecture.md) - Directory structure and file locations
 - [Maximize OSS Tools](../../work/initiatives/ini.maximize-oss-tools.md) - P0 prerequisites (WAL-G, OpenFGA/OPA) before new feature work
-- [Accounts Design](./ACCOUNTS_DESIGN.md) - Identity & billing model
+- [Accounts Design](../spec/accounts-design.md) - Identity & billing model
 - [Security & Auth Spec](../spec/security-auth.md) - SIWE authentication architecture
 - [Payments Design](../spec/payments-design.md) - Native USDC payment architecture
 - [Billing Evolution](../spec/billing-evolution.md) - Dual-cost accounting implementation
@@ -42,7 +42,7 @@ tags: [meta]
 | **6**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
 | **7**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)          | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
 | **8**    | [LangGraph Server](./LANGGRAPH_SERVER.md)              | 📋 Contract   | Server deployment mode (P1 for scale)                      |
-| **9**    | [Accounts Design](./ACCOUNTS_DESIGN.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
+| **9**    | [Accounts Design](../spec/accounts-design.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
 
 **Legend:** 📋 Draft/Contract | 🔄 In Progress | ✅ Complete
 
@@ -96,7 +96,7 @@ Tables: `users`, `billing_accounts`, `virtual_keys`, `credit_ledger`, `charge_re
 
 **Architecture:** Service-auth model where `virtual_keys` acts as FK/scope handle for billing attribution. All outbound LLM calls use `LITELLM_MASTER_KEY` from env.
 
-**Reference:** [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [Billing Evolution](../spec/billing-evolution.md)
+**Reference:** [Accounts Design](../spec/accounts-design.md), [Billing Evolution](../spec/billing-evolution.md)
 
 ### 5. Dual-Cost LLM Billing ✅
 
@@ -183,7 +183,7 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 - Add auth middleware: `/api/v1/*` accepts session OR `Authorization: Bearer <app_api_key>`
 - Update LLM port: resolve `{billing_account_id, app_api_key_id}` → mapped LiteLLM virtual key
 
-**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented), [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [Security Auth Spec](../spec/security-auth.md)
+**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented), [Accounts Design](../spec/accounts-design.md), [Security Auth Spec](../spec/security-auth.md)
 
 ### 13. Post-MVP Security Hardening ⚠️
 
