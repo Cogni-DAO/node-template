@@ -11,7 +11,7 @@
  *   - Per GRANT_VALIDATED_TWICE: Worker validates grant before calling API (fail-fast)
  *   - SCHEDULER_API_TOKEN treated as secret (never logged)
  * Side-effects: IO (database, HTTP to internal API)
- * Links: docs/spec/scheduler.md, docs/TEMPORAL_PATTERNS.md
+ * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md
  * @internal
  */
 

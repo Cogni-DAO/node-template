@@ -50,7 +50,7 @@ Provide a signal-to-decision pipeline: CloudEvents ingestion → budget-enforced
 
 ### Orchestration (Temporal)
 
-> See [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) for canonical Temporal patterns, anti-patterns, and code examples.
+> See [Temporal Patterns](temporal-patterns.md) for canonical Temporal patterns, anti-patterns, and code examples.
 
 1. **TEMPORAL_DETERMINISM**: No I/O in Workflow code. All external calls run in Activities. (See TEMPORAL_PATTERNS.md)
 
@@ -253,7 +253,7 @@ Provide a signal-to-decision pipeline: CloudEvents ingestion → budget-enforced
 
 ### Temporal Workflow Blueprint
 
-> See [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) for canonical patterns and code examples.
+> See [Temporal Patterns](temporal-patterns.md) for canonical patterns and code examples.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐

@@ -15,7 +15,7 @@ Pure TypeScript types and port interfaces for the scheduling domain. Defines con
 ## Pointers
 
 - [Scheduler Spec](../../docs/spec/scheduler.md): Scheduling architecture and invariants
-- [TEMPORAL_PATTERNS.md](../../docs/TEMPORAL_PATTERNS.md): Temporal patterns and anti-patterns
+- [Temporal Patterns](../../docs/spec/temporal-patterns.md): Temporal patterns and anti-patterns
 
 ## Boundaries
 

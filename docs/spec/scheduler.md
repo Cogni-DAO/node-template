@@ -21,7 +21,7 @@ tags: [scheduler]
 
 ## Core Invariants
 
-> See [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) for canonical Temporal patterns, anti-patterns, and code examples shared across scheduler and governance workflows.
+> See [Temporal Patterns](temporal-patterns.md) for canonical Temporal patterns, anti-patterns, and code examples shared across scheduler and governance workflows.
 
 ### Governance Layer (Stable)
 
@@ -328,7 +328,7 @@ tags: [scheduler]
 
 ## Related Documents
 
-- [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) — Canonical Temporal patterns and anti-patterns
+- [Temporal Patterns](temporal-patterns.md) — Canonical Temporal patterns and anti-patterns
 - [Graph Execution](graph-execution.md) — Execution invariants, billing
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Billing account lifecycle
 - [Architecture](architecture.md) — Hexagonal pattern

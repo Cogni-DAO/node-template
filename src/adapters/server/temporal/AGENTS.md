@@ -15,7 +15,7 @@ Temporal schedule control adapter implementing `ScheduleControlPort` for schedul
 ## Pointers
 
 - [Scheduler Spec](../../../../docs/spec/scheduler.md): Schedule architecture and invariants
-- [TEMPORAL_PATTERNS.md](../../../../docs/TEMPORAL_PATTERNS.md): Temporal patterns and anti-patterns
+- [Temporal Patterns](../../../../docs/spec/temporal-patterns.md): Temporal patterns and anti-patterns
 - [ScheduleControlPort](../../../../packages/scheduler-core/src/ports/schedule-control.port.ts): Port interface
 
 ## Boundaries
