@@ -21,7 +21,7 @@ tags: [meta]
 - [Architecture](../spec/architecture.md) - Directory structure and file locations
 - [Maximize OSS Tools](../../work/initiatives/ini.maximize-oss-tools.md) - P0 prerequisites (WAL-G, OpenFGA/OPA) before new feature work
 - [Accounts Design](./ACCOUNTS_DESIGN.md) - Identity & billing model
-- [Security & Auth Spec](./SECURITY_AUTH_SPEC.md) - SIWE authentication architecture
+- [Security & Auth Spec](../spec/security-auth.md) - SIWE authentication architecture
 - [Payments Design](../spec/payments-design.md) - Native USDC payment architecture
 - [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
 - [Activity Metrics](../spec/activity-metrics.md) - Usage dashboard and charge receipt design
@@ -69,7 +69,7 @@ The system accepts USDC payments with real EVM RPC verification, tracks LLM cost
 
 Auth.js + SIWE wallet-first authentication with session management. Sessions resolve to billing accounts.
 
-**Reference:** [SECURITY_AUTH_SPEC.md](./SECURITY_AUTH_SPEC.md)
+**Reference:** [Security Auth Spec](../spec/security-auth.md)
 
 ### 2. Wallet Integration ✅
 
@@ -183,7 +183,7 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 - Add auth middleware: `/api/v1/*` accepts session OR `Authorization: Bearer <app_api_key>`
 - Update LLM port: resolve `{billing_account_id, app_api_key_id}` → mapped LiteLLM virtual key
 
-**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented), [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [SECURITY_AUTH_SPEC.md](./SECURITY_AUTH_SPEC.md)
+**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented), [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [Security Auth Spec](../spec/security-auth.md)
 
 ### 13. Post-MVP Security Hardening ⚠️
 

@@ -18,7 +18,7 @@ Next.js application source implementing hexagonal architecture for a fully web3-
 - [Architecture](../docs/spec/architecture.md)
 - [Authentication overview](../docs/AUTHENTICATION.md)
 - [Accounts design (billing + identity)](../docs/ACCOUNTS_DESIGN.md)
-- [Security & auth spec](../docs/SECURITY_AUTH_SPEC.md)
+- [Security & auth spec](../docs/spec/security-auth.md)
 - [Database architecture](../docs/DATABASES.md)
 - [Environment modes](../docs/ENVIRONMENTS.md)
 - [Auth schema](shared/db/schema.auth.ts) - Users table with SIWE wallet identity

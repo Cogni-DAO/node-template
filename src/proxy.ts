@@ -7,7 +7,7 @@
  * Scope: Root-level proxy. Enforces session auth on /api/v1/* routes (except /api/v1/public/*) via NextAuth JWT token inspection. Does not handle public infrastructure endpoints (e.g., /api/metrics, /api/health).
  * Invariants: /api/v1/public/* accessible without auth; other /api/v1/* routes require session; public infra endpoints live outside /api/v1/.
  * Side-effects: none
- * Links: docs/SECURITY_AUTH_SPEC.md
+ * Links: docs/spec/security-auth.md
  * @public
  */
 
