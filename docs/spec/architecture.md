@@ -550,7 +550,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [Graph Execution](grap
 - [Packages Architecture](packages-architecture.md) - Internal packages, isolation boundaries, and CI/CD setup
 - [Environment & Stack Deployment Modes](environments.md) - All 6 deployment modes, environment variables, and when to use each
 - [Observability](observability.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
-- [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
+- [Database & Migration Architecture](databases.md) - Database organization, migration strategies, and URL construction
 - [Database RLS Spec](database-rls.md) - Row-Level Security design (not yet implemented)
 - [Testing Strategy](../guides/testing.md) - Environment-based test adapters and stack testing approaches
 - [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines
