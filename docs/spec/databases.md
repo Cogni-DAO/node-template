@@ -16,7 +16,7 @@ tags: [databases]
 
 This document describes database organization, migration strategies, and database-specific configuration patterns.
 
-**For stack deployment modes and environment details, see [ENVIRONMENTS.md](ENVIRONMENTS.md).**
+**For stack deployment modes and environment details, see [Environments](environments.md).**
 
 ## Quick Start: Primary Development Workflow
 

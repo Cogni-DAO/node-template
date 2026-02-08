@@ -548,7 +548,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [Graph Execution](grap
 - [Authorization (RBAC/ReBAC)](RBAC_SPEC.md) - Actor/subject model, OpenFGA, dual-check for agent delegation
 - [Tenant Connections](TENANT_CONNECTIONS_SPEC.md) - Connection broker, credential faucet, grant intersection
 - [Packages Architecture](packages-architecture.md) - Internal packages, isolation boundaries, and CI/CD setup
-- [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
+- [Environment & Stack Deployment Modes](environments.md) - All 6 deployment modes, environment variables, and when to use each
 - [Observability](observability.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
 - [Database RLS Spec](database-rls.md) - Row-Level Security design (not yet implemented)
