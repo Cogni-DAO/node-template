@@ -304,7 +304,7 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 
 ## Design Notes
 
-Content aggregated from original `docs/spec/build-architecture.md` (Known Issues + Future Improvements), `docs/spec/check-full.md` (Future Enhancements), `docs/spec/database-url-alignment.md` (P1/P2 roadmap), `docs/spec/services-architecture.md` (service spawning roadmap), `docs/CICD_SERVICES_ROADMAP.md` (P0–P4 services deployment & GitOps track), `docs/SERVICES_MIGRATION.md` (Node → Operator migration track), and `docs/spec/health-probes.md` (liveness/readiness probe separation track) during docs migration.
+Content aggregated from original `docs/spec/build-architecture.md` (Known Issues + Future Improvements), `docs/spec/check-full.md` (Future Enhancements), `docs/spec/database-url-alignment.md` (P1/P2 roadmap), `docs/spec/services-architecture.md` (service spawning roadmap), `docs/CICD_SERVICES_ROADMAP.md` (P0–P4 services deployment & GitOps track), `work/initiatives/ini.cicd-services-gitops.md` (Node → Operator migration track), and `docs/spec/health-probes.md` (liveness/readiness probe separation track) during docs migration.
 
 ### Tagging Strategy (from CICD_SERVICES_ROADMAP.md)
 
@@ -362,7 +362,7 @@ k3s Cluster (OpenTofu-provisioned)
 
 ### Node → Operator Migration Track
 
-> Source: docs/SERVICES_MIGRATION.md
+> Source: work/initiatives/ini.cicd-services-gitops.md
 > Related spec: [node-operator-contract.md](../../docs/spec/node-operator-contract.md)
 
 All current code is Node-owned. Operator components will be added to this repo first (monorepo phase), then extracted when criteria are met.
