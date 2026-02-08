@@ -8,7 +8,7 @@
  * Invariants: Duplicate clientPaymentId does not double credit; ledger/reference remains single-entry.
  * Side-effects: IO (writes to billing tables via facade + DB).
  * Notes: Runs with stack test DB; cleans up inserted user/billing records.
- * Links: docs/DEPAY_PAYMENTS.md, src/app/_facades/payments/credits.server.ts
+ * Links: docs/spec/payments-design.md, src/app/_facades/payments/credits.server.ts
  * @public
  */
 

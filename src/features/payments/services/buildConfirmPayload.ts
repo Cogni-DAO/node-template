@@ -8,7 +8,7 @@
  * Invariants: USD to cents conversion uses Math.round; txHash becomes clientPaymentId; fallback to UUID if hash missing
  * Side-effects: none (pure function)
  * Notes: Used by Credits page after DePay widget success callback
- * Links: docs/DEPAY_PAYMENTS.md, src/contracts/payments.credits.confirm.v1.contract.ts
+ * Links: docs/spec/payments-design.md, src/contracts/payments.credits.confirm.v1.contract.ts
  * @public
  */
 
