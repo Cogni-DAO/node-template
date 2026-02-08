@@ -16,6 +16,7 @@
  */
 
 import {
+  TEST_GRAPH_NAME,
   TEST_SESSION_USER_1,
   TEST_SESSION_USER_2,
   TEST_SESSION_USER_3,
@@ -79,6 +80,7 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
       tokensIn: 298,
       tokensOut: 340,
       latencyMs: 7500,
+      graphId: TEST_GRAPH_NAME,
     };
 
     mockListChargeReceipts.mockResolvedValue([mockReceipt]);
@@ -195,6 +197,7 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
         tokensIn: 100,
         tokensOut: 150,
         latencyMs: null,
+        graphId: TEST_GRAPH_NAME,
       },
       {
         chargeReceiptId: "receipt-2",
@@ -204,6 +207,7 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
         tokensIn: 200,
         tokensOut: 250,
         latencyMs: null,
+        graphId: TEST_GRAPH_NAME,
       },
       {
         chargeReceiptId: "receipt-3",
@@ -213,6 +217,7 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
         tokensIn: 50,
         tokensOut: 75,
         latencyMs: null,
+        graphId: TEST_GRAPH_NAME,
       },
     ];
 

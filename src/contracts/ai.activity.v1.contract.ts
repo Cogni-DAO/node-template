@@ -135,7 +135,7 @@ export const aiActivityOperation = {
         timestamp: z.string().datetime(),
         provider: z.string(),
         model: z.string(),
-        app: z.string().optional(),
+        graphId: z.string(),
         tokensIn: z.number().int(),
         tokensOut: z.number().int(),
         cost: z.string().describe("Decimal string USD"),

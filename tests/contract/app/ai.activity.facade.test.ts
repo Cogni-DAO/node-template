@@ -13,7 +13,7 @@
  * @internal
  */
 
-import { TEST_SESSION_USER_1 } from "@tests/_fakes";
+import { TEST_GRAPH_NAME, TEST_SESSION_USER_1 } from "@tests/_fakes";
 import { describe, expect, it, vi } from "vitest";
 
 import { getActivity } from "@/app/_facades/ai/activity.server";
@@ -43,6 +43,7 @@ vi.mock("@/bootstrap/container", () => ({
           tokensIn: 10,
           tokensOut: 20,
           latencyMs: 500,
+          graphId: TEST_GRAPH_NAME,
         },
       ]),
     },
