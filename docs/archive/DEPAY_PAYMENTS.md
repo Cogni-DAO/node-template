@@ -11,7 +11,7 @@
 DePay Widgets was the **initial MVP crypto payment UI** for topping up internal credits. It sat in the **payments layer** and fed the **billing layer** by creating `credit_ledger` entries, but did **not** replace or change the dual-cost billing system defined in:
 
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
-- [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
+- [Billing Evolution](../spec/billing-evolution.md)
 - [DAO Enforcement](../spec/dao-enforcement.md) (Binding enforcement rules)
 
 Billing = how we track and charge for LLM usage (credits, provider_cost_credits, user_price_credits).

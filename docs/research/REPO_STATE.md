@@ -23,7 +23,7 @@ tags: [meta]
 - [Accounts Design](./ACCOUNTS_DESIGN.md) - Identity & billing model
 - [Security & Auth Spec](../spec/security-auth.md) - SIWE authentication architecture
 - [Payments Design](../spec/payments-design.md) - Native USDC payment architecture
-- [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
+- [Billing Evolution](../spec/billing-evolution.md) - Dual-cost accounting implementation
 - [Activity Metrics](../spec/activity-metrics.md) - Usage dashboard and charge receipt design
 - [On-Chain Readers](../spec/onchain-readers.md) - Treasury snapshots and token ownership intelligence (v2/v3)
 - [Chain Configuration](../spec/chain-config.md) - Policy for binding Web2 code to DAO-approved actions
@@ -96,7 +96,7 @@ Tables: `users`, `billing_accounts`, `virtual_keys`, `credit_ledger`, `charge_re
 
 **Architecture:** Service-auth model where `virtual_keys` acts as FK/scope handle for billing attribution. All outbound LLM calls use `LITELLM_MASTER_KEY` from env.
 
-**Reference:** [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md)
+**Reference:** [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [Billing Evolution](../spec/billing-evolution.md)
 
 ### 5. Dual-Cost LLM Billing ✅
 
@@ -106,7 +106,7 @@ Provider cost tracking + user pricing with configurable profit margin (default 2
 - Cost header missing → graceful degradation (free response, logged for review)
 - Invariant: `user_price_credits >= provider_cost_credits` when billed
 
-**Reference:** [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md)
+**Reference:** [Billing Evolution](../spec/billing-evolution.md)
 
 ### 6. Credits Page UI ✅
 
@@ -226,7 +226,7 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 
 **Payment Flow:** User creates intent → transfers USDC to DAO wallet → submits txHash → backend verifies (stubbed) → credits account
 
-**Reference:** [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md) - Credit Unit Standard
+**Reference:** [Billing Evolution](../spec/billing-evolution.md) - Credit Unit Standard
 
 ---
 

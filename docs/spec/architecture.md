@@ -54,7 +54,7 @@ Every dependency points inward.
 - Accounts & Credits: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
 - API Endpoints: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
 - Wallet Integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
-- Billing Evolution: [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
+- Billing Evolution: [Billing Evolution](billing-evolution.md)
 - Activity Metrics: [Activity Metrics](activity-metrics.md)
 
 ### Vertical slicing

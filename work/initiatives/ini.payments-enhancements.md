@@ -102,7 +102,7 @@ Harden and extend the billing pipeline across three axes: (1) improve pre-call c
 
 ## Design Notes
 
-Content aggregated from original `docs/BILLING_EVOLUTION.md` (Known Issues + Future Work), `docs/spec/external-executor-billing.md` (P0 remaining + P1 hardening), and `docs/spec/dao-enforcement.md` (Section 5: future DAO hardening) during docs migration.
+Content aggregated from original `docs/spec/billing-evolution.md` (Known Issues + Future Work), `docs/spec/external-executor-billing.md` (P0 remaining + P1 hardening), and `docs/spec/dao-enforcement.md` (Section 5: future DAO hardening) during docs migration.
 
 **Known issue from BILLING_EVOLUTION (resolved):** Activity reporting previously showed zeros — fixed by joining `charged_credits` from `charge_receipts` with LiteLLM telemetry by `litellm_call_id`.
 
