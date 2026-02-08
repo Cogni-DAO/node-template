@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/stack/setup/preflight-litellm-config`
  * Purpose: Vitest globalSetup that verifies LiteLLM is loaded with test config, not prod config.
- * Scope: Queries /v1/models and checks for test-model. Fails fast if prod config detected.
+ * Scope: Queries /v1/models and checks for test-model. Does not validate individual model routing or test data.
  * Invariants:
  *   - Stack tests MUST run against litellm.test.config.yaml (routes to mock-openai-api)
  *   - Stale containers from dev:stack must not silently serve prod config during test runs

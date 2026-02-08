@@ -4,8 +4,7 @@
 /**
  * Module: `@tests/stack/sandbox/sandbox-repo-volume`
  * Purpose: Proves sandbox containers can mount the git-sync repo_data volume read-only.
- * Scope: Tests SandboxVolumeMount with the real repo_data volume populated by git-sync.
- *        Does not test LLM proxy or network isolation.
+ * Scope: Tests SandboxVolumeMount with the real repo_data volume populated by git-sync. Does not test LLM proxy or network isolation.
  * Invariants:
  *   - repo_data volume is readable at /repo/current inside sandbox
  *   - /repo is read-only (container cannot write)

@@ -3,9 +3,8 @@
 
 /**
  * Module: `@tests/stack/sandbox/sandbox-llm-roundtrip-billing`
- * Purpose: Acceptance test proving sandbox billing pipeline end-to-end:
- *   proxy audit log captures billing data → UsageFact passes strict schema → charge_receipts DB row.
- * Scope: Full LLM round-trip (agent → proxy → LiteLLM → mock backend) with billing entry + DB assertions.
+ * Purpose: Acceptance test proving sandbox billing pipeline end-to-end from proxy audit log through charge_receipts DB row.
+ * Scope: Full LLM round-trip (agent → proxy → LiteLLM → mock backend) with billing entry + DB assertions. Does not test graph execution pipeline or billing reconciliation.
  * Invariants:
  *   - Per REAL_PROXY_MOCK_BACKEND: LiteLLM routes test models to mock-openai-api
  *   - Per SECRETS_HOST_ONLY: LITELLM_MASTER_KEY never enters sandbox container

@@ -3,7 +3,7 @@ id: billing-sandbox-spec
 type: spec
 title: Sandbox Billing — Proxy-Driven Audit Log Pipeline
 status: active
-trust: verified
+trust: draft
 summary: How LLM calls made inside sandbox containers are billed via nginx proxy audit log parsing
 read_when: Working on sandbox billing, proxy configuration, or UsageFact emission for sandboxed agents
 owner: derekg1729
