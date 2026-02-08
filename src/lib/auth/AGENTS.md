@@ -14,7 +14,7 @@ Server-side authentication helpers: session retrieval and billing account mappin
 
 ## Pointers
 
-- [AUTHENTICATION.md](../../../docs/AUTHENTICATION.md): Auth architecture
+- [Authentication](../../../docs/spec/authentication.md): Auth architecture
 - [AccountService port](../../ports/accounts.port.ts)
 
 ## Boundaries

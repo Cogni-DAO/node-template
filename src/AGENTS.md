@@ -16,7 +16,7 @@ Next.js application source implementing hexagonal architecture for a fully web3-
 
 - [Root AGENTS.md](../AGENTS.md)
 - [Architecture](../docs/spec/architecture.md)
-- [Authentication overview](../docs/AUTHENTICATION.md)
+- [Authentication overview](../docs/spec/authentication.md)
 - [Accounts design (billing + identity)](../docs/ACCOUNTS_DESIGN.md)
 - [Security & auth spec](../docs/spec/security-auth.md)
 - [Database architecture](../docs/DATABASES.md)
