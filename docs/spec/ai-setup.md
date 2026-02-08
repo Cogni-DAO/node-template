@@ -472,7 +472,7 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 - [USAGE_HISTORY.md](USAGE_HISTORY.md) - Artifact caching (executor-agnostic)
 - [AI_EVALS.md](AI_EVALS.md) - Eval harness structure, CI gates
 - [PROMPT_REGISTRY_SPEC.md](PROMPT_REGISTRY_SPEC.md) - Cloud-based prompt management (Langfuse + in-repo fallback)
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal layers
+- [Architecture](architecture.md) - Hexagonal layers
 
 ---
 

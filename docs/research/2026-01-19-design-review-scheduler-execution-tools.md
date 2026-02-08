@@ -432,7 +432,7 @@ CREATE TABLE connections (
 - [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
 - [TOOL_USE_SPEC.md](../TOOL_USE_SPEC.md)
 - [ROADMAP.md](../../ROADMAP.md)
-- [ARCHITECTURE.md](../ARCHITECTURE.md)
+- [Architecture](../spec/architecture.md)
 
 ---
 

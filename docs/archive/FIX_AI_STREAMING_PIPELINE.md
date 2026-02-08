@@ -31,7 +31,7 @@
 
 ### What The Architecture Actually Says
 
-From `ARCHITECTURE.md`:
+From `architecture.md`:
 
 - **`src/app/_facades/`**: "route facade helpers" - thin app-layer wrappers
 - **`src/features/*/services/`**: feature business logic
@@ -171,7 +171,7 @@ The 800+ line `completion.ts` handles too many concerns. Recommended split:
 
 ## Related Documents
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal layers, import rules
+- [Architecture](../spec/architecture.md) - Hexagonal layers, import rules
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) - P1 invariants and correlation IDs
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - Graph architecture
 - [\_facades/AGENTS.md](../src/app/_facades/AGENTS.md) - App facade pattern

@@ -17,7 +17,7 @@ tags: [web3]
 
 ## Context
 
-Multi-step on-chain operations (DAO formation, payments, future chain-interactive flows) need a reusable step visualization component. MVP (P0) fully reuses minimalistic Payments frontend components. See [NODE_FORMATION_SPEC.md](../NODE_FORMATION_SPEC.md) for P0 scope.
+Multi-step on-chain operations (DAO formation, payments, future chain-interactive flows) need a reusable step visualization component. MVP (P0) fully reuses minimalistic Payments frontend components. See [Node Formation Spec](node-formation.md) for P0 scope.
 
 ## Goal
 
@@ -186,4 +186,4 @@ _(none)_
 
 ## Related
 
-- [Node Formation](../NODE_FORMATION_SPEC.md)
+- [Node Formation](node-formation.md)

@@ -331,7 +331,7 @@ tags: [scheduler]
 - [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) — Canonical Temporal patterns and anti-patterns
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Execution invariants, billing
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Billing account lifecycle
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal pattern
+- [Architecture](architecture.md) — Hexagonal pattern
 - [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md) — Package boundaries and rules
 
 ## Sources

@@ -665,7 +665,7 @@ export function CreditsPageClient({ widgetConfig }: CreditsPageClientProps): Rea
 
 ## Token Compliance
 
-All styling MUST use semantic tokens per `UI_IMPLEMENTATION_GUIDE.md`:
+All styling MUST use semantic tokens per `ui-implementation.md`:
 
 | Element    | Token Usage                                          |
 | ---------- | ---------------------------------------------------- |
@@ -697,7 +697,7 @@ All styling MUST use semantic tokens per `UI_IMPLEMENTATION_GUIDE.md`:
 ## References
 
 - [PAYMENTS_DESIGN.md](PAYMENTS_DESIGN.md) - Backend spec and state machine
-- [UI_IMPLEMENTATION_GUIDE.md](UI_IMPLEMENTATION_GUIDE.md) - Styling rules
+- [UI Implementation Guide](../spec/ui-implementation.md) - Styling rules
 - [UI_CLEANUP_PLAN.md](UI_CLEANUP_PLAN.md) - Component consolidation plan
 - [wagmi docs](https://wagmi.sh) - React hooks for Ethereum
 - [USDC on Sepolia](https://sepolia.etherscan.io/token/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238)

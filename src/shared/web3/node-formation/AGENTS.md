@@ -76,7 +76,7 @@ import {
 ## Change Protocol
 
 - Update when OSx addresses change or new chains added
-- Sync address changes with [NODE_FORMATION_SPEC.md](../../../docs/spec/node-formation.md) appendix
+- Sync address changes with [Node Formation Spec](../../../docs/spec/node-formation.md) appendix
 - Bytecode updates require artifact re-extraction
 
 ## Notes

@@ -63,6 +63,8 @@ export interface SandboxRunSpec {
   readonly runId: string;
   /** Host filesystem path to mount as /workspace in container */
   readonly workspacePath: string;
+  /** Docker image to use for this run. */
+  readonly image: string;
   /**
    * Command arguments to execute.
    * For shell commands, use: ['bash', '-lc', 'your command here']

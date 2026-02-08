@@ -620,6 +620,6 @@ Capture at 3 viewports:
 
 ## References
 
-- [UI_IMPLEMENTATION_GUIDE.md](UI_IMPLEMENTATION_GUIDE.md) — Canonical UI reference
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Layer enforcement rules
+- [UI Implementation Guide](../spec/ui-implementation.md) — Canonical UI reference
+- [Architecture](../spec/architecture.md) — Layer enforcement rules
 - [ui-style-spec.json](ui-style-spec.json) — Machine-readable style spec
