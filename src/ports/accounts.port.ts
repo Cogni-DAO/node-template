@@ -3,7 +3,7 @@
 
 /**
  * Module: `@ports/accounts`
- * Purpose: Billing account service port interface with charge receipt recording and port-level errors.
+ * Purpose: Billing account service port interface with charge receipt + llm_charge_details recording and port-level errors.
  * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management. Does not implement business logic.
  * Invariants:
  * - All operations atomic; billing accounts own virtual keys; ledger integrity preserved

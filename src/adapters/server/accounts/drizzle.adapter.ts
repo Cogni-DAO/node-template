@@ -3,13 +3,14 @@
 
 /**
  * Module: `@adapters/server/accounts/drizzle`
- * Purpose: Drizzle account service implementations for PostgreSQL billing account operations with charge receipt recording.
+ * Purpose: Drizzle account service implementations for PostgreSQL billing account operations with charge receipt + llm_charge_details recording.
  * Scope: Implements AccountService and ServiceAccountService ports with ledger-based credit accounting and virtual key management. Does not compute pricing.
  * Invariants:
  * - Atomic ops; ledger source of truth; balance cached; UUID v4 validated
  * - IDEMPOTENT_CHARGES: (source_system, source_reference) is idempotency key per GRAPH_EXECUTION.md
  * - Persists chargeReason, sourceSystem, runId to charge_receipts (required fields)
  * - listChargeReceipts returns sourceSystem for Activity UI join
+ * - listLlmChargeDetails fetches LLM telemetry (model/tokens/provider/latency/graphId) for receipt enrichment
  * - UserDrizzleAccountService wraps all queries in withTenantScope (RLS enforced)
  * - ServiceDrizzleAccountService uses serviceDb directly (BYPASSRLS)
  * Side-effects: IO (database operations)

@@ -3,8 +3,8 @@
 
 /**
  * Module: `@shared/db/schema.billing`
- * Purpose: Billing tables schema with minimal charge_receipts for audit trail.
- * Scope: Defines billing_accounts, virtual_keys, credit_ledger, charge_receipts, payment_attempts, payment_events. Does not include auth identity tables.
+ * Purpose: Billing tables schema with charge_receipts as ledger of truth and llm_charge_details for LLM telemetry.
+ * Scope: Defines billing_accounts, virtual_keys, credit_ledger, charge_receipts, llm_charge_details, payment_attempts, payment_events. Does not include auth identity tables.
  * Invariants:
  * - Credits are BIGINT.
  * - billing_accounts.owner_user_id FK → auth.users(id).

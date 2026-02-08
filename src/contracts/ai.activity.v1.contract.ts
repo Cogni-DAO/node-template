@@ -11,7 +11,7 @@
  * - Chart buckets are zero-filled for the requested range.
  * - Money is decimal string to avoid float precision issues.
  * - Cursor is opaque string.
- * - P1: spend = our billing (charged_credits), telemetry = LiteLLM (model/tokens).
+ * - Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH: all data sourced from charge_receipts + llm_charge_details.
  * Side-effects: none
  * Links: [activity.server.ts](../../app/_facades/ai/activity.server.ts), docs/ACTIVITY_METRICS.md
  * @public
