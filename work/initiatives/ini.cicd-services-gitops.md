@@ -191,7 +191,7 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 
 ### Health Probe Separation (Livez/Readyz) Track
 
-> Source: docs/features/HEALTH_PROBES.md
+> Source: docs/spec/health-probes.md
 > Related spec: [health-probes.md](../../docs/spec/health-probes.md)
 
 **Goal:** Separate liveness (`/livez`) from readiness (`/readyz`) probes to enable fast CI smoke tests without full env, while maintaining strict runtime validation for deploy gates. Avoid double-boot waste by checking both probes against the same running stack container.
@@ -304,7 +304,7 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 
 ## Design Notes
 
-Content aggregated from original `docs/spec/build-architecture.md` (Known Issues + Future Improvements), `docs/spec/check-full.md` (Future Enhancements), `docs/spec/database-url-alignment.md` (P1/P2 roadmap), `docs/spec/services-architecture.md` (service spawning roadmap), `docs/CICD_SERVICES_ROADMAP.md` (P0–P4 services deployment & GitOps track), `docs/SERVICES_MIGRATION.md` (Node → Operator migration track), and `docs/features/HEALTH_PROBES.md` (liveness/readiness probe separation track) during docs migration.
+Content aggregated from original `docs/spec/build-architecture.md` (Known Issues + Future Improvements), `docs/spec/check-full.md` (Future Enhancements), `docs/spec/database-url-alignment.md` (P1/P2 roadmap), `docs/spec/services-architecture.md` (service spawning roadmap), `docs/CICD_SERVICES_ROADMAP.md` (P0–P4 services deployment & GitOps track), `docs/SERVICES_MIGRATION.md` (Node → Operator migration track), and `docs/spec/health-probes.md` (liveness/readiness probe separation track) during docs migration.
 
 ### Tagging Strategy (from CICD_SERVICES_ROADMAP.md)
 
