@@ -288,7 +288,7 @@ Reused:
 
 ## Design Notes
 
-Content extracted from original `docs/ACTIVITY_METRICS.md` TODO section during docs migration. The `METRICS_OBSERVABILITY.md` and `OBSERVABILITY_REQUIRED_SPEC.md` docs will contribute additional content when migrated.
+Content extracted from original `docs/spec/activity-metrics.md` TODO section during docs migration. The `METRICS_OBSERVABILITY.md` and `OBSERVABILITY_REQUIRED_SPEC.md` docs will contribute additional content when migrated.
 
 P2+ log filtering, structured metadata, traces, dashboards, and alerts content extracted from `docs/ALLOY_LOKI_SETUP.md` during guide migration.
 

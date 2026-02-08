@@ -13,7 +13,7 @@
  * - Pass-through: model, tokens, timestamps from LiteLLM as-is (no recomputation)
  * - Read-only: observational cost only (not user billing)
  * Side-effects: IO (HTTP to LiteLLM /spend/logs)
- * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
+ * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), docs/spec/activity-metrics.md
  * @internal
  */
 

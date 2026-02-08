@@ -24,7 +24,7 @@ tags: [meta]
 - [Security & Auth Spec](./SECURITY_AUTH_SPEC.md) - SIWE authentication architecture
 - [Payments Design](../spec/payments-design.md) - Native USDC payment architecture
 - [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
-- [Activity Metrics](./ACTIVITY_METRICS.md) - Usage dashboard and charge receipt design
+- [Activity Metrics](../spec/activity-metrics.md) - Usage dashboard and charge receipt design
 - [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
 - [Chain Configuration](./CHAIN_CONFIG.md) - Policy for binding Web2 code to DAO-approved actions
 - [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
@@ -126,7 +126,7 @@ Full usage tracking dashboard with LiteLLM integration.
 - USD cost display from charge receipts
 - Join key: `litellm_call_id` links telemetry to billing
 
-**Reference:** [ACTIVITY_METRICS.md](./ACTIVITY_METRICS.md)
+**Reference:** [Activity Metrics](../spec/activity-metrics.md)
 
 ### 9. Observability Infrastructure ✅
 

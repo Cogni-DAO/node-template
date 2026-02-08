@@ -7,7 +7,7 @@
  * Scope: Tests P1 invariants: bounded pagination, server-derived identity, error handling, pass-through data. Does not make real HTTP calls.
  * Invariants: No real HTTP calls; deterministic responses; ActivityUsagePort contract compliance
  * Side-effects: none (mocked fetch)
- * Links: src/adapters/server/ai/litellm.activity-usage.adapter.ts, docs/ACTIVITY_METRICS.md (P1 invariants)
+ * Links: src/adapters/server/ai/litellm.activity-usage.adapter.ts, docs/spec/activity-metrics.md (P1 invariants)
  * @public
  */
 
