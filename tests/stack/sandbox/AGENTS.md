@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-07
+- **Last reviewed:** 2026-02-08
 - **Status:** draft
 
 ## Purpose
@@ -32,13 +32,13 @@ Stack tests for sandbox P0.5 and P0.5a. Proves socket bridge, proxy forwarding, 
 
 - **Exports:** none
 - **Routes:** none
-- **CLI:** `pnpm test:stack:dev -- sandbox-llm`
+- **CLI:** `pnpm test:stack:dev -- sandbox-llm`, `pnpm test:stack:dev -- sandbox-repo-volume`
 - **Env/Config keys:** `LITELLM_MASTER_KEY` (required; tests skip if absent)
 - **Files considered API:** none
 
 ## Responsibilities
 
-- This directory **does**: Test proxy health endpoint via socket bridge; test LiteLLM forwarding; test network isolation (no proxy → no connectivity); test secrets isolation (no LITELLM_MASTER_KEY in container env); test OPENAI_API_BASE injection; test spoofed header handling; test full LLM round-trip via mock-openai-api (response content, litellmCallId header chain)
+- This directory **does**: Test proxy health endpoint via socket bridge; test LiteLLM forwarding; test network isolation (no proxy → no connectivity); test secrets isolation (no LITELLM_MASTER_KEY in container env); test OPENAI_API_BASE injection; test spoofed header handling; test full LLM round-trip via mock-openai-api (response content, litellmCallId header chain); test repo volume mount (repo_data read-only at /repo)
 - This directory **does not**: Test billing DB writes or reconciliation; test graph execution pipeline
 
 ## Usage

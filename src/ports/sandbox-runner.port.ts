@@ -27,6 +27,20 @@ export interface SandboxMount {
 }
 
 /**
+ * Named Docker volume mount for sandbox containers.
+ * Used for git-sync repo volumes, shared caches, or artifact volumes.
+ * Defaults to read-only — callers must explicitly opt into read-write.
+ */
+export interface SandboxVolumeMount {
+  /** Docker named volume (e.g., "repo_data") */
+  readonly volume: string;
+  /** Path inside container (e.g., "/repo") */
+  readonly containerPath: string;
+  /** Defaults to true. Force explicit override if ever needed. */
+  readonly readOnly?: boolean;
+}
+
+/**
  * Network mode configuration for sandbox containers.
  */
 export interface SandboxNetworkMode {
@@ -80,8 +94,10 @@ export interface SandboxRunSpec {
     /** Maximum combined stdout+stderr bytes (default: 2MB) */
     readonly maxOutputBytes?: number;
   };
-  /** Additional mounts (e.g., repo snapshot at /repo:ro) */
+  /** Additional bind mounts (e.g., host paths) */
   readonly mounts?: readonly SandboxMount[];
+  /** Named Docker volume mounts (e.g., git-sync repo_data at /repo:ro) */
+  readonly volumes?: readonly SandboxVolumeMount[];
   /**
    * Network mode for container. Defaults to { mode: 'none' } for complete isolation.
    * Note: P0.5 uses network=none + llmProxy for LLM access, not internal network.

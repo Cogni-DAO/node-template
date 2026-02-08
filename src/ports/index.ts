@@ -155,6 +155,7 @@ export type {
   SandboxRunnerPort,
   SandboxRunResult,
   SandboxRunSpec,
+  SandboxVolumeMount,
 } from "./sandbox-runner.port";
 export type {
   EmitAiEvent,

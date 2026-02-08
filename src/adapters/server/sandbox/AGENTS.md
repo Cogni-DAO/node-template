@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-07
+- **Last reviewed:** 2026-02-08
 - **Status:** draft
 
 ## Purpose
@@ -45,7 +45,7 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 
 ## Responsibilities
 
-- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; manage LLM proxy containers (nginx:alpine on sandbox-internal network); share socket via Docker volume at `/llm-sock`; inject billing identity and metadata headers; collect stdout/stderr; handle timeouts and OOM; cleanup containers and volumes; route `sandbox:*` graphIds through the graph execution pipeline (SandboxGraphProvider); list sandbox agents in UI catalog (SandboxAgentCatalogProvider)
+- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; manage LLM proxy containers (nginx:alpine on sandbox-internal network); share socket via Docker volume at `/llm-sock`; mount named Docker volumes (e.g., git-sync `repo_data` at `/repo:ro` via `SandboxVolumeMount`); inject billing identity and metadata headers; collect stdout/stderr; handle timeouts and OOM; cleanup containers and volumes; route `sandbox:*` graphIds through the graph execution pipeline (SandboxGraphProvider); list sandbox agents in UI catalog (SandboxAgentCatalogProvider)
 - This directory **does not**: Manage long-lived containers; implement agent logic (agent runs inside container); pass credentials to sandbox containers
 
 ## Usage

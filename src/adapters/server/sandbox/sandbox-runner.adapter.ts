@@ -96,6 +96,7 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
       argv,
       limits,
       mounts = [],
+      volumes = [],
       networkMode,
       llmProxy,
     } = spec;
@@ -164,6 +165,15 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
         Source: proxyHandle.socketVolume,
         Target: CONTAINER_LLM_SOCKET_DIR,
         ReadOnly: false,
+      });
+    }
+    // Named volume mounts from spec (e.g., git-sync repo_data)
+    for (const v of volumes) {
+      volumeMounts.push({
+        Type: "volume",
+        Source: v.volume,
+        Target: v.containerPath,
+        ReadOnly: v.readOnly ?? true,
       });
     }
 
