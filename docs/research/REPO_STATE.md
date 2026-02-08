@@ -75,7 +75,7 @@ Auth.js + SIWE wallet-first authentication with session management. Sessions res
 
 wagmi + RainbowKit client-side wallet connection. Chain locked to Base mainnet (8453).
 
-**Reference:** [INTEGRATION_WALLETS_CREDITS.md](./INTEGRATION_WALLETS_CREDITS.md)
+**Reference:** [Wallet Auth Setup](../guides/wallet-auth-setup.md)
 
 ### 3. Native USDC Payments ✅
 
