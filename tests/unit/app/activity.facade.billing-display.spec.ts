@@ -17,6 +17,7 @@
 
 import {
   TEST_GRAPH_NAME,
+  TEST_GRAPH_NAME_2,
   TEST_SESSION_USER_1,
   TEST_SESSION_USER_2,
   TEST_SESSION_USER_3,
@@ -246,5 +247,68 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
 
     // If we had mistakenly summed credits: 12340 + 56780 + 9100 = 78220 credits = $0.007822
     // But displaying as raw would show "$78220.000000" - the bug we're preventing
+  });
+
+  it("should pipe distinct graphId values through to rows", async () => {
+    const receipts = [
+      {
+        id: "receipt-sandbox",
+        litellmCallId: "call-sb",
+        chargedCredits: "5000",
+        responseCostUsd: "0.000500",
+        sourceSystem: "litellm" as const,
+        receiptKind: "llm",
+        createdAt: new Date("2024-01-01T12:10:00Z"),
+      },
+      {
+        id: "receipt-inproc",
+        litellmCallId: "call-ip",
+        chargedCredits: "3000",
+        responseCostUsd: "0.000300",
+        sourceSystem: "litellm" as const,
+        receiptKind: "llm",
+        createdAt: new Date("2024-01-01T12:00:00Z"),
+      },
+    ];
+
+    const details = [
+      {
+        chargeReceiptId: "receipt-sandbox",
+        providerCallId: "call-sb",
+        model: "gpt-4",
+        provider: "openai",
+        tokensIn: 100,
+        tokensOut: 50,
+        latencyMs: null,
+        graphId: TEST_GRAPH_NAME_2,
+      },
+      {
+        chargeReceiptId: "receipt-inproc",
+        providerCallId: "call-ip",
+        model: "anthropic/claude-sonnet-4.5",
+        provider: "anthropic",
+        tokensIn: 200,
+        tokensOut: 100,
+        latencyMs: null,
+        graphId: TEST_GRAPH_NAME,
+      },
+    ];
+
+    mockListChargeReceipts.mockResolvedValue(receipts);
+    mockListLlmChargeDetails.mockResolvedValue(details);
+
+    const result = await getActivity({
+      from: "2024-01-01T00:00:00Z",
+      to: "2024-01-02T00:00:00Z",
+      limit: 10,
+      sessionUser: TEST_SESSION_USER_1,
+    });
+
+    expect(result.rows).toHaveLength(2);
+    // DESC order: sandbox first (12:10), then inproc (12:00)
+    expect(result.rows[0]?.graphId).toBe(TEST_GRAPH_NAME_2);
+    expect(result.rows[0]?.model).toBe("gpt-4");
+    expect(result.rows[1]?.graphId).toBe(TEST_GRAPH_NAME);
+    expect(result.rows[1]?.model).toBe("anthropic/claude-sonnet-4.5");
   });
 });
