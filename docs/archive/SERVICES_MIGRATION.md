@@ -3,7 +3,7 @@
 > [!CRITICAL]
 > All current code is Node-owned. Operator components will be added to this repo first (monorepo phase), then extracted when criteria are met.
 
-→ See: [Node vs Operator Contract](NODE_VS_OPERATOR_CONTRACT.md) for boundary definitions and full directory structures
+→ See: [Node vs Operator Contract](../spec/node-operator-contract.md) for boundary definitions and full directory structures
 
 ---
 
@@ -181,7 +181,7 @@ All routes are Node-owned. Routes are framework artifacts; architectural boundar
 
 | Doc                                                       | Purpose                                      |
 | --------------------------------------------------------- | -------------------------------------------- |
-| [Node vs Operator Contract](NODE_VS_OPERATOR_CONTRACT.md) | Boundaries, invariants, directory structures |
+| [Node vs Operator Contract](../spec/node-operator-contract.md) | Boundaries, invariants, directory structures |
 | [MVP Deliverables](MVP_DELIVERABLES.md)                   | Scope lock                                   |
 | [AI Architecture & Evals](AI_EVALS.md)                    | AI structure                                 |
 | [ROADMAP](../ROADMAP.md)                                  | Phase overview                               |

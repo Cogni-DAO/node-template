@@ -9,7 +9,7 @@ Cogni is a DAO-first "org factory." This repo ships the **Node** — a sovereign
 
 **Operator** services (git-review, git-admin) are value-add. Nodes can consume them, self-host OSS versions, or skip entirely.
 
-→ See: [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md)
+→ See: [Node vs Operator Contract](docs/spec/node-operator-contract.md)
 
 ---
 
@@ -40,7 +40,7 @@ Operator shares CI/CD, observability, deploy invariants, and hex architecture wi
 
 **Self-Host Note:** Operator data plane services (git-review-daemon, git-admin-daemon) will be open-sourced as standalone deployables. Sovereign Nodes can run their own instances without any Cogni Operator account.
 
-→ Full directory trees: [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md#directory-structures)
+→ Full directory trees: [Node vs Operator Contract](docs/spec/node-operator-contract.md#directory-structures)
 → Migration details: [Services Migration Guide](docs/SERVICES_MIGRATION.md)
 
 ---
@@ -54,7 +54,7 @@ Operator shares CI/CD, observability, deploy invariants, and hex architecture wi
 | **Fork Freedom**        | Node repo forkable and runnable without Cogni accounts                              |
 | **Repo-Spec Authority** | Node authors policy; Operator consumes snapshot+hash; Operator never invents policy |
 
-→ Full list: [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md)
+→ Full list: [Node vs Operator Contract](docs/spec/node-operator-contract.md)
 
 ---
 
@@ -173,7 +173,7 @@ Requirements:
 
 | Doc                                                            | Purpose                            |
 | -------------------------------------------------------------- | ---------------------------------- |
-| [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md) | Boundaries, invariants, boot seams |
+| [Node vs Operator Contract](docs/spec/node-operator-contract.md) | Boundaries, invariants, boot seams |
 | [MVP Deliverables](docs/MVP_DELIVERABLES.md)                   | Scope lock, success criteria       |
 | [Node Formation Spec](docs/spec/node-formation.md)             | DAO formation tooling (Phase 0)    |
 | [AI Setup Spec](docs/spec/ai-setup.md)                         | AI P0/P1/P2 checklists, invariants |

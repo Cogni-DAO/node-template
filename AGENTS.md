@@ -54,7 +54,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ### Core Architecture
 
 - [Technical Roadmap](ROADMAP.md)
-- [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md)
+- [Node vs Operator Contract](docs/spec/node-operator-contract.md)
 - [MVP Deliverables](docs/MVP_DELIVERABLES.md)
 - [Node Formation Spec](docs/spec/node-formation.md)
 - [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
