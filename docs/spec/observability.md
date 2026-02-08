@@ -191,7 +191,7 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 **Labels:** All low-cardinality—`route` (routeId), `method`, `status` (2xx/4xx/5xx), `provider`, `model_class` (free/standard/premium), `code` (`AiExecutionErrorCode` — pre-normalized, no heuristics)
 
-**Error Metrics:** `ai_llm_errors_total` receives pre-normalized `AiExecutionErrorCode` from the completion layer. Metrics never introspect error objects or use string heuristics. See [ERROR_HANDLING_ARCHITECTURE.md](ERROR_HANDLING_ARCHITECTURE.md#ai-execution-errors).
+**Error Metrics:** `ai_llm_errors_total` receives pre-normalized `AiExecutionErrorCode` from the completion layer. Metrics never introspect error objects or use string heuristics. See [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md#ai-execution-errors).
 
 ---
 

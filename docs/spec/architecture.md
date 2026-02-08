@@ -553,7 +553,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [Graph Execution](grap
 - [Database & Migration Architecture](databases.md) - Database organization, migration strategies, and URL construction
 - [Database RLS Spec](database-rls.md) - Row-Level Security design (not yet implemented)
 - [Testing Strategy](../guides/testing.md) - Environment-based test adapters and stack testing approaches
-- [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines
+- [Error Handling Architecture](error-handling.md) - Layered error translation patterns and implementation guidelines
 - [Model Selection](model-selection.md) - Dynamic model fetching from LiteLLM, validation, and UI integration
 - [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
