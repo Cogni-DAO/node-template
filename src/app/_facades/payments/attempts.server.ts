@@ -8,7 +8,7 @@
  * Invariants: Billing account from session identity only; return types use z.infer; Date fields map to ISO strings.
  * Side-effects: IO (via PaymentAttemptUserRepository, PaymentAttemptServiceRepository, AccountService, OnChainVerifier ports).
  * Notes: Errors bubble to route handlers for HTTP mapping. Facades own DTO mapping (port types → contract types).
- * Links: docs/PAYMENTS_DESIGN.md, src/contracts/AGENTS.md
+ * Links: docs/spec/payments-design.md, src/contracts/AGENTS.md
  * @public
  */
 

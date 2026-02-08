@@ -66,7 +66,7 @@
 - [x] `pnpm check` passes with 0 violations
 - [ ] Manual test on Sepolia with real USDC
 - [ ] Mobile viewport (360px) works
-- [x] Update `docs/PAYMENTS_DESIGN.md` Phase 2 checklist
+- [x] Update `docs/spec/payments-design.md` Phase 2 checklist
 
 ---
 
@@ -696,7 +696,7 @@ All styling MUST use semantic tokens per `ui-implementation.md`:
 
 ## References
 
-- [PAYMENTS_DESIGN.md](PAYMENTS_DESIGN.md) - Backend spec and state machine
+- [Payments Design](../spec/payments-design.md) - Backend spec and state machine
 - [UI Implementation Guide](../spec/ui-implementation.md) - Styling rules
 - [UI_CLEANUP_PLAN.md](UI_CLEANUP_PLAN.md) - Component consolidation plan
 - [wagmi docs](https://wagmi.sh) - React hooks for Ethereum

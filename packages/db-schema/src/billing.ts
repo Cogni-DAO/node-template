@@ -15,7 +15,7 @@
  * - charge_receipts has run_id, attempt columns for run-level queries
  * - charge_receipts uses (source_system, source_reference) for generic linking to external systems
  * Side-effects: none (schema definitions only)
- * Links: docs/PAYMENTS_DESIGN.md, docs/ACTIVITY_METRICS.md, docs/GRAPH_EXECUTION.md, types/billing.ts
+ * Links: docs/spec/payments-design.md, docs/ACTIVITY_METRICS.md, docs/GRAPH_EXECUTION.md, types/billing.ts
  * @public
  */
 

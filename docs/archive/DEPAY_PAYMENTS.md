@@ -2,7 +2,7 @@
 
 **⚠️ DEPRECATED:** This document describes the original DePay widget approach. The project has moved to a direct wagmi/viem implementation with backend verification.
 
-**See instead:** [PAYMENTS_DESIGN.md](PAYMENTS_DESIGN.md) - Current payment system design
+**See instead:** [Payments Design](../spec/payments-design.md) - Current payment system design
 
 ---
 

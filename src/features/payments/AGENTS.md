@@ -15,7 +15,7 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [Payments Design](../../../docs/PAYMENTS_DESIGN.md)
+- [Payments Design](../../../docs/spec/payments-design.md)
 - [DAO Enforcement](../../../docs/DAO_ENFORCEMENT.md)
 - [Billing Evolution](../../../docs/BILLING_EVOLUTION.md)
 

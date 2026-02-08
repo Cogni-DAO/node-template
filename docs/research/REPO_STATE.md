@@ -22,7 +22,7 @@ tags: [meta]
 - [Maximize OSS Tools](../../work/initiatives/ini.maximize-oss-tools.md) - P0 prerequisites (WAL-G, OpenFGA/OPA) before new feature work
 - [Accounts Design](./ACCOUNTS_DESIGN.md) - Identity & billing model
 - [Security & Auth Spec](./SECURITY_AUTH_SPEC.md) - SIWE authentication architecture
-- [Payments Design](./PAYMENTS_DESIGN.md) - Native USDC payment architecture
+- [Payments Design](../spec/payments-design.md) - Native USDC payment architecture
 - [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
 - [Activity Metrics](./ACTIVITY_METRICS.md) - Usage dashboard and charge receipt design
 - [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
@@ -88,7 +88,7 @@ Intent-based payment flow: create intent → user transfers USDC → submit txHa
 
 **Security Note:**: EvmRpcOnChainVerifierAdapter implemented with viem RPC verification. Validates transactions against canonical config (chain, recipient, token, amount).\*\*
 
-**Reference:** [PAYMENTS_DESIGN.md](./PAYMENTS_DESIGN.md)
+**Reference:** [Payments Design](../spec/payments-design.md)
 
 ### 4. Database Schema (Billing Layer) ✅
 
