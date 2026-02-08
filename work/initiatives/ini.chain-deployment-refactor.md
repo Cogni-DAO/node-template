@@ -119,7 +119,7 @@ Harden the repo-spec governance pipeline so that production deployments are cryp
 
 ## Design Notes
 
-Signed repo-spec track extracted from original `docs/CHAIN_CONFIG.md` "Long-Term Hardening" section during docs migration. Deployment verification track extracted from `docs/CHAIN_DEPLOYMENT_TECH_DEBT.md`.
+Signed repo-spec track extracted from original `docs/spec/chain-config.md` "Long-Term Hardening" section during docs migration. Deployment verification track extracted from `docs/CHAIN_DEPLOYMENT_TECH_DEBT.md`.
 
 ### Deployment Verification Design (from CHAIN_DEPLOYMENT_TECH_DEBT.md)
 

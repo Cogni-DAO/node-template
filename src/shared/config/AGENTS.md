@@ -77,5 +77,5 @@ Server-only configuration helpers sourced from versioned repo metadata (e.g., `.
 - Repo-spec changes require a server restart to refresh cached payment config.
 - Reads from `payments_in.credits_topup.*` path only - no fallback to legacy widget paths.
 - Schema validates structure: EVM address format, non-empty provider; `allowed_chains`/`allowed_tokens` are informational metadata (not enforced).
-- Chain alignment: `cogni_dao.chain_id` must match `CHAIN_ID` from `@/shared/web3/chain` or startup fails. See [CHAIN_CONFIG.md](../../../docs/CHAIN_CONFIG.md).
+- Chain alignment: `cogni_dao.chain_id` must match `CHAIN_ID` from `@/shared/web3/chain` or startup fails. See [Chain Config](../../../docs/spec/chain-config.md).
 - Use `getPaymentConfig()` for DAO wallet only; use `CHAIN_ID`/`USDC_TOKEN_ADDRESS` from `@/shared/web3/chain` for network constants.
