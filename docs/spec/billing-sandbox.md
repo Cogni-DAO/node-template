@@ -14,118 +14,87 @@ tags: [sandbox, billing, proxy]
 
 # Sandbox Billing — Proxy-Driven Audit Log Pipeline
 
-## Data Flow
+## How It Works
+
+The agent never touches billing. The nginx proxy captures billing data from every LLM call, and the host reads it after the run.
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  SANDBOX CONTAINER (network=none)                                │
-│                                                                  │
-│  Agent (run.mjs or OpenClaw) calls LLM via localhost:8080        │
-│  socat bridges localhost:8080 → unix socket in /llm-sock/        │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ unix socket (Docker volume)
-               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  NGINX PROXY CONTAINER (sandbox-internal network)                │
-│                                                                  │
-│  Injects (overwrites client values):                             │
-│    Authorization: Bearer $LITELLM_MASTER_KEY                     │
-│    x-litellm-end-user-id: $BILLING_ACCOUNT_ID                   │
-│    x-litellm-spend-logs-metadata: {run_id, attempt, graph_id}   │
-│                                                                  │
-│  Forwards to LiteLLM, receives response headers:                 │
-│    x-litellm-call-id        → written to audit log               │
-│    x-litellm-response-cost  → written to audit log               │
-│                                                                  │
-│  Audit log line per request:                                     │
-│    $time litellm_call_id=$ID litellm_response_cost=$COST ...     │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ audit log collected via docker exec cat
-               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  HOST — LlmProxyManager.stop()                                   │
-│                                                                  │
-│  1. copyLogFromContainer() — demux Docker stream, write to disk  │
-│  2. parseAuditLog() — extract {litellmCallId, costUsd} per line  │
-│  3. Return ProxyStopResult { billingEntries, logPath }           │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ ProxyBillingEntry[]
-               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  HOST — SandboxRunnerAdapter.runOnce()                            │
-│                                                                  │
-│  Attaches billingEntries to SandboxRunResult                     │
-│  (collected on ALL paths: success, timeout, OOM, error)          │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ SandboxRunResult.proxyBillingEntries
-               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  HOST — SandboxGraphProvider.createExecution()                    │
-│                                                                  │
-│  For each billing entry:                                         │
-│    yield { type: "usage_report", fact: UsageFact }               │
-│      usageUnitId  = entry.litellmCallId                          │
-│      costUsd      = entry.costUsd                                │
-│      executorType = "sandbox"                                    │
-│      source       = "litellm"                                    │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ AiEvent stream
-               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  BILLING — commitUsageFact()                                     │
-│                                                                  │
-│  Idempotency key: ${runId}/${attempt}/${usageUnitId}             │
-│  → calculateDefaultLlmCharge(costUsd)                            │
-│  → accountService.recordChargeReceipt()                          │
-└──────────────────────────────────────────────────────────────────┘
+ SANDBOX CONTAINER (network=none)          NGINX PROXY (sandbox-internal)           LiteLLM
+ ┌──────────────────────────┐              ┌───────────────────────────┐            ┌────────┐
+ │                          │  socat       │                           │            │        │
+ │  Agent calls LLM ───────────────────►   │  1. Inject billing hdrs  │            │        │
+ │  localhost:8080          │  unix sock   │  2. Forward to LiteLLM  ──────────►   │  LLM   │
+ │                          │              │  3. Receive response    ◄──────────    │  call  │
+ │  (repeat N times)        │              │  4. Log call_id + cost   │            │        │
+ │                          │              │     to access.log        │            │        │
+ └──────────────────────────┘              └───────────────────────────┘            └────────┘
+
+ After sandbox exits, HOST reads the proxy audit log:
+
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │  HOST                                                                      │
+ │                                                                            │
+ │  5. docker exec cat access.log  →  raw log lines                           │
+ │  6. parseAuditLog()             →  ProxyBillingEntry[] (callId + costUsd)  │
+ │  7. Attach to SandboxRunResult.proxyBillingEntries                         │
+ │  8. Emit usage_report per entry →  commitUsageFact()                       │
+ │                                 →  recordChargeReceipt()                   │
+ └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Key Files
+Steps 5–8 run on ALL exit paths (success, timeout, OOM, error). LLM calls before failure are still billed.
 
-| Layer            | File                                                        | What it does                                                                    |
-| ---------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Proxy config     | `platform/infra/services/sandbox-proxy/nginx.conf.template` | Header injection + audit log format                                             |
-| Port types       | `src/ports/sandbox-runner.port.ts`                          | `ProxyBillingEntry`, `SandboxRunResult.proxyBillingEntries`                     |
-| Proxy lifecycle  | `src/adapters/server/sandbox/llm-proxy-manager.ts`          | `stop()` → `parseAuditLog()` → `ProxyStopResult`                                |
-| Container runner | `src/adapters/server/sandbox/sandbox-runner.adapter.ts`     | Threads billing entries through `SandboxRunResult`                              |
-| Graph provider   | `src/adapters/server/sandbox/sandbox-graph.provider.ts`     | Emits `usage_report` per billing entry                                          |
-| Billing consumer | `src/features/ai/services/billing.ts`                       | `commitUsageFact()` → `recordChargeReceipt()`                                   |
-| Agent script     | `services/sandbox-runtime/agent/run.mjs`                    | Still captures `litellmCallId` in stdout (debug only, billing does not read it) |
+The proxy is **ephemeral — one per run**. `LlmProxyManager.start()` generates an nginx config from the template by substituting the caller's `billingAccountId`, `runId`, and `LITELLM_MASTER_KEY`, then starts a fresh `nginx:alpine` container on the `sandbox-internal` Docker network. The sandbox and proxy share a Docker volume at `/llm-sock/` for the unix socket. On stop, the proxy container is removed.
+
+## Component Responsibilities
+
+| Component                      | Responsibility                                                                  | Key file                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Nginx proxy**                | Injects billing headers, logs `call_id` + `cost` per request                    | `platform/infra/services/sandbox-proxy/nginx.conf.template` |
+| **LlmProxyManager**            | Starts/stops proxy container, parses audit log → `ProxyBillingEntry[]`          | `src/adapters/server/sandbox/llm-proxy-manager.ts`          |
+| **SandboxRunnerAdapter**       | Runs sandbox container, threads billing entries into `SandboxRunResult`         | `src/adapters/server/sandbox/sandbox-runner.adapter.ts`     |
+| **SandboxGraphProvider**       | Emits `usage_report` AiEvent per billing entry (with `usageUnitId` + `costUsd`) | `src/adapters/server/sandbox/sandbox-graph.provider.ts`     |
+| **billing.ts**                 | Consumes `usage_report` → `commitUsageFact()` → `recordChargeReceipt()`         | `src/features/ai/services/billing.ts`                       |
+| **Agent (run.mjs / OpenClaw)** | Billing-ignorant. Still captures `litellmCallId` in stdout for debug only.      | `services/sandbox-runtime/agent/run.mjs`                    |
 
 ## Invariants
 
-1. **BILLING_FROM_PROXY_NOT_AGENT** — Billing data comes from the nginx audit log, never from agent stdout. The agent is billing-ignorant.
+1. **BILLING_FROM_PROXY_NOT_AGENT** — Billing data comes from the nginx audit log, never from agent stdout.
+2. **UNIFORM_MECHANISM** — Single-call (run.mjs) and multi-call (OpenClaw) agents use the identical billing path. No branching.
+3. **USAGE_UNIT_IS_LITELLM_CALL_ID** — `usageUnitId` sourced from `x-litellm-call-id` response header captured in audit log.
+4. **COST_FROM_RESPONSE_HEADER** — `costUsd` sourced from `x-litellm-response-cost`. When absent, billing.ts logs CRITICAL but still records (degraded mode).
+5. **BILLING_ON_ALL_PATHS** — Billing entries collected on timeout, OOM, and error paths.
+6. **SECRETS_HOST_ONLY** — `LITELLM_MASTER_KEY` exists only in proxy container. Sandbox never sees it.
+7. **HOST_INJECTS_BILLING_HEADER** — Proxy unconditionally overwrites `x-litellm-end-user-id` and `x-litellm-spend-logs-metadata`. Sandbox cannot spoof billing identity.
 
-2. **UNIFORM_MECHANISM** — Single-call agents (run.mjs) and multi-call agents (OpenClaw) use the identical billing path. No `if (multiCall)` branching.
+## Audit Log Format
 
-3. **USAGE_UNIT_IS_LITELLM_CALL_ID** — `usageUnitId` on every `UsageFact` is sourced from `x-litellm-call-id` response header, captured in the proxy audit log.
+Nginx key=value format. `parseAuditLog()` extracts two fields per line:
 
-4. **COST_FROM_RESPONSE_HEADER** — `costUsd` is sourced from `x-litellm-response-cost` response header. When absent, billing.ts logs CRITICAL but still records the receipt (degraded mode).
+- `litellm_call_id=<value>` → `ProxyBillingEntry.litellmCallId` (lines with `-` or absent are skipped — health checks)
+- `litellm_response_cost=<value>` → `ProxyBillingEntry.costUsd` (parseFloat; undefined if `-` or NaN)
 
-5. **BILLING_ON_ALL_PATHS** — Proxy billing entries are collected even on timeout, OOM, and error paths. LLM calls that happened before failure are still billed.
+`copyLogFromContainer()` uses `demuxDockerStream()` to strip Docker multiplexed frame headers before writing to disk.
 
-6. **SECRETS_HOST_ONLY** — `LITELLM_MASTER_KEY` exists only in the proxy container. The sandbox container never sees it.
+## Port Types
 
-7. **HOST_INJECTS_BILLING_HEADER** — The proxy unconditionally overwrites `x-litellm-end-user-id` and `x-litellm-spend-logs-metadata`. The sandbox cannot spoof billing identity.
+```typescript
+// src/ports/sandbox-runner.port.ts
 
-## How the Audit Log is Parsed
+interface ProxyBillingEntry {
+  readonly litellmCallId: string; // x-litellm-call-id
+  readonly costUsd?: number; // x-litellm-response-cost
+}
 
-The nginx access log uses a key=value format. `LlmProxyManager.parseAuditLog()` extracts:
+interface SandboxRunResult {
+  // ...stdout, stderr, exitCode, etc.
+  readonly proxyBillingEntries?: readonly ProxyBillingEntry[];
+}
+```
 
-- `litellm_call_id=<value>` → `ProxyBillingEntry.litellmCallId` (skip if `-` or absent)
-- `litellm_response_cost=<value>` → `ProxyBillingEntry.costUsd` (parseFloat, undefined if `-` or NaN)
+## Comparison with In-Proc
 
-Health check requests (`/health`) produce no `litellm_call_id` and are filtered out.
+Both paths produce the same `UsageFact` shape. The difference is where headers are captured:
 
-Docker exec with `hijack:true` returns multiplexed stream frames (8-byte headers). `LlmProxyManager.demuxDockerStream()` strips these before writing the log to disk, so `parseAuditLog()` reads clean text.
-
-## Comparison with In-Proc Billing
-
-| Aspect                 | In-proc (LangGraph)                     | Sandbox                                              |
-| ---------------------- | --------------------------------------- | ---------------------------------------------------- |
-| LLM call               | `LiteLlmAdapter` on host                | Agent inside container via proxy                     |
-| Header capture         | Adapter reads response headers directly | Proxy writes headers to audit log                    |
-| `usageUnitId` source   | `x-litellm-call-id` from response       | `litellm_call_id=` from audit log                    |
-| `costUsd` source       | `x-litellm-response-cost` from response | `litellm_response_cost=` from audit log              |
-| `usage_report` emitter | `InProcCompletionUnitAdapter`           | `SandboxGraphProvider`                               |
-| Timing                 | Immediate (same process)                | Post-run (after container exits, before proxy stops) |
+- **In-proc:** `InProcCompletionUnitAdapter` reads LiteLLM response headers directly, emits `usage_report` immediately.
+- **Sandbox:** Nginx proxy writes headers to audit log. Host parses log post-run, `SandboxGraphProvider` emits `usage_report` per entry.
