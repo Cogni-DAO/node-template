@@ -219,6 +219,7 @@ export async function getActivity(
       timestamp: receipt.createdAt.toISOString(),
       provider: detail?.provider ?? receipt.sourceSystem,
       model: detail?.model ?? "unknown",
+      app: detail?.graphId,
       tokensIn: detail?.tokensIn ?? 0,
       tokensOut,
       cost: receipt.responseCostUsd ?? "—",

@@ -211,6 +211,8 @@ export const llmChargeDetails = pgTable(
     tokensOut: integer("tokens_out"),
     /** Call latency in milliseconds */
     latencyMs: integer("latency_ms"),
+    /** Namespaced graph ID (e.g. 'langgraph:poet') or 'raw-completion' for direct calls */
+    graphId: text("graph_id").notNull(),
   },
   (table) => [
     pgPolicy("tenant_isolation", {

@@ -19,6 +19,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { GraphId } from "@cogni/ai-core";
 import { withTenantScope } from "@cogni/db-client";
 import { type ActorId, type UserId, userActor } from "@cogni/ids";
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
@@ -407,6 +408,7 @@ export class UserDrizzleAccountService implements AccountService {
           tokensIn: params.llmDetail.tokensIn ?? null,
           tokensOut: params.llmDetail.tokensOut ?? null,
           latencyMs: params.llmDetail.latencyMs ?? null,
+          graphId: params.llmDetail.graphId,
         });
       }
 
@@ -619,6 +621,7 @@ export class UserDrizzleAccountService implements AccountService {
       tokensIn: number | null;
       tokensOut: number | null;
       latencyMs: number | null;
+      graphId: GraphId;
     }>
   > {
     if (params.chargeReceiptIds.length === 0) return [];
@@ -641,6 +644,7 @@ export class UserDrizzleAccountService implements AccountService {
         tokensIn: r.tokensIn,
         tokensOut: r.tokensOut,
         latencyMs: r.latencyMs,
+        graphId: r.graphId as `${string}:${string}`,
       }));
     });
   }

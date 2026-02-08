@@ -1,5 +1,5 @@
 {
-  "id": "cde0363e-8c14-4916-ac90-ddc23bff0004",
+  "id": "c79559c8-e70e-4cc4-be3d-711e4b951f1b",
   "prevId": "4b7623a8-2602-49ef-b4af-1e1319904633",
   "version": "7",
   "dialect": "postgresql",
@@ -805,6 +805,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "graph_id": {
+          "name": "graph_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {},

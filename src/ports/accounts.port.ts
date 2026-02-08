@@ -16,6 +16,7 @@
  * @public
  */
 
+import type { GraphId } from "@cogni/ai-core";
 import type { ChargeReason, SourceSystem } from "@/types/billing";
 
 /**
@@ -133,6 +134,7 @@ export type LlmChargeDetail = {
   tokensIn: number | null;
   tokensOut: number | null;
   latencyMs: number | null;
+  graphId: GraphId;
 };
 
 export type ChargeReceiptParams = {
@@ -296,6 +298,7 @@ export interface AccountService {
       tokensIn: number | null;
       tokensOut: number | null;
       latencyMs: number | null;
+      graphId: GraphId;
     }>
   >;
 }

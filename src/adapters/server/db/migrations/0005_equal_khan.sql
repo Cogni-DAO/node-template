@@ -5,7 +5,8 @@ CREATE TABLE "llm_charge_details" (
 	"provider" text,
 	"tokens_in" integer,
 	"tokens_out" integer,
-	"latency_ms" integer
+	"latency_ms" integer,
+	"graph_id" text NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "llm_charge_details" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

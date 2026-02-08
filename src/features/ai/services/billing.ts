@@ -17,6 +17,7 @@
  * @public
  */
 
+import type { GraphId } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import type { AccountService } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
@@ -44,6 +45,7 @@ export interface BillingContext {
   readonly providerCostUsd: number | undefined;
   readonly litellmCallId: string | undefined;
   readonly provenance: "response" | "stream";
+  readonly graphId: GraphId;
 }
 
 /**
@@ -79,6 +81,7 @@ export async function recordBilling(
     providerCostUsd,
     litellmCallId,
     provenance,
+    graphId,
   } = context;
 
   try {
@@ -142,6 +145,7 @@ export async function recordBilling(
         tokensIn: null, // Not available in BillingContext
         tokensOut: null, // Not available in BillingContext
         latencyMs: null,
+        graphId,
       },
     });
   } catch (error) {
@@ -277,6 +281,7 @@ export async function commitUsageFact(
         tokensIn: fact.inputTokens ?? null,
         tokensOut: fact.outputTokens ?? null,
         latencyMs: null, // Not available in UsageFact
+        graphId: fact.graphId,
       },
     });
 
