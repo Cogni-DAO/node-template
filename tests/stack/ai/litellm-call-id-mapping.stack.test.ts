@@ -136,17 +136,6 @@ describe("LiteLLM Call ID → Spend Log Mapping (Contract Test)", () => {
 
     // 5. Find the matching spend log entry by filtering for our request
     // (LiteLLM stores metadata.run_id in spend logs)
-    console.log("DEBUG: Looking for capturedCallId:", capturedCallId);
-    console.log("DEBUG: Total spend logs returned:", spendLogs.length);
-    console.log(
-      "DEBUG: First log entry:",
-      JSON.stringify(spendLogs[0], null, 2)
-    );
-    console.log(
-      "DEBUG: All request_id values:",
-      spendLogs.map((log: { request_id: string }) => log.request_id)
-    );
-
     const matchingLog = spendLogs.find((log: { request_id: string }) => {
       return log.request_id === capturedCallId;
     });
@@ -154,11 +143,6 @@ describe("LiteLLM Call ID → Spend Log Mapping (Contract Test)", () => {
     // 6. CRITICAL ASSERTION: verify the field mapping
     expect(matchingLog).toBeDefined();
     expect(matchingLog?.request_id).toBe(capturedCallId);
-
-    // Log the verified mapping for documentation
-    console.log(
-      `✓ Verified: x-litellm-call-id (${capturedCallId}) === spend_logs.request_id`
-    );
 
     // Cleanup
     await db.delete(users).where(eq(users.id, mockSessionUser.id));
