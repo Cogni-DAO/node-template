@@ -107,7 +107,7 @@ Lock current hex architecture. Document what exists. All code is Node-owned.
 - Establish eval CI gate
 - Add dependency-cruiser rule: Next.js (`src/**`) cannot import `packages/langgraph-graphs/`
 
-→ See: [AI Setup Spec](docs/AI_SETUP_SPEC.md), [LangGraph Server](docs/LANGGRAPH_SERVER.md)
+→ See: [AI Setup Spec](docs/AI_SETUP_SPEC.md), [LangGraph Server](docs/spec/langgraph-server.md)
 
 ### Phase 2: Operator Services Scaffold
 

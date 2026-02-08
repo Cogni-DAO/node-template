@@ -17,7 +17,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 - [Root AGENTS.md](../../../AGENTS.md)
 - [Architecture](../../../docs/spec/architecture.md)
 - [AI Setup Spec](../../../docs/AI_SETUP_SPEC.md) (P0/P1 checklists, invariants)
-- [LangGraph Server](../../../docs/LANGGRAPH_SERVER.md) (external runtime, adapter implementation)
+- [LangGraph Server](../../../docs/spec/langgraph-server.md) (external runtime, adapter implementation)
 - [LangGraph Patterns](../../../docs/spec/langgraph-patterns.md) (graph patterns, anti-patterns)
 - [Chat subfeature](./chat/AGENTS.md)
 - **Related:** [../payments/](../payments/) (credits), [../../contracts/](../../contracts/) (ai.completion.v1, ai.chat.v1, ai.models.v1)

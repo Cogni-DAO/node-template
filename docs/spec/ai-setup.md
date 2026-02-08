@@ -134,7 +134,7 @@ tags: [ai]
 
 ### P1: LangGraph Server Integration
 
-Deploy LangGraph Server as external runtime; implement adapter; preserve unified billing. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for full spec.
+Deploy LangGraph Server as external runtime; implement adapter; preserve unified billing. See [LangGraph Server](langgraph-server.md) for full spec.
 
 **Runtime architecture:**
 
@@ -466,7 +466,7 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 
 ## Related Docs
 
-- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) - External runtime MVP, adapter implementation
+- [LangGraph Server](langgraph-server.md) - External runtime MVP, adapter implementation
 - [LangGraph Patterns](langgraph-patterns.md) - Graph patterns, anti-patterns
 - [Graph Execution](graph-execution.md) - Billing idempotency, pump+fanout pattern
 - [USAGE_HISTORY.md](USAGE_HISTORY.md) - Artifact caching (executor-agnostic)

@@ -22,7 +22,7 @@ AI service adapters including LiteLLM completion/streaming, usage telemetry, age
 - [LiteLLM configuration](../../../../../platform/infra/services/litellm/)
 - [Activity Metrics Design](../../../../docs/spec/activity-metrics.md)
 - [Graph Execution Design](../../../../docs/spec/graph-execution.md)
-- [LangGraph Server Design](../../../../docs/LANGGRAPH_SERVER.md)
+- [LangGraph Server Design](../../../../docs/spec/langgraph-server.md)
 
 ## Boundaries
 

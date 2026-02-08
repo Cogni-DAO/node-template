@@ -26,7 +26,7 @@ Define the package boundaries, execution paths, and invariants that govern LangG
 
 ## Non-Goals
 
-- Server infrastructure details (Docker, Redis, container deployment) — see [LANGGRAPH_SERVER.md](../LANGGRAPH_SERVER.md)
+- Server infrastructure details (Docker, Redis, container deployment) — see [LangGraph Server](../LANGGRAPH_SERVER.md)
 - Executor-agnostic billing and tracking patterns — see [Graph Execution](graph-execution.md)
 - Step-by-step guide for adding new graphs — see [Agent Development Guide](../guides/agent-development.md)
 
@@ -206,7 +206,7 @@ Key design:
 
 LangGraphServerAdapter calls external LangGraph Server via SDK. Server owns thread state/checkpoints and routes LLM through LiteLLM proxy. `stateKey` is required; send only new user input; server owns thread state. Tools work per-run. InProc path ignores `stateKey` (no thread persistence).
 
-See [LANGGRAPH_SERVER.md](../LANGGRAPH_SERVER.md) for infrastructure details.
+See [LangGraph Server](../LANGGRAPH_SERVER.md) for infrastructure details.
 
 ### Tool Structure
 
@@ -300,7 +300,7 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 
 - [Agent Development Guide](../guides/agent-development.md) — Step-by-step for adding new agent graphs
 - [Graph Execution](graph-execution.md) — Executor-agnostic billing, tracking, UI/UX patterns
-- [LANGGRAPH_SERVER.md](../LANGGRAPH_SERVER.md) — Infrastructure: Docker, Redis, container deployment
+- [LangGraph Server](../LANGGRAPH_SERVER.md) — Infrastructure: Docker, Redis, container deployment
 - [Tool Use Spec](./tool-use.md) — Tool execution invariants
 - [Usage History Spec](./usage-history.md) — Run artifacts, assistant_final persistence
 - [AI Setup Spec](./ai-setup.md) — Correlation IDs, telemetry
