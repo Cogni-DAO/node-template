@@ -275,4 +275,4 @@ The dashboard and SDK ergonomics are nice-to-have, but:
 - [Graph Execution](../spec/graph-execution.md)
 - [Scheduler Spec](../spec/scheduler.md)
 - [Node Formation Spec](../spec/node-formation.md)
-- [TOOL_USE_SPEC.md](../TOOL_USE_SPEC.md)
+- [Tool Use Spec](../spec/tool-use.md)

@@ -342,5 +342,5 @@ Without idempotency:
 - [Accounts Design](../ACCOUNTS_DESIGN.md) — Billing accounts, owner vs actor (pending migration)
 - [Graph Execution](graph-execution.md) — GraphExecutorPort, billing flow, invariants 26/29/30 (pending migration)
 - [Scheduler](./scheduler.md) — ExecutionGrant for scheduled runs
-- [Tool Use](../TOOL_USE_SPEC.md) — Tool contracts, ToolEffect (pending migration)
+- [Tool Use](tool-use.md) — Tool contracts, ToolEffect (pending migration)
 - [System Tenant Initiative](../../work/initiatives/ini.system-tenant-governance.md) — Implementation roadmap

@@ -15,7 +15,7 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
 ## Pointers
 
 - [LangGraph AI Guide](../../docs/LANGGRAPH_AI.md)
-- [Tool Use Spec](../../docs/TOOL_USE_SPEC.md)
+- [Tool Use Spec](../../docs/spec/tool-use.md)
 
 ## Boundaries
 

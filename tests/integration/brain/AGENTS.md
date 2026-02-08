@@ -15,7 +15,7 @@ End-to-end smoke tests for Brain-mode capability wiring. Validates the full path
 ## Pointers
 
 - [RepoCapability interface](../../../packages/ai-tools/src/capabilities/repo.ts)
-- [Tool Use Spec](../../../docs/TOOL_USE_SPEC.md)
+- [Tool Use Spec](../../../docs/spec/tool-use.md)
 - [COGNI_BRAIN_SPEC](../../../docs/spec/cogni-brain.md)
 
 ## Boundaries
