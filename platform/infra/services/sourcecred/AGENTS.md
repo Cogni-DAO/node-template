@@ -16,7 +16,7 @@ Hosts the legacy SourceCred instance for contribution tracking and cred distribu
 
 - [Service Definition](./docker-compose.sourcecred.yml)
 - [Deployment Script](../../../../platform/ci/scripts/deploy.sh)
-- [Spec](../../../../docs/SOURCECRED.md)
+- [Spec](../../../../docs/spec/sourcecred.md)
 
 ## Boundaries
 
