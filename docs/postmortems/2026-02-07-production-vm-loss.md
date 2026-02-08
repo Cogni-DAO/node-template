@@ -1,23 +1,24 @@
 ---
 id: pm-2026-02-07-production-vm-loss
 type: postmortem
-title: "Production VM Loss & Complete Outage"
+title: "Production VM Loss, OTel Hang, & Multi-Environment Outages"
 status: draft
 trust: draft
-summary: CherryServers silently replaced production VM — total data loss (Postgres, Temporal, configs), full outage
-read_when: Investigating hosting reliability, backup strategy, or disaster recovery
+summary: CherryServers silently replaced production VM (data loss); OTel spawnSync blocks event loop (app hang); preview crashed silently; billing FK bug blocks all users
+read_when: Investigating hosting reliability, backup strategy, disaster recovery, or OTel configuration
 owner: derekg1729
 created: 2026-02-07
+updated: 2026-02-08
 ---
 
-# Postmortem: Production VM Loss & Complete Outage
+# Postmortem: Production VM Loss, OTel Hang, & Multi-Environment Outages
 
 > **WE DO NOT TRUST CHERRYSERVERS. WE NEED TO BACK UP OUR DATA.**
 
-**Date**: 2026-02-07
-**Severity**: Critical (full production outage, total data loss)
-**Status**: Active — VM reprovisioned, deploy pending
-**Duration**: Ongoing (first detected ~08:20 UTC)
+**Date**: 2026-02-07 through 2026-02-08
+**Severity**: Critical (full production outage, total data loss, then recurring hangs)
+**Status**: Active — VM reprovisioned, app hangs on page requests, billing broken
+**Duration**: Ongoing (first detected ~08:20 UTC Feb 7)
 
 ---
 
@@ -350,3 +351,193 @@ Sequence:
 - [ ] Determine if `BrokenBronzeBroomBrotherBrownBrushBubbleBuddy` is a real secret or test data
 - [ ] If real: rotate immediately, audit what it protects
 - [ ] Either way: fix the code path that dumps it to stderr
+
+---
+
+## Feb 8 Continuation: Three More Issues Found
+
+After the VM was reprovisioned and redeployed, three additional issues were discovered on Feb 8. The `spawnSync` SIGTERM flood from Feb 7 and the `spawnSync` ETIMEDOUT from Feb 8 are the **same root cause** — OTel resource detectors shelling out during startup/render.
+
+### Issue A: OTel `spawnSync` Blocks Event Loop (PRODUCTION DOWN)
+
+**Status**: Active — cognidao.org hangs on all page requests as of Feb 8 ~10:50 UTC
+**Severity**: P0 — site completely unresponsive to browsers
+
+#### What's happening
+
+1. `curl https://cognidao.org/` — TLS succeeds, HTTP/2 request sent, **0 bytes received**, hangs until timeout
+2. Health checks (`meta.readyz`, `meta.metrics`) still return 200 — backend is alive
+3. LiteLLM readiness checks pass every 10s
+4. App stderr shows repeated `spawnSync /bin/sh ETIMEDOUT` errors
+
+#### Root cause
+
+`@opentelemetry/sdk-node` (v0.208.0) default resource detectors — when `resourceDetectors` is not explicitly set and `OTEL_NODE_RESOURCE_DETECTORS` env var is absent, the SDK defaults to `'all'`, which includes `hostDetector`, `osDetector`, `processDetector`, and `envDetector`. In the production Docker image's bundled code, these detectors shell out synchronously:
+
+```
+spawnSync /bin/sh -c "curl -s -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' http://169.254.169.254/latest/api/token"
+```
+
+This probes the **AWS EC2 Instance Metadata Service (IMDSv2)** to detect if the process is running on EC2. On non-AWS hosts (CherryServers), the request times out after several seconds. Because it uses `spawnSync` (synchronous), it **blocks the entire Node.js event loop** during the timeout.
+
+The detectors run not just at startup but appear to fire during SSR page renders, causing every page request to hang for the full timeout duration and return 0 bytes.
+
+**Connection to Feb 7**: The `spawnSync /bin/sh` SIGTERM errors on Feb 7 stderr were the same detectors timing out and being killed. The subprocess `pid: 50820` was this curl call. The crash loop was: startup → OTel detectors block event loop → Docker health check fails → container restart → repeat. On a 2GB VM, this cycle exhausted memory and likely triggered the CherryServers VM replacement.
+
+#### Evidence
+
+```
+# First occurrence (Feb 7)
+{service="app", env="production", stream="stderr"} |~ "spawnSync"
+→ 2026-02-07T07:47:59Z: "spawnSync /bin/sh ETIMEDOUT"
+
+# Feb 8 (ongoing)
+→ 2026-02-08T10:52:43Z: 5+ spawnSync ETIMEDOUT errors in same millisecond
+→ Each includes: curl to 169.254.169.254, errno: -110 (ETIMEDOUT)
+
+# App responding to health checks but not page requests
+→ meta.readyz: 200 OK (116-278ms)
+→ GET /: 0 bytes, hangs until 15s timeout
+```
+
+#### Fix
+
+Two changes needed:
+
+**1. Set env var `OTEL_NODE_RESOURCE_DETECTORS=none`** in the production Docker Compose / deployment config. This is the fastest fix — no code change, no rebuild needed. The env var tells the SDK to skip all resource detectors. We don't use OTel resource attributes for anything (P0 config is trace-ID-only, no exporter).
+
+**2. Add `resourceDetectors: []` to `src/instrumentation.ts`** as a code-level defense so we don't depend on the env var:
+
+```typescript
+sdk = new NodeSDK({
+  instrumentations: [],
+  resourceDetectors: [], // Prevent spawnSync to EC2 metadata
+});
+```
+
+Both changes are needed: env var for immediate production fix without redeploy, code change to prevent regression.
+
+---
+
+### Issue B: Preview Silently Down for 5 Hours (Feb 8)
+
+**Status**: Resolved (app recovered after deploy at ~06:04 UTC)
+**Severity**: P1 — 5 hours of unnoticed downtime, no alerts
+
+#### Timeline (UTC, Feb 8)
+
+| Time          | Event                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------- |
+| ~01:00        | App goes down silently — no crash logs, no OOM messages, no app logs at all                                 |
+| 01:00 – 05:59 | scheduler-worker fires every 15 min, every run fails: `ConnectTimeoutError` to app:3000 (2,774 log entries) |
+| ~06:01        | App comes back, processes backlogged graph execution (idempotency key from Feb 7 17:30)                     |
+| ~06:04        | Deployment completes                                                                                        |
+| 06:15         | Scheduler run: "Graph execution completed with error"                                                       |
+| ~06:33        | Deployment FAILED — exit code 255                                                                           |
+| 06:45         | Scheduler run: error again                                                                                  |
+| 07:00         | Scheduler run: success                                                                                      |
+
+#### Key errors
+
+1. **`ConnectTimeoutError: Connect Timeout Error (attempted address: app:3000, timeout: 10000ms)`** — scheduler-worker couldn't TCP-connect to the app for 5 hours straight
+2. **`spawnSync /bin/sh ENOBUFS`** — when the app came back at ~06:00, it hit buffer overflow errors, suggesting severe resource pressure (same `spawnSync` pattern as production)
+3. **Deployment failed (exit code 255)** — the 06:33 deploy failed, though the 06:04 deploy recovered the app
+
+#### What's unclear
+
+Why the app went down at ~01:00 UTC. No crash logs, no OOM messages. The `ENOBUFS` errors on restart suggest resource exhaustion from the same OTel `spawnSync` pattern. Possible OOM kill by container runtime (invisible to app logs).
+
+#### Sandbox error (unrelated)
+
+```
+SandboxGraphProvider: ENOENT: connect /var/run/docker.sock
+```
+
+Preview doesn't have Docker — sandbox features can't run there. Needs a graceful fallback.
+
+---
+
+### Issue C: Billing FK Violation Blocks All Chat (Both Environments)
+
+**Status**: Active — every authenticated request returns 500
+**Severity**: P0 — no user can chat
+
+#### What's happening
+
+On both production and preview, every `POST /ai.chat` and `GET /payments.credits_summary` request fails:
+
+```
+insert into "billing_accounts" ("id", "owner_user_id", "balance_credits", "created_at")
+values ($1, $2, $3, default)
+→ violates foreign key constraint "billing_accounts_owner_user_id_users_id_fk"
+```
+
+The `getOrCreateBillingAccountForUser()` method (`src/adapters/server/accounts/drizzle.adapter.ts:226`) tries to INSERT a billing account, but the FK constraint requires `owner_user_id` to exist in the `users` table. After the DB was wiped and recreated (Feb 7 VM loss), users authenticate via SIWE and get a session, but if their session was issued before the DB wipe, the userId in their session doesn't exist in the new `users` table.
+
+#### Affected users
+
+| Environment | User ID                                | Errors | Time range         |
+| ----------- | -------------------------------------- | ------ | ------------------ |
+| Production  | `49acbd1b-0f2e-4ee3-a45f-0b79e32ca45d` | 16     | Feb 8, 09:41-09:42 |
+| Preview     | `5c8f75f0-0e59-4858-b125-52d6b9b9cde3` | 6      | Feb 7, 07:09-07:10 |
+
+#### Fix
+
+**Immediate**: Clear cookies / invalidate sessions so users re-authenticate. The SIWE `authorize()` callback in `src/auth.ts:127` will create the user row, then billing account creation succeeds.
+
+**Proper**: The `getOrCreateBillingAccountForUser()` should verify the user exists before INSERT, or catch the FK violation and return a user-friendly error ("please re-authenticate") instead of a raw 500.
+
+---
+
+### Issue D: Recurring Poet Graph Stream Aborts (Preview)
+
+**Status**: Active — recurring every 15-60 min
+**Severity**: P1 — scheduled graph execution failing silently
+
+```
+LlmError: LiteLLM stream aborted
+  kind: "aborted"
+  component: InProcCompletionUnitAdapter
+  graph: "poet"
+```
+
+Seven occurrences between Feb 7 14:30 and Feb 8 06:45 UTC. The `poet` graph's completion stream is being cut off. Likely a timeout or upstream provider issue.
+
+---
+
+## Updated Hypothesis: The Full Chain
+
+The Feb 7 and Feb 8 incidents are **the same root cause** at different severities:
+
+1. **OTel `spawnSync` detectors** run on startup AND during SSR renders
+2. On Feb 7 (production, 2GB VM): repeated timeouts → event loop blocked → Docker health check fails → `restart: always` → crash loop → OOM → CherryServers replaces VM → data loss
+3. On Feb 8 (preview): same pattern → app goes down at 01:00 → no crash logs (OOM kill) → 5 hours downtime → recovers after deploy
+4. On Feb 8 (production, after recovery): app deploys to fresh VM → OTel detectors block page renders → site "doesn't exist" from browser perspective → health checks still pass (lightweight, no SSR)
+5. The billing FK bug is a **consequence** of the data loss — users have sessions but no DB rows
+
+**Fix priority**:
+
+1. **VM watchdog** — the app can be "healthy but hung" (readyz passes, pages don't render). We have ZERO external observability on the VM. No alerting, no auto-restart, no way to know the site is down until a human tries it. A systemd watchdog timer curling `/api/meta/readyz` with a 2s timeout, restarting the app container after 4 consecutive failures (~2 min), would have auto-recovered both the Feb 7 crash loop and the Feb 8 hang without human intervention.
+2. `OTEL_NODE_RESOURCE_DETECTORS=none` in production env (immediate, no rebuild)
+3. `resourceDetectors: []` in `src/instrumentation.ts` (code fix, requires deploy)
+4. Session invalidation or graceful billing FK handling
+
+---
+
+## Critical Gap: No External Observability on VM
+
+**We are blind.** The VM has no mechanism to detect or recover from application failures:
+
+- **No watchdog**: App can hang indefinitely while Docker thinks it's healthy
+- **No external uptime monitor**: Nobody knows the site is down until a human visits it
+- **No alerting**: Grafana Cloud has the logs but no alert rules configured
+- **No auto-restart for hangs**: Docker `restart: always` only helps if the process exits — it does nothing when the process is alive but the event loop is blocked
+- **Preview crashed for 5 hours** on Feb 8 with zero notification
+
+### What's needed (in priority order)
+
+1. **Systemd watchdog timer on the VM** — curl `localhost:3000/api/meta/readyz` every 30s with a 2s timeout. After 4 consecutive failures (~2 min), `docker compose restart app`. This converts "hung but still running" into an automatic restart within ~2 minutes. This is the single change that would have prevented both the Feb 7 crash loop (by restarting before OOM) and the Feb 8 hang (by restarting when pages stop rendering).
+
+2. **External uptime monitor** (UptimeRobot, Checkly, or similar) pinging `https://cognidao.org/api/meta/readyz` every 60s from outside. Alerts to Slack/email when it fails. The VM watchdog handles auto-recovery; this handles notification.
+
+3. **Grafana Cloud alert rules** on Loki — trigger when `{stream="stderr"}` volume spikes or when `{service="app"}` logs stop arriving (dead-man's switch).
