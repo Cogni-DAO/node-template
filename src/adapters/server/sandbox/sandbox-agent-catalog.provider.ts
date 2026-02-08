@@ -9,7 +9,7 @@
  *   - DISCOVERY_NO_EXECUTION_DEPS: No SandboxRunnerAdapter or proxy deps required
  *   - P0_AGENT_GRAPH_IDENTITY: agentId === graphId (one agent per graph)
  * Side-effects: none
- * Links: docs/SANDBOXED_AGENTS.md, agent-catalog.provider.ts
+ * Links: docs/spec/sandboxed-agents.md, agent-catalog.provider.ts
  * @internal
  */
 

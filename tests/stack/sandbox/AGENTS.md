@@ -14,7 +14,7 @@ Stack tests for sandbox P0.5 and P0.5a. Proves socket bridge, proxy forwarding, 
 
 ## Pointers
 
-- [Sandbox Spec](../../../docs/SANDBOXED_AGENTS.md)
+- [Sandbox Spec](../../../docs/spec/sandboxed-agents.md)
 - [Sandbox Adapter](../../../src/adapters/server/sandbox/)
 - [Shared Fixtures](../../_fixtures/sandbox/fixtures.ts)
 

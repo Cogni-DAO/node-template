@@ -11,7 +11,7 @@
  *   - No public internet access (internal: true prevents external gateway)
  *   - No Docker socket access (container escape prevention)
  * Side-effects: IO (Docker containers, filesystem)
- * Links: docs/SANDBOXED_AGENTS.md, P0.5a spec
+ * Links: docs/spec/sandboxed-agents.md, P0.5a spec
  * @public
  */
 
