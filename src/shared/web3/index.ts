@@ -7,7 +7,7 @@
  * Scope: Re-exports chain configuration helpers/constants; does not contain runtime logic or side effects.
  * Invariants: Exports both framework-agnostic config (chain.ts) and wagmi adapter (evm-wagmi.ts).
  * Side-effects: none
- * Links: docs/spec/payments-design.md, docs/ONCHAIN_READERS.md
+ * Links: docs/spec/payments-design.md, docs/spec/onchain-readers.md
  * @public
  */
 

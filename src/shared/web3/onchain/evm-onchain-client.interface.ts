@@ -8,7 +8,7 @@
  * Invariants: All EVM adapters MUST use this interface (never call viem/RPC directly).
  * Side-effects: none (interface definition only)
  * Notes: Production uses ViemEvmOnchainClient; tests use FakeEvmOnchainClient.
- * Links: docs/ONCHAIN_READERS.md, docs/spec/payments-design.md
+ * Links: docs/spec/onchain-readers.md, docs/spec/payments-design.md
  * @public
  */
 

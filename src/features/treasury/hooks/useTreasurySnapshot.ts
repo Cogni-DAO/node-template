@@ -8,7 +8,7 @@
  * Invariants: NO refetchInterval, NO refetchOnWindowFocus; rely on staleTime only.
  * Side-effects: IO (HTTP GET to treasury snapshot API)
  * Notes: Phase 2: USDC balance only. Returns full snapshot (address, chainId, balance, staleWarning).
- * Links: docs/ONCHAIN_READERS.md
+ * Links: docs/spec/onchain-readers.md
  * @public
  */
 

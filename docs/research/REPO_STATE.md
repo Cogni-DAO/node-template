@@ -25,7 +25,7 @@ tags: [meta]
 - [Payments Design](../spec/payments-design.md) - Native USDC payment architecture
 - [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
 - [Activity Metrics](../spec/activity-metrics.md) - Usage dashboard and charge receipt design
-- [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
+- [On-Chain Readers](../spec/onchain-readers.md) - Treasury snapshots and token ownership intelligence (v2/v3)
 - [Chain Configuration](./CHAIN_CONFIG.md) - Policy for binding Web2 code to DAO-approved actions
 - [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
 - [AI Governance Data](./AI_GOVERNANCE_DATA.md) - Signal ingest, brief generation, incident-gated governance
