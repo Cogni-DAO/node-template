@@ -6,7 +6,7 @@
 # Purpose: Ban raw typography utilities and arbitrary values without var(--token)
 # Runs: Part of pnpm check (see scripts/check-fast.sh)
 # Scope: src/** excluding styles/kit/vendor directories
-# Links: docs/UI_CLEANUP_PLAN.md Phase 2, docs/spec/ui-implementation.md
+# Links: docs/spec/ui-implementation.md Phase 2, docs/spec/ui-implementation.md
 
 set -e
 
