@@ -39,7 +39,7 @@ tags: [meta]
 | **3**    | [System Tenant Design](./SYSTEM_TENANT_DESIGN.md)      | 📋 Draft      | Governance loops, PolicyResolverPort, multi-tenancy        |
 | **4**    | [Tool Use Spec](../spec/tool-use.md)                    | ✅ P0 Done    | Agentic loop, policy enforcement, local tools              |
 | **5**    | [Tenant Connections](../spec/tenant-connections.md)     | 📋 Draft      | Authenticated tools, OAuth, connectionId broker            |
-| **6**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
+| **6**    | [Human-in-the-Loop](../spec/human-in-the-loop.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
 | **7**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)          | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
 | **8**    | [LangGraph Server](./LANGGRAPH_SERVER.md)              | 📋 Contract   | Server deployment mode (P1 for scale)                      |
 | **9**    | [Accounts Design](../spec/accounts-design.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
