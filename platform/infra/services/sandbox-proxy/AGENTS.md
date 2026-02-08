@@ -16,7 +16,7 @@ Nginx config template for the per-run LLM proxy container. Injects authenticatio
 
 - [Sandbox Spec](../../../../docs/spec/sandboxed-agents.md)
 - [LlmProxyManager](../../../../src/adapters/server/sandbox/llm-proxy-manager.ts) (generates config from template)
-- [Billing Spec](../../../../docs/EXTERNAL_EXECUTOR_BILLING.md)
+- [Billing Spec](../../../../docs/spec/external-executor-billing.md)
 
 ## Boundaries
 
