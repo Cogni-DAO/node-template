@@ -151,7 +151,7 @@ Document the engineering due diligence for Supabase adoption, establishing which
 | ------------------ | -------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **SANDBOX_GATING** | Yes (design + P0 implementation) | src/ports/sandbox-runner.port.ts; docs/spec/sandboxed-agents.md | SandboxRunnerPort.runOnce() enforces network=none, resource limits, capability drop (CapDrop: ["ALL"]), no-new-privileges, PidsLimit(256), ReadonlyRootfs. |
 | **WRITE_PATHS**    | Designed, not fully enforced     | docs/spec/sandboxed-agents.md WRITE_PATH_IS_BRANCH invariant    | P0.5+: push to branch only. PR creation requires explicit request. Currently P0.5 in progress.                                                             |
-| **TOOL_POLICY**    | Designed, not implemented        | docs/RBAC_SPEC.md ToolPolicy layer; docs/spec/tool-use.md       | DENY_BY_DEFAULT designed. OpenFGA check before tool execution designed. P0 checklist items all unchecked in RBAC_SPEC.md.                                  |
+| **TOOL_POLICY**    | Designed, not implemented        | docs/spec/rbac.md ToolPolicy layer; docs/spec/tool-use.md       | DENY_BY_DEFAULT designed. OpenFGA check before tool execution designed. P0 checklist items all unchecked in RBAC_SPEC.md.                                  |
 
 ---
 
@@ -458,7 +458,7 @@ This evaluation confirms that assessment is correct. The overlap between Supabas
 | LiteLLM config              | platform/infra/services/runtime/configs/litellm.config.yaml | 204 lines, 20+ models                                 |
 | AI telemetry port           | src/ports/ai-telemetry.port.ts                              | RecordInvocationParams with correlation IDs           |
 | Usage port (LiteLLM API)    | src/ports/usage.port.ts                                     | ActivityUsagePort with spend logs/charts              |
-| RBAC design (not built)     | docs/RBAC_SPEC.md                                           | OpenFGA, dual-check, actor/subject model              |
+| RBAC design (not built)     | docs/spec/rbac.md                                           | OpenFGA, dual-check, actor/subject model              |
 | Sandbox spec                | docs/spec/sandboxed-agents.md                               | P0 complete, P0.5a complete, P0.5 complete            |
 
 ## Acceptance Checks
