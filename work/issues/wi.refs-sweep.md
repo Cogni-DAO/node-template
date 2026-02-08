@@ -300,6 +300,7 @@ This workflow was developed through 8 doc migrations. Follow it exactly.
 ### Step 1: Check the migration tracker
 
 Read `wi.docs-migration-tracker.md` for the doc's row. Note:
+
 - **Spec column** → primary target is `docs/spec/{value}`
 - **Ini column** → if present, this is a multi-destination doc
 - **Guide column** → if present, procedural content went here
@@ -317,6 +318,7 @@ grep -rn 'OLD_NAME\.md' --include='*.{md,ts,tsx,mjs,sh,toml,yaml}' \
 ```
 
 This catches:
+
 - `docs/OLD_NAME.md` — repo-root-relative (most common)
 - `(OLD_NAME.md)` — bare relative within docs/spec/ (same-dir ref)
 - `(../OLD_NAME.md)` — relative from docs/archive/, docs/research/
@@ -360,6 +362,7 @@ grep -rn 'OLD_NAME\.md' --include='*.{md,ts,tsx,mjs,sh,toml,yaml}' \
 ```
 
 Remaining matches should only be:
+
 - `> Source:` provenance lines in initiatives (correct — don't touch)
 - Prose mentions in code comments (`Per OLD_NAME.md:`) — acceptable to leave
 - Archive migration tables (`DOCS_ORGANIZATION_PLAN.md`) — historical, leave

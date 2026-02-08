@@ -32,16 +32,16 @@ tags: [meta]
 
 ### Spec Implementation Priority
 
-| Priority | Spec                                                   | Status        | Enables                                                    |
-| -------- | ------------------------------------------------------ | ------------- | ---------------------------------------------------------- |
-| **1**    | [Scheduler Spec](../spec/scheduler.md)                 | 🔄 P1 Pending | Scheduled graph execution, Temporal migration              |
+| Priority | Spec                                                         | Status        | Enables                                                    |
+| -------- | ------------------------------------------------------------ | ------------- | ---------------------------------------------------------- |
+| **1**    | [Scheduler Spec](../spec/scheduler.md)                       | 🔄 P1 Pending | Scheduled graph execution, Temporal migration              |
 | **2**    | [Graph Execution](../spec/graph-execution.md)                | 🔄 P1 Pending | Core execution envelope, billing, compiled exports         |
-| **3**    | [System Tenant Design](../spec/system-tenant.md)      | 📋 Draft      | Governance loops, PolicyResolverPort, multi-tenancy        |
-| **4**    | [Tool Use Spec](../spec/tool-use.md)                    | ✅ P0 Done    | Agentic loop, policy enforcement, local tools              |
-| **5**    | [Tenant Connections](../spec/tenant-connections.md)     | 📋 Draft      | Authenticated tools, OAuth, connectionId broker            |
+| **3**    | [System Tenant Design](../spec/system-tenant.md)             | 📋 Draft      | Governance loops, PolicyResolverPort, multi-tenancy        |
+| **4**    | [Tool Use Spec](../spec/tool-use.md)                         | ✅ P0 Done    | Agentic loop, policy enforcement, local tools              |
+| **5**    | [Tenant Connections](../spec/tenant-connections.md)          | 📋 Draft      | Authenticated tools, OAuth, connectionId broker            |
 | **6**    | [Human-in-the-Loop](../spec/human-in-the-loop.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
-| **7**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)          | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
-| **8**    | [LangGraph Server](./LANGGRAPH_SERVER.md)              | 📋 Contract   | Server deployment mode (P1 for scale)                      |
+| **7**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)                | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
+| **8**    | [LangGraph Server](./LANGGRAPH_SERVER.md)                    | 📋 Contract   | Server deployment mode (P1 for scale)                      |
 | **9**    | [Accounts Design](../spec/accounts-design.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
 
 **Legend:** 📋 Draft/Contract | 🔄 In Progress | ✅ Complete

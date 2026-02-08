@@ -171,16 +171,16 @@ Requirements:
 
 ## Related Docs
 
-| Doc                                                            | Purpose                            |
-| -------------------------------------------------------------- | ---------------------------------- |
-| [Node vs Operator Contract](docs/spec/node-operator-contract.md) | Boundaries, invariants, boot seams |
-| [MVP Deliverables](docs/archive/MVP_DELIVERABLES.md)                   | Scope lock, success criteria       |
-| [Node Formation Spec](docs/spec/node-formation.md)             | DAO formation tooling (Phase 0)    |
-| [AI Setup Spec](docs/spec/ai-setup.md)                         | AI P0/P1/P2 checklists, invariants |
-| [LangGraph AI](docs/spec/langgraph-patterns.md)                           | How to create a graph in a feature |
-| [AI Architecture & Evals](docs/spec/ai-evals.md)                    | LangGraph, Langfuse, eval gates    |
-| [Services Migration Guide](work/initiatives/ini.cicd-services-gitops.md)         | Implementation checklist           |
-| [Architecture](docs/spec/architecture.md)                      | Hex architecture details           |
+| Doc                                                                      | Purpose                            |
+| ------------------------------------------------------------------------ | ---------------------------------- |
+| [Node vs Operator Contract](docs/spec/node-operator-contract.md)         | Boundaries, invariants, boot seams |
+| [MVP Deliverables](docs/archive/MVP_DELIVERABLES.md)                     | Scope lock, success criteria       |
+| [Node Formation Spec](docs/spec/node-formation.md)                       | DAO formation tooling (Phase 0)    |
+| [AI Setup Spec](docs/spec/ai-setup.md)                                   | AI P0/P1/P2 checklists, invariants |
+| [LangGraph AI](docs/spec/langgraph-patterns.md)                          | How to create a graph in a feature |
+| [AI Architecture & Evals](docs/spec/ai-evals.md)                         | LangGraph, Langfuse, eval gates    |
+| [Services Migration Guide](work/initiatives/ini.cicd-services-gitops.md) | Implementation checklist           |
+| [Architecture](docs/spec/architecture.md)                                | Hex architecture details           |
 
 ---
 

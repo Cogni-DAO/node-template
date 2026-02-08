@@ -179,12 +179,12 @@ All routes are Node-owned. Routes are framework artifacts; architectural boundar
 
 ## Related Docs
 
-| Doc                                                       | Purpose                                      |
-| --------------------------------------------------------- | -------------------------------------------- |
+| Doc                                                            | Purpose                                      |
+| -------------------------------------------------------------- | -------------------------------------------- |
 | [Node vs Operator Contract](../spec/node-operator-contract.md) | Boundaries, invariants, directory structures |
-| [MVP Deliverables](MVP_DELIVERABLES.md)                   | Scope lock                                   |
-| [AI Architecture & Evals](../spec/ai-evals.md)                    | AI structure                                 |
-| [ROADMAP](../ROADMAP.md)                                  | Phase overview                               |
+| [MVP Deliverables](MVP_DELIVERABLES.md)                        | Scope lock                                   |
+| [AI Architecture & Evals](../spec/ai-evals.md)                 | AI structure                                 |
+| [ROADMAP](../ROADMAP.md)                                       | Phase overview                               |
 
 ---
 
