@@ -19,7 +19,7 @@ labels:
 
 # System Tenant & Governance Execution Infrastructure
 
-> Source: docs/SYSTEM_TENANT_DESIGN.md
+> Source: docs/spec/system-tenant.md
 
 ## Goal
 
