@@ -3,15 +3,15 @@ id: proj.unified-graph-launch
 type: project
 primary_charter:
 title: Unified Graph Launch — Temporal Execution Path
-state: Paused
-priority: 2
+state: Active
+priority: 1
 estimate: 5
 summary: Unify all graph execution (API, scheduled, webhook) through GraphRunWorkflow in Temporal
 outcome: All graph runs flow through GraphRunWorkflow; no inline execution in HTTP handlers; idempotent run starts
 assignees:
-  - cogni-dev
+  - derekg1729
 created: 2026-02-07
-updated: 2026-02-07
+updated: 2026-02-09
 labels:
   - ai-graphs
   - scheduler
@@ -33,6 +33,9 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 | Deliverable                                                                                             | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Fix: scheduled runs write charge_receipts (billing bypass regression)                                   | Todo        | 2   | bug.0005  |
+| Billing enforcement decorator at GraphExecutorPort level                                                | Todo        | 2   | task.0007 |
+| Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing          | Todo        | 3   | task.0006 |
 | Add `trigger_*` columns to existing `schedule_runs` table (or create `graph_runs` if P1 lands)          | Not Started | 1   | —         |
 | Create `GraphRunWorkflow` in `services/scheduler-worker/`                                               | Not Started | 2   | —         |
 | Refactor `POST /api/v1/ai/chat` to start `GraphRunWorkflow` instead of inline execution                 | Not Started | 2   | —         |
