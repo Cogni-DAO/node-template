@@ -77,6 +77,12 @@ export const serverSchema = z.object({
     ),
   LITELLM_MASTER_KEY: z.string().min(1),
 
+  // OpenClaw gateway (sandbox:openclaw agent execution)
+  // Default: localhost:3333 for dev/test (host-mapped port); Docker DNS in production
+  OPENCLAW_GATEWAY_URL: z.string().url().default("http://127.0.0.1:3333"),
+  // Auth token for OpenClaw gateway WS handshake (must match openclaw-gateway.json gateway.auth.token)
+  OPENCLAW_GATEWAY_TOKEN: z.string().default("openclaw-internal-token"),
+
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
   // Wallet link MVP - single API key for all wallets (temporary)
   LITELLM_MVP_API_KEY: z.string().default("test-mvp-api-key"),
