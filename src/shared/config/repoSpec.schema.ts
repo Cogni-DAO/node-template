@@ -7,7 +7,7 @@
  * Scope: Validates governance-managed payment configuration structure; does not enforce chain/token values (those checked against chain.ts constants).
  * Invariants: Receiving_address must be valid EVM format; provider must be non-empty; allowed_chains/allowed_tokens are informational metadata.
  * Side-effects: none
- * Links: .cogni/repo-spec.yaml, docs/CHAIN_CONFIG.md, docs/PAYMENTS_DESIGN.md
+ * Links: .cogni/repo-spec.yaml, docs/spec/chain-config.md, docs/spec/payments-design.md
  * @public
  */
 

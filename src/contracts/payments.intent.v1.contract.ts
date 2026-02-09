@@ -8,7 +8,7 @@
  * Invariants: amountUsdCents must be between 100 ($1) and 1,000,000 ($10,000); all outputs include on-chain transfer parameters.
  * Side-effects: none
  * Notes: Billing account and from address derived from session server-side; not provided in input.
- * Links: docs/PAYMENTS_DESIGN.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

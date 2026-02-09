@@ -21,11 +21,11 @@ Extends accounts design with profit-enforcing billing and provider cost tracking
 
 **Related docs:**
 
-- System architecture: [ACCOUNTS_DESIGN.md](../ACCOUNTS_DESIGN.md)
-- API contracts: [ACCOUNTS_API_KEY_ENDPOINTS.md](../ACCOUNTS_API_KEY_ENDPOINTS.md)
-- Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](../INTEGRATION_WALLETS_CREDITS.md)
+- System architecture: [Accounts Design](../ACCOUNTS_DESIGN.md)
+- API contracts: [Accounts API Endpoints](../ACCOUNTS_API_KEY_ENDPOINTS.md)
+- Wallet integration: [Wallet Auth Setup](../INTEGRATION_WALLETS_CREDITS.md)
 - Usage/Activity Design: [Activity Metrics](./activity-metrics.md)
-- Graph Execution & Idempotency: [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
+- Graph Execution & Idempotency: [Graph Execution](graph-execution.md)
 
 ## Goal
 
@@ -131,7 +131,7 @@ Protocol constant `CREDITS_PER_USD = 10_000_000` is NOT configurable (hardcoded)
 - `response_cost_usd` stores user cost (with markup), not provider cost
 - Single ceil at end: `chargedCredits = ceil(userCostUsd × CREDITS_PER_USD)`
 - Post-call billing NEVER blocks user response
-- Idempotency via `UNIQUE(source_system, source_reference)` — see [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
+- Idempotency via `UNIQUE(source_system, source_reference)` — see [Graph Execution](graph-execution.md)
 
 **Verification:**
 
@@ -152,5 +152,5 @@ _(none — planned work tracked in ini.payments-enhancements.md: pre-call max-co
 ## Related
 
 - [Activity Metrics](./activity-metrics.md)
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
-- [ACCOUNTS_DESIGN.md](../ACCOUNTS_DESIGN.md)
+- [Graph Execution](graph-execution.md)
+- [Accounts Design](../ACCOUNTS_DESIGN.md)

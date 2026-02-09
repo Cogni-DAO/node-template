@@ -9,7 +9,7 @@
  *   - Schedule ownership enforced (callerUserId must match ownerUserId)
  *   - Delete also revokes the associated grant
  * Side-effects: IO (HTTP request/response, database)
- * Links: docs/SCHEDULER_SPEC.md, schedules.*.v1.contract
+ * Links: docs/spec/scheduler.md, schedules.*.v1.contract
  * @public
  */
 

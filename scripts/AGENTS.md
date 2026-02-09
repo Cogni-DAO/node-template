@@ -15,7 +15,7 @@ Build-time scripts for migrations, seeds, type generation, development utilities
 ## Pointers
 
 - [Root AGENTS.md](../AGENTS.md)
-- [Architecture](../docs/ARCHITECTURE.md)
+- [Architecture](../docs/spec/architecture.md)
 
 ## Boundaries
 

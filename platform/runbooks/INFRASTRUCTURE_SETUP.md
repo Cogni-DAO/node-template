@@ -404,7 +404,7 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 >
 > DSNs are authoritative for runtime. Component secrets are for provisioning only and must never
 > reach runtime containers. Deploy validates DSN invariants (distinct users, no superusers).
-> See `platform/ci/scripts/validate-dsns.sh` and `docs/DATABASE_URL_ALIGNMENT_SPEC.md`.
+> See `platform/ci/scripts/validate-dsns.sh` and `docs/spec/database-url-alignment.md`.
 
 ### Repository Secrets
 

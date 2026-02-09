@@ -74,7 +74,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 - Create [GitHub PAT](https://github.com/settings/personal-access-tokens/new) for bot account automation (needs Contents:Write, Pull requests:Write, Actions:Read, Metadata:Read), add it as a repo environment secret named `ACTIONS_AUTOMATION_BOT_PAT`
 - Enable your git repo to contribute packages to your git org
 - Set up GitHub environments and secrets manually
-- Configure branch protection rules (see docs/CI-CD.md)
+- Configure branch protection rules (see docs/spec/ci-cd.md)
 - **SonarCloud setup:** Generate token at [SonarCloud Security](https://sonarcloud.io/account/security) → Add as `SONAR_TOKEN` repository secret
 - **Grafana Cloud setup (optional):** Get Loki credentials from [Grafana Cloud](https://grafana.com/products/cloud/) → Add `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY` as **repository secrets** (shared across environments)
 

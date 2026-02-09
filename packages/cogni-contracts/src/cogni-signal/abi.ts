@@ -7,7 +7,7 @@
  * Scope: ABI constant only; does not include bytecode or addresses.
  * Invariants: ABI must match solc 0.8.30 compiled output.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

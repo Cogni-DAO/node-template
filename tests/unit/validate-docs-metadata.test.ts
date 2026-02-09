@@ -8,7 +8,7 @@
  * Invariants: All validation rules from DOCS_ORGANIZATION_PLAN.md must be tested.
  * Side-effects: none
  * Notes: Uses vitest; tests validator functions in isolation.
- * Links: scripts/validate-docs-metadata.mjs, docs/DOCS_ORGANIZATION_PLAN.md
+ * Links: scripts/validate-docs-metadata.mjs, docs/archive/DOCS_ORGANIZATION_PLAN.md
  * @internal
  */
 

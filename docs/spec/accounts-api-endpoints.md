@@ -57,7 +57,7 @@ Document the current billing identity plumbing from authentication through LiteL
 - **LiteLLM master key** — The Proxy admin key (`LITELLM_MASTER_KEY`) used for all LiteLLM calls in MVP. Accessed only at the adapter boundary.
 - **LlmCaller** — Internal type `{ billingAccountId; virtualKeyId }` constructed server-side. Contains only IDs, no secrets. The adapter reads `LITELLM_MASTER_KEY` from env.
 
-See also: [ACCOUNTS_DESIGN.md](./accounts-design.md) "Three-Layer Identity System" for complete architecture.
+See also: [Accounts Design](./accounts-design.md) "Three-Layer Identity System" for complete architecture.
 
 ### LiteLLM Endpoint: Chat Completions (Data Plane)
 

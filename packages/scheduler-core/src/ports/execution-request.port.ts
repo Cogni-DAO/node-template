@@ -11,7 +11,7 @@
  *   - idempotencyKey uniqueness enforced at DB level (primary key)
  *   - requestHash mismatch detection for payload integrity
  * Side-effects: none (interface definition only)
- * Links: docs/SCHEDULER_SPEC.md, execution_requests table
+ * Links: docs/spec/scheduler.md, execution_requests table
  * @public
  */
 

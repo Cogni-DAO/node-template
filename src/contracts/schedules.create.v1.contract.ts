@@ -11,7 +11,7 @@
  *   - Cron must be valid 5-field expression
  *   - Timezone must be valid IANA timezone
  * Side-effects: none
- * Links: /api/v1/schedules route, docs/SCHEDULER_SPEC.md
+ * Links: /api/v1/schedules route, docs/spec/scheduler.md
  * @internal
  */
 

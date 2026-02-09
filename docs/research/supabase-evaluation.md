@@ -134,7 +134,7 @@ Document the engineering due diligence for Supabase adoption, establishing which
 | Invariant              | Status                                 | Where enforced                                                                                                            | Evidence                                                                                                                                                                                         |
 | ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **SECRETS_ISOLATION**  | Yes (design), partial (implementation) | Sandbox: SECRETS_HOST_ONLY invariant in docs/spec/sandboxed-agents.md. App: Zod validation in src/shared/env/server.ts.   | Secrets from GitHub Secrets → CI → SSH → VM .env → docker-compose env. Never baked into images. Sandbox containers get no secrets. P0.5 unix socket proxy will inject auth headers on host side. |
-| **ENV_SEPARATION**     | Yes                                    | 6 deployment modes in docs/ENVIRONMENTS.md; APP_ENV=production\|test controls adapter wiring                              | Separate .env.local / .env.test. GitHub Environments for preview/production. Separate VMs per environment.                                                                                       |
+| **ENV_SEPARATION**     | Yes                                    | 6 deployment modes in docs/spec/environments.md; APP_ENV=production\|test controls adapter wiring                         | Separate .env.local / .env.test. GitHub Environments for preview/production. Separate VMs per environment.                                                                                       |
 | **NETWORK_BOUNDARIES** | Yes                                    | docker-compose.yml defines cogni-edge (external) and internal (isolated) networks. sandbox-internal (dev, internal: true) | Postgres not exposed in production. Temporal bound to 127.0.0.1. Sandbox network=none by default.                                                                                                |
 
 ### 2.4 Observability & Audit Invariants
@@ -151,7 +151,7 @@ Document the engineering due diligence for Supabase adoption, establishing which
 | ------------------ | -------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **SANDBOX_GATING** | Yes (design + P0 implementation) | src/ports/sandbox-runner.port.ts; docs/spec/sandboxed-agents.md | SandboxRunnerPort.runOnce() enforces network=none, resource limits, capability drop (CapDrop: ["ALL"]), no-new-privileges, PidsLimit(256), ReadonlyRootfs. |
 | **WRITE_PATHS**    | Designed, not fully enforced     | docs/spec/sandboxed-agents.md WRITE_PATH_IS_BRANCH invariant    | P0.5+: push to branch only. PR creation requires explicit request. Currently P0.5 in progress.                                                             |
-| **TOOL_POLICY**    | Designed, not implemented        | docs/RBAC_SPEC.md ToolPolicy layer; docs/TOOL_USE_SPEC.md       | DENY_BY_DEFAULT designed. OpenFGA check before tool execution designed. P0 checklist items all unchecked in RBAC_SPEC.md.                                  |
+| **TOOL_POLICY**    | Designed, not implemented        | docs/spec/rbac.md ToolPolicy layer; docs/spec/tool-use.md       | DENY_BY_DEFAULT designed. OpenFGA check before tool execution designed. P0 checklist items all unchecked in RBAC_SPEC.md.                                  |
 
 ---
 
@@ -451,14 +451,14 @@ This evaluation confirms that assessment is correct. The overlap between Supabas
 | Sandbox network isolation   | src/adapters/server/sandbox/sandbox-runner.adapter.ts       | NetworkMode: 'none', CapDrop: ["ALL"]                 |
 | Docker compose services     | platform/infra/services/runtime/docker-compose.yml          | 12 services, 352 lines                                |
 | 3-layer deployment          | platform/runbooks/DEPLOYMENT_ARCHITECTURE.md                | Base (OpenTofu) → Edge (Caddy) → Runtime (compose)    |
-| 6 deployment modes          | docs/ENVIRONMENTS.md                                        | App-only through full Docker stack                    |
+| 6 deployment modes          | docs/spec/environments.md                                   | App-only through full Docker stack                    |
 | Drizzle migrations          | drizzle.config.ts + src/adapters/server/db/migrations/      | 4 migration files                                     |
 | Application pool config     | packages/db-client/src/build-client.ts                      | max: 10, idle_timeout: 20                             |
 | Temporal worker             | services/scheduler-worker/src/main.ts                       | 94 lines, graceful shutdown                           |
 | LiteLLM config              | platform/infra/services/runtime/configs/litellm.config.yaml | 204 lines, 20+ models                                 |
 | AI telemetry port           | src/ports/ai-telemetry.port.ts                              | RecordInvocationParams with correlation IDs           |
 | Usage port (LiteLLM API)    | src/ports/usage.port.ts                                     | ActivityUsagePort with spend logs/charts              |
-| RBAC design (not built)     | docs/RBAC_SPEC.md                                           | OpenFGA, dual-check, actor/subject model              |
+| RBAC design (not built)     | docs/spec/rbac.md                                           | OpenFGA, dual-check, actor/subject model              |
 | Sandbox spec                | docs/spec/sandboxed-agents.md                               | P0 complete, P0.5a complete, P0.5 complete            |
 
 ## Acceptance Checks

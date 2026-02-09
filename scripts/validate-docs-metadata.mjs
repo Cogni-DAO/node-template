@@ -9,7 +9,7 @@
  * Invariants: /docs uses id/type/status/trust; /work uses work_item_id/work_item_type/state; no wikilinks.
  * Side-effects: IO
  * Notes: Uses `yaml` package for proper YAML parsing. Exits with error code if validation fails.
- * Links: docs/DOCS_ORGANIZATION_PLAN.md
+ * Links: docs/archive/DOCS_ORGANIZATION_PLAN.md
  * @public
  */
 

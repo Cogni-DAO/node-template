@@ -8,7 +8,7 @@
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings; maintains elevation hierarchy.
  * Side-effects: none
  * Notes: Elevation and status variants follow design system hierarchy.
- * Links: docs/UI_IMPLEMENTATION_GUIDE.md
+ * Links: docs/spec/ui-implementation.md
  * @public
  */
 

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Identify the current feature and files changed. Add _predictable, minimal, structured_ logging that helps debug production without polluting business logic. Read @docs/OBSERVABILITY.md an understanding of our observability system, then proceed to properly design and implement clean observability for this feature.
+Identify the current feature and files changed. Add _predictable, minimal, structured_ logging that helps debug production without polluting business logic. Read @docs/spec/observability.md an understanding of our observability system, then proceed to properly design and implement clean observability for this feature.
 
 ## Cardinal Rules
 

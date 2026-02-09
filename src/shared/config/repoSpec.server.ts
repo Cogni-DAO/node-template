@@ -7,7 +7,7 @@
  * Scope: Reads and caches repo-spec on first access; validates chain alignment and receiver address shape before exposing config to callers; does not run in client bundles or accept env overrides. This is the canonical source for chainId + receiving_address used by OnChainVerifier and payment flows.
  * Invariants: Chain ID must match `@shared/web3` CHAIN_ID; receiving address must look like an EVM address (0x + 40 hex chars); provider must be present.
  * Side-effects: IO (reads repo-spec from disk) on first call only.
- * Links: .cogni/repo-spec.yaml, docs/PAYMENTS_DESIGN.md
+ * Links: .cogni/repo-spec.yaml, docs/spec/payments-design.md
  * @public
  */
 

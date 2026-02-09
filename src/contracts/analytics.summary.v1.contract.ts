@@ -8,7 +8,7 @@
  * Invariants: Fixed time windows only (7d/30d/90d); all numeric values nullable (k-anonymity); no PII.
  * Side-effects: none
  * Notes: Public endpoint with aggressive caching; k-anonymity suppression at service layer.
- * Links: docs/METRICS_OBSERVABILITY.md
+ * Links: docs/spec/public-analytics.md
  * @public
  */
 

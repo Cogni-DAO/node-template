@@ -15,7 +15,7 @@ Unit tests for application bootstrapping and dependency injection container logi
 ## Pointers
 
 - [Bootstrap container](../../../src/bootstrap/container.ts)
-- [Architecture](../../../docs/ARCHITECTURE.md)
+- [Architecture](../../../docs/spec/architecture.md)
 
 ## Boundaries
 

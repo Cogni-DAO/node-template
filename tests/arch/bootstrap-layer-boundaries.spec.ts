@@ -8,7 +8,7 @@
  * Invariants: Bootstrap may import from adapters/ports/shared; not core/features/app/components directly.
  * Side-effects: IO (spawns depcruise subprocess)
  * Notes: Uses arch probes in src/bootstrap/__arch_probes__/ to test boundary enforcement.
- * Links: .dependency-cruiser.cjs (bootstrap layer rules), docs/ARCHITECTURE.md
+ * Links: .dependency-cruiser.cjs (bootstrap layer rules), docs/spec/architecture.md
  * @public
  */
 

@@ -7,7 +7,7 @@
  * Scope: Argument construction only; does not perform RPC calls or transaction signing.
  * Invariants: Uses pinned OSx version constants.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

@@ -11,7 +11,7 @@
  *   - GRANT_VALIDATED_TWICE: Re-validates grant (defense-in-depth)
  *   - Uses AiExecutionErrorCode from ai-core (no parallel error system)
  * Side-effects: IO (HTTP request/response, database, graph execution)
- * Links: docs/SCHEDULER_SPEC.md, graphs.run.internal.v1.contract
+ * Links: docs/spec/scheduler.md, graphs.run.internal.v1.contract
  * @internal
  */
 
