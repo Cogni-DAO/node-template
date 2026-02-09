@@ -9,14 +9,13 @@
  *   - EXECUTION_IDEMPOTENCY_PERSISTED: Same Idempotency-Key → same result
  *   - INTERNAL_API_SHARED_SECRET: Requires Bearer SCHEDULER_API_TOKEN
  *   - GRANT_VALIDATED_TWICE: Grant re-validated at execution time
- * Side-effects: IO (database writes, graph execution via mock-openai-api in test mode)
+ * Side-effects: IO (database writes, graph execution via FakeLlmAdapter in test mode)
  * Notes: Requires dev stack with DB running (pnpm dev:stack:test).
  * Links: docs/SCHEDULER_SPEC.md, graphs.run.internal.v1.contract
  * @public
  */
 
 import { randomUUID } from "node:crypto";
-import { TEST_MODEL_ID } from "@tests/_fakes/ai/test-constants";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { seedTestActor, type TestActor } from "@tests/_fixtures/stack/seed";
 import { eq } from "drizzle-orm";
@@ -38,7 +37,9 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
   beforeEach(async () => {
     // Ensure test mode
     if (process.env.APP_ENV !== "test") {
-      throw new Error("This test must run in APP_ENV=test (mock-LLM backend)");
+      throw new Error(
+        "This test must run in APP_ENV=test to use FakeLlmAdapter"
+      );
     }
 
     const db = getSeedDb();
@@ -136,10 +137,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
 
     it("first request succeeds and stores execution_request", async () => {
       const idempotencyKey = `${randomUUID()}:2025-01-21T09:00:00Z`;
-      const input = {
-        messages: [{ role: "user", content: "Hello" }],
-        model: TEST_MODEL_ID,
-      };
+      const input = { messages: [{ role: "user", content: "Hello" }] };
 
       const request = createRequest(
         TEST_GRAPH_ID,
@@ -169,10 +167,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
 
     it("replay with same Idempotency-Key returns cached result", async () => {
       const idempotencyKey = `${randomUUID()}:2025-01-21T09:00:00Z`;
-      const input = {
-        messages: [{ role: "user", content: "Hello" }],
-        model: TEST_MODEL_ID,
-      };
+      const input = { messages: [{ role: "user", content: "Hello" }] };
 
       // First request
       const request1 = createRequest(
@@ -218,10 +213,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
         TEST_GRAPH_ID,
         {
           executionGrantId: grantId,
-          input: {
-            messages: [{ role: "user", content: "Hello" }],
-            model: TEST_MODEL_ID,
-          },
+          input: { messages: [{ role: "user", content: "Hello" }] },
         },
         { token: SCHEDULER_TOKEN, idempotencyKey }
       );
@@ -235,10 +227,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
         TEST_GRAPH_ID,
         {
           executionGrantId: grantId,
-          input: {
-            messages: [{ role: "user", content: "Different!" }],
-            model: TEST_MODEL_ID,
-          },
+          input: { messages: [{ role: "user", content: "Different!" }] },
         },
         { token: SCHEDULER_TOKEN, idempotencyKey }
       );
@@ -249,32 +238,6 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
       expect(response2.status).toBe(422);
       const body = await response2.json();
       expect(body.error).toContain("Idempotency conflict");
-    });
-  });
-
-  describe("default model fallback", () => {
-    // Documents that omitting model falls back to "openrouter/auto".
-    // If we remove default-model support, this test should fail and be deleted.
-    it("uses openrouter/auto when input omits model", async () => {
-      const idempotencyKey = `${randomUUID()}:2025-01-21T09:00:00Z`;
-      const input = { messages: [{ role: "user", content: "Hello" }] }; // no model
-
-      const request = createRequest(
-        TEST_GRAPH_ID,
-        { executionGrantId: grantId, input },
-        { token: SCHEDULER_TOKEN, idempotencyKey }
-      );
-
-      const response = await POST(request, {
-        params: Promise.resolve({ graphId: TEST_GRAPH_ID }),
-      });
-
-      // Without "openrouter/auto" in LiteLLM config, the LLM call fails
-      // and the graph returns ok:false. This documents the current fallback behavior.
-      expect(response.status).toBe(200);
-      const body = await response.json();
-      expect(body.ok).toBe(false);
-      expect(body.error).toBeDefined();
     });
   });
 

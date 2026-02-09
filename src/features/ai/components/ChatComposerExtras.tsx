@@ -53,11 +53,6 @@ const AVAILABLE_GRAPHS: readonly GraphOption[] = [
     name: "Research",
     description: "Deep research with web search",
   },
-  {
-    graphId: "sandbox:agent" satisfies GraphId,
-    name: "Sandbox Agent",
-    description: "Isolated container with LLM proxy",
-  },
 ];
 
 /** Default graph ID - exported for page initialization */

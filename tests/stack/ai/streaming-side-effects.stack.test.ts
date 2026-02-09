@@ -17,7 +17,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { createChatRequest } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
@@ -32,11 +31,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
 import type { SessionUser } from "@/shared/auth/session";
-import {
-  aiInvocationSummaries,
-  chargeReceipts,
-  llmChargeDetails,
-} from "@/shared/db/schema";
+import { aiInvocationSummaries, chargeReceipts } from "@/shared/db/schema";
 
 // Mock session
 vi.mock("@/app/_lib/auth/session", () => ({
@@ -88,20 +83,18 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: defaultModelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Say hello." }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: `side-effects-test-${testId}`,
+          model: defaultModelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Say hello." }],
+            },
+          ],
         }),
       });
 
@@ -131,22 +124,6 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       const latestReceipt = receiptsAfter[0];
       expect(latestReceipt).toBeDefined();
       expect(latestReceipt?.provenance).toBe("stream");
-
-      // Assert - Linked llm_charge_details row exists with model, graphId, tokens
-      const receiptId = latestReceipt?.id;
-      if (!receiptId) throw new Error("Receipt missing id");
-
-      const details = await db
-        .select()
-        .from(llmChargeDetails)
-        .where(eq(llmChargeDetails.chargeReceiptId, receiptId));
-
-      expect(details).toHaveLength(1);
-      const detail = details[0];
-      expect(detail?.model).toBeTruthy();
-      expect(detail?.graphId).toBeTruthy();
-      expect(typeof detail?.tokensIn).toBe("number");
-      expect(typeof detail?.tokensOut).toBe("number");
 
       // Assert - Exactly ONE ai_invocation_summaries row with status='success'
       // Query by ingressRequestId from the latest receipt for precision (P0: equals requestId)
@@ -194,25 +171,23 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: defaultModelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [
-                  {
-                    type: "text",
-                    text: "Write a paragraph with at least 50 words.",
-                  },
-                ],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: defaultModelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [
+                {
+                  type: "text",
+                  text: "Write a paragraph with at least 50 words.",
+                },
+              ],
+            },
+          ],
         }),
       });
 
@@ -298,25 +273,23 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         headers: { "content-type": "application/json" },
         signal: ac.signal,
         body: JSON.stringify({
-          ...createChatRequest({
-            model: defaultModelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [
-                  {
-                    type: "text",
-                    text: "Write a very long detailed response with at least 100 words about the history of computing.",
-                  },
-                ],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: defaultModelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [
+                {
+                  type: "text",
+                  text: "Write a very long detailed response with at least 100 words about the history of computing.",
+                },
+              ],
+            },
+          ],
         }),
       });
 

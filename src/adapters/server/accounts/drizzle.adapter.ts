@@ -3,14 +3,13 @@
 
 /**
  * Module: `@adapters/server/accounts/drizzle`
- * Purpose: Drizzle account service implementations for PostgreSQL billing account operations with charge receipt + llm_charge_details recording.
+ * Purpose: Drizzle account service implementations for PostgreSQL billing account operations with charge receipt recording.
  * Scope: Implements AccountService and ServiceAccountService ports with ledger-based credit accounting and virtual key management. Does not compute pricing.
  * Invariants:
  * - Atomic ops; ledger source of truth; balance cached; UUID v4 validated
  * - IDEMPOTENT_CHARGES: (source_system, source_reference) is idempotency key per GRAPH_EXECUTION.md
  * - Persists chargeReason, sourceSystem, runId to charge_receipts (required fields)
  * - listChargeReceipts returns sourceSystem for Activity UI join
- * - listLlmChargeDetails fetches LLM telemetry (model/tokens/provider/latency/graphId) for receipt enrichment
  * - UserDrizzleAccountService wraps all queries in withTenantScope (RLS enforced)
  * - ServiceDrizzleAccountService uses serviceDb directly (BYPASSRLS)
  * Side-effects: IO (database operations)
@@ -20,10 +19,9 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { GraphId } from "@cogni/ai-core";
 import { withTenantScope } from "@cogni/db-client";
 import { type ActorId, type UserId, userActor } from "@cogni/ids";
-import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import type { Database } from "@/adapters/server/db/client";
 import {
@@ -40,7 +38,6 @@ import {
   billingAccounts,
   chargeReceipts,
   creditLedger,
-  llmChargeDetails,
   virtualKeys,
 } from "@/shared/db";
 import { serverEnv } from "@/shared/env";
@@ -380,38 +377,20 @@ export class UserDrizzleAccountService implements AccountService {
       );
 
       // Insert charge receipt (unique constraint on source_system, source_reference ensures no duplicates)
-      const [receipt] = await tx
-        .insert(chargeReceipts)
-        .values({
-          billingAccountId: params.billingAccountId,
-          virtualKeyId: params.virtualKeyId,
-          runId: params.runId,
-          attempt: params.attempt,
-          ingressRequestId: params.ingressRequestId ?? null, // Optional ingress correlation
-          litellmCallId: params.litellmCallId,
-          chargedCredits: params.chargedCredits,
-          responseCostUsd: params.responseCostUsd?.toString() ?? null,
-          provenance: params.provenance,
-          chargeReason: params.chargeReason,
-          sourceSystem: params.sourceSystem,
-          sourceReference: params.sourceReference,
-          receiptKind: params.receiptKind,
-        })
-        .returning({ id: chargeReceipts.id });
-
-      // Insert LLM detail row when receiptKind='llm' and detail provided
-      if (receipt && params.llmDetail) {
-        await tx.insert(llmChargeDetails).values({
-          chargeReceiptId: receipt.id,
-          providerCallId: params.llmDetail.providerCallId,
-          model: params.llmDetail.model,
-          provider: params.llmDetail.provider ?? null,
-          tokensIn: params.llmDetail.tokensIn ?? null,
-          tokensOut: params.llmDetail.tokensOut ?? null,
-          latencyMs: params.llmDetail.latencyMs ?? null,
-          graphId: params.llmDetail.graphId,
-        });
-      }
+      await tx.insert(chargeReceipts).values({
+        billingAccountId: params.billingAccountId,
+        virtualKeyId: params.virtualKeyId,
+        runId: params.runId,
+        attempt: params.attempt,
+        ingressRequestId: params.ingressRequestId ?? null, // Optional ingress correlation
+        litellmCallId: params.litellmCallId,
+        chargedCredits: params.chargedCredits,
+        responseCostUsd: params.responseCostUsd?.toString() ?? null,
+        provenance: params.provenance,
+        chargeReason: params.chargeReason,
+        sourceSystem: params.sourceSystem,
+        sourceReference: params.sourceReference,
+      });
 
       // Debit credits atomically (negative amount)
       const debitAmount = -params.chargedCredits;
@@ -566,12 +545,10 @@ export class UserDrizzleAccountService implements AccountService {
     limit?: number;
   }): Promise<
     Array<{
-      id: string;
       litellmCallId: string | null;
       chargedCredits: string;
       responseCostUsd: string | null;
       sourceSystem: SourceSystem;
-      receiptKind: string;
       createdAt: Date;
     }>
   > {
@@ -580,12 +557,10 @@ export class UserDrizzleAccountService implements AccountService {
 
       const rows = await tx
         .select({
-          id: chargeReceipts.id,
           litellmCallId: chargeReceipts.litellmCallId,
           chargedCredits: chargeReceipts.chargedCredits,
           responseCostUsd: chargeReceipts.responseCostUsd,
           sourceSystem: chargeReceipts.sourceSystem,
-          receiptKind: chargeReceipts.receiptKind,
           createdAt: chargeReceipts.createdAt,
         })
         .from(chargeReceipts)
@@ -600,52 +575,11 @@ export class UserDrizzleAccountService implements AccountService {
         .limit(take);
 
       return rows.map((r) => ({
-        id: r.id,
         litellmCallId: r.litellmCallId,
         chargedCredits: String(r.chargedCredits),
         responseCostUsd: r.responseCostUsd ? String(r.responseCostUsd) : null,
         sourceSystem: r.sourceSystem as SourceSystem,
-        receiptKind: r.receiptKind,
         createdAt: r.createdAt,
-      }));
-    });
-  }
-
-  async listLlmChargeDetails(params: {
-    chargeReceiptIds: readonly string[];
-  }): Promise<
-    Array<{
-      chargeReceiptId: string;
-      providerCallId: string | null;
-      model: string;
-      provider: string | null;
-      tokensIn: number | null;
-      tokensOut: number | null;
-      latencyMs: number | null;
-      graphId: GraphId;
-    }>
-  > {
-    if (params.chargeReceiptIds.length === 0) return [];
-
-    return withTenantScope(this.db, this.actorId, async (tx) => {
-      const rows = await tx
-        .select()
-        .from(llmChargeDetails)
-        .where(
-          inArray(llmChargeDetails.chargeReceiptId, [
-            ...params.chargeReceiptIds,
-          ])
-        );
-
-      return rows.map((r) => ({
-        chargeReceiptId: r.chargeReceiptId,
-        providerCallId: r.providerCallId,
-        model: r.model,
-        provider: r.provider,
-        tokensIn: r.tokensIn,
-        tokensOut: r.tokensOut,
-        latencyMs: r.latencyMs,
-        graphId: r.graphId as `${string}:${string}`,
       }));
     });
   }

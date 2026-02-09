@@ -10,7 +10,6 @@
  *   - 30s timeout (completion), 15s connect timeout (stream)
  *   - Settles once; model required
  *   - Stream abort rejects with LlmError(kind='aborted')
- *   - USAGE_UNIT_IS_LITELLM_CALL_ID: litellmCallId sourced ONLY from x-litellm-call-id response header (no response body fallback)
  * Side-effects: IO (HTTP calls to LiteLLM)
  * Notes:
  *   - SSE via eventsource-parser; assertRuntimeSecrets() before fetch
@@ -297,14 +296,15 @@ export class LiteLlmAdapter implements LlmService {
       result.providerCostUsd = providerCostFromHeader;
     }
 
-    // USAGE_UNIT_IS_LITELLM_CALL_ID: header is the ONLY source.
-    // Do NOT fall back to data.id (response body) — it may differ from
-    // spend_logs.request_id. Missing header = bug, fail deterministically.
-    if (litellmCallId) {
+    // Prefer response body id (gen-...) for join with /spend/logs
+    if (data.id) {
+      result.litellmCallId = data.id;
+    } else if (litellmCallId) {
       result.litellmCallId = litellmCallId;
     }
 
     // Sanitized adapter log (no content, bounded fields only)
+    // Use final resolved call ID for hasCallId (not header-only value)
     logger.info(
       {
         model: resolvedModel,
@@ -505,7 +505,7 @@ export class LiteLlmAdapter implements LlmService {
           | undefined;
         let finishReason: string | undefined;
         let usageCost: number | undefined; // Cost from stream usage event
-        // litellmCallId (from response header) is captured above — no body-id extraction needed
+        let litellmRequestId: string | undefined; // LiteLLM's gen-... ID from response
         let streamCompleted = false; // Track if stream completed normally (not aborted/errored)
 
         // Tool call accumulation state (per ADAPTER_ASSEMBLES_TOOLCALLS invariant)
@@ -555,8 +555,10 @@ export class LiteLlmAdapter implements LlmService {
               try {
                 const json = JSON.parse(data);
 
-                // json.id (response body) intentionally ignored for billing.
-                // USAGE_UNIT_IS_LITELLM_CALL_ID: header is the only source.
+                // Capture LiteLLM request ID (gen-...) from first chunk for join with /spend/logs
+                if (json.id && !litellmRequestId) {
+                  litellmRequestId = json.id;
+                }
 
                 // Check for provider error in response
                 if (json.error) {
@@ -581,7 +583,7 @@ export class LiteLlmAdapter implements LlmService {
                       requestId,
                       traceId,
                       model,
-                      litellmCallId,
+                      litellmCallId: litellmRequestId,
                     },
                     "adapter.litellm.sse_error"
                   );
@@ -747,10 +749,11 @@ export class LiteLlmAdapter implements LlmService {
               result.providerCostUsd = derivedCost;
             }
 
-            // USAGE_UNIT_IS_LITELLM_CALL_ID: header is the ONLY source.
-            // Do NOT fall back to SSE chunk json.id (response body) — it may
-            // differ from spend_logs.request_id. Missing header = bug.
-            if (litellmCallId) {
+            // Prefer response body id (gen-...) for join with /spend/logs
+            // Fall back to header UUID if response id not available
+            if (litellmRequestId) {
+              result.litellmCallId = litellmRequestId;
+            } else if (litellmCallId) {
               result.litellmCallId = litellmCallId;
             }
 
@@ -761,6 +764,7 @@ export class LiteLlmAdapter implements LlmService {
             };
 
             // Sanitized adapter log (no content, bounded fields only)
+            // Use final resolved call ID for hasCallId (not header-only value)
             logger.info(
               {
                 model: resolvedModel,

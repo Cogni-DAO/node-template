@@ -73,8 +73,7 @@ export const PRODUCTION_VALID_ENV = {
  * Use this when mocking @/shared/env to ensure all required fields are present.
  *
  * IMPORTANT: APP_ENV="test" and isTestMode=true are required to wire fake adapters
- * (FakeEvmOnchainClient, FakeMetricsAdapter, etc.) instead of real ones.
- * LLM always uses LiteLlmAdapter (test stacks use mock-openai-api backend).
+ * (FakeLlmAdapter, FakeEvmOnchainClient, etc.) instead of real ones.
  *
  * @example
  * ```ts

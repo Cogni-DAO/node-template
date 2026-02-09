@@ -79,7 +79,7 @@ export const executionGrants = pgTable(
       table.billingAccountId
     ),
   })
-).enableRLS();
+);
 
 /**
  * Schedules - cron-based graph execution definitions.
@@ -123,7 +123,7 @@ export const schedules = pgTable(
     nextRunIdx: index("schedules_next_run_idx").on(table.nextRunAt),
     grantIdx: index("schedules_grant_idx").on(table.executionGrantId),
   })
-).enableRLS();
+);
 
 /**
  * Schedule runs - execution ledger for auditability and governance.
@@ -169,7 +169,7 @@ export const scheduleRuns = pgTable(
     /** For querying runs by runId (correlation with charge_receipts) */
     runIdIdx: index("schedule_runs_run_id_idx").on(table.runId),
   })
-).enableRLS();
+);
 
 /**
  * Execution requests - idempotency layer for graph execution via internal API.

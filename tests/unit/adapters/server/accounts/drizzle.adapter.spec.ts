@@ -145,7 +145,6 @@ describe("UserDrizzleAccountService", () => {
       chargeReason: "llm_usage" as const,
       sourceSystem: "litellm" as const,
       sourceReference: "run-123/0/call-123",
-      receiptKind: "llm",
     };
 
     it("successfully records charge receipt and debits credits", async () => {
@@ -164,9 +163,7 @@ describe("UserDrizzleAccountService", () => {
         billingAccountId: "acc-123",
       });
 
-      // First .returning() = charge receipt insert (returns id for llm_charge_details FK)
-      // Second .returning() = balance update (returns new balance)
-      mockTx.returning.mockResolvedValueOnce([{ id: "receipt-uuid-1" }]);
+      // Mock update returning positive balance
       mockTx.returning.mockResolvedValueOnce([{ balanceCredits: 98000n }]);
 
       await service.recordChargeReceipt(params);
@@ -228,9 +225,7 @@ describe("UserDrizzleAccountService", () => {
         billingAccountId: "acc-123",
       });
 
-      // First .returning() = charge receipt insert (returns id)
-      // Second .returning() = balance update (returns negative balance)
-      mockTx.returning.mockResolvedValueOnce([{ id: "receipt-uuid-2" }]);
+      // Mock update returning negative balance
       mockTx.returning.mockResolvedValueOnce([{ balanceCredits: -1000n }]);
 
       // Should NOT throw - post-call billing is non-blocking

@@ -23,7 +23,6 @@ import {
   cleanupWorkspace,
   getRepoRootPath,
   mkWorkspace,
-  SANDBOX_IMAGE,
   uniqueRunId,
   useSandboxFixture,
 } from "./fixtures/sandbox-fixture";
@@ -41,8 +40,9 @@ describe("Sandbox Mounts", () => {
         const result = await fixture.runner.runOnce({
           runId: uniqueRunId("test-workspace-write"),
           workspacePath: workspace,
-          image: SANDBOX_IMAGE,
           argv: [
+            "bash",
+            "-lc",
             'echo "hello-from-sandbox" > /workspace/test.txt && cat /workspace/test.txt',
           ],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
@@ -65,8 +65,11 @@ describe("Sandbox Mounts", () => {
         await fixture.runner.runOnce({
           runId: uniqueRunId("test-workspace-host-read"),
           workspacePath: workspace,
-          image: SANDBOX_IMAGE,
-          argv: ['echo "visible-to-host" > /workspace/output.txt'],
+          argv: [
+            "bash",
+            "-lc",
+            'echo "visible-to-host" > /workspace/output.txt',
+          ],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
         });
 
@@ -100,8 +103,9 @@ describe("Sandbox Mounts", () => {
         const result = await fixture.runner.runOnce({
           runId: uniqueRunId("test-repo-readable"),
           workspacePath: workspace,
-          image: SANDBOX_IMAGE,
           argv: [
+            "bash",
+            "-lc",
             "jq -er '.name' /repo/package.json >/dev/null && echo 'REPO_READABLE'",
           ],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
@@ -126,8 +130,11 @@ describe("Sandbox Mounts", () => {
         const result = await fixture.runner.runOnce({
           runId: uniqueRunId("test-repo-readonly"),
           workspacePath: workspace,
-          image: SANDBOX_IMAGE,
-          argv: ['echo "x" >> /repo/package.json 2>&1 || echo "WRITE_BLOCKED"'],
+          argv: [
+            "bash",
+            "-lc",
+            'echo "x" >> /repo/package.json 2>&1 || echo "WRITE_BLOCKED"',
+          ],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
           mounts: [{ hostPath: repoPath, containerPath: "/repo", mode: "ro" }],
         });

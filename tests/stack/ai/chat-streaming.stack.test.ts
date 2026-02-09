@@ -13,7 +13,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { createChatRequest } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
@@ -68,25 +67,23 @@ describe("Chat Streaming", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        ...createChatRequest({
-          model: defaultModelId,
-          stateKey: randomUUID(),
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [
-                {
-                  type: "text",
-                  text: "Say hello in exactly 15 words or more, using complete sentences.",
-                },
-              ],
-            },
-          ],
-        }),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
+        model: defaultModelId,
         stream: true,
+        messages: [
+          {
+            id: randomUUID(),
+            role: "user",
+            createdAt: new Date().toISOString(),
+            content: [
+              {
+                type: "text",
+                text: "Say hello in exactly 15 words or more, using complete sentences.",
+              },
+            ],
+          },
+        ],
       }),
     });
 
@@ -123,6 +120,9 @@ describe("Chat Streaming", () => {
       expect(typeof delta.value).toBe("string");
       expect((delta.value as string).length).toBeGreaterThan(0);
     }
+
+    // DEBUG: Log all events to understand what we're receiving
+    console.log("DEBUG: Collected events:", JSON.stringify(events, null, 2));
 
     // Assert - Received finish message event at the end
     const finished = events.find((e) => isFinishMessageEvent(e));
@@ -174,20 +174,18 @@ describe("Chat Streaming", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        ...createChatRequest({
-          model: defaultModelId,
-          stateKey: randomUUID(),
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [{ type: "text", text: "Hello" }],
-            },
-          ],
-        }),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
+        model: defaultModelId,
         stream: true,
+        messages: [
+          {
+            id: randomUUID(),
+            role: "user",
+            createdAt: new Date().toISOString(),
+            content: [{ type: "text", text: "Hello" }],
+          },
+        ],
       }),
     });
 
@@ -260,25 +258,23 @@ describe("Chat Streaming", () => {
       },
       signal: ac.signal,
       body: JSON.stringify({
-        ...createChatRequest({
-          model: defaultModelId,
-          stateKey: randomUUID(),
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [
-                {
-                  type: "text",
-                  text: "Write a very long detailed response with many sentences about the history of computers.",
-                },
-              ],
-            },
-          ],
-        }),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
+        model: defaultModelId,
         stream: true,
+        messages: [
+          {
+            id: randomUUID(),
+            role: "user",
+            createdAt: new Date().toISOString(),
+            content: [
+              {
+                type: "text",
+                text: "Write a very long detailed response with many sentences about the history of computers.",
+              },
+            ],
+          },
+        ],
       }),
     });
 

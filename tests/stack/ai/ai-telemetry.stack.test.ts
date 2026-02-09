@@ -12,7 +12,7 @@
  * @public
  */
 
-import { createCompletionRequest } from "@tests/_fakes";
+import { TEST_MODEL_ID } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { desc, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
@@ -75,9 +75,10 @@ describe("AI Telemetry Stack Tests", () => {
         isDefault: true,
       });
 
-      const requestBody = createCompletionRequest({
+      const requestBody = {
         messages: [{ role: "user", content: "Say hello in one word." }],
-      });
+        model: TEST_MODEL_ID,
+      };
 
       const req = new NextRequest(
         "http://localhost:3000/api/v1/ai/completion",
@@ -191,10 +192,10 @@ describe("AI Telemetry Stack Tests", () => {
         isDefault: true,
       });
 
-      const requestBody = createCompletionRequest({
+      const requestBody = {
         messages: [{ role: "user", content: "Hello" }],
         model: "nonexistent/invalid-model-that-will-fail", // Invalid model
-      });
+      };
 
       const req = new NextRequest(
         "http://localhost:3000/api/v1/ai/completion",

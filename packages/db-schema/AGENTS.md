@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2026-02-08
+- **Last reviewed:** 2026-01-21
 - **Status:** stable
 
 ## Purpose
@@ -89,5 +89,3 @@ pnpm --filter @cogni/db-schema build
 - Subpath exports enable tree-shaking: consumers import only needed slices
 - `refs.ts` defines FK target tables shared across all slices
 - Schedule tables support Temporal migration (execution_requests for idempotency)
-- `billing.ts` includes `llmChargeDetails` (1:1 with charge_receipts, PK/FK cascade) for model/tokens/provider/latency/graphId
-- `charge_receipts.receipt_kind` distinguishes receipt types (e.g. "llm")

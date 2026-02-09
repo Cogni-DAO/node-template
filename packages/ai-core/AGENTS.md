@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-07
+- **Last reviewed:** 2026-02-01
 - **Status:** draft
 
 ## Purpose
@@ -43,10 +43,8 @@
   - `AiEvent` - Union of streaming event types (text_delta, usage_report, assistant_final, done, error)
   - `TextDeltaEvent`, `UsageReportEvent`, `AssistantFinalEvent`, `DoneEvent`, `ErrorEvent` - Individual event types
   - `ToolCallStartEvent`, `ToolCallResultEvent` - Tool execution events
-  - `UsageFact` - Billing fact emitted per LLM call (includes graphId)
-  - `UsageFactStrictSchema` - Zod schema for billing-authoritative executors (inproc/sandbox; usageUnitId required)
-  - `UsageFactHintsSchema` - Zod schema for external/telemetry executors (usageUnitId optional)
-  - `ExecutorType` - Executor discriminator ("langgraph_server" | "claude_sdk" | "inproc" | "sandbox")
+  - `UsageFact` - Billing fact emitted per LLM call
+  - `ExecutorType` - Executor discriminator ("langgraph_server" | "claude_sdk" | "inproc")
   - `RunContext` - Run identity provided to relay subscribers
   - `SourceSystem`, `SOURCE_SYSTEMS` - Billing source system enum
   - `ToolSpec` - Canonical tool definition (JSONSchema7 inputSchema)

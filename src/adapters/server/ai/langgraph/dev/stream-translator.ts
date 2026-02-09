@@ -15,7 +15,6 @@
  * @internal
  */
 
-import type { GraphId } from "@cogni/ai-core";
 import type { LlmCaller } from "@/ports";
 import { makeLogger } from "@/shared/observability";
 import type {
@@ -51,7 +50,6 @@ export interface StreamRunContext {
   readonly runId: string;
   readonly attempt: number;
   readonly caller: LlmCaller;
-  readonly graphId: GraphId;
 }
 
 /**
@@ -149,7 +147,6 @@ function buildUsageReport(ctx: StreamRunContext): UsageReportEvent {
     executorType: "langgraph_server",
     billingAccountId: ctx.caller.billingAccountId,
     virtualKeyId: ctx.caller.virtualKeyId,
-    graphId: ctx.graphId,
   };
   return { type: "usage_report", fact };
 }

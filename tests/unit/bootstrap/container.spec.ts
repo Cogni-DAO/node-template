@@ -3,11 +3,11 @@
 
 /**
  * Module: `@bootstrap/container`
- * Purpose: Unit tests for dependency injection container adapter wiring.
- * Scope: Tests LiteLlmAdapter is always wired regardless of APP_ENV; stateless container behavior; strict env validation. Does NOT test adapter implementations.
+ * Purpose: Unit tests for dependency injection container environment-based adapter wiring.
+ * Scope: Tests adapter selection logic based on APP_ENV; stateless container behavior; strict env validation. Does NOT test adapter implementations.
  * Invariants: Module cache reset between tests; clean env state; container wiring matches expected adapter types.
  * Side-effects: process.env
- * Notes: Uses vi.resetModules() to force fresh imports. LLM always wires LiteLlmAdapter (test stacks use mock-openai-api backend).
+ * Notes: Uses vi.resetModules() to force fresh imports; tests both test and production adapter wiring.
  * Links: src/bootstrap/container.ts
  * @public
  */
@@ -35,26 +35,30 @@ describe("bootstrap container DI wiring", () => {
   });
 
   describe("getContainer adapter selection", () => {
-    it("wires LiteLlmAdapter when APP_ENV=test", async () => {
+    it("wires FakeLlmAdapter when APP_ENV=test", async () => {
+      // Set up test environment
       Object.assign(process.env, BASE_VALID_ENV);
 
+      // Import after env setup to get correct adapter wiring
       const { getContainer } = await import("@/bootstrap/container");
-      const { LiteLlmAdapter } = await import("@/adapters/server");
+      const { FakeLlmAdapter } = await import("@/adapters/test");
 
       const container = getContainer();
 
-      expect(container.llmService).toBeInstanceOf(LiteLlmAdapter);
+      expect(container.llmService).toBeInstanceOf(FakeLlmAdapter);
       expect(container.clock).toBeDefined();
       expect(container.log).toBeDefined();
     });
 
     it("wires LiteLlmAdapter when APP_ENV=production", async () => {
+      // Test production adapter wiring (APP_ENV controls adapters, not NODE_ENV)
       Object.assign(process.env, {
         ...PRODUCTION_VALID_ENV,
         POSTGRES_DB: "prod_db",
         LITELLM_MASTER_KEY: "prod-key",
       });
 
+      // Import after env setup
       const { getContainer } = await import("@/bootstrap/container");
       const { LiteLlmAdapter } = await import("@/adapters/server");
 
@@ -66,6 +70,7 @@ describe("bootstrap container DI wiring", () => {
     });
 
     it("wires LiteLlmAdapter in development mode with APP_ENV=production", async () => {
+      // Test that APP_ENV controls adapters regardless of NODE_ENV
       Object.assign(process.env, {
         ...PRODUCTION_VALID_ENV,
         POSTGRES_DB: "dev_db",
