@@ -17,6 +17,11 @@ export {
   LlmProxyManager,
   type ProxyStopResult,
 } from "./llm-proxy-manager";
+export {
+  type GatewayChatResult,
+  OpenClawGatewayClient,
+} from "./openclaw-gateway-client";
+export { ProxyBillingReader } from "./proxy-billing-reader";
 export { SandboxAgentCatalogProvider } from "./sandbox-agent-catalog.provider";
 export {
   SANDBOX_PROVIDER_ID,
