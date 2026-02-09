@@ -28,7 +28,8 @@ Define the invariants and design contracts for running OpenClaw as a sandboxed a
 
 ## Non-Goals
 
-- OpenClaw gateway mode or Lit-based Control UI (invariants 17, 18)
+- ~~OpenClaw gateway mode~~ — **now in progress**: see [gateway header injection research](../research/openclaw-gateway-header-injection.md) and [integration handoff](../research/openclaw-gateway-integration-handoff.md). Gateway mode uses a separate image and execution path (not covered by this spec's ephemeral invariants).
+- Lit-based Control UI (invariant 18)
 - Passing API keys or git credentials into sandbox containers (SECRETS_HOST_ONLY)
 - Multi-stage Docker image optimization (see [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md))
 - Graph provider wiring, agent catalog, or bootstrap integration (see [openclaw-sandbox-controls](openclaw-sandbox-controls.md))
@@ -46,7 +47,7 @@ Define the invariants and design contracts for running OpenClaw as a sandboxed a
 
 16. **COGNI_IS_MODEL_ROUTER**: OpenClaw's model providers are set to `mode: "replace"` with a single `cogni` provider pointing at `http://localhost:8080/v1`. All built-in providers (Anthropic, OpenAI, Google, etc.) are stripped. OpenClaw cannot reach them anyway (`network=none`), and leaving them configured causes confusing fallback behavior and auth resolution attempts.
 
-17. **NO_OPENCLAW_GATEWAY**: OpenClaw runs in embedded/local agent mode only (`--local`). The gateway service is never started inside the sandbox. Gateway mode requires network listeners and persistent state that conflict with one-shot container semantics.
+17. **NO_OPENCLAW_GATEWAY** _(ephemeral path only)_: OpenClaw runs in embedded/local agent mode only (`--local`) when used as an ephemeral sandbox container. The gateway service is never started inside the `network=none` sandbox. Gateway mode requires network listeners and persistent state that conflict with one-shot container semantics. **Note**: A separate long-running gateway execution path is now validated — see [Container Images](#container-images) and [gateway integration handoff](../research/openclaw-gateway-integration-handoff.md).
 
 18. **NO_OPENCLAW_DASHBOARD**: OpenClaw's Control UI and bridge port are not exposed. No dashboard proxying until P2+ at earliest. The proxy only serves `/v1/*` (LLM) and `/health`.
 
