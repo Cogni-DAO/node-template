@@ -34,8 +34,10 @@ tags: [workflow, commands]
 graph LR
   idea["/idea"] --> triage["/triage"]
   bug["/bug"] --> triage
+  triage --> research["/research"]
   triage --> project["/project"]
   triage --> task["/task"]
+  research --> project
   project --> spec["/spec"]
   spec --> task
   task --> PR
@@ -49,7 +51,8 @@ graph LR
 
 | Command                  | Creates/Updates                               | Purpose                                                       |
 | ------------------------ | --------------------------------------------- | ------------------------------------------------------------- |
-| `/idea`                  | `story.*` item                                | Entry point: new feature concept                              |
+| `/idea`                  | `story.*` item (+ `spike.*` if unclear)       | Entry point: new feature concept                              |
+| `/research`              | `docs/research/*.md` + proposed layout        | Execute a spike: research + plausible project/spec/task plan  |
 | `/bug`                   | `bug.*` item                                  | Entry point: something is broken                              |
 | `/triage`                | updates item                                  | Route to project or leave standalone                          |
 | `/project`               | `proj.*` project                              | Plan roadmap with Crawl/Walk/Run phases                       |
@@ -89,14 +92,21 @@ graph LR
         └─ if contract change: /spec (draft) before /task
 ```
 
+**Research spike (unknown design space):**
+
+```
+/idea (creates story.* + spike.*) → /triage → /research spike.XXXX → docs/research/<topic>.md + proposed layout → /project → /spec → /task(s) → PR(s) → /closeout
+```
+
 ### When to Create What
 
-| Situation                     | Flow                                                                          |
-| ----------------------------- | ----------------------------------------------------------------------------- |
-| Small fix, no behavior change | `/bug` → `/task` → PR → `/closeout`                                           |
-| Single PR, clear scope        | `/idea` → `/triage` → `/task` → PR → `/closeout`                              |
-| Multi-PR effort               | `/idea` → `/triage` → `/project` → `/spec` → `/task`(s) → PR(s) → `/closeout` |
-| Architecture decision         | ADR in `docs/decisions/adr/`                                                  |
+| Situation                           | Flow                                                                          |
+| ----------------------------------- | ----------------------------------------------------------------------------- |
+| Small fix, no behavior change       | `/bug` → `/task` → PR → `/closeout`                                           |
+| Single PR, clear scope              | `/idea` → `/triage` → `/task` → PR → `/closeout`                              |
+| Multi-PR effort                     | `/idea` → `/triage` → `/project` → `/spec` → `/task`(s) → PR(s) → `/closeout` |
+| Unknown design space, need research | `/idea` → `/triage` → `/research` → `/project` → `/spec` → `/task`(s)         |
+| Architecture decision               | ADR in `docs/decisions/adr/`                                                  |
 
 ### PR Body Format
 
@@ -137,6 +147,7 @@ Enumerate the command-driven workflows, their sequencing, and the gates that enf
 | File                                        | Purpose                                     |
 | ------------------------------------------- | ------------------------------------------- |
 | `.claude/commands/idea.md`                  | `/idea` command definition                  |
+| `.claude/commands/research.md`              | `/research` command definition              |
 | `.claude/commands/bug.md`                   | `/bug` command definition                   |
 | `.claude/commands/triage.md`                | `/triage` command definition                |
 | `.claude/commands/project.md`               | `/project` command definition               |

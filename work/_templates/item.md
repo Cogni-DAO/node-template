@@ -1,6 +1,6 @@
 ---
-id:
-type:
+id: # <type>.<num> — must match filename prefix
+type: # task | bug | story | spike | subtask
 title:
 status: Backlog
 priority: 1

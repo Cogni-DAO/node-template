@@ -34,11 +34,22 @@ Read these before starting:
    - **Plan**: High-level only — detailed planning happens in `/task`.
    - **Validation**: How would someone verify the idea was implemented correctly?
 
-5. **Update `_index.md`**: Add row to `## Active` table, sorted by priority (0 first).
+5. **Assess if a spike is needed**: If the design space is unknown — unclear how to build it, multiple plausible approaches, or unfamiliar technology — also create a `spike.*` item:
 
-6. **Validate**: Run `pnpm check:docs` and fix any errors.
+   ```bash
+   cp work/_templates/item.md work/items/spike.<num>.<slug>.md
+   ```
 
-7. **Report**: Show file path and ID. Suggest next step: `/triage` to route to a project.
+   - `type: spike`
+   - Link it to the story in the description
+   - Requirements = the research questions that need answering
+   - Suggest `/research spike.<num>` as the next step after triage
+
+6. **Update `_index.md`**: Add row(s) to `## Active` table, sorted by priority (0 first).
+
+7. **Validate**: Run `pnpm check:docs` and fix any errors.
+
+8. **Report**: Show file path(s) and ID(s). Suggest next step: `/triage` to route to a project. If a spike was created, note that `/research spike.<num>` should follow triage.
 
 ## Rules
 

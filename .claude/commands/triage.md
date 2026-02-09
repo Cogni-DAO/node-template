@@ -31,6 +31,8 @@ Read these before starting:
    - Needs new project → `/project`
    - Attached to project, needs contract change → `/spec` then `/task`
    - Attached to project, ready to execute → `/task`
+   - Unknown design space, has a linked `spike.*` → `/research spike.<num>`
+   - Unknown design space, no spike yet → suggest creating one via `/idea` first
 
 ## Rules
 
