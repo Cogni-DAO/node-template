@@ -40,7 +40,8 @@ graph LR
   research --> project
   project --> spec["/spec"]
   spec --> task
-  task --> PR
+  task --> implement["/implement"]
+  implement --> PR
   PR --> review_d["/review-design"]
   PR --> review_i["/review-implementation"]
   review_d --> closeout["/closeout"]
@@ -58,6 +59,7 @@ graph LR
 | `/project`               | `proj.*` project                              | Plan roadmap with Crawl/Walk/Run phases                       |
 | `/spec`                  | spec in `docs/spec/`                          | Write or update technical contract                            |
 | `/task`                  | `task.*` item                                 | Decompose into PR-sized work                                  |
+| `/implement`             | code changes                                  | Execute a task/bug: clean code, checkpointed, spec-aligned    |
 | `/review-design`         | —                                             | Critical design review against architecture and principles    |
 | `/review-implementation` | —                                             | Critical code review against style, specs, and best practices |
 | `/closeout`              | updates item, spec, headers, AGENTS.md, index | Pre-PR finish pass: scan diff, update all docs, close item    |
@@ -153,6 +155,7 @@ Enumerate the command-driven workflows, their sequencing, and the gates that enf
 | `.claude/commands/project.md`               | `/project` command definition               |
 | `.claude/commands/spec.md`                  | `/spec` command definition                  |
 | `.claude/commands/task.md`                  | `/task` command definition                  |
+| `.claude/commands/implement.md`             | `/implement` command definition             |
 | `.claude/commands/review-design.md`         | `/review-design` command definition         |
 | `.claude/commands/review-implementation.md` | `/review-implementation` command definition |
 | `.claude/commands/closeout.md`              | `/closeout` command definition              |
