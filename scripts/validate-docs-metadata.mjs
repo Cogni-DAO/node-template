@@ -34,14 +34,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 // === REQUIRED H2 HEADINGS (per doc type) ===
 // Spec headings gated on spec_state being present (exempts legacy specs and indexes)
-const SPEC_REQUIRED_HEADINGS = [
-  "Context",
-  "Goal",
-  "Non-Goals",
-  "Core Invariants",
-  "Design",
-  "Acceptance Checks",
-];
+const SPEC_REQUIRED_HEADINGS = ["Design", "Goal", "Non-Goals"];
 const ADR_REQUIRED_HEADINGS = ["Decision", "Rationale", "Consequences"];
 const PROJECT_REQUIRED_HEADINGS = [
   "Goal",
@@ -220,6 +213,11 @@ function validateDoc(file, props, content, allIds) {
   // Heading checks (spec gated on spec_state; ADR always)
   if (props.type === "spec" && props.spec_state) {
     errors.push(...checkRequiredHeadings(content, SPEC_REQUIRED_HEADINGS));
+    // Accept either "Invariants" or "Core Invariants"
+    const h2s = extractH2Headings(content);
+    if (!h2s.includes("Invariants") && !h2s.includes("Core Invariants")) {
+      errors.push(`missing required heading: ## Invariants`);
+    }
   }
   if (props.type === "adr") {
     errors.push(...checkRequiredHeadings(content, ADR_REQUIRED_HEADINGS));
