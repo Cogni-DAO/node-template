@@ -60,7 +60,7 @@ pnpm test path/to/test.ts
 <!-- All required before status=done. -->
 
 - [ ] **Work Item:** `<type>.<num>` linked in PR body
-- [ ] **Spec:** relevant spec ID linked in PR body (if applicable)
+- [ ] **Spec:** all invariants of linked specs (here, or project) are upheld
 - [ ] **Tests:** new/updated tests cover the change
 - [ ] **Reviewer:** assigned and approved
 
