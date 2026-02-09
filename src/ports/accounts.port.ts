@@ -3,7 +3,7 @@
 
 /**
  * Module: `@ports/accounts`
- * Purpose: Billing account service port interface with charge receipt recording and port-level errors.
+ * Purpose: Billing account service port interface with charge receipt + llm_charge_details recording and port-level errors.
  * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management. Does not implement business logic.
  * Invariants:
  * - All operations atomic; billing accounts own virtual keys; ledger integrity preserved
@@ -16,6 +16,7 @@
  * @public
  */
 
+import type { GraphId } from "@cogni/ai-core";
 import type { ChargeReason, SourceSystem } from "@/types/billing";
 
 /**
@@ -125,6 +126,17 @@ export type ChargeReceiptProvenance = "response" | "stream";
  * - sourceReference: Idempotency key = runId/attempt/usageUnitId
  * - ingressRequestId: Optional delivery-layer correlation (P0: equals runId; P1: many per runId)
  */
+/** LLM-specific detail written to llm_charge_details alongside the charge receipt. */
+export type LlmChargeDetail = {
+  providerCallId: string | null;
+  model: string;
+  provider: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  latencyMs: number | null;
+  graphId: GraphId;
+};
+
 export type ChargeReceiptParams = {
   billingAccountId: string;
   virtualKeyId: string;
@@ -148,6 +160,10 @@ export type ChargeReceiptParams = {
   sourceSystem: SourceSystem;
   /** Idempotency key: runId/attempt/usageUnitId (unique per source_system) */
   sourceReference: string;
+  /** Discriminator for detail table join (e.g. 'llm') */
+  receiptKind: string;
+  /** LLM-specific detail — written to llm_charge_details when receiptKind='llm' */
+  llmDetail?: LlmChargeDetail;
 };
 
 /**
@@ -247,8 +263,8 @@ export interface AccountService {
   }): Promise<CreditLedgerEntry | null>;
 
   /**
-   * List charge receipts for a billing account (for Activity dashboard spend join).
-   * Returns litellmCallId for joining with LiteLLM usage logs, plus sourceSystem for filtering.
+   * List charge receipts for a billing account.
+   * Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH: primary source for Activity dashboard.
    */
   listChargeReceipts(params: {
     billingAccountId: string;
@@ -257,15 +273,32 @@ export interface AccountService {
     limit?: number;
   }): Promise<
     Array<{
-      /** LiteLLM call ID for Activity join (null if missing) */
+      id: string;
       litellmCallId: string | null;
-      /** Credits charged as decimal string */
       chargedCredits: string;
-      /** User cost in USD (with markup) as decimal string */
       responseCostUsd: string | null;
-      /** Source system for filtering joins */
       sourceSystem: SourceSystem;
+      receiptKind: string;
       createdAt: Date;
+    }>
+  >;
+
+  /**
+   * Fetch LLM charge details for a set of charge receipt IDs.
+   * Used by Activity facade to enrich receipts with model/tokens.
+   */
+  listLlmChargeDetails(params: {
+    chargeReceiptIds: readonly string[];
+  }): Promise<
+    Array<{
+      chargeReceiptId: string;
+      providerCallId: string | null;
+      model: string;
+      provider: string | null;
+      tokensIn: number | null;
+      tokensOut: number | null;
+      latencyMs: number | null;
+      graphId: GraphId;
     }>
   >;
 }

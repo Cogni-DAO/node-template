@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-05
+- **Last reviewed:** 2026-02-07
 - **Status:** stable
 
 ## Purpose
@@ -39,16 +39,20 @@ Deterministic test doubles for unit tests with no I/O dependencies.
   - FakeClock (controllable time for deterministic tests)
   - FakeRng (controllable randomness)
   - FakeTelemetry (no-op telemetry)
-  - FakeLlmAdapter (deterministic LLM responses)
+  - FakeLlmService (deterministic LLM responses for unit tests)
   - MockAccountService (account/credits test doubles)
   - Test identity fixtures (TEST_USER_ID_1–5, TEST_SESSION_USER_1–5, TEST_WALLET_1–5, testUser(), newTestUserId(), newTestSessionUser())
   - Payment builders (createPaymentAttempt, createIntentAttempt, createPendingAttempt, createCreditedAttempt, createRejectedAttempt, createFailedAttempt, createExpiredIntent, createTimedOutPending)
   - makeTestCtx (RequestContext factory for facade/service tests)
   - Tool test helpers (createTestBoundToolRuntime, createTestToolSource, createEventCollector)
+  - Graph executor fakes (createImmediateGraphExecutor, createDelayedReturnGraphExecutor)
+  - Request builders (createCompletionRequest, createChatRequest)
+  - UsageFact builders (buildInprocUsageFact, buildSandboxUsageFact, buildExternalUsageFact)
+  - TEST_GRAPH_NAME constant ("langgraph:poet")
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** index.ts, ids.ts, payments/fakes.ts, ai/fakes.ts, ai/tool-builders.ts, test-context.ts
+- **Files considered API:** index.ts, ids.ts, payments/fakes.ts, ai/fakes.ts, ai/tool-builders.ts, ai/graph-executor-fakes.ts, ai/request-builders.ts, ai/usage-fact-builders.ts, test-context.ts
 
 ## Responsibilities
 
@@ -85,3 +89,5 @@ import { createPaymentAttempt, createIntentAttempt } from "@tests/_fakes"
 - Keep fakes minimal and deterministic only
 - Payment builders provide 8 specialized functions for all PaymentAttempt states
 - FakeClock used in payment tests for time-based logic (expiration, timeouts)
+- Request builders include graphName by default (required since P0.75); use these instead of manual JSON.stringify
+- UsageFact builders produce schema-valid facts for strict (inproc/sandbox) and hints (external) schemas

@@ -29,7 +29,7 @@ export interface ActivityLog {
   timestamp: string;
   provider: string;
   model: string;
-  app?: string | undefined;
+  graphId: string;
   tokensIn: number;
   tokensOut: number;
   cost: string;
@@ -48,6 +48,7 @@ export function ActivityTable({ logs }: ActivityTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Timestamp</TableHead>
+            <TableHead>Graph</TableHead>
             <TableHead>Model</TableHead>
             <TableHead className="text-right">Tokens In</TableHead>
             <TableHead className="text-right">Tokens Out</TableHead>
@@ -57,7 +58,7 @@ export function ActivityTable({ logs }: ActivityTableProps) {
         <TableBody>
           {logs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="h-24 text-center">
+              <TableCell colSpan={6} className="h-24 text-center">
                 No activity found.
               </TableCell>
             </TableRow>
@@ -67,6 +68,7 @@ export function ActivityTable({ logs }: ActivityTableProps) {
                 <TableCell>
                   {new Date(log.timestamp).toLocaleString()}
                 </TableCell>
+                <TableCell>{log.graphId}</TableCell>
                 <TableCell>{log.model}</TableCell>
                 <TableCell className="text-right">{log.tokensIn}</TableCell>
                 <TableCell className="text-right">{log.tokensOut}</TableCell>
