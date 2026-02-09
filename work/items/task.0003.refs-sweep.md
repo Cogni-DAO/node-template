@@ -33,15 +33,15 @@ labels: [docs, refactor]
 
 ## Mapping Table
 
-Use the tracker (`work/issues/wi.docs-migration-tracker.md`) as the source of truth for old → new mappings. The columns are: `Original | Spec | Ini | WI | Guide`.
+Use the tracker (`work/items/task.0001.docs-migration-tracker.md`) as the source of truth for old → new mappings. The columns are: `Original | Spec | Proj | WI | Guide`.
 
 Rules:
 
 - If **Spec** column has a value → primary ref target is `docs/spec/{value}`
 - If only **Guide** column has a value → target is `docs/guides/{value}`
-- If only **Ini** column has a value → target is `work/initiatives/{value}`
+- If only **Proj** column has a value → target is `work/projects/{value}`
 - If **State** is `obsolete` or `snapshot` with no destination → delete the reference or replace with the nearest living doc
-- Some docs have BOTH spec + ini destinations. **For code references** (Links comments, AGENTS.md), point to the **spec**. For roadmap/TODO references, point to the **ini**.
+- Some docs have BOTH spec + ini destinations. **For code references** (Links comments, AGENTS.md), point to the **spec**. For roadmap/TODO references, point to the **proj**.
 
 ### Quick Reference (top 30 by ref count)
 

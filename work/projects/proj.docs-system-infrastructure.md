@@ -31,15 +31,15 @@ Build the tooling infrastructure that enforces our docs + work system:
 
 **Goal:** Standardize identifiers, headings, and enforceability before integrating external tools.
 
-| Deliverable                                                    | Status      | Est | Work Item                                                           |
-| -------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------------------- |
-| Templates finalized (spec, guide, decision, initiative, issue) | Done        | 1   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
-| Classify all 97 legacy docs                                    | Done        | 2   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
-| Migrate legacy docs to typed directories                       | Not Started | 4   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
-| CI check: required frontmatter props                           | Done        | 1   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
-| CI check: IDs unique + type↔dir match                         | Done        | 1   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
-| CI check: `spec_state` validation                              | Not Started | 1   | —                                                                   |
-| CI check: stable headings for specs                            | Not Started | 1   | —                                                                   |
+| Deliverable                                                    | Status      | Est | Work Item |
+| -------------------------------------------------------------- | ----------- | --- | --------- |
+| Templates finalized (spec, guide, decision, initiative, issue) | Done        | 1   | task.0001 |
+| Classify all 97 legacy docs                                    | Done        | 2   | task.0001 |
+| Migrate legacy docs to typed directories                       | Not Started | 4   | task.0001 |
+| CI check: required frontmatter props                           | Done        | 1   | task.0001 |
+| CI check: IDs unique + type↔dir match                         | Done        | 1   | task.0001 |
+| CI check: `spec_state` validation                              | Not Started | 1   | —         |
+| CI check: stable headings for specs                            | Not Started | 1   | —         |
 
 ### Walk (P1) — MkDocs + Repo Separation
 

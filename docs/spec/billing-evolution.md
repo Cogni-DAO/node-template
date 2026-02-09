@@ -143,7 +143,7 @@ Cost source: LiteLLM `usage.cost` (stream) or `x-litellm-response-cost` header (
 
 ## Known Issues
 
-- **/activity cost column broken**: LiteLLM `spend_logs.request_id` ≠ `charge_receipts.litellm_call_id` for some providers → all rows show "—" cost. See [task.0004.activity-billing-join](../../work/items/task.0004.activity-billing-join.md).
+- **/activity cost column broken**: LiteLLM `spend_logs.request_id` ≠ `charge_receipts.litellm_call_id` for some providers → all rows show "—" cost. See [bug.0004.activity-billing-join](../../work/items/bug.0004.activity-billing-join.md).
 
 ## Open Questions
 
