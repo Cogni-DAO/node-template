@@ -16,53 +16,48 @@ tags: [workflow, commands]
 
 # Development Lifecycle
 
-## Context
+> Work enters the system as ideas or bugs. It flows through triage, planning, execution, review, and closeout via `/commands` that enforce content boundaries.
 
-Work enters the system as ideas or bugs. It flows through triage, planning, execution, and closeout via `/commands` that enforce content boundaries. This spec defines those flows.
+### Key References
 
-For type definitions and ownership rules, see [docs-work-system](./docs-work-system.md).
-
-## Goal
-
-Enumerate the command-driven workflows, their sequencing, and the gates that enforce quality.
-
-## Non-Goals
-
-- Type taxonomy (see [docs-work-system](./docs-work-system.md))
-- Project management methodology
-- CI implementation details
-
----
-
-## Core Invariants
-
-1. **PR_LINKS_ITEM**: Every code PR references exactly one primary work item (`task.*` or `bug.*`) and at least one spec, or declares `Spec-Impact: none`.
-
-2. **TRIAGE_OWNS_ROUTING**: Only `/triage` sets or changes the `project:` linkage on an idea or bug.
-
-3. **SPEC_NO_EXEC_PLAN**: Specs never contain roadmap, phases, tasks, owners, or timelines. At any `spec_state`.
-
-4. **SPEC_STATE_LIFECYCLE**: `draft` → `proposed` → `active` → `deprecated`. No skipping.
-
-5. **ACTIVE_MEANS_CLEAN**: `spec_state: active` requires Open Questions empty and `verified:` current.
-
-6. **PROJECTS_BEFORE_CODE**: Projects may exist before any code. Specs are created or updated when code lands.
-
----
+|             |                                                                                           |                              |
+| ----------- | ----------------------------------------------------------------------------------------- | ---------------------------- |
+| **Spec**    | [Docs + Work System](./docs-work-system.md)                                               | Type taxonomy and ownership  |
+| **Project** | [proj.docs-system-infrastructure](../../work/projects/proj.docs-system-infrastructure.md) | Tooling roadmap (CI, MkDocs) |
+| **Guide**   | [Work Management Guide](../../work/README.md)                                             | Front door to `/work`        |
 
 ## Design
 
+### Workflow
+
+```mermaid
+graph LR
+  idea["/idea"] --> triage["/triage"]
+  bug["/bug"] --> triage
+  triage --> project["/project"]
+  triage --> task["/task"]
+  project --> spec["/spec"]
+  spec --> task
+  task --> PR
+  PR --> review_d["/review-design"]
+  PR --> review_i["/review-implementation"]
+  review_d --> closeout["/closeout"]
+  review_i --> closeout
+```
+
 ### Commands
 
-| Command     | Creates/Updates                               | Purpose                                                    |
-| ----------- | --------------------------------------------- | ---------------------------------------------------------- |
-| `/idea`     | `story.*` item                                | Entry point: new feature concept                           |
-| `/bug`      | `bug.*` item                                  | Entry point: something is broken                           |
-| `/triage`   | updates item                                  | Route to project or leave standalone                       |
-| `/project`  | `proj.*` project                              | Plan roadmap with Crawl/Walk/Run phases                    |
-| `/spec`     | spec in `docs/spec/`                          | Write or update technical contract                         |
-| `/task`     | `task.*` item                                 | Decompose into PR-sized work                               |
-| `/closeout` | updates item, spec, headers, AGENTS.md, index | Pre-PR finish pass: scan diff, update all docs, close item |
+| Command                  | Creates/Updates                               | Purpose                                                       |
+| ------------------------ | --------------------------------------------- | ------------------------------------------------------------- |
+| `/idea`                  | `story.*` item                                | Entry point: new feature concept                              |
+| `/bug`                   | `bug.*` item                                  | Entry point: something is broken                              |
+| `/triage`                | updates item                                  | Route to project or leave standalone                          |
+| `/project`               | `proj.*` project                              | Plan roadmap with Crawl/Walk/Run phases                       |
+| `/spec`                  | spec in `docs/spec/`                          | Write or update technical contract                            |
+| `/task`                  | `task.*` item                                 | Decompose into PR-sized work                                  |
+| `/review-design`         | —                                             | Critical design review against architecture and principles    |
+| `/review-implementation` | —                                             | Critical code review against style, specs, and best practices |
+| `/closeout`              | updates item, spec, headers, AGENTS.md, index | Pre-PR finish pass: scan diff, update all docs, close item    |
 
 ### Spec State Lifecycle
 
@@ -84,7 +79,7 @@ Enumerate the command-driven workflows, their sequencing, and the gates that enf
 **New idea, new project:**
 
 ```
-/idea → /triage → new proj.* → /project → /spec (draft) → /task(s) → PR(s) → /closeout
+/idea → /triage → new proj.* → /project → /spec (draft) → /task(s) → PR(s) → /review-design → /review-implementation → /closeout
 ```
 
 **Idea slots into existing project:**
@@ -109,35 +104,53 @@ Enumerate the command-driven workflows, their sequencing, and the gates that enf
 ## References
 
 Work: task.0042
-Spec: docs/spec/feature.md#core-invariants (or Spec-Impact: none)
+Spec: docs/spec/feature.md#invariants (or Spec-Impact: none)
 ```
 
 - Missing `Work:` → merge blocked
 - Missing `Spec:` → warning (blocked if behavior/security/interface change)
 
----
+## Goal
 
-## Acceptance Checks
+Enumerate the command-driven workflows, their sequencing, and the gates that enforce quality.
 
-**Automated:**
+## Non-Goals
 
-- `node scripts/validate-docs-metadata.mjs` — validates frontmatter including `spec_state`
-- `pnpm check:docs` — agents + headers + metadata
+- Type taxonomy (see [docs-work-system](./docs-work-system.md))
+- Project management methodology
+- CI implementation details
 
-**Manual (until automated):**
+## Invariants
 
-1. Specs contain no roadmap/phase/task content
-2. `spec_state: active` specs have empty Open Questions
-3. PRs reference a work item
+| Rule                 | Constraint                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| PR_LINKS_ITEM        | Every code PR references exactly one primary work item (`task.*` or `bug.*`) and at least one spec, or `Spec-Impact: none` |
+| TRIAGE_OWNS_ROUTING  | Only `/triage` sets or changes the `project:` linkage on an idea or bug                                                    |
+| SPEC_NO_EXEC_PLAN    | Specs never contain roadmap, phases, tasks, owners, or timelines. At any `spec_state`                                      |
+| SPEC_STATE_LIFECYCLE | `draft` → `proposed` → `active` → `deprecated`. No skipping                                                                |
+| ACTIVE_MEANS_CLEAN   | `spec_state: active` requires Open Questions empty and `verified:` current                                                 |
+| PROJECTS_BEFORE_CODE | Projects may exist before any code. Specs are created or updated when code lands                                           |
+| REVIEW_BEFORE_MERGE  | Design and implementation reviews use `/review-design` and `/review-implementation` before `/closeout`                     |
 
----
+### File Pointers
+
+| File                                        | Purpose                                     |
+| ------------------------------------------- | ------------------------------------------- |
+| `.claude/commands/idea.md`                  | `/idea` command definition                  |
+| `.claude/commands/bug.md`                   | `/bug` command definition                   |
+| `.claude/commands/triage.md`                | `/triage` command definition                |
+| `.claude/commands/project.md`               | `/project` command definition               |
+| `.claude/commands/spec.md`                  | `/spec` command definition                  |
+| `.claude/commands/task.md`                  | `/task` command definition                  |
+| `.claude/commands/review-design.md`         | `/review-design` command definition         |
+| `.claude/commands/review-implementation.md` | `/review-implementation` command definition |
+| `.claude/commands/closeout.md`              | `/closeout` command definition              |
+| `scripts/validate-docs-metadata.mjs`        | Frontmatter and heading validation          |
 
 ## Open Questions
 
 - [ ] Should we lint specs for roadmap/phase language?
 - [ ] CI enforcement of PR body format (Work: / Spec: lines)
-
----
 
 ## Related
 
