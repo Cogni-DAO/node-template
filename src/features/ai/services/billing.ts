@@ -17,6 +17,7 @@
  * @public
  */
 
+import type { GraphId } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import type { AccountService } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
@@ -44,6 +45,7 @@ export interface BillingContext {
   readonly providerCostUsd: number | undefined;
   readonly litellmCallId: string | undefined;
   readonly provenance: "response" | "stream";
+  readonly graphId: GraphId;
 }
 
 /**
@@ -79,6 +81,7 @@ export async function recordBilling(
     providerCostUsd,
     litellmCallId,
     provenance,
+    graphId,
   } = context;
 
   try {
@@ -134,6 +137,16 @@ export async function recordBilling(
       chargeReason: "llm_usage",
       sourceSystem: "litellm",
       sourceReference,
+      receiptKind: "llm",
+      llmDetail: {
+        providerCallId: litellmCallId ?? null,
+        model,
+        provider: null, // Not available in BillingContext
+        tokensIn: null, // Not available in BillingContext
+        tokensOut: null, // Not available in BillingContext
+        latencyMs: null,
+        graphId,
+      },
     });
   } catch (error) {
     // Post-call billing is best-effort - NEVER block user response
@@ -189,22 +202,29 @@ export function computeIdempotencyKey(
  */
 export async function commitUsageFact(
   fact: UsageFact,
-  callIndex: number,
   context: RunContext,
   accountService: AccountService,
   log: Logger
 ): Promise<void> {
-  const { runId, attempt, billingAccountId, virtualKeyId, source } = fact;
+  const {
+    runId,
+    attempt,
+    billingAccountId,
+    virtualKeyId,
+    source,
+    usageUnitId,
+  } = fact;
   const { ingressRequestId } = context;
 
-  // Resolve usageUnitId: adapter-provided or fallback
-  let usageUnitId = fact.usageUnitId;
+  // External executors (validated with hints schema) may have undefined usageUnitId.
+  // Billing-authoritative executors (strict schema) always have usageUnitId (validation ensures it).
   if (!usageUnitId) {
-    log.error(
-      { runId, model: fact.model, callIndex },
-      "billing.missing_usage_unit_id"
+    // Skip billing for external executor hints without usageUnitId (telemetry-only, not authoritative)
+    log.warn(
+      { runId, executorType: fact.executorType },
+      "Skipping billing commit: usageUnitId missing (external executor hint)"
     );
-    usageUnitId = `MISSING:${runId}/${callIndex}`;
+    return;
   }
 
   try {
@@ -253,6 +273,16 @@ export async function commitUsageFact(
       chargeReason: "llm_usage",
       sourceSystem: source,
       sourceReference,
+      receiptKind: "llm",
+      llmDetail: {
+        providerCallId: fact.usageUnitId ?? null,
+        model,
+        provider: fact.provider ?? null,
+        tokensIn: fact.inputTokens ?? null,
+        tokensOut: fact.outputTokens ?? null,
+        latencyMs: null, // Not available in UsageFact
+        graphId: fact.graphId,
+      },
     });
 
     // Log billing commit complete (success path)

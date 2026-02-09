@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import {
   cleanupWorkspace,
   mkWorkspace,
+  SANDBOX_IMAGE,
   uniqueRunId,
   useSandboxFixture,
 } from "./fixtures/sandbox-fixture";
@@ -34,6 +35,7 @@ describe("Sandbox Network Isolation", () => {
       const result = await fixture.runner.runOnce({
         runId: uniqueRunId("test-network-isolation"),
         workspacePath: workspace,
+        image: SANDBOX_IMAGE,
         argv: [
           "bash",
           "-lc",
@@ -61,6 +63,7 @@ describe("Sandbox Network Isolation", () => {
       const result = await fixture.runner.runOnce({
         runId: uniqueRunId("test-dns-blocked"),
         workspacePath: workspace,
+        image: SANDBOX_IMAGE,
         argv: [
           "bash",
           "-lc",

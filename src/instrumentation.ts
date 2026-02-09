@@ -3,8 +3,8 @@
 
 /**
  * Module: `@instrumentation`
- * Purpose: Next.js instrumentation hook for OpenTelemetry SDK initialization.
- * Scope: Initialize OTel SDK once per Node.js process; provide trace context for request correlation. Does NOT export SDK instance or run during build.
+ * Purpose: Next.js instrumentation hook — once-per-process startup orchestration.
+ * Scope: Initialize OTel SDK and run preflight checks. Does NOT export SDK instance or run during build.
  * Invariants:
  *   - OTel init happens ONLY in this file (not container module-load)
  *   - Must await sdk.start() and hard-fail in non-dev if startup fails
@@ -54,8 +54,12 @@ export async function initOtelSdk(options?: {
     await sdk.start();
 
     // Log successful initialization (console since Pino may not be ready)
-    // biome-ignore lint/suspicious/noConsole: OTel init happens before logging is available
-    console.log("[instrumentation] OTel SDK started successfully");
+    // Suppress in test mode to avoid spamming per-fork output
+    // biome-ignore lint/style/noProcessEnv: APP_ENV check for test silence
+    if (process.env.APP_ENV !== "test") {
+      // biome-ignore lint/suspicious/noConsole: OTel init happens before logging is available
+      console.log("[instrumentation] OTel SDK started successfully");
+    }
     return true;
   } catch (error) {
     // biome-ignore lint/style/noProcessEnv: NODE_ENV is standard Next.js runtime env
@@ -76,19 +80,57 @@ export async function initOtelSdk(options?: {
 
 /**
  * Next.js instrumentation hook - called once per Node.js process.
- * Initializes OpenTelemetry SDK for distributed tracing.
- *
- * Per AI_SETUP_SPEC.md:
- * - Hard-fail in non-dev if startup fails
+ * Orchestrates OTel init + preflight checks.
  */
 export async function register(): Promise<void> {
-  // Only initialize OTel in Node.js runtime (allowlist, not denylist)
+  // Only initialize in Node.js runtime (allowlist, not denylist)
   // biome-ignore lint/style/noProcessEnv: NEXT_RUNTIME is set by Next.js, no config file
   if (process.env.NEXT_RUNTIME !== "nodejs") {
     return;
   }
 
   await initOtelSdk();
+
+  // Dev mode (not test): warn if LiteLLM has stale test config from a previous session.
+  // Inlined here (not in bootstrap/) because dep-cruiser forbids instrumentation→bootstrap imports.
+  // biome-ignore lint/style/noProcessEnv: startup check before config framework
+  if (process.env.APP_ENV !== "test") {
+    (async () => {
+      // biome-ignore lint/style/noProcessEnv: startup check before config framework
+      const baseUrl = process.env.LITELLM_BASE_URL;
+      // biome-ignore lint/style/noProcessEnv: startup check before config framework
+      const masterKey = process.env.LITELLM_MASTER_KEY;
+      if (!baseUrl || !masterKey) return;
+      try {
+        const res = await fetch(`${baseUrl}/v1/models`, {
+          headers: { Authorization: `Bearer ${masterKey}` },
+          signal: AbortSignal.timeout(3_000),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { data?: Array<{ id: string }> };
+        const ids = (data.data ?? []).map((m) => m.id);
+        if (ids.includes("test-model")) {
+          // biome-ignore lint/suspicious/noConsole: startup warning before logging
+          console.warn(
+            [
+              "",
+              "  ╔══════════════════════════════════════════════════════════════╗",
+              "  ║  WARNING: LiteLLM is loaded with TEST config (test-model)  ║",
+              "  ║  dev:stack expects prod config (litellm.config.yaml).      ║",
+              "  ║                                                            ║",
+              "  ║  LLM calls will route to mock-openai-api, not real LLMs.  ║",
+              "  ║                                                            ║",
+              "  ║  Fix: docker compose down litellm && pnpm dev:stack        ║",
+              "  ╚══════════════════════════════════════════════════════════════╝",
+              "",
+            ].join("\n")
+          );
+        }
+      } catch {
+        // Non-fatal: LiteLLM might not be up yet
+      }
+    })().catch(() => {});
+  }
 }
 
 /**

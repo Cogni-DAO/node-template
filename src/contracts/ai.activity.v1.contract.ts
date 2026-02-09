@@ -11,9 +11,9 @@
  * - Chart buckets are zero-filled for the requested range.
  * - Money is decimal string to avoid float precision issues.
  * - Cursor is opaque string.
- * - P1: spend = our billing (charged_credits), telemetry = LiteLLM (model/tokens).
+ * - Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH: all data sourced from charge_receipts + llm_charge_details.
  * Side-effects: none
- * Links: [ActivityService](../../features/ai/services/activity.ts), docs/ACTIVITY_METRICS.md
+ * Links: [activity.server.ts](../../app/_facades/ai/activity.server.ts), docs/ACTIVITY_METRICS.md
  * @public
  */
 
@@ -135,7 +135,7 @@ export const aiActivityOperation = {
         timestamp: z.string().datetime(),
         provider: z.string(),
         model: z.string(),
-        app: z.string().optional(),
+        graphId: z.string(),
         tokensIn: z.number().int(),
         tokensOut: z.number().int(),
         cost: z.string().describe("Decimal string USD"),

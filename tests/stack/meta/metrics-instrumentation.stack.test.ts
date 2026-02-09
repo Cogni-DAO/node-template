@@ -7,7 +7,7 @@
  * Scope: Black-box HTTP checks for HTTP metrics; in-process route calls for LLM metrics. Does not test metric values or bucket distributions.
  * Invariants: HTTP metrics increment by exactly 1 per request; LLM metrics use low-cardinality labels.
  * Side-effects: IO (HTTP requests, database writes)
- * Notes: Requires running stack for HTTP tests; uses FakeLlmAdapter for LLM tests (APP_ENV=test).
+ * Notes: Requires running stack for HTTP tests; LLM calls route through mock-openai-api (APP_ENV=test).
  * Links: /api/metrics, src/bootstrap/http/wrapRouteHandlerWithLogging.ts
  * @public
  */
@@ -195,7 +195,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 // Import after mock
-import { TEST_MODEL_ID } from "@tests/_fakes";
+import { createCompletionRequest } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { fetchStackTest } from "@tests/_fixtures/http/rate-limit-helpers";
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -206,12 +206,6 @@ import { metricsRegistry } from "@/shared/observability";
 
 describe("LLM Metrics Instrumentation", () => {
   it("increments ai_llm_call_duration_ms and ai_llm_tokens_total on successful completion", async () => {
-    // Skip if not in test mode (FakeLlmAdapter required)
-    if (process.env.APP_ENV !== "test") {
-      console.log("Skipping LLM metrics test - requires APP_ENV=test");
-      return;
-    }
-
     // 1. Setup authenticated user with credits
     const mockSessionUser: SessionUser = {
       id: randomUUID(),
@@ -268,10 +262,11 @@ describe("LLM Metrics Instrumentation", () => {
     // 3. Call completion (in-process, metrics recorded in same registry)
     const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
       method: "POST",
-      body: JSON.stringify({
-        messages: [{ role: "user", content: "Hello metrics test" }],
-        model: TEST_MODEL_ID,
-      }),
+      body: JSON.stringify(
+        createCompletionRequest({
+          messages: [{ role: "user", content: "Hello metrics test" }],
+        })
+      ),
     });
 
     const res = await completionPOST(req);
@@ -315,7 +310,6 @@ describe("LLM Metrics Instrumentation", () => {
   it("increments ai_llm_errors_total on LLM failure", async () => {
     // Skip if not in test mode
     if (process.env.APP_ENV !== "test") {
-      console.log("Skipping LLM error metrics test - requires APP_ENV=test");
       return;
     }
 

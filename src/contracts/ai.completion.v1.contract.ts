@@ -14,17 +14,29 @@
 
 import { z } from "zod";
 
-/** Message length limit - duplicated from core to avoid dependency */
-const MAX_MESSAGE_CHARS = 4000;
+/** Input message length limit — caps client-submitted messages */
+const MAX_INPUT_MESSAGE_CHARS = 4000;
+/** Output message length limit — generous cap on LLM responses */
+const MAX_OUTPUT_MESSAGE_CHARS = 65_536;
 
 // DTOs that don't leak core internals
-export const MessageDtoSchema = z.object({
+const InputMessageDtoSchema = z.object({
   /** No 'system' role allowed from client */
   role: z.enum(["user", "assistant"]),
   /** Hard cap enforced at schema level */
-  content: z.string().max(MAX_MESSAGE_CHARS),
+  content: z.string().max(MAX_INPUT_MESSAGE_CHARS),
   /** Client timestamp ignored - server sets timestamps */
   timestamp: z.string().optional(),
+});
+
+const OutputMessageDtoSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  /** LLM responses may be much longer than client input */
+  content: z.string().max(MAX_OUTPUT_MESSAGE_CHARS),
+  /** Always present in response */
+  timestamp: z.string(),
+  /** Request ID for billing reference */
+  requestId: z.string(),
 });
 
 export const aiCompletionOperation = {
@@ -32,16 +44,13 @@ export const aiCompletionOperation = {
   summary: "Chat completion via AI",
   description: "Send messages to AI and receive completion response",
   input: z.object({
-    messages: z.array(MessageDtoSchema),
+    messages: z.array(InputMessageDtoSchema),
     /** Model ID (REQUIRED) - client resolves to defaultModelId if needed */
     model: z.string(),
+    /** Graph name or fully-qualified graphId to execute (required) */
+    graphName: z.string(),
   }),
   output: z.object({
-    message: MessageDtoSchema.omit({ timestamp: true }).extend({
-      /** Always present in response */
-      timestamp: z.string(),
-      /** Request ID for billing reference */
-      requestId: z.string(),
-    }),
+    message: OutputMessageDtoSchema,
   }),
 } as const;

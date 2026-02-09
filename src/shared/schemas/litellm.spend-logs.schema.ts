@@ -12,7 +12,7 @@
  * - prompt_tokens, completion_tokens, spend are required for usage data
  * - passthrough() allows unknown fields from LiteLLM without breaking
  * Side-effects: none
- * Links: [LiteLlmActivityUsageAdapter](../adapters/server/ai/litellm.activity-usage.adapter.ts), docs/ACTIVITY_METRICS.md
+ * Links: docs/ACTIVITY_METRICS.md
  * @public
  */
 

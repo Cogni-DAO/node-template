@@ -44,12 +44,15 @@ const MAX_AUTH_HEADER_LENGTH = 512;
 const MAX_TOKEN_LENGTH = 256;
 
 /**
- * Constant-time string comparison using SHA-256 digests.
+ * Constant-time string comparison.
+ * Both values are server-generated API tokens (not user passwords),
+ * so we compare buffers directly — no key-stretching needed.
  */
 function safeCompare(a: string, b: string): boolean {
-  const hashA = createHash("sha256").update(a, "utf8").digest();
-  const hashB = createHash("sha256").update(b, "utf8").digest();
-  return timingSafeEqual(hashA, hashB);
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 /**
@@ -129,11 +132,15 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const params = await routeParams.params;
-    const graphId = params.graphId;
-    if (!graphId) {
-      log.warn("Missing graphId in path");
+    const rawGraphId = params.graphId;
+    if (!rawGraphId || !rawGraphId.includes(":")) {
+      log.warn(
+        { graphId: rawGraphId },
+        "Missing or invalid graphId in path (expected providerId:graphName)"
+      );
       return NextResponse.json({ error: "Graph not found" }, { status: 404 });
     }
+    const graphId = rawGraphId as `${string}:${string}`;
 
     // --- 3. Idempotency-Key header (required) ---
     const idempotencyKey = request.headers.get("idempotency-key");
