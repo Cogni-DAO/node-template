@@ -7,7 +7,7 @@
  * Scope: Renders error message when LiteLLM is down. Does not fetch data.
  * Invariants: P1 - explicit error state, no fallback to partial data.
  * Side-effects: none
- * Links: docs/ACTIVITY_METRICS.md (P1 invariants - no fallback)
+ * Links: docs/spec/activity-metrics.md (P1 invariants - no fallback)
  * @public
  */
 

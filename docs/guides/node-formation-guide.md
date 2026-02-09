@@ -14,7 +14,7 @@ tags: [web3, setup, dao]
 
 # Node Formation — DAO Setup Guide
 
-> Source: docs/NODE_FORMATION_SPEC.md
+> Source: docs/spec/node-formation.md
 
 ## When to Use This
 
@@ -101,6 +101,6 @@ After formation completes successfully:
 ## Related
 
 - [Node Formation Spec](../spec/node-formation.md)
-- [Node Formation Initiative](../../work/initiatives/ini.node-formation-ui.md)
+- [Node Formation Project](../../work/projects/proj.node-formation-ui.md)
 - [Node vs Operator Contract](../spec/node-operator-contract.md)
 - [Cred Licensing Policy](../spec/cred-licensing-policy.md)

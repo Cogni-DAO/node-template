@@ -362,7 +362,7 @@ _(None — spec reflects as-built state)_
 
 ## Related
 
-- [Sandboxed Agents Initiative](../../work/initiatives/ini.sandboxed-agents.md) — roadmap: tool gateway, OpenClaw wiring, git relay, dashboard
+- [Sandboxed Agents Project](../../work/projects/proj.sandboxed-agents.md) — roadmap: tool gateway, OpenClaw wiring, git relay, dashboard
 - [OpenClaw Sandbox Controls](./openclaw-sandbox-controls.md) — Invariants 20-25, OpenClaw-specific design decisions
 - [OpenClaw Sandbox Spec](./openclaw-sandbox-spec.md) — Invariants 13-19, container image, LLM protocol, I/O protocol
 - [Sandbox Scaling](./sandbox-scaling.md) — Proxy comparison, per-run architecture, threat model

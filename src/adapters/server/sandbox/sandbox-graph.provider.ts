@@ -11,7 +11,7 @@
  *   - Per SECRETS_HOST_ONLY: Only messages + model passed to sandbox, never credentials
  *   - Per BILLING_INDEPENDENT_OF_CLIENT: usage_report emitted for RunEventRelay billing
  * Side-effects: IO (creates tmp workspace, runs Docker containers via SandboxRunnerPort, HTTP to gateway)
- * Links: docs/SANDBOXED_AGENTS.md, graph-provider.ts, sandbox-runner.adapter.ts, openclaw-gateway-client.ts
+ * Links: docs/spec/sandboxed-agents.md, graph-provider.ts, sandbox-runner.adapter.ts, openclaw-gateway-client.ts
  * @internal
  */
 

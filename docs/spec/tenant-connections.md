@@ -29,7 +29,7 @@ Define the credential brokering invariants, encrypted storage schema, grant inte
 ## Non-Goals
 
 - Payment verification (separate EvmRpcOnChainVerifier flow)
-- MCP gateway integration (future — see [ini.tenant-connections](../../work/initiatives/ini.tenant-connections.md) P2)
+- MCP gateway integration (future — see [proj.tenant-connections](../../work/projects/proj.tenant-connections.md) P2)
 - OAuth flow implementation (future — see initiative P1)
 
 ## Core Invariants
@@ -175,6 +175,6 @@ _(none)_
 ## Related
 
 - [tool-use.md](./tool-use.md) — CONNECTION_ID_ONLY invariant, CONNECTION_ID_VIA_CONTEXT
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — No secrets in configurable
+- [Graph Execution](graph-execution.md) — No secrets in configurable
 - [scheduler.md](./scheduler.md) — ExecutionGrant scopes
-- [Initiative: Tenant Connections](../../work/initiatives/ini.tenant-connections.md)
+- [Project: Tenant Connections](../../work/projects/proj.tenant-connections.md)

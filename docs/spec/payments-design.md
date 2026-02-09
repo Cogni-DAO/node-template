@@ -281,5 +281,5 @@ Three endpoints: POST intents, POST submit, GET status. Internal 5-state machine
 - [Billing Evolution](./billing-evolution.md) — Credit accounting
 - [On-Chain Readers](./onchain-readers.md) — On-chain data intelligence (treasury, ownership)
 - [DAO Enforcement](./dao-enforcement.md) — DAO financial rails
-- [Payments & Billing Initiative](../../work/initiatives/ini.payments-enhancements.md)
+- [Payments & Billing Project](../../work/projects/proj.payments-enhancements.md)
 - [Payments Setup Guide](../guides/payments-setup.md)

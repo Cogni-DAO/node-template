@@ -31,7 +31,7 @@ Document the current billing identity plumbing from authentication through LiteL
 
 ## Non-Goals
 
-- User-facing API key generation via `/key/generate` (see [ini.accounts-api-keys](../../work/initiatives/ini.accounts-api-keys.md) P3)
+- User-facing API key generation via `/key/generate` (see [proj.accounts-api-keys](../../work/projects/proj.accounts-api-keys.md) P3)
 - Operator admin routes for account management (see initiative P3)
 - LiteLLM Team grouping (not used in MVP)
 
@@ -57,7 +57,7 @@ Document the current billing identity plumbing from authentication through LiteL
 - **LiteLLM master key** — The Proxy admin key (`LITELLM_MASTER_KEY`) used for all LiteLLM calls in MVP. Accessed only at the adapter boundary.
 - **LlmCaller** — Internal type `{ billingAccountId; virtualKeyId }` constructed server-side. Contains only IDs, no secrets. The adapter reads `LITELLM_MASTER_KEY` from env.
 
-See also: [ACCOUNTS_DESIGN.md](./accounts-design.md) "Three-Layer Identity System" for complete architecture.
+See also: [Accounts Design](./accounts-design.md) "Three-Layer Identity System" for complete architecture.
 
 ### LiteLLM Endpoint: Chat Completions (Data Plane)
 
@@ -145,4 +145,4 @@ _(none)_
 - [accounts-design.md](./accounts-design.md) — three-layer identity system (pending migration)
 - [security-auth.md](./security-auth.md) — authentication architecture
 - [billing-evolution.md](./billing-evolution.md) — billing stages
-- [Initiative: Accounts & API Keys](../../work/initiatives/ini.accounts-api-keys.md)
+- [Project: Accounts & API Keys](../../work/projects/proj.accounts-api-keys.md)

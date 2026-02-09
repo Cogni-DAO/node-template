@@ -7,7 +7,7 @@ spec_state: draft
 trust: draft
 summary: Webhook-based adapter integrating n8n workflow execution into Cogni's GraphExecutorPort with LiteLLM billing reconciliation.
 read_when: You are implementing or modifying the n8n workflow execution adapter.
-implements: ini.n8n-integration
+implements: proj.n8n-integration
 owner: derekg1729
 created: 2026-02-07
 verified: 2026-02-07
@@ -266,6 +266,6 @@ Use this adapter when the developer **chooses to implement their agent/workflow 
 ## Related
 
 - [external-executor-billing.md](./external-executor-billing.md) — Invariants 41-47, reconciliation pattern
-- [Initiative: ini.n8n-integration](../../work/initiatives/ini.n8n-integration.md)
+- [Project: proj.n8n-integration](../../work/projects/proj.n8n-integration.md)
 - [n8n Webhook Node Documentation](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/)
 - [n8n Respond to Webhook](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.respondtowebhook/)

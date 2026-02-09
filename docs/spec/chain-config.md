@@ -29,7 +29,7 @@ Ensure chain identity and payment addresses are governed in git (not env), valid
 
 - Runtime chain switching (different builds for different chains)
 - Env-based override of DAO addresses
-- Signed/attested repo-specs (deferred, tracked in ini.chain-deployment-refactor.md)
+- Signed/attested repo-specs (deferred, tracked in proj.chain-deployment-refactor.md)
 
 ## Core Invariants
 
@@ -105,7 +105,7 @@ Misalignment throws: `"Chain mismatch: repo-spec declares X, app requires Y"`
 
 ## Open Questions
 
-_(none — long-term hardening tracked in ini.chain-deployment-refactor.md: signed repo-spec, hash verification, attested builds, revocation policy)_
+_(none — long-term hardening tracked in proj.chain-deployment-refactor.md: signed repo-spec, hash verification, attested builds, revocation policy)_
 
 ## Related
 

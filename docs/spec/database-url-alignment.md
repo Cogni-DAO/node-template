@@ -132,7 +132,7 @@ P0 runtime isolation is complete:
 
 ## Open Questions
 
-_(none — P1 DSN-only provisioning and P2 secret cleanup tracked in ini.cicd-services-gitops.md)_
+_(none — P1 DSN-only provisioning and P2 secret cleanup tracked in proj.cicd-services-gitops.md)_
 
 ## Related
 

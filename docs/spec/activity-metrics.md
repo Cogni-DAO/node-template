@@ -43,7 +43,7 @@ Provide a user-facing activity dashboard that joins LiteLLM telemetry with local
 
 5. **USER_VISIBLE_SPEND_IS_BILLING**: Dashboard displays `charged_credits` (our billed amount with markup), not raw provider costs from LiteLLM.
 
-6. **IDEMPOTENT_RECEIPTS_WITH_LEDGER_PAIRING**: Every charge_receipt row is keyed by `(source_system, source_reference)`. Multiple receipts per `request_id` allowed for multi-LLM-call graphs. See [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md).
+6. **IDEMPOTENT_RECEIPTS_WITH_LEDGER_PAIRING**: Every charge_receipt row is keyed by `(source_system, source_reference)`. Multiple receipts per `request_id` allowed for multi-LLM-call graphs. See [Graph Execution](graph-execution.md).
 
 7. **NO_FALLBACK**: If LiteLLM is down, fail loudly (503), don't show partial data.
 
@@ -214,9 +214,9 @@ Cost source: LiteLLM `usage.cost` (stream) or `x-litellm-response-cost` header (
 
 ## Open Questions
 
-_(none — planned work tracked in ini.observability-hardening.md: hourly bucketing, FakeUsageAdapter for stack tests, stack test coverage for activity endpoint)_
+_(none — planned work tracked in proj.observability-hardening.md: hourly bucketing, FakeUsageAdapter for stack tests, stack test coverage for activity endpoint)_
 
 ## Related
 
 - [Billing Evolution](./billing-evolution.md)
-- [Graph Execution](../GRAPH_EXECUTION.md)
+- [Graph Execution](graph-execution.md)

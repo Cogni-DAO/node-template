@@ -7,7 +7,7 @@
  * Scope: State transitions only; does not perform IO or side effects.
  * Invariants: Single source of truth for formation state.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md, docs/CHAIN_DEPLOYMENT_TECH_DEBT.md
+ * Links: docs/spec/node-formation.md, work/projects/proj.chain-deployment-refactor.md
  * @public
  */
 

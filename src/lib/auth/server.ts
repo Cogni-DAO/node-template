@@ -7,7 +7,7 @@
  * Scope: Server-only. Wraps NextAuth's getServerSession with invariant enforcement. Do not use on client.
  * Invariants: Returns null unless both id AND walletAddress are present (wallet-first auth).
  * Side-effects: IO (NextAuth session retrieval)
- * Links: docs/AUTHENTICATION.md
+ * Links: docs/spec/authentication.md
  * @public
  */
 

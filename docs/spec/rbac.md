@@ -321,8 +321,8 @@ Subject included in cache key because delegation status can change independently
 
 ## Related
 
-- [RBAC Hardening Initiative](../../work/initiatives/ini.rbac-hardening.md) — Roadmap, implementation checklists, P1/P2 plans
+- [RBAC Hardening Project](../../work/projects/proj.rbac-hardening.md) — Roadmap, implementation checklists, P1/P2 plans
 - [Tool Use Spec](tool-use.md) — Tool execution pipeline, DENY_BY_DEFAULT
 - [Tenant Connections Spec](tenant-connections.md) — Connection auth, GRANT_INTERSECTION
-- [Graph Execution](../GRAPH_EXECUTION.md) — Graph executor, billing idempotency
+- [Graph Execution](graph-execution.md) — Graph executor, billing idempotency
 - [Security Auth Spec](security-auth.md) — Authentication (SIWE, API keys)

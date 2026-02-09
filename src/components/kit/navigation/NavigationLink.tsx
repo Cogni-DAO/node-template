@@ -8,7 +8,7 @@
  * Invariants: Normalizes paths; supports exact/prefix matching; sets active state via CVA factory.
  * Side-effects: global
  * Notes: Client component for usePathname; handles basePath and locale prefixes; never for external URLs.
- * Links: docs/UI_IMPLEMENTATION_GUIDE.md, Next.js usePathname
+ * Links: docs/spec/ui-implementation.md, Next.js usePathname
  * @public
  */
 

@@ -8,7 +8,7 @@
  * Invariants: Credits computed via usdCentsToCredits (integer-only math); idempotent on clientPaymentId per billing account.
  * Side-effects: IO (via AccountService port).
  * Notes: Billing account resolution occurs at app layer; this service assumes a valid billing account and default virtual key.
- * Links: docs/DEPAY_PAYMENTS.md, src/core/billing/pricing.ts
+ * Links: docs/spec/payments-design.md, src/core/billing/pricing.ts
  * @public
  */
 

@@ -29,7 +29,7 @@ Define the read-only on-chain data ports, adapter contracts, and UI integration 
 ## Non-Goals
 
 - Payment verification (handled by EvmRpcOnChainVerifier in payment flow)
-- Multi-chain support (future — see [ini.onchain-indexer](../../work/initiatives/ini.onchain-indexer.md))
+- Multi-chain support (future — see [proj.onchain-indexer](../../work/projects/proj.onchain-indexer.md))
 - Ponder indexer integration (future — see initiative P2)
 - Persistent storage of treasury balances (chain is system of record)
 
@@ -204,4 +204,4 @@ _(none)_
 
 - [payments-design.md](./payments-design.md) — Payment verification (EvmRpcOnChainVerifier)
 - [architecture.md](./architecture.md) — Hexagonal architecture, ports pattern
-- [Initiative: On-Chain Indexer](../../work/initiatives/ini.onchain-indexer.md)
+- [Project: On-Chain Indexer](../../work/projects/proj.onchain-indexer.md)

@@ -8,7 +8,7 @@
  * Invariants: State machine transitions validated via core/rules; atomic settlement via confirmCreditsPayment.
  * Side-effects: IO
  * Notes: OnChainVerifier stubbed (always VERIFIED) in MVP; Phase 3 uses real Ponder indexer.
- * Links: docs/PAYMENTS_DESIGN.md
+ * Links: docs/spec/payments-design.md
  * @public
  */
 

@@ -11,7 +11,7 @@
  *   - GRANT_VALIDATED_TWICE: Re-validates grant (defense-in-depth)
  *   - Uses AiExecutionErrorCode from ai-core (no parallel error system)
  * Side-effects: IO (HTTP request/response, database, graph execution)
- * Links: docs/SCHEDULER_SPEC.md, graphs.run.internal.v1.contract
+ * Links: docs/spec/scheduler.md, graphs.run.internal.v1.contract
  * @internal
  */
 
@@ -44,12 +44,15 @@ const MAX_AUTH_HEADER_LENGTH = 512;
 const MAX_TOKEN_LENGTH = 256;
 
 /**
- * Constant-time string comparison using SHA-256 digests.
+ * Constant-time string comparison.
+ * Both values are server-generated API tokens (not user passwords),
+ * so we compare buffers directly — no key-stretching needed.
  */
 function safeCompare(a: string, b: string): boolean {
-  const hashA = createHash("sha256").update(a, "utf8").digest();
-  const hashB = createHash("sha256").update(b, "utf8").digest();
-  return timingSafeEqual(hashA, hashB);
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 /**

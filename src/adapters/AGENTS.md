@@ -15,7 +15,7 @@ Infrastructure implementations of ports including server/, worker/, cli/, and te
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
-- [Architecture](../../docs/ARCHITECTURE.md)
+- [Architecture](../../docs/spec/architecture.md)
 
 ## Boundaries
 

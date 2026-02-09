@@ -10,7 +10,7 @@
  *   - Field name is stable across LiteLLM versions (test breaks if LiteLLM changes the field)
  * Side-effects: IO (LLM call, database read, HTTP request to LiteLLM API)
  * Notes: Requires running stack (dev:stack:test). Uses real LiteLLM via FakeLlmAdapter in test mode.
- * Links: docs/EXTERNAL_EXECUTOR_BILLING.md (invariant #2), packages/ai-core/src/usage/usage.ts (usageUnitId comment)
+ * Links: docs/spec/external-executor-billing.md (invariant #2), packages/ai-core/src/usage/usage.ts (usageUnitId comment)
  * @public
  */
 
@@ -38,7 +38,7 @@ import {
 import { serverEnv } from "@/shared/env";
 
 describe("LiteLLM Call ID → Spend Log Mapping (Contract Test)", () => {
-  // TODO: Enable when system test infra lands (see docs/SYSTEM_TEST_ARCHITECTURE.md)
+  // TODO: Enable when system test infra lands (see docs/spec/system-test-architecture.md)
   // Requires real LiteLLM (not FakeLlmAdapter) to verify the invariant:
   //   x-litellm-call-id response header === spend_logs.request_id field
   // Manually verified 2026-02-07: charge_receipts.litellm_call_id matched

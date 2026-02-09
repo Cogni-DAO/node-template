@@ -11,7 +11,7 @@
  * - Used by worker task, not by schedule CRUD adapter
  * - actorId required on all methods for RLS SET LOCAL / audit trail
  * Side-effects: none (interface definition only)
- * Links: docs/SCHEDULER_SPEC.md, types/scheduling.ts, DrizzleScheduleRunAdapter
+ * Links: docs/spec/scheduler.md, types/scheduling.ts, DrizzleScheduleRunAdapter
  * @public
  */
 

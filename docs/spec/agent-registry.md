@@ -226,4 +226,4 @@ Deterministic serialization via JSON Canonicalization Scheme (RFC 8785):
 - [database-rls.md](./database-rls.md) — dual DB client pattern for tenant-scoped tables
 - [node-formation.md](./node-formation.md) — P3 federation enrollment may reference agent registrations for DAO-published agents
 - [tool-use.md](./tool-use.md) — tool capabilities advertised in `services[].skills` align with tool catalog
-- [ini.agent-registry.md](../../work/initiatives/ini.agent-registry.md) — implementation roadmap (P0–P2 checklists)
+- [proj.agent-registry.md](../../work/projects/proj.agent-registry.md) — implementation roadmap (P0–P2 checklists)

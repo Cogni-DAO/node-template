@@ -80,7 +80,7 @@ pnpm docker:test:stack:reset    # Nuclear reset for containerized test database
 
 **Fast variants:** Add `:fast` to skip rebuilds (e.g., `pnpm docker:test:stack:fast`)
 
-See [ENVIRONMENTS.md](../spec/environments.md) for deployment modes and [DATABASES.md](../spec/databases.md) for migration details.
+See [Environments](../spec/environments.md) for deployment modes and [Databases](../spec/databases.md) for migration details.
 
 ## Verification
 

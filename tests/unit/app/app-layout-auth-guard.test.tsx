@@ -8,7 +8,7 @@
  * Invariants: loading shows UI; unauthenticated redirects; authenticated renders children. No auto sign-out - sign-out is explicit user action only.
  * Side-effects: none (mocked hooks)
  * Notes: Uses React Testing Library with mocked useSession and useRouter. DOM environment via test-level override.
- * Links: src/app/(app)/layout.tsx, docs/SECURITY_AUTH_SPEC.md
+ * Links: src/app/(app)/layout.tsx, docs/spec/security-auth.md
  * @public
  */
 

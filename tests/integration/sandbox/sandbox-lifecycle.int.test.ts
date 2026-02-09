@@ -11,7 +11,7 @@
  *   - Timeouts kill containers cleanly
  *   - No orphan containers after tests
  * Side-effects: IO (Docker containers, filesystem)
- * Links: docs/SANDBOXED_AGENTS.md, src/adapters/server/sandbox/
+ * Links: docs/spec/sandboxed-agents.md, src/adapters/server/sandbox/
  * @public
  */
 

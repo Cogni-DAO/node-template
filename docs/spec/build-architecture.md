@@ -25,7 +25,7 @@ Provide a deterministic, cacheable build pipeline where workspace packages build
 
 ## Non-Goals
 
-- Graph-scoped builds with turbo prune (deferred, tracked in ini.cicd-services-gitops.md)
+- Graph-scoped builds with turbo prune (deferred, tracked in proj.cicd-services-gitops.md)
 - Runtime-only env validation (deferred)
 - Moving app to `apps/web` workspace package (deferred)
 
@@ -174,7 +174,7 @@ Five tsconfigs exist for different scenarios:
 
 ## Open Questions
 
-_(none — future improvements tracked in ini.cicd-services-gitops.md: graph-scoped builds, runtime-only env validation, app-as-workspace-package)_
+_(none — future improvements tracked in proj.cicd-services-gitops.md: graph-scoped builds, runtime-only env validation, app-as-workspace-package)_
 
 ## Related
 
