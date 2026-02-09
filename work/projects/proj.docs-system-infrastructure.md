@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.docs-system-infrastructure
-work_item_type: project
+id: proj.docs-system-infrastructure
+type: project
 primary_charter:
 title: Docs + Work System Infrastructure
 state: Active

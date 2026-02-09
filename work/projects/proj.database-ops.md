@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.database-ops
-work_item_type: project
+id: proj.database-ops
+type: project
 primary_charter:
 title: Database Operations — Backups, Pooling & Credential Management
 state: Active

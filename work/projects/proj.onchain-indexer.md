@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.onchain-indexer
-work_item_type: project
+id: proj.onchain-indexer
+type: project
 primary_charter:
 title: On-Chain Indexer & Treasury Evolution
 state: Paused

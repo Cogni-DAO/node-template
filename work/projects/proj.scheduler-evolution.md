@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.scheduler-evolution
-work_item_type: project
+id: proj.scheduler-evolution
+type: project
 primary_charter:
 title: Scheduler Evolution — Temporal Migration & Beyond
 state: Active

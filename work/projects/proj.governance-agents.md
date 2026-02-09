@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.governance-agents
-work_item_type: project
+id: proj.governance-agents
+type: project
 primary_charter:
 title: Governance Agents — Signal Infrastructure & Incident-Gated AI
 state: Active

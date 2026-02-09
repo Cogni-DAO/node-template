@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.system-tenant-governance
-work_item_type: project
+id: proj.system-tenant-governance
+type: project
 primary_charter:
 title: System Tenant & Governance Execution Infrastructure
 state: Active

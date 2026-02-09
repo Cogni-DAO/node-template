@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.tenant-connections
-work_item_type: project
+id: proj.tenant-connections
+type: project
 primary_charter:
 title: Tenant Connections — Encrypted Credential Brokering
 state: Paused

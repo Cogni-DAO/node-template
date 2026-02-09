@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.performance-efficiency
-work_item_type: project
+id: proj.performance-efficiency
+type: project
 primary_charter:
 title: Performance & Efficiency
 state: Active

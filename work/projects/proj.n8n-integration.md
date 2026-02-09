@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.n8n-integration
-work_item_type: project
+id: proj.n8n-integration
+type: project
 primary_charter:
 title: n8n Workflow Execution Adapter
 state: Paused

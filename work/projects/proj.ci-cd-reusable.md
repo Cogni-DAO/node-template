@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.ci-cd-reusable
-work_item_type: project
+id: proj.ci-cd-reusable
+type: project
 primary_charter:
 title: Reusable CI/CD Rails & Multi-Node Pipeline
 state: Paused

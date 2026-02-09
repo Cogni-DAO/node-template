@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.tool-use-evolution
-work_item_type: project
+id: proj.tool-use-evolution
+type: project
 primary_charter:
 title: Tool Use Evolution — Semantic Types, Wire Adapters, Policy, MCP
 state: Active

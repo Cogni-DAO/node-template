@@ -1,17 +1,22 @@
 ---
-work_item_id: wi.refs-sweep
-work_item_type: issue
+id: task.0003
+type: task
 title: Sweep stale doc references across the codebase
-state: Todo
+status: Todo
 priority: 2
 estimate: 3
-summary: Replace ~560 stale refs to old docs/UPPER_CASE.md paths with new docs/spec/, docs/guides/, work/initiatives/ paths
+summary: Replace ~560 stale refs to old docs/UPPER_CASE.md paths with new typed directory paths
 outcome: Zero stale doc refs in codebase, all tracker Refs columns checked
-project: proj.maximize-oss-tools
+spec_refs:
 assignees: derekg1729
+credit:
+project: proj.maximize-oss-tools
+pr:
+reviewer:
 created: 2026-02-08
 updated: 2026-02-08
 labels: [docs, refactor]
+external_refs:
 ---
 
 # Sweep Stale Doc References

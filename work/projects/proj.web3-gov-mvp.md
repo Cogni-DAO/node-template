@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.web3-gov-mvp
-work_item_type: project
+id: proj.web3-gov-mvp
+type: project
 primary_charter:
 title: Web3 Governance MVP — Proposal Launcher Integration
 state: Active

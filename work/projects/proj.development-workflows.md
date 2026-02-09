@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.development-workflows
-work_item_type: project
+id: proj.development-workflows
+type: project
 primary_charter:
 title: Development Workflows
 state: Active

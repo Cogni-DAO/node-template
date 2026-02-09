@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.prompt-registry
-work_item_type: project
+id: proj.prompt-registry
+type: project
 primary_charter:
 title: Prompt Registry — Langfuse Integration & Prompt Management
 state: Paused

@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.system-test-architecture
-work_item_type: project
+id: proj.system-test-architecture
+type: project
 primary_charter:
 title: System Test Architecture — Mock-LLM + FakeLlmAdapter Deprecation
 state: Active

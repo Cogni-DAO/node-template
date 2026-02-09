@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.graph-execution
-work_item_type: project
+id: proj.graph-execution
+type: project
 primary_charter:
 title: Graph Execution — Transport/Enforcement Split & Contract Tests
 state: Active

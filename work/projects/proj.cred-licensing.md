@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.cred-licensing
-work_item_type: project
+id: proj.cred-licensing
+type: project
 primary_charter:
 title: Cred Licensing & Federation Enrollment
 state: Paused

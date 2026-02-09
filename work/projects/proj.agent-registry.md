@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.agent-registry
-work_item_type: project
+id: proj.agent-registry
+type: project
 primary_charter:
 title: Agent Registry & Multi-Adapter Discovery
 state: Paused

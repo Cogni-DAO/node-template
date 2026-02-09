@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.chain-deployment-refactor
-work_item_type: project
+id: proj.chain-deployment-refactor
+type: project
 primary_charter:
 title: Chain Deployment Refactor — Signed Repo-Spec & Attested Builds
 state: Paused

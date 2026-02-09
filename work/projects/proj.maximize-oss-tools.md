@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.maximize-oss-tools
-work_item_type: project
+id: proj.maximize-oss-tools
+type: project
 primary_charter:
 title: Maximize OSS Tools
 state: Active

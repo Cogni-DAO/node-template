@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.payments-enhancements
-work_item_type: project
+id: proj.payments-enhancements
+type: project
 primary_charter:
 title: Payments & Billing Enhancements
 state: Active

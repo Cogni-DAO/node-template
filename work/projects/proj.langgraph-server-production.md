@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.langgraph-server-production
-work_item_type: project
+id: proj.langgraph-server-production
+type: project
 primary_charter:
 title: LangGraph Server Production Readiness
 state: Active

@@ -1,18 +1,21 @@
 ---
-work_item_id: wi.gh-deploy-secret-exposure
-work_item_type: issue
+id: bug.0002
+type: bug
 title: "P0 SECURITY: Deploy artifacts expose all secrets"
-state: In Progress
+status: In Progress
 priority: 0
 estimate: 2
 summary: Deploy workflow uploads secrets as GitHub Actions artifact, exposing all production credentials
 outcome: Secrets rotated, deploy script fixed to exclude secrets from artifacts
+spec_refs:
 assignees: derek
+credit:
 project: proj.docs-system-infrastructure
+pr:
+reviewer:
 created: 2026-02-06
 updated: 2026-02-06
 labels: [security, p0, secrets, ci]
-pr:
 external_refs:
 ---
 

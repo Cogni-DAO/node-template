@@ -1,18 +1,21 @@
 ---
-work_item_id: wi.activity-billing-join
-work_item_type: issue
+id: bug.0004
+type: bug
 title: "/activity dashboard cost column broken — charge_receipts needs linked telemetry"
-state: Backlog
+status: Backlog
 priority: 1
 estimate: 3
 summary: Activity join on litellm_call_id vs spend_logs.request_id fails for some providers; fix by storing telemetry in our DB at write time
 outcome: /activity shows cost per row from our DB with no LiteLLM API dependency
-assignees: [derekg1729]
+spec_refs: billing-evolution
+assignees: derekg1729
+credit:
 project: proj.payments-enhancements
+pr:
+reviewer:
 created: 2026-02-08
 updated: 2026-02-08
 labels: [billing, activity, dashboard]
-pr:
 external_refs:
 ---
 

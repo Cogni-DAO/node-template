@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.node-formation-ui
-work_item_type: project
+id: proj.node-formation-ui
+type: project
 primary_charter:
 title: Node Formation UI & CLI Tooling
 state: Active

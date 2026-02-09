@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.accounts-api-keys
-work_item_type: project
+id: proj.accounts-api-keys
+type: project
 primary_charter:
 title: Accounts, API Keys & Wallet Authentication
 state: Active

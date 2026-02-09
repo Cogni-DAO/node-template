@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.claude-sdk-adapter
-work_item_type: project
+id: proj.claude-sdk-adapter
+type: project
 primary_charter:
 title: Claude Agent SDK Adapter
 state: Paused

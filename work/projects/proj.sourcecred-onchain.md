@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.sourcecred-onchain
-work_item_type: project
+id: proj.sourcecred-onchain
+type: project
 primary_charter:
 title: SourceCred On-Chain Integration
 state: Paused

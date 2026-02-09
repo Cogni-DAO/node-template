@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.hil-graphs
-work_item_type: project
+id: proj.hil-graphs
+type: project
 primary_charter:
 title: Human-in-the-Loop Graph Execution
 state: Active

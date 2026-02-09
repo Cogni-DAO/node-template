@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.observability-hardening
-work_item_type: project
+id: proj.observability-hardening
+type: project
 primary_charter:
 title: Observability Hardening
 state: Paused

@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.rbac-hardening
-work_item_type: project
+id: proj.rbac-hardening
+type: project
 primary_charter:
 title: RBAC Hardening — OpenFGA Authorization Implementation
 state: Active

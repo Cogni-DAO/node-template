@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.cicd-services-gitops
-work_item_type: project
+id: proj.cicd-services-gitops
+type: project
 primary_charter:
 title: CI/CD & Services GitOps
 state: Active

@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.reliability
-work_item_type: project
+id: proj.reliability
+type: project
 primary_charter:
 title: Reliability & Uptime
 state: Active

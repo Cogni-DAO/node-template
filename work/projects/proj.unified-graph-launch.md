@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.unified-graph-launch
-work_item_type: project
+id: proj.unified-graph-launch
+type: project
 primary_charter:
 title: Unified Graph Launch — Temporal Execution Path
 state: Paused

@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.usage-history-persistence
-work_item_type: project
+id: proj.usage-history-persistence
+type: project
 primary_charter:
 title: Usage History & Run Artifact Persistence
 state: Active

@@ -1,6 +1,6 @@
 ---
-work_item_id: proj.sandboxed-agents
-work_item_type: project
+id: proj.sandboxed-agents
+type: project
 primary_charter:
 title: Sandboxed Agents — OpenClaw Integration, Git Relay & Dashboard
 state: Active
