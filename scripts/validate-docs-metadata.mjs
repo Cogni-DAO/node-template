@@ -6,7 +6,7 @@
  * Module: `@scripts/validate-docs-metadata`
  * Purpose: Validates Obsidian-style YAML frontmatter in /docs and /work directories.
  * Scope: Enforces field requirements, enums, date format, field set separation, and required H2 headings; does NOT validate prose content or cross-references.
- * Invariants: /docs uses id/type/status/trust; /work uses work_item_id/work_item_type/state; no wikilinks.
+ * Invariants: /docs uses id/type/status/trust; /work projects use id/type; /work items use id/type/status; no wikilinks.
  * Side-effects: IO
  * Notes: Uses `yaml` package for proper YAML parsing. Exits with error code if validation fails.
  * Links: docs/archive/DOCS_ORGANIZATION_PLAN.md
@@ -24,8 +24,9 @@ const DOC_TRUST = ["canonical", "reviewed", "draft", "external"];
 const ADR_DECISION = ["proposed", "accepted", "deprecated", "superseded"];
 
 // === WORK ENUMS ===
-const INITIATIVE_STATE = ["Active", "Paused", "Done", "Dropped"];
-const ISSUE_STATE = ["Backlog", "Todo", "In Progress", "Done", "Cancelled"];
+const PROJECT_STATE = ["Active", "Paused", "Done", "Dropped"];
+const ITEM_STATUS = ["Backlog", "Todo", "In Progress", "Done", "Cancelled"];
+const ITEM_TYPES = ["task", "bug", "spike", "story", "subtask"];
 const PRIORITY = [0, 1, 2, 3];
 const ESTIMATE = [0, 1, 2, 3, 4, 5];
 
@@ -33,16 +34,9 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 // === REQUIRED H2 HEADINGS (per doc type) ===
 // Spec headings gated on spec_state being present (exempts legacy specs and indexes)
-const SPEC_REQUIRED_HEADINGS = [
-  "Context",
-  "Goal",
-  "Non-Goals",
-  "Core Invariants",
-  "Design",
-  "Acceptance Checks",
-];
+const SPEC_REQUIRED_HEADINGS = ["Design", "Goal", "Non-Goals"];
 const ADR_REQUIRED_HEADINGS = ["Decision", "Rationale", "Consequences"];
-const INITIATIVE_REQUIRED_HEADINGS = [
+const PROJECT_REQUIRED_HEADINGS = [
   "Goal",
   "Roadmap",
   "Constraints",
@@ -50,7 +44,8 @@ const INITIATIVE_REQUIRED_HEADINGS = [
   "As-Built Specs",
   "Design Notes",
 ];
-const ISSUE_REQUIRED_HEADINGS = ["Execution Checklist", "Validation"];
+const CHARTER_REQUIRED_HEADINGS = ["Goal", "Projects", "Constraints"];
+const ITEM_REQUIRED_HEADINGS = ["Validation"];
 
 // === REQUIRED KEYS ===
 const DOC_REQUIRED = [
@@ -64,9 +59,9 @@ const DOC_REQUIRED = [
   "owner",
   "created",
 ];
-const INITIATIVE_REQUIRED = [
-  "work_item_id",
-  "work_item_type",
+const PROJECT_REQUIRED = [
+  "id",
+  "type",
   "title",
   "state",
   "priority",
@@ -77,24 +72,31 @@ const INITIATIVE_REQUIRED = [
   "created",
   "updated",
 ];
-const ISSUE_REQUIRED = [
-  "work_item_id",
-  "work_item_type",
+const CHARTER_REQUIRED = [
+  "id",
+  "type",
   "title",
   "state",
+  "summary",
+  "created",
+  "updated",
+];
+const ITEM_REQUIRED = [
+  "id",
+  "type",
+  "title",
+  "status",
   "priority",
   "estimate",
   "summary",
   "outcome",
   "assignees",
-  "initiative",
   "created",
   "updated",
 ];
 
-// === FORBIDDEN FIELDS ===
-const DOCS_FORBIDDEN = ["work_item_id", "work_item_type", "state", "outcome"];
-const WORK_FORBIDDEN = ["id", "type", "status", "trust", "read_when"];
+// === FORBIDDEN FIELDS (docs tree only — work tree now shares id/type/status) ===
+const DOCS_FORBIDDEN = ["outcome"];
 
 // === YAML FRONTMATTER PARSER ===
 function extractFrontmatter(content) {
@@ -114,19 +116,6 @@ function checkForbidden(content) {
   const errors = [];
   if (/\[\[.+?\]\]/.test(content)) {
     errors.push("wikilinks forbidden (use markdown links)");
-  }
-  return errors;
-}
-
-// === FIELD SET SEPARATION ===
-function checkFieldSetSeparation(props, isWork) {
-  const errors = [];
-  const forbidden = isWork ? WORK_FORBIDDEN : DOCS_FORBIDDEN;
-  const tree = isWork ? "/work" : "/docs";
-  for (const key of forbidden) {
-    if (props[key] !== undefined) {
-      errors.push(`field "${key}" forbidden in ${tree} (wrong field set)`);
-    }
   }
   return errors;
 }
@@ -214,11 +203,21 @@ function validateDoc(file, props, content, allIds) {
     }
   }
 
-  errors.push(...checkFieldSetSeparation(props, false));
+  // Docs-specific forbidden fields
+  for (const key of DOCS_FORBIDDEN) {
+    if (props[key] !== undefined) {
+      errors.push(`field "${key}" forbidden in /docs (wrong field set)`);
+    }
+  }
 
   // Heading checks (spec gated on spec_state; ADR always)
   if (props.type === "spec" && props.spec_state) {
     errors.push(...checkRequiredHeadings(content, SPEC_REQUIRED_HEADINGS));
+    // Accept either "Invariants" or "Core Invariants"
+    const h2s = extractH2Headings(content);
+    if (!h2s.includes("Invariants") && !h2s.includes("Core Invariants")) {
+      errors.push(`missing required heading: ## Invariants`);
+    }
   }
   if (props.type === "adr") {
     errors.push(...checkRequiredHeadings(content, ADR_REQUIRED_HEADINGS));
@@ -227,21 +226,21 @@ function validateDoc(file, props, content, allIds) {
   return errors;
 }
 
-function validateInitiative(file, props, content, allIds) {
+function validateProject(file, props, content, allIds) {
   const errors = [];
 
-  for (const key of INITIATIVE_REQUIRED) {
+  for (const key of PROJECT_REQUIRED) {
     if (props[key] === undefined || props[key] === null || props[key] === "") {
       errors.push(`missing required key: ${key}`);
     }
   }
 
-  if (props.work_item_type !== "initiative") {
-    errors.push(`work_item_type must be "initiative"`);
+  if (props.type !== "project") {
+    errors.push(`type must be "project"`);
   }
-  if (props.state && !INITIATIVE_STATE.includes(props.state)) {
+  if (props.state && !PROJECT_STATE.includes(props.state)) {
     errors.push(
-      `invalid state: ${props.state} (expected: ${INITIATIVE_STATE.join("|")})`
+      `invalid state: ${props.state} (expected: ${PROJECT_STATE.join("|")})`
     );
   }
   if (props.priority !== undefined && !PRIORITY.includes(props.priority)) {
@@ -254,8 +253,8 @@ function validateInitiative(file, props, content, allIds) {
       `invalid estimate: ${props.estimate} (expected: ${ESTIMATE.join("|")})`
     );
   }
-  if (props.work_item_id && !String(props.work_item_id).startsWith("ini.")) {
-    errors.push(`work_item_id must start with "ini."`);
+  if (props.id && !String(props.id).startsWith("proj.")) {
+    errors.push(`id must start with "proj."`);
   }
 
   const created = String(props.created || "");
@@ -267,36 +266,76 @@ function validateInitiative(file, props, content, allIds) {
     errors.push(`invalid updated date: ${props.updated}`);
   }
 
-  if (props.work_item_id) {
-    const id = String(props.work_item_id);
+  if (props.id) {
+    const id = String(props.id);
     if (allIds.has(id)) {
-      errors.push(`duplicate work_item_id: ${id}`);
+      errors.push(`duplicate id: ${id}`);
     } else {
       allIds.set(id, file);
     }
   }
 
-  errors.push(...checkFieldSetSeparation(props, true));
-  errors.push(...checkRequiredHeadings(content, INITIATIVE_REQUIRED_HEADINGS));
+  errors.push(...checkRequiredHeadings(content, PROJECT_REQUIRED_HEADINGS));
 
   return errors;
 }
 
-function validateIssue(file, props, content, allIds, initiativeIds) {
+function validateCharter(file, props, content, allIds) {
   const errors = [];
 
-  for (const key of ISSUE_REQUIRED) {
+  for (const key of CHARTER_REQUIRED) {
     if (props[key] === undefined || props[key] === null || props[key] === "") {
       errors.push(`missing required key: ${key}`);
     }
   }
 
-  if (props.work_item_type !== "issue") {
-    errors.push(`work_item_type must be "issue"`);
+  if (props.type !== "charter") {
+    errors.push(`type must be "charter"`);
   }
-  if (props.state && !ISSUE_STATE.includes(props.state)) {
+  if (props.id && !String(props.id).startsWith("chr.")) {
+    errors.push(`id must start with "chr."`);
+  }
+
+  const created = String(props.created || "");
+  const updated = String(props.updated || "");
+  if (props.created && !DATE_REGEX.test(created)) {
+    errors.push(`invalid created date: ${props.created}`);
+  }
+  if (props.updated && !DATE_REGEX.test(updated)) {
+    errors.push(`invalid updated date: ${props.updated}`);
+  }
+
+  if (props.id) {
+    const id = String(props.id);
+    if (allIds.has(id)) {
+      errors.push(`duplicate id: ${id}`);
+    } else {
+      allIds.set(id, file);
+    }
+  }
+
+  errors.push(...checkRequiredHeadings(content, CHARTER_REQUIRED_HEADINGS));
+
+  return errors;
+}
+
+function validateItem(file, props, content, allIds, projectIds) {
+  const errors = [];
+
+  for (const key of ITEM_REQUIRED) {
+    if (props[key] === undefined || props[key] === null || props[key] === "") {
+      errors.push(`missing required key: ${key}`);
+    }
+  }
+
+  if (props.type && !ITEM_TYPES.includes(props.type)) {
     errors.push(
-      `invalid state: ${props.state} (expected: ${ISSUE_STATE.join("|")})`
+      `invalid type: ${props.type} (expected: ${ITEM_TYPES.join("|")})`
+    );
+  }
+  if (props.status && !ITEM_STATUS.includes(props.status)) {
+    errors.push(
+      `invalid status: ${props.status} (expected: ${ITEM_STATUS.join("|")})`
     );
   }
   if (props.priority !== undefined && !PRIORITY.includes(props.priority)) {
@@ -309,14 +348,49 @@ function validateIssue(file, props, content, allIds, initiativeIds) {
       `invalid estimate: ${props.estimate} (expected: ${ESTIMATE.join("|")})`
     );
   }
-  if (props.work_item_id && !String(props.work_item_id).startsWith("wi.")) {
-    errors.push(`work_item_id must start with "wi."`);
+
+  // id must be <type>.<num> and match filename prefix
+  if (props.id) {
+    const id = String(props.id);
+    const idMatch = id.match(/^([a-z]+)\.(\d+)$/);
+    if (!idMatch) {
+      errors.push(`id must be <type>.<num> (got "${id}")`);
+    } else {
+      const [, idType, idNum] = idMatch;
+      if (!ITEM_TYPES.includes(idType)) {
+        errors.push(`id type prefix "${idType}" not in allowed types`);
+      }
+      if (props.type && idType !== props.type) {
+        errors.push(
+          `id type "${idType}" does not match type field "${props.type}"`
+        );
+      }
+      // filename prefix must match id
+      const basename = file.split("/").pop();
+      if (!basename.startsWith(`${idType}.${idNum}`)) {
+        errors.push(
+          `filename "${basename}" must start with "${idType}.${idNum}"`
+        );
+      }
+    }
   }
-  if (props.initiative && !String(props.initiative).startsWith("ini.")) {
-    errors.push(`initiative must reference "ini.*"`);
+
+  // branch field (optional) must be non-empty string when present
+  if (props.branch !== undefined && props.branch !== null) {
+    if (typeof props.branch !== "string" || props.branch.trim() === "") {
+      errors.push(`branch must be a non-empty string when present`);
+    }
   }
-  if (props.initiative && !initiativeIds.has(String(props.initiative))) {
-    errors.push(`initiative "${props.initiative}" not found`);
+
+  // project field (optional) must reference proj.*
+  if (props.project) {
+    const proj = String(props.project);
+    if (!proj.startsWith("proj.")) {
+      errors.push(`project must reference "proj.*"`);
+    }
+    if (!projectIds.has(proj)) {
+      errors.push(`project "${proj}" not found`);
+    }
   }
 
   const created = String(props.created || "");
@@ -328,17 +402,16 @@ function validateIssue(file, props, content, allIds, initiativeIds) {
     errors.push(`invalid updated date: ${props.updated}`);
   }
 
-  if (props.work_item_id) {
-    const id = String(props.work_item_id);
+  if (props.id) {
+    const id = String(props.id);
     if (allIds.has(id)) {
-      errors.push(`duplicate work_item_id: ${id}`);
+      errors.push(`duplicate id: ${id}`);
     } else {
       allIds.set(id, file);
     }
   }
 
-  errors.push(...checkFieldSetSeparation(props, true));
-  errors.push(...checkRequiredHeadings(content, ISSUE_REQUIRED_HEADINGS));
+  errors.push(...checkRequiredHeadings(content, ITEM_REQUIRED_HEADINGS));
 
   return errors;
 }
@@ -347,19 +420,21 @@ function validateIssue(file, props, content, allIds, initiativeIds) {
 async function main() {
   let hasErrors = false;
   const allIds = new Map();
-  const initiativeIds = new Set();
+  const projectIds = new Set();
 
-  const initiativeFiles = await fg(["work/initiatives/**/*.md"]);
-  for (const f of initiativeFiles) {
+  // Phase 1: collect project IDs for cross-reference validation
+  const projectFiles = await fg(["work/projects/**/*.md"]);
+  for (const f of projectFiles) {
     try {
       const content = readFileSync(f, "utf8");
       const props = extractFrontmatter(content);
-      if (props.work_item_id) initiativeIds.add(String(props.work_item_id));
+      if (props.id) projectIds.add(String(props.id));
     } catch {
       // Ignore parse errors in phase 1
     }
   }
 
+  // Validate docs
   const docFiles = await fg([
     "docs/spec/**/*.md",
     "docs/decisions/adr/**/*.md",
@@ -386,13 +461,14 @@ async function main() {
     }
   }
 
-  for (const f of initiativeFiles) {
+  // Validate projects
+  for (const f of projectFiles) {
     try {
       const content = readFileSync(f, "utf8");
       const props = extractFrontmatter(content);
       const errors = [
         ...checkForbidden(content),
-        ...validateInitiative(f, props, content, allIds),
+        ...validateProject(f, props, content, allIds),
       ];
       if (errors.length) {
         hasErrors = true;
@@ -404,14 +480,39 @@ async function main() {
     }
   }
 
-  const issueFiles = await fg(["work/issues/**/*.md"]);
-  for (const f of issueFiles) {
+  // Validate charters
+  const charterFiles = await fg(["work/charters/**/*.md"]);
+  for (const f of charterFiles) {
     try {
       const content = readFileSync(f, "utf8");
       const props = extractFrontmatter(content);
       const errors = [
         ...checkForbidden(content),
-        ...validateIssue(f, props, content, allIds, initiativeIds),
+        ...validateCharter(f, props, content, allIds),
+      ];
+      if (errors.length) {
+        hasErrors = true;
+        for (const e of errors) console.error(`${f}: ${e}`);
+      }
+    } catch (e) {
+      hasErrors = true;
+      console.error(`${f}: ${e.message}`);
+    }
+  }
+
+  // Validate items (skip _index.md and _archive/)
+  const itemFiles = await fg([
+    "work/items/**/*.md",
+    "!work/items/_index.md",
+    "!work/items/_archive/**",
+  ]);
+  for (const f of itemFiles) {
+    try {
+      const content = readFileSync(f, "utf8");
+      const props = extractFrontmatter(content);
+      const errors = [
+        ...checkForbidden(content),
+        ...validateItem(f, props, content, allIds, projectIds),
       ];
       if (errors.length) {
         hasErrors = true;
@@ -425,7 +526,11 @@ async function main() {
 
   if (hasErrors) process.exit(1);
 
-  const total = docFiles.length + initiativeFiles.length + issueFiles.length;
+  const total =
+    docFiles.length +
+    projectFiles.length +
+    charterFiles.length +
+    itemFiles.length;
   console.log(
     `docs/work metadata OK (${total} files, ${allIds.size} unique ids)`
   );

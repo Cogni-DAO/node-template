@@ -20,7 +20,7 @@ tags: [data, observability, analytics]
 
 The platform needs a public transparency page showing aggregated usage metrics (requests, tokens, error rates, latency, model distribution). Metrics flow from the app via Alloy `remote_write` to Grafana Cloud Mimir, then the app queries Mimir for aggregated data. Privacy is enforced through k-anonymity suppression, fixed query windows, and server-side query allowlists.
 
-Backend implementation is complete (infrastructure, label audit, hexagonal architecture, tests). Frontend is tracked in [ini.observability-hardening.md](../../work/initiatives/ini.observability-hardening.md).
+Backend implementation is complete (infrastructure, label audit, hexagonal architecture, tests). Frontend is tracked in [proj.observability-hardening.md](../../work/projects/proj.observability-hardening.md).
 
 ## Goal
 
@@ -212,4 +212,4 @@ For `histogram_quantile()`: use `rate(...[5m])` (short range), chart granularity
 
 - [observability.md](./observability.md) — structured logging, tracing
 - [activity-metrics.md](./activity-metrics.md) — activity dashboard design
-- [ini.observability-hardening.md](../../work/initiatives/ini.observability-hardening.md) — frontend roadmap (Public Analytics Frontend Track)
+- [proj.observability-hardening.md](../../work/projects/proj.observability-hardening.md) — frontend roadmap (Public Analytics Frontend Track)

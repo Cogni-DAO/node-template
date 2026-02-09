@@ -37,7 +37,7 @@ import {
 } from "@/shared/db/schema";
 
 describe("Billing E2E Stack Test", () => {
-  // TODO(ini.payments-enhancements): Billing E2E fails in test stack because LiteLLM streaming
+  // TODO(proj.payments-enhancements): Billing E2E fails in test stack because LiteLLM streaming
   // does not return x-litellm-response-cost header or usage.cost in SSE events, so
   // providerCostUsd is undefined → chargedCredits = 0n. Live billing works fine.
   // Root cause is test-stack-specific: investigate mock-LLM streaming cost propagation.

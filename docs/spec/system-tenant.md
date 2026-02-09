@@ -343,4 +343,4 @@ Without idempotency:
 - [Graph Execution](graph-execution.md) — GraphExecutorPort, billing flow, invariants 26/29/30 (pending migration)
 - [Scheduler](./scheduler.md) — ExecutionGrant for scheduled runs
 - [Tool Use](tool-use.md) — Tool contracts, ToolEffect (pending migration)
-- [System Tenant Initiative](../../work/initiatives/ini.system-tenant-governance.md) — Implementation roadmap
+- [System Tenant Project](../../work/projects/proj.system-tenant-governance.md) — Implementation roadmap

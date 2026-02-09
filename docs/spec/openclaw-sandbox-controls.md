@@ -203,7 +203,7 @@ export function useAgents() {
 
 ## Related
 
-- **Initiative:** [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md) — Roadmap, deliverables, file pointers
+- **Project:** [proj.sandboxed-agents](../../work/projects/proj.sandboxed-agents.md) — Roadmap, deliverables, file pointers
 - [Sandboxed Agents](sandboxed-agents.md) — Core sandbox invariants 1–12, phase definitions (pending migration)
 - [OpenClaw Sandbox Spec](../OPENCLAW_SANDBOX_SPEC.md) — OpenClaw container image, config, I/O protocol (pending migration)
 - [Tenant Connections](tenant-connections.md) — P2 credential management via ConnectionBroker

@@ -363,4 +363,4 @@ export interface GraphRunRequest {
 - [AI Setup](./ai-setup.md) — AiEvent types, stream architecture
 - [Architecture](./architecture.md) — Hexagonal layers, port patterns
 - [LangGraph Patterns](../LANGGRAPH_AI.md) — Graph patterns, thread_id tenant-scoping (pending migration)
-- [Usage History Initiative](../../work/initiatives/ini.usage-history-persistence.md) — Implementation roadmap
+- [Usage History Project](../../work/projects/proj.usage-history-persistence.md) — Implementation roadmap

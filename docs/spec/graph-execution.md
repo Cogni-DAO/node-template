@@ -783,7 +783,7 @@ initChatModel + captured exec   CogniCompletionAdapter + ALS context
 - [n8n-adapter.md](n8n-adapter.md) — n8n workflow execution adapter design
 - [tenant-connections.md](tenant-connections.md) — Tenant connections
 - [external-executor-billing.md](external-executor-billing.md) — External executor billing design
-- [Initiative: Graph Execution](../../work/initiatives/ini.graph-execution.md)
+- [Project: Graph Execution](../../work/projects/proj.graph-execution.md)
 
 ## Sources
 

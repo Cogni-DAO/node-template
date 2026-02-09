@@ -16,7 +16,7 @@ tags: [wallet, auth, frontend]
 
 ## When to Use This
 
-You need to understand or extend the current wallet connectivity setup (wagmi/RainbowKit providers, wallet link contract, backend route). For the **next phase** (SIWE authentication, session management, session-based chat), see the [Accounts & API Keys Initiative](../../work/initiatives/ini.accounts-api-keys.md).
+You need to understand or extend the current wallet connectivity setup (wagmi/RainbowKit providers, wallet link contract, backend route). For the **next phase** (SIWE authentication, session management, session-based chat), see the [Accounts & API Keys Project](../../work/projects/proj.accounts-api-keys.md).
 
 ## Preconditions
 
@@ -27,7 +27,7 @@ You need to understand or extend the current wallet connectivity setup (wagmi/Ra
 
 ### Overview
 
-The MVP wallet loop has 4 major steps. **Steps 1-3 are complete** (covered here). Steps 4A and 4 (SIWE auth + session-based chat) are planned work tracked in the [Accounts & API Keys Initiative](../../work/initiatives/ini.accounts-api-keys.md).
+The MVP wallet loop has 4 major steps. **Steps 1-3 are complete** (covered here). Steps 4A and 4 (SIWE auth + session-based chat) are planned work tracked in the [Accounts & API Keys Project](../../work/projects/proj.accounts-api-keys.md).
 
 ### Step 1: Define shared HTTP contract for /api/v1/wallet/link ✅ COMPLETE
 
@@ -93,7 +93,7 @@ This ensures connectors only load in browser, avoiding `indexedDB is not defined
 
 ### Next: SIWE Authentication & Session-Based Chat (Steps 4A + 4)
 
-> All remaining work (SIWE auth endpoints, session storage, session middleware, frontend SIWE flow, dual-auth completion, session-based chat UI, and e2e verification) is tracked in the [Accounts & API Keys Initiative](../../work/initiatives/ini.accounts-api-keys.md).
+> All remaining work (SIWE auth endpoints, session storage, session middleware, frontend SIWE flow, dual-auth completion, session-based chat UI, and e2e verification) is tracked in the [Accounts & API Keys Project](../../work/projects/proj.accounts-api-keys.md).
 
 **Security Invariant:** API key never leaves the server. Browser authenticates with HttpOnly session cookie only.
 
@@ -157,7 +157,7 @@ Visit `http://localhost:3000/wallet-test` to verify wallet connection works in t
 
 ## Related
 
-- [Accounts & API Keys Initiative](../../work/initiatives/ini.accounts-api-keys.md) — SIWE auth, session management, and session-based chat roadmap (Steps 4A + 4)
+- [Accounts & API Keys Project](../../work/projects/proj.accounts-api-keys.md) — SIWE auth, session management, and session-based chat roadmap (Steps 4A + 4)
 - [Accounts Design](../ACCOUNTS_DESIGN.md) — system architecture for accounts and credits
 - [API Key Endpoints](../ACCOUNTS_API_KEY_ENDPOINTS.md) — API contracts for account/key management
 - [Security Auth Spec](../spec/security-auth.md) — authentication architecture and security invariants

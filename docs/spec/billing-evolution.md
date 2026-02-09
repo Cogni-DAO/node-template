@@ -35,7 +35,7 @@ Single-path billing where LiteLLM provides provider cost, our system applies mar
 
 - Hardcoded per-model USD pricing tables (LiteLLM is the oracle)
 - Blocking user responses during post-call billing
-- Credit holds / soft reservations (deferred, tracked in ini.payments-enhancements.md)
+- Credit holds / soft reservations (deferred, tracked in proj.payments-enhancements.md)
 
 ## Core Invariants
 
@@ -143,11 +143,11 @@ Cost source: LiteLLM `usage.cost` (stream) or `x-litellm-response-cost` header (
 
 ## Known Issues
 
-- **/activity cost column broken**: LiteLLM `spend_logs.request_id` ≠ `charge_receipts.litellm_call_id` for some providers → all rows show "—" cost. See [wi.activity-billing-join](../../work/issues/wi.activity-billing-join.md).
+- **/activity cost column broken**: LiteLLM `spend_logs.request_id` ≠ `charge_receipts.litellm_call_id` for some providers → all rows show "—" cost. See [bug.0004.activity-billing-join](../../work/items/bug.0004.activity-billing-join.md).
 
 ## Open Questions
 
-_(none — planned work tracked in ini.payments-enhancements.md: pre-call max-cost estimation, reconciliation scripts, credit_holds table, on-chain watcher, cents sprawl cleanup, conservative pre-call estimate tuning)_
+_(none — planned work tracked in proj.payments-enhancements.md: pre-call max-cost estimation, reconciliation scripts, credit_holds table, on-chain watcher, cents sprawl cleanup, conservative pre-call estimate tuning)_
 
 ## Related
 

@@ -218,4 +218,4 @@ export function createCogniMcpBridge(
 
 - [external-executor-billing.md](./external-executor-billing.md) — billing patterns (in-process vs reconciliation)
 - [agent-discovery.md](./agent-discovery.md) — agent catalog integration
-- [ini.claude-sdk-adapter.md](../../work/initiatives/ini.claude-sdk-adapter.md) — implementation roadmap
+- [proj.claude-sdk-adapter.md](../../work/projects/proj.claude-sdk-adapter.md) — implementation roadmap

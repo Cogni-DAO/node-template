@@ -30,7 +30,7 @@ Define the SourceCred configuration, scoring weights, allocation policies, and o
 
 ## Non-Goals
 
-- On-chain CSV/Gnosis integration (see [ini.sourcecred-onchain](../../work/initiatives/ini.sourcecred-onchain.md))
+- On-chain CSV/Gnosis integration (see [proj.sourcecred-onchain](../../work/projects/proj.sourcecred-onchain.md))
 - Per-node fork activation (see initiative Walk phase)
 - Discord or Discourse plugin integration
 
@@ -125,4 +125,4 @@ _(none)_
 ## Related
 
 - [sourcecred-config-rationale.md](./sourcecred-config-rationale.md) — weight and policy rationale
-- [Initiative: SourceCred On-Chain](../../work/initiatives/ini.sourcecred-onchain.md)
+- [Project: SourceCred On-Chain](../../work/projects/proj.sourcecred-onchain.md)

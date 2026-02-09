@@ -145,6 +145,6 @@ _(None — design is finalized)_
 
 ## Related
 
-- [System Test Architecture Initiative](../../work/initiatives/ini.system-test-architecture.md) — implementation roadmap (P0 mock-LLM wiring, P1 new assertions, P2 cleanup)
+- [System Test Architecture Project](../../work/projects/proj.system-test-architecture.md) — implementation roadmap (P0 mock-LLM wiring, P1 new assertions, P2 cleanup)
 - [Tool Use](./tool-use.md) — DENY_BY_DEFAULT, toolRunner.exec() enforcement
 - [Environments](./environments.md) — stack deployment modes

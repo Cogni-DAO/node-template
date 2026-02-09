@@ -32,7 +32,7 @@ Define the observability invariants that ensure silent container death, OOM, and
 ## Non-Goals
 
 - Relying on app logs for SIGKILL detection (impossible by design)
-- Implementation checklists (see [ini.observability-hardening](../../work/initiatives/ini.observability-hardening.md) Required Observability Track)
+- Implementation checklists (see [proj.observability-hardening](../../work/projects/proj.observability-hardening.md) Required Observability Track)
 
 ---
 
@@ -148,4 +148,4 @@ _(none)_
 
 - [observability.md](./observability.md) — structured logging, tracing
 - [health-probes.md](./health-probes.md) — liveness/readiness probe separation
-- [Initiative: Observability Hardening](../../work/initiatives/ini.observability-hardening.md)
+- [Project: Observability Hardening](../../work/projects/proj.observability-hardening.md)

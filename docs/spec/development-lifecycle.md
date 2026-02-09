@@ -5,174 +5,168 @@ title: Development Lifecycle
 status: draft
 spec_state: proposed
 trust: draft
-summary: How specs, initiatives, and issues work together — from idea to merged code
-read_when: Starting a new feature, understanding how to write specs, or reviewing PRs
-implements: ini.development-workflows
+summary: Command-driven workflows from idea to closeout
+read_when: Starting new work, understanding the development flow, reviewing PRs
+implements: proj.development-workflows
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-06
-tags: [workflow, specs, initiatives]
+verified: 2026-02-09
+tags: [workflow, commands]
 ---
 
 # Development Lifecycle
 
-## Context
+> Work enters the system as ideas or bugs. It flows through triage, planning, execution, review, and closeout via `/commands` that enforce content boundaries.
 
-Developers need a clear workflow that separates:
+### Key References
 
-- **What we're building** (specs — as-built contracts)
-- **What we're planning** (initiatives — roadmaps, design intent)
-- **What we're doing now** (issues — PR-sized execution)
-
-Without this separation, specs become cluttered with roadmaps, or initiatives become mega-issues that rot.
-
-## Goal
-
-A simple, enforceable workflow where:
-
-- **Specs** are as-built contract truth (no roadmaps/checklists)
-- **Initiatives** are pre-implementation planning (may exist before any code)
-- **Issues** are PR-sized execution
-- **Work drives change; specs record what IS**
-
-## Non-Goals
-
-- Prescribing project management methodology
-- Defining Plane/GitHub integration details (see [docs-work-system.md](./docs-work-system.md))
-- Covering doc types beyond spec/initiative/issue
-
----
-
-## Core Invariants
-
-1. **SPECS_ARE_AS_BUILT**: Specs describe current implementation only. Roadmaps and phases live in initiatives.
-
-2. **SPEC_STATE_LIFECYCLE**: Every spec has a `spec_state` field: `draft` → `proposed` → `active` → `deprecated`. No skipping states.
-
-3. **ACTIVE_MEANS_CLEAN**: When `spec_state: active`, the spec's "Open Questions" section must be empty.
-
-4. **PR_REFERENCES_REQUIRED**: Every code PR body must include `Work:` (issue ID). Behavior/security/interface changes also require `Spec:` link.
-
-5. **INITIATIVES_BEFORE_CODE**: Initiatives may exist before any code. They hold the roadmap; specs are created when code merges.
-
----
+|             |                                                                                           |                              |
+| ----------- | ----------------------------------------------------------------------------------------- | ---------------------------- |
+| **Spec**    | [Docs + Work System](./docs-work-system.md)                                               | Type taxonomy and ownership  |
+| **Project** | [proj.docs-system-infrastructure](../../work/projects/proj.docs-system-infrastructure.md) | Tooling roadmap (CI, MkDocs) |
+| **Guide**   | [Work Management Guide](../../work/README.md)                                             | Front door to `/work`        |
 
 ## Design
 
-### The Three Primitives
+### Workflow
 
+```mermaid
+graph LR
+  idea["/idea"] --> triage["/triage"]
+  bug["/bug"] --> triage
+  triage --> research["/research"]
+  triage --> project["/project"]
+  triage --> task["/task"]
+  research --> project
+  project --> spec["/spec"]
+  spec --> task
+  task --> implement["/implement"]
+  implement --> PR
+  PR --> review_d["/review-design"]
+  PR --> review_i["/review-implementation"]
+  review_d --> closeout["/closeout"]
+  review_i --> closeout
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│   /docs/spec/              /work/initiatives/    /work/issues/  │
-│   ═══════════              ══════════════════    ═════════════  │
-│                                                                 │
-│   As-Built Contract        Pre-Code Planning     PR-Sized Work  │
-│   • Current invariants     • Crawl/Walk/Run      • Checklist    │
-│   • Acceptance checks      • Design intent       • PR checklist │
-│   • Implementation notes   • Dependencies        • Validation   │
-│                            • Work item list                     │
-│                                                                 │
-│   Created AFTER merge      May exist BEFORE      Links to both  │
-│                            any code                             │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+### Commands
+
+| Command                  | Creates/Updates                               | Purpose                                                       |
+| ------------------------ | --------------------------------------------- | ------------------------------------------------------------- |
+| `/idea`                  | `story.*` item (+ `spike.*` if unclear)       | Entry point: new feature concept                              |
+| `/research`              | `docs/research/*.md` + proposed layout        | Execute a spike: research + plausible project/spec/task plan  |
+| `/bug`                   | `bug.*` item                                  | Entry point: something is broken                              |
+| `/triage`                | updates item                                  | Route to project or leave standalone                          |
+| `/project`               | `proj.*` project                              | Plan roadmap with Crawl/Walk/Run phases                       |
+| `/spec`                  | spec in `docs/spec/`                          | Write or update technical contract                            |
+| `/task`                  | `task.*` item                                 | Decompose into PR-sized work                                  |
+| `/implement`             | code changes                                  | Execute a task/bug: clean code, checkpointed, spec-aligned    |
+| `/review-design`         | —                                             | Critical design review against architecture and principles    |
+| `/review-implementation` | —                                             | Critical code review against style, specs, and best practices |
+| `/closeout`              | updates item, spec, headers, AGENTS.md, index | Pre-PR finish pass: scan diff, update all docs, close item    |
 
 ### Spec State Lifecycle
 
-| State        | Meaning                                    | What's Required                                       |
-| ------------ | ------------------------------------------ | ----------------------------------------------------- |
-| `draft`      | Exploratory. May not match implementation. | Invariants can be incomplete. Open Questions allowed. |
-| `proposed`   | Stable enough to review against.           | Invariants enumerated. Acceptance checks defined.     |
-| `active`     | Implemented and enforced. Matches code.    | Open Questions empty. `verified:` date current.       |
-| `deprecated` | No longer authoritative.                   | Points to replacement spec.                           |
+| State        | Meaning                          | Required                                              |
+| ------------ | -------------------------------- | ----------------------------------------------------- |
+| `draft`      | Exploratory. May not match code. | Invariants can be incomplete. Open Questions allowed. |
+| `proposed`   | Stable enough to review against. | Invariants enumerated. Acceptance checks defined.     |
+| `active`     | Matches code. Enforced.          | Open Questions empty. `verified:` current.            |
+| `deprecated` | No longer authoritative.         | Points to replacement spec.                           |
 
-### Workflow: Idea → Merged Code
+### Workflows
+
+**Bug (simple fix):**
 
 ```
-1. CREATE INITIATIVE (optional for multi-PR work)
-   └── /work/initiatives/ini.feature.md
-       • Goal, crawl/walk/run roadmap
-       • Constraints, dependencies
-       • Work items by phase
+/bug → /triage (attach proj.* or none) → /task → PR → /closeout
+```
 
-2. CREATE ISSUE (PR-sized)
-   └── /work/issues/wi.feature-001.md
-       • Execution checklist
-       • PR checklist (Work + Spec links)
-       • Validation commands
+**New idea, new project:**
 
-3. OPEN PR
-   └── PR body includes:
-       Work: wi.feature-001
-       Spec: docs/spec/feature.md#core-invariants (if exists)
+```
+/idea → /triage → new proj.* → /project → /spec (draft) → /task(s) → PR(s) → /review-design → /review-implementation → /closeout
+```
 
-4. REVIEW + MERGE
-   └── Reviewer checks diff against spec invariants (if spec exists)
-   └── CI validates PR body format
-   └── Acceptance checks must pass
+**Idea slots into existing project:**
 
-5. CREATE/UPDATE SPEC (after merge)
-   └── /docs/spec/feature.md
-       • spec_state: active (if fully implemented)
-       • Describes what IS, not what WILL BE
-       • Open Questions empty
+```
+/idea → /triage → attach proj.* → /task → PR → /closeout
+        └─ if contract change: /spec (draft) before /task
+```
+
+**Research spike (unknown design space):**
+
+```
+/idea (creates story.* + spike.*) → /triage → /research spike.XXXX → docs/research/<topic>.md + proposed layout → /project → /spec → /task(s) → PR(s) → /closeout
 ```
 
 ### When to Create What
 
-| Situation                     | Action                                                |
-| ----------------------------- | ----------------------------------------------------- |
-| Small fix, no behavior change | Issue only. No spec or initiative needed.             |
-| Single PR, clear scope        | Issue + reference existing spec (or skip if trivial). |
-| Multi-PR effort               | Initiative + Issues. Create spec when code merges.    |
-| Architecture decision         | ADR in `docs/decisions/adr/`.                         |
+| Situation                           | Flow                                                                          |
+| ----------------------------------- | ----------------------------------------------------------------------------- |
+| Small fix, no behavior change       | `/bug` → `/task` → PR → `/closeout`                                           |
+| Single PR, clear scope              | `/idea` → `/triage` → `/task` → PR → `/closeout`                              |
+| Multi-PR effort                     | `/idea` → `/triage` → `/project` → `/spec` → `/task`(s) → PR(s) → `/closeout` |
+| Unknown design space, need research | `/idea` → `/triage` → `/research` → `/project` → `/spec` → `/task`(s)         |
+| Architecture decision               | ADR in `docs/decisions/adr/`                                                  |
 
 ### PR Body Format
-
-Every code PR must include:
 
 ```markdown
 ## References
 
-Work: wi.feature-001
-Spec: docs/spec/feature.md#core-invariants
+Work: task.0042
+Spec: docs/spec/feature.md#invariants (or Spec-Impact: none)
 ```
 
-**CI enforcement:**
-
 - Missing `Work:` → merge blocked
-- Missing `Spec:` → warning (blocked if `arch_change=yes`)
+- Missing `Spec:` → warning (blocked if behavior/security/interface change)
 
----
+## Goal
 
-## Acceptance Checks
+Enumerate the command-driven workflows, their sequencing, and the gates that enforce quality.
 
-**Automated:**
+## Non-Goals
 
-- `node scripts/validate-docs-metadata.mjs` — validates frontmatter including `spec_state`
+- Type taxonomy (see [docs-work-system](./docs-work-system.md))
+- Project management methodology
+- CI implementation details
 
-**Manual (until automated):**
+## Invariants
 
-1. Specs do not contain roadmaps or phases (those belong in initiatives)
-2. When spec is marked `active`, Open Questions is empty
-3. PRs reference an issue
+| Rule                 | Constraint                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| PR_LINKS_ITEM        | Every code PR references exactly one primary work item (`task.*` or `bug.*`) and at least one spec, or `Spec-Impact: none` |
+| TRIAGE_OWNS_ROUTING  | Only `/triage` sets or changes the `project:` linkage on an idea or bug                                                    |
+| SPEC_NO_EXEC_PLAN    | Specs never contain roadmap, phases, tasks, owners, or timelines. At any `spec_state`                                      |
+| SPEC_STATE_LIFECYCLE | `draft` → `proposed` → `active` → `deprecated`. No skipping                                                                |
+| ACTIVE_MEANS_CLEAN   | `spec_state: active` requires Open Questions empty and `verified:` current                                                 |
+| PROJECTS_BEFORE_CODE | Projects may exist before any code. Specs are created or updated when code lands                                           |
+| REVIEW_BEFORE_MERGE  | Design and implementation reviews use `/review-design` and `/review-implementation` before `/closeout`                     |
 
----
+### File Pointers
+
+| File                                        | Purpose                                     |
+| ------------------------------------------- | ------------------------------------------- |
+| `.claude/commands/idea.md`                  | `/idea` command definition                  |
+| `.claude/commands/research.md`              | `/research` command definition              |
+| `.claude/commands/bug.md`                   | `/bug` command definition                   |
+| `.claude/commands/triage.md`                | `/triage` command definition                |
+| `.claude/commands/project.md`               | `/project` command definition               |
+| `.claude/commands/spec.md`                  | `/spec` command definition                  |
+| `.claude/commands/task.md`                  | `/task` command definition                  |
+| `.claude/commands/implement.md`             | `/implement` command definition             |
+| `.claude/commands/review-design.md`         | `/review-design` command definition         |
+| `.claude/commands/review-implementation.md` | `/review-implementation` command definition |
+| `.claude/commands/closeout.md`              | `/closeout` command definition              |
+| `scripts/validate-docs-metadata.mjs`        | Frontmatter and heading validation          |
 
 ## Open Questions
 
-<!-- This section must be empty when spec_state is active -->
-
 - [ ] Should we lint specs for roadmap/phase language?
-
----
+- [ ] CI enforcement of PR body format (Work: / Spec: lines)
 
 ## Related
 
-- [Docs + Work System](./docs-work-system.md) — document taxonomy
+- [Docs + Work System](./docs-work-system.md) — type taxonomy and ownership
 - [Work Management Guide](../../work/README.md)
-- [Initiative Template](../../work/_templates/initiative.md)
-- [Issue Template](../../work/_templates/issue.md)
-- [Spec Template](../_templates/spec.md)

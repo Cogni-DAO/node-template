@@ -26,7 +26,7 @@ Define the structural contracts, invariants, and import boundaries for deployabl
 ## Non-Goals
 
 - Step-by-step instructions for creating a new service (see [Create a Service Guide](../guides/create-service.md))
-- CI/CD pipeline automation for services (see [CI/CD & Services GitOps Initiative](../../work/initiatives/ini.cicd-services-gitops.md))
+- CI/CD pipeline automation for services (see [CI/CD & Services GitOps Project](../../work/projects/proj.cicd-services-gitops.md))
 - Package architecture (see [Packages Architecture Spec](./packages-architecture.md))
 
 ## Core Invariants
@@ -185,9 +185,9 @@ Enforced by dependency-cruiser:
 
 ### Existing Services
 
-| Service            | Purpose                        | Status   | CI/CD                                                                                   |
-| ------------------ | ------------------------------ | -------- | --------------------------------------------------------------------------------------- |
-| `scheduler-worker` | Temporal worker for scheduling | MVP (v0) | P0 stopgap (see [CI/CD initiative](../../work/initiatives/ini.cicd-services-gitops.md)) |
+| Service            | Purpose                        | Status   | CI/CD                                                                                 |
+| ------------------ | ------------------------------ | -------- | ------------------------------------------------------------------------------------- |
+| `scheduler-worker` | Temporal worker for scheduling | MVP (v0) | P0 stopgap (see [CI/CD initiative](../../work/projects/proj.cicd-services-gitops.md)) |
 
 ### File Pointers
 
@@ -226,4 +226,4 @@ _(none)_
 - [Packages Architecture](./packages-architecture.md) — pure libraries, package vs service distinction
 - [Architecture](./architecture.md) — hexagonal layers and boundaries
 - [Node vs Operator Contract](./node-operator-contract.md) — Node/Operator deployment boundaries
-- [CI/CD & Services GitOps](../../work/initiatives/ini.cicd-services-gitops.md) — service build/deploy roadmap
+- [CI/CD & Services GitOps](../../work/projects/proj.cicd-services-gitops.md) — service build/deploy roadmap

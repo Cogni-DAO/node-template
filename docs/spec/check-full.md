@@ -143,7 +143,7 @@ docker compose -f platform/infra/services/runtime/docker-compose.dev.yml down -v
 
 ## Open Questions
 
-_(none — future CLI enhancements like --only-stack, --watch, --verbose are tracked in ini.cicd-services-gitops.md)_
+_(none — future CLI enhancements like --only-stack, --watch, --verbose are tracked in proj.cicd-services-gitops.md)_
 
 ## Related
 

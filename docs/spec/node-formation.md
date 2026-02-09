@@ -327,6 +327,6 @@ OSx v1.4.0 deployments. Hardcoded addresses from [cogni-signal-evm-contracts](ht
 
 - [Node vs Operator Contract](./node-operator-contract.md)
 - [Cred Licensing Policy](./cred-licensing-policy.md)
-- [Node Formation Initiative](../../work/initiatives/ini.node-formation-ui.md)
+- [Node Formation Project](../../work/projects/proj.node-formation-ui.md)
 - [Node Formation Guide](../guides/node-formation-guide.md)
 - [ROADMAP](../../ROADMAP.md)

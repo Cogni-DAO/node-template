@@ -1,5 +1,5 @@
 ---
-description: Evaluate your design against **/AGENTS.md
+description: Evaluate your design against AGENTS.md and core guides
 ---
 
 Time to evaluate your design. Read docs/spec/architecture.md, docs/guides/feature-development.md, and docs/spec/ui-implementation.md.

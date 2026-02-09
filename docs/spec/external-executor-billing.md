@@ -197,7 +197,7 @@ Remaining P0: `getSpendLogsByEndUser()` adapter method, `reconcileRun()` service
 
 ## Open Questions
 
-_(none — P1 hardening (alerts, retry, metrics) and future provider integrations tracked in ini.payments-enhancements.md)_
+_(none — P1 hardening (alerts, retry, metrics) and future provider integrations tracked in proj.payments-enhancements.md)_
 
 ## Related
 

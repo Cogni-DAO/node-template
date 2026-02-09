@@ -1,4 +1,8 @@
-It's time to update documentation for this branch — both `*/AGENTS.md` files and top-of-file headers. Start by reading [Architecture](docs/spec/architecture.md) and [Style & Lint Rules](docs/spec/style.md)
+Update documentation for this branch — file headers and AGENTS.md only.
+
+> **If you have a work item**, use `/closeout` instead — it includes this pass plus spec/project/index updates.
+
+Start by reading [Architecture](docs/spec/architecture.md), then reviewing files and updating docs to align.
 
 ---
 
@@ -15,7 +19,7 @@ It's time to update documentation for this branch — both `*/AGENTS.md` files a
 ## 2. Update Directory Docs
 
 - Every subdirectory NEEDS to have a `AGENTS.md` file. Create one from template if missing.
-- Update a directory’s `AGENTS.md` **only if**:
+- Update a directory's `AGENTS.md` **only if**:
   - Public exports, routes, env keys, ports, or boundaries changed
   - Ownership/status/date changed
   - The directory was created or removed
@@ -26,7 +30,7 @@ It's time to update documentation for this branch — both `*/AGENTS.md` files a
 
 ## 3. Writing Rules
 
-- Use **present tense** only. Never write “new,” “updated,” “final,” or “production ready.”
+- Use **present tense** only. Never write "new," "updated," "final," or "production ready."
 - Simplify and shorten docs. Remove dead or duplicated lines.
 - Keep behavior details inside file headers, not `AGENTS.md`.
 - For new directories, seed from `docs/templates/agents_subdir_template.md`.

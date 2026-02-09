@@ -91,6 +91,7 @@ This is **correct merge behavior**. The deletion was intentional from Git's pers
 - **4+ days** of blocked releases during investigation
 - **3 failed PRs** (#268, #269, #270)
 - Required **manual override** of branch protection to resolve
+- Residual divergence on 2 doc files persisted until Feb 9, 2026 (see [Addendum](#addendum-residual-conflicts-feb-9-2026))
 
 ---
 
@@ -100,6 +101,10 @@ This is **correct merge behavior**. The deletion was intentional from Git's pers
 2. Performed conflict resolution in GitHub UI with correct content (release's version)
 3. Merged PR #270 with "Create a merge commit"
 4. Re-enabled branch protections
+
+**Files resolved**: `src/shared/env/invariants.ts`, `src/app/(infra)/readyz/route.ts`, CI configs, scheduler files.
+
+**Files NOT resolved** (not conflicting at the time): `docs/PAYMENTS_DESIGN.md`, `docs/features/HEALTH_PROBES.md`. These remained silently diverged — main had versions modified by PRs #189/#192 that staging never received. See [Addendum](#addendum-residual-conflicts-feb-9-2026).
 
 ---
 
@@ -125,12 +130,13 @@ The release branch had conflicts with main. Instead of following the correct pro
 
 ## Action Items
 
-| Priority | Action                                                                 | Status                |
-| -------- | ---------------------------------------------------------------------- | --------------------- |
-| P0       | Document: Never use "Update branch" button on release PRs              | **DONE** (in runbook) |
-| P0       | Add CI check: fail if release/\* branch has merge commits              | TODO                  |
-| P1       | Add CI check: fail if release→main merge loses lines                   | TODO                  |
-| P1       | Audit GitHub branch protection: disable "Update branch" for release/\* | TODO                  |
+| Priority | Action                                                                                                                       | Status                           |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| P0       | Document: Never use "Update branch" button on release PRs                                                                    | **DONE** (in runbook)            |
+| P0       | Add CI check: fail if release/\* branch has merge commits                                                                    | TODO                             |
+| P1       | Add CI check: fail if release→main merge loses lines                                                                         | TODO                             |
+| P1       | Audit GitHub branch protection: disable "Update branch" for release/\*                                                       | TODO                             |
+| P1       | After conflict resolution, audit ALL diverged files (`git diff <merge-base> origin/main`) not just actively conflicting ones | **DONE** (learned from addendum) |
 
 ---
 
@@ -154,4 +160,77 @@ git show 5a047cd --format="%s%nParents: %P" --no-patch
 # Show file state corruption
 git show 4f1c3b49:src/shared/env/invariants.ts | wc -l  # 149 (before)
 git show 5a047cd:src/shared/env/invariants.ts | wc -l   # 80 (after - WRONG)
+
+# Audit ALL diverged files between merge base and main (use after any resolution)
+git diff --stat $(git merge-base origin/main origin/staging) origin/main
+# ^^^ Should be empty after full resolution. Any remaining files are latent time bombs.
 ```
+
+---
+
+## Addendum: Residual Conflicts (Feb 9, 2026)
+
+The original resolution in January only fixed the actively conflicting source files. Two documentation files were also corrupted by the same forbidden merge but were not conflicting at the time, so they went unresolved. They surfaced 2 weeks later when the docs migration (PR #340) deleted/renamed them on staging.
+
+### How it resurfaced
+
+The docs migration deleted `docs/PAYMENTS_DESIGN.md` and renamed `docs/features/HEALTH_PROBES.md` → `docs/spec/health-probes.md` on staging. When release/20260209-bc945329 (PR #351) carried these changes to main, the latent divergence surfaced:
+
+- `docs/PAYMENTS_DESIGN.md`: modify/delete conflict (main had 535 lines from PRs #189/#192, release deleted it)
+- `docs/features/HEALTH_PROBES.md`: rename/modify conflict (GitHub's rename detection didn't match local git's, so the rename appeared as a modify/delete conflict on GitHub)
+
+### Why a staging-first fix was impossible
+
+Git's 3-way merge compares three **snapshots** (merge base, main, release) — not commit history. No commit on staging could change any of these snapshots:
+
+- Merge base (`7637063c`): only advances when a release merges to main
+- Main: has the modified files from PRs #189/#192
+- Any release from staging: has the files deleted/renamed
+
+This is circular — the merge base can't advance because the release can't merge, and the release can't merge because the merge base hasn't advanced. The fix must go directly on the release branch.
+
+### Steps taken
+
+1. On `release/20260209-bc945329`, adopted main's version of both files to make the 3-way merge see agreement:
+
+   ```bash
+   git checkout release/20260209-bc945329
+
+   # File 1: PAYMENTS_DESIGN.md (modify/delete)
+   git checkout origin/main -- docs/PAYMENTS_DESIGN.md
+   git commit -m "fix: adopt main's PAYMENTS_DESIGN.md to resolve modify/delete conflict"
+
+   # File 2: HEALTH_PROBES.md (rename/modify — GitHub didn't detect rename)
+   git checkout origin/main -- docs/features/HEALTH_PROBES.md
+   git commit -m "fix: adopt main's HEALTH_PROBES.md to resolve rename/modify conflict"
+
+   # Verify clean merge
+   git merge-tree --write-tree origin/main HEAD 2>&1 | grep -i conflict
+   # ^^^ Must be empty
+
+   git push
+   ```
+
+2. Temporarily disabled `require-pinned-release-branch` check on PR #351 (GitHub → Settings → Branch protection rules → main → uncheck "Require pinned release PRs to main / require-pinned-release-branch")
+
+3. Merged PR #351 to main
+
+4. Re-enabled `require-pinned-release-branch` check
+
+### Why the files temporarily reappear on main
+
+The fix adds the files back to the release branch so both sides agree. After merge, main temporarily has both files again. The **next release cycle** automatically cleans this up: staging already has the files deleted/moved, and the now-advanced merge base means git sees only the release side changed → clean delete/rename.
+
+### Gotcha: `merge-tree` vs GitHub
+
+`git merge-tree` showed `HEALTH_PROBES.md` auto-merging (local git detected the rename to `docs/spec/health-probes.md`). GitHub did **not** detect the rename and reported a conflict. Always verify conflict state on GitHub, not just locally.
+
+### Full divergence audit
+
+After applying the fix, we audited the complete diff between the merge base and main:
+
+```bash
+git diff --stat $(git merge-base origin/main origin/staging) origin/main
+```
+
+Only the 2 doc files were diverged. Once PR #351 merges and the next release cycle completes, the merge base will advance past all Dec 2025 corruption. This should be the final remediation for this incident.

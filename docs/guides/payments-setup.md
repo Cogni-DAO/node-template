@@ -96,4 +96,4 @@ The 9 critical test scenarios cover: sender mismatch, wrong token/recipient/amou
 
 - [Payments Design Spec](../spec/payments-design.md)
 - [Billing Evolution Spec](../spec/billing-evolution.md)
-- [Payments & Billing Initiative](../../work/initiatives/ini.payments-enhancements.md)
+- [Payments & Billing Project](../../work/projects/proj.payments-enhancements.md)
