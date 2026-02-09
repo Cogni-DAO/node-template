@@ -265,7 +265,7 @@ Current: 31 invariants spread across document.
 | OAuth connection mgmt  | Not designed          | Nango                    | Evaluate (not for POC)  |
 | Job queuing            | Graphile Worker       | BullMQ                   | N/A (Temporal replaces) |
 
-**Decision**: Temporal.io approved for scheduling migration (P1). See [SCHEDULER_SPEC.md](../SCHEDULER_SPEC.md) for design.
+**Decision**: Temporal.io approved for scheduling migration (P1). See [Scheduler Spec](../spec/scheduler.md) for design.
 
 ---
 
@@ -428,11 +428,11 @@ CREATE TABLE connections (
 
 ## Related Documents
 
-- [SCHEDULER_SPEC.md](../SCHEDULER_SPEC.md)
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
-- [TOOL_USE_SPEC.md](../TOOL_USE_SPEC.md)
+- [Scheduler Spec](../spec/scheduler.md)
+- [Graph Execution](../spec/graph-execution.md)
+- [Tool Use Spec](../spec/tool-use.md)
 - [ROADMAP.md](../../ROADMAP.md)
-- [ARCHITECTURE.md](../ARCHITECTURE.md)
+- [Architecture](../spec/architecture.md)
 
 ---
 

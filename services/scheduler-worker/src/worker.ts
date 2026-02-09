@@ -11,7 +11,7 @@
  *   - Zero imports from src/** (arch compliance)
  *   - All dependencies injected via config
  * Side-effects: IO (connects to Temporal, starts worker)
- * Links: docs/SCHEDULER_SPEC.md, docs/TEMPORAL_PATTERNS.md
+ * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md
  * @internal
  */
 

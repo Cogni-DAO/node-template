@@ -14,7 +14,7 @@ Pure TypeScript package for Node Formation P0. Provides Aragon OSx encoding, add
 
 ## Pointers
 
-- [Node Formation Spec](../../docs/NODE_FORMATION_SPEC.md)
+- [Node Formation Spec](../../docs/spec/node-formation.md)
 
 ## Boundaries
 
@@ -82,7 +82,7 @@ pnpm --filter @aragon-osx test
 
 - Update this file when public exports or boundaries change
 - Encoding struct changes require parity test update
-- Address changes must sync with [NODE_FORMATION_SPEC.md](../../docs/NODE_FORMATION_SPEC.md) appendix
+- Address changes must sync with [Node Formation Spec](../../docs/spec/node-formation.md) appendix
 
 ## Notes
 

@@ -30,7 +30,7 @@ Define the billing identity model, credit tenancy boundaries, and owner vs actor
 ## Non-Goals
 
 - SIWE/Auth.js mechanics in depth (see [security-auth.md](./security-auth.md))
-- App API key lifecycle and endpoints (see [ini.accounts-api-keys](../../work/initiatives/ini.accounts-api-keys.md) P3)
+- App API key lifecycle and endpoints (see [proj.accounts-api-keys](../../work/projects/proj.accounts-api-keys.md) P3)
 - Multi-tenant/OAuth providers (see initiative P4)
 
 ---
@@ -143,4 +143,4 @@ _(none)_
 - [security-auth.md](./security-auth.md) — authentication architecture
 - [billing-evolution.md](./billing-evolution.md) — billing stages
 - [system-tenant.md](./system-tenant.md) — system tenant design
-- [Initiative: Accounts & API Keys](../../work/initiatives/ini.accounts-api-keys.md)
+- [Project: Accounts & API Keys](../../work/projects/proj.accounts-api-keys.md)

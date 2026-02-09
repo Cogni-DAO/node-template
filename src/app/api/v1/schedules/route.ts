@@ -9,7 +9,7 @@
  *   - Schedule ownership scoped to caller's billing account
  *   - createSchedule is atomic (grant + schedule + job enqueue)
  * Side-effects: IO (HTTP request/response, database, job queue)
- * Links: docs/SCHEDULER_SPEC.md, schedules.*.v1.contract
+ * Links: docs/spec/scheduler.md, schedules.*.v1.contract
  * @public
  */
 

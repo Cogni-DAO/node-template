@@ -25,9 +25,9 @@ Provide a pluggable agent discovery pipeline where routes call a bootstrap helpe
 
 ## Non-Goals
 
-- Multi-assistant support per graph (P1+, tracked in ini.agent-registry.md)
-- LangGraph Server runtime discovery (P2, tracked in ini.agent-registry.md)
-- Claude SDK / n8n / Flowise discovery adapters (P3, tracked in ini.agent-registry.md)
+- Multi-assistant support per graph (P1+, tracked in proj.agent-registry.md)
+- LangGraph Server runtime discovery (P2, tracked in proj.agent-registry.md)
+- Claude SDK / n8n / Flowise discovery adapters (P3, tracked in proj.agent-registry.md)
 
 ## Core Invariants
 
@@ -173,10 +173,10 @@ src/
 
 ## Open Questions
 
-_(none — planned evolution tracked in ini.agent-registry.md: discovery factory, LangGraph Server provider, multi-adapter discovery, LangGraph Server field alignment)_
+_(none — planned evolution tracked in proj.agent-registry.md: discovery factory, LangGraph Server provider, multi-adapter discovery, LangGraph Server field alignment)_
 
 ## Related
 
-- [Graph Execution](../GRAPH_EXECUTION.md) — Execution invariants, billing flow
+- [Graph Execution](graph-execution.md) — Execution invariants, billing flow
 - [AI Setup](./ai-setup.md) — AI stack configuration
 - [Architecture](./architecture.md) — Hexagonal boundaries

@@ -15,7 +15,7 @@ Test double implementations of AI service ports for deterministic testing.
 ## Pointers
 
 - [Real adapters](../../server/ai/)
-- [System Test Architecture](../../../../work/initiatives/ini.system-test-architecture.md)
+- [System Test Architecture](../../../../work/projects/proj.system-test-architecture.md)
 
 ## Boundaries
 
@@ -66,4 +66,4 @@ pnpm test tests/integration/
 ## Notes
 
 - LLM adapter (FakeLlmAdapter) was removed — test stacks use real LiteLLM with mock-openai-api backend
-- See docs/SYSTEM_TEST_ARCHITECTURE.md for details
+- See docs/spec/system-test-architecture.md for details

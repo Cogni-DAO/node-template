@@ -7,7 +7,7 @@
  * Scope: ABI constants only; does not include full Aragon interfaces.
  * Invariants: Keep minimal surface; do not add unrelated functions/events.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

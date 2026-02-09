@@ -50,7 +50,7 @@ Provide a signal-to-decision pipeline: CloudEvents ingestion → budget-enforced
 
 ### Orchestration (Temporal)
 
-> See [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) for canonical Temporal patterns, anti-patterns, and code examples.
+> See [Temporal Patterns](temporal-patterns.md) for canonical Temporal patterns, anti-patterns, and code examples.
 
 1. **TEMPORAL_DETERMINISM**: No I/O in Workflow code. All external calls run in Activities. (See TEMPORAL_PATTERNS.md)
 
@@ -253,7 +253,7 @@ Provide a signal-to-decision pipeline: CloudEvents ingestion → budget-enforced
 
 ### Temporal Workflow Blueprint
 
-> See [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) for canonical patterns and code examples.
+> See [Temporal Patterns](temporal-patterns.md) for canonical patterns and code examples.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -865,7 +865,7 @@ Agents need: what changed? what's new? what escalated? Not everything.
 **Automated:**
 
 - `pnpm check:docs` — validates spec frontmatter and required headings
-- Integration tests for signal ingest idempotency (planned — see [ini.governance-agents](../../work/initiatives/ini.governance-agents.md))
+- Integration tests for signal ingest idempotency (planned — see [proj.governance-agents](../../work/projects/proj.governance-agents.md))
 
 **Manual:**
 
@@ -881,11 +881,11 @@ Agents need: what changed? what's new? what escalated? Not everything.
 
 ## Related
 
-- **Initiative:** [ini.governance-agents](../../work/initiatives/ini.governance-agents.md) — Roadmap, deliverables, P1 backlog
+- **Project:** [proj.governance-agents](../../work/projects/proj.governance-agents.md) — Roadmap, deliverables, P1 backlog
 - [Governance Data Collectors](gov-data-collectors.md) — SourceAdapter registry
 - [Temporal Patterns](temporal-patterns.md) — Canonical Temporal patterns and anti-patterns
 - [System Tenant Design](system-tenant.md) — System tenant foundation
 - [Scheduler Spec](scheduler.md) — Scheduled graph execution
-- [Graph Execution](../GRAPH_EXECUTION.md) — GraphExecutorPort (pending migration)
+- [Graph Execution](graph-execution.md) — GraphExecutorPort (pending migration)
 - [Observability](observability.md) — Prometheus, Loki
 - [Tool Use Spec](tool-use.md) — MCP tool contracts

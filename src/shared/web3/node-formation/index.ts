@@ -7,7 +7,7 @@
  * Scope: Re-exports all node formation web3 primitives from subdirectory; does not contain implementation logic.
  * Invariants: All exports are pure constants or types.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/spec/node-formation.md
  * @public
  */
 

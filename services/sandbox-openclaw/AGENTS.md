@@ -14,8 +14,8 @@ Docker image definition for running OpenClaw inside a network-isolated sandbox. 
 
 ## Pointers
 
-- [OpenClaw Sandbox Spec](../../docs/OPENCLAW_SANDBOX_SPEC.md)
-- [Sandbox Spec](../../docs/SANDBOXED_AGENTS.md)
+- [OpenClaw Sandbox Spec](../../docs/spec/openclaw-sandbox-spec.md)
+- [Sandbox Spec](../../docs/spec/sandboxed-agents.md)
 - [Sandbox Runtime (reference)](../sandbox-runtime/)
 - [Sandbox Adapter](../../src/adapters/server/sandbox/)
 

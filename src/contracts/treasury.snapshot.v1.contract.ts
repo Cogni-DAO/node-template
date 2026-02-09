@@ -8,7 +8,7 @@
  * Invariants: No request body (GET); response always returns 200 with optional staleWarning.
  * Side-effects: none (schema definition only)
  * Notes: Phase 2: ETH balance only. staleWarning indicates RPC timeout/error.
- * Links: docs/ONCHAIN_READERS.md
+ * Links: docs/spec/onchain-readers.md
  * @public
  */
 

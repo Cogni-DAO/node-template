@@ -16,7 +16,7 @@ Reusable kit components for displaying data including badges, avatars, scroll ar
 ## Pointers
 
 - [Parent: Kit Components](../AGENTS.md)
-- [UI Implementation Guide](../../../../docs/UI_IMPLEMENTATION_GUIDE.md)
+- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
 - **Related:** [../overlays/](../overlays/) (Dialog uses ScrollArea)
 
 ## Boundaries

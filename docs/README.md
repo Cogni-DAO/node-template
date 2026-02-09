@@ -56,7 +56,7 @@ tags: [scheduler, temporal]
 
 **Required (specs):** `id`, `type`, `title`, `status`, `spec_state`, `trust`, `summary`, `read_when`, `owner`, `created`, `verified`, `tags`
 
-Work items (`work/initiatives/`, `work/issues/`) use a different field set — see `work/README.md`.
+Work items (`work/projects/`, `work/items/`) use a different field set — see `work/README.md`.
 
 ## Trust Levels
 

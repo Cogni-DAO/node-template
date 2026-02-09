@@ -20,7 +20,7 @@ tags: [sandbox, openclaw, ai-agents]
 
 ## Context
 
-The sandbox runtime ([SANDBOXED_AGENTS.md](../SANDBOXED_AGENTS.md), invariants 1–12) provides isolated container execution for AI agents. OpenClaw is a third-party agent runtime that supports autonomous multi-turn tool-use loops. This spec defines how OpenClaw runs inside the Cogni sandbox: what is disabled, how LLM calls route through the proxy, container image layout, I/O protocol, and billing integration.
+The sandbox runtime ([Sandboxed Agents](sandboxed-agents.md), invariants 1–12) provides isolated container execution for AI agents. OpenClaw is a third-party agent runtime that supports autonomous multi-turn tool-use loops. This spec defines how OpenClaw runs inside the Cogni sandbox: what is disabled, how LLM calls route through the proxy, container image layout, I/O protocol, and billing integration.
 
 ## Goal
 
@@ -30,13 +30,13 @@ Define the invariants and design contracts for running OpenClaw as a sandboxed a
 
 - OpenClaw gateway mode or Lit-based Control UI (invariants 17, 18)
 - Passing API keys or git credentials into sandbox containers (SECRETS_HOST_ONLY)
-- Multi-stage Docker image optimization (see [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md))
+- Multi-stage Docker image optimization (see [proj.sandboxed-agents](../../work/projects/proj.sandboxed-agents.md))
 - Graph provider wiring, agent catalog, or bootstrap integration (see [openclaw-sandbox-controls](openclaw-sandbox-controls.md))
 - Streaming passthrough from OpenClaw to client (deferred)
 
 ## Core Invariants
 
-> Numbering continues from [SANDBOXED_AGENTS.md](../SANDBOXED_AGENTS.md) invariants 1–12.
+> Numbering continues from [Sandboxed Agents](sandboxed-agents.md) invariants 1–12.
 
 13. **OPENCLAW_SANDBOX_OFF**: OpenClaw's built-in sandbox (`sandbox.mode`) is always `"off"` inside Cogni's container. The Cogni sandbox IS the isolation boundary. Docker is not available inside the container; enabling OpenClaw's sandbox would hard-fail on `docker create`.
 
@@ -496,7 +496,7 @@ OpenClaw skills (in `skills/` directory) provide domain-specific behavior. Skill
 
 #### Billing Flow
 
-Unchanged from [SANDBOXED_AGENTS.md](../SANDBOXED_AGENTS.md) P0.5 design and [external-executor-billing](external-executor-billing.md):
+Unchanged from [Sandboxed Agents](sandboxed-agents.md) P0.5 design and [external-executor-billing](external-executor-billing.md):
 
 1. Every LLM call from OpenClaw transits our nginx proxy
 2. Proxy injects `x-litellm-end-user-id: ${billingAccountId}`
@@ -592,8 +592,8 @@ OpenClaw receives the prompt via CLI `--message` flag. For very long prompts (e.
 
 ## Related
 
-- **Initiative:** [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md) — Roadmap: container, E2E wiring, custom agents, conversation continuity
-- [Sandboxed Agents](../SANDBOXED_AGENTS.md) — Core sandbox invariants 1–12, phase definitions (pending migration)
+- **Project:** [proj.sandboxed-agents](../../work/projects/proj.sandboxed-agents.md) — Roadmap: container, E2E wiring, custom agents, conversation continuity
+- [Sandboxed Agents](sandboxed-agents.md) — Core sandbox invariants 1–12, phase definitions (pending migration)
 - [OpenClaw Sandbox Controls](openclaw-sandbox-controls.md) — Invariants 20-25, dynamic catalog, git relay, dashboard
 - [External Executor Billing](external-executor-billing.md) — Reconciliation pattern, billing invariants
 - [Sandbox Scaling](../SANDBOX_SCALING.md) — Proxy architecture, threat model (pending migration)

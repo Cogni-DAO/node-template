@@ -403,7 +403,7 @@ volumes:
     # Add healthcheck once health endpoints exist
   ```
 - [ ] Add to production `docker-compose.yml` (when ready for deployment)
-- [ ] Add to CI/CD pipeline (see [CI/CD Services Roadmap](../../work/initiatives/ini.cicd-services-gitops.md)):
+- [ ] Add to CI/CD pipeline (see [CI/CD Services Roadmap](../../work/projects/proj.cicd-services-gitops.md)):
   - Build: `pnpm --filter @cogni/<name>-service build`
   - Test: `pnpm --filter @cogni/<name>-service test`
   - Docker build and push to GHCR with immutable SHA tags
@@ -416,7 +416,7 @@ volumes:
   - Environment variables
   - Health endpoints
   - Deployment notes
-- [ ] Update `docs/ENVIRONMENTS.md` with service env vars
+- [ ] Update `docs/spec/environments.md` with service env vars
 - [ ] Update the Existing Services table in [Services Architecture Spec](../spec/services-architecture.md)
 
 ## Verification
@@ -458,4 +458,4 @@ pnpm check
 
 - [Services Architecture Spec](../spec/services-architecture.md) — invariants, import boundaries, structure contracts
 - [Packages Architecture Spec](../spec/packages-architecture.md) — packages vs services distinction
-- [CI/CD & Services GitOps Initiative](../../work/initiatives/ini.cicd-services-gitops.md) — service build/deploy roadmap
+- [CI/CD & Services GitOps Project](../../work/projects/proj.cicd-services-gitops.md) — service build/deploy roadmap

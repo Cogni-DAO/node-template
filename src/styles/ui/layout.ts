@@ -8,7 +8,7 @@
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings; maintains responsive patterns.
  * Side-effects: none
  * Notes: Responsive variants follow mobile-first approach with consistent spacing scale.
- * Links: docs/UI_IMPLEMENTATION_GUIDE.md
+ * Links: docs/spec/ui-implementation.md
  * @public
  */
 

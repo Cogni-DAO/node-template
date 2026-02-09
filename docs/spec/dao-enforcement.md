@@ -193,7 +193,7 @@ As additional payment providers and on-chain verification (Ponder) are added:
 
 ## Open Questions
 
-_(none — on-chain reconciliation and multi-provider routing tracked in ini.payments-enhancements.md)_
+_(none — on-chain reconciliation and multi-provider routing tracked in proj.payments-enhancements.md)_
 
 ## Related
 

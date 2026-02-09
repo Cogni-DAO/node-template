@@ -2,7 +2,7 @@
 
 Phased approach to consolidate UI before locking it down. Don't lock down trash.
 
-**Read first**: `docs/UI_IMPLEMENTATION_GUIDE.md`
+**Read first**: `docs/spec/ui-implementation.md`
 
 ---
 
@@ -157,7 +157,7 @@ Phased approach to consolidate UI before locking it down. Don't lock down trash.
 
 | File                              | Purpose                                     |
 | --------------------------------- | ------------------------------------------- |
-| `docs/UI_IMPLEMENTATION_GUIDE.md` | The 5 rules, token system, quality gates    |
+| `docs/spec/ui-implementation.md`  | The 5 rules, token system, quality gates    |
 | `src/components/index.ts`         | Barrel exports (update after consolidation) |
 | `src/components/kit/`             | 20 components to audit                      |
 | `src/styles/ui/`                  | CVA factories (the styling API)             |
@@ -620,6 +620,6 @@ Capture at 3 viewports:
 
 ## References
 
-- [UI_IMPLEMENTATION_GUIDE.md](UI_IMPLEMENTATION_GUIDE.md) — Canonical UI reference
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Layer enforcement rules
+- [UI Implementation Guide](../spec/ui-implementation.md) — Canonical UI reference
+- [Architecture](../spec/architecture.md) — Layer enforcement rules
 - [ui-style-spec.json](ui-style-spec.json) — Machine-readable style spec

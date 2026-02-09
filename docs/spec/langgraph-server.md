@@ -198,7 +198,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 ### Current Scope Boundaries
 
-23. **NO_GDPR_DELETE_YET**: Current implementation does not provide compliant user data deletion. LangGraph checkpoint deletion tracked in [ini.langgraph-server-production](../../work/initiatives/ini.langgraph-server-production.md).
+23. **NO_GDPR_DELETE_YET**: Current implementation does not provide compliant user data deletion. LangGraph checkpoint deletion tracked in [proj.langgraph-server-production](../../work/projects/proj.langgraph-server-production.md).
 
 24. **DEV_TOOL_EVENT_STREAMING**: Dev adapter emits `tool_call_start`/`tool_call_result` events with chunk buffering. Accumulates `tool_call_chunks` by `(messageId, index)` until parseable. Buffer caps: 64KB args, 100 pending results.
 
@@ -473,7 +473,7 @@ packages/langgraph-server/                           ← Service that imports gr
 ## Non-Goals
 
 - Graph patterns and package structure — see [LangGraph Patterns spec](./langgraph-patterns.md)
-- Executor-agnostic billing and tracking — see [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
+- Executor-agnostic billing and tracking — see [Graph Execution](graph-execution.md)
 - Step-by-step setup instructions — see [LangGraph Server Setup guide](../guides/langgraph-server.md)
 
 ## Open Questions
@@ -484,8 +484,8 @@ _(none)_
 
 - [LangGraph Patterns spec](./langgraph-patterns.md) — Package structure, InProc execution, anti-patterns
 - [LangGraph Server Setup guide](../guides/langgraph-server.md) — Dev, container, and hosted setup steps
-- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — Billing idempotency, pump+fanout
+- [Graph Execution](graph-execution.md) — Billing idempotency, pump+fanout
 - [Usage History spec](./usage-history.md) — Artifact caching (executor-agnostic)
 - [AI Setup spec](./ai-setup.md) — Correlation IDs, telemetry
 - [External Executor Billing spec](./external-executor-billing.md) — Reconciliation pattern
-- [Initiative: LangGraph Server Production](../../work/initiatives/ini.langgraph-server-production.md) — Roadmap for production deployment + billing parity
+- [Project: LangGraph Server Production](../../work/projects/proj.langgraph-server-production.md) — Roadmap for production deployment + billing parity

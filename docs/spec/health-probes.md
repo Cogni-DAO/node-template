@@ -228,6 +228,6 @@ Enable separate health probe endpoints with:
 
 ## Related
 
-- [CI/CD & Services GitOps Initiative](../../work/initiatives/ini.cicd-services-gitops.md) — Health probe separation track
+- [CI/CD & Services GitOps Project](../../work/projects/proj.cicd-services-gitops.md) — Health probe separation track
 - [Check Full](./check-full.md) — CI-parity gate design
 - [Services Architecture](./services-architecture.md) — Service health endpoint contract

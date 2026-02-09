@@ -8,7 +8,7 @@
  * Invariants: 1 cent = 100,000 credits (CREDITS_PER_USD / 100); idempotent per clientPaymentId; validation on amountUsdCents.
  * Side-effects: none
  * Notes: Uses mocked AccountService with stub implementations.
- * Links: docs/DEPAY_PAYMENTS.md, src/features/payments/services/creditsConfirm.ts
+ * Links: docs/spec/payments-design.md, src/features/payments/services/creditsConfirm.ts
  * @public
  */
 

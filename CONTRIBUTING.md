@@ -78,7 +78,7 @@ pnpm db:setup:test          # Create test database + run migrations
 - Use Conventional Commit types: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`
 - Examples: `feat/ai-preview-health-checks`, `fix/litellm-config-bug`, `chore/ci-playwright-cache`
 
-**See [CI/CD Pipeline Flow](docs/CI-CD.md) for branch model details.**
+**See [CI/CD Pipeline Flow](docs/spec/ci-cd.md) for branch model details.**
 
 ## Code Style
 
