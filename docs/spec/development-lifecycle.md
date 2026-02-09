@@ -5,13 +5,13 @@ title: Development Lifecycle
 status: draft
 spec_state: proposed
 trust: draft
-summary: How specs, initiatives, and issues work together — from idea to merged code
+summary: How specs, projects, and items work together — from idea to merged code
 read_when: Starting a new feature, understanding how to write specs, or reviewing PRs
 implements: proj.development-workflows
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-06
-tags: [workflow, specs, initiatives]
+verified: 2026-02-09
+tags: [workflow, specs, projects]
 ---
 
 # Development Lifecycle
@@ -21,39 +21,39 @@ tags: [workflow, specs, initiatives]
 Developers need a clear workflow that separates:
 
 - **What we're building** (specs — as-built contracts)
-- **What we're planning** (initiatives — roadmaps, design intent)
-- **What we're doing now** (issues — PR-sized execution)
+- **What we're planning** (projects — roadmaps, design intent)
+- **What we're doing now** (items — PR-sized execution)
 
-Without this separation, specs become cluttered with roadmaps, or initiatives become mega-issues that rot.
+Without this separation, specs become cluttered with roadmaps, or projects become mega-tasks that rot.
 
 ## Goal
 
 A simple, enforceable workflow where:
 
 - **Specs** are as-built contract truth (no roadmaps/checklists)
-- **Initiatives** are pre-implementation planning (may exist before any code)
-- **Issues** are PR-sized execution
+- **Projects** are pre-implementation planning (may exist before any code)
+- **Items** are PR-sized execution
 - **Work drives change; specs record what IS**
 
 ## Non-Goals
 
 - Prescribing project management methodology
 - Defining Plane/GitHub integration details (see [docs-work-system.md](./docs-work-system.md))
-- Covering doc types beyond spec/initiative/issue
+- Covering doc types beyond spec/project/item
 
 ---
 
 ## Core Invariants
 
-1. **SPECS_ARE_AS_BUILT**: Specs describe current implementation only. Roadmaps and phases live in initiatives.
+1. **SPECS_ARE_AS_BUILT**: Specs describe current implementation only. Roadmaps and phases live in projects.
 
 2. **SPEC_STATE_LIFECYCLE**: Every spec has a `spec_state` field: `draft` → `proposed` → `active` → `deprecated`. No skipping states.
 
 3. **ACTIVE_MEANS_CLEAN**: When `spec_state: active`, the spec's "Open Questions" section must be empty.
 
-4. **PR_REFERENCES_REQUIRED**: Every code PR body must include `Work:` (issue ID). Behavior/security/interface changes also require `Spec:` link.
+4. **PR_REFERENCES_REQUIRED**: Every code PR body must include `Work:` (item ID, e.g. `task.0001`). Behavior/security/interface changes also require `Spec:` link.
 
-5. **INITIATIVES_BEFORE_CODE**: Initiatives may exist before any code. They hold the roadmap; specs are created when code merges.
+5. **PROJECTS_BEFORE_CODE**: Projects may exist before any code. They hold the roadmap; specs are created when code merges.
 
 ---
 
@@ -91,13 +91,13 @@ A simple, enforceable workflow where:
 ### Workflow: Idea → Merged Code
 
 ```
-1. CREATE INITIATIVE (optional for multi-PR work)
+1. CREATE PROJECT (optional for multi-PR work)
    └── /work/projects/proj.feature.md
        • Goal, crawl/walk/run roadmap
        • Constraints, dependencies
-       • Work items by phase
+       • Work items by ID
 
-2. CREATE ISSUE (PR-sized)
+2. CREATE ITEM (PR-sized)
    └── /work/items/task.0001.feature.md
        • Execution checklist
        • PR checklist (Work + Spec links)
@@ -105,7 +105,7 @@ A simple, enforceable workflow where:
 
 3. OPEN PR
    └── PR body includes:
-       Work: wi.feature-001
+       Work: task.0001
        Spec: docs/spec/feature.md#core-invariants (if exists)
 
 4. REVIEW + MERGE
@@ -122,12 +122,12 @@ A simple, enforceable workflow where:
 
 ### When to Create What
 
-| Situation                     | Action                                                |
-| ----------------------------- | ----------------------------------------------------- |
-| Small fix, no behavior change | Issue only. No spec or initiative needed.             |
-| Single PR, clear scope        | Issue + reference existing spec (or skip if trivial). |
-| Multi-PR effort               | Initiative + Issues. Create spec when code merges.    |
-| Architecture decision         | ADR in `docs/decisions/adr/`.                         |
+| Situation                     | Action                                               |
+| ----------------------------- | ---------------------------------------------------- |
+| Small fix, no behavior change | Item only. No spec or project needed.                |
+| Single PR, clear scope        | Item + reference existing spec (or skip if trivial). |
+| Multi-PR effort               | Project + Items. Create spec when code merges.       |
+| Architecture decision         | ADR in `docs/decisions/adr/`.                        |
 
 ### PR Body Format
 
@@ -136,7 +136,7 @@ Every code PR must include:
 ```markdown
 ## References
 
-Work: wi.feature-001
+Work: task.0001
 Spec: docs/spec/feature.md#core-invariants
 ```
 
@@ -155,9 +155,9 @@ Spec: docs/spec/feature.md#core-invariants
 
 **Manual (until automated):**
 
-1. Specs do not contain roadmaps or phases (those belong in initiatives)
+1. Specs do not contain roadmaps or phases (those belong in projects)
 2. When spec is marked `active`, Open Questions is empty
-3. PRs reference an issue
+3. PRs reference a work item
 
 ---
 
@@ -173,6 +173,7 @@ Spec: docs/spec/feature.md#core-invariants
 
 - [Docs + Work System](./docs-work-system.md) — document taxonomy
 - [Work Management Guide](../../work/README.md)
-- [Initiative Template](../../work/_templates/initiative.md)
-- [Issue Template](../../work/_templates/issue.md)
+- [Project Template](../../work/_templates/project.md)
+- [Charter Template](../../work/_templates/charter.md)
+- [Item Template](../../work/_templates/item.md)
 - [Spec Template](../_templates/spec.md)
