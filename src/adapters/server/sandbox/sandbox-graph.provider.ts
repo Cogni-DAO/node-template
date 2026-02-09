@@ -421,19 +421,24 @@ export class SandboxGraphProvider implements GraphProvider {
           "Sending agent call via gateway WS"
         );
 
-        // Send agent call via WS with outboundHeaders (set per-call, no separate patch needed)
-        const chatResult = await self.gatewayClient.chat({
+        // Run agent via gateway WS — yields typed events (per OpenClaw gateway protocol)
+        let content = "";
+        for await (const event of self.gatewayClient.runAgent({
           message: lastUserMsg?.content ?? "",
           sessionKey,
           outboundHeaders,
           timeoutMs: (agent.limits.maxRuntimeSec ?? 600) * 1000,
-        });
-
-        const content = chatResult.content;
-
-        // Emit response as text_delta
-        if (content) {
-          yield { type: "text_delta", delta: content };
+        })) {
+          switch (event.type) {
+            case "text_delta":
+              yield { type: "text_delta", delta: event.text };
+              break;
+            case "chat_final":
+              content = event.text;
+              break;
+            case "chat_error":
+              throw new Error(`Gateway agent error: ${event.message}`);
+          }
         }
 
         // Read billing entries from proxy audit log
