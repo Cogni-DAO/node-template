@@ -1,6 +1,7 @@
 ---
-work_item_id: ini.
-work_item_type: initiative
+id: proj.
+type: project
+primary_charter:
 title:
 state: Active
 priority: 1
@@ -13,25 +14,25 @@ updated:
 labels: []
 ---
 
-# [Initiative Title]
+# [Project Title]
 
 ## Goal
 
-What is this initiative trying to achieve? One paragraph.
+What is this project trying to achieve? One paragraph.
 
 ## Roadmap
 
-<!-- Each phase has a deliverable table with status, estimate, and optional work item link. -->
-<!-- A work item (wi.*) can appear in multiple deliverable rows — detail lives in the issue's Execution Checklist. -->
+<!-- Each phase has a deliverable table with status, estimate, and optional work item ID. -->
+<!-- Reference work items by ID only (e.g., task.0042), never by file path. -->
 
 ### Crawl (P0)
 
 **Goal:** Minimal viable implementation. What must work first?
 
-| Deliverable   | Status      | Est | Work Item                               |
-| ------------- | ----------- | --- | --------------------------------------- |
-| Deliverable 1 | Not Started | 2   | [wi.name-001](../issues/wi.name-001.md) |
-| Deliverable 2 | Not Started | 1   | —                                       |
+| Deliverable   | Status      | Est | Work Item |
+| ------------- | ----------- | --- | --------- |
+| Deliverable 1 | Not Started | 2   | task.0001 |
+| Deliverable 2 | Not Started | 1   | —         |
 
 ### Walk (P1)
 

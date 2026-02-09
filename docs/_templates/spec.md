@@ -92,4 +92,4 @@ How to adopt this spec if there's existing code/behavior to migrate.
 ## Related
 
 - [Related Spec](./related.md)
-- [Initiative](../../work/projects/proj.name.md)
+- [Project](../../work/projects/proj.name.md)
