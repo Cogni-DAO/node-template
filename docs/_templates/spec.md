@@ -18,10 +18,12 @@ tags: []
 
 > [One-line synopsis — what this system does and why it exists]
 
-|             |                                               |
-| ----------- | --------------------------------------------- |
-| **Project** | [proj.name](../../work/projects/proj.name.md) |
-| **Guide**   | [Guide Name](../guides/guide.md)              |
+### Key References
+
+|             |                                               |                          |
+| ----------- | --------------------------------------------- | ------------------------ |
+| **Project** | [proj.name](../../work/projects/proj.name.md) | Roadmap and planning     |
+| **Guide**   | [Guide Name](../guides/guide.md)              | Developer setup / how-to |
 
 ## Design
 
@@ -33,22 +35,6 @@ graph LR
 ```
 
 <!-- Or annotated ASCII for simpler flows -->
-
-### Schema
-
-<!-- Optional: database tables, API shapes, config schemas. Delete if not applicable. -->
-
-**Table:** `table_name`
-
-| Column       | Type | Constraints      | Description       |
-| ------------ | ---- | ---------------- | ----------------- |
-| `column_one` | type | NOT NULL, UNIQUE | Brief description |
-
-### File Pointers
-
-| File                  | Purpose           |
-| --------------------- | ----------------- |
-| `src/path/to/file.ts` | Brief description |
 
 ## Goal
 
@@ -66,6 +52,22 @@ One paragraph: what this spec enables when implemented.
 | Rule           | Constraint                            |
 | -------------- | ------------------------------------- |
 | INVARIANT_NAME | What must always be true, in one line |
+
+### Schema
+
+<!-- Optional: database tables, API shapes, config schemas. Delete if not applicable. -->
+
+**Table:** `table_name`
+
+| Column       | Type | Constraints      | Description       |
+| ------------ | ---- | ---------------- | ----------------- |
+| `column_one` | type | NOT NULL, UNIQUE | Brief description |
+
+### File Pointers
+
+| File                  | Purpose           |
+| --------------------- | ----------------- |
+| `src/path/to/file.ts` | Brief description |
 
 ## Open Questions
 

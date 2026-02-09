@@ -31,15 +31,17 @@ Build the tooling infrastructure that enforces our docs + work system:
 
 **Goal:** Standardize identifiers, headings, and enforceability before integrating external tools.
 
-| Deliverable                                                    | Status      | Est | Work Item |
-| -------------------------------------------------------------- | ----------- | --- | --------- |
-| Templates finalized (spec, guide, decision, initiative, issue) | Done        | 1   | task.0001 |
-| Classify all 97 legacy docs                                    | Done        | 2   | task.0001 |
-| Migrate legacy docs to typed directories                       | Not Started | 4   | task.0001 |
-| CI check: required frontmatter props                           | Done        | 1   | task.0001 |
-| CI check: IDs unique + type↔dir match                         | Done        | 1   | task.0001 |
-| CI check: `spec_state` validation                              | Not Started | 1   | —         |
-| CI check: stable headings for specs                            | Not Started | 1   | —         |
+| Deliverable                                                        | Status      | Est | Work Item |
+| ------------------------------------------------------------------ | ----------- | --- | --------- |
+| Templates finalized (spec, project, charter, item)                 | Done        | 1   | task.0001 |
+| Classify all 97 legacy docs                                        | Done        | 2   | task.0001 |
+| Migrate legacy docs to typed directories                           | Not Started | 4   | task.0001 |
+| CI check: required frontmatter props                               | Done        | 1   | task.0001 |
+| CI check: IDs unique + type↔dir match                             | Done        | 1   | task.0001 |
+| CI check: `spec_state` validation                                  | Not Started | 1   | —         |
+| CI check: stable headings for specs                                | Done        | 1   | —         |
+| Migrate all specs to new template (design-first, table invariants) | Not Started | 3   | —         |
+| Harden validator: enforce new spec heading order                   | Not Started | 1   | —         |
 
 ### Walk (P1) — MkDocs + Repo Separation
 
@@ -149,14 +151,14 @@ Use Dolt as branchable, decentralized Postgres-compatible store for knowledge/ta
 
 ### P0 Checks (Current Focus)
 
-| Check                                                                 | Script                               | Failure Mode  |
-| --------------------------------------------------------------------- | ------------------------------------ | ------------- |
-| Required YAML frontmatter properties                                  | `scripts/validate-docs-metadata.mjs` | Merge blocked |
-| `spec_state` field validation                                         | Extend validator                     | Merge blocked |
-| Stable headings (Context/Goal/Non-Goals/Invariants/Design/Acceptance) | Extend validator                     | Merge blocked |
-| Unique `id` values                                                    | Existing validator                   | Merge blocked |
-| Type matches directory                                                | Extend validator                     | Merge blocked |
-| Valid arrays in tags/labels fields                                    | Existing validator                   | Merge blocked |
+| Check                                              | Script                               | Failure Mode  |
+| -------------------------------------------------- | ------------------------------------ | ------------- |
+| Required YAML frontmatter properties               | `scripts/validate-docs-metadata.mjs` | Merge blocked |
+| `spec_state` field validation                      | Extend validator                     | Merge blocked |
+| Stable headings (Design/Goal/Non-Goals/Invariants) | `scripts/validate-docs-metadata.mjs` | Merge blocked |
+| Unique `id` values                                 | Existing validator                   | Merge blocked |
+| Type matches directory                             | Extend validator                     | Merge blocked |
+| Valid arrays in tags/labels fields                 | Existing validator                   | Merge blocked |
 
 ### P2 Checks (With Plane)
 
