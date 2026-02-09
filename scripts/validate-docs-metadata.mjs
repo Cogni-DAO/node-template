@@ -375,6 +375,13 @@ function validateItem(file, props, content, allIds, projectIds) {
     }
   }
 
+  // branch field (optional) must be non-empty string when present
+  if (props.branch !== undefined && props.branch !== null) {
+    if (typeof props.branch !== "string" || props.branch.trim() === "") {
+      errors.push(`branch must be a non-empty string when present`);
+    }
+  }
+
   // project field (optional) must reference proj.*
   if (props.project) {
     const proj = String(props.project);

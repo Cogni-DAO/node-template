@@ -100,6 +100,7 @@ spec_refs: sandboxed-agents
 assignees: derekg1729
 credit:
 project: proj.sandboxed-agents
+branch:
 pr:
 reviewer:
 created: 2026-02-09
@@ -144,6 +145,7 @@ external_refs:
 | `assignees`     | Yes         | CSV of handles                              |
 | `credit`        | No          | Attribution for contributors                |
 | `project`       | No          | `proj.{slug}` parent (optional)             |
+| `branch`        | No          | Git branch name for this work               |
 | `pr`            | Before Done | PR number/URL                               |
 | `reviewer`      | Before Done | Review assignee                             |
 | `created`       | Yes         | YYYY-MM-DD                                  |

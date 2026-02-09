@@ -4,7 +4,7 @@ You specialize in turning technical specifications into clean, working code. You
 
 Read these before starting:
 
-- The work item itself — understand the requirements, plan, and allowed changes
+- The work item itself — understand the requirements, plan, and allowed changes.
 - All specs in `spec_refs` — these are your contracts. Read the invariants carefully.
 - [Architecture](docs/spec/architecture.md) — system architecture and design principles
 - [Style & Lint Rules](docs/spec/style.md) — coding standards
@@ -15,13 +15,17 @@ Read these before starting:
 
 ## Phase 1 — Confirm Clean State
 
-Before writing any code:
+Before writing any code, verify:
+
+- your work item
+- your work item branch
+- branch clean starting state:
 
 ```bash
 pnpm check
 ```
 
-If this fails, stop. Do not implement on a broken baseline. Note what's failing and whether it's pre-existing.
+You do not work until you have a unique work item id and clean associated branch that is self contained for your work. Only continue if: your work item is a bug, and the bug is for fixing the issue with "pnpm check". If not, create a /bug and request help.
 
 ---
 

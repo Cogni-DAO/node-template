@@ -11,6 +11,7 @@ spec_refs: spec-project-lifecycle, docs-work-system-spec
 assignees: derekg1729
 credit:
 project: proj.docs-system-infrastructure
+branch:
 pr:
 reviewer:
 created: 2026-02-05
