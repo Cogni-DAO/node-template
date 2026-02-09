@@ -41,26 +41,32 @@ These workflows should **persist and adapt** as the underlying infrastructure ch
 | Document agent operating model in AGENTS.md | Not Started | 2   | wi.document-agent-workflow |
 | Document trust handling rules in AGENTS.md  | Not Started | 1   | wi.document-trust-handling |
 
-### Walk (P1) — Enforce via CI + Templates
+### Walk (P1) — Review Gates + Quality Pipeline
 
-**Goal:** Templates and CI enforce the documented conventions.
+**Goal:** Review commands, prompt quality, and design-to-validation traceability.
 
-| Deliverable                                | Status      | Est | Work Item            |
-| ------------------------------------------ | ----------- | --- | -------------------- |
-| Templates enforce required sections        | Not Started | 2   | (create at P1 start) |
-| CI warns on missing PR linkage             | Not Started | 2   | (create at P1 start) |
-| Agent prompts reference workflow docs      | Not Started | 1   | (create at P1 start) |
-| GitHub PR template with Work + Spec fields | Not Started | 1   | wi.pr-template       |
+| Deliverable                                                       | Status      | Est | Work Item            |
+| ----------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Review commands (`/review-design`, `/review-implementation`)      | Done        | 2   | —                    |
+| PR review hard-requires linked work item ID for systematic review | Not Started | 1   | (create at P1 start) |
+| Audit and improve agent command prompts                           | Not Started | 2   | (create at P1 start) |
+| Agent perf evaluation: compare outputs vs prompt expectations     | Not Started | 3   | (create at P1 start) |
+| Iterative prompt refinement loop (eval → adjust → re-eval)        | Not Started | 2   | (create at P1 start) |
+| Design-to-validation pipeline: spec invariants → e2e test cases   | Not Started | 3   | (create at P1 start) |
+| Functional requirements traceability: spec → test → CI gate       | Not Started | 2   | (create at P1 start) |
 
-### Run (P2) — Full Enforcement
+### Run (P2) — Full CI Enforcement + External Integrations
 
 **Goal:** CI blocks non-compliant PRs; agents use Plane directly.
 
-| Deliverable                             | Status      | Est | Work Item            |
-| --------------------------------------- | ----------- | --- | -------------------- |
-| CI blocks PRs missing Work + Spec links | Not Started | 2   | (create at P2 start) |
-| Agents query Plane directly (via MCP)   | Not Started | 3   | (create at P2 start) |
-| Trust levels enforced in agent prompts  | Not Started | 1   | (create at P2 start) |
+| Deliverable                                | Status      | Est | Work Item            |
+| ------------------------------------------ | ----------- | --- | -------------------- |
+| Templates enforce required sections        | Not Started | 2   | (create at P2 start) |
+| CI blocks PRs missing Work + Spec links    | Not Started | 2   | (create at P2 start) |
+| GitHub PR template with Work + Spec fields | Not Started | 1   | (create at P2 start) |
+| CI warns on missing PR linkage             | Not Started | 2   | (create at P2 start) |
+| Agents query Plane directly (via MCP)      | Not Started | 3   | (create at P2 start) |
+| Trust levels enforced in agent prompts     | Not Started | 1   | (create at P2 start) |
 
 ## Core Invariants
 
@@ -71,7 +77,7 @@ These invariants define how work flows through the system:
 | **INV-DOCS-CANONICAL-001**   | Canonical docs live in `/docs`; future `cogni-knowledge` repo will be pinned via git submodule                 | CI: submodule SHA must advance atomically with referencing code |
 | **INV-PR-LINKAGE-001**       | Code PRs must reference a Work Item; behavior/security/interface changes also require Spec link                | CI: PR body parser + merge gate (P2)                            |
 | **INV-WORK-CANONICAL-001**   | Plane is source-of-truth for work state; `/work` markdown is export-only (read-only mirror)                    | CI: reject direct `/work` edits after Plane cutover (P2+)       |
-| **INV-SPEC-SCOPE-001**       | Specs must contain required headings: Context, Goal, Non-Goals, Core Invariants, Design, Acceptance Checks     | CI: heading validator script                                    |
+| **INV-SPEC-SCOPE-001**       | Specs must contain required headings: Design, Goal, Non-Goals, Invariants                                      | CI: heading validator script                                    |
 | **INV-AGENT-ENTRYPOINT-001** | Agents start from Work Item → resolve linked Spec(s) → verify acceptance checks → act                          | Agent workflow (documented below)                               |
 | **INV-TRUST-001**            | `trust: external` is non-instructional for agents; agents require corroboration against canonical docs or code | Agent prompt guards                                             |
 
@@ -169,7 +175,7 @@ Spec: docs/spec/feature.md#core-invariants
 | `active`     | Implemented and enforced. Matches code.    | Open Questions empty. `verified:` date current.       |
 | `deprecated` | No longer authoritative.                   | Points to replacement spec.                           |
 
-**Key rule:** Specs describe what IS (as-built), not what WILL BE (roadmaps live in initiatives).
+**Key rule:** Specs describe what IS (as-built), not what WILL BE (roadmaps live in projects).
 
 ## Required Headings for Specs
 
