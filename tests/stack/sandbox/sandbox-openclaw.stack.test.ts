@@ -20,7 +20,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 15_000 });
 
 import { LlmProxyManager } from "@/adapters/server/sandbox";
-import { OpenClawGatewayClient } from "@/adapters/server/sandbox/openclaw-gateway-client";
+import {
+  type GatewayAgentEvent,
+  OpenClawGatewayClient,
+} from "@/adapters/server/sandbox/openclaw-gateway-client";
 import { ProxyBillingReader } from "@/adapters/server/sandbox/proxy-billing-reader";
 
 const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL ?? "http://127.0.0.1:3333";
@@ -31,6 +34,17 @@ const PROXY_CONTAINER = "llm-proxy-openclaw";
 
 function uniqueRunId(prefix = "gw-test"): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Collect all events from a gateway agent run into an array. */
+async function collectEvents(
+  gen: AsyncGenerator<GatewayAgentEvent>
+): Promise<GatewayAgentEvent[]> {
+  const events: GatewayAgentEvent[] = [];
+  for await (const event of gen) {
+    events.push(event);
+  }
+  return events;
 }
 
 /** Check if a container exists and is running */
@@ -90,23 +104,29 @@ describe("OpenClaw Gateway Full-Stack", () => {
     const runId = uniqueRunId();
     const sessionKey = `agent:main:test-billing:${runId}`;
 
-    // Send agent call with outboundHeaders for billing
-    const result = await client.chat({
-      message: 'Say "hello from gateway" and nothing else.',
-      sessionKey,
-      outboundHeaders: {
-        "x-litellm-end-user-id": "test-billing",
-        "x-litellm-spend-logs-metadata": JSON.stringify({
-          run_id: runId,
-          graph_id: "sandbox:openclaw",
-        }),
-        "x-cogni-run-id": runId,
-      },
-      timeoutMs: 45_000,
-    });
+    // Run agent and collect typed events
+    const events = await collectEvents(
+      client.runAgent({
+        message: 'Say "hello from gateway" and nothing else.',
+        sessionKey,
+        outboundHeaders: {
+          "x-litellm-end-user-id": "test-billing",
+          "x-litellm-spend-logs-metadata": JSON.stringify({
+            run_id: runId,
+            graph_id: "sandbox:openclaw",
+          }),
+          "x-cogni-run-id": runId,
+        },
+        timeoutMs: 45_000,
+      })
+    );
 
-    expect(result.content).toBeTruthy();
-    expect(result.content.length).toBeGreaterThan(0);
+    // Must receive chat_final with real text content
+    const chatFinal = events.find((e) => e.type === "chat_final");
+    expect(chatFinal).toBeDefined();
+    expect(chatFinal?.text.length).toBeGreaterThan(0);
+    // Content must NOT be the stringified ACK payload
+    expect(chatFinal?.text).not.toMatch(/"status"\s*:\s*"accepted"/);
   });
 
   it("billing entries appear in proxy audit log after call", async () => {
@@ -115,20 +135,22 @@ describe("OpenClaw Gateway Full-Stack", () => {
     const runId = uniqueRunId("billing");
     const sessionKey = `agent:main:test-billing:${runId}`;
 
-    // Send agent call with billing headers
-    await client.chat({
-      message: "Hello",
-      sessionKey,
-      outboundHeaders: {
-        "x-litellm-end-user-id": "test-billing",
-        "x-litellm-spend-logs-metadata": JSON.stringify({
-          run_id: runId,
-          graph_id: "sandbox:openclaw",
-        }),
-        "x-cogni-run-id": runId,
-      },
-      timeoutMs: 45_000,
-    });
+    // Run agent call (drain all events)
+    await collectEvents(
+      client.runAgent({
+        message: "Hello",
+        sessionKey,
+        outboundHeaders: {
+          "x-litellm-end-user-id": "test-billing",
+          "x-litellm-spend-logs-metadata": JSON.stringify({
+            run_id: runId,
+            graph_id: "sandbox:openclaw",
+          }),
+          "x-cogni-run-id": runId,
+        },
+        timeoutMs: 45_000,
+      })
+    );
 
     // Wait for audit log flush
     await new Promise((r) => setTimeout(r, 1000));
