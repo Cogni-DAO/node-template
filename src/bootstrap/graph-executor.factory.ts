@@ -71,7 +71,11 @@ export function createGraphExecutor(
   const env = serverEnv();
   const providers: GraphProvider[] = [
     langGraphProvider,
-    new LazySandboxGraphProvider(env.LITELLM_MASTER_KEY),
+    new LazySandboxGraphProvider(
+      env.LITELLM_MASTER_KEY,
+      env.OPENCLAW_GATEWAY_URL,
+      env.OPENCLAW_GATEWAY_TOKEN
+    ),
   ];
 
   // Create aggregating executor with all configured providers
@@ -122,12 +126,42 @@ function createDevProvider(apiUrl: string): LangGraphDevProvider {
 /** Module-scoped singleton: caches the dynamic import + provider construction */
 let _sandboxProvider: Promise<GraphProvider> | null = null;
 
-function loadSandboxProvider(litellmMasterKey: string): Promise<GraphProvider> {
+function loadSandboxProvider(
+  litellmMasterKey: string,
+  gatewayUrl: string,
+  gatewayToken: string
+): Promise<GraphProvider> {
   if (!_sandboxProvider) {
-    _sandboxProvider = import("@/adapters/server/sandbox").then(
-      ({ SandboxRunnerAdapter, SandboxGraphProvider }) => {
+    _sandboxProvider = Promise.all([
+      import("@/adapters/server/sandbox"),
+      import("dockerode"),
+    ]).then(
+      ([
+        {
+          SandboxRunnerAdapter,
+          SandboxGraphProvider,
+          OpenClawGatewayClient,
+          ProxyBillingReader,
+        },
+        DockerModule,
+      ]) => {
         const runner = new SandboxRunnerAdapter({ litellmMasterKey });
-        return new SandboxGraphProvider(runner) as GraphProvider;
+
+        // Gateway client + billing reader for OpenClaw gateway mode
+        const gatewayClient = new OpenClawGatewayClient(
+          gatewayUrl,
+          gatewayToken
+        );
+        const billingReader = new ProxyBillingReader(
+          new DockerModule.default(),
+          "llm-proxy-openclaw"
+        );
+
+        return new SandboxGraphProvider(
+          runner,
+          gatewayClient,
+          billingReader
+        ) as GraphProvider;
       }
     );
   }
@@ -148,8 +182,16 @@ class LazySandboxGraphProvider implements GraphProvider {
   readonly providerId = "sandbox";
   private readonly delegate: Promise<GraphProvider>;
 
-  constructor(litellmMasterKey: string) {
-    this.delegate = loadSandboxProvider(litellmMasterKey);
+  constructor(
+    litellmMasterKey: string,
+    gatewayUrl: string,
+    gatewayToken: string
+  ) {
+    this.delegate = loadSandboxProvider(
+      litellmMasterKey,
+      gatewayUrl,
+      gatewayToken
+    );
   }
 
   canHandle(graphId: string): boolean {
