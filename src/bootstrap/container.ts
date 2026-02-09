@@ -31,9 +31,7 @@ import {
   EvmRpcOnChainVerifierAdapter,
   getAppDb,
   LangfuseAdapter,
-  LiteLlmActivityUsageAdapter,
   LiteLlmAdapter,
-  LiteLlmUsageServiceAdapter,
   type MimirAdapterConfig,
   MimirMetricsAdapter,
   SystemClock,
@@ -77,9 +75,6 @@ import type {
   ScheduleUserPort,
   ServiceAccountService,
   TreasuryReadPort,
-  UsageLogEntry,
-  UsageLogsByRangeParams,
-  UsageService,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
@@ -102,7 +97,6 @@ export interface Container {
   llmService: LlmService;
   accountsForUser(userId: UserId): AccountService;
   serviceAccountService: ServiceAccountService;
-  usageService: UsageService;
   clock: Clock;
   paymentAttemptsForUser(userId: UserId): PaymentAttemptUserRepository;
   paymentAttemptServiceRepository: PaymentAttemptServiceRepository;
@@ -143,14 +137,10 @@ export type AiAdapterDeps = {
 
 /**
  * Activity dashboard dependencies.
- * Note: usageService requires listUsageLogsByRange (only on LiteLlmUsageServiceAdapter, not general UsageService).
+ * Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH: charge_receipts is primary data source.
+ * LLM detail (model/tokens) fetched via listLlmChargeDetails, merged in facade.
  */
 export type ActivityDeps = {
-  usageService: UsageService & {
-    listUsageLogsByRange(
-      params: UsageLogsByRangeParams
-    ): Promise<{ logs: UsageLogEntry[] }>;
-  };
   accountService: AccountService;
 };
 
@@ -247,11 +237,6 @@ function createContainer(): Container {
   const serviceAccountService = new ServiceDrizzleAccountService(
     getServiceDb()
   );
-  // UsageService: P1 - LiteLLM is canonical usage log source for Activity (no fallback)
-  const usageService = new LiteLlmUsageServiceAdapter(
-    new LiteLlmActivityUsageAdapter()
-  );
-
   // TreasuryReadPort: always uses ViemTreasuryAdapter (no test fake needed - mocked at port level in tests)
   const treasuryReadPort = new ViemTreasuryAdapter(evmOnchainClient);
 
@@ -360,7 +345,6 @@ function createContainer(): Container {
     accountsForUser: (userId: UserId) =>
       new UserDrizzleAccountService(db, userId),
     serviceAccountService,
-    usageService,
     clock,
     paymentAttemptsForUser: (userId: UserId) =>
       new UserDrizzlePaymentAttemptRepository(db, userId),
@@ -402,7 +386,6 @@ export function resolveAiAdapterDeps(userId: UserId): AiAdapterDeps {
 export function resolveActivityDeps(userId: UserId): ActivityDeps {
   const container = getContainer();
   return {
-    usageService: container.usageService as ActivityDeps["usageService"],
     accountService: container.accountsForUser(userId),
   };
 }

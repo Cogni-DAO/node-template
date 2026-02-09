@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-05
+- **Last reviewed:** 2026-02-08
 - **Status:** draft
 
 ## Purpose
 
-PostgreSQL implementations of account service ports for credit accounting and charge receipt recording. Per [Activity Metrics](../../../../docs/spec/activity-metrics.md), LiteLLM is canonical for telemetry; we store minimal charge receipts.
+PostgreSQL implementations of account service ports for credit accounting and charge receipt recording. Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH, charge_receipts + llm_charge_details is the primary data source for Activity dashboard.
 
 ## Pointers
 
@@ -38,13 +38,13 @@ PostgreSQL implementations of account service ports for credit accounting and ch
 ## Ports (optional)
 
 - **Uses ports:** none
-- **Implements ports:** AccountService, ServiceAccountService
+- **Implements ports:** AccountService (includes listLlmChargeDetails), ServiceAccountService
 - **Contracts (required if implementing):** AccountService contract tests pending
 
 ## Responsibilities
 
-- This directory **does**: Implement AccountService using PostgreSQL via Drizzle ORM; atomic recordChargeReceipt (idempotent, non-blocking per ACTIVITY_METRICS.md); virtual key provisioning via LiteLLM API
-- This directory **does not**: Handle business logic or authentication; compute pricing (uses pre-calculated values from features layer); store model/tokens (LiteLLM is canonical)
+- This directory **does**: Implement AccountService using PostgreSQL via Drizzle ORM; atomic recordChargeReceipt with optional llmDetail insert into llm_charge_details (idempotent, non-blocking); listLlmChargeDetails for Activity dashboard enrichment; virtual key provisioning via LiteLLM API
+- This directory **does not**: Handle business logic or authentication; compute pricing (uses pre-calculated values from features layer)
 
 ## Usage
 
@@ -76,4 +76,5 @@ pnpm test tests/integration/
 - Implements ledger-based accounting with computed balance cache
 - Transaction semantics critical for credit integrity
 - recordChargeReceipt is idempotent (request_id as unique key) and non-blocking (never throws InsufficientCredits post-call)
-- charge_receipts stores minimal charge receipt fields; telemetry lives in LiteLLM
+- llm_charge_details stores model/tokens/provider/latency/graphId; 1:1 with charge_receipts via PK/FK cascade
+- charge_receipts.receipt_kind distinguishes receipt types (e.g. "llm")

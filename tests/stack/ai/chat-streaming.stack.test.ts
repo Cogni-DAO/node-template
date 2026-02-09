@@ -124,9 +124,6 @@ describe("Chat Streaming", () => {
       expect((delta.value as string).length).toBeGreaterThan(0);
     }
 
-    // DEBUG: Log all events to understand what we're receiving
-    console.log("DEBUG: Collected events:", JSON.stringify(events, null, 2));
-
     // Assert - Received finish message event at the end
     const finished = events.find((e) => isFinishMessageEvent(e));
     expect(finished).toBeDefined();

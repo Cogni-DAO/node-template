@@ -54,8 +54,12 @@ export async function initOtelSdk(options?: {
     await sdk.start();
 
     // Log successful initialization (console since Pino may not be ready)
-    // biome-ignore lint/suspicious/noConsole: OTel init happens before logging is available
-    console.log("[instrumentation] OTel SDK started successfully");
+    // Suppress in test mode to avoid spamming per-fork output
+    // biome-ignore lint/style/noProcessEnv: APP_ENV check for test silence
+    if (process.env.APP_ENV !== "test") {
+      // biome-ignore lint/suspicious/noConsole: OTel init happens before logging is available
+      console.log("[instrumentation] OTel SDK started successfully");
+    }
     return true;
   } catch (error) {
     // biome-ignore lint/style/noProcessEnv: NODE_ENV is standard Next.js runtime env

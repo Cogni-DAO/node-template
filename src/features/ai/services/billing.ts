@@ -17,6 +17,7 @@
  * @public
  */
 
+import type { GraphId } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import type { AccountService } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
@@ -44,6 +45,7 @@ export interface BillingContext {
   readonly providerCostUsd: number | undefined;
   readonly litellmCallId: string | undefined;
   readonly provenance: "response" | "stream";
+  readonly graphId: GraphId;
 }
 
 /**
@@ -79,6 +81,7 @@ export async function recordBilling(
     providerCostUsd,
     litellmCallId,
     provenance,
+    graphId,
   } = context;
 
   try {
@@ -134,6 +137,16 @@ export async function recordBilling(
       chargeReason: "llm_usage",
       sourceSystem: "litellm",
       sourceReference,
+      receiptKind: "llm",
+      llmDetail: {
+        providerCallId: litellmCallId ?? null,
+        model,
+        provider: null, // Not available in BillingContext
+        tokensIn: null, // Not available in BillingContext
+        tokensOut: null, // Not available in BillingContext
+        latencyMs: null,
+        graphId,
+      },
     });
   } catch (error) {
     // Post-call billing is best-effort - NEVER block user response
@@ -260,6 +273,16 @@ export async function commitUsageFact(
       chargeReason: "llm_usage",
       sourceSystem: source,
       sourceReference,
+      receiptKind: "llm",
+      llmDetail: {
+        providerCallId: fact.usageUnitId ?? null,
+        model,
+        provider: fact.provider ?? null,
+        tokensIn: fact.inputTokens ?? null,
+        tokensOut: fact.outputTokens ?? null,
+        latencyMs: null, // Not available in UsageFact
+        graphId: fact.graphId,
+      },
     });
 
     // Log billing commit complete (success path)
