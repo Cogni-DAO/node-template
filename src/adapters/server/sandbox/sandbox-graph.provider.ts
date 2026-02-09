@@ -105,9 +105,8 @@ const SANDBOX_AGENTS: Record<string, SandboxAgentEntry> = {
     limits: { maxRuntimeSec: 120, maxMemoryMb: 512 },
   },
   openclaw: {
-    name: "OpenClaw Agent",
-    description:
-      "OpenClaw multi-call agent via gateway (shared internal service, concurrent sessions, LLM via proxy)",
+    name: "OpenClaw",
+    description: "Community-accessible OpenClaw container agent",
     image: "openclaw-outbound-headers:latest",
     argv: [],
     limits: { maxRuntimeSec: 600, maxMemoryMb: 1024 },
