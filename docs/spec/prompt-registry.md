@@ -7,7 +7,7 @@ spec_state: draft
 trust: draft
 summary: PromptRegistryPort with Langfuse adapter, prefetch injection into graph context, label-based rollout, and in-repo fallback.
 read_when: You are implementing or modifying prompt management, adding new prompts, or changing the prompt injection architecture.
-implements: ini.prompt-registry
+implements: proj.prompt-registry
 owner: derekg1729
 created: 2026-02-07
 verified: 2026-02-07
@@ -312,6 +312,6 @@ Callers (`LangGraphInProcProvider`, `message-preparation.ts`) resolve the label 
 
 ## Related
 
-- [Initiative: ini.prompt-registry](../../work/initiatives/ini.prompt-registry.md)
+- [Project: proj.prompt-registry](../../work/projects/proj.prompt-registry.md)
 - [ai-setup.md](./ai-setup.md) — Langfuse integration
 - [ai-evals.md](./ai-evals.md) — eval harness that may use prompt variants

@@ -241,12 +241,12 @@ Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<
 
 **Goal:** Add external execution adapters for Claude Agent SDK, n8n, and future engines.
 
-| Deliverable                                                                                   | Status      | Est | Work Item            |
-| --------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Claude Agent SDK Adapter (see [ini.claude-sdk-adapter.md](ini.claude-sdk-adapter.md))         | Not Started | 5   | (create at P2 start) |
-| n8n Workflow Adapter (see [ini.n8n-integration.md](ini.n8n-integration.md))                   | Not Started | 5   | (create at P2 start) |
-| OpenClaw/Clawdbot Adapter (superseded by ini.sandboxed-agents.md; original: Clawdbot/Moltbot) | Superseded  | —   | —                    |
-| Future external adapters (Flowise/custom) — build only if demand materializes                 | Not Started | —   | (create if needed)   |
+| Deliverable                                                                                    | Status      | Est | Work Item            |
+| ---------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Claude Agent SDK Adapter (see [proj.claude-sdk-adapter.md](proj.claude-sdk-adapter.md))        | Not Started | 5   | (create at P2 start) |
+| n8n Workflow Adapter (see [proj.n8n-integration.md](proj.n8n-integration.md))                  | Not Started | 5   | (create at P2 start) |
+| OpenClaw/Clawdbot Adapter (superseded by proj.sandboxed-agents.md; original: Clawdbot/Moltbot) | Superseded  | —   | —                    |
+| Future external adapters (Flowise/custom) — build only if demand materializes                  | Not Started | —   | (create if needed)   |
 
 **P2 Adapter Checklists (from source):**
 
@@ -275,7 +275,7 @@ Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<
 - [ ] Privileged integrations via Cogni bridge tool (toolRunner.exec)
 - [ ] Reconcile billing via LiteLLM spend logs (end_user correlation)
 
-> Note: Clawdbot/Moltbot adapter has been superseded by the OpenClaw sandbox integration. See [openclaw-sandbox-spec.md](../../docs/spec/openclaw-sandbox-spec.md) and [ini.sandboxed-agents.md](ini.sandboxed-agents.md). These checklist items are preserved for NO_DATA_LOSS but should be considered historical.
+> Note: Clawdbot/Moltbot adapter has been superseded by the OpenClaw sandbox integration. See [openclaw-sandbox-spec.md](../../docs/spec/openclaw-sandbox-spec.md) and [proj.sandboxed-agents.md](proj.sandboxed-agents.md). These checklist items are preserved for NO_DATA_LOSS but should be considered historical.
 
 ### Known Issues & Risk Flags
 

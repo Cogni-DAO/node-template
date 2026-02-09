@@ -26,7 +26,7 @@ tags: [work, meta]
 
 ## Work Item Types
 
-### initiative (`ini.*`)
+### project (`proj.*`)
 
 Roadmap and phased plan for a multi-PR effort. **May exist before any code.**
 
@@ -42,7 +42,7 @@ Contains: Execution checklist, PR checklist, validation commands.
 
 ```yaml
 ---
-work_item_id: ini.sandbox-runtime
+work_item_id: proj.sandbox-runtime
 work_item_type: initiative
 title: Sandboxed Agent Runtime
 state: Active
@@ -62,7 +62,7 @@ labels: [security, ai]
 
 | Field            | Req | Description                   |
 | ---------------- | --- | ----------------------------- |
-| `work_item_id`   | Yes | `ini.{name}` immutable        |
+| `work_item_id`   | Yes | `proj.{name}` immutable       |
 | `work_item_type` | Yes | `initiative`                  |
 | `title`          | Yes | Human readable                |
 | `state`          | Yes | Active, Paused, Done, Dropped |
@@ -83,7 +83,7 @@ labels: [security, ai]
 | `priority`       | Yes | Urgent, High, Medium, Low, None             |
 | `summary`        | Yes | What needs to be done?                      |
 | `outcome`        | Yes | What is the deliverable?                    |
-| `initiative`     | No  | `ini.{name}` parent (optional)              |
+| `initiative`     | No  | `proj.{name}` parent (optional)             |
 | `spec_refs`      | No  | Links to relevant specs                     |
 | `assignees`      | Yes | CSV of handles                              |
 | `created`        | Yes | YYYY-MM-DD                                  |

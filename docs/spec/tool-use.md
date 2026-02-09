@@ -28,7 +28,7 @@ Define the tool execution invariants, semantic types, wire format adapters, poli
 
 ## Non-Goals
 
-- MCP gateway integration (future — see [ini.tool-use-evolution](../../work/initiatives/ini.tool-use-evolution.md) P2)
+- MCP gateway integration (future — see [proj.tool-use-evolution](../../work/projects/proj.tool-use-evolution.md) P2)
 - Graph-as-Tool subagents (future — see initiative P3)
 - Multi-tool parallel execution (future — see initiative PX)
 
@@ -515,4 +515,4 @@ When `toolCall.function.arguments` is invalid JSON:
 - [langgraph-patterns.md](./langgraph-patterns.md) — Architecture, anti-patterns
 - [Graph Execution](graph-execution.md) — GraphExecutorPort, billing, pump+fanout
 - [tenant-connections.md](./tenant-connections.md) — Authenticated tool connections
-- [Initiative: Tool Use Evolution](../../work/initiatives/ini.tool-use-evolution.md)
+- [Project: Tool Use Evolution](../../work/projects/proj.tool-use-evolution.md)

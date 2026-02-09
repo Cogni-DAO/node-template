@@ -467,4 +467,4 @@ export async function getCheckpointer(): Promise<PostgresSaver> {
 - [LangGraph Patterns](./langgraph-patterns.md) — Graph patterns, compiled exports
 - [Tool Use](./tool-use.md) — Tool execution (may be used in HIL graphs)
 - [Usage History](./usage-history.md) — Artifact persistence (parallel to HIL state)
-- [HIL Graphs Initiative](../../work/initiatives/ini.hil-graphs.md)
+- [HIL Graphs Project](../../work/projects/proj.hil-graphs.md)

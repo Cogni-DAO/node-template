@@ -349,4 +349,4 @@ tags: [scheduler]
 
 ## Related
 
-- [Scheduler Evolution Initiative](../../work/initiatives/ini.scheduler-evolution.md) — Roadmap, implementation checklists, P2/P3 plans
+- [Scheduler Evolution Project](../../work/projects/proj.scheduler-evolution.md) — Roadmap, implementation checklists, P2/P3 plans

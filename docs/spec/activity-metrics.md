@@ -214,7 +214,7 @@ Cost source: LiteLLM `usage.cost` (stream) or `x-litellm-response-cost` header (
 
 ## Open Questions
 
-_(none — planned work tracked in ini.observability-hardening.md: hourly bucketing, FakeUsageAdapter for stack tests, stack test coverage for activity endpoint)_
+_(none — planned work tracked in proj.observability-hardening.md: hourly bucketing, FakeUsageAdapter for stack tests, stack test coverage for activity endpoint)_
 
 ## Related
 

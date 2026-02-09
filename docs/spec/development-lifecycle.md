@@ -7,7 +7,7 @@ spec_state: proposed
 trust: draft
 summary: How specs, initiatives, and issues work together — from idea to merged code
 read_when: Starting a new feature, understanding how to write specs, or reviewing PRs
-implements: ini.development-workflows
+implements: proj.development-workflows
 owner: derekg1729
 created: 2026-02-05
 verified: 2026-02-06
@@ -64,7 +64,7 @@ A simple, enforceable workflow where:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│   /docs/spec/              /work/initiatives/    /work/issues/  │
+│   /docs/spec/              /work/projects/       /work/items/   │
 │   ═══════════              ══════════════════    ═════════════  │
 │                                                                 │
 │   As-Built Contract        Pre-Code Planning     PR-Sized Work  │
@@ -92,13 +92,13 @@ A simple, enforceable workflow where:
 
 ```
 1. CREATE INITIATIVE (optional for multi-PR work)
-   └── /work/initiatives/ini.feature.md
+   └── /work/projects/proj.feature.md
        • Goal, crawl/walk/run roadmap
        • Constraints, dependencies
        • Work items by phase
 
 2. CREATE ISSUE (PR-sized)
-   └── /work/issues/wi.feature-001.md
+   └── /work/items/task.0001.feature.md
        • Execution checklist
        • PR checklist (Work + Spec links)
        • Validation commands

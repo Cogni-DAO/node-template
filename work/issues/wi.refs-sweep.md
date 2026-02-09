@@ -7,7 +7,7 @@ priority: 2
 estimate: 3
 summary: Replace ~560 stale refs to old docs/UPPER_CASE.md paths with new docs/spec/, docs/guides/, work/initiatives/ paths
 outcome: Zero stale doc refs in codebase, all tracker Refs columns checked
-initiative: ini.maximize-oss-tools
+project: proj.maximize-oss-tools
 assignees: derekg1729
 created: 2026-02-08
 updated: 2026-02-08
@@ -206,18 +206,18 @@ sed -i '' 's|docs/features/HEALTH_PROBES\.md|docs/spec/health-probes.md|g'
 
 **Exclusions (need manual review, not mechanical replace):**
 
-| Old path                                    | Why manual                                                         | Refs |
-| ------------------------------------------- | ------------------------------------------------------------------ | ---- |
-| `docs/PAYMENTS_FRONTEND_DESIGN.md`          | Obsolete/deleted — remove link or replace with nearest spec        | 21   |
-| `docs/DEPAY_PAYMENTS.md`                    | Archived — remove or redirect                                      | 17   |
-| `docs/CHAIN_DEPLOYMENT_TECH_DEBT.md`        | Roadmap-only → `work/initiatives/ini.chain-deployment-refactor.md` | 10   |
-| `docs/LINTING_RULES.md`                     | Snapshot → `docs/research/linting-rules.md`                        | 7    |
-| `docs/REPO_STATE.md`                        | Snapshot → `docs/research/REPO_STATE.md` (still in research/)      | 8    |
-| `docs/CICD_SERVICES_ROADMAP.md`             | Roadmap-only → `work/initiatives/ini.cicd-services-gitops.md`      | ~2   |
-| `docs/SERVICES_MIGRATION.md`                | Roadmap-only → `work/initiatives/ini.cicd-services-gitops.md`      | ~1   |
-| `docs/CACHING.md`                           | Roadmap-only → `work/initiatives/ini.performance-efficiency.md`    | ~1   |
-| `docs/PROPOSAL_LAUNCHER.md`                 | Roadmap-only → `work/initiatives/ini.web3-gov-mvp.md`              | ~1   |
-| `docs/ERROR_HANDLING_IMPROVEMENT_DESIGN.md` | Roadmap-only → `work/initiatives/ini.observability-hardening.md`   | ~1   |
+| Old path                                    | Why manual                                                       | Refs |
+| ------------------------------------------- | ---------------------------------------------------------------- | ---- |
+| `docs/PAYMENTS_FRONTEND_DESIGN.md`          | Obsolete/deleted — remove link or replace with nearest spec      | 21   |
+| `docs/DEPAY_PAYMENTS.md`                    | Archived — remove or redirect                                    | 17   |
+| `docs/CHAIN_DEPLOYMENT_TECH_DEBT.md`        | Roadmap-only → `work/projects/proj.chain-deployment-refactor.md` | 10   |
+| `docs/LINTING_RULES.md`                     | Snapshot → `docs/research/linting-rules.md`                      | 7    |
+| `docs/REPO_STATE.md`                        | Snapshot → `docs/research/REPO_STATE.md` (still in research/)    | 8    |
+| `docs/CICD_SERVICES_ROADMAP.md`             | Roadmap-only → `work/projects/proj.cicd-services-gitops.md`      | ~2   |
+| `docs/SERVICES_MIGRATION.md`                | Roadmap-only → `work/projects/proj.cicd-services-gitops.md`      | ~1   |
+| `docs/CACHING.md`                           | Roadmap-only → `work/projects/proj.performance-efficiency.md`    | ~1   |
+| `docs/PROPOSAL_LAUNCHER.md`                 | Roadmap-only → `work/projects/proj.web3-gov-mvp.md`              | ~1   |
+| `docs/ERROR_HANDLING_IMPROVEMENT_DESIGN.md` | Roadmap-only → `work/projects/proj.observability-hardening.md`   | ~1   |
 
 ### Phase 1: AGENTS.md files (~160 refs, highest value)
 

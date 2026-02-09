@@ -203,4 +203,4 @@ _(none)_
 - [Graph Execution](graph-execution.md) — Execution invariants, billing, P1 run persistence
 - [scheduler.md](./scheduler.md) — Temporal architecture, internal API
 - [temporal-patterns.md](./temporal-patterns.md) — Workflow determinism, activity idempotency
-- [Initiative: Unified Graph Launch](../../work/initiatives/ini.unified-graph-launch.md)
+- [Project: Unified Graph Launch](../../work/projects/proj.unified-graph-launch.md)

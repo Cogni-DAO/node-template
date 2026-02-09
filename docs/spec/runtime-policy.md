@@ -82,7 +82,7 @@ Ensure every API route runs in the correct runtime (Node.js or Edge) with explic
 
 ## Open Questions
 
-_(none — future CI lint enforcement (`pnpm lint:runtime`) tracked in ini.cicd-services-gitops.md: auto-detect Node builtins and adapter imports, require `runtime='nodejs'` declaration)_
+_(none — future CI lint enforcement (`pnpm lint:runtime`) tracked in proj.cicd-services-gitops.md: auto-detect Node builtins and adapter imports, require `runtime='nodejs'` declaration)_
 
 ## Related
 

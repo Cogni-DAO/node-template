@@ -8,7 +8,7 @@ estimate: 3
 summary: Activity join on litellm_call_id vs spend_logs.request_id fails for some providers; fix by storing telemetry in our DB at write time
 outcome: /activity shows cost per row from our DB with no LiteLLM API dependency
 assignees: [derekg1729]
-initiative: ini.payments-enhancements
+project: proj.payments-enhancements
 created: 2026-02-08
 updated: 2026-02-08
 labels: [billing, activity, dashboard]

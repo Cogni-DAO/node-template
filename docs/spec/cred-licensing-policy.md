@@ -120,4 +120,4 @@ Define a policy signing and federation enrollment model where forks run freely b
 
 - [node-formation.md](./node-formation.md) — P3 references this spec for federation enrollment
 - [node-operator-contract.md](./node-operator-contract.md) — sovereignty invariants
-- [ini.cred-licensing.md](../../work/initiatives/ini.cred-licensing.md) — implementation roadmap
+- [proj.cred-licensing.md](../../work/projects/proj.cred-licensing.md) — implementation roadmap

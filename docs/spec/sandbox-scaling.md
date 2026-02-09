@@ -29,7 +29,7 @@ Define the proxy selection rationale, per-run proxy architecture (current), and 
 
 ## Non-Goals
 
-- Shared long-lived proxy implementation (see [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md))
+- Shared long-lived proxy implementation (see [proj.sandboxed-agents](../../work/projects/proj.sandboxed-agents.md))
 - Signed run token scheme (P1+ reference, deferred)
 - CogniGateway Node.js service (P1+ tool execution)
 
@@ -126,11 +126,11 @@ All mitigations assume core invariants from [Sandboxed Agents](sandboxed-agents.
 
 ## Open Questions
 
-None — all design decisions resolved for P0.5. Future proxy upgrade decisions tracked in [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md).
+None — all design decisions resolved for P0.5. Future proxy upgrade decisions tracked in [proj.sandboxed-agents](../../work/projects/proj.sandboxed-agents.md).
 
 ## Related
 
-- **Initiative:** [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md) — Proxy scaling migration plan, shared proxy, signed run tokens
+- **Project:** [proj.sandboxed-agents](../../work/projects/proj.sandboxed-agents.md) — Proxy scaling migration plan, shared proxy, signed run tokens
 - [Sandboxed Agents](sandboxed-agents.md) — Core sandbox invariants 1–12, phase definitions (pending migration)
 - [OpenClaw Sandbox Spec](openclaw-sandbox-spec.md) — Invariants 13-19, container image, LLM protocol
 - [OpenClaw Sandbox Controls](openclaw-sandbox-controls.md) — Invariants 20-25, dynamic catalog, git relay

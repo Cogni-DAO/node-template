@@ -28,7 +28,7 @@ Define the CI/CD invariants, merge gate, and file ownership boundaries that ensu
 
 ## Non-Goals
 
-- Reusable workflow extraction (see [ini.ci-cd-reusable](../../work/initiatives/ini.ci-cd-reusable.md))
+- Reusable workflow extraction (see [proj.ci-cd-reusable](../../work/projects/proj.ci-cd-reusable.md))
 - Jenkins migration (see initiative P2)
 - External rails kit (see initiative P3)
 
@@ -158,4 +158,4 @@ _(none)_
 
 - [ci-cd.md](./ci-cd.md) — CI/CD specification
 - [check-full.md](./check-full.md) — check:full CI-parity gate
-- [Initiative: Reusable CI/CD Rails](../../work/initiatives/ini.ci-cd-reusable.md)
+- [Project: Reusable CI/CD Rails](../../work/projects/proj.ci-cd-reusable.md)

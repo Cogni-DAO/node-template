@@ -865,7 +865,7 @@ Agents need: what changed? what's new? what escalated? Not everything.
 **Automated:**
 
 - `pnpm check:docs` — validates spec frontmatter and required headings
-- Integration tests for signal ingest idempotency (planned — see [ini.governance-agents](../../work/initiatives/ini.governance-agents.md))
+- Integration tests for signal ingest idempotency (planned — see [proj.governance-agents](../../work/projects/proj.governance-agents.md))
 
 **Manual:**
 
@@ -881,7 +881,7 @@ Agents need: what changed? what's new? what escalated? Not everything.
 
 ## Related
 
-- **Initiative:** [ini.governance-agents](../../work/initiatives/ini.governance-agents.md) — Roadmap, deliverables, P1 backlog
+- **Project:** [proj.governance-agents](../../work/projects/proj.governance-agents.md) — Roadmap, deliverables, P1 backlog
 - [Governance Data Collectors](gov-data-collectors.md) — SourceAdapter registry
 - [Temporal Patterns](temporal-patterns.md) — Canonical Temporal patterns and anti-patterns
 - [System Tenant Design](system-tenant.md) — System tenant foundation

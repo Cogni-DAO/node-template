@@ -209,7 +209,7 @@ Every `type: spec` document must include these **exact** H2 headings (greppable,
 
 ## Dependencies
 
-- Depends on [ini.docs-system-infrastructure](./ini.docs-system-infrastructure.md) for CI enforcement
+- Depends on [proj.docs-system-infrastructure](./proj.docs-system-infrastructure.md) for CI enforcement
 - Templates must match workflow requirements
 
 ## As-Built Specs
@@ -221,5 +221,5 @@ Every `type: spec` document must include these **exact** H2 headings (greppable,
 **Relationship to infrastructure initiative:**
 
 - This initiative defines the **what** (workflows, conventions)
-- [ini.docs-system-infrastructure](./ini.docs-system-infrastructure.md) defines the **how** (tooling, enforcement)
+- [proj.docs-system-infrastructure](./proj.docs-system-infrastructure.md) defines the **how** (tooling, enforcement)
 - Workflows should persist even as infrastructure evolves

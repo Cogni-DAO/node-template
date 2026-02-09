@@ -12,7 +12,7 @@ assignees: derekg1729
 created: 2026-02-08
 updated: 2026-02-08
 labels: [infra, reliability]
-related: [ini.observability-hardening]
+related: [proj.observability-hardening]
 ---
 
 # Reliability & Uptime
@@ -71,9 +71,9 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 ## Design Notes
 
-Extracted from [postmortem](../../docs/postmortems/2026-02-07-production-vm-loss.md) Feb 7–8. Complements [ini.observability-hardening](ini.observability-hardening.md) — observability = seeing problems, reliability = surviving them.
+Extracted from [postmortem](../../docs/postmortems/2026-02-07-production-vm-loss.md) Feb 7–8. Complements [proj.observability-hardening](proj.observability-hardening.md) — observability = seeing problems, reliability = surviving them.
 
 ## Related
 
-- [ini.observability-hardening](ini.observability-hardening.md)
+- [proj.observability-hardening](proj.observability-hardening.md)
 - [Postmortem: Feb 7–8 outages](../../docs/postmortems/2026-02-07-production-vm-loss.md)

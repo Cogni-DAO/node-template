@@ -7,7 +7,7 @@ spec_state: draft
 trust: draft
 summary: Document taxonomy, identifier conventions, and directory structure for docs and work tracking
 read_when: Creating docs or work items, understanding the directory structure
-implements: ini.docs-system-infrastructure
+implements: proj.docs-system-infrastructure
 owner: derekg1729
 created: 2026-02-05
 verified: 2026-02-06
@@ -26,7 +26,7 @@ Define the document taxonomy, identifier conventions, and directory structure th
 
 ## Non-Goals
 
-- Roadmap for future tooling (see [ini.docs-system-v0](../../work/initiatives/ini.docs-system-v0.md))
+- Roadmap for future tooling (see [proj.docs-system-v0](../../work/projects/proj.docs-system-v0.md))
 - Plane integration details (future)
 - CI enforcement implementation (future)
 
@@ -36,7 +36,7 @@ Define the document taxonomy, identifier conventions, and directory structure th
 
 1. **DOCS_TYPED_DIRECTORIES**: Docs live in typed directories: `docs/spec/`, `docs/guides/`, `docs/decisions/adr/`.
 
-2. **WORK_TYPED_DIRECTORIES**: Work items live in: `work/initiatives/`, `work/issues/`.
+2. **WORK_TYPED_DIRECTORIES**: Work items live in: `work/projects/`, `work/items/`.
 
 3. **ID_IMMUTABLE**: Once assigned, `id` (docs) and `work_item_id` (work) never change.
 
@@ -58,10 +58,10 @@ Define the document taxonomy, identifier conventions, and directory structure th
 
 ### Work Item Types
 
-| Type         | Directory           | ID Prefix | Purpose                          |
-| ------------ | ------------------- | --------- | -------------------------------- |
-| `initiative` | `work/initiatives/` | `ini.*`   | Roadmap, phased plans (pre-code) |
-| `issue`      | `work/issues/`      | `wi.*`    | PR-sized execution               |
+| Type      | Directory        | ID Prefix      | Purpose                                               |
+| --------- | ---------------- | -------------- | ----------------------------------------------------- |
+| `project` | `work/projects/` | `proj.*`       | Roadmap, phased plans (pre-code)                      |
+| work item | `work/items/`    | `<type>.<num>` | PR-sized execution (task, bug, spike, story, subtask) |
 
 ### Identifier Conventions
 
@@ -74,7 +74,7 @@ id: kebab-case-name
 **Initiatives:**
 
 ```
-work_item_id: ini.feature-name
+work_item_id: proj.feature-name
 ```
 
 **Issues:**
@@ -105,7 +105,7 @@ tags: [optional]
 **Initiatives:**
 
 ```yaml
-work_item_id: ini.example
+work_item_id: proj.example
 work_item_type: initiative
 title: Example Initiative
 state: Active|Paused|Done|Dropped
@@ -129,7 +129,7 @@ priority: Urgent|High|Medium|Low|None
 summary: One-line description
 outcome: What the deliverable is
 spec_refs: docs/spec/example.md
-initiative: ini.example
+initiative: proj.example
 assignees: handle
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
@@ -148,8 +148,8 @@ pr:
 **Manual:**
 
 1. New specs go in `docs/spec/`
-2. New initiatives go in `work/initiatives/`
-3. New issues go in `work/issues/`
+2. New initiatives go in `work/projects/`
+3. New items go in `work/items/`
 4. IDs follow conventions above
 
 ---
@@ -166,5 +166,5 @@ pr:
 - [Development Lifecycle](./development-lifecycle.md) — workflow spec
 - [Work Management Guide](../../work/README.md) — front door to /work
 - [Documentation Guide](../README.md) — front door to /docs
-- [Initiative: Docs System Infrastructure](../../work/initiatives/ini.docs-system-infrastructure.md) — tooling roadmap
-- [Initiative: Development Workflows](../../work/initiatives/ini.development-workflows.md) — workflow conventions
+- [Project: Docs System Infrastructure](../../work/projects/proj.docs-system-infrastructure.md) — tooling roadmap
+- [Project: Development Workflows](../../work/projects/proj.development-workflows.md) — workflow conventions

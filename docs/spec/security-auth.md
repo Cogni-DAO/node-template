@@ -85,7 +85,7 @@ Key lifecycle endpoints (target):
 
 ### Target State Acceptance Criteria (API Keys)
 
-These criteria will be tracked by `ini.accounts-api-keys` initiative when the ACCOUNTS docs are migrated:
+These criteria will be tracked by `proj.accounts-api-keys` initiative when the ACCOUNTS docs are migrated:
 
 1. `app_api_keys` table exists with hash-only storage + show-once plaintext.
 2. `/api/v1/*` accepts session OR Bearer app_api_key.

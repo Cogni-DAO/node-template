@@ -338,7 +338,7 @@ Per invariant MCP_UNTRUSTED_BY_DEFAULT.
 
 ## Dependencies
 
-- [ ] ConnectionBrokerPort (ini.tenant-connections P0)
+- [ ] ConnectionBrokerPort (proj.tenant-connections P0)
 - [ ] AuthorizationPort (RBAC spec)
 - [ ] LangGraph infrastructure (existing)
 

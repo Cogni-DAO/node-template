@@ -31,7 +31,7 @@ Document the current billing identity plumbing from authentication through LiteL
 
 ## Non-Goals
 
-- User-facing API key generation via `/key/generate` (see [ini.accounts-api-keys](../../work/initiatives/ini.accounts-api-keys.md) P3)
+- User-facing API key generation via `/key/generate` (see [proj.accounts-api-keys](../../work/projects/proj.accounts-api-keys.md) P3)
 - Operator admin routes for account management (see initiative P3)
 - LiteLLM Team grouping (not used in MVP)
 
@@ -145,4 +145,4 @@ _(none)_
 - [accounts-design.md](./accounts-design.md) — three-layer identity system (pending migration)
 - [security-auth.md](./security-auth.md) — authentication architecture
 - [billing-evolution.md](./billing-evolution.md) — billing stages
-- [Initiative: Accounts & API Keys](../../work/initiatives/ini.accounts-api-keys.md)
+- [Project: Accounts & API Keys](../../work/projects/proj.accounts-api-keys.md)

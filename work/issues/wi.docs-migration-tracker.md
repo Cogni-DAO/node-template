@@ -9,7 +9,7 @@ summary: Track migration of 97 legacy docs to typed structure with YAML frontmat
 outcome: All docs classified, migrated to typed directories, references updated
 spec_refs: docs/spec/spec-project-lifecycle.md, docs/spec/docs-work-system.md
 assignees: derekg1729
-initiative: ini.docs-system-infrastructure
+project: proj.docs-system-infrastructure
 created: 2026-02-05
 updated: 2026-02-06
 labels: [docs, migration]
@@ -86,7 +86,7 @@ external_refs:
 
 **Step 9: Update tracker.** Mark `[x]` in Done column. Update Ini column if destination differs from pre-planned.
 
-**Step 10: Commit individually.** One commit per doc: `docs(migrate): target-name spec + roadmap to ini.name` or `docs(migrate): target-name spec + new ini.name`.
+**Step 10: Commit individually.** One commit per doc: `docs(migrate): target-name spec + roadmap to proj.name` or `docs(migrate): target-name spec + new proj.name`.
 
 #### Content Placement Rules
 
@@ -106,7 +106,7 @@ external_refs:
 ### Post-Migration Tasks
 
 - [x] All `Refs` checkboxes in migration table are checked (references updated)
-- [ ] `.claude/commands/` updated to reference new doc/work locations and follow workflow conventions per `ini.development-workflows`
+- [ ] `.claude/commands/` updated to reference new doc/work locations and follow workflow conventions per `proj.development-workflows`
 - [ ] Update SPEC_INDEX.md with each newly migrated spec
 - [ ] Create redirect stubs at all original locations
 - [ ] Verify `pnpm check:docs` passes after each batch
@@ -129,116 +129,116 @@ Destination columns: `filename.md` = planned output, `-` = not applicable.
 
 Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work/initiatives/`, WI → `work/issues/`, Guide → `docs/guides/`.
 
-| Original                             | Spec                           | Ini                                | WI  | Guide                   | State      | Done | Refs |
-| ------------------------------------ | ------------------------------ | ---------------------------------- | --- | ----------------------- | ---------- | :--: | :--: |
-| ACCOUNTS_API_KEY_ENDPOINTS.md        | accounts-api-endpoints.md      | ini.accounts-api-keys.md           | -   | -                       | AB+road    | [x]  | [x]  |
-| ACCOUNTS_DESIGN.md                   | accounts-design.md             | ini.accounts-api-keys.md           | -   | -                       | AB+road    | [x]  | [x]  |
-| ACTIVITY_METRICS.md                  | activity-metrics.md            | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| AGENTS_CONTEXT.md                    | -                              | -                                  | -   | agents-context.md       | procedural | [x]  | [x]  |
-| AGENT_DEVELOPMENT_GUIDE.md           | -                              | -                                  | -   | agent-development.md    | procedural | [x]  | [x]  |
-| AGENT_DISCOVERY.md                   | agent-discovery.md             | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                       | roadmap    | [x]  | [x]  |
-| AI_EVALS.md                          | ai-evals.md                    | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                       | AB+road    | [x]  | [x]  |
-| AI_SETUP_SPEC.md                     | ai-setup.md                    | -                                  | -   | -                       | migrated   | [x]  | [x]  |
-| ALLOY_LOKI_SETUP.md                  | -                              | -                                  | -   | alloy-loki-setup.md     | procedural | [x]  | [x]  |
-| ARCHITECTURE.md                      | architecture.md                | -                                  | -   | -                       | migrated   | [x]  | [x]  |
-| ARCHITECTURE_ENFORCEMENT_GAPS.md     | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
-| AUTHENTICATION.md                    | authentication.md              | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| BILLING_EVOLUTION.md                 | billing-evolution.md           | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| BUILD_ARCHITECTURE.md                | build-architecture.md          | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| CACHING.md                           | -                              | ini.performance-efficiency.md      | -   | -                       | roadmap    | [x]  | [x]  |
-| CHAIN_ACTION_FLOW_UI_SPEC.md         | chain-action-flow-ui.md        | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| CHAIN_CONFIG.md                      | chain-config.md                | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| CHAIN_DEPLOYMENT_TECH_DEBT.md        | -                              | ini.chain-deployment-refactor.md   | -   | -                       | roadmap    | [x]  | [x]  |
-| CHECK_FULL.md                        | check-full.md                  | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| CI-CD.md                             | ci-cd.md                       | -                                  | -   | -                       | migrated   | [x]  | [x]  |
-| CICD_SERVICES_ROADMAP.md             | -                              | ini.cicd-services-gitops.md        | -   | -                       | roadmap    | [x]  | [x]  |
-| CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                       | roadmap    | [x]  | [x]  |
-| CLAWDBOT_ADAPTER_SPEC.md             | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| CODE_GATES.md                        | -                              | ini.maximize-oss-tools.md          | -   | -                       | snapshot   | [x]  | [x]  |
-| COGNI_BRAIN_SPEC.md                  | cogni-brain.md                 | -                                  | -   | -                       | migrated   | [x]  | [x]  |
-| CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
-| CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                       | roadmap    | [x]  | [x]  |
-| DAO_ENFORCEMENT.md                   | dao-enforcement.md             | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| DATABASE_OPS_SPEC.md                 | -                              | ini.database-ops.md                | -   | -                       | roadmap    | [x]  | [x]  |
-| DATABASES.md                         | databases.md                   | -                                  | -   | -                       | migrated   | [x]  | [x]  |
-| DATABASE_RLS_SPEC.md                 | database-rls.md                | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| DATABASE_URL_ALIGNMENT_SPEC.md       | database-url-alignment.md      | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| DOCS_ORGANIZATION_PLAN.md            | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
-| ENVIRONMENTS.md                      | environments.md                | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| ERROR_HANDLING_ARCHITECTURE.md       | error-handling.md              | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| ERROR_HANDLING_IMPROVEMENT_DESIGN.md | -                              | ini.observability-hardening.md     | -   | -                       | roadmap    | [x]  | [x]  |
-| EXTERNAL_EXECUTOR_BILLING.md         | external-executor-billing.md   | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md  | procedural | [x]  | [x]  |
-| GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                       | AB+road    | [x]  | [x]  |
-| GRAPH_EXECUTOR_AUDIT.md              | -                              | ini.graph-execution.md             | -   | -                       | AB+road    | [x]  | [x]  |
-| HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                       | AB+road    | [x]  | [x]  |
-| INTEGRATION_WALLETS_CREDITS.md       | -                              | ini.accounts-api-keys.md           | -   | wallet-auth-setup.md    | procedural | [x]  | [x]  |
-| ISOLATE_LITELLM_DATABASE.md          | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| LANGGRAPH_AI.md                      | langgraph-patterns.md          | (ini.langgraph-server-production)  | -   | -                       | AB+road    | [x]  | [x]  |
-| LANGGRAPH_SERVER.md                  | langgraph-server.md            | ini.langgraph-server-production.md | -   | langgraph-server.md     | AB+road    | [x]  | [x]  |
-| LINTING_RULES.md                     | -                              | -                                  | -   | linting-migration.md    | snapshot   | [x]  | [x]  |
-| METRICS_OBSERVABILITY.md             | public-analytics.md            | ini.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [x]  |
-| MODEL_SELECTION.md                   | model-selection.md             | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| MVP_DELIVERABLES.md                  | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
-| N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | ini.n8n-integration.md             | -   | -                       | AB+road    | [x]  | [x]  |
-| NEW_PACKAGES.md                      | -                              | -                                  | -   | new-packages.md         | procedural | [x]  | [x]  |
-| NODE_CI_CD_CONTRACT.md               | node-ci-cd-contract.md         | ini.ci-cd-reusable.md              | -   | -                       | AB+road    | [x]  | [x]  |
-| NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md | AB+road    | [x]  | [x]  |
-| NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| OPENCLAW_SANDBOX_CONTROLS.md         | openclaw-sandbox-controls.md   | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
-| OPENCLAW_SANDBOX_SPEC.md             | openclaw-sandbox-spec.md       | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
-| OBSERVABILITY.md                     | observability.md               | -                                  | -   | -                       | migrated   | [x]  | [x]  |
-| OBSERVABILITY_REQUIRED_SPEC.md       | observability-requirements.md  | ini.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [x]  |
-| ONCHAIN_READERS.md                   | onchain-readers.md             | ini.onchain-indexer.md             | -   | -                       | AB+road    | [x]  | [x]  |
-| PACKAGES_ARCHITECTURE.md             | packages-architecture.md       | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| PAYMENTS_DESIGN.md                   | payments-design.md             | ini.payments-enhancements.md       | -   | payments-setup.md       | AB+road    | [x]  | [x]  |
-| PAYMENTS_FRONTEND_DESIGN.md          | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | ini.prompt-registry.md             | -   | -                       | AB+road    | [x]  | [x]  |
-| PROPOSAL_LAUNCHER.md                 | -                              | ini.web3-gov-mvp.md                | -   | -                       | roadmap    | [x]  | [x]  |
-| RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                       | AB+road    | [x]  | [x]  |
-| REPO_STATE.md                        | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
-| RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| SANDBOX_SCALING.md                   | sandbox-scaling.md             | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
-| SANDBOXED_AGENTS.md                  | sandboxed-agents.md            | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
-| SCHEDULER_SPEC.md                    | scheduler.md                   | ini.scheduler-evolution.md         | -   | -                       | migrated   | [x]  | [x]  |
-| SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| SERVICES_ARCHITECTURE.md             | services-architecture.md       | ini.cicd-services-gitops.md        | -   | create-service.md       | as-built   | [x]  | [x]  |
-| SERVICES_MIGRATION.md                | -                              | ini.cicd-services-gitops.md        | -   | -                       | roadmap    | [x]  | [x]  |
-| SETUP.md                             | -                              | -                                  | -   | developer-setup.md      | procedural | [x]  | [x]  |
-| SOURCECRED.md                        | sourcecred.md                  | ini.sourcecred-onchain.md          | -   | -                       | AB+road    | [x]  | [x]  |
-| SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| STYLE.md                             | style.md                       | -                                  | -   | -                       | migrated   | [x]  | [x]  |
-| SUPABASE_EVALUATION.md               | research/supabase-evaluation   | ini.database-ops.md                | -   | -                       | AB+road    | [x]  | [x]  |
-| SYSTEM_TEST_ARCHITECTURE.md          | system-test-architecture.md    | ini.system-test-architecture.md    | -   | -                       | AB+road    | [x]  | [x]  |
-| SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | ini.system-tenant-governance.md    | -   | -                       | AB+road    | [x]  | [x]  |
-| TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | ini.tenant-connections.md          | -   | -                       | AB+road    | [x]  | [x]  |
-| TESTING.md                           | -                              | -                                  | -   | testing.md              | procedural | [x]  | [x]  |
-| TOOLS_AUTHORING.md                   | -                              | -                                  | -   | tools-authoring.md      | procedural | [x]  | [x]  |
-| TOOL_USE_SPEC.md                     | tool-use.md                    | ini.tool-use-evolution.md          | -   | -                       | AB+road    | [x]  | [x]  |
-| UI_CLEANUP_CHECKLIST.md              | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| UI_CLEANUP_PLAN.md                   | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| UI_IMPLEMENTATION_GUIDE.md           | ui-implementation.md           | -                                  | -   | -                       | as-built   | [x]  | [x]  |
-| UNIFIED_GRAPH_LAUNCH_SPEC.md         | unified-graph-launch.md        | ini.unified-graph-launch.md        | -   | -                       | AB+road    | [x]  | [x]  |
-| USAGE_HISTORY.md                     | usage-history.md               | ini.usage-history-persistence.md   | -   | -                       | AB+road    | [x]  | [x]  |
-| VERCEL_AI_STREAMING.md               | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| archive/COMPLETION_REFACTOR_PLAN.md  | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| archive/DEPAY_PAYMENTS.md            | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| archive/FIX_AI_STREAMING_PIPELINE.md | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| archive/PAYMENTS_WIDGET_DECISION.md  | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| archive/triggerdev_analysis.md       | -                              | -                                  | -   | -                       | obsolete   | [x]  | [x]  |
-| dev/TOOL_STREAMING_ISSUE.md          | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
-| features/HEALTH_PROBES.md            | health-probes.md               | ini.cicd-services-gitops.md        | -   | -                       | AB+road    | [x]  | [x]  |
-| introspection/2026-01-19-\*.md       | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
-| introspection/2026-01-21-\*.md       | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
-| postmortems/2026-01-25-\*.md         | -                              | -                                  | -   | -                       | snapshot   | [x]  | [x]  |
+| Original                             | Spec                           | Ini                                 | WI  | Guide                   | State      | Done | Refs |
+| ------------------------------------ | ------------------------------ | ----------------------------------- | --- | ----------------------- | ---------- | :--: | :--: |
+| ACCOUNTS_API_KEY_ENDPOINTS.md        | accounts-api-endpoints.md      | proj.accounts-api-keys.md           | -   | -                       | AB+road    | [x]  | [x]  |
+| ACCOUNTS_DESIGN.md                   | accounts-design.md             | proj.accounts-api-keys.md           | -   | -                       | AB+road    | [x]  | [x]  |
+| ACTIVITY_METRICS.md                  | activity-metrics.md            | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| AGENTS_CONTEXT.md                    | -                              | -                                   | -   | agents-context.md       | procedural | [x]  | [x]  |
+| AGENT_DEVELOPMENT_GUIDE.md           | -                              | -                                   | -   | agent-development.md    | procedural | [x]  | [x]  |
+| AGENT_DISCOVERY.md                   | agent-discovery.md             | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| AGENT_REGISTRY_SPEC.md               | agent-registry.md              | proj.agent-registry.md              | -   | -                       | roadmap    | [x]  | [x]  |
+| AI_EVALS.md                          | ai-evals.md                    | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | proj.governance-agents.md           | -   | -                       | AB+road    | [x]  | [x]  |
+| AI_SETUP_SPEC.md                     | ai-setup.md                    | -                                   | -   | -                       | migrated   | [x]  | [x]  |
+| ALLOY_LOKI_SETUP.md                  | -                              | -                                   | -   | alloy-loki-setup.md     | procedural | [x]  | [x]  |
+| ARCHITECTURE.md                      | architecture.md                | -                                   | -   | -                       | migrated   | [x]  | [x]  |
+| ARCHITECTURE_ENFORCEMENT_GAPS.md     | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
+| AUTHENTICATION.md                    | authentication.md              | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| BILLING_EVOLUTION.md                 | billing-evolution.md           | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| BUILD_ARCHITECTURE.md                | build-architecture.md          | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| CACHING.md                           | -                              | proj.performance-efficiency.md      | -   | -                       | roadmap    | [x]  | [x]  |
+| CHAIN_ACTION_FLOW_UI_SPEC.md         | chain-action-flow-ui.md        | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| CHAIN_CONFIG.md                      | chain-config.md                | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| CHAIN_DEPLOYMENT_TECH_DEBT.md        | -                              | proj.chain-deployment-refactor.md   | -   | -                       | roadmap    | [x]  | [x]  |
+| CHECK_FULL.md                        | check-full.md                  | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| CI-CD.md                             | ci-cd.md                       | -                                   | -   | -                       | migrated   | [x]  | [x]  |
+| CICD_SERVICES_ROADMAP.md             | -                              | proj.cicd-services-gitops.md        | -   | -                       | roadmap    | [x]  | [x]  |
+| CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | proj.claude-sdk-adapter.md          | -   | -                       | roadmap    | [x]  | [x]  |
+| CLAWDBOT_ADAPTER_SPEC.md             | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| CODE_GATES.md                        | -                              | proj.maximize-oss-tools.md          | -   | -                       | snapshot   | [x]  | [x]  |
+| COGNI_BRAIN_SPEC.md                  | cogni-brain.md                 | -                                   | -   | -                       | migrated   | [x]  | [x]  |
+| CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
+| CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | proj.cred-licensing.md              | -   | -                       | roadmap    | [x]  | [x]  |
+| DAO_ENFORCEMENT.md                   | dao-enforcement.md             | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| DATABASE_OPS_SPEC.md                 | -                              | proj.database-ops.md                | -   | -                       | roadmap    | [x]  | [x]  |
+| DATABASES.md                         | databases.md                   | -                                   | -   | -                       | migrated   | [x]  | [x]  |
+| DATABASE_RLS_SPEC.md                 | database-rls.md                | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| DATABASE_URL_ALIGNMENT_SPEC.md       | database-url-alignment.md      | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| DOCS_ORGANIZATION_PLAN.md            | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
+| ENVIRONMENTS.md                      | environments.md                | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| ERROR_HANDLING_ARCHITECTURE.md       | error-handling.md              | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| ERROR_HANDLING_IMPROVEMENT_DESIGN.md | -                              | proj.observability-hardening.md     | -   | -                       | roadmap    | [x]  | [x]  |
+| EXTERNAL_EXECUTOR_BILLING.md         | external-executor-billing.md   | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                   | -   | feature-development.md  | procedural | [x]  | [x]  |
+| GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| GRAPH_EXECUTION.md                   | graph-execution.md             | proj.graph-execution.md             | -   | -                       | AB+road    | [x]  | [x]  |
+| GRAPH_EXECUTOR_AUDIT.md              | -                              | proj.graph-execution.md             | -   | -                       | AB+road    | [x]  | [x]  |
+| HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | proj.hil-graphs.md                  | -   | -                       | AB+road    | [x]  | [x]  |
+| INTEGRATION_WALLETS_CREDITS.md       | -                              | proj.accounts-api-keys.md           | -   | wallet-auth-setup.md    | procedural | [x]  | [x]  |
+| ISOLATE_LITELLM_DATABASE.md          | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| LANGGRAPH_AI.md                      | langgraph-patterns.md          | (proj.langgraph-server-production)  | -   | -                       | AB+road    | [x]  | [x]  |
+| LANGGRAPH_SERVER.md                  | langgraph-server.md            | proj.langgraph-server-production.md | -   | langgraph-server.md     | AB+road    | [x]  | [x]  |
+| LINTING_RULES.md                     | -                              | -                                   | -   | linting-migration.md    | snapshot   | [x]  | [x]  |
+| METRICS_OBSERVABILITY.md             | public-analytics.md            | proj.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [x]  |
+| MODEL_SELECTION.md                   | model-selection.md             | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| MVP_DELIVERABLES.md                  | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
+| N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | proj.n8n-integration.md             | -   | -                       | AB+road    | [x]  | [x]  |
+| NEW_PACKAGES.md                      | -                              | -                                   | -   | new-packages.md         | procedural | [x]  | [x]  |
+| NODE_CI_CD_CONTRACT.md               | node-ci-cd-contract.md         | proj.ci-cd-reusable.md              | -   | -                       | AB+road    | [x]  | [x]  |
+| NODE_FORMATION_SPEC.md               | node-formation.md              | proj.node-formation-ui.md           | -   | node-formation-guide.md | AB+road    | [x]  | [x]  |
+| NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| OPENCLAW_SANDBOX_CONTROLS.md         | openclaw-sandbox-controls.md   | proj.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
+| OPENCLAW_SANDBOX_SPEC.md             | openclaw-sandbox-spec.md       | proj.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
+| OBSERVABILITY.md                     | observability.md               | -                                   | -   | -                       | migrated   | [x]  | [x]  |
+| OBSERVABILITY_REQUIRED_SPEC.md       | observability-requirements.md  | proj.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [x]  |
+| ONCHAIN_READERS.md                   | onchain-readers.md             | proj.onchain-indexer.md             | -   | -                       | AB+road    | [x]  | [x]  |
+| PACKAGES_ARCHITECTURE.md             | packages-architecture.md       | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| PAYMENTS_DESIGN.md                   | payments-design.md             | proj.payments-enhancements.md       | -   | payments-setup.md       | AB+road    | [x]  | [x]  |
+| PAYMENTS_FRONTEND_DESIGN.md          | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| PAYMENTS_TEST_DESIGN.md              | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | proj.prompt-registry.md             | -   | -                       | AB+road    | [x]  | [x]  |
+| PROPOSAL_LAUNCHER.md                 | -                              | proj.web3-gov-mvp.md                | -   | -                       | roadmap    | [x]  | [x]  |
+| RBAC_SPEC.md                         | rbac.md                        | proj.rbac-hardening.md              | -   | -                       | AB+road    | [x]  | [x]  |
+| REPO_STATE.md                        | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
+| RUNTIME_POLICY.md                    | runtime-policy.md              | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| SANDBOX_SCALING.md                   | sandbox-scaling.md             | proj.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
+| SANDBOXED_AGENTS.md                  | sandboxed-agents.md            | proj.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
+| SCHEDULER_SPEC.md                    | scheduler.md                   | proj.scheduler-evolution.md         | -   | -                       | migrated   | [x]  | [x]  |
+| SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| SERVICES_ARCHITECTURE.md             | services-architecture.md       | proj.cicd-services-gitops.md        | -   | create-service.md       | as-built   | [x]  | [x]  |
+| SERVICES_MIGRATION.md                | -                              | proj.cicd-services-gitops.md        | -   | -                       | roadmap    | [x]  | [x]  |
+| SETUP.md                             | -                              | -                                   | -   | developer-setup.md      | procedural | [x]  | [x]  |
+| SOURCECRED.md                        | sourcecred.md                  | proj.sourcecred-onchain.md          | -   | -                       | AB+road    | [x]  | [x]  |
+| SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| STYLE.md                             | style.md                       | -                                   | -   | -                       | migrated   | [x]  | [x]  |
+| SUPABASE_EVALUATION.md               | research/supabase-evaluation   | proj.database-ops.md                | -   | -                       | AB+road    | [x]  | [x]  |
+| SYSTEM_TEST_ARCHITECTURE.md          | system-test-architecture.md    | proj.system-test-architecture.md    | -   | -                       | AB+road    | [x]  | [x]  |
+| SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | proj.system-tenant-governance.md    | -   | -                       | AB+road    | [x]  | [x]  |
+| TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | proj.tenant-connections.md          | -   | -                       | AB+road    | [x]  | [x]  |
+| TESTING.md                           | -                              | -                                   | -   | testing.md              | procedural | [x]  | [x]  |
+| TOOLS_AUTHORING.md                   | -                              | -                                   | -   | tools-authoring.md      | procedural | [x]  | [x]  |
+| TOOL_USE_SPEC.md                     | tool-use.md                    | proj.tool-use-evolution.md          | -   | -                       | AB+road    | [x]  | [x]  |
+| UI_CLEANUP_CHECKLIST.md              | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| UI_CLEANUP_PLAN.md                   | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| UI_IMPLEMENTATION_GUIDE.md           | ui-implementation.md           | -                                   | -   | -                       | as-built   | [x]  | [x]  |
+| UNIFIED_GRAPH_LAUNCH_SPEC.md         | unified-graph-launch.md        | proj.unified-graph-launch.md        | -   | -                       | AB+road    | [x]  | [x]  |
+| USAGE_HISTORY.md                     | usage-history.md               | proj.usage-history-persistence.md   | -   | -                       | AB+road    | [x]  | [x]  |
+| VERCEL_AI_STREAMING.md               | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| archive/COMPLETION_REFACTOR_PLAN.md  | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| archive/DEPAY_PAYMENTS.md            | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| archive/FIX_AI_STREAMING_PIPELINE.md | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| archive/PAYMENTS_WIDGET_DECISION.md  | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| archive/triggerdev_analysis.md       | -                              | -                                   | -   | -                       | obsolete   | [x]  | [x]  |
+| dev/TOOL_STREAMING_ISSUE.md          | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
+| features/HEALTH_PROBES.md            | health-probes.md               | proj.cicd-services-gitops.md        | -   | -                       | AB+road    | [x]  | [x]  |
+| introspection/2026-01-19-\*.md       | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
+| introspection/2026-01-21-\*.md       | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
+| postmortems/2026-01-25-\*.md         | -                              | -                                   | -   | -                       | snapshot   | [x]  | [x]  |
 
 ## Summary
 

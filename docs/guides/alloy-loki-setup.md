@@ -234,7 +234,7 @@ Open http://127.0.0.1:12345 in your browser:
 ## Related
 
 - [Observability Spec](../spec/observability.md) — structured logging, tracing, event schemas
-- [Observability Hardening Initiative](../../work/initiatives/ini.observability-hardening.md) — future enhancements (filtering, dashboards, alerts, traces)
+- [Observability Hardening Project](../../work/projects/proj.observability-hardening.md) — future enhancements (filtering, dashboards, alerts, traces)
 - [Official Alloy Tutorial: Send Logs to Loki](https://grafana.com/docs/alloy/latest/tutorials/send-logs-to-loki/)
 - [loki.source.docker Component](https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.docker/)
 - [discovery.docker Component](https://grafana.com/docs/alloy/latest/reference/components/discovery/discovery.docker/)
