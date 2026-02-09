@@ -3,10 +3,10 @@ id: docs-work-system-spec
 type: spec
 title: Docs + Work System
 status: draft
-spec_state: draft
+spec_state: proposed
 trust: draft
-summary: Document taxonomy, identifier conventions, and directory structure for docs and work tracking
-read_when: Creating docs or work items, understanding the directory structure
+summary: Types, ownership boundaries, linkage rules, and invariants for /docs and /work
+read_when: Creating any doc or work item, understanding what goes where
 implements: proj.docs-system-infrastructure
 owner: derekg1729
 created: 2026-02-05
@@ -16,153 +16,168 @@ tags: [docs, work, meta]
 
 # Docs + Work System
 
-## Context
+> Taxonomy, ownership boundaries, and linkage rules for `/docs` and `/work`. Each has typed directories with enforced frontmatter.
 
-This repo uses a typed directory structure for documentation (`/docs`) and work tracking (`/work`). This spec describes the current as-built conventions.
+### Key References
 
-## Goal
-
-Define the document taxonomy, identifier conventions, and directory structure that all docs and work items must follow.
-
-## Non-Goals
-
-- Roadmap for future tooling (see [proj.docs-system-infrastructure](../../work/projects/proj.docs-system-infrastructure.md))
-- Plane integration details (future)
-- CI enforcement implementation (future)
-
----
-
-## Core Invariants
-
-1. **DOCS_TYPED_DIRECTORIES**: Docs live in typed directories: `docs/spec/`, `docs/guides/`, `docs/decisions/adr/`.
-
-2. **WORK_TYPED_DIRECTORIES**: Work items live in: `work/projects/`, `work/items/`.
-
-3. **ID_IMMUTABLE**: Once assigned, `id` never changes.
-
-4. **SPECS_ARE_AS_BUILT**: Specs describe current implementation only. Roadmaps live in projects.
-
-5. **TYPE_MATCHES_DIRECTORY**: A doc's `type` field must match its directory (`type: spec` → `docs/spec/`).
-
----
+|             |                                                                                           |                              |
+| ----------- | ----------------------------------------------------------------------------------------- | ---------------------------- |
+| **Project** | [proj.docs-system-infrastructure](../../work/projects/proj.docs-system-infrastructure.md) | Tooling roadmap (CI, MkDocs) |
+| **Guide**   | [Work Management Guide](../../work/README.md)                                             | Front door to `/work`        |
+| **Spec**    | [Development Lifecycle](./development-lifecycle.md)                                       | Workflow flows and commands  |
 
 ## Design
 
-### Document Types
+### Types
 
-| Type    | Directory             | Purpose                        |
-| ------- | --------------------- | ------------------------------ |
-| `spec`  | `docs/spec/`          | As-built contracts, invariants |
-| `guide` | `docs/guides/`        | Procedures, howtos, runbooks   |
-| `adr`   | `docs/decisions/adr/` | Architecture decision records  |
+| Type      | Directory             | ID Format      | Owns                                                  |
+| --------- | --------------------- | -------------- | ----------------------------------------------------- |
+| `spec`    | `docs/spec/`          | `kebab-case`   | Contracts, invariants, design, acceptance checks      |
+| `guide`   | `docs/guides/`        | `kebab-case`   | Procedures, howtos, runbooks                          |
+| `adr`     | `docs/decisions/adr/` | `kebab-case`   | Architecture decision records                         |
+| `charter` | `work/charters/`      | `chr.<slug>`   | Strategic themes, project groupings                   |
+| `project` | `work/projects/`      | `proj.<slug>`  | Roadmaps, phases, deliverables, constraints           |
+| `item`    | `work/items/`         | `<type>.<num>` | PR-sized execution (task, bug, story, spike, subtask) |
 
-### Work Item Types
+### Content Boundaries
 
-| Type      | Directory        | ID Format      | Purpose                                               |
-| --------- | ---------------- | -------------- | ----------------------------------------------------- |
-| `charter` | `work/charters/` | `chr.<slug>`   | Strategic themes, groups projects                     |
-| `project` | `work/projects/` | `proj.<slug>`  | Roadmap, phased plans (pre-code)                      |
-| work item | `work/items/`    | `<type>.<num>` | PR-sized execution (task, bug, spike, story, subtask) |
+| Content                           | Spec     | Project      | Item     |
+| --------------------------------- | -------- | ------------ | -------- |
+| SCREAMING_SNAKE invariants        | **owns** | link to spec | —        |
+| Design diagrams / file pointers   | **owns** | —            | —        |
+| Acceptance checks / test commands | **owns** | —            | —        |
+| Crawl/Walk/Run phases             | —        | **owns**     | —        |
+| Deliverable tables with status    | —        | **owns**     | —        |
+| Work item ID references           | —        | **owns**     | —        |
+| Plain-language constraints        | —        | **owns**     | —        |
+| Execution plan (checkboxes)       | —        | —            | **owns** |
+| PR link, reviewer, attribution    | —        | —            | **owns** |
+| Validation commands               | —        | —            | **owns** |
 
-### Identifier Conventions
+### Linkages
 
-| Kind    | Format         | Example                 | Immutable |
-| ------- | -------------- | ----------------------- | --------- |
-| Doc     | `kebab-case`   | `activity-metrics`      | Yes       |
-| Charter | `chr.<slug>`   | `chr.platform-health`   | Yes       |
-| Project | `proj.<slug>`  | `proj.sandboxed-agents` | Yes       |
-| Item    | `<type>.<num>` | `task.0042`             | Yes       |
+```
+charter ──1:N──▶ project          (project.primary_charter → chr.*)
+project ──1:N──▶ item             (item.project → proj.*; project roadmap refs item by ID)
+item    ──N:M──▶ spec             (item.spec_refs → spec IDs)
+spec    ──N:1──▶ project          (spec.implements → proj.*)
+```
 
-Item filenames: `work/items/<type>.<num>.<editable_slug>.md` — the `<type>.<num>` prefix is immutable; the slug is editable.
+Rules:
 
-### Required Frontmatter
+- Projects reference items **by ID only** (`task.0005`), never by file path.
+- Items reference specs **by ID only** (`spec_refs: billing-evolution`), never by path.
+- Specs link to their parent project via `implements:` in frontmatter.
 
-**Specs:**
+### ID Conventions
+
+| Kind    | Format         | Example                 | Mutable                          |
+| ------- | -------------- | ----------------------- | -------------------------------- |
+| Doc     | `kebab-case`   | `activity-metrics`      | No                               |
+| Charter | `chr.<slug>`   | `chr.platform-health`   | No                               |
+| Project | `proj.<slug>`  | `proj.sandboxed-agents` | No                               |
+| Item    | `<type>.<num>` | `task.0042`             | No (slug in filename is mutable) |
+
+Item filenames: `work/items/<type>.<num>.<slug>.md` — prefix immutable, slug editable.
+
+## Goal
+
+One authoritative reference for: what types exist, what content each owns, and how they connect.
+
+## Non-Goals
+
+- Workflow sequencing (see [development-lifecycle](./development-lifecycle.md))
+- CI enforcement implementation (future)
+
+## Invariants
+
+| Rule                   | Constraint                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| TYPE_MATCHES_DIRECTORY | A file's `type` field must match its directory. `type: spec` → `docs/spec/`              |
+| ID_IMMUTABLE           | Once assigned, no ID changes. Ever.                                                      |
+| CONTENT_OWNERSHIP      | Each type owns specific concerns. No bleeding across boundaries (see Content Boundaries) |
+| SPECS_OWN_CONTRACTS    | Invariants (SCREAMING_SNAKE), acceptance checks, and design diagrams live in specs only  |
+| PROJECTS_OWN_ROADMAPS  | Phases, deliverable tables, timelines, and work item lists live in projects only         |
+| ITEMS_OWN_EXECUTION    | Checklists, validation commands, PR links, and attribution live in items only            |
+| LINK_DONT_DUPLICATE    | If content exists in its owning type, link to it. Never restate.                         |
+
+### Schema
+
+**Spec** — `docs/spec/*.md`:
 
 ```yaml
-id: example-spec
+id: example-spec # kebab-case, immutable
 type: spec
 title: Example Spec
 status: draft|active|deprecated
 spec_state: draft|proposed|active|deprecated
 trust: draft|reviewed|canonical|external
-summary: One-line description
+summary: One line
 read_when: When to read this
+implements: proj.example # parent project (optional)
 owner: handle
 created: YYYY-MM-DD
 verified: YYYY-MM-DD
-tags: [optional]
+tags: []
 ```
 
-**Projects:**
+**Project** — `work/projects/proj.*.md`:
 
 ```yaml
-id: proj.example
+id: proj.example # immutable
 type: project
-primary_charter:
+primary_charter: chr.example
 title: Example Project
 state: Active|Paused|Done|Dropped
 priority: 0-3
 estimate: 0-5
-summary: One-line description
-outcome: What success looks like
+summary: One line
+outcome: Success criteria
 assignees: handle
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-labels: [optional]
+labels: []
 ```
 
-**Items:**
+**Item** — `work/items/<type>.<num>.*.md`:
 
 ```yaml
-id: task.0042
-type: task
+id: task.0042 # immutable, must match filename prefix
+type: task|bug|story|spike|subtask
 title: Example Task
 status: Backlog|Todo|In Progress|Done|Cancelled
 priority: 0-3
 estimate: 0-5
-summary: One-line description
-outcome: What the deliverable is
-spec_refs: example-spec
+summary: One line
+outcome: Deliverable
+spec_refs: example-spec # spec IDs, not paths
+project: proj.example # parent project
 assignees: handle
 credit:
-project: proj.example
 pr:
 reviewer:
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-labels: [optional]
+labels: []
 external_refs:
 ```
 
----
+### File Pointers
 
-## Acceptance Checks
-
-**Automated:**
-
-- `node scripts/validate-docs-metadata.mjs` — validates frontmatter (partially implemented)
-
-**Manual:**
-
-1. New specs go in `docs/spec/`
-2. New projects go in `work/projects/`
-3. New charters go in `work/charters/`
-4. New items go in `work/items/`
-5. IDs follow conventions above
-
----
+| File                                 | Purpose                                       |
+| ------------------------------------ | --------------------------------------------- |
+| `scripts/validate-docs-metadata.mjs` | Enforces frontmatter schemas, IDs, cross-refs |
+| `docs/_templates/spec.md`            | Spec template                                 |
+| `work/_templates/project.md`         | Project template                              |
+| `work/_templates/item.md`            | Item template                                 |
+| `work/_templates/charter.md`         | Charter template                              |
 
 ## Open Questions
 
-- [ ] Directory structure not yet enforced by CI (validator checks frontmatter but not file placement)
-
----
+- [ ] Directory placement not yet enforced by CI (validator checks frontmatter only)
 
 ## Related
 
-- [Development Lifecycle](./development-lifecycle.md) — workflow spec
+- [Development Lifecycle](./development-lifecycle.md) — workflow flows and commands
 - [Work Management Guide](../../work/README.md) — front door to /work
 - [Documentation Guide](../README.md) — front door to /docs
-- [Project: Docs System Infrastructure](../../work/projects/proj.docs-system-infrastructure.md) — tooling roadmap
-- [Project: Development Workflows](../../work/projects/proj.development-workflows.md) — workflow conventions

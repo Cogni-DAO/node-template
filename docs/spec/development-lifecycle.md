@@ -5,145 +5,115 @@ title: Development Lifecycle
 status: draft
 spec_state: proposed
 trust: draft
-summary: How specs, projects, and items work together — from idea to merged code
-read_when: Starting a new feature, understanding how to write specs, or reviewing PRs
+summary: Command-driven workflows from idea to closeout
+read_when: Starting new work, understanding the development flow, reviewing PRs
 implements: proj.development-workflows
 owner: derekg1729
 created: 2026-02-05
 verified: 2026-02-09
-tags: [workflow, specs, projects]
+tags: [workflow, commands]
 ---
 
 # Development Lifecycle
 
 ## Context
 
-Developers need a clear workflow that separates:
+Work enters the system as ideas or bugs. It flows through triage, planning, execution, and closeout via `/commands` that enforce content boundaries. This spec defines those flows.
 
-- **What we're building** (specs — as-built contracts)
-- **What we're planning** (projects — roadmaps, design intent)
-- **What we're doing now** (items — PR-sized execution)
-
-Without this separation, specs become cluttered with roadmaps, or projects become mega-tasks that rot.
+For type definitions and ownership rules, see [docs-work-system](./docs-work-system.md).
 
 ## Goal
 
-A simple, enforceable workflow where:
-
-- **Specs** are as-built contract truth (no roadmaps/checklists)
-- **Projects** are pre-implementation planning (may exist before any code)
-- **Items** are PR-sized execution
-- **Work drives change; specs record what IS**
+Enumerate the command-driven workflows, their sequencing, and the gates that enforce quality.
 
 ## Non-Goals
 
-- Prescribing project management methodology
-- Defining Plane/GitHub integration details (see [docs-work-system.md](./docs-work-system.md))
-- Covering doc types beyond spec/project/item
+- Type taxonomy (see [docs-work-system](./docs-work-system.md))
+- Project management methodology
+- CI implementation details
 
 ---
 
 ## Core Invariants
 
-1. **SPECS_ARE_AS_BUILT**: Specs describe current implementation only. Roadmaps and phases live in projects.
+1. **PR_LINKS_ITEM**: Every code PR references exactly one primary work item (`task.*` or `bug.*`) and at least one spec, or declares `Spec-Impact: none`.
 
-2. **SPEC_STATE_LIFECYCLE**: Every spec has a `spec_state` field: `draft` → `proposed` → `active` → `deprecated`. No skipping states.
+2. **TRIAGE_OWNS_ROUTING**: Only `/triage` sets or changes the `project:` linkage on an idea or bug.
 
-3. **ACTIVE_MEANS_CLEAN**: When `spec_state: active`, the spec's "Open Questions" section must be empty.
+3. **SPEC_NO_EXEC_PLAN**: Specs never contain roadmap, phases, tasks, owners, or timelines. At any `spec_state`.
 
-4. **PR_REFERENCES_REQUIRED**: Every code PR body must include `Work:` (item ID, e.g. `task.0001`). Behavior/security/interface changes also require `Spec:` link.
+4. **SPEC_STATE_LIFECYCLE**: `draft` → `proposed` → `active` → `deprecated`. No skipping.
 
-5. **PROJECTS_BEFORE_CODE**: Projects may exist before any code. They hold the roadmap; specs are created when code merges.
+5. **ACTIVE_MEANS_CLEAN**: `spec_state: active` requires Open Questions empty and `verified:` current.
+
+6. **PROJECTS_BEFORE_CODE**: Projects may exist before any code. Specs are created or updated when code lands.
 
 ---
 
 ## Design
 
-### The Three Primitives
+### Commands
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│   /docs/spec/              /work/projects/       /work/items/   │
-│   ═══════════              ══════════════════    ═════════════  │
-│                                                                 │
-│   As-Built Contract        Pre-Code Planning     PR-Sized Work  │
-│   • Current invariants     • Crawl/Walk/Run      • Checklist    │
-│   • Acceptance checks      • Design intent       • PR checklist │
-│   • Implementation notes   • Dependencies        • Validation   │
-│                            • Work item list                     │
-│                                                                 │
-│   Created AFTER merge      May exist BEFORE      Links to both  │
-│                            any code                             │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Command     | Creates/Updates                               | Purpose                                                    |
+| ----------- | --------------------------------------------- | ---------------------------------------------------------- |
+| `/idea`     | `story.*` item                                | Entry point: new feature concept                           |
+| `/bug`      | `bug.*` item                                  | Entry point: something is broken                           |
+| `/triage`   | updates item                                  | Route to project or leave standalone                       |
+| `/project`  | `proj.*` project                              | Plan roadmap with Crawl/Walk/Run phases                    |
+| `/spec`     | spec in `docs/spec/`                          | Write or update technical contract                         |
+| `/task`     | `task.*` item                                 | Decompose into PR-sized work                               |
+| `/closeout` | updates item, spec, headers, AGENTS.md, index | Pre-PR finish pass: scan diff, update all docs, close item |
 
 ### Spec State Lifecycle
 
-| State        | Meaning                                    | What's Required                                       |
-| ------------ | ------------------------------------------ | ----------------------------------------------------- |
-| `draft`      | Exploratory. May not match implementation. | Invariants can be incomplete. Open Questions allowed. |
-| `proposed`   | Stable enough to review against.           | Invariants enumerated. Acceptance checks defined.     |
-| `active`     | Implemented and enforced. Matches code.    | Open Questions empty. `verified:` date current.       |
-| `deprecated` | No longer authoritative.                   | Points to replacement spec.                           |
+| State        | Meaning                          | Required                                              |
+| ------------ | -------------------------------- | ----------------------------------------------------- |
+| `draft`      | Exploratory. May not match code. | Invariants can be incomplete. Open Questions allowed. |
+| `proposed`   | Stable enough to review against. | Invariants enumerated. Acceptance checks defined.     |
+| `active`     | Matches code. Enforced.          | Open Questions empty. `verified:` current.            |
+| `deprecated` | No longer authoritative.         | Points to replacement spec.                           |
 
-### Workflow: Idea → Merged Code
+### Workflows
+
+**Bug (simple fix):**
 
 ```
-1. CREATE PROJECT (optional for multi-PR work)
-   └── /work/projects/proj.feature.md
-       • Goal, crawl/walk/run roadmap
-       • Constraints, dependencies
-       • Work items by ID
+/bug → /triage (attach proj.* or none) → /task → PR → /closeout
+```
 
-2. CREATE ITEM (PR-sized)
-   └── /work/items/task.0001.feature.md
-       • Execution checklist
-       • PR checklist (Work + Spec links)
-       • Validation commands
+**New idea, new project:**
 
-3. OPEN PR
-   └── PR body includes:
-       Work: task.0001
-       Spec: docs/spec/feature.md#core-invariants (if exists)
+```
+/idea → /triage → new proj.* → /project → /spec (draft) → /task(s) → PR(s) → /closeout
+```
 
-4. REVIEW + MERGE
-   └── Reviewer checks diff against spec invariants (if spec exists)
-   └── CI validates PR body format
-   └── Acceptance checks must pass
+**Idea slots into existing project:**
 
-5. CREATE/UPDATE SPEC (after merge)
-   └── /docs/spec/feature.md
-       • spec_state: active (if fully implemented)
-       • Describes what IS, not what WILL BE
-       • Open Questions empty
+```
+/idea → /triage → attach proj.* → /task → PR → /closeout
+        └─ if contract change: /spec (draft) before /task
 ```
 
 ### When to Create What
 
-| Situation                     | Action                                               |
-| ----------------------------- | ---------------------------------------------------- |
-| Small fix, no behavior change | Item only. No spec or project needed.                |
-| Single PR, clear scope        | Item + reference existing spec (or skip if trivial). |
-| Multi-PR effort               | Project + Items. Create spec when code merges.       |
-| Architecture decision         | ADR in `docs/decisions/adr/`.                        |
+| Situation                     | Flow                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------- |
+| Small fix, no behavior change | `/bug` → `/task` → PR → `/closeout`                                           |
+| Single PR, clear scope        | `/idea` → `/triage` → `/task` → PR → `/closeout`                              |
+| Multi-PR effort               | `/idea` → `/triage` → `/project` → `/spec` → `/task`(s) → PR(s) → `/closeout` |
+| Architecture decision         | ADR in `docs/decisions/adr/`                                                  |
 
 ### PR Body Format
-
-Every code PR must include:
 
 ```markdown
 ## References
 
-Work: task.0001
-Spec: docs/spec/feature.md#core-invariants
+Work: task.0042
+Spec: docs/spec/feature.md#core-invariants (or Spec-Impact: none)
 ```
 
-**CI enforcement:**
-
 - Missing `Work:` → merge blocked
-- Missing `Spec:` → warning (blocked if `arch_change=yes`)
+- Missing `Spec:` → warning (blocked if behavior/security/interface change)
 
 ---
 
@@ -152,28 +122,24 @@ Spec: docs/spec/feature.md#core-invariants
 **Automated:**
 
 - `node scripts/validate-docs-metadata.mjs` — validates frontmatter including `spec_state`
+- `pnpm check:docs` — agents + headers + metadata
 
 **Manual (until automated):**
 
-1. Specs do not contain roadmaps or phases (those belong in projects)
-2. When spec is marked `active`, Open Questions is empty
+1. Specs contain no roadmap/phase/task content
+2. `spec_state: active` specs have empty Open Questions
 3. PRs reference a work item
 
 ---
 
 ## Open Questions
 
-<!-- This section must be empty when spec_state is active -->
-
 - [ ] Should we lint specs for roadmap/phase language?
+- [ ] CI enforcement of PR body format (Work: / Spec: lines)
 
 ---
 
 ## Related
 
-- [Docs + Work System](./docs-work-system.md) — document taxonomy
+- [Docs + Work System](./docs-work-system.md) — type taxonomy and ownership
 - [Work Management Guide](../../work/README.md)
-- [Project Template](../../work/_templates/project.md)
-- [Charter Template](../../work/_templates/charter.md)
-- [Item Template](../../work/_templates/item.md)
-- [Spec Template](../_templates/spec.md)
