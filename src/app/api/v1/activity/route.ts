@@ -21,6 +21,7 @@ import { getActivity } from "@/app/_facades/ai/activity.server";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { aiActivityOperation } from "@/contracts/ai.activity.v1.contract";
 import { getServerSessionUser } from "@/lib/auth/server";
+import { isActivityUsageUnavailableError } from "@/ports";
 import { deriveTimeRange } from "@/shared/time/time-range";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +100,14 @@ export const GET = wrapRouteHandlerWithLogging(
 
       if (error instanceof Error && error.name === "InvalidRangeError") {
         return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+
+      // P1: LiteLLM is hard dependency - fail loudly with 503
+      if (error instanceof Error && isActivityUsageUnavailableError(error)) {
+        return NextResponse.json(
+          { code: "LITELLM_UNAVAILABLE", error: "Usage logs unavailable" },
+          { status: 503 }
+        );
       }
 
       throw error; // Let wrapper handle unexpected errors

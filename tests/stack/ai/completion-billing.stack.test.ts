@@ -21,7 +21,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
-import { createCompletionRequest } from "@tests/_fakes";
+import { TEST_MODEL_ID } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
@@ -31,7 +31,6 @@ import {
   billingAccounts,
   chargeReceipts,
   creditLedger,
-  llmChargeDetails,
   users,
   virtualKeys,
 } from "@/shared/db/schema";
@@ -72,13 +71,19 @@ describe("Completion Billing Stack Test", () => {
       isDefault: true,
     });
 
+    const requestBody = {
+      messages: [
+        {
+          role: "user",
+          content: "Say 'hello' in one word.",
+        },
+      ],
+      model: TEST_MODEL_ID,
+    };
+
     const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
       method: "POST",
-      body: JSON.stringify(
-        createCompletionRequest({
-          messages: [{ role: "user", content: "Say 'hello' in one word." }],
-        })
-      ),
+      body: JSON.stringify(requestBody),
     });
 
     // Act
@@ -120,20 +125,6 @@ describe("Completion Billing Stack Test", () => {
     expect(receipt.runId).toBeTruthy();
     expect(receipt.provenance).toBe("stream"); // Per UNIFIED_GRAPH_EXECUTOR: all execution flows through streaming
     expect(receipt.chargedCredits).toBeGreaterThanOrEqual(0n);
-
-    // Assert - Linked llm_charge_details row with model, graphId, tokens
-    const details = await db
-      .select()
-      .from(llmChargeDetails)
-      .where(eq(llmChargeDetails.chargeReceiptId, receipt.id));
-
-    expect(details).toHaveLength(1);
-    const detail = details[0];
-    if (!detail) throw new Error("No llm_charge_details row");
-    expect(detail.model).toBeTruthy();
-    expect(detail.graphId).toBeTruthy();
-    expect(typeof detail.tokensIn).toBe("number");
-    expect(typeof detail.tokensOut).toBe("number");
 
     // Assert - credit_ledger debit created
     const ledgerRows = await db
@@ -206,9 +197,14 @@ describe("Completion Billing Stack Test", () => {
       isDefault: true,
     });
 
+    const requestBody = {
+      messages: [{ role: "user", content: "Hello" }],
+      model: TEST_MODEL_ID,
+    };
+
     const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
       method: "POST",
-      body: JSON.stringify(createCompletionRequest()),
+      body: JSON.stringify(requestBody),
     });
 
     // Act

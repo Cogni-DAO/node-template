@@ -146,16 +146,11 @@ export {
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
 export type {
-  ProxyBillingEntry,
   SandboxErrorCode,
-  SandboxLlmProxyConfig,
   SandboxMount,
-  SandboxNetworkMode,
-  SandboxProgramContract,
   SandboxRunnerPort,
   SandboxRunResult,
   SandboxRunSpec,
-  SandboxVolumeMount,
 } from "./sandbox-runner.port";
 export type {
   EmitAiEvent,
@@ -168,3 +163,4 @@ export type {
   TreasuryReadPort,
   TreasurySnapshot,
 } from "./treasury-read.port";
+export * from "./usage.port";

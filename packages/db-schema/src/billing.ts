@@ -3,8 +3,8 @@
 
 /**
  * Module: `@shared/db/schema.billing`
- * Purpose: Billing tables schema with charge_receipts as ledger of truth and llm_charge_details for LLM telemetry.
- * Scope: Defines billing_accounts, virtual_keys, credit_ledger, charge_receipts, llm_charge_details, payment_attempts, payment_events. Does not include auth identity tables.
+ * Purpose: Billing tables schema with minimal charge_receipts for audit trail.
+ * Scope: Defines billing_accounts, virtual_keys, credit_ledger, charge_receipts, payment_attempts, payment_events. Does not include auth identity tables.
  * Invariants:
  * - Credits are BIGINT.
  * - billing_accounts.owner_user_id FK → auth.users(id).
@@ -27,7 +27,6 @@ import {
   integer,
   jsonb,
   numeric,
-  pgPolicy,
   pgTable,
   text,
   timestamp,
@@ -67,7 +66,7 @@ export const virtualKeys = pgTable("virtual_keys", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-}).enableRLS();
+});
 
 export const creditLedger = pgTable(
   "credit_ledger",
@@ -105,7 +104,7 @@ export const creditLedger = pgTable(
       .on(table.reference)
       .where(sql`${table.reason} = 'charge_receipt'`),
   })
-).enableRLS();
+);
 
 /**
  * Charge receipts - minimal audit-focused table.
@@ -148,8 +147,6 @@ export const chargeReceipts = pgTable(
     sourceSystem: text("source_system", { enum: SOURCE_SYSTEMS }).notNull(),
     /** Idempotency key: runId/attempt/usageUnitId (unique per source_system) */
     sourceReference: text("source_reference").notNull(),
-    /** Discriminator for detail table join (e.g. 'llm'). Required at write time, no default. */
-    receiptKind: text("receipt_kind").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -186,45 +183,7 @@ export const chargeReceipts = pgTable(
       "charge_receipts_source_idempotency_unique"
     ).on(table.sourceSystem, table.sourceReference),
   })
-).enableRLS();
-
-/**
- * LLM-specific detail for charge receipts with receipt_kind='llm'.
- * 1:1 relationship: charge_receipt_id is both PK and FK.
- * Stores model, tokens, and provider telemetry captured at billing write time.
- */
-export const llmChargeDetails = pgTable(
-  "llm_charge_details",
-  {
-    chargeReceiptId: uuid("charge_receipt_id")
-      .primaryKey()
-      .references(() => chargeReceipts.id, { onDelete: "cascade" }),
-    /** External provider call ID (e.g. x-litellm-call-id) for forensic correlation */
-    providerCallId: text("provider_call_id"),
-    /** LLM model used for this call */
-    model: text("model").notNull(),
-    /** Provider name (e.g. "openai", "anthropic") */
-    provider: text("provider"),
-    /** Input token count */
-    tokensIn: integer("tokens_in"),
-    /** Output token count */
-    tokensOut: integer("tokens_out"),
-    /** Call latency in milliseconds */
-    latencyMs: integer("latency_ms"),
-    /** Namespaced graph ID (e.g. 'langgraph:poet') or 'raw-completion' for direct calls */
-    graphId: text("graph_id").notNull(),
-  },
-  (table) => [
-    pgPolicy("tenant_isolation", {
-      using: sql`EXISTS (
-        SELECT 1 FROM charge_receipts cr
-        JOIN billing_accounts ba ON ba.id = cr.billing_account_id
-        WHERE cr.id = ${table.chargeReceiptId}
-          AND ba.owner_user_id = current_setting('app.current_user_id', true)
-      )`,
-    }),
-  ]
-).enableRLS();
+);
 
 export const paymentAttempts = pgTable(
   "payment_attempts",
@@ -265,7 +224,7 @@ export const paymentAttempts = pgTable(
       table.createdAt
     ),
   })
-).enableRLS();
+);
 
 export const paymentEvents = pgTable(
   "payment_events",
@@ -289,4 +248,4 @@ export const paymentEvents = pgTable(
       table.createdAt
     ),
   })
-).enableRLS();
+);

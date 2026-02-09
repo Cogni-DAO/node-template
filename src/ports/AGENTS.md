@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-08
+- **Last reviewed:** 2026-02-05
 - **Status:** stable
 
 ## Purpose
@@ -37,14 +37,16 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 ## Public Surface
 
 - **Exports:**
-  - AccountService (user-scoped: getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listLlmChargeDetails, listCreditLedgerEntries, findCreditLedgerEntryByReference)
+  - AccountService (user-scoped: getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listCreditLedgerEntries, findCreditLedgerEntryByReference)
   - ServiceAccountService (service-role: getBillingAccountById, getOrCreateBillingAccountForUser — BYPASSRLS subset)
   - LlmService (completion, completionStream with CompletionStreamParams including abortSignal, tools, toolChoice; returns providerCostUsd, litellmCallId, toolCalls)
   - AgentCatalogPort (listAgents; discovery-only interface per AGENT_DISCOVERY.md)
   - AgentDescriptor (agentId, graphId, name, description; P0_AGENT_GRAPH_IDENTITY: agentId === graphId)
   - GraphExecutorPort (runGraph → stream + completion promise; execution-only per GRAPH_EXECUTION.md)
-  - GraphRunRequest (includes toolIds for per-run tool allowlist; graphId typed as GraphId), GraphRunResult, GraphFinal
-  - LlmChargeDetail (type for llm_charge_details read results)
+  - GraphRunRequest, GraphRunResult, GraphFinal (graph execution types; GraphRunRequest includes toolIds for per-run tool allowlist)
+  - UsageService (getUsageStats, listUsageLogs; legacy aggregation interface)
+  - ActivityUsagePort (getSpendLogs, getSpendChart; LiteLLM-only telemetry for Activity dashboard)
+  - UsageLogEntry, UsageLogsByRangeParams (types for log fetching)
   - ChatDeltaEvent (text_delta | error | done)
   - PaymentAttemptUserRepository (create, findById — RLS enforced, UserId bound at construction)
   - PaymentAttemptServiceRepository (findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent — BYPASSRLS, billingAccountId defense-in-depth anchor)
@@ -53,7 +55,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - AiTelemetryPort (recordInvocation for ai_invocation_summaries DB writes)
   - LangfusePort (createTrace, createTraceWithIO, updateTraceOutput, startSpan, recordGeneration, flush for optional Langfuse integration)
   - Clock (now)
-  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError)
+  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError, ActivityUsageUnavailableError)
   - LlmError, LlmErrorKind, isLlmError (typed error classification from status codes)
   - normalizeErrorToExecutionCode (error-to-code normalization, re-exported for adapters)
   - LlmToolDefinition, LlmToolCall, LlmToolChoice (tool calling types)
@@ -65,9 +67,6 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - ExecutionGrantWorkerPort (worker-only grant validation)
   - ExecutionRequestPort (idempotency layer for execution requests)
   - ScheduleRunRepository (run ledger: createRun, markRunStarted, markRunCompleted)
-  - SandboxRunnerPort (runOnce; one-shot container execution with optional LLM proxy)
-  - SandboxRunSpec, SandboxRunResult, SandboxLlmProxyConfig (sandbox execution types)
-  - SandboxProgramContract (stdout JSON envelope for sandbox agent output; matches OpenClaw --json format)
   - Grant errors (GrantNotFoundError, GrantExpiredError, GrantRevokedError, GrantScopeMismatchError)
   - Schedule errors (ScheduleNotFoundError, ScheduleAccessDeniedError, InvalidCronExpressionError, InvalidTimezoneError)
 - **Routes:** none
@@ -118,4 +117,4 @@ These tests are separate from edge tests for src/contracts/\*\*
 - OnChainVerifier is generic (no blockchain-specific types), returns VerificationResult with status (VERIFIED | PENDING | FAILED)
 - Port-level errors are thrown by adapters, caught and translated by feature layer
 - recordChargeReceipt is non-blocking (never throws InsufficientCredits post-call per ACTIVITY_METRICS.md)
-- Activity dashboard reads from charge_receipts + llm_charge_details (no external API dependency); LiteLLM usage service removed
+- ActivityUsagePort is for Activity dashboard (distinct from observability/Grafana telemetry); single implementation (LiteLLM) by design; throws ActivityUsageUnavailableError on failures (for 503 mapping)

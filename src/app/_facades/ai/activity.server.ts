@@ -4,15 +4,15 @@
 /**
  * Module: `@app/_facades/ai/activity.server`
  * Purpose: App-layer facade for Activity dashboard with granular time bucketing.
- * Scope: Resolves session user to billing account, fetches receipts + LLM details, aggregates into buckets. Does not handle HTTP transport.
+ * Scope: Resolves session user to billing account, fetches range-complete logs, aggregates into buckets. Does not handle HTTP transport.
  * Invariants:
  * - Only app layer imports this; validates billing account.
- * - Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH: charge_receipts is the primary data source for Activity.
+ * - Fetches ALL logs in [from, to) via listUsageLogsByRange (range-complete, no silent truncation).
  * - Uses epoch-based bucketing (UTC, DST-safe) with server-derived step.
  * - Zero-fills buckets across entire range for continuous charts.
- * - LLM detail (model/tokens) enriched via separate listLlmChargeDetails fetch, merged in memory.
- * - Logs receiptCount for observability.
- * Side-effects: IO (via accountService)
+ * - Joins receipts by litellm_call_id (LEFT JOIN), then buckets spend by log.timestamp (not receipt.createdAt).
+ * - Logs fetchedLogCount and unjoinedLogCount for observability.
+ * Side-effects: IO (via usageService, accountService)
  * Links: [validateActivityRange](../../../features/ai/services/activity.ts), [ai.activity.v1.contract](../../../contracts/ai.activity.v1.contract.ts)
  * @public
  */
@@ -79,7 +79,7 @@ export async function getActivity(
 ): Promise<ActivityOutput> {
   const startTime = performance.now();
   const effectiveReqId = input.reqId ?? randomUUID();
-  const { accountService } = resolveActivityDeps(
+  const { usageService, accountService } = resolveActivityDeps(
     toUserId(input.sessionUser.id)
   );
 
@@ -104,58 +104,73 @@ export async function getActivity(
 
   const stepMs = STEP_MS[effectiveStep];
 
-  // Fetch charge receipts (primary source per CHARGE_RECEIPTS_IS_LEDGER_TRUTH)
-  // MVP: capped at adapter max (1000). Heavy users may see truncated charts.
-  // TODO: SQL GROUP BY aggregation or materialized view for unbounded ranges.
-  const receipts = await accountService.listChargeReceipts({
-    billingAccountId: billingAccount.id,
-    from,
-    to,
-    limit: 1000,
-  });
+  // Fetch ALL logs in range for charts/totals (range-complete, no silent truncation)
+  // Also fetch receipts for spend join
+  const [logsResult, receipts] = await Promise.all([
+    usageService.listUsageLogsByRange({
+      billingAccountId: billingAccount.id,
+      from,
+      to,
+    }),
+    accountService.listChargeReceipts({
+      billingAccountId: billingAccount.id,
+      from,
+      to,
+      limit: 10000, // High limit for receipts (should match logs)
+    }),
+  ]);
 
-  const receiptCount = receipts.length;
+  // All logs in range (already filtered by adapter)
+  const allLogs = logsResult.logs;
+  const fetchedLogCount = allLogs.length;
 
-  // Fetch LLM details for receipts that have receipt_kind='llm'
-  const llmReceiptIds = receipts
-    .filter((r) => r.receiptKind === "llm")
-    .map((r) => r.id);
+  // Build join map: litellmCallId → responseCostUsd
+  // Activity is usage-driven; charge_receipts adds cost via LEFT JOIN on litellmCallId
+  const chargeMap = new Map<string, string>(); // litellmCallId → responseCostUsd (USD)
+  for (const receipt of receipts) {
+    // Only join LiteLLM-based receipts to LiteLLM usage logs
+    if (
+      receipt.sourceSystem === "litellm" &&
+      receipt.litellmCallId &&
+      receipt.responseCostUsd
+    ) {
+      chargeMap.set(receipt.litellmCallId, receipt.responseCostUsd);
+    }
+  }
 
-  const llmDetails =
-    llmReceiptIds.length > 0
-      ? await accountService.listLlmChargeDetails({
-          chargeReceiptIds: llmReceiptIds,
-        })
-      : [];
+  // Track unjoined logs for observability
+  let unjoinedLogCount = 0;
+  for (const log of allLogs) {
+    if (!chargeMap.has(log.id)) {
+      unjoinedLogCount++;
+    }
+  }
 
-  // Build detail map: chargeReceiptId → detail
-  const detailMap = new Map(llmDetails.map((d) => [d.chargeReceiptId, d]));
-
-  // Aggregate receipts into epoch buckets
+  // Aggregate logs into epoch buckets for tokens/requests
+  // Also aggregate spend by log.timestamp (joined from receipts by litellmCallId)
   const buckets = new Map<
     number,
     { tokens: number; requests: number; spend: number }
   >();
 
-  for (const receipt of receipts) {
-    const bucketEpoch = toBucketEpoch(receipt.createdAt, stepMs);
+  for (const log of allLogs) {
+    const bucketEpoch = toBucketEpoch(log.timestamp, stepMs);
     const existing = buckets.get(bucketEpoch) ?? {
       tokens: 0,
       requests: 0,
       spend: 0,
     };
 
-    const detail = detailMap.get(receipt.id);
-    const tokensIn = detail?.tokensIn ?? 0;
-    const tokensOut = detail?.tokensOut ?? 0;
-    const spend = receipt.responseCostUsd
-      ? Number.parseFloat(receipt.responseCostUsd)
+    // Get spend from joined receipt by litellmCallId (if exists)
+    const responseCostUsdStr = chargeMap.get(log.id);
+    const logSpend = responseCostUsdStr
+      ? Number.parseFloat(responseCostUsdStr)
       : 0;
 
     buckets.set(bucketEpoch, {
-      tokens: existing.tokens + tokensIn + tokensOut,
+      tokens: existing.tokens + log.tokensIn + log.tokensOut,
       requests: existing.requests + 1,
-      spend: existing.spend + spend,
+      spend: existing.spend + logSpend,
     });
   }
 
@@ -171,17 +186,17 @@ export async function getActivity(
     };
   });
 
-  // Calculate totals from all receipts in range
+  // Calculate totals from all logs in range
   let totalUserSpend = 0;
   let totalTokens = 0;
-  for (const receipt of receipts) {
-    if (receipt.responseCostUsd) {
-      totalUserSpend += Number.parseFloat(receipt.responseCostUsd);
+  for (const log of allLogs) {
+    totalTokens += log.tokensIn + log.tokensOut;
+    const responseCostUsdStr = chargeMap.get(log.id);
+    if (responseCostUsdStr) {
+      totalUserSpend += Number.parseFloat(responseCostUsdStr);
     }
-    const detail = detailMap.get(receipt.id);
-    totalTokens += (detail?.tokensIn ?? 0) + (detail?.tokensOut ?? 0);
   }
-  const totalRequests = receipts.length;
+  const totalRequests = allLogs.length;
 
   const avgDays = Math.max(1, diffDays);
 
@@ -203,37 +218,35 @@ export async function getActivity(
     },
   };
 
-  // Build rows — receipts already sorted by createdAt DESC from adapter
+  // Build rows with user cost from joined receipts
+  // Sort by timestamp descending (most recent first) and apply pagination
+  const sortedLogs = [...allLogs].sort(
+    (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+  );
   const pageSize = input.limit ?? 20;
-  const paginatedReceipts = receipts.slice(0, pageSize);
+  const paginatedLogs = sortedLogs.slice(0, pageSize);
 
-  const rows = paginatedReceipts.map((receipt) => {
-    const detail = detailMap.get(receipt.id);
-    const tokensOut = detail?.tokensOut ?? 0;
-    const latencyMs = detail?.latencyMs ?? 0;
-    const speed =
-      tokensOut > 0 && latencyMs > 0 ? tokensOut / (latencyMs / 1000) : 0;
-
-    return {
-      id: receipt.id,
-      timestamp: receipt.createdAt.toISOString(),
-      provider: detail?.provider ?? receipt.sourceSystem,
-      model: detail?.model ?? "unknown",
-      graphId: detail?.graphId ?? "unknown:unknown",
-      tokensIn: detail?.tokensIn ?? 0,
-      tokensOut,
-      cost: receipt.responseCostUsd ?? "—",
-      speed,
-    };
-  });
+  const rows = paginatedLogs.map((log) => ({
+    id: log.id,
+    timestamp: log.timestamp.toISOString(),
+    provider: "litellm",
+    model: log.model,
+    app: (log.metadata?.app as string) || "Unknown",
+    tokensIn: log.tokensIn,
+    tokensOut: log.tokensOut,
+    // Display user cost in USD from charge_receipts (LEFT JOIN by litellmCallId)
+    cost: chargeMap.get(log.id) ?? "—",
+    speed: (log.metadata?.speed as number) || 0,
+    finish: (log.metadata?.finishReason as string) || "unknown",
+  }));
 
   // Generate nextCursor if there are more rows
   let nextCursor: string | null = null;
-  if (receipts.length > pageSize) {
-    const lastRow = paginatedReceipts.at(-1);
+  if (sortedLogs.length > pageSize) {
+    const lastRow = paginatedLogs.at(-1);
     if (lastRow) {
       const json = JSON.stringify({
-        createdAt: lastRow.createdAt.toISOString(),
+        createdAt: lastRow.timestamp.toISOString(),
         id: lastRow.id,
       });
       nextCursor = Buffer.from(json).toString("base64");
@@ -258,8 +271,8 @@ export async function getActivity(
     effectiveStep,
     durationMs: performance.now() - startTime,
     resultCount: rows.length,
-    fetchedLogCount: receiptCount,
-    unjoinedLogCount: 0,
+    fetchedLogCount,
+    unjoinedLogCount,
     status: "success",
   };
   logger.info(logEvent, EVENT_NAMES.AI_ACTIVITY_QUERY_COMPLETED);

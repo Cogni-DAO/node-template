@@ -95,4 +95,3 @@ export type {
 } from "./tooling/types";
 // Usage types
 export type { ExecutorType, UsageFact } from "./usage/usage";
-export { UsageFactHintsSchema, UsageFactStrictSchema } from "./usage/usage";

@@ -7,7 +7,7 @@
  * Scope: Executes completion route, then replays with exact persisted values to verify idempotency. Does not test usage_report event path (P0 refactor pending).
  * Invariants:
  *   - IDEMPOTENT_CHARGES: DB unique on (source_system, source_reference) prevents duplicate charges
- * Side-effects: IO (database writes, LLM calls via mock-openai-api in test mode)
+ * Side-effects: IO (database writes, LLM calls via FakeLlmAdapter in test mode)
  * Notes: Requires dev stack with DB running (pnpm dev:stack:test). Discovers values from actual execution.
  * Links: GRAPH_EXECUTION.md, billing.ts, schema.billing.ts
  * @public
@@ -24,7 +24,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 import type { UserId } from "@cogni/ids";
-import { createCompletionRequest } from "@tests/_fakes";
+import { TEST_MODEL_ID } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -40,9 +40,11 @@ import {
 
 describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
   it("replay with same (source_system, source_reference) → still 1 row", async () => {
-    // Ensure test mode (mock-LLM backend via litellm.test.config.yaml)
+    // Ensure test mode for FakeLlmAdapter
     if (process.env.APP_ENV !== "test") {
-      throw new Error("This test must run in APP_ENV=test (mock-LLM backend)");
+      throw new Error(
+        "This test must run in APP_ENV=test to use FakeLlmAdapter"
+      );
     }
 
     const db = getSeedDb();
@@ -88,11 +90,10 @@ describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
       "http://localhost:3000/api/v1/ai/completion",
       {
         method: "POST",
-        body: JSON.stringify(
-          createCompletionRequest({
-            messages: [{ role: "user", content: "Idempotency test" }],
-          })
-        ),
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Idempotency test" }],
+          model: TEST_MODEL_ID,
+        }),
       }
     );
 

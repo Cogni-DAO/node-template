@@ -71,7 +71,6 @@ describe("completion facade contract", () => {
         messages: [{ role: "user", content: "test" }],
         model: TEST_MODEL_ID,
         sessionUser: TEST_SESSION_USER_1,
-        graphName: "langgraph:poet",
       },
       testCtx
     );
@@ -121,7 +120,6 @@ describe("completion facade contract", () => {
         messages: [{ role: "user", content: "test" }],
         model: TEST_MODEL_ID,
         sessionUser: TEST_SESSION_USER_1,
-        graphName: "langgraph:poet",
       },
       testCtx
     );

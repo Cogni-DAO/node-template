@@ -121,29 +121,22 @@ export interface LlmService {
 
 ```typescript
 // DTOs that don't leak core internals
-const InputMessageDtoSchema = z.object({
+export const MessageDtoSchema = z.object({
   role: z.enum(["user", "assistant"]), // No 'system' from client
-  content: z.string().max(4000), // Cap client input
+  content: z.string(),
   timestamp: z.string().optional(), // Client timestamp ignored - set server-side
 });
 
-const OutputMessageDtoSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  content: z.string().max(65_536), // LLM responses can be long
-  timestamp: z.string(),
-  requestId: z.string(),
-});
-
-export const aiCompletionOperation = {
-  id: "ai.completion.v1",
-  summary: "Chat completion via AI",
+export const aiCompleteOperation = {
+  id: "ai.complete.v1",
+  summary: "Complete chat messages via AI",
   input: z.object({
-    messages: z.array(InputMessageDtoSchema),
-    model: z.string(),
-    graphName: z.string(),
+    messages: z.array(MessageDtoSchema),
   }),
   output: z.object({
-    message: OutputMessageDtoSchema,
+    message: MessageDtoSchema.omit({ timestamp: true }).extend({
+      timestamp: z.string(), // Always present in response
+    }),
   }),
 } as const;
 ```

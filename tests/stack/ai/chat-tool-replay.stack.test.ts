@@ -16,7 +16,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { TEST_GRAPH_NAME } from "@tests/_fakes";
 import {
   DataStreamChunkType,
   isErrorEvent,
@@ -131,7 +130,6 @@ describe("Chat Tool Replay", () => {
       stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
-      graphName: TEST_GRAPH_NAME,
       stream: true,
       messages: [
         {
@@ -233,6 +231,21 @@ describe("Chat Tool Replay", () => {
       reader.releaseLock();
     }
 
+    // Debug output
+    console.log("=== RAW DSP LINES ===");
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      console.log(
+        `  ${i}: ${line.slice(0, 120)}${line.length > 120 ? "..." : ""}`
+      );
+    }
+    console.log("=== STREAM ENDED CLEANLY:", streamEndedCleanly);
+    console.log("=== EVENT TYPES:", events.map((e) => e.type).join(", "));
+
+    // Check for 'a:' presence before assertions
+    const hasToolCallResult = rawLines.some((line) => line.startsWith("a:"));
+    console.log("=== HAS TOOL_CALL_RESULT (a:):", hasToolCallResult);
+
     // Assert stream ended cleanly
     expect(streamEndedCleanly).toBe(true);
 
@@ -302,7 +315,6 @@ describe("Chat Tool Replay", () => {
       stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
-      graphName: TEST_GRAPH_NAME,
       stream: true,
       messages: [
         {
@@ -348,7 +360,6 @@ describe("Chat Tool Replay", () => {
       stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
-      graphName: TEST_GRAPH_NAME,
       stream: true,
       messages: [
         {

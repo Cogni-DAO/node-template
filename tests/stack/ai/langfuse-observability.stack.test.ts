@@ -20,7 +20,6 @@
 
 import { randomUUID } from "node:crypto";
 
-import { createChatRequest } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
@@ -197,22 +196,20 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [
-                  { type: "text", text: "Hello, please respond briefly." },
-                ],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [
+                { type: "text", text: "Hello, please respond briefly." },
+              ],
+            },
+          ],
         }),
       });
 
@@ -265,20 +262,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Say hello" }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Say hello" }],
+            },
+          ],
         }),
       });
 
@@ -333,20 +328,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Hi" }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hi" }],
+            },
+          ],
         }),
       });
 
@@ -399,20 +392,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: longStateKey,
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Test" }],
-              },
-            ],
-          }),
+          stateKey: longStateKey,
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Test" }],
+            },
+          ],
         }),
       });
 
@@ -462,20 +453,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Hello" }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hello" }],
+            },
+          ],
         }),
       });
 
@@ -523,20 +512,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Hello" }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hello" }],
+            },
+          ],
         }),
       });
 
@@ -584,20 +571,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Hello" }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hello" }],
+            },
+          ],
         }),
       });
 
@@ -648,20 +633,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Hello" }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hello" }],
+            },
+          ],
         }),
       });
 
@@ -714,20 +697,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: sensitiveMessage }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: sensitiveMessage }],
+            },
+          ],
         }),
       });
 
@@ -791,20 +772,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Say hello briefly." }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Say hello briefly." }],
+            },
+          ],
         }),
       });
 
@@ -866,20 +845,18 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...createChatRequest({
-            model: modelId,
-            stateKey: randomUUID(),
-            messages: [
-              {
-                id: randomUUID(),
-                role: "user",
-                createdAt: new Date().toISOString(),
-                content: [{ type: "text", text: "Hi" }],
-              },
-            ],
-          }),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
+          model: modelId,
           stream: true,
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hi" }],
+            },
+          ],
         }),
       });
 

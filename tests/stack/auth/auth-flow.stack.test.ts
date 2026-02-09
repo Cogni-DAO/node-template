@@ -21,7 +21,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
-import { createCompletionRequest } from "@tests/_fakes";
+import { TEST_MODEL_ID } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
@@ -38,6 +38,11 @@ describe("Auth Flow Stack Test", () => {
 
     // Mock getSessionUser() to return session user
     vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
+
+    const body = {
+      messages: [{ role: "user", content: "Hello AI" }],
+      model: TEST_MODEL_ID,
+    };
 
     // Seed user in DB to satisfy FK constraint
     const db = getSeedDb();
@@ -64,11 +69,7 @@ describe("Auth Flow Stack Test", () => {
 
     const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
       method: "POST",
-      body: JSON.stringify(
-        createCompletionRequest({
-          messages: [{ role: "user", content: "Hello AI" }],
-        })
-      ),
+      body: JSON.stringify(body),
     });
 
     // Act
@@ -101,13 +102,14 @@ describe("Auth Flow Stack Test", () => {
     // Arrange
     vi.mocked(getSessionUser).mockResolvedValue(null);
 
+    const body = {
+      messages: [{ role: "user", content: "Hello AI" }],
+      model: TEST_MODEL_ID,
+    };
+
     const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
       method: "POST",
-      body: JSON.stringify(
-        createCompletionRequest({
-          messages: [{ role: "user", content: "Hello AI" }],
-        })
-      ),
+      body: JSON.stringify(body),
     });
 
     // Act

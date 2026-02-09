@@ -27,7 +27,7 @@ export const users = pgTable("users", {
   emailVerified: timestamp("email_verified", { withTimezone: true }),
   image: text("image"),
   walletAddress: text("wallet_address").unique(),
-}).enableRLS();
+});
 
 /**
  * Billing accounts table - per-user billing entity.
@@ -43,4 +43,4 @@ export const billingAccounts = pgTable("billing_accounts", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-}).enableRLS();
+});
