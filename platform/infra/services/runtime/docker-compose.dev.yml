@@ -509,8 +509,8 @@ services:
     depends_on:
       llm-proxy-openclaw:
         condition: service_healthy
-      # git-sync:
-      #   condition: service_completed_successfully
+      git-sync:
+        condition: service_completed_successfully
 
 networks:
   cogni-edge:
