@@ -194,7 +194,12 @@ Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md)
 
 **Decision:** Build our own, modeled on upstream's `pending` map + `expectFinal` + reconnect patterns. Upstream is not consumable as a library (deeply coupled internals, not exported from package). P0 ships the generator pattern; P1 refactors to persistent connection.
 
+### Sub-Projects
+
+- [proj.messenger-channels](proj.messenger-channels.md) — Expose OpenClaw's channel plugin system (WhatsApp, Telegram, etc.) to tenants via proxy endpoints + management UI
+
 ### Research Artifacts
 
 - [openclaw-gateway-header-injection.md](../../docs/research/openclaw-gateway-header-injection.md) — outboundHeaders investigation
 - [openclaw-gateway-integration-handoff.md](../../docs/research/openclaw-gateway-integration-handoff.md) — protocol reverse-engineering, frame sequences
+- [messenger-integration-openclaw-channels.md](../../docs/research/messenger-integration-openclaw-channels.md) — spike.0020: messenger channel integration research
