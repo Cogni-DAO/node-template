@@ -6,10 +6,9 @@
 # Purpose: Deploy containerized stack to remote VM via SSH with disk-aware cleanup to prevent 'no space left' failures.
 # Invariants:
 #   - APP_IMAGE and DEPLOY_ENVIRONMENT must be set; secrets via env vars
-#   - Keeps exactly 1 previous app image via stable 'keep-last' tag
-#   - Prunes BEFORE pull when disk >= 70%
+#   - Prunes BEFORE pull when free < 15GB or used > 70%
 # Notes:
-#   - 70% threshold prevents overlayfs extraction failures on 20GB disks
+#   - Dual gate (15GB free / 70% used) prevents overlayfs extraction failures on 40GB disks
 #   - Hard prune may force service image re-pull (reliability > speed)
 #   - Uses --volumes safely (all state in bind mounts, not named volumes)
 # Links: Called by .github/workflows/deploy.yml; uses platform/infra/services/runtime/
@@ -565,7 +564,27 @@ else
   fi
 fi
 
-# (Step 2.5 removed - Moved to after Disk Cleanup)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 2.5: Disk cleanup gate (before any image pulls)
+# Dual gate: free < 15GB OR used > 70% triggers cleanup
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AVAIL_GB=$(df -BG / | tail -1 | awk '{print $4}' | tr -d G)
+USED_PCT=$(df / | tail -1 | awk '{print $5}' | tr -d %)
+log_info "Disk: ${AVAIL_GB}GB free, ${USED_PCT}% used"
+
+if [ "$AVAIL_GB" -lt 15 ] || [ "$USED_PCT" -gt 70 ]; then
+  log_warn "Disk pressure (${AVAIL_GB}GB free, ${USED_PCT}% used). Running cleanup..."
+  docker system prune -af || true
+  journalctl --vacuum-time=3d || true
+
+  AVAIL_GB=$(df -BG / | tail -1 | awk '{print $4}' | tr -d G)
+  log_info "Free space after cleanup: ${AVAIL_GB}GB"
+
+  if [ "$AVAIL_GB" -lt 15 ]; then
+    log_error "Insufficient disk after cleanup (${AVAIL_GB}GB free)."
+    exit 1
+  fi
+fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 3: Authenticate to GHCR
@@ -574,49 +593,7 @@ log_info "Logging into GHCR for private image pulls..."
 echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 3.5: Pull OpenClaw gateway image from GHCR
-# Compose references short name; tag alias needed.
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Pulling OpenClaw gateway image..."
-docker pull ghcr.io/cogni-dao/node-template:openclaw-gateway-latest
-docker tag ghcr.io/cogni-dao/node-template:openclaw-gateway-latest openclaw-outbound-headers:latest
-log_info "OpenClaw gateway image ready"
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 4: Tag running image for rollback (keep exactly 1 previous version)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Tagging currently running app image for preservation..."
-cd /opt/cogni-template-runtime
-RUNNING_IMAGE="$($RUNTIME_COMPOSE ps -q app 2>/dev/null | xargs -r docker inspect --format '{{.Config.Image}}' 2>/dev/null || true)"
-if [[ -n "${RUNNING_IMAGE:-}" ]]; then
-  docker image tag "$RUNNING_IMAGE" cogni-runtime:keep-last || true
-  log_info "Tagged running image: $RUNNING_IMAGE"
-else
-  log_info "No running app image found (likely first deploy)"
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 5: Require 10GB free before pull (fail-fast disk gate)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AVAIL_GB=$(df -BG / | tail -1 | awk '{print $4}' | tr -d G)
-log_info "Free space before pull: ${AVAIL_GB}GB"
-
-if [ "$AVAIL_GB" -lt 10 ]; then
-  log_warn "Low disk (${AVAIL_GB}GB free). Running aggressive cleanup..."
-  docker system prune -af || true
-  journalctl --vacuum-time=3d || true
-
-  AVAIL_GB=$(df -BG / | tail -1 | awk '{print $4}' | tr -d G)
-  log_info "Free space after cleanup: ${AVAIL_GB}GB"
-
-  if [ "$AVAIL_GB" -lt 10 ]; then
-    log_error "Insufficient disk after cleanup (${AVAIL_GB}GB free). Increase disk or move /var/lib/containerd to dedicated volume."
-    exit 1
-  fi
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 5.5: Deploy SourceCred (After cleanup, before app pull)
+# Step 4: Deploy SourceCred (After cleanup, before app pull)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Deploying SourceCred stack..."
 
@@ -676,6 +653,20 @@ while true; do
 
     sleep 2
 done
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 5.9: Assert profile services exist (guard against silent compose drift)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESOLVED_SERVICES=$($RUNTIME_COMPOSE --profile bootstrap --profile sandbox-openclaw config --services)
+for svc in openclaw-gateway llm-proxy-openclaw; do
+  if ! echo "$RESOLVED_SERVICES" | grep -q "^${svc}$"; then
+    log_error "Profile guardrail: service '$svc' not found in compose config."
+    log_error "Compose file: /opt/cogni-template-runtime/docker-compose.yml"
+    log_error "Resolved services: $RESOLVED_SERVICES"
+    exit 1
+  fi
+done
+log_info "Profile guardrail passed: openclaw-gateway, llm-proxy-openclaw resolved"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6: Validate images exist (fail fast)
@@ -801,6 +792,17 @@ rsync -av -e "ssh $SSH_OPTS" \
 rsync -av -e "ssh $SSH_OPTS" \
   "$REPO_ROOT/platform/infra/services/sourcecred/" \
   root@"$VM_HOST":/opt/cogni-template-sourcecred/
+
+# Upload sandbox-proxy config (OpenClaw nginx)
+rsync -av -e "ssh $SSH_OPTS" \
+  "$REPO_ROOT/platform/infra/services/sandbox-proxy/" \
+  root@"$VM_HOST":/opt/cogni-template-runtime/sandbox-proxy/
+
+# Upload OpenClaw gateway config
+ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-runtime/openclaw"
+scp $SSH_OPTS \
+  "$REPO_ROOT/services/sandbox-openclaw/openclaw-gateway.json" \
+  root@"$VM_HOST":/opt/cogni-template-runtime/openclaw/openclaw-gateway.json
 
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
