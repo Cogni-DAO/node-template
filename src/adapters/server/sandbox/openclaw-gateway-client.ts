@@ -406,12 +406,16 @@ export class OpenClawGatewayClient {
   }
 
   /**
-   * Configure per-session outbound headers via WS sessions.patch.
+   * Configure per-session settings via WS sessions.patch.
    * Opens a connection, performs handshake, sends patch, closes.
+   *
+   * @param model - Model override (e.g. "cogni/test-model").
+   *   Sets session-level modelOverride via OpenClaw's sessions.patch handler.
    */
   async configureSession(
     sessionKey: string,
-    outboundHeaders: Record<string, string>
+    outboundHeaders: Record<string, string>,
+    model: string
   ): Promise<void> {
     const wsUrl = this.gatewayUrl.replace(/^http/, "ws");
     this.log.debug(
@@ -500,7 +504,7 @@ export class OpenClawGatewayClient {
                 type: "req",
                 id: patchId,
                 method: "sessions.patch",
-                params: { key: sessionKey, outboundHeaders },
+                params: { key: sessionKey, outboundHeaders, model },
               })
             );
             return;

@@ -35,6 +35,27 @@ const GATEWAY_TOKEN =
 const GATEWAY_CONTAINER = "openclaw-gateway";
 const PROXY_CONTAINER = "llm-proxy-openclaw";
 
+/**
+ * LiteLLM deployment hashes per model group (litellm_model_id).
+ * These are SHA-256 hashes of the deployment config and are stable across restarts.
+ * Derived from LiteLLM spend logs: GET /spend/logs → entries[].model_id + entries[].model_group
+ * Source configs: litellm.test.config.yaml (test models → mock-llm backend)
+ */
+const LITELLM_MODEL_IDS: Record<string, string> = {
+  "test-model":
+    "cde092af6f4c69b3d3ac2e2f7dcf97a3279fa1c37d1f399951f5d7cc7c4bc511",
+  "test-free-model":
+    "c86e3ee3b6dc9be88ff9429c4e5583502c62d5d0cc87767095a5f52b260bb897",
+  "test-paid-model":
+    "4bc3010e9687ca1b5962c19db9bfbecdcbdf53d4248a2cdd0eebfd1a58420075",
+};
+
+/** Extract litellm_model_id hash from an audit log line. */
+function extractModelId(auditLine: string): string {
+  const match = auditLine.match(/litellm_model_id=(\S+)/);
+  return match?.[1] ?? "-";
+}
+
 function uniqueRunId(prefix = "gw-test"): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -323,6 +344,87 @@ describe("OpenClaw Gateway Full-Stack", () => {
     expect(textB).not.toContain("HEARTBEAT_OK");
     expect(finalA!.text).not.toContain("HEARTBEAT_OK");
     expect(finalB!.text).not.toContain("HEARTBEAT_OK");
+  });
+
+  it("session model override: test-free-model reaches LiteLLM", async () => {
+    const runId = uniqueRunId("model-free");
+    const sessionKey = `agent:main:test-model-free:${runId}`;
+    const outboundHeaders = {
+      "x-litellm-end-user-id": "test-model-select",
+      "x-litellm-spend-logs-metadata": JSON.stringify({
+        run_id: runId,
+        graph_id: "sandbox:openclaw",
+      }),
+      "x-cogni-run-id": runId,
+    };
+
+    // Patch session with model override BEFORE agent call
+    await client.configureSession(
+      sessionKey,
+      outboundHeaders,
+      "cogni/test-free-model"
+    );
+
+    // Run agent — should use the overridden model
+    await collectEvents(
+      client.runAgent({
+        message: "Hello",
+        sessionKey,
+        outboundHeaders,
+        timeoutMs: 45_000,
+      })
+    );
+
+    // Assert ACTUAL model from LiteLLM response header in proxy audit log.
+    // litellm_model_id is a deployment hash available even in SSE streaming mode
+    // (unlike litellm_model_group which LiteLLM omits from streaming response headers).
+    await new Promise((r) => setTimeout(r, 1000));
+    const auditOutput = await execInContainer(
+      docker,
+      PROXY_CONTAINER,
+      `grep "run_id=${runId}" /tmp/audit.log`
+    );
+    const modelId = extractModelId(auditOutput);
+    expect(modelId).toBe(LITELLM_MODEL_IDS["test-free-model"]);
+    expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
+  });
+
+  it("session model override: test-paid-model reaches LiteLLM", async () => {
+    const runId = uniqueRunId("model-paid");
+    const sessionKey = `agent:main:test-model-paid:${runId}`;
+    const outboundHeaders = {
+      "x-litellm-end-user-id": "test-model-select",
+      "x-litellm-spend-logs-metadata": JSON.stringify({
+        run_id: runId,
+        graph_id: "sandbox:openclaw",
+      }),
+      "x-cogni-run-id": runId,
+    };
+
+    await client.configureSession(
+      sessionKey,
+      outboundHeaders,
+      "cogni/test-paid-model"
+    );
+
+    await collectEvents(
+      client.runAgent({
+        message: "Hello",
+        sessionKey,
+        outboundHeaders,
+        timeoutMs: 45_000,
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 1000));
+    const auditOutput = await execInContainer(
+      docker,
+      PROXY_CONTAINER,
+      `grep "run_id=${runId}" /tmp/audit.log`
+    );
+    const modelId = extractModelId(auditOutput);
+    expect(modelId).toBe(LITELLM_MODEL_IDS["test-paid-model"]);
+    expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
   });
 
   it("gateway container does not have LITELLM_MASTER_KEY in env", async () => {

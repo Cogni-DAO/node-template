@@ -19,13 +19,14 @@ events {
 }
 
 http {
-    # Audit log: captures run_id + end_user from client headers + cost from upstream
+    # Audit log: captures run_id + end_user from client headers + cost/model from upstream
     log_format audit '$time_iso8601 '
                      'run_id=$http_x_cogni_run_id '
                      'end_user=$http_x_litellm_end_user_id '
                      'status=$status '
                      'litellm_call_id=$upstream_http_x_litellm_call_id '
-                     'litellm_response_cost=$upstream_http_x_litellm_response_cost';
+                     'litellm_response_cost=$upstream_http_x_litellm_response_cost '
+                     'litellm_model_id=$upstream_http_x_litellm_model_id';
 
     access_log /tmp/audit.log audit;
 
