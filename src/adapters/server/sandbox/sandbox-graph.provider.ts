@@ -37,7 +37,7 @@ import type {
   SandboxRunnerPort,
   SandboxRunResult,
 } from "@/ports";
-import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 import type { GraphProvider } from "../ai/graph-provider";
 import type { OpenClawGatewayClient } from "./openclaw-gateway-client";
@@ -161,9 +161,17 @@ export class SandboxGraphProvider implements GraphProvider {
       return this.createErrorResult(runId, ingressRequestId, "not_found");
     }
 
-    this.log.debug(
-      { runId, agentName, messageCount: req.messages.length, model: req.model },
-      "SandboxGraphProvider.runGraph starting"
+    this.log.info(
+      {
+        event: EVENT_NAMES.SANDBOX_EXECUTION_STARTED,
+        runId,
+        ingressRequestId,
+        agentName,
+        executionMode: agent.executionMode ?? "ephemeral",
+        model: req.model,
+        messageCount: req.messages.length,
+      },
+      EVENT_NAMES.SANDBOX_EXECUTION_STARTED
     );
 
     if (agent.executionMode === "gateway") {
@@ -193,6 +201,7 @@ export class SandboxGraphProvider implements GraphProvider {
     const stream = (async function* (): AsyncIterable<AiEvent> {
       const { runId, ingressRequestId, messages, model, caller, graphId } = req;
       const attempt = 0; // P0_ATTEMPT_FREEZE
+      const execStartTime = Date.now();
 
       // Create isolated workspace with messages file
       const workspaceDir = mkdtempSync(join(tmpdir(), `sandbox-${runId}-`));
@@ -266,13 +275,17 @@ export class SandboxGraphProvider implements GraphProvider {
           const errInfo = envelope.meta.error;
           self.log.error(
             {
+              event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
               runId,
-              exitCode: result.exitCode,
+              ingressRequestId,
+              executionMode: "ephemeral",
+              outcome: "error",
+              durationMs: Date.now() - execStartTime,
+              model,
               errorCode: result.errorCode ?? errInfo?.code,
-              errorMessage: errInfo?.message,
-              stderr: result.stderr.slice(0, 500),
+              exitCode: result.exitCode,
             },
-            "Sandbox agent failed"
+            EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
           );
           yield { type: "error", error: "internal" as AiExecutionErrorCode };
           yield { type: "done" };
@@ -327,6 +340,21 @@ export class SandboxGraphProvider implements GraphProvider {
 
         // Emit assistant_final for history persistence
         yield { type: "assistant_final", content: content || "" };
+
+        self.log.info(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            runId,
+            ingressRequestId,
+            executionMode: "ephemeral",
+            outcome: "success",
+            durationMs: Date.now() - execStartTime,
+            billingEntryCount: billingEntries.length,
+            model,
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
+
         yield { type: "done" };
 
         if (state.resolve) {
@@ -339,7 +367,19 @@ export class SandboxGraphProvider implements GraphProvider {
           });
         }
       } catch (err) {
-        self.log.error({ runId, error: err }, "Sandbox execution threw");
+        self.log.error(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            runId,
+            ingressRequestId,
+            executionMode: "ephemeral",
+            outcome: "error",
+            durationMs: Date.now() - execStartTime,
+            model,
+            errorMessage: err instanceof Error ? err.message : String(err),
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
         yield { type: "error", error: "internal" as AiExecutionErrorCode };
         yield { type: "done" };
         if (state.resolve) {
@@ -383,11 +423,24 @@ export class SandboxGraphProvider implements GraphProvider {
     const stream = (async function* (): AsyncIterable<AiEvent> {
       const { runId, ingressRequestId, messages, model, caller, graphId } = req;
       const attempt = 0; // P0_ATTEMPT_FREEZE
+      const execStartTime = Date.now();
+      const callLog = self.log.child({
+        runId,
+        agentName: agent.name,
+        ingressRequestId,
+      });
 
       if (!self.gatewayClient) {
-        self.log.error(
-          { runId },
-          "Gateway client not configured for gateway agent"
+        callLog.error(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            executionMode: "gateway",
+            outcome: "error",
+            durationMs: 0,
+            errorCode: "gateway_client_missing",
+            model,
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
         );
         yield { type: "error", error: "internal" as AiExecutionErrorCode };
         yield { type: "done" };
@@ -420,18 +473,17 @@ export class SandboxGraphProvider implements GraphProvider {
           .reverse()
           .find((m) => m.role === "user");
 
-        self.log.debug(
-          { runId, sessionKey },
-          "Sending agent call via gateway WS"
-        );
+        callLog.debug({ sessionKey }, "Sending agent call via gateway WS");
 
         // Run agent via gateway WS — yields typed events (per OpenClaw gateway protocol)
         let content = "";
+        let billingEntryCount = 0;
         for await (const event of self.gatewayClient.runAgent({
           message: lastUserMsg?.content ?? "",
           sessionKey,
           outboundHeaders,
           timeoutMs: (agent.limits.maxRuntimeSec ?? 600) * 1000,
+          log: callLog,
         })) {
           switch (event.type) {
             case "text_delta":
@@ -452,6 +504,7 @@ export class SandboxGraphProvider implements GraphProvider {
           await new Promise((r) => setTimeout(r, 500));
 
           const billingEntries = await self.billingReader.readEntries(runId);
+          billingEntryCount = billingEntries.length;
           if (billingEntries.length > 0) {
             for (const entry of billingEntries) {
               const usageFact: UsageFact = {
@@ -469,8 +522,8 @@ export class SandboxGraphProvider implements GraphProvider {
               yield { type: "usage_report", fact: usageFact };
             }
           } else {
-            self.log.error(
-              { runId, model },
+            callLog.error(
+              { model },
               "CRITICAL: No billing entries from gateway proxy audit log"
             );
             throw new Error(
@@ -478,14 +531,26 @@ export class SandboxGraphProvider implements GraphProvider {
             );
           }
         } else {
-          self.log.warn(
-            { runId },
+          callLog.warn(
             "No billing reader configured — billing will be incomplete"
           );
         }
 
         // Emit assistant_final for history persistence
         yield { type: "assistant_final", content: content || "" };
+
+        callLog.info(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            executionMode: "gateway",
+            outcome: "success",
+            durationMs: Date.now() - execStartTime,
+            billingEntryCount,
+            model,
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
+
         yield { type: "done" };
 
         if (state.resolve) {
@@ -498,7 +563,17 @@ export class SandboxGraphProvider implements GraphProvider {
           });
         }
       } catch (err) {
-        self.log.error({ runId, error: err }, "Gateway execution threw");
+        callLog.error(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            executionMode: "gateway",
+            outcome: "error",
+            durationMs: Date.now() - execStartTime,
+            model,
+            errorMessage: err instanceof Error ? err.message : String(err),
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
         yield { type: "error", error: "internal" as AiExecutionErrorCode };
         yield { type: "done" };
         if (state.resolve) {

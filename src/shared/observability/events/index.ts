@@ -71,6 +71,11 @@ export const EVENT_NAMES = {
   ADAPTER_RIPGREP_ERROR: "adapter.ripgrep.error",
   ADAPTER_RIPGREP_SEARCH: "adapter.ripgrep.search",
   ADAPTER_RIPGREP_OPEN: "adapter.ripgrep.open",
+  ADAPTER_OPENCLAW_GATEWAY_ERROR: "adapter.openclaw_gateway.error",
+
+  // Sandbox Execution Events
+  SANDBOX_EXECUTION_STARTED: "sandbox.execution.started",
+  SANDBOX_EXECUTION_COMPLETE: "sandbox.execution.complete",
 
   // Invariant Warnings
   INV_PROVIDER_META_MODEL_MISSING: "inv_provider_meta_model_missing",

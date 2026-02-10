@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
 import WebSocket from "ws";
 
-import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocol types (subset of OpenClaw gateway protocol)
@@ -68,6 +68,8 @@ export interface RunAgentOptions {
   outboundHeaders?: Record<string, string>;
   /** Total timeout for the operation (default: 120s). */
   timeoutMs?: number;
+  /** Caller-provided logger with pre-bound context (runId, etc.). */
+  log?: Logger;
 }
 
 /**
@@ -112,9 +114,15 @@ export class OpenClawGatewayClient {
   async *runAgent(opts: RunAgentOptions): AsyncGenerator<GatewayAgentEvent> {
     const timeoutMs = opts.timeoutMs ?? 120_000;
     const wsUrl = this.gatewayUrl.replace(/^http/, "ws");
+    const log = opts.log ?? this.log;
+    const startTime = Date.now();
 
-    this.log.debug(
-      { sessionKey: opts.sessionKey, hasHeaders: !!opts.outboundHeaders },
+    log.info(
+      {
+        sessionKey: opts.sessionKey,
+        hasHeaders: !!opts.outboundHeaders,
+        timeoutMs,
+      },
       "Starting gateway agent call"
     );
 
@@ -123,7 +131,8 @@ export class OpenClawGatewayClient {
       | { kind: "event"; value: GatewayAgentEvent }
       | { kind: "done" }
       | { kind: "error"; error: Error }
-      | { kind: "ws_closed" };
+      | { kind: "ws_closed" }
+      | { kind: "heartbeat" };
 
     const queue: QueueItem[] = [];
     let notify: (() => void) | null = null;
@@ -144,6 +153,9 @@ export class OpenClawGatewayClient {
         error: new Error(`Gateway call timed out after ${timeoutMs}ms`),
       });
     }, timeoutMs);
+    const heartbeatInterval = setInterval(() => {
+      push({ kind: "heartbeat" });
+    }, 30_000);
 
     try {
       // Phase 1: Handshake (blocking)
@@ -261,9 +273,14 @@ export class OpenClawGatewayClient {
 
           // Unexpected status — log and treat as error
           terminalSeen = true;
-          this.log.warn(
-            { agentRequestId, status, payload },
-            "Unexpected res status from gateway"
+          log.warn(
+            {
+              event: EVENT_NAMES.ADAPTER_OPENCLAW_GATEWAY_ERROR,
+              agentRequestId,
+              status,
+              reasonCode: "unexpected_status",
+            },
+            EVENT_NAMES.ADAPTER_OPENCLAW_GATEWAY_ERROR
           );
           push({
             kind: "event",
@@ -335,14 +352,27 @@ export class OpenClawGatewayClient {
           const item = queue.shift()!;
           if (item.kind === "done") return;
           if (item.kind === "error") throw item.error;
+          if (item.kind === "heartbeat") {
+            const elapsedMs = Date.now() - startTime;
+            log.warn(
+              { elapsedMs, timeoutMs },
+              "Gateway agent still waiting for response"
+            );
+            continue;
+          }
           if (item.kind === "ws_closed") {
             if (terminalSeen) {
               // Normal: WS closed after we already processed the terminal frame
               return;
             }
             // Abnormal: WS closed before terminal frame — surface as error
-            this.log.error(
-              "WebSocket closed before terminal res frame received"
+            log.error(
+              {
+                event: EVENT_NAMES.ADAPTER_OPENCLAW_GATEWAY_ERROR,
+                reasonCode: "ws_closed_before_terminal",
+                elapsedMs: Date.now() - startTime,
+              },
+              EVENT_NAMES.ADAPTER_OPENCLAW_GATEWAY_ERROR
             );
             throw new Error(
               "Gateway WebSocket closed before agent response completed"
@@ -353,6 +383,7 @@ export class OpenClawGatewayClient {
       }
     } finally {
       clearTimeout(timer);
+      clearInterval(heartbeatInterval);
       if (ws.readyState === WebSocket.OPEN) {
         ws.close();
       }
