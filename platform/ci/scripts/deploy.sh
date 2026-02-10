@@ -574,6 +574,15 @@ log_info "Logging into GHCR for private image pulls..."
 echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 3.5: Pull OpenClaw gateway image from GHCR
+# Compose references short name; tag alias needed.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "Pulling OpenClaw gateway image..."
+docker pull ghcr.io/cogni-dao/openclaw-outbound-headers:latest
+docker tag ghcr.io/cogni-dao/openclaw-outbound-headers:latest openclaw-outbound-headers:latest
+log_info "OpenClaw gateway image ready"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 4: Tag running image for rollback (keep exactly 1 previous version)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Tagging currently running app image for preservation..."
@@ -672,7 +681,7 @@ done
 # Step 6: Validate images exist (fail fast)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Validating required images are available..."
-if ! $RUNTIME_COMPOSE --dry-run --profile bootstrap pull; then
+if ! $RUNTIME_COMPOSE --dry-run --profile bootstrap --profile sandbox-openclaw pull; then
   log_error "❌ Required images not found in registry"
   log_error "Build workflow may have failed - check previous workflow run"
   log_error "Expected: APP_IMAGE=${APP_IMAGE}, MIGRATOR_IMAGE=${MIGRATOR_IMAGE}"
@@ -684,7 +693,7 @@ fi
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "[$(date -u +%H:%M:%S)] Pulling updated images (app continues serving)..."
 emit_deployment_event "deployment.pull_started" "in_progress" "Pulling images from registry"
-$RUNTIME_COMPOSE --profile bootstrap pull
+$RUNTIME_COMPOSE --profile bootstrap --profile sandbox-openclaw pull
 log_info "[$(date -u +%H:%M:%S)] Pull complete"
 emit_deployment_event "deployment.pull_complete" "success" "Images pulled successfully"
 
@@ -714,7 +723,7 @@ emit_deployment_event "deployment.migration_complete" "success" "Migrations appl
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "[$(date -u +%H:%M:%S)] Starting runtime stack (rolling update)..."
 emit_deployment_event "deployment.stack_up_started" "in_progress" "Starting container stack"
-$RUNTIME_COMPOSE up -d --remove-orphans
+$RUNTIME_COMPOSE --profile sandbox-openclaw up -d --remove-orphans
 log_info "[$(date -u +%H:%M:%S)] Stack up complete"
 emit_deployment_event "deployment.stack_up_complete" "success" "All containers started"
 

@@ -315,6 +315,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Pull OpenClaw gateway image
+        run: |
+          docker pull ghcr.io/cogni-dao/openclaw-outbound-headers:latest
+          docker tag ghcr.io/cogni-dao/openclaw-outbound-headers:latest openclaw-outbound-headers:latest
+
       - name: Build app image (with GHA cache)
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
@@ -370,7 +375,8 @@ jobs:
           # Temporal services required for schedule CRUD + execution tests
           # scheduler-worker required for workflow execution tests
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
-            up -d app postgres litellm mock-llm caddy temporal-postgres temporal temporal-ui scheduler-worker git-sync
+            --profile sandbox-openclaw \
+            up -d app postgres litellm mock-llm caddy temporal-postgres temporal temporal-ui scheduler-worker git-sync llm-proxy-openclaw openclaw-gateway
 
       - name: Probe container-boundary (git-sync volume)
         run: platform/ci/scripts/probe-repo-volume.sh
