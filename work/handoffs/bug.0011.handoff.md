@@ -1,116 +1,63 @@
 ---
-id: openclaw-streaming-truncation-handoff-v2
-type: research
-title: "Handoff v2: SSE Route Reconciliation — assistant_final Fix for Streaming Truncation"
+id: bug.0011.handoff
+type: handoff
+work_item_id: bug.0011
 status: active
-trust: reviewed
-verified: 2026-02-10
-summary: Root cause identified and partially fixed. The SSE route ignored assistant_final events, so truncated deltas were never recovered. Fix applied but needs real-stack validation.
-read_when: Continuing work on bug.0011 streaming truncation on feat/concurrent-openclaw branch
-owner: derekg1729
 created: 2026-02-10
-tags: [sandbox, openclaw, gateway, streaming, handoff, sse, assistant_final]
+updated: 2026-02-10
+branch: feat/concurrent-openclaw
+last_commit: b320e206
 ---
 
-# Handoff v2: SSE Route Reconciliation for Streaming Truncation
+# Handoff: Gateway Streaming Truncation (bug.0011)
 
-**Branch:** `feat/concurrent-openclaw`
-**Previous handoff:** `work/handoffs/archive/bug.0011/2026-02-09T00-00-00.md` (read that first for full context)
-**Date:** 2026-02-10
+## Context
 
-## What Changed This Session
+- OpenClaw gateway chat responses are truncated mid-sentence in the Cogni UI
+- Root cause: `route.ts` silently dropped `assistant_final` events — the authoritative full text from `AiEvent` contract (`ASSISTANT_FINAL_REQUIRED`) was never delivered to the client
+- Gateway client's diff-based delta logic (`openclaw-gateway-client.ts:282-295`) loses text across multi-turn LLM calls when accumulated text resets between turns
+- LangGraph inproc is unaffected — its deltas are reliable, so `assistant_final` reconciliation is a no-op
+- Reconciliation fix is committed and tested (6/6 contract tests), but gateway deltas are still fundamentally broken for multi-turn (P0 remaining)
 
-### Root Cause Identified
+## Current State
 
-The streaming truncation bug (bug.0011) has a clear server-side root cause in `src/app/api/v1/ai/chat/route.ts`.
+- **Committed** (`b320e206`): route.ts captures `assistant_final`, appends remainder if deltas are a prefix, logs error if missing, flush barrier before `message-finish`
+- **Committed** (`299d3a1f`): gateway client WS `terminalSeen` tracking + proxy timeout 300s→3600s
+- **Contract test** 6/6 passing: truncated, full-delivery, severely truncated, zero-delta, no-final, usage propagation
+- **Real-stack validated**: reconciliation fires correctly (logs confirm `ai.chat_reconcile_appending_remainder`)
+- **NOT fixed**: gateway client produces `accLen:0` in multi-turn (zero progressive streaming — user sees blank, then full text dump at end)
+- **NOT fixed**: possible agent input poisoning — multi-turn agent returned JSON parse error, may be receiving corrupted chat history
+- **NOT fixed**: hardcoded `openclaw-internal-token` — OpenClaw supports `${VAR}` substitution in config natively; use compose env + gitignored `.env` instead of custom renderer
 
-**The `for await` loop that processes AiEvents (lines 466-530) handled `text_delta` and `tool_call_*` events but completely ignored `assistant_final`.** The authoritative full text from the gateway was silently dropped. When any `text_delta` was lost (gateway multi-turn accumulated text reset, WS frame drops), the text was permanently truncated with no recovery.
+## Decisions Made
 
-This is the streaming chain:
+- `assistant_final` is authoritative per `AiEvent` contract (`packages/ai-core/src/events/ai-events.ts:74-86`) — route.ts is the translator, not the client
+- Server-side prefix-check reconciliation chosen over client-side SSE overwrite — keeps fix at the `AiEvent→SSE` boundary without protocol changes
+- Flush barrier (`setTimeout(0)`) required before `message-finish` — ReadableStream backpressure can drop reconciliation text
 
-```
-SandboxGraphProvider.createGatewayExecution()
-  yields: text_delta*, assistant_final, usage_report*, done
-    ↓
-RunEventRelay (ai_runtime.ts)
-  filters: usage_report (to billing subscriber)
-  passes: text_delta, assistant_final, done → uiStream()
-    ↓
-route.ts for-await loop
-  text_delta → controller.appendText()     ✅ handled
-  assistant_final → **SILENTLY DROPPED**   ❌ was the bug
-  tool_call_* → controller tool methods    ✅ handled
-  done → falls through                     (ok, loop exits when iterator ends)
-    ↓
-assistant-stream → Data Stream Protocol SSE → browser
-```
+## Next Actions
 
-**Why LangGraph inproc doesn't truncate:** The LangGraph SDK streams reliably — each chunk from the LLM produces one `text_delta`, all arrive in order. The `assistant_final` event is redundant (accumulated deltas == final text). No reconciliation needed.
+- [ ] Fix gateway client delta logic for multi-turn: `prevText` reset at line 285 causes zero deltas when accumulated text resets between turns
+- [ ] Investigate agent input poisoning: multi-turn agent returned JSON parse error as response — check what chat history is sent
+- [ ] Parameterize gateway auth token: set `gateway.auth.token` to `"${OPENCLAW_GATEWAY_TOKEN}"` in `openclaw-gateway.json`, provide via compose env / `.env` (gitignored). OpenClaw expands `${VAR}` at config load. Guard against config writeback expanding secrets (see OpenClaw issue #9813)
+- [ ] CI: build `cogni-sandbox-openclaw` image + start `sandbox-openclaw` compose profile in stack-test job
+- [ ] CI: gateway stack tests (`sandbox-openclaw.stack.test.ts`) currently local-only, blocked by above
 
-**Why gateway truncates:** The gateway client uses diff-based delta streaming (`openclaw-gateway-client.ts:282-295`). Each WS `chat` delta carries the full accumulated text; the client diffs against `prevText`. When the agent does multi-turn LLM calls (nemotron does chain-of-thought → 4 billing entries), the accumulated text resets between turns, triggering the regression guard that resets `prevText=""`. This can cause text content to be lost across turn boundaries.
+## Risks / Gotchas
 
-### Fix Applied (uncommitted)
+- Reconciliation only works for prefix case — if deltas and final diverge (multi-turn chain-of-thought), it logs `ai.chat_reconcile_content_diverged` but cannot fix the text
+- OpenClaw config writeback can expand `${VAR}` to plaintext — ensure config file is read-only or use `$include` for secret-bearing fields
+- The 1 failing stack test (`sandbox-llm-roundtrip-billing`) is pre-existing (ephemeral billing), not related to this work
 
-**File:** `src/app/api/v1/ai/chat/route.ts` (lines 461-568)
+## Pointers
 
-Added:
-
-1. **Tracking variables:** `accumulatedText`, `assistantFinalContent`, `eventSeq`
-2. **`assistant_final` handler:** Captures `event.content` and logs receipt
-3. **Reconciliation block** (after the for-await loop, before `message-finish`):
-   - If `assistantFinalContent` is longer than `accumulatedText` AND starts with it → `controller.appendText(remainder)` fills the gap
-   - If content diverges (multi-turn chain-of-thought) → logs warning for diagnostics
-
-### Test Written (needs work)
-
-**File:** `tests/contract/app/ai.chat.sse-reconciliation.test.ts`
-
-A contract-level test that mocks `completionStream` with a synthetic `AsyncIterable<AiEvent>` and verifies SSE output. Uses the existing `readDataStreamEvents` helper from `tests/helpers/data-stream.ts`.
-
-**Status:** 5/6 tests pass. The "zero deltas" edge case fails due to a test-infrastructure timing issue: `createAssistantStreamResponse` (assistant-stream package) has ReadableStream backpressure behavior where synchronous writes don't flush before the stream closes. Real streams have I/O delays so this doesn't happen in production. The test needs the synthetic stream to yield to the macrotask queue (`setTimeout(0)`) between events to simulate real async behavior. The zero-delta case has no preceding yields from delta events, so the reconciliation text never gets flushed.
-
-**Important realization from testing:** The same ReadableStream backpressure issue that causes the test to fail may also contribute to production truncation. If the gateway yields events very fast (all WS frames arrive in one burst), the `for await` loop processes everything quickly, and `controller.appendText()` calls may not all flush to the SSE response before the stream closes. This needs investigation with real gateway traffic — add `await new Promise(r => setTimeout(r, 0))` after the reconciliation `controller.appendText()` and see if it helps.
-
-## What Needs to Happen Next
-
-### 1. Validate the route.ts fix with real gateway traffic
-
-The reconciliation logic is applied but untested with real models. Steps:
-
-- Start the gateway stack (`pnpm sandbox:openclaw:up`)
-- Send a chat message via the UI using `sandbox:openclaw` graph
-- Check server logs for `ai.chat_assistant_final_received` and `ai.chat_reconcile_appending_remainder`
-- Verify UI shows full text matching `OPENCLAW_RAW_STREAM` output
-
-### 2. Investigate whether the reconciliation is sufficient
-
-The reconciliation only works if `assistantFinalContent.startsWith(accumulatedText)` — i.e., the accumulated deltas are a prefix of the final text. If the gateway's multi-turn diff logic causes non-prefix divergence, the reconciliation will log a warning but won't fix the text. In that case, the fix needs to be in the gateway client's delta logic itself.
-
-### 3. Fix the contract test zero-delta case
-
-Either add a macrotask yield after `controller.appendText(remainder)` in route.ts (which would also help production), or accept the zero-delta case as an unreachable edge case for gateway (gateway always has at least some deltas).
-
-### 4. Consider a deeper fix: flush guarantee in route.ts
-
-The `controller.appendText()` in assistant-stream may not guarantee immediate delivery to the SSE response. After reconciliation, adding a macrotask yield before `controller.enqueue({ type: "message-finish" })` could ensure the reconciliation text is flushed. This is worth testing.
-
-## Key Files (Updated)
-
-| File                                                     | What Changed                                  | Purpose                                                                               |
-| -------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `src/app/api/v1/ai/chat/route.ts`                        | **MODIFIED** — assistant_final reconciliation | SSE route handler. The for-await loop + reconciliation block at lines 461-568         |
-| `tests/contract/app/ai.chat.sse-reconciliation.test.ts`  | **NEW**                                       | Contract test with synthetic AiEvent streams (5/6 passing)                            |
-| `src/adapters/server/sandbox/openclaw-gateway-client.ts` | Unchanged (has prior WS close fix)            | WS protocol client. `runAgent()` diff-based delta streaming at lines 282-295          |
-| `src/adapters/server/sandbox/sandbox-graph.provider.ts`  | Unchanged                                     | `createGatewayExecution()` at line 366. Yields text_delta then assistant_final        |
-| `src/features/ai/services/ai_runtime.ts`                 | Unchanged                                     | `RunEventRelay` at line 184. Filters usage_report, passes assistant_final to uiStream |
-| `packages/ai-core/src/events/ai-events.ts`               | Unchanged                                     | `AssistantFinalEvent` type definition at line 82                                      |
-| `tests/helpers/data-stream.ts`                           | Unchanged                                     | Data Stream Protocol parser for tests                                                 |
-
-## Uncommitted Changes Summary
-
-```
-src/app/api/v1/ai/chat/route.ts                          — assistant_final reconciliation (THE FIX)
-tests/contract/app/ai.chat.sse-reconciliation.test.ts     — synthetic SSE contract test (NEW)
-work/handoffs/bug.0011.handoff.md — this handoff (NEW)
-+ all prior uncommitted changes from v1 handoff (nginx, gateway client, docs)
-```
+| File / Resource                                                  | Why it matters                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `src/app/api/v1/ai/chat/route.ts:461-590`                        | The fix: `assistant_final` handler + reconciliation + flush barrier |
+| `tests/contract/app/ai.chat.sse-reconciliation.test.ts`          | Contract test enforcing SSE text === `assistant_final` content      |
+| `src/adapters/server/sandbox/openclaw-gateway-client.ts:282-295` | Diff-based delta logic — the source of multi-turn text loss         |
+| `packages/ai-core/src/events/ai-events.ts:74-86`                 | `AssistantFinalEvent` type + `ASSISTANT_FINAL_REQUIRED` invariant   |
+| `src/adapters/server/sandbox/sandbox-graph.provider.ts:430-488`  | `createGatewayExecution()` — yields deltas then `assistant_final`   |
+| `services/sandbox-openclaw/openclaw-gateway.json:58`             | Hardcoded auth token to parameterize                                |
+| `work/items/bug.0011.gateway-streaming-truncation.md`            | Canonical bug with root cause, fix details, real-stack validation   |
+| `work/projects/proj.openclaw-capabilities.md`                    | Gateway Service Operations table — CI/CD roadmap                    |
