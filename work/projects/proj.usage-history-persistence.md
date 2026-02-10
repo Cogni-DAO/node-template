@@ -91,6 +91,10 @@ AI SDK's `saveChat()` persists the full array. Tool-call parts are embedded in a
 
 The original design had `run_artifacts` as a run-scoped projection of transcript events with idempotency keys and content hashes. With AI SDK UIMessage persistence, the thread IS the artifact store. Tool calls live inside UIMessage parts. No separate artifact table, no HistoryWriterSubscriber fanout, no idempotency key strategy. Dramatically simpler.
 
+### Handoff
+
+- [Handoff](../handoffs/proj.usage-history-persistence.handoff.md) — Context, decisions, next actions for incoming developer
+
 ### Superseded specs (deleted)
 
 - `docs/spec/server-transcript-authority.md` — invariants absorbed into [chat-persistence](../../docs/spec/chat-persistence.md)
