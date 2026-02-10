@@ -4,10 +4,11 @@
 /**
  * Module: `@tests/stack/sandbox/sandbox-openclaw`
  * Purpose: Full-stack acceptance test proving OpenClaw gateway mode works end-to-end.
- * Scope: Tests gateway chat, billing via proxy, secrets isolation, repo volume mount, and workspace writability. Does not test ephemeral container path or billing DB writes.
+ * Scope: Tests gateway chat, billing via proxy, secrets isolation, repo volume mount, workspace writability, and WS event isolation (cross-run). Does not test ephemeral container path or billing DB writes.
  * Invariants:
  *   - Per SECRETS_HOST_ONLY: LITELLM_MASTER_KEY never enters gateway container
  *   - Per BILLING_INDEPENDENT_OF_CLIENT: billing data from proxy audit log, not agent
+ *   - Per WS_EVENT_CAUSALITY: concurrent sessions receive zero cross-run tokens (skipped; requires real LLM)
  * Side-effects: IO (HTTP to gateway, Docker exec for assertions)
  * Links: docs/spec/openclaw-sandbox-spec.md, src/adapters/server/sandbox/
  * @public

@@ -2,7 +2,7 @@
 id: bug.0021
 type: bug
 title: "Gateway WS client receives uncorrelated chat events — heartbeat HEARTBEAT_OK contaminates user responses"
-status: Backlog
+status: Done
 priority: 0
 estimate: 2
 summary: OpenClaw gateway broadcasts chat events to all WS clients. Our gateway client processes all chat events without filtering by runId/sessionKey, so heartbeat output (HEARTBEAT_OK) or other concurrent runs can contaminate the user's response stream. Heartbeats fire immediately after agent calls complete (1s retry loop), making this a near-certain race on rapid follow-up messages.
@@ -10,8 +10,8 @@ outcome: Every streamed token delivered to the UI is causally attributable to ex
 spec_refs: openclaw-sandbox-spec
 assignees: derekg1729
 credit:
-project:
-branch:
+project: proj.openclaw-capabilities
+branch: fix/openclaw-gateway-connectivity
 pr:
 reviewer:
 created: 2026-02-11

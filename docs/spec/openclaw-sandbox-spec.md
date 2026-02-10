@@ -9,7 +9,7 @@ summary: OpenClaw agent runtime in Cogni — two execution modes (ephemeral sand
 read_when: Implementing OpenClaw sandbox or gateway agent, modifying container images, or debugging sandbox LLM calls
 owner: derekg1729
 created: 2026-02-07
-verified: 2026-02-07
+verified: 2026-02-11
 tags: [sandbox, openclaw, ai-agents]
 ---
 
@@ -80,6 +80,10 @@ Define the invariants and design contracts for running OpenClaw in Cogni: which 
 22. **OUTBOUND_HEADERS_PER_SESSION**: Billing headers (`x-litellm-end-user-id`, `x-litellm-spend-logs-metadata`, `x-cogni-run-id`) are set per-session via the `outboundHeaders` field on the WS `agent` call. The gateway proxy passes these through to LiteLLM without overwriting.
 
 23. **SESSION_KEY_ISOLATION**: Each Cogni run gets a unique session key (`agent:main:{billingAccountId}:{runId}`). Concurrent users are isolated by session — no shared session state, no cross-contamination of billing headers. Validated empirically (see [research](../research/openclaw-gateway-header-injection.md#5-patch-validation-results-2026-02-09)).
+
+24. **WS_EVENT_CAUSALITY**: Every streamed chat token is attributable to exactly one request. The gateway client hard-filters all chat event frames by `payload.sessionKey` — frames with missing or mismatched sessionKey are dropped (fail-closed, no fallback). `sessionKey` is required in `RunAgentOptions` (compile-time enforcement). The gateway broadcasts chat events to all connected WS clients; this filter is the isolation mechanism. See `openclaw-gateway-client.ts:304-313`.
+
+25. **HEARTBEAT_DISABLED**: OpenClaw heartbeats (`heartbeat.every`) are set to `"0"` in both `openclaw-gateway.json` and `openclaw-gateway.test.json`, disabling the heartbeat runner entirely. Heartbeats serve no purpose for backend agent usage and cause `HEARTBEAT_OK` contamination when combined with broadcast chat events (see bug.0021).
 
 ---
 

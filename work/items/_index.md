@@ -9,7 +9,7 @@
 | --- | --- | ----------- | ---------- | ------------------------------------------------------------------------- | -------------------------- | ------------------------------- |
 | 0   | 2   | Done        | bug.0015   | Deploy disk cleanup runs after pulls — disk exhaustion on 40GB VMs        | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Done        | bug.0016   | Production compose missing OpenClaw services — silent no-op profiles      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 0   | 2   | Backlog     | bug.0021   | Gateway WS client receives uncorrelated chat events — HEARTBEAT_OK leak   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 2   | Done        | bug.0021   | Gateway WS client receives uncorrelated chat events — HEARTBEAT_OK leak   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Todo        | task.0023  | Gateway agent system prompt — dedicated workspace, SOUL.md, heartbeat fix | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Backlog     | bug.0017   | Deploy does not reload Alloy when bind-mounted config changes             | Reliability & Uptime       | proj.reliability                |
 | 0   | 1   | Backlog     | bug.0009   | OpenClaw v2026.2.4 gateway agent returns empty payloads                   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
