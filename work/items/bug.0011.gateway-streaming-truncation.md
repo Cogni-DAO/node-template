@@ -102,6 +102,6 @@ The reconciliation prevents total text loss but does NOT fix the underlying stre
 ## PR / Links
 
 - Related: task.0008, bug.0009
-- Handoffs: `docs/research/openclaw-streaming-truncation-handoff.md`, `docs/research/openclaw-streaming-truncation-handoff-v2.md`
+- Handoff: [handoff](../handoffs/bug.0011.handoff.md)
 - Contract: `packages/ai-core/src/events/ai-events.ts` (`ASSISTANT_FINAL_REQUIRED` invariant)
 - Project: [proj.openclaw-capabilities](../projects/proj.openclaw-capabilities.md)

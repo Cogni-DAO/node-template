@@ -10,7 +10,7 @@
  *   - When deltas are complete, assistant_final is a no-op → no duplicate text
  *   - Reconstructed text from SSE always matches assistant_final content
  * Side-effects: none (all I/O mocked)
- * Links: src/app/api/v1/ai/chat/route.ts, docs/research/openclaw-streaming-truncation-handoff.md
+ * Links: src/app/api/v1/ai/chat/route.ts, work/handoffs/bug.0011.handoff.md
  * @internal
  */
 

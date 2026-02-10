@@ -18,14 +18,15 @@ tags: [work, meta]
 
 ## Structure
 
-| Directory         | Purpose                                     |
-| ----------------- | ------------------------------------------- |
-| `charters/`       | Strategic themes (`chr.<slug>.md`)          |
-| `projects/`       | Phased roadmaps (`proj.<slug>.md`)          |
-| `items/`          | PR-sized work (`<type>.<num>.<slug>.md`)    |
-| `items/_index.md` | Canonical discoverability surface           |
-| `items/_archive/` | Completed items archived by YYYY/MM         |
-| `_templates/`     | Templates for charters, projects, and items |
+| Directory         | Purpose                                           |
+| ----------------- | ------------------------------------------------- |
+| `charters/`       | Strategic themes (`chr.<slug>.md`)                |
+| `projects/`       | Phased roadmaps (`proj.<slug>.md`)                |
+| `items/`          | PR-sized work (`<type>.<num>.<slug>.md`)          |
+| `items/_index.md` | Canonical discoverability surface                 |
+| `items/_archive/` | Completed items archived by YYYY/MM               |
+| `handoffs/`       | Agent handoff packets (bounded, per work item)    |
+| `_templates/`     | Templates for charters, projects, items, handoffs |
 
 ## Work Item Types
 
@@ -152,6 +153,59 @@ external_refs:
 | `updated`       | Yes         | YYYY-MM-DD                                  |
 | `labels`        | No          | CSV labels                                  |
 | `external_refs` | No          | External URLs                               |
+
+## Handoffs
+
+Handoffs are bounded, derived summaries that give the next developer (human or agent) enough context to resume work on a specific item. They are **not** canonical state — the work item is the source of truth.
+
+### Layout
+
+```
+work/handoffs/
+  {workItemId}.handoff.md                          # rolling (overwritten each run)
+  archive/{workItemId}/{YYYY-MM-DDTHH-MM-SS}.md   # snapshots (archived before overwrite)
+```
+
+### Contract
+
+Handoff files use the template at `_templates/handoff.md`. Required frontmatter:
+
+| Field          | Req | Description                           |
+| -------------- | --- | ------------------------------------- |
+| `id`           | Yes | Same as filename stem                 |
+| `type`         | Yes | `handoff`                             |
+| `work_item_id` | Yes | Parent work item ID (e.g. `bug.0004`) |
+| `status`       | Yes | `active` or `archived`                |
+| `created`      | Yes | YYYY-MM-DD                            |
+| `updated`      | Yes | YYYY-MM-DD                            |
+| `branch`       | No  | Git branch                            |
+| `last_commit`  | No  | Short SHA of last relevant commit     |
+
+Required sections (6 max):
+
+1. **Context** — 3-5 bullets, no prose
+2. **Current State** — facts only
+3. **Decisions Made** — link to spec/ADR/PR, not prose
+4. **Next Actions** — checklist, max 10 items
+5. **Risks / Gotchas** — max 5 bullets
+6. **Pointers** — key files, commands, dashboards
+
+### Limits
+
+| Constraint            | Limit                                      |
+| --------------------- | ------------------------------------------ |
+| Max lines             | 200                                        |
+| Max sections          | 6                                          |
+| Max links per section | 12                                         |
+| Stack traces          | max 30 lines                               |
+| Code blocks           | max 60 lines (link to file/commit instead) |
+| Full transcripts/logs | never (link to run log instead)            |
+
+### Rules
+
+- **HANDOFF_IS_DERIVED** — Handoffs summarize; canonical state lives in the work item
+- **HANDOFF_IS_BOUNDED** — Rolling handoff is regenerated, not appended; archive old versions
+- **NO_LOGS_IN_HANDOFF** — Raw tool calls, transcripts, and verbose logs belong in `work/runs/` or observability, not handoffs
 
 ## Hard Rules
 

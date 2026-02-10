@@ -15,7 +15,7 @@ tags: [sandbox, openclaw, gateway, streaming, handoff, sse, assistant_final]
 # Handoff v2: SSE Route Reconciliation for Streaming Truncation
 
 **Branch:** `feat/concurrent-openclaw`
-**Previous handoff:** `docs/research/openclaw-streaming-truncation-handoff.md` (read that first for full context)
+**Previous handoff:** `work/handoffs/archive/bug.0011/2026-02-09T00-00-00.md` (read that first for full context)
 **Date:** 2026-02-10
 
 ## What Changed This Session
@@ -111,6 +111,6 @@ The `controller.appendText()` in assistant-stream may not guarantee immediate de
 ```
 src/app/api/v1/ai/chat/route.ts                          — assistant_final reconciliation (THE FIX)
 tests/contract/app/ai.chat.sse-reconciliation.test.ts     — synthetic SSE contract test (NEW)
-docs/research/openclaw-streaming-truncation-handoff-v2.md — this handoff (NEW)
+work/handoffs/bug.0011.handoff.md — this handoff (NEW)
 + all prior uncommitted changes from v1 handoff (nginx, gateway client, docs)
 ```
