@@ -618,41 +618,7 @@ $SOURCECRED_COMPOSE up -d
 
 # 4. Verify readiness (fail-fast, check config availability - SC-3)
 log_info "Waiting for SourceCred readiness..."
-
-deadline=$((SECONDS+300))
-while true; do
-    if (( SECONDS >= deadline )); then
-        log_error "SourceCred failed to become ready (timeout)"
-        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
-        exit 1
-    fi
-
-    # Fail fast if container crashed (SC-invariant-3)
-    cid="$($SOURCECRED_COMPOSE ps -q sourcecred || true)"
-    if [[ -z "$cid" ]]; then
-        status="missing"
-        restarting="false"
-    else
-        container_info="$(docker inspect -f '{{.State.Status}} {{.State.Restarting}}' "$cid" 2>/dev/null || echo 'missing false')"
-        status="${container_info%% *}"
-        restarting="${container_info##* }"
-    fi
-
-    # Treat exited/dead/restarting/missing as failure; allow created/running to keep trying
-    if [[ "$status" == "exited" || "$status" == "dead" || "$status" == "missing" || "$restarting" == "true" ]]; then
-        log_error "SourceCred container failed early (State: $status, Restarting: $restarting)"
-        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
-        exit 1
-    fi
-
-    # Simple HTTP readiness: check one config file via host-mapped port 6006
-    if wget -qO- http://localhost:6006/config/weights.json >/dev/null 2>&1; then
-        log_info "SourceCred is ready (weights.json reachable on port 6006)"
-        break
-    fi
-
-    sleep 2
-done
+bash /tmp/healthcheck-sourcecred.sh "$SOURCECRED_COMPOSE"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 5.9: Assert profile services exist (guard against silent compose drift)
@@ -745,6 +711,12 @@ else
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 11.5: OpenClaw readiness gate (fail deploy if crash-looping)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "Waiting for OpenClaw readiness..."
+bash /tmp/healthcheck-openclaw.sh "$RUNTIME_COMPOSE --profile sandbox-openclaw"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 12: Verify deployment
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Waiting for containers to be ready..."
@@ -806,6 +778,12 @@ scp $SSH_OPTS \
 
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
+
+# Upload healthcheck scripts (called from deploy-remote.sh)
+scp $SSH_OPTS \
+  "$REPO_ROOT/platform/ci/scripts/healthcheck-sourcecred.sh" \
+  "$REPO_ROOT/platform/ci/scripts/healthcheck-openclaw.sh" \
+  root@"$VM_HOST":/tmp/
 
 # Verify SCP landed correctly
 REMOTE_CHECK=$(ssh $SSH_OPTS root@"$VM_HOST" "echo host=\$(hostname) date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) && sha256sum /tmp/deploy-remote.sh | awk '{print \$1}'" 2>&1) || {
