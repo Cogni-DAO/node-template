@@ -409,7 +409,13 @@ volumes:
   - Docker build and push to GHCR with immutable SHA tags
   - Wire into deploy workflow (P0 stopgap: extend existing scripts; P1+: GitOps)
 
-### 10. Documentation
+### 10. Deployment Criticality
+
+- [ ] Classify: **critical** (deploy fails if unhealthy) or **optional** (best-effort)
+- [ ] If critical: add a post-deploy health gate in `platform/ci/scripts/` and wire it into `deploy.sh` after `compose up`
+- [ ] If using compose profiles: add a profile guardrail asserting the service resolves in `compose config --services` — compose silently ignores profiles for missing services
+
+### 11. Documentation
 
 - [ ] Create `services/<name>/AGENTS.md` with:
   - Purpose and scope

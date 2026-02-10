@@ -10,7 +10,7 @@ summary: Maximum cogni uptime — watchdog, external monitoring, OTel fix, backu
 outcome: Auto-recovery from hangs within 2 min, external alerting on downtime, no silent outages
 assignees: derekg1729
 created: 2026-02-08
-updated: 2026-02-08
+updated: 2026-02-10
 labels: [infra, reliability]
 related: [proj.observability-hardening]
 ---
@@ -31,6 +31,7 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 | Deliverable                                                                                                                 | Status           | Est |
 | --------------------------------------------------------------------------------------------------------------------------- | ---------------- | --- |
+| Deploy disk cleanup: prune before pulls, dual gate (15GB free / 70% used), remove keep-last tag                             | Done (bug.0015)  | 2   |
 | VM watchdog: systemd timer curls `/api/meta/readyz` every 30s, restarts app container after 4 consecutive failures (~2 min) | Todo (task.0014) | 1   |
 | OTel fix: set `OTEL_NODE_RESOURCE_DETECTORS=none` in production env                                                         | Not Started      | 1   |
 | OTel fix: add `resourceDetectors: []` to `NodeSDK` constructor in `src/instrumentation.ts`                                  | Not Started      | 1   |
@@ -78,3 +79,4 @@ Extracted from [postmortem](../../docs/postmortems/2026-02-07-production-vm-loss
 
 - [proj.observability-hardening](proj.observability-hardening.md)
 - [Postmortem: Feb 7–8 outages](../../docs/postmortems/2026-02-07-production-vm-loss.md)
+- [Postmortem: Feb 10 disk exhaustion](../../docs/postmortems/pm.preview-disk-exhaustion.2026-02-10.md)

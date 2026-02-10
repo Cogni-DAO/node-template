@@ -2,7 +2,7 @@
 id: pm.preview-disk-exhaustion.2026-02-10
 type: postmortem
 title: "Preview VM Disk Exhaustion — Deploy Blocked at 100%"
-status: draft
+status: active
 trust: draft
 severity: SEV2
 duration: "~1 hour manual recovery"
@@ -19,7 +19,7 @@ tags: [incident, deploy, disk, openclaw, cd]
 
 **Date**: 2026-02-10
 **Severity**: SEV2
-**Status**: Active — manual cleanup recovered disk; root causes unfixed
+**Status**: Resolved — bug.0015 (disk cleanup ordering) and bug.0016 (production compose) both fixed
 **Duration**: ~1 hour manual recovery
 
 ---

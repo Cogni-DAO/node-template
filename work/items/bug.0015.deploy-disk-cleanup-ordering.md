@@ -2,7 +2,7 @@
 id: bug.0015
 type: bug
 title: Deploy disk cleanup runs after pulls — disk exhaustion on 40GB VMs
-status: Todo
+status: Done
 priority: 0
 estimate: 2
 summary: deploy.sh Step 5 (disk prune) runs after Step 3.5 (OpenClaw pull), so the pull that needs space fails before cleanup runs. keep-last tag also defeats prune.
@@ -11,7 +11,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.reliability
-branch:
+branch: docs/postmortem-skill-and-disk-exhaustion
 pr:
 reviewer:
 created: 2026-02-10

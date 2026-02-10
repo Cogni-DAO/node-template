@@ -7,8 +7,8 @@
 
 | Pri | Est | Status      | ID        | Title                                                                | Project                    | Project ID                      |
 | --- | --- | ----------- | --------- | -------------------------------------------------------------------- | -------------------------- | ------------------------------- |
-| 0   | 2   | Todo        | bug.0015  | Deploy disk cleanup runs after pulls — disk exhaustion on 40GB VMs   | Reliability & Uptime       | proj.reliability                |
-| 0   | 2   | Todo        | bug.0016  | Production compose missing OpenClaw services — silent no-op profiles | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 2   | Done        | bug.0015  | Deploy disk cleanup runs after pulls — disk exhaustion on 40GB VMs   | Reliability & Uptime       | proj.reliability                |
+| 0   | 2   | Done        | bug.0016  | Production compose missing OpenClaw services — silent no-op profiles | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Backlog     | bug.0009  | OpenClaw v2026.2.4 gateway agent returns empty payloads              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | In Progress | task.0008 | Gateway client: correct protocol lifecycle for OpenClaw chat E2E     | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Todo        | bug.0005  | Scheduled runs invisible in Activity — no billing                    | Unified Graph Launch       | proj.unified-graph-launch       |
