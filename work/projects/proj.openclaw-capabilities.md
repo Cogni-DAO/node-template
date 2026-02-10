@@ -57,13 +57,13 @@ The gateway is a long-running service (externally-built image, compose-managed).
 
 | Deliverable                                                                                                                                                                     | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Production model catalog in `openclaw-gateway.json` — sync model list from LiteLLM config (currently only `test-model`)                                                         | Not Started | 1   | (create)  |
+| Production model catalog in `openclaw-gateway.json` — sync model list from LiteLLM config (currently only `test-model`)                                                         | Not Started | 1   | task.0018 |
 | Root script `sandbox:openclaw:docker:build` for ephemeral image (parity with `sandbox:docker:build`)                                                                            | Not Started | 0.5 | (create)  |
 | CI: pull `openclaw-outbound-headers:latest` from GHCR + start gateway profile in stack-test compose `up`                                                                        | Done        | 1   | —         |
 | Gateway stack tests (`sandbox-openclaw.stack.test.ts`) pass in CI — gateway image pulled, profile started                                                                       | Done        | 1   | —         |
 | Deploy: `deploy.sh` pulls gateway image from GHCR + starts `--profile sandbox-openclaw` on preview/prod VMs                                                                     | Done        | 1   | —         |
 | Compose: Wire OpenClaw services + sandbox-internal network into production compose; post-deploy health gate                                                                     | Done        | 2   | bug.0016  |
-| Parameterize gateway auth token — replace hardcoded `openclaw-internal-token` with generated secret per environment                                                             | Not Started | 1   | (create)  |
+| Parameterize gateway auth token — replace hardcoded `openclaw-internal-token` with generated secret per environment                                                             | Todo        | 1   | task.0019 |
 | Update `services/sandbox-openclaw/AGENTS.md` — document gateway mode, compose services, config, proxy                                                                           | Not Started | 0.5 | (create)  |
 | Update `services-architecture.md` Existing Services table — add `openclaw-gateway` (external image), `llm-proxy-openclaw` (nginx sidecar), `sandbox-openclaw` (ephemeral image) | Not Started | 0.5 | (create)  |
 | Add "External Image Service" variant to `create-service.md` — lighter checklist for pre-built images (compose + config + healthcheck + CI, no package.json/tsconfig/src)        | Not Started | 1   | (create)  |
@@ -104,7 +104,7 @@ Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md)
 
 | Deliverable                                                                          | Status      | Est | Work Item            |
 | ------------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
-| Replace hardcoded `AVAILABLE_GRAPHS` in `ChatComposerExtras` with `useAgents()` hook | Not Started | 2   | (create at P1 start) |
+| Replace hardcoded `AVAILABLE_GRAPHS` in `ChatComposerExtras` with `useAgents()` hook | Not Started | 1   | task.0018            |
 | Deduplicate agent name/description — catalog should derive from execution registry   | Not Started | 1   | (create at P1 start) |
 
 #### Host-Side Git Relay
