@@ -16,6 +16,14 @@ services:
     networks:
       - cogni-edge
       - internal
+    labels:
+      - "autoheal=true"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/livez"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       # Required vars - fail fast at compose level if missing
@@ -69,6 +77,31 @@ services:
         condition: service_healthy
       git-sync:
         condition: service_completed_successfully
+
+  # =============================================================================
+  # Autoheal — restarts unhealthy containers (label-gated)
+  # Per vm-watchdog spec: WATCHDOG_AUTOHEAL_HARDENED, WATCHDOG_LABEL_GATE
+  # =============================================================================
+  autoheal:
+    image: willfarrell/autoheal@sha256:babbdf5d586b8e2708db827893a228e542b7cbd3b61ee698ba172a67b725c7dd
+    container_name: autoheal
+    restart: always
+    network_mode: "none"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=5
+      - AUTOHEAL_START_PERIOD=60
+      - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
+      - DOCKER_SOCK=/var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "autoheal=false"
 
   litellm:
     image: ghcr.io/berriai/litellm@sha256:7e7816d58c265c182be5f3568ed8e5d999f11a5deda1d85e8e347a18bc578f64
