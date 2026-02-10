@@ -539,10 +539,7 @@ export class OpenClawGatewayClient {
       ws.on("error", (err) => {
         clearTimeout(handshakeTimer);
         clearTimeout(timer);
-        push({
-          kind: "error",
-          error: new Error(`Gateway WebSocket error: ${err.message}`),
-        });
+        reject(new Error(`Gateway WebSocket error: ${err.message}`));
       });
 
       ws.on("close", () => {

@@ -54,6 +54,7 @@ services:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
+      - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
     volumes:
       - repo_data:/repo:ro
     depends_on:
