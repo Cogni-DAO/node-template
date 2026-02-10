@@ -54,9 +54,9 @@ const AVAILABLE_GRAPHS: readonly GraphOption[] = [
     description: "Deep research with web search",
   },
   {
-    graphId: "sandbox:agent" satisfies GraphId,
-    name: "Sandbox Agent",
-    description: "Isolated container with LLM proxy",
+    graphId: "sandbox:openclaw" satisfies GraphId,
+    name: "OpenClaw",
+    description: "Community-accessible OpenClaw container agent",
   },
 ];
 

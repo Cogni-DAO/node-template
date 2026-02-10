@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-07
+- **Last reviewed:** 2026-02-10
 - **Status:** draft
 
 ## Purpose
 
-Nginx config template for the per-run LLM proxy container. Injects authentication, billing identity, and observability headers into requests forwarded to LiteLLM. No bespoke code — config-only proxy.
+Nginx config templates for sandbox LLM proxy containers — **ephemeral** (`nginx.conf.template`, per-run, overwrites billing headers) and **gateway** (`nginx-gateway.conf.template`, long-running, passes through OpenClaw outboundHeaders). Both inject LiteLLM authentication and write audit logs. No bespoke code — config-only proxy.
 
 ## Pointers
 
@@ -30,11 +30,11 @@ Nginx config template for the per-run LLM proxy container. Injects authenticatio
 
 ## Public Surface
 
-- **Exports:** `nginx.conf.template` (consumed by `LlmProxyManager.generateConfig()`)
+- **Exports:** `nginx.conf.template` (consumed by `LlmProxyManager.generateConfig()`), `nginx-gateway.conf.template` (consumed by compose `envsubst`)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys (template vars):** `SOCKET_PATH`, `LITELLM_MASTER_KEY`, `BILLING_ACCOUNT_ID`, `LITELLM_METADATA_JSON`, `RUN_ID`, `ATTEMPT`, `LITELLM_HOST`, `ACCESS_LOG_PATH`
-- **Files considered API:** nginx.conf.template
+- **Files considered API:** nginx.conf.template, nginx-gateway.conf.template
 
 ## Responsibilities
 

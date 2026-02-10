@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-04
+- **Last reviewed:** 2026-02-10
 - **Status:** draft
 
 ## Purpose
 
-Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + alloy + temporal + git-sync services. Edge (Caddy) is in separate `../edge/` project.
+Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + alloy + temporal + git-sync + openclaw-gateway services. Edge (Caddy) is in separate `../edge/` project.
 
 ## Pointers
 
@@ -98,6 +98,7 @@ docker compose --project-name cogni-runtime logs -f app
 - `MIGRATOR_IMAGE` required in production compose (no fallback), derived from APP_IMAGE with `-migrate` suffix
 - `git-sync` runs as bootstrap profile service (prod) or regular service (dev), populates `repo_data` volume at `/repo/current` via atomic symlink
 - App reads `COGNI_REPO_PATH=/repo/current` in all environments; `COGNI_REPO_REF` pins to deploy commit SHA
+- `openclaw-gateway` mounts `repo_data:/repo:ro` + `/workspace` tmpfs; agent workspace defaults to `/repo/current`
 - Both dev and prod git-sync clone via HTTPS from `COGNI_REPO_URL` at `COGNI_REPO_REF` with `GIT_READ_TOKEN` auth (same path everywhere, no file:// shortcut)
 
 **Local Dev (docker-compose.dev.yml):**

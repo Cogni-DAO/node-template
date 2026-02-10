@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-08
+- **Last reviewed:** 2026-02-10
 - **Status:** draft
 
 ## Purpose
 
-Stack tests for sandbox P0.5 and P0.5a. Proves socket bridge, proxy forwarding, network isolation, secrets safety, billing header injection, and full LLM round-trip (via mock-openai-api) using real Docker containers against a live dev stack.
+Stack tests for sandbox P0.5, P0.5a, and OpenClaw gateway. Proves socket bridge, proxy forwarding, network isolation, secrets safety, billing header injection, full LLM round-trip (via mock-openai-api), and gateway repo mount (read-only volume, workspace writability) using real Docker containers against a live dev stack.
 
 ## Pointers
 
@@ -32,13 +32,13 @@ Stack tests for sandbox P0.5 and P0.5a. Proves socket bridge, proxy forwarding, 
 
 - **Exports:** none
 - **Routes:** none
-- **CLI:** `pnpm test:stack:dev -- sandbox-llm`, `pnpm test:stack:dev -- sandbox-repo-volume`
+- **CLI:** `pnpm test:stack:dev -- sandbox-llm`, `pnpm test:stack:dev -- sandbox-repo-volume`, `pnpm test:stack:docker -- sandbox-openclaw`
 - **Env/Config keys:** `LITELLM_MASTER_KEY` (required; tests skip if absent)
 - **Files considered API:** none
 
 ## Responsibilities
 
-- This directory **does**: Test proxy health endpoint via socket bridge; test LiteLLM forwarding; test network isolation (no proxy → no connectivity); test secrets isolation (no LITELLM_MASTER_KEY in container env); test OPENAI_API_BASE injection; test spoofed header handling; test full LLM round-trip via mock-openai-api (response content, litellmCallId header chain); test repo volume mount (repo_data read-only at /repo)
+- This directory **does**: Test proxy health endpoint via socket bridge; test LiteLLM forwarding; test network isolation (no proxy → no connectivity); test secrets isolation (no LITELLM_MASTER_KEY in container env); test OPENAI_API_BASE injection; test spoofed header handling; test full LLM round-trip via mock-openai-api (response content, litellmCallId header chain); test repo volume mount (repo_data read-only at /repo); test OpenClaw gateway WS agent call + billing via proxy audit log; test gateway repo mount read-only + workspace writable
 - This directory **does not**: Test billing DB writes or reconciliation; test graph execution pipeline
 
 ## Usage

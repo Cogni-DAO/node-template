@@ -132,6 +132,49 @@ export async function cleanupOrphanedProxies(docker: Docker): Promise<number> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Container Exec Helpers (for stack tests against running compose services)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Run a shell command inside a running container via docker exec.
+ * Returns demuxed stdout+stderr as a string.
+ * Uses hijack:true with bounded timeout (per MEMORY.md dockerode gotchas).
+ */
+export async function execInContainer(
+  docker: Docker,
+  containerName: string,
+  cmd: string
+): Promise<string> {
+  const container = docker.getContainer(containerName);
+  const exec = await container.exec({
+    Cmd: ["sh", "-c", cmd],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+
+  const stream = await exec.start({ hijack: true, stdin: false });
+  const chunks: Buffer[] = [];
+
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      stream.destroy();
+      resolve();
+    }, 5000);
+    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+    stream.on("end", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    stream.on("error", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+
+  return LlmProxyManager.demuxDockerStream(Buffer.concat(chunks));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Runner Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 

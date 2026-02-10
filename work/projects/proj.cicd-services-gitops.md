@@ -75,21 +75,22 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 
 **Goal:** Get scheduler-worker into production using existing SSH+Compose. Minimal changes. **Scope guard:** Only scheduler-worker. No generalized service loops. **Exemption:** Temporarily violates `NO_COUPLED_PIPELINES` — service build runs in app pipeline as bridge.
 
-| Deliverable                                                               | Status      | Est | Work Item |
-| ------------------------------------------------------------------------- | ----------- | --- | --------- |
-| `build-service.sh` script (scheduler-worker only)                         | Done        | 1   | —         |
-| Extend `build-prod.yml` to build scheduler-worker after app               | Done        | 1   | —         |
-| Extend `push.sh` to push service image, capture digest                    | Done        | 1   | —         |
-| Pass `SCHEDULER_WORKER_IMAGE` as full digest ref through workflow outputs | Done        | 1   | —         |
-| Wire scheduler-worker into `deploy.sh` (env var substitution)             | Done        | 1   | —         |
-| Add `/version` endpoint (`{ sha, service, buildTs, imageDigest }`)        | Done        | 1   | —         |
-| Validate `/livez` + `/readyz` in staging-preview E2E                      | Not Started | 1   | —         |
-| Add smoke test exercising real service behavior                           | Not Started | 1   | —         |
-| VM disk sizing: Preview VM at 20GB insufficient for full stack            | Not Started | 1   | —         |
-| Deploy cleanup: `docker image prune -f` in deploy.sh                      | Not Started | 1   | —         |
-| Deploy resilience: failed deploys must not take down running site         | Not Started | 1   | —         |
-| Document service tagging in CI-CD.md                                      | Not Started | 1   | —         |
-| Add scheduler-worker to SERVICES_ARCHITECTURE.md status table             | Not Started | 1   | —         |
+| Deliverable                                                                                                                           | Status      | Est | Work Item |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| `build-service.sh` script (scheduler-worker only)                                                                                     | Done        | 1   | —         |
+| Extend `build-prod.yml` to build scheduler-worker after app                                                                           | Done        | 1   | —         |
+| Extend `push.sh` to push service image, capture digest                                                                                | Done        | 1   | —         |
+| Pass `SCHEDULER_WORKER_IMAGE` as full digest ref through workflow outputs                                                             | Done        | 1   | —         |
+| Wire scheduler-worker into `deploy.sh` (env var substitution)                                                                         | Done        | 1   | —         |
+| Add `/version` endpoint (`{ sha, service, buildTs, imageDigest }`)                                                                    | Done        | 1   | —         |
+| Validate `/livez` + `/readyz` in staging-preview E2E                                                                                  | Not Started | 1   | —         |
+| Add smoke test exercising real service behavior                                                                                       | Not Started | 1   | —         |
+| VM disk sizing: Preview VM at 20GB insufficient for full stack                                                                        | Not Started | 1   | —         |
+| Deploy cleanup: `docker image prune -f` in deploy.sh                                                                                  | Not Started | 1   | —         |
+| Deploy resilience: failed deploys must not take down running site                                                                     | Not Started | 1   | —         |
+| SHA-pin OpenClaw images: gateway pull (`:latest`), ephemeral base (`FROM openclaw:local`) — mutable tags violate `IMAGE_IMMUTABILITY` | Not Started | 1   | —         |
+| Document service tagging in CI-CD.md                                                                                                  | Not Started | 1   | —         |
+| Add scheduler-worker to SERVICES_ARCHITECTURE.md status table                                                                         | Not Started | 1   | —         |
 
 **Service Contract (all services — Done):**
 

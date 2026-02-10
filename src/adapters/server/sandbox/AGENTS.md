@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-08
+- **Last reviewed:** 2026-02-10
 - **Status:** draft
 
 ## Purpose
 
-Docker-based sandbox adapter for network-isolated command execution with LLM proxy support. Implements `SandboxRunnerPort` using dockerode; delegates proxy lifecycle to `LlmProxyManager`.
+Sandbox adapter for AI agent execution — two modes: **ephemeral** containers (`network=none`, CLI invocation via dockerode) and **gateway** (long-running OpenClaw service on `sandbox-internal`, WS protocol). Both route LLM calls through nginx proxy to LiteLLM. Implements `SandboxRunnerPort`, `GraphProvider`, `AgentCatalogProvider`.
 
 ## Pointers
 
@@ -31,10 +31,10 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 
 ## Public Surface
 
-- **Exports:** `SandboxRunnerAdapter`, `SandboxRunnerAdapterOptions`, `LlmProxyManager`, `LlmProxyConfig`, `LlmProxyHandle`, `SandboxGraphProvider`, `SANDBOX_PROVIDER_ID`, `SandboxAgentCatalogProvider`
+- **Exports:** `SandboxRunnerAdapter`, `SandboxRunnerAdapterOptions`, `LlmProxyManager`, `LlmProxyConfig`, `LlmProxyHandle`, `ProxyStopResult`, `SandboxGraphProvider`, `SANDBOX_PROVIDER_ID`, `SandboxAgentCatalogProvider`, `OpenClawGatewayClient`, `GatewayAgentEvent`, `RunAgentOptions`, `ProxyBillingReader`
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** none (litellmMasterKey configurable via constructor; image passed per-run via SandboxRunSpec)
+- **Env/Config keys:** `OPENCLAW_GATEWAY_URL`, `OPENCLAW_GATEWAY_TOKEN` (gateway mode); litellmMasterKey via constructor; image per-run via SandboxRunSpec
 - **Files considered API:** index.ts barrel export (not re-exported from parent server barrel — consumers use subpath imports to avoid Turbopack bundling dockerode native addon chain)
 
 ## Ports
@@ -45,8 +45,8 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 
 ## Responsibilities
 
-- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; manage LLM proxy containers (nginx:alpine on sandbox-internal network); share socket via Docker volume at `/llm-sock`; mount named Docker volumes (e.g., git-sync `repo_data` at `/repo:ro` via `SandboxVolumeMount`); inject billing identity and metadata headers; collect stdout/stderr; handle timeouts and OOM; cleanup containers and volumes; route `sandbox:*` graphIds through the graph execution pipeline (SandboxGraphProvider); list sandbox agents in UI catalog (SandboxAgentCatalogProvider)
-- This directory **does not**: Manage long-lived containers; implement agent logic (agent runs inside container); pass credentials to sandbox containers
+- This directory **does**: Create ephemeral Docker containers (network=none); manage gateway WS connections to long-running OpenClaw service (sandbox-internal); manage LLM proxy containers (nginx:alpine); share socket via Docker volume at `/llm-sock` (ephemeral) or TCP via Docker DNS (gateway); mount named Docker volumes; inject billing headers (ephemeral: proxy overwrites; gateway: outboundHeaders per-session, proxy passes through); collect stdout/stderr; read billing from proxy audit logs (`ProxyBillingReader`); handle timeouts and OOM; cleanup containers; route `sandbox:*` graphIds through graph execution pipeline; list sandbox agents in UI catalog
+- This directory **does not**: Implement agent logic (agent runs inside container); pass credentials to sandbox containers; manage the gateway container lifecycle (compose service)
 
 ## Usage
 
@@ -69,18 +69,18 @@ await runner.dispose(); // stop all proxy containers
 
 ## Standards
 
-- Containers are one-shot and ephemeral (P0 invariant)
-- Network isolation via `NetworkMode: 'none'`
-- All capabilities dropped (`CapDrop: ['ALL']`)
-- Non-root user execution (`sandboxer`)
+- Ephemeral containers are one-shot, `network=none`, destroyed after run
+- Gateway mode connects to long-running OpenClaw service via WS on `sandbox-internal`
+- All capabilities dropped (`CapDrop: ['ALL']`), non-root user (`sandboxer`)
 - Socket sharing via Docker volumes (not bind mounts) to avoid macOS osxfs issues and tmpfs masking
 - All dockerode exec streams have bounded timeouts (never await unbounded `stream.on('end')`)
 - Proxy containers labeled `cogni.role=llm-proxy` for sweep-based cleanup
+- Billing from proxy audit log, never from agent self-reporting (LITELLM_IS_BILLING_TRUTH)
 
 ## Dependencies
 
 - **Internal:** ports/, shared/observability/
-- **External:** dockerode, nginx:alpine image
+- **External:** dockerode, ws, nginx:alpine image, `openclaw-outbound-headers:latest` image
 
 ## Change Protocol
 
@@ -90,7 +90,9 @@ await runner.dispose(); // stop all proxy containers
 
 ## Notes
 
-- Requires `cogni-sandbox-runtime:latest` image built from services/sandbox-runtime/
+- Requires `cogni-sandbox-runtime:latest` image built from services/sandbox-runtime/ (ephemeral mode)
+- Requires `openclaw-outbound-headers:latest` for gateway mode (compose service)
 - Requires `nginx:alpine` image for proxy containers
 - Requires `sandbox-internal` Docker network for proxy ↔ LiteLLM connectivity
 - `LlmProxyManager.cleanupSweep()` removes orphaned proxy containers by label filter
+- Gateway WS protocol: custom frames, NOT JSON-RPC. See `openclaw-gateway-client.ts` header comment
