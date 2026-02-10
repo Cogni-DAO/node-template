@@ -113,6 +113,7 @@ pnpm dotenv -e .env.test -- pnpm vitest run --config vitest.stack.config.mts tes
 - Project: [proj.openclaw-capabilities](../projects/proj.openclaw-capabilities.md)
 - Test file: tests/stack/sandbox/sandbox-openclaw.stack.test.ts (content test skipped)
 - Diagnostic env vars in compose: `OPENCLAW_RAW_STREAM=1`, `OPENCLAW_RAW_STREAM_PATH=/tmp/openclaw-raw-stream.jsonl`
+- Handoff: [handoff](../handoffs/bug.0009.handoff.md)
 
 ## Attribution
 
