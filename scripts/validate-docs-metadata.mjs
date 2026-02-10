@@ -45,6 +45,7 @@ const PROJECT_REQUIRED_HEADINGS = [
   "Design Notes",
 ];
 const CHARTER_REQUIRED_HEADINGS = ["Goal", "Projects", "Constraints"];
+const POSTMORTEM_REQUIRED_HEADINGS = ["Summary", "Timeline"];
 const ITEM_REQUIRED_HEADINGS = ["Validation"];
 
 // === REQUIRED KEYS ===
@@ -125,11 +126,18 @@ function extractH2Headings(content) {
   return [...content.matchAll(/^##\s+(.+?)\s*$/gm)].map((m) => m[1].trim());
 }
 
-function checkRequiredHeadings(content, requiredHeadings) {
+function checkRequiredHeadings(
+  content,
+  requiredHeadings,
+  { prefix = false } = {}
+) {
   const actual = extractH2Headings(content);
   const errors = [];
   for (const req of requiredHeadings) {
-    if (!actual.includes(req)) {
+    const found = prefix
+      ? actual.some((h) => h === req || h.startsWith(req + " "))
+      : actual.includes(req);
+    if (!found) {
       errors.push(`missing required heading: ## ${req}`);
     }
   }
@@ -221,6 +229,13 @@ function validateDoc(file, props, content, allIds) {
   }
   if (props.type === "adr") {
     errors.push(...checkRequiredHeadings(content, ADR_REQUIRED_HEADINGS));
+  }
+  if (props.type === "postmortem") {
+    errors.push(
+      ...checkRequiredHeadings(content, POSTMORTEM_REQUIRED_HEADINGS, {
+        prefix: true,
+      })
+    );
   }
 
   return errors;

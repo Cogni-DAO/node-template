@@ -10,14 +10,16 @@
 
 ## Purpose
 
-Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + alloy + temporal + git-sync + openclaw-gateway services. Edge (Caddy) is in separate `../edge/` project.
+Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + alloy + temporal + git-sync services, plus OpenClaw gateway services (`llm-proxy-openclaw`, `openclaw-gateway`) under the `sandbox-openclaw` compose profile. Edge (Caddy) is in separate `../edge/` project.
 
 ## Pointers
 
-- [docker-compose.yml](docker-compose.yml): Production container stack (app, postgres, litellm, alloy)
+- [docker-compose.yml](docker-compose.yml): Production container stack (app, postgres, litellm, alloy, temporal, OpenClaw gateway profile)
 - [docker-compose.dev.yml](docker-compose.dev.yml): Development container stack (includes local loki, grafana)
 - [postgres-init/](postgres-init/): Database initialization scripts
-- [configs/](configs/): Service configuration templates (litellm, alloy)
+- [configs/](configs/): Service configuration templates (litellm, alloy, temporal)
+- [sandbox-proxy/](sandbox-proxy/): nginx gateway config template for OpenClaw LLM proxy (rsync'd by deploy.sh)
+- [openclaw/](openclaw/): OpenClaw gateway config (`openclaw-gateway.json`, scp'd by deploy.sh)
 - [docker-daemon.json](docker-daemon.json): Docker daemon log limits (reference only, applied via bootstrap.yaml)
 - [Edge stack](../edge/): TLS termination (Caddy) - separate compose project, never stopped during deploys
 
@@ -37,7 +39,7 @@ Production runtime configuration directory copied to VM hosts for container orch
 - **Routes (if any):** none
 - **CLI (if any):** docker-compose commands
 - **Env/Config keys:** `APP_IMAGE`, `MIGRATOR_IMAGE`, `APP_ENV`, `DEPLOY_ENVIRONMENT`, `COGNI_REPO_URL` (git-sync), `COGNI_REPO_REF` (git-sync, pinned SHA), `GIT_READ_USERNAME` (git-sync), `GIT_READ_TOKEN` (git-sync, Contents:Read PAT), `COGNI_REPO_PATH` (app, `/repo/current`), `COGNI_REPO_SHA` (app), `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_SERVICE_USER`, `APP_DB_SERVICE_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL` (explicit DSN, app_user), `DATABASE_SERVICE_URL` (explicit DSN, app_service), `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` (derived from DEPLOY_ENVIRONMENT), `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`, `METRICS_TOKEN` (app+alloy), `PROMETHEUS_REMOTE_WRITE_URL` (alloy), `PROMETHEUS_USERNAME` (alloy), `PROMETHEUS_PASSWORD` (alloy), `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD`, `TEMPORAL_DB_HOST`, `TEMPORAL_DB_PORT`
-- **Files considered API:** `docker-compose.yml`, `postgres-init/*.sh`, `configs/alloy-config.alloy`
+- **Files considered API:** `docker-compose.yml`, `postgres-init/*.sh`, `configs/alloy-config.alloy`, `sandbox-proxy/nginx-gateway.conf.template`, `openclaw/openclaw-gateway.json`
 
 ## Ports (optional)
 
@@ -115,6 +117,15 @@ docker compose --project-name cogni-runtime logs -f app
 - Environment variables: `DEPLOY_ENVIRONMENT`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`
 - Metrics: App exposes `/api/metrics` (auth via `METRICS_TOKEN`); Alloy scrapes and ships to Mimir (via `PROMETHEUS_*`)
 - Verify in Alloy UI (http://127.0.0.1:12345) and Grafana Cloud
+
+**OpenClaw Gateway Services (profile: sandbox-openclaw):**
+
+- `llm-proxy-openclaw`: nginx auth-injecting proxy on `sandbox-internal` network, injects `LITELLM_MASTER_KEY`
+- `openclaw-gateway`: long-running OpenClaw gateway on `sandbox-internal` + `internal`, port 127.0.0.1:3333→18789
+- Both behind `sandbox-openclaw` profile — activated by deploy.sh `--profile sandbox-openclaw`
+- Config: `sandbox-proxy/nginx-gateway.conf.template` (nginx), `openclaw/openclaw-gateway.json` (OpenClaw)
+- Networks: `sandbox-internal` (internal: true) for isolation; `litellm` on both `internal` and `sandbox-internal`
+- Post-deploy health gate: `healthcheck-openclaw.sh` fails deploy if either service crashes or times out
 
 **Temporal Services:**
 

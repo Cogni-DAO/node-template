@@ -11,7 +11,7 @@ outcome: OpenClaw agents are fully operational via Cogni UI — gateway chat wor
 assignees:
   - derekg1729
 created: 2026-02-09
-updated: 2026-02-09
+updated: 2026-02-10
 labels: [openclaw, ai-agents, sandbox]
 ---
 
@@ -62,6 +62,7 @@ The gateway is a long-running service (externally-built image, compose-managed).
 | CI: pull `openclaw-outbound-headers:latest` from GHCR + start gateway profile in stack-test compose `up`                                                                        | Done        | 1   | —         |
 | Gateway stack tests (`sandbox-openclaw.stack.test.ts`) pass in CI — gateway image pulled, profile started                                                                       | Done        | 1   | —         |
 | Deploy: `deploy.sh` pulls gateway image from GHCR + starts `--profile sandbox-openclaw` on preview/prod VMs                                                                     | Done        | 1   | —         |
+| Compose: Wire OpenClaw services + sandbox-internal network into production compose; post-deploy health gate                                                                     | Done        | 2   | bug.0016  |
 | Parameterize gateway auth token — replace hardcoded `openclaw-internal-token` with generated secret per environment                                                             | Not Started | 1   | (create)  |
 | Update `services/sandbox-openclaw/AGENTS.md` — document gateway mode, compose services, config, proxy                                                                           | Not Started | 0.5 | (create)  |
 | Update `services-architecture.md` Existing Services table — add `openclaw-gateway` (external image), `llm-proxy-openclaw` (nginx sidecar), `sandbox-openclaw` (ephemeral image) | Not Started | 0.5 | (create)  |
