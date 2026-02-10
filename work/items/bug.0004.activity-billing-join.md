@@ -58,6 +58,8 @@ llm_charge_details (type-specific, FK to charge_receipts)
 
 **Write path:** `commitUsageFact()` already receives `fact.model`, `fact.inputTokens`, `fact.outputTokens` — pipe into `llm_charge_details` alongside `recordChargeReceipt()`.
 
+> **CRITICAL (from task.0010 investigation, 2026-02-09):** `fact.model` may not reflect the model that was actually called. The OpenClaw gateway ignores the request-side model and always uses the agent config default (`openclaw-gateway.json` → `agents.defaults.model.primary`). LiteLLM spend logs confirmed all recent calls went to `nemotron-nano-30b` regardless of what model the graph executor requested. When writing `llm_charge_details`, the `model` field **must** be sourced from LiteLLM spend log `model_group` (what was actually called), NOT from `GraphRunRequest.model` or `fact.model` (what was requested). Same applies to `tokens_in`, `tokens_out`, `response_cost_usd` — all must come from the LiteLLM spend log entry, which is the billing source of truth per **LITELLM_IS_USAGE_TRUTH**.
+
 **Read path:** Activity facade queries `charge_receipts JOIN llm_charge_details` — one DB query, our RLS, no LiteLLM API call.
 
 **Invariant corrections:**

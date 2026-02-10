@@ -15,6 +15,7 @@
 | 1   | 2   | Todo        | task.0007 | Billing enforcement decorator at GraphExecutorPort               | Unified Graph Launch       | proj.unified-graph-launch       |
 | 1   | 3   | Todo        | task.0006 | Collapse GraphProvider — single execution interface              | Unified Graph Launch       | proj.unified-graph-launch       |
 | 1   | 3   | Backlog     | bug.0004  | /activity dashboard cost column broken                           | Payments Enhancements      | proj.payments-enhancements      |
+| 2   | 1   | Backlog     | bug.0012  | pre-commit check:docs validates all files, not just staged       |                            |                                 |
 | 2   | 3   | Todo        | task.0003 | Sweep stale doc references across the codebase                   | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
 > Sort: priority → status (completed last) → estimate → type

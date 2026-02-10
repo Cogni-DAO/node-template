@@ -51,6 +51,23 @@ agent call: req(agent) → ACK res(accepted) → chat delta events (0–N)
             → chat final signal (NOT terminal) → final "ok" res with result.payloads (terminal)
 ```
 
+#### Gateway Service Operations
+
+The gateway is a long-running service (externally-built image, compose-managed). It needs the same operational rigor as any other service: CI builds, model catalog, documentation, root scripts. This is a new pattern — **external image service** — not covered by the current `create-service.md` guide.
+
+| Deliverable                                                                                                                                                                     | Status      | Est | Work Item |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Production model catalog in `openclaw-gateway.json` — sync model list from LiteLLM config (currently only `test-model`)                                                         | Not Started | 1   | (create)  |
+| Root script `sandbox:openclaw:docker:build` for ephemeral image (parity with `sandbox:docker:build`)                                                                            | Not Started | 0.5 | (create)  |
+| CI: build `cogni-sandbox-openclaw` image in stack-test job (`docker/build-push-action` + GHA cache)                                                                             | Not Started | 1   | (create)  |
+| CI: start `llm-proxy-openclaw` + `openclaw-gateway` in stack-test compose `up` (with `mock-llm` backend)                                                                        | Not Started | 1   | (create)  |
+| Gateway stack tests (`sandbox-openclaw.stack.test.ts`) pass in CI — currently local-only, blocked by above                                                                      | Not Started | 1   | (create)  |
+| Update `services/sandbox-openclaw/AGENTS.md` — document gateway mode, compose services, config, proxy                                                                           | Not Started | 0.5 | (create)  |
+| Update `services-architecture.md` Existing Services table — add `openclaw-gateway` (external image), `llm-proxy-openclaw` (nginx sidecar), `sandbox-openclaw` (ephemeral image) | Not Started | 0.5 | (create)  |
+| Add "External Image Service" variant to `create-service.md` — lighter checklist for pre-built images (compose + config + healthcheck + CI, no package.json/tsconfig/src)        | Not Started | 1   | (create)  |
+
+**Key distinction**: `openclaw-gateway` uses `openclaw-outbound-headers:latest` (built in the OpenClaw repo, published to GHCR). We don't own that Dockerfile — we configure it via bind-mounted `openclaw-gateway.json` and deploy via compose. `cogni-sandbox-openclaw` (ephemeral) is the image we DO build from `services/sandbox-openclaw/Dockerfile`. Both need CI coverage.
+
 #### Agent Catalog + UI Wiring
 
 | Deliverable                                                                       | Status | Est | Work Item |
