@@ -11,7 +11,7 @@ outcome: OpenClaw agents are fully operational via Cogni UI — gateway chat wor
 assignees:
   - derekg1729
 created: 2026-02-09
-updated: 2026-02-10
+updated: 2026-02-11
 labels: [openclaw, ai-agents, sandbox]
 ---
 
@@ -80,79 +80,108 @@ The gateway is a long-running service (externally-built image, compose-managed).
 | Proxy billing reader for gateway mode (`ProxyBillingReader.readEntries`)          | Done   | 1   | —         |
 | Bootstrap wiring: `LazySandboxGraphProvider` with gateway client + billing reader | Done   | 1   | —         |
 
-### Walk (P1) — Robustness + Dynamic Catalog + Git Relay
+### Walk (P1) — Git Relay + Dynamic Catalog + Gateway Hardening
 
-**Goal:** Gateway client is production-grade (persistent connection, reconnect, liveness). UI discovers agents from API instead of hardcoded list. Code-producing agents create PRs via host-side git relay.
+**Goal:** Code-producing agents create PRs via host-side git relay. UI discovers agents from API. Gateway client is production-grade.
+
+**North star:** Credentials never enter the agent runtime; host owns push+PR forever.
+
+#### Git Relay — MVP
+
+Per [sandbox-git-write-permissions.md](../../docs/research/sandbox-git-write-permissions.md) Option A and [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md) HOST_SIDE_GIT_RELAY.
+
+The real requirement is per-run RW workspace + unique branch. Not blocked on "ephemeral-only" — use whichever execution path is easiest today. Multiple concurrent coder runs allowed (footgun accepted for now). Enforce: unique workspace per runId + unique branch per runId.
+
+| Deliverable                                                                                                                                              | Status      | Est | Work Item |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| [ ] Create per-run workspace dir on host (`git clone --depth=1` or `git worktree add`) — agent gets RW copy of repo on a fresh `sandbox/${runId}` branch | Not Started | 2   | task.0022 |
+| [ ] Mount workspace RW into OpenClaw run — wire through `SandboxGraphProvider` (ephemeral or gateway path, whichever is simpler)                         | Not Started | 1   | task.0022 |
+| [ ] Agent must `git add`/`git commit` locally (no credentials needed) — ensure AGENTS.md instructs the agent to commit before exit                       | Not Started | 1   | task.0022 |
+| [ ] Host detects commits (`git log baseBranch..HEAD`), pushes branch, creates PR — use `gh` CLI for speed, `GITHUB_TOKEN` env on host only               | Not Started | 2   | task.0022 |
+| [ ] Return PR URL in `GraphFinal.content`                                                                                                                | Not Started | 0.5 | task.0022 |
+| [ ] Cleanup workspace after push completes — defer `rmSync` until push finishes (WORKSPACE_SURVIVES_FOR_PUSH)                                            | Not Started | 0.5 | task.0022 |
+
+#### Git Relay — Robustness
+
+| Deliverable                                                                                                                         | Status      | Est |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- |
+| [ ] Max-parallel coder runs + simple queue — disk threshold refusal (refuse if `/tmp` or workspace root exceeds threshold)          | Not Started | 2   |
+| [ ] Bare-mirror cache + `git worktree` to reduce disk/time per clone — avoids full `clone --depth=1` per run                        | Not Started | 2   |
+| [ ] Standardize PR body file (`.cogni/pr.md`) — agent writes PR description, host reads it during `gh pr create`                    | Not Started | 1   |
+| [ ] Stack tests for git relay (mock GH) — agent modifies file + commits → host detects → mock push; no-commit → skip; cleanup after | Not Started | 2   |
+
+#### Dynamic Agent Catalog
+
+Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md) CATALOG_FROM_API:
+
+| Deliverable                                                                            | Status      | Est | Work Item |
+| -------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Replace hardcoded `AVAILABLE_GRAPHS` in `ChatComposerExtras` with `useAgents()` hook   | Not Started | 1   | task.0018 |
+| [ ] Deduplicate agent name/description — catalog should derive from execution registry | Not Started | 1   |           |
 
 #### Gateway Client Hardening
 
 Model after upstream `openclaw/src/gateway/client.ts` features:
 
-| Deliverable                                                                                    | Status      | Est | Work Item            |
-| ---------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Persistent WS connection — connect once at bootstrap, reuse for all calls                      | Not Started | 2   | (create at P1 start) |
-| Generic `request<T>(method, params, { expectFinal })` replacing per-method bespoke WS handling | Not Started | 2   | (create at P1 start) |
-| `pending` map with `flushPendingErrors` on close (upstream lines 82, 362-367)                  | Not Started | 1   | (create at P1 start) |
-| Auto-reconnect with exponential backoff (upstream `scheduleReconnect`, lines 349-360)          | Not Started | 2   | (create at P1 start) |
-| Tick-based liveness detection (upstream `startTickWatch`, lines 369-386)                       | Not Started | 1   | (create at P1 start) |
+| Deliverable                                                                                        | Status      | Est |
+| -------------------------------------------------------------------------------------------------- | ----------- | --- |
+| [ ] Persistent WS connection — connect once at bootstrap, reuse for all calls                      | Not Started | 2   |
+| [ ] Generic `request<T>(method, params, { expectFinal })` replacing per-method bespoke WS handling | Not Started | 2   |
+| [ ] `pending` map with `flushPendingErrors` on close (upstream lines 82, 362-367)                  | Not Started | 1   |
+| [ ] Auto-reconnect with exponential backoff (upstream `scheduleReconnect`, lines 349-360)          | Not Started | 2   |
+| [ ] Tick-based liveness detection (upstream `startTickWatch`, lines 369-386)                       | Not Started | 1   |
 
 **Features from upstream we do NOT need:** device identity/keypair signing, TLS fingerprint pinning, device auth token store/rotate (all server-to-server token auth is sufficient).
 
-#### Dynamic Agent Catalog
+### Run (P2+) — Credential Evolution, Warm Pool, Multi-Agent
 
-Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md) invariant CATALOG_FROM_API:
+**Goal:** Production-grade credential management, container warm pool for fast cold starts, full OpenClaw capability surface.
 
-| Deliverable                                                                          | Status      | Est | Work Item            |
-| ------------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
-| Replace hardcoded `AVAILABLE_GRAPHS` in `ChatComposerExtras` with `useAgents()` hook | Not Started | 1   | task.0018            |
-| Deduplicate agent name/description — catalog should derive from execution registry   | Not Started | 1   | (create at P1 start) |
+#### Credential Evolution + Advanced Git
 
-#### Host-Side Git Relay
+Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md) ENV_CREDENTIALS_FIRST:
 
-Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md) invariant HOST_SIDE_GIT_RELAY:
+| Deliverable                                                                                                                 | Status      | Est |
+| --------------------------------------------------------------------------------------------------------------------------- | ----------- | --- |
+| [ ] `ConnectionBroker` + GitHub App installation tokens — replace `GITHUB_TOKEN` PAT with short-lived, repo-scoped tokens   | Not Started | 3   |
+| [ ] Multi-tenant: per billing account GitHub App installations                                                              | Not Started | 2   |
+| [ ] Optional socket/MCP `git_push` tool for mid-run pushes — agent invokes tool via Unix socket bridge to host relay daemon | Not Started | 3   |
+| [ ] Gateway per-session workspace — only if use cases emerge requiring real-time code editing in shared gateway             | Not Started | 3   |
 
-| Deliverable                                                                | Status      | Est | Work Item            |
-| -------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Pre-run host clone into workspace (`git clone --depth=1`)                  | Not Started | 2   | (create at P1 start) |
-| Post-run host reads git log/diff for changes                               | Not Started | 1   | (create at P1 start) |
-| Host pushes branch `sandbox/${runId}` using `GITHUB_TOKEN`                 | Not Started | 2   | (create at P1 start) |
-| Host creates PR via GitHub API if requested                                | Not Started | 2   | (create at P1 start) |
-| Return PR URL in `GraphFinal.content`                                      | Not Started | 1   | (create at P1 start) |
-| Defer workspace cleanup until push completes (WORKSPACE_SURVIVES_FOR_PUSH) | Not Started | 1   | (create at P1 start) |
+#### Warm Pool (Container Cold-Start Elimination)
 
-### Run (P2+) — Multi-Agent, Custom Skills, Dashboard
+A pool of pre-warmed coding-agent containers ready to accept jobs, eliminating clone + container-start latency.
 
-**Goal:** Full OpenClaw capability surface — multi-agent routing, custom skill bundles, persistent sessions, and observability dashboard.
+| Deliverable                                                                                                                        | Status      | Est |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- |
+| [ ] Pool manager: assigns one job to one worker, unique workspace per job, no state bleed between jobs                             | Not Started | 3   |
+| [ ] Workers rebound to per-job workspace — if OpenClaw supports workspace override, use it; else one-job-per-worker + symlink flip | Not Started | 2   |
+| [ ] Periodic worker restart to prevent state accumulation                                                                          | Not Started | 1   |
+
+Host still owns push+PR in warm pool mode — workers never need GitHub credentials.
 
 #### Multi-Agent + Custom Agents
 
-| Deliverable                                                                         | Status      | Est | Work Item            |
-| ----------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| OpenClaw multi-agent routing (`--agent` selection per-run via `agents.list` config) | Not Started | 2   | (create at P2 start) |
-| Skills audit: identify sandbox-compatible skills, bundle curated set into image     | Not Started | 2   | (create at P2 start) |
-| Dashboard-driven agent + skill creation (config changes via git commit)             | Not Started | 3   | (create at P2 start) |
-| Persistent sessions: workspace volume across runs for DAO agents                    | Not Started | 2   | (create at P2 start) |
-| Conversation continuity: inject prior messages as workspace context files           | Not Started | 2   | (create at P2 start) |
-
-#### Credential Evolution
-
-Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md) invariant ENV_CREDENTIALS_FIRST:
-
-| Deliverable                                                                        | Status      | Est | Work Item            |
-| ---------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Upgrade from `GITHUB_TOKEN` to GitHub App installation auth via `ConnectionBroker` | Not Started | 3   | (create at P2 start) |
-| Multi-tenant: per billing account GitHub App installations                         | Not Started | 2   | (create at P2 start) |
+| Deliverable                                                                             | Status      | Est |
+| --------------------------------------------------------------------------------------- | ----------- | --- |
+| [ ] OpenClaw multi-agent routing (`--agent` selection per-run via `agents.list` config) | Not Started | 2   |
+| [ ] Skills audit: identify sandbox-compatible skills, bundle curated set into image     | Not Started | 2   |
+| [ ] Dashboard-driven agent + skill creation (config changes via git commit)             | Not Started | 3   |
+| [ ] Persistent sessions: workspace volume across runs for DAO agents                    | Not Started | 2   |
+| [ ] Conversation continuity: inject prior messages as workspace context files           | Not Started | 2   |
 
 #### Observability
 
-| Deliverable                                                               | Status      | Est | Work Item            |
-| ------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Sandbox dashboard (`/sandbox` page): run history, per-run detail view     | Not Started | 3   | (create at P2 start) |
-| Prometheus counters: `sandbox_runs_total`, `sandbox_run_duration_seconds` | Not Started | 1   | (create at P2 start) |
+| Deliverable                                                                   | Status      | Est |
+| ----------------------------------------------------------------------------- | ----------- | --- |
+| [ ] Sandbox dashboard (`/sandbox` page): run history, per-run detail view     | Not Started | 3   |
+| [ ] Prometheus counters: `sandbox_runs_total`, `sandbox_run_duration_seconds` | Not Started | 1   |
 
 ## Constraints
 
+- **North star: credentials never enter the agent runtime; host owns push+PR forever** — this holds across all phases, including warm pool
 - All credential-bearing operations on host, never in sandbox or gateway container (links to SECRETS_HOST_ONLY, HOST_SIDE_GIT_RELAY in specs)
+- Git relay is execution-mode-agnostic — the requirement is per-run RW workspace + unique branch, not "must be ephemeral"
 - Chat UI fetches agent list from API — no hardcoded arrays long-term (links to CATALOG_FROM_API)
 - Dashboard and controls are Cogni-native Next.js — no OpenClaw Lit UI (links to COGNI_NATIVE_UI)
 - Gateway client must not block on upstream OpenClaw package — our client implements the protocol directly, using upstream as reference only
@@ -200,6 +229,7 @@ Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md)
 
 ### Research Artifacts
 
+- [sandbox-git-write-permissions.md](../../docs/research/sandbox-git-write-permissions.md) — 5 approaches evaluated for sandbox git writes; host-side relay recommended
 - [openclaw-gateway-header-injection.md](../../docs/research/openclaw-gateway-header-injection.md) — outboundHeaders investigation
 - [openclaw-gateway-integration-handoff.md](../../docs/research/openclaw-gateway-integration-handoff.md) — protocol reverse-engineering, frame sequences
 - [messenger-integration-openclaw-channels.md](../../docs/research/messenger-integration-openclaw-channels.md) — spike.0020: messenger channel integration research
