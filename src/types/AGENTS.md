@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-01-12
+- **Last reviewed:** 2026-02-10
 - **Status:** stable
 
 ## Purpose
@@ -41,7 +41,7 @@ Bottom-of-tree type definitions. TS utility types, branded types, ambient global
 
 - **Exports:** TS utility types, branded types, global.d.ts, Env interfaces, domain enums
   - `payments.ts` - PaymentFlowState, PaymentStatus, PaymentAttemptStatus, PaymentErrorCode (canonical source)
-  - `billing.ts` - Re-exports SourceSystem from @cogni/ai-core; defines ChargeReason
+  - `billing.ts` - Re-exports SourceSystem from @cogni/ai-core; defines ChargeReason, BillingCommitFn (DI callback type for billing decorator)
   - `usage.ts` - Re-exports UsageFact, ExecutorType from @cogni/ai-core
   - `ai-events.ts` - Re-exports AiEvent union from @cogni/ai-core
   - `ai-span.ts` - AiSpanPort, AiSpanHandle (provider-agnostic span interface for tool instrumentation)

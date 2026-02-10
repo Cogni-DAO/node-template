@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-02-08
+- **Last reviewed:** 2026-02-10
 - **Status:** stable
 
 ## Purpose
@@ -61,7 +61,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
     - `billing.ts` - Non-blocking charge receipt recording (commitUsageFact with Zod validation, recordBilling)
     - `telemetry.ts` - DB + Langfuse writes (ai_invocation_summaries)
     - `metrics.ts` - Prometheus metric recording
-    - `ai_runtime.ts` - AI runtime orchestration with RunEventRelay (pump+fanout pattern, per-executor UsageFact schema validation)
+    - `ai_runtime.ts` - AI runtime orchestration with RunEventRelay (pump+fanout UI stream adapter; billing handled by BillingGraphExecutorDecorator at port level)
     - `run-id-factory.ts` - Run identity factory (P0: runId = reqId)
     - `llmPricingPolicy.ts` - Pricing markup calculation
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
@@ -88,7 +88,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - Record AI invocation telemetry via AiTelemetryPort (per AI_SETUP_SPEC.md)
   - Create Langfuse traces for observability (optional, env-gated)
   - Provide createAiRuntime as single AI entrypoint via GraphExecutorPort
-  - Use RunEventRelay for pump+fanout pattern (billing independent of UI)
+  - Use RunEventRelay for pump+fanout pattern (pure UI stream adapter; billing via decorator at port level)
   - Execute tools via createToolRunner — owns toolCallId, emits AiEvents, redacts payloads
 
 - **This feature does not:**

@@ -34,7 +34,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | Deliverable                                                                                             | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
 | Fix: scheduled runs write charge_receipts (billing bypass regression)                                   | Todo        | 2   | bug.0005  |
-| Billing enforcement decorator at GraphExecutorPort level                                                | Todo        | 2   | task.0007 |
+| Billing enforcement decorator at GraphExecutorPort level                                                | Done        | 2   | task.0007 |
 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing          | Todo        | 3   | task.0006 |
 | Add `trigger_*` columns to existing `schedule_runs` table (or create `graph_runs` if P1 lands)          | Not Started | 1   | —         |
 | Create `GraphRunWorkflow` in `services/scheduler-worker/`                                               | Not Started | 2   | —         |

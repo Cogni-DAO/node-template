@@ -14,7 +14,7 @@
 | 0   | 2   | In Progress | bug.0002  | P0 SECURITY: Deploy artifacts expose all secrets                 | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 0   | 4   | In Progress | task.0001 | Docs Migration Tracker                                           | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 1   | 1   | In Progress | bug.0011  | Gateway streaming truncates output mid-sentence in UI            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 1   | 2   | Todo        | task.0007 | Billing enforcement decorator at GraphExecutorPort               | Unified Graph Launch       | proj.unified-graph-launch       |
+| 1   | 2   | Done        | task.0007 | Billing enforcement decorator at GraphExecutorPort               | Unified Graph Launch       | proj.unified-graph-launch       |
 | 1   | 3   | Todo        | task.0006 | Collapse GraphProvider — single execution interface              | Unified Graph Launch       | proj.unified-graph-launch       |
 | 1   | 3   | Todo        | task.0009 | Sandbox repo refresh: on-demand git-sync for agent workspace     | Sandboxed Agents           | proj.sandboxed-agents           |
 | 1   | 3   | Backlog     | bug.0004  | /activity dashboard cost column broken                           | Payments Enhancements      | proj.payments-enhancements      |
