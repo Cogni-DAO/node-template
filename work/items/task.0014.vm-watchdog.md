@@ -2,7 +2,7 @@
 id: task.0014
 type: task
 title: "VM watchdog: autoheal + HEALTHCHECK on /livez with resource limits"
-status: Todo
+status: In Progress
 priority: 0
 estimate: 2
 summary: Switch Docker HEALTHCHECK from /readyz to /livez, add hardened autoheal sidecar to auto-restart unhealthy containers, add mem_limit/memswap_limit to app
@@ -11,7 +11,7 @@ spec_refs: vm-watchdog, spec.observability-requirements
 assignees: derekg1729
 credit:
 project: proj.reliability
-branch:
+branch: feat/vm-watchdog-task0014
 pr:
 reviewer:
 created: 2026-02-10
@@ -53,24 +53,24 @@ See [vm-watchdog spec](../../docs/spec/vm-watchdog.md) for full design, invarian
 
 ## Plan
 
-- [ ] Resolve `willfarrell/autoheal` digest pin
-  - `docker pull willfarrell/autoheal:latest && docker inspect --format='{{index .RepoDigests 0}}' willfarrell/autoheal:latest`
-- [ ] Update `Dockerfile` HEALTHCHECK
+- [x] Resolve `willfarrell/autoheal` digest pin
+  - `sha256:babbdf5d586b8e2708db827893a228e542b7cbd3b61ee698ba172a67b725c7dd`
+- [x] Update `Dockerfile` HEALTHCHECK
   - Change `/readyz` to `/livez`
   - Adjust: `--timeout=5s --start-period=30s`
-- [ ] Update `docker-compose.yml` — app service
+- [x] Update `docker-compose.yml` — app service
   - Add HEALTHCHECK override (same as Dockerfile, ensures compose-level consistency)
   - Add label `autoheal: "true"`
   - Add `mem_limit: 512m`
   - Add `memswap_limit: 768m`
-- [ ] Update `docker-compose.yml` — add autoheal service
+- [x] Update `docker-compose.yml` — add autoheal service
   - Digest-pinned image
   - `restart: always`
   - `network_mode: "none"`, `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`
   - Environment: `AUTOHEAL_CONTAINER_LABEL=autoheal`, `AUTOHEAL_INTERVAL=5`, `AUTOHEAL_START_PERIOD=60`, `AUTOHEAL_DEFAULT_STOP_TIMEOUT=10`
   - Volume: `/var/run/docker.sock:/var/run/docker.sock:ro`
   - Label: `autoheal: "false"`
-- [ ] Verify dev compose parity — check if `docker-compose.dev.yml` needs matching changes
+- [x] Verify dev compose parity — HEALTHCHECK + autoheal added to `docker-compose.dev.yml` (no mem_limit for dev)
 
 ## Validation
 
