@@ -31,6 +31,8 @@ export type {
   AiRuntimeResult,
 } from "./services/ai_runtime";
 export { createAiRuntime } from "./services/ai_runtime";
+// Billing commit (for app-layer closure injection into BillingGraphExecutorDecorator)
+export { commitUsageFact } from "./services/billing";
 // Non-streaming completion (for app facade)
 export { execute, executeStream } from "./services/completion";
 // Message mappers (for app facade DTO conversion)

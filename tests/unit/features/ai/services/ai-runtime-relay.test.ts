@@ -3,26 +3,22 @@
 
 /**
  * Module: `@tests/unit/features/ai/services/ai-runtime-relay.test`
- * Purpose: Unit tests for RunEventRelay race conditions and billing validation in ai_runtime.ts
- * Scope: Tests protocol termination, billing validation (strict/hints schemas), and terminal guard. Does not test actual DB writes or stack-level integration.
- * Invariants: BILLING_INDEPENDENT_OF_CLIENT, USAGE_FACT_VALIDATED, TERMINAL_ONCE
+ * Purpose: Unit tests for RunEventRelay race conditions, protocol termination, and usage_report filtering.
+ * Scope: Tests protocol termination and terminal guard. Does not test billing validation (see billing-executor-decorator.spec.ts).
+ * Invariants: PUMP_TO_COMPLETION, PROTOCOL_TERMINATION, AI_RUNTIME_EMITS_AIEVENTS
  * Side-effects: none
  * Links: Tests RunEventRelay in ai_runtime.ts, GRAPH_EXECUTION.md
  * @internal
  */
 
 import {
-  buildExternalUsageFact,
-  buildInprocUsageFact,
-  buildSandboxUsageFact,
   createDelayedReturnGraphExecutor,
   createImmediateGraphExecutor,
-  createMockAccountServiceWithDefaults,
   createUserMessage,
   FakeClock,
   TEST_MODEL_ID,
 } from "@tests/_fakes";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createAiRuntime } from "@/features/ai/services/ai_runtime";
 import type {
@@ -37,21 +33,7 @@ import type {
   DoneEvent,
   ErrorEvent,
   TextDeltaEvent,
-  UsageReportEvent,
 } from "@/types/ai-events";
-import type { UsageFact } from "@/types/usage";
-
-// Mock serverEnv
-vi.mock("@/shared/env", () => ({
-  serverEnv: () => ({
-    USER_PRICE_MARKUP_FACTOR: 1.5,
-  }),
-}));
-
-// Mock isModelFree for billing commit tests
-vi.mock("@/shared/ai/model-catalog.server", () => ({
-  isModelFree: vi.fn().mockResolvedValue(true),
-}));
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -113,9 +95,8 @@ describe("RunEventRelay race conditions", () => {
 
     // Upstream delays 500ms after done before returning (pumpDone not set yet)
     const graphExecutor = createDelayedReturnGraphExecutor(events, 500);
-    const accountService = createMockAccountServiceWithDefaults();
 
-    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const runtime = createAiRuntime({ graphExecutor });
     const ctx = createTestCtx();
 
     const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
@@ -146,9 +127,8 @@ describe("RunEventRelay race conditions", () => {
     ];
 
     const graphExecutor = createImmediateGraphExecutor(events);
-    const accountService = createMockAccountServiceWithDefaults();
 
-    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const runtime = createAiRuntime({ graphExecutor });
     const ctx = createTestCtx();
 
     const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
@@ -178,9 +158,8 @@ describe("RunEventRelay race conditions", () => {
     ];
 
     const graphExecutor = createImmediateGraphExecutor(events);
-    const accountService = createMockAccountServiceWithDefaults();
 
-    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const runtime = createAiRuntime({ graphExecutor });
     const ctx = createTestCtx();
 
     const { stream, final } = runtime.runChatStream(defaultInput(ctx), ctx);
@@ -202,7 +181,8 @@ describe("RunEventRelay race conditions", () => {
   });
 
   it("uiStream filters out usage_report events", async () => {
-    // usage_report events are for billing only, not UI
+    // usage_report events are consumed by BillingGraphExecutorDecorator
+    // but if any leak through, relay defensively filters them
 
     const events: AiEvent[] = [
       { type: "text_delta", delta: "Response" } satisfies TextDeltaEvent,
@@ -222,9 +202,8 @@ describe("RunEventRelay race conditions", () => {
     ];
 
     const graphExecutor = createImmediateGraphExecutor(events);
-    const accountService = createMockAccountServiceWithDefaults();
 
-    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const runtime = createAiRuntime({ graphExecutor });
     const ctx = createTestCtx();
 
     const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
@@ -243,9 +222,8 @@ describe("RunEventRelay race conditions", () => {
     const events: AiEvent[] = [{ type: "done" } satisfies DoneEvent];
 
     const graphExecutor = createImmediateGraphExecutor(events);
-    const accountService = createMockAccountServiceWithDefaults();
 
-    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const runtime = createAiRuntime({ graphExecutor });
     const ctx = createTestCtx();
 
     const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
@@ -257,134 +235,6 @@ describe("RunEventRelay race conditions", () => {
 
     expect(result).toBe("completed");
     expect(collectedEvents).toEqual([{ type: "done" }]);
-  });
-});
-
-// ============================================================================
-// RunEventRelay: Billing Validation
-// ============================================================================
-
-describe("RunEventRelay billing validation", () => {
-  it("inproc executor missing usageUnitId → error event in stream (billing failed)", async () => {
-    // A billing-authoritative executor (inproc) with missing usageUnitId
-    // should fail strict schema validation → throw → error event in stream
-    const { usageUnitId: _, ...factWithoutId } = buildInprocUsageFact();
-
-    const events: AiEvent[] = [
-      { type: "text_delta", delta: "Hello" } satisfies TextDeltaEvent,
-      {
-        type: "usage_report",
-        fact: factWithoutId as unknown as UsageFact,
-      } satisfies UsageReportEvent,
-      { type: "done" } satisfies DoneEvent,
-    ];
-
-    const graphExecutor = createImmediateGraphExecutor(events);
-    const accountService = createMockAccountServiceWithDefaults();
-    const runtime = createAiRuntime({ graphExecutor, accountService });
-    const ctx = createTestCtx();
-
-    const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
-    const { result, events: collectedEvents } =
-      await consumeWithTimeout(stream);
-
-    expect(result).toBe("completed");
-    // text_delta was queued before the usage_report caused the error
-    expect(collectedEvents[0]).toEqual({ type: "text_delta", delta: "Hello" });
-    // error event should be emitted by pump's catch handler
-    expect(collectedEvents.some((e) => e.type === "error")).toBe(true);
-    // recordChargeReceipt should NOT have been called (validation failed before billing)
-    expect(accountService.recordChargeReceipt).not.toHaveBeenCalled();
-  });
-
-  it("sandbox executor missing usageUnitId → error event in stream (billing failed)", async () => {
-    const { usageUnitId: _, ...factWithoutId } = buildSandboxUsageFact();
-
-    const events: AiEvent[] = [
-      {
-        type: "usage_report",
-        fact: factWithoutId as unknown as UsageFact,
-      } satisfies UsageReportEvent,
-      { type: "done" } satisfies DoneEvent,
-    ];
-
-    const graphExecutor = createImmediateGraphExecutor(events);
-    const accountService = createMockAccountServiceWithDefaults();
-    const runtime = createAiRuntime({ graphExecutor, accountService });
-    const ctx = createTestCtx();
-
-    const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
-
-    const collectedEvents: AiEvent[] = [];
-    for await (const event of stream) {
-      collectedEvents.push(event);
-    }
-
-    expect(collectedEvents.some((e) => e.type === "error")).toBe(true);
-    expect(accountService.recordChargeReceipt).not.toHaveBeenCalled();
-  });
-
-  it("external executor missing usageUnitId → no error, billing skipped", async () => {
-    // External (langgraph_server) with missing usageUnitId should pass hints
-    // schema validation but skip billing commit (soft warn, not error)
-    const externalFact = buildExternalUsageFact();
-
-    const events: AiEvent[] = [
-      { type: "text_delta", delta: "Response" } satisfies TextDeltaEvent,
-      { type: "usage_report", fact: externalFact } satisfies UsageReportEvent,
-      { type: "done" } satisfies DoneEvent,
-    ];
-
-    const graphExecutor = createImmediateGraphExecutor(events);
-    const accountService = createMockAccountServiceWithDefaults();
-    const runtime = createAiRuntime({ graphExecutor, accountService });
-    const ctx = createTestCtx();
-
-    const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
-
-    const collectedEvents: AiEvent[] = [];
-    for await (const event of stream) {
-      collectedEvents.push(event);
-    }
-
-    // No error in stream — soft skip, not hard failure
-    expect(collectedEvents.map((e) => e.type)).toEqual(["text_delta", "done"]);
-    // recordChargeReceipt NOT called (usageUnitId missing → commitUsageFact skips)
-    expect(accountService.recordChargeReceipt).not.toHaveBeenCalled();
-  });
-
-  it("valid inproc usage_report → commitUsageFact calls recordChargeReceipt", async () => {
-    const fact = buildInprocUsageFact();
-
-    const events: AiEvent[] = [
-      { type: "text_delta", delta: "Response" } satisfies TextDeltaEvent,
-      { type: "usage_report", fact } satisfies UsageReportEvent,
-      { type: "done" } satisfies DoneEvent,
-    ];
-
-    const graphExecutor = createImmediateGraphExecutor(events);
-    const accountService = createMockAccountServiceWithDefaults();
-    const runtime = createAiRuntime({ graphExecutor, accountService });
-    const ctx = createTestCtx();
-
-    const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
-
-    const collectedEvents: AiEvent[] = [];
-    for await (const event of stream) {
-      collectedEvents.push(event);
-    }
-
-    // Stream completes normally (no error)
-    expect(collectedEvents.map((e) => e.type)).toEqual(["text_delta", "done"]);
-
-    // Wait a tick for async billing to complete
-    await new Promise((r) => setTimeout(r, 50));
-
-    // recordChargeReceipt was called (billing committed)
-    expect(accountService.recordChargeReceipt).toHaveBeenCalledTimes(1);
-    const callArgs = vi.mocked(accountService.recordChargeReceipt).mock
-      .calls[0]?.[0];
-    expect(callArgs.sourceReference).toContain("litellm-call-id-456");
   });
 });
 
@@ -422,8 +272,7 @@ describe("RunEventRelay terminal guard", () => {
       },
     };
 
-    const accountService = createMockAccountServiceWithDefaults();
-    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const runtime = createAiRuntime({ graphExecutor });
     const ctx = createTestCtx();
 
     const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
@@ -439,13 +288,21 @@ describe("RunEventRelay terminal guard", () => {
     expect(collectedEvents[1]).toEqual({ type: "done" });
   });
 
-  it("ignores usage_report after terminal done (no billing for post-done events)", async () => {
-    const fact = buildInprocUsageFact();
-
+  it("ignores usage_report after terminal done", async () => {
+    // usage_report after done should be ignored by terminal guard
     const events: AiEvent[] = [
       { type: "done" } satisfies DoneEvent,
       // Protocol violation: usage_report after done
-      { type: "usage_report", fact } satisfies UsageReportEvent,
+      {
+        type: "usage_report",
+        fact: {
+          runId: "run-123",
+          attempt: 0,
+          source: "litellm",
+          billingAccountId: "billing-123",
+          virtualKeyId: "vk-123",
+        },
+      },
     ];
 
     const graphExecutor: GraphExecutorPort = {
@@ -466,8 +323,7 @@ describe("RunEventRelay terminal guard", () => {
       },
     };
 
-    const accountService = createMockAccountServiceWithDefaults();
-    const runtime = createAiRuntime({ graphExecutor, accountService });
+    const runtime = createAiRuntime({ graphExecutor });
     const ctx = createTestCtx();
 
     const { stream } = runtime.runChatStream(defaultInput(ctx), ctx);
@@ -482,7 +338,5 @@ describe("RunEventRelay terminal guard", () => {
 
     // Only done should be collected
     expect(collectedEvents).toEqual([{ type: "done" }]);
-    // Billing should NOT have been called (usage_report was after terminal)
-    expect(accountService.recordChargeReceipt).not.toHaveBeenCalled();
   });
 });

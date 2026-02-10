@@ -28,6 +28,7 @@ import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
 import type { AiEvent, StreamFinalResult } from "@/features/ai/public";
 // Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
 import {
+  commitUsageFact,
   createAiRuntime,
   executeStream,
   type MessageDto,
@@ -43,6 +44,7 @@ import {
 } from "@/ports";
 import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
+import type { BillingCommitFn } from "@/types/billing";
 
 interface CompletionInput {
   messages: MessageDto[];
@@ -161,9 +163,17 @@ export async function completionStream(
   // Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes by graphId to providers
   const { accountService, clock } = resolveAiAdapterDeps(userId);
 
+  // Create billing commit closure (app layer CAN import features — DI boundary)
+  const billingCommitFn: BillingCommitFn = (fact, context) =>
+    commitUsageFact(fact, context, accountService, ctx.log);
+
   // Create graph executor via bootstrap factory
   // Routing is handled by AggregatingGraphExecutor - facade is graph-agnostic
-  const graphExecutor = createGraphExecutor(executeStream, userId);
+  const graphExecutor = createGraphExecutor(
+    executeStream,
+    userId,
+    billingCommitFn
+  );
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
@@ -210,10 +220,7 @@ export async function completionStream(
       accountService,
     });
 
-    const aiRuntime = createAiRuntime({
-      graphExecutor,
-      accountService,
-    });
+    const aiRuntime = createAiRuntime({ graphExecutor });
 
     // runChatStream is now synchronous (returns immediately with stream handle)
     const { stream, final } = aiRuntime.runChatStream(

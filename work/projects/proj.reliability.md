@@ -29,12 +29,12 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 ### P0 — Stop the Bleeding
 
-| Deliverable                                                                                                                 | Status      | Est |
-| --------------------------------------------------------------------------------------------------------------------------- | ----------- | --- |
-| VM watchdog: systemd timer curls `/api/meta/readyz` every 30s, restarts app container after 4 consecutive failures (~2 min) | Not Started | 1   |
-| OTel fix: set `OTEL_NODE_RESOURCE_DETECTORS=none` in production env                                                         | Not Started | 1   |
-| OTel fix: add `resourceDetectors: []` to `NodeSDK` constructor in `src/instrumentation.ts`                                  | Not Started | 1   |
-| External uptime monitor (UptimeRobot/Checkly) on `https://cognidao.org/api/meta/readyz`, alerts to Slack/email              | Not Started | 1   |
+| Deliverable                                                                                                                 | Status           | Est |
+| --------------------------------------------------------------------------------------------------------------------------- | ---------------- | --- |
+| VM watchdog: systemd timer curls `/api/meta/readyz` every 30s, restarts app container after 4 consecutive failures (~2 min) | Todo (task.0014) | 1   |
+| OTel fix: set `OTEL_NODE_RESOURCE_DETECTORS=none` in production env                                                         | Not Started      | 1   |
+| OTel fix: add `resourceDetectors: []` to `NodeSDK` constructor in `src/instrumentation.ts`                                  | Not Started      | 1   |
+| External uptime monitor (UptimeRobot/Checkly) on `https://cognidao.org/api/meta/readyz`, alerts to Slack/email              | Not Started      | 1   |
 
 ### P1 — Don't Lose Data Again
 
@@ -66,6 +66,7 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 ## As-Built Specs
 
+- [vm-watchdog.md](../../docs/spec/vm-watchdog.md) — watchdog design, invariants, deploy lockfile
 - [observability.md](../../docs/spec/observability.md) — structured logging, tracing
 - [observability-requirements.md](../../docs/spec/observability-requirements.md) — silent death detection invariants
 

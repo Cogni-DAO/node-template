@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-07
+- **Last reviewed:** 2026-02-10
 - **Status:** stable
 
 ## Purpose
@@ -54,7 +54,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
   - `ContainerConfig` interface - Runtime config (unhandledErrorPolicy, rateLimitBypass, DEPLOY_ENVIRONMENT)
   - `UnhandledErrorPolicy` type - `"rethrow" | "respond_500"`
   - `resolveAiAdapterDeps()` - AI adapter dependencies for factory
-  - `createGraphExecutor()` - Factory for GraphExecutorPort (from `graph-executor.factory.ts`)
+  - `createGraphExecutor(completionStreamFn, userId, billingCommitFn)` - Factory for GraphExecutorPort with billing + observability decorators (from `graph-executor.factory.ts`)
   - `createAgentCatalog()`, `listAgentsForApi()` - Discovery factory (from `agent-discovery.ts`)
   - `wrapRouteHandlerWithLogging()` - Route logging wrapper with metrics (from `http/`)
   - `wrapPublicRoute()` - Lazy singleton wrapper for public routes with rate limiting (from `http/`)
@@ -76,7 +76,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 
 - This directory **does**:
   - Dependency injection wiring with singleton container
-  - Factory functions for adapter construction (e.g., createInProcGraphExecutor, createAgentCatalog)
+  - Factory functions for adapter construction (e.g., createGraphExecutor, createAgentCatalog)
   - Sandbox provider registration (LazySandboxGraphProvider + SandboxAgentCatalogProvider, gated by LITELLM_MASTER_KEY; sandbox adapter loaded via dynamic import to avoid Turbopack bundling native deps)
   - Discovery factory for agent listing (listAgentsForApi per DISCOVERY_PIPELINE invariant)
   - Environment-based adapter selection (APP_ENV=test → fakes, production → real adapters including RipgrepAdapter)
