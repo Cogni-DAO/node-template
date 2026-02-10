@@ -67,6 +67,7 @@ The gateway is a long-running service (externally-built image, compose-managed).
 | Update `services/sandbox-openclaw/AGENTS.md` — document gateway mode, compose services, config, proxy                                                                           | Not Started | 0.5 | (create)  |
 | Update `services-architecture.md` Existing Services table — add `openclaw-gateway` (external image), `llm-proxy-openclaw` (nginx sidecar), `sandbox-openclaw` (ephemeral image) | Not Started | 0.5 | (create)  |
 | Add "External Image Service" variant to `create-service.md` — lighter checklist for pre-built images (compose + config + healthcheck + CI, no package.json/tsconfig/src)        | Not Started | 1   | (create)  |
+| Gateway agent workspace + SOUL.md — dedicated workspace with chat-appropriate AGENTS.md, upstream heartbeat prompt fix                                                          | Todo        | 2   | task.0023 |
 
 **Key distinction**: `openclaw-gateway` uses `openclaw-outbound-headers:latest` (built in the OpenClaw repo, published to GHCR). We don't own that Dockerfile — we configure it via bind-mounted `openclaw-gateway.json` and deploy via compose. `cogni-sandbox-openclaw` (ephemeral) is the image we DO build from `services/sandbox-openclaw/Dockerfile`. Both need CI coverage.
 
