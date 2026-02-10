@@ -230,6 +230,100 @@ describe("OpenClaw Gateway Full-Stack", () => {
     expect(output).toContain("WS_WRITABLE");
   });
 
+  // WS_EVENT_CAUSALITY: two concurrent agent calls must never leak tokens across sessions.
+  // Real models work (verified with nemotron-nano-30b). Skipped in CI — same mock-llm
+  // limitation as bug.0009. Run locally with real LiteLLM model to validate.
+  it.skip("cross-run isolation: two concurrent calls receive zero foreign tokens", async () => {
+    // Two independent clients — each opens its own WS connection
+    const clientA = new OpenClawGatewayClient(GATEWAY_URL, GATEWAY_TOKEN);
+    const clientB = new OpenClawGatewayClient(GATEWAY_URL, GATEWAY_TOKEN);
+
+    const runIdA = uniqueRunId("isolation-A");
+    const runIdB = uniqueRunId("isolation-B");
+    const sessionKeyA = `agent:main:test-isolation-a:${runIdA}`;
+    const sessionKeyB = `agent:main:test-isolation-b:${runIdB}`;
+
+    const makeHeaders = (runId: string, account: string) => ({
+      "x-litellm-end-user-id": account,
+      "x-litellm-spend-logs-metadata": JSON.stringify({
+        run_id: runId,
+        graph_id: "sandbox:openclaw",
+      }),
+      "x-cogni-run-id": runId,
+    });
+
+    // Fire both calls concurrently — gateway broadcasts all chat events to all WS clients
+    const [eventsA, eventsB] = await Promise.all([
+      collectEvents(
+        clientA.runAgent({
+          message: 'Respond with exactly: "ALPHA_RESPONSE"',
+          sessionKey: sessionKeyA,
+          outboundHeaders: makeHeaders(runIdA, "test-isolation-a"),
+          timeoutMs: 45_000,
+        })
+      ),
+      collectEvents(
+        clientB.runAgent({
+          message: 'Respond with exactly: "BRAVO_RESPONSE"',
+          sessionKey: sessionKeyB,
+          outboundHeaders: makeHeaders(runIdB, "test-isolation-b"),
+          timeoutMs: 45_000,
+        })
+      ),
+    ]);
+
+    // Both must complete without errors
+    const errorsA = eventsA.filter((e) => e.type === "chat_error");
+    const errorsB = eventsB.filter((e) => e.type === "chat_error");
+    expect(errorsA).toHaveLength(0);
+    expect(errorsB).toHaveLength(0);
+
+    // Both must have chat_final
+    const finalA = eventsA.find((e) => e.type === "chat_final") as
+      | Extract<GatewayAgentEvent, { type: "chat_final" }>
+      | undefined;
+    const finalB = eventsB.find((e) => e.type === "chat_final") as
+      | Extract<GatewayAgentEvent, { type: "chat_final" }>
+      | undefined;
+    expect(finalA).toBeDefined();
+    expect(finalB).toBeDefined();
+
+    // Collect all text delivered to each client (deltas + final)
+    const textA = eventsA
+      .filter(
+        (e): e is Extract<GatewayAgentEvent, { type: "text_delta" }> =>
+          e.type === "text_delta"
+      )
+      .map((e) => e.text)
+      .join("");
+    const textB = eventsB
+      .filter(
+        (e): e is Extract<GatewayAgentEvent, { type: "text_delta" }> =>
+          e.type === "text_delta"
+      )
+      .map((e) => e.text)
+      .join("");
+
+    // CRITICAL ISOLATION ASSERTIONS:
+    // Client A must never see BRAVO content; Client B must never see ALPHA content.
+    // Fail on the first foreign byte.
+    expect(textA).not.toContain("BRAVO");
+    expect(textB).not.toContain("ALPHA");
+    expect(finalA!.text).not.toContain("BRAVO");
+    expect(finalB!.text).not.toContain("ALPHA");
+
+    // Positive check: each stream contains its own expected content
+    // (LLMs may paraphrase, so check the final authoritative response)
+    expect(finalA!.text.length).toBeGreaterThan(0);
+    expect(finalB!.text.length).toBeGreaterThan(0);
+
+    // No HEARTBEAT_OK in either stream
+    expect(textA).not.toContain("HEARTBEAT_OK");
+    expect(textB).not.toContain("HEARTBEAT_OK");
+    expect(finalA!.text).not.toContain("HEARTBEAT_OK");
+    expect(finalB!.text).not.toContain("HEARTBEAT_OK");
+  });
+
   it("gateway container does not have LITELLM_MASTER_KEY in env", async () => {
     const output = await execInContainer(
       docker,

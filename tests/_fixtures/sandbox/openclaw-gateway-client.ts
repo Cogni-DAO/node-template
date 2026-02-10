@@ -50,7 +50,8 @@ export interface ConnectOptions {
 export interface AgentCallOptions {
   message: string;
   agentId?: string;
-  sessionKey?: string;
+  /** Session correlation key — REQUIRED per WS_EVENT_CAUSALITY. */
+  sessionKey: string;
   outboundHeaders?: Record<string, string>;
   /** Timeout waiting for the agent response (ms). Default: 15000 */
   timeoutMs?: number;
@@ -187,9 +188,9 @@ export class OpenClawGatewayClient {
     const params: Record<string, unknown> = {
       message,
       agentId,
+      sessionKey,
       idempotencyKey: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     };
-    if (sessionKey) params.sessionKey = sessionKey;
     if (outboundHeaders) params.outboundHeaders = outboundHeaders;
 
     return this.request("agent", params, timeoutMs);
