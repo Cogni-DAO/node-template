@@ -20,6 +20,33 @@ labels: [ai-graphs, refactoring]
 external_refs:
 ---
 
+## Requirements
+
+- `GraphProvider` interface MUST be deleted — only `GraphExecutorPort` owns `runGraph()`
+- All providers MUST implement `GraphExecutorPort` directly (no intermediate interface)
+- Routing MUST be deterministic by namespace: `graphId.split(":")[0]` → `Map<string, GraphExecutorPort>` lookup
+- Unknown namespace MUST return error result (fail closed, no fallback)
+- `canHandle()` MUST be removed from all execution and discovery interfaces
+- `AgentCatalogProvider` drops `canHandle()` — discovery is pure `listAgents()` fanout
+- `LazySandboxGraphProvider` MUST preserve lazy-init behavior in the new router map
+- Per GRAPH_ID_NAMESPACED: routing uses `${providerId}:${graphName}` format exclusively
+
+## Allowed Changes
+
+- `src/adapters/server/ai/graph-provider.ts` — DELETE entirely
+- `src/adapters/server/ai/aggregating-executor.ts` — rename class to `NamespaceGraphRouter`, replace `GraphProvider[]` with `Map<string, GraphExecutorPort>`
+- `src/adapters/server/ai/langgraph/inproc.provider.ts` — `implements GraphExecutorPort` instead of `GraphProvider`
+- `src/adapters/server/ai/langgraph/dev/provider.ts` — same
+- `src/adapters/server/sandbox/sandbox-graph.provider.ts` — same
+- `src/bootstrap/graph-executor.factory.ts` — `LazySandboxGraphProvider` implements `GraphExecutorPort`; build `Map` instead of `GraphProvider[]`
+- `src/adapters/server/ai/agent-catalog.provider.ts` — remove `canHandle()` from interface
+- `src/adapters/server/ai/langgraph/inproc-agent-catalog.provider.ts` — remove `canHandle()` impl
+- `src/adapters/server/ai/langgraph/dev/agent-catalog.provider.ts` — remove `canHandle()` impl
+- `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` — remove `canHandle()` impl
+- `src/adapters/server/ai/aggregating-agent-catalog.ts` — simplify to pure fanout
+- `src/adapters/server/ai/index.ts` — update barrel exports
+- `tests/` — routing tests, provider tests updated
+
 ## Problem
 
 `GraphProvider` is effectively a second port with the same `runGraph(req) -> GraphRunResult` signature as `GraphExecutorPort`. Combined with per-provider `canHandle()` logic, this creates two problems:
@@ -123,9 +150,34 @@ File: `src/bootstrap/graph-executor.factory.ts`
 
 ## Validation
 
-- `pnpm check` — no type errors
-- `pnpm test` — all unit/integration pass
-- `pnpm test:contract` — contract tests pass
-- `pnpm test:stack:dev` — stack tests pass (graph execution still works end-to-end)
-- Verify: `GraphProvider` interface no longer exists in codebase
-- Verify: no `canHandle` method anywhere in execution layer
+```bash
+pnpm check                # lint + type + format
+pnpm test                 # unit/integration
+pnpm test:contract        # contract tests
+pnpm test:stack:dev       # full stack (graph execution end-to-end)
+```
+
+**Expected:** All pass. `GraphProvider` interface no longer exists. No `canHandle` method in execution layer.
+
+**Grep verifications:**
+
+```bash
+grep -rn "GraphProvider" src/ --include="*.ts" | grep -v "node_modules"  # should be 0 results
+grep -rn "canHandle" src/adapters/ --include="*.ts"                       # should be 0 results
+```
+
+## Review Checklist
+
+- [ ] **Work Item:** `task.0006` linked in PR body
+- [ ] **Spec:** UNIFIED_GRAPH_EXECUTOR, GRAPH_ID_NAMESPACED, PROVIDER_AGGREGATION, DISCOVERY_SEPARATION upheld
+- [ ] **Tests:** routing tests (namespace parsing, unknown → error), provider tests (no canHandle)
+- [ ] **Reviewer:** assigned and approved
+- [ ] **Scope:** No billing or RunEventRelay changes (those are task.0007)
+
+## PR / Links
+
+-
+
+## Attribution
+
+-

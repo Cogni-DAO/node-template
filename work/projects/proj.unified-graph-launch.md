@@ -11,7 +11,7 @@ outcome: All graph runs flow through GraphRunWorkflow; no inline execution in HT
 assignees:
   - derekg1729
 created: 2026-02-07
-updated: 2026-02-09
+updated: 2026-02-10
 labels:
   - ai-graphs
   - scheduler
@@ -95,4 +95,12 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 ## Design Notes
 
-_(none yet)_
+**Implementation order** (from design review, 2026-02-10):
+
+1. **bug.0005** (PR #1) — Minimal inline billing drain in internal route handler. Intentionally short-lived; task.0007 makes it redundant.
+2. **task.0007** (PR #2) — `BillingGraphExecutorDecorator` at port level. Uses DI (`commitFn` closure) to respect `adapters → ports|shared|types` boundary. Also: remove billing from `RunEventRelay`, add drain-enforcement grep test, add JSDoc on port.
+3. **task.0006** (PR #3) — Delete `GraphProvider`, replace `AggregatingGraphExecutor` with `NamespaceGraphRouter`, clean up `canHandle()`.
+
+**Do not implement in this changeset:** Temporal `GraphRunWorkflow` unification (items 4-10 in Crawl roadmap). Those require separate task decomposition when ready.
+
+**Branch:** Cut a clean branch from `staging` for implementation. The current `feat/concurrent-openclaw` branch carries unrelated OpenClaw work.

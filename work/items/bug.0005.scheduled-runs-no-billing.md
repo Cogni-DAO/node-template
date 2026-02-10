@@ -46,14 +46,60 @@ The internal route handler (`src/app/api/internal/graphs/[graphId]/runs/route.ts
 | `src/features/ai/services/billing.ts:203-321`                 | `commitUsageFact()` — never called for scheduled runs                 |
 | `src/app/_facades/ai/activity.server.ts`                      | Activity facade — now reads charge_receipts only                      |
 
-## Fix Options
+## Requirements
 
-1. **Quick fix**: Wrap `executor.runGraph()` in the internal route handler with a `RunEventRelay` (or inline billing loop) so `usage_report` events are processed.
-2. **Proper fix** (proj.unified-graph-launch P0): Unify all graph execution through `GraphRunWorkflow` so there's a single execution path with billing enforcement. The internal route becomes an Activity caller, not a direct executor.
+- Scheduled graph runs MUST produce `charge_receipts` rows identical in structure to UI chat runs
+- Activity dashboard (`/activity`) MUST show scheduled runs with cost, tokens, and model
+- `AI_BILLING_COMMIT_COMPLETE` structured log event MUST fire for scheduled runs
+- Fix MUST be minimal — this is intentionally short-lived; task.0007 makes it redundant
+- Per ONE_LEDGER_WRITER: billing MUST go through `commitUsageFact()`, not direct `recordChargeReceipt()`
+- Per IDEMPOTENT_CHARGES: `sourceReference` format MUST be `runId/attempt/usageUnitId`
+
+## Allowed Changes
+
+- `src/app/api/internal/graphs/[graphId]/runs/route.ts` — add inline billing drain to the stream consumption loop
+- `tests/stack/` — add or extend stack test asserting scheduled runs produce `charge_receipts`
+- NO changes to `RunEventRelay`, `billing.ts`, `GraphExecutorPort`, or the factory — those are task.0007's scope
+
+## Plan
+
+- [ ] Read `src/app/api/internal/graphs/[graphId]/runs/route.ts` and locate the `for await (const _event of result.stream) {}` drain loop (~line 353)
+- [ ] Import `commitUsageFact` from `@/features/ai/services/billing` (app layer can import features)
+- [ ] Build `RunContext` from the handler's existing `runId` and `ingressRequestId` variables
+- [ ] Replace the empty drain with an inline billing loop:
+  ```typescript
+  for await (const event of result.stream) {
+    if (event.type === "usage_report") {
+      await commitUsageFact(event.fact, runContext, accountService, log);
+    }
+  }
+  ```
+- [ ] Resolve `accountService` — use `getContainer().accountService` or pass from the handler's existing billing account resolution
+- [ ] Add stack test: trigger scheduled graph run → assert `charge_receipts` row exists with `receipt_kind='llm'`
+- [ ] Run `pnpm check` — no type errors
+- [ ] Run `pnpm test:stack:dev` — billing stack tests pass
 
 ## Validation
 
-- Trigger a scheduled graph run
-- Verify `charge_receipts` row exists with correct `run_id`, `billing_account_id`, `receipt_kind='llm'`
-- Verify `/activity` dashboard shows the scheduled run with cost/tokens/model
-- Verify `AI_BILLING_COMMIT_COMPLETE` log event fires for scheduled runs
+```bash
+pnpm check                # lint + type + format
+pnpm test:stack:dev       # full stack tests (billing assertions)
+```
+
+**Expected:** All pass. Scheduled run produces `charge_receipts` row. `AI_BILLING_COMMIT_COMPLETE` log fires.
+
+## Review Checklist
+
+- [ ] **Work Item:** `bug.0005` linked in PR body
+- [ ] **Spec:** ONE_LEDGER_WRITER, IDEMPOTENT_CHARGES, BILLING_INDEPENDENT_OF_CLIENT upheld
+- [ ] **Tests:** stack test covers scheduled run → charge_receipts
+- [ ] **Reviewer:** assigned and approved
+- [ ] **Scope:** No RunEventRelay or factory changes (those are task.0007)
+
+## PR / Links
+
+-
+
+## Attribution
+
+-

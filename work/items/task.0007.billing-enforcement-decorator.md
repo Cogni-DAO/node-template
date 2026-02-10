@@ -20,6 +20,29 @@ labels: [ai-graphs, billing]
 external_refs:
 ---
 
+## Requirements
+
+- `BillingGraphExecutorDecorator` MUST implement `GraphExecutorPort` and intercept `usage_report` events from the stream, calling `commitUsageFact()` for each
+- Decorator MUST use dependency injection for the billing function — adapters layer CANNOT import from features layer (architecture boundary)
+- `RunEventRelay` MUST drop all billing responsibility (`handleBilling()`, `commitUsageFact` import, validation logic removed)
+- After this change, the internal route handler's `for await` drain MUST produce `charge_receipts` with zero route-level changes (billing comes from the decorator)
+- `GraphExecutorPort.runGraph()` JSDoc MUST document the caller-drain obligation: "Caller MUST consume `stream` to completion for billing side-effects to fire"
+- A grep-based lint test MUST enforce that all `runGraph()` call sites consume the stream fully
+- Per ONE_LEDGER_WRITER: billing path is still `commitUsageFact()` → `recordChargeReceipt()` only
+- Per IDEMPOTENT_CHARGES: no change to idempotency key computation
+
+## Allowed Changes
+
+- `src/adapters/server/ai/billing-executor.decorator.ts` — NEW: `BillingGraphExecutorDecorator`
+- `src/adapters/server/ai/index.ts` — barrel export for the new decorator
+- `src/bootstrap/graph-executor.factory.ts` — wire decorator between observability and router; add `billingCommitFn` parameter
+- `src/features/ai/services/ai_runtime.ts` — remove `handleBilling()` from `RunEventRelay`, remove `commitUsageFact` import
+- `src/ports/graph-executor.port.ts` — add JSDoc on `runGraph()` documenting caller-drain obligation
+- `src/app/_facades/ai/completion.server.ts` — create `commitFn` closure, pass to factory
+- `src/app/api/internal/graphs/[graphId]/runs/route.ts` — create `commitFn` closure, pass to factory; remove inline billing from bug.0005 fix (now redundant)
+- `src/types/` or `src/ports/` — define `BillingCommitFn` type if needed
+- `tests/` — update RunEventRelay tests (no billing assertions), add decorator unit tests, add drain-enforcement grep test
+
 ## Problem
 
 Billing enforcement lives in `RunEventRelay` (feature layer, `ai_runtime.ts`), which is only used by the UI chat path. Any code that calls `GraphExecutorPort.runGraph()` without wrapping in RunEventRelay gets zero billing — this is exactly what caused bug.0005 (scheduled runs bypass billing).
@@ -42,23 +65,21 @@ The `BillingGraphExecutorDecorator`:
 
 1. Wraps the inner `GraphExecutorPort`
 2. Calls `inner.runGraph(req)` to get the raw stream
-3. Returns a **new stream** that transparently passes through all events but intercepts `usage_report` events and calls `commitUsageFact()`
+3. Returns a **new stream** that transparently passes through all events but intercepts `usage_report` events and calls the injected `commitFn`
 4. The consumer sees the same `AsyncIterable<AiEvent>` — billing is invisible
 
-### Context Resolution
+### Architecture: Dependency Injection for Layer Boundaries
 
-`commitUsageFact()` needs `RunContext` (runId, attempt, ingressRequestId) and `AccountService`. Both are available:
-
-- `RunContext` derivable from `GraphRunRequest` (has `runId`, `ingressRequestId`; attempt is 0 in P0)
-- `AccountService` provided at construction time (same as observability decorator gets `LangfusePort`)
-
-### Stream Wrapping
+The decorator lives in `src/adapters/server/ai/` and CANNOT import from `src/features/`. The billing function is injected at construction time:
 
 ```typescript
+/** Type lives in @/types or @/ports (both importable by adapters + app) */
+type BillingCommitFn = (fact: UsageFact, context: RunContext) => Promise<void>;
+
 class BillingGraphExecutorDecorator implements GraphExecutorPort {
   constructor(
     private inner: GraphExecutorPort,
-    private accountServiceFactory: (userId: UserId) => AccountService,
+    private commitFn: BillingCommitFn,
     private log: Logger
   ) {}
 
@@ -82,16 +103,26 @@ class BillingGraphExecutorDecorator implements GraphExecutorPort {
 
     for await (const event of upstream) {
       if (event.type === "usage_report") {
-        // Billing side-effect (non-blocking, errors logged not thrown)
-        await commitUsageFact(event.fact, context, accountService, this.log);
-        // Don't yield usage_report to consumer — internal event
-        continue;
+        await this.commitFn(event.fact, context);
+        continue; // Don't yield usage_report to consumer
       }
       yield event;
     }
   }
 }
 ```
+
+**Wiring**: The `app` layer (facade or route handler) creates the closure and passes it to the factory:
+
+```typescript
+// In completion.server.ts or internal route handler (app layer — CAN import features)
+const billingCommitFn: BillingCommitFn = (fact, ctx) =>
+  commitUsageFact(fact, ctx, accountService, log);
+
+const executor = createGraphExecutor(executeStream, userId, billingCommitFn);
+```
+
+The factory passes it through to the decorator — factory itself never imports from features.
 
 ### RunEventRelay Impact
 
@@ -101,28 +132,55 @@ Once the decorator handles billing, `RunEventRelay` can drop its billing subscri
 - Remove: `handleBilling()`, `commitUsageFact` import, billing validation logic
 - `RunEventRelay` becomes a pure UI stream adapter (which is what its name should imply)
 
-## Key Constraint
+### Caller-Drain Obligation
 
-**BILLING_INDEPENDENT_OF_CLIENT** must still hold. The decorator's stream wrapper must run to completion even if the consumer disconnects. Two options:
+The decorator's billing only fires as the consumer iterates the stream. This is safe for P0 because both callers drain fully:
 
-1. The decorator itself doesn't need pump semantics — the consumer (RunEventRelay or direct drain) is responsible for completing the stream
-2. The internal route handler already drains to completion (`for await`), so billing fires
+- UI path: `RunEventRelay.pump()` runs to completion regardless of UI disconnect
+- Scheduled path: `for await (const _event of result.stream) {}` drains completely
 
-Option 1 is correct: the decorator transparently processes events as they flow. The _caller_ is responsible for consuming the full stream. This is already true for both paths (UI chat: RunEventRelay pump; scheduled: for-await drain).
+A grep test enforces this: every `runGraph()` call site must be followed by either `RunEventRelay` or a full `for await` drain. This prevents future callers from silently skipping billing.
 
-## Execution Plan
+## Plan
 
-1. Create `BillingGraphExecutorDecorator` in `src/adapters/server/ai/`
-2. Wire in `createGraphExecutor()` factory (between observability decorator and router)
-3. Remove billing from `RunEventRelay.handleBilling()` — relay becomes UI-only
-4. Verify: scheduled run path (`internal/graphs/.../runs/route.ts`) gets billing automatically with zero changes
-5. Update tests
+- [ ] Define `BillingCommitFn` type in `src/types/` (importable by both adapters and app)
+- [ ] Create `BillingGraphExecutorDecorator` in `src/adapters/server/ai/billing-executor.decorator.ts` — constructor takes `(inner, commitFn, log)`, no features imports
+- [ ] Export from `src/adapters/server/ai/index.ts` barrel
+- [ ] Update `createGraphExecutor()` factory signature: add `billingCommitFn: BillingCommitFn` parameter; wire decorator between observability wrapper and aggregator
+- [ ] Update `completion.server.ts` facade: create `commitFn` closure binding `commitUsageFact` + `accountService` + `log`, pass to factory
+- [ ] Update internal route handler: same `commitFn` closure creation, pass to factory; remove inline billing drain from bug.0005 fix
+- [ ] Remove billing from `RunEventRelay`: delete `handleBilling()`, remove `commitUsageFact` import, remove schema validation for usage_report
+- [ ] Add JSDoc on `GraphExecutorPort.runGraph()`: "Caller MUST consume `stream` to completion. Billing side-effects are triggered by stream iteration."
+- [ ] Add grep test: `tests/stack/ai/stream-drain-enforcement.stack.test.ts` — grep for `.runGraph(` call sites, assert each is consumed by RunEventRelay or `for await`
+- [ ] Add unit test: `BillingGraphExecutorDecorator` — mock inner executor emitting `usage_report`, verify `commitFn` called with correct args
+- [ ] Update RunEventRelay tests: remove billing assertions, verify relay is UI-only
+- [ ] Run `pnpm check` — no type errors
+- [ ] Run `pnpm test` — all pass
+- [ ] Run `pnpm test:stack:dev` — billing stack tests pass, scheduled runs still produce charge_receipts
 
 ## Validation
 
-- `pnpm check` — no type errors
-- `pnpm test` — RunEventRelay tests updated (no billing assertions)
-- `pnpm test:stack:dev` — billing stack tests pass
-- New assertion: scheduled graph run produces `charge_receipts` row (bug.0005 resolved)
-- New assertion: `AI_BILLING_COMMIT_COMPLETE` log event fires for scheduled runs
-- Verify: `RunEventRelay` no longer imports `commitUsageFact`
+```bash
+pnpm check                # lint + type + format
+pnpm test                 # unit tests (decorator + relay)
+pnpm test:stack:dev       # full stack tests (billing)
+```
+
+**Expected:** All pass. `RunEventRelay` no longer imports `commitUsageFact`. Scheduled runs still produce `charge_receipts` (via decorator, not inline fix).
+
+## Review Checklist
+
+- [ ] **Work Item:** `task.0007` linked in PR body
+- [ ] **Spec:** ONE_LEDGER_WRITER, IDEMPOTENT_CHARGES, BILLING_INDEPENDENT_OF_CLIENT upheld
+- [ ] **Architecture:** No `adapters → features` imports; decorator uses only DI'd `commitFn`
+- [ ] **Tests:** decorator unit test, drain-enforcement grep test, updated relay tests
+- [ ] **Reviewer:** assigned and approved
+- [ ] **Scope:** No GraphProvider/routing changes (those are task.0006)
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0007.handoff.md)
+
+## Attribution
+
+-
