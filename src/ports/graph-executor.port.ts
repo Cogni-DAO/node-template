@@ -109,6 +109,10 @@ export interface GraphExecutorPort {
    * Execute a graph with the given request.
    * Returns stream handle immediately; consume stream to drive execution.
    *
+   * **Caller MUST consume `stream` to completion.** Billing side-effects
+   * (via BillingGraphExecutorDecorator) are triggered by stream iteration.
+   * Abandoning the stream silently skips billing for that run.
+   *
    * @param req - Graph run request with messages, model, caller info
    * @returns Stream of events and promise for final result
    */

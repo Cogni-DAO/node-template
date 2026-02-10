@@ -10,6 +10,7 @@
 | 0   | 1   | Backlog     | bug.0009  | OpenClaw v2026.2.4 gateway agent returns empty payloads          | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | In Progress | task.0008 | Gateway client: correct protocol lifecycle for OpenClaw chat E2E | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Todo        | bug.0005  | Scheduled runs invisible in Activity — no billing                | Unified Graph Launch       | proj.unified-graph-launch       |
+| 0   | 2   | Todo        | task.0014 | VM watchdog: systemd timer auto-restarts app on health failure   | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | In Progress | bug.0002  | P0 SECURITY: Deploy artifacts expose all secrets                 | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 0   | 4   | In Progress | task.0001 | Docs Migration Tracker                                           | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 1   | 1   | In Progress | bug.0011  | Gateway streaming truncates output mid-sentence in UI            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
