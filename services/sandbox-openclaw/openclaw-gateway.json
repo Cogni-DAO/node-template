@@ -160,7 +160,8 @@
       "model": { "primary": "cogni/gemini-2.5-flash" },
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
-      "timeoutSeconds": 540
+      "timeoutSeconds": 540,
+      "heartbeat": { "every": "0" }
     },
     "list": [{ "id": "main", "default": true, "workspace": "/repo/current" }]
   },

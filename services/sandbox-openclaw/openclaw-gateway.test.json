@@ -43,7 +43,8 @@
       "model": { "primary": "cogni/test-model" },
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
-      "timeoutSeconds": 540
+      "timeoutSeconds": 540,
+      "heartbeat": { "every": "0" }
     },
     "list": [{ "id": "main", "default": true, "workspace": "/repo/current" }]
   },

@@ -8,6 +8,7 @@
  * Invariants:
  *   - Per BILLING_INDEPENDENT_OF_CLIENT: billing headers passed as outboundHeaders per agent call
  *   - Per SECRETS_HOST_ONLY: no LiteLLM keys ever sent to gateway
+ *   - Per WS_EVENT_CAUSALITY: chat events are filtered by sessionKey — only frames matching the current request's sessionKey are processed; all others are dropped (prevents cross-run contamination from broadcasts)
  *   - Frame format: { type: "req"|"res"|"event", id, method, params } (NOT JSON-RPC 2.0)
  *   - Handshake: challenge → connect(auth) → hello-ok (3-step)
  *   - Agent protocol: ACK res (accepted) → optional chat deltas → chat final signal → final "ok" res with result.payloads (authoritative)
@@ -64,7 +65,13 @@ export type GatewayAgentEvent =
 /** Options for {@link OpenClawGatewayClient.runAgent}. */
 export interface RunAgentOptions {
   message: string;
-  sessionKey?: string;
+  /**
+   * Session correlation key — REQUIRED for event isolation.
+   * Only chat events whose payload.sessionKey matches this value are processed;
+   * all others are dropped. Without this, cross-run contamination is possible
+   * because the gateway broadcasts chat events to all connected WS clients.
+   */
+  sessionKey: string;
   outboundHeaders?: Record<string, string>;
   /** Total timeout for the operation (default: 120s). */
   timeoutMs?: number;
@@ -166,9 +173,9 @@ export class OpenClawGatewayClient {
       const params: Record<string, unknown> = {
         message: opts.message,
         agentId: "main",
+        sessionKey: opts.sessionKey,
         idempotencyKey: `cogni-${randomUUID()}`,
       };
-      if (opts.sessionKey) params.sessionKey = opts.sessionKey;
       if (opts.outboundHeaders) params.outboundHeaders = opts.outboundHeaders;
 
       ws.send(
@@ -294,8 +301,16 @@ export class OpenClawGatewayClient {
         }
 
         // ── Chat events: delta, final (signal), error, aborted ───────
+        // WS_EVENT_CAUSALITY: only process chat events for OUR session.
+        // The gateway broadcasts chat events to all connected WS clients,
+        // so heartbeat runs, other users' runs, etc. arrive here too.
+        // Hard filter: drop any frame whose sessionKey doesn't match ours.
         if (frame.type === "event" && frame.event === "chat") {
           const payload = frame.payload as Record<string, unknown> | undefined;
+          const frameSessionKey = payload?.sessionKey as string | undefined;
+          if (!frameSessionKey || frameSessionKey !== opts.sessionKey) {
+            return; // Missing or mismatched sessionKey — drop
+          }
           const state = payload?.state as string | undefined;
 
           if (state === "delta") {
