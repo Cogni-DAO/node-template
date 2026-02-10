@@ -146,20 +146,19 @@ import {
 
 Persistence is handled by parallel stream subscribers — runner owns event emission, not storage:
 
-| Subscriber            | Event              | Action                                      |
-| --------------------- | ------------------ | ------------------------------------------- |
-| **BillingSubscriber** | `usage_report`     | `commitUsageFact()` → charge_receipts       |
-| **HistorySubscriber** | `assistant_final`  | `persistArtifact()` → run_artifacts (cache) |
-| **UI Subscriber**     | `text_delta`, etc. | Forward to client (may disconnect)          |
+| Subscriber            | Event              | Action                                |
+| --------------------- | ------------------ | ------------------------------------- |
+| **BillingSubscriber** | `usage_report`     | `commitUsageFact()` → charge_receipts |
+| **UI Subscriber**     | `text_delta`, etc. | Forward to client (may disconnect)    |
 
-Key contracts from [Usage History spec](./usage-history.md):
+Key contracts from [Chat Persistence spec](./chat-persistence.md):
 
-- **NO_DELTA_STORAGE**: P0 persists only user input + assistant final output. No streaming deltas.
-- **ARTIFACTS_ARE_CACHE**: `run_artifacts` is best-effort transcript cache, not source of truth. For `langgraph_server`, LangGraph owns canonical thread state.
-- **REDACT_BEFORE_PERSIST**: Masking applied before `content_hash` computation and storage. Single redaction boundary.
-- **TENANT_SCOPED**: All artifacts include `account_id`. RLS enforces isolation. `UNIQUE(account_id, run_id, artifact_key)` for idempotency.
+- **UIMESSAGE_IS_CONTRACT**: Thread messages stored as AI SDK `UIMessage[]` JSONB. No bespoke artifact tables.
+- **LANGGRAPH_THREAD_DUALITY**: For `langgraph_server`, LangGraph checkpoints are canonical. `chat_threads` is a projection for UI history.
+- **REDACT_BEFORE_PERSIST**: PII masking applied before `saveThread()`. Single redaction boundary.
+- **TENANT_SCOPED**: All `chat_threads` rows include `owner_user_id`. RLS enforces isolation via `app.current_user_id`.
 
-Runner responsibility: Emit `assistant_final` with complete content. HistoryWriter persists directly — no delta assembly required.
+Runner responsibility: Emit `assistant_final` with complete content. Route accumulates AiEvents into response UIMessage for persistence.
 
 ### InProc Execution Path
 
@@ -302,5 +301,5 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 - [Graph Execution](graph-execution.md) — Executor-agnostic billing, tracking, UI/UX patterns
 - [LangGraph Server](../LANGGRAPH_SERVER.md) — Infrastructure: Docker, Redis, container deployment
 - [Tool Use Spec](./tool-use.md) — Tool execution invariants
-- [Usage History Spec](./usage-history.md) — Run artifacts, assistant_final persistence
+- [Chat Persistence Spec](./chat-persistence.md) — UIMessage persistence, assistant_final accumulation
 - [AI Setup Spec](./ai-setup.md) — Correlation IDs, telemetry

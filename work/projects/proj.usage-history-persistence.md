@@ -2,227 +2,96 @@
 id: proj.usage-history-persistence
 type: project
 primary_charter:
-title: Usage History & Run Artifact Persistence
+title: Chat Persistence & Usage History
 state: Active
 priority: 1
-estimate: 5
-summary: Persist user input and assistant output artifacts from AI runs with tenant isolation, soft delete, PII masking, and LangGraph checkpoint integration for GDPR compliance.
-outcome: Run artifacts (user input + assistant final output) persisted in `run_artifacts` table with RLS-enforced tenant scope, idempotent writes, soft delete, and coordinated LangGraph checkpoint deletion for compliant user data deletion.
+estimate: 4
+summary: Server-authoritative chat persistence using AI SDK UIMessage[] per thread, with tenant-scoped RLS, PII masking, soft delete, and client migration to useChatRuntime. Supersedes run_artifacts design.
+outcome: Multi-turn conversations persisted in `chat_threads` table as `UIMessage[]` JSONB with RLS enforcement. Client sends only user message; server owns all history. assistant-ui migrated to AI SDK runtime.
 assignees:
   - cogni-dev
 created: 2026-02-07
-updated: 2026-02-07
+updated: 2026-02-10
 labels:
   - ai-graphs
   - data
-  - compliance
+  - security
   - tenant-isolation
 ---
 
-# Usage History & Run Artifact Persistence
-
-> Source: docs/USAGE_HISTORY.md
+# Chat Persistence & Usage History
 
 ## Goal
 
-Build a tenant-scoped artifact persistence layer for AI runs that stores user input and assistant final output, with idempotent writes parallel to billing, PII masking before storage, soft delete with retention policies, and LangGraph checkpoint deletion for GDPR-compliant user data deletion.
+Ship server-authoritative conversation persistence so that multi-turn chat works across disconnects, the client cannot fabricate history, and tool messages are inherently server-authored. Use standard AI SDK `UIMessage[]` persistence — no bespoke event-sourcing or run_artifacts for message content. See [chat-persistence spec](../../docs/spec/chat-persistence.md) for all invariants and schema.
 
 ## Roadmap
 
-### Crawl (P0): Minimal Message Persistence
+### Crawl (P0): Core Persistence + Route Bridge
 
-**Goal:** Persist user input and assistant final output per run with tenant isolation, soft delete, and PII masking. No tool call/result storage yet.
+**Goal:** Server persists `UIMessage[]` per thread. Route handler loads history, executes graph, assembles response UIMessage from AiEvent stream, and persists after pump completion. Existing billing/observability decorators unchanged.
 
-| Deliverable                                                             | Status      | Est | Work Item |
-| ----------------------------------------------------------------------- | ----------- | --- | --------- |
-| Core Persistence: RunHistoryPort + run_artifacts table + DrizzleAdapter | Not Started | 3   | —         |
-| Tenant Isolation: RLS policies + account_id enforcement + stack tests   | Not Started | 2   | —         |
-| Retention & Soft Delete: columns + filters + default retention config   | Not Started | 2   | —         |
-| Masking: regex-based PII masking before persist + hash computation      | Not Started | 2   | —         |
-| Thread ID Scoping: enforce `${accountId}:${stateKey}` format            | Not Started | 1   | —         |
+| Deliverable                                                                | Status      | Est | Work Item |
+| -------------------------------------------------------------------------- | ----------- | --- | --------- |
+| DB: `chat_threads` table + Drizzle schema + RLS + migration                | Not Started | 1   | —         |
+| Port: `ChatPersistencePort` + `DrizzleChatPersistenceAdapter`              | Not Started | 2   | —         |
+| Route: load→execute→persist flow + AiEvent→UIMessageStream bridge          | Not Started | 3   | —         |
+| Contract: accept `{threadId, message}` instead of `messages[]`             | Not Started | 1   | —         |
+| Masking: regex-based PII masking before `saveThread()`                     | Not Started | 1   | —         |
+| Tests: multi-turn, tenant isolation, messages-grow-only, disconnect safety | Not Started | 2   | —         |
 
-#### Core Persistence
+### Walk (P1): Client Migration + Thread Management
 
-- [ ] Create `RunHistoryPort` interface in `src/ports/run-history.port.ts`
-- [ ] Create `run_artifacts` table with tenant scope (see Schema in spec)
-- [ ] Create `DrizzleRunHistoryAdapter` in `src/adapters/server/ai/`
-- [ ] Wire `HistoryWriterSubscriber` into `RunEventRelay` fanout (parallel to billing)
-- [ ] Persist user artifact at run start in `AiRuntimeService.runGraph()`
-- [ ] Add `AssistantFinalEvent` to AiEvent union in `@/types/ai-events.ts`
-- [ ] Executors emit `assistant_final` event (LangGraph: from state; direct LLM: assembled from deltas)
-- [ ] Persist assistant artifact on `assistant_final` event in `HistoryWriterSubscriber`
-- [ ] Add idempotency test: replay `assistant_final` twice → 1 assistant artifact row
-- [ ] Add ordering test: `getArtifacts()` returns deterministic order (created_at ASC, id ASC)
+**Goal:** Client sends only the new user message. Thread list UI backed by server. History survives page refresh.
 
-#### Tenant Isolation (P0 blocker)
+| Deliverable                                                                    | Status      | Est | Work Item            |
+| ------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
+| Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk) | Not Started | 2   | (create at P1 start) |
+| Thread list: `listThreads` endpoint + basic thread selection UI                | Not Started | 2   | (create at P1 start) |
+| History load: thread messages loaded from server on mount / thread switch      | Not Started | 1   | (create at P1 start) |
 
-- [ ] Add `account_id` NOT NULL column to `run_artifacts` schema
-- [ ] Add RLS policy with `FORCE ROW LEVEL SECURITY` (see Schema in spec)
-- [ ] Add indexes `(account_id, run_id)` and `(account_id, thread_id)`
-- [ ] Pass `accountId` via relay context (RELAY_PROVIDES_CONTEXT invariant)
-- [ ] Update `getArtifacts()` to require `accountId` parameter
-- [ ] Add stack test: query without `SET LOCAL app.current_account_id` → access denied
-- [ ] Add stack test: cannot read artifacts with mismatched `account_id`
+### Run (P2+): Retention + GDPR Deletion + LangGraph Coordination
 
-#### Retention & Soft Delete
+**Goal:** Production-grade data lifecycle: retention policies, hard delete jobs, and coordinated LangGraph checkpoint + chat_threads deletion for compliant user data removal.
 
-- [ ] Add `deleted_at` and `retention_expires_at` columns to schema
-- [ ] Add retention index on `retention_expires_at`
-- [ ] Filter deleted/expired rows in all read queries by default
-- [ ] Add `softDelete(accountId, runId)` to port interface
-- [ ] Document default retention window in config (e.g., `ARTIFACT_RETENTION_DAYS=90`)
-
-#### Masking (REDACT_BEFORE_PERSIST)
-
-- [ ] Create `src/features/ai/services/masking.ts` with regex-based PII masking
-- [ ] Implement patterns: email, phone, credit card, API keys (sk-\*, Bearer, key patterns)
-- [ ] Apply masking in HistoryWriterSubscriber BEFORE `content_hash` computation
-- [ ] Apply same masking BEFORE any content logging/tracing
-
-#### Thread ID Scoping (TENANT_SCOPED_THREAD_ID)
-
-- [ ] Enforce `thread_id = ${accountId}:${stateKey}` format in `AiRuntimeService`
-- [ ] Add contract test: LangGraph runs require tenant-scoped thread_id
-
-#### Chores
-
-- [ ] Observability instrumentation
-- [ ] Documentation updates
-
-### Walk (P1): Tool Call Artifacts + Enhanced Retention
-
-**Goal:** Optionally persist tool calls for non-LangGraph executors, add scheduled hard-delete job, evaluate stronger PII detection.
-
-| Deliverable                                                                              | Status      | Est | Work Item |
-| ---------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Tool Call Artifacts: persist tool_call artifacts for inproc/claude_sdk executors         | Not Started | 2   | —         |
-| Enhanced Retention: scheduled hard-delete job + evaluate pg_partman + Presidio           | Not Started | 3   | —         |
-| LangGraph Checkpoint Deletion: coordinated artifact + checkpoint deletion (GDPR blocker) | Not Started | 3   | —         |
-
-#### Tool Call Artifacts (Optional)
-
-Enable for `inproc`/`claude_sdk` executors if tool-calling requires audit/replay. **Not needed for `langgraph_server`—LangGraph Server already persists tool calls in checkpoints.**
-
-- [ ] Add `tool_call` artifact type: `{toolName, argsRedacted, resultSummary}`
-- [ ] Persist tool artifacts via HistoryWriterSubscriber on `tool_call_result` events
-- [ ] Stack test: graph with tool calls → tool artifacts persisted
-- [ ] Gate persistence: only for non-langgraph_server executors (or make optional via config)
-
-#### Enhanced Retention & Masking
-
-- [ ] Scheduled job to hard-delete rows where `retention_expires_at < now() - grace_period`
-- [ ] Evaluate pg_partman for partition-based retention at scale
-- [ ] Evaluate Presidio integration for stronger PII detection
-- [ ] Add per-workspace retention policy override
-
-#### LangGraph Checkpoint Deletion (Compliance Blocker)
-
-**Per P0_NO_GDPR_DELETE invariant:** Deleting artifacts without checkpoints is NOT compliant user data deletion—checkpoints hold real conversation state including PII.
-
-- [ ] Implement deletion API for LangGraph PostgresSaver checkpoint tables
-- [ ] Delete by tenant-scoped thread_id prefix (`${accountId}:%`) for full account deletion
-- [ ] Delete by specific thread_id for conversation deletion
-- [ ] Coordinate artifact + checkpoint deletion for GDPR/user-initiated delete requests
-- [ ] Stack test: delete user data → both artifacts AND checkpoints removed
-
-### Run (P2+): Run Lineage + Thread Linking
-
-**Goal:** Add run lineage tracking and thread-level queries for retry/resume semantics and conversation grouping.
-
-| Deliverable                                                    | Status      | Est | Work Item |
-| -------------------------------------------------------------- | ----------- | --- | --------- |
-| Run Lineage: `graph_runs` table for retry/resume semantics     | Not Started | 3   | —         |
-| Thread Linking: thread-level queries/indexes + previous_run_id | Not Started | 2   | —         |
-
-#### Run Lineage (Future)
-
-Add `graph_runs` table for retry/resume semantics if needed.
-
-- [ ] Evaluate need after P0
-- [ ] Add `graph_runs` table: `{run_id PK, parent_run_id?, status, executor_type, graph_name?, timestamps}`
-- [ ] Attempt = computed from lineage chain depth
-- [ ] **Do NOT build preemptively**
-
-#### Thread Linking (Future)
-
-Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, thread groups related runs.
-
-- [ ] Evaluate need after P1
-- [ ] Index on `thread_id` for thread-level queries
-- [ ] Add `previous_run_id` column if explicit chaining needed
-- [ ] **Do NOT build preemptively**
+| Deliverable                                                                    | Status      | Est | Work Item            |
+| ------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
+| Retention: configurable soft-delete window + scheduled hard-delete job         | Not Started | 2   | (create at P2 start) |
+| LangGraph deletion: coordinated `chat_threads` + checkpoint deletion by thread | Not Started | 3   | (create at P2 start) |
+| Enhanced masking: evaluate Presidio for stronger PII detection                 | Not Started | 1   | (create at P2 start) |
 
 ## Constraints
 
-- Usage history is parallel to billing — neither blocks the other
-- `run_artifacts` is a best-effort transcript cache, NOT source of truth for thread state (LangGraph Server is canonical for `langgraph_server` executor)
-- All reads/writes MUST be tenant-scoped (`account_id` NOT NULL, RLS enforced)
-- PII masking applied BEFORE `content_hash` computation and BEFORE any logging/tracing (single redaction boundary)
-- Thread IDs MUST be tenant-scoped: `${accountId}:${stateKey}` (checkpoint isolation requirement)
-- P0 does NOT provide GDPR-compliant deletion (artifacts without checkpoints is insufficient)
-- No streaming delta persistence in P0 (only user input + final assistant output)
+- All technical invariants are in the [chat-persistence spec](../../docs/spec/chat-persistence.md) — this project does not redefine them
+- P0 ships persistence + route bridge without changing the client transport (existing `useDataStreamRuntime` still works against the new contract during transition)
+- P0 does not provide GDPR-compliant deletion — deleting `chat_threads` without LangGraph checkpoints is insufficient for `langgraph_server` runs
+- No `run_artifacts` table for message content — `UIMessage[]` in `chat_threads` IS the transcript store
+- No bespoke event-sourcing — no `run_events`, no `TranscriptStorePort`, no `HistoryWriterSubscriber` fanout
+- Billing/observability decorators must remain unchanged (AiEvent internal contract preserved)
+- RLS uses `app.current_user_id` setting (same as `billing_accounts`)
 
 ## Dependencies
 
-- [ ] RunEventRelay fanout (GRAPH_EXECUTION.md)
-- [ ] AiEvent stream architecture (AI_SETUP_SPEC.md)
-- [ ] Tenant isolation patterns (ACCOUNTS_DESIGN.md)
-- [ ] LangGraph PostgresSaver checkpointer (LANGGRAPH_SERVER.md)
+- [x] ~~AiEvent stream architecture~~ — `AssistantFinalEvent` already in `@cogni/ai-core`; executors already emit it
+- [x] ~~Billing decorator~~ — `BillingGraphExecutorDecorator` works, unchanged by this project
+- [ ] AI SDK 5+ package (`ai`) added as dependency (P0 blocker for `convertToModelMessages()`)
+- [ ] `@assistant-ui/react-ai-sdk` package added as dependency (P1 blocker for `useChatRuntime`)
 
 ## As-Built Specs
 
-- [Usage History](../../docs/spec/usage-history.md) — Core invariants, schema, port interface, stream consumer architecture
-
-## File Pointers (P0 Scope)
-
-| File                                              | Change                                                      |
-| ------------------------------------------------- | ----------------------------------------------------------- |
-| `src/ports/graph-executor.port.ts`                | Add `threadId?: string` to `GraphRunRequest`                |
-| `src/ports/run-history.port.ts`                   | New: `RunHistoryPort` interface with tenant scope           |
-| `src/ports/index.ts`                              | Re-export `RunHistoryPort`                                  |
-| `src/shared/db/schema.history.ts`                 | New: `run_artifacts` table with RLS + retention columns     |
-| `src/adapters/server/ai/run-history.adapter.ts`   | New: `DrizzleRunHistoryAdapter` with RLS context setting    |
-| `src/features/ai/services/ai_runtime.ts`          | Persist user artifact; enforce tenant-scoped thread_id      |
-| `src/features/ai/services/history-writer.ts`      | New: HistoryWriterSubscriber with masking before persist    |
-| `src/features/ai/services/masking.ts`             | New: regex-based PII masking utility                        |
-| `src/bootstrap/container.ts`                      | Wire RunHistoryPort                                         |
-| `src/types/ai-events.ts`                          | Add `AssistantFinalEvent` to AiEvent union                  |
-| `tests/stack/ai/history-idempotency.test.ts`      | New: replay assistant_final twice → 1 row                   |
-| `tests/stack/ai/history-tenant-isolation.test.ts` | New: cross-tenant access denied; missing RLS setting denied |
-| `tests/ports/run-history.port.spec.ts`            | New: port contract test with accountId requirement          |
+- [Chat Persistence & Transcript Authority](../../docs/spec/chat-persistence.md) — Canonical spec: schema, invariants, port interface, event mapping, assembly pattern
 
 ## Design Notes
 
-### Run vs Thread vs Conversation Terminology
+### Why UIMessage[] JSONB, not normalized rows
 
-| Term             | Meaning                                         | When to use      |
-| ---------------- | ----------------------------------------------- | ---------------- |
-| **Run**          | Single graph execution (runId)                  | Always           |
-| **Thread**       | LangGraph thread scope (multi-run accumulation) | LangGraph runs   |
-| **Conversation** | UI concept over thread/runs                     | Never in backend |
+AI SDK's `saveChat()` persists the full array. Tool-call parts are embedded in assistant messages — normalizing fights the type system. Thread-level read/write is the only access pattern. Normalize later if per-message search or individual delete is needed.
 
-**Rule:** Backend uses `run` and `thread`. Frontend may present as "conversation" but never passes that term to API.
+### Why not run_artifacts
 
-### Idempotency Key Strategy
+The original design had `run_artifacts` as a run-scoped projection of transcript events with idempotency keys and content hashes. With AI SDK UIMessage persistence, the thread IS the artifact store. Tool calls live inside UIMessage parts. No separate artifact table, no HistoryWriterSubscriber fanout, no idempotency key strategy. Dramatically simpler.
 
-| artifact_key    | Uniqueness scope         |
-| --------------- | ------------------------ |
-| `input`         | One user input per run   |
-| `output`        | One final output per run |
-| `tool/{callId}` | One per tool invocation  |
+### Superseded specs (deleted)
 
-**Why `input`/`output` not `user`/`assistant`?** Avoids collision with `role` enum. `role` = speaker (user/assistant/tool); `artifact_key` = artifact type.
-
-### What We're NOT Building in P0
-
-**Explicitly deferred:**
-
-- Streaming delta persistence (full message replay)
-- Thread-level queries/indexes
-- Content blob storage (large messages)
-- Tool call/result persistence
-- Message threading/branching
-- Edit/regenerate lineage
-- LangGraph checkpointer integration (runs use checkpointer directly; artifacts are cache)
-
-**Why:** Start minimal. Validate run-scoped artifacts work before adding complexity.
+- `docs/spec/server-transcript-authority.md` — invariants absorbed into [chat-persistence](../../docs/spec/chat-persistence.md)
+- `docs/spec/usage-history.md` — `run_artifacts` design fully superseded by `chat_threads` with `UIMessage[]`

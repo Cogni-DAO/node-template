@@ -485,7 +485,7 @@ _(none)_
 - [LangGraph Patterns spec](./langgraph-patterns.md) — Package structure, InProc execution, anti-patterns
 - [LangGraph Server Setup guide](../guides/langgraph-server.md) — Dev, container, and hosted setup steps
 - [Graph Execution](graph-execution.md) — Billing idempotency, pump+fanout
-- [Usage History spec](./usage-history.md) — Artifact caching (executor-agnostic)
+- [Chat Persistence spec](./chat-persistence.md) — UIMessage persistence, thread duality with checkpoints
 - [AI Setup spec](./ai-setup.md) — Correlation IDs, telemetry
 - [External Executor Billing spec](./external-executor-billing.md) — Reconciliation pattern
 - [Project: LangGraph Server Production](../../work/projects/proj.langgraph-server-production.md) — Roadmap for production deployment + billing parity

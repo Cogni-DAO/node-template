@@ -807,7 +807,7 @@ initChatModel + captured exec   CogniCompletionAdapter + ALS context
 - [tool-use.md](tool-use.md) — Tool execution within graphs
 - [billing-evolution.md](billing-evolution.md) — Credit unit standard, pricing policy, markup
 - [activity-metrics.md](activity-metrics.md) — Activity dashboard join
-- [usage-history.md](usage-history.md) — Message artifact persistence (parallel stream consumer)
+- [chat-persistence.md](chat-persistence.md) — UIMessage persistence, AiEvent→UIMessage bridge
 - [claude-sdk-adapter.md](claude-sdk-adapter.md) — Claude Agent SDK adapter design
 - [n8n-adapter.md](n8n-adapter.md) — n8n workflow execution adapter design
 - [tenant-connections.md](tenant-connections.md) — Tenant connections
