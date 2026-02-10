@@ -254,6 +254,8 @@ jobs:
       SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
       # LiteLLM test config routes to mock-openai-api (no real provider keys)
       LITELLM_CONFIG: litellm.test.config.yaml
+      # OpenClaw gateway config with test models matching litellm.test.config.yaml
+      OPENCLAW_CONFIG: openclaw-gateway.test.json
       # Temporal env vars for HOST-based test process (vitest runs on host, not in Docker)
       # App container gets temporal:7233 from docker-compose.dev.yml; tests need localhost:7233
       TEMPORAL_ADDRESS: localhost:7233

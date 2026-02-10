@@ -489,7 +489,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=128m
       - /workspace:rw,noexec,nosuid,size=256m # writable scratch for agent file ops
     volumes:
-      - ../../../../services/sandbox-openclaw/openclaw-gateway.json:/etc/openclaw/openclaw.json:ro
+      - ../../../../services/sandbox-openclaw/${OPENCLAW_CONFIG:-openclaw-gateway.json}:/etc/openclaw/openclaw.json:ro
       - repo_data:/repo:ro # git-synced codebase (read-only mirror, updated by git-sync)
     security_opt:
       - no-new-privileges:true

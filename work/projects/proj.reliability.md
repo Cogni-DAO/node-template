@@ -29,13 +29,13 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 ### P0 — Stop the Bleeding
 
-| Deliverable                                                                                                                 | Status           | Est |
-| --------------------------------------------------------------------------------------------------------------------------- | ---------------- | --- |
-| Deploy disk cleanup: prune before pulls, dual gate (15GB free / 70% used), remove keep-last tag                             | Done (bug.0015)  | 2   |
-| VM watchdog: systemd timer curls `/api/meta/readyz` every 30s, restarts app container after 4 consecutive failures (~2 min) | Todo (task.0014) | 1   |
-| OTel fix: set `OTEL_NODE_RESOURCE_DETECTORS=none` in production env                                                         | Not Started      | 1   |
-| OTel fix: add `resourceDetectors: []` to `NodeSDK` constructor in `src/instrumentation.ts`                                  | Not Started      | 1   |
-| External uptime monitor (UptimeRobot/Checkly) on `https://cognidao.org/api/meta/readyz`, alerts to Slack/email              | Not Started      | 1   |
+| Deliverable                                                                                                      | Status           | Est |
+| ---------------------------------------------------------------------------------------------------------------- | ---------------- | --- |
+| Deploy disk cleanup: prune before pulls, dual gate (15GB free / 70% used), remove keep-last tag                  | Done (bug.0015)  | 2   |
+| VM watchdog: HEALTHCHECK on `/livez` + autoheal sidecar auto-restarts unhealthy app container (~60-90s recovery) | Todo (task.0014) | 2   |
+| OTel fix: set `OTEL_NODE_RESOURCE_DETECTORS=none` in production env                                              | Not Started      | 1   |
+| OTel fix: add `resourceDetectors: []` to `NodeSDK` constructor in `src/instrumentation.ts`                       | Not Started      | 1   |
+| External uptime monitor (UptimeRobot/Checkly) on `https://cognidao.org/api/meta/readyz`, alerts to Slack/email   | Not Started      | 1   |
 
 ### P1 — Don't Lose Data Again
 
@@ -56,8 +56,7 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 ## Constraints
 
-- VM is CherryServers 2GB shared — watchdog must be lightweight (no extra containers)
-- No AWS/cloud-native tooling available — must use systemd + curl
+- VM is CherryServers 2GB shared — watchdog sidecar must be lightweight (~5MB autoheal container)
 - OTel SDK is only used for trace ID generation (no exporter) — disabling detectors has zero cost
 
 ## Dependencies
@@ -67,7 +66,7 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 ## As-Built Specs
 
-- [vm-watchdog.md](../../docs/spec/vm-watchdog.md) — watchdog design, invariants, deploy lockfile
+- [vm-watchdog.md](../../docs/spec/vm-watchdog.md) — HEALTHCHECK + autoheal sidecar design, invariants
 - [observability.md](../../docs/spec/observability.md) — structured logging, tracing
 - [observability-requirements.md](../../docs/spec/observability-requirements.md) — silent death detection invariants
 

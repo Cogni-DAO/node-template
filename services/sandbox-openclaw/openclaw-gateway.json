@@ -8,8 +8,71 @@
         "apiKey": "proxy-handles-auth",
         "models": [
           {
-            "id": "test-model",
-            "name": "test-model",
+            "id": "nemotron-nano-30b",
+            "name": "Nemotron Nano 30B",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "tng-chimera",
+            "name": "TNG Chimera",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "trinity-mini",
+            "name": "Trinity Mini",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "glm-4.5-air",
+            "name": "GLM 4.5 Air",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "solar-pro-3",
+            "name": "Solar Pro 3",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "gpt-4o-mini",
+            "name": "GPT-4o Mini",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 128000,
+            "maxTokens": 16384,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "gpt-5",
+            "name": "GPT-5",
+            "reasoning": true,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 32768,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "claude-sonnet-4.5",
+            "name": "Claude Sonnet 4.5",
             "reasoning": false,
             "input": ["text"],
             "contextWindow": 200000,
@@ -17,12 +80,75 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           },
           {
-            "id": "nemotron-nano-30b",
-            "name": "nemotron-nano-30b",
+            "id": "claude-opus-4.5",
+            "name": "Claude Opus 4.5",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "deepseek-v3.1",
+            "name": "DeepSeek V3.1",
             "reasoning": false,
             "input": ["text"],
             "contextWindow": 131072,
             "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "gemini-2.5-flash",
+            "name": "Gemini 2.5 Flash",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 1048576,
+            "maxTokens": 65536,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "gemini-3-pro",
+            "name": "Gemini 3 Pro",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 1048576,
+            "maxTokens": 65536,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "kimi-k2-thinking",
+            "name": "Kimi K2 Thinking",
+            "reasoning": true,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "minimax-m2",
+            "name": "Minimax M2",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 1048576,
+            "maxTokens": 16384,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "qwen3-vl-8b",
+            "name": "Qwen 3 VL 8B",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "grok-4.1-fast",
+            "name": "Grok 4.1 Fast",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 32768,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           }
         ]
@@ -31,10 +157,11 @@
   },
   "agents": {
     "defaults": {
-      "model": { "primary": "cogni/nemotron-nano-30b" },
+      "model": { "primary": "cogni/gemini-2.5-flash" },
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
-      "timeoutSeconds": 540
+      "timeoutSeconds": 540,
+      "heartbeat": { "every": "0" }
     },
     "list": [{ "id": "main", "default": true, "workspace": "/repo/current" }]
   },

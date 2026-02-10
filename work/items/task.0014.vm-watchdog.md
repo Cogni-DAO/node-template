@@ -1,12 +1,12 @@
 ---
 id: task.0014
 type: task
-title: "VM watchdog: systemd timer auto-restarts app on health failure"
+title: "VM watchdog: autoheal + HEALTHCHECK on /livez with resource limits"
 status: Todo
 priority: 0
 estimate: 2
-summary: Add a systemd timer + script on the VM that curls /api/meta/readyz every 30s and restarts the app container after 4 consecutive failures (~2 min), with deploy lockfile and Loki event emission
-outcome: App container auto-recovers from hangs within 2 minutes without human intervention; restart events visible in Loki
+summary: Switch Docker HEALTHCHECK from /readyz to /livez, add hardened autoheal sidecar to auto-restart unhealthy containers, add mem_limit/memswap_limit to app
+outcome: App container auto-recovers from hangs within 60-90s; restart events visible in Loki; memory growth bounded
 spec_refs: vm-watchdog, spec.observability-requirements
 assignees: derekg1729
 credit:
@@ -20,123 +20,102 @@ labels: [infra, reliability, P0]
 external_refs:
 ---
 
-# VM watchdog: systemd timer auto-restarts app on health failure
+# VM watchdog: autoheal + HEALTHCHECK on /livez with resource limits
 
 ## Context
 
-Feb 7-8, 2026: Two multi-hour outages with zero alerting or auto-recovery. The app was "healthy but hung" — Docker health checks passed, but the event loop was blocked. No watchdog, no external monitor. See [postmortem](../../docs/postmortems/2026-02-07-production-vm-loss.md) and [proj.reliability](../projects/proj.reliability.md) P0 roadmap.
-
-The app can be in a state where `/readyz` (or page renders) hang indefinitely while Docker considers the container healthy. Docker `restart: always` only fires on process exit, not on event-loop hangs. A VM-level watchdog that probes the HTTP endpoint and force-restarts the container is the missing safety net.
+Feb 7-8, 2026: Two multi-hour outages with zero auto-recovery. The app was "healthy but hung" — OTel `spawnSync` blocked the event loop. Docker `restart: always` only fires on process exit, not on event-loop hangs. See [postmortem](../../docs/postmortems/2026-02-07-production-vm-loss.md).
 
 See [vm-watchdog spec](../../docs/spec/vm-watchdog.md) for full design, invariants, and rationale.
 
 ## Requirements
 
-- A bash script (`cogni-watchdog.sh`) that:
-  - Checks for deploy lockfile (`/var/lib/cogni/watchdog-pause`) — if present and < 15 min old, skip probe and exit 0
-  - Curls `http://127.0.0.1:3000/api/meta/readyz` with a 2s timeout
-  - Tracks consecutive failure count via a statefile (`/var/lib/cogni/watchdog-failures`)
-  - After 4 consecutive failures, emits `watchdog.app_restart` event to Loki, then runs `docker compose restart app`
-  - Resets the failure counter on success, restart, or lockfile skip
-  - Logs each probe result to journald (stdout, picked up by systemd)
-  - Exits 0 always (WATCHDOG_EXIT_ZERO invariant)
-- A systemd timer (`cogni-watchdog.timer`) that fires every 30s (OnBootSec=90s, OnUnitActiveSec=30s)
-- A systemd service (`cogni-watchdog.service`) that runs the script (Type=oneshot)
-- App port published on loopback: `127.0.0.1:3000:3000` in docker-compose.yml (WATCHDOG_LOOPBACK_ONLY)
-- Deploy lockfile in `deploy.sh`: write before runtime deploy, remove after health check (WATCHDOG_DEPLOY_SAFE)
-- Installation via `deploy.sh` only — no bootstrap.yaml duplication (WATCHDOG_SINGLE_INSTALL)
-- Loki event on restart using `emit_deployment_event` pattern (WATCHDOG_LOKI_ON_RESTART)
-- No extra containers — systemd + curl only (constraint: 2GB shared VM)
-- Upholds **HEARTBEAT_LIVENESS** from `spec.observability-requirements` and **WATCHDOG_RECOVERY_BOUND** from `vm-watchdog` spec
+- Switch Dockerfile HEALTHCHECK from `/readyz` to `/livez` (WATCHDOG_LIVEZ_NOT_READYZ)
+  - `/livez` is dependency-free — won't false-positive during deploys/migrations
+  - Tuning: interval=10s, timeout=5s, start_period=30s, retries=3
+- Add HEALTHCHECK override in docker-compose.yml `app` service (same params as Dockerfile)
+- Add `autoheal` service to docker-compose.yml (WATCHDOG_AUTOHEAL_HARDENED):
+  - Image: `willfarrell/autoheal` pinned by digest
+  - `network_mode: "none"`, `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`
+  - Label `autoheal: "false"` on itself (WATCHDOG_AUTOHEAL_NO_SELF)
+  - Polls every 5s, start_period 60s
+  - Docker socket mounted read-only
+- Add `autoheal: "true"` label to `app` service (WATCHDOG_LABEL_GATE)
+- Add `mem_limit: 512m` and `memswap_limit: 768m` to `app` service (WATCHDOG_MEM_BOUNDED)
+- Autoheal logs flow to Loki via Alloy automatically (WATCHDOG_LOGS_TO_LOKI — no config change needed, Alloy scrapes all Docker logs)
+- Recovery within ~60-90s of livez failure (WATCHDOG_RECOVERY_BOUND)
 
 ## Allowed Changes
 
-- `platform/infra/files/scripts/cogni-watchdog.sh` — **new** watchdog script
-- `platform/infra/files/systemd/cogni-watchdog.service` — **new** systemd service unit
-- `platform/infra/files/systemd/cogni-watchdog.timer` — **new** systemd timer unit
-- `platform/infra/services/runtime/docker-compose.yml` — add `ports: ["127.0.0.1:3000:3000"]` to app service
-- `platform/ci/scripts/deploy.sh` — add rsync of scripts/systemd, lockfile write/remove, systemctl enable
-- `platform/infra/files/AGENTS.md` — update to mention watchdog script and systemd units
+- `Dockerfile` — change HEALTHCHECK from `/readyz` to `/livez`, adjust timeout/start_period
+- `platform/infra/services/runtime/docker-compose.yml` — add autoheal service, add app labels + mem_limit + HEALTHCHECK override
+- `platform/infra/services/runtime/docker-compose.dev.yml` — add matching HEALTHCHECK override + autoheal for dev parity (if applicable)
 
 ## Plan
 
-- [ ] Add `ports: ["127.0.0.1:3000:3000"]` to `app` service in `docker-compose.yml`
-  - Loopback only — no external exposure (WATCHDOG_LOOPBACK_ONLY)
-- [ ] Create `platform/infra/files/scripts/cogni-watchdog.sh`
-  - Check lockfile: if `/var/lib/cogni/watchdog-pause` exists and mtime < 15 min, log "deploy in progress, skipping", reset counter, exit 0
-  - Probe `http://127.0.0.1:3000/api/meta/readyz` with `curl -sf -m 2`
-  - Read failure count from `/var/lib/cogni/watchdog-failures` (default 0)
-  - On success: reset counter to 0, log "watchdog: readyz OK"
-  - On failure: increment counter, log "watchdog: readyz FAILED (N/4)"
-  - If counter >= 4: log "watchdog: RESTARTING app container", emit Loki event, run docker compose restart, reset counter
-  - Loki emit: reuse `curl + jq` pattern from deploy.sh's `emit_deployment_event`, reading Loki creds from `/opt/cogni-template-runtime/.env`
-  - Always exit 0
-- [ ] Create `platform/infra/files/systemd/cogni-watchdog.timer`
-  - `OnBootSec=90s` (wait for full app startup after VM boot)
-  - `OnUnitActiveSec=30s` (every 30s thereafter)
-  - `AccuracySec=5s`
-- [ ] Create `platform/infra/files/systemd/cogni-watchdog.service`
-  - `Type=oneshot`
-  - `ExecStart=/opt/cogni/scripts/cogni-watchdog.sh`
-- [ ] Update `deploy.sh` remote script to install watchdog + manage lockfile
-  - Early in remote script: rsync scripts to `/opt/cogni/scripts/`, systemd units to `/etc/systemd/system/`
-  - Run `systemctl daemon-reload && systemctl enable --now cogni-watchdog.timer`
-  - Before Step 7 (image pull): write `/var/lib/cogni/watchdog-pause`
-  - After Step 12 (health check pass): remove `/var/lib/cogni/watchdog-pause`
-  - In `on_fail` trap: also remove `/var/lib/cogni/watchdog-pause` (prevent permanent disable)
-- [ ] Update `platform/infra/files/AGENTS.md` to document watchdog script and systemd units
+- [ ] Resolve `willfarrell/autoheal` digest pin
+  - `docker pull willfarrell/autoheal:latest && docker inspect --format='{{index .RepoDigests 0}}' willfarrell/autoheal:latest`
+- [ ] Update `Dockerfile` HEALTHCHECK
+  - Change `/readyz` to `/livez`
+  - Adjust: `--timeout=5s --start-period=30s`
+- [ ] Update `docker-compose.yml` — app service
+  - Add HEALTHCHECK override (same as Dockerfile, ensures compose-level consistency)
+  - Add label `autoheal: "true"`
+  - Add `mem_limit: 512m`
+  - Add `memswap_limit: 768m`
+- [ ] Update `docker-compose.yml` — add autoheal service
+  - Digest-pinned image
+  - `restart: always`
+  - `network_mode: "none"`, `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`
+  - Environment: `AUTOHEAL_CONTAINER_LABEL=autoheal`, `AUTOHEAL_INTERVAL=5`, `AUTOHEAL_START_PERIOD=60`, `AUTOHEAL_DEFAULT_STOP_TIMEOUT=10`
+  - Volume: `/var/run/docker.sock:/var/run/docker.sock:ro`
+  - Label: `autoheal: "false"`
+- [ ] Verify dev compose parity — check if `docker-compose.dev.yml` needs matching changes
 
 ## Validation
 
-**Local (script logic):**
+**Automated (CI):**
 
 ```bash
-# Script is valid bash
-bash -n platform/infra/files/scripts/cogni-watchdog.sh
+# Dockerfile HEALTHCHECK uses livez
+grep '/livez' Dockerfile
 
-# Port published loopback-only
-grep '127.0.0.1:3000:3000' platform/infra/services/runtime/docker-compose.yml
+# Autoheal service in compose
+grep 'autoheal' platform/infra/services/runtime/docker-compose.yml
 
-# Lockfile referenced in deploy
-grep 'watchdog-pause' platform/ci/scripts/deploy.sh
-```
+# App has mem_limit
+grep 'mem_limit' platform/infra/services/runtime/docker-compose.yml
 
-**CI gate:**
+# App has autoheal label
+grep 'autoheal.*true' platform/infra/services/runtime/docker-compose.yml
 
-```bash
+# CI gate
 pnpm check
 ```
 
 **Manual (on VM after deploy):**
 
 ```bash
-# Timer is active
-systemctl is-active cogni-watchdog.timer
+# Autoheal is running
+docker ps --filter name=autoheal --format '{{.Status}}'
 
-# Timer fires correctly
-systemctl list-timers cogni-watchdog.timer
+# App health is passing
+docker inspect --format='{{.State.Health.Status}}' cogni-runtime-app-1
 
-# Script runs and logs to journald
-journalctl -u cogni-watchdog.service --since "5 min ago"
+# Simulate hang: pause app, wait ~60-90s, check restart
+docker pause cogni-runtime-app-1
+docker events --filter event=health_status --filter event=restart --since 2m
+# Verify in Loki: {service="autoheal"} |= "Restarting"
 
-# Simulate hang: docker pause cogni-runtime-app-1
-# Wait ~2 min, check journald for restart
-journalctl -u cogni-watchdog.service --since "3 min ago" | grep RESTARTING
-# Verify Loki event: {service="watchdog"} |= "watchdog.app_restart"
-docker unpause cogni-runtime-app-1  # cleanup if needed
-
-# Deploy lockfile test
-touch /var/lib/cogni/watchdog-pause
-# Wait 30s, check journald shows "deploy in progress, skipping"
-rm /var/lib/cogni/watchdog-pause
+# Memory limit enforced
+docker stats --no-stream cogni-runtime-app-1 --format '{{.MemUsage}}'
 ```
 
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0014` linked in PR body
-- [ ] **Spec:** all vm-watchdog invariants upheld (WATCHDOG_RECOVERY_BOUND, WATCHDOG_DEPLOY_SAFE, WATCHDOG_EXIT_ZERO, WATCHDOG_LOOPBACK_ONLY, WATCHDOG_LOKI_ON_RESTART, WATCHDOG_SINGLE_INSTALL)
-- [ ] **Spec:** HEARTBEAT_LIVENESS from observability-requirements upheld
-- [ ] **Tests:** bash -n validates script syntax; manual VM test validates end-to-end
+- [ ] **Spec:** all vm-watchdog invariants upheld (WATCHDOG_LIVEZ_NOT_READYZ, WATCHDOG_RECOVERY_BOUND, WATCHDOG_LABEL_GATE, WATCHDOG_AUTOHEAL_HARDENED, WATCHDOG_AUTOHEAL_NO_SELF, WATCHDOG_MEM_BOUNDED, WATCHDOG_LOGS_TO_LOKI)
+- [ ] **Tests:** HEALTHCHECK endpoint verified; manual autoheal restart test on VM
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
