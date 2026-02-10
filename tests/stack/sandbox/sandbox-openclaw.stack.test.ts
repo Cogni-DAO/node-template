@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/stack/sandbox/sandbox-openclaw`
  * Purpose: Full-stack acceptance test proving OpenClaw gateway mode works end-to-end.
- * Scope: Tests gateway chat, session configuration, billing via proxy, and secrets isolation. Does not test ephemeral container path or billing DB writes.
+ * Scope: Tests gateway chat, billing via proxy, secrets isolation, repo volume mount, and workspace writability. Does not test ephemeral container path or billing DB writes.
  * Invariants:
  *   - Per SECRETS_HOST_ONLY: LITELLM_MASTER_KEY never enters gateway container
  *   - Per BILLING_INDEPENDENT_OF_CLIENT: billing data from proxy audit log, not agent
@@ -25,6 +25,8 @@ import {
   OpenClawGatewayClient,
 } from "@/adapters/server/sandbox/openclaw-gateway-client";
 import { ProxyBillingReader } from "@/adapters/server/sandbox/proxy-billing-reader";
+
+import { execInContainer } from "../../_fixtures/sandbox/fixtures";
 
 const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL ?? "http://127.0.0.1:3333";
 const GATEWAY_TOKEN =
@@ -64,27 +66,23 @@ async function isContainerHealthy(
 let client: OpenClawGatewayClient;
 let billingReader: ProxyBillingReader;
 let docker: Docker;
-let skip = false;
 
 describe("OpenClaw Gateway Full-Stack", () => {
   beforeAll(async () => {
     docker = new Docker();
 
-    // Check if gateway and proxy containers are running
     const [gatewayOk, proxyOk] = await Promise.all([
       isContainerHealthy(docker, GATEWAY_CONTAINER),
       isContainerHealthy(docker, PROXY_CONTAINER),
     ]);
 
     if (!gatewayOk || !proxyOk) {
-      console.warn(
-        `SKIPPING: OpenClaw gateway containers not running. ` +
+      throw new Error(
+        `OpenClaw gateway containers not running. ` +
           `Start with: pnpm sandbox:openclaw:up\n` +
           `  ${GATEWAY_CONTAINER}: ${gatewayOk ? "healthy" : "not found/unhealthy"}\n` +
           `  ${PROXY_CONTAINER}: ${proxyOk ? "healthy" : "not found/unhealthy"}`
       );
-      skip = true;
-      return;
     }
 
     client = new OpenClawGatewayClient(GATEWAY_URL, GATEWAY_TOKEN);
@@ -99,8 +97,6 @@ describe("OpenClaw Gateway Full-Stack", () => {
   });
 
   it("gateway responds to agent call via WS", async () => {
-    if (skip) return;
-
     const runId = uniqueRunId();
     const sessionKey = `agent:main:test-billing:${runId}`;
 
@@ -130,8 +126,6 @@ describe("OpenClaw Gateway Full-Stack", () => {
   });
 
   it("billing entries appear in proxy audit log after call", async () => {
-    if (skip) return;
-
     const runId = uniqueRunId("billing");
     const sessionKey = `agent:main:test-billing:${runId}`;
 
@@ -161,42 +155,46 @@ describe("OpenClaw Gateway Full-Stack", () => {
     expect(entries[0]?.litellmCallId).toBeTruthy();
   });
 
+  it("can read LICENSE from workspace (repo mounted read-only)", async () => {
+    const output = await execInContainer(
+      docker,
+      GATEWAY_CONTAINER,
+      'cat /repo/current/LICENSE* 2>/dev/null | head -1 && echo "READ_OK" || echo "READ_FAIL"'
+    );
+
+    expect(output).toContain("READ_OK");
+    expect(output).not.toContain("READ_FAIL");
+    // LICENSE file should contain a recognizable license header
+    expect(output).toMatch(/licen[sc]e|copyright|polyform/i);
+  });
+
+  it("cannot write to LICENSE in workspace (repo is read-only)", async () => {
+    const output = await execInContainer(
+      docker,
+      GATEWAY_CONTAINER,
+      'echo "tampered" >> /repo/current/LICENSE 2>&1 && echo "WRITE_OK" || echo "WRITE_BLOCKED"'
+    );
+
+    expect(output).toContain("WRITE_BLOCKED");
+    expect(output).not.toContain("WRITE_OK");
+  });
+
+  it("/workspace tmpfs is writable", async () => {
+    const output = await execInContainer(
+      docker,
+      GATEWAY_CONTAINER,
+      'touch /workspace/_test && rm /workspace/_test && echo "WS_WRITABLE" || echo "WS_READONLY"'
+    );
+
+    expect(output).toContain("WS_WRITABLE");
+  });
+
   it("gateway container does not have LITELLM_MASTER_KEY in env", async () => {
-    if (skip) return;
-
-    const container = docker.getContainer(GATEWAY_CONTAINER);
-    const exec = await container.exec({
-      Cmd: [
-        "sh",
-        "-c",
-        'env | grep -q LITELLM_MASTER_KEY && echo "LEAKED" || echo "SAFE"',
-      ],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-
-    const stream = await exec.start({ hijack: true, stdin: false });
-    const chunks: Buffer[] = [];
-
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        stream.destroy();
-        resolve();
-      }, 5000);
-      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-      stream.on("end", () => {
-        clearTimeout(timer);
-        resolve();
-      });
-      stream.on("error", () => {
-        clearTimeout(timer);
-        resolve();
-      });
-    });
-
-    const raw = Buffer.concat(chunks);
-    // Demux Docker stream (hijack mode wraps output in 8-byte frame headers)
-    const output = LlmProxyManager.demuxDockerStream(raw);
+    const output = await execInContainer(
+      docker,
+      GATEWAY_CONTAINER,
+      'env | grep -q LITELLM_MASTER_KEY && echo "LEAKED" || echo "SAFE"'
+    );
 
     expect(output).toContain("SAFE");
     expect(output).not.toContain("LEAKED");

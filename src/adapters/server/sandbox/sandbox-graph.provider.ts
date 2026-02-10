@@ -246,6 +246,10 @@ export class SandboxGraphProvider implements GraphProvider {
           image: agent.image,
           argv: [...agent.argv],
           limits: agent.limits,
+          // Mount git-synced repo (read-only mirror, UID 1001 aligned)
+          volumes: [
+            { volume: "repo_data", containerPath: "/repo", readOnly: true },
+          ],
           llmProxy: {
             enabled: true,
             attempt,

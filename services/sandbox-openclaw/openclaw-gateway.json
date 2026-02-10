@@ -36,7 +36,7 @@
       "skipBootstrap": true,
       "timeoutSeconds": 540
     },
-    "list": [{ "id": "main", "default": true }]
+    "list": [{ "id": "main", "default": true, "workspace": "/repo/current" }]
   },
   "tools": {
     "elevated": { "enabled": false },
