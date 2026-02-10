@@ -168,6 +168,40 @@ describe("OpenClaw Gateway Full-Stack", () => {
     expect(output).toMatch(/licen[sc]e|copyright|polyform/i);
   });
 
+  it("/repo is mounted read-only at mount table level", async () => {
+    const output = await execInContainer(
+      docker,
+      GATEWAY_CONTAINER,
+      "grep ' /repo ' /proc/mounts | grep -q 'ro,' && echo MOUNT_RO || echo MOUNT_BAD"
+    );
+
+    expect(output).toContain("MOUNT_RO");
+    expect(output).not.toContain("MOUNT_BAD");
+  });
+
+  it("/repo/current has valid 40-hex git SHA", async () => {
+    const output = await execInContainer(
+      docker,
+      GATEWAY_CONTAINER,
+      'SHA=$(git -C /repo/current rev-parse HEAD 2>/dev/null) && echo "SHA=$SHA" || echo "GIT_FAIL"'
+    );
+
+    expect(output).not.toContain("GIT_FAIL");
+    const match = output.match(/SHA=([0-9a-f]{40})/);
+    expect(match).not.toBeNull();
+  });
+
+  it("/repo/current/package.json is readable and identifies this repo", async () => {
+    const output = await execInContainer(
+      docker,
+      GATEWAY_CONTAINER,
+      'cat /repo/current/package.json 2>/dev/null | head -5 && echo "PKG_OK" || echo "PKG_FAIL"'
+    );
+
+    expect(output).toContain("PKG_OK");
+    expect(output).toContain("cogni-template");
+  });
+
   it("cannot write to LICENSE in workspace (repo is read-only)", async () => {
     const output = await execInContainer(
       docker,
