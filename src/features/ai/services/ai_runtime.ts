@@ -3,34 +3,28 @@
 
 /**
  * Module: `@features/ai/services/ai_runtime`
- * Purpose: AI runtime orchestrator using GraphExecutorPort with run-centric billing.
+ * Purpose: AI runtime orchestrator using GraphExecutorPort — UI stream adapter.
  * Scope: Generates runId, calls graphExecutor.runGraph(), pumps stream via RunEventRelay. Does not touch wire protocol encoding.
  * Invariants:
  *   - UNIFIED_GRAPH_EXECUTOR: All execution via GraphExecutorPort.runGraph()
- *   - BILLING_INDEPENDENT_OF_CLIENT: RunEventRelay pumps to completion; UI disconnect doesn't stop billing
+ *   - BILLING_VIA_DECORATOR: Billing handled by BillingGraphExecutorDecorator at port level, NOT here
  *   - AI_RUNTIME_EMITS_AIEVENTS: Only emits AiEvents (text_delta, tool_call_*, done/error); usage_report filtered out
  *   - PROTOCOL_TERMINATION: uiStream terminates on done/error events, not pumpDone (prevents hang)
  *   - Must NOT import app/*, adapters/*, or contracts/*
  * Side-effects: IO (via injected services)
- * Notes: Per GRAPH_EXECUTION.md P0 implementation
- * Links: ../types.ts, billing.ts, GRAPH_EXECUTION.md
+ * Notes: Per GRAPH_EXECUTION.md P0 implementation. Billing removed from RunEventRelay in task.0007.
+ * Links: ../types.ts, GRAPH_EXECUTION.md
  * @public
  */
 
-import {
-  type GraphId,
-  UsageFactHintsSchema,
-  UsageFactStrictSchema,
-} from "@cogni/ai-core";
+import type { GraphId } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import type { Message } from "@/core";
-import type { AccountService, GraphExecutorPort, LlmCaller } from "@/ports";
+import type { GraphExecutorPort, LlmCaller } from "@/ports";
 import { EVENT_NAMES, type RequestContext } from "@/shared/observability";
 import type { AiRelayPumpErrorEvent } from "@/shared/observability/events/ai";
 import type { RunContext } from "@/types/run-context";
-import type { UsageFact } from "@/types/usage";
 import type { AiEvent, StreamFinalResult } from "../types";
-import { commitUsageFact } from "./billing";
 import { createRunIdentity } from "./run-id-factory";
 
 /**
@@ -57,10 +51,10 @@ export interface AiRuntimeInput {
 /**
  * Dependencies for AI runtime.
  * Per UNIFIED_GRAPH_EXECUTOR: uses GraphExecutorPort, not direct LLM calls.
+ * Note: accountService removed — billing handled by BillingGraphExecutorDecorator at port level.
  */
 export interface AiRuntimeDeps {
   readonly graphExecutor: GraphExecutorPort;
-  readonly accountService: AccountService;
 }
 
 /**
@@ -81,7 +75,7 @@ export interface AiRuntimeResult {
  * @returns Runtime with runChatStream method
  */
 export function createAiRuntime(deps: AiRuntimeDeps) {
-  const { graphExecutor, accountService } = deps;
+  const { graphExecutor } = deps;
 
   /**
    * Run a chat stream as AiEvents.
@@ -129,13 +123,8 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
       ...(stateKey && { stateKey }),
     });
 
-    // Create RunEventRelay for pump+fanout pattern (context provided to subscribers)
-    const relay = new RunEventRelay(
-      graphStream,
-      runContext,
-      accountService,
-      log
-    );
+    // Create RunEventRelay for pump+fanout pattern (UI stream adapter)
+    const relay = new RunEventRelay(graphStream, runContext, log);
 
     // Start pump (fire and forget - runs to completion regardless of UI)
     relay.startPump();
@@ -174,12 +163,12 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
 
 /**
  * RunEventRelay implements the StreamDriver + Fanout pattern per GRAPH_EXECUTION.md.
+ * Pure UI stream adapter — billing is handled by BillingGraphExecutorDecorator at port level.
  *
  * Invariants:
- * - BILLING_INDEPENDENT_OF_CLIENT: Pump runs to completion; UI disconnect doesn't stop billing
- * - RELAY_PROVIDES_CONTEXT: Subscribers receive RunContext from relay, not from events
- * - Billing subscriber calls commitUsageFact() for each usage_report event
- * - UI stream filters out usage_report events (internal to billing)
+ * - PUMP_TO_COMPLETION: Pump runs to completion; UI disconnect doesn't stop iteration
+ * - AI_RUNTIME_EMITS_AIEVENTS: usage_report events filtered out (already consumed by decorator)
+ * - PROTOCOL_TERMINATION: uiStream terminates on done/error events, not pumpDone
  */
 class RunEventRelay {
   private readonly uiQueue: AiEvent[] = [];
@@ -190,7 +179,6 @@ class RunEventRelay {
   constructor(
     private readonly upstream: AsyncIterable<AiEvent>,
     private readonly context: RunContext,
-    private readonly accountService: AccountService,
     private readonly log: Logger
   ) {}
 
@@ -242,10 +230,9 @@ class RunEventRelay {
           continue;
         }
 
-        // Billing subscriber: process usage_report events
+        // usage_report events are consumed by BillingGraphExecutorDecorator
+        // at port level. Defensive skip in case any leak through.
         if (event.type === "usage_report") {
-          await this.handleBilling(event);
-          // Don't forward usage_report to UI
           continue;
         }
 
@@ -270,87 +257,6 @@ class RunEventRelay {
     } finally {
       this.pumpDone = true;
       this.notifyUi();
-    }
-  }
-
-  /**
-   * Handle billing for a usage_report event.
-   * Per BILLING_INDEPENDENT_OF_CLIENT: errors are logged, never propagated.
-   * Per RELAY_PROVIDES_CONTEXT: context passed to commitUsageFact (not from event).
-   * Validates UsageFact schema with per-executor policy (strict for inproc/sandbox, hints for external).
-   */
-  private async handleBilling(event: {
-    type: "usage_report";
-    fact: import("@/types/usage").UsageFact;
-  }): Promise<void> {
-    const { runId, ingressRequestId } = this.context;
-    const fact = event.fact;
-
-    try {
-      // Select schema based on executor type
-      const isBillingAuthoritative =
-        fact.executorType === "inproc" || fact.executorType === "sandbox";
-
-      const schema = isBillingAuthoritative
-        ? UsageFactStrictSchema
-        : UsageFactHintsSchema;
-
-      // Validate schema at ingestion boundary
-      const validationResult = schema.safeParse(fact);
-
-      if (!validationResult.success) {
-        const errors = validationResult.error.format();
-
-        if (isBillingAuthoritative) {
-          // HARD FAILURE for inproc/sandbox: billing incomplete = run failed
-          this.log.error(
-            {
-              runId,
-              ingressRequestId,
-              executorType: fact.executorType,
-              validationErrors: errors,
-              fact,
-            },
-            "CRITICAL: Invalid UsageFact from billing-authoritative executor - BILLING FAILED"
-          );
-          // Throw error to mark run as failed (caught by pump, triggers error event)
-          throw new Error(
-            `Billing failed: invalid UsageFact from ${fact.executorType} (missing usageUnitId or malformed fields)`
-          );
-        } else {
-          // Soft warning for external/telemetry: log but don't block
-          this.log.warn(
-            {
-              runId,
-              ingressRequestId,
-              executorType: fact.executorType,
-              validationErrors: errors,
-              fact,
-            },
-            "External executor emitted invalid UsageFact (telemetry hint only, not authoritative)"
-          );
-          return; // Skip billing for malformed hints
-        }
-      }
-
-      // Commit validated fact (cast to UsageFact for exactOptionalPropertyTypes compatibility)
-      await commitUsageFact(
-        validationResult.data as UsageFact,
-        this.context,
-        this.accountService,
-        this.log
-      );
-    } catch (error) {
-      // Propagate validation errors up (for billing-authoritative executors)
-      if (error instanceof Error && error.message.includes("Billing failed")) {
-        throw error;
-      }
-
-      // Log other billing errors but don't propagate (non-blocking per invariant)
-      this.log.error(
-        { err: error, runId },
-        "RunEventRelay: billing commit error swallowed"
-      );
     }
   }
 

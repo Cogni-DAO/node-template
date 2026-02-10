@@ -10,7 +10,7 @@ read_when: You are working on graph execution, billing, streaming, or adding a n
 implements:
 owner: derekg1729
 created: 2026-01-29
-verified: 2026-02-07
+verified: 2026-02-10
 tags: [ai-graphs, billing, streaming]
 ---
 
@@ -49,7 +49,9 @@ Provide a single execution interface (`GraphExecutorPort.runGraph()`) that all g
 
 7. **USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT**: Adapter emits at most one `usage_report` per `(runId, attempt, usageUnitId)`. Adapters may emit 1..N `usage_report` events per run depending on execution granularity (see MVP Invariants). DB uniqueness constraint is a safety net, not a substitute for correct event semantics.
 
-8. **BILLING_INDEPENDENT_OF_CLIENT**: Billing commits occur server-side regardless of client connection state. `AiRuntimeService` uses a StreamDriver + Fanout pattern via `RunEventRelay`: a StreamDriver consumes the upstream `AsyncIterable` to completion, broadcasting events to subscribers (UI + billing). UI disconnect or slow consumption does not stop the StreamDriver. Billing subscriber never drops events.
+8. **BILLING_INDEPENDENT_OF_CLIENT**: Billing commits occur server-side regardless of client connection state. `BillingGraphExecutorDecorator` intercepts `usage_report` events during stream iteration; the caller MUST drain the stream to completion for billing to fire. UI path: `RunEventRelay.pump()` drains to completion regardless of UI disconnect. Scheduled path: `for await` drain in route handler. `stream-drain-enforcement.stack.test.ts` enforces this obligation at all call sites.
+
+8a. **BILLING_ENFORCED_AT_PORT**: Billing is enforced by `BillingGraphExecutorDecorator` wrapping `GraphExecutorPort` at the factory level. Call sites do not implement billing — they create a `BillingCommitFn` closure (binding `commitUsageFact` + `accountService`) and pass it to `createGraphExecutor()`. The decorator uses DI only; adapters layer never imports from features. `RunEventRelay` is a pure UI stream adapter with no billing responsibility.
 
 9. **P0_ATTEMPT_FREEZE**: In P0, `attempt` is always 0. No code path increments attempt. Full attempt/retry semantics require run persistence (P1). The `attempt` field exists in schema and `UsageFact` for forward compatibility but is frozen at 0.
 
@@ -216,32 +218,47 @@ SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
 
 ### 2. Execution + Billing Flow
 
+**Decorator stack** (outer → inner):
+
+```
+ObservabilityGraphExecutorDecorator  (Langfuse traces)
+  └─ BillingGraphExecutorDecorator   (intercepts usage_report → commitUsageFact)
+       └─ AggregatingGraphExecutor   (routes by graphId prefix → providers)
+            └─ providers...
+```
+
+**Call site wiring** (app layer creates closure, passes to factory):
+
+```typescript
+const billingCommitFn: BillingCommitFn = (fact, ctx) =>
+  commitUsageFact(fact, ctx, accountService, log);
+const executor = createGraphExecutor(executeStream, userId, billingCommitFn);
+```
+
+**Flow (both UI and scheduled paths):**
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ AiRuntimeService.runGraph(request)                                  │
-│ ─────────────────────────────────────                               │
-│ 1. Generate run_id; set attempt=0 (P0: no persistence)              │
-│ 2. Route to provider via AggregatingGraphExecutor (by graphId)      │
-│ 3. Call adapter.runGraph(request) → get stream                      │
-│ 4. Start RunEventRelay.pump() to consume upstream to completion     │
-│ 5. Fanout events to subscribers:                                    │
-│    ├── UI subscriber → returned to route (may disconnect)           │
-│    └── Billing subscriber → commits charges (never drops events)    │
-│ 6. Return { uiStream, final }                                       │
+│ Caller (AiRuntime or internal route handler)                         │
+│ ──────────────────────────────────────────────                       │
+│ 1. Create billingCommitFn closure (app layer — CAN import features)  │
+│ 2. createGraphExecutor(streamFn, userId, billingCommitFn)            │
+│ 3. executor.runGraph(request) → { stream, final }                    │
+│ 4. Drain stream to completion (RunEventRelay.pump OR for-await)      │
 └─────────────────────────────────────────────────────────────────────┘
                               │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌──────────────────────────────┐ ┌────────────────────────────────────┐
-│ UI Subscriber                │ │ Billing Subscriber                 │
-│ ──────────────               │ │ ──────────────────                 │
-│ - Receives broadcast events  │ │ - Receives broadcast events        │
-│ - Client disconnect = stops  │ │ - Runs to completion (never stops) │
-│   receiving, driver continues│ │ - On usage_report → commitUsageFact│
-│                              │ │ - On done/error → finalize         │
-└──────────────────────────────┘ └────────────────────────────────────┘
-                                              │
-                                              ▼
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ BillingGraphExecutorDecorator (adapters layer — DI only)             │
+│ ──────────────────────────────────────────────                       │
+│ - Wraps upstream stream with async generator                         │
+│ - On usage_report → validate via Zod, call commitFn, continue        │
+│   (strict for inproc/sandbox; hints for external executors)          │
+│ - All other events → yield through unchanged                         │
+│ - usage_report events consumed — invisible to downstream             │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ GraphExecutorAdapter (in-proc or external)                          │
 │ ───────────────────────────────────────────                         │
@@ -249,12 +266,12 @@ SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
 │ - usage_report carries UsageFact with run_id/attempt/usageUnitId    │
 │ - Resolve final with usage_totals                                   │
 └─────────────────────────────────────────────────────────────────────┘
-                                              │
-                                              ▼
+                              │
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ BillingService (billing.ts) — never blocking                        │
 │ ─────────────────────────────────────────                           │
-│ - commitUsageFact(fact) called by billing sink                      │
+│ - commitUsageFact(fact, context, accountService, log)                │
 │ - Apply pricing policy: chargedCredits = llmPricingPolicy(costUsd)  │
 │ - Compute source_reference = computeIdempotencyKey(fact)            │
 │ - Call recordChargeReceipt with source_reference                    │
@@ -264,7 +281,7 @@ SELECT * FROM charge_receipts WHERE source_reference LIKE 'run123/0/%';
 
 **Pricing policy:** `commitUsageFact()` applies the markup via `llmPricingPolicy.ts`. See [billing-evolution.md](billing-evolution.md) for credit unit standard (`CREDITS_PER_USD = 10_000_000`) and markup factor.
 
-**Why StreamDriver + Fanout?** AsyncIterable cannot be safely consumed by two independent readers. The StreamDriver (internal `pump()` loop in `RunEventRelay`) is a single consumer that reads upstream to completion, broadcasting each event to subscribers via internal queues. Per BILLING_INDEPENDENT_OF_CLIENT: if UI subscriber disconnects, the driver continues and billing subscriber still receives all events.
+**Why decorator, not subscriber?** The prior design used `RunEventRelay` billing subscriber, but only the UI path used `RunEventRelay`. Scheduled runs (and future webhook/API triggers) bypassed billing entirely (bug.0005). The decorator wraps `GraphExecutorPort` at factory level — every call site gets billing automatically. `RunEventRelay` is a pure UI stream adapter.
 
 **Why run-centric?** Graphs have multiple LLM calls. Billing must be attributed to usage units, not requests. Idempotency key includes run context to prevent cross-run collisions.
 
@@ -428,19 +445,23 @@ The `CogniCompletionAdapter` in the package layer then doesn't need any special 
 ```
 AiRuntime.runChatStream()
         ↓
+createGraphExecutor(streamFn, userId, billingCommitFn)
+        ↓
+ObservabilityDecorator → BillingDecorator → AggregatingExecutor
+        ↓
 graphExecutor.runGraph() [InProcCompletionUnitAdapter]
         ↓
-createTransformedStream() [lines 448-512]
+createTransformedStream()
         │
         ├─ for await (event of innerStream) { yield events }
         ├─ await final ← AFTER stream completes
         ├─ yield usage_report { fact: UsageFact } ← WITH costUsd, litellmCallId
         └─ yield done
         ↓
-RunEventRelay.pump()
+BillingGraphExecutorDecorator.wrapStreamWithBilling()
         │
-        ├─ on usage_report → commitUsageFact() → recordChargeReceipt()
-        └─ on other events → queue to UI
+        ├─ on usage_report → validate (Zod strict) → commitFn() → recordChargeReceipt()
+        └─ on other events → yield to RunEventRelay (UI stream adapter)
 ```
 
 **Key insight:** In the working path, `createTransformedStream()`:
@@ -450,6 +471,7 @@ RunEventRelay.pump()
 3. Builds `UsageFact` from final result (has litellmCallId, costUsd, model)
 4. Emits `usage_report` then `done`
 5. Stream never throws to caller — it's self-contained
+6. `BillingGraphExecutorDecorator` intercepts `usage_report` before `RunEventRelay` sees it
 
 ### 9. Adapter-Specific Notes
 
@@ -735,25 +757,30 @@ initChatModel + captured exec   CogniCompletionAdapter + ALS context
 
 ### File Pointers
 
-| File                                                              | Purpose                                                           |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `src/ports/graph-executor.port.ts`                                | `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`          |
-| `src/ports/index.ts`                                              | Re-export `GraphExecutorPort`                                     |
-| `src/adapters/server/ai/inproc-completion-unit.adapter.ts`        | `InProcCompletionUnitAdapter`; emits `usage_report` before `done` |
-| `src/types/usage.ts`                                              | `UsageFact` type                                                  |
-| `src/types/billing.ts`                                            | `SOURCE_SYSTEMS` enum                                             |
-| `src/features/ai/types.ts`                                        | `UsageReportEvent` (contains `UsageFact`)                         |
-| `src/features/ai/services/completion.ts`                          | Returns usage in final (no AiEvent emission)                      |
-| `src/features/ai/services/billing.ts`                             | `commitUsageFact()`, `computeIdempotencyKey()`                    |
-| `src/features/ai/services/ai_runtime.ts`                          | `RunEventRelay` (StreamDriver + Fanout)                           |
-| `src/shared/db/schema.billing.ts`                                 | `run_id`, `attempt` columns; uniqueness constraints               |
-| `src/bootstrap/container.ts`                                      | Wires `InProcCompletionUnitAdapter`                               |
-| `src/bootstrap/graph-executor.factory.ts`                         | Factory for adapter creation                                      |
-| `.dependency-cruiser.cjs`                                         | ONE_LEDGER_WRITER rule                                            |
-| `tests/stack/ai/one-ledger-writer.stack.test.ts`                  | Grep for `.recordChargeReceipt(` call sites                       |
-| `tests/stack/ai/billing-idempotency.stack.test.ts`                | Replay usage_report twice, assert 1 row                           |
-| `tests/stack/ai/billing-disconnect.stack.test.ts`                 | StreamDriver completes billing even if UI disconnects             |
-| `tests/stack/ai/no-direct-completion-executestream.stack.test.ts` | Grep test for BILLABLE_AI_THROUGH_EXECUTOR                        |
+| File                                                               | Purpose                                                              |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `src/ports/graph-executor.port.ts`                                 | `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`             |
+| `src/ports/index.ts`                                               | Re-export `GraphExecutorPort`                                        |
+| `src/adapters/server/ai/inproc-completion-unit.adapter.ts`         | `InProcCompletionUnitAdapter`; emits `usage_report` before `done`    |
+| `src/types/usage.ts`                                               | `UsageFact` type                                                     |
+| `src/types/billing.ts`                                             | `SOURCE_SYSTEMS` enum                                                |
+| `src/features/ai/types.ts`                                         | `UsageReportEvent` (contains `UsageFact`)                            |
+| `src/features/ai/services/completion.ts`                           | Returns usage in final (no AiEvent emission)                         |
+| `src/features/ai/services/billing.ts`                              | `commitUsageFact()`, `computeIdempotencyKey()`                       |
+| `src/adapters/server/ai/billing-executor.decorator.ts`             | `BillingGraphExecutorDecorator` (intercepts usage_report → commitFn) |
+| `src/types/billing.ts`                                             | `BillingCommitFn` type (DI callback for decorator)                   |
+| `src/features/ai/services/ai_runtime.ts`                           | `RunEventRelay` (UI stream adapter; no billing responsibility)       |
+| `src/shared/db/schema.billing.ts`                                  | `run_id`, `attempt` columns; uniqueness constraints                  |
+| `src/bootstrap/container.ts`                                       | Wires `InProcCompletionUnitAdapter`                                  |
+| `src/bootstrap/graph-executor.factory.ts`                          | Factory for adapter creation                                         |
+| `.dependency-cruiser.cjs`                                          | ONE_LEDGER_WRITER rule                                               |
+| `tests/stack/ai/one-ledger-writer.stack.test.ts`                   | Grep for `.recordChargeReceipt(` call sites                          |
+| `tests/stack/ai/billing-idempotency.stack.test.ts`                 | Replay usage_report twice, assert 1 row                              |
+| `tests/stack/ai/billing-disconnect.stack.test.ts`                  | StreamDriver completes billing even if UI disconnects                |
+| `tests/stack/ai/no-direct-completion-executestream.stack.test.ts`  | Grep test for BILLABLE_AI_THROUGH_EXECUTOR                           |
+| `tests/stack/ai/stream-drain-enforcement.stack.test.ts`            | Grep test for CALLER_DRAIN_OBLIGATION (all runGraph callers drain)   |
+| `tests/stack/internal/internal-runs-billing.stack.test.ts`         | Regression test: internal runs produce charge_receipts (bug.0005)    |
+| `tests/unit/adapters/server/ai/billing-executor-decorator.spec.ts` | Decorator unit tests (validation, error handling, stream wrapping)   |
 
 ## Acceptance Checks
 
@@ -763,6 +790,8 @@ initChatModel + captured exec   CogniCompletionAdapter + ALS context
 - `pnpm test -- billing-idempotency` — validates IDEMPOTENT_CHARGES
 - `pnpm test -- billing-disconnect` — validates BILLING_INDEPENDENT_OF_CLIENT
 - `pnpm test -- no-direct-completion-executestream` — validates BILLABLE_AI_THROUGH_EXECUTOR
+- `pnpm test -- stream-drain-enforcement` — validates CALLER_DRAIN_OBLIGATION (all runGraph callers drain stream)
+- `pnpm test -- billing-executor-decorator` — validates BillingGraphExecutorDecorator behavior
 - `pnpm check` — lint + type-check passes
 
 ## Open Questions
@@ -778,7 +807,7 @@ initChatModel + captured exec   CogniCompletionAdapter + ALS context
 - [tool-use.md](tool-use.md) — Tool execution within graphs
 - [billing-evolution.md](billing-evolution.md) — Credit unit standard, pricing policy, markup
 - [activity-metrics.md](activity-metrics.md) — Activity dashboard join
-- [usage-history.md](usage-history.md) — Message artifact persistence (parallel stream consumer)
+- [chat-persistence.md](chat-persistence.md) — UIMessage persistence, AiEvent→UIMessage bridge
 - [claude-sdk-adapter.md](claude-sdk-adapter.md) — Claude Agent SDK adapter design
 - [n8n-adapter.md](n8n-adapter.md) — n8n workflow execution adapter design
 - [tenant-connections.md](tenant-connections.md) — Tenant connections

@@ -2,9 +2,10 @@
 id: openclaw-gateway-header-injection
 type: research
 title: "OpenClaw Gateway: Per-Session Outbound Header Injection (for Cogni + LiteLLM Billing)"
-status: draft
-trust: draft
-summary: Investigation into OpenClaw's ability to forward per-session billing headers to LiteLLM, current limitations, and proposed patch design.
+status: active
+trust: reviewed
+verified: 2026-02-09
+summary: Investigation into OpenClaw's ability to forward per-session billing headers to LiteLLM. Patch built, image tested — all 3 scenarios pass.
 read_when: Working on OpenClaw gateway integration, sandbox billing, or multi-tenant LLM proxy attribution.
 owner: derekg1729
 created: 2026-02-08
@@ -13,9 +14,10 @@ tags: [sandbox, billing, openclaw]
 
 # OpenClaw Gateway: Per-Session Outbound Header Injection (for Cogni + LiteLLM Billing)
 
-**Date**: 2026-02-08
+**Date**: 2026-02-08 (research), 2026-02-09 (patch validated)
 **Branch**: `fix/charge-receipts`
-**OpenClaw image**: `cogni-sandbox-openclaw:latest` (based on `openclaw:local`, pi-ai OpenAI/JS 6.10.0)
+**OpenClaw base image**: `openclaw:local` (v2026.2.4, pi-ai OpenAI/JS 6.10.0)
+**Patched image**: `openclaw-outbound-headers:latest` (adds `outboundHeaders` to WS protocol)
 
 ## 1. What we're trying to do
 
@@ -75,19 +77,22 @@ LiteLLM header for metadata is `x-litellm-spend-logs-metadata` (NOT `x-litellm-m
 
 ### Summary table
 
-| Scenario                                                      | Works?                          |
-| ------------------------------------------------------------- | ------------------------------- |
-| Static provider headers in config                             | Yes (verified empirically)      |
-| Per-request headers via gateway HTTP                          | No — not in protocol            |
-| Per-request headers via gateway WS                            | No — not in protocol            |
-| Per-session provider switch to different static headers       | Yes, but doesn't scale          |
-| Concurrent different billing headers, single OpenClaw process | No — requires external injector |
+| Scenario                                                      | Unpatched                       | Patched (`openclaw-outbound-headers`) |
+| ------------------------------------------------------------- | ------------------------------- | ------------------------------------- |
+| Static provider headers in config                             | Yes (verified empirically)      | Yes                                   |
+| Per-request headers via gateway HTTP                          | No — not in protocol            | No (HTTP not extended)                |
+| Per-request headers via gateway WS (`outboundHeaders`)        | No — not in protocol            | **Yes (verified)**                    |
+| Per-session provider switch to different static headers       | Yes, but doesn't scale          | Yes (still works)                     |
+| Concurrent different billing headers, single OpenClaw process | No — requires external injector | **Yes (verified, no cross-contam.)**  |
+| Clear outboundHeaders via `sessions.patch` null               | N/A                             | **Yes (verified)**                    |
 
-## 3. Proposed OpenClaw patch: per-session outbound header overrides
+## 3. OpenClaw patch: per-session outbound header overrides (VALIDATED)
 
 ### Goal
 
 Add a generic, per-session outbound header override mechanism, so Cogni can set billing headers once per session and OpenClaw will apply them to all outbound LiteLLM calls for that session.
+
+> **Status**: Patch built by another developer, image `openclaw-outbound-headers:latest`. All 3 test scenarios pass (see section 5).
 
 ### Patch principles
 
@@ -136,13 +141,15 @@ Merge order (lowest to highest priority):
 - Cap total size (e.g., 8KB serialized) to prevent bloating session storage / request abuse
 - Allowlist keys or prefix-based allowlist (team decision)
 
-### Verification plan (must be E2E)
+### Verification plan (must be E2E) — COMPLETED
 
 1. Create two sessions concurrently:
    - Session A: `outboundHeaders` includes `x-litellm-end-user-id: A`
    - Session B: `outboundHeaders` includes `x-litellm-end-user-id: B`
 2. Run both concurrently through the gateway.
-3. Verify via LiteLLM spend logs or an echo server in place of LiteLLM that outbound requests include the correct per-session headers without cross-contamination.
+3. Verify via echo server that outbound requests include the correct per-session headers without cross-contamination.
+
+**All 3 scenarios validated** — see section 5 for full results.
 
 ## Appendix: Key source locations (inside `cogni-sandbox-openclaw:latest`)
 
@@ -191,9 +198,11 @@ Standard OpenAI chat completion request body:
 
 #### WebSocket — full protocol
 
-- JSON-RPC 2.0 framing: `{ "jsonrpc": "2.0", "id": "...", "method": "...", "params": {...} }`
-- First call must be `connect` with `{ token, password }` for auth
-- Source: `/app/src/gateway/protocol/schema/agent.ts`
+- Custom frame format (NOT JSON-RPC): `{ "type": "req", "id": "...", "method": "...", "params": {...} }`
+- Server sends `connect.challenge` event on connection, client must reply with `connect` request
+- Connect params require: `minProtocol`/`maxProtocol` (currently 3), `client` info object, `auth: { token }`
+- Server responds with `hello-ok` on success
+- Source: `/app/src/gateway/protocol/schema/frames.ts`, `/app/src/gateway/protocol/schema/agent.ts`
 
 ### Key WS methods
 
@@ -304,3 +313,48 @@ Listens on port 3000 by default (HTTP + WS upgrade on same port).
 - Bearer token on HTTP, `{ token }` on WS `connect`
 - Supports `x-forwarded-for` / `x-forwarded-proto` for proxied setups
 - Config: `gateway.auth` in `openclaw.json` (mode options include `"none"` for dev)
+
+## 5. Patch Validation Results (2026-02-09)
+
+**Image**: `openclaw-outbound-headers:latest` (92505cab538b)
+**Test infra**: oc-gateway container (port 18789) + oc-echo (Node echo server capturing headers to `/tmp/captured.jsonl`)
+**Test script**: `tests/_fixtures/sandbox/test-gateway-outbound-headers.ts`
+**Client fixture**: `tests/_fixtures/sandbox/openclaw-gateway-client.ts`
+
+### Test 1: Basic outboundHeaders via `agent` call — PASS
+
+- Connected via WS, authenticated with protocol v3 handshake
+- Sent `agent` call with `outboundHeaders: { "x-litellm-end-user-id": "tenant-42", "x-litellm-spend-logs-metadata": "{...}" }`
+- Echo server captured both dynamic headers AND static `x-static-provider-header: from-config`
+- Confirms merge order: static provider headers + session outboundHeaders both present
+
+### Test 2: Concurrent session isolation — PASS
+
+- Two WS clients, two sessions (`isolation-A`, `isolation-B`) with different `outboundHeaders`
+- Both agent calls fired concurrently via `Promise.all`
+- Echo server captured 2 requests; each had its own session's tenant ID and marker
+- Zero cross-contamination: `tenant-A` always paired with `session-A`, `tenant-B` with `session-B`
+
+### Test 3: Clear outboundHeaders via `sessions.patch` — PASS
+
+- Set `outboundHeaders` via agent call, verified headers present on outbound request
+- Called `sessions.patch` with `{ key: "agent:main:clear-test", outboundHeaders: null }` — returned `ok: true`
+- Subsequent agent call on same session: dynamic headers gone, static `x-static-provider-header` preserved
+
+### Protocol corrections discovered during testing
+
+- WS frame format is **NOT JSON-RPC 2.0** — it's `{ type: "req", id, method, params }` with responses `{ type: "res", id, ok, payload, error }`
+- `sessions.patch` uses `key` (not `sessionKey`) and fields go at top level (not nested under a `patch` object)
+- Handshake requires full `ConnectParamsSchema`: `{ minProtocol: 3, maxProtocol: 3, client: { id: "test", version: "1.0.0", platform: "node-test", mode: "test" }, auth: { token } }`
+
+### Key source locations in patched image
+
+| Component                              | Path                                                     |
+| -------------------------------------- | -------------------------------------------------------- |
+| Agent method (outboundHeaders support) | `/app/src/gateway/server-methods/agent.ts:85,91-94,266`  |
+| Chat method (outboundHeaders support)  | `/app/src/gateway/server-methods/chat.ts:328,376-389`    |
+| Agent schema (outboundHeaders field)   | `/app/src/gateway/protocol/schema/agent.ts:67`           |
+| Sessions.patch (outboundHeaders field) | `/app/src/gateway/protocol/schema/sessions.ts`           |
+| Validation + guardrails                | `/app/src/gateway/sessions-patch.ts:44-62,368-377`       |
+| Header merge into outbound calls       | `/app/src/agents/pi-embedded-runner/extra-params.ts:138` |
+| Agent command plumbing                 | `/app/src/commands/agent.ts:455`                         |

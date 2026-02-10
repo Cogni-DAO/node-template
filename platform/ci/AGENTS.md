@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-04
+- **Last reviewed:** 2026-02-10
 - **Status:** draft
 
 ## Purpose
@@ -31,7 +31,7 @@ CI/CD automation scripts and configuration documentation for multiple pipeline s
 
 - **Exports:** none
 - **Routes (if any):** none
-- **CLI (if any):** `scripts/build.sh`, `scripts/push.sh`, `scripts/deploy.sh`, `scripts/test-image.sh`, `scripts/loki_push.sh`, `scripts/fetch_github_job_logs.sh`
+- **CLI (if any):** `scripts/build.sh`, `scripts/push.sh`, `scripts/deploy.sh`, `scripts/test-image.sh`, `scripts/loki_push.sh`, `scripts/fetch_github_job_logs.sh`, `scripts/healthcheck-openclaw.sh`, `scripts/healthcheck-sourcecred.sh`
 - **Env/Config keys:** `IMAGE_NAME`, `IMAGE_TAG`, `APP_IMAGE`, `MIGRATOR_IMAGE`, `COGNI_REPO_URL`, `COGNI_REPO_REF`, `PLATFORM`, `GHCR_PAT`, `CHERRY_AUTH_TOKEN`, `TF_VAR_*`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `LOKI_URL`, `LOKI_USER`, `LOKI_TOKEN`, `LOG_FILE`, `JOB_NAME`, `LABELS`, `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`, `GITHUB_JOB`, `OUTPUT_FILE`
 - **Files considered API:** `scripts/*.sh`
 

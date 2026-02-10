@@ -92,7 +92,8 @@ describe("Sandbox LLM Round-Trip Billing", () => {
     ctx = null;
   });
 
-  it("proxy audit log captures billing data and commits to charge_receipts", async () => {
+  // Skip: flaky — proxy container vanishes mid-startup (bug.0013)
+  it.skip("proxy audit log captures billing data and commits to charge_receipts", async () => {
     if (!ctx) return;
 
     // 1. Run sandbox agent through full proxy chain

@@ -5,31 +5,44 @@ title: OpenClaw Sandbox Integration
 status: active
 spec_state: draft
 trust: draft
-summary: OpenClaw agent runtime inside Cogni sandbox — invariants, container image, LLM protocol, I/O protocol, billing, and anti-patterns
-read_when: Implementing OpenClaw sandbox agent, modifying container image, or debugging sandbox LLM calls
+summary: OpenClaw agent runtime in Cogni — two execution modes (ephemeral sandbox, long-running gateway), invariants, container images, LLM protocol, I/O protocol, billing
+read_when: Implementing OpenClaw sandbox or gateway agent, modifying container images, or debugging sandbox LLM calls
 owner: derekg1729
 created: 2026-02-07
-verified: 2026-02-07
+verified: 2026-02-11
 tags: [sandbox, openclaw, ai-agents]
 ---
 
 # OpenClaw Sandbox Integration
 
 > [!CRITICAL]
-> OpenClaw runs **inside** the Cogni sandbox (`network=none`). LLM calls route through the unix-socket proxy — OpenClaw never touches API keys or the network. OpenClaw's own sandbox and cron are **disabled**; Cogni is the sandbox and Temporal is the scheduler. Supersedes the former `CLAWDBOT_ADAPTER_SPEC.md`.
+> OpenClaw runs in two modes: **ephemeral** (one-shot `network=none` container, CLI invocation) and **gateway** (long-running service on `sandbox-internal`, WS protocol). Both route LLM calls through an nginx proxy to LiteLLM — OpenClaw never touches API keys directly. OpenClaw's own sandbox and cron are **disabled** in both modes. Supersedes the former `CLAWDBOT_ADAPTER_SPEC.md`.
+
+## Execution Modes
+
+|                       | Ephemeral                                    | Gateway                                                                               |
+| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Container**         | `cogni-sandbox-openclaw:latest`              | `openclaw-outbound-headers:latest` (`ghcr.io/cogni-dao/openclaw-outbound-headers:v0`) |
+| **Lifecycle**         | One-shot per run, destroyed after            | Long-running compose service, shared                                                  |
+| **Network**           | `network=none` (isolated)                    | `sandbox-internal` (Docker DNS)                                                       |
+| **Invocation**        | CLI: `--local --agent main --message ...`    | WS: custom frame protocol on port 18789                                               |
+| **Concurrency**       | Single user per container                    | Multiple concurrent sessions                                                          |
+| **LLM proxy**         | Per-run nginx via unix socket (socat)        | Shared nginx (`llm-proxy-openclaw:8080`) via TCP                                      |
+| **Billing headers**   | Proxy **overwrites** `x-litellm-end-user-id` | OpenClaw **injects** per-session via `outboundHeaders`; proxy **passes through**      |
+| **Session isolation** | Container boundary (invariant 19)            | Session key: `agent:main:{billingAccountId}:{runId}`                                  |
 
 ## Context
 
-The sandbox runtime ([Sandboxed Agents](sandboxed-agents.md), invariants 1–12) provides isolated container execution for AI agents. OpenClaw is a third-party agent runtime that supports autonomous multi-turn tool-use loops. This spec defines how OpenClaw runs inside the Cogni sandbox: what is disabled, how LLM calls route through the proxy, container image layout, I/O protocol, and billing integration.
+The sandbox runtime ([Sandboxed Agents](sandboxed-agents.md), invariants 1–12) provides isolated container execution for AI agents. OpenClaw is a third-party agent runtime that supports autonomous multi-turn tool-use loops. This spec defines how OpenClaw integrates with Cogni across both execution modes: what is disabled, how LLM calls route through the proxy, container images, invocation protocols, and billing.
 
 ## Goal
 
-Define the invariants and design contracts for running OpenClaw as a sandboxed agent: which OpenClaw features are disabled, how the container image is structured, how LLM calls transit the proxy, how the agent is invoked and its output parsed, and how billing is tracked through LiteLLM.
+Define the invariants and design contracts for running OpenClaw in Cogni: which OpenClaw features are disabled, how the two execution modes work, how LLM calls transit the proxy, how billing is tracked through LiteLLM.
 
 ## Non-Goals
 
-- OpenClaw gateway mode or Lit-based Control UI (invariants 17, 18)
-- Passing API keys or git credentials into sandbox containers (SECRETS_HOST_ONLY)
+- OpenClaw Lit-based Control UI / dashboard (invariant 18)
+- Passing API keys or git credentials into containers (SECRETS_HOST_ONLY)
 - Multi-stage Docker image optimization (see [proj.sandboxed-agents](../../work/projects/proj.sandboxed-agents.md))
 - Graph provider wiring, agent catalog, or bootstrap integration (see [openclaw-sandbox-controls](openclaw-sandbox-controls.md))
 - Streaming passthrough from OpenClaw to client (deferred)
@@ -38,19 +51,39 @@ Define the invariants and design contracts for running OpenClaw as a sandboxed a
 
 > Numbering continues from [Sandboxed Agents](sandboxed-agents.md) invariants 1–12.
 
-13. **OPENCLAW_SANDBOX_OFF**: OpenClaw's built-in sandbox (`sandbox.mode`) is always `"off"` inside Cogni's container. The Cogni sandbox IS the isolation boundary. Docker is not available inside the container; enabling OpenClaw's sandbox would hard-fail on `docker create`.
+### Shared (both modes)
 
-14. **OPENCLAW_CRON_DISABLED**: OpenClaw's cron scheduler (`cron.enabled`) is always `false`. Temporal is scheduler-of-record (same as SANDBOXED_AGENTS.md invariant). Duplicate schedulers cause billing surprises and audit gaps.
+13. **OPENCLAW_SANDBOX_OFF**: OpenClaw's built-in sandbox (`sandbox.mode`) is always `"off"`. Docker is not available inside the container; enabling OpenClaw's sandbox would hard-fail on `docker create`.
 
-15. **OPENCLAW_ELEVATED_DISABLED**: OpenClaw's elevated tool mode (`tools.elevated.enabled`) is always `false`. Elevated mode bypasses tool policy and would collapse the sandbox security boundary.
+14. **OPENCLAW_CRON_DISABLED**: OpenClaw's cron scheduler (`cron.enabled`) is always `false`. Temporal is scheduler-of-record. Duplicate schedulers cause billing surprises and audit gaps.
 
-16. **COGNI_IS_MODEL_ROUTER**: OpenClaw's model providers are set to `mode: "replace"` with a single `cogni` provider pointing at `http://localhost:8080/v1`. All built-in providers (Anthropic, OpenAI, Google, etc.) are stripped. OpenClaw cannot reach them anyway (`network=none`), and leaving them configured causes confusing fallback behavior and auth resolution attempts.
+15. **OPENCLAW_ELEVATED_DISABLED**: OpenClaw's elevated tool mode (`tools.elevated.enabled`) is always `false`. Elevated mode bypasses tool policy and would collapse the security boundary.
 
-17. **NO_OPENCLAW_GATEWAY**: OpenClaw runs in embedded/local agent mode only (`--local`). The gateway service is never started inside the sandbox. Gateway mode requires network listeners and persistent state that conflict with one-shot container semantics.
+16. **COGNI_IS_MODEL_ROUTER**: OpenClaw's model providers are set to `mode: "replace"` with a single `cogni` provider. All built-in providers are stripped. The `baseUrl` differs by mode:
+    - Ephemeral: `http://localhost:8080/v1` (socat → unix socket → per-run proxy)
+    - Gateway: `http://llm-proxy-openclaw:8080/v1` (Docker DNS → shared proxy)
 
-18. **NO_OPENCLAW_DASHBOARD**: OpenClaw's Control UI and bridge port are not exposed. No dashboard proxying until P2+ at earliest. The proxy only serves `/v1/*` (LLM) and `/health`.
+17. **NO_OPENCLAW_DASHBOARD**: OpenClaw's Control UI and bridge port are not exposed. The proxy only serves `/v1/*` (LLM) and `/health`.
 
-19. **ONE_RUN_ONE_SESSION**: Each `SandboxRunnerAdapter.runOnce()` invocation is a fresh OpenClaw session. Session state does not persist across runs. Conversation history, if needed, is injected via workspace files (see [Agent I/O Protocol](#agent-io-protocol)).
+18. **LITELLM_IS_BILLING_TRUTH**: OpenClaw's self-reported usage is a UX hint only. Authoritative billing comes from LiteLLM spend logs, correlated by proxy audit log.
+
+### Ephemeral mode only
+
+19. **EPHEMERAL_NO_GATEWAY**: The gateway service is never started inside the `network=none` sandbox. Gateway mode requires network listeners and persistent state that conflict with one-shot container semantics.
+
+20. **ONE_RUN_ONE_SESSION**: Each `SandboxRunnerAdapter.runOnce()` invocation is a fresh OpenClaw session. Session state does not persist across runs. Conversation history is injected via workspace files (see [Agent I/O Protocol](#agent-io-protocol)).
+
+### Gateway mode only
+
+21. **GATEWAY_ON_INTERNAL_ONLY**: The OpenClaw gateway runs on `sandbox-internal` network only, never exposed to the public internet. Auth via token (`gateway.auth.mode: "token"`).
+
+22. **OUTBOUND_HEADERS_PER_SESSION**: Billing headers (`x-litellm-end-user-id`, `x-litellm-spend-logs-metadata`, `x-cogni-run-id`) are set per-session via the `outboundHeaders` field on the WS `agent` call. The gateway proxy passes these through to LiteLLM without overwriting.
+
+23. **SESSION_KEY_ISOLATION**: Each Cogni run gets a unique session key (`agent:main:{billingAccountId}:{runId}`). Concurrent users are isolated by session — no shared session state, no cross-contamination of billing headers. Validated empirically (see [research](../research/openclaw-gateway-header-injection.md#5-patch-validation-results-2026-02-09)).
+
+24. **WS_EVENT_CAUSALITY**: Every streamed chat token is attributable to exactly one request. The gateway client hard-filters all chat event frames by `payload.sessionKey` — frames with missing or mismatched sessionKey are dropped (fail-closed, no fallback). `sessionKey` is required in `RunAgentOptions` (compile-time enforcement). The gateway broadcasts chat events to all connected WS clients; this filter is the isolation mechanism. See `openclaw-gateway-client.ts:304-313`.
+
+25. **HEARTBEAT_DISABLED**: OpenClaw heartbeats (`heartbeat.every`) are set to `"0"` in both `openclaw-gateway.json` and `openclaw-gateway.test.json`, disabling the heartbeat runner entirely. Heartbeats serve no purpose for backend agent usage and cause `HEARTBEAT_OK` contamination when combined with broadcast chat events (see bug.0021).
 
 ---
 
@@ -58,47 +91,71 @@ Define the invariants and design contracts for running OpenClaw as a sandboxed a
 
 ### Architecture
 
+#### Ephemeral Mode
+
 ```
-┌───────────────────────────────────────────────────────────────────────┐
-│ SandboxGraphProvider                                                    │
-│  1. Create tmp workspace, write .cogni/prompt.txt + openclaw.json      │
-│  2. SandboxRunnerAdapter.runOnce({ image: openclaw, llmProxy: ... })   │
-│  3. Parse stdout JSON → emit AiEvents                                  │
-│  4. Reconcile billing via LiteLLM /spend/logs                          │
-└──────────────────┬────────────────────────────────────────────────────┘
-                   ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│ SANDBOX CONTAINER: cogni-sandbox-openclaw (network=none)                │
-│ ────────────────────────────────────────                                │
-│  HOME=/workspace  OPENCLAW_CONFIG_PATH=/workspace/.openclaw/openclaw.json│
-│                                                                         │
-│  node /app/dist/index.js agent --local --agent main                    │
-│       --message "$(cat /workspace/.cogni/prompt.txt)"                  │
-│       --session-id ${RUN_ID} --json --timeout ${TIMEOUT}               │
-│                                                                         │
-│  OpenClaw Pi agent runtime (autonomous multi-turn tool loop):          │
-│    → POST /v1/chat/completions { model: "gemini-2.5-flash", ... }     │
-│    ← tool_calls → execute locally (bash, read, write, edit)            │
-│    → POST /v1/chat/completions { tool_results, ... }                   │
-│    ← ... repeat until text-only response ...                           │
-│                                                                         │
-│  socat (localhost:8080 ↔ /llm-sock/llm.sock)                          │
-│  Mounts: llm-socket-{runId} volume → /llm-sock (rw, socket connect)  │
-│          workspace/ → /workspace (read-write, bind mount)             │
-└──────────────────────┼────────────────────────────────────────────────┘
-                       │ sock/ directory (Docker volume)
-                       ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│ PROXY: nginx:alpine (sandbox-internal network)                          │
-│  Injects: Authorization: Bearer ${LITELLM_MASTER_KEY}                  │
-│  Injects: x-litellm-end-user-id: ${billingAccountId}                  │
-│  Injects: x-litellm-spend-logs-metadata: { run_id, attempt, graph_id, ... }     │
-│  Forwards: http://litellm:4000                                         │
-│  Audit log: timestamp, runId, model, status (no prompts)               │
-└───────────────────────────────────────────────────────────────────────┘
+SandboxGraphProvider
+  1. Create tmp workspace, write .cogni/prompt.txt + openclaw.json
+  2. SandboxRunnerAdapter.runOnce({ image: openclaw, llmProxy: ... })
+  3. Parse stdout JSON → emit AiEvents
+  4. Reconcile billing via proxy audit log
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│ SANDBOX CONTAINER: cogni-sandbox-openclaw (network=none)    │
+│                                                             │
+│  node /app/dist/index.js agent --local --agent main         │
+│       --message "..." --session-id ${RUN_ID} --json         │
+│                                                             │
+│  Pi agent runtime (multi-turn tool loop):                   │
+│    → POST localhost:8080/v1/chat/completions                │
+│    ← tool_calls → execute locally → repeat                  │
+│                                                             │
+│  socat (localhost:8080 ↔ /llm-sock/llm.sock)               │
+└────────────────────────┼────────────────────────────────────┘
+                         │ unix socket (Docker volume)
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│ PER-RUN PROXY: nginx:alpine (sandbox-internal)              │
+│  OVERWRITES: Authorization, x-litellm-end-user-id,         │
+│              x-litellm-spend-logs-metadata                  │
+│  Forwards → http://litellm:4000                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight**: OpenClaw may make **many** LLM calls per sandbox run (one per tool-use turn). Every call transits the proxy. Every call gets billing headers injected. LiteLLM tracks all calls under the same `billingAccountId`, filtered by `metadata.run_id` for per-run reconciliation. We never count tokens ourselves.
+#### Gateway Mode
+
+```
+SandboxGraphProvider
+  1. WS connect to openclaw-gateway:18789 (token auth, protocol v3)
+  2. WS agent call with outboundHeaders (billing + x-cogni-run-id)
+  3. Parse WS response → emit AiEvents
+  4. grep proxy audit log by x-cogni-run-id for billing
+         │
+         ▼  WS (custom frame protocol, NOT JSON-RPC)
+┌─────────────────────────────────────────────────────────────┐
+│ GATEWAY: openclaw-outbound-headers (sandbox-internal:18789) │
+│  Long-running, concurrent sessions                          │
+│  Session key: agent:main:{billingAccountId}:{runId}         │
+│                                                             │
+│  Pi agent runtime per session (multi-turn tool loop):       │
+│    → POST llm-proxy-openclaw:8080/v1/chat/completions      │
+│      with outboundHeaders merged into outbound request      │
+│    ← tool_calls → execute locally → repeat                  │
+└────────────────────────┼────────────────────────────────────┘
+                         │ TCP (Docker DNS)
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│ SHARED PROXY: llm-proxy-openclaw (sandbox-internal:8080)    │
+│  INJECTS: Authorization: Bearer ${LITELLM_MASTER_KEY}       │
+│  PASSES THROUGH: x-litellm-end-user-id,                    │
+│    x-litellm-spend-logs-metadata, x-cogni-run-id           │
+│  Forwards → http://litellm:4000                             │
+│  Audit log keyed by x-cogni-run-id for per-run billing      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key insight**: OpenClaw may make **many** LLM calls per run (one per tool-use turn). Every call transits the proxy. In ephemeral mode, the proxy injects billing headers. In gateway mode, OpenClaw injects them via per-session `outboundHeaders` and the proxy passes them through. LiteLLM tracks all calls; we never count tokens ourselves.
 
 ---
 
@@ -168,9 +225,9 @@ Standard OpenAI SSE streaming response. OpenClaw's Pi runtime parses `tool_calls
 
 ---
 
-### Container Image
+### Container Images
 
-#### Image: `cogni-sandbox-openclaw`
+#### Ephemeral: `cogni-sandbox-openclaw:latest`
 
 Thin layer over `openclaw:local` — adds socat and the sandbox entrypoint:
 
@@ -185,6 +242,14 @@ ENTRYPOINT ["/usr/local/bin/sandbox-entrypoint.sh"]
 ```
 
 No multi-stage build, no file pruning, no user creation (adapter sets `User` at container create time). Build: `docker build -t cogni-sandbox-openclaw services/sandbox-openclaw`.
+
+#### Gateway: `openclaw-outbound-headers:latest`
+
+Patched OpenClaw image with `outboundHeaders` support on the WS protocol. Published to `ghcr.io/cogni-dao/openclaw-outbound-headers:v0`. Based on `openclaw:local` (v2026.2.4). No socat needed — gateway uses TCP on `sandbox-internal` directly.
+
+Entrypoint: `node /app/dist/index.js gateway` (port 18789, `gateway.auth.mode: "token"`).
+
+Config bind-mounted at `/etc/openclaw/openclaw.json:ro`. State at `/tmp/openclaw-state` (writable tmpfs). See [gateway integration handoff](../research/openclaw-gateway-integration-handoff.md) for WS protocol details.
 
 #### Entrypoint
 

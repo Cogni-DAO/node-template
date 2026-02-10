@@ -269,8 +269,14 @@ describe("app/_facades/ai/completion.server", () => {
       // Act
       await completion(input, testCtx);
 
-      // Assert - Factory must be called to create executor
+      // Assert - Factory must be called with (streamFn, userId, billingCommitFn)
       expect(mockCreateGraphExecutor).toHaveBeenCalledTimes(1);
+      const [streamFn, userId, billingCommitFn] =
+        mockCreateGraphExecutor.mock.calls[0]!;
+      expect(typeof streamFn).toBe("function");
+      expect(typeof userId).toBe("string");
+      // CRITICAL: billingCommitFn must be provided (task.0007 — decorator requires it)
+      expect(typeof billingCommitFn).toBe("function");
     });
 
     it("should set timestamps consistently from clock", async () => {

@@ -26,7 +26,7 @@ import {
   InternalGraphRunInputSchema,
   type InternalGraphRunOutput,
 } from "@/contracts/graphs.run.internal.v1.contract";
-import { executeStream } from "@/features/ai/public.server";
+import { commitUsageFact, executeStream } from "@/features/ai/public.server";
 import {
   isGrantExpiredError,
   isGrantNotFoundError,
@@ -34,6 +34,7 @@ import {
   isGrantScopeMismatchError,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
+import type { BillingCommitFn } from "@/types/billing";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -335,8 +336,17 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     const model =
       typeof input.model === "string" ? input.model : "openrouter/auto";
 
+    // Create billing commit closure (app layer CAN import features — DI boundary)
+    const accountService = container.accountsForUser(toUserId(grant.userId));
+    const billingCommitFn: BillingCommitFn = (fact, context) =>
+      commitUsageFact(fact, context, accountService, log);
+
     // Create graph executor and run
-    const executor = createGraphExecutor(executeStream, toUserId(grant.userId));
+    const executor = createGraphExecutor(
+      executeStream,
+      toUserId(grant.userId),
+      billingCommitFn
+    );
     const result = executor.runGraph({
       runId,
       ingressRequestId: runId,

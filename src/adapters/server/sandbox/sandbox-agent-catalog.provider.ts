@@ -29,9 +29,8 @@ const SANDBOX_AGENT_DESCRIPTORS: readonly AgentDescriptor[] = [
   {
     agentId: `${SANDBOX_PROVIDER_ID}:openclaw`,
     graphId: `${SANDBOX_PROVIDER_ID}:openclaw`,
-    name: "OpenClaw Agent",
-    description:
-      "OpenClaw multi-call agent in isolated container (network=none, LLM via proxy)",
+    name: "OpenClaw",
+    description: "Community-accessible OpenClaw container agent",
   },
 ];
 

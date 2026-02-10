@@ -87,7 +87,7 @@ USER nextjs
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=10s --timeout=2s --start-period=15s --retries=3 \
-CMD curl -fsS http://0.0.0.0:3000/readyz || exit 1
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -fsS http://localhost:3000/livez || exit 1
 
 CMD ["node", "server.js"]

@@ -39,16 +39,18 @@ Evolve the agent discovery pipeline from the current single in-proc LangGraph ca
 
 **Goal:** Clean separation of discovery and execution registries; LangGraph Server runtime discovery.
 
-| Deliverable                                                                   | Status      | Est | Work Item            |
-| ----------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Create `createAgentCatalogProvidersForDiscovery()` factory in bootstrap       | Not Started | 1   | (create at P1 start) |
-| Add bootstrap-time assertion: discovery providers never in execution registry | Not Started | 1   | (create at P1 start) |
-| Add unit test: execution registry contains no discovery-only providers        | Not Started | 1   | (create at P1 start) |
-| Make `defaultAgentId` app-configurable via env override                       | Not Started | 1   | (create at P1 start) |
-| Validate `defaultAgentId` exists in returned agents                           | Not Started | 1   | (create at P1 start) |
-| Create `LangGraphServerCatalogProvider` calling `/assistants/search`          | Not Started | 2   | (create at P1 start) |
-| Add LangGraph Server provider to discovery registry                           | Not Started | 1   | (create at P1 start) |
-| Handle server-discoverable graphs (runtime, not static catalog)               | Not Started | 2   | (create at P1 start) |
+| Deliverable                                                                                                                                                 | Status      | Est | Work Item            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Create `createAgentCatalogProvidersForDiscovery()` factory in bootstrap                                                                                     | Not Started | 1   | (create at P1 start) |
+| Add bootstrap-time assertion: discovery providers never in execution registry                                                                               | Not Started | 1   | (create at P1 start) |
+| Add unit test: execution registry contains no discovery-only providers                                                                                      | Not Started | 1   | (create at P1 start) |
+| Make `defaultAgentId` app-configurable via env override                                                                                                     | Not Started | 1   | (create at P1 start) |
+| Validate `defaultAgentId` exists in returned agents                                                                                                         | Not Started | 1   | (create at P1 start) |
+| Create `LangGraphServerCatalogProvider` calling `/assistants/search`                                                                                        | Not Started | 2   | (create at P1 start) |
+| Add LangGraph Server provider to discovery registry                                                                                                         | Not Started | 1   | (create at P1 start) |
+| Handle server-discoverable graphs (runtime, not static catalog)                                                                                             | Not Started | 2   | (create at P1 start) |
+| Replace hardcoded `AVAILABLE_GRAPHS` in `ChatComposerExtras` with API fetch from `/api/v1/ai/agents`                                                        | Not Started | 1   | (create at P1 start) |
+| Deduplicate agent name/description: `SandboxAgentCatalogProvider` and `SANDBOX_AGENTS` define independently — catalog should derive from execution registry | Not Started | 1   | (create at P1 start) |
 
 **LangGraph Server Field Alignment (P1+):**
 

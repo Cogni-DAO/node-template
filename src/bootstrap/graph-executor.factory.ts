@@ -3,13 +3,15 @@
 
 /**
  * Module: `@bootstrap/graph-executor.factory`
- * Purpose: Factory for creating GraphExecutorPort implementations with observability.
+ * Purpose: Factory for creating GraphExecutorPort implementations with observability and billing.
  * Scope: Bridges app layer (facades) to adapters layer via bootstrap. Does not contain business logic.
  * Invariants:
  *   - Facade NEVER imports adapters directly (use this factory)
  *   - Per UNIFIED_GRAPH_EXECUTOR: all graph execution flows through GraphExecutorPort
  *   - Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes to providers
  *   - Per LANGFUSE_INTEGRATION: ObservabilityGraphExecutorDecorator wraps for Langfuse traces
+ *   - Per BILLING_ENFORCEMENT: BillingGraphExecutorDecorator intercepts usage_report events
+ *   - BILLING_COMMIT_REQUIRED: billingCommitFn is required — missing commitFn is a hard error
  *   - LAZY_SANDBOX_IMPORT: Sandbox provider loaded via dynamic import() to avoid Turbopack bundling dockerode native addon chain
  * Side-effects: global (module-scoped cached sandbox provider promise)
  * Links: container.ts, AggregatingGraphExecutor, GRAPH_EXECUTION.md, OBSERVABILITY.md
@@ -20,6 +22,7 @@ import type { UserId } from "@cogni/ids";
 import { LANGGRAPH_CATALOG } from "@cogni/langgraph-graphs";
 import {
   AggregatingGraphExecutor,
+  BillingGraphExecutorDecorator,
   type CompletionStreamFn,
   createLangGraphDevClient,
   type GraphProvider,
@@ -35,6 +38,7 @@ import type {
   GraphRunResult,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
+import type { BillingCommitFn } from "@/types/billing";
 import {
   type AiAdapterDeps,
   getContainer,
@@ -51,12 +55,18 @@ import {
  * Architecture boundary: Facade calls this factory (app → bootstrap),
  * factory creates aggregator (bootstrap → adapters). Facade never imports adapters.
  *
+ * Decorator stack (outer → inner):
+ *   ObservabilityGraphExecutorDecorator → BillingGraphExecutorDecorator → AggregatingGraphExecutor
+ *
  * @param completionStreamFn - Feature function for LLM streaming (from features/ai)
- * @returns GraphExecutorPort implementation (AggregatingGraphExecutor)
+ * @param userId - User ID for adapter dependency resolution
+ * @param billingCommitFn - Required billing commit function (created in app layer as closure)
+ * @returns GraphExecutorPort implementation with observability + billing
  */
 export function createGraphExecutor(
   completionStreamFn: CompletionStreamFn,
-  userId: UserId
+  userId: UserId,
+  billingCommitFn: BillingCommitFn
 ): GraphExecutorPort {
   const deps = resolveAiAdapterDeps(userId);
   const container = getContainer();
@@ -71,16 +81,29 @@ export function createGraphExecutor(
   const env = serverEnv();
   const providers: GraphProvider[] = [
     langGraphProvider,
-    new LazySandboxGraphProvider(env.LITELLM_MASTER_KEY),
+    new LazySandboxGraphProvider(
+      env.LITELLM_MASTER_KEY,
+      env.OPENCLAW_GATEWAY_URL,
+      env.OPENCLAW_GATEWAY_TOKEN
+    ),
   ];
 
   // Create aggregating executor with all configured providers
   const aggregator = new AggregatingGraphExecutor(providers);
 
-  // Wrap with observability decorator for Langfuse traces
-  // Per OBSERVABILITY.md#langfuse-integration: creates trace with I/O, handles terminal states
-  const decorated = new ObservabilityGraphExecutorDecorator(
+  // Wrap with billing decorator (intercepts usage_report events → commitUsageFact)
+  // Per BILLING_ENFORCEMENT: all execution paths get billing automatically
+  const billed = new BillingGraphExecutorDecorator(
     aggregator,
+    billingCommitFn,
+    container.log
+  );
+
+  // Wrap with observability decorator for Langfuse traces (outermost)
+  // Per OBSERVABILITY.md#langfuse-integration: creates trace with I/O, handles terminal states
+  // Note: Observability doesn't need usage_report events — billing consumes them before this layer
+  const decorated = new ObservabilityGraphExecutorDecorator(
+    billed,
     container.langfuse,
     { finalizationTimeoutMs: 15_000 },
     container.log
@@ -122,12 +145,42 @@ function createDevProvider(apiUrl: string): LangGraphDevProvider {
 /** Module-scoped singleton: caches the dynamic import + provider construction */
 let _sandboxProvider: Promise<GraphProvider> | null = null;
 
-function loadSandboxProvider(litellmMasterKey: string): Promise<GraphProvider> {
+function loadSandboxProvider(
+  litellmMasterKey: string,
+  gatewayUrl: string,
+  gatewayToken: string
+): Promise<GraphProvider> {
   if (!_sandboxProvider) {
-    _sandboxProvider = import("@/adapters/server/sandbox").then(
-      ({ SandboxRunnerAdapter, SandboxGraphProvider }) => {
+    _sandboxProvider = Promise.all([
+      import("@/adapters/server/sandbox"),
+      import("dockerode"),
+    ]).then(
+      ([
+        {
+          SandboxRunnerAdapter,
+          SandboxGraphProvider,
+          OpenClawGatewayClient,
+          ProxyBillingReader,
+        },
+        DockerModule,
+      ]) => {
         const runner = new SandboxRunnerAdapter({ litellmMasterKey });
-        return new SandboxGraphProvider(runner) as GraphProvider;
+
+        // Gateway client + billing reader for OpenClaw gateway mode
+        const gatewayClient = new OpenClawGatewayClient(
+          gatewayUrl,
+          gatewayToken
+        );
+        const billingReader = new ProxyBillingReader(
+          new DockerModule.default(),
+          "llm-proxy-openclaw"
+        );
+
+        return new SandboxGraphProvider(
+          runner,
+          gatewayClient,
+          billingReader
+        ) as GraphProvider;
       }
     );
   }
@@ -148,8 +201,16 @@ class LazySandboxGraphProvider implements GraphProvider {
   readonly providerId = "sandbox";
   private readonly delegate: Promise<GraphProvider>;
 
-  constructor(litellmMasterKey: string) {
-    this.delegate = loadSandboxProvider(litellmMasterKey);
+  constructor(
+    litellmMasterKey: string,
+    gatewayUrl: string,
+    gatewayToken: string
+  ) {
+    this.delegate = loadSandboxProvider(
+      litellmMasterKey,
+      gatewayUrl,
+      gatewayToken
+    );
   }
 
   canHandle(graphId: string): boolean {

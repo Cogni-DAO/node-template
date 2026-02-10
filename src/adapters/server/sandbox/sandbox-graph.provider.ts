@@ -10,8 +10,8 @@
  *   - Per UNIFIED_GRAPH_EXECUTOR: Registered in AggregatingGraphExecutor like any provider
  *   - Per SECRETS_HOST_ONLY: Only messages + model passed to sandbox, never credentials
  *   - Per BILLING_INDEPENDENT_OF_CLIENT: usage_report emitted for RunEventRelay billing
- * Side-effects: IO (creates tmp workspace, runs Docker containers via SandboxRunnerPort)
- * Links: docs/spec/sandboxed-agents.md, graph-provider.ts, sandbox-runner.adapter.ts
+ * Side-effects: IO (creates tmp workspace, runs Docker containers via SandboxRunnerPort, HTTP to gateway)
+ * Links: docs/spec/sandboxed-agents.md, graph-provider.ts, sandbox-runner.adapter.ts, openclaw-gateway-client.ts
  * @internal
  */
 
@@ -37,9 +37,11 @@ import type {
   SandboxRunnerPort,
   SandboxRunResult,
 } from "@/ports";
-import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 import type { GraphProvider } from "../ai/graph-provider";
+import type { OpenClawGatewayClient } from "./openclaw-gateway-client";
+import type { ProxyBillingReader } from "./proxy-billing-reader";
 
 /** Provider ID for sandbox agent execution */
 export const SANDBOX_PROVIDER_ID = "sandbox" as const;
@@ -79,62 +81,14 @@ interface SandboxAgentEntry {
    * Used by OpenClaw for HOME, OPENCLAW_CONFIG_PATH, etc.
    */
   readonly extraEnv?: (ctx: WorkspaceSetupContext) => Record<string, string>;
-}
-
-/**
- * OpenClaw config for sandbox execution.
- * Models.providers.cogni points at the socat → nginx proxy inside the container.
- * All dangerous tools/features disabled.
- */
-function makeOpenClawConfig(model: string) {
-  return {
-    models: {
-      mode: "replace",
-      providers: {
-        cogni: {
-          baseUrl: "http://localhost:8080/v1",
-          api: "openai-completions",
-          apiKey: "proxy-handles-auth",
-          models: [
-            {
-              id: model,
-              name: model,
-              reasoning: false,
-              input: ["text"],
-              contextWindow: 200000,
-              maxTokens: 8192,
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            },
-          ],
-        },
-      },
-    },
-    agents: {
-      defaults: {
-        model: { primary: `cogni/${model}` },
-        workspace: "/workspace",
-        sandbox: { mode: "off" },
-        skipBootstrap: true,
-        timeoutSeconds: 540,
-      },
-      list: [{ id: "main", default: true, workspace: "/workspace" }],
-    },
-    tools: {
-      elevated: { enabled: false },
-      deny: [
-        "group:web",
-        "browser",
-        "cron",
-        "gateway",
-        "nodes",
-        "sessions_send",
-        "sessions_spawn",
-        "message",
-      ],
-    },
-    cron: { enabled: false },
-    gateway: { mode: "local" },
-  };
+  /**
+   * Execution mode:
+   * - "ephemeral" (default): one-shot container per run (existing path)
+   * - "gateway": long-running shared service via HTTP/WS
+   */
+  readonly executionMode?: "ephemeral" | "gateway";
+  /** Proxy container name for billing reader (gateway mode only) */
+  readonly gatewayProxyContainer?: string;
 }
 
 /**
@@ -151,50 +105,13 @@ const SANDBOX_AGENTS: Record<string, SandboxAgentEntry> = {
     limits: { maxRuntimeSec: 120, maxMemoryMb: 512 },
   },
   openclaw: {
-    name: "OpenClaw Agent",
-    description:
-      "OpenClaw multi-call agent in isolated container (network=none, LLM via proxy)",
-    image: "cogni-sandbox-openclaw:latest",
-    argv: [
-      'node /app/dist/index.js agent --local --agent main --message "$(cat /workspace/.cogni/prompt.txt)" --json --timeout 540',
-    ],
+    name: "OpenClaw",
+    description: "Community-accessible OpenClaw container agent",
+    image: "openclaw-outbound-headers:latest",
+    argv: [],
     limits: { maxRuntimeSec: 600, maxMemoryMb: 1024 },
-    setupWorkspace(ctx) {
-      // OpenClaw config + state directories
-      const openclawDir = join(ctx.workspaceDir, ".openclaw");
-      const stateDir = join(ctx.workspaceDir, ".openclaw-state");
-      mkdirSync(openclawDir, { recursive: true });
-      mkdirSync(stateDir, { recursive: true });
-
-      // Write OpenClaw config
-      writeFileSync(
-        join(openclawDir, "openclaw.json"),
-        JSON.stringify(makeOpenClawConfig(ctx.model), null, 2)
-      );
-
-      // Write prompt from last user message
-      const lastUserMsg = [...ctx.messages]
-        .reverse()
-        .find(
-          (m): m is { role: string; content: string } =>
-            typeof m === "object" &&
-            m !== null &&
-            "role" in m &&
-            (m as Record<string, unknown>).role === "user"
-        );
-      writeFileSync(
-        join(ctx.cogniDir, "prompt.txt"),
-        lastUserMsg?.content ?? ""
-      );
-    },
-    extraEnv() {
-      return {
-        HOME: "/workspace",
-        OPENCLAW_CONFIG_PATH: "/workspace/.openclaw/openclaw.json",
-        OPENCLAW_STATE_DIR: "/workspace/.openclaw-state",
-        OPENCLAW_LOAD_SHELL_ENV: "0",
-      };
-    },
+    executionMode: "gateway",
+    gatewayProxyContainer: "llm-proxy-openclaw",
   },
 };
 
@@ -216,7 +133,11 @@ export class SandboxGraphProvider implements GraphProvider {
   readonly providerId = SANDBOX_PROVIDER_ID;
   private readonly log: Logger;
 
-  constructor(private readonly runner: SandboxRunnerPort) {
+  constructor(
+    private readonly runner: SandboxRunnerPort,
+    private readonly gatewayClient?: OpenClawGatewayClient,
+    private readonly billingReader?: ProxyBillingReader
+  ) {
     this.log = makeLogger({ component: "SandboxGraphProvider" });
     this.log.debug(
       { agents: Object.keys(SANDBOX_AGENTS) },
@@ -240,20 +161,31 @@ export class SandboxGraphProvider implements GraphProvider {
       return this.createErrorResult(runId, ingressRequestId, "not_found");
     }
 
-    this.log.debug(
-      { runId, agentName, messageCount: req.messages.length, model: req.model },
-      "SandboxGraphProvider.runGraph starting"
+    this.log.info(
+      {
+        event: EVENT_NAMES.SANDBOX_EXECUTION_STARTED,
+        runId,
+        ingressRequestId,
+        agentName,
+        executionMode: agent.executionMode ?? "ephemeral",
+        model: req.model,
+        messageCount: req.messages.length,
+      },
+      EVENT_NAMES.SANDBOX_EXECUTION_STARTED
     );
 
-    return this.createExecution(req, agent);
+    if (agent.executionMode === "gateway") {
+      return this.createGatewayExecution(req, agent);
+    }
+    return this.createContainerExecution(req, agent);
   }
 
   /**
-   * Create the async stream + final promise for a sandbox execution.
+   * Create the async stream + final promise for an ephemeral container execution.
    * Pattern matches LangGraphInProcProvider: runGraph returns synchronously,
    * execution happens when the stream is consumed.
    */
-  private createExecution(
+  private createContainerExecution(
     req: GraphRunRequest,
     agent: SandboxAgentEntry
   ): GraphRunResult {
@@ -269,6 +201,7 @@ export class SandboxGraphProvider implements GraphProvider {
     const stream = (async function* (): AsyncIterable<AiEvent> {
       const { runId, ingressRequestId, messages, model, caller, graphId } = req;
       const attempt = 0; // P0_ATTEMPT_FREEZE
+      const execStartTime = Date.now();
 
       // Create isolated workspace with messages file
       const workspaceDir = mkdtempSync(join(tmpdir(), `sandbox-${runId}-`));
@@ -322,6 +255,10 @@ export class SandboxGraphProvider implements GraphProvider {
           image: agent.image,
           argv: [...agent.argv],
           limits: agent.limits,
+          // Mount git-synced repo (read-only mirror, UID 1001 aligned)
+          volumes: [
+            { volume: "repo_data", containerPath: "/repo", readOnly: true },
+          ],
           llmProxy: {
             enabled: true,
             attempt,
@@ -338,13 +275,17 @@ export class SandboxGraphProvider implements GraphProvider {
           const errInfo = envelope.meta.error;
           self.log.error(
             {
+              event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
               runId,
-              exitCode: result.exitCode,
+              ingressRequestId,
+              executionMode: "ephemeral",
+              outcome: "error",
+              durationMs: Date.now() - execStartTime,
+              model,
               errorCode: result.errorCode ?? errInfo?.code,
-              errorMessage: errInfo?.message,
-              stderr: result.stderr.slice(0, 500),
+              exitCode: result.exitCode,
             },
-            "Sandbox agent failed"
+            EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
           );
           yield { type: "error", error: "internal" as AiExecutionErrorCode };
           yield { type: "done" };
@@ -399,6 +340,21 @@ export class SandboxGraphProvider implements GraphProvider {
 
         // Emit assistant_final for history persistence
         yield { type: "assistant_final", content: content || "" };
+
+        self.log.info(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            runId,
+            ingressRequestId,
+            executionMode: "ephemeral",
+            outcome: "success",
+            durationMs: Date.now() - execStartTime,
+            billingEntryCount: billingEntries.length,
+            model,
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
+
         yield { type: "done" };
 
         if (state.resolve) {
@@ -411,7 +367,19 @@ export class SandboxGraphProvider implements GraphProvider {
           });
         }
       } catch (err) {
-        self.log.error({ runId, error: err }, "Sandbox execution threw");
+        self.log.error(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            runId,
+            ingressRequestId,
+            executionMode: "ephemeral",
+            outcome: "error",
+            durationMs: Date.now() - execStartTime,
+            model,
+            errorMessage: err instanceof Error ? err.message : String(err),
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
         yield { type: "error", error: "internal" as AiExecutionErrorCode };
         yield { type: "done" };
         if (state.resolve) {
@@ -428,6 +396,193 @@ export class SandboxGraphProvider implements GraphProvider {
           rmSync(realWorkspace, { recursive: true, force: true });
         } catch {
           // Best-effort cleanup
+        }
+      }
+    })();
+
+    return { stream, final };
+  }
+
+  /**
+   * Create the async stream + final promise for a gateway execution.
+   * Uses OpenClawGatewayClient for HTTP chat + ProxyBillingReader for billing.
+   */
+  private createGatewayExecution(
+    req: GraphRunRequest,
+    agent: SandboxAgentEntry
+  ): GraphRunResult {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
+    const state = {
+      resolve: null as null | ((value: GraphFinal) => void),
+    };
+    const final = new Promise<GraphFinal>((resolve) => {
+      state.resolve = resolve;
+    });
+
+    const stream = (async function* (): AsyncIterable<AiEvent> {
+      const { runId, ingressRequestId, messages, model, caller, graphId } = req;
+      const attempt = 0; // P0_ATTEMPT_FREEZE
+      const execStartTime = Date.now();
+      const callLog = self.log.child({
+        runId,
+        agentName: agent.name,
+        ingressRequestId,
+      });
+
+      if (!self.gatewayClient) {
+        callLog.error(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            executionMode: "gateway",
+            outcome: "error",
+            durationMs: 0,
+            errorCode: "gateway_client_missing",
+            model,
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
+        yield { type: "error", error: "internal" as AiExecutionErrorCode };
+        yield { type: "done" };
+        if (state.resolve) {
+          state.resolve({
+            ok: false,
+            runId,
+            requestId: ingressRequestId,
+            error: "internal",
+          });
+        }
+        return;
+      }
+
+      const sessionKey = `agent:main:${caller.billingAccountId}:${runId}`;
+
+      try {
+        // Build outbound headers for billing (OpenClaw includes these on LLM calls)
+        const outboundHeaders: Record<string, string> = {
+          "x-litellm-end-user-id": caller.billingAccountId,
+          "x-litellm-spend-logs-metadata": JSON.stringify({
+            run_id: runId,
+            graph_id: graphId,
+          }),
+          "x-cogni-run-id": runId,
+        };
+
+        // Extract last user message
+        const lastUserMsg = [...messages]
+          .reverse()
+          .find((m) => m.role === "user");
+
+        callLog.debug({ sessionKey }, "Sending agent call via gateway WS");
+
+        // Run agent via gateway WS — yields typed events (per OpenClaw gateway protocol)
+        let content = "";
+        let billingEntryCount = 0;
+        for await (const event of self.gatewayClient.runAgent({
+          message: lastUserMsg?.content ?? "",
+          sessionKey,
+          outboundHeaders,
+          timeoutMs: (agent.limits.maxRuntimeSec ?? 600) * 1000,
+          log: callLog,
+        })) {
+          switch (event.type) {
+            case "text_delta":
+              yield { type: "text_delta", delta: event.text };
+              break;
+            case "chat_final":
+              content = event.text;
+              break;
+            case "chat_error":
+              throw new Error(`Gateway agent error: ${event.message}`);
+          }
+        }
+
+        // Read billing entries from proxy audit log
+        const proxyContainer = agent.gatewayProxyContainer;
+        if (self.billingReader && proxyContainer) {
+          // Small delay for audit log flush
+          await new Promise((r) => setTimeout(r, 500));
+
+          const billingEntries = await self.billingReader.readEntries(runId);
+          billingEntryCount = billingEntries.length;
+          if (billingEntries.length > 0) {
+            for (const entry of billingEntries) {
+              const usageFact: UsageFact = {
+                runId,
+                attempt,
+                source: "litellm",
+                executorType: "sandbox",
+                billingAccountId: caller.billingAccountId,
+                virtualKeyId: caller.virtualKeyId,
+                graphId,
+                model,
+                usageUnitId: entry.litellmCallId,
+                ...(entry.costUsd !== undefined && { costUsd: entry.costUsd }),
+              };
+              yield { type: "usage_report", fact: usageFact };
+            }
+          } else {
+            callLog.error(
+              { model },
+              "CRITICAL: No billing entries from gateway proxy audit log"
+            );
+            throw new Error(
+              "Billing failed: no proxy billing entries from gateway"
+            );
+          }
+        } else {
+          callLog.warn(
+            "No billing reader configured — billing will be incomplete"
+          );
+        }
+
+        // Emit assistant_final for history persistence
+        yield { type: "assistant_final", content: content || "" };
+
+        callLog.info(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            executionMode: "gateway",
+            outcome: "success",
+            durationMs: Date.now() - execStartTime,
+            billingEntryCount,
+            model,
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
+
+        yield { type: "done" };
+
+        if (state.resolve) {
+          state.resolve({
+            ok: true,
+            runId,
+            requestId: ingressRequestId,
+            finishReason: "stop",
+            ...(content ? { content } : {}),
+          });
+        }
+      } catch (err) {
+        callLog.error(
+          {
+            event: EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE,
+            executionMode: "gateway",
+            outcome: "error",
+            durationMs: Date.now() - execStartTime,
+            model,
+            errorMessage: err instanceof Error ? err.message : String(err),
+          },
+          EVENT_NAMES.SANDBOX_EXECUTION_COMPLETE
+        );
+        yield { type: "error", error: "internal" as AiExecutionErrorCode };
+        yield { type: "done" };
+        if (state.resolve) {
+          state.resolve({
+            ok: false,
+            runId,
+            requestId: ingressRequestId,
+            error: "internal",
+          });
         }
       }
     })();

@@ -3,15 +3,15 @@ id: proj.unified-graph-launch
 type: project
 primary_charter:
 title: Unified Graph Launch — Temporal Execution Path
-state: Paused
-priority: 2
+state: Active
+priority: 1
 estimate: 5
 summary: Unify all graph execution (API, scheduled, webhook) through GraphRunWorkflow in Temporal
 outcome: All graph runs flow through GraphRunWorkflow; no inline execution in HTTP handlers; idempotent run starts
 assignees:
-  - cogni-dev
+  - derekg1729
 created: 2026-02-07
-updated: 2026-02-07
+updated: 2026-02-10
 labels:
   - ai-graphs
   - scheduler
@@ -33,6 +33,9 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 | Deliverable                                                                                             | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Fix: scheduled runs write charge_receipts (billing bypass regression)                                   | Todo        | 2   | bug.0005  |
+| Billing enforcement decorator at GraphExecutorPort level                                                | Done        | 2   | task.0007 |
+| Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing          | Todo        | 3   | task.0006 |
 | Add `trigger_*` columns to existing `schedule_runs` table (or create `graph_runs` if P1 lands)          | Not Started | 1   | —         |
 | Create `GraphRunWorkflow` in `services/scheduler-worker/`                                               | Not Started | 2   | —         |
 | Refactor `POST /api/v1/ai/chat` to start `GraphRunWorkflow` instead of inline execution                 | Not Started | 2   | —         |
@@ -92,4 +95,12 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 ## Design Notes
 
-_(none yet)_
+**Implementation order** (from design review, 2026-02-10):
+
+1. **bug.0005** (PR #1) — Minimal inline billing drain in internal route handler. Intentionally short-lived; task.0007 makes it redundant.
+2. **task.0007** (PR #2) — `BillingGraphExecutorDecorator` at port level. Uses DI (`commitFn` closure) to respect `adapters → ports|shared|types` boundary. Also: remove billing from `RunEventRelay`, add drain-enforcement grep test, add JSDoc on port.
+3. **task.0006** (PR #3) — Delete `GraphProvider`, replace `AggregatingGraphExecutor` with `NamespaceGraphRouter`, clean up `canHandle()`.
+
+**Do not implement in this changeset:** Temporal `GraphRunWorkflow` unification (items 4-10 in Crawl roadmap). Those require separate task decomposition when ready.
+
+**Branch:** Cut a clean branch from `staging` for implementation. The current `feat/concurrent-openclaw` branch carries unrelated OpenClaw work.

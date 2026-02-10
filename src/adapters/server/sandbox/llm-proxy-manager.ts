@@ -240,7 +240,7 @@ export class LlmProxyManager {
             ReadOnly: false,
           },
         ],
-        AutoRemove: true,
+        AutoRemove: false,
       },
     });
 
@@ -304,9 +304,12 @@ export class LlmProxyManager {
         await this.copyLogFromContainer(container, handle.logPath);
       }
 
-      // Stop container (AutoRemove:true will remove it after stop)
+      // Stop and remove container
       await container.stop({ t: 2 }).catch(() => {
-        // Container may already be stopped or auto-removed
+        // Container may already be stopped
+      });
+      await container.remove({ force: true }).catch(() => {
+        // Container may already be removed
       });
 
       // Remove Docker volume
