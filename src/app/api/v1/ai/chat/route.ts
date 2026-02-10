@@ -458,12 +458,32 @@ export const POST = wrapRouteHandlerWithLogging(
               ReturnType<typeof controller.addToolCallPart>
             >();
 
+            // Track accumulated text for assistant_final reconciliation
+            let accumulatedText = "";
+            let assistantFinalContent: string | undefined;
+            let eventSeq = 0;
+
             for await (const event of deltaStream) {
               // Guard: stop writing if client aborted
               if (request.signal.aborted) break;
 
+              eventSeq++;
+
               if (event.type === "text_delta") {
+                accumulatedText += event.delta;
                 controller.appendText(event.delta);
+              } else if (event.type === "assistant_final") {
+                // Capture authoritative final content for reconciliation.
+                // Per ASSISTANT_FINAL_REQUIRED: this carries the complete response text.
+                assistantFinalContent = event.content;
+                ctx.log.debug(
+                  {
+                    seq: eventSeq,
+                    accLen: accumulatedText.length,
+                    finalLen: event.content.length,
+                  },
+                  "ai.chat_assistant_final_received"
+                );
               } else if (event.type === "tool_call_start") {
                 // MVP: Stream tool lifecycle to UI
                 // NOTE: Do NOT pass args to addToolCallPart - it closes argsText immediately,
@@ -508,6 +528,66 @@ export const POST = wrapRouteHandlerWithLogging(
                 );
               }
             }
+
+            // Reconcile: if assistant_final has text beyond what deltas delivered,
+            // append the remainder. This prevents truncation when some text_delta
+            // events are lost (e.g., gateway multi-turn reset, WS frame drops).
+            if (
+              assistantFinalContent !== undefined &&
+              assistantFinalContent.length > accumulatedText.length &&
+              assistantFinalContent.startsWith(accumulatedText)
+            ) {
+              const remainder = assistantFinalContent.slice(
+                accumulatedText.length
+              );
+              ctx.log.info(
+                {
+                  accLen: accumulatedText.length,
+                  finalLen: assistantFinalContent.length,
+                  remainderLen: remainder.length,
+                },
+                "ai.chat_reconcile_appending_remainder"
+              );
+              controller.appendText(remainder);
+            } else if (
+              assistantFinalContent !== undefined &&
+              assistantFinalContent !== accumulatedText &&
+              !assistantFinalContent.startsWith(accumulatedText)
+            ) {
+              // Divergent content (e.g., multi-turn where accumulated has chain-of-thought
+              // but final only has last turn's response). Log for diagnostics.
+              ctx.log.warn(
+                {
+                  accLen: accumulatedText.length,
+                  finalLen: assistantFinalContent.length,
+                  accTail: accumulatedText.slice(-40),
+                  finalTail: assistantFinalContent.slice(-40),
+                },
+                "ai.chat_reconcile_content_diverged"
+              );
+            }
+
+            // Per ASSISTANT_FINAL_REQUIRED: all executors must emit assistant_final.
+            // If missing, the response text has no authoritative source — log error.
+            if (
+              assistantFinalContent === undefined &&
+              accumulatedText.length > 0
+            ) {
+              ctx.log.error(
+                {
+                  accLen: accumulatedText.length,
+                  eventCount: eventSeq,
+                },
+                "ai.chat_assistant_final_missing — ASSISTANT_FINAL_REQUIRED violated"
+              );
+            }
+
+            // Flush barrier: yield to macrotask queue so any reconciliation
+            // text (or late delta) flushes through the ReadableStream before
+            // we emit message-finish and close. Without this, fast bursts
+            // (especially zero-delta reconciliation) can be dropped by
+            // ReadableStream backpressure.
+            await new Promise((r) => setTimeout(r, 0));
 
             // Wait for final result (billing) with 15s timeout
             const FINAL_TIMEOUT_MS = 15000;
