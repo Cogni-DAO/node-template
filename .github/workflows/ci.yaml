@@ -317,8 +317,8 @@ jobs:
 
       - name: Pull OpenClaw gateway image
         run: |
-          docker pull ghcr.io/cogni-dao/openclaw-outbound-headers:latest
-          docker tag ghcr.io/cogni-dao/openclaw-outbound-headers:latest openclaw-outbound-headers:latest
+          docker pull ghcr.io/cogni-dao/node-template:openclaw-gateway-latest
+          docker tag ghcr.io/cogni-dao/node-template:openclaw-gateway-latest openclaw-outbound-headers:latest
 
       - name: Build app image (with GHA cache)
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0

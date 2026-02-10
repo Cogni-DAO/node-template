@@ -578,8 +578,8 @@ echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --passw
 # Compose references short name; tag alias needed.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Pulling OpenClaw gateway image..."
-docker pull ghcr.io/cogni-dao/openclaw-outbound-headers:latest
-docker tag ghcr.io/cogni-dao/openclaw-outbound-headers:latest openclaw-outbound-headers:latest
+docker pull ghcr.io/cogni-dao/node-template:openclaw-gateway-latest
+docker tag ghcr.io/cogni-dao/node-template:openclaw-gateway-latest openclaw-outbound-headers:latest
 log_info "OpenClaw gateway image ready"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
