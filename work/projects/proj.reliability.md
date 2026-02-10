@@ -39,12 +39,14 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 ### P1 — Don't Lose Data Again
 
-| Deliverable                                                             | Status      | Est |
-| ----------------------------------------------------------------------- | ----------- | --- |
-| Automated Postgres backups: `pg_dump` to object storage (S3/R2) on cron | Not Started | 2   |
-| Grafana alert: app log silence >5 min (dead-man's switch)               | Not Started | 1   |
-| Grafana alert: stderr volume spike                                      | Not Started | 1   |
-| Session invalidation on DB reset (prevent stale-session FK errors)      | Not Started | 1   |
+| Deliverable                                                                           | Status              | Est |
+| ------------------------------------------------------------------------------------- | ------------------- | --- |
+| Automated Postgres backups: `pg_dump` to object storage (S3/R2) on cron               | Not Started         | 2   |
+| Grafana alert: app log silence >5 min (dead-man's switch)                             | Not Started         | 1   |
+| Grafana alert: container restart count delta >0 / unhealthy >60s / RSS >85% mem_limit | Not Started         | 1   |
+| Grafana alert: stderr volume spike                                                    | Not Started         | 1   |
+| Session invalidation on DB reset (prevent stale-session FK errors)                    | Not Started         | 1   |
+| Deploy config reconciliation: hash-based restart/reload for bind-mounted configs      | Backlog (task.0024) | 2   |
 
 ### P2 — Harden the Platform
 
