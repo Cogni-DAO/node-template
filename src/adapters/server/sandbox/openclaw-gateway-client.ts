@@ -120,10 +120,12 @@ export class OpenClawGatewayClient {
     type QueueItem =
       | { kind: "event"; value: GatewayAgentEvent }
       | { kind: "done" }
-      | { kind: "error"; error: Error };
+      | { kind: "error"; error: Error }
+      | { kind: "ws_closed" };
 
     const queue: QueueItem[] = [];
     let notify: (() => void) | null = null;
+    let terminalSeen = false;
 
     const push = (item: QueueItem) => {
       queue.push(item);
@@ -185,6 +187,7 @@ export class OpenClawGatewayClient {
         if (frame.type === "res" && frame.id === agentRequestId) {
           // Terminal failure: server rejected the frame
           if (!frame.ok) {
+            terminalSeen = true;
             push({
               kind: "event",
               value: {
@@ -213,6 +216,7 @@ export class OpenClawGatewayClient {
 
           // Final res: { status: "ok", result: { payloads, meta } } — authoritative terminal
           if (status === "ok") {
+            terminalSeen = true;
             const text = extractTextFromResult(payload);
             if (text) {
               push({ kind: "event", value: { type: "chat_final", text } });
@@ -240,6 +244,7 @@ export class OpenClawGatewayClient {
 
           // Error res: { status: "error", summary } — terminal failure
           if (status === "error") {
+            terminalSeen = true;
             push({
               kind: "event",
               value: {
@@ -253,6 +258,7 @@ export class OpenClawGatewayClient {
           }
 
           // Unexpected status — log and treat as error
+          terminalSeen = true;
           this.log.warn(
             { agentRequestId, status, payload },
             "Unexpected res status from gateway"
@@ -298,6 +304,7 @@ export class OpenClawGatewayClient {
 
           // Error/aborted — terminal failure
           if (state === "error" || state === "aborted") {
+            terminalSeen = true;
             const errorMessage =
               (payload?.errorMessage as string) ??
               `Agent ${state === "aborted" ? "aborted" : "error"}`;
@@ -326,6 +333,19 @@ export class OpenClawGatewayClient {
           const item = queue.shift()!;
           if (item.kind === "done") return;
           if (item.kind === "error") throw item.error;
+          if (item.kind === "ws_closed") {
+            if (terminalSeen) {
+              // Normal: WS closed after we already processed the terminal frame
+              return;
+            }
+            // Abnormal: WS closed before terminal frame — surface as error
+            this.log.error(
+              "WebSocket closed before terminal res frame received"
+            );
+            throw new Error(
+              "Gateway WebSocket closed before agent response completed"
+            );
+          }
           yield item.value;
         }
       }
@@ -493,7 +513,9 @@ export class OpenClawGatewayClient {
 
       ws.on("close", () => {
         clearTimeout(handshakeTimer);
-        push({ kind: "done" });
+        // Do NOT push {done} here — terminal is determined by the final res frame.
+        // If WS closes before terminal, the sentinel triggers an error.
+        push({ kind: "ws_closed" });
       });
 
       ws.on("message", (data: WebSocket.RawData) => {
