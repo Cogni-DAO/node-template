@@ -16,21 +16,23 @@ tags:: documentation, meta
 
 ## Structure
 
-| Directory     | Purpose                             |
-| ------------- | ----------------------------------- |
-| `spec/`       | Invariants, interfaces, contracts   |
-| `decisions/`  | ADRs and EDO governance traces      |
-| `guides/`     | Procedures (setup, howto, runbooks) |
-| `archive/`    | Deprecated docs                     |
-| `_templates/` | Templates for each doc type         |
+| Directory      | Purpose                               |
+| -------------- | ------------------------------------- |
+| `spec/`        | Invariants, interfaces, contracts     |
+| `decisions/`   | ADRs and EDO governance traces        |
+| `guides/`      | Procedures (setup, howto, runbooks)   |
+| `postmortems/` | Incident reviews, root cause analysis |
+| `archive/`     | Deprecated docs                       |
+| `_templates/`  | Templates for each doc type           |
 
 ## Doc Types
 
-| type    | Use for                                  |
-| ------- | ---------------------------------------- |
-| `spec`  | System contracts, invariants, interfaces |
-| `adr`   | Architecture decision records            |
-| `guide` | Setup, howto, runbook procedures         |
+| type         | Use for                                  |
+| ------------ | ---------------------------------------- |
+| `spec`       | System contracts, invariants, interfaces |
+| `adr`        | Architecture decision records            |
+| `guide`      | Setup, howto, runbook procedures         |
+| `postmortem` | Incident reviews, root cause analysis    |
 
 ## Metadata Format
 
