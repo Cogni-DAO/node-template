@@ -22,7 +22,12 @@ import { makeLogger } from "@/shared/observability";
 
 import { LlmProxyManager } from "./llm-proxy-manager";
 
-/** Audit log path inside the gateway proxy container */
+/**
+ * Audit log path inside the gateway proxy container.
+ * Uses /tmp/ because nginx:alpine symlinks /var/log/nginx/access.log → /dev/stdout,
+ * preventing file-based capture at the default path. Safe here: this is an isolated,
+ * single-purpose container with no untrusted processes (see llm-proxy-manager.ts).
+ */
 const CONTAINER_AUDIT_LOG = "/tmp/audit.log";
 
 /**

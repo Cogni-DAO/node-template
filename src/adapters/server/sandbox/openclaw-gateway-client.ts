@@ -16,6 +16,8 @@
  * @internal
  */
 
+import { randomUUID } from "node:crypto";
+
 import type { Logger } from "pino";
 import WebSocket from "ws";
 
@@ -152,7 +154,7 @@ export class OpenClawGatewayClient {
       const params: Record<string, unknown> = {
         message: opts.message,
         agentId: "main",
-        idempotencyKey: `cogni-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        idempotencyKey: `cogni-${randomUUID()}`,
       };
       if (opts.sessionKey) params.sessionKey = opts.sessionKey;
       if (opts.outboundHeaders) params.outboundHeaders = opts.outboundHeaders;
