@@ -8,6 +8,7 @@
  * Invariants:
  *   - Uses official assistant-stream helper (no custom SSE)
  *   - Validates input with contract, delegates to completion facade
+ *   - Per ASSISTANT_FINAL_REQUIRED: reconciles truncated text_delta events with assistant_final
  * Side-effects: IO (HTTP request/response)
  * Notes: Uses createAssistantStreamResponse from assistant-stream package
  * Links: Uses ai.chat.v1 contract, completion.server facade, assistant-stream

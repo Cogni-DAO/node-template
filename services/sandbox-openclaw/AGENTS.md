@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-07
+- **Last reviewed:** 2026-02-10
 - **Status:** draft
 
 ## Purpose
@@ -35,7 +35,7 @@ Docker image definition for running OpenClaw inside a network-isolated sandbox. 
 - **Routes:** none
 - **CLI:** `docker build -t cogni-sandbox-openclaw services/sandbox-openclaw`
 - **Env/Config keys (runtime):** Same as `sandbox-runtime` — `LLM_PROXY_SOCKET`, `LLM_PROXY_PORT`, `OPENAI_API_BASE`, `RUN_ID`. Plus OpenClaw-specific: `OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, `OPENCLAW_LOAD_SHELL_ENV`, `HOME`
-- **Files considered API:** Dockerfile, entrypoint.sh
+- **Files considered API:** Dockerfile, entrypoint.sh, openclaw-gateway.json
 
 ## Responsibilities
 
@@ -74,5 +74,6 @@ node scripts/diag-openclaw-sandbox.mjs
 ## Notes
 
 - `entrypoint.sh` is copied from `sandbox-runtime/` (not symlinked) for build context isolation
-- OpenClaw config is written to workspace by the host (adapter or diag script), not baked into image
+- `openclaw-gateway.json` is the gateway agent config (models, tools, workspace). Bind-mounted into the compose service, not baked into image
+- Ephemeral config is generated at runtime by `SandboxGraphProvider`
 - Image build requires `openclaw:local` which is ~4GB
