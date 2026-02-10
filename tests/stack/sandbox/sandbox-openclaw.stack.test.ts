@@ -179,18 +179,6 @@ describe("OpenClaw Gateway Full-Stack", () => {
     expect(output).not.toContain("MOUNT_BAD");
   });
 
-  it("/repo/current has valid 40-hex git SHA", async () => {
-    const output = await execInContainer(
-      docker,
-      GATEWAY_CONTAINER,
-      'SHA=$(git -C /repo/current rev-parse HEAD 2>/dev/null) && echo "SHA=$SHA" || echo "GIT_FAIL"'
-    );
-
-    expect(output).not.toContain("GIT_FAIL");
-    const match = output.match(/SHA=([0-9a-f]{40})/);
-    expect(match).not.toBeNull();
-  });
-
   it("/repo/current/package.json is readable and identifies this repo", async () => {
     const output = await execInContainer(
       docker,

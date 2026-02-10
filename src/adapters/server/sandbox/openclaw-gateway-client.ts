@@ -492,6 +492,7 @@ export class OpenClawGatewayClient {
         | { kind: "done" }
         | { kind: "error"; error: Error }
         | { kind: "event"; value: GatewayAgentEvent }
+        | { kind: "ws_closed" }
     ) => void
   ): Promise<() => string> {
     let nextId = 0;

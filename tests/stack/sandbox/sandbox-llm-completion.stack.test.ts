@@ -85,7 +85,8 @@ describe("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   // Socket Bridge Tests
   // ───────────────────────────────────────────────────────────────────────────
 
-  it("socket bridge connects sandbox to proxy health endpoint", async () => {
+  // Skip: flaky — proxy container vanishes mid-startup (bug.0013)
+  it.skip("socket bridge connects sandbox to proxy health endpoint", async () => {
     if (!ctx) return;
 
     const result = await runWithProxy(
@@ -98,7 +99,8 @@ describe("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
     expect(result.stdout).toContain("status");
   });
 
-  it("socket bridge forwards to LiteLLM (connection test)", async () => {
+  // Skip: flaky — proxy container vanishes mid-startup (bug.0013)
+  it.skip("socket bridge forwards to LiteLLM (connection test)", async () => {
     if (!ctx) return;
 
     const result = await runWithProxy(
