@@ -31,7 +31,7 @@
   },
   "agents": {
     "defaults": {
-      "model": { "primary": "cogni/nemotron-nano-30b" },
+      "model": { "primary": "cogni/test-model" },
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
       "timeoutSeconds": 540
