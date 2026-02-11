@@ -9,7 +9,7 @@ summary: OpenClaw agent runtime in Cogni — two execution modes (ephemeral sand
 read_when: Implementing OpenClaw sandbox or gateway agent, modifying container images, or debugging sandbox LLM calls
 owner: derekg1729
 created: 2026-02-07
-verified: 2026-02-11
+verified: 2026-02-12
 tags: [sandbox, openclaw, ai-agents]
 ---
 
@@ -20,16 +20,16 @@ tags: [sandbox, openclaw, ai-agents]
 
 ## Execution Modes
 
-|                       | Ephemeral                                    | Gateway                                                                               |
-| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Container**         | `cogni-sandbox-openclaw:latest`              | `openclaw-outbound-headers:latest` (`ghcr.io/cogni-dao/openclaw-outbound-headers:v0`) |
-| **Lifecycle**         | One-shot per run, destroyed after            | Long-running compose service, shared                                                  |
-| **Network**           | `network=none` (isolated)                    | `sandbox-internal` (Docker DNS)                                                       |
-| **Invocation**        | CLI: `--local --agent main --message ...`    | WS: custom frame protocol on port 18789                                               |
-| **Concurrency**       | Single user per container                    | Multiple concurrent sessions                                                          |
-| **LLM proxy**         | Per-run nginx via unix socket (socat)        | Shared nginx (`llm-proxy-openclaw:8080`) via TCP                                      |
-| **Billing headers**   | Proxy **overwrites** `x-litellm-end-user-id` | OpenClaw **injects** per-session via `outboundHeaders`; proxy **passes through**      |
-| **Session isolation** | Container boundary (invariant 19)            | Session key: `agent:main:{billingAccountId}:{runId}`                                  |
+|                       | Ephemeral                                    | Gateway                                                                          |
+| --------------------- | -------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Container**         | `cogni-sandbox-openclaw:latest`              | `cogni-sandbox-openclaw:latest` (entrypoint overridden to gateway mode)          |
+| **Lifecycle**         | One-shot per run, destroyed after            | Long-running compose service, shared                                             |
+| **Network**           | `network=none` (isolated)                    | `sandbox-internal` (Docker DNS)                                                  |
+| **Invocation**        | CLI: `--local --agent main --message ...`    | WS: custom frame protocol on port 18789                                          |
+| **Concurrency**       | Single user per container                    | Multiple concurrent sessions                                                     |
+| **LLM proxy**         | Per-run nginx via unix socket (socat)        | Shared nginx (`llm-proxy-openclaw:8080`) via TCP                                 |
+| **Billing headers**   | Proxy **overwrites** `x-litellm-end-user-id` | OpenClaw **injects** per-session via `outboundHeaders`; proxy **passes through** |
+| **Session isolation** | Container boundary (invariant 19)            | Session key: `agent:main:{billingAccountId}:{runId}`                             |
 
 ## Context
 
@@ -85,7 +85,11 @@ Define the invariants and design contracts for running OpenClaw in Cogni: which 
 
 25. **HEARTBEAT_DISABLED**: OpenClaw heartbeats (`heartbeat.every`) are set to `"0"` in both `openclaw-gateway.json` and `openclaw-gateway.test.json`, disabling the heartbeat runner entirely. Heartbeats serve no purpose for backend agent usage and cause `HEARTBEAT_OK` contamination when combined with broadcast chat events (see bug.0021).
 
-26. **SESSION_MODEL_OVERRIDE**: `SandboxGraphProvider.createGatewayExecution()` calls `configureSession(sessionKey, outboundHeaders, model)` before every `runAgent()` call. OpenClaw's `sessions.patch` handler resolves the model through the gateway model catalog and sets `modelOverride`/`providerOverride` on the session entry. Without this, the gateway uses its config default model regardless of `GraphRunRequest.model`. See `openclaw-gateway-client.ts:configureSession()`, `sandbox-graph.provider.ts:476-482`.
+26. **IMAGE_FROM_PUBLISHED_BASE**: The `cogni-sandbox-openclaw` Dockerfile must reference a published GHCR OpenClaw image (with header-forwarding) as its base — never `openclaw:local`. The base is parameterized via `ARG OPENCLAW_BASE` with the GHCR tag as default.
+
+27. **COMPOSE_IMAGE_PARITY**: Dev and prod compose files reference the same `cogni-sandbox-openclaw` image tag for the `openclaw-gateway` service. Architecture differences are handled by the multi-arch manifest — not by different image references.
+
+28. **SESSION_MODEL_OVERRIDE**: `SandboxGraphProvider.createGatewayExecution()` calls `configureSession(sessionKey, outboundHeaders, model)` before every `runAgent()` call. OpenClaw's `sessions.patch` handler resolves the model through the gateway model catalog and sets `modelOverride`/`providerOverride` on the session entry. Without this, the gateway uses its config default model regardless of `GraphRunRequest.model`. See `openclaw-gateway-client.ts:configureSession()`, `sandbox-graph.provider.ts:476-482`.
 
 ---
 
@@ -136,7 +140,7 @@ SandboxGraphProvider
          │
          ▼  WS (custom frame protocol, NOT JSON-RPC)
 ┌─────────────────────────────────────────────────────────────┐
-│ GATEWAY: openclaw-outbound-headers (sandbox-internal:18789) │
+│ GATEWAY: cogni-sandbox-openclaw (sandbox-internal:18789)    │
 │  Long-running, concurrent sessions                          │
 │  Session key: agent:main:{billingAccountId}:{runId}         │
 │                                                             │
@@ -227,45 +231,94 @@ Standard OpenAI SSE streaming response. OpenClaw's Pi runtime parses `tool_calls
 
 ---
 
-### Container Images
+### Container Image
 
-#### Ephemeral: `cogni-sandbox-openclaw:latest`
+One image for both modes: `cogni-sandbox-openclaw:latest` (`ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`).
 
-Thin layer over `openclaw:local` — adds socat and the sandbox entrypoint:
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Image Build (multi-stage)                                             │
+│                                                                        │
+│  Stage 1: GHCR openclaw-outbound-headers ──────────────────────┐       │
+│    (forked header-forwarding OpenClaw, /app runtime)           │       │
+│                                                                │       │
+│  Stage 2: node:22-bookworm                                     │       │
+│    ├── COPY --from=stage1 /app  ◄──────────────────────────────┘       │
+│    ├── apt: socat, git, jq, curl                                       │
+│    ├── corepack: pnpm@9.12.2                                           │
+│    ├── ENV PNPM_STORE_DIR=/pnpm-store                                  │
+│    ├── ENV HOME=/workspace                                             │
+│    ├── user: sandboxer (1001:1001)                                     │
+│    └── entrypoint: sandbox-entrypoint.sh (socat bridge)                │
+│                                                                        │
+│  Output: cogni-sandbox-openclaw:latest                                 │
+└─────────────────────────────────────────────────────────────────────────┘
 
-```dockerfile
-FROM openclaw:local
-USER root
-RUN apt-get update && apt-get install -y --no-install-recommends socat \
-  && rm -rf /var/lib/apt/lists/*
-COPY entrypoint.sh /usr/local/bin/sandbox-entrypoint.sh
-RUN chmod 755 /usr/local/bin/sandbox-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/sandbox-entrypoint.sh"]
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Runtime: Gateway Mode                                                 │
+│  compose entrypoint override: ["node", "/app/dist/index.js", "gateway"]│
+│  (sandbox-entrypoint.sh bypassed — devtools unused but present)        │
+│                                                                        │
+│  Runtime: Ephemeral Mode                                               │
+│  default entrypoint: sandbox-entrypoint.sh (socat + bash -lc "$@")    │
+│  (devtools available: pnpm, git for coding agents)                     │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-No multi-stage build, no file pruning, no user creation (adapter sets `User` at container create time). Build: `docker build -t cogni-sandbox-openclaw services/sandbox-openclaw`.
+#### Image Build Parameterization
 
-#### Gateway: `openclaw-outbound-headers:latest`
+```dockerfile
+ARG OPENCLAW_BASE=ghcr.io/cogni-dao/openclaw-outbound-headers:latest
+FROM ${OPENCLAW_BASE} AS openclaw
+FROM node:22-bookworm
+COPY --from=openclaw /app /app
+# ... devtools, sandboxer user, entrypoint
+```
 
-Patched OpenClaw image with `outboundHeaders` support on the WS protocol. Published to `ghcr.io/cogni-dao/openclaw-outbound-headers:v0`. Based on `openclaw:local` (v2026.2.4). No socat needed — gateway uses TCP on `sandbox-internal` directly.
+Per-arch override at build time:
 
-Entrypoint: `node /app/dist/index.js gateway` (port 18789, `gateway.auth.mode: "token"`).
+| Arch  | `OPENCLAW_BASE`                                           |
+| ----- | --------------------------------------------------------- |
+| arm64 | `ghcr.io/cogni-dao/openclaw-outbound-headers:latest`      |
+| amd64 | `ghcr.io/cogni-dao/node-template:openclaw-gateway-latest` |
 
-Config bind-mounted at `/etc/openclaw/openclaw.json:ro`. State at `/tmp/openclaw-state` (writable tmpfs). See [gateway integration handoff](../research/openclaw-gateway-integration-handoff.md) for WS protocol details.
+Published as multi-arch manifest: `ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`. Docker resolves the correct arch automatically.
+
+#### Storage Volumes
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Container: cogni-sandbox-openclaw                          │
+│                                                             │
+│  /workspace/          ← RW repo checkout (agent edits here) │
+│  /pnpm-store/         ← persistent pnpm CAS (named volume)  │
+│  /app/                ← OpenClaw runtime (from image, RO)    │
+│  /etc/openclaw/       ← config bind-mount (RO)               │
+│  /llm-sock/           ← LLM proxy unix socket (volume)       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Volume       | Mount         | Purpose                                      | Persists? |
+| ------------ | ------------- | -------------------------------------------- | --------- |
+| `pnpm_store` | `/pnpm-store` | pnpm content-addressable store across runs   | Yes       |
+| `repo_data`  | `/repo`       | git-synced codebase mirror (gateway: RO)     | Yes       |
+| workspace    | `/workspace`  | agent working directory (ephemeral or tmpfs) | Per-mode  |
+
+`PNPM_STORE_DIR=/pnpm-store` is set in the image ENV. First `pnpm install` populates the store; subsequent installs relink from cache (~250ms vs ~5s cold).
+
+**Temporary (P0):** Agent's first action must be `pnpm install --offline --frozen-lockfile` in the RW workspace. P1 replaces this with a compose bootstrap service (task.0036).
 
 #### Entrypoint
 
-Reuses the existing `sandbox-entrypoint.sh` pattern from P0.5 (starts socat, then execs the command). No changes needed — the entrypoint already bridges `localhost:8080 → /llm-sock/llm.sock` and runs `bash -lc "$@"`.
+`sandbox-entrypoint.sh`: starts socat bridge (`localhost:8080 → /llm-sock/llm.sock`), then execs `bash -lc "$@"`. Gateway mode overrides entrypoint entirely.
 
 #### ReadonlyRootfs Compatibility
 
-The `SandboxRunnerAdapter` sets `ReadonlyRootfs: true` with tmpfs at `/tmp` (64m) and `/run` (8m). OpenClaw needs writable paths controlled via env:
+`ReadonlyRootfs: true` with tmpfs at `/tmp` and `/run`. Writable paths:
 
-- **`/workspace/.openclaw/`** — config file (`OPENCLAW_CONFIG_PATH`) → on workspace bind mount (rw), OK
-- **`/workspace/.openclaw-state/`** — sessions, transcripts, caches (`OPENCLAW_STATE_DIR`) → on workspace bind mount (rw), OK
-- **`/workspace/`** — `HOME=/workspace` ensures any `$HOME` writes go to writable mount, not readonly rootfs
-
-**Resolved (OQ-8)**: OpenClaw's `resolveStateDir()` defaults to `$HOME/.openclaw` if `OPENCLAW_STATE_DIR` is not set. Setting `OPENCLAW_STATE_DIR=/workspace/.openclaw-state` and `HOME=/workspace` prevents all writes to readonly paths. Verified in `src/config/paths.ts:49-74`.
+- `/workspace/` — `HOME=/workspace`, agent file ops, OpenClaw config/state
+- `/pnpm-store/` — named volume for pnpm CAS
+- `OPENCLAW_STATE_DIR=/workspace/.openclaw-state` prevents writes to readonly rootfs
 
 ---
 
@@ -618,6 +671,8 @@ This is acceptable for single-turn task execution ("fix this bug", "write this f
 | Leave `web_fetch`/`browser` enabled      | Immediate failure (`network=none`); confuses agent               |
 | Proxy OpenClaw dashboard                 | Network + ports required; not until P2+                          |
 | Persist sessions without workspace mount | Session state lost on container exit                             |
+| `FROM openclaw:local` in published image | Non-deterministic; may lack header-forwarding (invariant 26)     |
+| Different images for dev vs prod gateway | Compose drift; violates COMPOSE_IMAGE_PARITY (invariant 27)      |
 
 ## Acceptance Checks
 
@@ -656,6 +711,12 @@ The `SandboxRunnerAdapter` hardcodes `User: "sandboxer"` (uid 1001). The host-mo
 OpenClaw receives the prompt via CLI `--message` flag. For very long prompts (e.g., pasting an entire file for review), this could hit shell argument limits (typically 128KB–2MB depending on OS). Alternative: write message to a file and use shell substitution `--message "$(cat file)"`.
 
 **Resolution**: Our invocation already uses `$(cat /workspace/.cogni/prompt.txt)`. Verify this works for prompts up to the shell limit. For larger inputs, consider writing a wrapper script inside the container.
+
+### OQ-9: Egress Policy for `pnpm install` Inside Container
+
+The devtools image includes pnpm, and the `pnpm_store` volume enables fast installs. But `pnpm install` requires network access to a package registry. In ephemeral mode (`network=none`), this is impossible. In gateway mode (`sandbox-internal`), only Docker DNS is available — no internet egress.
+
+Options: (a) host pre-seeds `node_modules` on the workspace volume before mounting, (b) allow minimum egress from `sandbox-internal` to an internal npm proxy/mirror, (c) pre-populate `pnpm_store` volume from host.
 
 ## Related
 
