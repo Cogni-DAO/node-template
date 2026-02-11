@@ -2,8 +2,9 @@
 id: openclaw-thread-persistence-duplication
 type: research
 title: "Thread Persistence Scoping: ai_threads vs Executor State vs Industry Patterns"
-status: draft
-trust: draft
+status: active
+trust: reviewed
+verified: 2026-02-11
 summary: Analysis of ai_threads persistence scoping against OpenClaw's JSONL transcripts, LangGraph checkpoints, and industry patterns (OpenAI Conversations API, AI SDK). Identifies sandbox opacity as the real gap — ai_threads loses all intermediate tool-use for black-box executors. Recommends dual-store UI projection for P0, gateway streaming enrichment for P1.
 read_when: Working on thread persistence, OpenClaw multi-turn, sandbox observability, or evaluating executor state ownership
 owner: cogni-dev

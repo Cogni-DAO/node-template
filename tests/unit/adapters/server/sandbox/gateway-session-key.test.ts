@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/unit/adapters/server/sandbox/gateway-session-key.test`
  * Purpose: Verify gateway session key uses stateKey for multi-turn continuity.
- * Scope: Unit tests for SandboxGraphProvider gateway execution path.
+ * Scope: Unit tests for SandboxGraphProvider gateway execution path. Does not test ephemeral mode or billing.
  * Invariants:
  *   - Gateway session key derived from stateKey (stable per conversation), not runId
  *   - stateKey is required for gateway mode — throws if missing
