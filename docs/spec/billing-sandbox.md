@@ -8,7 +8,7 @@ summary: How LLM calls made inside sandbox containers are billed via nginx proxy
 read_when: Working on sandbox billing, proxy configuration, or UsageFact emission for sandboxed agents
 owner: derekg1729
 created: 2026-02-08
-verified: 2026-02-08
+verified: 2026-02-11
 tags: [sandbox, billing, proxy]
 ---
 
@@ -92,9 +92,29 @@ interface SandboxRunResult {
 }
 ```
 
+## Gateway Mode (OpenClaw)
+
+Gateway mode uses a **long-running** shared proxy (`llm-proxy-openclaw`) instead of ephemeral per-run containers. The billing read path differs:
+
+- **Audit log format**: JSONL (`escape=json`) at `/billing/audit.jsonl` on a shared Docker volume (`openclaw_billing`)
+- **Read path**: `ProxyBillingReader` tail-reads last 2MB from the shared volume (filesystem read, no docker exec). Retry with 500ms/1s/2s backoff for nginx flush latency.
+- **Correlation**: `x-cogni-run-id` header (set by OpenClaw per-session via `outboundHeaders`) filters entries by `run_id`
+- **NO_DOCKERODE_IN_BILLING_PATH**: App container reads from shared volume, never uses docker exec or docker.sock
+- **Billing misconfiguration**: Gateway mode throws if `billingReader` or `gatewayProxyContainer` is missing (hard error, not warn)
+
+| Component               | Gateway mode file                                                      |
+| ----------------------- | ---------------------------------------------------------------------- |
+| **Nginx gateway proxy** | `platform/infra/services/sandbox-proxy/nginx-gateway.conf.template`    |
+| **ProxyBillingReader**  | `src/adapters/server/sandbox/proxy-billing-reader.ts`                  |
+| **Volume (prod)**       | `openclaw_billing` named volume (app `:ro`, proxy rw)                  |
+| **Volume (dev)**        | `${OPENCLAW_BILLING_HOST_DIR:-/tmp/cogni-openclaw-billing}` bind mount |
+
+**Superseded by**: [billing-ingest](./billing-ingest.md) spec designs callback-driven billing that eliminates all log scraping for both ephemeral and gateway modes.
+
 ## Comparison with In-Proc
 
 Both paths produce the same `UsageFact` shape. The difference is where headers are captured:
 
 - **In-proc:** `InProcCompletionUnitAdapter` reads LiteLLM response headers directly, emits `usage_report` immediately.
-- **Sandbox:** Nginx proxy writes headers to audit log. Host parses log post-run, `SandboxGraphProvider` emits `usage_report` per entry.
+- **Sandbox (ephemeral):** Per-run nginx proxy writes headers to audit log. `LlmProxyManager` copies log via docker exec post-run, `SandboxGraphProvider` emits `usage_report` per entry.
+- **Sandbox (gateway):** Long-running nginx proxy writes JSONL audit log to shared volume. `ProxyBillingReader` tail-reads entries by `run_id`, `SandboxGraphProvider` emits `usage_report` per entry.

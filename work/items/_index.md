@@ -29,6 +29,7 @@
 | 1   | 1   | In Progress | bug.0011   | Gateway streaming truncates output mid-sentence in UI                                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Done        | task.0007  | Billing enforcement decorator at GraphExecutorPort                                   | Unified Graph Launch       | proj.unified-graph-launch       |
 | 1   | 3   | Todo        | task.0006  | Collapse GraphProvider — single execution interface                                  | Unified Graph Launch       | proj.unified-graph-launch       |
+| 1   | 3   | Todo        | task.0030  | Thread persistence P0 — ai_threads table, port, route bridge                         | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Todo        | task.0009  | Sandbox repo refresh: on-demand git-sync for agent workspace                         | Sandboxed Agents           | proj.sandboxed-agents           |
 | 1   | 3   | Backlog     | bug.0004   | /activity dashboard cost column broken                                               | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 1   | Todo        | task.0018  | Dynamic agent catalog in UI + OpenClaw model sync                                    | OpenClaw Capabilities      | proj.openclaw-capabilities      |
