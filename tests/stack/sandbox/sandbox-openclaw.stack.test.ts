@@ -26,6 +26,7 @@ import {
   OpenClawGatewayClient,
 } from "@/adapters/server/sandbox/openclaw-gateway-client";
 import { ProxyBillingReader } from "@/adapters/server/sandbox/proxy-billing-reader";
+import { serverEnv } from "@/shared/env/server";
 
 import { execInContainer } from "../../_fixtures/sandbox/fixtures";
 
@@ -50,10 +51,32 @@ const LITELLM_MODEL_IDS: Record<string, string> = {
     "4bc3010e9687ca1b5962c19db9bfbecdcbdf53d4248a2cdd0eebfd1a58420075",
 };
 
-/** Extract litellm_model_id hash from an audit log line. */
-function extractModelId(auditLine: string): string {
-  const match = auditLine.match(/litellm_model_id=(\S+)/);
-  return match?.[1] ?? "-";
+/** Extract litellm_model_id from JSONL audit log entries matching a runId. */
+function extractModelId(runId: string, billingDir: string): string {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const logPath = path.join(billingDir, "audit.jsonl");
+  try {
+    const content = fs.readFileSync(logPath, "utf-8") as string;
+    for (const line of content.split("\n").reverse()) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as Record<string, string>;
+        if (
+          entry.run_id === runId &&
+          entry.litellm_model_id &&
+          entry.litellm_model_id !== "-"
+        ) {
+          return entry.litellm_model_id;
+        }
+      } catch {
+        /* skip malformed */
+      }
+    }
+  } catch {
+    /* file missing */
+  }
+  return "-";
 }
 
 function uniqueRunId(prefix = "gw-test"): string {
@@ -88,6 +111,7 @@ async function isContainerHealthy(
 let client: OpenClawGatewayClient;
 let billingReader: ProxyBillingReader;
 let docker: Docker;
+let billingDir: string;
 
 describe("OpenClaw Gateway Full-Stack", () => {
   beforeAll(async () => {
@@ -108,8 +132,7 @@ describe("OpenClaw Gateway Full-Stack", () => {
     }
 
     client = new OpenClawGatewayClient(GATEWAY_URL, GATEWAY_TOKEN);
-    const billingDir =
-      process.env.OPENCLAW_BILLING_DIR ?? "/tmp/cogni-openclaw-billing";
+    billingDir = serverEnv().OPENCLAW_BILLING_DIR;
     billingReader = new ProxyBillingReader(billingDir);
   });
 
@@ -377,16 +400,11 @@ describe("OpenClaw Gateway Full-Stack", () => {
       })
     );
 
-    // Assert ACTUAL model from LiteLLM response header in proxy audit log.
+    // Assert ACTUAL model from LiteLLM response header in proxy audit log (JSONL on shared volume).
     // litellm_model_id is a deployment hash available even in SSE streaming mode
     // (unlike litellm_model_group which LiteLLM omits from streaming response headers).
     await new Promise((r) => setTimeout(r, 1000));
-    const auditOutput = await execInContainer(
-      docker,
-      PROXY_CONTAINER,
-      `grep "run_id=${runId}" /tmp/audit.log`
-    );
-    const modelId = extractModelId(auditOutput);
+    const modelId = extractModelId(runId, billingDir);
     expect(modelId).toBe(LITELLM_MODEL_IDS["test-free-model"]);
     expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
   });
@@ -419,12 +437,7 @@ describe("OpenClaw Gateway Full-Stack", () => {
     );
 
     await new Promise((r) => setTimeout(r, 1000));
-    const auditOutput = await execInContainer(
-      docker,
-      PROXY_CONTAINER,
-      `grep "run_id=${runId}" /tmp/audit.log`
-    );
-    const modelId = extractModelId(auditOutput);
+    const modelId = extractModelId(runId, billingDir);
     expect(modelId).toBe(LITELLM_MODEL_IDS["test-paid-model"]);
     expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
   });

@@ -4,7 +4,7 @@
 /**
  * Module: `@adapters/server/sandbox/proxy-billing-reader`
  * Purpose: Reads billing entries from the proxy's audit log via shared volume.
- * Scope: Tail-reads JSONL audit log on disk, filters by runId. No Docker socket needed.
+ * Scope: Tail-reads JSONL audit log on disk, filters by runId. Does not use Docker socket or dockerode.
  * Invariants:
  *   - Per BILLING_INDEPENDENT_OF_CLIENT: billing data comes from proxy audit log, not agent
  *   - Per NO_DOCKERODE_IN_BILLING_PATH: reads from shared volume, never uses docker exec
