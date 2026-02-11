@@ -6,7 +6,7 @@ status: Todo
 priority: 0
 estimate: 3
 summary: Rebuild cogni-sandbox-openclaw Dockerfile as multi-stage — node:20 base with devtools (pnpm, git, socat), OpenClaw runtime rebuilt for node:20 ABI. Deps NOT baked; fast installs via pnpm-store named volume. One image for both gateway and ephemeral.
-outcome: Single image with OpenClaw on node:20 + Cogni devtools. First pnpm install populates cache volume; subsequent runs complete in seconds. Gateway compose uses new image with cache volume. Ephemeral mode uses identical image + same workspace contract.
+outcome: Single image with OpenClaw on node:20 + Cogni devtools. First pnpm install populates store volume; subsequent runs are fast relink/verify with minimal downloads. Gateway compose uses new image with cache volume. Ephemeral mode uses identical image + same workspace contract.
 spec_refs: openclaw-sandbox-spec, sandboxed-agents-spec
 assignees: derekg1729
 credit:
@@ -34,13 +34,13 @@ Today `cogni-sandbox-openclaw` is a thin layer over `openclaw:local` (node:22-bo
 
 - Single Dockerfile produces one image for **both** gateway (long-running) and ephemeral (one-shot) modes
 - Image based on `node:20-bookworm` (Cogni's required engine version)
-- OpenClaw runtime rebuilt for node:20 ABI at image build time — copy source + manifests from `openclaw:local`, then `pnpm install --frozen-lockfile` in the node:20 stage (rebuilds native modules correctly)
+- OpenClaw runtime rebuilt for node:20 ABI at image build time — copy `/app` from `openclaw:local`, then reinstall deps in the node:20 stage (rebuilds native modules correctly). Guard: use `--frozen-lockfile` if `pnpm-lock.yaml` exists, otherwise fall back to plain `pnpm install`
 - System tools installed: `socat`, `git`, `jq`, `curl`
 - `pnpm@9.12.2` installed (Cogni's pinned version, matches `packageManager` field)
 - `sandboxer` user (uid 1001, gid 1001) preserved for sandbox adapter compatibility
 - Existing `entrypoint.sh` (socat bridge) preserved — same entrypoint for both modes
 - **No Cogni node_modules baked in** — deps installed at runtime via `pnpm install` using cache volume
-- Compose updated: named volume `pnpm_store` mounted into gateway container for fast installs
+- Compose updated: named volume `pnpm_store` mounted at `/pnpm-store`, `PNPM_STORE_DIR=/pnpm-store` set in env
 - Gateway compose service updated to use new image
 - Build script: `pnpm sandbox:openclaw:docker:build` builds the unified image
 - No secrets in image (SECRETS_HOST_ONLY upheld)
@@ -69,10 +69,17 @@ Stage 1 — FROM openclaw:local AS openclaw
 Stage 2 — FROM node:20-bookworm
   Install system deps: socat, git, jq, curl
   Enable corepack, prepare pnpm@9.12.2
+  ENV PNPM_STORE_DIR=/pnpm-store
   COPY --from=openclaw /app /app
   WORKDIR /app
-  RUN pnpm install --frozen-lockfile     ← rebuilds native modules for node:20
+  # Rebuild OpenClaw deps for node:20 ABI.
+  # Guard: if pnpm-lock.yaml exists, use --frozen-lockfile;
+  # otherwise fall back to plain pnpm install (OpenClaw may use
+  # a different lockfile name or install method).
+  RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; \
+      else pnpm install; fi
   Create sandboxer user (1001:1001)
+  RUN mkdir -p /pnpm-store && chown sandboxer:sandbox /pnpm-store
   COPY entrypoint.sh
   WORKDIR /workspace
   ENTRYPOINT sandbox-entrypoint.sh
@@ -80,12 +87,13 @@ Stage 2 — FROM node:20-bookworm
 
 ### Runtime Workspace Contract
 
-At runtime, the agent gets a **RW workspace** (either host-cloned for ephemeral, or tmpfs for gateway). To run Cogni tools:
+The image is **orchestration-agnostic** — it does not assume how the workspace is populated. That's the provider's job (task.0022 for git relay, gateway runner for chat mode). The image provides:
 
-1. **`/repo/current`** — read-only git-sync source (reference)
-2. **`/workspace/`** — writable working directory
-3. Agent (or entrypoint) copies/clones source into `/workspace/`, runs `pnpm install`
-4. **`pnpm_store` volume** mounted at pnpm's store dir — first install populates it, subsequent installs resolve from cache (~10-30s)
+1. **`/workspace/`** — empty writable working directory (populated at runtime by provider)
+2. **`/pnpm-store/`** — mount point for pnpm store named volume (`PNPM_STORE_DIR=/pnpm-store`)
+3. **Devtools** — `pnpm`, `git`, `node`, `socat` available on PATH
+
+The provider (not the image) is responsible for cloning/copying source into `/workspace/` and running `pnpm install`. The pnpm store volume ensures first install populates the cache; subsequent installs are fast relink/verify with minimal downloads.
 
 ### Compose Changes
 
@@ -93,8 +101,10 @@ At runtime, the agent gets a **RW workspace** (either host-cloned for ephemeral,
 openclaw-gateway:
   image: cogni-sandbox-openclaw:latest # was: openclaw-outbound-headers:latest
   entrypoint: ["node", "/app/dist/index.js", "gateway"]
+  environment:
+    - PNPM_STORE_DIR=/pnpm-store
   volumes:
-    - pnpm_store:/home/sandboxer/.local/share/pnpm/store # persistent cache
+    - pnpm_store:/pnpm-store # persistent pnpm content-addressable store
     # ... existing volumes unchanged
 ```
 
@@ -116,13 +126,14 @@ volumes:
 
 ## Plan
 
-- [ ] Verify OpenClaw runtime works on node:20: build a test container with `FROM node:20-bookworm`, copy `/app` from `openclaw:local`, run `pnpm install --frozen-lockfile` to rebuild native modules, verify `node /app/dist/index.js --version` succeeds
+- [ ] Verify OpenClaw runtime works on node:20: build a test container with `FROM node:20-bookworm`, copy `/app` from `openclaw:local`, reinstall deps (guarded: `--frozen-lockfile` if lockfile exists, else plain install), verify `node /app/dist/index.js --version` succeeds
 - [ ] Rewrite `services/sandbox-openclaw/Dockerfile` as multi-stage:
   - Stage 1: `FROM openclaw:local AS openclaw`
-  - Stage 2: `FROM node:20-bookworm` — install system tools, pnpm@9.12.2, copy `/app` from stage 1, `pnpm install --frozen-lockfile` in `/app`, create sandboxer user, copy entrypoint
+  - Stage 2: `FROM node:20-bookworm` — install system tools, pnpm@9.12.2, `ENV PNPM_STORE_DIR=/pnpm-store`, copy `/app` from stage 1, guarded reinstall in `/app`, create sandboxer user + `/pnpm-store` dir, copy entrypoint
 - [ ] Update `docker-compose.dev.yml`:
   - Change `openclaw-gateway` image from `openclaw-outbound-headers:latest` to `cogni-sandbox-openclaw:latest`
-  - Add `pnpm_store` named volume, mount into gateway service
+  - Add `pnpm_store` named volume mounted at `/pnpm-store`
+  - Add `PNPM_STORE_DIR=/pnpm-store` to environment
   - Keep existing entrypoint override for gateway mode
 - [ ] Add `sandbox:openclaw:docker:build` script to root `package.json` (build context = repo root to allow future Cogni manifest copying if needed, Dockerfile = `services/sandbox-openclaw/Dockerfile`)
 - [ ] Verify gateway mode: `pnpm sandbox:openclaw:docker:build && pnpm dev:infra` — gateway starts, healthcheck passes
@@ -158,11 +169,24 @@ docker run --rm cogni-sandbox-openclaw:latest socat -V 2>&1 | head -1
 # Verify no Cogni deps baked in
 docker run --rm cogni-sandbox-openclaw:latest test -d /opt/cogni && echo "FAIL: baked deps" || echo "PASS"
 
-# Verify pnpm cache volume (second install faster)
+# Verify pnpm store volume (second install relinks from cache)
 docker volume create pnpm_store_test
-docker run --rm -v pnpm_store_test:/home/sandboxer/.local/share/pnpm/store cogni-sandbox-openclaw:latest sh -c "cd /tmp && pnpm init && pnpm add zod && echo 'first install done'"
-docker run --rm -v pnpm_store_test:/home/sandboxer/.local/share/pnpm/store cogni-sandbox-openclaw:latest sh -c "cd /tmp && pnpm init && pnpm add zod && echo 'second install done (should be fast)'"
-docker volume rm pnpm_store_test
+docker volume create workspace_test
+# First run: cold install populates store
+docker run --rm \
+  -v pnpm_store_test:/pnpm-store \
+  -v workspace_test:/workspace \
+  -e PNPM_STORE_DIR=/pnpm-store \
+  cogni-sandbox-openclaw:latest \
+  sh -c "cd /workspace && pnpm init && pnpm add zod && echo 'first install done'"
+# Second run: same workspace + store — should be fast relink
+docker run --rm \
+  -v pnpm_store_test:/pnpm-store \
+  -v workspace_test:/workspace \
+  -e PNPM_STORE_DIR=/pnpm-store \
+  cogni-sandbox-openclaw:latest \
+  sh -c "cd /workspace && pnpm install && echo 'second install done (fast relink)'"
+docker volume rm pnpm_store_test workspace_test
 
 # Gateway starts with healthcheck
 pnpm sandbox:openclaw:docker:build && pnpm dev:infra
@@ -171,7 +195,7 @@ pnpm sandbox:openclaw:docker:build && pnpm dev:infra
 pnpm check
 ```
 
-**Expected:** Image builds. OpenClaw reports version on node:20. pnpm, git, socat present. No baked Cogni deps. Second pnpm install is fast via cache. Gateway healthcheck passes.
+**Expected:** Image builds. OpenClaw reports version on node:20. pnpm, git, socat present. No baked Cogni deps. Second pnpm install is fast relink from store. Gateway healthcheck passes.
 
 ## Review Checklist
 
