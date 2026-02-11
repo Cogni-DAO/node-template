@@ -151,12 +151,11 @@ Persistence is handled by parallel stream subscribers — runner owns event emis
 | **BillingSubscriber** | `usage_report`     | `commitUsageFact()` → charge_receipts |
 | **UI Subscriber**     | `text_delta`, etc. | Forward to client (may disconnect)    |
 
-Key contracts from [Chat Persistence spec](./chat-persistence.md):
+Key contracts from [Thread Persistence spec](./thread-persistence.md):
 
 - **UIMESSAGE_IS_CONTRACT**: Thread messages stored as AI SDK `UIMessage[]` JSONB. No bespoke artifact tables.
-- **LANGGRAPH_THREAD_DUALITY**: For `langgraph_server`, LangGraph checkpoints are canonical. `chat_threads` is a projection for UI history.
 - **REDACT_BEFORE_PERSIST**: PII masking applied before `saveThread()`. Single redaction boundary.
-- **TENANT_SCOPED**: All `chat_threads` rows include `owner_user_id`. RLS enforces isolation via `app.current_user_id`.
+- **TENANT_SCOPED**: All `ai_threads` rows include `owner_user_id`. RLS enforces isolation via `app.current_user_id`.
 
 Runner responsibility: Emit `assistant_final` with complete content. Route accumulates AiEvents into response UIMessage for persistence.
 
@@ -301,5 +300,5 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 - [Graph Execution](graph-execution.md) — Executor-agnostic billing, tracking, UI/UX patterns
 - [LangGraph Server](../LANGGRAPH_SERVER.md) — Infrastructure: Docker, Redis, container deployment
 - [Tool Use Spec](./tool-use.md) — Tool execution invariants
-- [Chat Persistence Spec](./chat-persistence.md) — UIMessage persistence, assistant_final accumulation
+- [Thread Persistence Spec](./thread-persistence.md) — UIMessage persistence, assistant_final accumulation
 - [AI Setup Spec](./ai-setup.md) — Correlation IDs, telemetry

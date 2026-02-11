@@ -1,13 +1,13 @@
 ---
-id: chat-persistence
+id: thread-persistence
 type: spec
-title: Chat Persistence & Transcript Authority
+title: Thread Persistence & Transcript Authority
 status: draft
 spec_state: draft
 trust: draft
-summary: Server-authoritative conversation persistence using AI SDK UIMessage[] per thread. Client sends only the new user message; server loads history from DB, executes graph, persists response UIMessages after pump completion. AiEvent remains the internal executor stream contract, bridged to AI SDK stream parts at the route layer.
-read_when: Working on chat API, message persistence, multi-turn conversation state, assistant-ui transport, or message security model
-implements: proj.usage-history-persistence
+summary: Server-authoritative conversation persistence using AI SDK UIMessage[] per thread. Server extracts the last user message from the client payload, loads authoritative history from DB, executes graph, persists response UIMessages after pump completion. AiEvent remains the internal executor stream contract, bridged to AI SDK stream parts at the route layer.
+read_when: Working on thread API, message persistence, multi-turn conversation state, assistant-ui transport, or message security model
+implements: proj.thread-persistence
 owner: cogni-dev
 created: 2026-02-10
 verified:
@@ -18,15 +18,15 @@ tags:
   - tenant-isolation
 ---
 
-# Chat Persistence & Transcript Authority
+# Thread Persistence & Transcript Authority
 
-> Server owns conversation history as `UIMessage[]` per thread. Client sends `{threadId, message}` (one user message); server loads thread from DB, converts to `ModelMessage[]`, runs graph, constructs response `UIMessage` from AiEvent stream, persists full thread after pump completion. AiEvent is the internal executor/decorator stream contract — bridged to AI SDK stream parts at the route layer. No bespoke event-sourcing, no run_artifacts for message content.
+> Server owns conversation history as `UIMessage[]` per thread. Client sends existing `messages[]` payload; server selects the last entry with `role === "user"` and uses only that text as input (400 if none found), loads authoritative history from `ai_threads`, converts to `ModelMessage[]`, runs graph, constructs response `UIMessage` from AiEvent stream, persists full thread after pump completion. AiEvent is the internal executor/decorator stream contract — bridged to AI SDK stream parts at the route layer. No bespoke event-sourcing, no run_artifacts for message content. P1 changes the wire contract to `{threadId, message}` alongside client migration to `useChatRuntime`.
 
 ### Key References
 
 |              |                                                                                             |                                          |
 | ------------ | ------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| **Project**  | [Usage History](../../work/projects/proj.usage-history-persistence.md)                      | Implementation roadmap                   |
+| **Project**  | [Thread Persistence](../../work/projects/proj.thread-persistence.md)                        | Implementation roadmap                   |
 | **Spec**     | [Graph Execution](./graph-execution.md)                                                     | AiEvent stream, billing decorator, pump  |
 | **Package**  | `packages/ai-core/src/events/ai-events.ts`                                                  | AiEvent types (streaming, not persisted) |
 | **OSS**      | [AI SDK Message Persistence](https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence) | Canonical server persistence pattern     |
@@ -38,19 +38,23 @@ tags:
 ### Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ POST /api/v1/ai/chat  { threadId, message: UIMessage }                      │
-│                                                                             │
-│  1. Validate: message.role === "user" (reject assistant/tool/system)        │
-│  2. Load: UIMessage[] ← ChatPersistencePort.loadThread(ownerUserId, threadId) │
-│  3. Append user message to thread                                           │
-│  4. Convert: UIMessage[] → ModelMessage[] via convertToModelMessages()      │
-│  5. Execute: graphExecutor.runGraph({ messages: ModelMessage[], ... })       │
-│  6. Stream: AiEvent → createUIMessageStream() parts → SSE to client        │
-│  7. Collect: assemble response UIMessage from AiEvent stream events         │
-│  8. Persist: ChatPersistencePort.saveThread(ownerUserId, threadId, messages)│
-│  9. Return: X-State-Key header for thread continuity                        │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ POST /api/v1/ai/chat  { messages[], model, graphName, stateKey? }            │
+│                                                                              │
+│  1. Extract: last entry where role === "user" from messages[] (400 if none)  │
+│  2. Resolve threadId: ownerUserId + stateKey                                 │
+│  3. Load: UIMessage[] ← ThreadPersistencePort.loadThread(ownerUserId, tid)   │
+│  4. Append extracted user message to server-loaded thread                    │
+│  5. Convert: UIMessage[] → ModelMessage[] via convertToModelMessages()       │
+│  6. Execute: graphExecutor.runGraph({ messages: ModelMessage[], ... })        │
+│  7. Stream: AiEvent → createUIMessageStream() parts → SSE to client         │
+│  8. Collect: assemble response UIMessage from AiEvent stream events          │
+│  9. Persist: ThreadPersistencePort.saveThread(ownerUserId, tid, messages)    │
+│ 10. Return: X-State-Key header for thread continuity                         │
+│                                                                              │
+│  NOTE: Client-supplied history is IGNORED — server loads from ai_threads.    │
+│  P1 changes contract to { threadId, message } + client useChatRuntime.       │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### AiEvent → AI SDK Stream → Persisted UIMessage
@@ -130,23 +134,30 @@ This replaces our current `toCoreMessages()` transformation. The existing `Messa
 
 ### Client Transport
 
-assistant-ui migrates from `useDataStreamRuntime` (legacy, sends full history) to `useChatRuntime` from `@assistant-ui/react-ai-sdk`:
+**P0 (backend-only, no client changes):**
 
 ```
-Current (vulnerable):
-  Client sends: { messages: [user, assistant, tool, ...], model, graphName }
-  Server: passes client history to LLM verbatim
-  Risk: client can fabricate any message role
+Client sends: { messages: [user, assistant, tool, ...], model, graphName, stateKey? }
+Server:
+  1. Selects last messages[] entry with role === "user" (400 if none)
+  2. Ignores all other client-supplied messages
+  3. Loads authoritative history from ai_threads
+  4. Appends extracted user message, runs LLM, persists
+Result: server-authored history, existing client transport unchanged
+```
 
-Target:
-  Client sends: { message: UIMessage (user only), threadId, model, graphName }
-  Server: loads history from DB, appends user message, runs LLM
-  Guarantee: server-authored history only
+**P1 (wire contract change + client migration):**
+
+```
+Client sends: { threadId, message: UIMessage (user only), model, graphName }
+Server: loads history from DB, appends user message, runs LLM
+Transport: assistant-ui migrates from useDataStreamRuntime → useChatRuntime
+  (@assistant-ui/react-ai-sdk)
 ```
 
 ## Goal
 
-- Server owns all message history as `UIMessage[]` in `chat_threads` table
+- Server owns all message history as `UIMessage[]` in `ai_threads` table
 - Client sends only the new user message; cannot fabricate assistant/tool messages
 - Multi-turn works across disconnects, refreshes, device switches (history in DB)
 - Tool messages are inherently server-authored (constructed from AiEvent stream)
@@ -160,28 +171,27 @@ Target:
 - Message editing/branching — messages grow only for MVP (no rewrite/delete of individual messages)
 - Streaming delta persistence — UIMessage stores final state, not incremental deltas
 - GDPR-compliant deletion in MVP — requires LangGraph checkpoint coordination (future)
-- LangGraph checkpoint deduplication — `chat_threads` duplicates what LangGraph checkpoints hold for `langgraph_server` executor; optimize later
+- LangGraph checkpoint coordination — if `langgraph_server` executor gains durable checkpoints, `ai_threads` becomes a UI projection; revisit then
 
 ## Invariants
 
 | Rule                      | Constraint                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SERVER_OWNS_MESSAGES      | All messages persisted server-side in `chat_threads`. The LLM prompt is loaded from DB via `convertToModelMessages()`, never from client-supplied history.                                                                                                                                                                                                                               |
-| CLIENT_SENDS_USER_ONLY    | Chat API accepts `{threadId, message: UIMessage}` where `message.role === "user"`. Server rejects assistant, tool, or system role in client-supplied message.                                                                                                                                                                                                                            |
+| SERVER_OWNS_MESSAGES      | All messages persisted server-side in `ai_threads`. The LLM prompt is loaded from DB via `convertToModelMessages()`, never from client-supplied history.                                                                                                                                                                                                                                 |
+| CLIENT_SENDS_USER_ONLY    | P0: Server selects the last `messages[]` entry with `role === "user"` and uses ONLY that text as input; all other client messages are ignored for prompt + persistence; 400 if no user message found. P1: Wire contract changes to `{threadId, message}` — server rejects non-user roles at the contract level.                                                                          |
 | TOOLS_ARE_SERVER_AUTHORED | Tool-call and tool-result parts exist only because the server's graph executor emitted `tool_call_start`/`tool_call_result` AiEvents. No client path can create tool parts.                                                                                                                                                                                                              |
 | PERSIST_AFTER_PUMP        | Response UIMessage (with text + tool parts) is persisted after `RunEventRelay.startPump()` completes. Client disconnect does not prevent persistence. Same drain guarantee billing depends on.                                                                                                                                                                                           |
-| UIMESSAGE_IS_CONTRACT     | `chat_threads.messages` stores AI SDK `UIMessage[]` directly (JSONB). Parts-based: text, tool-call with lifecycle state, tool-result. No bespoke message shapes.                                                                                                                                                                                                                         |
-| TENANT_SCOPED             | All `chat_threads` rows include `owner_user_id` (NOT NULL). RLS policy checks `owner_user_id = current_setting('app.current_user_id', true)`. Postgres enforces with `FORCE ROW LEVEL SECURITY`. Missing setting = access denied. Same pattern as `billing_accounts`.                                                                                                                    |
+| UIMESSAGE_IS_CONTRACT     | `ai_threads.messages` stores AI SDK `UIMessage[]` directly (JSONB). Parts-based: text, tool-call with lifecycle state, tool-result. No bespoke message shapes.                                                                                                                                                                                                                           |
+| TENANT_SCOPED             | All `ai_threads` rows include `owner_user_id` (NOT NULL). RLS policy checks `owner_user_id = current_setting('app.current_user_id', true)`. Postgres enforces with `FORCE ROW LEVEL SECURITY`. Missing setting = access denied. Same pattern as `billing_accounts`.                                                                                                                      |
 | TENANT_SCOPED_THREAD_ID   | Thread IDs MUST be tenant-scoped: `${ownerUserId}:${stateKey}`. The route validates that the `threadId` prefix matches the authenticated `owner_user_id` on every request — `owner_user_id` is authoritative, threadId prefix is verified, never trusted. LangGraph checkpoints use the same scoped ID.                                                                                  |
 | REDACT_BEFORE_PERSIST     | PII masking applied to message content BEFORE `saveThread()`. Regex-based, best-effort (secrets-first: API keys, tokens). Stored content may still contain PII — retention and deletion must treat all content as personal data.                                                                                                                                                         |
 | SOFT_DELETE_DEFAULT       | All reads filter `WHERE deleted_at IS NULL`. Hard delete via scheduled job (future).                                                                                                                                                                                                                                                                                                     |
 | MESSAGES_GROW_ONLY        | `saveThread()` rejects any call where `newMessages.length < oldMessages.length`. The JSONB column is always overwritten (UPDATE), but the adapter enforces that messages only grow. Thread-level soft delete is the deletion primitive.                                                                                                                                                  |
 | AIEVENT_NEVER_VERBATIM    | AiEvent is the internal stream contract between GraphExecutorPort, decorators, and RunEventRelay. AiEvent is never sent verbatim to the client — the route maps each AiEvent discriminant to the corresponding AI SDK stream part (e.g. `text_delta` → `text-delta`, `tool_call_start` → `tool-input-*`). The route also accumulates events into a response `UIMessage` for persistence. |
-| LANGGRAPH_THREAD_DUALITY  | For `langgraph_server` executor, LangGraph checkpoints are the canonical thread state. `chat_threads` is a projection/cache for UI history display. Never reconstruct LangGraph conversation from `chat_threads`. For `inproc`/`claude_sdk` executors, `chat_threads` is the only record.                                                                                                |
 
 ### Schema
 
-**Table:** `chat_threads`
+**Table:** `ai_threads`
 
 | Column          | Type        | Constraints                   | Description                                                       |
 | --------------- | ----------- | ----------------------------- | ----------------------------------------------------------------- |
@@ -210,9 +220,9 @@ Target:
 ### Port Interface
 
 ```typescript
-// src/ports/chat-persistence.port.ts
+// src/ports/thread-persistence.port.ts
 
-export interface ChatPersistencePort {
+export interface ThreadPersistencePort {
   /** Load thread messages. Returns empty array if thread doesn't exist. */
   loadThread(ownerUserId: string, threadId: string): Promise<UIMessage[]>;
 
@@ -246,17 +256,17 @@ export interface ThreadSummary {
 
 ### File Pointers
 
-| File                                                            | Purpose                                                             |
-| --------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `packages/ai-core/src/events/ai-events.ts`                      | AiEvent types — internal stream contract (unchanged)                |
-| `src/ports/chat-persistence.port.ts`                            | New: `ChatPersistencePort` interface                                |
-| `packages/db-schema/src/chat-threads.ts`                        | New: `chat_threads` table definition (Drizzle)                      |
-| `src/adapters/server/ai/chat-persistence.adapter.ts`            | New: `DrizzleChatPersistenceAdapter` with RLS                       |
-| `src/contracts/ai.chat.v1.contract.ts`                          | Refactor: accept `{threadId, message}` instead of `messages[]`      |
-| `src/app/api/v1/ai/chat/route.ts`                               | Refactor: load→execute→persist flow, AiEvent→UIMessageStream bridge |
-| `src/app/_facades/ai/completion.server.ts`                      | Refactor: remove `toCoreMessages()`, use `convertToModelMessages()` |
-| `src/features/ai/chat/providers/ChatRuntimeProvider.client.tsx` | Migrate: `useDataStreamRuntime` → `useChatRuntime`                  |
-| `src/core/chat/model.ts`                                        | `Message` type — retained as internal executor format only          |
+| File                                                            | Purpose                                                                    |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `packages/ai-core/src/events/ai-events.ts`                      | AiEvent types — internal stream contract (unchanged)                       |
+| `src/ports/thread-persistence.port.ts`                          | New: `ThreadPersistencePort` interface                                     |
+| `packages/db-schema/src/ai-threads.ts`                          | New: `ai_threads` table definition (Drizzle)                               |
+| `src/adapters/server/ai/thread-persistence.adapter.ts`          | New: `DrizzleThreadPersistenceAdapter` with RLS                            |
+| `src/contracts/ai.chat.v1.contract.ts`                          | P0: extract last user message from `messages[]`; P1: `{threadId, message}` |
+| `src/app/api/v1/ai/chat/route.ts`                               | Refactor: load→execute→persist flow, AiEvent→UIMessageStream bridge        |
+| `src/app/_facades/ai/completion.server.ts`                      | Refactor: remove `toCoreMessages()`, use `convertToModelMessages()`        |
+| `src/features/ai/chat/providers/ChatRuntimeProvider.client.tsx` | P1: Migrate `useDataStreamRuntime` → `useChatRuntime`                      |
+| `src/core/chat/model.ts`                                        | `Message` type — retained as internal executor format only                 |
 
 ### Key Decisions
 
@@ -294,7 +304,7 @@ export interface ThreadSummary {
 1. **Multi-turn persistence**
    - Send user message for turn 1 → response streamed, thread persisted
    - Send user message for turn 2 → server loads history from DB → LLM sees both turns
-   - Assert: `chat_threads.messages` has user + assistant UIMessages with correct parts
+   - Assert: `ai_threads.messages` has user + assistant UIMessages with correct parts
 
 2. **Fabricated message rejection**
    - POST with `message.role: "assistant"` → 400
@@ -308,7 +318,7 @@ export interface ThreadSummary {
    - Abort client mid-stream → assert thread still persisted (pump completed)
 
 5. **Tenant isolation**
-   - Query chat_threads without `SET LOCAL app.current_user_id` → access denied
+   - Query ai_threads without `SET LOCAL app.current_user_id` → access denied
    - Query with mismatched owner_user_id → no rows returned
 
 6. **Billing unchanged**
@@ -322,7 +332,7 @@ export interface ThreadSummary {
 ## Open Questions
 
 - [ ] Should thread metadata include `lastModel` and `graphName` for thread list display?
-- [ ] For `langgraph_server` executor: should `chat_threads` be written at all, or only for non-LangGraph executors? (Write for all — enables uniform thread list UI; LangGraph checkpoints remain canonical for execution)
+- [ ] LangGraph thread duality: if `langgraph_server` gains durable checkpoints, those become execution-canonical and `ai_threads` becomes a UI projection. For MVP, `ai_threads` is canonical for all executors. Revisit when `langgraph_server` is deployed to prod.
 - [ ] Retention policy: default days before soft-deleted threads are hard-deleted? (90 days proposed)
 
 ## Related
@@ -333,4 +343,4 @@ export interface ThreadSummary {
 - [LangGraph Patterns](./langgraph-patterns.md) — Graph patterns, tenant-scoped thread_id
 - [Architecture](./architecture.md) — Hexagonal layers, port patterns
 - [Database RLS](./database-rls.md) — RLS enforcement patterns
-- [Usage History Project](../../work/projects/proj.usage-history-persistence.md) — Implementation roadmap
+- [Thread Persistence Project](../../work/projects/proj.thread-persistence.md) — Implementation roadmap

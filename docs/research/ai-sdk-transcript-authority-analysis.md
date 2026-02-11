@@ -82,16 +82,16 @@ Option (B) is the smallest diff — keep AiEvent internally, bridge at the route
 
 If we adopt AI SDK `UIMessage` persistence:
 
-| Current spec/concept                                           | Disposition                                                                                                                                          |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chat_messages` table (server-transcript-authority.md)         | **Replace** with `UIMessage[]` JSON storage per thread (or normalized equivalent)                                                                    |
-| `run_artifacts` table (proj.usage-history-persistence.md P0)   | **Largely unnecessary** — UIMessage persistence IS the artifact store. `run_artifacts` becomes a billing/audit concern only, not message persistence |
-| `Message` type from `src/core/chat/model.ts`                   | **Retire for persistence** — `UIMessage` replaces it. Keep `Message` only as internal executor format (it maps to `ModelMessage`)                    |
-| `toCoreMessages()` in completion facade                        | **Replace** with `convertToModelMessages()` from AI SDK                                                                                              |
-| `AssistantFinalEvent` for persistence                          | **Still needed** — but used to construct the persisted `UIMessage` parts, not stored separately                                                      |
-| PII masking before persist (proj.usage-history-persistence.md) | **Still needed** — apply before `saveChat()`                                                                                                         |
-| HistoryWriterSubscriber fanout                                 | **Unnecessary** — persistence moves to route-level `onFinish` callback                                                                               |
-| Custom message-to-wire mapping in route.ts                     | **Simplified** — `createUIMessageStream` + merge replaces manual `controller.appendText()` etc.                                                      |
+| Current spec/concept                                    | Disposition                                                                                                                                          |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat_messages` table (server-transcript-authority.md)  | **Replace** with `UIMessage[]` JSON storage per thread (or normalized equivalent)                                                                    |
+| `run_artifacts` table (proj.thread-persistence.md P0)   | **Largely unnecessary** — UIMessage persistence IS the artifact store. `run_artifacts` becomes a billing/audit concern only, not message persistence |
+| `Message` type from `src/core/chat/model.ts`            | **Retire for persistence** — `UIMessage` replaces it. Keep `Message` only as internal executor format (it maps to `ModelMessage`)                    |
+| `toCoreMessages()` in completion facade                 | **Replace** with `convertToModelMessages()` from AI SDK                                                                                              |
+| `AssistantFinalEvent` for persistence                   | **Still needed** — but used to construct the persisted `UIMessage` parts, not stored separately                                                      |
+| PII masking before persist (proj.thread-persistence.md) | **Still needed** — apply before `saveChat()`                                                                                                         |
+| HistoryWriterSubscriber fanout                          | **Unnecessary** — persistence moves to route-level `onFinish` callback                                                                               |
+| Custom message-to-wire mapping in route.ts              | **Simplified** — `createUIMessageStream` + merge replaces manual `controller.appendText()` etc.                                                      |
 
 ### 5. Does AiEvent Need Refactoring?
 
@@ -128,11 +128,11 @@ The adapter layer (AiEvent → UIMessageStream parts) is ~40 lines in the route 
 
 **Scope:**
 
-- Create `chat_threads` table: `{id, thread_id (unique), tenant_id, messages JSONB, created_at, updated_at}`
+- Create `ai_threads` table: `{id, thread_id (unique), tenant_id, messages JSONB, created_at, updated_at}`
 - Implement `loadChat(threadId)` → `UIMessage[]` and `saveChat(threadId, messages: UIMessage[])`
 - RLS on `tenant_id` (same pattern as `charge_receipts`)
 - Drizzle schema + migration
-- Port interface: `ChatPersistencePort` with `loadThread / saveThread`
+- Port interface: `ThreadPersistencePort` with `loadThread / saveThread`
 
 **Acceptance:**
 
@@ -186,16 +186,16 @@ The adapter layer (AiEvent → UIMessageStream parts) is ~40 lines in the route 
 
 If this plan is adopted:
 
-1. **`docs/spec/server-transcript-authority.md`** — The `chat_messages` table schema (flat rows per message) is replaced by `chat_threads` with `UIMessage[]` JSONB. The invariants (SERVER_OWNS_MESSAGES, CLIENT_SENDS_USER_ONLY, TOOLS_ARE_SERVER_AUTHORED, PERSIST_AFTER_PUMP, APPEND_ONLY) all still hold — just implemented via AI SDK patterns instead of bespoke.
+1. **`docs/spec/server-transcript-authority.md`** — The `chat_messages` table schema (flat rows per message) is replaced by `ai_threads` with `UIMessage[]` JSONB. The invariants (SERVER_OWNS_MESSAGES, CLIENT_SENDS_USER_ONLY, TOOLS_ARE_SERVER_AUTHORED, PERSIST_AFTER_PUMP, APPEND_ONLY) all still hold — just implemented via AI SDK patterns instead of bespoke.
 
-2. **`work/projects/proj.usage-history-persistence.md` P0** — The `run_artifacts` table for message persistence becomes unnecessary. `UIMessage[]` in `chat_threads` IS the persisted transcript. `run_artifacts` can be reduced to a billing audit concern only (store `run_id → usage summary`, not message content). The masking, tenant isolation, and soft-delete requirements still apply to `chat_threads`.
+2. **`work/projects/proj.thread-persistence.md` P0** — The `run_artifacts` table for message persistence becomes unnecessary. `UIMessage[]` in `ai_threads` IS the persisted transcript. `run_artifacts` can be reduced to a billing audit concern only (store `run_id → usage summary`, not message content). The masking, tenant isolation, and soft-delete requirements still apply to `ai_threads`.
 
 3. **`HistoryWriterSubscriber`** — Not needed. Persistence happens at the route level in `onFinish`, not via a fanout subscriber.
 
-4. **`RunHistoryPort`** — Replace with `ChatPersistencePort` that stores `UIMessage[]`, not `run_artifacts`.
+4. **`RunHistoryPort`** — Replace with `ThreadPersistencePort` that stores `UIMessage[]`, not `run_artifacts`.
 
 ## Open Questions
 
 - **JSONB vs normalized:** Storing `UIMessage[]` as a single JSONB column per thread is simplest and matches AI SDK's `saveChat()` pattern. But if we need per-message queries (search, individual delete), we'd need to normalize into rows. Start with JSONB; normalize only if needed.
 - **Thread ID generation:** AI SDK expects client to send `id` (threadId). Our current `stateKey` maps to this. Server should validate and scope it: `${tenantId}:${stateKey}`.
-- **LangGraph checkpoint coordination:** LangGraph Server executor already persists its own checkpoints. For those executors, `chat_threads` is a cache/projection. The `convertToModelMessages()` path may not apply since LangGraph manages its own prompt assembly. Address in a follow-up PR.
+- **LangGraph checkpoint coordination:** LangGraph Server executor already persists its own checkpoints. For those executors, `ai_threads` is a cache/projection. The `convertToModelMessages()` path may not apply since LangGraph manages its own prompt assembly. Address in a follow-up PR.

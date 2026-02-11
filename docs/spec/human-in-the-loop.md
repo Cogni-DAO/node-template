@@ -466,5 +466,5 @@ export async function getCheckpointer(): Promise<PostgresSaver> {
 - [LangGraph Server](./langgraph-server.md) — Thread ID derivation, stateKey semantics
 - [LangGraph Patterns](./langgraph-patterns.md) — Graph patterns, compiled exports
 - [Tool Use](./tool-use.md) — Tool execution (may be used in HIL graphs)
-- [Chat Persistence](./chat-persistence.md) — UIMessage persistence (parallel to HIL state)
+- [Thread Persistence](./thread-persistence.md) — UIMessage persistence (parallel to HIL state)
 - [HIL Graphs Project](../../work/projects/proj.hil-graphs.md)
