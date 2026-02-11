@@ -17,7 +17,7 @@
 | 0   | 3   | Todo        | task.0022  | Git relay MVP: host-side clone → agent commit → host push + PR                       | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Done        | bug.0027   | Gateway billing fails in production — Docker socket ENOENT crashes all OpenClaw runs | Payments Enhancements      | proj.payments-enhancements      |
 | 0   | 2   | Backlog     | bug.0026   | Scheduler worker silently stops polling — schedules enabled but runs cease           | Reliability & Uptime       | proj.reliability                |
-| 0   | 3   | Todo        | task.0029  | Replace nginx audit log billing with LiteLLM callback webhook                        | Unified Graph Launch       | proj.unified-graph-launch       |
+| 0   | 3   | Todo        | task.0029  | Canonicalize billing at GraphExecutorPort — callback + receipt barrier               | Unified Graph Launch       | proj.unified-graph-launch       |
 | 0   | 2   | Backlog     | bug.0025   | Schedule creation accepts paid agents with zero credits — no credit gate             | Unified Graph Launch       | proj.unified-graph-launch       |
 | 0   | 2   | Todo        | bug.0005   | Scheduled runs invisible in Activity — no billing                                    | Unified Graph Launch       | proj.unified-graph-launch       |
 | 0   | 2   | Todo        | task.0014  | VM watchdog: autoheal + HEALTHCHECK on /livez with resource limits                   | Reliability & Uptime       | proj.reliability                |

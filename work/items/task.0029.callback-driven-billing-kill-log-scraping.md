@@ -1,12 +1,12 @@
 ---
 id: task.0029
 type: task
-title: "Replace nginx audit log billing with LiteLLM callback webhook"
+title: "Canonicalize billing at GraphExecutorPort — callback + receipt barrier"
 status: Todo
 priority: 0
 estimate: 3
-summary: "Eliminate all log-scraping billing paths (nginx JSONL parsing, shared volume reads) and replace with LiteLLM success_callback webhook that pushes per-call cost data to an internal ingest endpoint."
-outcome: "Billing works identically across all executor types and deployment topologies via a single push-based mechanism. ProxyBillingReader and openclaw_billing volume deleted."
+summary: "Canonicalize billing at GraphExecutorPort: LiteLLM callback writes receipts, adapters only emit usage_unit_created{call_id}, decorator enforces receipt barrier. Eliminates all log-scraping billing paths."
+outcome: "Adapters contain zero billing-specific code. All executor types produce receipts via callback→ingest→receipt. No nginx audit parsing. No ProxyBillingReader. No billing volumes."
 spec_refs: billing-ingest-spec
 assignees: derekg1729
 credit:
@@ -20,49 +20,57 @@ labels: [billing, litellm, p0]
 external_refs:
 ---
 
-# task.0029 — Replace nginx audit log billing with LiteLLM callback webhook
+# task.0029 — Canonicalize billing at GraphExecutorPort
 
 ## Context
 
-bug.0027 shipped a bridge fix: nginx writes JSONL audit log → shared volume → app tail-reads. This works but is fragile — file-based coupling between containers, no delivery guarantees, grow-forever log, and a completely separate billing codepath from the standard InProc executor.
+bug.0027 shipped a bridge fix: nginx writes JSONL audit log → shared volume → app tail-reads. This works but is the wrong architecture — file-based coupling between containers, adapters constructing full `UsageFact` with cost data, completely separate billing codepaths per executor type.
 
-The real fix: LiteLLM already computes `response_cost` on every call. Configure its `success_callback` webhook to POST billing data directly to the app. One billing data plane for all executor types.
+The real fix: billing is canonicalized at the port level. Adapters only emit `usage_unit_created{call_id}`. Cost arrives via LiteLLM callback. The decorator enforces a receipt barrier.
 
 ## Requirements
 
-- LiteLLM `success_callback: ["webhook"]` configured to POST to `POST /api/internal/billing/ingest`
-- Ingest endpoint validates payload (Zod), calls `commitUsageFact()` → `recordChargeReceipt()`, returns 200/409
-- Idempotent by `UNIQUE(source_system, source_reference)` where `source_reference = {runId}/{attempt}/{litellm_call_id}`
-- Ingest endpoint authenticated via `BILLING_INGEST_TOKEN` shared secret
-- Endpoint on internal network only (not exposed through Caddy)
-- All executors (InProc, sandbox ephemeral, gateway, external) confirm receipt existence after LLM call before marking run successful
-- `ProxyBillingReader` deleted after cutover
-- `openclaw_billing` named volume removed from compose files
-- Zero change to charge_receipts schema (reuse existing table)
+Per billing-ingest-spec invariants:
+
+- **ONE_BILLING_PATH**: all billing confirmation is receipt-existence by `litellm_call_id`
+- **ADAPTERS_NEVER_BILL**: adapters only emit `usage_unit_created{call_id}`; no cost parsing, no log reads
+- **COST_ORACLE_IS_LITELLM**: cost comes from LiteLLM callback payload, not nginx logs or response headers
+- **CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID**
+- **BILLING_FAILURE_STILL_BLOCKS**: decorator enforces receipt barrier at end-of-run
 
 ## Allowed Changes
 
-- `src/app/api/internal/billing/ingest/route.ts` — new POST handler
-- `src/contracts/billing-ingest.contract.ts` — new Zod schema
+- `src/types/ai-events.ts` / `@cogni/ai-core` — add `usage_unit_created` event type
+- `src/app/api/internal/billing/ingest/route.ts` — new ingest endpoint
+- `src/contracts/billing-ingest.contract.ts` — Zod schema for callback payload
+- `src/ports/receipt-barrier.port.ts` — new ReceiptBarrierPort interface
+- `src/adapters/server/ai/billing-executor.decorator.ts` — collect call_ids, poll receipt barrier
+- `src/adapters/server/ai/inproc-completion-unit.adapter.ts` — strip cost fields, emit `usage_unit_created`
+- `src/adapters/server/sandbox/sandbox-graph.provider.ts` — strip billing reader, emit `usage_unit_created`
+- `src/adapters/server/sandbox/proxy-billing-reader.ts` — **delete**
+- `src/features/ai/services/billing.ts` — add `pollForReceipt(callId, timeoutMs)`
 - `platform/infra/services/runtime/configs/litellm.config.yaml` — add webhook callback
-- `src/adapters/server/sandbox/proxy-billing-reader.ts` — delete
-- `src/adapters/server/sandbox/sandbox-graph.provider.ts` — replace billing reader with receipt poll
-- `src/adapters/server/ai/inproc-completion-unit.adapter.ts` — replace inline usage_report with receipt poll
-- `src/features/ai/services/billing.ts` — add `pollForReceipt(litellmCallId, timeoutMs)`
 - `platform/infra/services/runtime/docker-compose.yml` — remove `openclaw_billing` volume
 - `platform/infra/services/runtime/docker-compose.dev.yml` — remove billing bind mount
 - `src/shared/env/server.ts` — add `BILLING_INGEST_TOKEN`, remove `OPENCLAW_BILLING_DIR`
 
 ## Plan
 
-Per billing-ingest-spec migration path — each step can ship independently:
+Each step can ship independently (callback + log-scraping coexist during cutover):
 
-- [ ] Add ingest endpoint + Zod contract + LiteLLM webhook config (callback writes are idempotent, safe to run alongside log scraping)
-- [ ] Add `pollForReceipt()` to billing service
-- [ ] Switch SandboxGraphProvider from billing reader to receipt poll
-- [ ] Switch InProc executor from inline usage_report to receipt poll
-- [ ] Delete `ProxyBillingReader`, remove billing volume mounts, remove `OPENCLAW_BILLING_DIR`
-- [ ] Verify all executor types in stack tests
+- [ ] **1. Add `usage_unit_created` event** — define in `@cogni/ai-core`, adapters emit alongside existing `usage_report`
+- [ ] **2. Add ingest endpoint** — `POST /api/internal/billing/ingest` with Zod validation, `commitUsageFact()`, shared-secret auth. Safe alongside existing path (idempotent by call_id)
+- [ ] **3. Configure LiteLLM callback** — `success_callback: ["langfuse", "webhook"]` with `BILLING_INGEST_TOKEN` header
+- [ ] **4. Add ReceiptBarrierPort + decorator change** — decorator collects call_ids from `usage_unit_created`, polls receipt barrier at end-of-run (≤3s), fails on missing
+- [ ] **5. Strip billing from adapters** — remove cost extraction from InProc, remove `ProxyBillingReader` from Sandbox/Gateway, adapters emit only `usage_unit_created`
+- [ ] **6. Delete old paths** — `ProxyBillingReader`, billing volumes, `proxyBillingEntries`, `OPENCLAW_BILLING_DIR`, `usage_report` event type
+
+## Acceptance Criteria
+
+- Any graph executor type produces receipts the same way (callback → ingest → receipt)
+- Adapters contain zero billing-specific code (no cost parsing, no log reads, no receipt writes)
+- No nginx audit parsing for billing anywhere in the codebase
+- Run fails if receipt absent after bounded poll
 
 ## Validation
 
@@ -72,13 +80,13 @@ Per billing-ingest-spec migration path — each step can ship independently:
 pnpm test:stack:dev
 ```
 
-**Expected:** All sandbox + billing tests pass with callback-driven billing. No shared volume reads.
+**Expected:** All sandbox + billing tests pass with callback-driven billing. No shared volume reads. No `ProxyBillingReader` in codebase.
 
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0029` linked in PR body
-- [ ] **Spec:** billing-ingest-spec invariants upheld (BILLING_SOURCE_IS_CALLBACK_NOT_LOGS, CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID, etc.)
-- [ ] **Tests:** ingest endpoint contract test + stack test proving callback → receipt → executor confirmation
+- [ ] **Spec:** billing-ingest-spec invariants upheld (ONE_BILLING_PATH, ADAPTERS_NEVER_BILL, COST_ORACLE_IS_LITELLM)
+- [ ] **Tests:** ingest endpoint contract test + stack test proving callback → receipt → decorator barrier
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
