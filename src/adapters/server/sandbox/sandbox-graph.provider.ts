@@ -473,7 +473,19 @@ export class SandboxGraphProvider implements GraphProvider {
           .reverse()
           .find((m) => m.role === "user");
 
-        callLog.debug({ sessionKey }, "Sending agent call via gateway WS");
+        // Configure session with model override BEFORE agent call.
+        // Per OpenClaw sessions.patch: sets modelOverride on the session entry
+        // so the agent call uses the requested model, not the config default.
+        await self.gatewayClient.configureSession(
+          sessionKey,
+          outboundHeaders,
+          model
+        );
+
+        callLog.debug(
+          { sessionKey, model },
+          "Sending agent call via gateway WS"
+        );
 
         // Run agent via gateway WS — yields typed events (per OpenClaw gateway protocol)
         let content = "";
