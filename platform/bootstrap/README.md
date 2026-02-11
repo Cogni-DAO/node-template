@@ -9,7 +9,7 @@ One-time development machine and repository setup.
 platform/bootstrap/setup.sh
 ```
 
-This installs Node.js 20 (via Volta), pnpm, Docker Desktop, project dependencies, and git hooks. After installation, it runs pre-flight checks and offers to start the dev stack.
+This installs Node.js 22 (via Volta), pnpm, Docker Desktop, project dependencies, and git hooks. After installation, it runs pre-flight checks and offers to start the dev stack.
 
 ### Install All Tools
 
@@ -23,8 +23,8 @@ Adds OpenTofu (infrastructure) and REUSE (license compliance) for fork owners de
 
 | Tool           | Default | --all | Purpose                                |
 | -------------- | ------- | ----- | -------------------------------------- |
-| Volta          | ✓       | ✓     | Node.js version manager (pins to 20.x) |
-| Node.js 20     | ✓       | ✓     | JavaScript runtime                     |
+| Volta          | ✓       | ✓     | Node.js version manager (pins to 22.x) |
+| Node.js 22     | ✓       | ✓     | JavaScript runtime                     |
 | pnpm 9         | ✓       | ✓     | Package manager                        |
 | Docker Desktop | ✓       | ✓     | Container runtime with compose v2      |
 | OpenTofu       |         | ✓     | Infrastructure as Code                 |
@@ -35,7 +35,7 @@ Adds OpenTofu (infrastructure) and REUSE (license compliance) for fork owners de
 Located in `install/`:
 
 ```bash
-platform/bootstrap/install/install-pnpm.sh     # Volta + Node 20 + pnpm
+platform/bootstrap/install/install-pnpm.sh     # Volta + Node 22 + pnpm
 platform/bootstrap/install/install-docker.sh   # Docker Desktop + daemon check
 platform/bootstrap/install/install-project.sh  # pnpm install + packages:build + git hooks
 platform/bootstrap/install/install-tofu.sh     # OpenTofu
@@ -57,7 +57,7 @@ platform/bootstrap/simple-local-env-setup.sh  # Copy .env.local.example → .env
 
 Before offering to start `dev:stack`, the setup script verifies:
 
-- Node.js version is 20.x
+- Node.js version is 22.x
 - Docker daemon is running
 - `docker compose` v2 is available
 

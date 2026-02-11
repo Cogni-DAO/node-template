@@ -124,8 +124,8 @@ export PATH="$VOLTA_HOME/bin:$PATH"
 
 # Check Node version
 NODE_VERSION=$(node -v 2>/dev/null | cut -d'.' -f1 | tr -d 'v' || echo "0")
-if [[ "$NODE_VERSION" != "20" ]]; then
-    log_error "Node.js 20.x required, but got: $(node -v 2>/dev/null || echo 'not found')"
+if [[ "$NODE_VERSION" != "22" ]]; then
+    log_error "Node.js 22.x required, but got: $(node -v 2>/dev/null || echo 'not found')"
     log_error "Please restart your terminal to pick up Volta PATH changes, then re-run."
     exit 1
 fi

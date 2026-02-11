@@ -64,7 +64,7 @@ You are adding a new independently deployable service to the `services/` directo
     clean: true,
     sourcemap: true,
     platform: "node",
-    target: "node20",
+    target: "node22",
   });
   ```
 
@@ -264,7 +264,7 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
   # ============================================================================
   # Stage 1: Builder — install deps, build packages, prune to prod
   # ============================================================================
-  FROM node:20-bookworm-slim AS builder
+  FROM node:22-bookworm-slim AS builder
 
   # Build tools for native modules (bufferutil, etc. from shared lockfile)
   RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -299,7 +299,7 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
   # ============================================================================
   # Stage 2: Runner — minimal production image with node_modules
   # ============================================================================
-  FROM node:20-bookworm-slim AS runner
+  FROM node:22-bookworm-slim AS runner
 
   # Security: non-root user
   RUN addgroup --system --gid 1001 nodejs && \
@@ -327,8 +327,8 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
 
 - **Pin pnpm version** to match root `package.json` `packageManager` field (not `pnpm@latest`)
 - **Include build tools** in builder stage: `python3`, `make`, `g++` (required for native modules from shared lockfile)
-- **Default base image:** `node:20-bookworm-slim` (glibc, broad native dep compatibility)
-- Alpine (`node:20-alpine`) allowed only if: (1) no native deps, and (2) CI smoke test proves image runs correctly
+- **Default base image:** `node:22-bookworm-slim` (glibc, broad native dep compatibility)
+- Alpine (`node:22-alpine`) allowed only if: (1) no native deps, and (2) CI smoke test proves image runs correctly
 - **Do NOT use `--ignore-scripts`** (breaks esbuild/tsup postinstall)
 - Use multi-stage to minimize final image size
 - Add OCI labels (`org.opencontainers.image.*`)

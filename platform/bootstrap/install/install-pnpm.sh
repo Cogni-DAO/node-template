@@ -89,20 +89,20 @@ ensure_volta_path() {
     fi
 }
 
-# Install Node.js 20 via Volta
+# Install Node.js 22 via Volta
 install_node() {
     ensure_volta_path
 
-    log_info "Installing Node.js 20 via Volta..."
-    volta install node@20
+    log_info "Installing Node.js 22 via Volta..."
+    volta install node@22
 
     # Verify installation
     local node_version
     node_version=$(node -v 2>/dev/null | cut -d'.' -f1 | tr -d 'v')
-    if [[ "$node_version" == "20" ]]; then
+    if [[ "$node_version" == "22" ]]; then
         log_info "Node.js $(node -v) installed successfully"
     else
-        log_error "Node.js 20 installation failed. Got: $(node -v 2>/dev/null || echo 'not found')"
+        log_error "Node.js 22 installation failed. Got: $(node -v 2>/dev/null || echo 'not found')"
         exit 1
     fi
 }

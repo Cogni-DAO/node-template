@@ -20,7 +20,7 @@ You are setting up the Cogni-Template repo for the first time, or need a referen
 
 ## Preconditions
 
-- [ ] Node.js 20+ installed
+- [ ] Node.js 22+ installed
 - [ ] pnpm installed (`corepack enable`)
 - [ ] Repository cloned
 - [ ] Docker running (for infrastructure services)

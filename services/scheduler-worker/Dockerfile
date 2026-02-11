@@ -7,7 +7,7 @@
 # ============================================================
 # Stage 1: Build
 # ============================================================
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 # Install build tools for native modules (bufferutil, etc. from shared lockfile)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -55,7 +55,7 @@ RUN pnpm prune --prod
 # ============================================================
 # Stage 2: Production
 # ============================================================
-FROM node:20-bookworm-slim AS runner
+FROM node:22-bookworm-slim AS runner
 
 # Don't run as root
 RUN addgroup --system --gid 1001 nodejs && \

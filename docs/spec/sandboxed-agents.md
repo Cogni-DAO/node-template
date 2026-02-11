@@ -300,7 +300,7 @@ See [Git-Sync Repo Mount](./git-sync-repo-mount.md) for the full git-sync boot s
 
 | File                                                            | Purpose                                                |
 | --------------------------------------------------------------- | ------------------------------------------------------ |
-| `services/sandbox-runtime/Dockerfile`                           | Sandbox container image (node:20-slim + socat + agent) |
+| `services/sandbox-runtime/Dockerfile`                           | Sandbox container image (node:22-slim + socat + agent) |
 | `services/sandbox-runtime/entrypoint.sh`                        | socat bridge + exec agent command                      |
 | `services/sandbox-runtime/agent/run.mjs`                        | Minimal agent script (reads messages, calls LLM)       |
 | `platform/infra/services/sandbox-proxy/nginx.conf.template`     | Proxy config template (header injection, forwarding)   |

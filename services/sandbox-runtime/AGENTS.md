@@ -64,7 +64,7 @@ docker run --rm --network=none --read-only \
 
 ## Standards
 
-- Base image: node:20-slim
+- Base image: node:22-slim
 - Non-root execution: user `sandboxer` (uid 1001)
 - Entrypoint: `entrypoint.sh` starts socat bridge, then execs command via `bash -lc`
 - Minimal tooling: socat, git, jq, curl
@@ -73,7 +73,7 @@ docker run --rm --network=none --read-only \
 ## Dependencies
 
 - **Internal:** none
-- **External:** Docker, node:20-slim base image
+- **External:** Docker, node:22-slim base image
 
 ## Change Protocol
 

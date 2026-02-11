@@ -95,7 +95,7 @@ The real requirement is per-run RW workspace + unique branch. Not blocked on "ep
 
 | Deliverable                                                                                                                                              | Status      | Est | Work Item |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| [ ] Unified devtools image: node:20 + OpenClaw (rebuilt) + pnpm/git/socat + pnpm cache volume — single image for gateway + ephemeral                     | Todo        | 3   | task.0031 |
+| [ ] Unified devtools image: node:22 + OpenClaw + pnpm/git/socat + pnpm cache volume — single image for gateway + ephemeral                               | Todo        | 3   | task.0031 |
 | [ ] Create per-run workspace dir on host (`git clone --depth=1` or `git worktree add`) — agent gets RW copy of repo on a fresh `sandbox/${runId}` branch | Not Started | 2   | task.0022 |
 | [ ] Mount workspace RW into OpenClaw run — wire through `SandboxGraphProvider` (ephemeral or gateway path, whichever is simpler)                         | Not Started | 1   | task.0022 |
 | [ ] Agent must `git add`/`git commit` locally (no credentials needed) — ensure AGENTS.md instructs the agent to commit before exit                       | Not Started | 1   | task.0022 |
