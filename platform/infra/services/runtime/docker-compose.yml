@@ -65,8 +65,11 @@ services:
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
       - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
+      # Shared volume: proxy writes JSONL audit log, app reads for billing
+      - OPENCLAW_BILLING_DIR=/openclaw-billing
     volumes:
       - repo_data:/repo:ro
+      - openclaw_billing:/openclaw-billing:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -399,6 +402,7 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
     volumes:
       - ./sandbox-proxy/nginx-gateway.conf.template:/etc/nginx/nginx.conf.template:ro
+      - openclaw_billing:/billing
     command: >
       sh -c "envsubst '$$LITELLM_MASTER_KEY' < /etc/nginx/nginx.conf.template
       > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
@@ -484,3 +488,5 @@ volumes:
     name: temporal_postgres_data
   repo_data:
     name: repo_data
+  openclaw_billing:
+    name: openclaw_billing

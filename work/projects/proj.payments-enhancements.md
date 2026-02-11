@@ -10,7 +10,7 @@ summary: Hardening and extending the billing pipeline — pre-call estimation, r
 outcome: Reliable billing with reconciliation scripts, monitoring dashboards, credit holds, and on-chain settlement verification
 assignees: derekg1729
 created: 2026-02-06
-updated: 2026-02-06
+updated: 2026-02-11
 labels: [billing, ai-graphs, web3]
 ---
 
@@ -96,6 +96,8 @@ Harden and extend the billing pipeline across three axes: (1) improve pre-call c
 ## As-Built Specs
 
 - [billing-evolution.md](../../docs/spec/billing-evolution.md) — charge receipt schema, credit unit standard, single billing path
+- [billing-sandbox.md](../../docs/spec/billing-sandbox.md) — proxy-driven audit log pipeline (ephemeral + gateway shared volume)
+- [billing-ingest.md](../../docs/spec/billing-ingest.md) — callback-driven billing design (draft, supersedes log scraping)
 - [external-executor-billing.md](../../docs/spec/external-executor-billing.md) — async reconciliation design, end_user correlation
 - [dao-enforcement.md](../../docs/spec/dao-enforcement.md) — DAO financial rails, widget payment invariants
 - [activity-metrics.md](../../docs/spec/activity-metrics.md) — activity dashboard join, preflight gating model
