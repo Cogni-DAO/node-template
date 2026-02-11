@@ -389,6 +389,16 @@ async function verifyAndSettle(
 
   if (verificationResult.status === "FAILED") {
     const errorCode = verificationResult.errorCode ?? "TX_REVERTED";
+
+    // RPC_ERROR is transient — leave in PENDING_UNVERIFIED so next poll retries
+    if (errorCode === "RPC_ERROR") {
+      log.warn(
+        { attemptId: attempt.id, txHash: attempt.txHash, errorCode },
+        "RPC error during verification — will retry on next poll"
+      );
+      return attempt;
+    }
+
     const targetStatus: PaymentAttemptStatus =
       errorCode === "TX_REVERTED" ? "FAILED" : "REJECTED";
 
