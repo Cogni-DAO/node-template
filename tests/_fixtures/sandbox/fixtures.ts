@@ -147,7 +147,8 @@ export async function cleanupOrphanedProxies(docker: Docker): Promise<number> {
 export async function execInContainer(
   docker: Docker,
   containerName: string,
-  cmd: string
+  cmd: string,
+  timeoutMs = 5000
 ): Promise<string> {
   const container = docker.getContainer(containerName);
   const exec = await container.exec({
@@ -163,7 +164,7 @@ export async function execInContainer(
     const timer = setTimeout(() => {
       stream.destroy();
       resolve();
-    }, 5000);
+    }, timeoutMs);
     stream.on("data", (chunk: Buffer) => chunks.push(chunk));
     stream.on("end", () => {
       clearTimeout(timer);
