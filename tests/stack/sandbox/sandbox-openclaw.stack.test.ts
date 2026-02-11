@@ -108,7 +108,9 @@ describe("OpenClaw Gateway Full-Stack", () => {
     }
 
     client = new OpenClawGatewayClient(GATEWAY_URL, GATEWAY_TOKEN);
-    billingReader = new ProxyBillingReader(docker, PROXY_CONTAINER);
+    const billingDir =
+      process.env.OPENCLAW_BILLING_DIR ?? "/tmp/cogni-openclaw-billing";
+    billingReader = new ProxyBillingReader(billingDir);
   });
 
   afterAll(async () => {

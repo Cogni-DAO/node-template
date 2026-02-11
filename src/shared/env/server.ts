@@ -82,6 +82,9 @@ export const serverSchema = z.object({
   OPENCLAW_GATEWAY_URL: z.string().url().default("http://127.0.0.1:3333"),
   // Auth token for OpenClaw gateway WS handshake (must match openclaw-gateway.json gateway.auth.token)
   OPENCLAW_GATEWAY_TOKEN: z.string().default("openclaw-internal-token"),
+  // Shared volume path for gateway proxy billing audit log (required when gateway mode active)
+  // Docker: /openclaw-billing (named volume), Host: /tmp/cogni-openclaw-billing (bind mount)
+  OPENCLAW_BILLING_DIR: z.string().optional(),
 
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
   // Wallet link MVP - single API key for all wallets (temporary)
