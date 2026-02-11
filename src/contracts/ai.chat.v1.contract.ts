@@ -14,8 +14,14 @@
 
 import { z } from "zod";
 
-/** Message length limit - matches core constraint */
-const MAX_MESSAGE_CHARS = 4000;
+/**
+ * Text part length limit for the wire schema.
+ * Set high because the client replays full history including long assistant
+ * responses; the server ignores them (loads from DB) but validation runs first.
+ * User input is bounded separately at the route level (MAX_USER_TEXT_CHARS).
+ * Primary payload protection is via transport body size limit, not per-part caps.
+ */
+const MAX_MESSAGE_CHARS = 100_000;
 
 /** Max tool name length */
 const MAX_TOOL_NAME_CHARS = 64;

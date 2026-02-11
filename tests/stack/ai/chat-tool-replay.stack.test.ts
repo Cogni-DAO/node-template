@@ -85,7 +85,11 @@ function createCompletionStreamMock() {
   });
 }
 
-describe("Chat Tool Replay", () => {
+// Skipped: P0 thread persistence ignores client-supplied message history.
+// The server now loads authoritative history from ai_threads DB, so client
+// replay and client-side tool validation are no longer exercised.
+// TODO(P1): Re-enable once client sends stateKey + single message instead of full history.
+describe.skip("Chat Tool Replay", () => {
   let completionStreamMock: ReturnType<typeof createCompletionStreamMock>;
 
   beforeEach(async () => {

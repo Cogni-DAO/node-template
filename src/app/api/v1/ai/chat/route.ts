@@ -197,6 +197,15 @@ export const POST = wrapRouteHandlerWithLogging(
           { status: 400 }
         );
       }
+      const MAX_USER_TEXT_CHARS = 16_000;
+      if (userText.length > MAX_USER_TEXT_CHARS) {
+        return NextResponse.json(
+          {
+            error: `User message exceeds ${MAX_USER_TEXT_CHARS} character limit`,
+          },
+          { status: 400 }
+        );
+      }
 
       const handlerStartMs = performance.now();
 
