@@ -535,7 +535,7 @@ services:
     entrypoint: ["node", "/app/dist/index.js", "gateway"]
     environment:
       - HOME=/tmp
-      - PNPM_STORE_DIR=/pnpm-store
+      - npm_config_store_dir=/pnpm-store
       - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
       - OPENCLAW_STATE_DIR=/tmp/openclaw-state
       - OPENCLAW_LOAD_SHELL_ENV=0
@@ -546,7 +546,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m
-      - /workspace:rw,noexec,nosuid,size=256m # writable scratch for agent file ops
+      - /workspace:rw,noexec,nosuid,size=256m,uid=1001,gid=1001 # writable scratch for agent file ops (sandboxer)
     volumes:
       - ../../../../services/sandbox-openclaw/${OPENCLAW_CONFIG:-openclaw-gateway.json}:/etc/openclaw/openclaw.json:ro
       - repo_data:/repo:ro # git-synced codebase (read-only mirror, updated by git-sync)
