@@ -9,7 +9,7 @@ Deploy Next.js container on Spheron (managed Akash layer) via OpenTofu and bind 
 ✅ **Completed:**
 
 - Added `/health` API route at `src/app/health/route.ts` for health checks
-- Created production `Dockerfile` with Node.js 20 Alpine, multi-stage build
+- Created production `Dockerfile` with Node.js 22 Alpine, multi-stage build
 - Updated `next.config.ts` to use `output: 'standalone'` for containerization
 - Created OpenTofu configuration in `infra/terraform/spheron/main.tf`
 - Created `infra/terraform/spheron/AGENTS.md` documentation

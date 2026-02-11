@@ -22,5 +22,5 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   platform: "node",
-  target: "node20",
+  target: "node22",
 });

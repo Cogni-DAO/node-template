@@ -48,7 +48,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 
 ### ✅ Current Script Support
 
-- **`platform/bootstrap/setup.sh`** - One-command dev environment setup (Volta, Node 20, pnpm, Docker Desktop)
+- **`platform/bootstrap/setup.sh`** - One-command dev environment setup (Volta, Node 22, pnpm, Docker Desktop)
 - **`platform/bootstrap/setup.sh --all`** - Full setup including OpenTofu and REUSE
 - **`tofu apply`** - VM provisioning (when manually configured)
 

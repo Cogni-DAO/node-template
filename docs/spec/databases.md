@@ -321,7 +321,7 @@ env:
 **Runner Stage (no migration tools):**
 
 ```dockerfile
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 RUN addgroup --system --gid 1001 nodejs \
