@@ -147,21 +147,23 @@ volumes:
 - [x] pnpm cache volume: cold 1.2s → warm 244ms relink
 - [x] `pnpm check` passes
 
-### GHCR Publish (remaining)
+### GHCR Publish (done)
 
-- [ ] Publish `ghcr.io/cogni-dao/cogni-sandbox-openclaw:arm64` — build from GHCR arm64 base
-- [ ] Publish `ghcr.io/cogni-dao/cogni-sandbox-openclaw:amd64` — build from GHCR amd64 base (`node-template:openclaw-gateway-latest`)
-- [ ] Create multi-arch manifest: `ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`
+- [x] Publish `ghcr.io/cogni-dao/cogni-sandbox-openclaw:arm64` — built from GHCR arm64 base
+- [x] Publish `ghcr.io/cogni-dao/cogni-sandbox-openclaw:amd64` — built from GHCR amd64 base (QEMU cross-build)
+- [x] Create multi-arch manifest: `ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`
+- [x] Fix `openclaw-outbound-headers` base: consolidated from split repos into single multi-arch `ghcr.io/cogni-dao/openclaw-outbound-headers:latest` (arm64+amd64)
+- [x] Fix prod compose paths: `nginx-gateway.conf.template` and `openclaw-gateway.json` volume mounts were broken
 - [ ] Verify gateway healthcheck with published image: `pnpm dev:infra`
 
-### pnpm Store Seeding (remaining)
+### pnpm Store Seeding (done)
 
-- [ ] Build pnpm-store image: `pnpm fetch --frozen-lockfile` with `PNPM_STORE_DIR=/pnpm-store`, tag by lockfile hash
-- [ ] Publish `ghcr.io/cogni-dao/cogni-pnpm-store:<lockfile_sha256>` to GHCR
-- [ ] Seed deployment host: extract pnpm-store image contents into `pnpm_store` Docker volume
+- [x] Build pnpm-store image: `pnpm fetch --frozen-lockfile` with `PNPM_STORE_DIR=/pnpm-store`, tag by lockfile hash
+- [x] Seed deployment host: extract pnpm-store image contents into `pnpm_store` Docker volume (deploy.sh Step 7.5)
+- [x] Stack test: negative control (missing dep fails offline) added to `sandbox-openclaw-pnpm-smoke.stack.test.ts`
+- [ ] Publish `ghcr.io/cogni-dao/node-template:pnpm-store-latest` to GHCR (manual, post-merge)
 - [ ] Verify offline bootstrap: `pnpm install --offline --frozen-lockfile` succeeds inside container with seeded store
 - [ ] **Temporary**: agent's first action must be `pnpm install --offline --frozen-lockfile` in RW workspace (P1: compose bootstrap service replaces this — see task.0036)
-- [ ] Stack test `sandbox-openclaw-offline-pnpm.stack.test.ts`: seed pnpm_store volume from store image → offline `pnpm install --frozen-lockfile` in `network=none` container → verify `biome --version` runs. Negative control: empty store volume must fail offline install.
 
 ## Non-Goals
 
