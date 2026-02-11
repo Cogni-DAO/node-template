@@ -521,7 +521,7 @@ services:
         condition: service_healthy
 
   openclaw-gateway:
-    image: openclaw-outbound-headers:latest
+    image: cogni-sandbox-openclaw:latest
     container_name: openclaw-gateway
     profiles: [sandbox-openclaw]
     restart: unless-stopped
@@ -535,6 +535,7 @@ services:
     entrypoint: ["node", "/app/dist/index.js", "gateway"]
     environment:
       - HOME=/tmp
+      - PNPM_STORE_DIR=/pnpm-store
       - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
       - OPENCLAW_STATE_DIR=/tmp/openclaw-state
       - OPENCLAW_LOAD_SHELL_ENV=0
@@ -549,6 +550,7 @@ services:
     volumes:
       - ../../../../services/sandbox-openclaw/${OPENCLAW_CONFIG:-openclaw-gateway.json}:/etc/openclaw/openclaw.json:ro
       - repo_data:/repo:ro # git-synced codebase (read-only mirror, updated by git-sync)
+      - pnpm_store:/pnpm-store # persistent pnpm content-addressable store
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -598,3 +600,5 @@ volumes:
     name: temporal_postgres_data
   repo_data:
     name: repo_data
+  pnpm_store:
+    name: pnpm_store

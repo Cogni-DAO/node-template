@@ -422,7 +422,7 @@ services:
         condition: service_healthy
 
   openclaw-gateway:
-    image: ghcr.io/cogni-dao/node-template:openclaw-gateway-latest
+    image: ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest
     container_name: openclaw-gateway
     profiles: [sandbox-openclaw]
     restart: unless-stopped
@@ -436,6 +436,7 @@ services:
     entrypoint: ["node", "/app/dist/index.js", "gateway"]
     environment:
       - HOME=/tmp
+      - PNPM_STORE_DIR=/pnpm-store
       - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
       - OPENCLAW_STATE_DIR=/tmp/openclaw-state
       - OPENCLAW_LOAD_SHELL_ENV=0
@@ -450,6 +451,7 @@ services:
     volumes:
       - ./openclaw/openclaw-gateway.json:/etc/openclaw/openclaw.json:ro
       - repo_data:/repo:ro
+      - pnpm_store:/pnpm-store
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -496,3 +498,5 @@ volumes:
     name: repo_data
   openclaw_billing:
     name: openclaw_billing
+  pnpm_store:
+    name: pnpm_store
