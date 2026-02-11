@@ -135,7 +135,7 @@ function checkRequiredHeadings(
   const errors = [];
   for (const req of requiredHeadings) {
     const found = prefix
-      ? actual.some((h) => h === req || h.startsWith(req + " "))
+      ? actual.some((h) => h === req || h.startsWith(`${req} `))
       : actual.includes(req);
     if (!found) {
       errors.push(`missing required heading: ## ${req}`);

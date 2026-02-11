@@ -151,7 +151,7 @@ describe("Thread Persistence", () => {
       return msgs.length >= 2;
     });
     expect(rows).toHaveLength(1);
-    const messages = rows[0]!.messages as Array<{ role: string }>;
+    const messages = rows[0]?.messages as Array<{ role: string }>;
     expect(messages.length).toBeGreaterThanOrEqual(2);
     expect(messages[0]?.role).toBe("user");
     expect(messages[messages.length - 1]?.role).toBe("assistant");
@@ -191,7 +191,7 @@ describe("Thread Persistence", () => {
       return msgs.length >= 4;
     });
     expect(rows2).toHaveLength(1);
-    const messages2 = rows2[0]!.messages as Array<{
+    const messages2 = rows2[0]?.messages as Array<{
       role: string;
       parts: Array<{ type: string; text?: string }>;
     }>;
@@ -204,7 +204,7 @@ describe("Thread Persistence", () => {
     ]);
 
     // Fabricated content must NOT appear
-    const turn2UserMsg = messages2[2]!;
+    const turn2UserMsg = messages2[2] as (typeof messages2)[number];
     const turn2Text = turn2UserMsg.parts
       .filter((p) => p.type === "text")
       .map((p) => p.text)
