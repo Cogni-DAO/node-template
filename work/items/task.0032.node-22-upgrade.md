@@ -2,7 +2,7 @@
 id: task.0032
 type: task
 title: "Upgrade Cogni from Node 20 to Node 22 LTS"
-status: Todo
+status: Done
 priority: 0
 estimate: 1
 summary: "Mechanical upgrade: replace all node:20 pins with node:22 across 9 surfaces. The node:20 pin is convention inertia from repo scaffolding (Nov 2025) — no dependency requires it. Next.js 16.0.1 requires >=20.9.0; Node 22 is fully compatible. Unblocks task.0031 (devtools image can share OpenClaw's node:22 ABI)."
@@ -11,11 +11,11 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.openclaw-capabilities
-branch:
+branch: feat/openclaw-devtools-image
 pr:
 reviewer:
 created: 2026-02-11
-updated: 2026-02-11
+updated: 2026-02-12
 labels: [infra, node, upgrade]
 external_refs:
 ---
