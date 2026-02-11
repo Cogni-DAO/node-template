@@ -43,6 +43,13 @@
       "when": 1770564381662,
       "tag": "0005_equal_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770799543517,
+      "tag": "0006_sticky_madelyne_pryor",
+      "breakpoints": true
     }
   ]
 }

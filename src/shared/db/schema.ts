@@ -12,6 +12,7 @@
  */
 
 export * from "@cogni/db-schema/ai";
+export * from "@cogni/db-schema/ai-threads";
 
 // Domain slices
 export * from "@cogni/db-schema/auth";
