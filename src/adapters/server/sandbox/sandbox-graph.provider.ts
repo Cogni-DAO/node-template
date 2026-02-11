@@ -531,8 +531,9 @@ export class SandboxGraphProvider implements GraphProvider {
             );
           }
         } else {
-          callLog.warn(
-            "No billing reader configured — billing will be incomplete"
+          // Gateway mode MUST have billing — missing reader/container is a config error
+          throw new Error(
+            "Gateway billing misconfigured: billingReader or gatewayProxyContainer missing"
           );
         }
 
