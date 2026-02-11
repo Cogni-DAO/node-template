@@ -104,15 +104,18 @@ openclaw-gateway:
     - PNPM_STORE_DIR=/pnpm-store
   volumes:
     - pnpm_store:/pnpm-store # persistent pnpm content-addressable store
+    - cogni_workspace:/workspace # RW volume (replaces tmpfs — pnpm hardlinks need same fs)
     # ... existing volumes unchanged
 ```
 
-New named volume:
+New named volumes:
 
 ```yaml
 volumes:
   pnpm_store:
     name: pnpm_store
+  cogni_workspace:
+    name: cogni_workspace
 ```
 
 ## Allowed Changes
@@ -154,7 +157,7 @@ volumes:
 - [x] Create multi-arch manifest: `ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`
 - [x] Fix `openclaw-outbound-headers` base: consolidated from split repos into single multi-arch `ghcr.io/cogni-dao/openclaw-outbound-headers:latest` (arm64+amd64)
 - [x] Fix prod compose paths: `nginx-gateway.conf.template` and `openclaw-gateway.json` volume mounts were broken
-- [ ] Verify gateway healthcheck with published image: `pnpm dev:infra`
+- [x] Verify gateway healthcheck with published image: `pnpm dev:infra`
 
 ### pnpm Store Seeding (done)
 
@@ -162,8 +165,10 @@ volumes:
 - [x] Seed deployment host: extract pnpm-store image contents into `pnpm_store` Docker volume (deploy.sh Step 7.5)
 - [x] Stack test: negative control (missing dep fails offline) added to `sandbox-openclaw-pnpm-smoke.stack.test.ts`
 - [ ] Publish `ghcr.io/cogni-dao/node-template:pnpm-store-latest` to GHCR (manual, post-merge)
-- [ ] Verify offline bootstrap: `pnpm install --offline --frozen-lockfile` succeeds inside container with seeded store
-- [ ] **Temporary**: agent's first action must be `pnpm install --offline --frozen-lockfile` in RW workspace (P1: compose bootstrap service replaces this — see task.0036)
+- [x] Verify offline bootstrap: `pnpm install --offline --frozen-lockfile` succeeds inside container with seeded store (45.5s, biome runs)
+- [x] Replace /workspace tmpfs (256MB) with `cogni_workspace` named volume — pnpm hardlinks require same fs as pnpm_store
+- [x] Stack test: all 5 tests pass in `sandbox-openclaw-pnpm-smoke.stack.test.ts` (pnpm version, store path, writability, offline install + biome, negative control)
+- [ ] **Deferred**: agent CWD is `/repo/current` (RO) — agent cannot `pnpm install` without manual copy to `/workspace/repo`. Fix in git-sync/workspace bootstrap (task.0022 or follow-up)
 
 ## Non-Goals
 
