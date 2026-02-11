@@ -26,15 +26,16 @@ external_refs:
 
 Today `cogni-sandbox-openclaw` is a thin layer over `openclaw:local` (node:22-bookworm) — adds socat + sandboxer user. The agent gets the Cogni repo via read-only volume mount (`repo_data:/repo:ro`) with no `node_modules`. To run `pnpm check`, `pnpm test`, or any Node tooling, the agent needs `pnpm install` at runtime (~2-5 min cold). That's unacceptable.
 
-**Node version conflict**: OpenClaw base is `node:22-bookworm`. Cogni requires `node:20.x` (`engines` in package.json, enforced by pnpm). Copying `node_modules` from a node:22 stage is unsafe if any native deps exist (different ABI). Must rebuild OpenClaw deps on node:20 at image build time.
+**Node version conflict**: OpenClaw has a **hard runtime guard** (`assertSupportedRuntime`) that calls `process.exit(1)` on node < 22. No env bypass exists. Cogni pins `node:20.x` across `engines`, Volta, Dockerfiles, and CI — but the constraint is conservative, not architectural. Next.js 16 supports node:22. Resolution: upgrade Cogni to node:22 as a prerequisite (see below).
 
 **Why not bake node_modules?** Cogni's dependency tree changes frequently. Baking `node_modules` into the image forces a full rebuild on every `pnpm-lock.yaml` change, makes the image huge, and still requires brittle runtime wiring (symlinking into RO mounts). Instead: ship devtools + a warm pnpm store volume. First run populates the cache; subsequent runs are fast.
 
 ## Requirements
 
+- **Prerequisite**: Upgrade Cogni to node:22 (see prerequisite section below) — unblocks unified image
 - Single Dockerfile produces one image for **both** gateway (long-running) and ephemeral (one-shot) modes
-- Image based on `node:20-bookworm` (Cogni's required engine version)
-- OpenClaw runtime rebuilt for node:20 ABI at image build time — copy `/app` from `openclaw:local`, then reinstall deps in the node:20 stage (rebuilds native modules correctly). Guard: use `--frozen-lockfile` if `pnpm-lock.yaml` exists, otherwise fall back to plain `pnpm install`
+- Image based on `node:22-bookworm` (aligned with OpenClaw's hard `>=22` runtime guard)
+- OpenClaw `/app` copied from `openclaw:local` — same node major, no ABI rebuild needed
 - System tools installed: `socat`, `git`, `jq`, `curl`
 - `pnpm@9.12.2` installed (Cogni's pinned version, matches `packageManager` field)
 - `sandboxer` user (uid 1001, gid 1001) preserved for sandbox adapter compatibility
@@ -50,9 +51,9 @@ Today `cogni-sandbox-openclaw` is a thin layer over `openclaw:local` (node:22-bo
 ### Image Layout
 
 ```
-/app/                          ← OpenClaw runtime (rebuilt on node:20)
-/app/dist/                     ← Compiled OpenClaw JS (copied from openclaw:local)
-/app/node_modules/             ← OpenClaw deps (rebuilt for node:20 ABI)
+/app/                          ← OpenClaw runtime (copied from openclaw:local, same node:22)
+/app/dist/                     ← Compiled OpenClaw JS
+/app/node_modules/             ← OpenClaw deps (native, no ABI rebuild needed)
 /app/package.json              ← OpenClaw manifest
 /usr/local/bin/sandbox-entrypoint.sh  ← socat bridge entrypoint
 /workspace/                    ← Agent working directory (empty at build)
@@ -64,20 +65,14 @@ No `/opt/cogni/`. No baked Cogni deps. The image is a **devtools runtime** — n
 
 ```
 Stage 1 — FROM openclaw:local AS openclaw
-  (source of /app — dist, package.json, pnpm-lock.yaml, patches, etc.)
+  (source of /app — dist, node_modules, package.json)
 
-Stage 2 — FROM node:20-bookworm
+Stage 2 — FROM node:22-bookworm
   Install system deps: socat, git, jq, curl
   Enable corepack, prepare pnpm@9.12.2
   ENV PNPM_STORE_DIR=/pnpm-store
   COPY --from=openclaw /app /app
-  WORKDIR /app
-  # Rebuild OpenClaw deps for node:20 ABI.
-  # Guard: if pnpm-lock.yaml exists, use --frozen-lockfile;
-  # otherwise fall back to plain pnpm install (OpenClaw may use
-  # a different lockfile name or install method).
-  RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; \
-      else pnpm install; fi
+  # No dep rebuild needed — same node major version
   Create sandboxer user (1001:1001)
   RUN mkdir -p /pnpm-store && chown sandboxer:sandbox /pnpm-store
   COPY entrypoint.sh
@@ -126,10 +121,19 @@ volumes:
 
 ## Plan
 
-- [ ] Verify OpenClaw runtime works on node:20: build a test container with `FROM node:20-bookworm`, copy `/app` from `openclaw:local`, reinstall deps (guarded: `--frozen-lockfile` if lockfile exists, else plain install), verify `node /app/dist/index.js --version` succeeds
+- [ ] **Prerequisite: Upgrade Cogni to node:22** — mechanical find-and-replace across the repo:
+  - `package.json`: `engines.node` → `"22.x"`, `volta.node` → `"22.22.0"`, `@types/node` → `"^22"`
+  - `Dockerfile` (app): `node:20-alpine` → `node:22-alpine`
+  - `services/scheduler-worker/Dockerfile`: `node:20-bookworm-slim` → `node:22-bookworm-slim`
+  - `services/scheduler-worker/tsup.config.ts`: `target: "node20"` → `"node22"`
+  - `services/sandbox-runtime/Dockerfile`: `node:20-slim` → `node:22-slim`
+  - `.github/workflows/ci.yaml`: `NODE_VERSION: "20"` → `"22"`
+  - `.github/workflows/staging-preview.yml`: `node-version: "20"` → `"22"` (x2)
+  - `platform/bootstrap/`: volta install node@22, version check
+  - Validate: `pnpm check` passes, `pnpm test` passes, Docker build succeeds
 - [ ] Rewrite `services/sandbox-openclaw/Dockerfile` as multi-stage:
   - Stage 1: `FROM openclaw:local AS openclaw`
-  - Stage 2: `FROM node:20-bookworm` — install system tools, pnpm@9.12.2, `ENV PNPM_STORE_DIR=/pnpm-store`, copy `/app` from stage 1, guarded reinstall in `/app`, create sandboxer user + `/pnpm-store` dir, copy entrypoint
+  - Stage 2: `FROM node:22-bookworm` — install system tools, pnpm@9.12.2, `ENV PNPM_STORE_DIR=/pnpm-store`, copy `/app` from stage 1 (no dep rebuild needed — same node major), create sandboxer user + `/pnpm-store` dir, copy entrypoint
 - [ ] Update `docker-compose.dev.yml`:
   - Change `openclaw-gateway` image from `openclaw-outbound-headers:latest` to `cogni-sandbox-openclaw:latest`
   - Add `pnpm_store` named volume mounted at `/pnpm-store`
@@ -147,7 +151,7 @@ volumes:
 - Git relay wiring (task.0022)
 - Runtime workspace orchestration (clone, worktree, symlink) — that's provider-level, not image-level
 - Image size optimization beyond what multi-stage naturally provides
-- Rebuilding OpenClaw from source — use pre-built `/app/dist` from `openclaw:local`, only rebuild `node_modules`
+- Rebuilding OpenClaw from source — use pre-built `/app` from `openclaw:local` directly (same node major)
 - Updating production compose (`docker-compose.yml`) to use the new image for GHCR-published gateway — defer until the image is published to a registry
 
 ## Validation
@@ -158,7 +162,7 @@ volumes:
 # Build the image
 pnpm sandbox:openclaw:docker:build
 
-# Verify OpenClaw works on node:20
+# Verify OpenClaw works
 docker run --rm cogni-sandbox-openclaw:latest node /app/dist/index.js --version
 
 # Verify devtools
@@ -195,7 +199,7 @@ pnpm sandbox:openclaw:docker:build && pnpm dev:infra
 pnpm check
 ```
 
-**Expected:** Image builds. OpenClaw reports version on node:20. pnpm, git, socat present. No baked Cogni deps. Second pnpm install is fast relink from store. Gateway healthcheck passes.
+**Expected:** Image builds on node:22. OpenClaw reports version. pnpm, git, socat present. No baked Cogni deps. Second pnpm install is fast relink from store. Gateway healthcheck passes.
 
 ## Review Checklist
 
