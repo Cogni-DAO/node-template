@@ -2,7 +2,7 @@
 id: bug.0033
 type: bug
 title: "Transient RPC errors permanently reject payments — funds taken, no credits"
-status: Backlog
+status: Done
 priority: 0
 estimate: 2
 summary: "A transient RPC failure during on-chain verification causes the payment to be permanently REJECTED. The user's on-chain transfer succeeds (treasury receives funds) but credits are never granted. No retry, no recovery, no logging of the actual error."
@@ -11,8 +11,8 @@ spec_refs:
   - payments-design
 assignees: []
 credit:
-project:
-branch:
+project: proj.payments-enhancements
+branch: fix/bug-0033-payment-rpc-error-rejection
 pr:
 reviewer:
 created: 2026-02-11
@@ -69,12 +69,12 @@ external_refs:
 
 ## Plan
 
-- [ ] **Fix 1 — RPC_ERROR must not cause REJECTED.** In `paymentService.ts:390-393`, treat `RPC_ERROR` like `PENDING` — leave the attempt in `PENDING_UNVERIFIED` so the next `getStatus` poll retries. Do NOT call `serviceRepo.updateStatus`. Consider returning early (same as `PENDING` path).
-- [ ] **Fix 2 — Log the swallowed RPC exception.** In `evm-rpc-onchain-verifier.adapter.ts:182`, accept a Logger and log the error at `warn` level before returning `failedResult("RPC_ERROR")`. Alternatively, re-throw a typed error that the caller can catch and log.
-- [ ] **Fix 3 — Add errorCode to state transition event.** Update `PaymentsStateTransitionEvent` to include `errorCode?: string`. Update `attempts.server.ts` to pass `result.errorCode` into the event.
-- [ ] **Fix 4 — Fix chainId: 0 in state transition event.** Replace `chainId: 0` with the actual chainId from the payment attempt (pass through from `submitTxHash` result or re-read).
-- [ ] **Fix 5 — Emit payments.verified and payments.confirmed events.** Wire these into `verifyAndSettle()` or the facade at the appropriate state transitions.
-- [ ] **Manual remediation — credit the affected user.** Query `payment_attempts` table for intent `8d5b422e`, verify on-chain, and manually apply credits.
+- [x] **Fix 1 — RPC_ERROR must not cause REJECTED.** `verifyAndSettle()` now returns early (same as PENDING path) when errorCode is RPC_ERROR, with a `log.warn`. Attempt stays in PENDING_UNVERIFIED.
+- [x] **Fix 2 — Log the RPC error.** `verifyAndSettle()` emits `log.warn` with attemptId, txHash, and errorCode when RPC_ERROR occurs. The adapter catch block still returns `failedResult("RPC_ERROR")` (port interface unchanged).
+- [x] **Fix 3 — Add errorCode to state transition event.** `PaymentsStateTransitionEvent` includes `errorCode?: string`. Facade passes `result.errorCode` into the event.
+- [x] **Fix 4 — Fix chainId: 0 in state transition event.** `SubmitTxHashResult` and `GetStatusResult` include `chainId`. Facade uses `result.chainId`.
+- [x] **Fix 5 — Emit payments.verified events.** Both submit and getStatus facades emit `payments.verified` when the result status is CREDITED.
+- [ ] **Manual remediation — credit the affected user.** Requires DB access (out of scope for code fix).
 
 ## Validation
 

@@ -5,9 +5,9 @@
  * Module: `@features/payments/services/paymentService`
  * Purpose: Orchestrate payment attempt lifecycle via ports. Handles intent creation, txHash submission, status polling, and settlement.
  * Scope: Feature-layer orchestration for payment attempts; validates state transitions, enforces TTLs; does not expose HTTP handling.
- * Invariants: State machine transitions validated via core/rules; atomic settlement via confirmCreditsPayment.
+ * Invariants: State transitions via core/rules; atomic settlement via confirmCreditsPayment; RPC_ERROR is transient (retried on next poll).
  * Side-effects: IO
- * Notes: OnChainVerifier stubbed (always VERIFIED) in MVP; Phase 3 uses real Ponder indexer.
+ * Notes: RPC_ERROR from OnChainVerifier leaves attempt in PENDING_UNVERIFIED for automatic retry via getStatus polling.
  * Links: docs/spec/payments-design.md
  * @public
  */
