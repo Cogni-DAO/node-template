@@ -191,6 +191,7 @@ pnpm check
 - [proj.reliability](../projects/proj.reliability.md) — P1 deliverables: Grafana alerts for container metrics
 - [observability-requirements.md](../../docs/spec/observability-requirements.md) — BELOW_APP_ATTRIBUTION, PRE_CRASH_CURVE, HEARTBEAT_LIVENESS, CONTAINER_RESTART_DETECTION
 - [observability.md](../../docs/spec/observability.md) — logging contract, metrics pipeline
+- Handoff: [handoff](../handoffs/task.0027.handoff.md)
 
 ## Attribution
 

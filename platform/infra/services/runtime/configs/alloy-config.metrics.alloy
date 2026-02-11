@@ -150,11 +150,21 @@ prometheus.scrape "app_metrics" {
   targets = [
     {"__address__" = "app:3000"},
   ]
-  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+  forward_to      = [prometheus.relabel.app_metrics.receiver]
   scrape_interval = "15s"
   scrape_timeout  = "10s"
   metrics_path    = "/api/metrics"
   bearer_token    = sys.env("METRICS_TOKEN")
+}
+
+prometheus.relabel "app_metrics" {
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+
+  // Add env label so deadman alerts can scope to preview|production
+  rule {
+    target_label = "env"
+    replacement  = sys.env("DEPLOY_ENVIRONMENT")
+  }
 }
 
 // =============================================================================
