@@ -5,9 +5,9 @@
  * Module: `@features/payments/services/paymentService`
  * Purpose: Orchestrate payment attempt lifecycle via ports. Handles intent creation, txHash submission, status polling, and settlement.
  * Scope: Feature-layer orchestration for payment attempts; validates state transitions, enforces TTLs; does not expose HTTP handling.
- * Invariants: State machine transitions validated via core/rules; atomic settlement via confirmCreditsPayment.
+ * Invariants: State transitions via core/rules; atomic settlement via confirmCreditsPayment; RPC_ERROR is transient (retried on next poll).
  * Side-effects: IO
- * Notes: OnChainVerifier stubbed (always VERIFIED) in MVP; Phase 3 uses real Ponder indexer.
+ * Notes: RPC_ERROR from OnChainVerifier leaves attempt in PENDING_UNVERIFIED for automatic retry via getStatus polling.
  * Links: docs/spec/payments-design.md
  * @public
  */
@@ -69,6 +69,7 @@ export interface SubmitTxHashInput {
 export interface SubmitTxHashResult {
   attemptId: string;
   status: PaymentAttemptStatus;
+  chainId: number;
   txHash: string;
   errorCode?: PaymentErrorCode | undefined;
   errorMessage?: string | undefined;
@@ -83,6 +84,7 @@ export interface GetStatusInput {
 export interface GetStatusResult {
   attemptId: string;
   status: PaymentAttemptStatus;
+  chainId: number;
   clientStatus: string; // ClientVisibleStatus from core
   txHash: string | null;
   amountUsdCents: number;
@@ -190,6 +192,7 @@ export async function submitTxHash(
     return {
       attemptId: attempt.id,
       status: attempt.status,
+      chainId: attempt.chainId,
       txHash: attempt.txHash,
       errorCode: attempt.errorCode ?? undefined,
       errorMessage: attempt.errorCode
@@ -211,6 +214,7 @@ export async function submitTxHash(
     return {
       attemptId: attempt.id,
       status: attempt.status,
+      chainId: attempt.chainId,
       txHash: attempt.txHash ?? input.txHash,
       errorCode: "INTENT_EXPIRED",
       errorMessage: "Payment intent expired before transaction submission",
@@ -241,6 +245,7 @@ export async function submitTxHash(
   return {
     attemptId: attempt.id,
     status: attempt.status,
+    chainId: attempt.chainId,
     txHash: attempt.txHash,
     errorCode: attempt.errorCode ?? undefined,
     errorMessage: attempt.errorCode
@@ -338,6 +343,7 @@ export async function getStatus(
   return {
     attemptId: attempt.id,
     status: attempt.status,
+    chainId: attempt.chainId,
     clientStatus: toClientVisibleStatus(attempt.status),
     txHash: attempt.txHash,
     amountUsdCents: attempt.amountUsdCents,
@@ -389,6 +395,16 @@ async function verifyAndSettle(
 
   if (verificationResult.status === "FAILED") {
     const errorCode = verificationResult.errorCode ?? "TX_REVERTED";
+
+    // RPC_ERROR is transient — leave in PENDING_UNVERIFIED so next poll retries
+    if (errorCode === "RPC_ERROR") {
+      log.warn(
+        { attemptId: attempt.id, txHash: attempt.txHash, errorCode },
+        "RPC error during verification — will retry on next poll"
+      );
+      return attempt;
+    }
+
     const targetStatus: PaymentAttemptStatus =
       errorCode === "TX_REVERTED" ? "FAILED" : "REJECTED";
 

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-05
+- **Last reviewed:** 2026-02-11
 - **Status:** draft
 
 ## Purpose
@@ -84,12 +84,13 @@ const result = await confirmCreditsPayment(accountService, {
 
 - Payment services accept ports as first parameters (userRepo, serviceRepo, accountService, verifier, clock); createIntent takes userRepo only, verifyAndSettle takes serviceRepo only
 - State machine transitions validated via `core/rules.isValidTransition()`
+- RPC_ERROR from OnChainVerifier is transient — leaves attempt in PENDING_UNVERIFIED for automatic retry via getStatus polling
 - Settlement exclusively via `confirmCreditsPayment()` for atomic ledger+balance updates
 - Credit conversion: 1 cent = 10 credits (integer math only)
 - Idempotency required for all payment mutations
 - Composite reference for payment attempts: `${chainId}:${txHash}`
 - Repository logs all events atomically with status changes
-- Services return structured results (not port types directly)
+- Services return structured results including `chainId` (not port types directly)
 
 ## Dependencies
 
@@ -104,7 +105,7 @@ const result = await confirmCreditsPayment(accountService, {
 
 ## Notes
 
-- OnChainVerifier stubbed (always VERIFIED) for MVP; Phase 3 uses Ponder indexer
+- OnChainVerifier uses real EVM RPC (EvmRpcOnChainVerifierAdapter) in production
 - Verification throttled to 10-second intervals to reduce RPC cost
 - Payment attempts remain PENDING_UNVERIFIED until confirmCreditsPayment succeeds
 - Exactly-once credit enforced via DB unique constraint on credit_ledger.reference
