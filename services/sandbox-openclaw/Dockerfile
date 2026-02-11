@@ -3,7 +3,7 @@
 # Per task.0031 spec. No Cogni deps baked in — use pnpm_store volume at runtime.
 
 # Stage 1: OpenClaw runtime source (forked header-forwarding build)
-# Override per-arch: --build-arg OPENCLAW_BASE=ghcr.io/cogni-dao/node-template:openclaw-gateway-latest (amd64)
+# Default base is multi-arch (arm64 + amd64). Override with --build-arg for local dev.
 ARG OPENCLAW_BASE=ghcr.io/cogni-dao/openclaw-outbound-headers:latest
 FROM ${OPENCLAW_BASE} AS openclaw
 
@@ -22,8 +22,9 @@ RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
 # HOME writable for non-root user (sandboxer has no real home dir)
 # Persistent pnpm store mount point (populated via named volume at runtime)
+# npm_config_store_dir is the env var pnpm actually reads (not PNPM_STORE_DIR)
 ENV HOME=/workspace \
-    PNPM_STORE_DIR=/pnpm-store
+    npm_config_store_dir=/pnpm-store
 
 # OpenClaw runtime — same node:22 major, no ABI rebuild needed
 COPY --from=openclaw /app /app
