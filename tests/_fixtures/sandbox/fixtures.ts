@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/_fixtures/sandbox/fixtures`
  * Purpose: Shared test fixtures for sandbox container tests (P0.5, P0.5a, full LLM round-trip).
- * Scope: Provides runner helpers, context setup/teardown, and common assertions. Does not contain test logic or assertions.
+ * Scope: Provides runner helpers, container exec helpers (with configurable timeout), context setup/teardown, and common assertions. Does not contain test logic or assertions.
  * Invariants: All sandbox tests use same image, same limits defaults.
  * Side-effects: IO (Docker containers, filesystem)
  * Links: docs/spec/sandboxed-agents.md
