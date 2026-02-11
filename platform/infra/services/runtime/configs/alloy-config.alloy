@@ -83,10 +83,10 @@ loki.process "docker_logs" {
   // Extract JSON fields from app logs (fail-safe: non-JSON lines get no extracted fields)
   stage.json {
     expressions = {
-      route       = "route"
-      status_code = "status"
-      duration_ms = "durationMs"
-      log_msg     = "msg"
+      route       = "route",
+      status_code = "status",
+      duration_ms = "durationMs",
+      log_msg     = "msg",
     }
   }
 
