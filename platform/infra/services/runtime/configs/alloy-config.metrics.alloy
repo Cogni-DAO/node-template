@@ -165,6 +165,12 @@ prometheus.relabel "app_metrics" {
     target_label = "env"
     replacement  = sys.env("DEPLOY_ENVIRONMENT")
   }
+
+  // Add service label for consistent querying across app + infra metrics
+  rule {
+    target_label = "service"
+    replacement  = "app"
+  }
 }
 
 // =============================================================================
