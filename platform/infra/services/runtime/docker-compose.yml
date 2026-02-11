@@ -377,7 +377,13 @@ services:
       temporal:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/livez || exit 1"]
+      # node -e inline check: wget/curl not available in node:20-bookworm-slim
+      # Uses /livez (liveness) per WATCHDOG_LIVEZ_NOT_READYZ invariant
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "require(''http'').get(''http://localhost:9000/livez'',r=>{process.exit(r.statusCode===200?0:1)}).on(''error'',()=>process.exit(1))"',
+        ]
       interval: 10s
       timeout: 2s
       retries: 3

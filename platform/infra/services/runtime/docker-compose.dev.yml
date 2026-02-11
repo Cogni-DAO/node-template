@@ -476,11 +476,12 @@ services:
       temporal:
         condition: service_healthy
     healthcheck:
-      # Check /readyz (not /livez) - returns 200 only when worker is polling Temporal
+      # Uses /livez (liveness) per WATCHDOG_LIVEZ_NOT_READYZ invariant
+      # node -e inline check: wget/curl not available in node:20-bookworm-slim
       test:
         [
           "CMD-SHELL",
-          'node -e "require(''http'').get(''http://localhost:9000/readyz'',r=>{process.exit(r.statusCode===200?0:1)})"',
+          'node -e "require(''http'').get(''http://localhost:9000/livez'',r=>{process.exit(r.statusCode===200?0:1)}).on(''error'',()=>process.exit(1))"',
         ]
       interval: 10s
       timeout: 2s
