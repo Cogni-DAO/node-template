@@ -68,6 +68,7 @@ The gateway is a long-running service (externally-built image, compose-managed).
 | Update `services-architecture.md` Existing Services table — add `openclaw-gateway` (external image), `llm-proxy-openclaw` (nginx sidecar), `sandbox-openclaw` (ephemeral image) | Not Started | 0.5 | (create)  |
 | Add "External Image Service" variant to `create-service.md` — lighter checklist for pre-built images (compose + config + healthcheck + CI, no package.json/tsconfig/src)        | Not Started | 1   | (create)  |
 | Gateway agent workspace + SOUL.md — dedicated workspace with chat-appropriate AGENTS.md, upstream heartbeat prompt fix                                                          | Todo        | 2   | task.0023 |
+| Memory search extraPaths + curated MEMORY.md/TOOLS.md + spec documentation for bootstrap file alignment                                                                         | Not Started | 2   | task.0034 |
 
 **Key distinction**: `openclaw-gateway` uses `openclaw-outbound-headers:latest` (built in the OpenClaw repo, published to GHCR). We don't own that Dockerfile — we configure it via bind-mounted `openclaw-gateway.json` and deploy via compose. `cogni-sandbox-openclaw` (ephemeral) is the image we DO build from `services/sandbox-openclaw/Dockerfile`. Both need CI coverage.
 
@@ -235,3 +236,4 @@ Host still owns push+PR in warm pool mode — workers never need GitHub credenti
 - [openclaw-gateway-header-injection.md](../../docs/research/openclaw-gateway-header-injection.md) — outboundHeaders investigation
 - [openclaw-gateway-integration-handoff.md](../../docs/research/openclaw-gateway-integration-handoff.md) — protocol reverse-engineering, frame sequences
 - [messenger-integration-openclaw-channels.md](../../docs/research/messenger-integration-openclaw-channels.md) — spike.0020: messenger channel integration research
+- [openclaw-memory-workspace-alignment.md](../../docs/research/openclaw-memory-workspace-alignment.md) — memory backend, bootstrap files, extraPaths for repo doc indexing
