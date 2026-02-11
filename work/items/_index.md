@@ -32,7 +32,7 @@
 | 1   | 3   | Todo        | task.0009  | Sandbox repo refresh: on-demand git-sync for agent workspace                         | Sandboxed Agents           | proj.sandboxed-agents           |
 | 1   | 3   | Backlog     | bug.0004   | /activity dashboard cost column broken                                               | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 1   | Todo        | task.0018  | Dynamic agent catalog in UI + OpenClaw model sync                                    | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 1   | 3   | Backlog     | task.0010  | OpenClaw gateway model selection — session-level override                            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                 | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 1   | Backlog     | bug.0012   | pre-commit check:docs validates all files, not just staged                           |                            |                                 |
 | 2   | 2   | Backlog     | bug.0013   | Sandbox stack tests flaky — proxy container vanishes                                 | OpenClaw Capabilities      | proj.openclaw-capabilities      |

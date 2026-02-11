@@ -85,6 +85,8 @@ Define the invariants and design contracts for running OpenClaw in Cogni: which 
 
 25. **HEARTBEAT_DISABLED**: OpenClaw heartbeats (`heartbeat.every`) are set to `"0"` in both `openclaw-gateway.json` and `openclaw-gateway.test.json`, disabling the heartbeat runner entirely. Heartbeats serve no purpose for backend agent usage and cause `HEARTBEAT_OK` contamination when combined with broadcast chat events (see bug.0021).
 
+26. **SESSION_MODEL_OVERRIDE**: `SandboxGraphProvider.createGatewayExecution()` calls `configureSession(sessionKey, outboundHeaders, model)` before every `runAgent()` call. OpenClaw's `sessions.patch` handler resolves the model through the gateway model catalog and sets `modelOverride`/`providerOverride` on the session entry. Without this, the gateway uses its config default model regardless of `GraphRunRequest.model`. See `openclaw-gateway-client.ts:configureSession()`, `sandbox-graph.provider.ts:476-482`.
+
 ---
 
 ## Design

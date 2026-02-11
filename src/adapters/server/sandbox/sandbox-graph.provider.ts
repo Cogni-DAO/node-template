@@ -10,6 +10,7 @@
  *   - Per UNIFIED_GRAPH_EXECUTOR: Registered in AggregatingGraphExecutor like any provider
  *   - Per SECRETS_HOST_ONLY: Only messages + model passed to sandbox, never credentials
  *   - Per BILLING_INDEPENDENT_OF_CLIENT: usage_report emitted for RunEventRelay billing
+ *   - Per SESSION_MODEL_OVERRIDE: Gateway mode calls configureSession() before runAgent() so GraphRunRequest.model reaches LiteLLM via OpenClaw sessions.patch
  * Side-effects: IO (creates tmp workspace, runs Docker containers via SandboxRunnerPort, HTTP to gateway)
  * Links: docs/spec/sandboxed-agents.md, graph-provider.ts, sandbox-runner.adapter.ts, openclaw-gateway-client.ts
  * @internal
