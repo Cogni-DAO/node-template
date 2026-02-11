@@ -12,7 +12,7 @@
  *   - Per LANGFUSE_INTEGRATION: ObservabilityGraphExecutorDecorator wraps for Langfuse traces
  *   - Per BILLING_ENFORCEMENT: BillingGraphExecutorDecorator intercepts usage_report events
  *   - BILLING_COMMIT_REQUIRED: billingCommitFn is required — missing commitFn is a hard error
- *   - LAZY_SANDBOX_IMPORT: Sandbox provider loaded via dynamic import() to avoid Turbopack bundling dockerode native addon chain
+ *   - LAZY_SANDBOX_IMPORT: Sandbox provider loaded via dynamic import() to defer dockerode native addon chain (SandboxRunnerAdapter); ProxyBillingReader imported here but filesystem-only, no Docker dependency
  * Side-effects: global (module-scoped cached sandbox provider promise)
  * Links: container.ts, AggregatingGraphExecutor, GRAPH_EXECUTION.md, OBSERVABILITY.md
  * @public
@@ -151,30 +151,31 @@ function loadSandboxProvider(
   gatewayToken: string
 ): Promise<GraphProvider> {
   if (!_sandboxProvider) {
-    _sandboxProvider = Promise.all([
-      import("@/adapters/server/sandbox"),
-      import("dockerode"),
-    ]).then(
-      ([
-        {
-          SandboxRunnerAdapter,
-          SandboxGraphProvider,
-          OpenClawGatewayClient,
-          ProxyBillingReader,
-        },
-        DockerModule,
-      ]) => {
+    _sandboxProvider = import("@/adapters/server/sandbox").then(
+      ({
+        SandboxRunnerAdapter,
+        SandboxGraphProvider,
+        OpenClawGatewayClient,
+        ProxyBillingReader,
+      }) => {
         const runner = new SandboxRunnerAdapter({ litellmMasterKey });
 
         // Gateway client + billing reader for OpenClaw gateway mode
+        // Per NO_DOCKERODE_IN_BILLING_PATH: billing reader uses shared volume, not docker exec
         const gatewayClient = new OpenClawGatewayClient(
           gatewayUrl,
           gatewayToken
         );
-        const billingReader = new ProxyBillingReader(
-          new DockerModule.default(),
-          "llm-proxy-openclaw"
-        );
+
+        const billingDir = serverEnv().OPENCLAW_BILLING_DIR;
+        if (!billingDir) {
+          throw new Error(
+            "OPENCLAW_BILLING_DIR is required when gateway mode is enabled. " +
+              "Set to the shared volume mount path (e.g. /openclaw-billing in Docker, " +
+              "/tmp/cogni-openclaw-billing on host)."
+          );
+        }
+        const billingReader = new ProxyBillingReader(billingDir);
 
         return new SandboxGraphProvider(
           runner,

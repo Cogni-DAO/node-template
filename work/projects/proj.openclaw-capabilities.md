@@ -37,7 +37,7 @@ The production WS client must implement the OpenClaw gateway protocol correctly.
 | ----------------------------------------------------------------------------------------- | ----------- | --- | --------- |
 | Gateway client `runAgent()` generator — correct ACK → deltas → final res lifecycle        | In Progress | 3   | task.0008 |
 | `extractTextFromResult()` — extract content from authoritative `result.payloads`          | In Progress | 1   | task.0008 |
-| `configureSession()` — per-session outboundHeaders via `sessions.patch`                   | Done        | 1   | —         |
+| `configureSession()` — per-session outboundHeaders + model override via `sessions.patch`  | Done        | 1   | task.0010 |
 | Stack test: gateway WS chat returns real content (not ACK JSON)                           | In Progress | 1   | task.0008 |
 | Stack test: billing entries in proxy audit log after gateway call                         | In Progress | 1   | task.0008 |
 | Stack test: LITELLM_MASTER_KEY not in gateway container env                               | Done        | 1   | —         |

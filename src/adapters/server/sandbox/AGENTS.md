@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-10
+- **Last reviewed:** 2026-02-11
 - **Status:** draft
 
 ## Purpose
@@ -34,7 +34,7 @@ Sandbox adapter for AI agent execution — two modes: **ephemeral** containers (
 - **Exports:** `SandboxRunnerAdapter`, `SandboxRunnerAdapterOptions`, `LlmProxyManager`, `LlmProxyConfig`, `LlmProxyHandle`, `ProxyStopResult`, `SandboxGraphProvider`, `SANDBOX_PROVIDER_ID`, `SandboxAgentCatalogProvider`, `OpenClawGatewayClient`, `GatewayAgentEvent`, `RunAgentOptions`, `ProxyBillingReader`
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** `OPENCLAW_GATEWAY_URL`, `OPENCLAW_GATEWAY_TOKEN` (gateway mode); litellmMasterKey via constructor; image per-run via SandboxRunSpec
+- **Env/Config keys:** `OPENCLAW_GATEWAY_URL`, `OPENCLAW_GATEWAY_TOKEN` (gateway mode); `OPENCLAW_BILLING_DIR` (shared volume path for gateway billing audit log); litellmMasterKey via constructor; image per-run via SandboxRunSpec
 - **Files considered API:** index.ts barrel export (not re-exported from parent server barrel — consumers use subpath imports to avoid Turbopack bundling dockerode native addon chain)
 
 ## Ports
@@ -45,7 +45,7 @@ Sandbox adapter for AI agent execution — two modes: **ephemeral** containers (
 
 ## Responsibilities
 
-- This directory **does**: Create ephemeral Docker containers (network=none); manage gateway WS connections to long-running OpenClaw service (sandbox-internal); manage LLM proxy containers (nginx:alpine); share socket via Docker volume at `/llm-sock` (ephemeral) or TCP via Docker DNS (gateway); mount named Docker volumes; inject billing headers (ephemeral: proxy overwrites; gateway: outboundHeaders per-session, proxy passes through); collect stdout/stderr; read billing from proxy audit logs (`ProxyBillingReader`); handle timeouts and OOM; cleanup containers; route `sandbox:*` graphIds through graph execution pipeline; list sandbox agents in UI catalog
+- This directory **does**: Create ephemeral Docker containers (network=none); manage gateway WS connections to long-running OpenClaw service (sandbox-internal); manage LLM proxy containers (nginx:alpine); share socket via Docker volume at `/llm-sock` (ephemeral) or TCP via Docker DNS (gateway); mount named Docker volumes; inject billing headers (ephemeral: proxy overwrites; gateway: outboundHeaders per-session, proxy passes through); collect stdout/stderr; read billing from proxy audit log via shared volume filesystem (`ProxyBillingReader`, tail-read JSONL); handle timeouts and OOM; cleanup containers; route `sandbox:*` graphIds through graph execution pipeline; list sandbox agents in UI catalog
 - This directory **does not**: Implement agent logic (agent runs inside container); pass credentials to sandbox containers; manage the gateway container lifecycle (compose service)
 
 ## Usage
@@ -75,7 +75,8 @@ await runner.dispose(); // stop all proxy containers
 - Socket sharing via Docker volumes (not bind mounts) to avoid macOS osxfs issues and tmpfs masking
 - All dockerode exec streams have bounded timeouts (never await unbounded `stream.on('end')`)
 - Proxy containers labeled `cogni.role=llm-proxy` for sweep-based cleanup
-- Billing from proxy audit log, never from agent self-reporting (LITELLM_IS_BILLING_TRUTH)
+- Billing from proxy audit log on shared volume (JSONL tail-read), never from agent self-reporting (LITELLM_IS_BILLING_TRUTH)
+- Gateway billing reads from filesystem (`OPENCLAW_BILLING_DIR`), not docker exec (NO_DOCKERODE_IN_BILLING_PATH)
 
 ## Dependencies
 

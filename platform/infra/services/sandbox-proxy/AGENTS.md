@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-10
+- **Last reviewed:** 2026-02-11
 - **Status:** draft
 
 ## Purpose
@@ -17,6 +17,7 @@ Nginx config templates for sandbox LLM proxy containers — **ephemeral** (`ngin
 - [Sandbox Spec](../../../../docs/spec/sandboxed-agents.md)
 - [LlmProxyManager](../../../../src/adapters/server/sandbox/llm-proxy-manager.ts) (generates config from template)
 - [Billing Spec](../../../../docs/spec/external-executor-billing.md)
+- [Billing Ingest Spec](../../../../docs/spec/billing-ingest.md)
 
 ## Boundaries
 
@@ -38,7 +39,7 @@ Nginx config templates for sandbox LLM proxy containers — **ephemeral** (`ngin
 
 ## Responsibilities
 
-- This directory **does**: Define nginx listen-on-socket config; inject Authorization header (LITELLM_MASTER_KEY); inject x-litellm-end-user-id (billingAccountId); inject x-litellm-spend-logs-metadata (run correlation + Langfuse); overwrite client-sent identity headers; log audit trail (runId, status, model, litellm_call_id); serve /health endpoint
+- This directory **does**: Define nginx listen-on-socket config; inject Authorization header (LITELLM_MASTER_KEY); inject x-litellm-end-user-id (billingAccountId); inject x-litellm-spend-logs-metadata (run correlation + Langfuse); overwrite client-sent identity headers; write JSONL audit log to `/billing/audit.jsonl` on shared volume (gateway) or `ACCESS_LOG_PATH` (ephemeral); serve /health endpoint
 - This directory **does not**: Run as a standalone service; contain secrets at rest; implement application logic; count tokens
 
 ## Usage

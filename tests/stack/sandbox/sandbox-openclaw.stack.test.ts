@@ -26,6 +26,9 @@ import {
   OpenClawGatewayClient,
 } from "@/adapters/server/sandbox/openclaw-gateway-client";
 import { ProxyBillingReader } from "@/adapters/server/sandbox/proxy-billing-reader";
+import { SandboxGraphProvider } from "@/adapters/server/sandbox/sandbox-graph.provider";
+import type { GraphRunRequest, SandboxRunnerPort } from "@/ports";
+import { serverEnv } from "@/shared/env/server";
 
 import { execInContainer } from "../../_fixtures/sandbox/fixtures";
 
@@ -50,10 +53,32 @@ const LITELLM_MODEL_IDS: Record<string, string> = {
     "4bc3010e9687ca1b5962c19db9bfbecdcbdf53d4248a2cdd0eebfd1a58420075",
 };
 
-/** Extract litellm_model_id hash from an audit log line. */
-function extractModelId(auditLine: string): string {
-  const match = auditLine.match(/litellm_model_id=(\S+)/);
-  return match?.[1] ?? "-";
+/** Extract litellm_model_id from JSONL audit log entries matching a runId. */
+function extractModelId(runId: string, billingDir: string): string {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const logPath = path.join(billingDir, "audit.jsonl");
+  try {
+    const content = fs.readFileSync(logPath, "utf-8") as string;
+    for (const line of content.split("\n").reverse()) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as Record<string, string>;
+        if (
+          entry.run_id === runId &&
+          entry.litellm_model_id &&
+          entry.litellm_model_id !== "-"
+        ) {
+          return entry.litellm_model_id;
+        }
+      } catch {
+        /* skip malformed */
+      }
+    }
+  } catch {
+    /* file missing */
+  }
+  return "-";
 }
 
 function uniqueRunId(prefix = "gw-test"): string {
@@ -88,6 +113,7 @@ async function isContainerHealthy(
 let client: OpenClawGatewayClient;
 let billingReader: ProxyBillingReader;
 let docker: Docker;
+let billingDir: string;
 
 describe("OpenClaw Gateway Full-Stack", () => {
   beforeAll(async () => {
@@ -108,7 +134,8 @@ describe("OpenClaw Gateway Full-Stack", () => {
     }
 
     client = new OpenClawGatewayClient(GATEWAY_URL, GATEWAY_TOKEN);
-    billingReader = new ProxyBillingReader(docker, PROXY_CONTAINER);
+    billingDir = serverEnv().OPENCLAW_BILLING_DIR;
+    billingReader = new ProxyBillingReader(billingDir);
   });
 
   afterAll(async () => {
@@ -375,16 +402,11 @@ describe("OpenClaw Gateway Full-Stack", () => {
       })
     );
 
-    // Assert ACTUAL model from LiteLLM response header in proxy audit log.
+    // Assert ACTUAL model from LiteLLM response header in proxy audit log (JSONL on shared volume).
     // litellm_model_id is a deployment hash available even in SSE streaming mode
     // (unlike litellm_model_group which LiteLLM omits from streaming response headers).
     await new Promise((r) => setTimeout(r, 1000));
-    const auditOutput = await execInContainer(
-      docker,
-      PROXY_CONTAINER,
-      `grep "run_id=${runId}" /tmp/audit.log`
-    );
-    const modelId = extractModelId(auditOutput);
+    const modelId = extractModelId(runId, billingDir);
     expect(modelId).toBe(LITELLM_MODEL_IDS["test-free-model"]);
     expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
   });
@@ -417,14 +439,59 @@ describe("OpenClaw Gateway Full-Stack", () => {
     );
 
     await new Promise((r) => setTimeout(r, 1000));
-    const auditOutput = await execInContainer(
-      docker,
-      PROXY_CONTAINER,
-      `grep "run_id=${runId}" /tmp/audit.log`
-    );
-    const modelId = extractModelId(auditOutput);
+    const modelId = extractModelId(runId, billingDir);
     expect(modelId).toBe(LITELLM_MODEL_IDS["test-paid-model"]);
     expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
+  });
+
+  // E2E through SandboxGraphProvider: proves GraphRunRequest.model reaches LiteLLM.
+  // Existing "session model override" tests call configureSession() directly on the client,
+  // which bypasses the provider. This test exposes the missing wiring in createGatewayExecution().
+  it("provider-level model selection: GraphRunRequest.model reaches LiteLLM", async () => {
+    const runId = uniqueRunId("provider-model");
+
+    // Stub runner — gateway mode never calls runOnce()
+    const stubRunner: SandboxRunnerPort = {
+      runOnce: () => {
+        throw new Error("runOnce should not be called in gateway mode");
+      },
+    };
+
+    const provider = new SandboxGraphProvider(
+      stubRunner,
+      client,
+      billingReader
+    );
+
+    const req: GraphRunRequest = {
+      runId,
+      ingressRequestId: runId,
+      graphId: "sandbox:openclaw",
+      model: "cogni/test-free-model",
+      messages: [{ role: "user", content: "Hello" }],
+      caller: {
+        billingAccountId: "test-provider-model",
+        virtualKeyId: "test-vk",
+        requestId: runId,
+        traceId: runId,
+      },
+    };
+
+    const { stream } = provider.runGraph(req);
+
+    // Drain the stream — don't assert on success/errors (mock-llm compat issues per bug.0009).
+    // The LLM call still hits the proxy and gets logged regardless of agent-level errors.
+    for await (const _event of stream) {
+      /* drain */
+    }
+
+    // CRITICAL: The model that actually hit LiteLLM must be test-free-model,
+    // NOT the gateway default (test-model). This fails until createGatewayExecution()
+    // calls configureSession() with the model from GraphRunRequest.
+    await new Promise((r) => setTimeout(r, 1000));
+    const modelId = extractModelId(runId, billingDir);
+    expect(modelId).toBe(LITELLM_MODEL_IDS["test-free-model"]);
+    expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]);
   });
 
   it("gateway container does not have LITELLM_MASTER_KEY in env", async () => {

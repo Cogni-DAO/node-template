@@ -2,7 +2,7 @@
 id: task.0010
 type: task
 title: "OpenClaw gateway model selection — session-level override or agent-per-specialty"
-status: In Progress
+status: Done
 priority: 1
 estimate: 3
 summary: Design and implement dynamic model selection for OpenClaw gateway mode. GraphRunRequest.model must reach the actual LLM call. Two viable mechanisms exist in OpenClaw — session-level modelOverride via sessions.patch, or agent-per-specialty with distinct tool/workspace configs.
@@ -10,11 +10,11 @@ outcome: GraphRunRequest.model determines the actual LLM model used in gateway m
 spec_refs:
   - openclaw-sandbox-spec
 project: proj.openclaw-capabilities
-branch: fix/openclaw-gateway-connectivity
+branch: fix/openclaw-billing-clean
 pr:
 reviewer:
 created: 2026-02-09
-updated: 2026-02-11
+updated: 2026-02-12
 labels: [openclaw, gateway, model-routing]
 external_refs:
 assignees: derekg1729
@@ -80,14 +80,15 @@ Define distinct agents for real specialties (different tool profiles, workspaces
 ## Execution Checklist
 
 - [x] Verify `sessions.patch` accepts `modelOverride`/`providerOverride` via WS (test against running gateway)
-- [ ] Add model allowlist mapping in `SandboxGraphProvider` (req.model → OpenClaw model ID)
-- [ ] Gateway client: accept `agentId` param (don't hardcode `"main"`)
+- [ ] Add model allowlist mapping in `SandboxGraphProvider` (req.model → OpenClaw model ID) — deferred, passthrough works
+- [ ] Gateway client: accept `agentId` param (don't hardcode `"main"`) — deferred, single-agent sufficient
 - [x] Gateway client: `configureSession()` accepts required `model` param, forwards via `sessions.patch`
-- [ ] Wire `configureSession(sessionKey, outboundHeaders, model)` call before `runAgent()` in `createGatewayExecution()`
-- [ ] Include `requested_model` + `agentId` in `x-litellm-spend-logs-metadata`
+- [x] Wire `configureSession(sessionKey, outboundHeaders, model)` call before `runAgent()` in `createGatewayExecution()`
+- [ ] Include `requested_model` + `agentId` in `x-litellm-spend-logs-metadata` — deferred, billing tracks model via audit log
 - [x] Update `openclaw-gateway.json` with all supported models in `models.providers.cogni.models[]`
 - [x] Add `litellm_model_id` to gateway proxy nginx audit log format
 - [x] Validate: send request with non-default model, confirm correct LiteLLM deployment via `litellm_model_id` hash in proxy audit log (stack tests: test-free-model, test-paid-model)
+- [x] Provider-level E2E stack test: `SandboxGraphProvider.runGraph()` with non-default model, assert audit log model ID
 
 ## Validation
 

@@ -35,6 +35,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | ------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
 | Fix: schedule creation accepts paid models with zero credits — no credit gate                           | Backlog     | 2   | bug.0025  |
 | Fix: scheduled runs write charge_receipts (billing bypass regression)                                   | Todo        | 2   | bug.0005  |
+| Canonicalize billing at GraphExecutorPort — LiteLLM callback + receipt barrier, kill log-scraping paths | Todo        | 3   | task.0029 |
 | Billing enforcement decorator at GraphExecutorPort level                                                | Done        | 2   | task.0007 |
 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing          | Todo        | 3   | task.0006 |
 | Add `trigger_*` columns to existing `schedule_runs` table (or create `graph_runs` if P1 lands)          | Not Started | 1   | —         |
@@ -91,6 +92,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 ## As-Built Specs
 
 - [unified-graph-launch.md](../../docs/spec/unified-graph-launch.md) — Core invariants, schema, design decisions
+- [billing-ingest.md](../../docs/spec/billing-ingest.md) — Callback-driven billing: adapters emit call_id, LiteLLM callback writes receipts, decorator enforces barrier
 - [scheduler.md](../../docs/spec/scheduler.md) — Temporal architecture, internal API
 - [temporal-patterns.md](../../docs/spec/temporal-patterns.md) — Workflow determinism, activity idempotency
 
