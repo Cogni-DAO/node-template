@@ -4,62 +4,63 @@ type: handoff
 work_item_id: task.0031
 status: active
 created: 2026-02-11
-updated: 2026-02-11
+updated: 2026-02-12
 branch: feat/openclaw-devtools-image
-last_commit: 3b23f9f8
+last_commit: 350a8756
 ---
 
-# Handoff: Build unified cogni-sandbox-openclaw devtools image + pnpm cache volumes
+# Handoff — task.0031: Unified cogni-sandbox-openclaw devtools image
 
 ## Context
 
-- OpenClaw agents run in Docker containers but currently lack Cogni dev tooling (pnpm, correct node version) — agents can't run `pnpm check` or `pnpm test` against the codebase
-- Today's `cogni-sandbox-openclaw` image is a thin layer over `openclaw:local` (node:22) adding only socat — no pnpm, no Cogni-aware tooling
-- Goal: one unified image (node:22 + OpenClaw + pnpm + git + socat) that serves both gateway (long-running) and ephemeral (one-shot) modes
-- Cogni workspace deps are NOT baked into the image — instead a `pnpm_store` named volume provides fast installs after first run
-- This is a prerequisite for task.0022 (git relay MVP) — the git relay agent needs git + pnpm in the container
+- OpenClaw agents need Cogni dev tooling (pnpm, git) inside their containers to run `pnpm check`, `pnpm test`, and create PRs via git relay (task.0022)
+- Previous image was a thin `openclaw:local` wrapper with only socat — no devtools, no deterministic base
+- Goal: one multi-stage image (GHCR OpenClaw base + node:22-bookworm + devtools) for both gateway and ephemeral modes
+- Deps are NOT baked in — `pnpm_store` named volume enables fast offline installs after seeding
+- Prerequisite task.0032 (Node 22 upgrade) is merged (PR #379)
 
 ## Current State
 
-- **Task spec is complete** — requirements, design, plan, validation all written in `work/items/task.0031.openclaw-cogni-dev-image.md`
-- **Blocker discovered and resolved**: OpenClaw has a hard `process.exit(1)` runtime guard requiring node >= 22. Cogni currently pins node:20. Resolution: upgrade Cogni to node:22 first (prerequisite added to task plan)
-- **Node:22 probe done**: `pnpm install --frozen-lockfile` of OpenClaw deps succeeds on node:20-bookworm with node:22 artifacts, but the runtime guard kills the process. No bypass env var exists.
-- **Node:20 surface area mapped**: `package.json` (engines, volta, @types/node), `Dockerfile` (app), `scheduler-worker/Dockerfile`, `sandbox-runtime/Dockerfile`, `ci.yaml`, `staging-preview.yml`, bootstrap scripts — all mechanical replacements
-- **No implementation code written yet** — only task definition and research
+- **Image + compose done**: Dockerfile rewritten as multi-stage with `ARG OPENCLAW_BASE` (GHCR default), build script added, both dev and prod compose updated (COMPOSE_IMAGE_PARITY)
+- **arm64 validated locally**: all devtools present, pnpm cache 1.2s cold → 244ms warm, OpenClaw v2026.2.6-3
+- **Spec updated**: invariants 26 (IMAGE_FROM_PUBLISHED_BASE), 27 (COMPOSE_IMAGE_PARITY), OQ-9 (egress policy)
+- **Not done**: GHCR multi-arch publish, pnpm store seeding, offline install stack test, gateway healthcheck with published image
 
 ## Decisions Made
 
-- **node:22 base** — OpenClaw's hard runtime guard makes node:20 impossible without patching compiled JS. Cogni's node:20 pin is conservative, not architectural. See task.0031 Context section.
-- **No baked deps** — pnpm store volume instead. See task.0031 "Why not bake node_modules?" rationale.
-- **Deterministic store path** — `PNPM_STORE_DIR=/pnpm-store` as env var + volume mount. See task.0031 Compose Changes section.
-- **Orchestration-agnostic image** — image doesn't know how workspace is populated. Provider's job. See task.0031 Runtime Workspace Contract.
+- **Parameterized base**: `ARG OPENCLAW_BASE` — arm64 default from GHCR, amd64 override via `--build-arg`. See [Dockerfile](../../services/sandbox-openclaw/Dockerfile)
+- **One image everywhere**: gateway overrides entrypoint to `["node", "/app/dist/index.js", "gateway"]`; devtools present but unused. See [spec Container Image section](../../docs/spec/openclaw-sandbox-spec.md#container-image)
+- **No `openclaw:local` in published images**: invariant 26 (IMAGE_FROM_PUBLISHED_BASE)
+- **Temporary P0**: agent's first action is `pnpm install --offline --frozen-lockfile`; P1 compose bootstrap service replaces this (task.0036)
 
 ## Next Actions
 
-- [ ] Upgrade Cogni to node:22 — mechanical find-and-replace (full list in task.0031 Plan, first checkbox)
-- [ ] Validate node:22 upgrade: `pnpm check`, `pnpm test`, Docker build all pass
-- [ ] Rewrite `services/sandbox-openclaw/Dockerfile` as multi-stage (node:22-bookworm + openclaw:local)
-- [ ] Update `docker-compose.dev.yml`: new image, `pnpm_store` volume at `/pnpm-store`, `PNPM_STORE_DIR` env
-- [ ] Add `sandbox:openclaw:docker:build` script to root `package.json`
-- [ ] Verify gateway healthcheck passes with new image
-- [ ] Verify pnpm store volume works (second install fast)
+- [ ] Publish `ghcr.io/cogni-dao/cogni-sandbox-openclaw:arm64` from GHCR arm64 base
+- [ ] Publish `ghcr.io/cogni-dao/cogni-sandbox-openclaw:amd64` from GHCR amd64 base (`node-template:openclaw-gateway-latest`)
+- [ ] Create multi-arch manifest `ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`
+- [ ] Build + publish pnpm-store image (`pnpm fetch --frozen-lockfile`, tag by lockfile hash)
+- [ ] Seed `pnpm_store` Docker volume on deployment host from store image
+- [ ] Verify gateway healthcheck: `pnpm dev:infra` with published image
+- [ ] Write stack test `sandbox-openclaw-offline-pnpm.stack.test.ts` (positive + negative control)
+- [ ] After task.0031: pick up task.0022 (git relay MVP)
 
 ## Risks / Gotchas
 
-- **Node:22 upgrade may surface issues** — unlikely but test thoroughly (`pnpm check`, `pnpm test`, Docker builds, CI). Next.js 16 and all major deps support node:22.
-- **OpenClaw uses pnpm 10.x internally** — corepack will auto-download it for `/app` workspace. Cogni uses pnpm 9.x. Both coexist fine (different workspaces).
-- **`@types/node` bump to `^22`** may surface new type errors if node:22 changed any APIs. Run `pnpm typecheck` after the bump.
-- **Worktree location**: implementation lives at `/Users/derek/dev/cogni-template-devtools-image` (worktree of cogni-template)
+- **GHCR bases are different repos**: arm64 at `ghcr.io/cogni-dao/openclaw-outbound-headers:latest`, amd64 at `ghcr.io/cogni-dao/node-template:openclaw-gateway-latest` — pass correct `--build-arg` per arch
+- **`COREPACK_HOME=/usr/local/share/corepack`**: required so sandboxer user (uid 1001) can access pre-prepared pnpm; without it, corepack tries to write to `/nonexistent/.cache` and fails
+- **Egress for `pnpm install`**: both `network=none` (ephemeral) and `sandbox-internal` (gateway) block registry access — must pre-seed pnpm_store volume (OQ-9)
+- **OpenClaw uses pnpm 10.x internally**: corepack auto-downloads for `/app` workspace; Cogni uses 9.x — both coexist (different workspaces)
 
 ## Pointers
 
-| File / Resource                                          | Why it matters                                                |
-| -------------------------------------------------------- | ------------------------------------------------------------- |
-| `work/items/task.0031.openclaw-cogni-dev-image.md`       | Full task spec — requirements, plan, validation               |
-| `services/sandbox-openclaw/Dockerfile`                   | Current Dockerfile to rewrite                                 |
-| `services/sandbox-openclaw/entrypoint.sh`                | Socat bridge entrypoint — preserved as-is                     |
-| `platform/infra/services/runtime/docker-compose.dev.yml` | Gateway compose service to update (lines 522-565)             |
-| `docs/spec/openclaw-sandbox-spec.md`                     | Governing spec — 25 invariants                                |
-| `docs/spec/sandboxed-agents.md`                          | Core sandbox architecture — invariants 1-12                   |
-| `work/projects/proj.openclaw-capabilities.md`            | Parent project — task.0031 is first row in P1 Git Relay table |
-| `work/items/task.0022.git-relay-mvp.md`                  | Downstream task — depends on this image                       |
+| File / Resource                                          | Why it matters                                                 |
+| -------------------------------------------------------- | -------------------------------------------------------------- |
+| `work/items/task.0031.openclaw-cogni-dev-image.md`       | Full task spec with plan checklist                             |
+| `services/sandbox-openclaw/Dockerfile`                   | Multi-stage Dockerfile (the deliverable)                       |
+| `services/sandbox-openclaw/AGENTS.md`                    | Service-level docs — build, standards, usage                   |
+| `platform/infra/services/runtime/docker-compose.dev.yml` | Dev compose — gateway service + pnpm_store volume              |
+| `platform/infra/services/runtime/docker-compose.yml`     | Prod compose — GHCR image ref + same volume                    |
+| `docs/spec/openclaw-sandbox-spec.md`                     | Governing spec — invariants 26-27, Container Image section     |
+| `work/items/task.0036.pnpm-store-cicd.md`                | P1 follow-up — CI/CD pipeline for automated store rebuilds     |
+| `work/items/task.0022.git-relay-mvp.md`                  | Downstream — depends on this image for git + pnpm in container |
+| `work/projects/proj.openclaw-capabilities.md`            | Parent project — P1 Git Relay roadmap                          |
