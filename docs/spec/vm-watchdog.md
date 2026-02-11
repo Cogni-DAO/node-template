@@ -141,6 +141,8 @@ autoheal:
 - `autoheal` itself — `autoheal=false` to prevent self-restart loops
 - One-shot containers (`git-sync`, `repo-init`, `db-provision`, `db-migrate`) — `restart: no`, not long-running
 
+**Deploy interaction:** `deploy.sh` stops autoheal before `compose up -d` to prevent a race condition — autoheal can restart a container between compose's stop and remove steps, causing "cannot remove container: container is running". Compose recreates autoheal as part of the stack, so no explicit re-enable is needed.
+
 ### Resource Limits
 
 ```yaml
