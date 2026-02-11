@@ -48,6 +48,25 @@ async function drainStream(res: Response) {
   return events;
 }
 
+/**
+ * Poll DB until a condition is met. Phase 2 persist runs async inside
+ * createAssistantStreamResponse — there's a race between stream drain
+ * and server-side persist.
+ */
+async function pollUntil<T>(
+  fn: () => Promise<T>,
+  check: (v: T) => boolean,
+  { timeoutMs = 5000, intervalMs = 100 } = {}
+): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const val = await fn();
+    if (check(val)) return val;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return fn(); // final attempt — let assertion fail naturally
+}
+
 describe("Thread Persistence", () => {
   // TODO: Enable once mock-llm auth is fixed (LiteLLM rejects test-key with 401)
   it.skip("persists multi-turn conversation and loads from DB on turn 2", async () => {
@@ -106,19 +125,24 @@ describe("Thread Persistence", () => {
     await drainStream(turn1Res);
 
     // --- Assert: thread row exists in DB with user + assistant messages ---
-    const rows = await db
-      .select()
-      .from(aiThreads)
-      .where(
-        and(
-          eq(aiThreads.ownerUserId, user.id),
-          eq(aiThreads.stateKey, stateKey)
-        )
-      );
+    // Phase 2 persist runs async after stream close — poll until it lands.
+    const queryThread = () =>
+      db
+        .select()
+        .from(aiThreads)
+        .where(
+          and(
+            eq(aiThreads.ownerUserId, user.id),
+            eq(aiThreads.stateKey, stateKey)
+          )
+        );
+    const rows = await pollUntil(queryThread, (r) => {
+      const msgs = (r[0]?.messages ?? []) as Array<{ role: string }>;
+      return msgs.length >= 2;
+    });
     expect(rows).toHaveLength(1);
     const thread = rows[0]!;
     const messages = thread.messages as Array<{ role: string }>;
-    // Phase 1 persists user msg, phase 2 persists user + assistant
     expect(messages.length).toBeGreaterThanOrEqual(2);
     expect(messages[0]?.role).toBe("user");
     expect(messages[messages.length - 1]?.role).toBe("assistant");
@@ -156,15 +180,11 @@ describe("Thread Persistence", () => {
     await drainStream(turn2Res);
 
     // --- Assert: thread now has 4 messages (user1, assistant1, user2, assistant2) ---
-    const rows2 = await db
-      .select()
-      .from(aiThreads)
-      .where(
-        and(
-          eq(aiThreads.ownerUserId, user.id),
-          eq(aiThreads.stateKey, stateKey)
-        )
-      );
+    // Poll again for phase 2 of turn 2
+    const rows2 = await pollUntil(queryThread, (r) => {
+      const msgs = (r[0]?.messages ?? []) as Array<{ role: string }>;
+      return msgs.length >= 4;
+    });
     expect(rows2).toHaveLength(1);
     const thread2 = rows2[0]!;
     const messages2 = thread2.messages as Array<{
