@@ -69,6 +69,7 @@ export interface SubmitTxHashInput {
 export interface SubmitTxHashResult {
   attemptId: string;
   status: PaymentAttemptStatus;
+  chainId: number;
   txHash: string;
   errorCode?: PaymentErrorCode | undefined;
   errorMessage?: string | undefined;
@@ -83,6 +84,7 @@ export interface GetStatusInput {
 export interface GetStatusResult {
   attemptId: string;
   status: PaymentAttemptStatus;
+  chainId: number;
   clientStatus: string; // ClientVisibleStatus from core
   txHash: string | null;
   amountUsdCents: number;
@@ -190,6 +192,7 @@ export async function submitTxHash(
     return {
       attemptId: attempt.id,
       status: attempt.status,
+      chainId: attempt.chainId,
       txHash: attempt.txHash,
       errorCode: attempt.errorCode ?? undefined,
       errorMessage: attempt.errorCode
@@ -211,6 +214,7 @@ export async function submitTxHash(
     return {
       attemptId: attempt.id,
       status: attempt.status,
+      chainId: attempt.chainId,
       txHash: attempt.txHash ?? input.txHash,
       errorCode: "INTENT_EXPIRED",
       errorMessage: "Payment intent expired before transaction submission",
@@ -241,6 +245,7 @@ export async function submitTxHash(
   return {
     attemptId: attempt.id,
     status: attempt.status,
+    chainId: attempt.chainId,
     txHash: attempt.txHash,
     errorCode: attempt.errorCode ?? undefined,
     errorMessage: attempt.errorCode
@@ -338,6 +343,7 @@ export async function getStatus(
   return {
     attemptId: attempt.id,
     status: attempt.status,
+    chainId: attempt.chainId,
     clientStatus: toClientVisibleStatus(attempt.status),
     txHash: attempt.txHash,
     amountUsdCents: attempt.amountUsdCents,

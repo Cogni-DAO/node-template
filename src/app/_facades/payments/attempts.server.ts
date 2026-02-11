@@ -30,6 +30,7 @@ import type {
   PaymentsIntentCreatedEvent,
   PaymentsStateTransitionEvent,
   PaymentsStatusReadEvent,
+  PaymentsVerifiedEvent,
   RequestContext,
 } from "@/shared/observability";
 
@@ -208,11 +209,27 @@ export async function submitPaymentTxHashFacade(
     billingAccountId: billingAccount.id,
     paymentIntentId: result.attemptId,
     toStatus: result.status,
-    chainId: 0, // TODO: retrieve chainId from payment attempt
+    chainId: result.chainId,
     txHash: result.txHash,
+    errorCode: result.errorCode,
     durationMs: performance.now() - start,
   };
   enrichedCtx.log.info(event, "payment state transition");
+
+  // Emit verified event when submit triggers immediate verification + settlement
+  if (result.status === "CREDITED") {
+    const verifiedEvent: PaymentsVerifiedEvent = {
+      event: "payments.verified",
+      routeId: ctx.routeId,
+      reqId: ctx.reqId,
+      billingAccountId: billingAccount.id,
+      paymentIntentId: result.attemptId,
+      chainId: result.chainId,
+      txHash: result.txHash,
+      durationMs: performance.now() - start,
+    };
+    enrichedCtx.log.info(verifiedEvent, "payment verified and credited");
+  }
 
   return {
     attemptId: result.attemptId,
@@ -300,7 +317,7 @@ export async function getPaymentStatusFacade(
   );
 
   // Log domain event (read operation)
-  const event: PaymentsStatusReadEvent = {
+  const readEvent: PaymentsStatusReadEvent = {
     event: "payments.status_read",
     routeId: ctx.routeId,
     reqId: ctx.reqId,
@@ -309,7 +326,22 @@ export async function getPaymentStatusFacade(
     status: result.clientStatus,
     durationMs: performance.now() - start,
   };
-  enrichedCtx.log.info(event, "payment status read");
+  enrichedCtx.log.info(readEvent, "payment status read");
+
+  // Emit verified event when status poll discovers a CREDITED payment
+  if (result.status === "CREDITED" && result.txHash) {
+    const verifiedEvent: PaymentsVerifiedEvent = {
+      event: "payments.verified",
+      routeId: ctx.routeId,
+      reqId: ctx.reqId,
+      billingAccountId: billingAccount.id,
+      paymentIntentId: result.attemptId,
+      chainId: result.chainId,
+      txHash: result.txHash,
+      durationMs: performance.now() - start,
+    };
+    enrichedCtx.log.info(verifiedEvent, "payment verified and credited");
+  }
 
   // Map port types (Date) to contract types (ISO string)
   return {
