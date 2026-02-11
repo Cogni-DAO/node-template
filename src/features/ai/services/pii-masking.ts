@@ -37,10 +37,10 @@ const SECRET_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
     pattern: /\bgh[pohsr]_[a-zA-Z0-9]{36,}\b/g,
     replacement: "[REDACTED_GH_TOKEN]",
   },
-  // Base64-encoded secrets (long base64 strings that look like secrets)
+  // JWT tokens (eyJ... base64url header)
   {
-    pattern: /\b[A-Za-z0-9+/]{40,}={0,2}\b/g,
-    replacement: "[REDACTED_BASE64]",
+    pattern: /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g,
+    replacement: "[REDACTED_JWT]",
   },
 ];
 

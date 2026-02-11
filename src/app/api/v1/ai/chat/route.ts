@@ -324,7 +324,24 @@ export const POST = wrapRouteHandlerWithLogging(
         "ai.chat_response_started"
       );
 
-      // --- Stream response + accumulate UIMessage for persistence ---
+      // --- Persistence accumulator (outer scope — survives stream lifecycle) ---
+      // Per PERSIST_AFTER_PUMP: written by stream callback, read by detached persist.
+      let accumulatedText = "";
+      let assistantFinalContent: string | undefined;
+      const accToolParts: Array<{
+        toolCallId: string;
+        toolName: string;
+        input: unknown;
+        output?: unknown;
+        state: "input-available" | "output-available";
+      }> = [];
+      const toolPartIndexByCallId = new Map<string, number>();
+      let resolvePumpDone!: () => void;
+      const pumpDone = new Promise<void>((r) => {
+        resolvePumpDone = r;
+      });
+
+      // --- Stream response (callback streams + accumulates, no persistence) ---
       const response = createAssistantStreamResponse(async (controller) => {
         // Helper: finalize tool-call substream with result, then close.
         // assistant-stream requires explicit close() after setResponse().
@@ -377,20 +394,7 @@ export const POST = wrapRouteHandlerWithLogging(
             ReturnType<typeof controller.addToolCallPart>
           >();
 
-          // Wire format + persistence accumulator state
-          let accumulatedText = "";
-          let assistantFinalContent: string | undefined;
           let eventSeq = 0;
-
-          // UIMessage accumulator: tool parts collected during stream
-          const accToolParts: Array<{
-            toolCallId: string;
-            toolName: string;
-            input: unknown;
-            output?: unknown;
-            state: "input-available" | "output-available";
-          }> = [];
-          const toolPartIndexByCallId = new Map<string, number>();
 
           for await (const event of deltaStream) {
             if (request.signal.aborted) break;
@@ -558,74 +562,6 @@ export const POST = wrapRouteHandlerWithLogging(
               error: `Stream finalization failed: ${result.error}`,
             });
           }
-
-          // --- Phase 2: persist assistant message after pump (optimistic) ---
-          const finalText = assistantFinalContent ?? accumulatedText;
-          const responseParts: UIMessage["parts"] = [];
-          if (finalText) {
-            responseParts.push({ type: "text" as const, text: finalText });
-          }
-          for (const tp of accToolParts) {
-            responseParts.push({
-              type: "dynamic-tool",
-              toolCallId: tp.toolCallId,
-              toolName: tp.toolName,
-              state: tp.state,
-              input: tp.input,
-              ...(tp.output !== undefined ? { output: tp.output } : {}),
-            } as UIMessage["parts"][number]);
-          }
-
-          const assistantUIMessage: UIMessage = {
-            id: nanoid(),
-            role: "assistant",
-            parts: responseParts,
-          };
-
-          try {
-            const fullThread = [...threadWithUser, assistantUIMessage];
-            await threadPersistence.saveThread(
-              sessionUser.id,
-              stateKey,
-              maskMessagesForPersistence(fullThread),
-              expectedLenAfterUser
-            );
-            ctx.log.info(
-              { stateKey, messageCount: fullThread.length },
-              "ai.thread_persisted"
-            );
-          } catch (persistErr) {
-            if (persistErr instanceof ThreadConflictError) {
-              // Retry once: reload + re-append assistant only
-              try {
-                const reloaded = await threadPersistence.loadThread(
-                  sessionUser.id,
-                  stateKey
-                );
-                const retryThread = [...reloaded, assistantUIMessage];
-                await threadPersistence.saveThread(
-                  sessionUser.id,
-                  stateKey,
-                  maskMessagesForPersistence(retryThread),
-                  reloaded.length
-                );
-                ctx.log.info(
-                  { stateKey, messageCount: retryThread.length },
-                  "ai.thread_persisted (retry)"
-                );
-              } catch (retryErr) {
-                ctx.log.error(
-                  { err: retryErr, stateKey },
-                  "ai.thread_persist_retry_failed"
-                );
-              }
-            } else {
-              ctx.log.error(
-                { err: persistErr, stateKey },
-                "ai.thread_persist_failed"
-              );
-            }
-          }
         } catch (error) {
           if (error instanceof Error && error.name === "AbortError") {
             ctx.log.info({ reqId: ctx.reqId }, "ai.chat_client_aborted");
@@ -637,8 +573,87 @@ export const POST = wrapRouteHandlerWithLogging(
           const streamMs = performance.now() - streamStartMs;
           aiChatStreamDurationMs.observe(streamMs);
           ctx.log.info({ reqId: ctx.reqId, streamMs }, "ai.chat_stream_closed");
+          resolvePumpDone();
         }
       });
+
+      // --- Phase 2: persist assistant message after pump (disconnect-safe) ---
+      // Detached from stream lifecycle — client disconnect cannot prevent this.
+      const persistAfterPump = pumpDone.then(async () => {
+        const finalText = assistantFinalContent ?? accumulatedText;
+        if (!finalText && accToolParts.length === 0) {
+          ctx.log.warn({ stateKey }, "ai.thread_persist_skipped — no content");
+          return;
+        }
+
+        const responseParts: UIMessage["parts"] = [];
+        if (finalText) {
+          responseParts.push({ type: "text" as const, text: finalText });
+        }
+        for (const tp of accToolParts) {
+          responseParts.push({
+            type: "dynamic-tool",
+            toolCallId: tp.toolCallId,
+            toolName: tp.toolName,
+            state: tp.state,
+            input: tp.input,
+            ...(tp.output !== undefined ? { output: tp.output } : {}),
+          } as UIMessage["parts"][number]);
+        }
+
+        const assistantUIMessage: UIMessage = {
+          id: nanoid(),
+          role: "assistant",
+          parts: responseParts,
+        };
+
+        try {
+          const fullThread = [...threadWithUser, assistantUIMessage];
+          await threadPersistence.saveThread(
+            sessionUser.id,
+            stateKey,
+            maskMessagesForPersistence(fullThread),
+            expectedLenAfterUser
+          );
+          ctx.log.info(
+            { stateKey, messageCount: fullThread.length },
+            "ai.thread_persisted"
+          );
+        } catch (persistErr) {
+          if (persistErr instanceof ThreadConflictError) {
+            try {
+              const reloaded = await threadPersistence.loadThread(
+                sessionUser.id,
+                stateKey
+              );
+              const retryThread = [...reloaded, assistantUIMessage];
+              await threadPersistence.saveThread(
+                sessionUser.id,
+                stateKey,
+                maskMessagesForPersistence(retryThread),
+                reloaded.length
+              );
+              ctx.log.info(
+                { stateKey, messageCount: retryThread.length },
+                "ai.thread_persisted (retry)"
+              );
+            } catch (retryErr) {
+              ctx.log.error(
+                { err: retryErr, stateKey },
+                "ai.thread_persist_retry_failed"
+              );
+            }
+          } else {
+            ctx.log.error(
+              { err: persistErr, stateKey },
+              "ai.thread_persist_failed"
+            );
+          }
+        }
+      });
+      persistAfterPump.catch((err) =>
+        ctx.log.error({ err, stateKey }, "ai.thread_persist_unhandled")
+      );
 
       // Return response with stateKey header for thread continuity
       const headers = new Headers(response.headers);

@@ -67,6 +67,21 @@ These are explicitly **NOT in P0** (deferred to P1):
 
 Per spec § Acceptance Checks (all 8 checks must pass).
 
+## Code Review Findings
+
+Priority order — top items first:
+
+- [ ] **H1. Phase 2 persist inside `createAssistantStreamResponse` callback — disconnect may abort it.** Move phase 2 persistence out of the callback or detach it from abort lifecycle. Accumulate state in outer scope, persist after `response` is constructed.
+- [ ] **M1. PII masking base64 regex too aggressive.** `/\b[A-Za-z0-9+/]{40,}={0,2}\b/g` matches UUIDs, hashes, code. Remove or tighten (require `+`/`/` char, or match known prefixes like `ey`).
+- [ ] **M2. Stack test `it.skip` — no live coverage of persistence invariants.** Write at least one contract-level test (mocked LLM) exercising full persistence round-trip.
+- [ ] **H2. `listThreads` fetches full messages JSONB just to count.** Use `sql\`jsonb_array_length(messages)\`` in select instead.
+- [ ] **M4. No unit test for adapter optimistic concurrency.** Add tests for: conflict path, INSERT-on-first-write path, concurrent save race.
+- [ ] **M5. `nanoid` dependency — `crypto.randomUUID()` was an option.** Acceptable since AI SDK uses nanoid internally; note for awareness.
+- [ ] **L1. `ai` package as direct dep — type-only usage.** Justified since schema/port/adapter/mappers all type against `UIMessage`.
+- [ ] **L3. `MAX_USER_TEXT_CHARS` route-local constant vs contract `MAX_MESSAGE_CHARS`.** Consider co-locating in contract or shared constants.
+- [ ] **Scope note: PII masking (97 + 120 lines) not in P0 invariants.** Defense-in-depth but adds surface area. Deferrable to P1.
+- [ ] **Scope note: `softDelete`/`listThreads` not called by route in P0.** Speculative but small; port is cleaner with them.
+
 ## PR / Links
 
 - Handoff: [handoff](../handoffs/task.0030.handoff.md)

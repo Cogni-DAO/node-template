@@ -68,8 +68,7 @@ async function pollUntil<T>(
 }
 
 describe("Thread Persistence", () => {
-  // TODO: Enable once mock-llm auth is fixed (LiteLLM rejects test-key with 401)
-  it.skip("persists multi-turn conversation and loads from DB on turn 2", async () => {
+  it("persists multi-turn conversation and loads from DB on turn 2", async () => {
     // --- Arrange: seed user with credits ---
     const db = getSeedDb();
     const { user } = await seedAuthenticatedUser(

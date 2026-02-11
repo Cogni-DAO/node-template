@@ -160,7 +160,7 @@ export class DrizzleThreadPersistenceAdapter implements ThreadPersistencePort {
         .select({
           stateKey: aiThreads.stateKey,
           updatedAt: aiThreads.updatedAt,
-          messages: aiThreads.messages,
+          messageCount: sql<number>`jsonb_array_length(${aiThreads.messages})`,
           metadata: aiThreads.metadata,
         })
         .from(aiThreads)
@@ -177,7 +177,7 @@ export class DrizzleThreadPersistenceAdapter implements ThreadPersistencePort {
       return rows.map((row) => ({
         stateKey: row.stateKey,
         updatedAt: row.updatedAt,
-        messageCount: (row.messages as UIMessage[]).length,
+        messageCount: row.messageCount,
         metadata: row.metadata ?? undefined,
       }));
     });
