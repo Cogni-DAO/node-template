@@ -20,12 +20,16 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 // Gateway + LLM round-trip. Generous timeout for first-call session creation.
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 15_000 });
 
+import type { AiEvent } from "@cogni/ai-core";
+
 import { LlmProxyManager } from "@/adapters/server/sandbox";
 import {
   type GatewayAgentEvent,
   OpenClawGatewayClient,
 } from "@/adapters/server/sandbox/openclaw-gateway-client";
 import { ProxyBillingReader } from "@/adapters/server/sandbox/proxy-billing-reader";
+import { SandboxGraphProvider } from "@/adapters/server/sandbox/sandbox-graph.provider";
+import type { GraphRunRequest, SandboxRunnerPort } from "@/ports";
 import { serverEnv } from "@/shared/env/server";
 
 import { execInContainer } from "../../_fixtures/sandbox/fixtures";
@@ -440,6 +444,74 @@ describe("OpenClaw Gateway Full-Stack", () => {
     const modelId = extractModelId(runId, billingDir);
     expect(modelId).toBe(LITELLM_MODEL_IDS["test-paid-model"]);
     expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
+  });
+
+  // E2E through SandboxGraphProvider: proves GraphRunRequest.model reaches LiteLLM.
+  // Existing "session model override" tests call configureSession() directly on the client,
+  // which bypasses the provider. This test exposes the missing wiring in createGatewayExecution().
+  it("provider-level model selection: GraphRunRequest.model reaches LiteLLM", async () => {
+    const runId = uniqueRunId("provider-model");
+
+    // Stub runner — gateway mode never calls runOnce()
+    const stubRunner: SandboxRunnerPort = {
+      runOnce: () => {
+        throw new Error("runOnce should not be called in gateway mode");
+      },
+    };
+
+    const provider = new SandboxGraphProvider(
+      stubRunner,
+      client,
+      billingReader
+    );
+
+    const req: GraphRunRequest = {
+      runId,
+      ingressRequestId: runId,
+      graphId: "sandbox:openclaw",
+      model: "cogni/test-free-model",
+      messages: [{ role: "user", content: "Hello" }],
+      caller: {
+        billingAccountId: "test-provider-model",
+        virtualKeyId: "test-vk",
+        requestId: runId,
+        traceId: runId,
+      },
+    };
+
+    const { stream, final } = provider.runGraph(req);
+
+    // Consume the stream, collect events by type
+    const events: AiEvent[] = [];
+    for await (const event of stream) {
+      events.push(event);
+    }
+
+    const result = await final;
+
+    // Must complete without errors
+    const errors = events.filter((e) => e.type === "error");
+    expect(errors).toHaveLength(0);
+    expect(result.ok).toBe(true);
+
+    // Must have assistant content
+    const assistantFinal = events.find((e) => e.type === "assistant_final") as
+      | Extract<AiEvent, { type: "assistant_final" }>
+      | undefined;
+    expect(assistantFinal).toBeDefined();
+    expect(assistantFinal!.content.length).toBeGreaterThan(0);
+
+    // Must have billing
+    const usageReports = events.filter((e) => e.type === "usage_report");
+    expect(usageReports.length).toBeGreaterThan(0);
+
+    // CRITICAL: The model that actually hit LiteLLM must be test-free-model,
+    // NOT the gateway default (test-model). This fails until createGatewayExecution()
+    // calls configureSession() with the model from GraphRunRequest.
+    await new Promise((r) => setTimeout(r, 1000));
+    const modelId = extractModelId(runId, billingDir);
+    expect(modelId).toBe(LITELLM_MODEL_IDS["test-free-model"]);
+    expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]);
   });
 
   it("gateway container does not have LITELLM_MASTER_KEY in env", async () => {
