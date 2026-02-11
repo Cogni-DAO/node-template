@@ -34,6 +34,7 @@
 | 1   | 3   | Todo        | task.0006  | Collapse GraphProvider — single execution interface                                  | Unified Graph Launch       | proj.unified-graph-launch       |
 | 1   | 1   | Backlog     | bug.0033   | Chat route enqueues to closed assistant-stream controller — unhandled TypeError      |                            |                                 |
 | 1   | 3   | Done        | task.0030  | Thread persistence P0 — ai_threads table, port, route bridge                         | Thread Persistence         | proj.thread-persistence         |
+| 1   | 3   | Todo        | task.0035  | Thread history sidebar — list, switch, load conversations                            | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Todo        | task.0009  | Sandbox repo refresh: on-demand git-sync for agent workspace                         | Sandboxed Agents           | proj.sandboxed-agents           |
 | 1   | 3   | Backlog     | bug.0004   | /activity dashboard cost column broken                                               | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 1   | Todo        | task.0018  | Dynamic agent catalog in UI + OpenClaw model sync                                    | OpenClaw Capabilities      | proj.openclaw-capabilities      |

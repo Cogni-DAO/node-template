@@ -49,8 +49,8 @@ Ship server-authoritative conversation persistence so that multi-turn chat works
 | Contract: change wire format to `{threadId, message}` instead of `messages[]`         | Not Started | 1   | (create at P1 start) |
 | Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk)        | Not Started | 2   | (create at P1 start) |
 | LangGraph routing: executor-conditional history loading + UUID thread ref derivation  | Not Started | 2   | (create at P1 start) |
-| Thread list: `listThreads` endpoint + basic thread selection UI                       | Not Started | 2   | (create at P1 start) |
-| History load: thread messages loaded from server on mount / thread switch             | Not Started | 1   | (create at P1 start) |
+| Thread list: `listThreads` endpoint + basic thread selection UI                       | Todo        | 2   | task.0035            |
+| History load: thread messages loaded from server on mount / thread switch             | Todo        | 1   | task.0035            |
 | Gateway streaming enrichment: capture OpenClaw WS tool-use events as AiEvents         | Not Started | 3   | (create at P1 start) |
 | Ephemeral output enrichment: investigate richer `--json` output for tool-use metadata | Not Started | 1   | (create at P1 start) |
 
