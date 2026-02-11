@@ -158,6 +158,10 @@ export type {
   SandboxVolumeMount,
 } from "./sandbox-runner.port";
 export type {
+  ThreadPersistencePort,
+  ThreadSummary,
+} from "./thread-persistence.port";
+export type {
   EmitAiEvent,
   ToolEffect,
   ToolExecFn,

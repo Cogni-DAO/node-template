@@ -19,6 +19,7 @@ import type {
   WebSearchCapability,
 } from "@cogni/ai-tools";
 import type { UserId } from "@cogni/ids";
+import { userActor } from "@cogni/ids";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
@@ -28,6 +29,7 @@ import {
   DrizzleExecutionRequestAdapter,
   DrizzleScheduleRunAdapter,
   DrizzleScheduleUserAdapter,
+  DrizzleThreadPersistenceAdapter,
   EvmRpcOnChainVerifierAdapter,
   getAppDb,
   LangfuseAdapter,
@@ -74,6 +76,7 @@ import type {
   ScheduleRunRepository,
   ScheduleUserPort,
   ServiceAccountService,
+  ThreadPersistencePort,
   TreasuryReadPort,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
@@ -123,6 +126,8 @@ export interface Container {
   repoCapability: RepoCapability;
   /** Tool source with real implementations for AI tool execution */
   toolSource: ToolSourcePort;
+  /** Thread persistence scoped to a user (RLS enforced) */
+  threadPersistenceForUser(userId: UserId): ThreadPersistencePort;
 }
 
 // Feature-specific dependency types
@@ -365,6 +370,8 @@ function createContainer(): Container {
     webSearchCapability,
     repoCapability,
     toolSource,
+    threadPersistenceForUser: (userId: UserId) =>
+      new DrizzleThreadPersistenceAdapter(db, userActor(userId)),
   };
 }
 

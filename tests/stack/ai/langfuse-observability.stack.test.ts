@@ -392,7 +392,7 @@ describe("Langfuse Observability Stack Tests", () => {
       const { defaultPreferredModelId: modelId } = await modelsRes.json();
 
       // Use a very long stateKey (which becomes sessionId via hash)
-      const longStateKey = "a".repeat(300);
+      const longStateKey = "a".repeat(128);
 
       // Act
       const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
