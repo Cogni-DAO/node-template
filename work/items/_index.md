@@ -7,6 +7,7 @@
 
 | Pri | Est | Status      | ID         | Title                                                                                | Project                    | Project ID                      |
 | --- | --- | ----------- | ---------- | ------------------------------------------------------------------------------------ | -------------------------- | ------------------------------- |
+| 0   | 2   | Done        | bug.0033   | Transient RPC errors permanently reject payments — funds taken, no credits           | Payments Enhancements      | proj.payments-enhancements      |
 | 0   | 2   | Done        | bug.0015   | Deploy disk cleanup runs after pulls — disk exhaustion on 40GB VMs                   | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Done        | bug.0016   | Production compose missing OpenClaw services — silent no-op profiles                 | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Done        | bug.0021   | Gateway WS client receives uncorrelated chat events — HEARTBEAT_OK leak              | OpenClaw Capabilities      | proj.openclaw-capabilities      |

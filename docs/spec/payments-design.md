@@ -144,7 +144,7 @@ WHERE reason = 'widget_payment';
 CREATED_INTENT -> PENDING_UNVERIFIED (on submit)
 CREATED_INTENT -> FAILED (on intent expiration)
 PENDING_UNVERIFIED -> CREDITED (on successful verification)
-PENDING_UNVERIFIED -> REJECTED (on validation failure)
+PENDING_UNVERIFIED -> REJECTED (on validation failure; NOT on transient RPC_ERROR)
 PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 ```
 
@@ -216,6 +216,7 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 - EvmRpcOnChainVerifierAdapter MUST use EvmOnchainClient (never call viem/RPC directly)
 - Unit tests MUST use FakeEvmOnchainClient (no RPC calls in unit tests)
 - Payment service NEVER grants credits unless `status === 'VERIFIED'`
+- RPC_ERROR from OnChainVerifier is transient — `verifyAndSettle()` leaves attempt in PENDING_UNVERIFIED (no state transition) so the next `getStatus` poll retries verification automatically
 
 ### Key Decisions
 
@@ -229,7 +230,7 @@ Three endpoints: POST intents, POST submit, GET status. Internal 5-state machine
 
 #### 3. Error Codes
 
-`TX_NOT_FOUND`, `TX_REVERTED`, `TOKEN_TRANSFER_NOT_FOUND`, `SENDER_MISMATCH`, `RECIPIENT_MISMATCH`, `AMOUNT_MISMATCH`, `INSUFFICIENT_CONFIRMATIONS`, `RECEIPT_NOT_FOUND`, `INTENT_EXPIRED`, `RPC_ERROR`
+`TX_NOT_FOUND`, `TX_REVERTED`, `TOKEN_TRANSFER_NOT_FOUND`, `SENDER_MISMATCH`, `RECIPIENT_MISMATCH`, `AMOUNT_MISMATCH`, `INSUFFICIENT_CONFIRMATIONS`, `RECEIPT_NOT_FOUND`, `INTENT_EXPIRED`, `RPC_ERROR` (transient — does not cause state transition; retried on next poll)
 
 #### 4. Unit Conversions
 
