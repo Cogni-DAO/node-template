@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-10
+- **Last reviewed:** 2026-02-11
 - **Status:** draft
 
 ## Purpose
@@ -92,10 +92,11 @@ docker compose --project-name cogni-runtime logs -f app
 - Database security uses two-user model (root + app credentials)
 - Init scripts run only on first postgres container startup
 - `NEXTAUTH_URL` env var provided with shell fallback to `APP_BASE_URL`; Auth.js uses `trustHost: true` (safe behind Caddy)
-- Log collection: Alloy scrapes Docker containers (JSON stdout), applies strict label cardinality (app, env, service, stream)
+- Log collection: Alloy scrapes Docker containers (JSON stdout), applies strict label cardinality (app, env, service, stream); suppresses successful health-check/metrics-scrape log noise at pipeline level
+- Alloy infra metrics: cAdvisor (container memory/CPU/OOM/network/disk) + node exporter (host memory/CPU/filesystem/network) → Grafana Cloud Mimir via strict 18-metric allowlist
+- Alloy host mounts: `/proc:/host/proc:ro`, `/sys:/host/sys:ro`, `/:/host/root:ro` (required for node exporter)
 - Alloy UI exposed at 127.0.0.1:12345 (internal only)
 - `DEPLOY_ENVIRONMENT` must be set (local|preview|production) - used for env label, fail-closed validation
-- Single parameterized Alloy config for all environments (no drift)
 - `db-migrate` service runs via `--profile bootstrap`, receives only DB env vars (least-secret exposure)
 - `MIGRATOR_IMAGE` required in production compose (no fallback), derived from APP_IMAGE with `-migrate` suffix
 - `git-sync` runs as bootstrap profile service (prod) or regular service (dev), populates `repo_data` volume at `/repo/current` via atomic symlink
@@ -115,7 +116,7 @@ docker compose --project-name cogni-runtime logs -f app
 - Caddy runs in separate edge project (see `../edge/`)
 - Alloy writes to Grafana Cloud Loki
 - Environment variables: `DEPLOY_ENVIRONMENT`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`
-- Metrics: App exposes `/api/metrics` (auth via `METRICS_TOKEN`); Alloy scrapes and ships to Mimir (via `PROMETHEUS_*`)
+- Metrics: App exposes `/api/metrics` (auth via `METRICS_TOKEN`); Alloy scrapes app + cAdvisor + node exporter and ships to Mimir (via `PROMETHEUS_*`)
 - Verify in Alloy UI (http://127.0.0.1:12345) and Grafana Cloud
 
 **OpenClaw Gateway Services (profile: sandbox-openclaw):**

@@ -541,3 +541,49 @@ The Feb 7 and Feb 8 incidents are **the same root cause** at different severitie
 2. **External uptime monitor** (UptimeRobot, Checkly, or similar) pinging `https://cognidao.org/api/meta/readyz` every 60s from outside. Alerts to Slack/email when it fails. The VM watchdog handles auto-recovery; this handles notification.
 
 3. **Grafana Cloud alert rules** on Loki — trigger when `{stream="stderr"}` volume spikes or when `{service="app"}` logs stop arriving (dead-man's switch).
+
+---
+
+## Feb 10 Continuation: Preview Disk Exhaustion & Observability Blindfold
+
+See also: [pm.preview-disk-exhaustion.2026-02-10](./pm.preview-disk-exhaustion.2026-02-10.md)
+
+Preview VM hit 100% disk (39G/39G) again, blocking deploys. During investigation, Loki log analysis revealed that our observability data is unreliable for incident reconstruction.
+
+### Loki log gap during disk exhaustion (Feb 10, UTC)
+
+| Window (UTC)    | Preview Entries | Production Entries | Notes                                   |
+| --------------- | --------------- | ------------------ | --------------------------------------- |
+| 05:00–09:00     | ~3,300/hr       | ~3,158/hr          | Appears normal                          |
+| **09:00–10:00** | **890**         | ~3,158             | Preview drops — disk full               |
+| **10:00–11:00** | **32**          | ~3,103             | Preview near-silent                     |
+| 11:00–12:00     | 2,430           | —                  | Recovery begins                         |
+| 12:00–13:00     | 2,690           | —                  | OpenClaw gateway first boot (12:20 UTC) |
+
+Key error lines during the gap:
+
+- **09:16** — LiteLLM: `PostgreSQL connection: Error { kind: Closed }` (×3)
+- **09:16** — Caddy: `no space left on device` (TLS cert lock file)
+- **09:48** — Temporal: `poll_workflow_task_queue retried 8 times` (gRPC timeout)
+- **09:57** — Deploy started then **failed with exit code 11**
+- **10:07–10:18** — Caddy: `no space left on device` flood (access.log, caddy.log)
+- **~10:55** — First recovery: LiteLLM health checks resume after manual SSH cleanup + Alloy restart
+- **12:20** — OpenClaw gateway boots (85 min after LiteLLM — stack boots in 30s, so this gap is unexplained)
+
+Production was unaffected (separate VM).
+
+### Observability data quality: flying with a blindfold
+
+**We don't trust this data.** The Loki logs are too noisy and too incomplete for confident incident analysis:
+
+1. **Health check spam dominates volume.** ~3,000 entries/hr sounds healthy, but the majority is `meta.readyz` (every 10s) + `meta.metrics` (every 15s) + LiteLLM `health/readiness` (every 10s), each logged as "request received" + "request complete". Actual application signal is buried. Volume-based gap detection is misleading.
+
+2. **Recovery timeline is nonsensical.** LiteLLM resumed at ~10:55, OpenClaw booted at 12:20 — 85-minute gap for a 30-second boot. Either Alloy wasn't collecting all containers during recovery, there were invisible restart failures, or the OpenClaw deploy was a separate event. The logs don't tell us which.
+
+3. **Alloy has no self-monitoring.** When Alloy stops shipping (as during disk exhaustion), there is zero indication — just a gap. No heartbeat, no dead-man's switch, no separate channel.
+
+4. **No disk metrics.** Disk exhaustion was discovered manually via SSH. No `node_filesystem_*` metrics, no log-based disk alerts. We see consequences (Caddy write errors, deploy failures) but not the cause.
+
+5. **Stats API can't filter noise.** Loki `/index/stats` rejects line filters — can't programmatically separate health checks from real logs. Assessing signal requires full log queries.
+
+**We're not flying blind — but we are flying with a blindfold.** We can see errors and gaps after the fact, but the data is too noisy to reconstruct incidents confidently or detect them proactively.
