@@ -15,6 +15,7 @@
 | 0   | 1   | Backlog     | bug.0009   | OpenClaw v2026.2.4 gateway agent returns empty payloads                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | In Progress | task.0008  | Gateway client: correct protocol lifecycle for OpenClaw chat E2E                     | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | Todo        | task.0022  | Git relay MVP: host-side clone → agent commit → host push + PR                       | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 1   | Todo        | task.0032  | Upgrade Cogni from Node 20 to Node 22 LTS                                            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | Todo        | task.0031  | Build unified cogni-sandbox-openclaw devtools image + pnpm cache volumes             | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Done        | bug.0027   | Gateway billing fails in production — Docker socket ENOENT crashes all OpenClaw runs | Payments Enhancements      | proj.payments-enhancements      |
 | 0   | 2   | Backlog     | bug.0026   | Scheduler worker silently stops polling — schedules enabled but runs cease           | Reliability & Uptime       | proj.reliability                |

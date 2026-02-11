@@ -26,7 +26,7 @@ external_refs:
 
 Today `cogni-sandbox-openclaw` is a thin layer over `openclaw:local` (node:22-bookworm) — adds socat + sandboxer user. The agent gets the Cogni repo via read-only volume mount (`repo_data:/repo:ro`) with no `node_modules`. To run `pnpm check`, `pnpm test`, or any Node tooling, the agent needs `pnpm install` at runtime (~2-5 min cold). That's unacceptable.
 
-**Node version conflict**: OpenClaw has a **hard runtime guard** (`assertSupportedRuntime`) that calls `process.exit(1)` on node < 22. No env bypass exists. Cogni pins `node:20.x` across `engines`, Volta, Dockerfiles, and CI — but the constraint is conservative, not architectural. Next.js 16 supports node:22. Resolution: upgrade Cogni to node:22 as a prerequisite (see below).
+**Node version conflict (resolved by task.0032)**: OpenClaw has a **hard runtime guard** (`assertSupportedRuntime`) that calls `process.exit(1)` on node < 22. Cogni currently pins `node:20.x` but this is convention inertia, not a real constraint — see [task.0032](task.0032.node-22-upgrade.md) for full analysis. Next.js 16 requires `>=20.9.0`; Node 22 is fully compatible. Once Cogni is on node:22, the devtools image can use `node:22-bookworm` directly, matching OpenClaw's ABI — no native module rebuild step needed.
 
 **Why not bake node_modules?** Cogni's dependency tree changes frequently. Baking `node_modules` into the image forces a full rebuild on every `pnpm-lock.yaml` change, makes the image huge, and still requires brittle runtime wiring (symlinking into RO mounts). Instead: ship devtools + a warm pnpm store volume. First run populates the cache; subsequent runs are fast.
 
