@@ -31,26 +31,26 @@ Ship server-authoritative conversation persistence so that multi-turn chat works
 
 **Goal:** Server persists `UIMessage[]` per thread. Route handler loads history, executes graph, assembles response UIMessage from AiEvent stream, and persists after pump completion. Existing billing/observability decorators unchanged.
 
-| Deliverable                                                                   | Status      | Est | Work Item |
-| ----------------------------------------------------------------------------- | ----------- | --- | --------- |
-| DB: `ai_threads` table + Drizzle schema + RLS + migration                     | Not Started | 1   | —         |
-| Port: `ThreadPersistencePort` (incl. `getExecutorThreadRef` stub) + adapter   | Not Started | 2   | —         |
-| Route: extract last user message from `messages[]`, load→execute→persist flow | Not Started | 3   | —         |
-| Bridge: AiEvent→UIMessageStream + response UIMessage assembly                 | Not Started | 2   | —         |
-| Masking: regex-based PII masking before `saveThread()`                        | Not Started | 1   | —         |
-| Tests: multi-turn, tenant isolation, messages-grow-only, disconnect safety    | Not Started | 2   | —         |
+| Deliverable                                                                    | Status      | Est | Work Item |
+| ------------------------------------------------------------------------------ | ----------- | --- | --------- |
+| DB: `ai_threads` table + Drizzle schema + RLS + migration                      | Not Started | 1   | —         |
+| Port: `ThreadPersistencePort` + `DrizzleThreadPersistenceAdapter` (FOR UPDATE) | Not Started | 2   | —         |
+| Route: extract last user message from `messages[]`, load→execute→persist flow  | Not Started | 3   | —         |
+| Bridge: AiEvent→UIMessageStream + response UIMessage assembly                  | Not Started | 2   | —         |
+| Masking: regex-based PII masking before `saveThread()`                         | Not Started | 1   | —         |
+| Tests: multi-turn, tenant isolation, messages-grow-only, disconnect safety     | Not Started | 2   | —         |
 
 ### Walk (P1): Client Migration + Thread Management
 
 **Goal:** Client sends only the new user message. Thread list UI backed by server. History survives page refresh.
 
-| Deliverable                                                                    | Status      | Est | Work Item            |
-| ------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
-| Contract: change wire format to `{threadId, message}` instead of `messages[]`  | Not Started | 1   | (create at P1 start) |
-| Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk) | Not Started | 2   | (create at P1 start) |
-| LangGraph routing: executor-conditional history loading + UUID thread ref      | Not Started | 2   | (create at P1 start) |
-| Thread list: `listThreads` endpoint + basic thread selection UI                | Not Started | 2   | (create at P1 start) |
-| History load: thread messages loaded from server on mount / thread switch      | Not Started | 1   | (create at P1 start) |
+| Deliverable                                                                          | Status      | Est | Work Item            |
+| ------------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
+| Contract: change wire format to `{threadId, message}` instead of `messages[]`        | Not Started | 1   | (create at P1 start) |
+| Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk)       | Not Started | 2   | (create at P1 start) |
+| LangGraph routing: executor-conditional history loading + UUID thread ref derivation | Not Started | 2   | (create at P1 start) |
+| Thread list: `listThreads` endpoint + basic thread selection UI                      | Not Started | 2   | (create at P1 start) |
+| History load: thread messages loaded from server on mount / thread switch            | Not Started | 1   | (create at P1 start) |
 
 ### Run (P2+): Retention + GDPR Deletion + LangGraph Coordination
 
