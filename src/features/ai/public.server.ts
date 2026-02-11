@@ -42,7 +42,7 @@ export {
   toCoreMessages,
   uiMessagesToMessageDtos,
 } from "./services/mappers";
-// PII masking for thread persistence
-export { maskMessagesForPersistence } from "./services/pii-masking";
 // Preflight credit check (for facade-level gating before graph execution)
 export { preflightCreditCheck } from "./services/preflight-credit-check";
+// Secrets redaction for thread persistence
+export { redactSecretsInMessages } from "./services/secrets-redaction";

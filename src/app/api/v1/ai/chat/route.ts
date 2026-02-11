@@ -31,7 +31,7 @@ import {
 } from "@/contracts/ai.chat.v1.contract";
 import { isAccountsFeatureError } from "@/features/accounts/public";
 import {
-  maskMessagesForPersistence,
+  redactSecretsInMessages,
   uiMessagesToMessageDtos,
 } from "@/features/ai/public.server";
 import { ThreadConflictError } from "@/ports";
@@ -261,7 +261,7 @@ export const POST = wrapRouteHandlerWithLogging(
         await threadPersistence.saveThread(
           sessionUser.id,
           stateKey,
-          maskMessagesForPersistence(threadWithUser),
+          redactSecretsInMessages(threadWithUser),
           expectedLen
         );
       } catch (e) {
@@ -276,7 +276,7 @@ export const POST = wrapRouteHandlerWithLogging(
         await threadPersistence.saveThread(
           sessionUser.id,
           stateKey,
-          maskMessagesForPersistence(threadWithUser),
+          redactSecretsInMessages(threadWithUser),
           expectedLen
         );
         // If this throws ThreadConflictError again, handleRouteError catches → 409
@@ -612,7 +612,7 @@ export const POST = wrapRouteHandlerWithLogging(
           await threadPersistence.saveThread(
             sessionUser.id,
             stateKey,
-            maskMessagesForPersistence(fullThread),
+            redactSecretsInMessages(fullThread),
             expectedLenAfterUser
           );
           ctx.log.info(
@@ -630,7 +630,7 @@ export const POST = wrapRouteHandlerWithLogging(
               await threadPersistence.saveThread(
                 sessionUser.id,
                 stateKey,
-                maskMessagesForPersistence(retryThread),
+                redactSecretsInMessages(retryThread),
                 reloaded.length
               );
               ctx.log.info(

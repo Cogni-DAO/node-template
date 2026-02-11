@@ -2,18 +2,18 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/unit/features/ai/pii-masking.test`
- * Purpose: Unit tests for PII masking before thread persistence.
- * Scope: Tests secret masking in UIMessage text and tool parts. Does not test persistence.
+ * Module: `@tests/unit/features/ai/secrets-redaction.test`
+ * Purpose: Unit tests for secrets redaction before thread persistence.
+ * Scope: Tests credential redaction in UIMessage text and tool parts. Does not test persistence.
  * Invariants: Pure function tests, no mutation of input
  * Side-effects: none
- * Links: src/features/ai/services/pii-masking.ts
+ * Links: src/features/ai/services/secrets-redaction.ts
  * @internal
  */
 
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { maskMessagesForPersistence } from "@/features/ai/public.server";
+import { redactSecretsInMessages } from "@/features/ai/public.server";
 
 function makeMessage(
   role: "user" | "assistant",
@@ -22,14 +22,14 @@ function makeMessage(
   return { id: "msg-1", role, parts };
 }
 
-describe("maskMessagesForPersistence", () => {
+describe("redactSecretsInMessages", () => {
   it("masks API keys in text parts", () => {
     const msgs: UIMessage[] = [
       makeMessage("user", [
         { type: "text", text: "My key is sk-abc123456789012345678901" },
       ]),
     ];
-    const masked = maskMessagesForPersistence(msgs);
+    const masked = redactSecretsInMessages(msgs);
     expect(masked[0]?.parts[0]).toEqual({
       type: "text",
       text: "My key is [REDACTED_API_KEY]",
@@ -42,7 +42,7 @@ describe("maskMessagesForPersistence", () => {
         { type: "text", text: "AWS key: AKIAIOSFODNN7EXAMPLE" },
       ]),
     ];
-    const masked = maskMessagesForPersistence(msgs);
+    const masked = redactSecretsInMessages(msgs);
     const part = masked[0]?.parts[0];
     expect(part && "text" in part && part.text).toContain("[REDACTED_AWS_KEY]");
   });
@@ -56,7 +56,7 @@ describe("maskMessagesForPersistence", () => {
         },
       ]),
     ];
-    const masked = maskMessagesForPersistence(msgs);
+    const masked = redactSecretsInMessages(msgs);
     const part = masked[0]?.parts[0];
     expect(part && "text" in part && part.text).toContain(
       "Bearer [REDACTED_TOKEN]"
@@ -72,7 +72,7 @@ describe("maskMessagesForPersistence", () => {
         },
       ]),
     ];
-    const masked = maskMessagesForPersistence(msgs);
+    const masked = redactSecretsInMessages(msgs);
     const part = masked[0]?.parts[0];
     expect(part && "text" in part && part.text).toContain(
       "[REDACTED_GH_TOKEN]"
@@ -84,7 +84,7 @@ describe("maskMessagesForPersistence", () => {
     const msgs: UIMessage[] = [
       makeMessage("user", [{ type: "text", text: original }]),
     ];
-    maskMessagesForPersistence(msgs);
+    redactSecretsInMessages(msgs);
     const part = msgs[0]?.parts[0];
     expect(part && "text" in part && part.text).toBe(original);
   });
@@ -93,7 +93,7 @@ describe("maskMessagesForPersistence", () => {
     const msgs: UIMessage[] = [
       makeMessage("user", [{ type: "text", text: "Hello, how are you?" }]),
     ];
-    const masked = maskMessagesForPersistence(msgs);
+    const masked = redactSecretsInMessages(msgs);
     const part = masked[0]?.parts[0];
     expect(part && "text" in part && part.text).toBe("Hello, how are you?");
   });
@@ -111,7 +111,7 @@ describe("maskMessagesForPersistence", () => {
         } as UIMessage["parts"][number],
       ]),
     ];
-    const masked = maskMessagesForPersistence(msgs);
+    const masked = redactSecretsInMessages(msgs);
     const part = masked[0]?.parts[0];
     expect(part && "output" in part && JSON.stringify(part.output)).toContain(
       "[REDACTED_API_KEY]"
