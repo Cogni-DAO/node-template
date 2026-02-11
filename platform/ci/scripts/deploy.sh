@@ -655,6 +655,11 @@ log_info "[$(date -u +%H:%M:%S)] Pull complete"
 emit_deployment_event "deployment.pull_complete" "success" "Images pulled successfully"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 7.5: Seed pnpm_store volume (idempotent, skip if hash matches)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+source /tmp/seed-pnpm-store.sh
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 8: Start/update postgres (must be healthy before migrations)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Bringing up postgres..."
@@ -795,7 +800,11 @@ scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remot
 scp $SSH_OPTS \
   "$REPO_ROOT/platform/ci/scripts/healthcheck-sourcecred.sh" \
   "$REPO_ROOT/platform/ci/scripts/healthcheck-openclaw.sh" \
+  "$REPO_ROOT/platform/ci/scripts/seed-pnpm-store.sh" \
   root@"$VM_HOST":/tmp/
+scp $SSH_OPTS \
+  "$REPO_ROOT/services/sandbox-openclaw/seed-pnpm-store.sh" \
+  root@"$VM_HOST":/tmp/seed-pnpm-store-core.sh
 
 # Verify SCP landed correctly
 REMOTE_CHECK=$(ssh $SSH_OPTS root@"$VM_HOST" "echo host=\$(hostname) date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) && sha256sum /tmp/deploy-remote.sh | awk '{print \$1}'" 2>&1) || {
