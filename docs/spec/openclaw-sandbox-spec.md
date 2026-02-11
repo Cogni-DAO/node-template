@@ -18,6 +18,24 @@ tags: [sandbox, openclaw, ai-agents]
 > [!CRITICAL]
 > OpenClaw runs in two modes: **ephemeral** (one-shot `network=none` container, CLI invocation) and **gateway** (long-running service on `sandbox-internal`, WS protocol). Both route LLM calls through an nginx proxy to LiteLLM — OpenClaw never touches API keys directly. OpenClaw's own sandbox and cron are **disabled** in both modes. Supersedes the former `CLAWDBOT_ADAPTER_SPEC.md`.
 
+## Published Images
+
+All images are multi-arch (`linux/amd64` + `linux/arm64`). Docker resolves the correct arch automatically.
+
+| Image                         | GHCR Path                                            | Purpose                                                                                                                                                      |
+| ----------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **openclaw-outbound-headers** | `ghcr.io/cogni-dao/openclaw-outbound-headers:latest` | Fork of OpenClaw with patches for auth header forwarding and billing metadata. Build-time base only — not run directly.                                      |
+| **cogni-sandbox-openclaw**    | `ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`    | Wraps the above with Cogni devtools (pnpm, git, node:22). The image agents actually run in — used for both ephemeral and gateway modes.                      |
+| **pnpm-store**                | `ghcr.io/cogni-dao/node-template:pnpm-store-latest`  | Snapshot of all project dependencies so agents can `pnpm install --offline` without downloading anything. Also tagged by lockfile hash: `pnpm-store-{hash}`. |
+
+**Local dev equivalents:**
+
+| pnpm script                              | What it does                                                   |
+| ---------------------------------------- | -------------------------------------------------------------- |
+| `pnpm sandbox:openclaw:docker:build`     | Build `cogni-sandbox-openclaw:latest` locally                  |
+| `pnpm sandbox:pnpm-store:seed`           | Build pnpm-store image + seed `pnpm_store` volume (idempotent) |
+| `pnpm sandbox:pnpm-store:seed:from-ghcr` | Pull from GHCR + seed (for fresh clones without building)      |
+
 ## Execution Modes
 
 |                       | Ephemeral                                    | Gateway                                                                          |
@@ -275,14 +293,7 @@ COPY --from=openclaw /app /app
 # ... devtools, sandboxer user, entrypoint
 ```
 
-Per-arch override at build time:
-
-| Arch  | `OPENCLAW_BASE`                                           |
-| ----- | --------------------------------------------------------- |
-| arm64 | `ghcr.io/cogni-dao/openclaw-outbound-headers:latest`      |
-| amd64 | `ghcr.io/cogni-dao/node-template:openclaw-gateway-latest` |
-
-Published as multi-arch manifest: `ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`. Docker resolves the correct arch automatically.
+The base image `openclaw-outbound-headers:latest` is a multi-arch manifest (arm64+amd64). No per-arch overrides needed — Docker resolves the correct arch automatically at build time.
 
 #### Storage Volumes
 
