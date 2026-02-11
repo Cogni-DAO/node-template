@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-02-10
+- **Last reviewed:** 2026-02-11
 - **Status:** stable
 
 ## Purpose
@@ -45,6 +45,8 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `AiEvent` (union of all AI runtime events: text_delta, tool events, done)
   - `createAiRuntime` (AI runtime orchestrator via public.server.ts)
   - `createToolRunner` (tool execution factory; owns toolCallId; emits tool lifecycle AiEvents)
+  - `uiMessagesToMessageDtos` (UIMessage[] → MessageDto[] bridge for thread persistence pipeline)
+  - `redactSecretsInMessages` (best-effort credential redaction before persistence)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
   - `/api/v1/ai/chat` (POST) - chat endpoint (P1: consumes AiEvents, maps to assistant-stream format)
@@ -64,6 +66,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
     - `ai_runtime.ts` - AI runtime orchestration with RunEventRelay (pump+fanout UI stream adapter; billing handled by BillingGraphExecutorDecorator at port level)
     - `run-id-factory.ts` - Run identity factory (P0: runId = reqId)
     - `llmPricingPolicy.ts` - Pricing markup calculation
+    - `secrets-redaction.ts` - Best-effort credential redaction for persisted messages
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
 - **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 
@@ -94,7 +97,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 - **This feature does not:**
   - Implement LLM adapters (owned by adapters/server/ai)
   - Manage credits/billing (owned by features/accounts)
-  - Persist chat messages to database (planned for v2)
+  - Persist chat messages to database (owned by route layer via ThreadPersistencePort)
   - Map AiEvents to wire protocol (owned by route layer)
   - Compute promptHash (owned by litellm.adapter.ts, InProc path only)
   - Host LangGraph graph code (owned by apps/langgraph-service/)
@@ -144,7 +147,7 @@ import { Thread } from "@/components/kit/chat";
 
 - Model list fetched from LiteLLM /model/info (cached)
 - Chat supports streaming via SSE (v1)
-- Message persistence planned for v2 with smart windowing
+- Thread persistence is P0 (server-authoritative via ThreadPersistencePort; see thread-persistence spec)
 - Model validation implements UX-001 (graceful fallback to default)
 - Server cache implements PERF-001 (no per-request network calls)
 - Post-call billing is non-blocking per ACTIVITY_METRICS.md design

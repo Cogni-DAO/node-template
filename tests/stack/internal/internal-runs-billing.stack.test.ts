@@ -98,7 +98,7 @@ describe("[internal] billing via BillingGraphExecutorDecorator (bug.0005 regress
       .where(eq(chargeReceipts.billingAccountId, testActor.billingAccountId));
 
     expect(receiptRows.length).toBeGreaterThanOrEqual(1);
-    const receipt = receiptRows[0]!;
+    const receipt = receiptRows[0] as (typeof receiptRows)[number];
 
     // Verify receipt is tied to this run
     expect(receipt.runId).toBe(body.runId);
@@ -111,7 +111,7 @@ describe("[internal] billing via BillingGraphExecutorDecorator (bug.0005 regress
       .where(eq(llmChargeDetails.chargeReceiptId, receipt.id));
 
     expect(details.length).toBeGreaterThanOrEqual(1);
-    const detail = details[0]!;
+    const detail = details[0] as (typeof details)[number];
     expect(detail.graphId).toBeTruthy();
   });
 });

@@ -14,8 +14,14 @@
 
 import { z } from "zod";
 
-/** Message length limit - matches core constraint */
-const MAX_MESSAGE_CHARS = 4000;
+/**
+ * Text part length limit for the wire schema.
+ * Set high because the client replays full history including long assistant
+ * responses; the server ignores them (loads from DB) but validation runs first.
+ * User input is bounded separately at the route level (MAX_USER_TEXT_CHARS).
+ * Primary payload protection is via transport body size limit, not per-part caps.
+ */
+const MAX_MESSAGE_CHARS = 100_000;
 
 /** Max tool name length */
 const MAX_TOOL_NAME_CHARS = 64;
@@ -31,15 +37,16 @@ const MAX_ID_CHARS = 128;
 
 /**
  * Max stateKey length - app-level conversation routing key.
- * Separate from MAX_ID_CHARS to allow reasonable client-provided keys.
+ * Tightened in P0 to match nanoid(21) output charset.
  */
-const MAX_STATE_KEY_CHARS = 512;
+const MAX_STATE_KEY_CHARS = 128;
 
 /**
  * Safe character pattern for stateKey - prevents log injection.
- * Allows: alphanumeric, dots, underscores, colons, hyphens.
+ * P0 breaking change: removed dots and colons (acceptable — no persisted threads yet).
+ * Matches nanoid(21) output charset: [A-Za-z0-9_-].
  */
-const STATE_KEY_SAFE_PATTERN = /^[A-Za-z0-9._:-]+$/;
+const STATE_KEY_SAFE_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /**
  * JSON-serializable value schema (recursive).
@@ -249,7 +256,7 @@ export const AssistantUiInputSchema = z.object({
    * Conversation state key for multi-turn conversations.
    * If absent, server generates one and returns it via X-State-Key header.
    * Client should reuse for subsequent messages in same conversation.
-   * Must contain only safe characters: alphanumeric, dots, underscores, colons, hyphens.
+   * Must contain only safe characters: alphanumeric, underscores, hyphens.
    * Note: This is an app-level key, NOT a provider-specific thread_id.
    */
   stateKey: z

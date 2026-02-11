@@ -29,6 +29,10 @@
     "./ai": {
       "types": "./dist/ai.d.ts",
       "import": "./dist/ai.js"
+    },
+    "./ai-threads": {
+      "types": "./dist/ai-threads.d.ts",
+      "import": "./dist/ai-threads.js"
     }
   },
   "files": [

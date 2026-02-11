@@ -148,7 +148,7 @@ ws.on("message", (data) => {
           console.log(`  payload[${i}] keys: ${Object.keys(p).join(", ")}`);
           if (typeof p.text === "string") {
             const preview =
-              p.text.length > 200 ? p.text.slice(0, 200) + "..." : p.text;
+              p.text.length > 200 ? `${p.text.slice(0, 200)}...` : p.text;
             console.log(
               `  payload[${i}].text (${p.text.length} chars): ${preview}`
             );
@@ -202,7 +202,7 @@ ws.on("message", (data) => {
       phase = "streaming";
       const text = payload?.message?.content?.[0]?.text;
       const preview =
-        text && text.length > 100 ? text.slice(0, 100) + "..." : text;
+        text && text.length > 100 ? `${text.slice(0, 100)}...` : text;
       console.log(
         `  message.content[0].text (${text?.length ?? 0} chars): ${preview ?? "NONE"}`
       );
@@ -213,7 +213,7 @@ ws.on("message", (data) => {
       const text = payload?.message?.content?.[0]?.text;
       console.log(`  has message: ${hasMessage}`);
       if (text) {
-        const preview = text.length > 100 ? text.slice(0, 100) + "..." : text;
+        const preview = text.length > 100 ? `${text.slice(0, 100)}...` : text;
         console.log(
           `  message.content[0].text (${text.length} chars): ${preview}`
         );

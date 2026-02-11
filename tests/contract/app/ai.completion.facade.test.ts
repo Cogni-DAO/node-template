@@ -272,7 +272,7 @@ describe("app/_facades/ai/completion.server", () => {
       // Assert - Factory must be called with (streamFn, userId, billingCommitFn)
       expect(mockCreateGraphExecutor).toHaveBeenCalledTimes(1);
       const [streamFn, userId, billingCommitFn] =
-        mockCreateGraphExecutor.mock.calls[0]!;
+        mockCreateGraphExecutor.mock.calls[0] ?? [];
       expect(typeof streamFn).toBe("function");
       expect(typeof userId).toBe("string");
       // CRITICAL: billingCommitFn must be provided (task.0007 — decorator requires it)

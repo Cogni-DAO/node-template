@@ -181,17 +181,17 @@ describe("OpenClaw Gateway Full-Stack", () => {
       | Extract<GatewayAgentEvent, { type: "accepted" }>
       | undefined;
     expect(accepted).toBeDefined();
-    expect(accepted!.runId).toBeTruthy();
+    expect(accepted?.runId).toBeTruthy();
 
     // Green path: chat_final with real LLM content
     const chatFinal = events.find((e) => e.type === "chat_final") as
       | Extract<GatewayAgentEvent, { type: "chat_final" }>
       | undefined;
     expect(chatFinal).toBeDefined();
-    expect(chatFinal!.text.length).toBeGreaterThan(0);
+    expect(chatFinal?.text.length).toBeGreaterThan(0);
     // Must not be an error string masquerading as content
-    expect(chatFinal!.text).not.toMatch(/Invalid model/i);
-    expect(chatFinal!.text).not.toMatch(/No response from OpenClaw/i);
+    expect(chatFinal?.text).not.toMatch(/Invalid model/i);
+    expect(chatFinal?.text).not.toMatch(/No response from OpenClaw/i);
   });
 
   it("billing entries appear in proxy audit log after call", async () => {
@@ -222,7 +222,7 @@ describe("OpenClaw Gateway Full-Stack", () => {
     // (parseAuditLines already filters out callId === "-")
     const entries = await billingReader.readEntries(runId);
     expect(entries.length).toBeGreaterThan(0);
-    expect(entries[0]!.litellmCallId).toMatch(/^[a-f0-9-]+$/i);
+    expect(entries[0]?.litellmCallId).toMatch(/^[a-f0-9-]+$/i);
   });
 
   it("can read LICENSE from workspace (repo mounted read-only)", async () => {
@@ -361,19 +361,19 @@ describe("OpenClaw Gateway Full-Stack", () => {
     // Fail on the first foreign byte.
     expect(textA).not.toContain("BRAVO");
     expect(textB).not.toContain("ALPHA");
-    expect(finalA!.text).not.toContain("BRAVO");
-    expect(finalB!.text).not.toContain("ALPHA");
+    expect(finalA?.text).not.toContain("BRAVO");
+    expect(finalB?.text).not.toContain("ALPHA");
 
     // Positive check: each stream contains its own expected content
     // (LLMs may paraphrase, so check the final authoritative response)
-    expect(finalA!.text.length).toBeGreaterThan(0);
-    expect(finalB!.text.length).toBeGreaterThan(0);
+    expect(finalA?.text.length).toBeGreaterThan(0);
+    expect(finalB?.text.length).toBeGreaterThan(0);
 
     // No HEARTBEAT_OK in either stream
     expect(textA).not.toContain("HEARTBEAT_OK");
     expect(textB).not.toContain("HEARTBEAT_OK");
-    expect(finalA!.text).not.toContain("HEARTBEAT_OK");
-    expect(finalB!.text).not.toContain("HEARTBEAT_OK");
+    expect(finalA?.text).not.toContain("HEARTBEAT_OK");
+    expect(finalB?.text).not.toContain("HEARTBEAT_OK");
   });
 
   it("session model override: test-free-model reaches LiteLLM", async () => {
