@@ -4,10 +4,9 @@
 /**
  * Module: `@ports/thread-persistence.port`
  * Purpose: Port interface for server-authoritative thread persistence.
- * Scope: Defines ThreadPersistencePort and ThreadSummary. Does not contain implementations.
+ * Scope: Defines ThreadPersistencePort, ThreadSummary, and ThreadConflictError. Does not contain implementations.
  * Invariants:
- *   - SERIALIZED_APPENDS: saveThread() acquires FOR UPDATE lock within transaction
- *   - MESSAGES_GROW_ONLY: saveThread() rejects if messages.length < existing length
+ *   - OPTIMISTIC_APPEND: saveThread() verifies stored message count matches expectedMessageCount before writing
  *   - MAX_THREAD_MESSAGES: saveThread() rejects if messages.length > 200
  *   - SOFT_DELETE_DEFAULT: all reads filter deleted_at IS NULL
  * Side-effects: none
@@ -16,6 +15,16 @@
  */
 
 import type { UIMessage } from "ai";
+
+/** Thrown when saveThread() detects a concurrent modification (stored count != expected). */
+export class ThreadConflictError extends Error {
+  constructor(stateKey: string) {
+    super(
+      `Thread conflict for stateKey=${stateKey}: stored message count does not match expected`
+    );
+    this.name = "ThreadConflictError";
+  }
+}
 
 /** Summary of a thread for listing (no full message content). */
 export interface ThreadSummary {
@@ -31,14 +40,15 @@ export interface ThreadPersistencePort {
 
   /**
    * Persist full message array (upsert). Creates thread if not exists.
-   * SERIALIZED_APPENDS: acquires FOR UPDATE lock within transaction.
-   * MESSAGES_GROW_ONLY: rejects if messages.length < existing length.
+   * OPTIMISTIC_APPEND: verifies stored message count matches expectedMessageCount.
+   * Throws ThreadConflictError on mismatch — caller should reload and retry once.
    * MAX_THREAD_MESSAGES: rejects if messages.length > 200.
    */
   saveThread(
     ownerUserId: string,
     stateKey: string,
-    messages: UIMessage[]
+    messages: UIMessage[],
+    expectedMessageCount: number
   ): Promise<void>;
 
   /** Soft delete thread. Sets deleted_at, messages still in DB for retention. */

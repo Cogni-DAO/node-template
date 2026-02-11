@@ -6,8 +6,7 @@
  * Purpose: Drizzle implementation of ThreadPersistencePort with RLS enforcement.
  * Scope: CRUD operations on ai_threads table within tenant-scoped transactions. Does not contain business logic or query optimization.
  * Invariants:
- *   - SERIALIZED_APPENDS: SELECT ... FOR UPDATE within transaction
- *   - MESSAGES_GROW_ONLY: rejects saves where newMessages.length < existingMessages.length
+ *   - OPTIMISTIC_APPEND: UPDATE checks jsonb_array_length(messages) = expectedMessageCount
  *   - MAX_THREAD_MESSAGES: rejects saves exceeding 200 messages
  *   - TENANT_SCOPED: SET LOCAL app.current_user_id in every transaction
  *   - SOFT_DELETE_DEFAULT: all reads filter deleted_at IS NULL
@@ -21,7 +20,11 @@ import type { UIMessage } from "ai";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "@/adapters/server/db/client";
 import { setTenantContext } from "@/adapters/server/db/client";
-import type { ThreadPersistencePort, ThreadSummary } from "@/ports";
+import {
+  ThreadConflictError,
+  type ThreadPersistencePort,
+  type ThreadSummary,
+} from "@/ports";
 import { aiThreads } from "@/shared/db/schema";
 
 /** Maximum messages per thread — per MAX_THREAD_MESSAGES invariant. */
@@ -67,7 +70,8 @@ export class DrizzleThreadPersistenceAdapter implements ThreadPersistencePort {
   async saveThread(
     ownerUserId: string,
     stateKey: string,
-    messages: UIMessage[]
+    messages: UIMessage[],
+    expectedMessageCount: number
   ): Promise<void> {
     // MAX_THREAD_MESSAGES enforcement
     if (messages.length > MAX_THREAD_MESSAGES) {
@@ -80,50 +84,48 @@ export class DrizzleThreadPersistenceAdapter implements ThreadPersistencePort {
     await this.db.transaction(async (tx) => {
       await setTenantContext(tx, this.actorId);
 
-      // SERIALIZED_APPENDS: SELECT ... FOR UPDATE locks the row
-      const existing = await tx
-        .select({
-          id: aiThreads.id,
-          messages: aiThreads.messages,
+      // OPTIMISTIC_APPEND: UPDATE only if stored count matches expected
+      const updated = await tx
+        .update(aiThreads)
+        .set({
+          messages: sql`${JSON.stringify(messages)}::jsonb`,
+          updatedAt: sql`now()`,
         })
-        .from(aiThreads)
         .where(
           and(
             eq(aiThreads.ownerUserId, ownerUserId),
             eq(aiThreads.stateKey, stateKey),
-            isNull(aiThreads.deletedAt)
+            isNull(aiThreads.deletedAt),
+            sql`jsonb_array_length(${aiThreads.messages}) = ${expectedMessageCount}`
           )
         )
-        .for("update")
-        .limit(1);
+        .returning({ id: aiThreads.id });
 
-      const existingRow = existing[0];
-      if (existingRow) {
-        const existingMessages = existingRow.messages as UIMessage[];
+      if (updated.length > 0) return; // Success
 
-        // MESSAGES_GROW_ONLY enforcement
-        if (messages.length < existingMessages.length) {
-          throw new Error(
-            `MESSAGES_GROW_ONLY violated: new message count (${messages.length}) ` +
-              `is less than existing (${existingMessages.length})`
-          );
-        }
-
-        await tx
-          .update(aiThreads)
-          .set({
+      // No rows updated — either thread doesn't exist or count mismatch
+      if (expectedMessageCount === 0) {
+        // Thread doesn't exist yet — INSERT (race handled by unique constraint)
+        const inserted = await tx
+          .insert(aiThreads)
+          .values({
+            ownerUserId,
+            stateKey,
             messages: sql`${JSON.stringify(messages)}::jsonb`,
-            updatedAt: sql`now()`,
           })
-          .where(eq(aiThreads.id, existingRow.id));
-      } else {
-        // Insert new thread
-        await tx.insert(aiThreads).values({
-          ownerUserId,
-          stateKey,
-          messages: sql`${JSON.stringify(messages)}::jsonb`,
-        });
+          .onConflictDoNothing({
+            target: [aiThreads.ownerUserId, aiThreads.stateKey],
+          })
+          .returning({ id: aiThreads.id });
+
+        if (inserted.length === 0) {
+          throw new ThreadConflictError(stateKey);
+        }
+        return;
       }
+
+      // Count mismatch — concurrent modification
+      throw new ThreadConflictError(stateKey);
     });
   }
 
