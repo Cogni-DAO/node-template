@@ -141,4 +141,68 @@ describe("uiMessagesToMessageDtos", () => {
     const dtos = uiMessagesToMessageDtos(msgs);
     expect(dtos[0]?.content).toBe("line 1\nline 2");
   });
+
+  it("round-trip: tool call persisted as UIMessage reconstructs identical DTOs", () => {
+    // Simulate what the route persists after a tool-calling turn:
+    // user message + assistant message with text + dynamic-tool parts
+    const persistedThread: UIMessage[] = [
+      makeMessage("user", [makeTextPart("search for cats")]),
+      makeMessage("assistant", [
+        makeTextPart("Let me search for that."),
+        makeToolPart(
+          "call-abc",
+          "web_search",
+          { query: "cats" },
+          "output-available",
+          { results: [{ title: "Cats", url: "https://example.com" }] }
+        ),
+        makeToolPart(
+          "call-def",
+          "metrics_query",
+          { metric: "cpu_usage" },
+          "output-available",
+          { value: 42.5 }
+        ),
+      ]),
+      makeMessage("user", [makeTextPart("thanks")]),
+      makeMessage("assistant", [makeTextPart("You're welcome!")]),
+    ];
+
+    const dtos = uiMessagesToMessageDtos(persistedThread);
+
+    // Turn 1: user
+    expect(dtos[0]).toEqual({ role: "user", content: "search for cats" });
+
+    // Turn 1: assistant with 2 tool calls
+    expect(dtos[1]).toEqual({
+      role: "assistant",
+      content: "Let me search for that.",
+      toolCalls: [
+        { id: "call-abc", name: "web_search", arguments: '{"query":"cats"}' },
+        {
+          id: "call-def",
+          name: "metrics_query",
+          arguments: '{"metric":"cpu_usage"}',
+        },
+      ],
+    });
+
+    // Turn 1: tool results (one per completed tool call)
+    expect(dtos[2]).toEqual({
+      role: "tool",
+      content: '{"results":[{"title":"Cats","url":"https://example.com"}]}',
+      toolCallId: "call-abc",
+    });
+    expect(dtos[3]).toEqual({
+      role: "tool",
+      content: '{"value":42.5}',
+      toolCallId: "call-def",
+    });
+
+    // Turn 2: user + assistant (no tools)
+    expect(dtos[4]).toEqual({ role: "user", content: "thanks" });
+    expect(dtos[5]).toEqual({ role: "assistant", content: "You're welcome!" });
+
+    expect(dtos).toHaveLength(6);
+  });
 });
