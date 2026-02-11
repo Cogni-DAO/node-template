@@ -422,7 +422,15 @@ export class SandboxGraphProvider implements GraphProvider {
     });
 
     const stream = (async function* (): AsyncIterable<AiEvent> {
-      const { runId, ingressRequestId, messages, model, caller, graphId } = req;
+      const {
+        runId,
+        ingressRequestId,
+        messages,
+        model,
+        caller,
+        graphId,
+        stateKey,
+      } = req;
       const attempt = 0; // P0_ATTEMPT_FREEZE
       const execStartTime = Date.now();
       const callLog = self.log.child({
@@ -456,7 +464,15 @@ export class SandboxGraphProvider implements GraphProvider {
         return;
       }
 
-      const sessionKey = `agent:main:${caller.billingAccountId}:${runId}`;
+      // Gateway sessions are keyed by stateKey (stable per conversation) so the
+      // same OpenClaw session persists across Cogni requests for multi-turn.
+      // Route always generates stateKey — missing here means a caller bug.
+      if (!stateKey) {
+        throw new Error(
+          "stateKey is required for gateway execution (route must always provide one)"
+        );
+      }
+      const sessionKey = `agent:main:${caller.billingAccountId}:${stateKey}`;
 
       try {
         // Build outbound headers for billing (OpenClaw includes these on LLM calls)

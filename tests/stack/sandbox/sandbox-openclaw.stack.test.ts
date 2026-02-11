@@ -27,10 +27,13 @@ import {
 } from "@/adapters/server/sandbox/openclaw-gateway-client";
 import { ProxyBillingReader } from "@/adapters/server/sandbox/proxy-billing-reader";
 import { SandboxGraphProvider } from "@/adapters/server/sandbox/sandbox-graph.provider";
-import type { GraphRunRequest, SandboxRunnerPort } from "@/ports";
+import type { SandboxRunnerPort } from "@/ports";
 import { serverEnv } from "@/shared/env/server";
 
-import { execInContainer } from "../../_fixtures/sandbox/fixtures";
+import {
+  execInContainer,
+  makeGatewayRunRequest,
+} from "../../_fixtures/sandbox/fixtures";
 
 const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL ?? "http://127.0.0.1:3333";
 const GATEWAY_TOKEN =
@@ -448,7 +451,17 @@ describe("OpenClaw Gateway Full-Stack", () => {
   // Existing "session model override" tests call configureSession() directly on the client,
   // which bypasses the provider. This test exposes the missing wiring in createGatewayExecution().
   it("provider-level model selection: GraphRunRequest.model reaches LiteLLM", async () => {
-    const runId = uniqueRunId("provider-model");
+    const req = makeGatewayRunRequest({
+      runId: uniqueRunId("provider-model"),
+      model: "cogni/test-free-model",
+      caller: {
+        billingAccountId: "test-provider-model",
+        virtualKeyId: "test-vk",
+        requestId: "provider-model",
+        traceId: "provider-model",
+        userId: "test-user",
+      },
+    });
 
     // Stub runner — gateway mode never calls runOnce()
     const stubRunner: SandboxRunnerPort = {
@@ -463,20 +476,6 @@ describe("OpenClaw Gateway Full-Stack", () => {
       billingReader
     );
 
-    const req: GraphRunRequest = {
-      runId,
-      ingressRequestId: runId,
-      graphId: "sandbox:openclaw",
-      model: "cogni/test-free-model",
-      messages: [{ role: "user", content: "Hello" }],
-      caller: {
-        billingAccountId: "test-provider-model",
-        virtualKeyId: "test-vk",
-        requestId: runId,
-        traceId: runId,
-      },
-    };
-
     const { stream } = provider.runGraph(req);
 
     // Drain the stream — don't assert on success/errors (mock-llm compat issues per bug.0009).
@@ -489,7 +488,7 @@ describe("OpenClaw Gateway Full-Stack", () => {
     // NOT the gateway default (test-model). This fails until createGatewayExecution()
     // calls configureSession() with the model from GraphRunRequest.
     await new Promise((r) => setTimeout(r, 1000));
-    const modelId = extractModelId(runId, billingDir);
+    const modelId = extractModelId(req.runId, billingDir);
     expect(modelId).toBe(LITELLM_MODEL_IDS["test-free-model"]);
     expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]);
   });
