@@ -12,6 +12,7 @@
  */
 
 import { createMockAccountServiceWithDefaults } from "@tests/_fakes";
+import { TEST_SESSION_USER_1 } from "@tests/_fakes/ids";
 import { testApiHandler } from "next-test-api-route-handler";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as appHandler from "@/app/api/v1/ai/chat/route";
@@ -35,6 +36,12 @@ vi.mock("@/bootstrap/container", () => ({
     config: {
       unhandledErrorPolicy: "rethrow",
     },
+    threadPersistenceForUser: vi.fn(() => ({
+      loadThread: vi.fn().mockResolvedValue([]),
+      saveThread: vi.fn().mockResolvedValue(undefined),
+      softDelete: vi.fn().mockResolvedValue(undefined),
+      listThreads: vi.fn().mockResolvedValue([]),
+    })),
   })),
   resolveAiDeps: vi.fn(),
 }));
@@ -74,10 +81,7 @@ describe("POST /api/v1/ai/chat - Free Model Zero Credits", () => {
     vi.resetAllMocks();
 
     // Restore mock implementations after reset
-    vi.mocked(getSessionUser).mockResolvedValue({
-      id: "test-user",
-      walletAddress: "0xTestWallet123",
-    });
+    vi.mocked(getSessionUser).mockResolvedValue(TEST_SESSION_USER_1);
 
     vi.mocked(isModelAllowed).mockResolvedValue(true);
     vi.mocked(getDefaults).mockResolvedValue({

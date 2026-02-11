@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { UIMessage } from "ai";
+import type { DynamicToolUIPart, TextUIPart, UIMessage } from "ai";
 import {
   ChatErrorCode,
   ChatValidationError,
@@ -142,32 +142,27 @@ export function uiMessagesToMessageDtos(messages: UIMessage[]): MessageDto[] {
 
     // Extract text content from parts
     const textParts = msg.parts.filter(
-      (p): p is { type: "text"; text: string } => p.type === "text"
+      (p): p is TextUIPart => p.type === "text"
     );
     const textContent = textParts.map((p) => p.text).join("\n");
 
     // Extract dynamic-tool parts (tool calls with lifecycle)
     const toolParts = msg.parts.filter(
-      (
-        p
-      ): p is {
-        type: "dynamic-tool";
-        toolName: string;
-        toolCallId: string;
-        input: unknown;
-        output?: unknown;
-        state: string;
-      } => p.type === "dynamic-tool"
+      (p): p is DynamicToolUIPart => p.type === "dynamic-tool"
     );
 
     if (msg.role === "user") {
       result.push({ role: "user", content: textContent });
     } else if (msg.role === "assistant") {
       // Build tool calls from dynamic-tool parts
+      // All DynamicToolUIPart variants have toolCallId, toolName;
+      // input is available on all states except input-streaming (where it may be undefined)
       const toolCalls: MessageDtoToolCall[] = toolParts.map((p) => ({
         id: p.toolCallId,
         name: p.toolName,
-        arguments: JSON.stringify(p.input ?? {}),
+        arguments: JSON.stringify(
+          "input" in p && p.input != null ? p.input : {}
+        ),
       }));
 
       result.push({
@@ -178,7 +173,7 @@ export function uiMessagesToMessageDtos(messages: UIMessage[]): MessageDto[] {
 
       // Emit tool result messages for completed tool calls
       for (const p of toolParts) {
-        if (p.state === "output-available" && p.output !== undefined) {
+        if (p.state === "output-available") {
           result.push({
             role: "tool",
             content: JSON.stringify(p.output),

@@ -244,7 +244,6 @@ export const POST = wrapRouteHandlerWithLogging(
         id: nanoid(),
         role: "user",
         parts: [{ type: "text" as const, text: userText }],
-        createdAt: new Date(),
       };
 
       // --- Phase 1: persist user message before execution (optimistic) ---
@@ -572,7 +571,6 @@ export const POST = wrapRouteHandlerWithLogging(
             id: nanoid(),
             role: "assistant",
             parts: responseParts,
-            createdAt: new Date(),
           };
 
           try {
