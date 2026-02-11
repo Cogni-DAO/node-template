@@ -71,6 +71,7 @@
     "scheduler:dev": "dotenv -e .env.local -- pnpm --filter @cogni/scheduler-worker-service dev",
     "scheduler:docker:build": "docker build -f services/scheduler-worker/Dockerfile -t cogni-scheduler-worker-local .",
     "sandbox:docker:build": "docker build -t cogni-sandbox-runtime:latest services/sandbox-runtime/",
+    "sandbox:openclaw:docker:build": "docker build -f services/sandbox-openclaw/Dockerfile -t cogni-sandbox-openclaw:latest .",
     "sandbox:openclaw:up": "docker compose --env-file .env.test -f platform/infra/services/runtime/docker-compose.dev.yml --profile sandbox-openclaw up -d llm-proxy-openclaw openclaw-gateway",
     "sandbox:openclaw:down": "docker compose -f platform/infra/services/runtime/docker-compose.dev.yml --profile sandbox-openclaw down",
     "packages:build": "pnpm -r --filter \"./packages/**\" build && tsc -b && pnpm packages:validate",
