@@ -107,6 +107,8 @@ services:
     image: ghcr.io/berriai/litellm@sha256:7e7816d58c265c182be5f3568ed8e5d999f11a5deda1d85e8e347a18bc578f64
     container_name: litellm
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - cogni-edge
       - sandbox-internal # P0.5a: Allow sandbox containers to reach LiteLLM
@@ -138,6 +140,8 @@ services:
   mock-llm:
     image: zerob13/mock-openai-api:latest
     container_name: mock-llm
+    labels:
+      - "autoheal=true"
     networks:
       - cogni-edge
     healthcheck:
@@ -169,6 +173,8 @@ services:
     image: postgres:15
     container_name: postgres
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - cogni-edge
     environment:
@@ -349,6 +355,8 @@ services:
     image: postgres:15
     container_name: temporal-postgres
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - internal
     environment:
@@ -369,6 +377,8 @@ services:
     image: temporalio/auto-setup:1.29.1
     container_name: temporal
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - internal
     ports:
@@ -428,6 +438,8 @@ services:
       dockerfile: services/scheduler-worker/Dockerfile
     container_name: scheduler-worker
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - internal
       - cogni-edge
@@ -479,6 +491,8 @@ services:
     container_name: llm-proxy-openclaw
     profiles: [sandbox-openclaw]
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - sandbox-internal
     environment:
@@ -502,6 +516,8 @@ services:
     container_name: openclaw-gateway
     profiles: [sandbox-openclaw]
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - sandbox-internal
       - internal # needed for host port binding (internal:true blocks port publish)

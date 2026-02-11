@@ -39,22 +39,24 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 
 ### P1 — Don't Lose Data Again
 
-| Deliverable                                                                           | Status              | Est |
-| ------------------------------------------------------------------------------------- | ------------------- | --- |
-| Automated Postgres backups: `pg_dump` to object storage (S3/R2) on cron               | Not Started         | 2   |
-| Grafana alert: app log silence >5 min (dead-man's switch)                             | Not Started         | 1   |
-| Grafana alert: container restart count delta >0 / unhealthy >60s / RSS >85% mem_limit | Not Started         | 1   |
-| Grafana alert: stderr volume spike                                                    | Not Started         | 1   |
-| Session invalidation on DB reset (prevent stale-session FK errors)                    | Not Started         | 1   |
-| Deploy config reconciliation: hash-based restart/reload for bind-mounted configs      | Backlog (task.0024) | 2   |
+| Deliverable                                                                           | Status                                 | Est |
+| ------------------------------------------------------------------------------------- | -------------------------------------- | --- |
+| Automated Postgres backups: `pg_dump` to object storage (S3/R2) on cron               | Not Started                            | 2   |
+| Grafana alert: app log silence >5 min (dead-man's switch)                             | Replaced by deadman alerts (task.0027) | 1   |
+| Grafana alert: container restart count delta >0 / unhealthy >60s / RSS >85% mem_limit | Todo (task.0027)                       | 1   |
+| Grafana alert: stderr volume spike                                                    | Not Started                            | 1   |
+| Session invalidation on DB reset (prevent stale-session FK errors)                    | Not Started                            | 1   |
+| Deploy config reconciliation: hash-based restart/reload for bind-mounted configs      | Backlog (task.0024)                    | 2   |
 
 ### P2 — Harden the Platform
 
-| Deliverable                                                               | Status      | Est |
-| ------------------------------------------------------------------------- | ----------- | --- |
-| Upgrade VM from 2GB shared to 4GB+ dedicated                              | Not Started | 1   |
-| Container memory limits (`mem_limit`) on all services                     | Not Started | 1   |
-| Deploy-to-healthy gate: poll `/readyz` after deploy, fail CI if unhealthy | Not Started | 1   |
+| Deliverable                                                                                | Status      | Est |
+| ------------------------------------------------------------------------------------------ | ----------- | --- |
+| Upgrade VM from 2GB shared to 4GB+ dedicated                                               | Not Started | 1   |
+| Healthcheck + autoheal for all services (alloy, temporal-ui, caddy, loki, grafana missing) | Not Started | 2   |
+| Container memory limits (`mem_limit`) on all services                                      | Not Started | 1   |
+| Deploy-to-healthy gate: poll `/readyz` after deploy, fail CI if unhealthy                  | Not Started | 1   |
+| Custom watchdog script hitting /readyz, /pagez if autoheal+livez proves insufficient       | Not Started | 2   |
 
 ## Constraints
 
