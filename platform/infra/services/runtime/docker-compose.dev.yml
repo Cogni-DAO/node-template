@@ -546,11 +546,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m
-      - /workspace:rw,noexec,nosuid,size=256m,uid=1001,gid=1001 # writable scratch for agent file ops (sandboxer)
     volumes:
       - ../../../../services/sandbox-openclaw/${OPENCLAW_CONFIG:-openclaw-gateway.json}:/etc/openclaw/openclaw.json:ro
       - repo_data:/repo:ro # git-synced codebase (read-only mirror, updated by git-sync)
       - pnpm_store:/pnpm-store # persistent pnpm content-addressable store
+      - cogni_workspace:/workspace # RW volume — pnpm hardlinks require same fs as pnpm_store
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -602,3 +602,5 @@ volumes:
     name: repo_data
   pnpm_store:
     name: pnpm_store
+  cogni_workspace:
+    name: cogni_workspace
