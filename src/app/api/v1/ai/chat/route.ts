@@ -464,7 +464,8 @@ export const POST = wrapRouteHandlerWithLogging(
               // Accumulator: update tool part with result
               const partIdx = toolPartIndexByCallId.get(event.toolCallId);
               if (partIdx !== undefined) {
-                const part = accToolParts[partIdx]!;
+                const part = accToolParts[partIdx];
+                if (!part) continue;
                 part.output = event.result;
                 part.state = "output-available";
               }
