@@ -2,7 +2,7 @@
 id: task.0027
 type: task
 title: "Alloy infra metrics + log noise suppression + Grafana P0 alerts"
-status: Todo
+status: In Progress
 priority: 0
 estimate: 3
 summary: Add cAdvisor + node exporter to Alloy (no new containers), suppress health-check log noise at pipeline level, create P0 Grafana alert rules for OOM/memory-pressure/deadman
@@ -11,11 +11,11 @@ spec_refs: observability-spec, spec.observability-requirements
 assignees: derekg1729
 credit:
 project: proj.reliability
-branch:
+branch: fix/health-monitoring
 pr:
 reviewer:
 created: 2026-02-11
-updated: 2026-02-11
+updated: 2026-02-12
 labels: [infra, observability, reliability, P0]
 external_refs:
 ---
@@ -99,29 +99,29 @@ Create via Grafana API (or MCP tools). All alerts fire for `env=~"preview|produc
 
 ## Plan
 
-- [ ] Add host bind mounts to alloy service in `docker-compose.yml` (`/proc:/host/proc:ro`, `/sys:/host/sys:ro`, `/:/host/root:ro`)
-- [ ] Add same mounts to `docker-compose.dev.yml` for dev parity
-- [ ] Add `prometheus.exporter.cadvisor` block in `alloy-config.metrics.alloy`
+- [x] Add host bind mounts to alloy service in `docker-compose.yml` (`/proc:/host/proc:ro`, `/sys:/host/sys:ro`, `/:/host/root:ro`)
+- [x] Add same mounts to `docker-compose.dev.yml` for dev parity
+- [x] Add `prometheus.exporter.cadvisor` block in `alloy-config.metrics.alloy`
   - `docker_host = "unix:///var/run/docker.sock"`
   - `store_container_labels = false`
   - `allowlisted_container_labels = ["com.docker.compose.service"]`
   - `storage_duration = "2m"` (low memory footprint)
-- [ ] Add `prometheus.exporter.unix` block in `alloy-config.metrics.alloy`
+- [x] Add `prometheus.exporter.unix` block in `alloy-config.metrics.alloy`
   - `procfs_path = "/host/proc"`, `sysfs_path = "/host/sys"`, `rootfs_path = "/host/root"`
-- [ ] Add `prometheus.scrape` for cadvisor and node exporters (30s interval)
-- [ ] Add `prometheus.relabel` pipeline with metric name allowlist (keep regex) + label drops
+- [x] Add `prometheus.scrape` for cadvisor and node exporters (30s interval)
+- [x] Add `prometheus.relabel` pipeline with metric name allowlist (keep regex) + label drops
   - Map `com_docker_compose_service` → `service`
   - Drop `id`, `image`, `name`, `container_label_.*`
-- [ ] Wire cadvisor + node scrapes through relabel → existing `prometheus.remote_write.grafana_cloud`
-- [ ] Add `prometheus.relabel` rule to drop `node_filesystem_avail_bytes` for tmpfs/overlay/proc/sysfs fstype mounts (reduce series)
-- [ ] Add log noise drop stages to `alloy-config.metrics.alloy`:
+- [x] Wire cadvisor + node scrapes through relabel → existing `prometheus.remote_write.grafana_cloud`
+- [x] Add `prometheus.relabel` rule to drop `node_filesystem_avail_bytes` for tmpfs/overlay/proc/sysfs fstype mounts (reduce series)
+- [x] Add log noise drop stages to `alloy-config.metrics.alloy`:
   - `stage.json` to parse log lines (fail-safe: unparseable lines pass through)
-  - `stage.match` gated on parsed fields existing before reaching drop logic
+  - `stage.template` gated on parsed fields existing before reaching drop logic
   - Drop only when: JSON parsed OK AND route/status/duration fields present AND status==200 AND (duration<1000 or metrics endpoint)
   - Keep failures (non-200), slow responses (>1s), and lines with missing fields
-- [ ] Add same log drop stages to `alloy-config.alloy` (dev parity)
-- [ ] Create Grafana Cloud alert folder (e.g., "Cogni Alerts")
-- [ ] Create alert rules via Grafana MCP: `container_oom`, `container_rss_near_limit`, `deadman_cadvisor`, `deadman_node`, `deadman_app_metrics`
+- [x] Add same log drop stages to `alloy-config.alloy` (dev parity)
+- [ ] Create Grafana Cloud alert folder (post-deploy — requires metrics flowing)
+- [ ] Create alert rules via Grafana API: `container_oom`, `container_rss_near_limit`, `deadman_cadvisor`, `deadman_node`, `deadman_app_metrics`
 - [ ] Verify all alerts have correct `for` duration and severity labels
 
 ## Validation

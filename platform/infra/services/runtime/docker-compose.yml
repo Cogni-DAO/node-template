@@ -232,6 +232,10 @@ services:
       - ./configs/alloy-config.metrics.alloy:/etc/alloy/config.alloy:ro
       - alloy_data:/var/lib/alloy
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Host mounts for prometheus.exporter.unix (node-level metrics)
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
     command:
       - run
       - /etc/alloy/config.alloy
