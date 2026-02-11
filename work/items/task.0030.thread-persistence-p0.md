@@ -34,15 +34,22 @@ See [thread-persistence spec](../../docs/spec/thread-persistence.md) for all inv
   - `SET LOCAL app.current_user_id` in transaction
   - `SELECT ... FOR UPDATE` on thread row (SERIALIZED_APPENDS)
   - MESSAGES_GROW_ONLY enforcement
+- [ ] Contract update (`src/contracts/ai.chat.v1.contract.ts`):
+  - Update `STATE_KEY_SAFE_PATTERN` from `/^[A-Za-z0-9._:-]+$/` to `/^[a-zA-Z0-9_-]{1,128}$/`
 - [ ] Route refactor (`src/app/api/v1/ai/chat/route.ts`):
   - Extract last `role === "user"` message from `messages[]` (400 if none)
-  - stateKey lifecycle: use client value or generate `nanoid(21)`, validate `^[a-zA-Z0-9_-]{1,128}$`
-  - Load authoritative history → append user message → convert → execute → persist
-  - Return `X-State-Key` response header
-- [ ] Bridge: AiEvent→UIMessageStream + response UIMessage assembly (~30-line accumulator)
+  - stateKey lifecycle: use client value or generate `nanoid(21)`, validate per contract
+  - Load authoritative history → append user message → convert → execute → persist after pump
+  - Return `X-State-Key` response header (always)
+  - No changes to completion facade — route pre-processes messages before calling it
+- [ ] Bridge: AiEvent→UIMessageStream + response UIMessage assembly (~30-line accumulator in route)
 - [ ] Masking: regex-based PII masking before `saveThread()`
 - [ ] Tests: multi-turn persistence, fabricated history ignored, tool persistence, disconnect safety, tenant isolation, billing unchanged, messages-grow-only
 
 ## Validation
 
 Per spec § Acceptance Checks (all 7 checks must pass).
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0030.handoff.md)
