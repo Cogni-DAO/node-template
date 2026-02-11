@@ -32,6 +32,7 @@ export interface PaymentsStateTransitionEvent {
   toStatus: string;
   chainId: number;
   txHash?: string | undefined;
+  errorCode?: string | undefined;
   durationMs: number;
   idempotentHit?: boolean | undefined;
 }

@@ -21,7 +21,11 @@ import {
   LlmProxyManager,
   type SandboxRunnerAdapter,
 } from "@/adapters/server/sandbox";
-import type { SandboxProgramContract, SandboxRunResult } from "@/ports";
+import type {
+  GraphRunRequest,
+  SandboxProgramContract,
+  SandboxRunResult,
+} from "@/ports";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -185,6 +189,39 @@ export interface RunOptions {
 
 /** Test billing account ID for sandbox tests */
 export const TEST_BILLING_ACCOUNT_ID = "test-billing-account";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gateway GraphRunRequest Fixture
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Deterministic stateKey for gateway stack tests (not a real UUID — easy to spot in logs). */
+export const TEST_GATEWAY_STATE_KEY = "00000000-0000-0000-0000-stack-test-gw";
+
+/**
+ * Build a GraphRunRequest for gateway (SandboxGraphProvider) stack tests.
+ * Uses deterministic defaults; override any field via `overrides`.
+ */
+export function makeGatewayRunRequest(
+  overrides: Partial<GraphRunRequest> = {}
+): GraphRunRequest {
+  const runId = overrides.runId ?? uniqueRunId("gw");
+  return {
+    runId,
+    ingressRequestId: runId,
+    graphId: "sandbox:openclaw" as GraphRunRequest["graphId"],
+    stateKey: TEST_GATEWAY_STATE_KEY,
+    model: "cogni/test-model",
+    messages: [{ role: "user", content: "Hello" }],
+    caller: {
+      billingAccountId: TEST_BILLING_ACCOUNT_ID,
+      virtualKeyId: "test-vk",
+      requestId: runId,
+      traceId: runId,
+      userId: "test-user",
+    },
+    ...overrides,
+  } as GraphRunRequest;
+}
 
 /** Run command in sandbox with network=none and llmProxy enabled */
 export async function runWithProxy(
