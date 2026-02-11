@@ -2,7 +2,7 @@
 id: bug.0027
 type: bug
 title: "Gateway billing fails in production — Docker socket ENOENT crashes all OpenClaw runs"
-status: In Progress
+status: Done
 priority: 0
 estimate: 2
 summary: "ProxyBillingReader uses dockerode to read billing logs via docker exec, but the production app container does not mount /var/run/docker.sock. All sandbox:openclaw executions fail with Stream finalization failed: internal."
