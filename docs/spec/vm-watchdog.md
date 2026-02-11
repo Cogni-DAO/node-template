@@ -79,6 +79,18 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
 
 The Dockerfile HEALTHCHECK is also overridden in `docker-compose.yml` for the `app` service to ensure consistency across environments.
 
+### HEALTHCHECK Tooling
+
+Healthcheck `test` commands must use tools available in the container image. Common pitfall: `wget` and `curl` are not present in slim images like `node:20-bookworm-slim`.
+
+| Image base                     | Available tool   | Example                                                                                                                                  |
+| ------------------------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `node:*-bookworm-slim`         | `node -e`        | `node -e "require('http').get('http://localhost:9000/livez',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"` |
+| Next.js (Dockerfile with curl) | `curl`           | `curl -fsS http://localhost:3000/livez`                                                                                                  |
+| `postgres:*`                   | `pg_isready`     | `pg_isready -U $USER`                                                                                                                    |
+| `python` (LiteLLM)             | `python3 urllib` | `python3 -c "import urllib.request..."`                                                                                                  |
+| `alpine` (nginx)               | `wget`           | `wget -qO- http://127.0.0.1:8080/health`                                                                                                 |
+
 ### Autoheal Sidecar
 
 [willfarrell/autoheal](https://hub.docker.com/r/willfarrell/autoheal) is a lightweight Alpine container (~5MB) that:
@@ -122,7 +134,12 @@ autoheal:
 - `labels: autoheal=false` — prevent autoheal from restarting itself
 - Image pinned by digest — no tag drift
 
-**Label-gating:** Only containers with `labels: autoheal: "true"` get restarted. Initially only the `app` service. Other services (litellm, postgres, temporal) use `restart: unless-stopped` with their own health checks and should not be force-restarted by autoheal.
+**Label-gating:** Only containers with `labels: autoheal: "true"` get restarted. Every long-running service with a `healthcheck` defined defaults to `autoheal=true`. Autoheal only acts on containers Docker has marked `unhealthy` (requires a configured healthcheck — services without one are unaffected by the label).
+
+**Exceptions** (must NOT have `autoheal=true`):
+
+- `autoheal` itself — `autoheal=false` to prevent self-restart loops
+- One-shot containers (`git-sync`, `repo-init`, `db-provision`, `db-migrate`) — `restart: no`, not long-running
 
 ### Resource Limits
 
@@ -166,15 +183,15 @@ Define the contract for auto-recovery when the app container becomes unresponsiv
 
 ## Invariants
 
-| Rule                       | Constraint                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------------- |
-| WATCHDOG_LIVEZ_NOT_READYZ  | Docker HEALTHCHECK must probe `/livez` (liveness), never `/readyz` (readiness)                    |
-| WATCHDOG_RECOVERY_BOUND    | App container must be restarted within 90s of livez becoming unreachable                          |
-| WATCHDOG_LABEL_GATE        | Autoheal only restarts containers with explicit `autoheal: "true"` label; default is no restart   |
-| WATCHDOG_AUTOHEAL_HARDENED | Autoheal runs with network_mode:none, read_only:true, cap_drop:ALL, no-new-privileges, digest-pin |
-| WATCHDOG_AUTOHEAL_NO_SELF  | Autoheal container must have `autoheal: "false"` label to prevent self-restart loops              |
-| WATCHDOG_MEM_BOUNDED       | App container must have explicit `mem_limit` and `memswap_limit` set                              |
-| WATCHDOG_LOGS_TO_LOKI      | Autoheal container logs must be collected by Alloy and visible in Loki                            |
+| Rule                       | Constraint                                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| WATCHDOG_LIVEZ_NOT_READYZ  | Docker HEALTHCHECK must probe `/livez` (liveness), never `/readyz` (readiness)                                                   |
+| WATCHDOG_RECOVERY_BOUND    | App container must be restarted within 90s of livez becoming unreachable                                                         |
+| WATCHDOG_LABEL_GATE        | Every long-running service with a healthcheck gets `autoheal: "true"`; only autoheal itself and one-shot containers are excluded |
+| WATCHDOG_AUTOHEAL_HARDENED | Autoheal runs with network_mode:none, read_only:true, cap_drop:ALL, no-new-privileges, digest-pin                                |
+| WATCHDOG_AUTOHEAL_NO_SELF  | Autoheal container must have `autoheal: "false"` label to prevent self-restart loops                                             |
+| WATCHDOG_MEM_BOUNDED       | App container must have explicit `mem_limit` and `memswap_limit` set                                                             |
+| WATCHDOG_LOGS_TO_LOKI      | Autoheal container logs must be collected by Alloy and visible in Loki                                                           |
 
 ### File Pointers
 
