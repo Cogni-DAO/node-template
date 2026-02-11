@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-08
+- **Last reviewed:** 2026-02-11
 - **Status:** stable
 
 ## Purpose
@@ -68,6 +68,9 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - SandboxRunnerPort (runOnce; one-shot container execution with optional LLM proxy)
   - SandboxRunSpec, SandboxRunResult, SandboxLlmProxyConfig (sandbox execution types)
   - SandboxProgramContract (stdout JSON envelope for sandbox agent output; matches OpenClaw --json format)
+  - ThreadPersistencePort (loadThread, saveThread, softDelete, listThreads — tenant-scoped, optimistic concurrency)
+  - ThreadConflictError (thrown on saveThread expectedMessageCount mismatch)
+  - ThreadSummary (listing DTO: stateKey, updatedAt, messageCount)
   - Grant errors (GrantNotFoundError, GrantExpiredError, GrantRevokedError, GrantScopeMismatchError)
   - Schedule errors (ScheduleNotFoundError, ScheduleAccessDeniedError, InvalidCronExpressionError, InvalidTimezoneError)
 - **Routes:** none

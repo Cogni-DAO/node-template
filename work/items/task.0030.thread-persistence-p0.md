@@ -2,7 +2,7 @@
 id: task.0030
 type: task
 title: "Thread persistence P0 — ai_threads table, port, route bridge"
-status: Todo
+status: Done
 priority: 1
 estimate: 3
 summary: "Implement server-authoritative thread persistence: ai_threads Drizzle schema + RLS, ThreadPersistencePort + adapter (FOR UPDATE concurrency, MAX_THREAD_MESSAGES guard), route refactor (extract last user message, load→execute→persist), UIMessage accumulator for persistence (wire format unchanged), UIMessage→MessageDto mapper, PII masking, stateKey lifecycle."
@@ -12,7 +12,7 @@ assignees:
   - cogni-dev
 credit:
 project: proj.thread-persistence
-branch:
+branch: feat/thread-persistence
 pr:
 created: 2026-02-11
 updated: 2026-02-11

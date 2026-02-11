@@ -11,7 +11,7 @@ outcome: Multi-turn conversations persisted in `ai_threads` table as `UIMessage[
 assignees:
   - cogni-dev
 created: 2026-02-07
-updated: 2026-02-10
+updated: 2026-02-11
 labels:
   - ai-graphs
   - data
@@ -31,14 +31,14 @@ Ship server-authoritative conversation persistence so that multi-turn chat works
 
 **Goal:** Server persists `UIMessage[]` per thread. Route handler loads history, executes graph, assembles response UIMessage from AiEvent stream, and persists after pump completion. Existing billing/observability decorators unchanged.
 
-| Deliverable                                                                    | Status      | Est | Work Item |
-| ------------------------------------------------------------------------------ | ----------- | --- | --------- |
-| DB: `ai_threads` table + Drizzle schema + RLS + migration                      | Not Started | 1   | —         |
-| Port: `ThreadPersistencePort` + `DrizzleThreadPersistenceAdapter` (FOR UPDATE) | Not Started | 2   | —         |
-| Route: extract last user message from `messages[]`, load→execute→persist flow  | Not Started | 3   | —         |
-| Bridge: AiEvent→UIMessageStream + response UIMessage assembly                  | Not Started | 2   | —         |
-| Masking: regex-based PII masking before `saveThread()`                         | Not Started | 1   | —         |
-| Tests: multi-turn, tenant isolation, messages-grow-only, disconnect safety     | Not Started | 2   | —         |
+| Deliverable                                                                                | Status  | Est | Work Item |
+| ------------------------------------------------------------------------------------------ | ------- | --- | --------- |
+| DB: `ai_threads` table + Drizzle schema + RLS + migration                                  | Done    | 1   | task.0030 |
+| Port: `ThreadPersistencePort` + `DrizzleThreadPersistenceAdapter` (optimistic concurrency) | Done    | 2   | task.0030 |
+| Route: extract last user message from `messages[]`, two-phase load→execute→persist flow    | Done    | 3   | task.0030 |
+| Bridge: UIMessage accumulator + response UIMessage assembly from AiEvent stream            | Done    | 2   | task.0030 |
+| Secrets redaction: regex-based credential redaction before `saveThread()`                  | Done    | 1   | task.0030 |
+| Tests: multi-turn stack test passing; remaining acceptance tests deferred                  | Partial | 2   | task.0030 |
 
 ### Walk (P1): Client Migration + Thread Management + Sandbox Observability
 
