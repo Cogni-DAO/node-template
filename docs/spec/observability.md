@@ -8,7 +8,7 @@ summary: JSON logging with event registry, Prometheus metrics, and Alloy shippin
 read_when: Implementing logging, metrics, or debugging production issues
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-05
+verified: 2026-02-11
 tags: [observability]
 ---
 
@@ -174,10 +174,11 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 **Purpose:** Alertable numeric signals (rates/latency/tokens/cost) complementary to logs.
 
 **Flow:** App (`GET /api/metrics`) → Alloy `prometheus.scrape` → Grafana Cloud Mimir
+**Infra flow:** Alloy built-in exporters (cAdvisor + node) → `prometheus.relabel` allowlist → Mimir
 
 **Endpoint:** `GET /api/metrics` (Bearer auth required in production)
 
-**Config:** `alloy-config.metrics.alloy` (preview/prod); `alloy-config.alloy` (local dev, logs-only)
+**Config:** `alloy-config.metrics.alloy` (preview/prod — logs + app metrics + infra metrics); `alloy-config.alloy` (local dev, logs-only)
 
 **Registry:** `src/shared/observability/server/metrics.ts` - prom-client registry + metric definitions
 
@@ -187,7 +188,9 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 - Chat SSE: `ai.chat_stream_closed` - stream duration
 - LLM: `ai.llm_call_completed` + error paths - duration/tokens/cost/errors
 
-**Core metrics:** `http_requests_total`, `http_request_duration_ms`, `ai_chat_stream_duration_ms`, `ai_llm_call_duration_ms`, `ai_llm_tokens_total`, `ai_llm_cost_usd_total`, `ai_llm_errors_total`
+**Core app metrics:** `http_requests_total`, `http_request_duration_ms`, `ai_chat_stream_duration_ms`, `ai_llm_call_duration_ms`, `ai_llm_tokens_total`, `ai_llm_cost_usd_total`, `ai_llm_errors_total`
+
+**Infra metrics (via Alloy exporters, strict allowlist):** `container_memory_working_set_bytes`, `container_memory_rss`, `container_spec_memory_limit_bytes`, `container_cpu_usage_seconds_total`, `container_oom_events_total`, `container_network_*`, `container_fs_*`, `node_filesystem_avail_bytes` (excl. tmpfs/overlay), `node_memory_MemAvailable_bytes`, `node_cpu_seconds_total`, `node_network_*`, `up`
 
 **Labels:** All low-cardinality—`route` (routeId), `method`, `status` (2xx/4xx/5xx), `provider`, `model_class` (free/standard/premium), `code` (`AiExecutionErrorCode` — pre-normalized, no heuristics)
 
@@ -202,8 +205,9 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 - ❌ No Node.js process metrics (`collectDefaultMetrics()` not called — heap/RSS/GC invisible)
 - ❌ No heartbeat metric (app death indistinguishable from quiet period)
 - ❌ No container resource limits in compose (unbounded memory → unattributable OOM kills)
-- ❌ No Grafana alert rules (silent outages go undetected)
-- ❌ No container restart/exit-code detection
+- ⚠️ Grafana alert rules designed but not yet created (post-deploy — requires metrics flowing)
+- ✅ Container OOM detection via cAdvisor `container_oom_events_total` metric (task.0027)
+- ✅ Container memory pressure visible via `container_memory_rss` / `container_spec_memory_limit_bytes` (task.0027)
 - ❌ Dockerfile HEALTHCHECK timeout (2s) shorter than readyz budget (8s)
 - ❌ `/readyz` skips database connectivity check
 
