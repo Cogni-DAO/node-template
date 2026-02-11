@@ -33,6 +33,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 | Deliverable                                                                                             | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Fix: schedule creation accepts paid models with zero credits — no credit gate                           | Backlog     | 2   | bug.0025  |
 | Fix: scheduled runs write charge_receipts (billing bypass regression)                                   | Todo        | 2   | bug.0005  |
 | Billing enforcement decorator at GraphExecutorPort level                                                | Done        | 2   | task.0007 |
 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing          | Todo        | 3   | task.0006 |
