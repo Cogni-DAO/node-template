@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.12.2",
   "volta": {
-    "node": "20.19.0",
+    "node": "22.22.0",
     "pnpm": "9.12.2"
   },
   "scripts": {
@@ -116,7 +116,7 @@
     "prepare": "husky"
   },
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "pnpm": {
     "overrides": {
@@ -217,7 +217,7 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/dockerode": "^4.0.1",
-    "@types/node": "^20",
+    "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^11.0.0",

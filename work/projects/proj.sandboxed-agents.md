@@ -429,7 +429,7 @@ Prove network isolation, workspace I/O, and one-shot container lifecycle. No LLM
 **Infrastructure:**
 
 - [x] Create `services/sandbox-runtime/Dockerfile`:
-  - Base: `node:20-slim`
+  - Base: `node:22-slim`
   - Install: curl, git, jq, bash
   - User: non-root `sandboxer`
   - Entrypoint: `bash -c` for one-shot command execution

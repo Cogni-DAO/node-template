@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 # Base image – shared across stages
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
@@ -63,7 +63,7 @@ COPY --from=builder /app/src/adapters/server/db/migrations ./src/adapters/server
 CMD ["pnpm", "db:migrate:container"]
 
 # Runner – lean production image
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 # Create non-root user

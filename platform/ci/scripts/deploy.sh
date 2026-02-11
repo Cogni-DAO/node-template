@@ -680,6 +680,18 @@ emit_deployment_event "deployment.migration_complete" "success" "Migrations appl
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "[$(date -u +%H:%M:%S)] Starting runtime stack (rolling update)..."
 emit_deployment_event "deployment.stack_up_started" "in_progress" "Starting container stack"
+
+# ── Autoheal guard ──────────────────────────────────────────────────────────
+# Autoheal polls every 5s and restarts unhealthy containers. During
+# "compose up -d", compose does stop → remove → create. Autoheal can restart
+# a container between stop and remove, causing:
+#   "cannot remove container: container is running"
+# Stopping autoheal first eliminates the race. Compose up -d recreates it
+# as part of the stack (autoheal is a defined service in docker-compose.yml).
+# NOTE: Uses compose service name "autoheal", not container name.
+# ────────────────────────────────────────────────────────────────────────────
+$RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
+
 $RUNTIME_COMPOSE --profile sandbox-openclaw up -d --remove-orphans
 log_info "[$(date -u +%H:%M:%S)] Stack up complete"
 emit_deployment_event "deployment.stack_up_complete" "success" "All containers started"

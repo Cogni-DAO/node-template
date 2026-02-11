@@ -5,7 +5,7 @@
 # One-shot container for network-isolated command execution.
 # Per SANDBOXED_AGENTS.md P0.5: ephemeral per command, LLM access via socket bridge.
 
-FROM node:20-slim
+FROM node:22-slim
 
 # Install minimal tools needed for sandbox operations
 # socat: bridges localhost:8080 to mounted unix socket for LLM access (P0.5)
