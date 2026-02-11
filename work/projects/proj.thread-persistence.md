@@ -34,7 +34,7 @@ Ship server-authoritative conversation persistence so that multi-turn chat works
 | Deliverable                                                                   | Status      | Est | Work Item |
 | ----------------------------------------------------------------------------- | ----------- | --- | --------- |
 | DB: `ai_threads` table + Drizzle schema + RLS + migration                     | Not Started | 1   | —         |
-| Port: `ThreadPersistencePort` + `DrizzleThreadPersistenceAdapter`             | Not Started | 2   | —         |
+| Port: `ThreadPersistencePort` (incl. `getExecutorThreadRef` stub) + adapter   | Not Started | 2   | —         |
 | Route: extract last user message from `messages[]`, load→execute→persist flow | Not Started | 3   | —         |
 | Bridge: AiEvent→UIMessageStream + response UIMessage assembly                 | Not Started | 2   | —         |
 | Masking: regex-based PII masking before `saveThread()`                        | Not Started | 1   | —         |
@@ -48,6 +48,7 @@ Ship server-authoritative conversation persistence so that multi-turn chat works
 | ------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
 | Contract: change wire format to `{threadId, message}` instead of `messages[]`  | Not Started | 1   | (create at P1 start) |
 | Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk) | Not Started | 2   | (create at P1 start) |
+| LangGraph routing: executor-conditional history loading + UUID thread ref      | Not Started | 2   | (create at P1 start) |
 | Thread list: `listThreads` endpoint + basic thread selection UI                | Not Started | 2   | (create at P1 start) |
 | History load: thread messages loaded from server on mount / thread switch      | Not Started | 1   | (create at P1 start) |
 
