@@ -40,17 +40,27 @@ Ship server-authoritative conversation persistence so that multi-turn chat works
 | Masking: regex-based PII masking before `saveThread()`                         | Not Started | 1   | —         |
 | Tests: multi-turn, tenant isolation, messages-grow-only, disconnect safety     | Not Started | 2   | —         |
 
-### Walk (P1): Client Migration + Thread Management
+### Walk (P1): Client Migration + Thread Management + Sandbox Observability
 
-**Goal:** Client sends only the new user message. Thread list UI backed by server. History survives page refresh.
+**Goal:** Client sends only the new user message. Thread list UI backed by server. History survives page refresh. Sandbox executor tool-use visible in persisted threads.
 
-| Deliverable                                                                          | Status      | Est | Work Item            |
-| ------------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
-| Contract: change wire format to `{threadId, message}` instead of `messages[]`        | Not Started | 1   | (create at P1 start) |
-| Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk)       | Not Started | 2   | (create at P1 start) |
-| LangGraph routing: executor-conditional history loading + UUID thread ref derivation | Not Started | 2   | (create at P1 start) |
-| Thread list: `listThreads` endpoint + basic thread selection UI                      | Not Started | 2   | (create at P1 start) |
-| History load: thread messages loaded from server on mount / thread switch            | Not Started | 1   | (create at P1 start) |
+| Deliverable                                                                           | Status      | Est | Work Item            |
+| ------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Contract: change wire format to `{threadId, message}` instead of `messages[]`         | Not Started | 1   | (create at P1 start) |
+| Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk)        | Not Started | 2   | (create at P1 start) |
+| LangGraph routing: executor-conditional history loading + UUID thread ref derivation  | Not Started | 2   | (create at P1 start) |
+| Thread list: `listThreads` endpoint + basic thread selection UI                       | Not Started | 2   | (create at P1 start) |
+| History load: thread messages loaded from server on mount / thread switch             | Not Started | 1   | (create at P1 start) |
+| Gateway streaming enrichment: capture OpenClaw WS tool-use events as AiEvents         | Not Started | 3   | (create at P1 start) |
+| Ephemeral output enrichment: investigate richer `--json` output for tool-use metadata | Not Started | 1   | (create at P1 start) |
+
+#### P1 Sandbox Observability TODOs
+
+Identified in [thread persistence duplication research](../../docs/research/openclaw-thread-persistence-duplication.md):
+
+- [ ] **Gateway tool-use streaming**: `OpenClawGatewayClient` currently captures only `text_delta` and `chat_final` from the WS stream. Extend to capture structured tool-use events (tool name, args, result) and emit as `tool_call_start`/`tool_call_result` AiEvents. The UIMessage accumulator then persists them as typed parts automatically — closing the observability gap where sandbox runs show only final text.
+- [ ] **Ephemeral tool-use output**: `SandboxGraphProvider` parses only `payloads[0].text` from OpenClaw's `--json` envelope. Investigate whether OpenClaw can emit intermediate tool-use details in the JSON output, or whether post-hoc JSONL extraction is needed.
+- [ ] **Spec update — Executor State Duality**: Add section to `thread-persistence.md` documenting that `ai_threads` is a UI projection for external executors (OpenClaw, LangGraph Server) and single source for in-proc graphs. The UIMessage parts schema already supports tool-call parts — the gap is in AiEvent emission from black-box executors, not persistence architecture.
 
 ### Run (P2+): Retention + GDPR Deletion + LangGraph Coordination
 
