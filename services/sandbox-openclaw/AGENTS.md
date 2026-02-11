@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-12
+- **Last reviewed:** 2026-02-13
 - **Status:** draft
 
 ## Purpose
@@ -15,6 +15,7 @@ Multi-stage devtools image for running OpenClaw in Cogni. One image for both gat
 ## Pointers
 
 - [OpenClaw Sandbox Spec](../../docs/spec/openclaw-sandbox-spec.md) — invariants 26 (IMAGE_FROM_PUBLISHED_BASE), 27 (COMPOSE_IMAGE_PARITY)
+- [Sandbox Images Guide](../../docs/guides/sandbox-images.md) — build/push/pull commands for all published images
 - [Sandbox Spec](../../docs/spec/sandboxed-agents.md)
 - [Sandbox Runtime (reference)](../sandbox-runtime/)
 - [Sandbox Adapter](../../src/adapters/server/sandbox/)
@@ -33,9 +34,9 @@ Multi-stage devtools image for running OpenClaw in Cogni. One image for both gat
 
 - **Exports:** Docker image `cogni-sandbox-openclaw:latest` (`ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`)
 - **Routes:** none
-- **CLI:** `pnpm sandbox:openclaw:docker:build` (build context = repo root)
-- **Env/Config keys (runtime):** `PNPM_STORE_DIR`, `HOME`, `COREPACK_HOME`, `LLM_PROXY_SOCKET`, `LLM_PROXY_PORT`, `OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, `OPENCLAW_LOAD_SHELL_ENV`
-- **Files considered API:** Dockerfile, entrypoint.sh, openclaw-gateway.json
+- **CLI:** `pnpm sandbox:openclaw:docker:build`, `pnpm sandbox:pnpm-store:build`, `pnpm sandbox:pnpm-store:seed`, `pnpm sandbox:pnpm-store:seed:from-ghcr`
+- **Env/Config keys (runtime):** `npm_config_store_dir`, `HOME`, `COREPACK_HOME`, `LLM_PROXY_SOCKET`, `LLM_PROXY_PORT`, `OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, `OPENCLAW_LOAD_SHELL_ENV`
+- **Files considered API:** Dockerfile, Dockerfile.pnpm-store, entrypoint.sh, seed-pnpm-store.sh, openclaw-gateway.json
 
 ## Responsibilities
 
@@ -63,7 +64,7 @@ docker run --rm cogni-sandbox-openclaw:latest "pnpm --version && git --version &
 - Parameterized via `ARG OPENCLAW_BASE` for per-arch override
 - Entrypoint: `sandbox-entrypoint.sh` (socat bridge + `bash -lc`)
 - Non-root: sandboxer user (uid 1001, gid 1001)
-- pnpm store: `PNPM_STORE_DIR=/pnpm-store`, mount `pnpm_store` named volume
+- pnpm store: `npm_config_store_dir=/pnpm-store`, mount `pnpm_store` named volume
 - No Cogni node_modules baked in — deps installed at runtime via cache volume
 - Socket mount at `/llm-sock` (same convention as sandbox-runtime)
 
