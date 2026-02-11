@@ -2,7 +2,7 @@
 id: task.0027
 type: task
 title: "Alloy infra metrics + log noise suppression + Grafana P0 alerts"
-status: In Progress
+status: Done
 priority: 0
 estimate: 3
 summary: Add cAdvisor + node exporter to Alloy (no new containers), suppress health-check log noise at pipeline level, create P0 Grafana alert rules for OOM/memory-pressure/deadman
@@ -15,7 +15,7 @@ branch: fix/health-monitoring
 pr:
 reviewer:
 created: 2026-02-11
-updated: 2026-02-12
+updated: 2026-02-11
 labels: [infra, observability, reliability, P0]
 external_refs:
 ---
@@ -120,9 +120,7 @@ Create via Grafana API (or MCP tools). All alerts fire for `env=~"preview|produc
   - Drop only when: JSON parsed OK AND route/status/duration fields present AND status==200 AND (duration<1000 or metrics endpoint)
   - Keep failures (non-200), slow responses (>1s), and lines with missing fields
 - [x] Add same log drop stages to `alloy-config.alloy` (dev parity)
-- [ ] Create Grafana Cloud alert folder (post-deploy — requires metrics flowing)
-- [ ] Create alert rules via Grafana API: `container_oom`, `container_rss_near_limit`, `deadman_cadvisor`, `deadman_node`, `deadman_app_metrics`
-- [ ] Verify all alerts have correct `for` duration and severity labels
+- [ ] Create Grafana Cloud alert folder + alert rules — see task.0028 (human, post-deploy)
 
 ## Validation
 

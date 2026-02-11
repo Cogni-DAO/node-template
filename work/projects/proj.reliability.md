@@ -10,7 +10,7 @@ summary: Maximum cogni uptime — watchdog, external monitoring, OTel fix, backu
 outcome: Auto-recovery from hangs within 2 min, external alerting on downtime, no silent outages
 assignees: derekg1729
 created: 2026-02-08
-updated: 2026-02-10
+updated: 2026-02-11
 labels: [infra, reliability]
 related: [proj.observability-hardening]
 ---
@@ -43,7 +43,7 @@ Feb 7–8, 2026: Two multi-hour outages across production and preview with zero 
 | ------------------------------------------------------------------------------------- | -------------------------------------- | --- |
 | Automated Postgres backups: `pg_dump` to object storage (S3/R2) on cron               | Not Started                            | 2   |
 | Grafana alert: app log silence >5 min (dead-man's switch)                             | Replaced by deadman alerts (task.0027) | 1   |
-| Grafana alert: container restart count delta >0 / unhealthy >60s / RSS >85% mem_limit | Todo (task.0027)                       | 1   |
+| Grafana alert: container restart count delta >0 / unhealthy >60s / RSS >85% mem_limit | Backlog (task.0028, post-deploy)       | 1   |
 | Grafana alert: stderr volume spike                                                    | Not Started                            | 1   |
 | Session invalidation on DB reset (prevent stale-session FK errors)                    | Not Started                            | 1   |
 | Deploy config reconciliation: hash-based restart/reload for bind-mounted configs      | Backlog (task.0024)                    | 2   |

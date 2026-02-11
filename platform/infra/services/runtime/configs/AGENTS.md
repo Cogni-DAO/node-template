@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-06
+- **Last reviewed:** 2026-02-11
 - **Status:** draft
 
 ## Purpose
@@ -62,9 +62,11 @@ Mounted as volumes in docker-compose.yml.
 
 **Alloy Config** (env-specific):
 
-- `alloy-config.alloy` - Logs only (local dev); scrapes Docker containers → Loki
-- `alloy-config.metrics.alloy` - Logs + metrics (preview/prod); adds prometheus.scrape → Mimir
+- `alloy-config.alloy` - Logs only (local dev); scrapes Docker containers → Loki; includes log noise suppression stages
+- `alloy-config.metrics.alloy` - Logs + metrics (preview/prod); adds cAdvisor + node exporter + prometheus.scrape → Mimir; strict 18-metric allowlist + label cardinality policy
 - docker-compose.dev.yml mounts `alloy-config.alloy`; docker-compose.yml mounts `alloy-config.metrics.alloy`
+- Both configs share identical log noise suppression: drops successful fast health-check/metrics-scrape logs (fail-safe — only drops when JSON parses AND required fields match)
+- Infra metrics: `prometheus.exporter.cadvisor` (container memory/CPU/OOM/network/disk) + `prometheus.exporter.unix` (host memory/CPU/filesystem/network); requires host mounts `/proc:/host/proc:ro`, `/sys:/host/sys:ro`, `/:/host/root:ro`
 - Treating "metrics config without creds" as deployment misconfig (not tolerated)
 
 ## Dependencies

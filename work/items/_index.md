@@ -19,7 +19,8 @@
 | 0   | 2   | Backlog     | bug.0025   | Schedule creation accepts paid agents with zero credits — no credit gate   | Unified Graph Launch       | proj.unified-graph-launch       |
 | 0   | 2   | Todo        | bug.0005   | Scheduled runs invisible in Activity — no billing                          | Unified Graph Launch       | proj.unified-graph-launch       |
 | 0   | 2   | Todo        | task.0014  | VM watchdog: autoheal + HEALTHCHECK on /livez with resource limits         | Reliability & Uptime       | proj.reliability                |
-| 0   | 3   | Todo        | task.0027  | Alloy infra metrics + log noise suppression + Grafana P0 alerts            | Reliability & Uptime       | proj.reliability                |
+| 0   | 3   | Done        | task.0027  | Alloy infra metrics + log noise suppression + Grafana P0 alerts            | Reliability & Uptime       | proj.reliability                |
+| 0   | 1   | Backlog     | task.0028  | Create Grafana Cloud P0 alert rules (post-deploy, human)                   | Reliability & Uptime       | proj.reliability                |
 | 0   | 1   | Todo        | task.0019  | Parameterize gateway auth token — env substitution, no hardcoded secret    | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | In Progress | bug.0002   | P0 SECURITY: Deploy artifacts expose all secrets                           | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 0   | 4   | In Progress | task.0001  | Docs Migration Tracker                                                     | Docs System Infrastructure | proj.docs-system-infrastructure |
