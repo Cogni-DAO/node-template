@@ -210,7 +210,7 @@ pnpm check
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0031.handoff.md)
 
 ## Attribution
 
