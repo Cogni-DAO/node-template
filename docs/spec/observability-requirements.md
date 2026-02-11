@@ -3,14 +3,14 @@ id: spec.observability-requirements
 type: spec
 title: Required Observability Design
 status: draft
-spec_state: draft
+spec_state: proposed
 trust: draft
 summary: Infrastructure-layer observability invariants for silent death detection, pre-crash visibility, alert strategy, and health check layering
 read_when: Implementing health probes, container metrics, alerting, or resource limits
 implements: []
 owner: cogni-dev
 created: 2026-02-04
-verified: null
+verified: 2026-02-11
 tags:
   - observability
   - deployment
@@ -99,7 +99,7 @@ Each layer catches what the one above cannot. Heartbeat detects death but not ca
 | **cAdvisor sidecar**                            | Yes (oom_kill counter) | Yes (cgroup memory)     | Yes (container gone)  | New container + config |
 | **Platform-native (Akash/Spheron)**             | Yes (authoritative)    | Depends on API          | Yes                   | Unknown availability   |
 
-**Decision:** P0 ships heartbeat + process metrics. P1 adds cAdvisor for OOM attribution. Platform-native is ideal but blocked on Spheron API investigation.
+**Decision:** P0 ships heartbeat + process metrics. P1 adds cAdvisor for OOM attribution — implemented via Alloy's built-in `prometheus.exporter.cadvisor` (no sidecar container). Platform-native is ideal but blocked on Spheron API investigation.
 
 ### Resource Limits
 
@@ -118,14 +118,16 @@ Compose `deploy.resources.limits` requires Swarm mode and is silently ignored by
 
 ### File Pointers
 
-| File                                                     | Purpose                                               |
-| -------------------------------------------------------- | ----------------------------------------------------- |
-| `src/shared/observability/server/metrics.ts`             | Prometheus registry, process metrics, heartbeat gauge |
-| `platform/infra/services/runtime/docker-compose.yml`     | Production resource limits, Alloy health check        |
-| `platform/infra/services/runtime/docker-compose.dev.yml` | Dev resource limits, Alloy health check               |
-| `Dockerfile`                                             | HEALTHCHECK timeout configuration                     |
-| `src/app/(infra)/readyz/route.ts`                        | Readiness probe with dependency checks                |
-| `src/app/(infra)/livez/route.ts`                         | Liveness probe (dependency-free)                      |
+| File                                                                 | Purpose                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `src/shared/observability/server/metrics.ts`                         | Prometheus registry, process metrics, heartbeat gauge                     |
+| `platform/infra/services/runtime/docker-compose.yml`                 | Production resource limits, Alloy health check, host mounts for exporters |
+| `platform/infra/services/runtime/docker-compose.dev.yml`             | Dev resource limits, Alloy health check, host mounts for exporters        |
+| `platform/infra/services/runtime/configs/alloy-config.metrics.alloy` | cAdvisor + node exporter + metric allowlist + log noise suppression       |
+| `platform/infra/services/runtime/configs/alloy-config.alloy`         | Log noise suppression (dev parity)                                        |
+| `Dockerfile`                                                         | HEALTHCHECK timeout configuration                                         |
+| `src/app/(infra)/readyz/route.ts`                                    | Readiness probe with dependency checks                                    |
+| `src/app/(infra)/livez/route.ts`                                     | Liveness probe (dependency-free)                                          |
 
 ## Acceptance Checks
 

@@ -65,15 +65,65 @@ loki.source.docker "default" {
   relabel_rules = discovery.relabel.docker_logs.rules
 }
 
-// Process logs (minimal - defer filtering to later PR)
+// =============================================================================
+// Log Processing with Health-Check Noise Suppression
+// =============================================================================
+// Fail-safe: only drops when JSON parses AND required fields exist AND conditions
+// match. Unparseable lines, missing fields, failures, and slow responses pass through.
+// Same drop logic as alloy-config.metrics.alloy for dev parity.
+
 loki.process "docker_logs" {
-  // Parse Docker JSON wrapper
   stage.docker {}
 
-  // Extract timestamp from Docker JSON
   stage.timestamp {
     source = "time"
     format = "RFC3339Nano"
+  }
+
+  // Extract JSON fields from app logs (fail-safe: non-JSON lines get no extracted fields)
+  stage.json {
+    expressions = {
+      route       = "route",
+      status_code = "status",
+      duration_ms = "durationMs",
+      log_msg     = "msg",
+    }
+  }
+
+  // Drop "request received" lines for health/metrics probe routes
+  stage.template {
+    source   = "drop_probe_start"
+    template = "{{ if and .route .log_msg (or (eq .route \"meta.readyz\") (eq .route \"meta.metrics\")) (eq .log_msg \"request received\") }}true{{ end }}"
+  }
+
+  stage.drop {
+    source              = "drop_probe_start"
+    value               = "true"
+    drop_counter_reason = "probe_start_noise"
+  }
+
+  // Drop successful metrics scrape completions (status=200)
+  stage.template {
+    source   = "drop_metrics_ok"
+    template = "{{ if and .route .status_code (eq .route \"meta.metrics\") (eq .status_code \"200\") }}true{{ end }}"
+  }
+
+  stage.drop {
+    source              = "drop_metrics_ok"
+    value               = "true"
+    drop_counter_reason = "metrics_scrape_ok"
+  }
+
+  // Drop successful fast readyz probe completions (status=200, duration < 1000ms)
+  stage.template {
+    source   = "drop_readyz_ok"
+    template = "{{ if and .route .status_code .duration_ms (eq .route \"meta.readyz\") (eq .status_code \"200\") }}{{ if lt (int .duration_ms) 1000 }}true{{ end }}{{ end }}"
+  }
+
+  stage.drop {
+    source              = "drop_readyz_ok"
+    value               = "true"
+    drop_counter_reason = "readyz_probe_ok"
   }
 
   forward_to = [loki.write.loki.receiver]

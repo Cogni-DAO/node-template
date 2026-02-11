@@ -104,6 +104,8 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm@sha256:7e7816d58c265c182be5f3568ed8e5d999f11a5deda1d85e8e347a18bc578f64
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - internal
       - sandbox-internal
@@ -133,6 +135,8 @@ services:
   postgres:
     image: postgres:15
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - internal
     environment:
@@ -228,6 +232,10 @@ services:
       - ./configs/alloy-config.metrics.alloy:/etc/alloy/config.alloy:ro
       - alloy_data:/var/lib/alloy
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Host mounts for prometheus.exporter.unix (node-level metrics)
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
     command:
       - run
       - /etc/alloy/config.alloy
@@ -260,6 +268,8 @@ services:
     # Aligned to postgres:15 for consistency with app DB
     image: postgres:15
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - internal
     environment:
@@ -279,6 +289,8 @@ services:
     # Pinned version from temporalio/docker-compose v1.29.1
     image: temporalio/auto-setup:1.29.1
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - internal
     ports:
@@ -333,6 +345,8 @@ services:
   scheduler-worker:
     image: ${SCHEDULER_WORKER_IMAGE}
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     stop_grace_period: 30s
     networks:
       - internal
@@ -377,6 +391,8 @@ services:
     container_name: llm-proxy-openclaw
     profiles: [sandbox-openclaw]
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - sandbox-internal
     environment:
@@ -400,6 +416,8 @@ services:
     container_name: openclaw-gateway
     profiles: [sandbox-openclaw]
     restart: unless-stopped
+    labels:
+      - "autoheal=true"
     networks:
       - sandbox-internal
       - internal
