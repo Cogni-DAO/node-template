@@ -95,8 +95,8 @@ Schedule creation should have an analogous gate.
 - [x] Unit test: `tests/unit/adapters/server/ai/preflight-credit-check.decorator.test.ts`
 - [x] `pnpm check` — all pass
 - [x] `pnpm test` — 910 tests pass
-- [ ] Add contract test: schedule creation with paid model + zero credits → 402
-- [ ] Add contract test: schedule creation with free model + zero credits → 201 (succeeds)
+- [x] Add contract test: schedule creation with paid model + zero credits → 402
+- [x] Add contract test: schedule creation with free model + zero credits → 201 (succeeds)
 
 ## Validation
 
