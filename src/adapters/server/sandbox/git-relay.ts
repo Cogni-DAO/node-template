@@ -4,10 +4,7 @@
 /**
  * Module: `@adapters/server/sandbox/git-relay`
  * Purpose: Host-side git relay for gateway sandbox agents — worktree setup, bundle transfer, push + PR.
- * Scope: All credential-bearing git operations (push, PR) execute on the host via git CLI + gh CLI.
- *   In-container operations (worktree, commit detection, bundle creation) use dockerode exec.
- *   Offline transfer uses first-party `git bundle` (not format-patch). PR ops use `gh` CLI (not REST).
- *   Branch identity is branchKey (never runId). See openclaw-sandbox-controls.md invariants 20, 23.
+ * Scope: Host-side push/PR via git + gh CLI, container-side worktree + bundle via dockerode exec. Does not handle agent execution, billing, or ephemeral container mode.
  * Invariants:
  *   - Per HOST_SIDE_GIT_RELAY (inv. 20): push/PR on host, commits in container
  *   - Per BRANCH_KEY_IDENTITY (inv. 23): branchKey is stable work identity, never runId

@@ -5,63 +5,63 @@ work_item_id: task.0022
 status: active
 created: 2026-02-12
 updated: 2026-02-12
-branch: fix/check-output-verbosity
-last_commit: ad1c9544
+branch: feat/task-0022-git-relay-mvp
+last_commit: ef74cb86
 ---
 
-# Handoff: Git Relay MVP — Gateway Agent pnpm + git Foundations
+# Handoff: Git Relay MVP — Gateway Worktree + Bundle + PR
 
 ## Context
 
-- task.0022 is a git relay MVP: agent edits code in a sandbox container, commits locally, host pushes + creates PR
-- Scope was narrowed to **gateway (long-lived OpenClaw) only** — ephemeral mode is deprioritized
-- This session focused on the prerequisite: giving the gateway agent a writable workspace with pnpm offline install and local git commit
-- All changes are uncommitted on `fix/check-output-verbosity` (unrelated branch — needs a proper feature branch)
-- The gateway container already has pnpm 9.12.2, git, bash/exec tools, and all required Docker volumes
+- **Goal:** A sandbox agent (OpenClaw gateway) edits code, commits locally, and the host pushes the branch + creates a GitHub PR. The PR URL is returned in the chat response.
+- The relay uses **git-native offline transport** (`git bundle`, not format-patch) and **`gh` CLI** for PR ops (no bespoke REST client).
+- Branch identity is `branchKey` (stable work identity) — **never `runId`**. Multiple runs/agents can append commits to the same branch. See spec invariant 23 (BRANCH_KEY_IDENTITY).
+- Gateway is the only active execution mode (ephemeral deprioritized). The agent runs in a long-lived container on `sandbox-internal` network with no external egress.
+- Credentials (`OPENCLAW_GITHUB_RW_TOKEN`) stay on the host — never in the container (invariant 4, SECRETS_HOST_ONLY).
 
 ## Current State
 
-- **Done:** Config changes to point gateway agent workspace to `/workspace/current`, set `HOME=/workspace`, add git identity env vars, move `OPENCLAW_STATE_DIR` to `/workspace/.openclaw-state`
-- **Done:** Shared test fixtures for gateway workspace bootstrap (`ensureGatewayWorkspace`, `createGatewayTestClone`, `cleanupGatewayDir`)
-- **Done:** Stack test with hard prereq check (fails loud if `/repo/current` missing)
-- **Done:** AGENTS.md updated in both `src/adapters/server/sandbox/` and `services/sandbox-openclaw/` marking ephemeral as deprioritized
-- **Not proven yet:** The 4 new tests (workspace bootstrap + git commit) have not passed — `/repo/current` was absent in test stack run. The 5 existing pnpm store smoke tests pass
-- **Not started:** git relay orchestration (host-side clone, post-run push, PR creation), openclaw-coder agent registration, `GITHUB_TOKEN` / credential handling
+- **Done:** Gateway workspace config (HOME=/workspace, git identity env vars, agent workspace at /workspace/current)
+- **Done:** Smoke tests passing (9/9): pnpm store, offline install, workspace bootstrap, git commit inside container
+- **Done:** Spec updated — `openclaw-sandbox-controls.md` rewritten with gateway-mode flow, branchKey contract, worktree model, `gh` CLI for PRs
+- **Done:** `git-relay.ts` implemented — `GitRelayManager` class with worktree setup, bundle creation, host-side push, `gh pr create/list`
+- **Done:** `OPENCLAW_GITHUB_RW_TOKEN` added to server env schema (optional; relay skipped if absent)
+- **Not done:** Wiring `GitRelayManager` into `createGatewayExecution()` in `sandbox-graph.provider.ts`
+- **Not done:** `OPENCLAW_GITHUB_RW_TOKEN` propagation to `.env` files and deployment configs
+- **Not done:** End-to-end manual smoke test
 
 ## Decisions Made
 
-- Gateway-only: ephemeral containers deprioritized — see `src/adapters/server/sandbox/AGENTS.md`
-- `/repo/current` stays read-only (git-sync mirror immutable). Agent works in `/workspace/current` (writable clone)
-- `pnpm_store` and `cogni_workspace` are named volumes on same Docker fs — pnpm hardlinks work
-- Git push/credentials out of scope for this phase — local commits only
-- No OpenClaw source code changes needed; agent already has exec/bash tool access
+- **branchKey > runId**: Spec invariant 23 in `docs/spec/openclaw-sandbox-controls.md`. Sources ranked: explicit branchName > workItemId > stateKey (opt-in only). Never auto-derive from stateKey.
+- **git bundle > format-patch**: First-party git transport; handles binaries, merge commits. Bundle written to container `/tmp/`, `docker cp` to host.
+- **gh CLI > REST API**: No bespoke GitHub REST client. `gh pr list` / `gh pr create` with `GITHUB_TOKEN` env.
+- **Worktrees > single checkout**: `/workspace/wt/<branchKey>` via `git worktree add`. Symlink `/workspace/current` → active worktree for agent compatibility.
+- **Origin = git-sync mirror**: Worktree remote `origin` points to `/repo/current` (local). `git fetch`/`rebase` work natively in container without network.
 
 ## Next Actions
 
-- [ ] Move uncommitted changes to a proper feature branch (e.g., `feat/task-0022-git-relay-mvp`)
-- [ ] Verify the 4 new workspace tests pass with full `dev:stack:test` (needs git-sync to populate `/repo/current`)
-- [ ] Validate gateway boots cleanly with `HOME=/workspace` and new `OPENCLAW_STATE_DIR` (manual: `docker logs openclaw-gateway`)
-- [ ] Implement git relay orchestration in `sandbox-graph.provider.ts` per task.0022 plan: host clones repo → agent commits → host pushes branch + creates PR
-- [ ] Register `openclaw-coder` agent variant in `SANDBOX_AGENTS` registry
-- [ ] Add `GITHUB_TOKEN` handling for host-side push (env var, never in container)
-- [ ] End-to-end smoke test: send coding task → verify branch pushed + PR created
+- [ ] Wire `GitRelayManager` into `createGatewayExecution()`: pre-run calls `ensureWorkspaceBranch()`, post-run calls `relayCommits()`, append PR URL to `GraphFinal.content`
+- [ ] Resolve branchKey from `GraphRunRequest` — check for explicit branchName, then workItemId, skip if neither present
+- [ ] Propagate `OPENCLAW_GITHUB_RW_TOKEN` to `.env.local.example`, `.env.test.example`, and deploy pipeline
+- [ ] Manual e2e smoke test: `pnpm dev:stack` → chat with openclaw agent → verify branch pushed + PR created
+- [ ] Confirm `gh` CLI is available in the host environment (CI + dev)
 
 ## Risks / Gotchas
 
-- `HOME=/workspace` was `HOME=/tmp` before — untested with live gateway process. If gateway fails to start, revert to `/tmp` and investigate
-- `/repo/current` requires git-sync to have run — tests fail hard if missing (by design)
-- `cogni_workspace` volume persists across container restarts — stale `/workspace/current` clone could have outdated code. Consider freshness check against `/repo/current`
-- `noexec` on `/tmp` tmpfs (128m) could cause issues with pnpm postinstall scripts. If so, set `PNPM_IGNORE_SCRIPTS=1`
+- **git-sync uses worktrees**: `/repo/current/.git` is a file, not a directory. Always use `git rev-parse` (not `test -d .git`) — this was already a bug we fixed (commit `aefcb5b5`).
+- **`/workspace/current` is a symlink**: After `ensureWorkspaceBranch`, `/workspace/current` → `/workspace/wt/<branchKey>`. The OpenClaw agent config points to `/workspace/current` — it follows the symlink transparently.
+- **P0 concurrency = single branchKey**: Only one branchKey active at a time. The provider should hold a branchKey lock if concurrent requests are possible. Worktrees make P0.5 multi-branch safe.
+- **`docker cp` for bundle transfer**: Named Docker volumes aren't directly accessible on macOS. Bundle is written to `/tmp/` (tmpfs, 128m, noexec) in the container — bundles must stay small. If bundle exceeds tmpfs, consider a different transfer path.
 
 ## Pointers
 
-| File / Resource                                                          | Why it matters                                                                          |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `work/items/task.0022.git-relay-mvp.md`                                  | Full requirements, plan, and validation criteria                                        |
-| `services/sandbox-openclaw/openclaw-gateway.json`                        | Gateway agent config — workspace now `/workspace/current`                               |
-| `platform/infra/services/runtime/docker-compose.dev.yml` (lines 524-575) | Gateway service definition — env vars, volumes, networks                                |
-| `src/adapters/server/sandbox/sandbox-graph.provider.ts`                  | Gateway execution path (`createGatewayExecution`) — where git relay orchestration goes  |
-| `tests/_fixtures/sandbox/fixtures.ts`                                    | Shared helpers: `ensureGatewayWorkspace`, `createGatewayTestClone`, `GATEWAY_CONTAINER` |
-| `tests/stack/sandbox/sandbox-openclaw-pnpm-smoke.stack.test.ts`          | Smoke tests — 5 passing (store), 4 pending (workspace bootstrap + git)                  |
-| `docs/spec/openclaw-sandbox-controls.md`                                 | Spec for HOST_SIDE_GIT_RELAY, SECRETS_HOST_ONLY, WORKSPACE_SURVIVES_FOR_PUSH            |
-| `src/adapters/server/sandbox/AGENTS.md`                                  | Ephemeral deprioritization rationale                                                    |
+| File / Resource                                                          | Why it matters                                                                                |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `work/items/task.0022.git-relay-mvp.md`                                  | Full requirements, plan with [x] progress, validation criteria                                |
+| `docs/spec/openclaw-sandbox-controls.md`                                 | Authoritative spec — branchKey contract (sec 2), relay flow diagram (sec 3), invariants 20-26 |
+| `src/adapters/server/sandbox/git-relay.ts`                               | `GitRelayManager` — the relay implementation (worktree, bundle, push, PR)                     |
+| `src/adapters/server/sandbox/sandbox-graph.provider.ts`                  | `createGatewayExecution()` (line ~411) — where relay wiring goes                              |
+| `src/shared/env/server.ts`                                               | `OPENCLAW_GITHUB_RW_TOKEN` schema definition                                                  |
+| `platform/infra/services/runtime/docker-compose.dev.yml` (lines 524-579) | Gateway service: env vars, volumes, networks                                                  |
+| `tests/stack/sandbox/sandbox-openclaw-pnpm-smoke.stack.test.ts`          | 9 passing smoke tests — pnpm + workspace + git commit                                         |
+| `tests/_fixtures/sandbox/fixtures.ts`                                    | Shared helpers: `ensureGatewayWorkspace`, `createGatewayTestClone`, `GATEWAY_CONTAINER`       |
