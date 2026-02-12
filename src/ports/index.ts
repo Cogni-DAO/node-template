@@ -86,6 +86,7 @@ export type {
   GraphFinal,
   GraphRunRequest,
   GraphRunResult,
+  PreflightCreditCheckFn,
 } from "./graph-executor.port";
 // LlmError types re-exported for adapters (adapters can only import from ports)
 // Features should import directly from @/core
