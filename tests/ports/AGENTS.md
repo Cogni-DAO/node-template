@@ -31,7 +31,7 @@ Port behavior tests that verify implementations are swappable and conform to exp
 
 - **Exports:** test functions for port validation
 - **Routes:** none
-- **CLI:** imported by integration tests
+- **CLI:** imported by component tests
 - **Env/Config keys:** none
 - **Files considered API:** `harness/*.port.harness.ts`, `*.adapter.spec.ts`
 

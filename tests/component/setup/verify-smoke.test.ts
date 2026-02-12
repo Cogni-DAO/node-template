@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/setup/verify-smoke`
+ * Module: `@tests/component/setup/verify-smoke`
  * Purpose: End-to-end smoke test for DAO formation verification pipeline.
  * Scope: Proves whole verify flow works with real-ish data; does not make production RPC calls.
  * Invariants: Uses Base mainnet canonical fixtures or local fork.
@@ -24,7 +24,7 @@ describe("DAO formation verification smoke test", () => {
     // 1. Find or create a successful DAO creation on Base mainnet/Sepolia
     // 2. Capture daoTxHash and signalTxHash from explorer
     // 3. Fetch receipts via RPC: eth_getTransactionReceipt
-    // 4. Commit receipts to tests/integration/setup/fixtures/base-dao-formation.json
+    // 4. Commit receipts to tests/component/setup/fixtures/base-dao-formation.json
     // 5. Mock viem publicClient.getTransactionReceipt() to return fixtures
     // 6. Mock publicClient.readContract() for TokenVoting.getVotingToken, balanceOf, CogniSignal.DAO
     //

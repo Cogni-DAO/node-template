@@ -51,7 +51,7 @@ PostgreSQL implementations of account service ports for credit accounting and ch
 Minimal local commands:
 
 ```bash
-pnpm test tests/integration/
+pnpm test tests/component/
 ```
 
 ## Standards

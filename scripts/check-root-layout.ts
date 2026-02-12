@@ -136,7 +136,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "tsconfig.scripts.json",
   "vitest.api.config.mts",
   "vitest.config.mts",
-  "vitest.integration.config.mts",
+  "vitest.component.config.mts",
   "vitest.stack.config.mts",
   "vitest.workspace.ts",
   "work",

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/sandbox/sandbox-network`
+ * Module: `@tests/component/sandbox/sandbox-network`
  * Purpose: Proves network isolation for sandbox containers.
  * Scope: Tests network=none enforcement only. Does not test mount variations or LLM integration.
  * Invariants:

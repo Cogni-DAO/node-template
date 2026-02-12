@@ -57,7 +57,7 @@ pnpm check:full:fast
 2. docker:test:stack (--build or :fast)
 3. docker:test:stack:setup (provision + migrate)
 4. pnpm test:unit
-5. pnpm test:int
+5. pnpm test:component
 6. pnpm test:contract
 7. pnpm test:stack:docker
 8. docker:test:stack:down (always via trap)

@@ -363,8 +363,8 @@ Follows the Commit 3 construction-time binding pattern. `UserDrizzlePaymentAttem
 | `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs                  |
 | `src/shared/env/server.ts`                                   | Zod refine rejecting non-localhost URLs without `sslmode`         |
 | `src/shared/env/invariants.ts`                               | Role separation checks (`assertEnvInvariants()`)                  |
-| `tests/integration/db/rls-tenant-isolation.int.test.ts`      | Cross-tenant isolation + missing-context tests                    |
-| `tests/integration/db/rls-adapter-wiring.int.test.ts`        | Adapter wiring gate tests                                         |
+| `tests/component/db/rls-tenant-isolation.int.test.ts`        | Cross-tenant isolation + missing-context tests                    |
+| `tests/component/db/rls-adapter-wiring.int.test.ts`          | Adapter wiring gate tests                                         |
 
 ## Acceptance Checks
 

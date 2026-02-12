@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `vitest.integration.config.mts`
- * Purpose: Vitest configuration for integration tests (API + DB) requiring running infrastructure.
- * Scope: Configures integration test environment for tests that need real DB/HTTP server. Does not handle unit tests.
+ * Module: `vitest.component.config.mts`
+ * Purpose: Vitest configuration for component tests using isolated docker testcontainers.
+ * Scope: Configures component test environment for tests that use testcontainers. Does not handle unit tests.
  * Invariants: Uses tsconfigPaths plugin for clean `@/core` resolution; loads .env.test for DB connection; anchored at repo root.
- * Side-effects: process.env (.env.test injection), database connections, HTTP requests
+ * Side-effects: process.env (.env.test injection), database connections
  * Notes: Plugin-only approach eliminates manual alias conflicts; explicit tsconfig.base.json reference ensures path accuracy.
- * Links: tsconfig.base.json paths, integration test files
+ * Links: tsconfig.base.json paths, component test files
  * @public
  */
 
@@ -21,7 +21,7 @@ import { defineConfig } from "vitest/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Load .env.test for integration tests with variable expansion
+// Load .env.test for component tests with variable expansion
 const env = config({ path: ".env.test" });
 expand(env);
 
@@ -30,12 +30,10 @@ expand(env);
 export default defineConfig({
   plugins: [tsconfigPaths({ projects: ["./tsconfig.base.json"] })],
   test: {
-    include: ["tests/integration/**/*.int.test.ts"],
+    include: ["tests/component/**/*.int.test.ts"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    globalSetup: [
-      "./tests/integration/setup/testcontainers-postgres.global.ts",
-    ],
+    globalSetup: ["./tests/component/setup/testcontainers-postgres.global.ts"],
     sequence: { concurrent: false },
   },
   resolve: {

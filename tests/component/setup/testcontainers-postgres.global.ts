@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/setup/testcontainers-postgres.global`
- * Purpose: Vitest global setup for testcontainers-based PostgreSQL integration tests.
+ * Module: `@tests/component/setup/testcontainers-postgres.global`
+ * Purpose: Vitest global setup for testcontainers-based PostgreSQL component tests.
  * Scope: Manages PostgreSQL container lifecycle with proper role separation via provision.sh. Does not run application code or tests directly.
  * Invariants:
  *   - Runs provision.sh inside the container (psql available there, not on host)
@@ -11,8 +11,8 @@
  *   - DATABASE_SERVICE_URL → app_service (BYPASSRLS)
  *   - Migrations run as app_user (DB owner, same as production)
  * Side-effects: IO (Docker containers, process.env, file system)
- * Notes: Used by vitest.integration.config.mts as globalSetup; sets APP_ENV=test for fake adapters.
- * Links: vitest integration config, platform/infra/services/runtime/postgres-init/provision.sh
+ * Notes: Used by vitest.component.config.mts as globalSetup; sets APP_ENV=test for fake adapters.
+ * Links: vitest component config, platform/infra/services/runtime/postgres-init/provision.sh
  * @internal
  */
 

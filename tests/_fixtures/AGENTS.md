@@ -10,12 +10,12 @@
 
 ## Purpose
 
-Static test data for consistent test scenarios across unit and integration tests.
+Static test data for consistent test scenarios across unit and component tests.
 
 ## Pointers
 
 - [Unit tests](../unit/)
-- [Integration tests](../integration/)
+- [Component tests](../component/)
 
 ## Boundaries
 

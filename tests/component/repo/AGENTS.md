@@ -1,16 +1,16 @@
-# tests/integration/repo · AGENTS.md
+# tests/component/repo · AGENTS.md
 
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-03
+- **Last reviewed:** 2026-02-12
 - **Status:** draft
 
 ## Purpose
 
-Integration tests for RipgrepAdapter and GitLsFilesAdapter against real temp git repos. Validates path security, search bounds, SHA stamping, file retrieval, file listing, and cross-tool path canonicalization.
+Component tests for RipgrepAdapter, GitLsFilesAdapter, and Brain repo capability wiring against real temp git repos. Validates path security, search bounds, SHA stamping, file retrieval, file listing, cross-tool path canonicalization, and tool invocation smoke tests.
 
 ## Pointers
 
@@ -32,19 +32,19 @@ Integration tests for RipgrepAdapter and GitLsFilesAdapter against real temp git
 
 - **Exports:** `createTempGitRepo()`, `cleanupTempGitRepo()`, `assertBinariesAvailable()`, `KNOWN_FILE`, `TempGitRepo` (from fixtures/temp-git-repo.ts — shared with brain tests)
 - **Routes:** none
-- **CLI:** `pnpm test:int -- tests/integration/repo`
+- **CLI:** `pnpm test:component -- tests/component/repo`
 - **Env/Config keys:** none (uses temp directories)
 - **Files considered API:** `fixtures/temp-git-repo.ts` (shared fixture)
 
 ## Responsibilities
 
 - This directory **does**: Test RipgrepAdapter and GitLsFilesAdapter against real git repos with real `rg` and `git` binaries
-- This directory **does not**: Test tool layer (see brain/), test DI container wiring, test citation guard
+- This directory **does not**: Test DI container wiring, test citation guard
 
 ## Usage
 
 ```bash
-pnpm test:int -- tests/integration/repo
+pnpm test:component -- tests/component/repo
 ```
 
 ## Standards
@@ -66,5 +66,5 @@ pnpm test:int -- tests/integration/repo
 
 ## Notes
 
-- Fixture `temp-git-repo.ts` is also consumed by `tests/integration/brain/` for wiring smoke tests
-- CI installs ripgrep via `taiki-e/install-action` in the integration job
+- `repo-wiring-smoke.int.test.ts` (merged from brain/) tests end-to-end repo capability wiring
+- CI installs ripgrep via `taiki-e/install-action` in the component job

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/db/rls-tenant-isolation.int.test`
+ * Module: `@tests/component/db/rls-tenant-isolation.int.test`
  * Purpose: Verify PostgreSQL RLS policies enforce tenant isolation at the database layer.
  * Scope: Tests that SET LOCAL app.current_user_id restricts row visibility per user. Does not test application-layer auth.
  * Invariants:

@@ -105,7 +105,7 @@ docker restart openclaw-gateway && sleep 5 && docker logs openclaw-gateway 2>&1 
 # Expected: "heartbeat: disabled" (not "heartbeat: started")
 
 # After client fix, run gateway integration test:
-pnpm vitest run tests/integration/sandbox-openclaw-gateway
+pnpm vitest run tests/component/sandbox-openclaw-gateway
 ```
 
 **Expected:** Heartbeat disabled in gateway logs. No `HEARTBEAT_OK` in any chat response. Integration tests pass.

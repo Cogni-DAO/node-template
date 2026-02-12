@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/payments/drizzle-payment-attempt.adapter`
+ * Module: `@tests/component/payments/drizzle-payment-attempt.adapter`
  * Purpose: Integration tests for UserDrizzlePaymentAttemptRepository + ServiceDrizzlePaymentAttemptRepository with real PostgreSQL database.
  * Scope: Tests adapter implementation against port contract with testcontainers. Does NOT test business logic.
  * Invariants: Adapter passes all port contract tests; ownership enforced via RLS; txHash uniqueness maintained; events logged.
  * Side-effects: IO (database operations via testcontainers)
- * Notes: Uses port harness for reusable contract tests; runs with testcontainers PostgreSQL via vitest.integration.config.
+ * Notes: Uses port harness for reusable contract tests; runs with testcontainers PostgreSQL via vitest.component.config.
  * Links: PaymentAttemptUserRepository + PaymentAttemptServiceRepository ports, payment-attempt.port.harness.ts
  * @public
  */

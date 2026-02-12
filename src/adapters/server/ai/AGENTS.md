@@ -60,7 +60,7 @@ AI service adapters including LiteLLM completion/streaming, usage telemetry, age
 Minimal local commands:
 
 ```bash
-pnpm test tests/integration/ai/
+pnpm test tests/component/ai/
 ```
 
 ## Standards

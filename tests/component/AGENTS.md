@@ -1,16 +1,16 @@
-# tests/integration · AGENTS.md
+# tests/component · AGENTS.md
 
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-03
+- **Last reviewed:** 2026-02-12
 - **Status:** draft
 
 ## Purpose
 
-Pure adapter integration tests using testcontainers. Tests adapter implementations directly against real databases without HTTP server dependencies.
+Component tests using isolated docker testcontainers. Tests adapter implementations against real dependencies without a running application stack.
 
 ## Pointers
 
@@ -37,7 +37,7 @@ Pure adapter integration tests using testcontainers. Tests adapter implementatio
 
 - **Exports:** none
 - **Routes:** none
-- **CLI:** pnpm test:int or vitest run tests/integration
+- **CLI:** pnpm test:component or vitest run tests/component
 - **Env/Config keys:** .env.test only (e.g., TEST_DB_URL, TEST_LITELLM_URL)
 - **Files considered API:** none
 
@@ -49,9 +49,9 @@ Pure adapter integration tests using testcontainers. Tests adapter implementatio
 ## Usage
 
 ```bash
-pnpm test:int
-vitest run tests/integration
-pnpm test tests/integration/adapters/ai
+pnpm test:component
+vitest run tests/component
+pnpm test tests/component/adapters/ai
 ```
 
 ## Standards
@@ -64,11 +64,11 @@ pnpm test tests/integration/adapters/ai
 ## Dependencies
 
 - **Internal:** src/adapters, src/ports, src/shared, tests/ports, @cogni/ai-tools
-- **External:** vitest, docker (for local testing), test environment configs, ripgrep binary (for repo/ and brain/ tests)
+- **External:** vitest, docker (for local testing), test environment configs, ripgrep binary (for repo/ tests)
 
 ## Change Protocol
 
-- Update integration tests when adapter implementations change
+- Update component tests when adapter implementations change
 - Run full port test suites when port interfaces change
 - Bump **Last reviewed** date
 - Ensure clean test environment setup/teardown

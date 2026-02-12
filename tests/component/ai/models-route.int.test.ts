@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/ai/models-route.int`
+ * Module: `@tests/component/ai/models-route.int`
  * Purpose: Validates /api/v1/ai/models HTTP endpoint behavior including auth and error handling.
  * Scope: Tests HTTP status codes and response schema compliance. Does not test cache implementation or upstream fetch logic.
  * Invariants: Route requires authentication; returns contract-valid response; handles errors gracefully; defaults computed from catalog metadata.
@@ -47,7 +47,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { GET } from "@/app/api/v1/ai/models/route";
 import { getCachedModels } from "@/shared/ai/model-catalog.server";
 
-describe("/api/v1/ai/models integration tests", () => {
+describe("/api/v1/ai/models component tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
