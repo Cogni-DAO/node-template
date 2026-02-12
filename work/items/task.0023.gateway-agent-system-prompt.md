@@ -142,6 +142,7 @@ These files define what the LLM sees. Review tone, accuracy, and completeness af
 - OpenClaw system prompt: `src/agents/system-prompt.ts` (in openclaw repo)
 - OpenClaw skills: `src/agents/skills/workspace.ts` (in openclaw repo)
 - OpenClaw memory: `src/memory/` + `docs/concepts/memory.md` (in openclaw repo)
+- Handoff: [handoff](../handoffs/task.0023.handoff.md)
 
 ## Attribution
 
