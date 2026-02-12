@@ -81,7 +81,7 @@ export const serverSchema = z.object({
   // Default: localhost:3333 for dev/test (host-mapped port); Docker DNS in production
   OPENCLAW_GATEWAY_URL: z.string().url().default("http://127.0.0.1:3333"),
   // Auth token for OpenClaw gateway WS handshake (must match openclaw-gateway.json gateway.auth.token)
-  OPENCLAW_GATEWAY_TOKEN: z.string().default("openclaw-internal-token"),
+  OPENCLAW_GATEWAY_TOKEN: z.string().min(32),
   // Shared volume path for gateway proxy billing audit log
   // Default: /tmp/cogni-openclaw-billing for dev/test (host bind-mount); Docker compose overrides to /openclaw-billing
   OPENCLAW_BILLING_DIR: z.string().default("/tmp/cogni-openclaw-billing"),

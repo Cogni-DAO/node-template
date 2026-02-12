@@ -35,9 +35,10 @@ import {
   makeGatewayRunRequest,
 } from "../../_fixtures/sandbox/fixtures";
 
-const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL ?? "http://127.0.0.1:3333";
-const GATEWAY_TOKEN =
-  process.env.OPENCLAW_GATEWAY_TOKEN ?? "openclaw-internal-token";
+const {
+  OPENCLAW_GATEWAY_URL: GATEWAY_URL,
+  OPENCLAW_GATEWAY_TOKEN: GATEWAY_TOKEN,
+} = serverEnv();
 const GATEWAY_CONTAINER = "openclaw-gateway";
 const PROXY_CONTAINER = "llm-proxy-openclaw";
 
