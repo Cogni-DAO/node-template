@@ -54,7 +54,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
   - `ContainerConfig` interface - Runtime config (unhandledErrorPolicy, rateLimitBypass, DEPLOY_ENVIRONMENT)
   - `UnhandledErrorPolicy` type - `"rethrow" | "respond_500"`
   - `resolveAiAdapterDeps()` - AI adapter dependencies for factory
-  - `createGraphExecutor(completionStreamFn, userId, billingCommitFn)` - Factory for GraphExecutorPort with billing + observability decorators (from `graph-executor.factory.ts`)
+  - `createGraphExecutor(completionStreamFn, userId, billingCommitFn, preflightCheckFn)` - Factory for GraphExecutorPort with preflight + billing + observability decorators (from `graph-executor.factory.ts`)
   - `createAgentCatalog()`, `listAgentsForApi()` - Discovery factory (from `agent-discovery.ts`)
   - `wrapRouteHandlerWithLogging()` - Route logging wrapper with metrics (from `http/`)
   - `wrapPublicRoute()` - Lazy singleton wrapper for public routes with rate limiting (from `http/`)

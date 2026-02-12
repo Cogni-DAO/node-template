@@ -34,7 +34,7 @@ import {
   redactSecretsInMessages,
   uiMessagesToMessageDtos,
 } from "@/features/ai/public.server";
-import { ThreadConflictError } from "@/ports";
+import { isInsufficientCreditsPortError, ThreadConflictError } from "@/ports";
 import {
   aiChatStreamDurationMs,
   logRequestWarn,
@@ -68,6 +68,17 @@ function handleRouteError(
     return NextResponse.json(
       { error: "Thread conflict — please retry" },
       { status: 409 }
+    );
+  }
+
+  // Port-level credit errors (thrown directly by PreflightCreditCheckDecorator
+  // during stream iteration — not mapped to feature errors by the facade in
+  // the streaming path)
+  if (isInsufficientCreditsPortError(error)) {
+    logRequestWarn(ctx.log, error, "INSUFFICIENT_CREDITS");
+    return NextResponse.json(
+      { error: "Insufficient credits" },
+      { status: 402 }
     );
   }
 
