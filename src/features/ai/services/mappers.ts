@@ -4,7 +4,7 @@
 /**
  * Module: `@features/ai/mappers`
  * Purpose: DTO mapping for AI feature - isolates core types from external layers.
- * Scope: Maps between DTOs and core domain types with validation. Does not handle external API calls or database operations.
+ * Scope: Maps between DTOs and core domain types with validation. Includes UIMessage[] → MessageDto[] bridge for thread persistence pipeline. Does not handle external API calls or database operations.
  * Invariants: Pure functions, no side effects, proper error handling
  * Side-effects: none
  * Notes: Keeps core types isolated while enabling proper DTO translation
@@ -12,6 +12,7 @@
  * @public
  */
 
+import type { DynamicToolUIPart, TextUIPart, UIMessage } from "ai";
 import {
   ChatErrorCode,
   ChatValidationError,
@@ -120,4 +121,68 @@ export function fromCoreMessage(msg: Message): {
     content: msg.content,
     timestamp: msg.timestamp ?? new Date().toISOString(),
   };
+}
+
+/**
+ * Convert persisted UIMessage[] → MessageDto[] for the existing toCoreMessages() pipeline.
+ *
+ * Maps:
+ * - user UIMessage text parts → user MessageDto
+ * - assistant UIMessage text parts → assistant MessageDto (with optional toolCalls)
+ * - assistant UIMessage dynamic-tool parts with output → tool MessageDto per tool result
+ *
+ * Per spec Decision 4: this bridges UIMessage persistence shape into the existing pipeline.
+ * P1 replaces this with convertToModelMessages() from AI SDK.
+ */
+export function uiMessagesToMessageDtos(messages: UIMessage[]): MessageDto[] {
+  const result: MessageDto[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === "system") continue;
+
+    // Extract text content from parts
+    const textParts = msg.parts.filter(
+      (p): p is TextUIPart => p.type === "text"
+    );
+    const textContent = textParts.map((p) => p.text).join("\n");
+
+    // Extract dynamic-tool parts (tool calls with lifecycle)
+    const toolParts = msg.parts.filter(
+      (p): p is DynamicToolUIPart => p.type === "dynamic-tool"
+    );
+
+    if (msg.role === "user") {
+      result.push({ role: "user", content: textContent });
+    } else if (msg.role === "assistant") {
+      // Build tool calls from dynamic-tool parts
+      // All DynamicToolUIPart variants have toolCallId, toolName;
+      // input is available on all states except input-streaming (where it may be undefined)
+      const toolCalls: MessageDtoToolCall[] = toolParts.map((p) => ({
+        id: p.toolCallId,
+        name: p.toolName,
+        arguments: JSON.stringify(
+          "input" in p && p.input != null ? p.input : {}
+        ),
+      }));
+
+      result.push({
+        role: "assistant",
+        content: textContent,
+        ...(toolCalls.length > 0 ? { toolCalls } : {}),
+      });
+
+      // Emit tool result messages for completed tool calls
+      for (const p of toolParts) {
+        if (p.state === "output-available") {
+          result.push({
+            role: "tool",
+            content: JSON.stringify(p.output),
+            toolCallId: p.toolCallId,
+          });
+        }
+      }
+    }
+  }
+
+  return result;
 }

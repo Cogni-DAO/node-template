@@ -48,7 +48,7 @@ describe("CALLER_DRAIN_OBLIGATION Invariant", () => {
     const violations: string[] = [];
 
     for (const site of consumerSites) {
-      const filePath = site.split(":")[0]!;
+      const filePath = site.split(":")[0] ?? "";
       const fileContent = readFileSync(filePath, "utf-8");
 
       const hasPumpDrain =

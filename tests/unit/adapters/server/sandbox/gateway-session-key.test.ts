@@ -122,7 +122,7 @@ describe("SandboxGraphProvider gateway session key", () => {
 
     // configureSession is called first with the session key
     expect(configureSessionSpy).toHaveBeenCalledOnce();
-    const [sessionKey] = configureSessionSpy.mock.calls[0]!;
+    const [sessionKey] = configureSessionSpy.mock.calls[0] ?? [];
 
     // Session key must contain stateKey, NOT runId
     expect(sessionKey).toBe("agent:main:ba-acct-42:thread-abc-456");
@@ -188,8 +188,8 @@ describe("SandboxGraphProvider gateway session key", () => {
     const { stream: s2 } = provider.runGraph(req2);
     await drainStream(s2);
 
-    const [key1] = configureSessionSpy.mock.calls[0]!;
-    const [key2] = configureSessionSpy.mock.calls[1]!;
+    const [key1] = configureSessionSpy.mock.calls[0] ?? [];
+    const [key2] = configureSessionSpy.mock.calls[1] ?? [];
 
     // Same stateKey, different billing accounts → different session keys
     expect(key1).toBe("agent:main:ba-alice:same-thread");

@@ -157,6 +157,11 @@ export type {
   SandboxRunSpec,
   SandboxVolumeMount,
 } from "./sandbox-runner.port";
+export {
+  ThreadConflictError,
+  type ThreadPersistencePort,
+  type ThreadSummary,
+} from "./thread-persistence.port";
 export type {
   EmitAiEvent,
   ToolEffect,

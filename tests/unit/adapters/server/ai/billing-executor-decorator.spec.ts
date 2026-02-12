@@ -156,7 +156,7 @@ describe("BillingGraphExecutorDecorator billing validation", () => {
     await collectStream(result.stream);
 
     expect(commitFn).toHaveBeenCalledTimes(1);
-    const [calledFact, calledContext] = commitFn.mock.calls[0]!;
+    const [calledFact, calledContext] = commitFn.mock.calls[0] ?? [];
     expect(calledFact.usageUnitId).toBe("litellm-call-id-456");
     expect(calledContext.runId).toBe("run-123");
     expect(calledContext.ingressRequestId).toBe("req-123");
@@ -335,7 +335,7 @@ describe("BillingGraphExecutorDecorator billing validation", () => {
     await collectStream(decorator.runGraph(fakeRequest).stream);
 
     expect(commitFn).toHaveBeenCalledTimes(2);
-    expect(commitFn.mock.calls[0]![0].usageUnitId).toBe("call-1");
-    expect(commitFn.mock.calls[1]![0].usageUnitId).toBe("call-2");
+    expect(commitFn.mock.calls[0]?.[0].usageUnitId).toBe("call-1");
+    expect(commitFn.mock.calls[1]?.[0].usageUnitId).toBe("call-2");
   });
 });

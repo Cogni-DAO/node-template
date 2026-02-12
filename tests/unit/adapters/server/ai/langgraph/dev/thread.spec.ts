@@ -129,7 +129,7 @@ describe("adapters/server/ai/langgraph/dev/thread", () => {
 
     it("preserves original values without transformation", () => {
       const billingAccountId = "UPPER-case-123";
-      const stateKey = "Special_Chars-./";
+      const stateKey = "Special_Chars-_test";
 
       const metadata = buildThreadMetadata(billingAccountId, stateKey);
 

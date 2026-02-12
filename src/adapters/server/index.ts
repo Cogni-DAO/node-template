@@ -68,6 +68,10 @@ export {
   TavilyWebSearchAdapter,
   type TavilyWebSearchConfig,
 } from "./ai/tavily-web-search.adapter";
+export {
+  DrizzleThreadPersistenceAdapter,
+  MAX_THREAD_MESSAGES,
+} from "./ai/thread-persistence.adapter";
 export { DrizzleAiTelemetryAdapter } from "./ai-telemetry/drizzle.adapter";
 export {
   type CreateTraceWithIOParams,

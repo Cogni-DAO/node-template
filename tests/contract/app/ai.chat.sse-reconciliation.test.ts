@@ -42,6 +42,12 @@ vi.mock("@/bootstrap/container", () => ({
     config: {
       unhandledErrorPolicy: "rethrow",
     },
+    threadPersistenceForUser: vi.fn(() => ({
+      loadThread: vi.fn().mockResolvedValue([]),
+      saveThread: vi.fn().mockResolvedValue(undefined),
+      softDelete: vi.fn().mockResolvedValue(undefined),
+      listThreads: vi.fn().mockResolvedValue([]),
+    })),
   })),
   resolveAiDeps: vi.fn(),
   resolveAiAdapterDeps: vi.fn(),
@@ -91,6 +97,7 @@ vi.mock("@/shared/observability", async (importOriginal) => {
 
 // ─── Imports (after mocks) ───────────────────────────────────────────────────
 
+import { TEST_SESSION_USER_1 } from "@tests/_fakes/ids";
 import {
   isFinishMessageEvent,
   isTextDeltaEvent,
@@ -213,10 +220,7 @@ describe("Chat SSE Reconciliation", () => {
     vi.resetAllMocks();
 
     // Default mocks
-    vi.mocked(getSessionUser).mockResolvedValue({
-      id: "test-user",
-      walletAddress: "0xTestWallet123",
-    });
+    vi.mocked(getSessionUser).mockResolvedValue(TEST_SESSION_USER_1);
     vi.mocked(isModelAllowed).mockResolvedValue(true);
   });
 

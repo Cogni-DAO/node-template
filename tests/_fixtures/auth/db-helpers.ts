@@ -115,7 +115,7 @@ export function createMockSessionUser(
   overrides: Partial<SessionUser> = {}
 ): SessionUser {
   return {
-    id: "test-user-id",
+    id: overrides.id ?? "00000000-0000-4000-a000-000000000001",
     walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
     ...overrides,
   };

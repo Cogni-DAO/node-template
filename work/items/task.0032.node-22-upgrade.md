@@ -106,6 +106,11 @@ pnpm check:full
 - Changing any runtime behavior — this is a pin update only
 - Updating OpenClaw (already on Node 22)
 
+## PR / Links
+
+- PR: https://github.com/Cogni-DAO/node-template/pull/379
+- Handoff: [handoff](../handoffs/task.0032.handoff.md)
+
 ## Review Checklist
 
 - [ ] **Work Item:** task.0032 linked in PR body
