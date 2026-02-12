@@ -2,15 +2,15 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/repo/fixtures/temp-git-repo`
- * Purpose: Reusable temp git repo fixture for repo adapter and brain integration tests.
+ * Module: `@tests/component/repo/fixtures/temp-git-repo`
+ * Purpose: Reusable temp git repo fixture for repo adapter and brain component tests.
  * Scope: Creates disposable git repos with known content. Does not contain test assertions.
  * Invariants:
  *   - Cleanup always runs, even on test failure
  *   - Git identity set for CI compatibility (no global git config required)
  *   - Preflight checks for rg and git binaries
  * Side-effects: IO (filesystem, git subprocess)
- * Links: tests/integration/repo/, tests/integration/brain/
+ * Links: tests/component/repo/, tests/component/brain/
  * @internal
  */
 
@@ -62,14 +62,14 @@ export function assertBinariesAvailable(): void {
     execSync("git --version", { stdio: "pipe" });
   } catch {
     throw new Error(
-      "git binary not found. Install git to run repo integration tests."
+      "git binary not found. Install git to run repo component tests."
     );
   }
   try {
     execSync("rg --version", { stdio: "pipe" });
   } catch {
     throw new Error(
-      "rg (ripgrep) binary not found. Install ripgrep to run repo integration tests."
+      "rg (ripgrep) binary not found. Install ripgrep to run repo component tests."
     );
   }
 }

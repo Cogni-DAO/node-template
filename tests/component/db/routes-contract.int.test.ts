@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/payments/routes-contract`
+ * Module: `@tests/component/payments/routes-contract`
  * Purpose: HTTP route contract tests validating status codes, schema compliance, and auth enforcement.
  * Scope: Tests route handlers directly with NextRequest mocking. Does not test business logic (covered by stack tests).
  * Invariants: HTTP status codes correct; Zod schemas enforced; auth failures return 401; ownership returns 404/409.

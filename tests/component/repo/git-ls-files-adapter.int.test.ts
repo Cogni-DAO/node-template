@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/repo/git-ls-files-adapter`
+ * Module: `@tests/component/repo/git-ls-files-adapter`
  * Purpose: Integration tests for GitLsFilesAdapter and cross-tool path invariants.
  * Scope: Tests list(), getSha(), path canonicalization, and list-to-open round-trip. Does not test DI wiring.
  * Invariants:

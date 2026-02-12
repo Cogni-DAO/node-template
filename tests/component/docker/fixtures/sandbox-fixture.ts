@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/sandbox/fixtures/sandbox-fixture`
- * Purpose: Shared test fixtures for sandbox integration tests.
+ * Module: `@tests/component/sandbox/fixtures/sandbox-fixture`
+ * Purpose: Shared test fixtures for sandbox component tests.
  * Scope: Provides runner setup, workspace helpers, cleanup. Does not contain test assertions.
  * Invariants:
  *   - Cleanup always runs, even on test failure
  *   - No orphan containers left behind
  * Side-effects: IO (Docker containers, filesystem)
- * Links: tests/integration/sandbox/
+ * Links: tests/component/sandbox/
  * @internal
  */
 

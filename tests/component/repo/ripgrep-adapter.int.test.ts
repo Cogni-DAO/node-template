@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/repo/ripgrep-adapter`
+ * Module: `@tests/component/repo/ripgrep-adapter`
  * Purpose: Integration tests for RipgrepAdapter against a real temp git repo.
  * Scope: Tests path validation, search bounds, SHA stamping, and security invariants. Does not test DI wiring.
  * Invariants:

@@ -1,22 +1,22 @@
-# tests/integration/sandbox · AGENTS.md
+# tests/component/docker · AGENTS.md
 
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-07
+- **Last reviewed:** 2026-02-12
 - **Status:** draft
 
 ## Purpose
 
-Integration tests for sandbox container execution. Proves network isolation, mount behavior, and lifecycle semantics using real Docker containers.
+Component tests for sandbox container execution via Docker. Proves network isolation, mount behavior, and lifecycle semantics using real Docker containers.
 
 ## Pointers
 
 - [Sandbox Adapter](../../../src/adapters/server/sandbox/)
 - [Sandbox Spec](../../../docs/spec/sandboxed-agents.md)
-- [Parent Integration Tests](../)
+- [Parent Component Tests](../)
 
 ## Boundaries
 
@@ -32,7 +32,7 @@ Integration tests for sandbox container execution. Proves network isolation, mou
 
 - **Exports:** none
 - **Routes:** none
-- **CLI:** `pnpm test tests/integration/sandbox`
+- **CLI:** `pnpm test tests/component/docker`
 - **Env/Config keys:** `CI` (controls hard failure vs skip on missing image)
 - **Files considered API:** none
 
@@ -48,7 +48,7 @@ Integration tests for sandbox container execution. Proves network isolation, mou
 docker build -t cogni-sandbox-runtime:latest services/sandbox-runtime
 
 # Run tests
-pnpm test tests/integration/sandbox
+pnpm test tests/component/docker
 ```
 
 ## Standards

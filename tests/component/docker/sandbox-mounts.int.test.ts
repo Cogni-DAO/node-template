@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/sandbox/sandbox-mounts`
+ * Module: `@tests/component/sandbox/sandbox-mounts`
  * Purpose: Proves workspace and repo mount behavior for sandbox containers.
  * Scope: Tests mount permissions (rw/ro) only. Does not test network isolation.
  * Invariants:

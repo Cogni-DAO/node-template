@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/brain/repo-wiring-smoke`
+ * Module: `@tests/component/brain/repo-wiring-smoke`
  * Purpose: End-to-end smoke test for repo capability wiring through the tool layer.
  * Scope: Validates temp git repo → createRepoCapability → tool invocation. Does not test citation guard or DI container.
  * Invariants:
@@ -27,7 +27,7 @@ import {
   createTempGitRepo,
   KNOWN_FILE,
   type TempGitRepo,
-} from "../repo/fixtures/temp-git-repo";
+} from "./fixtures/temp-git-repo";
 
 let repo: TempGitRepo;
 let searchTool: ReturnType<typeof createRepoSearchImplementation>;

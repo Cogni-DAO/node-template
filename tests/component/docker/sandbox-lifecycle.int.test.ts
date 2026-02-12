@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/integration/sandbox/sandbox-lifecycle`
+ * Module: `@tests/component/sandbox/sandbox-lifecycle`
  * Purpose: Proves container lifecycle behavior (stdout/stderr, exit codes, timeouts, cleanup).
  * Scope: Tests execution semantics only. Does not test network or mount variations.
  * Invariants:
