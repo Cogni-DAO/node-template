@@ -535,12 +535,16 @@ services:
       - "127.0.0.1:3333:18789"
     entrypoint: ["node", "/app/dist/index.js", "gateway"]
     environment:
-      - HOME=/tmp
+      - HOME=/workspace
       - npm_config_store_dir=/pnpm-store
       - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
-      - OPENCLAW_STATE_DIR=/tmp/openclaw-state
+      - OPENCLAW_STATE_DIR=/workspace/.openclaw-state
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
       - OPENCLAW_LOAD_SHELL_ENV=0
+      - GIT_AUTHOR_NAME=Cogni Agent
+      - GIT_COMMITTER_NAME=Cogni Agent
+      - GIT_AUTHOR_EMAIL=agent@cogni.dev
+      - GIT_COMMITTER_EMAIL=agent@cogni.dev
       - OPENCLAW_RAW_STREAM=1
       - OPENCLAW_RAW_STREAM_PATH=/tmp/openclaw-raw-stream.jsonl
       - PI_RAW_STREAM=1
