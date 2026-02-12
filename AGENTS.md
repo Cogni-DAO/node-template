@@ -137,5 +137,10 @@ The gateway workspace (`/workspace/current`) is cloned from a local mirror. To c
 
 ```bash
 git -C /workspace/current remote set-url origin "$COGNI_REPO_URL"
-git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
+```
+
+If, and ONLY if: you experience `gh` auth errors, authenticate with:
+
+```bash
+echo "$GITHUB_TOKEN" | gh auth login --with-token
 ```
