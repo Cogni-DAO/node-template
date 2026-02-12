@@ -7,6 +7,10 @@
 # Invariants:
 #   - APP_IMAGE and DEPLOY_ENVIRONMENT must be set; secrets via env vars
 #   - Prunes BEFORE pull when free < 15GB or used > 70%
+#   - TARGETED_PULL: Only pull images that change per deploy (app, migrator, scheduler-worker, sandbox).
+#     Static/pinned images (postgres, litellm, alloy, temporal, autoheal, nginx, git-sync, busybox)
+#     use local Docker cache. After prune they'll be pulled on next `compose up -d`.
+#   - SSH_KEEPALIVE: All SSH connections use ServerAliveInterval to survive long operations.
 # Notes:
 #   - Dual gate (15GB free / 70% used) prevents overlayfs extraction failures on 40GB disks
 #   - Hard prune may force service image re-pull (reliability > speed)
@@ -149,7 +153,7 @@ SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/deploy_key}"
 if [[ -f "$SSH_KEY_PATH" ]]; then
     # Found deploy key (CI or explicit local override)
     log_info "SSH key validated: $SSH_KEY_PATH"
-    SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes"
+    SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
     
     # Validate permissions
     if [[ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]]; then
@@ -159,7 +163,7 @@ if [[ -f "$SSH_KEY_PATH" ]]; then
 else
     # No deploy key found - use default SSH (local development)
     log_info "No deploy key found, using default SSH configuration"
-    SSH_OPTS="-o StrictHostKeyChecking=yes"
+    SSH_OPTS="-o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
 fi
 
 # Validate required environment variables
@@ -612,11 +616,9 @@ fi
 log_info "SourceCred Configuration:"
 grep -C 2 "repositories" /opt/cogni-template-sourcecred/instance/config/plugins/sourcecred/github/config.json || log_warn "Could not read GitHub config"
 
-# 3. Pull image (Immutable Artifact - SC-invariant-2)
-log_info "Pulling SourceCred image..."
-$SOURCECRED_COMPOSE pull sourcecred
-
-# 4. Start service
+# 3. Start service (image uses pinned tag — Docker cache handles it.
+#    First deploy or post-prune: compose up -d pulls automatically.
+#    Subsequent deploys: no-op if image already cached.)
 log_info "Starting SourceCred container..."
 $SOURCECRED_COMPOSE up -d
 
@@ -639,27 +641,32 @@ done
 log_info "Profile guardrail passed: openclaw-gateway, llm-proxy-openclaw resolved"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 6: Validate images exist (fail fast)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Validating required images are available..."
-if ! $RUNTIME_COMPOSE --dry-run --profile bootstrap --profile sandbox-openclaw pull; then
-  log_error "❌ Required images not found in registry"
-  log_error "Build workflow may have failed - check previous workflow run"
-  log_error "Expected: APP_IMAGE=${APP_IMAGE}, MIGRATOR_IMAGE=${MIGRATOR_IMAGE}"
-  exit 1
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 7: Pull images while old app is still serving traffic
+# Step 6+7: Pull only images that change per deploy (targeted, not blanket)
+# Static/pinned images (postgres, litellm, alloy, temporal, autoheal, nginx,
+# git-sync, busybox) use local Docker cache. Only re-pulled after prune or
+# when their pins change in docker-compose.yml.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "[$(date -u +%H:%M:%S)] Pulling updated images (app continues serving)..."
 emit_deployment_event "deployment.pull_started" "in_progress" "Pulling images from registry"
-$RUNTIME_COMPOSE --profile bootstrap --profile sandbox-openclaw pull
+
+# Per-deploy images (change every deploy)
+docker pull "$APP_IMAGE"
+docker pull "$MIGRATOR_IMAGE"
+docker pull "$SCHEDULER_WORKER_IMAGE"
+
+# Sandbox images (may update on :latest — per openclaw-sandbox-spec)
+# Manifest check ~2s each; skips download if digest unchanged.
+OPENCLAW_GATEWAY_IMAGE="ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest"
+PNPM_STORE_IMAGE="ghcr.io/cogni-dao/node-template:pnpm-store-latest"
+docker pull "$OPENCLAW_GATEWAY_IMAGE"
+docker pull "$PNPM_STORE_IMAGE" || log_warn "pnpm-store image not found, skipping"
+
 log_info "[$(date -u +%H:%M:%S)] Pull complete"
 emit_deployment_event "deployment.pull_complete" "success" "Images pulled successfully"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 7.5: Seed pnpm_store volume (idempotent, skip if hash matches)
+# Image already pulled above; seed script uses $PNPM_STORE_IMAGE.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 source /tmp/seed-pnpm-store.sh
 
