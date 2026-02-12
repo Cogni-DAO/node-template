@@ -38,8 +38,9 @@ SENTINEL="/mnt/target/.lockhash"
 docker volume inspect "$VOLUME" &>/dev/null || docker volume create "$VOLUME"
 
 # --entrypoint sh: bypass sandbox-entrypoint.sh which prints to stdout and garbles output
-IMAGE_HASH=$(docker run --rm --entrypoint sh "$IMAGE" -c "cat /workspace/.lockhash 2>/dev/null || echo none")
-VOLUME_HASH=$(docker run --rm --entrypoint sh -v "${VOLUME}:/mnt/target" "$IMAGE" -c "cat $SENTINEL 2>/dev/null || echo none")
+# --user root: image defaults to sandboxer (1001:1001) but fresh volumes are root-owned
+IMAGE_HASH=$(docker run --rm --user root --entrypoint sh "$IMAGE" -c "cat /workspace/.lockhash 2>/dev/null || echo none")
+VOLUME_HASH=$(docker run --rm --user root --entrypoint sh -v "${VOLUME}:/mnt/target" "$IMAGE" -c "cat $SENTINEL 2>/dev/null || echo none")
 
 if [[ "$IMAGE_HASH" == "$VOLUME_HASH" ]]; then
   echo "[INFO] pnpm_store already seeded (hash: ${VOLUME_HASH}), skipping"
@@ -47,6 +48,6 @@ if [[ "$IMAGE_HASH" == "$VOLUME_HASH" ]]; then
 fi
 
 echo "[INFO] Seeding ${VOLUME} (image hash: ${IMAGE_HASH}, volume hash: ${VOLUME_HASH})..."
-docker run --rm --entrypoint sh -v "${VOLUME}:/mnt/target" "$IMAGE" \
+docker run --rm --user root --entrypoint sh -v "${VOLUME}:/mnt/target" "$IMAGE" \
   -c "cp -a /pnpm-store/. /mnt/target/ && cp /workspace/.lockhash $SENTINEL"
 echo "[INFO] ${VOLUME} seeded successfully (hash: ${IMAGE_HASH})"
