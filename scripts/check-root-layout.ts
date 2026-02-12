@@ -69,6 +69,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   ".clinerules",
   ".cogni",
   ".cursor",
+  ".openclaw",
   ".dependency-cruiser.cjs",
   ".dockerignore",
   ".editorconfig",
