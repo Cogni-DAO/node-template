@@ -9,6 +9,7 @@
  *   - INTERNAL_API_SHARED_SECRET: Requires Bearer SCHEDULER_API_TOKEN
  *   - EXECUTION_IDEMPOTENCY_PERSISTED: Uses execution_requests table for deduplication
  *   - GRANT_VALIDATED_TWICE: Re-validates grant (defense-in-depth)
+ *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: preflight credit check via decorator (DI closure)
  *   - Uses AiExecutionErrorCode from ai-core (no parallel error system)
  * Side-effects: IO (HTTP request/response, database, graph execution)
  * Links: docs/spec/scheduler.md, graphs.run.internal.v1.contract
@@ -27,11 +28,14 @@ import {
   type InternalGraphRunOutput,
 } from "@/contracts/graphs.run.internal.v1.contract";
 import { commitUsageFact, executeStream } from "@/features/ai/public.server";
+import { preflightCreditCheck } from "@/features/ai/services/preflight-credit-check";
+import type { PreflightCreditCheckFn } from "@/ports";
 import {
   isGrantExpiredError,
   isGrantNotFoundError,
   isGrantRevokedError,
   isGrantScopeMismatchError,
+  isInsufficientCreditsPortError,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import type { BillingCommitFn } from "@/types/billing";
@@ -341,11 +345,26 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     const billingCommitFn: BillingCommitFn = (fact, context) =>
       commitUsageFact(fact, context, accountService, log);
 
+    // Create preflight credit check closure
+    // Per CREDITS_ENFORCED_AT_EXECUTION_PORT: decorator handles all execution paths
+    const preflightCheckFn: PreflightCreditCheckFn = (
+      billingAccountId,
+      m,
+      msgs
+    ) =>
+      preflightCreditCheck({
+        billingAccountId,
+        messages: [...msgs],
+        model: m,
+        accountService,
+      });
+
     // Create graph executor and run
     const executor = createGraphExecutor(
       executeStream,
       toUserId(grant.userId),
-      billingCommitFn
+      billingCommitFn,
+      preflightCheckFn
     );
     const result = executor.runGraph({
       runId,
@@ -359,12 +378,41 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       caller,
     });
 
-    // Consume stream and wait for final result
-    for await (const _event of result.stream) {
-      // Drain stream to completion
-    }
+    // Consume stream and wait for final result.
+    // Wrapped in try/catch so preflight credit failures (thrown during stream
+    // iteration by PreflightCreditCheckDecorator) finalize the idempotency
+    // record cleanly instead of leaving it "pending" forever.
+    let final: Awaited<typeof result.final>;
+    try {
+      for await (const _event of result.stream) {
+        // Drain stream to completion
+      }
 
-    const final = await result.final;
+      final = await result.final;
+    } catch (error) {
+      const errorCode = isInsufficientCreditsPortError(error)
+        ? "insufficient_credits"
+        : "internal";
+
+      log.warn(
+        { runId, graphId, errorCode },
+        "Scheduled graph execution rejected before start"
+      );
+
+      // --- 10a. Finalize idempotency record with failure ---
+      await container.executionRequestPort.finalizeRequest(idempotencyKey, {
+        ok: false,
+        errorCode,
+      });
+
+      const errorResponse: InternalGraphRunOutput = {
+        ok: false,
+        runId,
+        traceId,
+        error: errorCode,
+      };
+      return NextResponse.json(errorResponse, { status: 200 });
+    }
 
     // --- 10. Finalize idempotency record with outcome ---
     await container.executionRequestPort.finalizeRequest(idempotencyKey, {

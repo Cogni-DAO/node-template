@@ -12,6 +12,13 @@
 
 Sandbox adapter for AI agent execution — two modes: **ephemeral** containers (`network=none`, CLI invocation via dockerode) and **gateway** (long-running OpenClaw service on `sandbox-internal`, WS protocol). Both route LLM calls through nginx proxy to LiteLLM. Implements `SandboxRunnerPort`, `GraphProvider`, `AgentCatalogProvider`.
 
+## Active Priority (2026-02-12)
+
+> **Gateway (long-lived OpenClaw) is the only active execution mode.**
+> Ephemeral mode is **deprioritized** until further notice — do not invest in new ephemeral features, agents, or tests. All current work (task.0022 git relay, offline install, openclaw-coder) targets the gateway path.
+>
+> Rationale: OpenClaw is our primary AI brain, and ephemeral containers take too long to boot. The gateway container is already running with pnpm + git + devtools, named volumes (pnpm_store + cogni_workspace on same fs = hardlinks), and multi-turn agent loops. Ephemeral containers may be reintroduced in the future but are not a priority now.
+
 ## Pointers
 
 - [Sandbox Spec](../../../../docs/spec/sandboxed-agents.md)
