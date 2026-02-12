@@ -272,6 +272,14 @@ jobs:
       GIT_READ_USERNAME: Cogni-1729
       # All fake keys: DO NOT expose any real keys here
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/share/powershell /usr/local/share/chromium
+          docker system prune -af --volumes
+          df -h /
+          docker system df
+
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 
       - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
@@ -317,10 +325,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull OpenClaw gateway image
+      - name: Pull cogni-sandbox-openclaw from GHCR
         run: |
-          docker pull ghcr.io/cogni-dao/node-template:openclaw-gateway-latest
-          docker tag ghcr.io/cogni-dao/node-template:openclaw-gateway-latest openclaw-outbound-headers:latest
+          docker pull ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest
+          docker tag ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest cogni-sandbox-openclaw:latest
+
+      - name: Seed pnpm store volume from GHCR
+        run: |
+          docker pull ghcr.io/cogni-dao/node-template:pnpm-store-latest
+          bash services/sandbox-openclaw/seed-pnpm-store.sh --image ghcr.io/cogni-dao/node-template:pnpm-store-latest --volume pnpm_store
 
       - name: Build app image (with GHA cache)
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0

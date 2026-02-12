@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-10
+- **Last reviewed:** 2026-02-13
 - **Status:** draft
 
 ## Purpose
 
-Stack tests for sandbox P0.5, P0.5a, and OpenClaw gateway. Proves socket bridge, proxy forwarding, network isolation, secrets safety, billing header injection, full LLM round-trip (via mock-openai-api), and gateway repo mount (read-only volume, workspace writability) using real Docker containers against a live dev stack.
+Stack tests for sandbox P0.5, P0.5a, and OpenClaw gateway. Proves socket bridge, proxy forwarding, network isolation, secrets safety, billing header injection, full LLM round-trip (via mock-openai-api), gateway repo mount (read-only volume, workspace writability), and pnpm store smoke (offline install from seeded store) using real Docker containers against a live dev stack.
 
 ## Pointers
 
@@ -72,6 +72,8 @@ pnpm test:stack:dev -- sandbox-llm
 ## Notes
 
 - Requires `cogni-sandbox-runtime:latest` image — `pnpm sandbox:docker:build`
+- Requires `cogni-sandbox-openclaw:latest` image — `pnpm sandbox:openclaw:docker:build` (or pulled from GHCR)
+- Requires seeded `pnpm_store` volume — `pnpm sandbox:pnpm-store:seed` (for pnpm smoke tests)
 - Requires `nginx:alpine` image for proxy containers
 - Requires dev stack running — `pnpm dev:stack:test`
 - Orphan proxy containers (label `cogni.role=llm-proxy`) cleaned up automatically

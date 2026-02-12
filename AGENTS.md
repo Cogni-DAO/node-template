@@ -26,6 +26,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - Never modify outside assigned directories.
 - Keep context lean (<40% window); summarize often.
 - Purge incorrect info instead of propagating it.
+- If asked to install tools, run: `pnpm install --offline --frozen-lockfile`
 
 ## Environment
 
