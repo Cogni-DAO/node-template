@@ -33,9 +33,7 @@ export default defineConfig({
     include: ["tests/component/**/*.int.test.ts"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    globalSetup: [
-      "./tests/component/setup/testcontainers-postgres.global.ts",
-    ],
+    globalSetup: ["./tests/component/setup/testcontainers-postgres.global.ts"],
     sequence: { concurrent: false },
   },
   resolve: {
