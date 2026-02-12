@@ -33,6 +33,8 @@ export const CORE_TEST_ENV = {
   // Temporal (required infrastructure)
   TEMPORAL_ADDRESS: "localhost:7233",
   TEMPORAL_NAMESPACE: "test-namespace",
+  // OpenClaw gateway auth (min 32 chars)
+  OPENCLAW_GATEWAY_TOKEN: "x".repeat(32),
   // Repo access (required in all envs — no cwd fallback)
   COGNI_REPO_PATH: process.cwd(),
 } as const;
