@@ -222,7 +222,9 @@ function validateBoundaries(block, filePathRaw) {
     j.may_import.length === 0 &&
     !(j.must_not_import.length === 1 && j.must_not_import[0] === "*")
   ) {
-    console.warn(`Warning: may_import is empty - this is probably a mistake`);
+    console.warn(
+      `Warning: may_import is empty in ${filePath} - this is probably a mistake`
+    );
   }
 
   // Validate imports are subsets of valid layers (allow wildcards like "*")

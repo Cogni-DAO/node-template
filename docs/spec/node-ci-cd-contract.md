@@ -52,14 +52,14 @@ Define the CI/CD invariants, merge gate, and file ownership boundaries that ensu
 
 ### Merge Gate (Required for PR Merge)
 
-| Check                               | Local | CI              |
-| ----------------------------------- | ----- | --------------- |
-| `pnpm typecheck`                    | yes   | static job      |
-| `pnpm lint`                         | yes   | static job      |
-| `pnpm format:check`                 | yes   | unit job        |
-| `pnpm test:ci` (unit/contract/meta) | yes   | unit job        |
-| `pnpm arch:check`                   | yes   | static job      |
-| `pnpm test:int`                     | yes   | integration job |
+| Check                               | Local | CI            |
+| ----------------------------------- | ----- | ------------- |
+| `pnpm typecheck`                    | yes   | static job    |
+| `pnpm lint`                         | yes   | static job    |
+| `pnpm format:check`                 | yes   | unit job      |
+| `pnpm test:ci` (unit/contract/meta) | yes   | unit job      |
+| `pnpm arch:check`                   | yes   | static job    |
+| `pnpm test:component`               | yes   | component job |
 
 **Optional** (not blocking): `pnpm test:stack:docker`, e2e, coverage upload.
 
@@ -69,12 +69,12 @@ No shared kit. Each node owns its workflows directly. `ci.yaml` runs the same ch
 
 ### Workflow Entrypoints
 
-| File                                      | Type | Secrets | Trigger               | Commands                                               |
-| ----------------------------------------- | ---- | ------- | --------------------- | ------------------------------------------------------ |
-| `.github/workflows/ci.yaml`               | CI   | No      | PR, push staging/main | typecheck, lint, format, test:ci, test:int, arch:check |
-| `.github/workflows/build-prod.yml`        | CD   | Yes     | push main             | build.sh, test-image.sh, push.sh                       |
-| `.github/workflows/staging-preview.yml`   | CD   | Yes     | push staging          | pnpm check, build.sh, deploy.sh, e2e                   |
-| `.github/workflows/deploy-production.yml` | CD   | Yes     | workflow_run          | deploy.sh                                              |
+| File                                      | Type | Secrets | Trigger               | Commands                                                     |
+| ----------------------------------------- | ---- | ------- | --------------------- | ------------------------------------------------------------ |
+| `.github/workflows/ci.yaml`               | CI   | No      | PR, push staging/main | typecheck, lint, format, test:ci, test:component, arch:check |
+| `.github/workflows/build-prod.yml`        | CD   | Yes     | push main             | build.sh, test-image.sh, push.sh                             |
+| `.github/workflows/staging-preview.yml`   | CD   | Yes     | push staging          | pnpm check, build.sh, deploy.sh, e2e                         |
+| `.github/workflows/deploy-production.yml` | CD   | Yes     | workflow_run          | deploy.sh                                                    |
 
 ### Local Gates
 

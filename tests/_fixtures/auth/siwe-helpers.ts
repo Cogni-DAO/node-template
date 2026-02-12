@@ -8,7 +8,7 @@
  * Invariants: Deterministic test wallets; valid EIP-4361 message format
  * Side-effects: none
  * Notes: Use for integration tests that need real SIWE signatures without external wallet dependencies.
- * Links: tests/integration/auth/siwe-verification.int.test.ts
+ * Links: tests/component/auth/siwe-verification.int.test.ts
  * @public
  */
 

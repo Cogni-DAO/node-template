@@ -66,6 +66,7 @@ services:
       # Default: http://scheduler-worker:9000 for Docker networks
       # Override via env for test:stack:dev where app runs on host
       - SCHEDULER_WORKER_HEALTH_URL=${SCHEDULER_WORKER_HEALTH_URL:-http://scheduler-worker:9000}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
       # Shared billing dir: proxy writes JSONL audit log, app reads for billing
       - OPENCLAW_BILLING_DIR=/openclaw-billing
     volumes:
@@ -521,7 +522,7 @@ services:
         condition: service_healthy
 
   openclaw-gateway:
-    image: openclaw-outbound-headers:latest
+    image: cogni-sandbox-openclaw:latest
     container_name: openclaw-gateway
     profiles: [sandbox-openclaw]
     restart: unless-stopped
@@ -535,8 +536,10 @@ services:
     entrypoint: ["node", "/app/dist/index.js", "gateway"]
     environment:
       - HOME=/tmp
+      - npm_config_store_dir=/pnpm-store
       - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
       - OPENCLAW_STATE_DIR=/tmp/openclaw-state
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
       - OPENCLAW_LOAD_SHELL_ENV=0
       - OPENCLAW_RAW_STREAM=1
       - OPENCLAW_RAW_STREAM_PATH=/tmp/openclaw-raw-stream.jsonl
@@ -545,10 +548,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m
-      - /workspace:rw,noexec,nosuid,size=256m # writable scratch for agent file ops
     volumes:
       - ../../../../services/sandbox-openclaw/${OPENCLAW_CONFIG:-openclaw-gateway.json}:/etc/openclaw/openclaw.json:ro
       - repo_data:/repo:ro # git-synced codebase (read-only mirror, updated by git-sync)
+      - pnpm_store:/pnpm-store # persistent pnpm content-addressable store
+      - cogni_workspace:/workspace # RW volume — pnpm hardlinks require same fs as pnpm_store
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -598,3 +602,7 @@ volumes:
     name: temporal_postgres_data
   repo_data:
     name: repo_data
+  pnpm_store:
+    name: pnpm_store
+  cogni_workspace:
+    name: cogni_workspace

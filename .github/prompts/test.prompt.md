@@ -58,7 +58,7 @@ Working loop for each run:
      - If a branch is extremely contrived and only defensive, consider a single tiny targeted test OR propose marking it as ignored for coverage if justified.
 
 6. Implement tests 1 at a time, following existing repo conventions
-   - Place tests in the correct directory (e.g. `tests/unit/...`, `tests/integration/...`) and mimic current patterns.
+   - Place tests in the correct directory (e.g. `tests/unit/...`, `tests/component/...`) and mimic current patterns.
    - Use existing factories, fixtures, and helpers instead of inventing new ones unless absolutely necessary.
    - Keep each new test file concise and focused:
      - No giant 200+ line suites just to gain a couple of percentage points.

@@ -15,7 +15,7 @@ Shared test fixtures for sandbox container tests (P0, P0.5, P0.5a) and gateway a
 ## Pointers
 
 - [Sandbox Adapter](../../../src/adapters/server/sandbox/)
-- [Integration Tests](../../integration/sandbox/)
+- [Component Tests](../../component/docker/)
 - [Stack Tests](../../stack/sandbox/)
 
 ## Boundaries
@@ -69,4 +69,4 @@ import {
 
 ## Notes
 
-- Imported by both integration tests (tests/integration/sandbox/) and stack tests (tests/stack/sandbox/)
+- Imported by both component tests (tests/component/docker/) and stack tests (tests/stack/sandbox/)

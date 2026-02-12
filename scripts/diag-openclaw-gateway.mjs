@@ -14,8 +14,11 @@
 import WebSocket from "ws";
 
 const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || "ws://127.0.0.1:3333";
-const GATEWAY_TOKEN =
-  process.env.OPENCLAW_GATEWAY_TOKEN || "openclaw-internal-token";
+const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN;
+if (!GATEWAY_TOKEN) {
+  console.error("OPENCLAW_GATEWAY_TOKEN env var is required");
+  process.exit(1);
+}
 
 const t0 = Date.now();
 function ts() {

@@ -4,10 +4,10 @@
 /**
  * Module: `vitest.config`
  * Purpose: Vitest test runner configuration for unit tests, contract tests, and lint tests (no infrastructure required).
- * Scope: Configures test environment for fast tests only. Excludes integration tests requiring DB/HTTP server.
+ * Scope: Configures test environment for fast tests only. Excludes component tests requiring DB/Docker/binaries.
  * Invariants: Coverage disabled by default; fast execution; v8 provider for Node.js compatibility.
  * Side-effects: file system (coverage reports written to ./coverage/)
- * Notes: Uses vite-tsconfig-paths for module resolution; excludes tests/integration/** from main test run.
+ * Notes: Uses vite-tsconfig-paths for module resolution; excludes tests/component/** from main test run.
  * Links: SonarCloud integration workflow
  * @public
  */
@@ -39,7 +39,8 @@ export default defineConfig({
       "e2e",
       "tests/_fakes/**",
       "tests/_fixtures/**",
-      "tests/integration/**",
+      "tests/component/**",
+      "tests/external/**",
       "tests/stack/**",
     ],
     coverage: {

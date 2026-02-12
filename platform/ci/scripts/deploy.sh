@@ -7,6 +7,10 @@
 # Invariants:
 #   - APP_IMAGE and DEPLOY_ENVIRONMENT must be set; secrets via env vars
 #   - Prunes BEFORE pull when free < 15GB or used > 70%
+#   - TARGETED_PULL: Only pull images that change per deploy (app, migrator, scheduler-worker, sandbox).
+#     Static/pinned images (postgres, litellm, alloy, temporal, autoheal, nginx, git-sync, busybox)
+#     use local Docker cache. After prune they'll be pulled on next `compose up -d`.
+#   - SSH_KEEPALIVE: All SSH connections use ServerAliveInterval to survive long operations.
 # Notes:
 #   - Dual gate (15GB free / 70% used) prevents overlayfs extraction failures on 40GB disks
 #   - Hard prune may force service image re-pull (reliability > speed)
@@ -149,7 +153,7 @@ SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/deploy_key}"
 if [[ -f "$SSH_KEY_PATH" ]]; then
     # Found deploy key (CI or explicit local override)
     log_info "SSH key validated: $SSH_KEY_PATH"
-    SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes"
+    SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
     
     # Validate permissions
     if [[ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]]; then
@@ -159,7 +163,7 @@ if [[ -f "$SSH_KEY_PATH" ]]; then
 else
     # No deploy key found - use default SSH (local development)
     log_info "No deploy key found, using default SSH configuration"
-    SSH_OPTS="-o StrictHostKeyChecking=yes"
+    SSH_OPTS="-o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
 fi
 
 # Validate required environment variables
@@ -214,6 +218,8 @@ REQUIRED_SECRETS=(
     "TEMPORAL_DB_PASSWORD"
     # Scheduler-worker image (P0 Bridge MVP - must be digest ref)
     "SCHEDULER_WORKER_IMAGE"
+    # OpenClaw gateway auth (must match openclaw-gateway.json gateway.auth.token)
+    "OPENCLAW_GATEWAY_TOKEN"
 )
 
 # Check required environment variables (not secrets)
@@ -505,6 +511,8 @@ COGNI_REPO_URL=${COGNI_REPO_URL}
 COGNI_REPO_REF=${COGNI_REPO_REF}
 GIT_READ_USERNAME=${GIT_READ_USERNAME}
 GIT_READ_TOKEN=${GIT_READ_TOKEN}
+# OpenClaw gateway auth
+OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 ENV_EOF
 
 # Verify .env was written
@@ -608,11 +616,9 @@ fi
 log_info "SourceCred Configuration:"
 grep -C 2 "repositories" /opt/cogni-template-sourcecred/instance/config/plugins/sourcecred/github/config.json || log_warn "Could not read GitHub config"
 
-# 3. Pull image (Immutable Artifact - SC-invariant-2)
-log_info "Pulling SourceCred image..."
-$SOURCECRED_COMPOSE pull sourcecred
-
-# 4. Start service
+# 3. Start service (image uses pinned tag — Docker cache handles it.
+#    First deploy or post-prune: compose up -d pulls automatically.
+#    Subsequent deploys: no-op if image already cached.)
 log_info "Starting SourceCred container..."
 $SOURCECRED_COMPOSE up -d
 
@@ -635,24 +641,34 @@ done
 log_info "Profile guardrail passed: openclaw-gateway, llm-proxy-openclaw resolved"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 6: Validate images exist (fail fast)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Validating required images are available..."
-if ! $RUNTIME_COMPOSE --dry-run --profile bootstrap --profile sandbox-openclaw pull; then
-  log_error "❌ Required images not found in registry"
-  log_error "Build workflow may have failed - check previous workflow run"
-  log_error "Expected: APP_IMAGE=${APP_IMAGE}, MIGRATOR_IMAGE=${MIGRATOR_IMAGE}"
-  exit 1
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 7: Pull images while old app is still serving traffic
+# Step 6+7: Pull only images that change per deploy (targeted, not blanket)
+# Static/pinned images (postgres, litellm, alloy, temporal, autoheal, nginx,
+# git-sync, busybox) use local Docker cache. Only re-pulled after prune or
+# when their pins change in docker-compose.yml.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "[$(date -u +%H:%M:%S)] Pulling updated images (app continues serving)..."
 emit_deployment_event "deployment.pull_started" "in_progress" "Pulling images from registry"
-$RUNTIME_COMPOSE --profile bootstrap --profile sandbox-openclaw pull
+
+# Per-deploy images (change every deploy)
+docker pull "$APP_IMAGE"
+docker pull "$MIGRATOR_IMAGE"
+docker pull "$SCHEDULER_WORKER_IMAGE"
+
+# Sandbox images (may update on :latest — per openclaw-sandbox-spec)
+# Manifest check ~2s each; skips download if digest unchanged.
+OPENCLAW_GATEWAY_IMAGE="ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest"
+PNPM_STORE_IMAGE="ghcr.io/cogni-dao/node-template:pnpm-store-latest"
+docker pull "$OPENCLAW_GATEWAY_IMAGE"
+docker pull "$PNPM_STORE_IMAGE" || log_warn "pnpm-store image not found, skipping"
+
 log_info "[$(date -u +%H:%M:%S)] Pull complete"
 emit_deployment_event "deployment.pull_complete" "success" "Images pulled successfully"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 7.5: Seed pnpm_store volume (idempotent, skip if hash matches)
+# Image already pulled above; seed script uses $PNPM_STORE_IMAGE.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+source /tmp/seed-pnpm-store.sh
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 8: Start/update postgres (must be healthy before migrations)
@@ -795,7 +811,11 @@ scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remot
 scp $SSH_OPTS \
   "$REPO_ROOT/platform/ci/scripts/healthcheck-sourcecred.sh" \
   "$REPO_ROOT/platform/ci/scripts/healthcheck-openclaw.sh" \
+  "$REPO_ROOT/platform/ci/scripts/seed-pnpm-store.sh" \
   root@"$VM_HOST":/tmp/
+scp $SSH_OPTS \
+  "$REPO_ROOT/services/sandbox-openclaw/seed-pnpm-store.sh" \
+  root@"$VM_HOST":/tmp/seed-pnpm-store-core.sh
 
 # Verify SCP landed correctly
 REMOTE_CHECK=$(ssh $SSH_OPTS root@"$VM_HOST" "echo host=\$(hostname) date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) && sha256sum /tmp/deploy-remote.sh | awk '{print \$1}'" 2>&1) || {
@@ -812,7 +832,7 @@ fi
 log_info "deploy-remote.sh verified on VM (sha256 match)"
 
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' SCHEDULER_WORKER_IMAGE='$SCHEDULER_WORKER_IMAGE' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' SCHEDULER_WORKER_IMAGE='$SCHEDULER_WORKER_IMAGE' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."

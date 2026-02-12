@@ -86,7 +86,7 @@ See [Environments](../spec/environments.md) for deployment modes and [Databases]
 
 ```bash
 pnpm check          # lint + type + format validation
-pnpm test           # run unit/integration tests
+pnpm test           # run unit tests (no infra required)
 ```
 
 ## Troubleshooting

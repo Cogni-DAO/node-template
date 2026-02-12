@@ -61,7 +61,7 @@
 
 **Real Adapter Tests:**
 
-- [x] `tests/integration/payments/drizzle-payment-attempt.adapter.int.test.ts` - PaymentAttemptRepository implementation
+- [x] `tests/component/payments/drizzle-payment-attempt.adapter.int.test.ts` - PaymentAttemptRepository implementation
   - ✅ Passes all 7 port contract test suite invariants
   - ✅ Drizzle type mapping validated
   - ✅ Database constraint handling verified (txHash uniqueness, FK constraints)
@@ -76,7 +76,7 @@
 
 **Prerequisites:** Payment service implementation, DI container wiring
 
-**Service Layer Tests (`tests/integration/payments/service.spec.ts`):**
+**Service Layer Tests (`tests/component/payments/service.spec.ts`):**
 
 - [ ] `createIntent()` - creates attempt, validates bounds, captures session wallet
 - [ ] `submitTxHash()` - binds hash, checks expiration, transitions state
@@ -87,7 +87,7 @@
 - [ ] Settlement flow - calls confirmCreditsPayment, atomic transaction
 - [ ] Assert on both PaymentAttempt state AND fake.lastCallParams to prove verify() wiring
 
-**API Contract Tests (`tests/integration/payments/api.spec.ts`):**
+**API Contract Tests (`tests/component/payments/api.spec.ts`):**
 
 - [ ] POST /api/v1/payments/intents - request/response validation
 - [ ] POST /api/v1/payments/attempts/:id/submit - request/response validation
@@ -367,7 +367,7 @@ The **9 critical MVP scenarios** from PAYMENTS_DESIGN.md are **integration tests
 
 ### Implementation Approach
 
-**Location:** `tests/integration/payments/mvp-scenarios.spec.ts`
+**Location:** `tests/component/payments/mvp-scenarios.spec.ts`
 
 **Test Environment Setup:**
 
@@ -683,7 +683,7 @@ pnpm test tests/unit/core/payments
 
 ```bash
 # Integration tests with port contract harness
-pnpm test:int tests/integration/payments/drizzle-payment-attempt.adapter.int.test.ts
+pnpm test:component tests/component/payments/drizzle-payment-attempt.adapter.int.test.ts
 # ✅ 7 tests passing - validates all port contract invariants
 ```
 
@@ -691,14 +691,14 @@ pnpm test:int tests/integration/payments/drizzle-payment-attempt.adapter.int.tes
 
 ```bash
 # Requires database
-pnpm test tests/integration/payments
+pnpm test tests/component/payments
 ```
 
 ### Phase 4: MVP Full Scenarios (Pending)
 
 ```bash
 # All 9 critical scenarios
-pnpm test tests/integration/payments/mvp-scenarios.spec.ts
+pnpm test tests/component/payments/mvp-scenarios.spec.ts
 ```
 
 ---

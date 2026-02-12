@@ -120,6 +120,7 @@ pnpm setup github --env production
      - `AUTH_SECRET` (generated random string)
      - `OPENROUTER_API_KEY` (prompt if not in local env)
      - `EVM_RPC_URL` (prompt if not in local env - Sepolia RPC from alchemy.com or infura.io)
+     - `OPENCLAW_GATEWAY_TOKEN` (generated random, ≥32 chars — gateway WS auth)
    - **Deployment secrets:** From previous steps
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
      - `VM_HOST` (from `.env.<env>` file)

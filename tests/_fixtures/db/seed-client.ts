@@ -7,7 +7,7 @@
  * Scope: Provides getSeedDb() — a lazy singleton using DATABASE_SERVICE_URL (BYPASSRLS). Does not provide app-role access or RLS-enforced queries.
  * Invariants: Requires DATABASE_SERVICE_URL in env (set by testcontainers global setup)
  * Side-effects: IO (database connection) — only on first access
- * Links: tests/integration/setup/testcontainers-postgres.global.ts
+ * Links: tests/component/setup/testcontainers-postgres.global.ts
  * @internal
  */
 
@@ -25,7 +25,7 @@ export function getSeedDb(): Database {
     const url = process.env.DATABASE_SERVICE_URL;
     if (!url) {
       throw new Error(
-        "DATABASE_SERVICE_URL not set. Run tests via vitest integration config (pnpm test:int)."
+        "DATABASE_SERVICE_URL not set. Run tests via vitest component config (pnpm test:component)."
       );
     }
     _seedDb = createServiceDbClient(url);

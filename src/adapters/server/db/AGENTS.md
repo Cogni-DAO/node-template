@@ -53,7 +53,7 @@ Database client singletons and tenant-scoping helpers for PostgreSQL access. App
 Minimal local commands:
 
 ```bash
-pnpm test tests/integration/db/
+pnpm test tests/component/db/
 pnpm db:migrate
 ```
 
@@ -72,7 +72,7 @@ pnpm db:migrate
 
 - Update this file when **Exports** or **Env/Config** change
 - Bump **Last reviewed** date
-- Ensure integration tests pass
+- Ensure component tests pass
 
 ## Notes
 

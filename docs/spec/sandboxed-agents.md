@@ -316,7 +316,7 @@ See [Git-Sync Repo Mount](./git-sync-repo-mount.md) for the full git-sync boot s
 | `src/adapters/server/index.ts`                                  | Server adapter barrel exports                          |
 | `src/bootstrap/graph-executor.factory.ts`                       | SandboxGraphProvider registration                      |
 | `src/bootstrap/agent-discovery.ts`                              | SandboxAgentCatalogProvider registration               |
-| `tests/integration/sandbox/network-isolation.int.test.ts`       | P0 network isolation tests                             |
+| `tests/component/sandbox/network-isolation.int.test.ts`         | P0 network isolation tests                             |
 | `tests/stack/sandbox/sandbox-litellm.stack.test.ts`             | P0.5a LiteLLM reachability tests                       |
 | `tests/stack/sandbox/sandbox-llm-completion.stack.test.ts`      | P0.5 LLM socket bridge tests                           |
 | `docs/spec/git-sync-repo-mount.md`                              | git-sync boot sequence, UID alignment, CI probe        |
@@ -325,7 +325,7 @@ See [Git-Sync Repo Mount](./git-sync-repo-mount.md) for the full git-sync boot s
 
 **Automated:**
 
-- `pnpm test:int -- network-isolation` — P0 network isolation, workspace I/O, timeout handling
+- `pnpm test:component -- network-isolation` — P0 network isolation, workspace I/O, timeout handling
 - `pnpm test:stack:dev -- sandbox-litellm` — P0.5a LiteLLM reachability
 - `pnpm test:stack:dev -- sandbox-llm` — P0.5 socket bridge, proxy forwarding
 

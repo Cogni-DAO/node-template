@@ -5,16 +5,17 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-10
+- **Last reviewed:** 2026-02-13
 - **Status:** draft
 
 ## Purpose
 
-Docker image definition for running OpenClaw inside a network-isolated sandbox. Thin layer over `openclaw:local` — adds socat for the LLM socket bridge and our standard sandbox entrypoint.
+Multi-stage devtools image for running OpenClaw in Cogni. One image for both gateway (long-running) and ephemeral (one-shot) modes. Adds pnpm, git, socat, and the sandbox entrypoint onto a published GHCR OpenClaw base with header-forwarding.
 
 ## Pointers
 
-- [OpenClaw Sandbox Spec](../../docs/spec/openclaw-sandbox-spec.md)
+- [OpenClaw Sandbox Spec](../../docs/spec/openclaw-sandbox-spec.md) — invariants 26 (IMAGE_FROM_PUBLISHED_BASE), 27 (COMPOSE_IMAGE_PARITY)
+- [Sandbox Images Guide](../../docs/guides/sandbox-images.md) — build/push/pull commands for all published images
 - [Sandbox Spec](../../docs/spec/sandboxed-agents.md)
 - [Sandbox Runtime (reference)](../sandbox-runtime/)
 - [Sandbox Adapter](../../src/adapters/server/sandbox/)
@@ -31,49 +32,56 @@ Docker image definition for running OpenClaw inside a network-isolated sandbox. 
 
 ## Public Surface
 
-- **Exports:** Docker image `cogni-sandbox-openclaw:latest`
+- **Exports:** Docker image `cogni-sandbox-openclaw:latest` (`ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest`)
 - **Routes:** none
-- **CLI:** `docker build -t cogni-sandbox-openclaw services/sandbox-openclaw`
-- **Env/Config keys (runtime):** Same as `sandbox-runtime` — `LLM_PROXY_SOCKET`, `LLM_PROXY_PORT`, `OPENAI_API_BASE`, `RUN_ID`. Plus OpenClaw-specific: `OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, `OPENCLAW_LOAD_SHELL_ENV`, `HOME`
-- **Files considered API:** Dockerfile, entrypoint.sh, openclaw-gateway.json
+- **CLI:** `pnpm sandbox:openclaw:docker:build`, `pnpm sandbox:pnpm-store:build`, `pnpm sandbox:pnpm-store:seed`, `pnpm sandbox:pnpm-store:seed:from-ghcr`
+- **Env/Config keys (runtime):** `npm_config_store_dir`, `HOME`, `COREPACK_HOME`, `LLM_PROXY_SOCKET`, `LLM_PROXY_PORT`, `OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, `OPENCLAW_LOAD_SHELL_ENV`
+- **Files considered API:** Dockerfile, Dockerfile.pnpm-store, entrypoint.sh, seed-pnpm-store.sh, openclaw-gateway.json
 
 ## Responsibilities
 
-- This directory **does**: Layer socat + sandbox entrypoint onto the `openclaw:local` base image; reuse the same entrypoint as `sandbox-runtime` for socket bridge; enable OpenClaw to call LLMs via the proxy socket
-- This directory **does not**: Build or maintain OpenClaw itself; contain secrets; manage container lifecycle; implement application logic
+- This directory **does**: Multi-stage build (GHCR OpenClaw base → node:22-bookworm + devtools); provide pnpm, git, socat, jq, curl; create sandboxer user; set up pnpm store mount point
+- This directory **does not**: Build or maintain OpenClaw itself; bake Cogni node_modules; contain secrets; manage container lifecycle
 
 ## Usage
 
 ```bash
-# Build (requires openclaw:local base image)
-docker build -t cogni-sandbox-openclaw services/sandbox-openclaw
+# Build (pulls GHCR base by default)
+pnpm sandbox:openclaw:docker:build
 
-# Run via diagnostic script
-node scripts/diag-openclaw-sandbox.mjs
+# Build with local override (arm64 dev)
+docker build -f services/sandbox-openclaw/Dockerfile \
+  --build-arg OPENCLAW_BASE=openclaw:local \
+  -t cogni-sandbox-openclaw:latest .
+
+# Verify devtools
+docker run --rm cogni-sandbox-openclaw:latest "pnpm --version && git --version && node --version"
 ```
 
 ## Standards
 
-- Base image: `openclaw:local` (must be built separately from OpenClaw repo)
-- Entrypoint: identical to `sandbox-runtime/entrypoint.sh` (socat bridge + `bash -lc`)
-- Non-root execution via adapter (`User: "1001:1001"`)
-- `skipBootstrap: true` in OpenClaw config to avoid setup phase
+- Base image: GHCR `openclaw-outbound-headers` (header-forwarding fork) — never `openclaw:local` in published images (invariant 26)
+- Parameterized via `ARG OPENCLAW_BASE` for per-arch override
+- Entrypoint: `sandbox-entrypoint.sh` (socat bridge + `bash -lc`)
+- Non-root: sandboxer user (uid 1001, gid 1001)
+- pnpm store: `npm_config_store_dir=/pnpm-store`, mount `pnpm_store` named volume
+- No Cogni node_modules baked in — deps installed at runtime via cache volume
 - Socket mount at `/llm-sock` (same convention as sandbox-runtime)
 
 ## Dependencies
 
 - **Internal:** none (image-only, no src/ imports)
-- **External:** Docker, `openclaw:local` base image, socat (installed at build)
+- **External:** Docker, GHCR OpenClaw base image, node:22-bookworm
 
 ## Change Protocol
 
 - Update this file when **Dockerfile** or **entrypoint.sh** changes
 - Bump **Last reviewed** date
-- Rebuild image and run diag script after changes
+- Rebuild image and verify: `pnpm sandbox:openclaw:docker:build`
 
 ## Notes
 
 - `entrypoint.sh` is copied from `sandbox-runtime/` (not symlinked) for build context isolation
-- `openclaw-gateway.json` is the gateway agent config (models, tools, workspace). Bind-mounted into the compose service, not baked into image
-- Ephemeral config is generated at runtime by `SandboxGraphProvider`
-- Image build requires `openclaw:local` which is ~4GB
+- Build context is repo root (not service dir) — COPY paths are relative to repo root
+- `openclaw-gateway.json` is the gateway agent config — bind-mounted into compose, not baked into image
+- Gateway mode overrides entrypoint to `["node", "/app/dist/index.js", "gateway"]` — devtools unused but present

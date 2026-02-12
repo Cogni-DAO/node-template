@@ -499,7 +499,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [Graph Execution](grap
 **Features (unit):** use-case tests with mocked ports in `tests/unit/features/**`.  
 **Contract (ports):** reusable contract harness per port in `tests/contract/<port-name>.contract.ts`; every adapter must pass it.  
 **Contract (edge):** each `src/contracts/*.contract.ts` has a contract test run against the HTTP route (and MCP later).  
-**Adapters (integration):** run contract + real-service tests in `tests/integration/<adapter-area>/**`.  
+**Adapters (integration):** run contract + real-service tests in `tests/component/<adapter-area>/**`.  
 **Routes (API e2e):** HTTP-level tests hitting Next API routes in `e2e/**`.  
 **Fake Adapters (CI):** `APP_ENV=test` triggers deterministic test adapters (`src/adapters/test/`) via `bootstrap/container` for CI testing without external dependencies.  
 **Setup:** common mocks and config in `tests/setup.ts`.

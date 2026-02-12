@@ -117,7 +117,7 @@ All other test-mode fakes (metrics, web-search, repo, EVM, onchain verifier) sta
 ### What Stays the Same
 
 - `APP_ENV=test` semantics unchanged (rate-limit bypass, error rethrowing, billing rethrow)
-- Test tiers unchanged (`test`, `test:int`, `test:stack:docker`, `e2e`)
+- Test tiers unchanged (`test`, `test:component`, `test:stack:docker`, `e2e`)
 - `FakeLlmService` (unit test double) unchanged
 - Capability fakes (metrics, web-search, repo) unchanged
 - `wait-for-probes.ts` unchanged
