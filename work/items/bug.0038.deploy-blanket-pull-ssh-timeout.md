@@ -139,23 +139,24 @@ Production and preview deploys fail intermittently on slow connections or post-p
 
 - `platform/ci/scripts/deploy.sh` — replace blanket compose pull with targeted pulls, add SSH keepalive, remove dry-run theater
 - `platform/infra/services/runtime/docker-compose.yml` — pin `busybox` image
-- `platform/ci/scripts/seed-pnpm-store.sh` — no changes needed (already separate)
+- `platform/ci/scripts/seed-pnpm-store.sh` — changed to expect `$PNPM_STORE_IMAGE` from caller
 
 ## Plan
 
-- [ ] Add SSH keepalive to `SSH_OPTS` (`deploy.sh:152`): `-o ServerAliveInterval=15 -o ServerAliveCountMax=12`
-- [ ] Replace blanket `$RUNTIME_COMPOSE ... pull` (Step 7) with targeted pulls of only the 5 images that change or may update:
+- [x] Add SSH keepalive to `SSH_OPTS` (`deploy.sh:153,166`): `-o ServerAliveInterval=15 -o ServerAliveCountMax=12`
+- [x] Replace blanket `$RUNTIME_COMPOSE ... pull` (Step 7) with targeted pulls of only the 5 images that change or may update:
   ```bash
   docker pull "$APP_IMAGE"
   docker pull "$MIGRATOR_IMAGE"
   docker pull "$SCHEDULER_WORKER_IMAGE"
-  docker pull "ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest"
+  docker pull "$OPENCLAW_GATEWAY_IMAGE"
+  docker pull "$PNPM_STORE_IMAGE" || log_warn "..."
   ```
-  (pnpm-store is already pulled separately in Step 7.5 via `seed-pnpm-store.sh`)
-- [ ] Remove or replace Step 6 dry-run validation — either delete it or use `docker manifest inspect` for the 3 per-deploy images
-- [ ] Remove `$SOURCECRED_COMPOSE pull sourcecred` (Step 4, line 617) — the image tag is immutable; first deploy pulls it, subsequent deploys use cache
-- [ ] Pin `busybox` in `docker-compose.yml:200` to a digest (e.g., `busybox@sha256:...`)
-- [ ] Add post-deploy image cleanup: `docker image prune -f` after health checks pass (Step 12) to remove dangling old app/migrator images
+- [x] Remove Step 6 dry-run validation (checked compose syntax, not registry — false confidence)
+- [x] Remove `$SOURCECRED_COMPOSE pull sourcecred` (Step 4) — immutable pinned tag; `compose up -d` handles cache
+- [x] Pin `busybox` in `docker-compose.yml:200` to `busybox:1.37`
+- [x] Consolidate pnpm-store pull into main pull block; `seed-pnpm-store.sh` now requires `$PNPM_STORE_IMAGE` from caller
+- [ ] Add post-deploy image cleanup: `docker image prune -f` after health checks (deferred — low priority)
 
 ## Validation
 
