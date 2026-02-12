@@ -11,7 +11,7 @@
  * @internal
  */
 
-export { GitRelayManager, type GitRelayResult } from "./git-relay";
+export { GitRelay, type PublishResult } from "./git-relay";
 export {
   type LlmProxyConfig,
   type LlmProxyHandle,
