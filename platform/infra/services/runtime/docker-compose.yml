@@ -65,6 +65,7 @@ services:
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
       - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
       # Shared volume: proxy writes JSONL audit log, app reads for billing
       - OPENCLAW_BILLING_DIR=/openclaw-billing
     volumes:

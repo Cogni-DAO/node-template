@@ -165,6 +165,7 @@ jobs:
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
           SCHEDULER_API_TOKEN: ${{ secrets.SCHEDULER_API_TOKEN }}
+          OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
         run: platform/ci/scripts/deploy.sh
 
       - name: Upload deployment artifacts

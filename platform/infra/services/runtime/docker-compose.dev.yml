@@ -66,6 +66,7 @@ services:
       # Default: http://scheduler-worker:9000 for Docker networks
       # Override via env for test:stack:dev where app runs on host
       - SCHEDULER_WORKER_HEALTH_URL=${SCHEDULER_WORKER_HEALTH_URL:-http://scheduler-worker:9000}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
       # Shared billing dir: proxy writes JSONL audit log, app reads for billing
       - OPENCLAW_BILLING_DIR=/openclaw-billing
     volumes:
