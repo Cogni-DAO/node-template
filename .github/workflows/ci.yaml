@@ -16,7 +16,7 @@ concurrency:
 
 env:
   NEXT_TELEMETRY_DISABLED: 1
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   # Temporal env vars - required by serverEnv() Zod schema
   # All CI jobs (including stack-test) use localhost:7233 since tests run on host, not in Docker
   TEMPORAL_ADDRESS: localhost:7233
