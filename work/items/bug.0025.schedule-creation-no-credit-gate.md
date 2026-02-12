@@ -2,7 +2,7 @@
 id: bug.0025
 type: bug
 title: Schedule creation accepts paid agents with zero credits — no preflight credit gate
-status: Backlog
+status: In Progress
 priority: 0
 estimate: 2
 summary: POST /api/v1/schedules creates a schedule (grant + DB + Temporal job) for a paid model without checking the user's credit balance. Users with zero credits can create schedules that will repeatedly fail at execution time.
@@ -11,11 +11,11 @@ spec_refs: scheduler, graph-execution
 assignees: derekg1729
 credit:
 project: proj.unified-graph-launch
-branch:
+branch: bug/0025-preflight-credit-check
 pr:
 reviewer:
 created: 2026-02-11
-updated: 2026-02-11
+updated: 2026-02-12
 labels: [billing, scheduler]
 external_refs:
 ---
@@ -75,12 +75,28 @@ Schedule creation should have an analogous gate.
 
 ## Plan
 
-- [ ] In `POST /api/v1/schedules` route handler, after getting the billing account, extract the model from `input.input.model`
-- [ ] Call `isModelFree()` to check if the model is free; skip credit check for free models
-- [ ] For paid models, call `accountService.getBalance()` and reject with 402 if balance <= 0
+### Step 1: PreflightCreditCheckDecorator (execution-port enforcement)
+
+- [x] Create `PreflightCreditCheckDecorator` at `src/adapters/server/ai/preflight-credit-check.decorator.ts`
+- [x] Define `PreflightCreditCheckFn` callback type in `src/ports/graph-executor.port.ts`
+- [x] Wire decorator into stack: Observability → **Preflight** → Billing → Aggregator (`graph-executor.factory.ts`)
+- [x] Remove facade-level `preflightCreditCheck()` call from `completion.server.ts`
+- [x] Add preflight closure to internal graphs route (`/api/internal/graphs/*/runs`)
+- [x] Remove `preflightCreditCheck` from `features/ai/public.server.ts` barrel (documented as DI closure source only)
+
+### Step 2: Schedule creation gate (route-level)
+
+- [x] In `POST /api/v1/schedules`, extract model from `input.input.model`
+- [x] Call `isModelFree()` — skip for free models
+- [x] For paid models, `accountService.getBalance()` ≤ 0 → 402
+
+### Step 3: Tests & validation
+
+- [x] Unit test: `tests/unit/adapters/server/ai/preflight-credit-check.decorator.test.ts`
+- [x] `pnpm check` — all pass
+- [x] `pnpm test` — 910 tests pass
 - [ ] Add contract test: schedule creation with paid model + zero credits → 402
 - [ ] Add contract test: schedule creation with free model + zero credits → 201 (succeeds)
-- [ ] Run `pnpm check` — no type errors
 
 ## Validation
 
@@ -102,7 +118,7 @@ pnpm test path/to/schedule-credit-gate.test.ts
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/bug.0025.handoff.md)
 
 ## Attribution
 
