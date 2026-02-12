@@ -27,7 +27,11 @@ import {
 import { schedulesListOperation } from "@/contracts/schedules.list.v1.contract";
 import { InvalidCronExpressionError, InvalidTimezoneError } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
-import { logRequestWarn, type RequestContext } from "@/shared/observability";
+import {
+  EVENT_NAMES,
+  logRequestWarn,
+  type RequestContext,
+} from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -138,6 +142,15 @@ export const POST = wrapRouteHandlerWithLogging(
       if (model && !(await isModelFree(model))) {
         const balance = await accountService.getBalance(account.id);
         if (balance <= 0) {
+          ctx.log.info(
+            {
+              reqId: ctx.reqId,
+              routeId: "schedules.create",
+              model,
+              errorCode: "insufficient_credits",
+            },
+            EVENT_NAMES.SCHEDULE_CREDIT_GATE_REJECTED
+          );
           return NextResponse.json(
             { error: "Insufficient credits for paid model schedule" },
             { status: 402 }

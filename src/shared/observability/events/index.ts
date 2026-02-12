@@ -73,6 +73,9 @@ export const EVENT_NAMES = {
   ADAPTER_RIPGREP_OPEN: "adapter.ripgrep.open",
   ADAPTER_OPENCLAW_GATEWAY_ERROR: "adapter.openclaw_gateway.error",
 
+  // Scheduling Domain
+  SCHEDULE_CREDIT_GATE_REJECTED: "schedules.credit_gate_rejected",
+
   // Sandbox Execution Events
   SANDBOX_EXECUTION_STARTED: "sandbox.execution.started",
   SANDBOX_EXECUTION_COMPLETE: "sandbox.execution.complete",
