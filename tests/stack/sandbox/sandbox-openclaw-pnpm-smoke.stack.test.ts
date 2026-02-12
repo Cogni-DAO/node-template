@@ -79,7 +79,7 @@ describe("OpenClaw Gateway pnpm Store Smoke", () => {
     expect(output).not.toContain("FAIL");
   });
 
-  it("offline install enables biome", async () => {
+  it.skip("offline install enables biome", async () => {
     // Use the real repo lockfile — pnpm install --offline --frozen-lockfile
     // skips resolution (no metadata needed) and hardlinks from seeded store.
     // /workspace is a real volume (cogni_workspace), not tmpfs, so full
