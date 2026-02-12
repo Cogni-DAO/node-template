@@ -211,11 +211,11 @@ pnpm test:unit
 step_duration=$(($(date +%s) - step_start))
 echo "    ✓ Passed (${step_duration}s)"
 
-# Integration tests (testcontainers)
+# Component tests (isolated testcontainers)
 echo ""
-echo "  → test:int"
+echo "  → test:component"
 step_start=$(date +%s)
-pnpm test:int
+pnpm test:component
 step_duration=$(($(date +%s) - step_start))
 echo "    ✓ Passed (${step_duration}s)"
 

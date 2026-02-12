@@ -135,7 +135,7 @@ jobs:
           loki_token: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
           job_status: ${{ job.status }}
 
-  integration:
+  component:
     runs-on: ubuntu-latest
     needs: static
     env:
@@ -172,8 +172,8 @@ jobs:
       - name: Build sandbox runtime image
         run: pnpm sandbox:docker:build
 
-      - name: Integration tests (testcontainers)
-        run: pnpm test:int
+      - name: Component tests (testcontainers)
+        run: pnpm test:component
 
       - name: CI Telemetry
         if: always()
