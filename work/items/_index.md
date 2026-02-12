@@ -12,6 +12,7 @@
 | 0   | 2   | Done        | bug.0015   | Deploy disk cleanup runs after pulls — disk exhaustion on 40GB VMs                   | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Done        | bug.0016   | Production compose missing OpenClaw services — silent no-op profiles                 | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Done        | bug.0021   | Gateway WS client receives uncorrelated chat events — HEARTBEAT_OK leak              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 2   | Todo        | task.0041  | Discord channel proof of life — bot connected, Cogni reads + sends via OpenClaw      | Messenger Channels         | proj.messenger-channels         |
 | 0   | 2   | In Progress | task.0023  | Gateway agent system prompt — dedicated workspace, SOUL.md, heartbeat fix            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Backlog     | bug.0017   | Deploy does not reload Alloy when bind-mounted config changes                        | Reliability & Uptime       | proj.reliability                |
 | 0   | 1   | Backlog     | bug.0009   | OpenClaw v2026.2.4 gateway agent returns empty payloads                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
@@ -35,7 +36,7 @@
 | 1   | 3   | Todo        | task.0006  | Collapse GraphProvider — single execution interface                                  | Unified Graph Launch       | proj.unified-graph-launch       |
 | 1   | 1   | Backlog     | bug.0036   | Chat route enqueues to closed assistant-stream controller — unhandled TypeError      |                            |                                 |
 | 1   | 3   | Done        | task.0030  | Thread persistence P0 — ai_threads table, port, route bridge                         | Thread Persistence         | proj.thread-persistence         |
-| 1   | 3   | Todo        | task.0040  | AI SDK streaming migration — createUIMessageStream + useChatRuntime                  | Thread Persistence         | proj.thread-persistence         |
+| 1   | 3   | Todo        | task.0042  | AI SDK streaming migration — createUIMessageStream + useChatRuntime                  | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Todo        | task.0035  | Thread history sidebar — list, switch, load conversations                            | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Todo        | task.0009  | Sandbox repo refresh: on-demand git-sync for agent workspace                         | Sandboxed Agents           | proj.sandboxed-agents           |
 | 1   | 3   | Backlog     | bug.0004   | /activity dashboard cost column broken                                               | Payments Enhancements      | proj.payments-enhancements      |

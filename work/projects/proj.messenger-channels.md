@@ -39,11 +39,11 @@ The existing gateway compose service needs channel sections enabled in its confi
 
 | Deliverable                                                                                                       | Status      | Est | Work Item |
 | ----------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Add `channels:` section to `openclaw-gateway.json` template (Telegram + WhatsApp enabled, others discoverable)    | Not Started | 1   | —         |
-| Remove `message` and `sessions_send` from tool deny list in gateway config                                        | Not Started | 0   | —         |
-| Add `OPENCLAW_STATE_DIR` volume mount in gateway compose for persistent channel auth state                        | Not Started | 1   | —         |
+| Add `channels:` section to `openclaw-gateway.json` (Discord first, then Telegram + WhatsApp)                      | Not Started | 1   | task.0041 |
+| Remove `message` and `sessions_send` from tool deny list in gateway config                                        | Not Started | 0   | task.0041 |
+| Add `OPENCLAW_STATE_DIR` volume mount in gateway compose for persistent channel auth state                        | Not Started | 1   | task.0041 |
 | Namespace state dirs by accountId — each account's auth state in `${STATE_DIR}/channels/${channel}/${accountId}/` | Not Started | 1   | —         |
-| Verify gateway restarts reconnect Telegram (bot token) and WhatsApp (Baileys session) automatically               | Not Started | 1   | —         |
+| Verify gateway restarts reconnect Discord (bot token) automatically                                               | Not Started | 1   | task.0041 |
 
 #### 3 Proxy Endpoints (Cogni → OpenClaw Gateway)
 

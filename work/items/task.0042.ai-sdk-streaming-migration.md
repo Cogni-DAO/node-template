@@ -1,5 +1,5 @@
 ---
-id: task.0040
+id: task.0042
 type: task
 title: "AI SDK streaming migration — createUIMessageStream + useChatRuntime"
 status: Todo
@@ -115,7 +115,7 @@ pnpm test:stack:dev  # with dev stack running
 
 ## Review Checklist
 
-- [ ] **Work Item:** `task.0040` linked in PR body
+- [ ] **Work Item:** `task.0042` linked in PR body
 - [ ] **Spec:** thread-persistence invariants upheld (CLIENT_SENDS_USER_ONLY, AIEVENT_NEVER_VERBATIM, PERSIST_AFTER_PUMP, ASSISTANT_FINAL_REQUIRED)
 - [ ] **Tests:** contract tests updated for new input schema, stack test passes multi-turn
 - [ ] **Scope:** No changes to `toCoreMessages()`, `GraphRunRequest`, facade, or completion route
@@ -123,7 +123,7 @@ pnpm test:stack:dev  # with dev stack running
 
 ## PR / Links
 
-- Handoff: [handoff](../handoffs/task.0040.handoff.md)
+- Handoff: [handoff](../handoffs/task.0042.handoff.md)
 
 ## Attribution
 
