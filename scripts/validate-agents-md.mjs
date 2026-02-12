@@ -404,7 +404,12 @@ function validate(file) {
 }
 
 // Find all AGENTS.md files including the root one
-const files = await fg(["**/AGENTS.md", "AGENTS.md", "!**/node_modules/**"]);
+const files = await fg([
+  "**/AGENTS.md",
+  "AGENTS.md",
+  "!**/node_modules/**",
+  "!**/gateway-workspace/**",
+]);
 const allErrors = [];
 for (const f of files) {
   try {
