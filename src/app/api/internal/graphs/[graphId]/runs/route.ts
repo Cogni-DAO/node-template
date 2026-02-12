@@ -27,6 +27,8 @@ import {
   type InternalGraphRunOutput,
 } from "@/contracts/graphs.run.internal.v1.contract";
 import { commitUsageFact, executeStream } from "@/features/ai/public.server";
+import { preflightCreditCheck } from "@/features/ai/services/preflight-credit-check";
+import type { PreflightCreditCheckFn } from "@/ports";
 import {
   isGrantExpiredError,
   isGrantNotFoundError,
@@ -341,11 +343,26 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     const billingCommitFn: BillingCommitFn = (fact, context) =>
       commitUsageFact(fact, context, accountService, log);
 
+    // Create preflight credit check closure
+    // Per CREDITS_ENFORCED_AT_EXECUTION_PORT: decorator handles all execution paths
+    const preflightCheckFn: PreflightCreditCheckFn = (
+      billingAccountId,
+      m,
+      msgs
+    ) =>
+      preflightCreditCheck({
+        billingAccountId,
+        messages: [...msgs],
+        model: m,
+        accountService,
+      });
+
     // Create graph executor and run
     const executor = createGraphExecutor(
       executeStream,
       toUserId(grant.userId),
-      billingCommitFn
+      billingCommitFn,
+      preflightCheckFn
     );
     const result = executor.runGraph({
       runId,
