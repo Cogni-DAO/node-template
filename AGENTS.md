@@ -26,7 +26,6 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - Never modify outside assigned directories.
 - Keep context lean (<40% window); summarize often.
 - Purge incorrect info instead of propagating it.
-- If asked to install tools, run: `pnpm install --offline --frozen-lockfile`
 
 ## Environment
 
@@ -127,3 +126,16 @@ pnpm e2e                      # Black box end-to-end tests (run on pnpm docker:s
 ```
 
 **Fast variants:** Commands with `:fast` skip Docker rebuilds, using existing images for faster startup.
+
+## OpenClaw Repo Setup
+
+Are you an OpenClaw agent having dev/git issues? run these setup commands:
+
+- If asked to install tools, run: `pnpm install --offline --frozen-lockfile`
+
+The gateway workspace (`/workspace/current`) is cloned from a local mirror. To connect to GitHub:
+
+```bash
+git -C /workspace/current remote set-url origin "$COGNI_REPO_URL"
+git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
+```

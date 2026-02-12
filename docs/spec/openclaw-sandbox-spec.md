@@ -16,7 +16,7 @@ tags: [sandbox, openclaw, ai-agents]
 # OpenClaw Sandbox Integration
 
 > [!CRITICAL]
-> OpenClaw runs in two modes: **ephemeral** (one-shot `network=none` container, CLI invocation) and **gateway** (long-running service on `sandbox-internal` + `cogni-edge`, WS protocol). Gateway has internet egress (curl, gh CLI, web_fetch, web_search). Ephemeral remains fully isolated. Both route LLM calls through an nginx proxy to LiteLLM. OpenClaw's own sandbox and cron are **disabled** in both modes.
+> OpenClaw runs in two modes: **ephemeral** (one-shot `network=none` container, CLI invocation) and **gateway** (long-running service on `sandbox-internal` + `cogni-edge`, WS protocol). Gateway has internet egress (curl, git, web_fetch, web_search). Ephemeral remains fully isolated. Both route LLM calls through an nginx proxy to LiteLLM. OpenClaw's own sandbox and cron are **disabled** in both modes.
 
 ## Published Images
 
@@ -93,7 +93,7 @@ Define the invariants and design contracts for running OpenClaw in Cogni: which 
 
 ### Gateway mode only
 
-21. **GATEWAY_NETWORK_ACCESS**: The OpenClaw gateway runs on `sandbox-internal` (LLM proxy access) and `cogni-edge` (internet egress for curl, gh CLI, web search). Never exposed to the public internet. Auth via token (`gateway.auth.mode: "token"`). `GITHUB_TOKEN` is passed as env var for `gh` CLI. Ephemeral containers remain `network=none`.
+21. **GATEWAY_NETWORK_ACCESS**: The OpenClaw gateway runs on `sandbox-internal` (LLM proxy access) and `cogni-edge` (internet egress for curl, git, web search). Never exposed to the public internet. Auth via token (`gateway.auth.mode: "token"`). `GITHUB_TOKEN` is passed as env var for GitHub API access via curl. `COGNI_REPO_URL` is passed for git remote setup. Ephemeral containers remain `network=none`.
 
 22. **OUTBOUND_HEADERS_PER_SESSION**: Billing headers (`x-litellm-end-user-id`, `x-litellm-spend-logs-metadata`, `x-cogni-run-id`) are set per-session via the `outboundHeaders` field on the WS `agent` call. The gateway proxy passes these through to LiteLLM without overwriting.
 
@@ -604,9 +604,24 @@ OpenClaw reads these files from the workspace directory at session start. They f
 # /workspace/AGENTS.md
 
 You are a Cogni coding agent. You have access to bash, file read/write/edit,
-web_fetch, web_search, and the gh CLI (GITHUB_TOKEN is set).
-LLM calls route through the proxy. You have internet access for research.
-Do not attempt browser actions — no Chromium is available.
+web_fetch, web_search, curl, and git. You have internet access for research.
+GITHUB_TOKEN is set — use it for GitHub API calls via curl.
+LLM calls route through the proxy. Do not attempt browser actions (no Chromium).
+```
+
+```markdown
+# /workspace/TOOLS.md
+
+## Git Remote Setup
+
+Your workspace was cloned from a local mirror. To interact with GitHub:
+git remote set-url origin "$COGNI_REPO_URL"
+  git config credential.helper '!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
+Then git fetch/push/pull work normally. COGNI_REPO_URL and GITHUB_TOKEN are in your env.
+
+## GitHub API (no gh CLI — use curl)
+
+curl -sH "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/OWNER/REPO/...
 ```
 
 ```markdown
@@ -619,7 +634,7 @@ if the task is ambiguous.
 
 #### Skills
 
-OpenClaw skills (in `skills/` directory) provide domain-specific behavior. The gateway has internet egress, so web-based skills (web search, API calls, `gh` CLI) are functional. Browser-based skills remain non-functional (no Chromium). Ephemeral mode (`network=none`) has no network access — web skills are denied there.
+OpenClaw skills (in `skills/` directory) provide domain-specific behavior. The gateway has internet egress, so web-based skills (web search, API calls, curl) are functional. `gh` CLI is not installed — use `curl` with `GITHUB_TOKEN` for GitHub API calls. Browser-based skills remain non-functional (no Chromium). Ephemeral mode (`network=none`) has no network access — web skills are denied there.
 
 ---
 
