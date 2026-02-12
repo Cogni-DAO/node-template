@@ -46,8 +46,9 @@ Ship server-authoritative conversation persistence so that multi-turn chat works
 
 | Deliverable                                                                           | Status      | Est | Work Item            |
 | ------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Contract: change wire format to `{threadId, message}` instead of `messages[]`         | Not Started | 1   | (create at P1 start) |
-| Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk)        | Not Started | 2   | (create at P1 start) |
+| Contract: change wire format to `{stateKey, message}` instead of `messages[]`         | Todo        | 1   | task.0040            |
+| Server: `createAssistantStreamResponse` → `createUIMessageStream` (AI SDK)            | Todo        | 2   | task.0040            |
+| Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk)        | Todo        | 2   | task.0040            |
 | LangGraph routing: executor-conditional history loading + UUID thread ref derivation  | Not Started | 2   | (create at P1 start) |
 | Thread list: `listThreads` endpoint + basic thread selection UI                       | Todo        | 2   | task.0035            |
 | History load: thread messages loaded from server on mount / thread switch             | Todo        | 1   | task.0035            |
