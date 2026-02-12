@@ -1,68 +1,89 @@
 ---
-id: task.0031.handoff
-type: handoff
 work_item_id: task.0031
-status: active
-created: 2026-02-11
-updated: 2026-02-12
+work_item_type: handoff
+title: "Handoff: cogni-sandbox-openclaw devtools image"
+status: In Progress
 branch: feat/openclaw-devtools-image
-last_commit: 62d1e587
+last_commit: 6fcd35ab
+state: active
+created: 2026-02-11
+updated: 2026-02-13
+assignees: []
 ---
 
-# Handoff — task.0031: pnpm Store Seeding (remaining work)
+# Handoff: cogni-sandbox-openclaw devtools image
 
-## Context
+## What's Done
 
-- The `cogni-sandbox-openclaw` devtools image is built, published to GHCR as multi-arch, and running in both dev and prod compose
-- Sandbox agents need `pnpm install --offline` with zero network egress — this requires a pre-populated `pnpm_store` Docker volume
-- A store image (`Dockerfile.pnpm-store`) runs `pnpm fetch` to snapshot all workspace deps; its contents are extracted into the volume at deploy time
-- The store image is published to GHCR (`ghcr.io/cogni-dao/node-template:pnpm-store-latest`), the deploy.sh seeding step is wired, and the smoke test exists
-- **Remaining**: the smoke test has two bugs to fix before it passes green
+Multi-stage `cogni-sandbox-openclaw` Docker image ships node:22 + OpenClaw + devtools (pnpm, git, socat). PR #383 is open against staging.
 
-## Current State
+**Image + Compose:**
 
-- **Image + compose + GHCR publish**: all done (multi-arch manifest for both `cogni-sandbox-openclaw` and `pnpm-store`)
-- **deploy.sh Step 7.5**: sources `seed-pnpm-store.sh` wrapper → calls `seed-pnpm-store-core.sh` with `--image`/`--volume` args (idempotent, hash-based skip)
-- **pnpm scripts**: `sandbox:pnpm-store:build`, `sandbox:pnpm-store:seed`, `sandbox:pnpm-store:seed:from-ghcr` all working
-- **Key bug fixed this session**: `PNPM_STORE_DIR` is not a real pnpm env var — changed to `npm_config_store_dir` in Dockerfile, compose files, and test
-- **Key bug fixed this session**: `/workspace` tmpfs was `root:root` — added `uid=1001,gid=1001` to tmpfs mount options in both compose files
-- **Smoke test (`sandbox-openclaw-pnpm-smoke.stack.test.ts`)**: 3 of 5 tests pass; 2 need fixes (see Next Actions)
-- **Uncommitted changes on branch** — all work is staged but not yet committed
+- `services/sandbox-openclaw/Dockerfile` — parameterized `ARG OPENCLAW_BASE` for multi-arch
+- Dev + prod compose: gateway uses new image, `pnpm_store` + `cogni_workspace` named volumes (replaces 256MB tmpfs)
+- GHCR published: `ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest` (arm64+amd64 manifest)
+
+**pnpm Store Seeding:**
+
+- `Dockerfile.pnpm-store` + `seed-pnpm-store.sh` — builds store image from lockfile, seeds volume
+- `deploy.sh` Step 7.5 seeds pnpm_store before compose up
+- Scripts: `pnpm sandbox:pnpm-store:build`, `pnpm sandbox:pnpm-store:seed`
+
+**Stack Tests:** `tests/stack/sandbox/sandbox-openclaw-pnpm-smoke.stack.test.ts` — 5 tests all pass locally:
+pnpm version, store path, writability, offline install + biome (45s), negative control
+
+**Spec:** Invariants 26 (IMAGE_FROM_PUBLISHED_BASE), 27 (COMPOSE_IMAGE_PARITY) in `docs/spec/openclaw-sandbox-spec.md`
+
+## What's Remaining
+
+### P0: CI failure (blocking merge)
+
+PR #383 CI fails because dev compose references `cogni-sandbox-openclaw:latest` (local image name). CI doesn't have it and tries Docker Hub pull → denied. Fix: add `pnpm sandbox:openclaw:docker:build` step in CI workflow before `docker compose up`, or pull from GHCR.
+
+### P1: Agent RW workspace (deferred to task.0022 / follow-up)
+
+Agent CWD is `/repo/current` (RO git-sync volume). Agent cannot `pnpm install` because it can't create `node_modules` on a read-only mount. The infra provides:
+
+- `/repo` — RO git-sync volume (bare repo + worktrees)
+- `/workspace` — RW `cogni_workspace` volume (empty on first boot)
+- `/pnpm-store` — RW seeded pnpm store
+
+Missing: a boot-time step that populates `/workspace/repo` as a writable checkout and sets agent CWD there. Config is in `services/sandbox-openclaw/openclaw-gateway.json` line 166: `"workspace": "/repo/current"`.
+
+### P2: GHCR store image publish
+
+`pnpm sandbox:pnpm-store:seed:from-ghcr` script exists but the store image hasn't been pushed to GHCR yet.
+
+## Key Files
+
+| File                                                            | Purpose                        |
+| --------------------------------------------------------------- | ------------------------------ |
+| `services/sandbox-openclaw/Dockerfile`                          | Multi-stage devtools image     |
+| `services/sandbox-openclaw/Dockerfile.pnpm-store`               | Store builder (pnpm fetch)     |
+| `services/sandbox-openclaw/seed-pnpm-store.sh`                  | Seeds pnpm_store Docker volume |
+| `services/sandbox-openclaw/openclaw-gateway.json`               | Agent config (workspace CWD)   |
+| `platform/infra/services/runtime/docker-compose.dev.yml`        | Dev compose (gateway service)  |
+| `platform/infra/services/runtime/docker-compose.yml`            | Prod compose (GHCR image)      |
+| `tests/stack/sandbox/sandbox-openclaw-pnpm-smoke.stack.test.ts` | pnpm store smoke tests         |
+| `tests/_fixtures/sandbox/fixtures.ts`                           | `execInContainer()` helper     |
+| `docs/spec/openclaw-sandbox-spec.md`                            | Invariants 26-27, OQ-9         |
+| `work/items/task.0031.openclaw-cogni-dev-image.md`              | Full task spec + plan          |
+
+## Gotchas
+
+- **pnpm hardlinks require same filesystem**: `/pnpm-store` and `/workspace` must both be Docker volumes (not tmpfs). That's why we replaced `/workspace` tmpfs with `cogni_workspace` volume.
+- **`/repo/current` is a symlink**: git-sync uses worktrees. `cp -a` preserves dangling symlinks. Use `cp -rL` to dereference.
+- **`execInContainer` timeout**: Default 5s is too short for pnpm install (~45s). Pass `timeoutMs` parameter.
+- **COREPACK_HOME**: Must be `/usr/local/share/corepack` (shared location) so sandboxer user can access pnpm prepared by root.
 
 ## Decisions Made
 
-- **Reusable seed script**: `services/sandbox-openclaw/seed-pnpm-store.sh` takes `--image` and `--volume` args — used by both local dev (pnpm scripts) and deploy (sourced wrapper). See [seed-pnpm-store.sh](../../services/sandbox-openclaw/seed-pnpm-store.sh)
-- **`npm_config_store_dir` not `PNPM_STORE_DIR`**: pnpm reads `npm_config_store_dir`; the old env var was silently ignored. Changed everywhere (Dockerfiles, compose, test)
-- **tmpfs uid/gid**: `/workspace` tmpfs needs `uid=1001,gid=1001` so sandboxer can write. Applied in both dev and prod compose
-- **Published Images table**: added to top of [openclaw-sandbox-spec.md](../../docs/spec/openclaw-sandbox-spec.md) — 3 images documented, legacy per-arch override table removed
-- **Test installs biome only** (not full monorepo): `/workspace` is 256MB tmpfs, full `node_modules` is 1.8GB — can't hardlink across filesystem boundaries (tmpfs ↔ volume)
+1. **One image for both modes** — gateway overrides entrypoint; ephemeral uses sandbox entrypoint. No separate images.
+2. **No baked node_modules** — pnpm store volume + offline install. Deps change too often for baked images.
+3. **cogni_workspace volume over tmpfs** — pnpm can't hardlink across filesystem boundaries. Full monorepo install (~1.8GB) exceeds any reasonable tmpfs size.
+4. **Agent workspace bootstrap deferred** — Correct fix requires gateway entrypoint wrapper or compose init container. Too invasive for this PR; tracked as follow-up.
 
-## Next Actions
+## PR
 
-- [ ] Fix biome offline install test: verify the `--offline` flag works for a single-dep install (biome) — may need `--no-frozen-lockfile` since we generate a fresh `package.json` without a lockfile
-- [ ] Fix negative control test: ensure it properly captures pnpm's non-zero exit code (the `2>&1; echo EXIT:$?` pattern may need the exec timeout bumped)
-- [ ] Commit all uncommitted changes on `feat/openclaw-devtools-image`
-- [ ] Run `pnpm check` — pre-existing format failures in 2 unrelated files (`tailscale-headscale-mesh-vpn.md`)
-- [ ] Run full stack tests to confirm no regressions (other failures in prior run were from infra restart, not code changes)
-- [ ] Consider P1: for real dev agents, `/workspace` should be a real RW volume (not tmpfs) to support full `pnpm install` + builds — tmpfs is only suitable for lightweight operations
-
-## Risks / Gotchas
-
-- **pnpm hardlinks don't cross filesystems**: `/pnpm-store` (Docker volume) → `/workspace` (tmpfs) forces pnpm to copy instead of hardlink. Full monorepo install (1.8GB) will always fail on 256MB tmpfs. Only minimal installs work
-- **`execInContainer` has a timeout**: the `execInContainer` fixture helper defaults to 5s stream timeout; the biome test passes 30s. If install is slow, bump it
-- **Entrypoint interference**: the seed script uses `--entrypoint sh` to bypass `sandbox-entrypoint.sh` (which prints socat logs to stdout and garbles command output)
-- **Infra restart causes transient test failures**: other stack tests (chat-streaming, langfuse, scheduler) will timeout briefly after `pnpm dev:infra` restart — wait for services to stabilize
-
-## Pointers
-
-| File / Resource                                                 | Why it matters                                        |
-| --------------------------------------------------------------- | ----------------------------------------------------- |
-| `work/items/task.0031.openclaw-cogni-dev-image.md`              | Full task spec with plan checklist                    |
-| `services/sandbox-openclaw/Dockerfile.pnpm-store`               | Store image — `pnpm fetch` into `/pnpm-store`         |
-| `services/sandbox-openclaw/seed-pnpm-store.sh`                  | Reusable seed script (`--image`, `--volume` args)     |
-| `platform/ci/scripts/seed-pnpm-store.sh`                        | Deploy wrapper (pulls GHCR, delegates to core script) |
-| `tests/stack/sandbox/sandbox-openclaw-pnpm-smoke.stack.test.ts` | Smoke test — the 2 failing tests to fix               |
-| `tests/_fixtures/sandbox/fixtures.ts:147`                       | `execInContainer` helper — has `timeoutMs` param      |
-| `docs/spec/openclaw-sandbox-spec.md`                            | Spec — Published Images table, invariants 26-27       |
-| `platform/infra/services/runtime/docker-compose.dev.yml:523`    | Gateway compose — tmpfs, volumes, env                 |
-| `work/items/task.0036.pnpm-store-cicd.md`                       | P1 follow-up — CI/CD for automated store rebuilds     |
+- PR #383: https://github.com/Cogni-DAO/node-template/pull/383
+- Branch: `feat/openclaw-devtools-image` (20 commits from staging)
