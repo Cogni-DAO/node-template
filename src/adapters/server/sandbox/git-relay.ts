@@ -253,7 +253,12 @@ export class GitRelayManager {
       });
 
       log.info({ prUrl, commitCount }, "Git relay complete");
-      return { hasCommits: true, commitCount, branch, prUrl };
+      return {
+        hasCommits: true,
+        commitCount,
+        branch,
+        ...(prUrl ? { prUrl } : {}),
+      };
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -394,7 +399,7 @@ export class GitRelayManager {
     repoUrl: string
   ): { owner: string; repo: string } | { owner: undefined; repo: undefined } {
     const match = repoUrl.match(/github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
-    if (!match) return { owner: undefined, repo: undefined };
+    if (!match?.[1] || !match[2]) return { owner: undefined, repo: undefined };
     return { owner: match[1], repo: match[2] };
   }
 }
