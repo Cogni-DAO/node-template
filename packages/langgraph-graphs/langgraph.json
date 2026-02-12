@@ -2,6 +2,7 @@
   "node_version": "20",
   "graphs": {
     "brain": "./src/graphs/brain/server.ts:brain",
+    "dev-lifecycle": "./src/graphs/dev-lifecycle/server.ts:devLifecycle",
     "poet": "./src/graphs/poet/server.ts:poet",
     "ponderer": "./src/graphs/ponderer/server.ts:ponderer",
     "research": "./src/graphs/research/server.ts:research"

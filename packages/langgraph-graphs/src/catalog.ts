@@ -16,6 +16,11 @@
 
 import { BRAIN_GRAPH_NAME, createBrainGraph } from "./graphs/brain/graph";
 import { BRAIN_TOOL_IDS } from "./graphs/brain/tools";
+import {
+  createDevLifecycleGraph,
+  DEV_LIFECYCLE_GRAPH_NAME,
+} from "./graphs/dev-lifecycle/graph";
+import { DEV_LIFECYCLE_TOOL_IDS } from "./graphs/dev-lifecycle/tools";
 import { createPoetGraph, POET_GRAPH_NAME } from "./graphs/poet/graph";
 import { POET_TOOL_IDS } from "./graphs/poet/tools";
 import {
@@ -98,6 +103,17 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
     toolIds: RESEARCH_TOOL_IDS,
     graphFactory: createResearchGraph,
   },
+  /**
+   * Dev-lifecycle graph - 17-node development workflow agent.
+   * Models the full command-driven lifecycle from idea to closeout with 3 review loops.
+   */
+  [DEV_LIFECYCLE_GRAPH_NAME]: {
+    displayName: "Dev Lifecycle",
+    description:
+      "Full development lifecycle agent: idea → triage → research → spec → implement → review → closeout",
+    toolIds: DEV_LIFECYCLE_TOOL_IDS,
+    graphFactory: createDevLifecycleGraph,
+  },
 } as const;
 
 /**
@@ -116,6 +132,7 @@ export const LANGGRAPH_PROVIDER_ID = "langgraph" as const;
  */
 export const LANGGRAPH_GRAPH_IDS = {
   brain: `${LANGGRAPH_PROVIDER_ID}:${BRAIN_GRAPH_NAME}`,
+  "dev-lifecycle": `${LANGGRAPH_PROVIDER_ID}:${DEV_LIFECYCLE_GRAPH_NAME}`,
   poet: `${LANGGRAPH_PROVIDER_ID}:${POET_GRAPH_NAME}`,
   ponderer: `${LANGGRAPH_PROVIDER_ID}:${PONDERER_GRAPH_NAME}`,
   research: `${LANGGRAPH_PROVIDER_ID}:${RESEARCH_GRAPH_NAME}`,
