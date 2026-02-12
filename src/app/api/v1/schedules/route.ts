@@ -25,6 +25,7 @@ import {
 } from "@/contracts/schedules.create.v1.contract";
 import { schedulesListOperation } from "@/contracts/schedules.list.v1.contract";
 import { InvalidCronExpressionError, InvalidTimezoneError } from "@/ports";
+import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
@@ -128,6 +129,20 @@ export const POST = wrapRouteHandlerWithLogging(
       const account = await accountService.getOrCreateBillingAccountForUser({
         userId: sessionUser.id,
       });
+
+      // Per SCHEDULE_CREATION_REJECTS_IF_CURRENTLY_UNPAYABLE:
+      // Coarse credit gate — paid model + balance <= 0 → 402
+      const model =
+        typeof input.input?.model === "string" ? input.input.model : undefined;
+      if (model && !(await isModelFree(model))) {
+        const balance = await accountService.getBalance(account.id);
+        if (balance <= 0) {
+          return NextResponse.json(
+            { error: "Insufficient credits for paid model schedule" },
+            { status: 402 }
+          );
+        }
+      }
 
       // Create schedule
       const schedule = await container.scheduleManager.createSchedule(
