@@ -386,7 +386,7 @@ export interface ChatInputProps {
 
 ### Integration Tests
 
-- `tests/integration/ai/litellm.adapter.test.ts` - Against real LiteLLM
+- `tests/component/ai/litellm.adapter.test.ts` - Against real LiteLLM
 - `e2e/ai.spec.ts` - Full request/response cycle
 
 ### Security Tests (Required)

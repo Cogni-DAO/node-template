@@ -10,11 +10,11 @@
 
 ## Purpose
 
-Database fixture helpers for integration tests. Provides a service-role (BYPASSRLS) database client for test seeding and cleanup operations.
+Database fixture helpers for component tests. Provides a service-role (BYPASSRLS) database client for test seeding and cleanup operations.
 
 ## Pointers
 
-- [testcontainers global setup](../../integration/setup/testcontainers-postgres.global.ts)
+- [testcontainers global setup](../../component/setup/testcontainers-postgres.global.ts)
 - [Database RLS Spec](../../../docs/spec/database-rls.md): RLS architecture
 
 ## Boundaries
@@ -49,7 +49,7 @@ Database fixture helpers for integration tests. Provides a service-role (BYPASSR
 ## Usage
 
 ```bash
-pnpm test:int
+pnpm test:component
 ```
 
 ## Standards

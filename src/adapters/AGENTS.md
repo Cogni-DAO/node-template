@@ -51,14 +51,14 @@ Infrastructure implementations of ports including server/, worker/, cli/, and te
 Minimal local commands:
 
 ```bash
-pnpm test tests/integration/
+pnpm test tests/component/
 pnpm test tests/contract/
 ```
 
 ## Standards
 
 - Contract tests required for all port implementations
-- Integration tests against real services
+- Component tests against real services
 
 ## Dependencies
 

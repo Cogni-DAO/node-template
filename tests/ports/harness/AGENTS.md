@@ -15,7 +15,7 @@ Shared helpers to spin up and tear down resources for port tests and adapter tes
 ## Pointers
 
 - [Port tests](../)
-- [Integration tests](../../integration/)
+- [Component tests](../../component/)
 - [Architecture](../../../docs/spec/architecture.md)
 
 ## Boundaries

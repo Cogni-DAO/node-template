@@ -48,7 +48,7 @@ Extract CI/CD workflows from monolithic `.github/workflows/ci.yaml` into reusabl
 | Create `.github/workflows/_rails-node-ci.yml` with `on: workflow_call`      | Not Started | 1   | —         |
 | Move static job steps (checkout, setup-node, pnpm install, typecheck, lint) | Not Started | 1   | —         |
 | Move unit job steps (format, tests, coverage upload)                        | Not Started | 1   | —         |
-| Move integration job steps (test:int)                                       | Not Started | 1   | —         |
+| Move integration job steps (test:component)                                 | Not Started | 1   | —         |
 | Convert `ci.yaml` to thin caller                                            | Not Started | 1   | —         |
 | Verify: same commands, same order, same pass/fail behavior                  | Not Started | 1   | —         |
 

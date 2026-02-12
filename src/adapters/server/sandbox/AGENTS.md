@@ -41,7 +41,7 @@ Sandbox adapter for AI agent execution — two modes: **ephemeral** containers (
 
 - **Uses ports:** none (SandboxGraphProvider uses SandboxRunnerPort internally)
 - **Implements ports:** `SandboxRunnerPort` (adapter), `GraphProvider` (sandbox-graph.provider), `AgentCatalogProvider` (sandbox-agent-catalog.provider)
-- **Contracts:** tests/integration/sandbox/, tests/stack/sandbox/
+- **Contracts:** tests/component/sandbox/, tests/stack/sandbox/
 
 ## Responsibilities
 

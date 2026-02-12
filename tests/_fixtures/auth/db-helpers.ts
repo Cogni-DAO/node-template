@@ -8,7 +8,7 @@
  * Invariants: Auto-generates IDs; maintains referential integrity
  * Side-effects: IO (database writes)
  * Notes: Use for integration and stack tests that need pre-seeded auth data.
- * Links: tests/integration/auth/, tests/stack/auth/
+ * Links: tests/component/auth/, tests/stack/auth/
  * @public
  */
 

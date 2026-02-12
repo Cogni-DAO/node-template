@@ -44,7 +44,7 @@ Test double implementations of AI service ports for deterministic testing.
 
 ```bash
 pnpm test tests/unit/
-pnpm test tests/integration/
+pnpm test tests/component/
 ```
 
 ## Standards

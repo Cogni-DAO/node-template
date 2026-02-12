@@ -483,15 +483,15 @@ Prove network isolation, workspace I/O, and one-shot container lifecycle. No LLM
 
 **File Pointers (P0):**
 
-| File                                                      | Status   |
-| --------------------------------------------------------- | -------- |
-| `services/sandbox-runtime/Dockerfile`                     | Complete |
-| `src/ports/sandbox-runner.port.ts`                        | Complete |
-| `src/ports/index.ts`                                      | Updated  |
-| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`   | Complete |
-| `src/adapters/server/sandbox/index.ts`                    | Complete |
-| `src/adapters/server/index.ts`                            | Updated  |
-| `tests/integration/sandbox/network-isolation.int.test.ts` | Complete |
+| File                                                    | Status   |
+| ------------------------------------------------------- | -------- |
+| `services/sandbox-runtime/Dockerfile`                   | Complete |
+| `src/ports/sandbox-runner.port.ts`                      | Complete |
+| `src/ports/index.ts`                                    | Updated  |
+| `src/adapters/server/sandbox/sandbox-runner.adapter.ts` | Complete |
+| `src/adapters/server/sandbox/index.ts`                  | Complete |
+| `src/adapters/server/index.ts`                          | Updated  |
+| `tests/component/sandbox/network-isolation.int.test.ts` | Complete |
 
 #### P0.5a: LiteLLM Reachability Spike (COMPLETE)
 

@@ -97,7 +97,7 @@ This ensures CI never makes external API calls while still testing the full HTTP
 ## Verification
 
 ```bash
-pnpm test           # Run unit/integration tests
+pnpm test           # Run unit tests (no infra required)
 pnpm test:ci        # Run tests with coverage statistics
 pnpm check          # Full lint + type + format validation
 ```
