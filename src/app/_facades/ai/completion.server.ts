@@ -131,8 +131,9 @@ export async function completion(
       },
     };
   } catch (error) {
-    // Map port-level errors to feature errors for route handler
-    // Route layer handles AccountsFeatureError via isAccountsFeatureError() → 402/403
+    // Map port-level errors to feature errors for route handler.
+    // Port errors arrive lazily from the decorator via stream iteration.
+    // Route layer handles AccountsFeatureError via isAccountsFeatureError() → 402/403.
     if (
       isInsufficientCreditsPortError(error) ||
       isBillingAccountNotFoundPortError(error) ||
@@ -140,7 +141,7 @@ export async function completion(
     ) {
       throw mapAccountsPortErrorToFeature(error);
     }
-    throw error; // Re-throw unknown errors
+    throw error;
   }
 }
 

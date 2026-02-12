@@ -35,6 +35,7 @@ import {
   isGrantNotFoundError,
   isGrantRevokedError,
   isGrantScopeMismatchError,
+  isInsufficientCreditsPortError,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import type { BillingCommitFn } from "@/types/billing";
@@ -377,12 +378,41 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       caller,
     });
 
-    // Consume stream and wait for final result
-    for await (const _event of result.stream) {
-      // Drain stream to completion
-    }
+    // Consume stream and wait for final result.
+    // Wrapped in try/catch so preflight credit failures (thrown during stream
+    // iteration by PreflightCreditCheckDecorator) finalize the idempotency
+    // record cleanly instead of leaving it "pending" forever.
+    let final: Awaited<typeof result.final>;
+    try {
+      for await (const _event of result.stream) {
+        // Drain stream to completion
+      }
 
-    const final = await result.final;
+      final = await result.final;
+    } catch (error) {
+      const errorCode = isInsufficientCreditsPortError(error)
+        ? "insufficient_credits"
+        : "internal";
+
+      log.warn(
+        { runId, graphId, errorCode },
+        "Scheduled graph execution rejected before start"
+      );
+
+      // --- 10a. Finalize idempotency record with failure ---
+      await container.executionRequestPort.finalizeRequest(idempotencyKey, {
+        ok: false,
+        errorCode,
+      });
+
+      const errorResponse: InternalGraphRunOutput = {
+        ok: false,
+        runId,
+        traceId,
+        error: errorCode,
+      };
+      return NextResponse.json(errorResponse, { status: 200 });
+    }
 
     // --- 10. Finalize idempotency record with outcome ---
     await container.executionRequestPort.finalizeRequest(idempotencyKey, {
