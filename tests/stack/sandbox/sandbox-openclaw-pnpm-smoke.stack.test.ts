@@ -109,11 +109,11 @@ describe("OpenClaw Gateway workspace bootstrap + git commit", () => {
     const repoCheck = await execInContainer(
       docker,
       GATEWAY_CONTAINER,
-      'test -d /repo/current/.git && echo "REPO_OK" || echo "REPO_MISSING"'
+      'git -C /repo/current rev-parse --git-dir >/dev/null 2>&1 && echo "REPO_OK" || echo "REPO_MISSING"'
     );
     if (!repoCheck.includes("REPO_OK")) {
       throw new Error(
-        "/repo/current/.git not found in gateway container. " +
+        "/repo/current is not a git repo in gateway container. " +
           "git-sync must run before these tests. Start with: pnpm dev:stack:test"
       );
     }

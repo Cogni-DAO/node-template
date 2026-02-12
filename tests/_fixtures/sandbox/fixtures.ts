@@ -188,13 +188,14 @@ export async function execInContainer(
 /**
  * Ensure /workspace/current exists inside the gateway container.
  * Idempotent: clones from the read-only git-sync mirror only if .git is absent.
+ * Uses git rev-parse (not test -d) because git-sync uses worktrees where .git is a file.
  * Call in beforeAll for any test suite that needs the writable workspace.
  */
 export async function ensureGatewayWorkspace(docker: Docker): Promise<void> {
   await execInContainer(
     docker,
     GATEWAY_CONTAINER,
-    "if [ ! -d /workspace/current/.git ]; then git clone /repo/current /workspace/current; fi",
+    "git -C /workspace/current rev-parse --git-dir >/dev/null 2>&1 || git clone /repo/current /workspace/current",
     60_000
   );
 }
