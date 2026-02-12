@@ -17,7 +17,7 @@
 import "server-only";
 
 import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -214,20 +214,13 @@ export class GitRelayManager {
       }
 
       // 2. Host-side: shallow clone, fetch from bundle, push
-      //    Auth via GIT_ASKPASS env (token never appears in command strings or error messages)
       const cloneDir = join(tmpDir, "repo");
-      const askpass = this.writeAskpass(tmpDir, token);
-      // biome-ignore lint/style/noProcessEnv: git CLI child process needs inherited PATH; token injected via GIT_ASKPASS, not read from env
-      const gitEnv = {
-        ...process.env,
-        GIT_ASKPASS: askpass,
-        GIT_TERMINAL_PROMPT: "0",
-      };
+      const authUrl = injectTokenIntoUrl(repoUrl, token);
 
       log.info("Cloning repo on host for push");
       execSync(
-        `git clone --depth=1 --branch="${baseRef}" "${repoUrl}" "${cloneDir}"`,
-        { stdio: "pipe", timeout: 60_000, env: gitEnv }
+        `git clone --depth=1 --branch="${baseRef}" "${authUrl}" "${cloneDir}"`,
+        { stdio: "pipe", timeout: 60_000 }
       );
 
       // Fetch branch from bundle into local clone
@@ -240,7 +233,7 @@ export class GitRelayManager {
       log.info("Pushing branch to remote");
       execSync(
         `git -C "${cloneDir}" push --force-with-lease origin "${branch}"`,
-        { stdio: "pipe", timeout: 60_000, env: gitEnv }
+        { stdio: "pipe", timeout: 60_000 }
       );
 
       // Count commits for reporting
@@ -291,7 +284,7 @@ export class GitRelayManager {
     log: Logger;
   }): string | undefined {
     const { repoUrl, token, head, base, title, body, log } = opts;
-    const { owner, repo } = this.parseGitHubUrl(repoUrl);
+    const { owner, repo } = parseGitHubUrl(repoUrl);
     if (!owner || !repo) {
       log.warn({ repoUrl }, "Could not parse GitHub owner/repo, skipping PR");
       return undefined;
@@ -379,40 +372,40 @@ export class GitRelayManager {
     });
 
     if (chunks.length === 0) return "";
-    return GitRelayManager.demuxDockerStream(Buffer.concat(chunks));
+    return demuxDockerStream(Buffer.concat(chunks));
   }
+}
 
-  /** Demux Docker multiplexed stream (8-byte header per frame, stdout = type 1). */
-  private static demuxDockerStream(buffer: Buffer): string {
-    const stdout: Buffer[] = [];
-    let offset = 0;
-    while (offset + 8 <= buffer.length) {
-      const streamType = buffer.readUInt8(offset);
-      const frameSize = buffer.readUInt32BE(offset + 4);
-      if (offset + 8 + frameSize > buffer.length) break;
-      if (streamType === 1) {
-        stdout.push(buffer.subarray(offset + 8, offset + 8 + frameSize));
-      }
-      offset += 8 + frameSize;
+// ─────────────────────────────────────────────────────────────────────────────
+// Pure helpers (exported for unit testing, not re-exported from barrel)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Demux Docker multiplexed stream (8-byte header per frame, stdout = type 1). */
+export function demuxDockerStream(buffer: Buffer): string {
+  const stdout: Buffer[] = [];
+  let offset = 0;
+  while (offset + 8 <= buffer.length) {
+    const streamType = buffer.readUInt8(offset);
+    const frameSize = buffer.readUInt32BE(offset + 4);
+    if (offset + 8 + frameSize > buffer.length) break;
+    if (streamType === 1) {
+      stdout.push(buffer.subarray(offset + 8, offset + 8 + frameSize));
     }
-    return Buffer.concat(stdout).toString("utf8");
+    offset += 8 + frameSize;
   }
+  return Buffer.concat(stdout).toString("utf8");
+}
 
-  /** Write a temporary GIT_ASKPASS script that echoes the token. Keeps token out of CLI args. */
-  private writeAskpass(dir: string, token: string): string {
-    const script = join(dir, "git-askpass.sh");
-    writeFileSync(script, `#!/bin/sh\necho "x-access-token:${token}"\n`, {
-      mode: 0o700,
-    });
-    return script;
-  }
+/** Inject token into HTTPS URL for authenticated git clone/push. */
+export function injectTokenIntoUrl(repoUrl: string, token: string): string {
+  return repoUrl.replace("https://", `https://x-access-token:${token}@`);
+}
 
-  /** Parse owner/repo from GitHub URL. */
-  private parseGitHubUrl(
-    repoUrl: string
-  ): { owner: string; repo: string } | { owner: undefined; repo: undefined } {
-    const match = repoUrl.match(/github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
-    if (!match?.[1] || !match[2]) return { owner: undefined, repo: undefined };
-    return { owner: match[1], repo: match[2] };
-  }
+/** Parse owner/repo from GitHub URL (HTTPS or SSH). */
+export function parseGitHubUrl(
+  repoUrl: string
+): { owner: string; repo: string } | { owner: undefined; repo: undefined } {
+  const match = repoUrl.match(/github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
+  if (!match?.[1] || !match[2]) return { owner: undefined, repo: undefined };
+  return { owner: match[1], repo: match[2] };
 }
