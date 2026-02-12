@@ -2,7 +2,7 @@
 id: task.0022
 type: task
 title: "Git relay MVP: host-side clone → agent commit → host push + PR"
-status: Todo
+status: In Progress
 priority: 0
 estimate: 3
 summary: End-to-end git relay for sandbox coder agent — host clones repo into per-run workspace, agent modifies + commits locally, host detects commits and pushes branch + creates PR via GITHUB_TOKEN
@@ -11,11 +11,11 @@ spec_refs: openclaw-sandbox-controls-spec, openclaw-sandbox-spec, git-sync-repo-
 assignees: derekg1729
 credit:
 project: proj.openclaw-capabilities
-branch:
+branch: feat/task-0022-git-relay-mvp
 pr:
 reviewer:
 created: 2026-02-11
-updated: 2026-02-11
+updated: 2026-02-12
 labels: [openclaw, sandbox, git-relay, p1]
 external_refs:
   - docs/research/sandbox-git-write-permissions.md
@@ -36,28 +36,28 @@ external_refs:
 
 ## Allowed Changes
 
-- `src/adapters/server/sandbox/sandbox-graph.provider.ts` — new `openclaw-coder` agent entry + git relay orchestration in ephemeral execution path
+- `src/adapters/server/sandbox/sandbox-graph.provider.ts` — git relay orchestration in gateway execution path (`createGatewayExecution`)
 - `src/adapters/server/sandbox/git-relay.ts` (new) — extracted helper: `cloneForRun()`, `pushIfChanged()`, `createPr()`
 - `services/sandbox-openclaw/Dockerfile` — ensure `git` is installed (may already be in `openclaw:local` base)
 - `src/shared/env/server.ts` — optional: add `GITHUB_TOKEN` to env schema (or read directly from `process.env`)
 
 ## Plan
 
-- [ ] Verify `openclaw:local` base image has `git` installed; if not, add `git` to `services/sandbox-openclaw/Dockerfile` apt-get
+- [x] Verify `openclaw:local` base image has `git` installed (confirmed: cogni-sandbox-openclaw image has git)
+- [x] Gateway workspace config: HOME=/workspace, OPENCLAW_STATE_DIR=/workspace/.openclaw-state, agent workspace→/workspace/current (docker-compose.dev.yml, docker-compose.yml, openclaw-gateway.json, openclaw-gateway.test.json)
+- [x] Git identity env vars: GIT_AUTHOR_NAME/EMAIL, GIT_COMMITTER_NAME/EMAIL in gateway container
+- [x] Test fixtures: `ensureGatewayWorkspace`, `createGatewayTestClone`, `cleanupGatewayDir` in tests/\_fixtures/sandbox/fixtures.ts
+- [x] Smoke tests: workspace bootstrap + git commit tests in sandbox-openclaw-pnpm-smoke.stack.test.ts (pending validation with full stack)
+- [x] AGENTS.md: ephemeral deprioritized, gateway-only active mode documented
 - [ ] Create `src/adapters/server/sandbox/git-relay.ts` with:
   - `cloneForRun({ repoUrl, baseBranch, runId, workspaceDir })` — `git clone --depth=1 --branch=${baseBranch}`, then `git checkout -b sandbox/${runId}`
   - `pushIfChanged({ workspaceDir, baseBranch, runId, token })` — `git log ${baseBranch}..HEAD` to detect commits, `git push origin sandbox/${runId}` if found
   - `createPr({ owner, repo, head, base, title, body, token })` — GitHub REST API `POST /repos/{owner}/{repo}/pulls` with fetch (zero deps), or `gh pr create` if available
   - All use `child_process.execSync` (host-side, not in container)
-- [ ] Add `openclaw-coder` entry to `SANDBOX_AGENTS` registry:
-  - `executionMode: "ephemeral"`, image `cogni-sandbox-openclaw:latest`
-  - `setupWorkspace` calls `cloneForRun()` then writes `.openclaw/openclaw.json` + `AGENTS.md` (instructs agent to commit changes before exit)
-  - `extraEnv` same as existing OpenClaw (HOME, OPENCLAW_CONFIG_PATH, etc.)
-  - `argv`: `node /app/dist/index.js agent --local --agent main --session-id ${runId} --message "$(cat /workspace/.cogni/prompt.txt)" --json --timeout 540`
-- [ ] Wire post-run git relay into `createContainerExecution()`:
-  - After successful `runner.runOnce()` and billing, call `pushIfChanged()`
+- [ ] Wire post-run git relay into `createGatewayExecution()`:
+  - After billing, call `pushIfChanged()` on the agent's workspace
   - If PR created, append PR URL to content in `GraphFinal`
-  - Move `rmSync` out of `finally` — only cleanup after push completes (or if no push needed)
+  - Defer workspace cleanup until push completes (WORKSPACE_SURVIVES_FOR_PUSH)
 - [ ] Add `sandbox:openclaw-coder` to `SandboxAgentCatalogProvider` descriptors so it appears in agent list
 - [ ] Manual smoke test: send coding task → verify branch pushed + PR created
 
@@ -97,7 +97,7 @@ pnpm check
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0022.handoff.md)
 
 ## Attribution
 
