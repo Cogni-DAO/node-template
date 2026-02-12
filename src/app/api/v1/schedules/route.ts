@@ -7,6 +7,7 @@
  * Scope: Auth-protected POST/GET endpoints for schedule management. Does not contain business logic.
  * Invariants:
  *   - Schedule ownership scoped to caller's billing account
+ *   - SCHEDULE_CREATION_REJECTS_IF_CURRENTLY_UNPAYABLE: paid model + balance <= 0 → 402
  *   - createSchedule is atomic (grant + schedule + job enqueue)
  * Side-effects: IO (HTTP request/response, database, job queue)
  * Links: docs/spec/scheduler.md, schedules.*.v1.contract

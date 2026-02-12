@@ -2,7 +2,7 @@
 id: bug.0025
 type: bug
 title: Schedule creation accepts paid agents with zero credits — no preflight credit gate
-status: In Progress
+status: Done
 priority: 0
 estimate: 2
 summary: POST /api/v1/schedules creates a schedule (grant + DB + Temporal job) for a paid model without checking the user's credit balance. Users with zero credits can create schedules that will repeatedly fail at execution time.
@@ -15,7 +15,7 @@ branch: bug/0025-preflight-credit-check
 pr:
 reviewer:
 created: 2026-02-11
-updated: 2026-02-12
+updated: 2026-02-13
 labels: [billing, scheduler]
 external_refs:
 ---

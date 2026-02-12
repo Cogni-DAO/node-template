@@ -11,7 +11,7 @@ outcome: All graph runs flow through GraphRunWorkflow; no inline execution in HT
 assignees:
   - derekg1729
 created: 2026-02-07
-updated: 2026-02-10
+updated: 2026-02-13
 labels:
   - ai-graphs
   - scheduler
@@ -33,7 +33,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 | Deliverable                                                                                             | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Fix: schedule creation accepts paid models with zero credits — no credit gate                           | Backlog     | 2   | bug.0025  |
+| Fix: schedule creation accepts paid models with zero credits — no credit gate                           | Done        | 2   | bug.0025  |
 | Fix: scheduled runs write charge_receipts (billing bypass regression)                                   | Todo        | 2   | bug.0005  |
 | Canonicalize billing at GraphExecutorPort — LiteLLM callback + receipt barrier, kill log-scraping paths | Todo        | 3   | task.0029 |
 | Billing enforcement decorator at GraphExecutorPort level                                                | Done        | 2   | task.0007 |

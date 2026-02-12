@@ -10,6 +10,7 @@
  *   - Only app layer imports this; routes call this, not features/* directly
  *   - Must import features via public.ts ONLY (never import from services subdirectories)
  *   - NEVER import adapters (use bootstrap factories instead)
+ *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: preflight credit check handled by decorator (no facade-level call)
  *   - Validates billing account before delegation; propagates feature errors
  * Side-effects: IO (via resolved dependencies)
  * Notes: completion() delegates to completionStream() and collects response server-side

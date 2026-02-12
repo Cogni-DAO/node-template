@@ -11,6 +11,7 @@
  *   - Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes to providers
  *   - Per LANGFUSE_INTEGRATION: ObservabilityGraphExecutorDecorator wraps for Langfuse traces
  *   - Per BILLING_ENFORCEMENT: BillingGraphExecutorDecorator intercepts usage_report events
+ *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: PreflightCreditCheckDecorator rejects runs with insufficient credits
  *   - BILLING_COMMIT_REQUIRED: billingCommitFn is required — missing commitFn is a hard error
  *   - LAZY_SANDBOX_IMPORT: Sandbox provider loaded via dynamic import() to defer dockerode native addon chain (SandboxRunnerAdapter); ProxyBillingReader imported here but filesystem-only, no Docker dependency
  * Side-effects: global (module-scoped cached sandbox provider promise)
