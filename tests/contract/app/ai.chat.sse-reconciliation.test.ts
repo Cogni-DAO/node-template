@@ -184,27 +184,12 @@ async function collectTextFromResponse(res: Response): Promise<{
 
   for await (const event of readDataStreamEvents(res)) {
     events.push(event);
-    // eslint-disable-next-line no-console
-    console.log(
-      "[DSP event]",
-      event.type,
-      JSON.stringify(event.value).slice(0, 80)
-    );
     if (isTextDeltaEvent(event)) {
       textParts.push(event.value as string);
     }
     if (isFinishMessageEvent(event)) break;
   }
 
-  // eslint-disable-next-line no-console
-  console.log(
-    "[DSP] total events:",
-    events.length,
-    "text parts:",
-    textParts.length,
-    "total text len:",
-    textParts.join("").length
-  );
   return { text: textParts.join(""), events };
 }
 
