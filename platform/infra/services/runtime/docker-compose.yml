@@ -66,6 +66,7 @@ services:
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
       - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
+      - OPENCLAW_GITHUB_RW_TOKEN=${OPENCLAW_GITHUB_RW_TOKEN?OPENCLAW_GITHUB_RW_TOKEN is required}
       # Shared volume: proxy writes JSONL audit log, app reads for billing
       - OPENCLAW_BILLING_DIR=/openclaw-billing
     volumes:

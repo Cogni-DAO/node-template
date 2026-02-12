@@ -14,8 +14,10 @@
  * @internal
  */
 
+import "server-only";
+
 import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -212,13 +214,20 @@ export class GitRelayManager {
       }
 
       // 2. Host-side: shallow clone, fetch from bundle, push
+      //    Auth via GIT_ASKPASS env (token never appears in command strings or error messages)
       const cloneDir = join(tmpDir, "repo");
-      const authUrl = this.injectTokenIntoUrl(repoUrl, token);
+      const askpass = this.writeAskpass(tmpDir, token);
+      // biome-ignore lint/style/noProcessEnv: git CLI child process needs inherited PATH; token injected via GIT_ASKPASS, not read from env
+      const gitEnv = {
+        ...process.env,
+        GIT_ASKPASS: askpass,
+        GIT_TERMINAL_PROMPT: "0",
+      };
 
       log.info("Cloning repo on host for push");
       execSync(
-        `git clone --depth=1 --branch="${baseRef}" "${authUrl}" "${cloneDir}"`,
-        { stdio: "pipe", timeout: 60_000 }
+        `git clone --depth=1 --branch="${baseRef}" "${repoUrl}" "${cloneDir}"`,
+        { stdio: "pipe", timeout: 60_000, env: gitEnv }
       );
 
       // Fetch branch from bundle into local clone
@@ -231,7 +240,7 @@ export class GitRelayManager {
       log.info("Pushing branch to remote");
       execSync(
         `git -C "${cloneDir}" push --force-with-lease origin "${branch}"`,
-        { stdio: "pipe", timeout: 60_000 }
+        { stdio: "pipe", timeout: 60_000, env: gitEnv }
       );
 
       // Count commits for reporting
@@ -389,9 +398,13 @@ export class GitRelayManager {
     return Buffer.concat(stdout).toString("utf8");
   }
 
-  /** Inject token into HTTPS URL for authenticated git push. */
-  private injectTokenIntoUrl(repoUrl: string, token: string): string {
-    return repoUrl.replace("https://", `https://x-access-token:${token}@`);
+  /** Write a temporary GIT_ASKPASS script that echoes the token. Keeps token out of CLI args. */
+  private writeAskpass(dir: string, token: string): string {
+    const script = join(dir, "git-askpass.sh");
+    writeFileSync(script, `#!/bin/sh\necho "x-access-token:${token}"\n`, {
+      mode: 0o700,
+    });
+    return script;
   }
 
   /** Parse owner/repo from GitHub URL. */

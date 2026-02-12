@@ -67,6 +67,7 @@ services:
       # Override via env for test:stack:dev where app runs on host
       - SCHEDULER_WORKER_HEALTH_URL=${SCHEDULER_WORKER_HEALTH_URL:-http://scheduler-worker:9000}
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
+      - OPENCLAW_GITHUB_RW_TOKEN=${OPENCLAW_GITHUB_RW_TOKEN?OPENCLAW_GITHUB_RW_TOKEN is required}
       # Shared billing dir: proxy writes JSONL audit log, app reads for billing
       - OPENCLAW_BILLING_DIR=/openclaw-billing
     volumes:
