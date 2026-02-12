@@ -195,7 +195,7 @@ pnpm typecheck
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0038.handoff.md)
 
 ## Attribution
 

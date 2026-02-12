@@ -12,6 +12,8 @@
 
 Multi-stage devtools image for running OpenClaw in Cogni. One image for both gateway (long-running) and ephemeral (one-shot) modes. Adds pnpm, git, socat, and the sandbox entrypoint onto a published GHCR OpenClaw base with header-forwarding.
 
+> **Active mode: gateway only.** Ephemeral is deprioritized (2026-02-12) — OpenClaw is our primary AI brain and ephemeral boots too slowly. May be reintroduced later. See `src/adapters/server/sandbox/AGENTS.md`.
+
 ## Pointers
 
 - [OpenClaw Sandbox Spec](../../docs/spec/openclaw-sandbox-spec.md) — invariants 26 (IMAGE_FROM_PUBLISHED_BASE), 27 (COMPOSE_IMAGE_PARITY)

@@ -163,12 +163,13 @@
       "timeoutSeconds": 540,
       "heartbeat": { "every": "0" }
     },
-    "list": [{ "id": "main", "default": true, "workspace": "/repo/current" }]
+    "list": [
+      { "id": "main", "default": true, "workspace": "/workspace/current" }
+    ]
   },
   "tools": {
     "elevated": { "enabled": false },
     "deny": [
-      "group:web",
       "browser",
       "cron",
       "gateway",
