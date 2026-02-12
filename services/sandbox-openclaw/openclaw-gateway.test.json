@@ -53,7 +53,6 @@
   "tools": {
     "elevated": { "enabled": false },
     "deny": [
-      "group:web",
       "browser",
       "cron",
       "gateway",

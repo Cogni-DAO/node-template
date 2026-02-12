@@ -16,7 +16,7 @@ tags: [sandbox, openclaw]
 # OpenClaw Sandbox Controls Design
 
 > [!CRITICAL]
-> Sandbox agents produce code changes inside the OpenClaw gateway container (long-running, `sandbox-internal` network). **Host-side git relay** handles all credential-bearing operations (push, PR creation) via `docker exec` + `format-patch` extraction. Sandbox never holds git credentials. Branch identity is `branchKey` (explicit, not runId). UI surfaces are Cogni-native (Next.js), not OpenClaw's gateway UI.
+> Sandbox agents produce code changes inside the OpenClaw gateway container (long-running, `sandbox-internal` + `cogni-edge` networks). Gateway has internet egress and `GITHUB_TOKEN` for `gh` CLI / curl. **Host-side git relay** handles push via `docker exec` + `bundle` extraction with `sandbox/*` branch allowlist. UI surfaces are Cogni-native (Next.js), not OpenClaw's gateway UI.
 
 ## Context
 
@@ -150,9 +150,9 @@ OPENCLAW_LOAD_SHELL_ENV=0
 - **P0**: Single mutable `/workspace/current`. One branchKey active at a time. Provider holds a branchKey lock to prevent concurrent mutation.
 - **P0.5**: Per-branch git worktrees at `/workspace/wt/<branchKey>`. Eliminates checkout/reset races and supports concurrent branches.
 
-**Why host-side push?** Per SECRETS_HOST_ONLY (invariant 4). The agent commits locally (git doesn't need credentials for local operations). Only push/PR creation needs tokens, and those stay on the host. The gateway container is on `sandbox-internal` (no external egress).
+**Why host-side push?** Defense-in-depth for git write operations. The `GitRelay` bundles commits out of the container and pushes from the host, enforcing a `sandbox/*` branch allowlist. The gateway container also has `GITHUB_TOKEN` for `gh` CLI read operations (issues, PRs, API queries), but the relay remains the controlled path for push.
 
-**Why `docker exec` + `format-patch`?** The gateway is a long-running container on a named volume — the host can't directly access the workspace filesystem (Docker Desktop). `docker exec` runs git commands inside the container; `format-patch` serializes commits to stdout for the host to apply and push.
+**Why `docker exec` + `bundle`?** The gateway is a long-running container on a named volume — the host can't directly access the workspace filesystem (Docker Desktop). `docker exec` runs git commands inside the container; `bundle` serializes commits to stdout for the host to apply and push.
 
 **Why not on `SandboxRunSpec`?** The port (`SandboxRunnerPort`) handles container execution only. Git relay is provider-level orchestration that wraps the gateway session — branch setup before, patch extraction after. This keeps the port interface simple and the security boundary clear.
 
@@ -191,18 +191,18 @@ export function useAgents() {
 
 **P1: Env var**
 
-- `GITHUB_TOKEN` in host `.env` (not in sandbox, not in proxy)
-- Used by `SandboxGraphProvider` post-run for `git push` + `octokit.pulls.create()`
+- `OPENCLAW_GITHUB_RW_TOKEN` in host `.env`
+- Passed into gateway container as `GITHUB_TOKEN` (enables `gh` CLI for read operations)
+- Used by host-side `GitRelay` for push (bundles out of container, pushes from host)
 - Scoped to the org/repos this Cogni instance operates on
 
 **P2: GitHub App Installation**
 
 - Per-repo scoped tokens via `TENANT_CONNECTIONS_SPEC.md` `ConnectionBroker`
 - `credential_type: "github_app_installation"`
-- `SandboxGraphProvider` calls `broker.resolveForTool()` before push
 - Multi-tenant: each billing account has its own GitHub App installation
 
-**Never** pass `GITHUB_TOKEN` into the sandbox container. The host-side relay is the only consumer.
+**Note:** `GITHUB_TOKEN` is present in the gateway container for `gh` CLI / `curl` use. This is acceptable because the gateway runs our own agent config — not untrusted code. Ephemeral containers (`network=none`) never receive tokens.
 
 ---
 
@@ -210,16 +210,13 @@ export function useAgents() {
 
 | Pattern                                    | Problem                                                     |
 | ------------------------------------------ | ----------------------------------------------------------- |
-| Pass `GITHUB_TOKEN` to sandbox env         | Violates SECRETS_HOST_ONLY; agent could exfiltrate          |
+| Pass tokens to ephemeral sandbox env       | Ephemeral runs untrusted code; tokens must stay out         |
 | Derive branchKey from `runId`              | Branch explosion; blocks multi-run continuation (inv. 23)   |
-| Auto-derive branchKey from `stateKey`      | Conversation scope != work scope; creates junk branches     |
 | OpenClaw gateway inside sandbox            | Invariant 17; requires network listeners                    |
 | Port OpenClaw's Lit UI                     | Wrong framework (we use Next.js), assumes gateway WebSocket |
 | Separate `GraphProvider` per agent variant | Over-engineering; registry pattern is simpler               |
 | Hardcode graphs in UI component            | Drifts from API catalog; violates CATALOG_FROM_API          |
-| `git push` inside sandbox container        | sandbox-internal network; would require breaking isolation  |
 | Git relay config on `SandboxRunSpec` port  | Port handles container exec only; git is provider-level     |
-| Build dashboard before git relay works     | No data to show; build P2 after P1 produces runs            |
 | Build `ConnectionBroker` for P1            | Over-engineering; env var sufficient for single-org         |
 
 ---
