@@ -108,7 +108,7 @@ const SANDBOX_AGENTS: Record<string, SandboxAgentEntry> = {
   openclaw: {
     name: "OpenClaw",
     description: "Community-accessible OpenClaw container agent",
-    image: "openclaw-outbound-headers:latest",
+    image: "cogni-sandbox-openclaw:latest",
     argv: [],
     limits: { maxRuntimeSec: 600, maxMemoryMb: 1024 },
     executionMode: "gateway",

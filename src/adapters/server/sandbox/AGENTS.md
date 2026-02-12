@@ -81,7 +81,7 @@ await runner.dispose(); // stop all proxy containers
 ## Dependencies
 
 - **Internal:** ports/, shared/observability/
-- **External:** dockerode, ws, nginx:alpine image, `openclaw-outbound-headers:latest` image
+- **External:** dockerode, ws, nginx:alpine image, `cogni-sandbox-openclaw:latest` image
 
 ## Change Protocol
 
@@ -92,7 +92,7 @@ await runner.dispose(); // stop all proxy containers
 ## Notes
 
 - Requires `cogni-sandbox-runtime:latest` image built from services/sandbox-runtime/ (ephemeral mode)
-- Requires `openclaw-outbound-headers:latest` for gateway mode (compose service)
+- Requires `cogni-sandbox-openclaw:latest` for gateway mode (compose service)
 - Requires `nginx:alpine` image for proxy containers
 - Requires `sandbox-internal` Docker network for proxy ↔ LiteLLM connectivity
 - `LlmProxyManager.cleanupSweep()` removes orphaned proxy containers by label filter
