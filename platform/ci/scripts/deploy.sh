@@ -655,13 +655,18 @@ docker pull "$MIGRATOR_IMAGE"
 docker pull "$SCHEDULER_WORKER_IMAGE"
 
 # Sandbox images (may update on :latest — per openclaw-sandbox-spec)
-docker pull "ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest"
+# Manifest check ~2s each; skips download if digest unchanged.
+OPENCLAW_GATEWAY_IMAGE="ghcr.io/cogni-dao/cogni-sandbox-openclaw:latest"
+PNPM_STORE_IMAGE="ghcr.io/cogni-dao/node-template:pnpm-store-latest"
+docker pull "$OPENCLAW_GATEWAY_IMAGE"
+docker pull "$PNPM_STORE_IMAGE" || log_warn "pnpm-store image not found, skipping"
 
 log_info "[$(date -u +%H:%M:%S)] Pull complete"
 emit_deployment_event "deployment.pull_complete" "success" "Images pulled successfully"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 7.5: Seed pnpm_store volume (idempotent, skip if hash matches)
+# Image already pulled above; seed script uses $PNPM_STORE_IMAGE.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 source /tmp/seed-pnpm-store.sh
 

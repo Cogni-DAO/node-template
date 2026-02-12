@@ -2,7 +2,7 @@
 id: bug.0038
 type: bug
 title: Deploy pulls all 15+ images every run — SSH timeout on slow pulls
-status: Todo
+status: Done
 priority: 0
 estimate: 2
 summary: deploy-remote.sh does a blanket `compose pull` of every service (including pinned-digest images that never change), wasting bandwidth and time. Combined with missing SSH keepalive on the deploy connection, slow pulls cause SSH disconnect (Broken pipe) and deploy failure.
@@ -11,7 +11,7 @@ spec_refs: openclaw-sandbox-spec
 assignees: derekg1729
 credit:
 project: proj.reliability
-branch:
+branch: fix/deploy-targeted-pull-ssh-keepalive
 pr:
 reviewer:
 created: 2026-02-12
