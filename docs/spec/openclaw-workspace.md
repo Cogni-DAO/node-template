@@ -42,7 +42,7 @@ Define the workspace layout, governance operating model, subagent delegation str
 
 > Numbering continues from [openclaw-sandbox-spec](openclaw-sandbox-spec.md) invariants 1–28.
 
-29. **GATEWAY_WORKSPACE_SEPARATION**: The gateway agent's workspace (`agents.list[0].workspace`) is `/workspace/gateway/`, never the repo root. The repo is available read-only at `/repo/current/`. This prevents system prompt contamination and keeps memory indexing scoped to docs, not source code.
+29. **GATEWAY_WORKSPACE_SEPARATION**: The gateway agent's workspace (`agents.list[0].workspace`) is `/workspace/gateway/`, never the repo root. The repo is available at `/repo/current/` (writable for git operations — worktree, fetch, push — but the agent must not modify `/repo/current/` contents directly; use worktrees). System prompt files are bind-mounted separately via CD and are unaffected by the agent's git operations.
 
 30. **SKILLS_AT_REPO_ROOT**: OpenClaw skills live at `.openclaw/skills/` in the repo root, loaded via `skills.load.extraDirs`. Consistent with `.claude/commands/` and `.gemini/commands/`. Skills are versioned with the codebase.
 
@@ -104,7 +104,7 @@ OpenClaw reads AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md from the workspace root a
 volumes:
   - ./openclaw/gateway-workspace:/workspace/gateway # system prompt files (AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md)
   # existing:
-  - repo_data:/repo:ro # codebase mirror (includes .cogni/, .openclaw/skills/)
+  - repo_data:/repo # codebase mirror (writable for git ops; .cogni/, .openclaw/skills/)
   - cogni_workspace:/workspace # persistent workspace volume
 ```
 

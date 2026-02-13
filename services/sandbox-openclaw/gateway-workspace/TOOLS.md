@@ -44,4 +44,4 @@ All LLM calls route through the proxy at `llm-proxy-openclaw:8080`. Do not call 
 - No browser/Chromium — `browser` tool is disabled
 - No cron scheduling — use Temporal (the platform scheduler)
 - Read-only rootfs — write to `/workspace/` or `/tmp/` only
-- `/repo/current/` is read-only — create worktrees for code changes
+- `/repo/current/` is the git-sync'd codebase — don't modify it directly, create worktrees for code changes

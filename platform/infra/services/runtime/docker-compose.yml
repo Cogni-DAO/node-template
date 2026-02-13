@@ -460,7 +460,7 @@ services:
     volumes:
       - ./openclaw/openclaw-gateway.json:/etc/openclaw/openclaw.json:ro
       - ./openclaw/gateway-workspace:/workspace/gateway
-      - repo_data:/repo:ro
+      - repo_data:/repo
       - pnpm_store:/pnpm-store
       - cogni_workspace:/workspace # RW volume — pnpm hardlinks require same fs as pnpm_store
     security_opt:
