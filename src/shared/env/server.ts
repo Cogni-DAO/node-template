@@ -122,6 +122,11 @@ export const serverSchema = z.object({
   // Required: Internal execution API will not function without this token.
   SCHEDULER_API_TOKEN: z.string().min(32),
 
+  // Billing ingest token - Bearer auth for LiteLLM generic_api callback → billing ingest endpoint
+  // Per billing-ingest-spec: CALLBACK_AUTHENTICATED invariant. Min 32 chars to reduce weak-token risk.
+  // Required: Billing ingest endpoint will reject all callbacks without this token.
+  BILLING_INGEST_TOKEN: z.string().min(32),
+
   // Prometheus Query (Grafana Cloud) - READ path for app metrics queries
   // Query URL derived from PROMETHEUS_REMOTE_WRITE_URL (must end with /api/prom/push)
   // Or set PROMETHEUS_QUERY_URL explicitly for non-standard endpoints
