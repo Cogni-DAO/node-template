@@ -1,5 +1,5 @@
 ---
-id: task.0045
+id: task.0048
 type: task
 title: "Sub-agent billing attribution — track which OpenClaw sub-agent made each LLM call"
 status: Backlog
@@ -119,7 +119,7 @@ GROUP BY d.model, d.sub_agent_id;
 
 ## Review Checklist
 
-- [ ] **Work Item:** `task.0045` linked in PR body
+- [ ] **Work Item:** `task.0048` linked in PR body
 - [ ] **Spec:** billing-ingest spec updated with sub_agent_id field
 - [ ] **Tests:** contract + stack tests cover sub-agent attribution
 - [ ] **Reviewer:** assigned and approved
