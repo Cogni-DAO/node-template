@@ -93,6 +93,10 @@ export const serverSchema = z.object({
   // Billing (Stage 6.5)
   USER_PRICE_MARKUP_FACTOR: z.coerce.number().min(1.0).default(2.0),
 
+  // System tenant revenue share — fraction of user credits minted as bonus to system tenant
+  // 0 = disabled, 0.75 = 75% bonus (default). Per docs/spec/system-tenant.md
+  SYSTEM_TENANT_REVENUE_SHARE: z.coerce.number().min(0).max(1).default(0.75),
+
   // Database connections — both required, no component-piece fallback.
   // Per DATABASE_RLS_SPEC.md design decision 7: runtime app consumes explicit DSNs only.
   // app_user role (RLS enforced) — used by Next.js request paths
