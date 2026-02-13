@@ -6,62 +6,64 @@ status: active
 created: 2026-02-12
 updated: 2026-02-13
 branch: ""
-last_commit: ""
+last_commit: 9e7d7406
 ---
 
-# Handoff: Callback-driven billing — LiteLLM generic_api webhook replaces log scraping
+# Handoff: Callback-driven billing — P0 MVP (ingest endpoint + LiteLLM config)
 
 ## Context
 
-- All `sandbox:openclaw` LLM calls record **$0 cost and 0 tokens** (bug.0037, P0). This is active revenue leakage for paid models like `gemini-2.5-flash`.
-- Root cause: the current billing pipeline captures cost from nginx response headers (`x-litellm-response-cost`), but **streaming SSE responses don't include that header** — cost isn't known until the stream completes.
-- The fix: LiteLLM's `generic_api` callback fires AFTER stream completion with full cost data. A new ingest endpoint receives the callback and writes charge receipts. No log scraping, no shared volumes, no docker exec.
-- The design has been verified via a live spike against dev:stack (2026-02-13). All open questions are resolved. The spec (`billing-ingest.md`) contains the verified payload schema, Zod types, and a table of per-executor quirks.
-- **No code has been written yet.** This is ready to implement.
+- **bug.0037 (P0):** All gateway streaming LLM calls record $0 cost. Revenue leakage on paid models like `gemini-2.5-flash`.
+- **Root cause:** Streaming SSE responses don't include cost in nginx response headers. The proxy-based billing pipeline is architecturally broken for streaming.
+- **The fix:** LiteLLM's `generic_api` callback fires AFTER stream completion with full cost data. A new internal ingest endpoint receives the callback and writes charge receipts via existing `commitUsageFact()`.
+- **P0 scope is narrow:** Add the ingest endpoint (step 1) + wire the LiteLLM callback (step 2). Old billing path coexists safely — idempotency prevents double-billing. Adapter stripping and old-path deletion are deferred.
+- **No code has been written yet.** Branch off `staging` and begin building.
 
 ## Current State
 
-- **Spec:** `docs/spec/billing-ingest.md` — fully updated with verified findings, Zod schema, end_user routing quirks, gateway `run_id` gap
-- **Task:** `work/items/task.0029.callback-driven-billing-kill-log-scraping.md` — 6-step plan, each step independently shippable
-- **Bug:** `work/items/bug.0037.gateway-proxy-zero-cost-streaming.md` — the motivating P0, resolved by this task
-- **Companion:** `work/items/task.0039.billing-reconciler-worker.md` — async reconciliation worker (build AFTER task.0029)
-- **Existing billing paths still operational:** inproc works, ephemeral sandbox works, gateway records $0 (broken)
+- **Spec verified:** `docs/spec/billing-ingest.md` contains verified Zod schema, callback payload shape, end_user routing quirks, and per-executor correlation table — all confirmed via live spike on 2026-02-13.
+- **Task scoped:** `work/items/task.0029...md` — P0 plan is 3 steps (endpoint, config, test). Full 6-step cleanup plan documented as deferred.
+- **Existing billing still works:** InProc and ephemeral sandbox bill correctly. Gateway records $0 (the bug). Old + new paths will coexist via `UNIQUE(source_system, source_reference)` idempotency.
+- **No reconciler needed for P0:** task.0039 (LiteLLM spend/logs polling) is deprioritized. Callback delivery failures on Docker-internal network are near-zero probability. Monitor first, build later.
 
 ## Decisions Made
 
-1. **No synchronous receipt barrier** — user response is never blocked waiting for callback. Async reconciliation (task.0039) catches missing callbacks. See spec invariant `NO_SYNCHRONOUS_RECEIPT_BARRIER`.
-2. **Accept LiteLLM's native `StandardLoggingPayload[]` directly** — verified Zod schema in spec matches real callback data. See `billing-ingest.md` → "Callback Payload Schema (Verified)".
-3. **Callback name is `generic_api`** — configured via `GENERIC_LOGGER_ENDPOINT` env var (not yaml). Headers via `GENERIC_LOGGER_HEADERS`. See spec → "LiteLLM Configuration".
-4. **Gateway `run_id` gap must be fixed** — live gateway calls have `spend_logs_metadata: null` in callback. Must add `x-litellm-spend-logs-metadata` to OpenClaw `outboundHeaders` per session (plan step 3).
-5. **`end_user` routing quirk** — `x-litellm-end-user-id` header does NOT populate `end_user` in callback (it's empty string). Must use request body `user` field. See spec → "End User Routing (Verified Quirk)".
+1. **P0 = steps 1-2 only.** Ingest endpoint + LiteLLM config. No adapter changes, no decorator changes, no deletions. Prove the callback path works before removing the old one. See task.0029 → Plan.
+2. **Accept `StandardLoggingPayload[]` directly.** Verified Zod schema in spec matches real callback data. See `billing-ingest.md` → "Callback Payload Schema (Verified)".
+3. **Callback name is `generic_api`.** URL via `GENERIC_LOGGER_ENDPOINT` env var, auth via `GENERIC_LOGGER_HEADERS`. Not configured in YAML — env vars on the LiteLLM container.
+4. **`end_user` routing quirk.** Header-based callers (`x-litellm-end-user-id`) get `end_user: ""` in callback. Fall back to `metadata.requester_custom_headers["x-litellm-end-user-id"]`. See spec → "End User Routing (Verified Quirk)".
+5. **Gateway `run_id` gap is deferred.** Gateway calls have `spend_logs_metadata: null`. The `end_user` field is populated (account correlation works). `run_id` fix requires OpenClaw outboundHeaders change — ship later.
+6. **No new DB tables.** Design review (2026-02-13) evaluated all existing tables for reconciliation — none cover all executor types. LiteLLM API is the universal reference set if reconciliation is needed later.
 
 ## Next Actions
 
-- [ ] **1. Add ingest endpoint** — `POST /api/internal/billing/ingest`. Accepts `List[StandardLoggingPayload]` (batched array). Zod validation, `Authorization: Bearer BILLING_INGEST_TOKEN` auth, calls `commitUsageFact()` per entry. Idempotent by `(source_system, source_reference)`. Safe to deploy alongside existing billing.
-- [ ] **2. Configure LiteLLM callback** — Add `generic_api` to `success_callback` in `litellm.config.yaml`. Add `GENERIC_LOGGER_ENDPOINT` + `GENERIC_LOGGER_HEADERS` env vars to litellm service in docker-compose.
-- [ ] **3. Fix gateway `run_id` gap** — Add `x-litellm-spend-logs-metadata` header (with `run_id`, `graph_id`, `attempt`) to OpenClaw `outboundHeaders` when Cogni app creates the gateway session.
-- [ ] **4. Add `usage_unit_created` event + decorator change** — New event in `@cogni/ai-core`. Decorator collects call_ids for observability, stops writing receipts inline.
-- [ ] **5. Strip billing from adapters** — Remove cost extraction from InProc, delete `ProxyBillingReader`, remove billing volumes. Adapters emit only `usage_unit_created`.
-- [ ] **6. Delete old paths** — `ProxyBillingReader`, billing volumes, `proxyBillingEntries`, `OPENCLAW_BILLING_DIR`, `usage_report` event type.
+- [ ] **1. Create branch** from `staging` for task.0029
+- [ ] **2. Add `BILLING_INGEST_TOKEN`** to `src/shared/env/server.ts` (Zod-validated, min 32 chars)
+- [ ] **3. Create Zod contract** at `src/contracts/billing-ingest.contract.ts` — schema from `billing-ingest.md` → "Callback Payload Schema (Verified)"
+- [ ] **4. Implement ingest endpoint** at `src/app/api/internal/billing/ingest/route.ts` — bearer auth, Zod validate array, iterate entries, call `commitUsageFact()` per entry, return 200/409
+- [ ] **5. Configure LiteLLM** — add `"generic_api"` to `success_callback` in `litellm.config.yaml`, add `GENERIC_LOGGER_ENDPOINT` + `GENERIC_LOGGER_HEADERS` env vars to litellm service in docker-compose files
+- [ ] **6. Add `.env.local.example` entries** for `BILLING_INGEST_TOKEN`
+- [ ] **7. Stack test** — streaming chat on paid model → verify `charge_receipts.response_cost_usd > 0`
+- [ ] **8. Run `pnpm check`** — ensure no lint/type/format regressions
 
 ## Risks / Gotchas
 
-- **Batched payloads**: LiteLLM sends `List[StandardLoggingPayload]` — sometimes 2+ entries per POST. Endpoint must iterate the array.
-- **`end_user` empty for header-based callers**: Ephemeral sandbox sets identity via header → callback has `end_user: ""`. Fall back to `metadata.requester_custom_headers["x-litellm-end-user-id"]`.
-- **Cutover idempotency**: During transition, both old (inline) and new (callback) paths may write the same receipt. The `UNIQUE(source_system, source_reference)` constraint makes the second write a no-op — this is safe.
-- **`model_group` vs `model`**: Use `model_group` for the LiteLLM alias we display (e.g., `gemini-2.5-flash`). `model` is the full provider path (e.g., `google/gemini-2.5-flash`).
-- **Token field names in payload**: `prompt_tokens` / `completion_tokens` / `total_tokens` (NOT `input_tokens` / `output_tokens`).
+- **Batched payloads:** LiteLLM sends `List[StandardLoggingPayload]` — sometimes 2+ entries per POST. Endpoint must iterate the array, not assume single entry.
+- **Cutover idempotency:** Both old and new paths may write the same receipt. `UNIQUE(source_system, source_reference)` makes the duplicate a no-op. Catch the constraint violation and return 409, don't throw.
+- **Internal endpoint auth:** `POST /api/internal/billing/ingest` bypasses the standard `/api/v1/` proxy auth. Use `Authorization: Bearer BILLING_INGEST_TOKEN` — validate in route handler, not in `proxy.ts`.
+- **Token field names:** Payload uses `prompt_tokens` / `completion_tokens` / `total_tokens` (NOT `input_tokens` / `output_tokens`). The Zod schema in the spec is correct.
+- **`model_group` vs `model`:** Use `model_group` for the alias users see (e.g., `gemini-2.5-flash`). `model` is the full provider path (e.g., `google/gemini-2.5-flash`).
 
 ## Pointers
 
-| File / Resource                                                     | Why it matters                                                                     |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `docs/spec/billing-ingest.md`                                       | Authoritative spec — verified Zod schema, architecture, invariants, spike findings |
-| `work/items/task.0029.callback-driven-billing-kill-log-scraping.md` | Work item — plan, allowed changes, acceptance criteria                             |
-| `work/items/bug.0037.gateway-proxy-zero-cost-streaming.md`          | Motivating P0 bug — $0 cost for all gateway streaming calls                        |
-| `src/features/ai/services/billing.ts`                               | `commitUsageFact()` — the receipt writer, reused by ingest endpoint                |
-| `src/adapters/server/ai/billing-executor.decorator.ts`              | Current decorator — writes receipts inline, must become observability-only         |
-| `src/adapters/server/sandbox/proxy-billing-reader.ts`               | To be deleted — current gateway log-scraping reader                                |
-| `src/adapters/server/sandbox/sandbox-graph.provider.ts:529-567`     | Gateway billing emission — to be simplified to `usage_unit_created`                |
-| `platform/infra/services/runtime/configs/litellm.config.yaml`       | LiteLLM config — add `generic_api` to `success_callback`                           |
-| `platform/infra/services/runtime/docker-compose.dev.yml:111-133`    | LiteLLM container — add `GENERIC_LOGGER_ENDPOINT` env var                          |
+| File / Resource                                                     | Why it matters                                                                      |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `docs/spec/billing-ingest.md`                                       | Authoritative spec — verified Zod schema, architecture, invariants                  |
+| `work/items/task.0029.callback-driven-billing-kill-log-scraping.md` | Work item — scoped plan, allowed changes, acceptance criteria                       |
+| `work/projects/proj.unified-graph-launch.md`                        | Project roadmap — P0/P0.5/P1 phasing                                                |
+| `src/features/ai/services/billing.ts`                               | `commitUsageFact()` — the receipt writer, reuse from ingest endpoint                |
+| `src/shared/env/server.ts`                                          | Add `BILLING_INGEST_TOKEN` here                                                     |
+| `platform/infra/services/runtime/configs/litellm.config.yaml`       | Add `generic_api` to `success_callback`                                             |
+| `platform/infra/services/runtime/docker-compose.dev.yml`            | Add `GENERIC_LOGGER_ENDPOINT` + `GENERIC_LOGGER_HEADERS` to litellm                 |
+| `src/adapters/server/accounts/drizzle.adapter.ts`                   | `recordChargeReceipt()` — atomic receipt + ledger debit (called by commitUsageFact) |
+| `packages/db-schema/src/billing.ts`                                 | `charge_receipts` schema — `UNIQUE(source_system, source_reference)`                |
