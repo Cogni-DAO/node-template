@@ -126,8 +126,8 @@ importers:
         specifier: ^6.0.79
         version: 6.0.79(zod@4.1.12)
       assistant-stream:
-        specifier: ^0.2.45
-        version: 0.2.45
+        specifier: ^0.3.2
+        version: 0.3.2
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -4930,9 +4930,6 @@ packages:
 
   assistant-cloud@0.1.17:
     resolution: {integrity: sha512-CUMr9MWuikURcYFHcMO7avyfe+lkMucM/W795AEre24/+eKutQklOOJj0YiLoUkm+0p3cmlX7tiN2bFACNaQXw==}
-
-  assistant-stream@0.2.45:
-    resolution: {integrity: sha512-gfCwkPcGpfCpwWDzKrgzR5TvKP/ppc+MqotFHPCufbYK8nMft1+GyWGhQp6XXzQR2dC7T/IrqmtEGlGSs8uobA==}
 
   assistant-stream@0.3.2:
     resolution: {integrity: sha512-BVpG6pSORumrEC6zX96KyTyw8RXFTbYElujgGST+SQuCZFgAJnTnBkuru2WyFkQglF/1hl8xXsvlU3hvpHcUsQ==}
@@ -16235,12 +16232,6 @@ snapshots:
   assistant-cloud@0.1.17:
     dependencies:
       assistant-stream: 0.3.2
-
-  assistant-stream@0.2.45:
-    dependencies:
-      '@types/json-schema': 7.0.15
-      nanoid: 5.1.6
-      secure-json-parse: 4.1.0
 
   assistant-stream@0.3.2:
     dependencies:
