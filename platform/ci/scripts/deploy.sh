@@ -808,6 +808,11 @@ scp $SSH_OPTS \
   "$REPO_ROOT/services/sandbox-openclaw/openclaw-gateway.json" \
   root@"$VM_HOST":/opt/cogni-template-runtime/openclaw/openclaw-gateway.json
 
+# Upload OpenClaw gateway workspace (SOUL.md, GOVERN.md, AGENTS.md, etc.)
+rsync -av -e "ssh $SSH_OPTS" \
+  "$REPO_ROOT/services/sandbox-openclaw/gateway-workspace/" \
+  root@"$VM_HOST":/opt/cogni-template-runtime/openclaw/gateway-workspace/
+
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 

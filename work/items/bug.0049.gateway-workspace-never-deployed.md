@@ -2,17 +2,17 @@
 id: bug.0049
 type: bug
 title: Deploy never syncs gateway-workspace + repo mount blocks git — agent is blind and immobile
-status: Backlog
+status: Done
 priority: 0
 estimate: 1
-summary: deploy.sh never rsync's gateway-workspace/ (agent has no SOUL.md/GOVERN.md) and /repo is mounted :ro (agent can't git worktree/fetch/pull despite documented workflow requiring it)
-outcome: Gateway agent boots with full workspace files and a writable repo it can fetch, branch, and worktree from
+summary: deploy.sh rsync's gateway-workspace/ to production; agent docs updated with safe clone-from-remote dev workflow; /repo/current/ documented as volatile
+outcome: Gateway agent boots with full workspace files; dev workflow uses persistent clone at /workspace/repo/ instead of volatile /repo/current/
 spec_refs:
   - openclaw-workspace
 assignees: []
 credit:
 project: proj.openclaw-capabilities
-branch:
+branch: fix/bug-0049-gateway-workspace-deploy
 pr:
 reviewer:
 created: 2026-02-13

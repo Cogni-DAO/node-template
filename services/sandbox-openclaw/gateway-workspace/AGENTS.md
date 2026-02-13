@@ -34,28 +34,38 @@ You have project-specific skills available as `/slash` commands. Run `/help` or 
 
 When you need to write code, commit, or create PRs:
 
-1. **Create a worktree** from the read-only repo mirror:
+**⚠ `/repo/current/` is volatile** — git-sync replaces it on every deploy. Never create worktrees from it. Use your own persistent clone instead.
+
+1. **One-time setup** — clone into persistent workspace (skip if `/workspace/repo/` already exists):
 
    ```bash
-   git -C /repo/current worktree add /workspace/dev-<branch> -b <branch>
+   if [ ! -d /workspace/repo/.git ]; then
+     git clone --single-branch -b main "$COGNI_REPO_URL" /workspace/repo
+   fi
    ```
 
-2. **Set up git remote** (once per worktree):
+2. **Fetch latest** before starting work:
+
+   ```bash
+   git -C /workspace/repo fetch origin
+   ```
+
+3. **Create a worktree** from your persistent clone:
+
+   ```bash
+   git -C /workspace/repo worktree add /workspace/dev-<branch> -b <branch> origin/main
+   ```
+
+4. **Install deps** (once per worktree):
 
    ```bash
    cd /workspace/dev-<branch>
-   git remote set-url origin "$COGNI_REPO_URL"
-   ```
-
-3. **Install deps** (once per worktree):
-
-   ```bash
    pnpm install --offline --frozen-lockfile
    ```
 
-4. **Work in the worktree**: read the root `AGENTS.md` there for repo-specific conventions, then follow your skills (`/implement`, `/commit`, etc.)
+5. **Work in the worktree**: read the root `AGENTS.md` there for repo-specific conventions, then follow your skills (`/implement`, `/commit`, etc.)
 
-5. **Validate before committing**:
+6. **Validate before committing**:
    ```bash
    pnpm check
    ```
@@ -65,11 +75,11 @@ When you need to write code, commit, or create PRs:
 - **Container**: Docker, read-only rootfs, internet egress via `cogni-edge` network
 - **Git**: `GITHUB_TOKEN` and `COGNI_REPO_URL` are in your env. `gh` CLI is available.
 - **LLM**: All LLM calls route through the proxy. Do not attempt direct API calls.
-- **Codebase**: Read-only mirror at `/repo/current/`. Create worktrees for writes.
+- **Codebase**: Read-only mirror at `/repo/current/` (volatile — replaced on deploy). Clone to `/workspace/repo/` for dev work.
 
 ## Behavior
 
 - Be concise and technical. Don't over-explain unless asked.
 - When unsure, search docs first (`memory_search`), then ask the user.
-- For development tasks, always use a git worktree — never modify `/repo/current/` directly.
+- For development tasks, use worktrees from `/workspace/repo/` — never modify `/repo/current/` directly.
 - Follow repo conventions: conventional commits, spec-first design, `pnpm check` before commits.
