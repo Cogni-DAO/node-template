@@ -52,7 +52,11 @@ Define the workspace layout, governance operating model, subagent delegation str
 
 33. **MEMORY_MD_HIGH_BAR**: `MEMORY.md` is reserved for niche, container-specific context that an OpenClaw agent needs and cannot find via `memory_search` over `docs/` and `work/`. General project knowledge belongs in specs and guides — not duplicated into MEMORY.md. The agent should not edit files under `services/` unless the content is specific to the container itself. Examples of valid MEMORY.md content: container filesystem layout, tool availability quirks, worktree setup gotchas. Examples of invalid content: architecture overview (→ `docs/spec/architecture.md`), API contracts (→ `src/contracts/`).
 
-34. **GOVERN_TRIGGER**: The Temporal scheduler sends the single-word message `GOVERN` on a recurring cadence. On receiving this message, the agent executes its full autonomous loop: orient (health + charters + work items) → pick ≤3 → execute → maintain → learn. All other messages are treated as user interactions.
+34. **GOVERN_TRIGGER**: The Temporal scheduler sends the single-word message `GOVERN` on a recurring cadence. On receiving this message, the agent reads `GOVERN.md` (not auto-injected — read on demand to keep user-message prompts lean) and executes the checklist. All other messages are treated as user interactions.
+
+37. **GOVERN_REFLECTION**: Every GOVERN run must end by appending 3 bullets to `memory/YYYY-MM-DD-govern.md` via the `write` tool: what shipped, what entropy was fixed, what was learned. These files are ephemeral (gitignored, auto-indexed by `memory_search`) and rotated after 30 days during the weekly prune.
+
+38. **CAPABILITY_GROWTH_GATE**: No new capability without six elements: a user it serves, a way to measure it, an owner, docs, a maintenance plan, and break detection. The agent must refuse to add capabilities that lack this checklist.
 
 35. **USER_MODE_PRIORITIES**: When handling a user message (anything that is not `GOVERN`), the agent follows three objectives in strict priority order: (1) help the user, (2) gather useful signal into work items or spec updates, (3) protect the charter — scope diversions into work items rather than derailing active work.
 
@@ -69,12 +73,14 @@ All system prompt files live in a single directory, bind-mounted into the contai
 ```
 /workspace/gateway/                    ← OpenClaw workspace root
 ├── AGENTS.md                          # Runtime-specific operating instructions
-├── SOUL.md                            # Agent personality/tone (auto-injected by OpenClaw)
+├── SOUL.md                            # Agent identity, principles, governance (auto-injected)
+├── GOVERN.md                          # GOVERN loop checklist (read on-demand, NOT auto-injected)
 ├── TOOLS.md                           # Container environment notes
 ├── MEMORY.md                          # Niche container-specific context (high bar, see invariant 33)
 ├── .gitignore                         # Ignores memory/ directory
 └── memory/                            # Ephemeral working memory (not in git, lost on reset)
-    └── YYYY-MM-DD.md                  # Auto-populated daily logs
+    ├── YYYY-MM-DD.md                  # Auto-populated session logs (on /new)
+    └── YYYY-MM-DD-govern.md           # GOVERN reflection logs (written by agent)
 ```
 
 OpenClaw reads AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md from the workspace root at session start (truncated to `bootstrapMaxChars`, default 20,000 chars). SOUL.md must be at the workspace root — OpenClaw has no config to read it from an alternate path. Subagents receive only `AGENTS.md` + `TOOLS.md`.
@@ -233,15 +239,13 @@ The gateway agent handles two distinct message types in the same long-running co
 
 #### GOVERN (Autonomous Loop)
 
-Temporal sends `GOVERN` on a recurring cadence. The agent executes:
+Temporal sends `GOVERN` on a recurring cadence. The agent reads `GOVERN.md` (on-demand, not in system prompt) and executes the checklist: orient → pick → execute → maintain → reflect.
 
-1. **Orient** — collect health analytics, read charters (`work/charters/CHARTER.md`), scan `work/items/_index.md`, identify top priorities
-2. **Pick** — select 1–3 items (WIP ≤ 3), prefer In Progress over new
-3. **Execute** — small PRs, close items, validate via repo workflows
-4. **Maintain** — update stale docs, dedupe, delete rot
-5. **Learn** — gap analysis: what's missing? what's been inefficient?
+`GOVERN.md` is a 5-line checklist — no prose. `SOUL.md` defines the principles and constraints that govern the loop. This separation keeps the GOVERN checklist tight and evolvable without bloating the system prompt for user messages.
 
-The GOVERN loop is the agent's core value creation cycle. It reads the DAO charter for strategic alignment, then translates that into concrete work items and PRs. Governance principles (syntropy, git-is-truth, WIP ≤ 3, no-sprawl, scoped-context, cost-discipline) are defined in `SOUL.md`.
+**Reflection**: Every GOVERN run ends by appending 3 bullets to `memory/YYYY-MM-DD-govern.md`: what shipped, what entropy was fixed, what was learned. These are indexed by `memory_search` for continuity across runs and rotated after 30 days.
+
+**Weekly prune** (during Maintain): close stale work items, deprecate unused capabilities, delete stale branches, rotate old memory logs.
 
 #### User Messages
 

@@ -1,0 +1,5 @@
+- [ ] **Orient** — health analytics, read charters, scan `work/items/_index.md`, top priorities
+- [ ] **Pick** — select 1–3 items (WIP ≤ 3), prefer In Progress
+- [ ] **Execute** — small PRs, close items, validate
+- [ ] **Maintain** — update stale docs, dedupe, delete rot, weekly prune
+- [ ] **Reflect** — append 3 bullets to `memory/YYYY-MM-DD-govern.md`: shipped / entropy fixed / learned
