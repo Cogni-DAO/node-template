@@ -40,7 +40,7 @@ tags: [billing, litellm, sandbox]
 | ONE_BILLING_PATH                      | All billing confirmation is receipt-existence by `litellm_call_id`. No adapter-specific billing logic, no log parsing, no cost extraction in adapters.                                  |
 | ADAPTERS_NEVER_BILL                   | Adapters only emit `usage_unit_created{call_id, runId, billingAccountId, model?}`. They never parse cost data, read logs, or write receipts.                                            |
 | COST_ORACLE_IS_LITELLM                | Cost comes from LiteLLM callback payload (`response_cost`), not from nginx logs, response headers, or adapter-side computation.                                                         |
-| CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID | `UNIQUE(source_system, source_reference)` where `source_reference` includes `litellm_call_id`. Duplicate callbacks are no-ops (HTTP 409).                                               |
+| CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID | `UNIQUE(source_system, source_reference)` where `source_reference` includes `litellm_call_id`. Duplicate callbacks are no-ops (swallowed by commitUsageFact, HTTP 200).                 |
 | NO_SYNCHRONOUS_RECEIPT_BARRIER        | The user response is NEVER blocked waiting for callback receipt arrival. Reconciliation is async (task.0039).                                                                           |
 | CALLBACK_AUTHENTICATED                | Ingest endpoint requires `Authorization: Bearer BILLING_INGEST_TOKEN`.                                                                                                                  |
 | INGEST_ENDPOINT_IS_INTERNAL           | `/api/internal/billing/ingest` — internal Docker network only, not exposed through Caddy.                                                                                               |
@@ -90,7 +90,7 @@ tags: [billing, litellm, sandbox]
 │  1. Validate payload array (Zod)                                    │
 │  2. For each entry: commitUsageFact() → recordChargeReceipt()       │
 │  3. UPSERT by (source_system, source_reference=call_id)             │
-│  4. Return 200 OK / 409 Conflict (duplicate)                        │
+│  4. Return 200 OK (duplicates are no-ops internally)                │
 └─────────────────────────────────────────────────────────────────────┘
 
                        ┌── periodic (task.0039) ──┐
