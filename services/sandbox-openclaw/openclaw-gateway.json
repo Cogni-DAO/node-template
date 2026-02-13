@@ -89,6 +89,15 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           },
           {
+            "id": "claude-opus-4.6",
+            "name": "Claude Opus 4.6",
+            "reasoning": true,
+            "input": ["text"],
+            "contextWindow": 1000000,
+            "maxTokens": 128000,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
             "id": "deepseek-v3.1",
             "name": "DeepSeek V3.1",
             "reasoning": false,
@@ -109,7 +118,16 @@
           {
             "id": "gemini-3-pro",
             "name": "Gemini 3 Pro",
-            "reasoning": false,
+            "reasoning": true,
+            "input": ["text"],
+            "contextWindow": 1048576,
+            "maxTokens": 65536,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "gemini-3-flash",
+            "name": "Gemini 3 Flash",
+            "reasoning": true,
             "input": ["text"],
             "contextWindow": 1048576,
             "maxTokens": 65536,
@@ -157,7 +175,12 @@
   },
   "agents": {
     "defaults": {
-      "model": { "primary": "cogni/gemini-2.5-flash" },
+      "model": { "primary": "cogni/claude-opus-4.6" },
+      "subagents": {
+        "model": "cogni/gemini-3-flash",
+        "maxConcurrent": 3,
+        "archiveAfterMinutes": 30
+      },
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
       "timeoutSeconds": 540,
@@ -185,15 +208,7 @@
   },
   "tools": {
     "elevated": { "enabled": false },
-    "deny": [
-      "browser",
-      "cron",
-      "gateway",
-      "nodes",
-      "sessions_send",
-      "sessions_spawn",
-      "message"
-    ]
+    "deny": ["browser", "cron", "gateway", "nodes", "sessions_send", "message"]
   },
   "cron": { "enabled": false },
   "gateway": {
