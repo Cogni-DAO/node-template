@@ -53,12 +53,11 @@ export interface BillingContext {
  * Graph execution will use usage_report events -> commitUsageFact() instead.
  * Remove this function when graphs are implemented (see GRAPH_EXECUTION.md P0 checklist).
  *
- * Non-blocking in production (catches all errors).
- * Re-throws in test environment for visibility.
+ * Non-blocking (catches all errors, logs — never re-throws).
  *
  * Invariants:
  * - ZERO_CREDIT_RECEIPTS_WRITTEN: Always records receipt even when chargedCredits = 0n
- * - BILLING_NEVER_THROWS: Catches all errors, logs — never re-throws
+ * - BILLING_NEVER_THROWS: Catches all errors, logs — identical in test and production
  *
  * @param context - Billing context from LLM result
  * @param accountService - Account service port for charge recording

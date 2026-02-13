@@ -36,7 +36,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | Fix: schedule creation accepts paid models with zero credits — no credit gate       | Backlog | 2   | bug.0025  |
 | Fix: scheduled runs write charge_receipts (billing bypass regression)               | Done    | 2   | bug.0005  |
 | Billing enforcement decorator at GraphExecutorPort level                            | Done    | 2   | task.0007 |
-| **Callback-driven billing — ingest endpoint + LiteLLM generic_api config (P0 MVP)** | Todo    | 1   | task.0029 |
+| **Callback-driven billing — ingest endpoint + LiteLLM generic_api config (P0 MVP)** | Done    | 1   | task.0029 |
 
 **P0 scope:** task.0029 ships (ingest endpoint + callback config). Old billing path coexists safely — idempotency prevents double-billing. Monitor callback delivery via Grafana (spend_logs count vs charge_receipts count). Reconciler (task.0039) deferred to P2 — build only if callback delivery failures observed in production.
 

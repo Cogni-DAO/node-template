@@ -2,15 +2,15 @@
 id: billing-ingest-spec
 type: spec
 title: "Billing Ingest: Callback-Driven, Port-Level Billing"
-status: draft
-spec_state: draft
+status: active
+spec_state: proposed
 trust: draft
 summary: "Canonicalize billing at GraphExecutorPort: LiteLLM generic_api callback writes receipts, adapters only emit usage_unit_created{call_id}, decorator logs for observability. Async reconciliation catches missing callbacks."
 read_when: Working on billing pipeline, LiteLLM integration, sandbox billing, or charge receipt reconciliation.
 implements: proj.unified-graph-launch
 owner: derekg1729
 created: 2026-02-11
-verified: 2026-02-13
+verified: 2026-02-14
 tags: [billing, litellm, sandbox]
 ---
 

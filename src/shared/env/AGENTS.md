@@ -100,6 +100,8 @@ Optional:
 - OPENROUTER_API_KEY (for LiteLLM providers)
 - AUTH_SECRET (≥32 chars) - TODO: when session management added
 - METRICS_TOKEN (≥32 chars) - Bearer auth for /api/metrics endpoint
+- BILLING_INGEST_TOKEN (≥32 chars) - Bearer auth for LiteLLM callback → billing ingest endpoint
+- SCHEDULER_API_TOKEN (≥32 chars) - Bearer auth for scheduler-worker → internal graph execution API
 - PROMETHEUS_REMOTE_WRITE_URL (url) - Grafana Cloud write endpoint (must end with /api/prom/push)
 - PROMETHEUS_QUERY_URL (url) - Explicit query endpoint (alternative to deriving from write URL)
 - PROMETHEUS_READ_USERNAME - Basic auth username for Prometheus queries (read path)
