@@ -115,10 +115,10 @@ Child agent LLM calls:
 | **Flash** (scanning)   | `gemini-2.5-flash`, `gpt-4o-mini`, `grok-4.1-fast`             | File scanning, pattern matching, data collection, summarization, search      | Subagents via `sessions_spawn` |
 | **Strong** (authoring) | `claude-opus-4.5`, `kimi-k2-thinking`, `gpt-5`, `gemini-3-pro` | File writes/edits, code generation, architecture decisions, complex analysis | Main agent directly            |
 
-The main agent decides when to delegate. AGENTS.md will instruct:
+The main agent decides when to delegate. SOUL.md instructs:
 
-- **Delegate to flash**: bulk file reads, grep-and-summarize, data extraction, status checks
-- **Keep in main**: any file write/edit, code generation, decisions requiring deep reasoning
+- **Delegate (flash)**: read, scan, grep, collect, summarize, synthesize — no file mutations
+- **Keep in main (strong)**: all writes, edits, commits, code generation, architecture decisions, EDOs
 
 ### OpenClaw Config Changes
 

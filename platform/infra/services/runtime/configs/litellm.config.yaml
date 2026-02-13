@@ -112,6 +112,19 @@ model_list:
       is_zdr: true
       provider_key: "anthropic"
 
+  - model_name: claude-opus-4.6
+    litellm_params:
+      model: openrouter/anthropic/claude-opus-4-6
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
+    model_info:
+      display_name: "Claude Opus 4.6"
+      is_free: false
+      is_zdr: true
+      provider_key: "anthropic"
+
   # DeepSeek
   - model_name: deepseek-v3.1
     litellm_params:
@@ -148,6 +161,19 @@ model_list:
           zdr: true
     model_info:
       display_name: "Gemini 3 Pro"
+      is_free: false
+      is_zdr: true
+      provider_key: "google"
+
+  - model_name: gemini-3-flash
+    litellm_params:
+      model: openrouter/google/gemini-3-flash-preview
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
+    model_info:
+      display_name: "Gemini 3 Flash"
       is_free: false
       is_zdr: true
       provider_key: "google"

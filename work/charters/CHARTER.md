@@ -155,6 +155,15 @@ All infrastructure is modular and designed for forkability and iteration.
 
 ---
 
+## Projects
+
+| Project                | Status | Summary                                      |
+| ---------------------- | ------ | -------------------------------------------- |
+| proj.governance-agents | Active | OpenClaw gateway, agent runtime, multi-agent |
+| proj.reliability       | Active | Uptime, auto-recovery, alerting              |
+
+---
+
 ## Amendment Process
 
 This charter is a living document.  
@@ -167,16 +176,11 @@ AI agents may suggest edits, but cannot enact them without human approval.
 
 Empower decentralized niche communities through shared infrastructure, AI-powered governance, and open knowledge. Build a scalable ecosystem where core knowledge and tools are freely accessible, while advanced value is fairly monetized.
 
-## Projects
-
-| Project | Status | Summary |
-| ------- | ------ | ------- |
-
 ## Constraints
 
 - AI is steward, not sovereign — community can override any AI decision by supermajority
 - Beginner content is always free — no paywalls at the base layer
-- All contributions under Open Core License (free for non-commercial; commercial requires DAO approval)
+- All contributions under Polyform Shield (free for non-commercial; commercial requires DAO approval)
 
 ## Final Note
 

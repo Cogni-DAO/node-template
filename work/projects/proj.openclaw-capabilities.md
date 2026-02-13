@@ -165,13 +165,14 @@ Host still owns push+PR in warm pool mode — workers never need GitHub credenti
 
 #### Multi-Agent + Custom Agents
 
-| Deliverable                                                                             | Status      | Est |
-| --------------------------------------------------------------------------------------- | ----------- | --- |
-| [ ] OpenClaw multi-agent routing (`--agent` selection per-run via `agents.list` config) | Not Started | 2   |
-| [ ] Skills audit: identify sandbox-compatible skills, bundle curated set into image     | Not Started | 2   |
-| [ ] Dashboard-driven agent + skill creation (config changes via git commit)             | Not Started | 3   |
-| [ ] Persistent sessions: workspace volume across runs for DAO agents                    | Not Started | 2   |
-| [ ] Conversation continuity: inject prior messages as workspace context files           | Not Started | 2   |
+| Deliverable                                                                                          | Status      | Est | Work Item |
+| ---------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| [ ] Subagent spawning: upstream header fix + config + flash/strong model tiers + delegation strategy | Todo        | 3   | task.0045 |
+| [ ] OpenClaw multi-agent routing (`--agent` selection per-run via `agents.list` config)              | Not Started | 2   |           |
+| [ ] Skills audit: identify sandbox-compatible skills, bundle curated set into image                  | Not Started | 2   |           |
+| [ ] Dashboard-driven agent + skill creation (config changes via git commit)                          | Not Started | 3   |           |
+| [ ] Persistent sessions: workspace volume across runs for DAO agents                                 | Not Started | 2   |           |
+| [ ] Conversation continuity: inject prior messages as workspace context files                        | Not Started | 2   |           |
 
 #### Observability
 
