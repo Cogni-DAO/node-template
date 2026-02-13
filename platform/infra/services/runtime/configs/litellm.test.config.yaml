@@ -53,6 +53,10 @@ model_list:
       is_free: false
       provider_key: "mock"
 
+litellm_settings:
+  include_cost_in_streaming_usage: true
+  success_callback: ["generic_api"]
+
 general_settings:
   master_key: "os.environ/LITELLM_MASTER_KEY"
   database_url: "os.environ/LITELLM_DATABASE_URL"
