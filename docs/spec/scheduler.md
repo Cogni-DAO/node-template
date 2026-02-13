@@ -8,7 +8,7 @@ summary: Temporal-based scheduling system for graph execution via internal HTTP 
 read_when: Implementing scheduled workflows, execution grants, or Temporal integration
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-05
+verified: 2026-02-12
 tags: [scheduler]
 ---
 
@@ -40,6 +40,8 @@ tags: [scheduler]
 7. **INTERNAL_API_SHARED_SECRET**: Internal calls require Bearer token (shared secret). Follows `METRICS_TOKEN` pattern. Caller service name logged. P1: JWT with aud/exp.
 
 8. **EXECUTION_IDEMPOTENCY_PERSISTED**: `execution_requests` table persists idempotency key → `{runId, traceId}`. This is the correctness layer for slot deduplication.
+
+9a. **SCHEDULE_CREATION_REJECTS_IF_CURRENTLY_UNPAYABLE**: `POST /api/v1/schedules` performs a coarse credit gate before creating the schedule. Paid model + balance ≤ 0 → 402. Free models and requests without a model field bypass the check. This is a creation-time guard only; the `PreflightCreditCheckDecorator` enforces at execution time (per CREDITS_ENFORCED_AT_EXECUTION_PORT).
 
 9. **RUN_OWNERSHIP_BOUNDARY**: Worker owns `schedule_runs`. Execution service owns graph runs + billing (`charge_receipts`). Correlation via `runId` and `langfuseTraceId`.
 
@@ -267,7 +269,7 @@ tags: [scheduler]
 | `packages/db-client/src/adapters/drizzle-schedule.adapter.ts`          | `DrizzleScheduleManagerAdapter`                         |
 | `packages/db-client/src/adapters/drizzle-run.adapter.ts`               | `DrizzleScheduleRunAdapter`                             |
 | `src/contracts/schedules.*.v1.contract.ts`                             | Schedule CRUD contracts (4 files)                       |
-| `src/app/api/v1/schedules/route.ts`                                    | POST (create), GET (list)                               |
+| `src/app/api/v1/schedules/route.ts`                                    | POST (create with credit gate), GET (list)              |
 | `src/app/api/v1/schedules/[scheduleId]/route.ts`                       | PATCH (update), DELETE                                  |
 | `src/bootstrap/container.ts`                                           | Wire scheduling ports                                   |
 | `packages/scheduler-core/src/payloads.ts`                              | Zod payload schemas                                     |

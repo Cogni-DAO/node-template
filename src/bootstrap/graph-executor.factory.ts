@@ -11,6 +11,7 @@
  *   - Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes to providers
  *   - Per LANGFUSE_INTEGRATION: ObservabilityGraphExecutorDecorator wraps for Langfuse traces
  *   - Per BILLING_ENFORCEMENT: BillingGraphExecutorDecorator intercepts usage_report events
+ *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: PreflightCreditCheckDecorator rejects runs with insufficient credits
  *   - BILLING_COMMIT_REQUIRED: billingCommitFn is required — missing commitFn is a hard error
  *   - LAZY_SANDBOX_IMPORT: Sandbox provider loaded via dynamic import() to defer dockerode native addon chain (SandboxRunnerAdapter); ProxyBillingReader imported here but filesystem-only, no Docker dependency
  * Side-effects: global (module-scoped cached sandbox provider promise)
@@ -30,12 +31,14 @@ import {
   LangGraphDevProvider,
   LangGraphInProcProvider,
   ObservabilityGraphExecutorDecorator,
+  PreflightCreditCheckDecorator,
 } from "@/adapters/server";
 import type {
   AiExecutionErrorCode,
   GraphExecutorPort,
   GraphRunRequest,
   GraphRunResult,
+  PreflightCreditCheckFn,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import type { BillingCommitFn } from "@/types/billing";
@@ -56,17 +59,19 @@ import {
  * factory creates aggregator (bootstrap → adapters). Facade never imports adapters.
  *
  * Decorator stack (outer → inner):
- *   ObservabilityGraphExecutorDecorator → BillingGraphExecutorDecorator → AggregatingGraphExecutor
+ *   ObservabilityGraphExecutorDecorator → PreflightCreditCheckDecorator → BillingGraphExecutorDecorator → AggregatingGraphExecutor
  *
  * @param completionStreamFn - Feature function for LLM streaming (from features/ai)
  * @param userId - User ID for adapter dependency resolution
  * @param billingCommitFn - Required billing commit function (created in app layer as closure)
- * @returns GraphExecutorPort implementation with observability + billing
+ * @param preflightCheckFn - Required preflight credit check function (created in app layer as closure)
+ * @returns GraphExecutorPort implementation with observability + preflight + billing
  */
 export function createGraphExecutor(
   completionStreamFn: CompletionStreamFn,
   userId: UserId,
-  billingCommitFn: BillingCommitFn
+  billingCommitFn: BillingCommitFn,
+  preflightCheckFn: PreflightCreditCheckFn
 ): GraphExecutorPort {
   const deps = resolveAiAdapterDeps(userId);
   const container = getContainer();
@@ -99,11 +104,19 @@ export function createGraphExecutor(
     container.log
   );
 
+  // Wrap with preflight credit check (rejects runs with insufficient credits)
+  // Per CREDITS_ENFORCED_AT_EXECUTION_PORT: all execution paths get credit check automatically
+  const preflighted = new PreflightCreditCheckDecorator(
+    billed,
+    preflightCheckFn,
+    container.log
+  );
+
   // Wrap with observability decorator for Langfuse traces (outermost)
   // Per OBSERVABILITY.md#langfuse-integration: creates trace with I/O, handles terminal states
   // Note: Observability doesn't need usage_report events — billing consumes them before this layer
   const decorated = new ObservabilityGraphExecutorDecorator(
-    billed,
+    preflighted,
     container.langfuse,
     { finalizationTimeoutMs: 15_000 },
     container.log
