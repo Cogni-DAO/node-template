@@ -158,6 +158,11 @@
   "agents": {
     "defaults": {
       "model": { "primary": "cogni/gemini-2.5-flash" },
+      "subagents": {
+        "model": "cogni/gemini-2.5-flash",
+        "maxConcurrent": 3,
+        "archiveAfterMinutes": 30
+      },
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
       "timeoutSeconds": 540,
@@ -191,7 +196,6 @@
       "gateway",
       "nodes",
       "sessions_send",
-      "sessions_spawn",
       "message"
     ]
   },

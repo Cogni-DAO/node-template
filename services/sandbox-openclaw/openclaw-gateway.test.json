@@ -41,6 +41,11 @@
   "agents": {
     "defaults": {
       "model": { "primary": "cogni/test-model" },
+      "subagents": {
+        "model": "cogni/test-model",
+        "maxConcurrent": 3,
+        "archiveAfterMinutes": 30
+      },
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
       "timeoutSeconds": 540,
@@ -67,7 +72,6 @@
       "gateway",
       "nodes",
       "sessions_send",
-      "sessions_spawn",
       "message"
     ]
   },

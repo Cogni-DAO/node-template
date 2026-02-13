@@ -5,8 +5,8 @@ title: OpenClaw Gateway Workspace
 status: active
 spec_state: draft
 trust: draft
-summary: Dual-workspace architecture for the OpenClaw gateway agent — dedicated system prompt context, skills integration, memory configuration, and development workflow
-read_when: Configuring gateway agent workspace, writing skills, or debugging agent system prompt content
+summary: Gateway agent workspace, governance operating model, and subagent delegation — GOVERN heartbeat loop, user message handling, dual-workspace layout, skills, memory
+read_when: Configuring gateway agent workspace, understanding the GOVERN loop, writing skills, or debugging agent system prompt content
 owner: derekg1729
 created: 2026-02-13
 verified: 2026-02-13
@@ -29,7 +29,7 @@ Three compounding issues cause bad gateway agent behavior:
 
 ## Goal
 
-Define the workspace layout, skills integration, memory configuration, and development workflow for the OpenClaw gateway agent so it has purpose-built system prompt context instead of inheriting the repo-root coding-agent meta-prompt.
+Define the workspace layout, governance operating model, subagent delegation strategy, and development workflow for the OpenClaw gateway agent. The agent is the lead engineer of CogniDAO — it autonomously plans, builds, and maintains the codebase via a recurring GOVERN loop, while also handling ad-hoc user messages in the same container.
 
 ## Non-Goals
 
@@ -51,6 +51,12 @@ Define the workspace layout, skills integration, memory configuration, and devel
 32. **MEMORY_IS_EPHEMERAL**: OpenClaw's auto-populated `memory/` directory (daily logs, session snapshots) is ephemeral working memory. It lives only in the container's workspace volume, is gitignored, and is expected to be lost on container hard reset. Durable knowledge belongs in `MEMORY.md` (human-reviewed, committed to git). A future cron worker ([task.0040](../../work/items/task.0040.gateway-memory-curation-worker.md)) may harvest valuable snippets from ephemeral memory before reset.
 
 33. **MEMORY_MD_HIGH_BAR**: `MEMORY.md` is reserved for niche, container-specific context that an OpenClaw agent needs and cannot find via `memory_search` over `docs/` and `work/`. General project knowledge belongs in specs and guides — not duplicated into MEMORY.md. The agent should not edit files under `services/` unless the content is specific to the container itself. Examples of valid MEMORY.md content: container filesystem layout, tool availability quirks, worktree setup gotchas. Examples of invalid content: architecture overview (→ `docs/spec/architecture.md`), API contracts (→ `src/contracts/`).
+
+34. **GOVERN_TRIGGER**: The Temporal scheduler sends the single-word message `GOVERN` on a recurring cadence. On receiving this message, the agent executes its full autonomous loop: orient (health + charters + work items) → pick ≤3 → execute → maintain → learn. All other messages are treated as user interactions.
+
+35. **USER_MODE_PRIORITIES**: When handling a user message (anything that is not `GOVERN`), the agent follows three objectives in strict priority order: (1) help the user, (2) gather useful signal into work items or spec updates, (3) protect the charter — scope diversions into work items rather than derailing active work.
+
+36. **SUBAGENT_DELEGATION_BY_LEADER**: Only the lead agent (main, with full SOUL.md context) decides when to spawn subagents via `sessions_spawn`. Subagents receive minimal prompt (AGENTS.md + TOOLS.md only per [openclaw-subagents-spec invariant 37](openclaw-subagents.md)). The leader delegates bulk reads, scanning, and data extraction; it keeps file writes, code generation, and judgment calls in its own context. Model selection per-spawn is dynamic — any model in the catalog is available.
 
 ## Design
 
@@ -221,6 +227,62 @@ The gateway agent is both a **chat responder** and a **developer**. The workspac
 
 The gateway `AGENTS.md` documents this workflow explicitly.
 
+### Operating Modes
+
+The gateway agent handles two distinct message types in the same long-running container:
+
+#### GOVERN (Autonomous Loop)
+
+Temporal sends `GOVERN` on a recurring cadence. The agent executes:
+
+1. **Orient** — collect health analytics, read charters (`work/charters/CHARTER.md`), scan `work/items/_index.md`, identify top priorities
+2. **Pick** — select 1–3 items (WIP ≤ 3), prefer In Progress over new
+3. **Execute** — small PRs, close items, validate via repo workflows
+4. **Maintain** — update stale docs, dedupe, delete rot
+5. **Learn** — gap analysis: what's missing? what's been inefficient?
+
+The GOVERN loop is the agent's core value creation cycle. It reads the DAO charter for strategic alignment, then translates that into concrete work items and PRs. Governance principles (syntropy, git-is-truth, WIP ≤ 3, no-sprawl, scoped-context, cost-discipline) are defined in `SOUL.md`.
+
+#### User Messages
+
+Any message that is not `GOVERN` is a user interaction. Multiple users can connect to the same container. The agent follows three priorities in order:
+
+1. **Help** — answer the question, do what they ask
+2. **Gather** — if the user shares useful context (bug reports, ideas, architecture feedback), capture it as a work item, spec update, or memory note
+3. **Protect** — stay aligned with the charter. If a request conflicts with or would derail active chartered work, explain the conflict and offer to scope it as a work item
+
+#### Subagent Delegation
+
+The lead agent can spawn flash-tier subagents via `sessions_spawn` for parallel work. See [openclaw-subagents-spec](openclaw-subagents.md) for the full technical design (invariants 34–39, billing linkage, model tiers).
+
+**Config** (`openclaw-gateway.json`):
+
+```json5
+{
+  agents: {
+    defaults: {
+      subagents: {
+        model: "cogni/gemini-2.5-flash",  // default, overridable per-spawn
+        maxConcurrent: 3,
+        archiveAfterMinutes: 30,
+      },
+    },
+  },
+  tools: {
+    deny: [/* sessions_spawn NOT in deny list */],
+  },
+}
+```
+
+**Delegation heuristic** (from SOUL.md):
+
+- **Delegate**: bulk reads, grep-and-summarize, data extraction, status checks
+- **Keep in main**: file writes, code generation, architecture decisions, judgment calls
+
+Model selection is dynamic — the agent passes any model from the catalog to `sessions_spawn` per-task. No predefined model tiers in config; the SOUL.md principles ("fast models scan, strong models decide") guide the agent's choice.
+
+**Upstream blocker**: Subagent billing attribution requires an OpenClaw PR to propagate `outboundHeaders` from parent to child sessions ([task.0045](../../work/items/task.0045.openclaw-subagent-spawning.md)). Until that lands, subagent LLM calls won't carry billing headers. Not a practical issue while all models route through the proxy at zero cost.
+
 ### OpenClaw System Prompt Anatomy
 
 For reference, `buildAgentSystemPrompt()` in OpenClaw injects these sections (full mode):
@@ -269,7 +331,9 @@ The `gateway-workspace/` AGENTS.md is excluded from the repo's `validate-agents-
 ## Related
 
 - [openclaw-sandbox-spec](openclaw-sandbox-spec.md) — Core integration invariants 13–28, container images, billing
+- [openclaw-subagents](openclaw-subagents.md) — Subagent spawning, billing linkage, model tiers (invariants 34–39 in that spec)
 - [openclaw-sandbox-controls](openclaw-sandbox-controls.md) — Git relay, agent catalog, credential strategy
+- `work/charters/CHARTER.md` — DAO charter (strategic north star for GOVERN loop)
 - [task.0023](../../work/items/task.0023.gateway-agent-system-prompt.md) — Implementation task
 - [task.0040](../../work/items/task.0040.gateway-memory-curation-worker.md) — Memory curation cron worker (harvest ephemeral → durable)
 - OpenClaw system prompt: `src/agents/system-prompt.ts` (in openclaw repo)
