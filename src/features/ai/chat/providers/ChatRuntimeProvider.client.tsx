@@ -19,6 +19,7 @@
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { useQueryClient } from "@tanstack/react-query";
+import type { UIMessage } from "ai";
 import { DefaultChatTransport } from "ai";
 import {
   type ReactNode,
@@ -47,8 +48,14 @@ interface ChatRuntimeProviderProps {
   selectedModel: string;
   selectedGraph: GraphId;
   defaultModelId: string;
+  /** Pre-loaded messages for an existing thread, or [] for a new thread. */
+  initialMessages: UIMessage[];
+  /** stateKey for an existing thread, or null for a new thread. */
+  initialStateKey: string | null;
   onAuthExpired?: () => void;
   onError?: (error: ChatError) => void;
+  /** Called after each assistant response finishes (for sidebar refresh, etc.). */
+  onFinish?: () => void;
 }
 
 export function ChatRuntimeProvider({
@@ -56,18 +63,23 @@ export function ChatRuntimeProvider({
   selectedModel,
   selectedGraph,
   defaultModelId,
+  initialMessages,
+  initialStateKey,
   onAuthExpired,
   onError,
+  onFinish,
 }: ChatRuntimeProviderProps) {
   const queryClient = useQueryClient();
   const selectedModelRef = useRef(selectedModel);
   const selectedGraphRef = useRef(selectedGraph);
 
   // State key for multi-turn conversations
-  // Map pattern preserved for future thread switching/forks support (see chat/AGENTS.md)
-  // Server generates stateKey on first request, we capture from X-State-Key and reuse
-  const [stateKeyMap, setStateKeyMap] = useState<Record<string, string>>({});
-  const activeStateKey = "default"; // Placeholder for future state/thread selection
+  // When initialStateKey is provided (existing thread), seed the map so stateKey is
+  // always included in prepareSendMessagesRequest — impossible to omit for existing threads.
+  const activeStateKey = "default";
+  const [stateKeyMap, setStateKeyMap] = useState<Record<string, string>>(
+    initialStateKey != null ? { [activeStateKey]: initialStateKey } : {}
+  );
   const stateKey = stateKeyMap[activeStateKey];
   const stateKeyRef = useRef(stateKey);
 
@@ -130,16 +142,18 @@ export function ChatRuntimeProvider({
     [defaultModelId, onAuthExpired, onError]
   );
 
-  // Handle stream finish - invalidate credits query
+  // Handle stream finish - invalidate credits query + notify parent
   const handleFinish = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
-  }, [queryClient]);
+    onFinish?.();
+  }, [queryClient, onFinish]);
 
   // Transport-level options (api, request shape, response interception) must be
   // on the transport — they are NOT valid ChatInit/useChatRuntime options.
   // useDynamicChatTransport inside useChatRuntime wraps this in a ref-based
   // proxy, so recreating each render is safe.
   const runtime = useChatRuntime({
+    messages: initialMessages,
     transport: new DefaultChatTransport({
       api: "/api/v1/ai/chat",
       prepareSendMessagesRequest: ({ messages }) => ({

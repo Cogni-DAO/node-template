@@ -59,6 +59,16 @@ vi.mock("@/features/ai/chat/providers/ChatRuntimeProvider.client", () => ({
 }));
 
 vi.mock("@/components", () => ({
+  Button: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props} />
+  ),
+  Sheet: (props: { children: React.ReactNode }) => <div>{props.children}</div>,
+  SheetContent: (props: { children: React.ReactNode }) => (
+    <div>{props.children}</div>
+  ),
+  SheetTitle: (props: { children: React.ReactNode }) => (
+    <div>{props.children}</div>
+  ),
   Thread: (props: { composerLeft: React.ReactNode }) => (
     <div data-testid="thread">{props.composerLeft}</div>
   ),

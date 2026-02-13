@@ -19,9 +19,5 @@ export default function ChatLayout({
 }: Readonly<{
   children: ReactNode;
 }>): ReactNode {
-  return (
-    <div className="chat-viewport flex flex-col overflow-hidden">
-      {children}
-    </div>
-  );
+  return <div className="chat-viewport flex overflow-hidden">{children}</div>;
 }

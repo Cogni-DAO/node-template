@@ -236,13 +236,20 @@ export const POST = wrapRouteHandlerWithLogging(
       };
 
       // --- Phase 1: persist user message before execution (optimistic) ---
+      // Metadata (model, graphName) saved on INSERT only — first persist creates the thread row.
+      const threadMetadata =
+        expectedLen === 0
+          ? { model: input.model, graphName: input.graphName }
+          : undefined;
+
       let threadWithUser = [...existingThread, userUIMessage];
       try {
         await threadPersistence.saveThread(
           sessionUser.id,
           stateKey,
           redactSecretsInMessages(threadWithUser),
-          expectedLen
+          expectedLen,
+          threadMetadata
         );
       } catch (e) {
         if (!(e instanceof ThreadConflictError)) throw e;
@@ -257,7 +264,8 @@ export const POST = wrapRouteHandlerWithLogging(
           sessionUser.id,
           stateKey,
           redactSecretsInMessages(threadWithUser),
-          expectedLen
+          expectedLen,
+          expectedLen === 0 ? threadMetadata : undefined
         );
         // If this throws ThreadConflictError again, handleRouteError catches → 409
       }
