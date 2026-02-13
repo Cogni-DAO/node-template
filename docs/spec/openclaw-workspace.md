@@ -54,13 +54,15 @@ Define the workspace layout, governance operating model, subagent delegation str
 
 34. **GOVERN_TRIGGER**: The Temporal scheduler sends the single-word message `GOVERN` on a recurring cadence. On receiving this message, the agent reads `GOVERN.md` (not auto-injected — read on demand to keep user-message prompts lean) and executes the checklist. All other messages are treated as user interactions.
 
-37. **GOVERN_REFLECTION**: Every GOVERN run must end by appending 3 bullets to `memory/YYYY-MM-DD-govern.md` via the `write` tool: what shipped, what entropy was fixed, what was learned. These files are ephemeral (gitignored, auto-indexed by `memory_search`) and rotated after 30 days during the weekly prune.
-
-38. **CAPABILITY_GROWTH_GATE**: No new capability without six elements: a user it serves, a way to measure it, an owner, docs, a maintenance plan, and break detection. The agent must refuse to add capabilities that lack this checklist.
-
 35. **USER_MODE_PRIORITIES**: When handling a user message (anything that is not `GOVERN`), the agent follows three objectives in strict priority order: (1) help the user, (2) gather useful signal into work items or spec updates, (3) protect the charter — scope diversions into work items rather than derailing active work.
 
-36. **SUBAGENT_DELEGATION_BY_LEADER**: Only the lead agent (main, with full SOUL.md context) decides when to spawn subagents via `sessions_spawn`. Subagents receive minimal prompt (AGENTS.md + TOOLS.md only per [openclaw-subagents-spec invariant 37](openclaw-subagents.md)). The leader delegates bulk reads, scanning, and data extraction; it keeps file writes, code generation, and judgment calls in its own context. Model selection per-spawn is dynamic — any model in the catalog is available.
+36. **SUBAGENT_DELEGATION_BY_LEADER**: Only the lead agent (main, with full SOUL.md context) decides when to spawn subagents via `sessions_spawn`. Subagents receive minimal prompt (AGENTS.md + TOOLS.md only per [openclaw-subagents-spec invariant 37](openclaw-subagents.md)). The leader delegates reads, scanning, and synthesis; it keeps all file mutations in its own context.
+
+37. **WRITES_REQUIRE_STRONG_MODEL**: All file mutations (write, edit, commit, EDOs, digests) must use a strong-tier model. Flash/weak models are restricted to read, scan, grep, collect, summarize, and synthesize — never file writes. This applies to both the main agent and any subagent spawns.
+
+38. **GOVERN_EDO**: When the agent makes a real decision during GOVERN (chose between alternatives, not routine work), it records an EDO (Event → Decision → Expected Outcome) in `memory/`. EDOs include a `byDate` for outcome checking. The weekly prune closes overdue EDOs. Policy/architecture/security/cost EDOs are committed to `docs/governance/decisions.md`; micro-choices stay ephemeral.
+
+39. **CAPABILITY_GROWTH_GATE**: No new capability without six elements: a user it serves, a way to measure it, an owner, docs, a maintenance plan, and break detection. The agent must refuse to add capabilities that lack this checklist.
 
 ## Design
 
@@ -80,7 +82,8 @@ All system prompt files live in a single directory, bind-mounted into the contai
 ├── .gitignore                         # Ignores memory/ directory
 └── memory/                            # Ephemeral working memory (not in git, lost on reset)
     ├── YYYY-MM-DD.md                  # Auto-populated session logs (on /new)
-    └── YYYY-MM-DD-govern.md           # GOVERN reflection logs (written by agent)
+    ├── YYYY-MM-DD-govern.md           # GOVERN EDO records (written by agent)
+    └── YYYY-MM-DD-digest.md           # Daily digest (written by agent)
 ```
 
 OpenClaw reads AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md from the workspace root at session start (truncated to `bootstrapMaxChars`, default 20,000 chars). SOUL.md must be at the workspace root — OpenClaw has no config to read it from an alternate path. Subagents receive only `AGENTS.md` + `TOOLS.md`.
@@ -243,9 +246,11 @@ Temporal sends `GOVERN` on a recurring cadence. The agent reads `GOVERN.md` (on-
 
 `GOVERN.md` is a 5-line checklist — no prose. `SOUL.md` defines the principles and constraints that govern the loop. This separation keeps the GOVERN checklist tight and evolvable without bloating the system prompt for user messages.
 
-**Reflection**: Every GOVERN run ends by appending 3 bullets to `memory/YYYY-MM-DD-govern.md`: what shipped, what entropy was fixed, what was learned. These are indexed by `memory_search` for continuity across runs and rotated after 30 days.
+**EDO records**: When a real decision is made during GOVERN, the agent writes an EDO (Event → Decision → Expected Outcome) to `memory/YYYY-MM-DD-govern.md`. One EDO per decision, not per run. EDOs include a `byDate` for outcome checking. `GOVERN.md` contains the format and an example.
 
-**Weekly prune** (during Maintain): close stale work items, deprecate unused capabilities, delete stale branches, rotate old memory logs.
+**Commit cadence**: EDOs live in `memory/` (ephemeral, searchable). Daily: 1-page digest to `memory/YYYY-MM-DD-digest.md`. Weekly: full Week Review (strong model). Commit to `docs/governance/decisions.md` only if policy/architecture/security/cost-relevant or shows repeated confusion. Micro-choices stay ephemeral.
+
+**Weekly prune** (during Maintain): close stale work items, close overdue EDOs with no outcome, deprecate unused capabilities, delete stale branches, rotate memory logs older than 30 days.
 
 #### User Messages
 

@@ -18,7 +18,7 @@ Read `work/charters/CHARTER.md` for strategic vision. Everything you do serves t
 - **WIP ≤ 3** — finish before starting. Never juggle more than 3 items.
 - **No sprawl** — edit > create. Delete > archive. One good file beats three.
 - **Scoped context** — research first, then distill. Don't load everything.
-- **Cost discipline** — fast models scan, strong models decide.
+- **Cost discipline** — fast models gather and synthesize, strong models write. All file mutations (write, edit, commit, EDOs) use strong models. No exceptions.
 
 ## Capability Growth
 
@@ -28,9 +28,13 @@ No new capability without: a user it serves, a way to measure it, an owner, docs
 
 ### GOVERN (Temporal heartbeat)
 
-When you receive `GOVERN`: read `GOVERN.md` and execute the loop. End every run by appending 3 bullets to `memory/YYYY-MM-DD-govern.md` via the `write` tool: what shipped, what entropy was fixed, what was learned.
+When you receive `GOVERN`: read `GOVERN.md` and execute the loop.
 
-**Weekly prune** (during Maintain): close stale work items, deprecate unused capabilities, delete stale branches, rotate memory logs older than 30 days.
+**EDO**: When you make a real decision during GOVERN, record an EDO (Event → Decision → Expected Outcome). One EDO per decision. No EDO for routine work — only when you chose between alternatives. See `GOVERN.md` for format.
+
+**Commit cadence**: EDOs live in `memory/` (ephemeral, searchable). Daily: write a 1-page digest to `memory/YYYY-MM-DD-digest.md`. Weekly (strong model): write a Week Review. Commit to `docs/governance/decisions.md` only if the EDO is policy-changing, architecture-changing, security/cost-relevant, or shows repeated confusion. Keep micro-choices ephemeral.
+
+**Weekly prune** (during Maintain): close stale work items, close overdue EDOs with no outcome, deprecate unused capabilities, delete stale branches, rotate memory logs older than 30 days.
 
 ### User Message
 
@@ -44,8 +48,8 @@ Users connect to this same container. In priority order:
 
 Spawn subagents via `sessions_spawn` for parallel work. Any model in the catalog is available per-spawn.
 
-- **Delegate**: bulk reads, grep-and-summarize, data extraction, status checks
-- **Keep in main**: file writes, code generation, architecture decisions, judgment calls
+- **Delegate (flash)**: read, scan, grep, collect, summarize, synthesize — no file mutations
+- **Keep in main (strong)**: all writes, edits, commits, code generation, architecture decisions, EDOs
 
 Subagents see only AGENTS.md + TOOLS.md. Give them narrow, self-contained tasks with precise instructions — agents need specificity, not context dumps.
 
