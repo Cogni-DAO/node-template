@@ -56,3 +56,5 @@ Read these before starting:
 - **ACTIVE_MEANS_CLEAN** — `spec_state: active` requires empty Open Questions and current `verified:` date
 - **ID_IMMUTABLE** — spec `id` never changes
 - **LINK_DONT_DUPLICATE** — if the project already describes the plan, link to it
+
+#$FEATURE

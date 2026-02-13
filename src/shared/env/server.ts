@@ -85,9 +85,6 @@ export const serverSchema = z.object({
   // OpenClaw's GitHub token for host-side git relay (push + PR creation).
   // Per SECRETS_HOST_ONLY (inv. 4): never passed into the sandbox container.
   OPENCLAW_GITHUB_RW_TOKEN: z.string().min(1),
-  // Shared volume path for gateway proxy billing audit log
-  // Default: /tmp/cogni-openclaw-billing for dev/test (host bind-mount); Docker compose overrides to /openclaw-billing
-  OPENCLAW_BILLING_DIR: z.string().default("/tmp/cogni-openclaw-billing"),
 
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
   // Wallet link MVP - single API key for all wallets (temporary)
@@ -121,6 +118,11 @@ export const serverSchema = z.object({
   // POST /api/internal/graphs/{graphId}/runs. Min 32 chars to reduce weak-token risk.
   // Required: Internal execution API will not function without this token.
   SCHEDULER_API_TOKEN: z.string().min(32),
+
+  // Billing ingest token - Bearer auth for LiteLLM generic_api callback → billing ingest endpoint
+  // Per billing-ingest-spec: CALLBACK_AUTHENTICATED invariant. Min 32 chars to reduce weak-token risk.
+  // Required: Billing ingest endpoint will reject all callbacks without this token.
+  BILLING_INGEST_TOKEN: z.string().min(32),
 
   // Prometheus Query (Grafana Cloud) - READ path for app metrics queries
   // Query URL derived from PROMETHEUS_REMOTE_WRITE_URL (must end with /api/prom/push)

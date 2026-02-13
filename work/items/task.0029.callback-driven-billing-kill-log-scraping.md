@@ -2,20 +2,20 @@
 id: task.0029
 type: task
 title: "Callback-driven billing — LiteLLM generic_api webhook replaces log scraping"
-status: Todo
+status: Done
 priority: 0
 estimate: 1
 summary: "P0 MVP: LiteLLM generic_api callback writes charge receipts via ingest endpoint. Fixes bug.0037 ($0 gateway billing). Old billing path coexists during cutover — idempotency prevents doubles."
-outcome: "Callback-driven billing operational. Paid gateway streaming calls produce charge_receipts with response_cost_usd > 0. Old path still runs alongside (safe, idempotent). Adapter stripping and old-path deletion deferred to follow-up."
+outcome: "Callback-driven billing operational. Proxy billing path deleted — LiteLLM callback is sole cost authority (COST_AUTHORITY_IS_LITELLM). commitUsageFact() is a strict ledger writer: requires costUsd from LiteLLM, defers when unknown. Gateway nginx audit log removed."
 spec_refs: billing-ingest-spec
 assignees: derekg1729
 credit:
 project: proj.unified-graph-launch
-branch:
+branch: feat/billing-callback-fix
 pr:
 reviewer:
 created: 2026-02-11
-updated: 2026-02-13
+updated: 2026-02-14
 labels: [billing, litellm, p0, mvp]
 external_refs:
 ---

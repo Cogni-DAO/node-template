@@ -119,7 +119,28 @@ describe("Completion Billing Stack Test", () => {
     expect(receipt.virtualKeyId).toBe(virtualKeyId);
     expect(receipt.runId).toBeTruthy();
     expect(receipt.provenance).toBe("stream"); // Per UNIFIED_GRAPH_EXECUTOR: all execution flows through streaming
-    expect(receipt.chargedCredits).toBeGreaterThanOrEqual(0n);
+
+    // Per RECEIPT_WRITES_REQUIRE_CALL_ID_AND_COST: paid model must have cost > 0
+    expect(receipt.responseCostUsd).not.toBeNull();
+    expect(Number(receipt.responseCostUsd)).toBeGreaterThan(0);
+
+    // Exactly 1 receipt per litellm_call_id (no duplicates)
+    const allReceipts = await db
+      .select()
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.runId, receipt.runId));
+    for (const r of allReceipts) {
+      if (!r.litellmCallId) continue;
+      const byCallId = allReceipts.filter(
+        (x) => x.litellmCallId === r.litellmCallId
+      );
+      expect(byCallId).toHaveLength(1);
+    }
+    // No $0 receipts for paid models
+    const zeroReceipts = allReceipts.filter(
+      (r) => r.responseCostUsd !== null && Number(r.responseCostUsd) === 0
+    );
+    expect(zeroReceipts).toHaveLength(0);
 
     // Assert - Linked llm_charge_details row with model, graphId, tokens
     const details = await db

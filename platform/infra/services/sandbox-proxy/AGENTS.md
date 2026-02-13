@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-11
+- **Last reviewed:** 2026-02-13
 - **Status:** draft
 
 ## Purpose
 
-Nginx config templates for sandbox LLM proxy containers — **ephemeral** (`nginx.conf.template`, per-run, overwrites billing headers) and **gateway** (`nginx-gateway.conf.template`, long-running, passes through OpenClaw outboundHeaders). Both inject LiteLLM authentication and write audit logs. No bespoke code — config-only proxy.
+Nginx config templates for sandbox LLM proxy containers — **ephemeral** (`nginx.conf.template`, per-run, overwrites billing headers, writes audit log for `LlmProxyManager`) and **gateway** (`nginx-gateway.conf.template`, long-running, passes through OpenClaw outboundHeaders, no audit log — billing via LiteLLM callback). Both inject LiteLLM authentication. No bespoke code — config-only proxy.
 
 ## Pointers
 
@@ -39,7 +39,7 @@ Nginx config templates for sandbox LLM proxy containers — **ephemeral** (`ngin
 
 ## Responsibilities
 
-- This directory **does**: Define nginx listen-on-socket config; inject Authorization header (LITELLM_MASTER_KEY); inject x-litellm-end-user-id (billingAccountId); inject x-litellm-spend-logs-metadata (run correlation + Langfuse); overwrite client-sent identity headers; write JSONL audit log to `/billing/audit.jsonl` on shared volume (gateway) or `ACCESS_LOG_PATH` (ephemeral); serve /health endpoint
+- This directory **does**: Define nginx listen-on-socket config; inject Authorization header (LITELLM_MASTER_KEY); inject x-litellm-end-user-id (billingAccountId); inject x-litellm-spend-logs-metadata (run correlation + Langfuse); overwrite client-sent identity headers; write JSONL audit log to `ACCESS_LOG_PATH` (ephemeral only — gateway has no audit log, billing via LiteLLM callback); serve /health endpoint
 - This directory **does not**: Run as a standalone service; contain secrets at rest; implement application logic; count tokens
 
 ## Usage

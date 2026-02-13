@@ -27,11 +27,14 @@ model_list:
           default_preferred: true
 
   # Free test model — matches TEST_MODEL_FREE ("test-free-model")
+  # Per COST_AUTHORITY_IS_LITELLM: zero pricing so LiteLLM reports response_cost=0 in callback
   - model_name: test-free-model
     litellm_params:
       model: openai/mock-gpt-markdown
       api_base: http://mock-llm:3000
       api_key: "os.environ/OPENROUTER_API_KEY"
+      input_cost_per_token: 0
+      output_cost_per_token: 0
     model_info:
       display_name: "Free Test Model"
       is_free: true
@@ -52,6 +55,10 @@ model_list:
       display_name: "Paid Test Model"
       is_free: false
       provider_key: "mock"
+
+litellm_settings:
+  include_cost_in_streaming_usage: true
+  success_callback: ["generic_api"]
 
 general_settings:
   master_key: "os.environ/LITELLM_MASTER_KEY"
