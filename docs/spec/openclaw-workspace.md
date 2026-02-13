@@ -42,7 +42,7 @@ Define the workspace layout, governance operating model, subagent delegation str
 
 > Numbering continues from [openclaw-sandbox-spec](openclaw-sandbox-spec.md) invariants 1–28.
 
-29. **GATEWAY_WORKSPACE_SEPARATION**: The gateway agent's workspace (`agents.list[0].workspace`) is `/workspace/gateway/`, never the repo root. The repo is available at `/repo/current/` (writable for git operations — worktree, fetch, push — but the agent must not modify `/repo/current/` contents directly; use worktrees). System prompt files are bind-mounted separately via CD and are unaffected by the agent's git operations.
+29. **GATEWAY_WORKSPACE_SEPARATION**: The gateway agent's workspace (`agents.list[0].workspace`) is `/workspace/gateway/`, never the repo root. The repo is available read-only at `/repo/current/` via git-sync (volatile — replaced on every deploy). For development, the agent clones from remote into `/workspace/repo/` (persistent) and creates worktrees from there. This prevents system prompt contamination and keeps memory indexing scoped to docs, not source code.
 
 30. **SKILLS_AT_REPO_ROOT**: OpenClaw skills live at `.openclaw/skills/` in the repo root, loaded via `skills.load.extraDirs`. Consistent with `.claude/commands/` and `.gemini/commands/`. Skills are versioned with the codebase.
 
@@ -104,7 +104,7 @@ OpenClaw reads AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md from the workspace root a
 volumes:
   - ./openclaw/gateway-workspace:/workspace/gateway # system prompt files (AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md)
   # existing:
-  - repo_data:/repo # codebase mirror (writable for git ops; .cogni/, .openclaw/skills/)
+  - repo_data:/repo:ro # codebase mirror (volatile — git-sync replaces on deploy; .cogni/, .openclaw/skills/)
   - cogni_workspace:/workspace # persistent workspace volume
 ```
 
@@ -229,10 +229,12 @@ The gateway agent is both a **chat responder** and a **developer**. The workspac
 
 **Dev mode** (on demand): When the task requires code changes:
 
-1. Agent creates a git worktree: `git -C /repo/current worktree add /workspace/dev-<branch> -b <branch>`
-2. Agent cds into `/workspace/dev-<branch>/`, reads its `AGENTS.md`
-3. Agent follows repo workflows — `/implement`, `/commit`, `/test` skills guide the process
-4. `GITHUB_TOKEN` and `COGNI_REPO_URL` are in env for git remote setup and GitHub API access
+1. Agent ensures a persistent clone exists: `git clone --single-branch -b main "$COGNI_REPO_URL" /workspace/repo` (one-time, idempotent)
+2. Agent fetches latest: `git -C /workspace/repo fetch origin`
+3. Agent creates a worktree: `git -C /workspace/repo worktree add /workspace/dev-<branch> -b <branch> origin/main`
+4. Agent cds into `/workspace/dev-<branch>/`, reads its `AGENTS.md`
+5. Agent follows repo workflows — `/implement`, `/commit`, `/test` skills guide the process
+6. `GITHUB_TOKEN` and `COGNI_REPO_URL` are in env for GitHub API access
 
 The gateway `AGENTS.md` documents this workflow explicitly.
 
