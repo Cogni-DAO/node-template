@@ -16,7 +16,7 @@ tags: [sandbox, openclaw, system-prompt]
 # OpenClaw Gateway Workspace
 
 > [!CRITICAL]
-> The gateway agent uses a **dual-workspace** layout: `/workspace/gateway/` for system prompt context (AGENTS.md, SOUL.md, memory), `/repo/current/` for the codebase. Skills live at repo root in `.openclaw/skills/`, loaded via `extraDirs`. When the agent needs to write code, it creates a git worktree from `/repo/current/` into a writable working directory.
+> The gateway agent uses a **dual-workspace** layout: `/workspace/gateway/` for system prompt context (AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md), `/repo/current/` for the codebase. Skills live at repo root in `.openclaw/skills/`, loaded via `extraDirs`. OpenClaw's auto-populated `memory/` directory is ephemeral working memory (not in git); durable knowledge goes into `MEMORY.md` via human-reviewed commits. General project knowledge belongs in `docs/` and `work/` — not duplicated into MEMORY.md.
 
 ## Problem
 
@@ -46,21 +46,32 @@ Define the workspace layout, skills integration, memory configuration, and devel
 
 30. **SKILLS_AT_REPO_ROOT**: OpenClaw skills live at `.openclaw/skills/` in the repo root, loaded via `skills.load.extraDirs`. Consistent with `.claude/commands/` and `.gemini/commands/`. Skills are versioned with the codebase.
 
+31. **SOUL_IN_WORKSPACE**: `SOUL.md` (agent personality/tone) lives in the gateway workspace (`services/sandbox-openclaw/gateway-workspace/SOUL.md`). OpenClaw auto-injects SOUL.md from the workspace root only — there is no config to read it from an alternate path. If a second runtime needs a shared personality, extract to `.cogni/SOUL.md` then.
+
+32. **MEMORY_IS_EPHEMERAL**: OpenClaw's auto-populated `memory/` directory (daily logs, session snapshots) is ephemeral working memory. It lives only in the container's workspace volume, is gitignored, and is expected to be lost on container hard reset. Durable knowledge belongs in `MEMORY.md` (human-reviewed, committed to git). A future cron worker ([task.0040](../../work/items/task.0040.gateway-memory-curation-worker.md)) may harvest valuable snippets from ephemeral memory before reset.
+
+33. **MEMORY_MD_HIGH_BAR**: `MEMORY.md` is reserved for niche, container-specific context that an OpenClaw agent needs and cannot find via `memory_search` over `docs/` and `work/`. General project knowledge belongs in specs and guides — not duplicated into MEMORY.md. The agent should not edit files under `services/` unless the content is specific to the container itself. Examples of valid MEMORY.md content: container filesystem layout, tool availability quirks, worktree setup gotchas. Examples of invalid content: architecture overview (→ `docs/spec/architecture.md`), API contracts (→ `src/contracts/`).
+
 ## Design
 
 ### Workspace Layout
 
+All system prompt files live in a single directory, bind-mounted into the container:
+
+**`services/sandbox-openclaw/gateway-workspace/` → `/workspace/gateway/`:**
+
 ```
 /workspace/gateway/                    ← OpenClaw workspace root
-├── AGENTS.md                          # Operating instructions: chat + dev workflow
-├── SOUL.md                            # Cogni agent personality
-├── TOOLS.md                           # Environment-specific tool guidance
-├── MEMORY.md                          # Curated project context
-└── memory/                            # Auto-populated by OpenClaw (gitignored)
-    └── YYYY-MM-DD.md
+├── AGENTS.md                          # Runtime-specific operating instructions
+├── SOUL.md                            # Agent personality/tone (auto-injected by OpenClaw)
+├── TOOLS.md                           # Container environment notes
+├── MEMORY.md                          # Niche container-specific context (high bar, see invariant 33)
+├── .gitignore                         # Ignores memory/ directory
+└── memory/                            # Ephemeral working memory (not in git, lost on reset)
+    └── YYYY-MM-DD.md                  # Auto-populated daily logs
 ```
 
-OpenClaw reads these files at session start, truncated to `bootstrapMaxChars` (default 20,000 chars each). Subagents receive only `AGENTS.md` + `TOOLS.md`.
+OpenClaw reads AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md from the workspace root at session start (truncated to `bootstrapMaxChars`, default 20,000 chars). SOUL.md must be at the workspace root — OpenClaw has no config to read it from an alternate path. Subagents receive only `AGENTS.md` + `TOOLS.md`.
 
 **Files not used:**
 
@@ -76,13 +87,13 @@ OpenClaw reads these files at session start, truncated to `bootstrapMaxChars` (d
 ```yaml
 # additions to openclaw-gateway service
 volumes:
-  - ./openclaw/gateway-workspace:/workspace/gateway # behavior files + runtime memory
+  - ./openclaw/gateway-workspace:/workspace/gateway # system prompt files (AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md)
   # existing:
-  - repo_data:/repo:ro # codebase mirror
+  - repo_data:/repo:ro # codebase mirror (includes .cogni/, .openclaw/skills/)
   - cogni_workspace:/workspace # persistent workspace volume
 ```
 
-The bind mount overlays `/workspace/gateway/` inside the existing `cogni_workspace` named volume.
+The bind mount overlays `/workspace/gateway/` inside the existing `cogni_workspace` named volume. The `memory/` directory is created at runtime by OpenClaw inside the bind-mounted workspace (ephemeral, gitignored). The repo at `/repo/current/` already contains `.cogni/` and `.openclaw/skills/` — no additional mounts needed for those.
 
 ### Skills Integration
 
@@ -219,9 +230,9 @@ For reference, `buildAgentSystemPrompt()` in OpenClaw injects these sections (fu
 | Identity        | Hardcoded                       | Fine                                  |
 | Safety          | Hardcoded                       | Fine                                  |
 | Tooling         | `tools` config + deny list      | Controlled by our config              |
-| Skills          | `skills/` directories           | **Need to populate**                  |
-| Memory Recall   | `memorySearch` config           | **Need to configure**                 |
-| Workspace Files | `AGENTS.md`, `SOUL.md`, etc.    | **Primary deliverable**               |
+| Skills          | `skills/` directories           | Populated via `extraDirs`             |
+| Memory Recall   | `memorySearch` config           | Configured with `extraPaths`          |
+| Workspace Files | `AGENTS.md`, `SOUL.md`, etc.    | Delivered in gateway-workspace        |
 | Heartbeat       | `heartbeat` config              | **Bug — injected even when disabled** |
 | Runtime         | Auto-populated                  | Fine                                  |
 | Documentation   | Hardcoded (OpenClaw docs links) | Noise but harmless                    |
@@ -231,13 +242,15 @@ For reference, `buildAgentSystemPrompt()` in OpenClaw injects these sections (fu
 
 ## Anti-Patterns
 
-| Pattern                                         | Problem                                                                          |
-| ----------------------------------------------- | -------------------------------------------------------------------------------- |
-| Workspace = repo root                           | Wrong AGENTS.md, memory indexes all source code                                  |
-| Skills in `gateway-workspace/skills/`           | Not versioned with codebase, diverges from `.claude/` and `.gemini/` conventions |
-| Copy `.claude/commands/` verbatim               | Missing YAML frontmatter, `$ARGUMENTS` won't resolve                             |
-| `memorySearch.extraPaths` = `["/repo/current"]` | Indexes entire codebase including node_modules artifacts                         |
-| Omit `MEMORY.md`                                | Agent has no curated project context, relies entirely on search                  |
+| Pattern                                         | Problem                                                                                                   |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Workspace = repo root                           | Wrong AGENTS.md, memory indexes all source code                                                           |
+| Skills in `gateway-workspace/skills/`           | Not versioned with codebase, diverges from `.claude/` and `.gemini/` conventions                          |
+| Copy `.claude/commands/` verbatim               | Missing YAML frontmatter, `$ARGUMENTS` won't resolve                                                      |
+| `memorySearch.extraPaths` = `["/repo/current"]` | Indexes entire codebase including node_modules artifacts                                                  |
+| Omit `MEMORY.md`                                | Agent has no curated project context, relies entirely on search                                           |
+| Dump project knowledge into `MEMORY.md`         | General knowledge belongs in `docs/` and `work/` — MEMORY.md is for niche container-specific context only |
+| Agent edits files under `services/`             | Service config is infra, not agent workspace — only edit if specific to the container itself              |
 
 ## Acceptance Checks
 
@@ -258,6 +271,7 @@ The `gateway-workspace/` AGENTS.md is excluded from the repo's `validate-agents-
 - [openclaw-sandbox-spec](openclaw-sandbox-spec.md) — Core integration invariants 13–28, container images, billing
 - [openclaw-sandbox-controls](openclaw-sandbox-controls.md) — Git relay, agent catalog, credential strategy
 - [task.0023](../../work/items/task.0023.gateway-agent-system-prompt.md) — Implementation task
+- [task.0040](../../work/items/task.0040.gateway-memory-curation-worker.md) — Memory curation cron worker (harvest ephemeral → durable)
 - OpenClaw system prompt: `src/agents/system-prompt.ts` (in openclaw repo)
 - OpenClaw skills: `src/agents/skills/workspace.ts` (in openclaw repo)
 - OpenClaw memory: `src/memory/` (in openclaw repo)

@@ -40,6 +40,7 @@
 | 1   | 3   | Backlog     | bug.0004   | /activity dashboard cost column broken                                               | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 1   | Todo        | task.0018  | Dynamic agent catalog in UI + OpenClaw model sync                                    | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Todo        | task.0034  | Wire OpenClaw memory search + bootstrap files for cogni-template repo context        | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 2   | 3   | Backlog     | task.0040  | Gateway memory curation worker — scan ephemeral state, persist, reset container      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                 | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 1   | Backlog     | bug.0012   | pre-commit check:docs validates all files, not just staged                           |                            |                                 |
