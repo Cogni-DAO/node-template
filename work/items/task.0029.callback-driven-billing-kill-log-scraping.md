@@ -97,6 +97,7 @@ pnpm test:stack:dev
 - Supersedes: billing-sandbox-spec (proxy audit log pipeline)
 - Companion: task.0039 (reconciliation worker — catches missing callbacks)
 - Related: bug.0004 (activity dashboard cost column — separate fix)
+- Handoff: [handoff](../handoffs/task.0029.handoff.md)
 
 ## Attribution
 
