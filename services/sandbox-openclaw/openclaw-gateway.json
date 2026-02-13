@@ -164,6 +164,13 @@
       "heartbeat": { "every": "0" },
       "memorySearch": {
         "enabled": true,
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "remote": {
+          "baseUrl": "http://llm-proxy-openclaw:8080/v1",
+          "apiKey": "proxy-handles-auth",
+          "batch": { "enabled": false }
+        },
         "extraPaths": ["/repo/current/docs", "/repo/current/work"]
       }
     },

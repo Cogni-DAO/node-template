@@ -184,7 +184,7 @@ Each `.claude/commands/<name>.md` becomes `.openclaw/skills/<name>/SKILL.md`. Th
 
 Two layers:
 
-**1. `MEMORY.md` (static)** — curated project context injected into system prompt. Architecture decisions, file layout conventions, known gotchas. Manually maintained, version-controlled.
+**1. `MEMORY.md` (static)** — niche, container-specific context injected into system prompt per Invariant 33. Only content the agent cannot find via `memory_search`: container filesystem layout, tool availability quirks, OpenClaw integration gotchas. Manually maintained, version-controlled.
 
 **2. Semantic search (dynamic)** — `memory_search` tool provides vector + BM25 hybrid search. The agent calls this tool before answering about prior work, decisions, or project context.
 
