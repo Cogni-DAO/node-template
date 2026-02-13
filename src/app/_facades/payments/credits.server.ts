@@ -36,7 +36,8 @@ export async function confirmCreditsPaymentFacade(
   ctx: RequestContext
 ): Promise<CreditsConfirmOutput> {
   const start = performance.now();
-  const accountService = getContainer().accountsForUser(
+  const container = getContainer();
+  const accountService = container.accountsForUser(
     toUserId(params.sessionUser.id)
   );
 
@@ -67,13 +68,17 @@ export async function confirmCreditsPaymentFacade(
     }),
   };
 
-  const result = await confirmCreditsPayment(accountService, {
-    billingAccountId: billingAccount.id,
-    defaultVirtualKeyId: billingAccount.defaultVirtualKeyId,
-    amountUsdCents: params.amountUsdCents,
-    clientPaymentId: params.clientPaymentId,
-    metadata: params.metadata,
-  });
+  const result = await confirmCreditsPayment(
+    accountService,
+    container.serviceAccountService,
+    {
+      billingAccountId: billingAccount.id,
+      defaultVirtualKeyId: billingAccount.defaultVirtualKeyId,
+      amountUsdCents: params.amountUsdCents,
+      clientPaymentId: params.clientPaymentId,
+      metadata: params.metadata,
+    }
+  );
 
   // Log domain event (widget payment confirmed)
   const event: PaymentsConfirmedEvent = {

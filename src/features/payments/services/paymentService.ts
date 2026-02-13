@@ -32,6 +32,7 @@ import type {
   OnChainVerifier,
   PaymentAttemptServiceRepository,
   PaymentAttemptUserRepository,
+  ServiceAccountService,
 } from "@/ports";
 import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import type { Logger } from "@/shared/observability";
@@ -173,6 +174,7 @@ export async function submitTxHash(
   userRepo: PaymentAttemptUserRepository,
   serviceRepo: PaymentAttemptServiceRepository,
   accountService: AccountService,
+  serviceAccountService: ServiceAccountService,
   onChainVerifier: OnChainVerifier,
   clock: Clock,
   log: Logger,
@@ -232,6 +234,7 @@ export async function submitTxHash(
     attempt,
     serviceRepo,
     accountService,
+    serviceAccountService,
     onChainVerifier,
     clock,
     log,
@@ -275,6 +278,7 @@ export async function getStatus(
   userRepo: PaymentAttemptUserRepository,
   serviceRepo: PaymentAttemptServiceRepository,
   accountService: AccountService,
+  serviceAccountService: ServiceAccountService,
   onChainVerifier: OnChainVerifier,
   clock: Clock,
   log: Logger,
@@ -332,6 +336,7 @@ export async function getStatus(
         attempt,
         serviceRepo,
         accountService,
+        serviceAccountService,
         onChainVerifier,
         clock,
         log,
@@ -371,6 +376,7 @@ async function verifyAndSettle(
   attempt: PaymentAttempt,
   serviceRepo: PaymentAttemptServiceRepository,
   accountService: AccountService,
+  serviceAccountService: ServiceAccountService,
   onChainVerifier: OnChainVerifier,
   _clock: Clock,
   log: Logger,
@@ -441,7 +447,7 @@ async function verifyAndSettle(
     const clientPaymentId = `${attempt.chainId}:${attempt.txHash}`;
 
     try {
-      await confirmCreditsPayment(accountService, {
+      await confirmCreditsPayment(accountService, serviceAccountService, {
         billingAccountId: attempt.billingAccountId,
         defaultVirtualKeyId,
         amountUsdCents: attempt.amountUsdCents,
