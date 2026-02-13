@@ -3,8 +3,8 @@ id: billing-ingest-spec
 type: spec
 title: "Billing Ingest: Callback-Driven, Port-Level Billing"
 status: active
-spec_state: proposed
-trust: draft
+spec_state: active
+trust: reviewed
 summary: "Canonicalize billing at GraphExecutorPort: LiteLLM generic_api callback writes receipts, adapters only emit usage_unit_created{call_id}, decorator logs for observability. Async reconciliation catches missing callbacks."
 read_when: Working on billing pipeline, LiteLLM integration, sandbox billing, or charge receipt reconciliation.
 implements: proj.unified-graph-launch
@@ -116,7 +116,7 @@ A standard Next.js internal API route. Not a hex port — just delivery-layer wi
 - Path: `POST /api/internal/billing/ingest`
 - Auth: `Authorization: Bearer BILLING_INGEST_TOKEN`
 - Body: `List[StandardLoggingPayload]` (LiteLLM sends batched arrays)
-- Response: `200 OK` (receipts written) or `409 Conflict` (duplicate call_id)
+- Response: `200 OK` (receipts written; duplicates are no-ops internally)
 
 ### Adapter Contract
 
@@ -231,7 +231,7 @@ The `end_user` field in the callback depends on HOW the caller sets identity:
 | **Gateway (OpenClaw)**  | Yes (via OpenClaw `outboundHeaders`) | **No**                     | Populated              | **MISSING**          |
 | **Sandbox (ephemeral)** | No (proxy sets headers)              | Yes (proxy header)         | Empty                  | Populated            |
 
-**Implication:** Gateway mode currently has `end_user` (for account correlation) but NO `run_id` (for per-run correlation). The gateway's nginx proxy sets `x-litellm-spend-logs-metadata` in the audit log format, but OpenClaw itself doesn't pass this header to LiteLLM. Fix: add `x-litellm-spend-logs-metadata` to OpenClaw's `outboundHeaders` per session.
+**Implication:** Gateway mode has `end_user` (for account correlation) but NO `run_id` (for per-run correlation). Fix: add `x-litellm-spend-logs-metadata` to OpenClaw's `outboundHeaders` per session (done in `SandboxGraphProvider.runGateway()`).
 
 ## Goal
 
@@ -248,15 +248,13 @@ Canonicalize billing at GraphExecutorPort so adapters never implement billing. S
 
 ## Migration Path
 
-Callback and log-scraping paths can coexist briefly during cutover:
+Callback and log-scraping paths coexisted briefly during cutover:
 
-1. **Add ingest endpoint** — `POST /api/internal/billing/ingest` accepting `List[StandardLoggingPayload]`, Zod validation, `commitUsageFact()`, shared-secret auth. Safe alongside existing path (idempotent by call_id).
-2. **Configure LiteLLM `generic_api` callback** — `success_callback: ["langfuse", "generic_api"]` with `GENERIC_LOGGER_ENDPOINT` + `GENERIC_LOGGER_HEADERS` env vars. Both paths write receipts; idempotency prevents doubles.
-3. **Fix gateway `run_id` gap** — Add `x-litellm-spend-logs-metadata` to OpenClaw `outboundHeaders` per session (set by Cogni app when creating gateway session).
-4. **Strip billing from adapters** — Remove cost extraction from InProc, remove `ProxyBillingReader` from Sandbox/Gateway. Adapters emit only `usage_unit_created`. Decorator becomes observability-only.
-5. **Delete old paths** — `ProxyBillingReader`, billing volumes, `proxyBillingEntries` from `SandboxRunResult`, `OPENCLAW_BILLING_DIR`.
-
-Steps 1-2 can ship independently; each is safe alongside the existing path.
+1. **Add ingest endpoint** — ~~Done (task.0029).~~ `POST /api/internal/billing/ingest` accepting `List[StandardLoggingPayload]`, Zod validation, `commitUsageFact()`, shared-secret auth.
+2. **Configure LiteLLM `generic_api` callback** — ~~Done (task.0029).~~ `success_callback: ["langfuse", "generic_api"]` with `GENERIC_LOGGER_ENDPOINT` + `GENERIC_LOGGER_HEADERS` env vars.
+3. **Fix gateway `run_id` gap** — Not started. Add `x-litellm-spend-logs-metadata` to OpenClaw `outboundHeaders` per session.
+4. **Strip billing from adapters** — ~~Done (task.0029).~~ `ProxyBillingReader` deleted, gateway billing removed from `SandboxGraphProvider`, `OPENCLAW_BILLING_DIR` removed. Gateway nginx audit log removed.
+5. **Delete old paths** — ~~Done (task.0029).~~ `ProxyBillingReader`, billing volumes, `OPENCLAW_BILLING_DIR`, gateway audit log all removed. `commitUsageFact()` refactored to strict cost-known/unknown branching (COST_AUTHORITY_IS_LITELLM).
 
 ## Verified Findings (Spike 2026-02-13)
 
