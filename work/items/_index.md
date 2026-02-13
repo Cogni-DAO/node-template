@@ -12,7 +12,7 @@
 | 0   | 2   | Done        | bug.0015   | Deploy disk cleanup runs after pulls — disk exhaustion on 40GB VMs                   | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Done        | bug.0016   | Production compose missing OpenClaw services — silent no-op profiles                 | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Done        | bug.0021   | Gateway WS client receives uncorrelated chat events — HEARTBEAT_OK leak              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 0   | 2   | Todo        | task.0023  | Gateway agent system prompt — dedicated workspace, SOUL.md, heartbeat fix            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 2   | In Progress | task.0023  | Gateway agent system prompt — dedicated workspace, SOUL.md, heartbeat fix            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Backlog     | bug.0017   | Deploy does not reload Alloy when bind-mounted config changes                        | Reliability & Uptime       | proj.reliability                |
 | 0   | 1   | Backlog     | bug.0009   | OpenClaw v2026.2.4 gateway agent returns empty payloads                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | In Progress | task.0008  | Gateway client: correct protocol lifecycle for OpenClaw chat E2E                     | OpenClaw Capabilities      | proj.openclaw-capabilities      |
@@ -40,6 +40,7 @@
 | 1   | 3   | Backlog     | bug.0004   | /activity dashboard cost column broken                                               | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 1   | Todo        | task.0018  | Dynamic agent catalog in UI + OpenClaw model sync                                    | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Todo        | task.0034  | Wire OpenClaw memory search + bootstrap files for cogni-template repo context        | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 2   | 3   | Backlog     | task.0040  | Gateway memory curation worker — scan ephemeral state, persist, reset container      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                 | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 1   | Backlog     | bug.0012   | pre-commit check:docs validates all files, not just staged                           |                            |                                 |
