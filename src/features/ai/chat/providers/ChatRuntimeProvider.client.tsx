@@ -189,6 +189,6 @@ function extractLastUserText(
   if (!lastUserMsg?.parts) return "";
   return lastUserMsg.parts
     .filter((p) => p.type === "text" && p.text)
-    .map((p) => p.text!)
+    .map((p) => p.text as string)
     .join("\n");
 }

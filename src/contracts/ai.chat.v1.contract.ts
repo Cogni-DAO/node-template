@@ -4,7 +4,7 @@
 /**
  * Module: `@contracts/ai.chat.v1.contract`
  * Purpose: Chat API contract for AI SDK streaming integration.
- * Scope: Wire format definition. Client sends a single user message string; server streams UIMessageChunks via SSE.
+ * Scope: Wire format definition. Client sends a single user message string; server streams UIMessageChunks via SSE. Does not contain business logic or message transformations.
  * Invariants: Contract remains stable; breaking changes require new version. All consumers use z.infer types.
  * Side-effects: none
  * Notes: P1 wire format — client sends { message } instead of { messages[] }. Server responds with AI SDK Data Stream Protocol (SSE).

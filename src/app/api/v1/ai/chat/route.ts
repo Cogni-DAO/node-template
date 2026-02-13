@@ -610,9 +610,15 @@ export const POST = wrapRouteHandlerWithLogging(
       );
 
       // Return SSE response with stateKey header for thread continuity
-      return createUIMessageStreamResponse({
+      // Wrap in NextResponse: createUIMessageStreamResponse returns Response,
+      // but wrapRouteHandlerWithLogging expects NextResponse.
+      const sseResponse = createUIMessageStreamResponse({
         stream: uiStream,
         headers: { "X-State-Key": stateKey },
+      });
+      return new NextResponse(sseResponse.body, {
+        status: sseResponse.status,
+        headers: sseResponse.headers,
       });
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error, input?.model);
