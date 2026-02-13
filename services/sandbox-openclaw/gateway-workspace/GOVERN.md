@@ -21,6 +21,7 @@ One EDO per real decision. No EDO for routine work.
 - Evidence: [file refs, PRs, work items]
 
 ### OutcomeCheck (YYYY-MM-DD)
+
 - ActualOutcome: what actually happened
 - Verdict: confirmed/missed/adjusted
 - Next: keep / new EDO / policy change
@@ -39,6 +40,7 @@ One EDO per real decision. No EDO for routine work.
 - Evidence: [SOUL.md, GOVERN.md, task.0023]
 
 ### OutcomeCheck (2026-02-20)
+
 - ActualOutcome: avg tokens per non-GOVERN reply -27%; no missed GOVERN runs observed.
 - Verdict: confirmed
 - Next: keep; apply same pattern to other non-critical prompt content

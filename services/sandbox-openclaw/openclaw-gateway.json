@@ -208,14 +208,7 @@
   },
   "tools": {
     "elevated": { "enabled": false },
-    "deny": [
-      "browser",
-      "cron",
-      "gateway",
-      "nodes",
-      "sessions_send",
-      "message"
-    ]
+    "deny": ["browser", "cron", "gateway", "nodes", "sessions_send", "message"]
   },
   "cron": { "enabled": false },
   "gateway": {

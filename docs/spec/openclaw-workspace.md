@@ -271,14 +271,16 @@ The lead agent can spawn flash-tier subagents via `sessions_spawn` for parallel 
   agents: {
     defaults: {
       subagents: {
-        model: "cogni/gemini-2.5-flash",  // default, overridable per-spawn
+        model: "cogni/gemini-2.5-flash", // default, overridable per-spawn
         maxConcurrent: 3,
         archiveAfterMinutes: 30,
       },
     },
   },
   tools: {
-    deny: [/* sessions_spawn NOT in deny list */],
+    deny: [
+      /* sessions_spawn NOT in deny list */
+    ],
   },
 }
 ```
