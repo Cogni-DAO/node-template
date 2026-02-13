@@ -131,7 +131,7 @@ services:
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
       # Billing ingest callback (generic_api → app ingest endpoint)
       - GENERIC_LOGGER_ENDPOINT=http://app:3000/api/internal/billing/ingest
-      - GENERIC_LOGGER_HEADERS=Authorization=Bearer ${BILLING_INGEST_TOKEN}
+      - "GENERIC_LOGGER_HEADERS=Authorization=Bearer ${BILLING_INGEST_TOKEN}"
     volumes:
       - ./configs/${LITELLM_CONFIG:-litellm.config.yaml}:/app/config.yaml:ro
     command: --config /app/config.yaml --host 0.0.0.0 --port 4000
