@@ -7,7 +7,8 @@
 #   ${LITELLM_MASTER_KEY}   - LiteLLM API key (injected as Authorization header)
 #
 # Audit log (JSONL at /billing/audit.jsonl) captures x-cogni-run-id for per-run correlation.
-# /billing/ is a shared volume — app container reads billing entries directly (no docker exec).
+# /billing/ is ephemeral (created by mkdir in compose command). Nothing reads this log —
+# billing is handled by LiteLLM generic_api callback. Log kept for debug/forensics only.
 # Billing headers (x-litellm-end-user-id, x-litellm-spend-logs-metadata) are
 # set by OpenClaw per-session via outboundHeaders — proxy passes them through.
 
@@ -21,7 +22,7 @@ events {
 
 http {
     # Audit log: JSONL — captures run_id + end_user from client headers + cost/model from upstream
-    # Written to /billing/ (shared volume with app container for billing reads)
+    # Ephemeral (debug/forensics only — billing via LiteLLM callback)
     log_format audit escape=json '{"ts":"$time_iso8601",'
                      '"run_id":"$http_x_cogni_run_id",'
                      '"end_user":"$http_x_litellm_end_user_id",'
