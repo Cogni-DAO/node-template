@@ -2,14 +2,9 @@
 
 ## Git
 
-Your workspace was cloned from a local mirror at `/repo/current/`. To interact with GitHub:
-
-```bash
-# In any worktree:
-git remote set-url origin "$COGNI_REPO_URL"
-```
-
 `GITHUB_TOKEN` and `COGNI_REPO_URL` are set in your environment.
+
+`/repo/current/` is a **volatile** git-sync mirror — replaced on every deploy. Do not create worktrees from it. Instead, clone to `/workspace/repo/` (see AGENTS.md § Development Workflow) and create worktrees from there.
 
 ## GitHub API
 
@@ -44,4 +39,4 @@ All LLM calls route through the proxy at `llm-proxy-openclaw:8080`. Do not call 
 - No browser/Chromium — `browser` tool is disabled
 - No cron scheduling — use Temporal (the platform scheduler)
 - Read-only rootfs — write to `/workspace/` or `/tmp/` only
-- `/repo/current/` is read-only — create worktrees for code changes
+- `/repo/current/` is volatile (replaced on deploy) — clone to `/workspace/repo/` for dev work

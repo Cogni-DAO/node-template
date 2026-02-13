@@ -57,3 +57,5 @@ Read these before starting:
 - **INDEX_MUST_MATCH** — `_index.md` row must match frontmatter exactly
 - **PROJECTS_REF_BY_ID** — use `task.0005` in project tables, never file paths
 - **SCOPE_FROM_SPEC** — reference the governing spec invariants. If no spec exists and the work changes contracts, recommend `/spec` first.
+
+#$TASK

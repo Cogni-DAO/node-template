@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-02-11
+- **Last reviewed:** 2026-02-13
 - **Status:** draft
 
 ## Purpose
@@ -40,6 +40,7 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
 - **Routes (if any):**
   - `/api/auth/[...nextauth]` [GET, POST]
   - `/api/setup/verify` [POST] - DAO formation verification
+  - `/api/internal/billing/ingest` [POST] - LiteLLM generic_api callback receiver (bearer auth, Docker-internal only)
   - `/api/v1/ai/completion` [POST]
   - `/api/v1/ai/chat` [POST] - streaming chat with server-authoritative thread persistence
   - `/api/v1/activity` [GET]

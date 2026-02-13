@@ -48,6 +48,7 @@ services:
       # Optional vars - pass-through only if set in host (absent = undefined, not empty string)
       - METRICS_TOKEN
       - SCHEDULER_API_TOKEN
+      - BILLING_INGEST_TOKEN
       - LANGFUSE_PUBLIC_KEY
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
@@ -67,11 +68,8 @@ services:
       - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
       - OPENCLAW_GITHUB_RW_TOKEN=${OPENCLAW_GITHUB_RW_TOKEN?OPENCLAW_GITHUB_RW_TOKEN is required}
-      # Shared volume: proxy writes JSONL audit log, app reads for billing
-      - OPENCLAW_BILLING_DIR=/openclaw-billing
     volumes:
       - repo_data:/repo:ro
-      - openclaw_billing:/openclaw-billing:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,6 +121,9 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_BASE_URL}
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+      # Billing ingest callback (generic_api → app ingest endpoint)
+      - GENERIC_LOGGER_ENDPOINT=${GENERIC_LOGGER_ENDPOINT:-http://app:3000/api/internal/billing/ingest}
+      - "GENERIC_LOGGER_HEADERS=Authorization=Bearer ${BILLING_INGEST_TOKEN}"
     volumes:
       - ./configs/litellm.config.yaml:/app/config.yaml:ro
     command: --config /app/config.yaml --host 0.0.0.0 --port 4000
@@ -410,7 +411,6 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
     volumes:
       - ./sandbox-proxy/nginx-gateway.conf.template:/etc/nginx/nginx.conf.template:ro
-      - openclaw_billing:/billing
     command: >
       sh -c "envsubst '$$LITELLM_MASTER_KEY' < /etc/nginx/nginx.conf.template
       > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
@@ -507,8 +507,6 @@ volumes:
     name: temporal_postgres_data
   repo_data:
     name: repo_data
-  openclaw_billing:
-    name: openclaw_billing
   pnpm_store:
     name: pnpm_store
   cogni_workspace:

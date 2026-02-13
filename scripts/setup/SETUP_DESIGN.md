@@ -122,6 +122,7 @@ pnpm setup github --env production
      - `EVM_RPC_URL` (prompt if not in local env - Sepolia RPC from alchemy.com or infura.io)
      - `OPENCLAW_GATEWAY_TOKEN` (generated random, ≥32 chars — gateway WS auth)
      - `OPENCLAW_GITHUB_RW_TOKEN` (GitHub PAT with Contents:Write + Pull requests:Write — host-side git relay)
+     - `BILLING_INGEST_TOKEN` (generated random, ≥32 chars — LiteLLM callback → billing ingest bearer auth)
    - **Deployment secrets:** From previous steps
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
      - `VM_HOST` (from `.env.<env>` file)
