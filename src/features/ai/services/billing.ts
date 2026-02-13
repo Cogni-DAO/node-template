@@ -7,10 +7,9 @@
  * Scope: Calculate user charge from provider cost, record charge receipt. Does NOT perform pre-flight checks or LLM calls.
  * Invariants:
  *   - ONE_LEDGER_WRITER: Only this module calls accountService.recordChargeReceipt()
- *   - Post-call billing NEVER blocks user response (catches errors in prod)
+ *   - BILLING_NEVER_THROWS: Post-call billing NEVER blocks user response or throws (catches all errors, logs)
  *   - ZERO_CREDIT_RECEIPTS_WRITTEN: Always records receipt even when chargedCredits = 0n
  *   - IDEMPOTENT_CHARGES: source_reference = runId/attempt/usageUnitId; DB constraint prevents duplicates
- *   - TEST_ENV_RETHROWS_BILLING: APP_ENV === "test" re-throws for test visibility
  * Side-effects: IO (writes charge receipt via AccountService)
  * Notes: Per GRAPH_EXECUTION.md, COMPLETION_REFACTOR_PLAN.md P2 extraction
  * Links: completion.ts, ports/account.port.ts, llmPricingPolicy.ts, GRAPH_EXECUTION.md
@@ -21,7 +20,6 @@ import type { GraphId } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import type { AccountService } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
-import { serverEnv } from "@/shared/env";
 import { EVENT_NAMES } from "@/shared/observability";
 import type { AiBillingCommitCompleteEvent } from "@/shared/observability/events/ai";
 import type { RunContext } from "@/types/run-context";
@@ -60,7 +58,7 @@ export interface BillingContext {
  *
  * Invariants:
  * - ZERO_CREDIT_RECEIPTS_WRITTEN: Always records receipt even when chargedCredits = 0n
- * - TEST_ENV_RETHROWS_BILLING: APP_ENV === "test" re-throws for test visibility
+ * - BILLING_NEVER_THROWS: Catches all errors, logs — never re-throws
  *
  * @param context - Billing context from LLM result
  * @param accountService - Account service port for charge recording
@@ -155,11 +153,6 @@ export async function recordBilling(
       { err: error, runId, billingAccountId },
       `CRITICAL: Post-call billing failed (${provenance}) - user response NOT blocked`
     );
-    // DO NOT RETHROW - user already got LLM response, must see it
-    // EXCEPT in test environment where we need to catch these issues
-    if (serverEnv().APP_ENV === "test") {
-      throw error;
-    }
   }
 }
 
@@ -313,9 +306,5 @@ export async function commitUsageFact(
       sourceSystem: source,
     };
     log.error({ ...errorEvent, err: error });
-    // Re-throw in test environment for visibility
-    if (serverEnv().APP_ENV === "test") {
-      throw error;
-    }
   }
 }
