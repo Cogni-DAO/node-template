@@ -6,7 +6,7 @@
  * Purpose: Orchestrate payment attempt lifecycle via ports. Handles intent creation, txHash submission, status polling, and settlement.
  * Scope: Feature-layer orchestration for payment attempts; validates state transitions, enforces TTLs; does not expose HTTP handling.
  * Invariants: State transitions via core/rules; atomic settlement via confirmCreditsPayment; RPC_ERROR is transient (retried on next poll).
- * Side-effects: IO
+ * Side-effects: IO (via AccountService, ServiceAccountService, PaymentAttemptUserRepository, PaymentAttemptServiceRepository, OnChainVerifier ports)
  * Notes: RPC_ERROR from OnChainVerifier leaves attempt in PENDING_UNVERIFIED for automatic retry via getStatus polling.
  * Links: docs/spec/payments-design.md
  * @public

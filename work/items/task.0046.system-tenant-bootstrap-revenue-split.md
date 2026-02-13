@@ -2,7 +2,7 @@
 id: task.0046
 type: task
 title: System tenant bootstrap + purchase-time revenue share
-status: Todo
+status: Done
 priority: 0
 estimate: 3
 summary: Seed cogni_system billing account, add startup healthcheck, and on every credit purchase mint bonus credits to the system tenant (75% of user's purchased amount).
@@ -11,11 +11,11 @@ spec_refs: system-tenant, billing-evolution-spec, accounts-design-spec
 assignees: cogni-dev
 credit:
 project: proj.system-tenant-governance
-branch:
+branch: feat/system-tenant-bootstrap
 pr:
 reviewer:
 created: 2026-02-13
-updated: 2026-02-13
+updated: 2026-02-14
 labels: [system-tenant, billing]
 external_refs:
   - docs/research/system-tenant-seeding-heartbeat-funding.md
