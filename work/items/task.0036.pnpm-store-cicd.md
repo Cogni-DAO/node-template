@@ -74,6 +74,10 @@ task.0031 ships the `cogni-sandbox-openclaw` devtools image with `PNPM_STORE_DIR
 - [ ] Add compose bootstrap one-shot service that runs `pnpm install --offline --frozen-lockfile` as part of deploy (replaces P0 agent-first-action pattern)
 - [ ] Idempotency: skip if `node_modules` exists AND `.cogni/bootstrap-lock-hash` matches current `pnpm-lock.yaml` hash
 
+## Motivation (2026-02-13)
+
+CI broke because `@assistant-ui/react` was added during AI SDK streaming work but the pnpm-store image was never regenerated. The `sandbox-openclaw-pnpm-smoke` workspace bootstrap tests had to be skipped (`describe.skip`) pending this automation. Until this task lands, every lockfile change requires a manual `pnpm sandbox:pnpm-store:seed` locally and a manual GHCR publish for prod. This is the primary blocker for re-enabling those tests.
+
 ## Non-Goals
 
 - Baking node_modules into the sandbox image (use store volume)

@@ -3,13 +3,13 @@
 
 /**
  * Module: `@features/chat/providers/ChatRuntimeProvider`
- * Purpose: Runtime provider for chat using assistant-ui streaming with multi-turn state.
- * Scope: Feature-local provider. Uses useDataStreamRuntime for streaming. Manages threadId state for LangGraph Server conversation continuity. Does not persist messages or manage auth.
+ * Purpose: Runtime provider for chat using AI SDK streaming with multi-turn state.
+ * Scope: Feature-local provider. Uses useChatRuntime for AI SDK Data Stream Protocol streaming. Manages stateKey state for conversation continuity. Does not persist messages or manage auth.
  * Invariants:
- *   - BODY_IS_OBJECT: body must be object (not function) per assistant-ui limitation
- *   - THREAD_STATE_BY_KEY: threadId stored in threadIdByStateKey map for future thread switching
+ *   - CLIENT_SENDS_MESSAGE_ONLY: prepareSendMessagesRequest extracts last user message text and sends { message, model, graphName, stateKey }
+ *   - THREAD_STATE_BY_KEY: stateKey stored in stateKeyMap map for future thread switching
  * Side-effects: IO (fetch to /api/v1/ai/chat via runtime)
- * Notes: Uses @assistant-ui/react-data-stream; captures X-Thread-Id from response header
+ * Notes: Uses @assistant-ui/react-ai-sdk useChatRuntime; captures X-State-Key from response header
  * Links: ai.chat.v1 contract, chat/AGENTS.md (Thread State Management)
  * @public
  */
@@ -17,8 +17,9 @@
 "use client";
 
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { useDataStreamRuntime } from "@assistant-ui/react-data-stream";
+import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { useQueryClient } from "@tanstack/react-query";
+import { DefaultChatTransport } from "ai";
 import {
   type ReactNode,
   useCallback,
@@ -68,6 +69,7 @@ export function ChatRuntimeProvider({
   const [stateKeyMap, setStateKeyMap] = useState<Record<string, string>>({});
   const activeStateKey = "default"; // Placeholder for future state/thread selection
   const stateKey = stateKeyMap[activeStateKey];
+  const stateKeyRef = useRef(stateKey);
 
   // Keep refs in sync
   useEffect(() => {
@@ -78,13 +80,17 @@ export function ChatRuntimeProvider({
     selectedGraphRef.current = selectedGraph;
   }, [selectedGraph]);
 
+  useEffect(() => {
+    stateKeyRef.current = stateKey;
+  }, [stateKey]);
+
   // Handle response - capture stateKey and handle errors
   const handleResponse = useCallback(
     async (response: Response) => {
       // Capture stateKey from response header for multi-turn continuity
       // Server generates stateKey on first request, we reuse it for subsequent requests
       const newStateKey = response.headers.get("X-State-Key");
-      if (newStateKey && newStateKey !== stateKey) {
+      if (newStateKey && newStateKey !== stateKeyRef.current) {
         setStateKeyMap((prev) => ({
           ...prev,
           [activeStateKey]: newStateKey,
@@ -121,7 +127,7 @@ export function ChatRuntimeProvider({
         throw new Error(body.error || "Request failed");
       }
     },
-    [defaultModelId, onAuthExpired, onError, stateKey]
+    [defaultModelId, onAuthExpired, onError]
   );
 
   // Handle stream finish - invalidate credits query
@@ -129,16 +135,29 @@ export function ChatRuntimeProvider({
     queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
   }, [queryClient]);
 
-  const runtime = useDataStreamRuntime({
-    api: "/api/v1/ai/chat",
-    // body must be object (not function) - assistant-ui limitation
-    // stateKey from state; state change triggers re-render with new body
-    body: {
-      model: selectedModel,
-      graphName: selectedGraph,
-      ...(stateKey ? { stateKey } : {}),
-    },
-    onResponse: handleResponse,
+  // Transport-level options (api, request shape, response interception) must be
+  // on the transport — they are NOT valid ChatInit/useChatRuntime options.
+  // useDynamicChatTransport inside useChatRuntime wraps this in a ref-based
+  // proxy, so recreating each render is safe.
+  const runtime = useChatRuntime({
+    transport: new DefaultChatTransport({
+      api: "/api/v1/ai/chat",
+      prepareSendMessagesRequest: ({ messages }) => ({
+        body: {
+          message: extractLastUserText(messages),
+          model: selectedModelRef.current,
+          graphName: selectedGraphRef.current,
+          ...(stateKeyRef.current ? { stateKey: stateKeyRef.current } : {}),
+        },
+      }),
+      // Wrap fetch to intercept responses (stateKey capture + error handling).
+      // ChatInit has no onResponse; fetch wrapper is the transport-level equivalent.
+      fetch: async (url, init) => {
+        const response = await globalThis.fetch(url, init);
+        await handleResponse(response);
+        return response;
+      },
+    }),
     onFinish: handleFinish,
     onError: (error) => {
       clientLogger.error(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, {
@@ -154,4 +173,22 @@ export function ChatRuntimeProvider({
       {children}
     </AssistantRuntimeProvider>
   );
+}
+
+/**
+ * Extract the text content from the last user message in the messages array.
+ * Falls back to empty string if no user message found.
+ */
+function extractLastUserText(
+  messages: Array<{
+    role: string;
+    parts?: Array<{ type: string; text?: string }>;
+  }>
+): string {
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+  if (!lastUserMsg?.parts) return "";
+  return lastUserMsg.parts
+    .filter((p) => p.type === "text" && p.text)
+    .map((p) => p.text as string)
+    .join("\n");
 }

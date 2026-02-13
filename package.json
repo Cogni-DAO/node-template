@@ -137,9 +137,10 @@
     ]
   },
   "dependencies": {
-    "@assistant-ui/react": "^0.11.52",
-    "@assistant-ui/react-data-stream": "^0.11.12",
-    "@assistant-ui/react-markdown": "^0.11.6",
+    "@assistant-ui/react": "^0.12.10",
+    "@assistant-ui/react-ai-sdk": "^1.3.7",
+    "@assistant-ui/react-data-stream": "^0.12.4",
+    "@assistant-ui/react-markdown": "^0.12.3",
     "@auth/drizzle-adapter": "^1.7.0",
     "@cogni/ai-core": "workspace:*",
     "@cogni/ai-tools": "workspace:*",
@@ -174,7 +175,7 @@
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.9.1",
     "ai": "^6.0.79",
-    "assistant-stream": "^0.2.45",
+    "assistant-stream": "^0.3.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
