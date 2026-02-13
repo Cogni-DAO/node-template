@@ -31,20 +31,20 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 **Goal:** All graph runs go through `GraphRunWorkflow`. API handler stops calling `GraphExecutorPort` directly.
 
-| Deliverable                                                                                             | Status      | Est | Work Item |
-| ------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Fix: schedule creation accepts paid models with zero credits — no credit gate                           | Backlog     | 2   | bug.0025  |
-| Fix: scheduled runs write charge_receipts (billing bypass regression)                                   | Done        | 2   | bug.0005  |
-| Canonicalize billing at GraphExecutorPort — LiteLLM callback + receipt barrier, kill log-scraping paths | Todo        | 3   | task.0029 |
-| Billing enforcement decorator at GraphExecutorPort level                                                | Done        | 2   | task.0007 |
-| Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing          | Todo        | 3   | task.0006 |
-| Add `trigger_*` columns to existing `schedule_runs` table (or create `graph_runs` if P1 lands)          | Not Started | 1   | —         |
-| Create `GraphRunWorkflow` in `services/scheduler-worker/`                                               | Not Started | 2   | —         |
-| Refactor `POST /api/v1/ai/chat` to start `GraphRunWorkflow` instead of inline execution                 | Not Started | 2   | —         |
-| Add `Idempotency-Key` header support to chat endpoint                                                   | Not Started | 1   | —         |
-| Ensure `executeGraphActivity` reuses existing internal API path (`/api/internal/graphs/{graphId}/runs`) | Not Started | 1   | —         |
-| Observability instrumentation                                                                           | Not Started | 1   | —         |
-| Documentation updates                                                                                   | Not Started | 1   | —         |
+| Deliverable                                                                                                       | Status      | Est | Work Item |
+| ----------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Fix: schedule creation accepts paid models with zero credits — no credit gate                                     | Backlog     | 2   | bug.0025  |
+| Fix: scheduled runs write charge_receipts (billing bypass regression)                                             | Done        | 2   | bug.0005  |
+| Callback-driven billing — LiteLLM generic_api webhook replaces log scraping (design verified, ready to implement) | Todo        | 3   | task.0029 |
+| Billing enforcement decorator at GraphExecutorPort level                                                          | Done        | 2   | task.0007 |
+| Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing                    | Todo        | 3   | task.0006 |
+| Add `trigger_*` columns to existing `schedule_runs` table (or create `graph_runs` if P1 lands)                    | Not Started | 1   | —         |
+| Create `GraphRunWorkflow` in `services/scheduler-worker/`                                                         | Not Started | 2   | —         |
+| Refactor `POST /api/v1/ai/chat` to start `GraphRunWorkflow` instead of inline execution                           | Not Started | 2   | —         |
+| Add `Idempotency-Key` header support to chat endpoint                                                             | Not Started | 1   | —         |
+| Ensure `executeGraphActivity` reuses existing internal API path (`/api/internal/graphs/{graphId}/runs`)           | Not Started | 1   | —         |
+| Observability instrumentation                                                                                     | Not Started | 1   | —         |
+| Documentation updates                                                                                             | Not Started | 1   | —         |
 
 #### File Pointers (P0 Scope)
 
