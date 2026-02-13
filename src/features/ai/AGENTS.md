@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-02-11
+- **Last reviewed:** 2026-02-13
 - **Status:** stable
 
 ## Purpose
@@ -60,7 +60,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
     - `completion.ts` - Orchestrator with internal DRY helpers (execute, executeStream)
     - `message-preparation.ts` - Message filtering, validation, fallbackPromptHash
     - `preflight-credit-check.ts` - Upper-bound credit estimation
-    - `billing.ts` - Non-blocking charge receipt recording (commitUsageFact with Zod validation)
+    - `billing.ts` - Non-blocking charge receipt recording (commitUsageFact — strict ledger writer, COST_AUTHORITY_IS_LITELLM)
     - `telemetry.ts` - DB + Langfuse writes (ai_invocation_summaries)
     - `metrics.ts` - Prometheus metric recording
     - `ai_runtime.ts` - AI runtime orchestration with RunEventRelay (pump+fanout UI stream adapter; billing handled by BillingGraphExecutorDecorator at port level)
