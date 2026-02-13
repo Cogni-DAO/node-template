@@ -35,19 +35,18 @@ tags: [billing, litellm, sandbox]
 
 ## Invariants
 
-| Rule                                    | Constraint                                                                                                                                                                                            |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ONE_BILLING_PATH                        | All billing confirmation is receipt-existence by `litellm_call_id`. No adapter-specific billing logic, no log parsing, no cost extraction in adapters.                                                |
-| ADAPTERS_NEVER_BILL                     | Adapters only emit `usage_unit_created{call_id, runId, billingAccountId, model?}`. They never parse cost data, read logs, or write receipts.                                                          |
-| COST_AUTHORITY_IS_LITELLM               | All LLM cost/tokens used for billing originate from LiteLLM (callback or spend/logs). App code never infers cost — not from nginx logs, response headers, model catalog, or adapter-side computation. |
-| RECEIPT_WRITES_REQUIRE_CALL_ID_AND_COST | A `charge_receipt` is written iff `usageUnitId` (litellm_call_id) exists AND `costUsd` is a number (0 allowed). Missing cost → no receipt written.                                                    |
-| NO_PLACEHOLDER_RECEIPTS                 | Never write $0/empty receipts as placeholders. If cost is unknown, defer until authoritative cost arrives via callback (COST_AUTHORITY_IS_LITELLM) or reconciler (task.0039).                         |
-| IDEMPOTENCY_KEY_IS_LITELLM_CALL_ID      | `UNIQUE(source_system, source_reference)` where `source_reference` includes `litellm_call_id`. Duplicate callbacks are no-ops (swallowed by commitUsageFact, HTTP 200).                               |
-| NO_SYNCHRONOUS_RECEIPT_BARRIER          | The user response is NEVER blocked waiting for callback receipt arrival. Reconciliation is async (task.0039).                                                                                         |
-| CALLBACK_AUTHENTICATED                  | Ingest endpoint requires `Authorization: Bearer BILLING_INGEST_TOKEN`.                                                                                                                                |
-| INGEST_ENDPOINT_IS_INTERNAL             | `/api/internal/billing/ingest` — internal Docker network only, not exposed through Caddy.                                                                                                             |
-| NO_DOCKER_SOCK_IN_APP                   | App container never mounts docker.sock or uses dockerode for billing. (Preserved from bug.0027 bridge fix.)                                                                                           |
-| BILLING_CORRELATION_BY_RUN_ID           | Gateway mode correlates billing by `metadata.spend_logs_metadata.run_id` from the callback, not by per-call barrier. Requires `x-litellm-spend-logs-metadata` header set with `run_id`.               |
+| Rule                                  | Constraint                                                                                                                                                                              |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ONE_BILLING_PATH                      | All billing confirmation is receipt-existence by `litellm_call_id`. No adapter-specific billing logic, no log parsing, no cost extraction in adapters.                                  |
+| ADAPTERS_NEVER_BILL                   | Adapters only emit `usage_unit_created{call_id, runId, billingAccountId, model?}`. They never parse cost data, read logs, or write receipts.                                            |
+| COST_ORACLE_IS_LITELLM                | Cost comes from LiteLLM callback payload (`response_cost`), not from nginx logs, response headers, or adapter-side computation.                                                         |
+| NO_PLACEHOLDER_RECEIPTS               | Never write $0/empty receipts as placeholders. If cost is unknown, defer until authoritative cost arrives via callback (COST_ORACLE_IS_LITELLM) or reconciler (task.0039).              |
+| CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID | `UNIQUE(source_system, source_reference)` where `source_reference` includes `litellm_call_id`. Duplicate callbacks are no-ops (swallowed by commitUsageFact, HTTP 200).                 |
+| NO_SYNCHRONOUS_RECEIPT_BARRIER        | The user response is NEVER blocked waiting for callback receipt arrival. Reconciliation is async (task.0039).                                                                           |
+| CALLBACK_AUTHENTICATED                | Ingest endpoint requires `Authorization: Bearer BILLING_INGEST_TOKEN`.                                                                                                                  |
+| INGEST_ENDPOINT_IS_INTERNAL           | `/api/internal/billing/ingest` — internal Docker network only, not exposed through Caddy.                                                                                               |
+| NO_DOCKER_SOCK_IN_APP                 | App container never mounts docker.sock or uses dockerode for billing. (Preserved from bug.0027 bridge fix.)                                                                             |
+| BILLING_CORRELATION_BY_RUN_ID         | Gateway mode correlates billing by `metadata.spend_logs_metadata.run_id` from the callback, not by per-call barrier. Requires `x-litellm-spend-logs-metadata` header set with `run_id`. |
 
 ## Design
 
