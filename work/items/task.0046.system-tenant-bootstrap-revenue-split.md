@@ -6,7 +6,7 @@ status: Todo
 priority: 0
 estimate: 3
 summary: Seed cogni_system billing account, add startup healthcheck, and on every credit purchase mint bonus credits to the system tenant (75% of user's purchased amount).
-outcome: cogni_system exists in DB with is_system_tenant=true (unique), app fails fast if missing, and every credit purchase atomically credits the user (full amount) plus mints bonus credits to system tenant.
+outcome: cogni_system exists in DB with is_system_tenant=true (unique), app fails fast if missing, and every credit purchase credits the user (full amount) then mints bonus credits to system tenant (sequential + idempotent).
 spec_refs: system-tenant, billing-evolution-spec, accounts-design-spec
 assignees: cogni-dev
 credit:
@@ -51,9 +51,10 @@ No DAO reserve account is needed — the DAO already holds the money.
 
 ### Revenue share
 
-- `confirmCreditsPayment()` atomically performs two ledger credits in one DB transaction:
+- `confirmCreditsPayment()` sequentially performs two ledger credits with idempotency guards (not one transaction — user credit uses appDb/RLS, system tenant credit uses serviceDb/BYPASSRLS):
   1. User: `purchasedCredits` (reason `widget_payment`) — **unchanged amount, same as today**
   2. System tenant: `floor(purchasedCredits × SYSTEM_TENANT_REVENUE_SHARE)` (reason `platform_revenue_share`)
+- If crash between steps: retry skips user credit (idempotent via `clientPaymentId`), applies system tenant credit
 - `SYSTEM_TENANT_REVENUE_SHARE` env var: `z.coerce.number().min(0).max(1).default(0.75)`
 - `calculateRevenueShareBonus()` is a pure function in `src/core/billing/pricing.ts` — no IO, no env reads
 - Entire operation keyed by `clientPaymentId`: on retry, both the user credit and system tenant credit are skipped (existing `findCreditLedgerEntryByReference` idempotency check covers user; add matching check for system tenant with `reason: 'platform_revenue_share'`)
