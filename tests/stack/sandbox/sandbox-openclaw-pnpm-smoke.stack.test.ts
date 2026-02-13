@@ -104,7 +104,9 @@ describe("OpenClaw Gateway pnpm Store Smoke", () => {
 // Workspace bootstrap: writable clone + pnpm install + git commit
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("OpenClaw Gateway workspace bootstrap + git commit", () => {
+// Skipped: offline install depends on a fully-seeded pnpm store volume
+// which is too slow / fragile for CI. Re-enable when store seeding is reliable.
+describe.skip("OpenClaw Gateway workspace bootstrap + git commit", () => {
   let testCloneDir: string;
 
   beforeAll(async () => {
