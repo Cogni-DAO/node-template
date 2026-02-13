@@ -215,7 +215,7 @@ pnpm check:docs
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0046.handoff.md)
 
 ## Attribution
 
