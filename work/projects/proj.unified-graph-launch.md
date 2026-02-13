@@ -11,7 +11,7 @@ outcome: All graph runs flow through GraphRunWorkflow; no inline execution in HT
 assignees:
   - derekg1729
 created: 2026-02-07
-updated: 2026-02-13
+updated: 2026-02-14
 labels:
   - ai-graphs
   - scheduler
@@ -58,8 +58,8 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | -------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
 | Fix gateway `run_id` gap — add `x-litellm-spend-logs-metadata` to OpenClaw outboundHeaders               | Not Started | 1   | —         |
 | Add `usage_unit_created` event + decorator change — decorator becomes observability-only                 | Not Started | 1   | —         |
-| Strip billing from adapters — remove cost extraction from InProc, remove ProxyBillingReader from Sandbox | Not Started | 1   | —         |
-| Delete old paths — ProxyBillingReader, billing volumes, OPENCLAW_BILLING_DIR, usage_report event type    | Not Started | 1   | —         |
+| Strip billing from adapters — remove cost extraction from InProc, remove ProxyBillingReader from Sandbox | Done        | 1   | task.0029 |
+| Delete old paths — ProxyBillingReader, billing volumes, OPENCLAW_BILLING_DIR, gateway audit log          | Done        | 1   | task.0029 |
 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing           | Todo        | 3   | task.0006 |
 
 ### Walk (P1): Unified Workflow Path + Run Persistence
