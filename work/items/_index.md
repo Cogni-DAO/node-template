@@ -48,6 +48,7 @@
 | 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0046 | Research PII-safe user context passing to OpenClaw agents                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 2   | Todo        | task.0047  | OpenClaw user context v0 — inject PII-safe identity into gateway agent messages                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 1   | Backlog     | bug.0012   | pre-commit check:docs validates all files, not just staged                                     |                            |                                 |
 | 2   | 2   | Backlog     | bug.0013   | Sandbox stack tests flaky — proxy container vanishes                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Todo        | task.0043  | Wire Fumadocs docs site — render /docs and /work at /docs/\*                                   | Docs System Infrastructure | proj.docs-system-infrastructure |
