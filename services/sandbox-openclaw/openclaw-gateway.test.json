@@ -41,6 +41,11 @@
   "agents": {
     "defaults": {
       "model": { "primary": "cogni/test-model" },
+      "subagents": {
+        "model": "cogni/test-model",
+        "maxConcurrent": 3,
+        "archiveAfterMinutes": 30
+      },
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
       "timeoutSeconds": 540,
@@ -61,15 +66,7 @@
   },
   "tools": {
     "elevated": { "enabled": false },
-    "deny": [
-      "browser",
-      "cron",
-      "gateway",
-      "nodes",
-      "sessions_send",
-      "sessions_spawn",
-      "message"
-    ]
+    "deny": ["browser", "cron", "gateway", "nodes", "sessions_send", "message"]
   },
   "cron": { "enabled": false },
   "gateway": {

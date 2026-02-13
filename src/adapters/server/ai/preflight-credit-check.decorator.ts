@@ -39,7 +39,7 @@ export class PreflightCreditCheckDecorator implements GraphExecutorPort {
   constructor(
     private readonly inner: GraphExecutorPort,
     private readonly checkFn: PreflightCreditCheckFn,
-    private readonly _log: Logger
+    _log: Logger
   ) {}
 
   runGraph(req: GraphRunRequest): GraphRunResult {
