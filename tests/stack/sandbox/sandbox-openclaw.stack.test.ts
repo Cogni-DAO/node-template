@@ -4,10 +4,10 @@
 /**
  * Module: `@tests/stack/sandbox/sandbox-openclaw`
  * Purpose: Full-stack acceptance test proving OpenClaw gateway mode works end-to-end.
- * Scope: Tests gateway chat, billing via proxy, secrets isolation, repo volume mount, workspace writability, and WS event isolation (cross-run). Does not test ephemeral container path or billing DB writes.
+ * Scope: Tests gateway chat, secrets isolation, repo volume mount, workspace writability, and WS event isolation (cross-run). Does not test ephemeral container path or billing DB writes (see gateway-billing-callback.stack.test.ts).
  * Invariants:
  *   - Per SECRETS_HOST_ONLY: LITELLM_MASTER_KEY never enters gateway container
- *   - Per BILLING_INDEPENDENT_OF_CLIENT: billing data from proxy audit log, not agent
+ *   - Per COST_AUTHORITY_IS_LITELLM: gateway billing via LiteLLM callback, not proxy audit log
  *   - Per WS_EVENT_CAUSALITY: concurrent sessions receive zero cross-run tokens (skipped; requires real LLM)
  * Side-effects: IO (HTTP to gateway, Docker exec for assertions)
  * Links: docs/spec/openclaw-sandbox-spec.md, src/adapters/server/sandbox/
@@ -57,21 +57,29 @@ const LITELLM_MODEL_IDS: Record<string, string> = {
 };
 
 /**
- * Extract litellm_model_id from audit log inside the proxy container.
- * Reads via docker exec since the billing volume is no longer shared to the host.
+ * Extract litellm_model_id from LiteLLM spend/logs API.
+ * Gateway audit log was removed (COST_AUTHORITY_IS_LITELLM) — query the source of truth directly.
  */
 async function extractModelId(runId: string): Promise<string> {
+  const env = serverEnv();
   try {
-    const output = await execInContainer(
-      docker,
-      PROXY_CONTAINER,
-      `grep '"run_id":"${runId}"' /billing/audit.jsonl | tail -1`
+    const url = new URL("/spend/logs", env.LITELLM_BASE_URL);
+    url.searchParams.set("user_id", "test-model-select");
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${env.LITELLM_MASTER_KEY}` },
+    });
+    if (!res.ok) return "-";
+
+    const logs = (await res.json()) as Array<{
+      model_id?: string;
+      metadata?: { spend_logs_metadata?: { run_id?: string } };
+    }>;
+
+    const entry = logs.find(
+      (l) => l.metadata?.spend_logs_metadata?.run_id === runId
     );
-    if (!output.trim()) return "-";
-    const entry = JSON.parse(output.trim()) as Record<string, string>;
-    return entry.litellm_model_id && entry.litellm_model_id !== "-"
-      ? entry.litellm_model_id
-      : "-";
+    return entry?.model_id && entry.model_id !== "-" ? entry.model_id : "-";
   } catch {
     return "-";
   }
@@ -367,11 +375,10 @@ describe("OpenClaw Gateway Full-Stack", () => {
       })
     );
 
-    // Assert ACTUAL model from LiteLLM response header in proxy audit log (JSONL on shared volume).
-    // litellm_model_id is a deployment hash available even in SSE streaming mode
-    // (unlike litellm_model_group which LiteLLM omits from streaming response headers).
+    // Assert ACTUAL model from LiteLLM spend/logs API.
+    // litellm_model_id is a deployment hash stable across restarts.
     await new Promise((r) => setTimeout(r, 1000));
-    const modelId = extractModelId(runId, billingDir);
+    const modelId = await extractModelId(runId);
     expect(modelId).toBe(LITELLM_MODEL_IDS["test-free-model"]);
     expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
   });
@@ -404,7 +411,7 @@ describe("OpenClaw Gateway Full-Stack", () => {
     );
 
     await new Promise((r) => setTimeout(r, 1000));
-    const modelId = extractModelId(runId, billingDir);
+    const modelId = await extractModelId(runId);
     expect(modelId).toBe(LITELLM_MODEL_IDS["test-paid-model"]);
     expect(modelId).not.toBe(LITELLM_MODEL_IDS["test-model"]); // not the default
   });
