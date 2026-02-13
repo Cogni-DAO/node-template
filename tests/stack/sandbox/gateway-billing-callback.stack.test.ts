@@ -8,7 +8,7 @@
  * Invariants:
  *   - CALLBACK_COST_GT_ZERO: charge_receipts.response_cost_usd > 0 for paid model calls
  *   - CALLBACK_AUTHENTICATED: LiteLLM sends Bearer token via GENERIC_LOGGER_HEADERS
- *   - COST_ORACLE_IS_LITELLM: response_cost in callback is the authoritative cost source
+ *   - COST_AUTHORITY_IS_LITELLM: response_cost in callback is the authoritative cost source
  * Side-effects: IO (gateway WS, LiteLLM callback HTTP, database writes)
  * Notes:
  *   SKIPPED — requires mock-llm to be compatible with OpenClaw agent runtime (bug.0009).
@@ -52,7 +52,6 @@ import {
   type GatewayAgentEvent,
   OpenClawGatewayClient,
 } from "@/adapters/server/sandbox/openclaw-gateway-client";
-import { ProxyBillingReader } from "@/adapters/server/sandbox/proxy-billing-reader";
 import { SandboxGraphProvider } from "@/adapters/server/sandbox/sandbox-graph.provider";
 import type { SandboxRunnerPort } from "@/ports";
 import { chargeReceipts, llmChargeDetails, users } from "@/shared/db/schema";
@@ -123,7 +122,6 @@ async function waitForCallbackReceipt(
 }
 
 let client: OpenClawGatewayClient;
-let billingReader: ProxyBillingReader;
 let docker: Docker;
 
 describe("Gateway Billing Callback E2E", () => {
@@ -147,7 +145,6 @@ describe("Gateway Billing Callback E2E", () => {
     }
 
     client = new OpenClawGatewayClient(GATEWAY_URL, GATEWAY_TOKEN);
-    billingReader = new ProxyBillingReader(serverEnv().OPENCLAW_BILLING_DIR);
   });
 
   afterAll(async () => {
@@ -186,11 +183,7 @@ describe("Gateway Billing Callback E2E", () => {
       },
     };
 
-    const provider = new SandboxGraphProvider(
-      stubRunner,
-      client,
-      billingReader
-    );
+    const provider = new SandboxGraphProvider(stubRunner, client);
 
     const req = makeGatewayRunRequest({
       runId,
@@ -218,21 +211,23 @@ describe("Gateway Billing Callback E2E", () => {
     // If these pass, callback-driven billing is working end-to-end.
 
     expect(receipt).not.toBeNull();
-    expect(Number(receipt!.responseCostUsd)).toBeGreaterThan(0);
-    expect(receipt!.chargedCredits).toBeGreaterThan(0n);
-    expect(receipt!.billingAccountId).toBe(testActor.billingAccountId);
-    expect(receipt!.sourceSystem).toBe("litellm");
+    const r = receipt as NonNullable<typeof receipt>;
+    expect(Number(r.responseCostUsd)).toBeGreaterThan(0);
+    expect(r.chargedCredits).toBeGreaterThan(0n);
+    expect(r.billingAccountId).toBe(testActor.billingAccountId);
+    expect(r.sourceSystem).toBe("litellm");
 
     // Verify linked llm_charge_details
     const db = getSeedDb();
     const details = await db
       .select()
       .from(llmChargeDetails)
-      .where(eq(llmChargeDetails.chargeReceiptId, receipt!.id));
+      .where(eq(llmChargeDetails.chargeReceiptId, r.id));
 
     expect(details).toHaveLength(1);
-    expect(details[0]!.model).toBeTruthy();
-    expect(details[0]!.graphId).toBe("sandbox:openclaw");
+    const d = details[0] as NonNullable<(typeof details)[0]>;
+    expect(d.model).toBeTruthy();
+    expect(d.graphId).toBe("sandbox:openclaw");
   });
 
   // Variant: test the callback flow via direct WebSocket client (lower-level, same billing assertion)
@@ -259,8 +254,9 @@ describe("Gateway Billing Callback E2E", () => {
     const receipt = await waitForCallbackReceipt(runId);
 
     expect(receipt).not.toBeNull();
-    expect(Number(receipt!.responseCostUsd)).toBeGreaterThan(0);
-    expect(receipt!.chargedCredits).toBeGreaterThan(0n);
-    expect(receipt!.billingAccountId).toBe(testActor.billingAccountId);
+    const r = receipt as NonNullable<typeof receipt>;
+    expect(Number(r.responseCostUsd)).toBeGreaterThan(0);
+    expect(r.chargedCredits).toBeGreaterThan(0n);
+    expect(r.billingAccountId).toBe(testActor.billingAccountId);
   });
 });

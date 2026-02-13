@@ -84,7 +84,7 @@ pnpm check
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0035.handoff.md)
 
 ## Attribution
 

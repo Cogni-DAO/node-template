@@ -7,8 +7,8 @@
  * Scope: Integration test calling POST /api/internal/billing/ingest and asserting DB rows. Does not test LiteLLM itself.
  * Invariants:
  *   - CALLBACK_AUTHENTICATED: Bearer token required
- *   - CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID: Duplicate callbacks are no-ops
- *   - COST_ORACLE_IS_LITELLM: response_cost from callback writes to charge_receipts
+ *   - IDEMPOTENCY_KEY_IS_LITELLM_CALL_ID: Duplicate callbacks are no-ops
+ *   - COST_AUTHORITY_IS_LITELLM: response_cost from callback writes to charge_receipts
  * Side-effects: IO (database writes via commitUsageFact)
  * Notes: Requires dev:stack:test running (DB + app).
  * Links: src/app/api/internal/billing/ingest/route.ts, docs/spec/billing-ingest.md

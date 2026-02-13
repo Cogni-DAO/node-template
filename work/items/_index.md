@@ -11,6 +11,7 @@
 | 0   | 2   | Done        | bug.0038   | Deploy pulls all 15+ images every run — SSH timeout on slow pulls                              | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Done        | bug.0015   | Deploy disk cleanup runs after pulls — disk exhaustion on 40GB VMs                             | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Done        | bug.0016   | Production compose missing OpenClaw services — silent no-op profiles                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 1   | Backlog     | bug.0049   | Deploy never syncs gateway-workspace + repo mount blocks git — agent blind and immobile        | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Done        | bug.0021   | Gateway WS client receives uncorrelated chat events — HEARTBEAT_OK leak                        | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Todo        | task.0041  | Discord channel proof of life — bot connected, Cogni reads + sends via OpenClaw                | Messenger Channels         | proj.messenger-channels         |
 | 0   | 2   | In Progress | task.0023  | Gateway agent system prompt — dedicated workspace, SOUL.md, heartbeat fix                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
@@ -49,6 +50,8 @@
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0046 | Research PII-safe user context passing to OpenClaw agents                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Todo        | task.0047  | OpenClaw user context v0 — inject PII-safe identity into gateway agent messages                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 2   | 1   | Backlog     | bug.0050   | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0               |                            |                                 |
+| 1   | 2   | Backlog     | bug.0051   | Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls       | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 1   | Backlog     | bug.0012   | pre-commit check:docs validates all files, not just staged                                     |                            |                                 |
 | 2   | 2   | Backlog     | bug.0013   | Sandbox stack tests flaky — proxy container vanishes                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Todo        | task.0043  | Wire Fumadocs docs site — render /docs and /work at /docs/\*                                   | Docs System Infrastructure | proj.docs-system-infrastructure |

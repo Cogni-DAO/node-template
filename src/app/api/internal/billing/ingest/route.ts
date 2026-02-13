@@ -8,8 +8,8 @@
  * Invariants:
  *   - CALLBACK_AUTHENTICATED: Requires Bearer BILLING_INGEST_TOKEN
  *   - INGEST_ENDPOINT_IS_INTERNAL: Docker-internal only, not exposed through Caddy
- *   - CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID: Duplicate callbacks → 409 (caught, not thrown)
- *   - COST_ORACLE_IS_LITELLM: Cost from callback response_cost field
+ *   - IDEMPOTENCY_KEY_IS_LITELLM_CALL_ID: Duplicate callbacks are no-ops (handled internally by commitUsageFact)
+ *   - COST_AUTHORITY_IS_LITELLM: Cost from callback response_cost field
  *   - NO_SYNCHRONOUS_RECEIPT_BARRIER: Never blocks LLM response (async callback)
  * Side-effects: IO (HTTP request/response, database via commitUsageFact)
  * Links: docs/spec/billing-ingest.md, billing-ingest.internal.v1.contract
@@ -97,9 +97,10 @@ function resolveBillingAccountId(
  * Construct a UsageFact from a LiteLLM callback entry.
  *
  * Key design: when spend_logs_metadata.run_id is available (InProc, Sandbox),
- * the computed source_reference matches the old billing path → idempotent.
- * When run_id is missing (Gateway), litellm_call_id is used as fallback runId,
- * creating a different source_reference → callback receipt coexists with old $0 receipt.
+ * the computed source_reference matches the direct billing path → idempotent.
+ * When run_id is missing (Gateway), litellm_call_id is used as fallback runId.
+ * Per RECEIPT_WRITES_REQUIRE_CALL_ID_AND_COST: adapter path does not write receipts
+ * when cost data is absent, so the callback is the sole receipt source for Gateway.
  */
 function buildUsageFact(
   entry: StandardLoggingPayloadBilling,
@@ -146,7 +147,7 @@ function buildUsageFact(
  * Validates bearer token, parses batched array, writes receipts via commitUsageFact().
  *
  * Returns:
- * - 200: { processed, duplicates, skipped }
+ * - 200: { processed, skipped }
  * - 401: Invalid/missing token
  * - 400: Invalid payload
  */
