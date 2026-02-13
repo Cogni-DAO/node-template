@@ -37,13 +37,13 @@
 | 1   | 2   | Backlog     | bug.0044   | Gateway billing reader finds 0 entries in stale audit log — kills execution after graph switch | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Backlog     | bug.0036   | Chat route enqueues to closed assistant-stream controller — unhandled TypeError                |                            |                                 |
 | 1   | 3   | Done        | task.0030  | Thread persistence P0 — ai_threads table, port, route bridge                                   | Thread Persistence         | proj.thread-persistence         |
-| 1   | 3   | Todo        | task.0042  | AI SDK streaming migration — createUIMessageStream + useChatRuntime                            | Thread Persistence         | proj.thread-persistence         |
+| 1   | 3   | Done        | task.0042  | AI SDK streaming migration — createUIMessageStream + useChatRuntime                            | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Todo        | task.0035  | Thread history sidebar — list, switch, load conversations                                      | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Todo        | task.0009  | Sandbox repo refresh: on-demand git-sync for agent workspace                                   | Sandboxed Agents           | proj.sandboxed-agents           |
 | 1   | 3   | Backlog     | bug.0004   | /activity dashboard cost column broken                                                         | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 1   | Todo        | task.0018  | Dynamic agent catalog in UI + OpenClaw model sync                                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Todo        | task.0034  | Wire OpenClaw memory search + bootstrap files for cogni-template repo context                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 1   | 3   | Todo        | task.0045  | Enable OpenClaw subagent spawning — upstream header fix + config + delegation                   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 3   | Todo        | task.0045  | Enable OpenClaw subagent spawning — upstream header fix + config + delegation                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 3   | Backlog     | task.0040  | Gateway memory curation worker — scan ephemeral state, persist, reset container                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |

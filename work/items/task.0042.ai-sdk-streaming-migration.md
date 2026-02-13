@@ -2,7 +2,7 @@
 id: task.0042
 type: task
 title: "AI SDK streaming migration — createUIMessageStream + useChatRuntime"
-status: Todo
+status: Done
 priority: 1
 estimate: 3
 summary: "Replace assistant-stream wire protocol with AI SDK Data Stream Protocol. Server: createAssistantStreamResponse → createUIMessageStream. Client: useDataStreamRuntime → useChatRuntime. Contract: messages[] → {stateKey?, message, model, graphName}. Requires assistant-ui 0.11→0.12 upgrade. Fixes bug.0036 and bug.0011 as side effects."
@@ -12,7 +12,7 @@ assignees:
   - cogni-dev
 credit:
 project: proj.thread-persistence
-branch:
+branch: feat/task-0040-ai-sdk-streaming
 pr:
 reviewer:
 created: 2026-02-13
