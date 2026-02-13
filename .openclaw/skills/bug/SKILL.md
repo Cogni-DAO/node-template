@@ -59,3 +59,5 @@ Read these before starting:
 - **ID_IMMUTABLE** — `bug.<num>` never changes
 - **INDEX_MUST_MATCH** — `_index.md` row must match frontmatter exactly
 - **INCLUDE_CODE_POINTERS** — always reference specific files/lines, not just "the login flow"
+
+#$BUG
