@@ -36,6 +36,7 @@ export {
 export {
   CREDITS_PER_USD,
   calculateLlmUserCharge,
+  calculateRevenueShareBonus,
   creditsToUsd,
   usdCentsToCredits,
   usdToCredits,
