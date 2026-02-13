@@ -4,10 +4,10 @@
 /**
  * Module: `@tests/stack/ai/chat-streaming.stack`
  * Purpose: Verify that /api/v1/ai/chat streaming endpoint truly streams incrementally, not buffered.
- * Scope: Tests chat route, Data Stream Protocol format, and streaming behavior. Does NOT test LiteLLM integration.
+ * Scope: Tests chat route, AI SDK Data Stream Protocol (SSE) format, and streaming behavior. Does NOT test LiteLLM integration.
  * Invariants: At least 2 text deltas arrive before completion; deltas arrive incrementally (not buffered); abort stops stream.
  * Side-effects: IO (HTTP requests, database writes via completion facade)
- * Notes: Requires dev stack running (pnpm dev:stack:test). Uses real LiteLLM streaming. Uses assistant-stream Data Stream Protocol.
+ * Notes: Requires dev stack running (pnpm dev:stack:test). Uses real LiteLLM streaming. Uses AI SDK SSE format.
  * Links: src/app/api/v1/ai/chat/route.ts, docs/guides/testing.md
  * @public
  */
@@ -17,9 +17,10 @@ import { createChatRequest } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
-  isFinishMessageEvent,
+  isFinishEvent,
   isTextDeltaEvent,
-  readDataStreamEvents,
+  readSseEvents,
+  type SseEvent,
 } from "@tests/helpers/data-stream";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
@@ -67,45 +68,32 @@ describe("Chat Streaming", () => {
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        ...createChatRequest({
+      body: JSON.stringify(
+        createChatRequest({
+          message:
+            "Say hello in exactly 15 words or more, using complete sentences.",
           model: defaultModelId,
           stateKey: randomUUID(),
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [
-                {
-                  type: "text",
-                  text: "Say hello in exactly 15 words or more, using complete sentences.",
-                },
-              ],
-            },
-          ],
-        }),
-        clientRequestId: randomUUID(),
-        stream: true,
-      }),
+        })
+      ),
     });
 
     const res = await chatPOST(req);
 
-    // Assert - Response is Data Stream Protocol (text/plain)
+    // Assert - Response is AI SDK SSE format (text/event-stream)
     expect(res.status).toBe(200);
     const contentType = res.headers.get("content-type") ?? "";
-    expect(contentType).toContain("text/plain");
+    expect(contentType).toContain("text/event-stream");
 
     // Collect events with timestamps to prove incremental arrival
-    const events: { type: string; value: unknown; t: number }[] = [];
+    const events: (SseEvent & { t: number })[] = [];
     const start = Date.now();
 
-    for await (const e of readDataStreamEvents(res)) {
+    for await (const e of readSseEvents(res)) {
       events.push({ ...e, t: Date.now() - start });
 
       // Stop once completed to avoid hanging tests
-      if (isFinishMessageEvent(e)) break;
+      if (isFinishEvent(e)) break;
 
       // Safety timeout: stop if stream takes too long
       if (Date.now() - start > 30_000) {
@@ -120,12 +108,13 @@ describe("Chat Streaming", () => {
 
     // Assert - Each delta contains incremental text
     for (const delta of deltas) {
-      expect(typeof delta.value).toBe("string");
-      expect((delta.value as string).length).toBeGreaterThan(0);
+      const text = delta.data.delta as string;
+      expect(typeof text).toBe("string");
+      expect(text.length).toBeGreaterThan(0);
     }
 
-    // Assert - Received finish message event at the end
-    const finished = events.find((e) => isFinishMessageEvent(e));
+    // Assert - Received finish event at the end
+    const finished = events.find((e) => isFinishEvent(e));
     expect(finished).toBeDefined();
 
     // Assert - Prove incremental arrival: first delta arrives before completion
@@ -173,32 +162,23 @@ describe("Chat Streaming", () => {
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        ...createChatRequest({
+      body: JSON.stringify(
+        createChatRequest({
+          message: "Hello",
           model: defaultModelId,
           stateKey: randomUUID(),
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [{ type: "text", text: "Hello" }],
-            },
-          ],
-        }),
-        clientRequestId: randomUUID(),
-        stream: true,
-      }),
+        })
+      ),
     });
 
     const res = await chatPOST(req);
 
-    // Assert - Response is Data Stream Protocol
+    // Assert - Response is SSE stream
     expect(res.status).toBe(200);
 
     // Consume stream to trigger completion
-    for await (const e of readDataStreamEvents(res)) {
-      if (isFinishMessageEvent(e)) break;
+    for await (const e of readSseEvents(res)) {
+      if (isFinishEvent(e)) break;
     }
 
     // Assert - Check database for charge receipt
@@ -259,27 +239,14 @@ describe("Chat Streaming", () => {
         "content-type": "application/json",
       },
       signal: ac.signal,
-      body: JSON.stringify({
-        ...createChatRequest({
+      body: JSON.stringify(
+        createChatRequest({
+          message:
+            "Write a very long detailed response with many sentences about the history of computers.",
           model: defaultModelId,
           stateKey: randomUUID(),
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [
-                {
-                  type: "text",
-                  text: "Write a very long detailed response with many sentences about the history of computers.",
-                },
-              ],
-            },
-          ],
-        }),
-        clientRequestId: randomUUID(),
-        stream: true,
-      }),
+        })
+      ),
     });
 
     const res = await chatPOST(req);
@@ -288,7 +255,7 @@ describe("Chat Streaming", () => {
     const start = Date.now();
 
     try {
-      for await (const e of readDataStreamEvents(res)) {
+      for await (const e of readSseEvents(res)) {
         if (isTextDeltaEvent(e)) {
           deltaCount++;
           // Abort after receiving 2 deltas (proves abort works mid-stream)

@@ -492,6 +492,8 @@ export const POST = wrapRouteHandlerWithLogging(
             const result = await Promise.race([final, finalTimeout]);
 
             if (result.ok) {
+              // AI SDK uiMessageChunkSchema uses z.strictObject for finish —
+              // only finishReason and messageMetadata are allowed (no usage).
               writer.write({
                 type: "finish",
                 finishReason: result.finishReason as

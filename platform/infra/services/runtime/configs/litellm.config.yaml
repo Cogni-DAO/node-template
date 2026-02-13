@@ -192,6 +192,19 @@ model_list:
       is_free: false
       provider_key: "xai"
 
+  # ===== EMBEDDING MODELS =====
+  # Used by OpenClaw memory_search for semantic vector search
+  # Uses openai/ prefix + api_base to avoid openrouter/ embedding routing bugs (BerriAI/litellm#19016)
+  - model_name: text-embedding-3-small
+    litellm_params:
+      model: openai/text-embedding-3-small
+      api_base: https://openrouter.ai/api/v1
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Text Embedding 3 Small"
+      is_free: false
+      provider_key: "openrouter"
+
 litellm_settings:
   include_cost_in_streaming_usage: true
   success_callback: ["langfuse"]
