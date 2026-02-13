@@ -96,11 +96,14 @@ tags: [billing, litellm, sandbox]
                        ┌── periodic (task.0039) ──┐
                        ▼                           │
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Reconciliation Worker (in scheduler-worker)                         │
+│ Reconciliation Worker (in scheduler-worker, setInterval)            │
 │                                                                     │
-│  1. Query runs completed > N minutes ago without receipts           │
-│  2. Mark as "unreconciled", emit alert                              │
-│  3. Never blocks user response — purely async                       │
+│  1. GET /spend/logs from LiteLLM API (trailing window)              │
+│  2. Bulk query charge_receipts by litellm_call_id                   │
+│  3. DIFF: spend_log_ids minus receipt_ids = missing                 │
+│  4. REPLAY: commitUsageFact() per missing entry (idempotent)        │
+│  5. ALERT: structured log + metric if missing persists              │
+│  6. Never blocks user response — purely async                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
