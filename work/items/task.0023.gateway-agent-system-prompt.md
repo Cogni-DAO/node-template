@@ -2,7 +2,7 @@
 id: task.0023
 type: task
 title: "Gateway agent workspace — dedicated context, skills integration, memory, and heartbeat fix"
-status: Todo
+status: In Progress
 priority: 0
 estimate: 3
 summary: The OpenClaw gateway agent reads the wrong AGENTS.md, has no persona or skills, no memory config, and HEARTBEAT_OK contaminates responses. Needs dual-workspace architecture with dedicated system prompt context, skills at repo root, and memory search over docs.
@@ -11,11 +11,11 @@ spec_refs: openclaw-workspace-spec
 assignees: derekg1729
 credit:
 project: proj.openclaw-capabilities
-branch:
+branch: feat/task-0023-gateway-workspace
 pr:
 reviewer:
 created: 2026-02-11
-updated: 2026-02-11
+updated: 2026-02-13
 labels: [openclaw, correctness, system-prompt]
 external_refs:
 ---
@@ -91,11 +91,11 @@ Three compounding issues cause the gateway agent to produce bad responses:
 
 ### Part 3: Config + compose
 
-- [ ] Update `openclaw-gateway.json`: `agents.list[0].workspace` → `/workspace/gateway`
-- [ ] Update `openclaw-gateway.json`: add `skills.load.extraDirs: ["/repo/current/.openclaw/skills"]`
-- [ ] Update `openclaw-gateway.json`: add `agents.defaults.memorySearch` with `extraPaths` for `/repo/current/docs` and `/repo/current/work`
-- [ ] Update `openclaw-gateway.test.json`: same workspace + skills + memory changes
-- [ ] Update `docker-compose.yml`: add bind mount `./openclaw/gateway-workspace:/workspace/gateway` to openclaw-gateway service
+- [x] Update `openclaw-gateway.json`: `agents.list[0].workspace` → `/workspace/gateway`
+- [x] Update `openclaw-gateway.json`: add `skills.load.extraDirs: ["/repo/current/.openclaw/skills"]`
+- [x] Update `openclaw-gateway.json`: add `agents.defaults.memorySearch` with `extraPaths` for `/repo/current/docs` and `/repo/current/work`
+- [x] Update `openclaw-gateway.test.json`: same workspace + skills + memory changes
+- [x] Update `docker-compose.yml`: add bind mount `./openclaw/gateway-workspace:/workspace/gateway` to openclaw-gateway service (both prod + dev compose)
 
 ### Part 4: Upstream heartbeat fix (separate PR in openclaw repo)
 

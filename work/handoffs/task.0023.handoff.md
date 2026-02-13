@@ -6,7 +6,7 @@ status: active
 created: 2026-02-13
 updated: 2026-02-13
 branch: feat/task-0023-gateway-workspace
-last_commit: 67a158a2
+last_commit: pending
 ---
 
 # Handoff: Gateway Agent Workspace
@@ -25,8 +25,8 @@ last_commit: 67a158a2
 - **Done**: Gateway workspace behavior files created — `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `MEMORY.md`, `.gitignore` in `services/sandbox-openclaw/gateway-workspace/`
 - **Done**: 10 OpenClaw skills created at `.openclaw/skills/` (implement, commit, spec, test, document, bug, task, handoff, pull-request, review-implementation)
 - **Done**: Validator exclusions — `gateway-workspace/` excluded from AGENTS.md validator, `.openclaw` added to root-layout allowlist
-- **Not done**: Config changes (`openclaw-gateway.json` workspace path, `skills.load.extraDirs`, `memorySearch` config)
-- **Not done**: Docker compose volume mount for gateway workspace
+- **Done**: Config changes — `openclaw-gateway.json` + `.test.json` updated: workspace → `/workspace/gateway`, `skills.load.extraDirs`, `memorySearch.extraPaths`
+- **Done**: Docker compose volume mounts — both prod (`docker-compose.yml`) and dev (`docker-compose.dev.yml`) bind-mount `gateway-workspace:/workspace/gateway`
 - **Not done**: Upstream OpenClaw PR for heartbeat prompt conditional (separate repo)
 - **Not done**: Manual validation (5-message test, skills listing)
 - **Human review needed**: The 4 system prompt `.md` files need human review for tone, accuracy, and completeness (checklist in task)
@@ -38,20 +38,21 @@ last_commit: 67a158a2
 - **Memory via extraPaths**: Semantic search over `/repo/current/docs` and `/repo/current/work` without indexing source code
 - **Dev workflow**: Agent creates git worktrees from `/repo/current/` when it needs to write code, documented in gateway `AGENTS.md`
 - **Skill content**: Near-identical to `.claude/commands/` with minimal YAML frontmatter added
+- **Both compose files**: Volume mount added to both `docker-compose.yml` (prod) and `docker-compose.dev.yml` (dev) — dev uses `../../../../services/sandbox-openclaw/gateway-workspace` relative path
 
 ## Next Actions
 
-- [ ] Update `services/sandbox-openclaw/openclaw-gateway.json`: workspace → `/workspace/gateway`, add `skills.load.extraDirs`, add `memorySearch.extraPaths`
-- [ ] Update `services/sandbox-openclaw/openclaw-gateway.test.json`: same changes
-- [ ] Update `platform/infra/services/runtime/docker-compose.yml`: add bind mount `./openclaw/gateway-workspace:/workspace/gateway`
+- [x] Update `services/sandbox-openclaw/openclaw-gateway.json`: workspace → `/workspace/gateway`, add `skills.load.extraDirs`, add `memorySearch.extraPaths`
+- [x] Update `services/sandbox-openclaw/openclaw-gateway.test.json`: same changes
+- [x] Update compose files: bind mount gateway-workspace into container (both prod + dev)
+- [x] Update task status to `In Progress`, set branch field
 - [ ] **Human review**: Read the 4 gateway workspace `.md` files for tone/accuracy (checklist in task)
 - [ ] Upstream OpenClaw PR: make heartbeat prompt section conditional on `heartbeat.every > 0` (in `/Users/derek/dev/openclaw/`)
 - [ ] Manual test: restart gateway, verify workspace files present, send 5 messages, zero HEARTBEAT_OK
-- [ ] Update task status to `In Progress`, set branch/PR fields
 
 ## Risks / Gotchas
 
-- The bind mount `./openclaw/gateway-workspace:/workspace/gateway` overlays inside the `cogni_workspace` named volume — Docker allows this but order matters in compose
+- The bind mount `gateway-workspace:/workspace/gateway` overlays inside the `cogni_workspace` named volume — Docker allows this but order matters in compose
 - OpenClaw's `memory/` directory needs RW access in the bind-mounted workspace for daily log writes
 - The heartbeat fix is in a separate repo (`/Users/derek/dev/openclaw/`) — without it, the system prompt still contains HEARTBEAT_OK instructions (mitigated by workspace separation but not eliminated)
 - Gateway workspace `.md` files are NOT validated by the repo's AGENTS.md validator (documented as OQ-1 in spec)
