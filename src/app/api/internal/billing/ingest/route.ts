@@ -8,7 +8,7 @@
  * Invariants:
  *   - CALLBACK_AUTHENTICATED: Requires Bearer BILLING_INGEST_TOKEN
  *   - INGEST_ENDPOINT_IS_INTERNAL: Docker-internal only, not exposed through Caddy
- *   - CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID: Duplicate callbacks → 409 (caught, not thrown)
+ *   - CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID: Duplicate callbacks are no-ops (handled internally by commitUsageFact)
  *   - COST_ORACLE_IS_LITELLM: Cost from callback response_cost field
  *   - NO_SYNCHRONOUS_RECEIPT_BARRIER: Never blocks LLM response (async callback)
  * Side-effects: IO (HTTP request/response, database via commitUsageFact)
@@ -146,7 +146,7 @@ function buildUsageFact(
  * Validates bearer token, parses batched array, writes receipts via commitUsageFact().
  *
  * Returns:
- * - 200: { processed, duplicates, skipped }
+ * - 200: { processed, skipped }
  * - 401: Invalid/missing token
  * - 400: Invalid payload
  */
