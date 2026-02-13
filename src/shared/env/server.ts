@@ -85,9 +85,6 @@ export const serverSchema = z.object({
   // OpenClaw's GitHub token for host-side git relay (push + PR creation).
   // Per SECRETS_HOST_ONLY (inv. 4): never passed into the sandbox container.
   OPENCLAW_GITHUB_RW_TOKEN: z.string().min(1),
-  // Shared volume path for gateway proxy billing audit log
-  // Default: /tmp/cogni-openclaw-billing for dev/test (host bind-mount); Docker compose overrides to /openclaw-billing
-  OPENCLAW_BILLING_DIR: z.string().default("/tmp/cogni-openclaw-billing"),
 
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
   // Wallet link MVP - single API key for all wallets (temporary)
