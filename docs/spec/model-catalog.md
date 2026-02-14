@@ -5,7 +5,7 @@ title: LLM Model Catalog
 status: active
 spec_state: active
 trust: reviewed
-summary: Curated model tiers for the Cogni platform — thinking (strong reasoning + writes), flash (fast scanning + synthesis), and free (zero-cost fallback)
+summary: VALUE-FIRST model tiers for Cogni — DeepSeek/QwQ for thinking, Haiku/GPT-4o-Mini/Llama for agents. Reserve Opus strictly for governance.
 read_when: Choosing models for agent config, updating LiteLLM or OpenClaw model lists, evaluating new models
 owner: derekg1729
 created: 2026-02-13
@@ -19,7 +19,7 @@ All models route through OpenRouter via LiteLLM proxy. The gateway agent selects
 
 ## Goal
 
-Maintain a curated, tiered model catalog that the governance agent and subagents draw from. Thinking tier for all writes, flash tier for read-only scanning, free tier as zero-cost fallback.
+**COST CRISIS RESPONSE.** Value is now 10x more important than premium. Maintain a value-first tiered catalog: thinking tier defaults to DeepSeek ($0.25/0.38) and QwQ ($0.05/0.22), NOT Opus. Flash tier defaults to Haiku ($1/$5), GPT-4o-Mini ($0.15/$0.60), or Llama ($0.10/$0.32). Reserve Opus + Sonnet strictly for governance agent only. Both "fast" (flash) and "thinking" (reasoning) remain required, but cost discipline is non-negotiable.
 
 ## Non-Goals
 
@@ -31,31 +31,31 @@ Maintain a curated, tiered model catalog that the governance agent and subagents
 
 ## Thinking Tier
 
-Strong reasoning models for all file mutations: writes, edits, commits, code generation, architecture decisions, EDOs. These tiers reflect 2026 pricing via OpenRouter.
+Strong reasoning models for all file mutations: writes, edits, commits, code generation, architecture decisions, EDOs. **VALUE FIRST.** These tiers reflect 2026 pricing via OpenRouter.
 
-| Model               | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Preference | Notes                                                                         |
-| ------------------- | --------- | ------- | ------- | ------ | ------- | --- | ---------- | ----------------------------------------------------------------------------- |
-| **Claude Opus 4.6** | Anthropic | 1M      | 128k    | $5.00  | $25.00  | Yes | Gold       | Default main agent. Frontier reasoning, best at complex sustained thinking.   |
-| Claude Sonnet 4.5   | Anthropic | 200k    | 4k      | $3.00  | $15.00  | Yes | Strong     | Excellent reasoning at lower cost. Best for governance + agent orchestration. |
-| DeepSeek-V3.2       | DeepSeek  | 64k     | 8k      | $0.25  | $0.38   | No  | ⭐ Value   | Remarkable cost. Strong reasoning with configurable depth (base + reasoning). |
-| QwQ-32B             | Qwen      | 16k     | —       | $0.05  | $0.22   | No  | ⭐ Value   | Cheapest reasoning model. Competitive with o1-mini on hard problems.          |
-| Kimi K2 Thinking    | Moonshot  | 256k    | 65k     | $0.60  | $2.50   | No  | Strong     | Advanced MoE reasoning. Best for persistent multi-turn agentic workflows.     |
-| Kimi K2.5           | Moonshot  | 256k    | 65k     | ~$0.50 | ~$2.00  | No  | Strong     | Latest iteration. Enhanced efficiency over K2.                                |
+| Model             | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Preference  | Notes                                                                                        |
+| ----------------- | --------- | ------- | ------- | ------ | ------- | --- | ----------- | -------------------------------------------------------------------------------------------- |
+| **QwQ-32B**       | Qwen      | 16k     | —       | $0.05  | $0.22   | No  | 🎯 USE THIS | Cheapest reasoning model. Competitive with o1-mini on hard problems. 100x cheaper than Opus. |
+| **DeepSeek-V3.2** | DeepSeek  | 64k     | 8k      | $0.25  | $0.38   | No  | 🎯 USE THIS | Remarkable cost + strength. Base + configurable reasoning depth. 200x cheaper than Opus.     |
+| Claude Sonnet 4.5 | Anthropic | 200k    | 4k      | $3.00  | $15.00  | Yes | Fallback    | Excellent reasoning at lower cost. Use if DeepSeek/QwQ insufficient for governance.          |
+| Claude Opus 4.6   | Anthropic | 1M      | 128k    | $5.00  | $25.00  | Yes | Gold        | Frontier reasoning. **GOVERNANCE ONLY.** Unsustainable for general agents ($20/30min).       |
+| Kimi K2 Thinking  | Moonshot  | 256k    | 65k     | $0.60  | $2.50   | No  | Strong      | Advanced MoE reasoning. Best for persistent multi-turn agentic workflows.                    |
+| Kimi K2.5         | Moonshot  | 256k    | 65k     | ~$0.50 | ~$2.00  | No  | Strong      | Latest iteration. Enhanced efficiency over K2.                                               |
 
 ## Flash Tier
 
-Fast, cheap models for read-only subagent work: scanning, grep-and-summarize, data extraction, synthesis, research. No file mutations. Optimized for ultra-low cost at scale.
+Fast, cheap models for read-only subagent work: scanning, grep-and-summarize, data extraction, synthesis, research. No file mutations. **Optimized for ultra-low cost at scale — these are primary agents.**
 
-| Model                  | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Preference | Notes                                                                  |
-| ---------------------- | --------- | ------- | ------- | ------ | ------- | --- | ---------- | ---------------------------------------------------------------------- |
-| **Claude Haiku 4.5**   | Anthropic | 200k    | 4k      | $1.00  | $5.00   | Yes | Strong     | Preferred subagent. 2× speed of Haiku 3.5, matches Sonnet 4 on coding. |
-| Gemini 2.5 Flash       | Google    | 1M      | 8k      | $0.30  | $2.50   | Yes | Strong     | Excellent balance. 1M context, built-in thinking, strong reasoning.    |
-| Gemini 2.5 Flash Lite  | Google    | 1M      | 8k      | ~$0.15 | ~$1.00  | Yes | Value      | Lighter version of 2.5 Flash. Good for high-volume scanning.           |
-| GPT-4o Mini            | OpenAI    | 128k    | 16k     | $0.15  | $0.60   | No  | ⭐ Value   | Ultra-cheap and capable. Best cost ratio for diverse tasks.            |
-| Llama 3.3 70B          | Meta      | 128k    | 8k      | $0.10  | $0.32   | No  | ⭐ Value   | Incredible for open-weight. Strong coding, competitive with gpt-4o.    |
-| Llama 3.3 70B (free)   | Meta      | 128k    | 8k      | $0     | $0      | No  | Free tier  | Rate-limited but viable for dev/test.                                  |
-| Qwen3 Coder 480B       | Qwen      | 128k    | 8k      | ~$0.20 | ~$0.40  | No  | Value      | Specializes in coding. Competitive with GPT-4o mini.                   |
-| Mistral Large (latest) | Mistral   | 128k    | 4k      | ~$0.27 | ~$0.81  | No  | Value      | Multimodal capable, solid all-rounder.                                 |
+| Model                  | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Preference  | Notes                                                                  |
+| ---------------------- | --------- | ------- | ------- | ------ | ------- | --- | ----------- | ---------------------------------------------------------------------- |
+| **Llama 3.3 70B**      | Meta      | 128k    | 8k      | $0.10  | $0.32   | No  | 🎯 USE THIS | Incredible for open-weight. Strong coding. $0.42/M total cost.         |
+| **GPT-4o Mini**        | OpenAI    | 128k    | 16k     | $0.15  | $0.60   | No  | 🎯 USE THIS | Ultra-cheap + capable. Best cost/quality ratio. $0.75/M total cost.    |
+| **Claude Haiku 4.5**   | Anthropic | 200k    | 4k      | $1.00  | $5.00   | Yes | Strong      | Premium if budget allows. 2× speed of 3.5, matches Sonnet 4 on coding. |
+| Qwen3 Coder 480B       | Qwen      | 128k    | 8k      | ~$0.20 | ~$0.40  | No  | Value       | Specializes in coding. Competitive with GPT-4o mini.                   |
+| Gemini 2.5 Flash Lite  | Google    | 1M      | 8k      | ~$0.15 | ~$1.00  | Yes | Value       | Lighter version of 2.5 Flash. Good for high-volume scanning.           |
+| Gemini 2.5 Flash       | Google    | 1M      | 8k      | $0.30  | $2.50   | Yes | Strong      | Excellent balance. 1M context, built-in thinking, strong reasoning.    |
+| Mistral Large (latest) | Mistral   | 128k    | 4k      | ~$0.27 | ~$0.81  | No  | Value       | Multimodal capable, solid all-rounder.                                 |
+| Llama 3.3 70B (free)   | Meta      | 128k    | 8k      | $0     | $0      | No  | Free (dev)  | Rate-limited (~1k req/day) but viable for local dev/testing only.      |
 
 ## Free Tier
 
