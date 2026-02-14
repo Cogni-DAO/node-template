@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-11
+- **Last reviewed:** 2026-02-14
 - **Status:** draft
 
 ## Purpose
@@ -35,7 +35,7 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
   - `createIntent(userRepo, clock, input)` - Create payment intent with on-chain transfer params (user repo only)
   - `submitTxHash(userRepo, serviceRepo, accountService, verifier, clock, log, input)` - Submit txHash for verification (dual repos)
   - `getStatus(userRepo, serviceRepo, accountService, verifier, clock, log, input)` - Poll status with throttled verification (dual repos)
-  - `confirmCreditsPayment(accountService, input)` - Atomic credit settlement; idempotent on clientPaymentId
+  - `confirmCreditsPayment(accountService, serviceAccountService, input)` - Credit settlement with system tenant revenue share bonus; idempotent on clientPaymentId
   - `getCreditsSummary(accountService, input)` - Fetch balance and recent ledger entries
 - **Exports (hooks/):**
   - `usePaymentFlow(options)` - React hook orchestrating USDC payment flow with wagmi + backend; uses attemptId guard to cancel stale async on reset; returns PaymentFlowState

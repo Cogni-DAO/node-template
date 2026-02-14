@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-11
+- **Last reviewed:** 2026-02-14
 - **Status:** stable
 
 ## Purpose
@@ -38,7 +38,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 
 - **Exports:**
   - AccountService (user-scoped: getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listLlmChargeDetails, listCreditLedgerEntries, findCreditLedgerEntryByReference)
-  - ServiceAccountService (service-role: getBillingAccountById, getOrCreateBillingAccountForUser — BYPASSRLS subset)
+  - ServiceAccountService (service-role: getBillingAccountById, getOrCreateBillingAccountForUser, creditAccount, findCreditLedgerEntryByReference — BYPASSRLS for system tenant operations)
   - LlmService (completion, completionStream with CompletionStreamParams including abortSignal, tools, toolChoice; returns providerCostUsd, litellmCallId, toolCalls)
   - AgentCatalogPort (listAgents; discovery-only interface per AGENT_DISCOVERY.md)
   - AgentDescriptor (agentId, graphId, name, description; P0_AGENT_GRAPH_IDENTITY: agentId === graphId)

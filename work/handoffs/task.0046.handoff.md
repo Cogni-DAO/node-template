@@ -3,85 +3,60 @@ id: task.0046.handoff
 type: handoff
 work_item_id: task.0046
 status: active
-created: 2026-02-13
-updated: 2026-02-13
+created: 2026-02-14
+updated: 2026-02-14
 branch: feat/system-tenant-bootstrap
-last_commit: e564d718
+last_commit: 111fa584
 ---
 
-# Handoff: System Tenant Bootstrap + Purchase-Time Revenue Share
+# Handoff: System Tenant Bootstrap — Migration Fix + Test Updates
 
 ## Context
 
-- Cogni needs a `cogni_system` billing account so governance AI loops execute under a first-class tenant with proper billing attribution
-- On every credit purchase, the system tenant receives **bonus credits** (75% of the user's purchased amount) — the user's allocation is unchanged (100% of what they paid for)
-- The bonus is backed economically by the 2× markup at consumption time ($100 of credits buys ~$50 of compute — the surplus funds the system tenant)
-- This is the P0 foundation for [proj.system-tenant-governance](../projects/proj.system-tenant-governance.md) — PolicyResolverPort, tool policy, governance heartbeat all build on this
+- task.0046 adds `cogni_system` billing account (system tenant) + purchase-time revenue share (25% bonus credits minted to system tenant on every payment)
+- Migration `0008_seed_system_tenant.sql` seeds the system tenant rows into RLS-protected tables
+- Migration failed because `app_user` has `FORCE ROW LEVEL SECURITY` — fixed by adding `set_config('app.current_user_id')` before inserts
+- `drizzle.config.ts` had been changed to prefer `DATABASE_SERVICE_URL` (BYPASSRLS) but `app_service` lacks DDL rights (can't CREATE SCHEMA) — reverted to use `DATABASE_URL` (app_user, DB owner)
+- Stack test `reset-db.ts` truncates all tables before each run, wiping seed data — fixed by re-seeding system tenant after truncation
 
 ## Current State
 
-**Committed (4 implementation commits on branch):**
-
-1. **Schema + migration** (`2812a44d`): `is_system_tenant` boolean on `billing_accounts` + partial unique index + `credit_ledger_revenue_share_ref_unique` idempotency index + seed migration (user, billing account, virtual key)
-2. **Constants + env** (`ae202923`): `SYSTEM_TENANT_ID`, `SYSTEM_TENANT_PRINCIPAL_ID`, `PLATFORM_REVENUE_SHARE_REASON` + `SYSTEM_TENANT_REVENUE_SHARE` env var (default 0.75)
-3. **Port + adapter** (`43557417`): `ServiceAccountService` extended with `creditAccount()` and `findCreditLedgerEntryByReference()`, implemented in `ServiceDrizzleAccountService` (BYPASSRLS)
-4. **Healthcheck** (`e564d718`): `verifySystemTenant()` in `src/bootstrap/healthchecks.ts`
-
-**Uncommitted (in working tree, partially complete):**
-
-- `src/core/billing/pricing.ts` — `calculateRevenueShareBonus()` pure function added (COMPLETE, uses scaled bigint math)
-- `src/core/public.ts` — export added for above (COMPLETE)
-- `src/app/(infra)/readyz/route.ts` — import of `verifySystemTenant` added but **NOT yet called** in the handler (INCOMPLETE — must add the call)
-
-**Not started:**
-
-- Update `confirmCreditsPayment()` to accept `serviceAccountService` param and mint system tenant bonus
-- Update facade caller to pass `serviceAccountService` from container
-- Unit tests for bonus math + creditsConfirm service (two credits, idempotency)
-- `pnpm check` validation pass
+- Migration fix committed (`e37c8d69`) — `set_config` + drizzle.config.ts revert
+- `reset-db.ts` updated to re-seed system tenant after truncation — **NOT YET COMMITTED**
+- Payment stack tests updated to scope ledger queries by `billingAccountId` (avoiding collision with system tenant revenue share entries) — **NOT YET COMMITTED**
+- `readyz` and `credits-confirm` tests pass after reset-db fix
+- Payment `numeric-flow` and `mvp-scenarios` tests have edits ready but **not yet validated** (run `pnpm test:stack:dev`)
+- `siwe-session` timeout and `scheduler-worker-execution` timeout are **pre-existing flaky tests**, unrelated
 
 ## Decisions Made
 
-- **Revenue share = bonus credits, not a split** — user gets 100% unchanged; system tenant gets additional 75%. See [research doc §Area 3](../../docs/research/system-tenant-seeding-heartbeat-funding.md)
-- **No single transaction across RLS boundary** — user credit uses appDb (RLS), system tenant credit uses serviceDb (BYPASSRLS). Sequential with idempotency guards, not one transaction. If crash between the two: retry skips user credit (idempotent), applies system tenant credit
-- **Scaled bigint math** — `calculateRevenueShareBonus` uses `REVENUE_SHARE_SCALE = 10_000n` to avoid float arithmetic on bigint credits, consistent with `usdCentsToCredits` pattern
-- **No DAO reserve account** — DAO already holds the money. The 25% not minted is implicit margin
-- **Partial unique index** for `platform_revenue_share` reason in `credit_ledger` for DB-level idempotency (defense-in-depth)
+- Option A chosen: run migrations as `app_user` (DB owner) with `set_config()` for RLS context, NOT as `app_service`
+- Revenue share is BONUS credits (minted to system tenant), NOT deducted from user — user gets full amount
+- P2 task.0055 created for dedicated `app_migrator` role (proper DDL/DML separation)
 
 ## Next Actions
 
-- [ ] Commit the uncommitted pricing function + public export (ready as-is)
-- [ ] Finish readyz wiring — call `verifySystemTenant(container.serviceAccountService)` in the handler after Temporal check
-- [ ] Update `confirmCreditsPayment()` signature: add `serviceAccountService: ServiceAccountService` param
-- [ ] After user credit, add idempotency check + bonus credit via `serviceAccountService.creditAccount()` with `reason: PLATFORM_REVENUE_SHARE_REASON`
-- [ ] When `SYSTEM_TENANT_REVENUE_SHARE=0`, skip system tenant credit entirely
-- [ ] Update `confirmCreditsPaymentFacade` to pass `getContainer().serviceAccountService`
-- [ ] Update facade test mock to include `serviceAccountService` in the `confirmCreditsPayment` call assertion
-- [ ] Write unit test: `calculateRevenueShareBonus` — standard 75%, zero share, 100% share, rounding
-- [ ] Write unit test: `confirmCreditsPayment` — two `creditAccount` calls (user + system), idempotency on retry
-- [ ] Run `pnpm check` — lint, typecheck, format, tests must all pass
+- [ ] Run `pnpm test:stack:dev` to validate payment test fixes
+- [ ] If tests pass, stage and commit: `tests/stack/setup/reset-db.ts`, `tests/stack/payments/numeric-flow.stack.test.ts`, `tests/stack/payments/mvp-scenarios.stack.test.ts`
+- [ ] Run `pnpm check` to validate lint/types
+- [ ] Consider adding a stack test that asserts system tenant receives revenue share bonus after payment
+- [ ] Create PR against `staging` via `/pull-request`
 
 ## Risks / Gotchas
 
-- **readyz import is dead code** — `verifySystemTenant` is imported but never called. This will fail lint (`unused imports`). Must either add the call or remove the import before committing
-- **`confirmCreditsPayment` callers** — the function signature change (adding `serviceAccountService`) is breaking. Check `credits.server.ts` facade and the existing unit/facade tests
-- **Mock needs updating** — `createMockAccountService()` in `tests/_fakes/accounts/mock-account.service.ts` returns `AccountService` (not `ServiceAccountService`). You'll need a separate `createMockServiceAccountService()` or pass the mock directly
-- **`credit_ledger` FK requires `virtual_key_id`** — the migration seeds one for `cogni_system`. The `ServiceDrizzleAccountService.creditAccount()` resolves it via `findDefaultKey()`. If you ever reset the DB without re-running migrations, the healthcheck will catch it
+- `reset-db.ts` uses `DATABASE_URL` (app_user, RLS enforced) — the re-seed SQL must be wrapped in `sql.begin()` so `set_config` persists across inserts
+- `seedDb` in stack tests is `app_service` (BYPASSRLS) — `findFirst` on `creditLedger` by `reference` alone returns EITHER user OR system tenant entry non-deterministically. Always filter by `billingAccountId`
+- `set_config(..., true)` = transaction-local only. Without explicit `BEGIN`, each statement is its own autocommit transaction and the setting is lost
 
 ## Pointers
 
-| File / Resource                                                                | Why it matters                                            |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| [task.0046](../items/task.0046.system-tenant-bootstrap-revenue-split.md)       | Full requirements, plan, validation commands              |
-| [Research doc](../../docs/research/system-tenant-seeding-heartbeat-funding.md) | Economics model, options considered                       |
-| [system-tenant spec](../../docs/spec/system-tenant.md)                         | Governing invariants (12 items)                           |
-| [billing-evolution spec](../../docs/spec/billing-evolution.md)                 | Credit unit standard, idempotency constraints             |
-| `packages/db-schema/src/refs.ts`                                               | `billingAccounts` table with `isSystemTenant` column      |
-| `packages/db-schema/src/billing.ts`                                            | `creditLedger` with `revenueShareRefUnique` index         |
-| `src/core/billing/pricing.ts`                                                  | `calculateRevenueShareBonus()` (uncommitted)              |
-| `src/features/payments/services/creditsConfirm.ts`                             | Payment confirmation — wire revenue share here            |
-| `src/app/_facades/payments/credits.server.ts`                                  | Facade — pass `serviceAccountService` from container here |
-| `src/ports/accounts.port.ts`                                                   | `ServiceAccountService` interface (already extended)      |
-| `src/adapters/server/accounts/drizzle.adapter.ts`                              | `ServiceDrizzleAccountService` (already extended)         |
-| `tests/unit/features/payments/services/creditsConfirm.spec.ts`                 | Existing unit tests — update for new param                |
-| `tests/_fakes/accounts/mock-account.service.ts`                                | Mock factory — may need ServiceAccountService variant     |
+| File / Resource                                                 | Why it matters                                                          |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `src/adapters/server/db/migrations/0008_seed_system_tenant.sql` | Seed migration with `set_config` fix                                    |
+| `drizzle.config.ts`                                             | Reverted to `DATABASE_URL` only (no service URL)                        |
+| `tests/stack/setup/reset-db.ts`                                 | Re-seeds system tenant after truncation                                 |
+| `tests/stack/payments/numeric-flow.stack.test.ts`               | Ledger queries scoped by `billingAccountId`                             |
+| `tests/stack/payments/mvp-scenarios.stack.test.ts`              | Same — all 7 ledger queries updated                                     |
+| `tests/stack/payments/credits-confirm.stack.test.ts`            | Already correct — reference pattern for the fix                         |
+| `src/features/payments/services/creditsConfirm.ts`              | Revenue share logic — user credit (line 72) then system bonus (line 98) |
+| `work/items/task.0055.dedicated-migrator-role.md`               | P2 follow-up for proper DDL/DML role separation                         |

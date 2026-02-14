@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-11
+- **Last reviewed:** 2026-02-14
 - **Status:** stable
 
 ## Purpose
@@ -48,6 +48,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 ## Public Surface
 
 - **Exports:**
+  - `verifySystemTenant(serviceAccountService)` - Startup healthcheck: fails fast if cogni_system billing account missing (per SYSTEM_TENANT_STARTUP_CHECK)
   - `getContainer()` - Singleton DI container with logger and config
   - `resetContainer()` - Reset singleton (tests only)
   - `Container` interface - Ports + logger + config (includes accountsForUser(userId), serviceAccountService, metricsQuery, metricsCapability, repoCapability, toolSource, threadPersistenceForUser(userId); no usageService)

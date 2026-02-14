@@ -10,7 +10,7 @@ read_when: Implementing governance loops, tool policy enforcement, or system-ini
 implements: []
 owner: cogni-dev
 created: 2026-01-20
-verified: 2026-02-13
+verified: 2026-02-14
 tags:
   - system-tenant
   - governance
