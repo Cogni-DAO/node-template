@@ -22,6 +22,7 @@ import {
   readSseEvents,
   type SseEvent,
 } from "@tests/helpers/data-stream";
+import { waitForReceipts } from "@tests/helpers/poll-db";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
@@ -29,7 +30,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
 import type { SessionUser } from "@/shared/auth/session";
-import { billingAccounts, chargeReceipts } from "@/shared/db/schema";
+import { billingAccounts } from "@/shared/db/schema";
 
 // Mock session
 vi.mock("@/app/_lib/auth/session", () => ({
@@ -192,11 +193,9 @@ describe("Chat Streaming", () => {
       throw new Error("Billing account not found");
     }
 
-    // Get the most recent charge receipt
-    const receipt = await db.query.chargeReceipts.findFirst({
-      where: eq(chargeReceipts.billingAccountId, billingAccount.id),
-      orderBy: (chargeReceipts, { desc }) => [desc(chargeReceipts.createdAt)],
-    });
+    // Wait for receipt from async LiteLLM callback (CALLBACK_IS_SOLE_WRITER)
+    const receipts = await waitForReceipts(db, billingAccount.id);
+    const receipt = receipts[0];
 
     // Per ACTIVITY_METRICS.md: charge_receipt has minimal fields, no model
     // Model lives in LiteLLM (canonical source)

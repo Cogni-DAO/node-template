@@ -223,6 +223,11 @@ export class LiteLlmAdapter implements LlmService {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${env.LITELLM_MASTER_KEY}`,
+          ...(params.spendLogsMetadata && {
+            "x-litellm-spend-logs-metadata": JSON.stringify(
+              params.spendLogsMetadata
+            ),
+          }),
         },
         body: JSON.stringify(requestBody),
         /** 30 second timeout */
@@ -471,6 +476,11 @@ export class LiteLlmAdapter implements LlmService {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${env.LITELLM_MASTER_KEY}`,
+          ...(params.spendLogsMetadata && {
+            "x-litellm-spend-logs-metadata": JSON.stringify(
+              params.spendLogsMetadata
+            ),
+          }),
         },
         body: JSON.stringify(requestBody),
         signal,

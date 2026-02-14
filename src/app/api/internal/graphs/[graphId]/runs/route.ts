@@ -27,7 +27,7 @@ import {
   InternalGraphRunInputSchema,
   type InternalGraphRunOutput,
 } from "@/contracts/graphs.run.internal.v1.contract";
-import { commitUsageFact, executeStream } from "@/features/ai/public.server";
+import { executeStream } from "@/features/ai/public.server";
 import { preflightCreditCheck } from "@/features/ai/services/preflight-credit-check";
 import type { PreflightCreditCheckFn } from "@/ports";
 import {
@@ -38,7 +38,6 @@ import {
   isInsufficientCreditsPortError,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
-import type { BillingCommitFn } from "@/types/billing";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -340,10 +339,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     const model =
       typeof input.model === "string" ? input.model : "openrouter/auto";
 
-    // Create billing commit closure (app layer CAN import features — DI boundary)
     const accountService = container.accountsForUser(toUserId(grant.userId));
-    const billingCommitFn: BillingCommitFn = (fact, context) =>
-      commitUsageFact(fact, context, accountService, log);
 
     // Create preflight credit check closure
     // Per CREDITS_ENFORCED_AT_EXECUTION_PORT: decorator handles all execution paths
@@ -363,7 +359,6 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     const executor = createGraphExecutor(
       executeStream,
       toUserId(grant.userId),
-      billingCommitFn,
       preflightCheckFn
     );
     const result = executor.runGraph({

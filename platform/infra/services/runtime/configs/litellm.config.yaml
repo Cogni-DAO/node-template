@@ -25,16 +25,6 @@ model_list:
         cogni:
           default_free: true
 
-  # TNG
-  - model_name: tng-chimera
-    litellm_params:
-      model: openrouter/tngtech/tng-r1t-chimera:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "TNG Chimera"
-      is_free: true
-      provider_key: "tng"
-
   # Arcee
   - model_name: trinity-mini
     litellm_params:
