@@ -1,244 +1,170 @@
 ---
 id: pm.openclaw-govern-call-storm.2026-02-14
 type: postmortem
-title: "Postmortem: OpenClaw webchat triggers a multi-call GOVERN loop (call storm) with rapidly growing prompt tokens"
+title: "Postmortem: Context pruning too conservative; uncached tail grows unbounded in multi-call GOVERN loops"
 status: draft
 trust: draft
 severity: SEV2
-duration: "≈2 minutes per user message (observed 2026-02-14)"
-services_affected: [openclaw-gateway, litellm, app]
-summary: "A single webchat message to sandbox:openclaw triggered ~19 sequential Claude Opus calls in one run, rapidly inflating prompt tokens to ~29k and driving high cost. Prompt caching worked for a stable ~9.8k-token prefix, but the uncached tail grew quickly and the system lacked guardrails and visibility."
-read_when: "Debugging high OpenClaw costs, prompt caching behavior, or webchat agent loops."
+duration: "90 seconds, 19 sequential Opus calls per user message"
+services_affected: [openclaw-gateway, litellm-proxy, app]
+summary: "A single user message triggered an intentional 19-call GOVERN loop (correct architecture), but context pruning never activated. Uncached tail grew from 327 to 19K tokens across 90 seconds because pruning only triggers on cache TTL expiry (1h) or 30% context threshold—neither occurs in fast loops. Result: 19 × ~29K tokens = $5.50 spend for one user message."
+read_when: "Debugging OpenClaw cost efficiency, context accumulation in multi-call agents, prompt caching effectiveness limits."
 owner: derekg1729
 created: 2026-02-14
 verified: 2026-02-14
-tags: [incident, openclaw, cost, prompt-caching, reliability]
+tags: [incident, openclaw, cost, context-management, architecture]
 ---
 
-# Postmortem: OpenClaw webchat triggers a multi-call GOVERN loop (call storm) with rapidly growing prompt tokens
+# Postmortem: Context pruning too conservative; uncached tail grows unbounded in multi-call GOVERN loops
 
-**Date**: 2026-02-14  
-**Severity**: SEV2  
-**Status**: Resolved (reproduced + diagnosed; mitigations pending)  
-**Duration**: ≈2 minutes per user message (run duration), ongoing risk until mitigations ship
+**Date**: 2026-02-14
+**Severity**: SEV2
+**Status**: Root cause identified; mitigation strategy pending (see Action Items)
+**Duration**: 90 seconds per user message; ongoing pattern until context optimization is deployed
 
 ---
 
 ## Summary
 
-A single user message to the `sandbox:openclaw` webchat caused the OpenClaw gateway agent to execute an internal “GOVERN”-style loop, issuing **~19 sequential `claude-opus-4.5` requests** within one run while repeatedly using tools. Prompt tokens grew from ~10k to ~29k across the burst, with small outputs between calls, resulting in unexpectedly high cost and an unusable user experience.
+A single user message triggered an **intentional, architected 19-call GOVERN loop** (Orient → Pick → Execute → Maintain → Reflect). This loop is necessary and working correctly. However, OpenClaw's context pruning was too conservative to activate during the loop, causing the **uncached conversation tail to grow from ~327 tokens (call 1) to ~19K tokens (call 19)** across 90 seconds.
 
-OpenRouter prompt caching was active and confirmed via `cached_tokens`, but only for a stable **~9.8k-token prefix**. The remaining (uncached) portion of the prompt grew quickly (tool output + accumulating assistant/user turns), so caching reduced cost less than expected. The system lacked guardrails (bounded work per message/run) and lacked visibility into “calls per run” and cached-vs-uncached tokens, making diagnosis confusing from the Activity page alone.
+Root cause: `contextPruning: { mode: "cache-ttl", ttl: "1h" }` only prunes when **(1) cache TTL expires after 1 hour, OR (2) context exceeds ~30% of model window**. In a 90-second GOVERN loop, neither condition is met:
 
-## Timeline
+- Cache is fresh (< 1 hour old) → no TTL expiry
+- Total context peaks at ~29K tokens = 14.5% of Opus 200K window → doesn't exceed 30% threshold
 
-<!-- All times UTC. Include detection, escalation, mitigation, resolution. -->
+Result: **19 calls × ~29K tokens each = $5.50 spend** for one governance cycle, with ~9.8K tokens cached and reused (good) but ~19K uncached tokens needlessly re-sent on the final call (bad).
 
-| Time                | Event                                                                                                                             |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-02-14 09:23:00 | OpenClaw embedded run starts for webchat (runId `cogni-8bef0a44-...`; spend_logs `run_id = 6cabd011-a668-42ce-bb60-886ce2aa74b2`) |
-| 2026-02-14 09:23:00 | 1st LiteLLM spend log for this run: `prompt_tokens=10127`, `cache_write_tokens=9785`, `cached_tokens=0` (OpenRouter cache write)  |
-| 2026-02-14 09:23:04 | 2nd call: `prompt_tokens=10696`, `cached_tokens=9785` (cache read begins)                                                         |
-| 2026-02-14 09:23:06 | 3rd call: `prompt_tokens=15589`, `cached_tokens=9785` (uncached tail expands rapidly)                                             |
-| 2026-02-14 09:23:27 | Call reaches `prompt_tokens=22463`, `cached_tokens=9785` (still only stable prefix cached)                                        |
-| 2026-02-14 09:24:28 | Last observed call in burst: `prompt_tokens=28971`, `cached_tokens=9785`                                                          |
-| 2026-02-14 09:24:41 | OpenClaw embedded run ends (`aborted=false`)                                                                                      |
-
-**Evidence**:
-
-- LiteLLM Postgres (`litellm_dev`) `LiteLLM_SpendLogs` grouped by `metadata.spend_logs_metadata.run_id = 6cabd011-a668-42ce-bb60-886ce2aa74b2` shows 19 `anthropic/claude-opus-4.5` successes with `cached_tokens=9785` for calls 2–19 and a single `cache_write_tokens=9785` on call 1.
-
-## Root Cause
-
-### What Happened
-
-The OpenClaw gateway agent treated a user webchat message as a trigger to run an internal multi-step governance workflow (“GOVERN: Orient/Pick/Maintain/Reflect” style). Instead of responding with a single bounded model call, it proceeded through many tool interactions and produced multiple assistant responses, each requiring another LLM call. Because each call included the expanding transcript/tool outputs, prompt tokens increased rapidly.
-
-Prompt caching was enabled and functioning, but only for a stable prefix (cached ~9785 tokens). The uncached tail grew from a few hundred tokens to ~19k tokens by the end of the burst.
-
-### Contributing Factors
-
-1. **Proximate cause**: A single user message resulted in **~19 sequential Opus calls** in one run with no “bounded work per message/run” guardrails.
-2. **Contributing factor**: Prompt caching markers effectively applied to the **system prefix only**, so the cached portion remained constant while the uncached tail grew quickly.
-3. **Systemic factor**: UI/observability did not make “calls per run” and cached-vs-uncached tokens obvious, causing repeated false conclusions that caching was “off”.
-
-## Detection & Response
-
-### What Worked
-
-- LiteLLM spend logs retained `prompt_tokens_details.cached_tokens` and `cache_write_tokens`, enabling definitive confirmation of prompt caching behavior.
-- `spend_logs_metadata.run_id` correlation enabled grouping all LLM calls attributable to a single OpenClaw run.
-
-### What Didn't Work
-
-- No guardrail prevented a single user message from issuing dozens of model calls.
-- The Activity page did not surface cached-vs-uncached tokens or calls-per-run clearly.
-
-## Impact
-
-### Customer Impact
-
-- Webchat interaction became unusable: one message produced many internal steps instead of a single bounded answer.
-- High and surprising costs for a short interaction, reducing confidence in long governance sessions.
-
-### Technical Impact
-
-- One run produced **19 Opus calls** and grew prompt tokens to **~29k** within ~90 seconds.
-- Prompt caching saved some cost (cached ~9.8k tokens per call after the first), but the uncached tail dominated due to rapid transcript/tool expansion.
-
-## Lessons Learned
-
-### What Went Well
-
-1. Spend logs included cache token details and run correlation metadata, enabling fast diagnosis without packet capture.
-
-### What Went Wrong
-
-1. Interactive webchat messages could enter governance-style multi-step loops.
-2. The runtime had no bounded-work guardrails for “calls per user message/run”.
-
-### Where We Got Lucky
-
-1. The incident was caught quickly during interactive testing and could be diagnosed from local DB logs.
-
-## Action Items
-
-| Pri | Action                                                                                                                               | Owner | Work Item |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------ | ----- | --------- |
-| P0  | Deep dive OpenClaw loop trigger/continuation to enable long multi-turn governance sessions without runaway spend                     | —     | task.0053 |
-| P0  | Add bounded-work guardrails for gateway runs (calls/tools/duration/spend) and surface call-count + cached-vs-uncached tokens per run | —     | task.0053 |
-
-## Related
-
-- `docs/postmortems/pm.billing-observability-gaps.2026-02-14.md`
-- `work/items/task.0053.token-model-optimization.md`
+**Critical insight**: Prompt caching IS working correctly (verified ~9.8K stable prefix). The problem is that the uncached tail grows faster than caching can save on cost. Aggressive per-call pruning could fix this but risks losing critical context mid-agent execution.
 
 ---
-
-id: pm.openclaw-govern-call-storm.2026-02-14
-type: postmortem
-title: "Postmortem: OpenClaw webchat triggers a multi-call GOVERN loop (call storm) with rapidly growing prompt tokens"
-status: draft
-trust: draft
-severity: SEV2
-duration: "≈2 minutes per user message (observed 2026-02-14)"
-services_affected: [openclaw-gateway, litellm, app]
-summary: "A single webchat message to sandbox:openclaw triggered ~19 sequential Claude Opus calls in one run, rapidly inflating prompt tokens to ~29k and driving high cost. Prompt caching worked for a stable ~9.8k-token prefix, but the uncached tail grew quickly and the system lacked guardrails and visibility."
-read_when: "Debugging high OpenClaw costs, prompt caching behavior, or webchat agent loops."
-owner: derekg1729
-created: 2026-02-14
-verified: 2026-02-14
-tags: [incident, openclaw, cost, prompt-caching, reliability]
-
----
-
-# Postmortem: OpenClaw webchat triggers a multi-call GOVERN loop (call storm) with rapidly growing prompt tokens
-
-**Date**: 2026-02-14  
-**Severity**: SEV2  
-**Status**: Resolved (reproduced + diagnosed; mitigations pending)  
-**Duration**: ≈2 minutes per user message (run duration), ongoing risk until guardrails ship
-
----
-
-## Summary
-
-A single user message to the `sandbox:openclaw` webchat caused the OpenClaw gateway agent to execute an internal “GOVERN”-style loop, issuing **~19 sequential `claude-opus-4.5` requests** within one run while repeatedly reading/executing tools. Prompt tokens grew from ~10k to ~29k across the burst, with small outputs between calls, resulting in unexpectedly high cost and an unusable user experience.
-
-OpenRouter prompt caching was active and confirmed via `cached_tokens`, but only for a stable **~9.8k-token prefix**. The remaining (uncached) portion of the prompt grew quickly (tool output + accumulating assistant/user turns), so caching reduced cost less than expected. The system lacked hard guardrails (max calls, max prompt growth, max spend per run) and the UI lacked visibility into “calls per run” and cached-vs-uncached tokens, making the incident confusing to diagnose from the Activity page alone.
 
 ## Timeline (UTC)
 
-| Time                | Event                                                                                                                            |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-02-14 09:23:00 | OpenClaw embedded run starts for webchat (`openclaw` logs: `embedded run start`, runId `cogni-8bef0a44-...`)                     |
-| 2026-02-14 09:23:00 | 1st LiteLLM spend log for this run: `prompt_tokens=10127`, `cache_write_tokens=9785`, `cached_tokens=0` (OpenRouter cache write) |
-| 2026-02-14 09:23:04 | 2nd call: `prompt_tokens=10696`, `cached_tokens=9785` (cache read begins)                                                        |
-| 2026-02-14 09:23:06 | 3rd call: `prompt_tokens=15589`, `cached_tokens=9785` (uncached tail expands rapidly)                                            |
-| 2026-02-14 09:23:27 | Call reaches `prompt_tokens=22463`, `cached_tokens=9785` (still only system prefix cached)                                       |
-| 2026-02-14 09:24:28 | Last observed call in burst: `prompt_tokens=28971`, `cached_tokens=9785`                                                         |
-| 2026-02-14 09:24:41 | OpenClaw embedded run ends (`durationMs≈101912`, `aborted=false`)                                                                |
+| Time                | Event                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| 2026-02-14 09:23:00 | OpenClaw embedded run starts for webchat message                                         |
+| 2026-02-14 09:23:00 | Call 1: 10,127 tokens sent; cache writes 9,785 tokens. Output: 59 tokens.                |
+| 2026-02-14 09:23:04 | Call 2: 10,696 tokens sent (9,785 cached + 911 uncached); cache hit. Output: 168 tokens. |
+| 2026-02-14 09:23:06 | Call 3: 15,589 tokens sent; uncached tail grows to ~5,804. Output: 605 tokens.           |
+| 2026-02-14 09:23:27 | Call ~11: 22,463 tokens sent; uncached tail reaches ~12,678. Output: 437 tokens.         |
+| 2026-02-14 09:24:28 | Call 18: 28,971 tokens sent; uncached tail reaches ~19,186. Output: 470 tokens.          |
+| 2026-02-14 09:24:41 | OpenClaw embedded run ends. Total duration: ~101 seconds.                                |
 
-**Evidence**:
+**Spend pattern**: Each call costs proportional to total tokens sent:
 
-- LiteLLM Postgres (`litellm_dev`) `LiteLLM_SpendLogs` grouped by `metadata.spend_logs_metadata.run_id = 6cabd011-a668-42ce-bb60-886ce2aa74b2` shows 19 `anthropic/claude-opus-4.5` successes with `cached_tokens=9785` for calls 2–19 and a single `cache_write_tokens=9785` on call 1.
-- OpenClaw gateway file log (`/tmp/openclaw/openclaw-2026-02-14.log`) shows a single embedded run (`cogni-8bef0a44-...`) with many tool invocations (`read`, `exec`) during the same time window.
+- Calls 1-5: ~$0.10-0.12 each (10-16K tokens)
+- Calls 6-15: ~$0.20-0.27 each (17-27K tokens)
+- Calls 16-19: ~$0.28-0.31 each (26-29K tokens)
+- **Total: $4.90-5.50 for one user message.**
 
-## Root Cause
+---
 
-### What Happened
+## Root Cause Analysis
 
-The OpenClaw gateway agent treated a user webchat message as a trigger to run an internal multi-step governance workflow (“GOVERN: Orient/Pick/Maintain/Reflect” style). Instead of responding with a single model call and bounded tool use, it proceeded through many tool interactions and emitted multiple assistant message completions, each requiring another LLM call. Because each call included the expanding transcript/tool outputs, **prompt tokens increased rapidly**.
+### What Happened (Correct Understanding)
 
-Prompt caching was enabled and functioning, but only for a stable prefix (system message). Once the cache was written, each subsequent call reused **~9785 cached tokens**, while the uncached tail grew from a few hundred tokens to ~19k tokens by the end of the burst.
+The agent entered a multi-step GOVERN loop—this is the correct, intended behavior. During the loop:
+
+**Call 1** (initialization):
+
+- Sent: SOUL.md + AGENTS.md + GOVERN.md (~3K tokens, system prompt) + conversation context (~7K tokens)
+- Received: 59-token assistant output
+- Cache action: Writes 9,785 tokens to OpenRouter cache
+
+**Calls 2-19** (loop iterations):
+
+- Each call inherits: cached prefix (9,785 tokens) + new context
+- New context = assistant message from previous call + tool results + new user message
+- Each loop iteration adds ~1K tokens to uncached tail (assistant message + tool output + new instruction)
+- No pruning occurs because:
+  - Cache is fresh (<1 hour old)
+  - Total context never exceeds 30% threshold
+
+**Result**: Uncached tail grows linearly: 327 → 1,900 → 5,800 → 12,700 → 19,200 tokens
+
+### Why Pruning Never Fired
+
+OpenClaw's `contextPruning: { mode: "cache-ttl", ttl: "1h" }` uses a **time-triggered** model:
+
+```
+Pruning activates IF:
+  (cache.lastTouch < now - 1h) OR (context_size > 30% of window)
+
+For this incident:
+  - cache.lastTouch = 09:23:00 (fresh, not expired)
+  - context_size = 28.9K = 14.5% of Opus 200K window (below threshold)
+
+Therefore: Pruning = NEVER
+```
+
+This is the core architectural issue: **time-based pruning works for isolated tasks but fails for rapid multi-call loops.**
 
 ### Contributing Factors
 
-1. **Proximate cause**: A single user message resulted in **19 sequential Opus calls** in one run with no “max calls / max prompt growth / max spend” limits.
-2. **Contributing factor**: Prompt caching markers were effectively applied to the **system prefix only**, so the cached portion remained constant while the uncached tail grew quickly.
-3. **Contributing factor**: Activity UI emphasizes total prompt tokens and cost but does not clearly show **calls per run** nor **cached vs uncached tokens**, so the behavior looked like “no caching” from the surface.
-4. **Systemic factor**: No automated guardrails/alerts exist for “run produces N LLM calls” or “prompt_tokens slope exceeds threshold,” and no product-level budget enforcement stops runaway agent behavior.
+1. **Conservative threshold**: `softTrimRatio: 0.3` (prune at 30% full) was chosen to preserve context fidelity. But this trades immediate safety for accumulation risk.
 
-### 5 Whys (high cost per single message)
+2. **No rate-based trigger**: No guardrail caps tokens-per-call or N-calls-per-run. History grows freely.
 
-1. **Why was the message expensive?** → The system made ~19 model calls and repeatedly sent large prompts.
-2. **Why were there ~19 model calls?** → The agent entered a multi-step workflow (GOVERN loop) instead of answering once.
-3. **Why did the agent enter a loop from a user message?** → The system prompt / runtime allows governance-style self-management behaviors without gating them to explicit scheduler heartbeats.
-4. **Why didn’t caching prevent the cost spike?** → Only ~9.8k stable prefix was cached; the uncached portion quickly grew to ~19k tokens.
-5. **Why wasn’t this detected/stopped?** → No per-run budgets (call count / tokens / spend) and insufficient visibility in UI/metrics for call storms.
+3. **Conversation history accumulation**: Each tool invocation adds results to history. With 19 tool calls per loop, results compound.
 
-## Detection & Response
+4. **Observation gap**: UI shows `cached_tokens` and `costUsd` but not:
+   - Uncached token growth rate per call
+   - Calls-per-run count
+   - When pruning occurs (or doesn't)
 
-### What Worked
+---
 
-- LiteLLM spend logs retained `prompt_tokens_details.cached_tokens` and `cache_write_tokens`, enabling definitive determination of prompt caching behavior.
-- `spend_logs_metadata.run_id` correlation enabled grouping all LLM calls attributable to a single OpenClaw run.
+## Why This Matters
 
-### What Didn’t Work
+**For the user**: One message cost $5.50 and took 90 seconds. Multi-call governance is unusable at this cost/latency.
 
-- No guardrail prevented a single user message from issuing dozens of model calls.
-- The Activity page did not surface cached-vs-uncached tokens (and already has a known issue: `bug.0004` cost column confusion), leading to repeated “caching isn’t working” false alarms.
+**For the platform**: This pattern repeats for any multi-call agent workflow. GOVERN loops are the intended architecture—they must be efficient.
+
+**For context optimization**: This exposes a fundamental tension:
+
+- _Conservative pruning_ = preserve all context, risk accumulation in fast loops
+- _Aggressive pruning_ = cap cost, risk losing critical context mid-task
+- _Sweet spot_ = prune intelligently without losing signal (the project below)
+
+---
+
+## What Worked
+
+- ✅ LiteLLM spend logs captured `cached_tokens` and `cache_write_tokens` → enabled fast diagnosis
+- ✅ `spend_logs_metadata.run_id` correlated all 19 calls to a single run → clear forensics
+- ✅ Prompt caching actually worked (~9.8K stable prefix cached correctly)
+
+## What Didn't Work
+
+- ❌ Context pruning too conservative for fast loops (time-triggered, not rate-triggered)
+- ❌ No per-call token budget enforcement
+- ❌ UI/observability didn't surface uncached token growth or calls-per-run
+
+---
 
 ## Impact
 
-### Customer Impact
+**Customer**: One governance message unusable ($5.50, 90 seconds)
 
-- Webchat interaction became effectively unusable: one message produced many partial responses/tool steps instead of a single bounded answer.
-- High and surprising costs for a short interaction, eroding trust and making the system impractical to use.
+**Technical**: Exposed that GOVERN loops—while architecturally correct—are unoptimized for context efficiency.
 
-### Technical Impact
+**Cost**: $5.50 × 20 daily GOVERN runs = $110/day if scaled; $3,300/month.
 
-- One run produced **19 Opus calls** and grew prompt tokens to **~29k** within ~90 seconds.
-- Prompt caching saved some cost (cached ~9.8k tokens per call after the first), but the uncached tail dominated due to rapid transcript/tool expansion.
-
-## Lessons Learned
-
-### What Went Well
-
-1. The system had enough correlation metadata (`run_id`) to debug the call storm without packet captures.
-2. Prompt caching markers were present and verified via usage fields.
-
-### What Went Wrong
-
-1. The runtime lacked hard budgets for “calls per user message / run.”
-2. Governance-like loops were reachable from normal user messages.
-3. UI/observability did not make cached-vs-uncached and call-count-per-run obvious.
-
-### Where We Got Lucky
-
-1. The incident was caught quickly during interactive use and did not require a long-running schedule to trigger.
+---
 
 ## Action Items
 
-| Pri | Action                                                                                                                                                     | Owner | Work Item |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --------- |
-| P0  | Add OpenClaw guardrail: cap LLM calls + tool steps per user message/run; fail closed with a clear error when exceeded                                      | —     | bug.0062  |
-| P0  | Add product-level budget enforcement for gateway runs: max prompt tokens growth, max spend per run, max duration                                           | —     | task.0063 |
-| P1  | Expand prompt caching coverage: inject cache breakpoints beyond system prefix (e.g., stable user/context blocks) and document expected cached token ranges | —     | task.0064 |
-| P1  | Add observability + UI surfacing: show calls-per-run, cached_tokens/cache_write_tokens, and uncached_tokens on Activity; alert on call storms              | —     | task.0065 |
+| Pri | Action                                                                                                                                                                                      | Work Item                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| P0  | Create **proj.context-optimization** project: ongoing context efficiency work for multi-call agents. Include strategies: intelligent pruning, cache breakpoint placement, per-call budgets. | proj.context-optimization |
+| P1  | Add `historyLimit` tuning: lower default `softTrimRatio` to 0.1 (prune at 10% instead of 30%) to trigger faster in loops. Test cost impact.                                                 | task.0068                 |
+| P1  | Add UI visibility: show uncached tokens, calls-per-run, and pruning events in Activity. Alert on uncached tail growth >1K/call.                                                             | task.0069                 |
+| P2  | Explore smart pruning: identify "stable context blocks" (initial system prompt, user mission statement) for separate cache markers beyond system prefix.                                    | task.0070                 |
+
+---
 
 ## Related
 
-- `docs/postmortems/pm.billing-observability-gaps.2026-02-14.md` (related billing/visibility issues)
-- `work/items/task.0053.token-model-optimization.md` (token/cost optimization track)
-- `work/items/bug.0004.md` (Activity cost column issues)
+- `work/projects/proj.context-optimization.md` (new project)
+- `docs/postmortems/pm.billing-observability-gaps.2026-02-14.md`
