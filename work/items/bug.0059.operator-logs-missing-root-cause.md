@@ -62,3 +62,7 @@ external_refs:
 - `pnpm check` — lint, type, format, docs
 - `grep -n 'responseExcerpt\|rootCauseKind\|errorDetail' src/adapters/server/ai/litellm.adapter.ts` — confirm all 5 error paths log private details
 - Manual: trigger a 404 (bad model name) in dev, confirm Loki shows the provider error message in the log line
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/bug.0059.handoff.md)

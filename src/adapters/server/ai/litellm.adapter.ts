@@ -62,7 +62,7 @@ async function readErrorResponseExcerpt(response: Response): Promise<string> {
     const text = await response.text();
     const truncated =
       text.length > MAX_ERROR_BODY_LOG_CHARS
-        ? text.slice(0, MAX_ERROR_BODY_LOG_CHARS) + "…[truncated]"
+        ? `${text.slice(0, MAX_ERROR_BODY_LOG_CHARS)}…[truncated]`
         : text;
     return scrubStringContent(truncated);
   } catch {

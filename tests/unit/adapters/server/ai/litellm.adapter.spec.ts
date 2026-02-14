@@ -25,6 +25,26 @@ vi.mock("@/shared/env", () => ({
   }),
 }));
 
+// Capture logger.warn calls for private error diagnostic assertions (bug.0059)
+const { mockLoggerWarn } = vi.hoisted(() => ({
+  mockLoggerWarn: vi.fn(),
+}));
+vi.mock("@/shared/observability", () => ({
+  makeLogger: () => ({
+    warn: mockLoggerWarn,
+    info: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn().mockReturnValue({
+      warn: mockLoggerWarn,
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    }),
+  }),
+  EVENT_NAMES: {},
+}));
+
 describe("LiteLlmAdapter", () => {
   let adapter: LlmService;
   const testCaller: LlmCaller = {
@@ -237,6 +257,7 @@ describe("LiteLlmAdapter", () => {
         ok: false,
         status: 401,
         statusText: "Unauthorized",
+        text: async () => '{"error":"invalid api key"}',
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
@@ -419,6 +440,111 @@ describe("LiteLlmAdapter", () => {
         request_id: "req-correlation-test",
         existing_trace_id: "trace-correlation-test",
       });
+    });
+  });
+
+  describe("bug.0059: private error diagnostics in operator logs", () => {
+    const errorTestParams = {
+      model: "openai/gpt-4",
+      messages: [{ role: "user" as const, content: "Hello" }],
+      caller: testCaller,
+    };
+
+    it("logs responseExcerpt on HTTP error", async () => {
+      const errorBody =
+        '{"error":{"message":"No endpoints found for gpt-4","type":"invalid_request_error"}}';
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        text: async () => errorBody,
+      });
+
+      await expect(adapter.completion(errorTestParams)).rejects.toThrow();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 404,
+          kind: "provider_4xx",
+          requestId: testCaller.requestId,
+          traceId: testCaller.traceId,
+          model: "openai/gpt-4",
+          provider: "openai",
+          responseExcerpt: expect.stringContaining("No endpoints found"),
+        }),
+        "adapter.litellm.http_error"
+      );
+    });
+
+    it("redacts secrets in responseExcerpt", async () => {
+      const bodyWithSecret =
+        '{"error":"auth failed","key":"sk-1234567890abcdefghijklmnopqrstuvwxyz"}';
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        text: async () => bodyWithSecret,
+      });
+
+      await expect(adapter.completion(errorTestParams)).rejects.toThrow();
+
+      const logPayload = mockLoggerWarn.mock.calls[0]?.[0];
+      expect(logPayload?.responseExcerpt).not.toContain("sk-1234567890");
+      expect(logPayload?.responseExcerpt).toContain("[REDACTED");
+    });
+
+    it("logs rootCauseKind on network error", async () => {
+      const networkErr = new Error("connect ECONNREFUSED 127.0.0.1:4000");
+      networkErr.cause = { code: "ECONNREFUSED" };
+      mockFetch.mockRejectedValueOnce(networkErr);
+
+      await expect(adapter.completion(errorTestParams)).rejects.toThrow();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rootCauseKind: "network",
+          errorMessage: "connect ECONNREFUSED 127.0.0.1:4000",
+          causeCode: "ECONNREFUSED",
+          requestId: testCaller.requestId,
+        }),
+        "adapter.litellm.network_error"
+      );
+    });
+
+    it("logs rootCauseKind on timeout", async () => {
+      const timeoutErr = new Error("The operation was aborted");
+      timeoutErr.name = "TimeoutError";
+      mockFetch.mockRejectedValueOnce(timeoutErr);
+
+      await expect(adapter.completion(errorTestParams)).rejects.toThrow();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rootCauseKind: "timeout",
+          requestId: testCaller.requestId,
+        }),
+        "adapter.litellm.network_error"
+      );
+    });
+
+    it("returns [unreadable] when response body cannot be read", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        text: async () => {
+          throw new Error("body already consumed");
+        },
+      });
+
+      await expect(adapter.completion(errorTestParams)).rejects.toThrow();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          responseExcerpt: "[unreadable]",
+        }),
+        "adapter.litellm.http_error"
+      );
     });
   });
 
