@@ -3,12 +3,16 @@
 
 /**
  * Module: `@app/(app)/chat/page`
- * Purpose: Protected chat page with assistant-ui integration.
- * Scope: Client component that displays chat interface using assistant-ui Thread component. Does not handle authentication directly.
- * Invariants: Session guaranteed by (app)/layout auth guard.
- * Side-effects: IO (chat API calls, session management)
- * Notes: Uses assistant-ui with useExternalStoreRuntime; ThreadWelcome customized for Cogni copy.
- * Links: src/components/vendor/assistant-ui/thread.tsx, src/features/ai/chat/providers/ChatRuntimeProvider.client.tsx
+ * Purpose: Chat page with thread history sidebar and assistant-ui Thread.
+ * Scope: Client component that renders thread sidebar (desktop aside + mobile Sheet), thread switching state, model/graph selection, and ChatRuntimeProvider with key-based remount. Does not handle authentication directly.
+ * Invariants:
+ *   - INV-UI-NO-PAID-DEFAULT-WHEN-ZERO: gates rendering until models + credits resolve
+ *   - INV-NO-CLIENT-INVENTED-MODEL-IDS: all model IDs from server's models list
+ *   - KEY_REMOUNT: `key={activeThreadKey ?? "new"}` forces full unmount/remount on thread switch, aborting in-flight streams
+ *   - LOADING_GATE: `isThreadLoading` prevents ChatRuntimeProvider render until thread messages load
+ * Side-effects: IO (chat API, thread list/load/delete via React Query)
+ * Notes: Thread sidebar shared between desktop (aside) and mobile (Sheet). Thread finish invalidates ai-threads query.
+ * Links: src/features/ai/chat/providers/ChatRuntimeProvider.client.tsx, src/features/ai/chat/hooks/useThreads.ts
  * @public
  */
 

@@ -4,7 +4,7 @@
 /**
  * Module: `@ports/thread-persistence.port`
  * Purpose: Port interface for server-authoritative thread persistence.
- * Scope: Defines ThreadPersistencePort, ThreadSummary, and ThreadConflictError. Does not contain implementations.
+ * Scope: Defines ThreadPersistencePort, ThreadSummary (with title + metadata), and ThreadConflictError. Does not contain implementations.
  * Invariants:
  *   - OPTIMISTIC_APPEND: saveThread() verifies stored message count matches expectedMessageCount before writing
  *   - MAX_THREAD_MESSAGES: saveThread() rejects if messages.length > 200

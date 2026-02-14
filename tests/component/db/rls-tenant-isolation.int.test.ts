@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/component/db/rls-tenant-isolation.int.test`
  * Purpose: Verify PostgreSQL RLS policies enforce tenant isolation at the database layer.
- * Scope: Tests that SET LOCAL app.current_user_id restricts row visibility per user. Does not test application-layer auth.
+ * Scope: Tests that SET LOCAL app.current_user_id restricts row visibility per user for users, billing_accounts, virtual_keys, and ai_threads tables. Does not test application-layer auth.
  * Invariants:
  * - User A cannot SELECT user B's billing_accounts, virtual_keys, or users row
  * - Missing SET LOCAL (no tenant context) returns zero rows

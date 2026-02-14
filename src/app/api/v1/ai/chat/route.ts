@@ -8,6 +8,7 @@
  * Invariants:
  *   - CLIENT_SENDS_USER_ONLY: client sends single message string; server loads authoritative thread from DB
  *   - OPTIMISTIC_APPEND: two-phase save (user before execute, assistant after pump) with expectedMessageCount guard
+ *   - METADATA_ON_INSERT: thread metadata (model, graphName) saved on first persist only (expectedLen === 0)
  *   - Uses AI SDK createUIMessageStream (no custom SSE)
  *   - Per ASSISTANT_FINAL_REQUIRED: reconciles truncated text_delta events with assistant_final
  * Side-effects: IO (HTTP request/response, DB persistence)

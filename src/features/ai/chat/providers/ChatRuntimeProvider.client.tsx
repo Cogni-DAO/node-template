@@ -3,13 +3,13 @@
 
 /**
  * Module: `@features/chat/providers/ChatRuntimeProvider`
- * Purpose: Runtime provider for chat using AI SDK streaming with multi-turn state.
- * Scope: Feature-local provider. Uses useChatRuntime for AI SDK Data Stream Protocol streaming. Manages stateKey state for conversation continuity. Does not persist messages or manage auth.
+ * Purpose: Runtime provider for chat using AI SDK streaming with multi-turn state and thread switching.
+ * Scope: Feature-local provider. Uses useChatRuntime for AI SDK Data Stream Protocol streaming. Manages stateKey state for conversation continuity. Accepts initialMessages and initialStateKey for loading existing threads. Does not persist messages or manage auth.
  * Invariants:
  *   - CLIENT_SENDS_MESSAGE_ONLY: prepareSendMessagesRequest extracts last user message text and sends { message, model, graphName, stateKey }
- *   - THREAD_STATE_BY_KEY: stateKey stored in stateKeyMap map for future thread switching
+ *   - THREAD_STATE_BY_KEY: stateKey stored in stateKeyMap; seeded from initialStateKey for existing threads
  * Side-effects: IO (fetch to /api/v1/ai/chat via runtime)
- * Notes: Uses @assistant-ui/react-ai-sdk useChatRuntime; captures X-State-Key from response header
+ * Notes: Uses useChatRuntime from @assistant-ui/react-ai-sdk; captures X-State-Key from response header.
  * Links: ai.chat.v1 contract, chat/AGENTS.md (Thread State Management)
  * @public
  */
