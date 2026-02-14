@@ -380,7 +380,7 @@ export default function ChatPage(): ReactNode {
 
       {/* Mobile sidebar — Sheet */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-72 p-0">
+        <SheetContent side="left" className="w-72 p-0" hideClose>
           <SheetTitle className="sr-only">Thread history</SheetTitle>
           {sidebarContent}
         </SheetContent>
