@@ -3,117 +3,120 @@ id: governance-scheduling-spec
 type: spec
 title: Governance Schedule Sync
 status: active
+spec_state: active
 trust: draft
-summary: Declarative governance schedules in repo-spec.yaml synced to Temporal at deploy time via idempotent CLI command.
+summary: Declarative governance schedules in repo-spec.yaml synced to Temporal at deploy time via idempotent CLI.
 read_when: Understanding how governance runs are scheduled, how repo-spec declares charters, or how the sync function works.
+implements: proj.system-tenant-governance
 owner: derekg1729
 created: 2026-02-14
-verified: 2026-02-14
+verified: 2026-02-15
 tags: [governance, scheduling, temporal]
 ---
 
 # Governance Schedule Sync
 
-> Declarative charter-scoped schedules in `.cogni/repo-spec.yaml` synced to Temporal at deploy time. Each schedule triggers an OpenClaw gateway run with a 1-word entrypoint.
+> Repo-spec declares charter schedules. Deploy syncs them to Temporal. Temporal fires cron. Worker executes governance run via OpenClaw.
 
-## Goal
+### Key References
 
-Enable governance runs by syncing declarative schedule definitions from repo-spec to Temporal. Repo-spec is source of truth; Temporal is derived state.
+|             |                                                                                       |                         |
+| ----------- | ------------------------------------------------------------------------------------- | ----------------------- |
+| **Project** | [proj.system-tenant-governance](../../work/projects/proj.system-tenant-governance.md) | Roadmap and planning    |
+| **Spec**    | [Scheduler](scheduler.md)                                                             | Grants, workflows, runs |
 
 ## Design
 
-### Data Flow
+```mermaid
+flowchart TD
+    RS[".cogni/repo-spec.yaml<br/><i>governance.schedules[]</i>"] -->|getGovernanceConfig| SYNC
 
-```
-.cogni/repo-spec.yaml          # declares schedules (versioned, DAO-auditable)
-    ↓ pnpm governance:schedules:sync    # idempotent CLI, runs in deploy.sh
-Temporal Schedules              # governance:community, governance:engineering, etc.
-    ↓ cron fires
-GovernanceScheduledRunWorkflow  # existing workflow in scheduler-worker
-    ↓ executeGraphActivity
-POST /api/internal/graphs/sandbox:openclaw/runs  { message: "COMMUNITY" }
-    ↓
-OpenClaw gateway                # activates charter-specific GOVERN skill
+    subgraph "deploy.sh Step 10.1"
+        CLI["pnpm governance:schedules:sync"] --> JOB["Job module<br/><i>pg_advisory_lock</i>"]
+        JOB --> SYNC["syncGovernanceSchedules()"]
+    end
+
+    SYNC -->|ensureGrant| GRANT["execution_grants<br/><i>cogni_system principal</i>"]
+    SYNC -->|createSchedule / resume / pause| TEMPORAL["Temporal Schedules<br/><i>governance:community</i><br/><i>governance:engineering</i><br/><i>governance:sustainability</i><br/><i>governance:govern</i>"]
+    TEMPORAL -->|cron fires| WF["GovernanceScheduledRunWorkflow"]
+    WF -->|POST /api/internal/.../runs| GW["OpenClaw gateway<br/><i>message: 'COMMUNITY'</i>"]
 ```
 
-### Repo-Spec Schema
+### Sync Logic (per schedule)
+
+```mermaid
+flowchart LR
+    S[Schedule in config] -->|createSchedule| C{Conflict?}
+    C -->|no| CREATED[Created]
+    C -->|yes| P{Paused?}
+    P -->|yes| RESUMED[Resumed]
+    P -->|no| SKIPPED[Skipped]
+
+    X[In Temporal, not in config] --> PAUSED[Paused ⚠️]
+```
+
+### Config Schema
 
 ```yaml
+# .cogni/repo-spec.yaml
 governance:
   schedules:
-    - charter: COMMUNITY # unique key
+    - charter: COMMUNITY # unique key → schedule ID governance:community
       cron: "0 */6 * * *" # 5-field cron
       timezone: UTC # IANA (default: UTC)
       entrypoint: COMMUNITY # 1-word trigger → OpenClaw gateway
 ```
 
-- `governance` is optional with `default({ schedules: [] })` — existing deployments don't break.
-- Validated by `governanceScheduleSchema` in `repoSpec.schema.ts`.
-- Accessor: `getGovernanceConfig()` in `repoSpec.server.ts` (lazy-cached).
+`governance` is optional — defaults to `{ schedules: [] }`. Validated by `governanceScheduleSchema` (Zod).
 
-### Schedule IDs
+### Execution Layers
 
-Deterministic: `governance:{charter_lowercase}` (e.g., `governance:community`). Derived by `governanceScheduleId()`.
+| Layer     | File                                                              | Responsibility                   |
+| --------- | ----------------------------------------------------------------- | -------------------------------- |
+| CLI       | `src/scripts/governance-schedules-sync.ts`                        | Process lifecycle (exit codes)   |
+| Job       | `src/bootstrap/jobs/syncGovernanceSchedules.job.ts`               | Advisory lock + container wiring |
+| Service   | `packages/scheduler-core/src/services/syncGovernanceSchedules.ts` | Pure orchestration via ports     |
+| Re-export | `src/features/governance/services/syncGovernanceSchedules.ts`     | Feature-layer convenience        |
 
-### Sync Function
+## Goal
 
-`syncGovernanceSchedules(config, deps)` takes injectable `GovernanceScheduleSyncDeps`:
-
-| Dependency                    | Purpose                                                            |
-| ----------------------------- | ------------------------------------------------------------------ |
-| `ensureGovernanceGrant()`     | Idempotent grant creation for system tenant (raw SQL, serviceDb)   |
-| `scheduleControl`             | `ScheduleControlPort` for Temporal CRUD                            |
-| `listGovernanceScheduleIds()` | Temporal `client.schedule.list()` filtered by `governance:` prefix |
-
-**Sync logic:**
-
-1. Ensure governance execution grant exists for system tenant
-2. For each schedule in config: try `createSchedule` → on conflict, resume if paused, else skip
-3. Prune: for each `governance:*` schedule not in config → pause (never delete)
-
-**Safety:** All schedules use `overlap=SKIP`, `catchupWindow=0`, `pauseOnFailure=true` (enforced by `ScheduleControlPort`).
-
-### Grant Management
-
-- No migration. Grant created on-demand by `ensureGovernanceGrant` in CLI wrapper.
-- Uses raw SQL `INSERT INTO execution_grants ... ON CONFLICT DO NOTHING` with serviceDb (BYPASSRLS).
-- `COGNI_SYSTEM_PRINCIPAL_USER_ID` is a deterministic UUID (`00000000-0000-4000-a000-000000000001`) — compatible with branded `UserId` type.
-- Scope: `graph:execute:sandbox:openclaw`.
-
-### Deploy Integration
-
-```bash
-# In deploy.sh, after migrations, before stack up:
-pnpm governance:schedules:sync
-```
-
-Idempotent on every deploy. No GitOps loop needed.
+Repo-spec is source of truth for governance schedules. Temporal is derived state, synced idempotently at deploy time.
 
 ## Non-Goals
 
-- **No cron update detection**: If cron changes in repo-spec, existing schedule is skipped (not updated). Manual delete+recreate needed until `ScheduleControlPort` gets `updateSchedule`.
-- **No heartbeat/monitoring**: This spec covers schedule creation only. Health monitoring is a separate concern.
-- **No tenant-callable sync**: System-ops only, never exposed as API endpoint.
-- **No migration**: Grant created on-demand, not via DB migration.
+- **No cron update detection** — changed cron requires manual delete+recreate
+- **No heartbeat/monitoring** — schedule creation only
+- **No tenant API** — system-ops only, never exposed as endpoint
 
 ## Invariants
 
-1. **REPO_SPEC_IS_SOURCE_OF_TRUTH**: `.cogni/repo-spec.yaml` declares what schedules should exist. Temporal is derived.
-2. **PRUNE_IS_PAUSE**: Removed schedules are paused, never deleted (reversible).
-3. **SYSTEM_OPS_ONLY**: Sync runs at deploy time via CLI, never callable by tenants.
-4. **GRANT_ON_DEMAND**: Governance grant created idempotently by sync, not by migration.
-5. **OVERLAP_SKIP_ALWAYS**: All governance schedules use `overlap=SKIP` (one run at a time).
+| Rule                         | Constraint                                                               |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| REPO_SPEC_IS_SOURCE_OF_TRUTH | `.cogni/repo-spec.yaml` declares schedules; Temporal is derived          |
+| PRUNE_IS_PAUSE               | Removed schedules are paused, never deleted (reversible)                 |
+| SYSTEM_OPS_ONLY              | Sync runs at deploy time via CLI, never callable by tenants              |
+| GRANT_ON_DEMAND              | Governance grant created idempotently by sync, not by migration          |
+| OVERLAP_SKIP_ALWAYS          | All governance schedules use `overlap=SKIP` (one run at a time)          |
+| SINGLE_WRITER                | `pg_advisory_lock(hashtext('governance_sync'))` prevents concurrent sync |
+| PURE_ORCHESTRATION           | Sync function depends only on ports/types — no adapters, no DB           |
 
-## File Pointers
+### File Pointers
 
-| File                                                          | Purpose                                            |
-| ------------------------------------------------------------- | -------------------------------------------------- |
-| `.cogni/repo-spec.yaml`                                       | Schedule declarations                              |
-| `src/shared/config/repoSpec.schema.ts`                        | `governanceScheduleSchema`, `governanceSpecSchema` |
-| `src/shared/config/repoSpec.server.ts`                        | `getGovernanceConfig()` accessor                   |
-| `src/features/governance/services/syncGovernanceSchedules.ts` | Core sync logic                                    |
-| `src/scripts/governance-schedules-sync.ts`                    | CLI wrapper (TODO)                                 |
-| `platform/ci/scripts/deploy.sh`                               | Deploy integration (TODO)                          |
+| File                                                              | Purpose                          |
+| ----------------------------------------------------------------- | -------------------------------- |
+| `.cogni/repo-spec.yaml`                                           | Schedule declarations            |
+| `src/shared/config/repoSpec.schema.ts`                            | `governanceScheduleSchema`       |
+| `src/shared/config/repoSpec.server.ts`                            | `getGovernanceConfig()` accessor |
+| `packages/scheduler-core/src/services/syncGovernanceSchedules.ts` | Canonical sync logic             |
+| `src/bootstrap/jobs/syncGovernanceSchedules.job.ts`               | Job module (lock + wiring)       |
+| `src/scripts/governance-schedules-sync.ts`                        | CLI entry point                  |
+| `platform/ci/scripts/deploy.sh`                                   | Deploy integration (Step 10.1)   |
+| `packages/scheduler-core/src/ports/schedule-control.port.ts`      | `listScheduleIds`                |
+| `packages/scheduler-core/src/ports/execution-grant.port.ts`       | `ensureGrant`                    |
+
+## Open Questions
+
+_(none)_
 
 ## Related
 
