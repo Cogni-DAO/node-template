@@ -355,12 +355,17 @@ export default function ChatPage(): ReactNode {
 
   return (
     <>
-      {/* Desktop sidebar — collapsible on lg: */}
-      {desktopSidebarOpen ? (
-        <aside className="hidden w-72 shrink-0 border-r lg:flex lg:flex-col">
-          {sidebarContent}
-        </aside>
-      ) : (
+      {/* Desktop sidebar — animates width between 0 and 18rem */}
+      <aside
+        className={cn(
+          "hidden shrink-0 overflow-hidden border-r transition-all duration-200 ease-in-out lg:flex lg:flex-col",
+          desktopSidebarOpen ? "w-72" : "w-0 border-r-0"
+        )}
+      >
+        <div className="flex h-full w-72 flex-col">{sidebarContent}</div>
+      </aside>
+      {/* Desktop reopen button — visible when sidebar is collapsed */}
+      {!desktopSidebarOpen && (
         <div className="hidden items-start p-2 lg:flex">
           <Tooltip>
             <TooltipTrigger asChild>
