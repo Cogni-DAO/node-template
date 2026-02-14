@@ -1,6 +1,10 @@
 -- Seed: system tenant bootstrap data (idempotent)
 -- Per docs/spec/system-tenant.md: SYSTEM_TENANT_STARTUP_CHECK
 
+-- Set RLS context to the system principal (transaction-local)
+SELECT set_config('app.current_user_id', 'cogni_system_principal', true);
+--> statement-breakpoint
+
 -- Service principal (no wallet — app-level owner, not a user)
 INSERT INTO "users" ("id", "wallet_address")
 VALUES ('cogni_system_principal', NULL)
