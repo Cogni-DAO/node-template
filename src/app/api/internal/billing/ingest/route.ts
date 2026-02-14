@@ -168,7 +168,7 @@ function buildUsageFact(
     model: entry.model_group, // User-facing alias (per spec: use model_group, not model)
     inputTokens: entry.prompt_tokens,
     outputTokens: entry.completion_tokens,
-    costUsd,
+    ...(costUsd !== undefined && { costUsd }),
   };
 
   const context: RunContext = {
