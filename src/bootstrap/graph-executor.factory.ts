@@ -10,9 +10,8 @@
  *   - Per UNIFIED_GRAPH_EXECUTOR: all graph execution flows through GraphExecutorPort
  *   - Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes to providers
  *   - Per LANGFUSE_INTEGRATION: ObservabilityGraphExecutorDecorator wraps for Langfuse traces
- *   - Per BILLING_ENFORCEMENT: BillingGraphExecutorDecorator intercepts usage_report events
+ *   - Per CALLBACK_IS_SOLE_WRITER: BillingGraphExecutorDecorator validates usage_report events (receipt writes via LiteLLM callback)
  *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: PreflightCreditCheckDecorator rejects runs with insufficient credits
- *   - BILLING_COMMIT_REQUIRED: billingCommitFn is required — missing commitFn is a hard error
  *   - LAZY_SANDBOX_IMPORT: Sandbox provider loaded via dynamic import() to defer dockerode native addon chain (SandboxRunnerAdapter)
  * Side-effects: global (module-scoped cached sandbox provider promise)
  * Links: container.ts, AggregatingGraphExecutor, GRAPH_EXECUTION.md, OBSERVABILITY.md
@@ -41,7 +40,6 @@ import type {
   PreflightCreditCheckFn,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
-import type { BillingCommitFn } from "@/types/billing";
 import {
   type AiAdapterDeps,
   getContainer,
@@ -63,14 +61,12 @@ import {
  *
  * @param completionStreamFn - Feature function for LLM streaming (from features/ai)
  * @param userId - User ID for adapter dependency resolution
- * @param billingCommitFn - Required billing commit function (created in app layer as closure)
  * @param preflightCheckFn - Required preflight credit check function (created in app layer as closure)
- * @returns GraphExecutorPort implementation with observability + preflight + billing
+ * @returns GraphExecutorPort implementation with observability + preflight + billing validation
  */
 export function createGraphExecutor(
   completionStreamFn: CompletionStreamFn,
   userId: UserId,
-  billingCommitFn: BillingCommitFn,
   preflightCheckFn: PreflightCreditCheckFn
 ): GraphExecutorPort {
   const deps = resolveAiAdapterDeps(userId);
@@ -96,13 +92,9 @@ export function createGraphExecutor(
   // Create aggregating executor with all configured providers
   const aggregator = new AggregatingGraphExecutor(providers);
 
-  // Wrap with billing decorator (intercepts usage_report events → commitUsageFact)
-  // Per BILLING_ENFORCEMENT: all execution paths get billing automatically
-  const billed = new BillingGraphExecutorDecorator(
-    aggregator,
-    billingCommitFn,
-    container.log
-  );
+  // Wrap with billing validation decorator (intercepts + validates usage_report events)
+  // Per CALLBACK_IS_SOLE_WRITER: decorator validates only; LiteLLM callback writes receipts
+  const billed = new BillingGraphExecutorDecorator(aggregator, container.log);
 
   // Wrap with preflight credit check (rejects runs with insufficient credits)
   // Per CREDITS_ENFORCED_AT_EXECUTION_PORT: all execution paths get credit check automatically
