@@ -122,6 +122,14 @@ export const serverSchema = z.object({
   // Required: Internal execution API will not function without this token.
   SCHEDULER_API_TOKEN: z.string().min(32),
 
+  // Governance schedules - Deploy-time schedule sync control
+  // When false, governance schedule sync job is skipped (prevents duplicate ops in preview)
+  // Default: true (enabled in production/staging)
+  GOVERNANCE_SCHEDULES_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+
   // Billing ingest token - Bearer auth for LiteLLM generic_api callback → billing ingest endpoint
   // Per billing-ingest-spec: CALLBACK_AUTHENTICATED invariant. Min 32 chars to reduce weak-token risk.
   // Required: Billing ingest endpoint will reject all callbacks without this token.

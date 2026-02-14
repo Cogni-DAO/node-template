@@ -42,6 +42,12 @@ flowchart TD
     WF -->|POST /api/internal/.../runs| GW["OpenClaw gateway<br/><i>message: 'COMMUNITY'</i>"]
 ```
 
+> **💡 Preview Environments**
+>
+> Set `GOVERNANCE_SCHEDULES_ENABLED=false` to skip schedule sync in preview deployments (prevents duplicate governance operations). Defaults to `true` in production/staging.
+>
+> See: `.github/workflows/staging-preview.yml`
+
 ### Sync Logic (per schedule)
 
 ```mermaid

@@ -24,6 +24,7 @@ import {
   COGNI_SYSTEM_BILLING_ACCOUNT_ID,
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
 } from "@/shared/constants/system-tenant";
+import { serverEnv } from "@/shared/env/server-env";
 
 const GOVERNANCE_GRANT_SCOPES = ["graph:execute:sandbox:openclaw"] as const;
 
@@ -37,6 +38,12 @@ const GOVERNANCE_GRANT_SCOPES = ["graph:execute:sandbox:openclaw"] as const;
 export async function runGovernanceSchedulesSyncJob(): Promise<void> {
   const container = getContainer();
   const { log } = container;
+
+  // Skip if governance schedules disabled (e.g., in preview environments)
+  if (!serverEnv().GOVERNANCE_SCHEDULES_ENABLED) {
+    log.info({}, "Governance schedules disabled, skipping sync");
+    return;
+  }
 
   log.info({}, "Starting governance schedule sync job");
 
