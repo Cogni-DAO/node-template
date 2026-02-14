@@ -117,6 +117,7 @@
     "e2e:report": "playwright show-report e2e/artifacts/report",
     "env:check": "tsx --tsconfig tsconfig.scripts.json scripts/check-runtime-env.ts",
     "validate:chain": "tsx --no-cache --tsconfig tsconfig.scripts.json scripts/validate-chain-config.ts",
+    "governance:schedules:sync": "tsx src/scripts/governance-schedules-sync.ts",
     "knip": "dotenv -e .env.local -- knip --include files,exports,dependencies",
     "prepare": "husky"
   },

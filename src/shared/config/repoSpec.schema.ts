@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/config/repoSpec.schema`
- * Purpose: Zod schemas and derived types for .cogni/repo-spec.yaml validation.
- * Scope: Validates governance-managed payment configuration structure; does not enforce chain/token values (those checked against chain.ts constants).
- * Invariants: Receiving_address must be valid EVM format; provider must be non-empty; allowed_chains/allowed_tokens are informational metadata.
+ * Purpose: Zod schemas and derived types for .cogni/repo-spec.yaml validation (payments + governance).
+ * Scope: Validates governance-managed payment and governance schedule configuration structures; does not enforce chain/token values (those checked against chain.ts constants).
+ * Invariants: Receiving_address must be valid EVM format; provider must be non-empty; governance schedules require charter + cron + entrypoint.
  * Side-effects: none
  * Links: .cogni/repo-spec.yaml, docs/spec/chain-config.md, docs/spec/payments-design.md
  * @public
@@ -68,7 +68,14 @@ export type GovernanceScheduleSpec = z.infer<typeof governanceScheduleSchema>;
  * Optional — existing deployments without this section continue to work.
  */
 export const governanceSpecSchema = z.object({
-  schedules: z.array(governanceScheduleSchema).default([]),
+  schedules: z
+    .array(governanceScheduleSchema)
+    .default([])
+    .refine(
+      (arr) =>
+        new Set(arr.map((s) => s.charter.toLowerCase())).size === arr.length,
+      { message: "Duplicate charter names in governance.schedules" }
+    ),
 });
 
 export type GovernanceSpec = z.infer<typeof governanceSpecSchema>;
