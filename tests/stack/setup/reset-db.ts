@@ -90,8 +90,30 @@ export async function setup() {
     // TRUNCATE with CASCADE handles foreign key constraints automatically
     await sql.unsafe(`TRUNCATE TABLE ${tableNames} RESTART IDENTITY CASCADE`);
 
+    // Re-seed system tenant data (wiped by truncation, required by verifySystemTenant healthcheck + revenue share).
+    // Mirrors 0008_seed_system_tenant.sql. Wrapped in a transaction so set_config (transaction-local) persists
+    // across all inserts — required because we connect as app_user (RLS enforced).
+    await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_user_id', 'cogni_system_principal', true)`;
+      await tx`
+        INSERT INTO "users" ("id", "wallet_address")
+        VALUES ('cogni_system_principal', NULL)
+        ON CONFLICT ("id") DO NOTHING
+      `;
+      await tx`
+        INSERT INTO "billing_accounts" ("id", "owner_user_id", "is_system_tenant", "balance_credits", "created_at")
+        VALUES ('cogni_system', 'cogni_system_principal', true, 0, now())
+        ON CONFLICT ("id") DO NOTHING
+      `;
+      await tx`
+        INSERT INTO "virtual_keys" ("billing_account_id", "label", "is_default", "active")
+        VALUES ('cogni_system', 'System Default', true, true)
+        ON CONFLICT DO NOTHING
+      `;
+    });
+
     console.log(
-      `✅ Stack test database reset complete (${tables.length} tables truncated)`
+      `✅ Stack test database reset complete (${tables.length} tables truncated, system tenant re-seeded)`
     );
   } catch (error) {
     console.error("❌ Failed to reset stack test database:", error);
