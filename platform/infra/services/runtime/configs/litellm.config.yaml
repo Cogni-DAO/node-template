@@ -83,6 +83,15 @@ model_list:
       extra_body:
         provider:
           zdr: true
+      # OpenRouter prompt caching (Anthropic): requires cache_control breakpoints.
+      # Inject markers automatically so callers (e.g. OpenClaw) don’t need to emit
+      # multipart content blocks explicitly.
+      #
+      # NOTE: This injects `{cache_control:{type:"ephemeral"}}` (OpenRouter default TTL ~5m).
+      # For 1h TTL, the caller must send `ttl:"1h"` in cache_control.
+      cache_control_injection_points:
+        - location: message
+          role: system
     model_info:
       display_name: "Claude Sonnet 4.5"
       is_free: false
@@ -96,6 +105,10 @@ model_list:
       extra_body:
         provider:
           zdr: true
+      # OpenRouter prompt caching (Anthropic): auto-inject cache_control breakpoints.
+      cache_control_injection_points:
+        - location: message
+          role: system
     model_info:
       display_name: "Claude Opus 4.5"
       is_free: false
@@ -109,6 +122,10 @@ model_list:
       extra_body:
         provider:
           zdr: true
+      # OpenRouter prompt caching (Anthropic): auto-inject cache_control breakpoints.
+      cache_control_injection_points:
+        - location: message
+          role: system
     model_info:
       display_name: "Claude Opus 4.6"
       is_free: false
@@ -133,6 +150,11 @@ model_list:
       extra_body:
         provider:
           zdr: true
+      # OpenRouter prompt caching (Gemini/OpenRouter): cache_control breakpoints can
+      # increase cache hit rate when the prefix is stable.
+      cache_control_injection_points:
+        - location: message
+          role: system
     model_info:
       display_name: "Gemini 2.5 Flash"
       is_free: false
@@ -149,6 +171,9 @@ model_list:
       extra_body:
         provider:
           zdr: true
+      cache_control_injection_points:
+        - location: message
+          role: system
     model_info:
       display_name: "Gemini 3 Pro"
       is_free: false
@@ -162,6 +187,9 @@ model_list:
       extra_body:
         provider:
           zdr: true
+      cache_control_injection_points:
+        - location: message
+          role: system
     model_info:
       display_name: "Gemini 3 Flash"
       is_free: false
