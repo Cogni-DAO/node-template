@@ -109,6 +109,9 @@ describe("[internal] POST /api/internal/billing/ingest", () => {
     expect(receipt).toBeDefined();
     expect(receipt?.billingAccountId).toBe(testActor.billingAccountId);
     expect(receipt?.virtualKeyId).toBe(testActor.virtualKeyId);
+    expect(receipt?.responseCostUsd).not.toBeNull();
+    expect(Number(receipt?.responseCostUsd)).toBeGreaterThan(0);
+    expect(receipt?.chargedCredits).toBeGreaterThan(0n);
 
     // Verify linked llm_charge_details
     const details = receipt
@@ -143,6 +146,63 @@ describe("[internal] POST /api/internal/billing/ingest", () => {
       .where(eq(chargeReceipts.runId, runId));
 
     expect(receipts).toHaveLength(1);
+  });
+
+  it("OpenRouter paid model with response_cost>0 writes non-zero receipt", async () => {
+    const { entry, runId } = makeCallbackPayload(testActor.billingAccountId, {
+      response_cost: 0.00653,
+      model: "openrouter/anthropic/claude-opus-4-6",
+      model_group: "test-paid-model",
+      custom_llm_provider: "openrouter",
+      prompt_tokens: 880,
+      completion_tokens: 120,
+      total_tokens: 1000,
+    });
+
+    const response = await POST(createRequest([entry]));
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body).toEqual({ processed: 1, skipped: 0 });
+
+    const db = getSeedDb();
+    const receipts = await db
+      .select()
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.runId, runId));
+
+    expect(receipts).toHaveLength(1);
+    const [receipt] = receipts;
+    expect(receipt?.responseCostUsd).not.toBeNull();
+    expect(Number(receipt?.responseCostUsd)).toBeGreaterThan(0);
+    expect(receipt?.chargedCredits).toBeGreaterThan(0n);
+  });
+
+  it("known-paid OpenRouter model with response_cost=0 is deferred (no receipt written)", async () => {
+    const { entry, runId } = makeCallbackPayload(testActor.billingAccountId, {
+      response_cost: 0,
+      model: "openrouter/anthropic/claude-opus-4-6",
+      model_group: "test-paid-model",
+      custom_llm_provider: "openrouter",
+      prompt_tokens: 120,
+      completion_tokens: 80,
+      total_tokens: 200,
+    });
+
+    const response = await POST(createRequest([entry]));
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body).toEqual({ processed: 1, skipped: 0 });
+
+    const db = getSeedDb();
+    const receipts = await db
+      .select()
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.runId, runId));
+
+    // Guardrail for bug.0060: do not persist a final $0 receipt for paid models (per model_info.is_free).
+    expect(receipts).toHaveLength(0);
   });
 
   it("returns 401 for invalid token", async () => {
