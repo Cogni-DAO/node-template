@@ -605,6 +605,79 @@ describe("LiteLlmAdapter", () => {
     });
   });
 
+  describe("bug.0057: completionStream() with x-litellm-spend-logs-metadata header", () => {
+    const streamTestParams = {
+      model: "openai/gpt-4",
+      messages: [{ role: "user" as const, content: "Hello" }],
+      caller: testCaller,
+    };
+
+    const mockStreamResponse = {
+      ok: true,
+      headers: new Headers([["x-litellm-call-id", "stream-call-xyz"]]),
+      body: {
+        getReader: () => ({
+          read: vi
+            .fn()
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode(
+                'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n'
+              ),
+            })
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode(
+                'data: {"choices":[{"delta":{"content":" there"}}]}\n\n'
+              ),
+            })
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode(
+                'data: {"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}\n\n'
+              ),
+            })
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode("data: [DONE]\n\n"),
+            })
+            .mockResolvedValueOnce({ done: true, value: undefined }),
+          releaseLock: vi.fn(),
+        }),
+      },
+    };
+
+    it("sets x-litellm-spend-logs-metadata header in completionStream when spendLogsMetadata provided", async () => {
+      mockFetch.mockResolvedValueOnce(mockStreamResponse);
+
+      await adapter.completionStream({
+        ...streamTestParams,
+        spendLogsMetadata: { run_id: "run-xyz", graph_id: "langgraph:poet" },
+      });
+
+      const requestOptions = mockFetch.mock.calls[0]?.[1];
+      expect(requestOptions?.headers).toEqual(
+        expect.objectContaining({
+          "x-litellm-spend-logs-metadata": JSON.stringify({
+            run_id: "run-xyz",
+            graph_id: "langgraph:poet",
+          }),
+        })
+      );
+    });
+
+    it("does not set x-litellm-spend-logs-metadata header in completionStream when spendLogsMetadata absent", async () => {
+      mockFetch.mockResolvedValueOnce(mockStreamResponse);
+
+      await adapter.completionStream(streamTestParams);
+
+      const requestOptions = mockFetch.mock.calls[0]?.[1];
+      expect(requestOptions?.headers).not.toHaveProperty(
+        "x-litellm-spend-logs-metadata"
+      );
+    });
+  });
+
   describe("LlmService interface compliance", () => {
     it("implements LlmService interface correctly", () => {
       const service: LlmService = adapter;
