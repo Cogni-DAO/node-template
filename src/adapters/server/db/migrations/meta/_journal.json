@@ -50,6 +50,20 @@
       "when": 1770799543517,
       "tag": "0006_sticky_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770975741844,
+      "tag": "0007_happy_whistler",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770975741845,
+      "tag": "0008_seed_system_tenant",
+      "breakpoints": true
     }
   ]
 }

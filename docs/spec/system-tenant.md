@@ -10,7 +10,7 @@ read_when: Implementing governance loops, tool policy enforcement, or system-ini
 implements: []
 owner: cogni-dev
 created: 2026-01-20
-verified: null
+verified: 2026-02-14
 tags:
   - system-tenant
   - governance
@@ -191,13 +191,13 @@ The codebase already has the primitives needed:
 
 **What's missing:**
 
-| Gap                               | Fix                                              |
-| --------------------------------- | ------------------------------------------------ |
-| No `is_system_tenant` flag        | Add column to `billing_accounts`                 |
-| No `cogni_system` record          | Add idempotent seed + startup healthcheck        |
-| No `PolicyResolverPort`           | Add port for authoritative policy resolution     |
-| No required `tenantId` in context | Make required + test escape hatch                |
-| No side-effect tool idempotency   | Add idempotency key + dedupe at adapter boundary |
+| Gap                               | Fix                                              | Status  |
+| --------------------------------- | ------------------------------------------------ | ------- |
+| No `is_system_tenant` flag        | Add column to `billing_accounts`                 | Done    |
+| No `cogni_system` record          | Add idempotent seed + startup healthcheck        | Done    |
+| No `PolicyResolverPort`           | Add port for authoritative policy resolution     | Pending |
+| No required `tenantId` in context | Make required + test escape hatch                | Pending |
+| No side-effect tool idempotency   | Add idempotency key + dedupe at adapter boundary | Pending |
 
 ### Key Decisions
 

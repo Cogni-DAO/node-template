@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-01-13
+- **Last reviewed:** 2026-02-14
 - **Status:** draft
 
 ## Purpose
@@ -41,7 +41,7 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
   - Account entities (Account, BillingAccount)
   - Payment entities (PaymentAttempt, PaymentAttemptStatus, ClientVisibleStatus, PaymentErrorCode)
   - Business rules (credit pricing, message validation, payment state transitions, amount bounds, TTLs)
-  - Billing functions (CREDITS_PER_USD, usdToCredits, usdCentsToCredits, creditsToUsd, calculateLlmUserCharge)
+  - Billing functions (CREDITS_PER_USD, usdToCredits, usdCentsToCredits, creditsToUsd, calculateLlmUserCharge, calculateRevenueShareBonus)
   - Payment constants (MIN_PAYMENT_CENTS, MAX_PAYMENT_CENTS, PAYMENT_INTENT_TTL_MS, PENDING_UNVERIFIED_TTL_MS)
   - Domain errors (InsufficientCreditsError, PaymentIntentExpiredError, PaymentVerificationError, etc.)
   - Utilities (USDC conversion, message builders, payment state checkers)

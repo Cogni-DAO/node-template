@@ -13,6 +13,10 @@
 | 0   | 2   | Done        | bug.0016   | Production compose missing OpenClaw services — silent no-op profiles                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Done        | bug.0049   | Deploy never syncs gateway-workspace + repo mount blocks git — agent blind and immobile        | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Done        | bug.0021   | Gateway WS client receives uncorrelated chat events — HEARTBEAT_OK leak                        | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 3   | Done        | task.0046  | System tenant bootstrap + purchase-time revenue share                                          | System Tenant & Governance | proj.system-tenant-governance   |
+| 0   | 2   | Todo        | task.0054  | Governance run foundation — repo-spec config + system tenant execution grant                   | System Tenant & Governance | proj.system-tenant-governance   |
+| 0   | 1   | Todo        | task.0052  | Get OpenClaw Grafana access — spend visibility for sandbox agents                              | Reliability & Uptime       | proj.reliability                |
+| 0   | 2   | Todo        | task.0053  | Token + model optimization — stop 85K input token hemorrhage on Opus                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Todo        | task.0041  | Discord channel proof of life — bot connected, Cogni reads + sends via OpenClaw                | Messenger Channels         | proj.messenger-channels         |
 | 0   | 2   | In Progress | task.0023  | Gateway agent system prompt — dedicated workspace, SOUL.md, heartbeat fix                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Backlog     | bug.0017   | Deploy does not reload Alloy when bind-mounted config changes                                  | Reliability & Uptime       | proj.reliability                |
@@ -54,6 +58,7 @@
 | 1   | 2   | Backlog     | bug.0051   | Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls       | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 1   | Backlog     | bug.0012   | pre-commit check:docs validates all files, not just staged                                     |                            |                                 |
 | 2   | 2   | Backlog     | bug.0013   | Sandbox stack tests flaky — proxy container vanishes                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 2   | 2   | Backlog     | task.0055  | Dedicated DB migrator role — separate DDL from runtime DML                                     | Database Operations        | proj.database-ops               |
 | 1   | 2   | Todo        | task.0043  | Wire Fumadocs docs site — render /docs and /work at /docs/\*                                   | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
