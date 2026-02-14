@@ -75,3 +75,28 @@ gates:
   # - type: ai-rule
   #   with:
   #     rule_file: ai-rule-template.yaml
+
+# Governance schedule definitions (charter-scoped per governance-council.md)
+# Each schedule triggers an OpenClaw gateway run with a 1-word entrypoint.
+# Cron Format syntax: https://crontab.guru/
+governance:
+  schedules:
+    - charter: COMMUNITY
+      cron: "0 */6 * * *" # Every 6 hours
+      timezone: UTC
+      entrypoint: COMMUNITY
+
+    - charter: ENGINEERING
+      cron: "0 */4 * * *" # Every 4 hours
+      timezone: UTC
+      entrypoint: ENGINEERING
+
+    - charter: SUSTAINABILITY
+      cron: "0 */8 * * *" # Every 8 hours
+      timezone: UTC
+      entrypoint: SUSTAINABILITY
+
+    - charter: GOVERN
+      cron: "0 * * * *" # Every hour (main orchestrator)
+      timezone: UTC
+      entrypoint: GOVERN

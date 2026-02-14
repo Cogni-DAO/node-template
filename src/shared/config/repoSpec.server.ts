@@ -20,6 +20,17 @@ import { CHAIN_ID } from "@/shared/web3/chain";
 
 import { type RepoSpec, repoSpecSchema } from "./repoSpec.schema";
 
+export interface GovernanceSchedule {
+  charter: string;
+  cron: string;
+  timezone: string;
+  entrypoint: string;
+}
+
+export interface GovernanceConfig {
+  schedules: GovernanceSchedule[];
+}
+
 export interface InboundPaymentConfig {
   chainId: number;
   receivingAddress: string;
@@ -96,4 +107,23 @@ export function getPaymentConfig(): InboundPaymentConfig {
   cachedPaymentConfig = validateAndMap(spec);
 
   return cachedPaymentConfig;
+}
+
+let cachedGovernanceConfig: GovernanceConfig | null = null;
+
+function mapGovernanceConfig(spec: RepoSpec): GovernanceConfig {
+  return {
+    schedules: spec.governance?.schedules ?? [],
+  };
+}
+
+export function getGovernanceConfig(): GovernanceConfig {
+  if (cachedGovernanceConfig) {
+    return cachedGovernanceConfig;
+  }
+
+  const spec = loadRepoSpec();
+  cachedGovernanceConfig = mapGovernanceConfig(spec);
+
+  return cachedGovernanceConfig;
 }

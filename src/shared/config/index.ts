@@ -12,6 +12,9 @@
  */
 
 export {
+  type GovernanceConfig,
+  type GovernanceSchedule,
+  getGovernanceConfig,
   getPaymentConfig,
   type InboundPaymentConfig,
 } from "./repoSpec.server";
