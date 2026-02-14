@@ -23,6 +23,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 
 import { createCompletionRequest } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
+import { waitForReceipts } from "@tests/helpers/poll-db";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
@@ -81,6 +82,13 @@ describe("Completion Billing Stack Test", () => {
       ),
     });
 
+    // Receipts arrive asynchronously via LiteLLM callback (CALLBACK_IS_SOLE_WRITER)
+    const receiptsBefore = await db
+      .select()
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.billingAccountId, billingAccountId));
+    const initialReceiptCount = receiptsBefore.length;
+
     // Act
     const response = await POST(req);
 
@@ -96,13 +104,15 @@ describe("Completion Billing Stack Test", () => {
 
     // Assert - charge_receipt row created (per ACTIVITY_METRICS.md)
     // NOTE: No model/tokens/billingStatus - LiteLLM is canonical for telemetry
-    const receiptRows = await db
-      .select()
-      .from(chargeReceipts)
-      .where(eq(chargeReceipts.billingAccountId, billingAccountId));
-
-    expect(receiptRows.length).toBeGreaterThan(0);
-    const [receipt] = receiptRows;
+    const receiptRows = await waitForReceipts(db, billingAccountId, {
+      minCount: initialReceiptCount + 1,
+      timeoutMs: 30_000,
+    });
+    expect(receiptRows.length).toBeGreaterThan(initialReceiptCount);
+    const [receipt] = receiptRows.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
     if (!receipt) throw new Error("No charge receipt row");
 
     // Get the virtual key to verify
@@ -193,7 +203,7 @@ describe("Completion Billing Stack Test", () => {
 
     // Assert - balanceAfter matches final balance
     expect(ledgerRow.balanceAfter).toBe(finalBalance);
-  });
+  }, 45_000);
 
   it("should fail with insufficient credits (preflight gating) and not create records", async () => {
     // Arrange

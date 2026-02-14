@@ -48,9 +48,9 @@ vi.mock("@/bootstrap/otel", () => ({
   ),
 }));
 
-// Mock model catalog (commitUsageFact calls isModelFree)
+// Mock model catalog (route uses isModelFreeFromCache for guardrail)
 vi.mock("@/shared/ai/model-catalog.server", () => ({
-  isModelFree: vi.fn().mockResolvedValue(false),
+  isModelFreeFromCache: vi.fn().mockReturnValue(null),
 }));
 
 const mockAccountService = {
