@@ -78,6 +78,13 @@ vi.mock("@/components", () => ({
       <div data-testid="error-message">{props.message}</div>
     </div>
   ),
+  Tooltip: (props: { children: React.ReactNode }) => <>{props.children}</>,
+  TooltipTrigger: (props: { children: React.ReactNode }) => (
+    <>{props.children}</>
+  ),
+  TooltipContent: (props: { children: React.ReactNode }) => (
+    <span>{props.children}</span>
+  ),
 }));
 
 vi.mock("next-auth/react", () => ({

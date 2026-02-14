@@ -20,7 +20,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
-import { Menu, Plus, Trash2 } from "lucide-react";
+import { Menu, PanelLeft, PanelLeftClose, Plus, Trash2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   type ReactNode,
@@ -37,6 +37,9 @@ import {
   SheetContent,
   SheetTitle,
   Thread,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@/components";
 import type { ChatError } from "@/contracts/error.chat.v1.contract";
 import { ChatRuntimeProvider } from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
@@ -92,6 +95,7 @@ export default function ChatPage(): ReactNode {
   // Thread switching state
   const [activeThreadKey, setActiveThreadKey] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
 
   // Extract server-provided defaults (NO CLIENT INVENTION)
   const models = modelsQuery.data?.models ?? [];
@@ -285,47 +289,61 @@ export default function ChatPage(): ReactNode {
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
-      <div className="border-b p-3">
+      <div className="flex items-center justify-between p-3">
         <Button
-          variant="outline"
-          className="w-full justify-start gap-2"
+          variant="ghost"
+          className="justify-start gap-2"
           onClick={handleNewThread}
         >
           <Plus className="h-4 w-4" />
           New chat
         </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              onClick={() => {
+                setDesktopSidebarOpen(false);
+                setSidebarOpen(false);
+              }}
+              aria-label="Close sidebar"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Close sidebar</TooltipContent>
+        </Tooltip>
       </div>
-      <div className="flex-1 overflow-y-auto">
-        {threadsQuery.data?.threads.map((thread) => (
-          <div
-            key={thread.stateKey}
-            className={cn(
-              "group flex items-center gap-2 border-b px-3 py-2.5 text-sm transition-colors hover:bg-accent/50",
-              activeThreadKey === thread.stateKey && "bg-accent"
-            )}
-          >
-            <button
-              type="button"
-              className="min-w-0 flex-1 text-left"
-              onClick={() => handleSelectThread(thread.stateKey)}
+      <div className="flex-1 overflow-y-auto px-2">
+        {threadsQuery.data?.threads.map((thread) => {
+          const isActive = activeThreadKey === thread.stateKey;
+          return (
+            <div
+              key={thread.stateKey}
+              className={cn(
+                "group relative flex items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent/50",
+                isActive && "bg-accent"
+              )}
             >
-              <div className="truncate font-medium">
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left"
+                onClick={() => handleSelectThread(thread.stateKey)}
+              >
                 {thread.title || "Untitled"}
-              </div>
-              <div className="truncate text-muted-foreground text-xs">
-                {formatRelativeTime(thread.updatedAt)}
-              </div>
-            </button>
-            <button
-              type="button"
-              className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-              onClick={() => handleDeleteThread(thread.stateKey)}
-              aria-label="Delete thread"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
+              </button>
+              <button
+                type="button"
+                className="ml-1 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                onClick={() => handleDeleteThread(thread.stateKey)}
+                aria-label="Delete thread"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
         {threadsQuery.data?.threads.length === 0 && (
           <div className="px-3 py-6 text-center text-muted-foreground text-sm">
             No conversations yet
@@ -337,10 +355,28 @@ export default function ChatPage(): ReactNode {
 
   return (
     <>
-      {/* Desktop sidebar — always visible on lg: */}
-      <aside className="hidden w-72 shrink-0 border-r lg:flex lg:flex-col">
-        {sidebarContent}
-      </aside>
+      {/* Desktop sidebar — collapsible on lg: */}
+      {desktopSidebarOpen ? (
+        <aside className="hidden w-72 shrink-0 border-r lg:flex lg:flex-col">
+          {sidebarContent}
+        </aside>
+      ) : (
+        <div className="hidden items-start p-2 lg:flex">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                onClick={() => setDesktopSidebarOpen(true)}
+                aria-label="Open sidebar"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Open sidebar</TooltipContent>
+          </Tooltip>
+        </div>
+      )}
 
       {/* Mobile sidebar — Sheet */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -411,17 +447,4 @@ export default function ChatPage(): ReactNode {
       </div>
     </>
   );
-}
-
-/** Format ISO timestamp as relative time (e.g. "2h ago", "3d ago"). */
-function formatRelativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
 }

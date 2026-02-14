@@ -99,3 +99,8 @@ export {
   TableHeader,
   TableRow,
 } from "./vendor/shadcn/table";
+export {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "./vendor/shadcn/tooltip";
