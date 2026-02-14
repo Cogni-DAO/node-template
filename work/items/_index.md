@@ -43,11 +43,13 @@
 | 1   | 1   | Backlog     | bug.0036   | Chat route enqueues to closed assistant-stream controller — unhandled TypeError                |                            |                                 |
 | 1   | 3   | Done        | task.0030  | Thread persistence P0 — ai_threads table, port, route bridge                                   | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Done        | task.0042  | AI SDK streaming migration — createUIMessageStream + useChatRuntime                            | Thread Persistence         | proj.thread-persistence         |
+| 0   | 3   | Todo        | bug.0056   | Thread switch aborts in-flight stream — credits consumed, response lost to user                | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Todo        | task.0035  | Thread history sidebar — list, switch, load conversations                                      | Thread Persistence         | proj.thread-persistence         |
 | 1   | 3   | Todo        | task.0009  | Sandbox repo refresh: on-demand git-sync for agent workspace                                   | Sandboxed Agents           | proj.sandboxed-agents           |
 | 1   | 3   | Backlog     | bug.0004   | /activity dashboard cost column broken                                                         | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 1   | Todo        | task.0018  | Dynamic agent catalog in UI + OpenClaw model sync                                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Todo        | task.0034  | Wire OpenClaw memory search + bootstrap files for cogni-template repo context                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 2   | Backlog     | task.0057  | OpenClaw OSS: per-section system prompt toggles + heartbeat guard                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Todo        | task.0045  | Enable OpenClaw subagent spawning — upstream header fix + config + delegation                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 3   | Backlog     | task.0040  | Gateway memory curation worker — scan ephemeral state, persist, reset container                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
@@ -60,6 +62,7 @@
 | 2   | 2   | Backlog     | bug.0013   | Sandbox stack tests flaky — proxy container vanishes                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 2   | Backlog     | task.0055  | Dedicated DB migrator role — separate DDL from runtime DML                                     | Database Operations        | proj.database-ops               |
 | 1   | 2   | Todo        | task.0043  | Wire Fumadocs docs site — render /docs and /work at /docs/\*                                   | Docs System Infrastructure | proj.docs-system-infrastructure |
+| 1   | 2   | Todo        | task.0062  | Standardized LiteLLM model update workflow — REQUIRED billing validation for all new models    | Reliability & Uptime       | proj.reliability                |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
 > Sort: priority → status (completed last) → estimate → type
