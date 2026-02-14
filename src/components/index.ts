@@ -84,6 +84,12 @@ export {
   SelectValue,
 } from "./vendor/shadcn/select";
 export {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "./vendor/shadcn/sheet";
+export {
   Table,
   TableBody,
   TableCaption,
@@ -93,3 +99,8 @@ export {
   TableHeader,
   TableRow,
 } from "./vendor/shadcn/table";
+export {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "./vendor/shadcn/tooltip";

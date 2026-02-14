@@ -3,14 +3,14 @@ id: thread-persistence
 type: spec
 title: Thread Persistence & Transcript Authority
 status: draft
-spec_state: proposed
+spec_state: active
 trust: draft
 summary: Server-authoritative conversation persistence using AI SDK UIMessage[] per thread. Client sends a single message string; server loads authoritative history from DB, executes graph, streams via createUIMessageStream (AI SDK Data Stream Protocol), and persists response UIMessages after pump completion. AiEvent remains the internal executor stream contract.
 read_when: Working on thread API, message persistence, multi-turn conversation state, assistant-ui transport, or message security model
 implements: proj.thread-persistence
 owner: cogni-dev
 created: 2026-02-10
-verified: 2026-02-13
+verified: 2026-02-14
 tags:
   - ai-graphs
   - security
@@ -228,9 +228,11 @@ export class ThreadConflictError extends Error { ... }
 
 export interface ThreadSummary {
   stateKey: string;
+  /** Auto-derived from first user text part, or metadata.title if set. */
+  title?: string | undefined;
   updatedAt: Date;
   messageCount: number;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 export interface ThreadPersistencePort {
@@ -247,7 +249,8 @@ export interface ThreadPersistencePort {
     ownerUserId: string,
     stateKey: string,
     messages: UIMessage[],
-    expectedMessageCount: number
+    expectedMessageCount: number,
+    metadata?: Record<string, unknown>
   ): Promise<void>;
 
   /** Soft delete thread. Sets deleted_at, messages still in DB for retention. */
@@ -263,19 +266,24 @@ export interface ThreadPersistencePort {
 
 ### File Pointers
 
-| File                                                            | Purpose                                                                        |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `packages/ai-core/src/events/ai-events.ts`                      | AiEvent types — internal stream contract (unchanged)                           |
-| `src/ports/thread-persistence.port.ts`                          | New: `ThreadPersistencePort` interface                                         |
-| `packages/db-schema/src/ai-threads.ts`                          | New: `ai_threads` table definition (Drizzle)                                   |
-| `src/adapters/server/ai/thread-persistence.adapter.ts`          | New: `DrizzleThreadPersistenceAdapter` with RLS                                |
-| `src/contracts/ai.chat.v1.contract.ts`                          | Wire format: `{ message: string, model, graphName, stateKey? }`                |
-| `src/app/api/v1/ai/chat/route.ts`                               | Load→execute→persist flow, createUIMessageStream bridge, UIMessage accumulator |
-| `src/app/_facades/ai/completion.server.ts`                      | Unchanged. Future: replace `toCoreMessages()` with `convertToModelMessages()`  |
-| `src/features/ai/services/mappers.ts`                           | `uiMessagesToMessageDtos()` mapper (UIMessage[] → MessageDto[])                |
-| `src/features/ai/services/secrets-redaction.ts`                 | P0: `redactSecretsInMessages()` — credential redaction before persist          |
-| `src/features/ai/chat/providers/ChatRuntimeProvider.client.tsx` | `useChatRuntime` + `DefaultChatTransport` — sends `{ message }` to server      |
-| `src/core/chat/model.ts`                                        | `Message` type — retained as internal executor format only                     |
+| File                                                            | Purpose                                                                                                                                       |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ai-core/src/events/ai-events.ts`                      | AiEvent types — internal stream contract (unchanged)                                                                                          |
+| `src/ports/thread-persistence.port.ts`                          | New: `ThreadPersistencePort` interface                                                                                                        |
+| `packages/db-schema/src/ai-threads.ts`                          | New: `ai_threads` table definition (Drizzle)                                                                                                  |
+| `src/adapters/server/ai/thread-persistence.adapter.ts`          | New: `DrizzleThreadPersistenceAdapter` with RLS                                                                                               |
+| `src/contracts/ai.chat.v1.contract.ts`                          | Wire format: `{ message: string, model, graphName, stateKey? }`                                                                               |
+| `src/app/api/v1/ai/chat/route.ts`                               | Load→execute→persist flow, createUIMessageStream bridge, UIMessage accumulator                                                                |
+| `src/app/_facades/ai/completion.server.ts`                      | Unchanged. Future: replace `toCoreMessages()` with `convertToModelMessages()`                                                                 |
+| `src/features/ai/services/mappers.ts`                           | `uiMessagesToMessageDtos()` mapper (UIMessage[] → MessageDto[])                                                                               |
+| `src/features/ai/services/secrets-redaction.ts`                 | P0: `redactSecretsInMessages()` — credential redaction before persist                                                                         |
+| `src/features/ai/chat/providers/ChatRuntimeProvider.client.tsx` | `useChatRuntime` + `DefaultChatTransport` — sends `{ message }` to server; accepts `initialMessages` + `initialStateKey` for thread switching |
+| `src/features/ai/chat/hooks/useThreads.ts`                      | React Query hooks: `useThreads`, `useLoadThread`, `useDeleteThread`                                                                           |
+| `src/contracts/ai.threads.v1.contract.ts`                       | Zod schemas for thread list/load/delete API operations                                                                                        |
+| `src/app/_facades/ai/threads.server.ts`                         | App-layer facade: `listThreadsFacade`, `loadThreadFacade`, `deleteThreadFacade`                                                               |
+| `src/app/api/v1/ai/threads/route.ts`                            | GET /api/v1/ai/threads — list threads (paginated, recency-ordered)                                                                            |
+| `src/app/api/v1/ai/threads/[stateKey]/route.ts`                 | GET (load) + DELETE (soft-delete) per-thread endpoints                                                                                        |
+| `src/core/chat/model.ts`                                        | `Message` type — retained as internal executor format only                                                                                    |
 
 ### Key Decisions
 
@@ -361,7 +369,7 @@ export interface ThreadPersistencePort {
 
 ## Open Questions
 
-- [ ] Should thread metadata include `lastModel` and `graphName` for thread list display?
+- [x] ~~Should thread metadata include `lastModel` and `graphName` for thread list display?~~ — Resolved: Yes. `metadata` (model, graphName) saved on first persist (`expectedLen === 0`). Stored in `ai_threads.metadata` JSONB column. Thread title auto-derived from first user message text part.
 - [x] ~~LangGraph thread duality~~ — Resolved: `ai_threads` is canonical for all current executors. When `langgraph_server` gains durable checkpoints, it will need a deterministic UUID derived from `(owner_user_id, state_key)` as its thread ref; `ai_threads` becomes a UI projection. History loading is executor-conditional (route decision).
 - [ ] Retention policy: default days before soft-deleted threads are hard-deleted? (90 days proposed)
 - [x] ~~stateKey validation tightening~~ — Resolved: P0 tightens from `/^[A-Za-z0-9._:-]+$/` (512 chars) to `/^[a-zA-Z0-9_-]{1,128}$/`. This is a **breaking change** to the contract. Acceptable because no threads are persisted yet — no data migration needed. Server-generated stateKeys use `nanoid(21)` which produces `[A-Za-z0-9_-]` output, matching the new pattern. Tests using `.` or `:` in stateKeys must be updated.
