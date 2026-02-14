@@ -15,8 +15,8 @@
 import { calculateRevenueShareBonus, usdCentsToCredits } from "@/core";
 import type { AccountService, ServiceAccountService } from "@/ports";
 import {
+  COGNI_SYSTEM_BILLING_ACCOUNT_ID,
   PLATFORM_REVENUE_SHARE_REASON,
-  SYSTEM_TENANT_ID,
   WIDGET_PAYMENT_REASON,
 } from "@/shared";
 import { serverEnv } from "@/shared/env";
@@ -89,14 +89,14 @@ export async function confirmCreditsPayment(
   if (bonusCredits > 0n) {
     const existingBonus =
       await serviceAccountService.findCreditLedgerEntryByReference({
-        billingAccountId: SYSTEM_TENANT_ID,
+        billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
         reason: PLATFORM_REVENUE_SHARE_REASON,
         reference: input.clientPaymentId,
       });
 
     if (!existingBonus) {
       await serviceAccountService.creditAccount({
-        billingAccountId: SYSTEM_TENANT_ID,
+        billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
         amount: Number(bonusCredits),
         reason: PLATFORM_REVENUE_SHARE_REASON,
         reference: input.clientPaymentId,

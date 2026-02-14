@@ -50,6 +50,7 @@ export const billingAccounts = pgTable(
       .unique()
       .references(() => users.id, { onDelete: "cascade" }),
     isSystemTenant: boolean("is_system_tenant").notNull().default(false),
+    slug: text("slug").unique(),
     balanceCredits: bigint("balance_credits", { mode: "bigint" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

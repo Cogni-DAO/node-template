@@ -1,5 +1,5 @@
 {
-  "id": "6b3e8b17-d22f-46af-be70-968c691d118b",
+  "id": "7531e321-f509-49c5-8e89-44390dda1e38",
   "prevId": "375958cd-1fc9-44fe-bb72-d4b246bcfd4c",
   "version": "7",
   "dialect": "postgresql",
@@ -443,6 +443,12 @@
           "notNull": true,
           "default": false
         },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "balance_credits": {
           "name": "balance_credits",
           "type": "bigint",
@@ -492,6 +498,11 @@
           "name": "billing_accounts_owner_user_id_unique",
           "nullsNotDistinct": false,
           "columns": ["owner_user_id"]
+        },
+        "billing_accounts_slug_unique": {
+          "name": "billing_accounts_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": ["slug"]
         }
       },
       "policies": {},
