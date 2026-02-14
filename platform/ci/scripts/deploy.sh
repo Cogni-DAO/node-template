@@ -717,6 +717,15 @@ log_info "[$(date -u +%H:%M:%S)] Stack up complete"
 emit_deployment_event "deployment.stack_up_complete" "success" "All containers started"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 10.1: Sync governance schedules (idempotent, after Temporal is up)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "[$(date -u +%H:%M:%S)] Syncing governance schedules..."
+emit_deployment_event "deployment.governance_sync_started" "in_progress" "Syncing governance schedules"
+$RUNTIME_COMPOSE exec -T app pnpm governance:schedules:sync
+log_info "[$(date -u +%H:%M:%S)] Governance schedules synced"
+emit_deployment_event "deployment.governance_sync_complete" "success" "Governance schedules synced"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 11: Checksum-gated restart for LiteLLM config changes
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HASH_DIR="/var/lib/cogni"

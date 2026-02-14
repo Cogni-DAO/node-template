@@ -37,6 +37,7 @@ function makeMockDeps(
       resumeSchedule: vi.fn().mockResolvedValue(undefined),
       deleteSchedule: vi.fn().mockResolvedValue(undefined),
       describeSchedule: vi.fn().mockResolvedValue(null),
+      listScheduleIds: vi.fn().mockResolvedValue([]),
     },
     listGovernanceScheduleIds: vi.fn().mockResolvedValue([]),
     log: { info: vi.fn(), warn: vi.fn() },
@@ -89,6 +90,8 @@ describe("syncGovernanceSchedules", () => {
       graphId: "sandbox:openclaw",
       executionGrantId: GRANT_ID,
       input: { message: "COMMUNITY" },
+      overlapPolicy: "skip",
+      catchupWindowMs: 0,
     });
   });
 
