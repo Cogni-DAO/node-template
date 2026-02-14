@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-04
+- **Last reviewed:** 2026-02-15
 - **Status:** draft
 
 ## Purpose
@@ -51,10 +51,11 @@ Single source of truth for environment variables. Lazy validation with Zod preve
 
 ## File Map
 
-- `server.ts` → server-only vars via lazy serverEnv() function. Never import from client code.
+- `server-env.ts` → All env validation logic (Zod schema, `serverEnv()`, `EnvValidationError`). No `server-only` guard — safe for bootstrap/job code under plain Node.
+- `server.ts` → Thin re-export of `server-env.ts` with `import "server-only"` guard. Next.js routes import through this.
 - `client.ts` → public, browser-safe vars (NEXT*PUBLIC*\* only).
 - `invariants.ts` → cross-field validation and runtime secret checks. assertEnvInvariants() runs after Zod parse. assertRuntimeSecrets() validates secrets at adapter boundaries (not during build).
-- `index.ts` → re-exports and tiny helpers.
+- `index.ts` → re-exports from `server.ts` (preserving `server-only` guard) + tiny helpers.
 
 ## Vars by layer
 

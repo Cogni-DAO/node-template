@@ -79,7 +79,7 @@ import type {
   ThreadPersistencePort,
   TreasuryReadPort,
 } from "@/ports";
-import { serverEnv } from "@/shared/env";
+import { serverEnv } from "@/shared/env/server-env";
 import { makeLogger } from "@/shared/observability";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
