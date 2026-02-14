@@ -45,7 +45,8 @@ export async function runGovernanceSchedulesSyncJob(): Promise<void> {
   const lockResult = await serviceDb.execute(
     sql`SELECT pg_try_advisory_lock(hashtext('governance_sync')) AS acquired`
   );
-  const acquired = (lockResult as Array<{ acquired: boolean }>)[0]?.acquired;
+  const acquired = (lockResult[0] as { acquired: boolean } | undefined)
+    ?.acquired;
   if (!acquired) {
     log.info({}, "Governance sync already running, skipping");
     return;
