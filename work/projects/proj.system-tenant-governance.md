@@ -35,6 +35,7 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 | Deliverable                                                                                                          | Status      | Est | Work Item |
 | -------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
 | Schema & bootstrap: `is_system_tenant` column, `cogni_system` seed, startup healthcheck, purchase-time revenue share | Done        | 3   | task.0046 |
+| Governance run foundation: repo-spec governance config + system tenant execution grant                               | Todo        | 2   | task.0054 |
 | PolicyResolverPort: interface + DrizzlePolicyResolverAdapter with system/customer policies                           | Not Started | 3   | —         |
 | ToolPolicyContext: required tenantId + test escape hatch                                                             | Not Started | 2   | —         |
 | Side-effect tool idempotency: `tool_execution_results` table + adapter check/store                                   | Not Started | 3   | —         |
