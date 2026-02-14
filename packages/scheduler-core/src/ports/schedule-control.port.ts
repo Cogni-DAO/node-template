@@ -3,7 +3,7 @@
 
 /**
  * Module: `@ports/schedule-control`
- * Purpose: Vendor-agnostic port for schedule lifecycle control (create/pause/resume/delete).
+ * Purpose: Vendor-agnostic port for schedule lifecycle control (create/pause/resume/delete/list).
  * Scope: Defines contract for schedule orchestration. Does not contain implementations or vendor imports.
  * Invariants:
  *   - Per CRUD_IS_TEMPORAL_AUTHORITY: CRUD endpoints control schedule lifecycle, worker never modifies schedules
@@ -22,6 +22,12 @@ import type { JsonValue } from "type-fest";
  * Parameters for creating a schedule.
  * The scheduleId is caller-supplied (matches DB UUID).
  */
+/**
+ * Overlap policy for scheduled workflows.
+ * Maps 1:1 to Temporal ScheduleOverlapPolicy values.
+ */
+export type ScheduleOverlapPolicyHint = "skip" | "buffer_one" | "allow_all";
+
 export interface CreateScheduleParams {
   /** Schedule ID (caller-supplied, matches DB UUID) */
   readonly scheduleId: string;
@@ -35,6 +41,10 @@ export interface CreateScheduleParams {
   readonly executionGrantId: string;
   /** Graph input payload (JSON-serializable) */
   readonly input: JsonValue;
+  /** Overlap policy hint. Default: "buffer_one" for tenant schedules. Governance sync passes "skip". */
+  readonly overlapPolicy?: ScheduleOverlapPolicyHint;
+  /** Catchup window in milliseconds. Default: 60_000 (1m). Governance passes 0. */
+  readonly catchupWindowMs?: number;
 }
 
 /**
@@ -177,4 +187,14 @@ export interface ScheduleControlPort {
    * @throws ScheduleControlUnavailableError if backend unavailable
    */
   describeSchedule(scheduleId: string): Promise<ScheduleDescription | null>;
+
+  /**
+   * Lists schedule IDs matching a prefix.
+   * Used by governance sync to discover existing governance: schedules.
+   *
+   * @param prefix - Prefix to filter by (e.g., "governance:")
+   * @returns Array of matching schedule IDs
+   * @throws ScheduleControlUnavailableError if backend unavailable
+   */
+  listScheduleIds(prefix: string): Promise<string[]>;
 }
