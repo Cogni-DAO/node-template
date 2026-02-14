@@ -82,21 +82,21 @@ gates:
 governance:
   schedules:
     - charter: COMMUNITY
-      cron: "0 */6 * * *" # Every 6 hours
+      cron: "0 * * * *" # :00 — every hour
       timezone: UTC
       entrypoint: COMMUNITY
 
     - charter: ENGINEERING
-      cron: "0 */4 * * *" # Every 4 hours
+      cron: "15 * * * *" # :15 — every hour
       timezone: UTC
       entrypoint: ENGINEERING
 
     - charter: SUSTAINABILITY
-      cron: "0 */8 * * *" # Every 8 hours
+      cron: "30 * * * *" # :30 — every hour
       timezone: UTC
       entrypoint: SUSTAINABILITY
 
     - charter: GOVERN
-      cron: "0 * * * *" # Every hour (main orchestrator)
+      cron: "45 * * * *" # :45 — every hour (orchestrator)
       timezone: UTC
       entrypoint: GOVERN
