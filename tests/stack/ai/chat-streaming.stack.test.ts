@@ -30,7 +30,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
 import type { SessionUser } from "@/shared/auth/session";
-import { billingAccounts } from "@/shared/db/schema";
+import { billingAccounts, chargeReceipts } from "@/shared/db/schema";
 
 // Mock session
 vi.mock("@/app/_lib/auth/session", () => ({
@@ -155,7 +155,22 @@ describe("Chat Streaming", () => {
     const modelsRes = await modelsGET(modelsReq);
     expect(modelsRes.status).toBe(200);
     const modelsData = await modelsRes.json();
-    const { defaultPreferredModelId: defaultModelId } = modelsData;
+    // Use free default to avoid paid-model $0 cost guardrail / callback flake
+    const { defaultFreeModelId: defaultModelId } = modelsData;
+    expect(defaultModelId).toBeTruthy();
+
+    // Record receipts before (async callback appends a new row)
+    const billingAccount = await db.query.billingAccounts.findFirst({
+      where: eq(billingAccounts.ownerUserId, user.id),
+    });
+    expect(billingAccount).toBeTruthy();
+    if (!billingAccount) throw new Error("Billing account not found");
+
+    const receiptsBefore = await db
+      .select()
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.billingAccountId, billingAccount.id));
+    const initialReceiptCount = receiptsBefore.length;
 
     // Act - Send streaming chat request
     const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
@@ -182,27 +197,22 @@ describe("Chat Streaming", () => {
       if (isFinishEvent(e)) break;
     }
 
-    // Assert - Check database for charge receipt
-    // First get the billing account
-    const billingAccount = await db.query.billingAccounts.findFirst({
-      where: eq(billingAccounts.ownerUserId, user.id),
-    });
-    expect(billingAccount).toBeTruthy();
-
-    if (!billingAccount) {
-      throw new Error("Billing account not found");
-    }
-
     // Wait for receipt from async LiteLLM callback (CALLBACK_IS_SOLE_WRITER)
-    const receipts = await waitForReceipts(db, billingAccount.id);
-    const receipt = receipts[0];
+    const receipts = await waitForReceipts(db, billingAccount.id, {
+      minCount: initialReceiptCount + 1,
+      timeoutMs: 8_000,
+    });
+    const receipt = receipts.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0];
 
     // Per ACTIVITY_METRICS.md: charge_receipt has minimal fields, no model
     // Model lives in LiteLLM (canonical source)
     expect(receipt).toBeTruthy();
     expect(receipt?.provenance).toBe("stream");
     expect(receipt?.runId).toBeTruthy();
-  });
+  }, 10_000);
 
   it("stops streaming when aborted", async () => {
     // Arrange - Seed authenticated user with credits

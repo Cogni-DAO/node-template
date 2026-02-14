@@ -127,9 +127,30 @@ function buildUsageFact(
   const isSuspiciousZeroCost =
     entry.status === "success" &&
     isOpenRouter &&
-    !isFree &&
+    isFreeFromCache === false &&
     hasTokens &&
     entry.response_cost === 0;
+
+  // Cache miss: do NOT treat as paid. Warn and continue normal processing.
+  if (
+    isOpenRouter &&
+    hasTokens &&
+    entry.response_cost === 0 &&
+    isFreeFromCache === null
+  ) {
+    log.warn(
+      {
+        litellmCallId: entry.id,
+        modelGroup: entry.model_group,
+        model: entry.model,
+        provider: entry.custom_llm_provider,
+        promptTokens: entry.prompt_tokens,
+        completionTokens: entry.completion_tokens,
+        totalTokens: entry.total_tokens,
+      },
+      "Billing ingest: model catalog cache miss for response_cost=0 with tokens>0 — continuing"
+    );
+  }
 
   // Guardrail (bug.0060): never persist a final $0 receipt for paid models.
   // "Paid" is derived from LiteLLM config model_info.is_free (missing/unknown defaults to paid).

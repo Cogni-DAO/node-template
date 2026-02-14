@@ -189,12 +189,25 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       );
       const modelsRes = await modelsGET(modelsReq);
       const modelsData = await modelsRes.json();
-      const { defaultPreferredModelId: defaultModelId } = modelsData;
+      const { defaultFreeModelId: defaultModelId } = modelsData;
+      expect(defaultModelId).toBeTruthy();
+
+      const receiptsBefore = await db
+        .select()
+        .from(chargeReceipts)
+        .where(eq(chargeReceipts.billingAccountId, billingAccount.id));
+      const initialReceiptCount = receiptsBefore.length;
+
+      // Make requestId deterministic for telemetry join
+      const requestId = `side-effects-${randomUUID().replace(/-/g, "")}`;
 
       // Send request that will produce multiple chunks
       const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": requestId,
+        },
         body: JSON.stringify({
           ...createChatRequest({
             model: defaultModelId,
@@ -232,7 +245,13 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       expect(chunkCount).toBeGreaterThanOrEqual(2);
 
       // Wait for receipt from async LiteLLM callback, then verify only ONE
-      const receipts = await waitForReceipts(db, billingAccount.id);
+      const receipts = await waitForReceipts(db, billingAccount.id, {
+        minCount: initialReceiptCount + 1,
+        timeoutMs: 10_000,
+      });
+
+      const newReceiptCount = receipts.length - initialReceiptCount;
+      expect(newReceiptCount).toBe(1);
 
       // Find the most recent one for this request
       const latestReceipt = receipts.sort(
@@ -250,13 +269,11 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       const telemetryRows = await db
         .select()
         .from(aiInvocationSummaries)
-        .where(
-          eq(aiInvocationSummaries.requestId, latestReceipt.ingressRequestId)
-        );
+        .where(eq(aiInvocationSummaries.requestId, requestId));
 
       // Only ONE telemetry row, despite multiple chunks
       expect(telemetryRows.length).toBe(1);
-    });
+    }, 10_000);
   });
 
   describe("abort path", () => {

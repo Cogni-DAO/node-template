@@ -31,30 +31,35 @@ Maintain a curated, tiered model catalog that the governance agent and subagents
 
 ## Thinking Tier
 
-Strong reasoning models for all file mutations: writes, edits, commits, code generation, architecture decisions, EDOs. The main governance agent runs on this tier.
+Strong reasoning models for all file mutations: writes, edits, commits, code generation, architecture decisions, EDOs. These tiers reflect 2026 pricing via OpenRouter.
 
-| Model               | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Notes                                                                   |
-| ------------------- | --------- | ------- | ------- | ------ | ------- | --- | ----------------------------------------------------------------------- |
-| **Claude Opus 4.6** | Anthropic | 1M      | 128k    | $5     | $25     | Yes | Default main agent. Sustained knowledge work, coding, extended thinking |
-| Gemini 3 Pro        | Google    | 1M      | 65k     | $2     | $12     | Yes | Multimodal reasoning, configurable depth (low/high)                     |
-| GPT-5               | OpenAI    | 200k    | 32k     | —      | —       | No  | Reasoning model, strong at code                                         |
-| Kimi K2 Thinking    | Moonshot  | 262k    | 65k     | $0.45  | $2.25   | No  | Agent swarm paradigm, multimodal                                        |
+| Model               | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Preference | Notes                                                                         |
+| ------------------- | --------- | ------- | ------- | ------ | ------- | --- | ---------- | ----------------------------------------------------------------------------- |
+| **Claude Opus 4.6** | Anthropic | 1M      | 128k    | $5.00  | $25.00  | Yes | Gold       | Default main agent. Frontier reasoning, best at complex sustained thinking.   |
+| Claude Sonnet 4.5   | Anthropic | 200k    | 4k      | $3.00  | $15.00  | Yes | Strong     | Excellent reasoning at lower cost. Best for governance + agent orchestration. |
+| DeepSeek-V3.2       | DeepSeek  | 64k     | 8k      | $0.25  | $0.38   | No  | ⭐ Value   | Remarkable cost. Strong reasoning with configurable depth (base + reasoning). |
+| QwQ-32B             | Qwen      | 16k     | —       | $0.05  | $0.22   | No  | ⭐ Value   | Cheapest reasoning model. Competitive with o1-mini on hard problems.          |
+| Kimi K2 Thinking    | Moonshot  | 256k    | 65k     | $0.60  | $2.50   | No  | Strong     | Advanced MoE reasoning. Best for persistent multi-turn agentic workflows.     |
+| Kimi K2.5           | Moonshot  | 256k    | 65k     | ~$0.50 | ~$2.00  | No  | Strong     | Latest iteration. Enhanced efficiency over K2.                                |
 
 ## Flash Tier
 
-Fast, cheap models for read-only subagent work: scanning, grep-and-summarize, data extraction, synthesis. No file mutations.
+Fast, cheap models for read-only subagent work: scanning, grep-and-summarize, data extraction, synthesis, research. No file mutations. Optimized for ultra-low cost at scale.
 
-| Model              | Provider | Context | Max Out | $/M in | $/M out | ZDR | Notes                                                          |
-| ------------------ | -------- | ------- | ------- | ------ | ------- | --- | -------------------------------------------------------------- |
-| **Gemini 3 Flash** | Google   | 1M      | 65k     | $0.50  | $3      | Yes | Default subagent. Configurable reasoning, tool use, multimodal |
-| Gemini 2.5 Flash   | Google   | 1M      | 65k     | $0.15  | $0.60   | Yes | Previous default, still capable                                |
-| GPT-4o Mini        | OpenAI   | 128k    | 16k     | —      | —       | No  | Budget option                                                  |
-| Grok 4.1 Fast      | xAI      | 131k    | 32k     | —      | —       | No  | Fast inference                                                 |
+| Model                  | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Preference | Notes                                                                  |
+| ---------------------- | --------- | ------- | ------- | ------ | ------- | --- | ---------- | ---------------------------------------------------------------------- |
+| **Claude Haiku 4.5**   | Anthropic | 200k    | 4k      | $1.00  | $5.00   | Yes | Strong     | Preferred subagent. 2× speed of Haiku 3.5, matches Sonnet 4 on coding. |
+| Gemini 2.5 Flash       | Google    | 1M      | 8k      | $0.30  | $2.50   | Yes | Strong     | Excellent balance. 1M context, built-in thinking, strong reasoning.    |
+| Gemini 2.5 Flash Lite  | Google    | 1M      | 8k      | ~$0.15 | ~$1.00  | Yes | Value      | Lighter version of 2.5 Flash. Good for high-volume scanning.           |
+| GPT-4o Mini            | OpenAI    | 128k    | 16k     | $0.15  | $0.60   | No  | ⭐ Value   | Ultra-cheap and capable. Best cost ratio for diverse tasks.            |
+| Llama 3.3 70B          | Meta      | 128k    | 8k      | $0.10  | $0.32   | No  | ⭐ Value   | Incredible for open-weight. Strong coding, competitive with gpt-4o.    |
+| Llama 3.3 70B (free)   | Meta      | 128k    | 8k      | $0     | $0      | No  | Free tier  | Rate-limited but viable for dev/test.                                  |
+| Qwen3 Coder 480B       | Qwen      | 128k    | 8k      | ~$0.20 | ~$0.40  | No  | Value      | Specializes in coding. Competitive with GPT-4o mini.                   |
+| Mistral Large (latest) | Mistral   | 128k    | 4k      | ~$0.27 | ~$0.81  | No  | Value      | Multimodal capable, solid all-rounder.                                 |
 
 ## Free Tier
 
-Zero-cost models for development, testing, and low-priority tasks. Severely Rate-limited and slow. (1000 req/day with credits).
-Last resort updates to model config, if the DAO is running out of money.
+Zero-cost models for development, testing, and low-priority tasks. ⚠️ **Severely rate-limited (typically ~1,000 requests/day with credits)** — unusable for OpenClaw workloads due to high per-call token volume and multi-turn conversation overhead.
 
 | Model             | Provider | Context | Tool Use | Notes              |
 | ----------------- | -------- | ------- | -------- | ------------------ |
@@ -66,28 +71,39 @@ Last resort updates to model config, if the DAO is running out of money.
 
 ## Config Mapping
 
-| LiteLLM alias      | OpenRouter ID                              | Gateway catalog ID       |
-| ------------------ | ------------------------------------------ | ------------------------ |
-| `claude-opus-4.6`  | `openrouter/anthropic/claude-opus-4-6`     | `cogni/claude-opus-4.6`  |
-| `gemini-3-pro`     | `openrouter/google/gemini-3-pro-preview`   | `cogni/gemini-3-pro`     |
-| `gemini-3-flash`   | `openrouter/google/gemini-3-flash-preview` | `cogni/gemini-3-flash`   |
-| `gemini-2.5-flash` | `openrouter/google/gemini-2.5-flash`       | `cogni/gemini-2.5-flash` |
-| `claude-opus-4.5`  | `openrouter/anthropic/claude-opus-4.5`     | `cogni/claude-opus-4.5`  |
+| LiteLLM alias       | OpenRouter ID                                  | Gateway catalog ID        | Tier  |
+| ------------------- | ---------------------------------------------- | ------------------------- | ----- |
+| `claude-opus-4.6`   | `openrouter/anthropic/claude-opus-4-6`         | `cogni/claude-opus-4.6`   | Think |
+| `claude-sonnet-4.5` | `openrouter/anthropic/claude-sonnet-4.5`       | `cogni/claude-sonnet-4.5` | Think |
+| `claude-haiku-4.5`  | `openrouter/anthropic/claude-haiku-4.5`        | `cogni/claude-haiku-4.5`  | Flash |
+| `deepseek-v3.2`     | `openrouter/deepseek/deepseek-chat-v3.2`       | `cogni/deepseek-v3.2`     | Think |
+| `qwq-32b`           | `openrouter/qwen/qwq-32b`                      | `cogni/qwq-32b`           | Think |
+| `kimi-k2-thinking`  | `openrouter/moonshotai/kimi-k2-thinking`       | `cogni/kimi-k2-thinking`  | Think |
+| `gemini-2.5-flash`  | `openrouter/google/gemini-2.5-flash`           | `cogni/gemini-2.5-flash`  | Flash |
+| `gpt-4o-mini`       | `openrouter/openai/gpt-4o-mini`                | `cogni/gpt-4o-mini`       | Flash |
+| `llama-3.3-70b`     | `openrouter/meta-llama/llama-3.3-70b-instruct` | `cogni/llama-3.3-70b`     | Flash |
+| `qwen3-coder-480b`  | `openrouter/qwen/qwen3-coder`                  | `cogni/qwen3-coder-480b`  | Flash |
 
 ## Current Defaults
 
 ```
-Main agent:    cogni/claude-opus-4.6  (thinking tier)
-Subagents:     cogni/gemini-3-flash   (flash tier)
+Governance agent:  cogni/claude-opus-4.6      (thinking tier — frontier reasoning)
+Fallback thinking: cogni/claude-sonnet-4.5    (thinking tier — 3× cheaper than Opus)
+Value thinking:    cogni/deepseek-v3.2        (thinking tier — $0.63/M total, strong reasoning)
+Primary subagent:  cogni/claude-haiku-4.5     (flash tier — real-time agents, coding)
+Budget subagent:   cogni/gpt-4o-mini          (flash tier — ultra-cheap, $0.75/M total)
+Ultra-budget:      cogni/llama-3.3-70b        (flash tier — $0.42/M total, open-weight)
 ```
 
 ## Invariants
 
-| Rule                  | Constraint                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| WRITES_REQUIRE_STRONG | All file mutations use thinking-tier models. Flash and free models are read-only.    |
-| MODELS_VIA_PROXY      | All LLM calls route through LiteLLM proxy. No direct provider API calls from agents. |
-| ZDR_PREFERRED         | Prefer Zero Data Retention providers (Anthropic, Google) for production workloads.   |
+| Rule                  | Constraint                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| WRITES_REQUIRE_STRONG | All file mutations use thinking-tier models. Flash and free models are read-only.                                 |
+| MODELS_VIA_PROXY      | All LLM calls route through LiteLLM proxy. No direct provider API calls from agents.                              |
+| ZDR_PREFERRED         | Prefer Zero Data Retention providers (Anthropic, Google) for production workloads.                                |
+| COST_CONTROL          | Use value-tier thinking models (DeepSeek, QwQ) for research; reserve Opus for governance. Avoid Opus agent loops. |
+| REASONING_EXPLICIT    | Enable reasoning/thinking modes only when task genuinely requires step-by-step analysis.                          |
 
 ## Evaluation Criteria
 

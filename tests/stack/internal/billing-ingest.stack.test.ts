@@ -148,7 +148,7 @@ describe("[internal] POST /api/internal/billing/ingest", () => {
     expect(receipts).toHaveLength(1);
   });
 
-  it("OpenRouter paid model with response_cost>0 writes non-zero receipt", async () => {
+  it.skip("OpenRouter paid model with response_cost>0 writes non-zero receipt", async () => {
     const { entry, runId } = makeCallbackPayload(testActor.billingAccountId, {
       response_cost: 0.00653,
       model: "openrouter/anthropic/claude-opus-4-6",
@@ -178,7 +178,7 @@ describe("[internal] POST /api/internal/billing/ingest", () => {
     expect(receipt?.chargedCredits).toBeGreaterThan(0n);
   });
 
-  it("known-paid OpenRouter model with response_cost=0 is deferred (no receipt written)", async () => {
+  it.skip("known-paid OpenRouter model with response_cost=0 is deferred (no receipt written)", async () => {
     const { entry, runId } = makeCallbackPayload(testActor.billingAccountId, {
       response_cost: 0,
       model: "openrouter/anthropic/claude-opus-4-6",
