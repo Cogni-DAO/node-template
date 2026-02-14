@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/stack/ai/billing-idempotency.stack`
  * Purpose: Verify IDEMPOTENT_CHARGES invariant for run-centric billing.
- * Scope: Executes completion route, then replays with exact persisted values to verify idempotency. Receipts arrive via async LiteLLM callback (CALLBACK_IS_SOLE_WRITER).
+ * Scope: Executes completion route, then replays with exact persisted values to verify idempotency. Receipts arrive via async LiteLLM callback (CALLBACK_IS_SOLE_WRITER). Does not validate refund logic or partial failure scenarios.
  * Invariants:
  *   - IDEMPOTENT_CHARGES: DB unique on (source_system, source_reference) prevents duplicate charges
  * Side-effects: IO (database writes, LLM calls via mock-openai-api in test mode)

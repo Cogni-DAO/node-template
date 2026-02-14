@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/helpers/poll-db`
  * Purpose: Polling helper for async billing receipts in stack tests.
- * Scope: Waits for rows to appear in the DB after LiteLLM callback fires asynchronously.
+ * Scope: Waits for rows to appear in the DB after LiteLLM callback fires asynchronously. Does not handle retry logic or persistent failures.
  * Invariants: CALLBACK_IS_SOLE_WRITER — receipts arrive via async LiteLLM callback, not in-process
  * Side-effects: IO (database reads)
  * Links: tests/stack/ai/*.stack.test.ts
