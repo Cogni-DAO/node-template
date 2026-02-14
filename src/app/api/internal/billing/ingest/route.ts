@@ -8,8 +8,8 @@
  * Invariants:
  *   - CALLBACK_AUTHENTICATED: Requires Bearer BILLING_INGEST_TOKEN
  *   - INGEST_ENDPOINT_IS_INTERNAL: Docker-internal only, not exposed through Caddy
- *   - IDEMPOTENCY_KEY_IS_LITELLM_CALL_ID: Duplicate callbacks are no-ops (handled internally by commitUsageFact)
- *   - COST_AUTHORITY_IS_LITELLM: Cost from callback response_cost field
+ *   - CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID: Duplicate callbacks are no-ops (handled internally by commitUsageFact)
+ *   - COST_ORACLE_IS_LITELLM: Cost from callback response_cost field
  *   - NO_SYNCHRONOUS_RECEIPT_BARRIER: Never blocks LLM response (async callback)
  * Side-effects: IO (HTTP request/response, database via commitUsageFact)
  * Links: docs/spec/billing-ingest.md, billing-ingest.internal.v1.contract

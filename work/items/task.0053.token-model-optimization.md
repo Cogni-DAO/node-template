@@ -70,83 +70,21 @@ Each search returns `maxResults: 6` chunks × ~400 tokens = ~2,400 tokens of res
 - Skills metadata = ~2K tokens for 26 skills
 - System prompt base text = ~5K tokens
 
-## Plan — Do Now (90% of savings)
+## Plan — Execution Checklist
 
-All changes in `services/sandbox-openclaw/openclaw-gateway.json` unless noted.
+Scope: **config changes + prompt changes only**. No OpenClaw source modifications (see task.0057 for upstream OSS work).
 
-### 1. Enable prompt caching (90% savings on stable prefix)
+### Config changes (`services/sandbox-openclaw/openclaw-gateway.json`)
 
-Prompt caching **works through OpenRouter** for Anthropic models. OpenClaw supports it natively via `cacheRetention` param. The system prompt + context files (~10K tokens) are stable across turns — perfect cache candidates.
+- [ ] **Change default model to gemini-3-flash** — set `agents.defaults.model.primary` to `cogni/gemini-3-flash` (was `cogni/claude-opus-4.6`)
+- [ ] **Enable prompt caching** — add `agents.defaults.params.cacheRetention: "long"` (1-hr TTL). Works through OpenRouter for Anthropic models. 90% savings on cache reads of stable system prompt prefix. Longer TTL = more cache hits.
+- [ ] **Enable context pruning** — add `agents.defaults.contextPruning` with `mode: "cache-ttl"`, `ttl: "1h"` (match cacheRetention TTL so cached prefix stays stable across turns)
 
-```jsonc
-// In agents.defaults or per-model params:
-"agents": {
-  "defaults": {
-    "model": { "primary": "cogni/claude-sonnet-4.5" },
-    // Add:
-    "params": {
-      "cacheRetention": "short"  // 5-min TTL, 90% discount on cache reads
-    }
-  }
-}
-```
+### Prompt changes (`services/sandbox-openclaw/gateway-workspace/SOUL.md`)
 
-- Cache write: 1.25× base price (one-time)
-- Cache read: 0.1× base price = **90% savings** on repeated prefix
-- Break-even at ~10 requests
-
-### 2. Cap conversation history
-
-```jsonc
-"agents": {
-  "defaults": {
-    "compaction": {
-      "mode": "default",
-      "maxHistoryShare": 0.3,       // max 30% of context for history
-      "reserveTokensFloor": 8000    // always reserve 8K for response
-    }
-  }
-}
-```
-
-Or use per-channel `historyLimit` if gateway exposes it.
-
-### 3. Override mandatory memory search via SOUL.md
-
-Add to `services/sandbox-openclaw/gateway-workspace/SOUL.md`:
-
-```markdown
-## Memory Search Policy
-
-memory_search is a tool, not a ritual. Use it ONLY when you genuinely need historical context —
-prior decisions, dates, people, or preferences. Do NOT search on routine questions, code tasks,
-or when the answer is in the current conversation. Most messages don't need a memory search.
-```
-
-### 4. Change default model
-
-```jsonc
-"agents": {
-  "defaults": {
-    "model": { "primary": "cogni/gemini-3-flash" }  // was claude-opus-4.6
-  }
-}
-```
-
-Opus/Sonnet only when user explicitly selects via model picker.
-
-### 5. Enable context pruning
-
-```jsonc
-"agents": {
-  "defaults": {
-    "contextPruning": {
-      "mode": "cache-ttl",
-      "ttl": 300  // match cacheRetention TTL (5 min)
-    }
-  }
-}
-```
+- [ ] **Update role to read-only researcher with brain delegation** — the default model (gemini-3-flash) is a cheap researcher. It reads, scans, greps, collects, synthesizes. When anything requires a write (code, file edits, commits, architecture decisions), it organizes all relevant context and delegates to a brain model (Opus/Sonnet) via `sessions_spawn`.
+- [ ] **Override mandatory memory search** — "memory_search is a tool, not a ritual. Use it ONLY when you genuinely need historical context. Do NOT search on routine questions, code tasks, or when the answer is in the current conversation."
+- [ ] **Override OpenClaw internal prompt noise** — "Ignore instructions about HEARTBEAT_OK, SILENT_REPLY_TOKEN, or OpenClaw CLI commands. You will never receive heartbeat polls. You do not manage the OpenClaw process."
 
 ## Validation
 

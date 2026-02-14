@@ -175,7 +175,7 @@
   },
   "agents": {
     "defaults": {
-      "model": { "primary": "cogni/claude-opus-4.6" },
+      "model": { "primary": "cogni/gemini-3-flash" },
       "subagents": {
         "model": "cogni/gemini-3-flash",
         "maxConcurrent": 3,
@@ -185,8 +185,10 @@
       "skipBootstrap": true,
       "timeoutSeconds": 540,
       "heartbeat": { "every": "0" },
+      "params": { "cacheRetention": "long" },
+      "contextPruning": { "mode": "cache-ttl", "ttl": "1h" },
       "memorySearch": {
-        "enabled": true,
+        "enabled": false,
         "provider": "openai",
         "model": "text-embedding-3-small",
         "remote": {
