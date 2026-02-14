@@ -8,6 +8,7 @@
  * Invariants:
  *   - CLIENT_SENDS_USER_ONLY: client sends single message string; server loads authoritative thread from DB
  *   - OPTIMISTIC_APPEND: two-phase save (user before execute, assistant after pump) with expectedMessageCount guard
+ *   - METADATA_ON_INSERT: thread metadata (model, graphName) saved on first persist only (expectedLen === 0)
  *   - Uses AI SDK createUIMessageStream (no custom SSE)
  *   - Per ASSISTANT_FINAL_REQUIRED: reconciles truncated text_delta events with assistant_final
  * Side-effects: IO (HTTP request/response, DB persistence)
@@ -236,13 +237,20 @@ export const POST = wrapRouteHandlerWithLogging(
       };
 
       // --- Phase 1: persist user message before execution (optimistic) ---
+      // Metadata (model, graphName) saved on INSERT only — first persist creates the thread row.
+      const threadMetadata =
+        expectedLen === 0
+          ? { model: input.model, graphName: input.graphName }
+          : undefined;
+
       let threadWithUser = [...existingThread, userUIMessage];
       try {
         await threadPersistence.saveThread(
           sessionUser.id,
           stateKey,
           redactSecretsInMessages(threadWithUser),
-          expectedLen
+          expectedLen,
+          threadMetadata
         );
       } catch (e) {
         if (!(e instanceof ThreadConflictError)) throw e;
@@ -257,7 +265,8 @@ export const POST = wrapRouteHandlerWithLogging(
           sessionUser.id,
           stateKey,
           redactSecretsInMessages(threadWithUser),
-          expectedLen
+          expectedLen,
+          expectedLen === 0 ? threadMetadata : undefined
         );
         // If this throws ThreadConflictError again, handleRouteError catches → 409
       }

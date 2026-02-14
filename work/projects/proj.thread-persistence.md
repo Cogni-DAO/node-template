@@ -11,7 +11,7 @@ outcome: Multi-turn conversations persisted in `ai_threads` table as `UIMessage[
 assignees:
   - cogni-dev
 created: 2026-02-07
-updated: 2026-02-13
+updated: 2026-02-14
 labels:
   - ai-graphs
   - data
@@ -50,8 +50,8 @@ Ship server-authoritative conversation persistence so that multi-turn chat works
 | Server: `createAssistantStreamResponse` → `createUIMessageStream` (AI SDK)            | Done        | 2   | task.0042            |
 | Client: `useDataStreamRuntime` → `useChatRuntime` (@assistant-ui/react-ai-sdk)        | Done        | 2   | task.0042            |
 | LangGraph routing: executor-conditional history loading + UUID thread ref derivation  | Not Started | 2   | (create at P1 start) |
-| Thread list: `listThreads` endpoint + basic thread selection UI                       | Todo        | 2   | task.0035            |
-| History load: thread messages loaded from server on mount / thread switch             | Todo        | 1   | task.0035            |
+| Thread list: `listThreads` endpoint + basic thread selection UI                       | Done        | 2   | task.0035            |
+| History load: thread messages loaded from server on mount / thread switch             | Done        | 1   | task.0035            |
 | Gateway streaming enrichment: capture OpenClaw WS tool-use events as AiEvents         | Not Started | 3   | (create at P1 start) |
 | Ephemeral output enrichment: investigate richer `--json` output for tool-use metadata | Not Started | 1   | (create at P1 start) |
 
