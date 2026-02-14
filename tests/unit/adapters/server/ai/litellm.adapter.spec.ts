@@ -548,6 +548,63 @@ describe("LiteLlmAdapter", () => {
     });
   });
 
+  describe("bug.0057: x-litellm-spend-logs-metadata header", () => {
+    const metadataTestParams = {
+      model: "openai/gpt-4",
+      messages: [{ role: "user" as const, content: "Hello" }],
+      caller: testCaller,
+    };
+
+    const mockSuccessResponse = {
+      id: "chatcmpl-test-meta",
+      choices: [
+        {
+          message: { role: "assistant", content: "Hi" },
+          finish_reason: "stop",
+        },
+      ],
+      usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 },
+    };
+
+    it("sets x-litellm-spend-logs-metadata header when spendLogsMetadata provided", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers(),
+        json: async () => mockSuccessResponse,
+      });
+
+      await adapter.completion({
+        ...metadataTestParams,
+        spendLogsMetadata: { run_id: "run-abc", graph_id: "langgraph:poet" },
+      });
+
+      const requestOptions = mockFetch.mock.calls[0]?.[1];
+      expect(requestOptions?.headers).toEqual(
+        expect.objectContaining({
+          "x-litellm-spend-logs-metadata": JSON.stringify({
+            run_id: "run-abc",
+            graph_id: "langgraph:poet",
+          }),
+        })
+      );
+    });
+
+    it("does not set x-litellm-spend-logs-metadata header when spendLogsMetadata absent", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers(),
+        json: async () => mockSuccessResponse,
+      });
+
+      await adapter.completion(metadataTestParams);
+
+      const requestOptions = mockFetch.mock.calls[0]?.[1];
+      expect(requestOptions?.headers).not.toHaveProperty(
+        "x-litellm-spend-logs-metadata"
+      );
+    });
+  });
+
   describe("LlmService interface compliance", () => {
     it("implements LlmService interface correctly", () => {
       const service: LlmService = adapter;
