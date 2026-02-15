@@ -305,7 +305,7 @@ describe("executeGraphActivity", () => {
       temporalScheduleId: FIXED_IDS.scheduleId,
       graphId: FIXED_IDS.graphId,
       executionGrantId: FIXED_IDS.grantId,
-      input: { messages: [], model: "openrouter/auto" },
+      input: { messages: [], model: "gpt-4o-mini" },
       scheduledFor: "2025-01-15T10:00:00.000Z",
       runId: FIXED_IDS.runId,
     });
@@ -321,7 +321,7 @@ describe("executeGraphActivity", () => {
         },
         body: JSON.stringify({
           executionGrantId: FIXED_IDS.grantId,
-          input: { messages: [], model: "openrouter/auto" },
+          input: { messages: [], model: "gpt-4o-mini" },
           runId: FIXED_IDS.runId,
         }),
       })
