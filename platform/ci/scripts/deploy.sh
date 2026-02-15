@@ -726,7 +726,24 @@ log_info "[$(date -u +%H:%M:%S)] Stack up complete"
 emit_deployment_event "deployment.stack_up_complete" "success" "All containers started"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 10.1: Sync governance schedules (idempotent, after Temporal is up)
+# Step 10.1: Wait for app readiness before post-deploy hooks
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "[$(date -u +%H:%M:%S)] Waiting for app to be ready..."
+for i in $(seq 1 30); do
+  if $RUNTIME_COMPOSE exec -T app sh -c 'curl -fsS http://localhost:3000/readyz' &>/dev/null; then
+    log_info "[$(date -u +%H:%M:%S)] App ready after ~${i}s"
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    log_error "App did not become ready after 30s"
+    $RUNTIME_COMPOSE logs --tail=20 app
+    exit 1
+  fi
+  sleep 1
+done
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 10.2: Sync governance schedules (idempotent, after app + Temporal are up)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "[$(date -u +%H:%M:%S)] Syncing governance schedules..."
 emit_deployment_event "deployment.governance_sync_started" "in_progress" "Syncing governance schedules"
