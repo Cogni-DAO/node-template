@@ -29,19 +29,28 @@ If not set, run `/env-update` to propagate from .env.local to OpenClaw gateway.
 
 Run `./queries.sh <command>` from this directory:
 
-### Health Metrics (Primary)
+### Service Overview
+
+- **services** - List all running services
+- **health** - Per-service health dashboard (memory, CPU, OOMs)
+- **all** - Full health report (services + metrics + alerts)
+
+### Aggregate Metrics
 
 - **cost** - LLM spend in last hour (USD)
 - **tokens** - Total tokens consumed (last hour)
 - **errors** - LLM error count (last hour)
-- **memory** - Container memory pressure (%)
+- **breakdown** - Cost/tokens by provider
+
+### Alerts & Incidents
+
 - **alerts** - Active alert rules status
 - **incidents** - Open incidents count
-
-### Debugging (Secondary)
-
 - **deployments** - Recent annotations (last 24h)
-- **all** - Run all health checks
+
+### Legacy (Single Metrics)
+
+- **memory** - Aggregate container memory pressure (%)
 
 ## Usage Pattern
 
@@ -55,15 +64,35 @@ Run `./queries.sh <command>` from this directory:
 
 ## Output Format
 
-Concise, parseable:
+Concise per-service dashboard:
 
 ```
+=== Services ===
+  ✓ app
+  ✓ scheduler-worker
+  ✓ openclaw-gateway
+  ...
+
+=== Per-Service Health ===
+app:
+  Memory: 45%  CPU: 12%  OOMs: 0
+scheduler-worker:
+  Memory: 23%  CPU: 5%  OOMs: 0
+...
+
+=== Aggregate Metrics ===
 LLM Cost (1h): $0.05
 Tokens (1h): 12450
 Errors (1h): 0
-Memory: 45%
-Active Alerts: 0
-Open Incidents: 0
+
+=== Cost Breakdown ===
+  OpenRouter: $0.045
+
+Tokens by Provider:
+  OpenRouter: 11200 tokens
+
+Note: Postgres internals, Temporal workflows, and network stats not included (future)
+Note: Alerts & incidents not configured yet
 ```
 
 ## Design Constraints
