@@ -57,11 +57,17 @@ Run `./queries.sh <command>` from this directory:
 ## Usage Pattern
 
 ```bash
-# Single check
-./queries.sh cost
-
-# Full health scan
+# Production, last 1h (defaults)
 ./queries.sh all
+
+# Preview environment
+DEPLOY_ENV=preview ./queries.sh all
+
+# Last 24 hours
+TIME_WINDOW=24h ./queries.sh all
+
+# Preview + 6h window
+DEPLOY_ENV=preview TIME_WINDOW=6h ./queries.sh cost
 ```
 
 ## Output Format

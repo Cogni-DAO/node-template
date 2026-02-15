@@ -44,10 +44,10 @@ Increase KPI awareness of yourself and all things involved in keeping you runnin
 
 ### Skills / resources
 
-| Resource               | Use                              | Where                                | /skill | Notes                         |
-| ---------------------- | -------------------------------- | ------------------------------------ | ------ | ----------------------------- |
-| Deployment health      | System health, cost, per-service | `.openclaw/skills/deployment-health` | ✓      | v0 MVP - data not trustworthy |
-| Scheduler + Temporal   | Governance loop execution        | `services/scheduler-worker/`         |        | Runtime exists; no agent hook |
-| OpenClaw gateway       | AI agent runtime + channels      | `services/openclaw-gateway/`         |        | Not wired to agent yet        |
-| Work items system      | Issue/task tracking              | `work/` directory                    |        | Read-only; no write access    |
-| Database observability | Usage metrics, billing data      | PostgreSQL tables                    |        | No query access yet           |
+| Resource               | Use                              | Where                                | /skill | Notes                                 |
+| ---------------------- | -------------------------------- | ------------------------------------ | ------ | ------------------------------------- |
+| Deployment health      | System health, cost, per-service | `.openclaw/skills/deployment-health` | ✓      | v0 Grafana MVP - data not trustworthy |
+| Scheduler + Temporal   | Governance loop execution        | `services/scheduler-worker/`         |        | Runtime exists; no agent hook         |
+| OpenClaw gateway       | AI agent runtime + channels      | `services/openclaw-gateway/`         |        | Not wired to agent yet                |
+| Work items system      | Issue/task tracking              | `work/` directory                    |        | Read-only; no write access            |
+| Database observability | Usage metrics, billing data      | PostgreSQL tables                    |        | No query access yet                   |

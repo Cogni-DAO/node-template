@@ -1,6 +1,8 @@
 #!/bin/bash
 # Grafana Health Queries - Readonly metrics for governance
 # Usage: ./queries.sh <command>
+# Env vars: DEPLOY_ENV (production|preview, default: production)
+#           TIME_WINDOW (1h|6h|24h, default: 1h)
 # Commands: cost, tokens, errors, memory, alerts, incidents, deployments, all
 
 set -euo pipefail
@@ -9,6 +11,12 @@ set -euo pipefail
 : "${GRAFANA_URL:?GRAFANA_URL not set - run /env-update}"
 : "${GRAFANA_SERVICE_ACCOUNT_TOKEN:?GRAFANA_SERVICE_ACCOUNT_TOKEN not set - run /env-update}"
 TOKEN="${GRAFANA_SERVICE_ACCOUNT_TOKEN}"
+
+# Environment selection (production or preview)
+ENV="${DEPLOY_ENV:-production}"
+
+# Time window for metrics (1h, 6h, 24h)
+TIME_WINDOW="${TIME_WINDOW:-1h}"
 
 # Datasource UIDs (stable)
 PROM_UID="grafanacloud-prom"
@@ -30,22 +38,22 @@ extract_value() {
 # --- Commands ---
 
 cmd_cost() {
-  echo -n "LLM Cost (1h): $"
-  prom_query 'sum(increase(ai_llm_cost_usd_total[1h]))' \
+  echo -n "LLM Cost (${TIME_WINDOW}): $"
+  prom_query "sum(increase(ai_llm_cost_usd_total{env=\"${ENV}\"}[${TIME_WINDOW}]))" \
     | extract_value | awk '{printf "%.4f", $1}'
   echo ""
 }
 
 cmd_tokens() {
-  echo -n "Tokens (1h): "
-  prom_query 'sum(increase(ai_llm_tokens_total[1h]))' \
+  echo -n "Tokens (${TIME_WINDOW}): "
+  prom_query "sum(increase(ai_llm_tokens_total{env=\"${ENV}\"}[${TIME_WINDOW}]))" \
     | extract_value | awk '{printf "%.0f", $1}'
   echo ""
 }
 
 cmd_errors() {
-  echo -n "Errors (1h): "
-  prom_query 'sum(increase(ai_llm_errors_total[1h]))' \
+  echo -n "Errors (${TIME_WINDOW}): "
+  prom_query "sum(increase(ai_llm_errors_total{env=\"${ENV}\"}[${TIME_WINDOW}]))" \
     | extract_value | awk '{printf "%.0f", $1}'
   echo ""
 }
@@ -112,18 +120,20 @@ cmd_service_health() {
 }
 
 cmd_cost_breakdown() {
-  echo "Cost Breakdown (1h):"
+  echo "Cost Breakdown (${TIME_WINDOW}):"
   # Cost by provider
-  prom_query 'sum by (provider) (increase(ai_llm_cost_usd_total[1h]))' \
+  prom_query "sum by (provider) (increase(ai_llm_cost_usd_total{env=\"${ENV}\"}[${TIME_WINDOW}]))" \
     | jq -r '.data.result[] | "  \(.metric.provider): $\(.value[1] | tonumber * 100 | round / 100)"'
 
   echo ""
   echo "Tokens by Provider:"
-  prom_query 'sum by (provider) (increase(ai_llm_tokens_total[1h]))' \
+  prom_query "sum by (provider) (increase(ai_llm_tokens_total{env=\"${ENV}\"}[${TIME_WINDOW}]))" \
     | jq -r '.data.result[] | "  \(.metric.provider): \(.value[1] | tonumber | floor) tokens"'
 }
 
 cmd_all() {
+  echo "=== Environment: ${ENV} ==="
+  echo ""
   echo "=== Services ==="
   cmd_services
   echo ""
