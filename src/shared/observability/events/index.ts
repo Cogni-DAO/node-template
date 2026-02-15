@@ -76,6 +76,9 @@ export const EVENT_NAMES = {
   // Scheduling Domain
   SCHEDULE_CREDIT_GATE_REJECTED: "schedules.credit_gate_rejected",
 
+  // Governance Domain
+  GOVERNANCE_SYNC_COMPLETE: "governance.sync.complete",
+
   // Sandbox Execution Events
   SANDBOX_EXECUTION_STARTED: "sandbox.execution.started",
   SANDBOX_EXECUTION_COMPLETE: "sandbox.execution.complete",

@@ -48,9 +48,12 @@ vi.mock("@/bootstrap/http", () => ({
     async (request: NextRequest) =>
       handler(
         {
+          reqId: "test-req-id",
+          routeId: "governance.schedules.sync.internal",
           log: {
             warn: vi.fn(),
             error: vi.fn(),
+            info: vi.fn(),
           },
         },
         request
