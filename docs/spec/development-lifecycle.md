@@ -40,12 +40,12 @@ graph LR
   research --> project
   project --> spec["/spec"]
   spec --> task
-  task --> implement["/implement"]
+  task --> design["/design"]
+  design --> review_d["/review-design"]
+  review_d --> implement["/implement"]
   implement --> PR
-  PR --> review_d["/review-design"]
   PR --> review_i["/review-implementation"]
-  review_d --> closeout["/closeout"]
-  review_i --> closeout
+  review_i --> closeout["/closeout"]
 ```
 
 ### Commands

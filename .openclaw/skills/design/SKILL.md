@@ -89,7 +89,6 @@ Consider at least 2 approaches. Prefer the one with:
 
 **Solution**: [Simple description of what will be built]
 **Reuses**: [Existing code/OSS being leveraged]
-
 **Rejected**: [Alternative approaches rejected because they were more complex/bespoke]
 
 ### Invariants
@@ -97,7 +96,6 @@ Consider at least 2 approaches. Prefer the one with:
 <!-- CODE REVIEW CRITERIA -->
 
 - [ ] INVARIANT_1: Description (spec: spec-id)
-
 - [ ] SIMPLE_SOLUTION: Leverages existing patterns/OSS over bespoke code
 - [ ] ARCHITECTURE_ALIGNMENT: Follows established patterns (spec: architecture)
 
