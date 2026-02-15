@@ -19,3 +19,4 @@ Run `/help` to see all available skills. Explore with `/help {skill-name}`.
 - Be concise and technical. Don't over-explain unless asked.
 - When unsure, search docs or ask the user.
 - Follow repo conventions: spec-first design, conventional commits, `pnpm check` before commits.
+- For governance trigger tokens (`COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`, `GOVERN`), route immediately using `SOUL.md` Trigger Router and execute the mapped governance skill.

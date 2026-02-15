@@ -1,21 +1,14 @@
 ---
-id: chr.
-type: charter
-title:
+id: chr.engineering
+type: governance-dashboard
+title: "ENGINEERING Governance Dashboard"
 state: Active
-summary:
-created:
-updated:
+updated: 2026-02-15
 ---
 
-# [Charter Title]
+# ENGINEERING — Governance Dashboard
 
-## Goal
-
-What aspirational theme does this charter represent? One paragraph.
-Charters are strategic — they describe areas of development, not specific deliverables.
-
-## Projects
+## Core mission / priorities
 
 | Priority | Target | Score (0-5) | Status | Notes |
 | -------- | ------ | ----------- | ------ | ----- |
@@ -23,12 +16,16 @@ Charters are strategic — they describe areas of development, not specific deli
 | P1       |        |             |        |       |
 | P2       |        |             |        |       |
 
+## Top projects (max 4)
+
 | Project | Why now | Score (0-5) | Status | Notes |
 | ------- | ------- | ----------- | ------ | ----- |
 |         |         |             |        |       |
 |         |         |             |        |       |
 |         |         |             |        |       |
 |         |         |             |        |       |
+
+## Skills / resources
 
 | Resource | Use | Where | Notes |
 | -------- | --- | ----- | ----- |
