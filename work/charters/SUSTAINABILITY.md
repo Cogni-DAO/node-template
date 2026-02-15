@@ -12,41 +12,42 @@ updated: 2026-02-15
 
 ## Goal
 
-Define SUSTAINABILITY priorities for budget protection and recommendation governance loops.  
-Known TODO: humans filling out the charters.
+Align incentives, monitoring, and workflows to build sustained syntropy and symbiosis with the living world around it. Reduce sprawl, entropy, and inefficient consumption.
+Cogni is a self-governing deployed application. This project must remain durable and reliable over time.
+Increase KPI awareness of yourself and all things involved in keeping you running.
 
 ## Projects
 
 ### Core mission / priorities
 
-| Priority | Target | Score (0-5) | Status | Notes |
-| -------- | ------ | ----------- | ------ | ----- |
-| P0       |        |             |        |       |
-| P1       |        |             |        |       |
-| P2       |        |             |        |       |
+| Priority | Target                                                                                     | Score (0-5) | Status      | Notes |
+| -------- | ------------------------------------------------------------------------------------------ | ----------- | ----------- | ----- |
+| P0       | Cogni has full observability over Cogni: it's codebase, deployment, community, impact, etc | 0           | Not Started |       |
+| P1       | Financial sustainability: budget awareness, cost control, spend monitoring                 | 0           | Not Started |       |
+| P2       | Self healing: Autonomous governance loops that empower syntropy without humans.            | 0           | Not Started |       |
 
 ### Top projects (max 4)
 
-| Project | Why now | Score (0-5) | Status | Notes |
-| ------- | ------- | ----------- | ------ | ----- |
-|         |         |             |        |       |
-|         |         |             |        |       |
-|         |         |             |        |       |
-|         |         |             |        |       |
-
-### Skills / resources
-
-| Resource | Use | Where | Notes |
-| -------- | --- | ----- | ----- |
-|          |     |       |       |
-|          |     |       |       |
-|          |     |       |       |
+| Project                        | Why now                                                                         | Score (0-5) | Status      | Notes |
+| ------------------------------ | ------------------------------------------------------------------------------- | ----------- | ----------- | ----- |
+| `proj.observability-hardening` | Enables full system visibility and KPI feedback loops.                          | 0           | Not Started |       |
+| `proj.ai-operator-wallet`      | Agent wallet for autonomous spending + budget tracking (P0: OpenRouter credits) | 0           | Not Started |       |
+| `proj.governance-agents`       | Foundation for autonomous governance loops.                                     | 0           | Not Started |       |
+| `proj.reliability`             | Keeps the system operational over long time horizons.                           | 0           | Not Started |       |
 
 ## Constraints
 
-- One focus per run
-- One decision per run (`action` or `no-op`)
-- Produce budget recommendations and risk signals; do not write the live gate
-- Read and respect GOVERN-owned live gate at `memory/_budget_header.md`
+- Execution 100% dependent on one human (Derek)
+- Agent has no access to observability data yet
+- Agent has no access to community channels yet
+- Agent cannot autonomously trigger deployments or restarts
 
-- Humans must set priorities, project scores, and status in this charter before autonomous runs should be trusted.
+### Skills / resources
+
+| Resource               | Use                               | Where                        | /skill | Notes                         |
+| ---------------------- | --------------------------------- | ---------------------------- | ------ | ----------------------------- |
+| Grafana stack          | Metrics, logs, traces, dashboards | `services/grafana/`          |        | Not wired to agent yet        |
+| Scheduler + Temporal   | Governance loop execution         | `services/scheduler-worker/` |        | Runtime exists; no agent hook |
+| OpenClaw gateway       | AI agent runtime + channels       | `services/openclaw-gateway/` |        | Not wired to agent yet        |
+| Work items system      | Issue/task tracking               | `work/` directory            |        | Read-only; no write access    |
+| Database observability | Usage metrics, billing data       | PostgreSQL tables            |        | No query access yet           |

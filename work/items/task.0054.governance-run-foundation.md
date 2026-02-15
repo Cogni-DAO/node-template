@@ -88,7 +88,8 @@ pnpm check
 
 ## PR / Links
 
-- Handoff: [handoff](../handoffs/task.0054.handoff.md)
+- Handoff: [2026-02-15 - Tests Passing](../handoffs/task.0054.handoff.md)
+- Handoff (archived): [2026-02-15T07-29-43](../handoffs/archive/task.0054/2026-02-15T07-29-43.md)
 - Spec: [governance-scheduling](../../docs/spec/governance-scheduling.md)
 
 ## Attribution
