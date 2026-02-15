@@ -82,8 +82,14 @@ All system prompt files live in a single directory, bind-mounted into the contai
 ├── .gitignore                         # Ignores memory/ directory
 └── memory/                            # Ephemeral working memory (not in git, lost on reset)
     ├── YYYY-MM-DD.md                  # Auto-populated session logs (on /new)
-    ├── YYYY-MM-DD-govern.md           # GOVERN EDO records (written by agent)
-    └── YYYY-MM-DD-digest.md           # Daily digest (written by agent)
+    ├── YYYY-MM-DD-digest.md           # Daily digest (written by agent)
+    ├── _budget_header.md              # GOVERN-owned live gate
+    ├── edo_index.md                   # Open/recent EDO index
+    ├── EDO/                           # EDO files (`<id>.md`) from template
+    ├── COMMUNITY/heartbeat.md         # Latest charter heartbeat (overwrite)
+    ├── ENGINEERING/heartbeat.md       # Latest charter heartbeat (overwrite)
+    ├── SUSTAINABILITY/heartbeat.md    # Latest charter heartbeat (overwrite)
+    └── GOVERN/heartbeat.md            # Latest charter heartbeat (overwrite)
 ```
 
 OpenClaw reads AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md from the workspace root at session start (truncated to `bootstrapMaxChars`, default 20,000 chars). SOUL.md must be at the workspace root — OpenClaw has no config to read it from an alternate path. Subagents receive only `AGENTS.md` + `TOOLS.md`.

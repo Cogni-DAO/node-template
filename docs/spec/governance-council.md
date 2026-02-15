@@ -100,6 +100,7 @@ Applies to all governance skills.
 
 ## Role Ownership
 
+- Humans own charter strategy content (`work/charters/*.md` priorities/projects/scores).
 - `SUSTAINABILITY`: reports and recommends only; does not write `allow_runs`.
 - `GOVERN`: sole owner of live authorization gate (`memory/_budget_header.md`).
 - `COMMUNITY` and `ENGINEERING`: consume gate + emit charter heartbeat.

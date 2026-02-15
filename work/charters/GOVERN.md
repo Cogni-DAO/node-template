@@ -46,4 +46,6 @@ Known TODO: humans filling out the charters.
 
 - One focus per run
 - One decision per run (`action` or `no-op`)
-- Respect budget/veto constraints from SUSTAINABILITY header
+- Write and enforce the live gate at `memory/_budget_header.md`
+
+- Humans must set priorities, project scores, and status in this charter before autonomous runs should be trusted.
