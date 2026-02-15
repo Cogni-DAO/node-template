@@ -31,10 +31,31 @@ You do not work until you have a unique work item id and clean associated branch
 
 ## Phase 2 — Plan Checkpoints
 
-Read the work item's plan/todo list. Identify **checkpoints** — natural boundaries where the code should be in a green/healthy state before moving on. A checkpoint is reached when:
+Read the work item's Design section (if present) and existing plan. Identify **checkpoints** — natural boundaries where the code should be in a green/healthy state before moving on.
 
-- A coherent unit of functionality is complete
-- Tests can be written and should pass
+Update the work item's Plan section with this structure for each checkpoint:
+
+```markdown
+- [ ] **Checkpoint N**
+  - Milestone: [what functional state is achieved]
+  - Invariants: [SCREAMING_SNAKE rules from Design section]
+  - Todos:
+    - [ ] do x to `<file.ts:line>`
+    - [ ] create `<path/to/new.ts>`
+  - Validation/Testing:
+    - [ ] What can now function e2e? [describe]
+    - Test levels:
+      - [ ] unit: `pnpm test path/to/test.ts`
+      - [ ] contract: [if applicable]
+      - [ ] component: [if applicable]
+      - [ ] stack: [if applicable]
+```
+
+A checkpoint is complete when:
+
+- All todos are done
+- All invariants from Design section upheld
+- All test levels pass
 - `pnpm check` passes
 
 List your checkpoints before starting implementation.

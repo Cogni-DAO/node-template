@@ -455,6 +455,9 @@ services:
       - OPENCLAW_RAW_STREAM_PATH=/tmp/openclaw-raw-stream.jsonl
       - PI_RAW_STREAM=1
       - PI_RAW_STREAM_PATH=/tmp/pi-raw-stream.jsonl
+      # Grafana observability (for grafana-health skill)
+      - GRAFANA_URL=${GRAFANA_URL}
+      - GRAFANA_SERVICE_ACCOUNT_TOKEN=${GRAFANA_SERVICE_ACCOUNT_TOKEN}
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m

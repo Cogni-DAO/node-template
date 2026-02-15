@@ -338,8 +338,17 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       : typeof input.message === "string"
         ? [{ role: "user", content: input.message }]
         : [];
-    const model =
-      typeof input.model === "string" ? input.model : "openrouter/auto";
+
+    // Model is required - no fallback
+    if (typeof input.model !== "string") {
+      log.error("Missing required model field");
+      return NextResponse.json(
+        { error: "model field is required" },
+        { status: 400 }
+      );
+    }
+    const model = input.model;
+
     const stateKey = createHash("sha256")
       .update(idempotencyKey, "utf8")
       .digest("hex");

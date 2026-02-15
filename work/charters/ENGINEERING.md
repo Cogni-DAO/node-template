@@ -76,11 +76,12 @@ _ENGINEERING-owned infrastructure. Feature delivery projects live in their respe
 
 ### Skills / resources
 
-| Resource               | Use                                | Where                    | /skill | Notes                    |
-| ---------------------- | ---------------------------------- | ------------------------ | ------ | ------------------------ |
-| Governance skills      | Charter-scoped governance runs     | `.openclaw/skills/gov-*` |        | Trigger-routed execution |
-| Development skills     | Command-driven workflows           | `.openclaw/skills/`      |        | /idea → /closeout        |
-| Test infrastructure    | Mock-LLM, system integration tests | `tests/`, docker-compose |        | Partial coverage         |
-| CI/CD pipelines        | GitHub Actions workflows           | `.github/workflows/`     |        | App CI only; no gov CI   |
-| Specs and architecture | Technical contracts and boundaries | `docs/spec/`             |        | Active specs enforce     |
-| Work tracking system   | Projects, tasks, issues            | `work/`                  |        | Via OpenClaw skills      |
+| Resource               | Use                                | Where                                | /skill | Notes                    |
+| ---------------------- | ---------------------------------- | ------------------------------------ | ------ | ------------------------ |
+| Governance skills      | Charter-scoped governance runs     | `.openclaw/skills/gov-*`             |        | Trigger-routed execution |
+| Development skills     | Command-driven workflows           | `.openclaw/skills/`                  |        | /idea → /closeout        |
+| Test infrastructure    | Mock-LLM, system integration tests | `tests/`, `docker-compose`           |        | Partial coverage         |
+| CI/CD pipelines        | GitHub Actions workflows           | `.github/workflows/`                 |        | App CI only; no gov CI   |
+| Specs and architecture | Technical contracts and boundaries | `docs/spec/`                         |        | Active specs enforce     |
+| Work tracking system   | Projects, tasks, issues            | `work/`                              |        | Via OpenClaw skills      |
+| Deployment health      | Per-service health, LLM cost       | `.openclaw/skills/deployment-health` | ✓      | v0 MVP - data incomplete |
