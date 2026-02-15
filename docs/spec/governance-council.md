@@ -33,6 +33,7 @@ All governance runtime state lives under `memory/`.
 - Required keys:
   - `allow_runs`
   - `max_tokens_per_charter_run`
+  - `max_tool_calls_per_charter_run`
   - `max_brain_spawns_per_hour`
   - `budget_status` (`ok` | `warn` | `critical`)
   - `burn_rate_trend`
@@ -50,6 +51,8 @@ All governance runtime state lives under `memory/`.
 - File: `memory/edo_index.md`
 - Written only when there is a real choice between alternatives
 - Keep bounded to open/recent entries (small index)
+- Each index entry references one EDO file in `memory/EDO/<id>.md`
+- EDO body format source: `services/sandbox-openclaw/gateway-workspace/memory-templates/EDO.template.md`
 
 ## Control Loop
 
@@ -121,7 +124,7 @@ Non-GOVERN (`COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`):
 3. Overwrite `memory/_budget_header.md`.
 4. Produce one portfolio heartbeat via `gov-core`.
 5. Overwrite `memory/GOVERN/heartbeat.md`.
-6. Update `memory/edo_index.md` only for real choices.
+6. For real choices only: create/update `memory/EDO/<id>.md` from `memory/EDO/_template.md`, then update `memory/edo_index.md`.
 7. Commit changed `memory/` files.
 
 ## Core Invariants
@@ -143,6 +146,8 @@ Non-GOVERN (`COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`):
 - `.openclaw/skills/gov-sustainability/SKILL.md`
 - `.openclaw/skills/gov-govern/SKILL.md`
 - `services/sandbox-openclaw/gateway-workspace/SOUL.md` — trigger router
+- `services/sandbox-openclaw/gateway-workspace/memory-templates/` — bootstrap templates for runtime `memory/` state files
+- `services/sandbox-openclaw/gateway-workspace/memory-templates/EDO.template.md` — canonical Event-Decision-Outcome template
 
 ## Non-Goals
 
