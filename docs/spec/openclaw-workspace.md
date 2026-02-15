@@ -261,7 +261,7 @@ Scheduler tokens map directly to governance skills:
 - `SUSTAINABILITY` → `/gov-sustainability`
 - `GOVERN` → `/gov-govern`
 
-All governance skills share one shape: one focus, one decision (`action` or `no-op`), expected measurable delta, cost guard, evidence refs, then exit. `cost_guard` is written per-run in `memory/{CHARTER}/YYYY-MM-DD.md`.
+All governance skills share one shape: one focus, one decision (`action` or `no-op`), expected measurable delta, cost guard, evidence refs, then exit. Runtime writes use `memory/{CHARTER}/heartbeat.md` (overwrite latest) and GOVERN owns `memory/_budget_header.md`.
 
 `/gov-govern` records an EDO only when a real choice between alternatives is made.
 

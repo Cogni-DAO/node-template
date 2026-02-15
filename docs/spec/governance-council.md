@@ -1,212 +1,151 @@
 ---
 id: openclaw-govern-distributed
 type: spec
-title: "OpenClaw Distributed GOVERN: Charter-scoped reporting with bounded context"
+title: "OpenClaw Distributed GOVERN: Deterministic runtime state model"
 status: draft
 spec_state: draft
 trust: draft
-summary: "Governance runs are charter-scoped and trigger-routed (`COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`, `GOVERN`) through one shared prompt stack. Each run emits one compact heartbeat. SUSTAINABILITY writes budget veto header first. GOVERN acts as portfolio balancer and makes one decision."
-read_when: "Understanding bounded GOVERN loops, implementing charter-scoped governance, or optimizing multi-call agent workflows."
+summary: "Governance runs are charter-scoped and trigger-routed (`COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`, `GOVERN`) through one shared prompt stack. Runtime state is deterministic: GOVERN-owned gate, overwrite-latest charter heartbeats, and a tiny durable EDO index."
+read_when: "Implementing governance skills, routing trigger tokens, or validating governance runtime behavior."
 implements: proj.context-optimization
 owner: derekg1729
 created: 2026-02-14
-verified: 2026-02-14
+verified: 2026-02-15
 tags: [openclaw, govern, architecture, context-optimization, governance]
 ---
 
-# OpenClaw Distributed GOVERN: Charter-scoped reporting with bounded context
-
-> **Problem**: A single GOVERN loop makes ~19 LLM calls with unbounded context growth (327 → 19K tokens), costing $5.50 and taking 90 seconds, before doing any productive work. **Solution**: Distribute GOVERN across charter-scoped agents. Each agent orients to its charter, picks work, reports findings in compressed form. Main GOVERN reads reports and makes one decision. Bounded context + lossless information preservation.
-
-### Key References
-
-|                          |                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------- |
-| **Current Architecture** | [openclaw-workspace-spec](openclaw-workspace-spec.md) § GOVERNANCE_TRIGGER_ROUTING (Invariant 34) |
-| **Context Analysis**     | [openclaw-context-optimization](openclaw-context-optimization.md) § Context Competition           |
-| **Project**              | [proj.context-optimization](../../work/projects/proj.context-optimization.md)                     |
-
----
+# OpenClaw Distributed GOVERN: Deterministic runtime state model
 
 ## Goal
 
-Enable GOVERN loops to remain intelligent and thorough while staying under 10K uncached tokens and <30 seconds per execution. Do this by distributing work across charter-scoped agents, each writing compressed reports, with a lightweight main GOVERN aggregator making one high-priority decision per run.
-
-## Non-Goals
-
-- Changing how individual charter agents work (each remains free to be thorough within its domain)
-- Replacing Temporal scheduler or heartbeat mechanism
-- Changing how EDOs are recorded or reviewed
-- Affecting user-message handling (only impacts GOVERN loop execution)
-
----
+Keep governance loops cheap, deterministic, and coherent by using a minimal runtime state model with strict ownership and git persistence rules.
 
 ## Design
 
-### Current State (Single Unbounded Loop)
+## Runtime State Model (Canonical)
 
-```
-GOVERN trigger (one message: "GOVERN")
-  |
-  v
-[Agent reads GOVERN.md checklist: Orient → Pick → Execute → Maintain → Reflect]
-  |
-  +---> CALL 1: Read all work items (search + parse) = 7K tokens
-  |       Output: agent picks 3 items
-  |
-  +---> CALL 2-7: Execute on each item (read spec, check dependencies, etc)
-  |       Context grows: 10K → 12K → 15K → 18K → 22K → 27K
-  |
-  +---> CALL 8-15: Maintain phase (prune docs, close stale items, etc)
-  |       Context: 27K → 29K (uncached tail: 327 → 19K)
-  |
-  +---> CALL 16-19: Reflect (write EDOs, update MEMORY.md)
-  |       All prior context re-sent; output: <100 tokens per call
-  |
-  v
-[Final output: user sees GOVERN summary]
+All governance runtime state lives under `memory/`.
 
-RESULT: 19 calls × ~29K tokens = $5.50, 90 seconds, before any productive work
-```
+1. Gate (authoritative live authorization)
 
-### Runtime State (Trigger-Routed Governance Skills)
+- File: `memory/_budget_header.md`
+- Single writer: `GOVERN`
+- Required keys:
+  - `allow_runs`
+  - `max_tokens_per_charter_run`
+  - `max_brain_spawns_per_hour`
+  - `budget_status` (`ok` | `warn` | `critical`)
+  - `burn_rate_trend`
+  - `updated_at`
 
-```
-Scheduler fires charter-scoped triggers by cron:
-  - COMMUNITY
-  - ENGINEERING
-  - SUSTAINABILITY
-  - GOVERN
+2. Charter heartbeat (ephemeral latest state)
 
-Gateway agent (shared prompt stack: AGENTS/SOUL/TOOLS/MEMORY):
-  - routes token to mapped governance skill
-  - skill reads charter dashboard + relevant heartbeat notes
-  - skill emits one compact heartbeat note
-  - exits
+- File: `memory/{CHARTER}/heartbeat.md`
+- Single writer: that charter's skill
+- Overwrite each run (no append logs)
+- Must include `run_at` (`YYYY-MM-DDTHH:MMZ`)
 
-SUSTAINABILITY run:
-  - writes budget header first (veto gate)
+3. Decisions (durable, bounded)
 
-GOVERN run:
-  - reads charter heartbeats + budget header
-  - resolves portfolio conflict
-  - emits one balancing decision (EDO only for real choice)
-```
+- File: `memory/edo_index.md`
+- Written only when there is a real choice between alternatives
+- Keep bounded to open/recent entries (small index)
 
-### Execution Flow Diagram
+## Control Loop
 
-```
-┌────────────────────────────────────────────┐
-│ Temporal schedules fire charter tokens      │
-│ COMMUNITY / ENGINEERING / SUSTAINABILITY / │
-│ GOVERN                                     │
-└──────────────────────┬─────────────────────┘
-                       │
-                       v
-        ┌──────────────────────────────────┐
-        │ Gateway agent (shared prompt)    │
-        │ SOUL trigger router maps token → │
-        │ /gov-* skill                     │
-        └──────────────────┬───────────────┘
-                           │
-                           v
-      ┌────────────────────────────────────────────┐
-      │ Skill reads charter dashboard + memory     │
-      │ Emits one heartbeat (focus/decision/cost)  │
-      │ Writes memory/{CHARTER}/YYYY-MM-DD.md      │
-      └──────────────────┬─────────────────────────┘
-                         │
-                         v
-          [SUSTAINABILITY writes veto header first]
-          [GOVERN balances portfolio and decides]
-```
+1. Scheduler emits trigger token: `COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`, `GOVERN`.
+2. SOUL router maps token directly to `/gov-*` skill without pre-routing deliberation.
+3. Non-GOVERN skills read gate first.
+4. If gate disallows runs (or is missing/stale), non-GOVERN skills write a no-op heartbeat and exit.
+5. GOVERN reads latest heartbeats, writes gate, writes one portfolio heartbeat, and writes EDO only for real choices.
 
-### Heartbeat Contract (shared output shape)
+## Cold Start and Staleness Rule
 
-Every governance run writes one compact heartbeat note to `memory/{CHARTER}/YYYY-MM-DD.md` with this exact shape:
+Non-GOVERN skills must treat the gate as unavailable when:
 
+- `memory/_budget_header.md` is missing, or
+- `updated_at` is missing/unparseable, or
+- `updated_at` is older than 2 hours.
+
+When gate is unavailable, non-GOVERN skills write `decision: no-op`, `no_op_reason: blocked` and exit.
+
+## Heartbeat Contract (Shared Shape)
+
+Every heartbeat in `memory/{CHARTER}/heartbeat.md` contains:
+
+- `run_at`: UTC timestamp (`YYYY-MM-DDTHH:MMZ`)
 - `charter`: one charter id
-- `focus`: one object only (metric or work item or dashboard row)
+- `focus`: one object only (metric, item, or dashboard row)
 - `decision`: `action` or `no-op`
-- `no_op_reason`: required when decision is `no-op` (`veto`, `wip_full`, `blocked`, `no_delta`)
+- `no_op_reason`: required when `decision: no-op` (`veto`, `wip_full`, `blocked`, `no_delta`)
 - `expected_outcome`: one measurable delta + date
-- `cost_guard`: max tokens/tool calls for this run + escalation requested bool
-- `evidence`: file refs / PR refs / item refs
+- `cost_guard`:
+  - `max_tokens`
+  - `max_tool_calls`
+  - `escalation_requested`
+- `evidence`: refs only
 
-`cost_guard` is recorded per run inside the heartbeat note in `memory/{CHARTER}/YYYY-MM-DD.md` (not in charter headers).
+## Git Persistence Contract
 
-This contract prevents sprawl, keeps run cost bounded, and makes downstream GOVERN balancing deterministic.
+Applies to all governance skills.
 
----
+- Governance writes run on branch `gov/state`.
+- Never write governance state on `main`.
+- Require clean tree at run start; dirty tree => blocked no-op.
+- Governance runtime writes are limited to `memory/`.
+- Any changed `memory/` file must be committed in the same run.
+
+## Role Ownership
+
+- `SUSTAINABILITY`: reports and recommends only; does not write `allow_runs`.
+- `GOVERN`: sole owner of live authorization gate (`memory/_budget_header.md`).
+- `COMMUNITY` and `ENGINEERING`: consume gate + emit charter heartbeat.
+
+## Skill-Level Behavior
+
+Non-GOVERN (`COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`):
+
+1. Apply `gov-core` invariants.
+2. Read gate from `memory/_budget_header.md`.
+3. If missing/stale => overwrite `memory/{CHARTER}/heartbeat.md` with blocked no-op and exit.
+4. If `allow_runs: false` => overwrite heartbeat with veto no-op and exit.
+5. Read `work/charters/{CHARTER}.md`.
+6. Produce one heartbeat via `gov-core`.
+7. Overwrite `memory/{CHARTER}/heartbeat.md`.
+8. Commit changed `memory/` files.
+
+`GOVERN`:
+
+1. Apply `gov-core` invariants.
+2. Read `work/charters/GOVERN.md` + latest charter heartbeats.
+3. Overwrite `memory/_budget_header.md`.
+4. Produce one portfolio heartbeat via `gov-core`.
+5. Overwrite `memory/GOVERN/heartbeat.md`.
+6. Update `memory/edo_index.md` only for real choices.
+7. Commit changed `memory/` files.
 
 ## Core Invariants
 
-| Rule                   | Constraint                                                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| ROUTE_BY_TRIGGER       | Scheduler sends one token (`COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`, `GOVERN`). SOUL router maps token to one governance skill immediately. |
-| HEARTBEAT_CONTRACT     | Every run emits one heartbeat with the shared shape; no free-form report formats.                                                               |
-| ONE_DECISION_PER_RUN   | Each run returns exactly one decision (`action` or `no-op`).                                                                                    |
-| REPORTS_ARE_EPHEMERAL  | Charter notes live in `memory/{CHARTER}/YYYY-MM-DD.md`. Durable policy decisions move to committed docs only when warranted.                    |
-| SUSTAINABILITY_VETO    | `SUSTAINABILITY` writes budget header first; other charters no-op when vetoed.                                                                  |
-| GLOBAL_WRITE_WIP_CAP   | Write-work WIP is globally bounded (`<= 3`).                                                                                                    |
-| GLOBAL_ESCALATION_CAP  | Brain/escalation runs are globally bounded (`<= 1 per hour`).                                                                                   |
-| BOUNDED_CONTEXT_AND_IO | Governance skills keep output and tool usage small; no fan-out workflows inside a single run.                                                   |
-
----
-
-## Implementation Contract
-
-### Scheduler and Prompt Routing
-
-Scheduler runs are charter-scoped and send one trigger token per run:
-
-- `COMMUNITY`
-- `ENGINEERING`
-- `SUSTAINABILITY`
-- `GOVERN`
-
-The gateway agent loads one shared prompt stack (AGENTS/SOUL/TOOLS/MEMORY) and routes each trigger immediately to its mapped governance skill (`/gov-community`, `/gov-engineering`, `/gov-sustainability`, `/gov-govern`).
-
-### Skill-Level Behavior
-
-Each governance skill:
-
-1. Reads its charter dashboard (`work/charters/{CHARTER}.md`)
-2. Applies shared heartbeat contract
-3. Writes one heartbeat note to `memory/{CHARTER}/YYYY-MM-DD.md`
-4. Exits
-
-`/gov-sustainability` writes budget header first (veto gate).  
-`/gov-govern` reads charter heartbeats and budget header, resolves portfolio conflicts, and outputs one balancing decision (EDO only for real choices).
-
----
+- `ROUTE_BY_TRIGGER`: direct token-to-skill routing.
+- `ONE_DECISION_PER_RUN`: exactly one decision per run.
+- `GOVERN_OWNS_GATE`: only GOVERN writes `memory/_budget_header.md`.
+- `HEARTBEAT_OVERWRITE_LATEST`: charter heartbeat is latest-state, overwrite each run.
+- `RUN_AT_REQUIRED`: each heartbeat includes `run_at`.
+- `COLD_START_BLOCKS_NON_GOVERN`: missing/stale gate means blocked no-op.
+- `EDO_REAL_CHOICE_ONLY`: persist decisions only for real alternatives.
+- `GIT_COMMIT_OR_FAIL`: changed runtime state must be committed in-run.
 
 ## File Pointers
 
-| File                                                  | Purpose                                                                        |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `work/charters/`                                      | Charter definitions (charter-a.md, charter-b.md, etc.)                         |
-| `work/charters/{name}-items.md`                       | Items assigned to each charter (optional; can use work/items with charter tag) |
-| `memory/`                                             | Working notes + EDOs (ephemeral, reset-prone)                                  |
-| `docs/governance/decisions.md`                        | Policy/architecture/cost EDOs (durable, committed decisions)                   |
-| `.openclaw/skills/gov-core/SKILL.md`                  | Shared heartbeat contract and syntropy constraints                             |
-| `.openclaw/skills/gov-*/SKILL.md`                     | Charter-specific governance wrappers                                           |
-| `services/sandbox-openclaw/gateway-workspace/SOUL.md` | Trigger router and governance operating mode                                   |
+- `.openclaw/skills/gov-core/SKILL.md` — canonical governance invariants
+- `.openclaw/skills/gov-community/SKILL.md`
+- `.openclaw/skills/gov-engineering/SKILL.md`
+- `.openclaw/skills/gov-sustainability/SKILL.md`
+- `.openclaw/skills/gov-govern/SKILL.md`
+- `services/sandbox-openclaw/gateway-workspace/SOUL.md` — trigger router
 
----
+## Non-Goals
 
-## Open Questions
-
-- [ ] How to assign items to charters? (tag-based, filename, separate index file?)
-- [ ] Should charter GOVERN runs be sequential or parallel? (Parallel faster but risks resource contention)
-- [ ] Timeout for waiting on all charter reports? (Suggest 60s, fail if any charter >45s)
-- [ ] How to handle cross-charter dependencies? (Charter reports include dependency section; main GOVERN resolves)
-
----
-
-## Related
-
-- [openclaw-context-optimization](openclaw-context-optimization.md) — Context budget analysis that motivated this design
-- [openclaw-workspace-spec](openclaw-workspace-spec.md) — Current GOVERN architecture (Invariant 34)
-- [pm.openclaw-govern-call-storm.2026-02-14](../postmortems/pm.openclaw-govern-call-storm.2026-02-14.md) — Root cause postmortem
-- [proj.context-optimization](../../work/projects/proj.context-optimization.md) — Implementation roadmap
+- Append-only governance journals
+- Table-driven capability selection in governance wrappers
+- Duplicating runtime state schema across multiple docs

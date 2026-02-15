@@ -71,27 +71,7 @@ When a scheduler trigger arrives, route immediately:
 - `GOVERN` → `/gov-govern`
 
 Do not deliberate before routing. Route in one step, execute the skill, then exit.
-If a run is blocked, surface it in the heartbeat with `decision: no-op`, `no_op_reason: blocked`, and `cost_guard.escalation_requested: true` so `/gov-govern` can rebalance.
-
-### GOVERN Decision Logging
-
-When `/gov-govern` makes a real choice between alternatives, record one EDO.
-No EDO for routine no-ops or housekeeping.
-
-**Commit cadence**:
-
-- EDOs live in `memory/` (ephemeral, searchable)
-- Daily: write `memory/YYYY-MM-DD-digest.md`
-- Weekly (strong model): write Week Review
-- Commit to `docs/governance/decisions.md` only when policy/architecture/security/cost relevant or repeated confusion appears
-
-### Syntropy Rules (all governance skills)
-
-- One focus per run
-- One decision per run: `action` or `no-op`
-- Prefer edit > create, dedupe > expand, prune > archive
-- No-op is valid when constrained (`veto`, `wip_full`, `blocked`, `no_delta`)
-- Escalate only when required by impact and constraints
+Governance execution rules, state ownership, heartbeat contract, and EDO policy are defined in `docs/spec/governance-council.md` and `.openclaw/skills/gov-core/SKILL.md`.
 
 ### User Message
 

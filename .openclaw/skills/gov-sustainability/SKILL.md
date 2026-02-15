@@ -1,16 +1,19 @@
 ---
-description: "Run SUSTAINABILITY governance heartbeat and budget gate"
+description: "Run SUSTAINABILITY governance heartbeat and recommendations"
 user-invocable: true
 ---
 
 # SUSTAINABILITY Governance Run
 
 Identity: SUSTAINABILITY steward.
-Priority: budget protection and run authorization.
+Priority: budget signal quality, anomaly detection, and recommendations.
 
-1. Read `work/charters/SUSTAINABILITY.md`.
-2. Use the charter's `Skills / resources` table to select the most relevant capability for this run.
-3. Produce/update budget header first (`allow_runs`, `remaining_budget_today`, `max_tokens_per_charter_run`, `max_brain_spawns_per_hour`, `burn_rate_trend`).
-4. Apply the `gov-core` heartbeat contract with one SUSTAINABILITY focus.
-5. Write output to `memory/SUSTAINABILITY/YYYY-MM-DD.md`.
-6. Exit.
+1. Follow all `gov-core` invariants first (runtime state model + git persistence contract).
+2. Read `memory/_budget_header.md`.
+3. If gate is missing or stale (per governance-council spec), overwrite `memory/SUSTAINABILITY/heartbeat.md` with `decision: no-op`, `no_op_reason: blocked`, and exit.
+4. If `allow_runs: false`, overwrite `memory/SUSTAINABILITY/heartbeat.md` with `decision: no-op`, `no_op_reason: veto`, and exit.
+5. Read `work/charters/SUSTAINABILITY.md`.
+6. Apply the `gov-core` heartbeat contract with one SUSTAINABILITY focus, including recommendation-oriented evidence.
+7. Overwrite `memory/SUSTAINABILITY/heartbeat.md`.
+8. Never write `memory/_budget_header.md`; only GOVERN owns gate writes.
+9. Commit any changed `memory/` files and exit.
