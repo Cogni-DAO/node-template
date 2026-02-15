@@ -20,6 +20,7 @@ import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { runGovernanceSchedulesSyncJob } from "@/bootstrap/jobs/syncGovernanceSchedules.job";
 import { GovernanceSchedulesSyncSummarySchema } from "@/contracts/governance-schedules-sync.internal.v1.contract";
 import { serverEnv } from "@/shared/env";
+import { EVENT_NAMES, logEvent } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,10 +73,40 @@ export const POST = wrapRouteHandlerWithLogging(
       return new NextResponse(null, { status: 204 });
     }
 
-    const summary = await runGovernanceSchedulesSyncJob();
-    return NextResponse.json(
-      GovernanceSchedulesSyncSummarySchema.parse(summary),
-      { status: 200 }
-    );
+    const start = performance.now();
+    try {
+      const summary = await runGovernanceSchedulesSyncJob();
+      const durationMs = Math.round(performance.now() - start);
+
+      logEvent(ctx.log, EVENT_NAMES.GOVERNANCE_SYNC_COMPLETE, {
+        reqId: ctx.reqId,
+        routeId: ctx.routeId,
+        status: 200,
+        durationMs,
+        outcome: "success",
+        created: summary.created,
+        resumed: summary.resumed,
+        skipped: summary.skipped,
+        paused: summary.paused,
+      });
+
+      return NextResponse.json(
+        GovernanceSchedulesSyncSummarySchema.parse(summary),
+        { status: 200 }
+      );
+    } catch (error) {
+      const durationMs = Math.round(performance.now() - start);
+
+      logEvent(ctx.log, EVENT_NAMES.GOVERNANCE_SYNC_COMPLETE, {
+        reqId: ctx.reqId,
+        routeId: ctx.routeId,
+        status: 500,
+        durationMs,
+        outcome: "error",
+        errorCode: "sync_failed",
+      });
+
+      throw error;
+    }
   }
 );
