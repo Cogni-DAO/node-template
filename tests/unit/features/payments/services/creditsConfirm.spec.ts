@@ -18,8 +18,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import type { CreditLedgerEntry, ServiceAccountService } from "@/ports";
 import {
+  COGNI_SYSTEM_BILLING_ACCOUNT_ID,
   PLATFORM_REVENUE_SHARE_REASON,
-  SYSTEM_TENANT_ID,
   WIDGET_PAYMENT_REASON,
 } from "@/shared";
 
@@ -214,14 +214,14 @@ describe("features/payments/services/creditsConfirm", () => {
 
       // System tenant idempotency check
       expect(svcFindByReference).toHaveBeenCalledWith({
-        billingAccountId: SYSTEM_TENANT_ID,
+        billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
         reason: PLATFORM_REVENUE_SHARE_REASON,
         reference: "payment-rev-share",
       });
 
       // System tenant bonus credit
       expect(svcCreditAccount).toHaveBeenCalledWith({
-        billingAccountId: SYSTEM_TENANT_ID,
+        billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
         amount: expectedBonus,
         reason: PLATFORM_REVENUE_SHARE_REASON,
         reference: "payment-rev-share",
@@ -244,7 +244,7 @@ describe("features/payments/services/creditsConfirm", () => {
       // Simulate existing bonus entry (prior successful write)
       svcFindByReference.mockResolvedValue({
         id: "bonus-1",
-        billingAccountId: SYSTEM_TENANT_ID,
+        billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
         virtualKeyId: "sys-vk",
         amount: 75_000_000,
         balanceAfter: 75_000_000,

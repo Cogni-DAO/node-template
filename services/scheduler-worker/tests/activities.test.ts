@@ -162,7 +162,7 @@ describe("createScheduleRunActivity", () => {
     const scheduledFor = "2025-01-15T10:00:00.000Z";
 
     await activities.createScheduleRunActivity({
-      scheduleId: FIXED_IDS.scheduleId,
+      dbScheduleId: FIXED_IDS.scheduleId,
       runId: FIXED_IDS.runId,
       scheduledFor,
     });
@@ -302,7 +302,7 @@ describe("executeGraphActivity", () => {
     });
 
     const result = await activities.executeGraphActivity({
-      scheduleId: FIXED_IDS.scheduleId,
+      temporalScheduleId: FIXED_IDS.scheduleId,
       graphId: FIXED_IDS.graphId,
       executionGrantId: FIXED_IDS.grantId,
       input: { messages: [], model: "openrouter/auto" },
@@ -355,7 +355,7 @@ describe("executeGraphActivity", () => {
 
     await expect(
       activities.executeGraphActivity({
-        scheduleId: FIXED_IDS.scheduleId,
+        temporalScheduleId: FIXED_IDS.scheduleId,
         graphId: FIXED_IDS.graphId,
         executionGrantId: FIXED_IDS.grantId,
         input: {},

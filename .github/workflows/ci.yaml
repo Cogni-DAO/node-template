@@ -33,6 +33,7 @@ jobs:
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
       SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
       BILLING_INGEST_TOKEN: test-billing-ingest-token-for-ci-min32ch
+      INTERNAL_OPS_TOKEN: test-internal-ops-token-for-ci-min32
       OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token-for-ci-32ch
       OPENCLAW_GITHUB_RW_TOKEN: test-github-rw-token
 
@@ -76,6 +77,7 @@ jobs:
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
       SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
       BILLING_INGEST_TOKEN: test-billing-ingest-token-for-ci-min32ch
+      INTERNAL_OPS_TOKEN: test-internal-ops-token-for-ci-min32
       OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token-for-ci-32ch
       OPENCLAW_GITHUB_RW_TOKEN: test-github-rw-token
 
@@ -148,6 +150,7 @@ jobs:
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
       SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
       BILLING_INGEST_TOKEN: test-billing-ingest-token-for-ci-min32ch
+      INTERNAL_OPS_TOKEN: test-internal-ops-token-for-ci-min32
       OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token-for-ci-32ch
       OPENCLAW_GITHUB_RW_TOKEN: test-github-rw-token
 
@@ -263,6 +266,7 @@ jobs:
       METRICS_TOKEN: test-metrics-token-for-stack-tests
       SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
       BILLING_INGEST_TOKEN: test-billing-ingest-token-for-ci-min32ch
+      INTERNAL_OPS_TOKEN: test-internal-ops-token-for-ci-min32
       OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token-for-ci-32ch
       OPENCLAW_GITHUB_RW_TOKEN: test-github-rw-token
       # LiteLLM test config routes to mock-openai-api (no real provider keys)

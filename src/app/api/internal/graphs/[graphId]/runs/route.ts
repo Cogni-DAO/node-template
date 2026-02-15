@@ -335,9 +335,14 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     // Parse input for graph execution
     const messages = Array.isArray(input.messages)
       ? (input.messages as { role: string; content: string }[])
-      : [];
+      : typeof input.message === "string"
+        ? [{ role: "user", content: input.message }]
+        : [];
     const model =
       typeof input.model === "string" ? input.model : "openrouter/auto";
+    const stateKey = createHash("sha256")
+      .update(idempotencyKey, "utf8")
+      .digest("hex");
 
     const accountService = container.accountsForUser(toUserId(grant.userId));
 
@@ -371,6 +376,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       })),
       model,
       caller,
+      stateKey,
     });
 
     // Consume stream and wait for final result.

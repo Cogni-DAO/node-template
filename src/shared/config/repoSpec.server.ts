@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/config/repoSpec.server`
- * Purpose: Server-only accessor for governance-managed inbound payment configuration for USDC credits top-up, stored in .cogni/repo-spec.yaml.
- * Scope: Reads and caches repo-spec on first access; validates chain alignment and receiver address shape before exposing config to callers; does not run in client bundles or accept env overrides. This is the canonical source for chainId + receiving_address used by OnChainVerifier and payment flows.
- * Invariants: Chain ID must match `@shared/web3` CHAIN_ID; receiving address must look like an EVM address (0x + 40 hex chars); provider must be present.
+ * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (payments + governance schedules).
+ * Scope: Reads and caches repo-spec on first access; validates chain alignment and receiver address shape; exposes getPaymentConfig() and getGovernanceConfig(). Does not run in client bundles or accept env overrides.
+ * Invariants: Chain ID must match CHAIN_ID; EVM address format required; governance schedules default to empty.
  * Side-effects: IO (reads repo-spec from disk) on first call only.
  * Links: .cogni/repo-spec.yaml, docs/spec/payments-design.md
  * @public
@@ -19,6 +19,17 @@ import { parse } from "yaml";
 import { CHAIN_ID } from "@/shared/web3/chain";
 
 import { type RepoSpec, repoSpecSchema } from "./repoSpec.schema";
+
+export interface GovernanceSchedule {
+  charter: string;
+  cron: string;
+  timezone: string;
+  entrypoint: string;
+}
+
+export interface GovernanceConfig {
+  schedules: GovernanceSchedule[];
+}
 
 export interface InboundPaymentConfig {
   chainId: number;
@@ -96,4 +107,23 @@ export function getPaymentConfig(): InboundPaymentConfig {
   cachedPaymentConfig = validateAndMap(spec);
 
   return cachedPaymentConfig;
+}
+
+let cachedGovernanceConfig: GovernanceConfig | null = null;
+
+function mapGovernanceConfig(spec: RepoSpec): GovernanceConfig {
+  return {
+    schedules: spec.governance?.schedules ?? [],
+  };
+}
+
+export function getGovernanceConfig(): GovernanceConfig {
+  if (cachedGovernanceConfig) {
+    return cachedGovernanceConfig;
+  }
+
+  const spec = loadRepoSpec();
+  cachedGovernanceConfig = mapGovernanceConfig(spec);
+
+  return cachedGovernanceConfig;
 }
