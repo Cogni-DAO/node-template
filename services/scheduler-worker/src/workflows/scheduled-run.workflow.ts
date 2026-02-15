@@ -55,8 +55,12 @@ const { executeGraphActivity } = proxyActivities<Activities>({
  * Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: scheduledFor derived from search attribute, not input.
  */
 export interface ScheduledRunWorkflowInput {
-  /** Schedule ID (DB UUID, also Temporal scheduleId) */
-  scheduleId: string;
+  /** Temporal schedule ID (always present on new schedules) */
+  temporalScheduleId?: string;
+  /** Optional DB schedule UUID for DB-backed schedules */
+  dbScheduleId?: string | null;
+  /** Legacy field from older schedule payloads */
+  scheduleId?: string;
   /** Graph ID to execute */
   graphId: string;
   /** Execution grant ID for authorization */
@@ -81,7 +85,20 @@ export interface ScheduledRunWorkflowInput {
 export async function GovernanceScheduledRunWorkflow(
   input: ScheduledRunWorkflowInput
 ): Promise<void> {
-  const { scheduleId, graphId, executionGrantId, input: graphInput } = input;
+  const {
+    temporalScheduleId: providedTemporalScheduleId,
+    dbScheduleId,
+    scheduleId: legacyScheduleId,
+    graphId,
+    executionGrantId,
+    input: graphInput,
+  } = input;
+  const temporalScheduleId = providedTemporalScheduleId ?? legacyScheduleId;
+  if (!temporalScheduleId) {
+    throw ApplicationFailure.nonRetryable(
+      "temporalScheduleId is required in workflow input"
+    );
+  }
 
   // Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: Get scheduledFor from Temporal search attribute
   // When workflow is started by a Schedule, TemporalScheduledStartTime is automatically set
@@ -91,7 +108,7 @@ export async function GovernanceScheduledRunWorkflow(
   if (!scheduledStartTime?.[0]) {
     throw ApplicationFailure.nonRetryable(
       `TemporalScheduledStartTime search attribute missing - workflow must be started by Schedule. ` +
-        `scheduleId=${scheduleId}, workflowId=${info.workflowId}, runId=${info.runId}`
+        `temporalScheduleId=${temporalScheduleId}, workflowId=${info.workflowId}, runId=${info.runId}`
     );
   }
   const scheduledFor = scheduledStartTime[0].toISOString();
@@ -104,27 +121,30 @@ export async function GovernanceScheduledRunWorkflow(
   try {
     await validateGrantActivity({ grantId: executionGrantId, graphId });
   } catch {
-    // Grant validation failed - create run record as skipped
-    await createScheduleRunActivity({ scheduleId, runId, scheduledFor });
-    await updateScheduleRunActivity({
-      runId,
-      status: "skipped",
-      errorMessage: "Grant validation failed",
-    });
+    // Grant validation failed - only DB-backed schedules have ledger rows.
+    if (dbScheduleId) {
+      await createScheduleRunActivity({ dbScheduleId, runId, scheduledFor });
+      await updateScheduleRunActivity({
+        runId,
+        status: "skipped",
+        errorMessage: "Grant validation failed",
+      });
+    }
     return;
   }
 
-  // 2. Create schedule_runs record (RUN_LEDGER_FOR_GOVERNANCE)
-  await createScheduleRunActivity({ scheduleId, runId, scheduledFor });
-
-  // 3. Mark run as started
-  await updateScheduleRunActivity({ runId, status: "running" });
+  // 2. Create schedule_runs record for DB-backed schedules only.
+  if (dbScheduleId) {
+    await createScheduleRunActivity({ dbScheduleId, runId, scheduledFor });
+    // 3. Mark run as started
+    await updateScheduleRunActivity({ runId, status: "running" });
+  }
 
   // 4. Execute graph via internal API
-  // Pass canonical runId to internal API for correlation with schedule_runs
+  // Pass canonical runId to internal API for correlation/idempotency.
   try {
     const result = await executeGraphActivity({
-      scheduleId,
+      temporalScheduleId,
       graphId,
       executionGrantId,
       input: graphInput,
@@ -133,29 +153,33 @@ export async function GovernanceScheduledRunWorkflow(
     });
 
     // 5. Mark run as success/error based on result
-    if (result.ok) {
-      await updateScheduleRunActivity({
-        runId,
-        status: "success",
-        traceId: result.traceId,
-      });
-    } else {
-      await updateScheduleRunActivity({
-        runId,
-        status: "error",
-        traceId: result.traceId,
-        errorMessage: result.errorCode ?? "Graph execution failed",
-      });
+    if (dbScheduleId) {
+      if (result.ok) {
+        await updateScheduleRunActivity({
+          runId,
+          status: "success",
+          traceId: result.traceId,
+        });
+      } else {
+        await updateScheduleRunActivity({
+          runId,
+          status: "error",
+          traceId: result.traceId,
+          errorMessage: result.errorCode ?? "Graph execution failed",
+        });
+      }
     }
   } catch (error) {
     // Activity threw - mark as error
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error during execution";
-    await updateScheduleRunActivity({
-      runId,
-      status: "error",
-      errorMessage,
-    });
+    if (dbScheduleId) {
+      await updateScheduleRunActivity({
+        runId,
+        status: "error",
+        errorMessage,
+      });
+    }
     throw error; // Re-throw so Temporal marks workflow as failed
   }
 }

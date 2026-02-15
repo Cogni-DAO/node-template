@@ -83,16 +83,18 @@ describe("syncGovernanceSchedules", () => {
       "governance:govern",
     ]);
     expect(deps.scheduleControl.createSchedule).toHaveBeenCalledTimes(2);
-    expect(deps.scheduleControl.createSchedule).toHaveBeenCalledWith({
-      scheduleId: "governance:community",
-      cron: "0 */6 * * *",
-      timezone: "UTC",
-      graphId: "sandbox:openclaw",
-      executionGrantId: GRANT_ID,
-      input: { message: "COMMUNITY" },
-      overlapPolicy: "skip",
-      catchupWindowMs: 0,
-    });
+    expect(deps.scheduleControl.createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scheduleId: "governance:community",
+        cron: "0 */6 * * *",
+        timezone: "UTC",
+        graphId: "sandbox:openclaw",
+        executionGrantId: GRANT_ID,
+        input: { message: "COMMUNITY" },
+        overlapPolicy: "skip",
+        catchupWindowMs: 0,
+      })
+    );
   });
 
   it("ensures governance grant before creating schedules", async () => {

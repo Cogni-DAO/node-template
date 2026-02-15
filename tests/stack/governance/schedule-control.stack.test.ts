@@ -73,11 +73,27 @@ describe("ScheduleControlPort.listScheduleIds (Contract)", () => {
     createdScheduleIds.push(scheduleId);
   }
 
+  async function waitForScheduleListed(
+    scheduleId: string,
+    timeoutMs = 3_000
+  ): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const allIds = await adapter.listScheduleIds("");
+      if (allIds.includes(scheduleId)) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`Timed out waiting for schedule to appear: ${scheduleId}`);
+  }
+
   it("returns only schedules matching prefix", async () => {
     // Create schedules with different prefixes
     await createTestSchedule("test-governance:charter1");
     await createTestSchedule("test-governance:charter2");
     await createTestSchedule("test-other:schedule");
+    await waitForScheduleListed("test-governance:charter1");
+    await waitForScheduleListed("test-governance:charter2");
+    await waitForScheduleListed("test-other:schedule");
 
     // List with governance prefix
     const governanceIds = await adapter.listScheduleIds("test-governance:");
@@ -90,6 +106,7 @@ describe("ScheduleControlPort.listScheduleIds (Contract)", () => {
 
   it("returns empty array when no schedules match prefix", async () => {
     await createTestSchedule("test-other:schedule");
+    await waitForScheduleListed("test-other:schedule");
 
     const governanceIds = await adapter.listScheduleIds("test-governance:");
 
@@ -99,6 +116,8 @@ describe("ScheduleControlPort.listScheduleIds (Contract)", () => {
   it("returns all schedules when prefix is empty", async () => {
     await createTestSchedule("test-governance:charter1");
     await createTestSchedule("test-other:schedule");
+    await waitForScheduleListed("test-governance:charter1");
+    await waitForScheduleListed("test-other:schedule");
 
     const allIds = await adapter.listScheduleIds("");
 
@@ -110,6 +129,8 @@ describe("ScheduleControlPort.listScheduleIds (Contract)", () => {
   it("handles schedule IDs with special characters", async () => {
     await createTestSchedule("test-governance:charter-with-dash");
     await createTestSchedule("test-governance:charter_with_underscore");
+    await waitForScheduleListed("test-governance:charter-with-dash");
+    await waitForScheduleListed("test-governance:charter_with_underscore");
 
     const ids = await adapter.listScheduleIds("test-governance:");
 

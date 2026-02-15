@@ -133,7 +133,10 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
           workflowId: params.scheduleId,
           args: [
             {
+              // Legacy compatibility: keep scheduleId for already-deployed workers.
               scheduleId: params.scheduleId,
+              temporalScheduleId: params.scheduleId,
+              dbScheduleId: params.dbScheduleId ?? null,
               graphId: params.graphId,
               executionGrantId: params.executionGrantId,
               input: params.input,

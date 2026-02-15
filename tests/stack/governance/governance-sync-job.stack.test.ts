@@ -11,11 +11,14 @@
  * @public
  */
 
+import { createHash } from "node:crypto";
 import { executionGrants } from "@cogni/db-schema";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
+import { getExecutionRequestsByPrefix } from "@tests/_fixtures/scheduling/db-helpers";
 import {
   getTestTemporalClient,
   getTestTemporalConfig,
+  triggerSchedule,
 } from "@tests/_fixtures/temporal/client";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -194,5 +197,70 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     const desc = await adapter.describeSchedule("governance:old-charter");
     expect(desc).toBeDefined();
     expect(desc?.isPaused).toBe(true);
+  });
+
+  it("executes a governance schedule end-to-end", async () => {
+    await runGovernanceSchedulesSyncJob();
+    const temporalScheduleId = "governance:govern";
+    createdScheduleIds.push(temporalScheduleId);
+
+    const before = await getExecutionRequestsByPrefix(`${temporalScheduleId}:`);
+    await triggerSchedule(temporalScheduleId);
+
+    const client = await getTestTemporalClient();
+    const start = Date.now();
+    let created = before;
+    while (Date.now() - start < 8_000) {
+      created = await getExecutionRequestsByPrefix(`${temporalScheduleId}:`);
+      if (created.length > before.length) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    if (created.length <= before.length) {
+      const desc = await client.schedule
+        .getHandle(temporalScheduleId)
+        .describe();
+      const recentActionCount = desc.info.recentActions.length;
+      const lastAction = desc.info.recentActions.at(-1);
+      const lastScheduledAt =
+        lastAction?.scheduledAt?.toISOString?.() ?? "unknown";
+      throw new Error(
+        `No execution_requests row observed for ${temporalScheduleId} after trigger. ` +
+          `recentActions=${recentActionCount}, lastScheduledAt=${lastScheduledAt}. ` +
+          "Likely worker backlog or stale scheduler-worker process."
+      );
+    }
+
+    const latest = created.sort((a, b) => {
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    })[0];
+    expect(latest).toBeDefined();
+    if (!latest) {
+      throw new Error("Missing execution_request row for governance run");
+    }
+
+    expect(latest.idempotencyKey.startsWith(`${temporalScheduleId}:`)).toBe(
+      true
+    );
+    // Regression guard: before stateKey wiring, governance runs would finalize
+    // as internal errors almost immediately from gateway execution.
+    if (latest.ok === false && latest.errorCode === "internal") {
+      throw new Error(
+        "Governance run finalized with internal error (possible stateKey regression)"
+      );
+    }
+
+    const expectedRequestHash = createHash("sha256")
+      .update(
+        JSON.stringify({
+          graphId: "sandbox:openclaw",
+          input: { message: "GOVERN" },
+        }),
+        "utf8"
+      )
+      .digest("hex");
+    expect(latest.requestHash).toBe(expectedRequestHash);
   });
 });

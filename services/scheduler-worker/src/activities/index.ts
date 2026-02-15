@@ -51,7 +51,7 @@ export interface ValidateGrantInput {
  * Input for createScheduleRunActivity.
  */
 export interface CreateScheduleRunInput {
-  scheduleId: string;
+  dbScheduleId: string;
   runId: string;
   scheduledFor: string; // ISO string
 }
@@ -60,7 +60,7 @@ export interface CreateScheduleRunInput {
  * Input for executeGraphActivity.
  */
 export interface ExecuteGraphInput {
-  scheduleId: string;
+  temporalScheduleId: string;
   graphId: string;
   executionGrantId: string;
   input: Record<string, unknown>;
@@ -142,15 +142,15 @@ export function createActivities(deps: ActivityDeps) {
   async function createScheduleRunActivity(
     input: CreateScheduleRunInput
   ): Promise<void> {
-    const { scheduleId, runId, scheduledFor } = input;
+    const { dbScheduleId, runId, scheduledFor } = input;
     const correlation = getWorkflowCorrelation();
     logger.info(
-      { ...correlation, scheduleId, runId, scheduledFor },
+      { ...correlation, dbScheduleId, runId, scheduledFor },
       "Creating schedule run"
     );
 
     await runAdapter.createRun(SYSTEM_ACTOR, {
-      scheduleId,
+      scheduleId: dbScheduleId,
       runId,
       scheduledFor: new Date(scheduledFor),
     });
@@ -161,13 +161,13 @@ export function createActivities(deps: ActivityDeps) {
   /**
    * Calls internal API to execute graph.
    * Per EXECUTION_VIA_SERVICE_API: Worker NEVER imports graph execution code.
-   * Per SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS: Uses scheduleId:scheduledFor as idempotency key.
+   * Per SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS: Uses temporalScheduleId:scheduledFor as idempotency key.
    */
   async function executeGraphActivity(
     input: ExecuteGraphInput
   ): Promise<ExecuteGraphOutput> {
     const {
-      scheduleId,
+      temporalScheduleId,
       graphId,
       executionGrantId,
       input: graphInput,
@@ -177,12 +177,12 @@ export function createActivities(deps: ActivityDeps) {
     const correlation = getWorkflowCorrelation();
 
     // Per SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS
-    const idempotencyKey = `${scheduleId}:${scheduledFor}`;
+    const idempotencyKey = `${temporalScheduleId}:${scheduledFor}`;
 
     const url = `${config.appBaseUrl}/api/internal/graphs/${graphId}/runs`;
 
     logger.info(
-      { ...correlation, scheduleId, graphId, runId, idempotencyKey },
+      { ...correlation, temporalScheduleId, graphId, runId, idempotencyKey },
       "Calling internal graph execution API"
     );
 
@@ -207,7 +207,7 @@ export function createActivities(deps: ActivityDeps) {
         {
           ...correlation,
           status: response.status,
-          scheduleId,
+          temporalScheduleId,
           graphId,
           runId,
           errorText,
@@ -221,7 +221,7 @@ export function createActivities(deps: ActivityDeps) {
         throw ApplicationFailure.nonRetryable(
           `Internal API client error: ${response.status} - ${errorText}`,
           "InternalApiClientError",
-          { status: response.status, scheduleId, graphId, runId }
+          { status: response.status, temporalScheduleId, graphId, runId }
         );
       }
 
@@ -235,14 +235,14 @@ export function createActivities(deps: ActivityDeps) {
 
     if (result.ok) {
       logger.info(
-        { ...correlation, scheduleId, graphId, runId: result.runId },
+        { ...correlation, temporalScheduleId, graphId, runId: result.runId },
         "Graph execution completed successfully"
       );
     } else {
       logger.warn(
         {
           ...correlation,
-          scheduleId,
+          temporalScheduleId,
           graphId,
           runId: result.runId,
           errorCode: result.errorCode,

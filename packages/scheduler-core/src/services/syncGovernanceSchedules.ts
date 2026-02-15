@@ -114,6 +114,7 @@ export async function syncGovernanceSchedules(
     try {
       await scheduleControl.createSchedule({
         scheduleId,
+        dbScheduleId: null,
         cron: schedule.cron,
         timezone: schedule.timezone,
         graphId: GOVERNANCE_GRAPH_ID,

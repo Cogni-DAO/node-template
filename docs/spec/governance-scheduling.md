@@ -48,6 +48,12 @@ flowchart TD
 >
 > See: `.github/workflows/staging-preview.yml`
 
+### Runtime Identity Model
+
+- Governance schedules are Temporal-only identities (`governance:*`).
+- Workflow payload includes `temporalScheduleId` and `dbScheduleId=null`.
+- Idempotency key uses `temporalScheduleId:scheduledFor`.
+
 ### Sync Logic (per schedule)
 
 ```mermaid
@@ -100,6 +106,7 @@ Repo-spec is source of truth for governance schedules. Temporal is derived state
 | ---------------------------- | ----------------------------------------------------------------------------- |
 | REPO_SPEC_IS_SOURCE_OF_TRUTH | `.cogni/repo-spec.yaml` declares schedules; Temporal is derived               |
 | PRUNE_IS_PAUSE               | Removed schedules are paused, never deleted (reversible)                      |
+| GOVERNANCE_IS_TEMPORAL_ONLY  | Governance schedule IDs are Temporal-only (`governance:*`), not DB UUID rows  |
 | SYSTEM_OPS_ONLY              | Sync runs at deploy time via internal ops endpoint, never callable by tenants |
 | GRANT_ON_DEMAND              | Governance grant created idempotently by sync, not by migration               |
 | OVERLAP_SKIP_ALWAYS          | All governance schedules use `overlap=SKIP` (one run at a time)               |
@@ -116,6 +123,7 @@ Repo-spec is source of truth for governance schedules. Temporal is derived state
 | `packages/scheduler-core/src/services/syncGovernanceSchedules.ts` | Canonical sync logic             |
 | `src/app/api/internal/ops/governance/schedules/sync/route.ts`     | Internal trigger endpoint        |
 | `src/bootstrap/jobs/syncGovernanceSchedules.job.ts`               | Job module (lock + wiring)       |
+| `src/app/api/internal/graphs/[graphId]/runs/route.ts`             | Input normalization + state key  |
 | `platform/ci/scripts/deploy.sh`                                   | Deploy integration (Step 10.1)   |
 | `packages/scheduler-core/src/ports/schedule-control.port.ts`      | `listScheduleIds`                |
 | `packages/scheduler-core/src/ports/execution-grant.port.ts`       | `ensureGrant`                    |

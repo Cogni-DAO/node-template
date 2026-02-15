@@ -29,8 +29,13 @@ import type { JsonValue } from "type-fest";
 export type ScheduleOverlapPolicyHint = "skip" | "buffer_one" | "allow_all";
 
 export interface CreateScheduleParams {
-  /** Schedule ID (caller-supplied, matches DB UUID) */
+  /** Temporal schedule ID (caller-supplied) */
   readonly scheduleId: string;
+  /**
+   * Optional DB schedule UUID for schedules that have a row in `schedules`.
+   * Set null/undefined for Temporal-only schedules (e.g., governance:*).
+   */
+  readonly dbScheduleId?: string | null;
   /** Cron expression (5-field) */
   readonly cron: string;
   /** IANA timezone */
