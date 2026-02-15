@@ -5,7 +5,9 @@ user-invocable: true
 
 # Update LiteLLM Free Models
 
-You are updating the free models in the LiteLLM proxy configuration. Free models on OpenRouter change frequently - models get added, removed, or their capabilities change. This skill guides you through discovering, validating, and configuring free models.
+**CURRENT POLICY (2026-02-15):** We use **gpt-4o-mini as the ONLY free model**. All other free models have been removed for cost control.
+
+This skill is preserved for historical reference and future policy changes. The steps below describe how to add/update free models IF we decide to expand the free tier again.
 
 ## Context
 

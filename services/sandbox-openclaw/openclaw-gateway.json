@@ -8,42 +8,6 @@
         "apiKey": "proxy-handles-auth",
         "models": [
           {
-            "id": "nemotron-nano-30b",
-            "name": "Nemotron Nano 30B",
-            "reasoning": false,
-            "input": ["text"],
-            "contextWindow": 131072,
-            "maxTokens": 8192,
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-          },
-          {
-            "id": "trinity-mini",
-            "name": "Trinity Mini",
-            "reasoning": false,
-            "input": ["text"],
-            "contextWindow": 131072,
-            "maxTokens": 8192,
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-          },
-          {
-            "id": "glm-4.5-air",
-            "name": "GLM 4.5 Air",
-            "reasoning": false,
-            "input": ["text"],
-            "contextWindow": 131072,
-            "maxTokens": 8192,
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-          },
-          {
-            "id": "solar-pro-3",
-            "name": "Solar Pro 3",
-            "reasoning": false,
-            "input": ["text"],
-            "contextWindow": 131072,
-            "maxTokens": 8192,
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-          },
-          {
             "id": "gpt-4o-mini",
             "name": "GPT-4o Mini",
             "reasoning": false,
@@ -174,7 +138,7 @@
             "name": "DeepSeek V3.2",
             "reasoning": true,
             "input": ["text"],
-            "contextWindow": 65536,
+            "contextWindow": 163840,
             "maxTokens": 8192,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           },
@@ -204,10 +168,6 @@
       "timeoutSeconds": 540,
       "heartbeat": { "every": "0" },
       "models": {
-        "cogni/nemotron-nano-30b": {},
-        "cogni/trinity-mini": {},
-        "cogni/glm-4.5-air": {},
-        "cogni/solar-pro-3": {},
         "cogni/gpt-4o-mini": {},
         "cogni/gpt-5.2": {},
         "cogni/gpt-5": {},
@@ -249,7 +209,16 @@
   },
   "tools": {
     "elevated": { "enabled": false },
-    "deny": ["browser", "cron", "gateway", "nodes", "sessions_send", "message"]
+    "deny": [
+      "browser",
+      "cron",
+      "gateway",
+      "nodes",
+      "sessions_send",
+      "sessions_list",
+      "sessions_history",
+      "message"
+    ]
   },
   "cron": { "enabled": false },
   "gateway": {

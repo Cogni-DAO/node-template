@@ -8,63 +8,57 @@
 # Links: https://docs.litellm.ai/docs/providers/openrouter
 
 model_list:
-  # ===== FREE MODELS =====
-  # Validated for streaming + tool support (2026-01-28)
-  # Rate limits: 50 req/day (free plan) or 1000 req/day (>=$10 credits)
-
-  # NVIDIA
-  - model_name: nemotron-nano-30b
-    litellm_params:
-      model: openrouter/nvidia/nemotron-3-nano-30b-a3b:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Nemotron Nano 30B"
-      is_free: true
-      provider_key: "nvidia"
-      metadata:
-        cogni:
-          default_free: true
-
-  # Arcee
-  - model_name: trinity-mini
-    litellm_params:
-      model: openrouter/arcee-ai/trinity-mini:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Trinity Mini"
-      is_free: true
-      provider_key: "arcee"
-
-  # Zhipu (GLM)
-  - model_name: glm-4.5-air
-    litellm_params:
-      model: openrouter/z-ai/glm-4.5-air:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "GLM 4.5 Air"
-      is_free: true
-      provider_key: "zhipu"
-
-  # Upstage
-  - model_name: solar-pro-3
-    litellm_params:
-      model: openrouter/upstage/solar-pro-3:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Solar Pro 3"
-      is_free: true
-      provider_key: "upstage"
-
-  # ===== PAID MODELS =====
-  # OpenAI
+  # ===== FREE MODEL =====
+  # gpt-4o-mini designated as the default free model for cost control
+  # Note: 4o-mini is NOT actually free... we are making it available, so free tier users can use it.
+  # All other models are paid and require explicit selection
   - model_name: gpt-4o-mini
     litellm_params:
       model: openrouter/openai/gpt-4o-mini-2024-07-18
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
       display_name: "GPT-4o Mini"
-      is_free: false
+      is_free: true
       provider_key: "openai"
+      metadata:
+        cogni:
+          default_free: true
+
+  # ===== PAID MODELS =====
+  # DeepSeek
+  - model_name: deepseek-v3.2
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v3.2
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "DeepSeek V3.2"
+      is_free: false
+      provider_key: "deepseek"
+      metadata:
+        cogni:
+          default_thinking: true
+
+  - model_name: kimi-k2.5
+    litellm_params:
+      model: openrouter/moonshotai/kimi-k2.5
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Kimi K2.5"
+      is_free: false
+      provider_key: "kimi"
+      metadata:
+        cogni:
+          fallback_thinking: true
+
+  # Minimax
+  - model_name: minimax-m2
+    litellm_params:
+      model: openrouter/minimax/minimax-m2
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Minimax M2"
+      is_free: false
+      provider_key: "minimax"
 
   - model_name: gpt-5.2
     litellm_params:
@@ -124,22 +118,9 @@ model_list:
       is_zdr: true
       provider_key: "anthropic"
 
-  # DeepSeek
-  - model_name: deepseek-v3.2
-    litellm_params:
-      model: openrouter/deepseek/deepseek-chat-v3.2
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "DeepSeek V3.2"
-      is_free: false
-      provider_key: "deepseek"
-      metadata:
-        cogni:
-          default_thinking: true
-
   - model_name: deepseek-v3.1
     litellm_params:
-      model: openrouter/deepseek/deepseek-chat-v3.1
+      model: openrouter/deepseek/deepseek-v3.1
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
       display_name: "DeepSeek V3.1"
@@ -206,28 +187,6 @@ model_list:
       display_name: "Kimi K2 Thinking"
       is_free: false
       provider_key: "kimi"
-
-  - model_name: kimi-k2.5
-    litellm_params:
-      model: openrouter/moonshotai/kimi-k2.5
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Kimi K2.5"
-      is_free: false
-      provider_key: "kimi"
-      metadata:
-        cogni:
-          fallback_thinking: true
-
-  # Minimax
-  - model_name: minimax-m2
-    litellm_params:
-      model: openrouter/minimax/minimax-m2
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Minimax M2"
-      is_free: false
-      provider_key: "minimax"
 
   # Qwen
   - model_name: qwen3-vl-8b

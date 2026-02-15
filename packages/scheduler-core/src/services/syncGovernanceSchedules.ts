@@ -119,7 +119,8 @@ export async function syncGovernanceSchedules(
         timezone: schedule.timezone,
         graphId: GOVERNANCE_GRAPH_ID,
         executionGrantId: grantId,
-        input: { message: schedule.entrypoint },
+        // TODO(task.0068): Use default_flash from LiteLLM config metadata instead of hardcoded model
+        input: { message: schedule.entrypoint, model: "gpt-4o-mini" },
         // Governance-specific safety: no overlap, no backfill
         overlapPolicy: "skip",
         catchupWindowMs: 0,
