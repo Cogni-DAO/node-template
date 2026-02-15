@@ -9,7 +9,7 @@ summary: OpenClaw agent runtime in Cogni — two execution modes (ephemeral sand
 read_when: Implementing OpenClaw sandbox or gateway agent, modifying container images, or debugging sandbox LLM calls
 owner: derekg1729
 created: 2026-02-07
-verified: 2026-02-12
+verified: 2026-02-15
 tags: [sandbox, openclaw, ai-agents]
 ---
 
@@ -635,6 +635,14 @@ if the task is ambiguous.
 #### Skills
 
 OpenClaw skills (in `skills/` directory) provide domain-specific behavior. The gateway has internet egress, so web-based skills (web search, API calls, curl) are functional. `gh` CLI is not installed — use `curl` with `GITHUB_TOKEN` for GitHub API calls. Browser-based skills remain non-functional (no Chromium). Ephemeral mode (`network=none`) has no network access — web skills are denied there.
+
+#### Cogni Skills (MVP)
+
+Gateway-only skills for governance and observability. Require env vars passed to `openclaw-gateway` service.
+
+| Skill               | Purpose                                          | Env Vars Required                                       | Gateway Only |
+| ------------------- | ------------------------------------------------ | ------------------------------------------------------- | ------------ |
+| `deployment-health` | Query Grafana metrics (LLM cost, service health) | `GRAFANA_URL`, `GRAFANA_SERVICE_ACCOUNT_TOKEN` (Viewer) | Yes          |
 
 ---
 
