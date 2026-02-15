@@ -90,7 +90,7 @@ describe("syncGovernanceSchedules", () => {
         timezone: "UTC",
         graphId: "sandbox:openclaw",
         executionGrantId: GRANT_ID,
-        input: { message: "COMMUNITY" },
+        input: { message: "COMMUNITY", model: "gpt-4o-mini" },
         overlapPolicy: "skip",
         catchupWindowMs: 0,
       })
