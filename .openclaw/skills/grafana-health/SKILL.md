@@ -7,6 +7,8 @@ user-invocable: false
 
 Readonly health monitoring for governance agents. Queries production metrics and alerts.
 
+**⚠️ v0 MVP:** Data may not be complete or trustworthy. Use for directional signals, not absolute truth.
+
 ## Goal
 
 Provide governance agents with high-signal system health data:
@@ -94,6 +96,27 @@ Tokens by Provider:
 Note: Postgres internals, Temporal workflows, and network stats not included (future)
 Note: Alerts & incidents not configured yet
 ```
+
+## Usage Guidance
+
+**When to use:**
+
+- SUSTAINABILITY governance runs (budget/cost monitoring)
+- ENGINEERING governance runs (system health checks)
+- Incident investigations (which service is affected?)
+
+**How to interpret:**
+
+- Memory >80% = concerning, may cause OOMs
+- OOM events >0 = critical, service was killed
+- Cost spikes = investigate model usage
+- Empty services list = metric collection failure
+
+**v0 Known Issues:**
+
+- Provider label shows "litellm" instead of actual provider (OpenRouter, etc.)
+- Alerts & incidents not configured yet
+- Some services may not report metrics (transient containers)
 
 ## Design Constraints
 
