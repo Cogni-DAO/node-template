@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@shared/ai/langfuse-scrubbing`
- * Purpose: Structured redaction for Langfuse trace I/O. Scrubs sensitive data while preserving readability.
+ * Module: `@shared/ai/content-scrubbing`
+ * Purpose: Structured redaction for sensitive content. Scrubs secrets/PII while preserving readability.
  * Scope: Key-based + regex scrubbing, payload limits, hash computation. Does not import adapters.
  * Invariants:
- *   - LANGFUSE_SCRUB_BEFORE_SEND: All content passes through scrubbing before Langfuse transmission
- *   - LANGFUSE_PAYLOAD_CAPS: Hard limits enforced; exceeded => summary + hash + bytes
- *   - LANGFUSE_USER_OPT_OUT: maskContent=true => hashes only
+ *   - SCRUB_BEFORE_SEND: All content passes through scrubbing before external transmission (Langfuse, operator logs)
+ *   - PAYLOAD_CAPS: Hard limits enforced; exceeded => summary + hash + bytes
+ *   - USER_OPT_OUT: maskContent=true => hashes only
  * Side-effects: none (pure functions)
  * Links: OBSERVABILITY.md#langfuse-integration
  * @public

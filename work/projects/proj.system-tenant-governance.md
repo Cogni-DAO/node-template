@@ -11,7 +11,7 @@ outcome: System tenant (`cogni_system`) can execute governance graphs through th
 assignees:
   - cogni-dev
 created: 2026-02-07
-updated: 2026-02-07
+updated: 2026-02-15
 labels:
   - system-tenant
   - governance
@@ -32,13 +32,14 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 
 **Goal:** System tenant exists, PolicyResolverPort enforces authoritative allowlists, tenantId is required, side-effect tools are idempotent.
 
-| Deliverable                                                                                | Status      | Est | Work Item |
-| ------------------------------------------------------------------------------------------ | ----------- | --- | --------- |
-| Schema & bootstrap: `is_system_tenant` column, `cogni_system` seed, startup healthcheck    | Not Started | 2   | —         |
-| PolicyResolverPort: interface + DrizzlePolicyResolverAdapter with system/customer policies | Not Started | 3   | —         |
-| ToolPolicyContext: required tenantId + test escape hatch                                   | Not Started | 2   | —         |
-| Side-effect tool idempotency: `tool_execution_results` table + adapter check/store         | Not Started | 3   | —         |
-| Chores: tenant_id/actor_type in traces, update ACCOUNTS_DESIGN.md                          | Not Started | 1   | —         |
+| Deliverable                                                                                                          | Status      | Est | Work Item |
+| -------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Schema & bootstrap: `is_system_tenant` column, `cogni_system` seed, startup healthcheck, purchase-time revenue share | Done        | 3   | task.0046 |
+| Governance run foundation: repo-spec governance config + system tenant execution grant                               | Done        | 2   | task.0054 |
+| PolicyResolverPort: interface + DrizzlePolicyResolverAdapter with system/customer policies                           | Not Started | 3   | —         |
+| ToolPolicyContext: required tenantId + test escape hatch                                                             | Not Started | 2   | —         |
+| Side-effect tool idempotency: `tool_execution_results` table + adapter check/store                                   | Not Started | 3   | —         |
+| Chores: tenant_id/actor_type in traces, update ACCOUNTS_DESIGN.md                                                    | Not Started | 1   | —         |
 
 #### Schema & Bootstrap
 
@@ -112,6 +113,7 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 ## As-Built Specs
 
 - [System Tenant Design](../../docs/spec/system-tenant.md) — Core invariants, schema, policy resolution flow
+- [Governance Scheduling](../../docs/spec/governance-scheduling.md) — Declarative schedule sync from repo-spec
 
 ## File Pointers (P0 Scope)
 

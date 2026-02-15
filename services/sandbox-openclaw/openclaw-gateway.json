@@ -17,15 +17,6 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           },
           {
-            "id": "tng-chimera",
-            "name": "TNG Chimera",
-            "reasoning": false,
-            "input": ["text"],
-            "contextWindow": 131072,
-            "maxTokens": 8192,
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-          },
-          {
             "id": "trinity-mini",
             "name": "Trinity Mini",
             "reasoning": false,
@@ -62,6 +53,15 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           },
           {
+            "id": "gpt-5.2",
+            "name": "GPT-5.2",
+            "reasoning": true,
+            "input": ["text"],
+            "contextWindow": 400000,
+            "maxTokens": 32768,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
             "id": "gpt-5",
             "name": "GPT-5",
             "reasoning": true,
@@ -86,15 +86,6 @@
             "input": ["text"],
             "contextWindow": 200000,
             "maxTokens": 8192,
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-          },
-          {
-            "id": "claude-opus-4.6",
-            "name": "Claude Opus 4.6",
-            "reasoning": true,
-            "input": ["text"],
-            "contextWindow": 1000000,
-            "maxTokens": 128000,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           },
           {
@@ -168,6 +159,24 @@
             "contextWindow": 131072,
             "maxTokens": 32768,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "deepseek-v3.2",
+            "name": "DeepSeek V3.2",
+            "reasoning": true,
+            "input": ["text"],
+            "contextWindow": 65536,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
+            "id": "llama-3.3-70b",
+            "name": "Llama 3.3 70B",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 128000,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           }
         ]
       }
@@ -175,9 +184,9 @@
   },
   "agents": {
     "defaults": {
-      "model": { "primary": "cogni/claude-opus-4.6" },
+      "model": { "primary": "cogni/llama-3.3-70b" },
       "subagents": {
-        "model": "cogni/gemini-3-flash",
+        "model": "cogni/llama-3.3-70b",
         "maxConcurrent": 3,
         "archiveAfterMinutes": 30
       },
@@ -185,8 +194,30 @@
       "skipBootstrap": true,
       "timeoutSeconds": 540,
       "heartbeat": { "every": "0" },
+      "models": {
+        "cogni/nemotron-nano-30b": {},
+        "cogni/trinity-mini": {},
+        "cogni/glm-4.5-air": {},
+        "cogni/solar-pro-3": {},
+        "cogni/gpt-4o-mini": {},
+        "cogni/gpt-5.2": {},
+        "cogni/gpt-5": {},
+        "cogni/claude-sonnet-4.5": { "params": { "cacheRetention": "long" } },
+        "cogni/claude-opus-4.5": { "params": { "cacheRetention": "long" } },
+        "cogni/deepseek-v3.1": {},
+        "cogni/deepseek-v3.2": {},
+        "cogni/gemini-2.5-flash": {},
+        "cogni/gemini-3-pro": {},
+        "cogni/gemini-3-flash": {},
+        "cogni/kimi-k2-thinking": {},
+        "cogni/minimax-m2": {},
+        "cogni/qwen3-vl-8b": {},
+        "cogni/grok-4.1-fast": {},
+        "cogni/llama-3.3-70b": {}
+      },
+      "contextPruning": { "mode": "cache-ttl", "ttl": "1h" },
       "memorySearch": {
-        "enabled": true,
+        "enabled": false,
         "provider": "openai",
         "model": "text-embedding-3-small",
         "remote": {

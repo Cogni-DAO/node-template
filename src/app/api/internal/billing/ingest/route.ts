@@ -8,8 +8,8 @@
  * Invariants:
  *   - CALLBACK_AUTHENTICATED: Requires Bearer BILLING_INGEST_TOKEN
  *   - INGEST_ENDPOINT_IS_INTERNAL: Docker-internal only, not exposed through Caddy
- *   - IDEMPOTENCY_KEY_IS_LITELLM_CALL_ID: Duplicate callbacks are no-ops (handled internally by commitUsageFact)
- *   - COST_AUTHORITY_IS_LITELLM: Cost from callback response_cost field
+ *   - CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID: Duplicate callbacks are no-ops (handled internally by commitUsageFact)
+ *   - COST_ORACLE_IS_LITELLM: Cost from callback response_cost field
  *   - NO_SYNCHRONOUS_RECEIPT_BARRIER: Never blocks LLM response (async callback)
  * Side-effects: IO (HTTP request/response, database via commitUsageFact)
  * Links: docs/spec/billing-ingest.md, billing-ingest.internal.v1.contract
@@ -20,6 +20,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { GraphId } from "@cogni/ai-core";
 import { toUserId } from "@cogni/ids";
 import { NextResponse } from "next/server";
+import type { Logger } from "pino";
 
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
@@ -29,7 +30,9 @@ import {
   type StandardLoggingPayloadBilling,
 } from "@/contracts/billing-ingest.internal.v1.contract";
 import { commitUsageFact } from "@/features/ai/public.server";
+import { isModelFreeFromCache } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
+import { billingInvariantViolationTotal } from "@/shared/observability/server/metrics";
 import type { RunContext } from "@/types/run-context";
 import type { UsageFact } from "@/types/usage";
 
@@ -105,7 +108,8 @@ function resolveBillingAccountId(
 function buildUsageFact(
   entry: StandardLoggingPayloadBilling,
   billingAccountId: string,
-  virtualKeyId: string
+  virtualKeyId: string,
+  log: Logger
 ): { fact: UsageFact; context: RunContext } {
   const metadata = entry.metadata?.spend_logs_metadata;
 
@@ -114,6 +118,63 @@ function buildUsageFact(
   const attempt = metadata?.attempt ?? 0;
   const graphId: GraphId =
     (metadata?.graph_id as GraphId) ?? "callback:billing-ingest";
+
+  const hasTokens =
+    entry.prompt_tokens + entry.completion_tokens > 0 || entry.total_tokens > 0;
+  const isOpenRouter = entry.custom_llm_provider === "openrouter";
+  const isFreeFromCache = isModelFreeFromCache(entry.model_group);
+  const isFree = isFreeFromCache ?? false;
+  const isSuspiciousZeroCost =
+    entry.status === "success" &&
+    isOpenRouter &&
+    isFreeFromCache === false &&
+    hasTokens &&
+    entry.response_cost === 0;
+
+  // Cache miss: do NOT treat as paid. Warn and continue normal processing.
+  if (
+    isOpenRouter &&
+    hasTokens &&
+    entry.response_cost === 0 &&
+    isFreeFromCache === null
+  ) {
+    log.warn(
+      {
+        litellmCallId: entry.id,
+        modelGroup: entry.model_group,
+        model: entry.model,
+        provider: entry.custom_llm_provider,
+        promptTokens: entry.prompt_tokens,
+        completionTokens: entry.completion_tokens,
+        totalTokens: entry.total_tokens,
+      },
+      "Billing ingest: model catalog cache miss for response_cost=0 with tokens>0 — continuing"
+    );
+  }
+
+  // Guardrail (bug.0060): never persist a final $0 receipt for paid models.
+  // "Paid" is derived from LiteLLM config model_info.is_free (missing/unknown defaults to paid).
+  // Defer instead, and emit an alertable metric/log so this can't be silent.
+  const costUsd = isSuspiciousZeroCost ? undefined : entry.response_cost;
+  if (isSuspiciousZeroCost) {
+    billingInvariantViolationTotal.inc({ type: "openrouter_paid_zero_cost" });
+    // Operator-facing: high-signal, no PII, includes forensic IDs.
+    // (Tokens are safe; prompts are not logged anywhere.)
+    log.error(
+      {
+        litellmCallId: entry.id,
+        modelGroup: entry.model_group,
+        model: entry.model,
+        provider: entry.custom_llm_provider,
+        isFreeModel: isFree,
+        modelCatalogCacheHit: isFreeFromCache !== null,
+        promptTokens: entry.prompt_tokens,
+        completionTokens: entry.completion_tokens,
+        totalTokens: entry.total_tokens,
+      },
+      "Billing ingest: suspicious $0 response_cost for paid OpenRouter model — deferring receipt"
+    );
+  }
 
   const fact: UsageFact = {
     runId,
@@ -128,7 +189,7 @@ function buildUsageFact(
     model: entry.model_group, // User-facing alias (per spec: use model_group, not model)
     inputTokens: entry.prompt_tokens,
     outputTokens: entry.completion_tokens,
-    costUsd: entry.response_cost,
+    ...(costUsd !== undefined && { costUsd }),
   };
 
   const context: RunContext = {
@@ -236,7 +297,8 @@ export const POST = wrapRouteHandlerWithLogging(
       const { fact, context } = buildUsageFact(
         entry,
         billingAccountId,
-        billingAccount.defaultVirtualKeyId
+        billingAccount.defaultVirtualKeyId,
+        log
       );
 
       // Get user-scoped account service for recordChargeReceipt (RLS)

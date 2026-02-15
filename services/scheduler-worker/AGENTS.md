@@ -59,7 +59,7 @@
 
 ## Responsibilities
 
-- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow, execute activities (validateGrant, createRun, executeGraph, updateRun), handle SIGTERM/SIGINT
+- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow, execute activities (validateGrant, executeGraph, updateRun; createRun only for DB-backed schedules), handle SIGTERM/SIGINT
 - This directory **does not**: Import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces
 
 ## Usage
@@ -101,4 +101,4 @@ docker build -f services/scheduler-worker/Dockerfile -t scheduler-worker .
 
 - Per NO_WORKER_RECONCILIATION: Temporal handles scheduling natively
 - Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: scheduledFor comes from Schedule action
-- Per EXECUTION_VIA_SERVICE_API: executeGraphActivity calls internal API with Idempotency-Key
+- Per EXECUTION_VIA_SERVICE_API: executeGraphActivity calls internal API with Idempotency-Key (`temporalScheduleId:scheduledFor`)

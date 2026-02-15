@@ -17,11 +17,12 @@ import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { InboundPaymentConfig } from "@/shared/config";
+import type { GovernanceConfig, InboundPaymentConfig } from "@/shared/config";
 import { CHAIN_ID } from "@/shared/web3";
 
 interface RepoSpecModule {
   getPaymentConfig: () => InboundPaymentConfig;
+  getGovernanceConfig: () => GovernanceConfig;
 }
 
 const ORIGINAL_CWD = process.cwd();
@@ -240,6 +241,142 @@ describe("getPaymentConfig (repo-spec)", () => {
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
       expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+});
+
+/** Minimal valid base YAML for governance tests (cogni_dao + payments_in required by schema) */
+const BASE_YAML = [
+  "cogni_dao:",
+  `  chain_id: "${CHAIN_ID}"`,
+  "payments_in:",
+  "  credits_topup:",
+  "    provider: cogni-usdc-backend-v1",
+  '    receiving_address: "0x1111111111111111111111111111111111111111"',
+].join("\n");
+
+async function loadRepoSpecModule(): Promise<RepoSpecModule> {
+  vi.resetModules();
+  return import("@/shared/config/repoSpec.server");
+}
+
+describe("getGovernanceConfig (repo-spec)", () => {
+  it("returns schedules when governance section is provided", async () => {
+    const yaml = [
+      BASE_YAML,
+      "governance:",
+      "  schedules:",
+      "    - charter: COMMUNITY",
+      '      cron: "0 */6 * * *"',
+      "      timezone: UTC",
+      "      entrypoint: COMMUNITY",
+      "    - charter: GOVERN",
+      '      cron: "0 * * * *"',
+      "      timezone: UTC",
+      "      entrypoint: GOVERN",
+    ].join("\n");
+
+    const tmpDir = writeRepoSpec(yaml);
+    process.chdir(tmpDir);
+
+    try {
+      const { getGovernanceConfig } = await loadRepoSpecModule();
+      const config = getGovernanceConfig();
+
+      expect(config.schedules).toHaveLength(2);
+      expect(config.schedules[0]).toEqual({
+        charter: "COMMUNITY",
+        cron: "0 */6 * * *",
+        timezone: "UTC",
+        entrypoint: "COMMUNITY",
+      });
+      expect(config.schedules[1]).toEqual({
+        charter: "GOVERN",
+        cron: "0 * * * *",
+        timezone: "UTC",
+        entrypoint: "GOVERN",
+      });
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("returns empty schedules when governance section is omitted", async () => {
+    const tmpDir = writeRepoSpec(BASE_YAML);
+    process.chdir(tmpDir);
+
+    try {
+      const { getGovernanceConfig } = await loadRepoSpecModule();
+      const config = getGovernanceConfig();
+
+      expect(config.schedules).toEqual([]);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("defaults timezone to UTC when omitted", async () => {
+    const yaml = [
+      BASE_YAML,
+      "governance:",
+      "  schedules:",
+      "    - charter: ENGINEERING",
+      '      cron: "0 */4 * * *"',
+      "      entrypoint: ENGINEERING",
+    ].join("\n");
+
+    const tmpDir = writeRepoSpec(yaml);
+    process.chdir(tmpDir);
+
+    try {
+      const { getGovernanceConfig } = await loadRepoSpecModule();
+      const config = getGovernanceConfig();
+
+      expect(config.schedules[0]?.timezone).toBe("UTC");
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("rejects schedule with empty charter", async () => {
+    const yaml = [
+      BASE_YAML,
+      "governance:",
+      "  schedules:",
+      '    - charter: ""',
+      '      cron: "0 * * * *"',
+      "      entrypoint: GOVERN",
+    ].join("\n");
+
+    const tmpDir = writeRepoSpec(yaml);
+    process.chdir(tmpDir);
+
+    try {
+      const { getGovernanceConfig } = await loadRepoSpecModule();
+      expect(() => getGovernanceConfig()).toThrow(/repo-spec\.yaml structure/i);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("rejects schedule with cron too short", async () => {
+    const yaml = [
+      BASE_YAML,
+      "governance:",
+      "  schedules:",
+      "    - charter: GOVERN",
+      '      cron: "* *"',
+      "      entrypoint: GOVERN",
+    ].join("\n");
+
+    const tmpDir = writeRepoSpec(yaml);
+    process.chdir(tmpDir);
+
+    try {
+      const { getGovernanceConfig } = await loadRepoSpecModule();
+      expect(() => getGovernanceConfig()).toThrow(/repo-spec\.yaml structure/i);
     } finally {
       cleanup(tmpDir);
     }

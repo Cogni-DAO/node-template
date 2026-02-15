@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-01-20
+- **Last reviewed:** 2026-02-14
 - **Status:** draft
 - **Parent:** [features/ai](../AGENTS.md)
 
@@ -41,16 +41,19 @@ Chat subfeature of AI — provides assistant-ui + AI SDK streaming integration f
 
 ## Public Surface
 
-- **Exports:** ChatRuntimeProvider, ChatCreditsHint, mapHttpError, toErrorAlertProps
-- **Routes:** /api/v1/ai/chat (POST) - routes to AI completion services
+- **Exports:** ChatRuntimeProvider, ChatCreditsHint, mapHttpError, toErrorAlertProps, useThreads, useLoadThread, useDeleteThread
+- **Routes:**
+  - `/api/v1/ai/chat` (POST) - chat with server-authoritative thread persistence
+  - `/api/v1/ai/threads` (GET) - list threads
+  - `/api/v1/ai/threads/[stateKey]` (GET, DELETE) - load/delete thread
 - **Env/Config keys:** none
-- **Files considered API:** providers/ChatRuntimeProvider.client.tsx, components/ChatCreditsHint.tsx, utils/mapHttpError.ts, utils/toErrorAlertProps.ts
+- **Files considered API:** providers/ChatRuntimeProvider.client.tsx, hooks/useThreads.ts, components/ChatCreditsHint.tsx, utils/mapHttpError.ts, utils/toErrorAlertProps.ts
 
 ## Ports
 
 - **Uses ports:** none (delegates to AI completion services via API route)
 - **Implements ports:** none
-- **Contracts:** ai.chat.v1 (wire format)
+- **Contracts:** ai.chat.v1 (wire format), ai.threads.v1 (thread list/load/delete)
 
 ## Responsibilities
 
@@ -59,6 +62,8 @@ Chat subfeature of AI — provides assistant-ui + AI SDK streaming integration f
   - Manage chat runtime state with useChatRuntime + DefaultChatTransport
   - Send single user message text via prepareSendMessagesRequest (not full history)
   - Capture stateKey from X-State-Key response header for multi-turn continuity
+  - Support thread switching via initialMessages + initialStateKey props (key-based remount)
+  - Provide React Query hooks for thread list, load, and delete operations
   - Show conditional credits hint when balance is zero
   - Handle abort/cancellation without state corruption
 

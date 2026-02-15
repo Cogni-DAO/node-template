@@ -50,6 +50,20 @@
       "when": 1770799543517,
       "tag": "0006_sticky_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1771090299758,
+      "tag": "0007_melted_siren",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1771090299759,
+      "tag": "0008_seed_system_tenant",
+      "breakpoints": true
     }
   ]
 }

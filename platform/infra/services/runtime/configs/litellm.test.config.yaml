@@ -56,6 +56,21 @@ model_list:
       is_free: false
       provider_key: "mock"
 
+  # Streaming plumbing model (deterministic, no prompt dependence)
+  # Used by stack tests that validate SSE parsing without relying on mock-llm fidelity.
+  - model_name: mock-stream
+    litellm_params:
+      model: openai/mock-gpt-markdown
+      api_base: http://mock-llm:3000
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      mock_response: "MOCK_STREAM_OK"
+      input_cost_per_token: 0.000001
+      output_cost_per_token: 0.000002
+    model_info:
+      display_name: "Mock Stream (Deterministic)"
+      is_free: false
+      provider_key: "mock"
+
 litellm_settings:
   include_cost_in_streaming_usage: true
   success_callback: ["generic_api"]

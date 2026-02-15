@@ -3,17 +3,24 @@
 
 /**
  * Module: `@app/(app)/chat/page`
- * Purpose: Protected chat page with assistant-ui integration.
- * Scope: Client component that displays chat interface using assistant-ui Thread component. Does not handle authentication directly.
- * Invariants: Session guaranteed by (app)/layout auth guard.
- * Side-effects: IO (chat API calls, session management)
- * Notes: Uses assistant-ui with useExternalStoreRuntime; ThreadWelcome customized for Cogni copy.
- * Links: src/components/vendor/assistant-ui/thread.tsx, src/features/ai/chat/providers/ChatRuntimeProvider.client.tsx
+ * Purpose: Chat page with thread history sidebar and assistant-ui Thread.
+ * Scope: Client component that renders thread sidebar (desktop aside + mobile Sheet), thread switching state, model/graph selection, and ChatRuntimeProvider with key-based remount. Does not handle authentication directly.
+ * Invariants:
+ *   - INV-UI-NO-PAID-DEFAULT-WHEN-ZERO: gates rendering until models + credits resolve
+ *   - INV-NO-CLIENT-INVENTED-MODEL-IDS: all model IDs from server's models list
+ *   - KEY_REMOUNT: `key={activeThreadKey ?? "new"}` forces full unmount/remount on thread switch, aborting in-flight streams
+ *   - LOADING_GATE: `isThreadLoading` prevents ChatRuntimeProvider render until thread messages load
+ * Side-effects: IO (chat API, thread list/load/delete via React Query)
+ * Notes: Thread sidebar shared between desktop (aside) and mobile (Sheet). Thread finish invalidates ai-threads query.
+ * Links: src/features/ai/chat/providers/ChatRuntimeProvider.client.tsx, src/features/ai/chat/hooks/useThreads.ts
  * @public
  */
 
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import type { UIMessage } from "ai";
+import { Menu, PanelLeft, PanelLeftClose, Plus, Trash2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   type ReactNode,
@@ -23,7 +30,17 @@ import {
   useState,
 } from "react";
 
-import { ErrorAlert, Thread } from "@/components";
+import {
+  Button,
+  ErrorAlert,
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  Thread,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components";
 import type { ChatError } from "@/contracts/error.chat.v1.contract";
 import { ChatRuntimeProvider } from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
 import { toErrorAlertProps } from "@/features/ai/chat/utils/toErrorAlertProps";
@@ -34,10 +51,14 @@ import {
   getPreferredModelId,
   pickDefaultModel,
   setPreferredModelId,
+  useDeleteThread,
+  useLoadThread,
   useModels,
+  useThreads,
 } from "@/features/ai/public";
 import { useCreditsSummary } from "@/features/payments/public";
 import type { GraphId } from "@/ports";
+import { cn } from "@/shared/util/cn";
 
 const ChatWelcomeWithHint = () => (
   <div className="mx-auto flex h-full w-full max-w-[var(--thread-max-width)] flex-col items-center justify-center">
@@ -70,6 +91,11 @@ export default function ChatPage(): ReactNode {
   const [selectedGraph, setSelectedGraph] = useState(DEFAULT_GRAPH_ID);
   const [chatError, setChatError] = useState<ChatError | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
+
+  // Thread switching state
+  const [activeThreadKey, setActiveThreadKey] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
 
   // Extract server-provided defaults (NO CLIENT INVENTION)
   const models = modelsQuery.data?.models ?? [];
@@ -162,6 +188,36 @@ export default function ChatPage(): ReactNode {
     window.location.href = "/credits";
   }, []);
 
+  // Thread data hooks
+  const queryClient = useQueryClient();
+  const threadsQuery = useThreads();
+  const threadData = useLoadThread(activeThreadKey);
+  const deleteThread = useDeleteThread();
+
+  const handleSelectThread = useCallback((key: string) => {
+    setChatError(null);
+    setActiveThreadKey(key);
+    setSidebarOpen(false);
+  }, []);
+
+  const handleNewThread = useCallback(() => {
+    setChatError(null);
+    setActiveThreadKey(null);
+    setSidebarOpen(false);
+  }, []);
+
+  const handleDeleteThread = useCallback(
+    (key: string) => {
+      deleteThread.mutate(key);
+      if (activeThreadKey === key) setActiveThreadKey(null);
+    },
+    [activeThreadKey, deleteThread]
+  );
+
+  const handleThreadFinish = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["ai-threads"] });
+  }, [queryClient]);
+
   // Prepare error alert props
   const errorAlertProps = chatError
     ? toErrorAlertProps(chatError, !!defaultFreeModelId)
@@ -220,42 +276,180 @@ export default function ChatPage(): ReactNode {
     );
   }
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ChatRuntimeProvider
-        selectedModel={selectedModel}
-        selectedGraph={selectedGraph}
-        defaultModelId={uiDefaultModelId}
-        onAuthExpired={() => signOut()}
-        onError={handleError}
-      >
-        <Thread
-          welcomeMessage={<ChatWelcomeWithHint />}
-          composerLeft={
-            <ChatComposerExtras
-              selectedModel={selectedModel}
-              onModelChange={handleModelChange}
-              defaultModelId={uiDefaultModelId}
-              balance={balance}
-              selectedGraph={selectedGraph}
-              onGraphChange={handleGraphChange}
-            />
-          }
-          errorMessage={
-            errorAlertProps ? (
-              <ChatErrorBubble
-                message={errorAlertProps.message}
-                showRetry={errorAlertProps.showRetry}
-                showSwitchFree={errorAlertProps.showSwitchFree}
-                showAddCredits={errorAlertProps.showAddCredits}
-                onRetry={handleRetry}
-                onSwitchFreeModel={handleSwitchFreeModel}
-                onAddCredits={handleAddCredits}
-              />
-            ) : undefined
-          }
-        />
-      </ChatRuntimeProvider>
+  // Gate provider render: for existing threads, wait until messages are loaded.
+  // New threads (activeThreadKey === null) render immediately with no initial messages.
+  const isThreadLoading = activeThreadKey != null && threadData.isPending;
+
+  // After the isThreadLoading gate, threadData.data is guaranteed for existing threads.
+  // New threads get an empty array — both cases produce UIMessage[].
+  const initialMessages: UIMessage[] =
+    activeThreadKey != null && threadData.data
+      ? (threadData.data.messages as UIMessage[])
+      : [];
+
+  const sidebarContent = (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between p-3">
+        <Button
+          variant="ghost"
+          className="justify-start gap-2"
+          onClick={handleNewThread}
+        >
+          <Plus className="h-4 w-4" />
+          New chat
+        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              onClick={() => {
+                setDesktopSidebarOpen(false);
+                setSidebarOpen(false);
+              }}
+              aria-label="Close sidebar"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Close sidebar</TooltipContent>
+        </Tooltip>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2">
+        {threadsQuery.data?.threads.map((thread) => {
+          const isActive = activeThreadKey === thread.stateKey;
+          return (
+            <div
+              key={thread.stateKey}
+              className={cn(
+                "group relative flex items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent/50",
+                isActive && "bg-accent"
+              )}
+            >
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left"
+                onClick={() => handleSelectThread(thread.stateKey)}
+              >
+                {thread.title || "Untitled"}
+              </button>
+              <button
+                type="button"
+                className="ml-1 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                onClick={() => handleDeleteThread(thread.stateKey)}
+                aria-label="Delete thread"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
+        {threadsQuery.data?.threads.length === 0 && (
+          <div className="px-3 py-6 text-center text-muted-foreground text-sm">
+            No conversations yet
+          </div>
+        )}
+      </div>
     </div>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar — animates width between 0 and 18rem */}
+      <aside
+        className={cn(
+          "hidden shrink-0 overflow-hidden border-r transition-all duration-200 ease-in-out lg:flex lg:flex-col",
+          desktopSidebarOpen ? "w-72" : "w-0 border-r-0"
+        )}
+      >
+        <div className="flex h-full w-72 flex-col">{sidebarContent}</div>
+      </aside>
+      {/* Desktop reopen button — visible when sidebar is collapsed */}
+      {!desktopSidebarOpen && (
+        <div className="hidden items-start p-2 lg:flex">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                onClick={() => setDesktopSidebarOpen(true)}
+                aria-label="Open sidebar"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Open sidebar</TooltipContent>
+          </Tooltip>
+        </div>
+      )}
+
+      {/* Mobile sidebar — Sheet */}
+      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetContent side="left" className="w-72 p-0" hideClose>
+          <SheetTitle className="sr-only">Thread history</SheetTitle>
+          {sidebarContent}
+        </SheetContent>
+      </Sheet>
+
+      {/* Chat area */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Mobile sidebar toggle */}
+        <div className="flex items-center border-b px-2 py-1.5 lg:hidden">
+          <button
+            type="button"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-accent"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open thread list"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+
+        {isThreadLoading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="text-muted-foreground">Loading thread...</div>
+          </div>
+        ) : (
+          <ChatRuntimeProvider
+            key={activeThreadKey ?? "new"}
+            selectedModel={selectedModel}
+            selectedGraph={selectedGraph}
+            defaultModelId={uiDefaultModelId}
+            initialMessages={initialMessages}
+            initialStateKey={activeThreadKey}
+            onAuthExpired={() => signOut()}
+            onError={handleError}
+            onFinish={handleThreadFinish}
+          >
+            <Thread
+              welcomeMessage={<ChatWelcomeWithHint />}
+              composerLeft={
+                <ChatComposerExtras
+                  selectedModel={selectedModel}
+                  onModelChange={handleModelChange}
+                  defaultModelId={uiDefaultModelId}
+                  balance={balance}
+                  selectedGraph={selectedGraph}
+                  onGraphChange={handleGraphChange}
+                />
+              }
+              errorMessage={
+                errorAlertProps ? (
+                  <ChatErrorBubble
+                    message={errorAlertProps.message}
+                    showRetry={errorAlertProps.showRetry}
+                    showSwitchFree={errorAlertProps.showSwitchFree}
+                    showAddCredits={errorAlertProps.showAddCredits}
+                    onRetry={handleRetry}
+                    onSwitchFreeModel={handleSwitchFreeModel}
+                    onAddCredits={handleAddCredits}
+                  />
+                ) : undefined
+              }
+            />
+          </ChatRuntimeProvider>
+        )}
+      </div>
+    </>
   );
 }

@@ -27,6 +27,7 @@ const srcLayers = {
   assets: "^src/assets",
   contracts: "^src/contracts",
   mcp: "^src/mcp",
+  scripts: "^src/scripts",
 };
 
 // Monorepo boundary layers (packages/)
@@ -250,6 +251,12 @@ module.exports = {
       to: { path: "^services/" },
     },
 
+    // scripts → bootstrap (CLI wrappers that call job modules)
+    {
+      from: { path: "^src/scripts" },
+      to: { path: ["^src/bootstrap"] },
+    },
+
     // Files not in a known layer are caught by the forbidden `no-unknown-layer` rule below.
   ],
 
@@ -313,7 +320,7 @@ module.exports = {
       name: "no-internal-adapter-imports",
       severity: "error",
       from: {
-        path: "^src/(?!adapters/server/)(?!auth\\.ts$)(?!bootstrap/container\\.ts$)(?!bootstrap/graph-executor\\.factory\\.ts$)(?!bootstrap/agent-discovery\\.ts$)",
+        path: "^src/(?!adapters/server/)(?!auth\\.ts$)(?!bootstrap/container\\.ts$)(?!bootstrap/graph-executor\\.factory\\.ts$)(?!bootstrap/agent-discovery\\.ts$)(?!bootstrap/jobs/syncGovernanceSchedules\\.job\\.ts$)",
       },
       to: {
         path: "^src/adapters/server/(?!index\\.ts$).*\\.ts$",
@@ -322,7 +329,8 @@ module.exports = {
         "Import from @/adapters/server (index.ts), not internal adapter files. " +
         "Exempt: auth.ts (bootstrap), container.ts (trust boundaries), " +
         "graph-executor.factory.ts + agent-discovery.ts (sandbox subpath imports " +
-        "to avoid Turbopack bundling dockerode native addon chain).",
+        "to avoid Turbopack bundling dockerode native addon chain), " +
+        "syncGovernanceSchedules.job.ts (needs serviceDb for advisory lock).",
     },
 
     // adapters/test: must use @/adapters/test (index.ts), not internal files
@@ -535,13 +543,14 @@ module.exports = {
       severity: "error",
       from: {
         path: "^src/",
-        pathNot: "^src/(auth\\.ts|bootstrap/container\\.ts)$",
+        pathNot:
+          "^src/(auth\\.ts|bootstrap/container\\.ts|bootstrap/jobs/syncGovernanceSchedules\\.job\\.ts)$",
       },
       to: {
         path: "^src/adapters/server/db/drizzle\\.service-client\\.ts$",
       },
       comment:
-        "Only auth.ts and container.ts may import the service-db adapter (BYPASSRLS singleton)",
+        "Only auth.ts, container.ts, and governance job may import the service-db adapter (BYPASSRLS singleton)",
     },
 
     // =========================================================================

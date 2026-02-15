@@ -29,7 +29,6 @@ import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
 import type { AiEvent, StreamFinalResult } from "@/features/ai/public";
 // Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
 import {
-  commitUsageFact,
   createAiRuntime,
   executeStream,
   type MessageDto,
@@ -45,7 +44,6 @@ import {
 } from "@/ports";
 import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
-import type { BillingCommitFn } from "@/types/billing";
 
 interface CompletionInput {
   messages: MessageDto[];
@@ -165,10 +163,6 @@ export async function completionStream(
   // Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes by graphId to providers
   const { accountService, clock } = resolveAiAdapterDeps(userId);
 
-  // Create billing commit closure (app layer CAN import features — DI boundary)
-  const billingCommitFn: BillingCommitFn = (fact, context) =>
-    commitUsageFact(fact, context, accountService, ctx.log);
-
   // Create preflight credit check closure (app layer → features DI boundary)
   // Per CREDITS_ENFORCED_AT_EXECUTION_PORT: decorator handles all execution paths
   const preflightCheckFn: PreflightCreditCheckFn = (
@@ -188,7 +182,6 @@ export async function completionStream(
   const graphExecutor = createGraphExecutor(
     executeStream,
     userId,
-    billingCommitFn,
     preflightCheckFn
   );
 

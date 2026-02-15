@@ -117,6 +117,7 @@
     "e2e:report": "playwright show-report e2e/artifacts/report",
     "env:check": "tsx --tsconfig tsconfig.scripts.json scripts/check-runtime-env.ts",
     "validate:chain": "tsx --no-cache --tsconfig tsconfig.scripts.json scripts/validate-chain-config.ts",
+    "governance:schedules:sync": "pnpm dotenv -e .env.local -- sh -lc 'curl -fsS -X POST http://localhost:3000/api/internal/ops/governance/schedules/sync -H \"Authorization: Bearer ${INTERNAL_OPS_TOKEN:?INTERNAL_OPS_TOKEN is required}\"'",
     "knip": "dotenv -e .env.local -- knip --include files,exports,dependencies",
     "prepare": "husky"
   },

@@ -5,8 +5,8 @@ title: OpenClaw Gateway Workspace
 status: active
 spec_state: draft
 trust: draft
-summary: Gateway agent workspace, governance operating model, and subagent delegation — GOVERN heartbeat loop, user message handling, dual-workspace layout, skills, memory
-read_when: Configuring gateway agent workspace, understanding the GOVERN loop, writing skills, or debugging agent system prompt content
+summary: Gateway agent workspace, governance trigger routing, and subagent delegation — user message handling, dual-workspace layout, skills, memory
+read_when: Configuring gateway agent workspace, understanding governance trigger routing, writing skills, or debugging agent system prompt content
 owner: derekg1729
 created: 2026-02-13
 verified: 2026-02-13
@@ -29,7 +29,7 @@ Three compounding issues cause bad gateway agent behavior:
 
 ## Goal
 
-Define the workspace layout, governance operating model, subagent delegation strategy, and development workflow for the OpenClaw gateway agent. The agent is the lead engineer of CogniDAO — it autonomously plans, builds, and maintains the codebase via a recurring GOVERN loop, while also handling ad-hoc user messages in the same container.
+Define the workspace layout, governance operating model, subagent delegation strategy, and development workflow for the OpenClaw gateway agent. The agent is the lead engineer of CogniDAO — it autonomously handles recurring governance triggers and ad-hoc user messages in the same container.
 
 ## Non-Goals
 
@@ -52,9 +52,9 @@ Define the workspace layout, governance operating model, subagent delegation str
 
 33. **MEMORY_MD_HIGH_BAR**: `MEMORY.md` is reserved for niche, container-specific context that an OpenClaw agent needs and cannot find via `memory_search` over `docs/` and `work/`. General project knowledge belongs in specs and guides — not duplicated into MEMORY.md. The agent should not edit files under `services/` unless the content is specific to the container itself. Examples of valid MEMORY.md content: container filesystem layout, tool availability quirks, worktree setup gotchas. Examples of invalid content: architecture overview (→ `docs/spec/architecture.md`), API contracts (→ `src/contracts/`).
 
-34. **GOVERN_TRIGGER**: The Temporal scheduler sends the single-word message `GOVERN` on a recurring cadence. On receiving this message, the agent reads `GOVERN.md` (not auto-injected — read on demand to keep user-message prompts lean) and executes the checklist. All other messages are treated as user interactions.
+34. **GOVERNANCE_TRIGGER_ROUTING**: The scheduler sends single-word governance tokens (`COMMUNITY`, `ENGINEERING`, `SUSTAINABILITY`, `GOVERN`). The agent routes immediately via SOUL.md trigger router to governance skills (`/gov-community`, `/gov-engineering`, `/gov-sustainability`, `/gov-govern`) with no pre-routing deliberation.
 
-35. **USER_MODE_PRIORITIES**: When handling a user message (anything that is not `GOVERN`), the agent follows three objectives in strict priority order: (1) help the user, (2) gather useful signal into work items or spec updates, (3) protect the charter — scope diversions into work items rather than derailing active work.
+35. **USER_MODE_PRIORITIES**: When handling a user message (anything not in the governance trigger set), the agent follows three objectives in strict priority order: (1) help the user, (2) gather useful signal into work items or spec updates, (3) protect the charter — scope diversions into work items rather than derailing active work.
 
 36. **SUBAGENT_DELEGATION_BY_LEADER**: Only the lead agent (main, with full SOUL.md context) decides when to spawn subagents via `sessions_spawn`. Subagents receive minimal prompt (AGENTS.md + TOOLS.md only per [openclaw-subagents-spec invariant 37](openclaw-subagents.md)). The leader delegates reads, scanning, and synthesis; it keeps all file mutations in its own context.
 
@@ -82,8 +82,14 @@ All system prompt files live in a single directory, bind-mounted into the contai
 ├── .gitignore                         # Ignores memory/ directory
 └── memory/                            # Ephemeral working memory (not in git, lost on reset)
     ├── YYYY-MM-DD.md                  # Auto-populated session logs (on /new)
-    ├── YYYY-MM-DD-govern.md           # GOVERN EDO records (written by agent)
-    └── YYYY-MM-DD-digest.md           # Daily digest (written by agent)
+    ├── YYYY-MM-DD-digest.md           # Daily digest (written by agent)
+    ├── _budget_header.md              # GOVERN-owned live gate
+    ├── edo_index.md                   # Open/recent EDO index
+    ├── EDO/                           # EDO files (`<id>.md`) from template
+    ├── COMMUNITY/heartbeat.md         # Latest charter heartbeat (overwrite)
+    ├── ENGINEERING/heartbeat.md       # Latest charter heartbeat (overwrite)
+    ├── SUSTAINABILITY/heartbeat.md    # Latest charter heartbeat (overwrite)
+    └── GOVERN/heartbeat.md            # Latest charter heartbeat (overwrite)
 ```
 
 OpenClaw reads AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md from the workspace root at session start (truncated to `bootstrapMaxChars`, default 20,000 chars). SOUL.md must be at the workspace root — OpenClaw has no config to read it from an alternate path. Subagents receive only `AGENTS.md` + `TOOLS.md`.
@@ -168,6 +174,16 @@ Skills auto-register as `/skillname` commands in connected channels (Telegram, D
 │   └── SKILL.md                       # /handoff — context handoff doc
 ├── pull-request/
 │   └── SKILL.md                       # /pull_request — create PR
+├── gov-core/
+│   └── SKILL.md                       # shared heartbeat contract for governance runs
+├── gov-community/
+│   └── SKILL.md                       # /gov-community
+├── gov-engineering/
+│   └── SKILL.md                       # /gov-engineering
+├── gov-sustainability/
+│   └── SKILL.md                       # /gov-sustainability
+├── gov-govern/
+│   └── SKILL.md                       # /gov-govern
 └── ...
 ```
 
@@ -240,23 +256,24 @@ The gateway `AGENTS.md` documents this workflow explicitly.
 
 ### Operating Modes
 
-The gateway agent handles two distinct message types in the same long-running container:
+The gateway agent handles two message classes in the same long-running container:
 
-#### GOVERN (Autonomous Loop)
+#### Governance Triggers (Autonomous)
 
-Temporal sends `GOVERN` on a recurring cadence. The agent reads `GOVERN.md` (on-demand, not in system prompt) and executes the checklist: orient → pick → execute → maintain → reflect.
+Scheduler tokens map directly to governance skills:
 
-`GOVERN.md` is a 5-line checklist — no prose. `SOUL.md` defines the principles and constraints that govern the loop. This separation keeps the GOVERN checklist tight and evolvable without bloating the system prompt for user messages.
+- `COMMUNITY` → `/gov-community`
+- `ENGINEERING` → `/gov-engineering`
+- `SUSTAINABILITY` → `/gov-sustainability`
+- `GOVERN` → `/gov-govern`
 
-**EDO records**: When a real decision is made during GOVERN, the agent writes an EDO (Event → Decision → Expected Outcome) to `memory/YYYY-MM-DD-govern.md`. One EDO per decision, not per run. EDOs include a `byDate` for outcome checking. `GOVERN.md` contains the format and an example.
+All governance skills share one shape: one focus, one decision (`action` or `no-op`), expected measurable delta, cost guard, evidence refs, then exit. Runtime writes use `memory/{CHARTER}/heartbeat.md` (overwrite latest) and GOVERN owns `memory/_budget_header.md`.
 
-**Commit cadence**: EDOs live in `memory/` (ephemeral, searchable). Daily: 1-page digest to `memory/YYYY-MM-DD-digest.md`. Weekly: full Week Review (strong model). Commit to `docs/governance/decisions.md` only if policy/architecture/security/cost-relevant or shows repeated confusion. Micro-choices stay ephemeral.
-
-**Weekly prune** (during Maintain): close stale work items, close overdue EDOs with no outcome, deprecate unused capabilities, delete stale branches, rotate memory logs older than 30 days.
+`/gov-govern` records an EDO only when a real choice between alternatives is made.
 
 #### User Messages
 
-Any message that is not `GOVERN` is a user interaction. Multiple users can connect to the same container. The agent follows three priorities in order:
+Any message outside the governance trigger set is a user interaction. Multiple users can connect to the same container. The agent follows three priorities in order:
 
 1. **Help** — answer the question, do what they ask
 2. **Gather** — if the user shares useful context (bug reports, ideas, architecture feedback), capture it as a work item, spec update, or memory note
@@ -292,7 +309,7 @@ The lead agent can spawn flash-tier subagents via `sessions_spawn` for parallel 
 - **Delegate**: bulk reads, grep-and-summarize, data extraction, status checks
 - **Keep in main**: file writes, code generation, architecture decisions, judgment calls
 
-Model selection is dynamic — the agent passes any model from the catalog to `sessions_spawn` per-task. No predefined model tiers in config; the SOUL.md principles ("fast models scan, strong models decide") guide the agent's choice.
+Model selection for write delegation is constrained by SOUL.md (brain brief -> `cogni/deepseek-v3.2`).
 
 **Upstream blocker**: Subagent billing attribution requires an OpenClaw PR to propagate `outboundHeaders` from parent to child sessions ([task.0045](../../work/items/task.0045.openclaw-subagent-spawning.md)). Until that lands, subagent LLM calls won't carry billing headers. Not a practical issue while all models route through the proxy at zero cost.
 

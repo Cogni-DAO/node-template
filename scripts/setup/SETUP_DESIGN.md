@@ -123,6 +123,7 @@ pnpm setup github --env production
      - `OPENCLAW_GATEWAY_TOKEN` (generated random, ≥32 chars — gateway WS auth)
      - `OPENCLAW_GITHUB_RW_TOKEN` (GitHub PAT with Contents:Write + Pull requests:Write — host-side git relay)
      - `BILLING_INGEST_TOKEN` (generated random, ≥32 chars — LiteLLM callback → billing ingest bearer auth)
+     - `INTERNAL_OPS_TOKEN` (generated random, ≥32 chars — deploy-time bearer auth for `/api/internal/ops/governance/schedules/sync`)
    - **Deployment secrets:** From previous steps
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
      - `VM_HOST` (from `.env.<env>` file)

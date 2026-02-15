@@ -22,6 +22,7 @@ import {
   type ScheduleControlPort,
   ScheduleControlUnavailableError,
   type ScheduleDescription,
+  type ScheduleOverlapPolicyHint,
 } from "@cogni/scheduler-core";
 import {
   Client,
@@ -46,6 +47,21 @@ export interface TemporalScheduleControlConfig {
 
 /** Workflow type name for scheduled graph execution (defined in scheduler-temporal-worker) */
 const SCHEDULED_RUN_WORKFLOW_TYPE = "GovernanceScheduledRunWorkflow";
+
+/** Map port-level overlap hint to Temporal SDK enum */
+function toTemporalOverlapPolicy(
+  hint: ScheduleOverlapPolicyHint | undefined
+): ScheduleOverlapPolicy {
+  switch (hint) {
+    case "skip":
+      return ScheduleOverlapPolicy.SKIP;
+    case "allow_all":
+      return ScheduleOverlapPolicy.ALLOW_ALL;
+    case "buffer_one":
+    default:
+      return ScheduleOverlapPolicy.BUFFER_ONE;
+  }
+}
 
 /**
  * Temporal implementation of ScheduleControlPort.
@@ -117,7 +133,10 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
           workflowId: params.scheduleId,
           args: [
             {
+              // Legacy compatibility: keep scheduleId for already-deployed workers.
               scheduleId: params.scheduleId,
+              temporalScheduleId: params.scheduleId,
+              dbScheduleId: params.dbScheduleId ?? null,
               graphId: params.graphId,
               executionGrantId: params.executionGrantId,
               input: params.input,
@@ -126,10 +145,8 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
           taskQueue: this.config.taskQueue,
         },
         policies: {
-          // Per OVERLAP_SKIP_DEFAULT: Only one workflow instance per schedule at a time
-          overlap: ScheduleOverlapPolicy.SKIP,
-          // Per CATCHUP_WINDOW_ZERO: No backfill in P0
-          catchupWindow: "0s",
+          overlap: toTemporalOverlapPolicy(params.overlapPolicy),
+          catchupWindow: params.catchupWindowMs ?? 60_000,
         },
       });
     } catch (error) {
@@ -225,6 +242,25 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
       }
       throw new ScheduleControlUnavailableError(
         "describeSchedule",
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  async listScheduleIds(prefix: string): Promise<string[]> {
+    const client = await this.getClient();
+
+    try {
+      const ids: string[] = [];
+      for await (const schedule of client.schedule.list()) {
+        if (schedule.scheduleId.startsWith(prefix)) {
+          ids.push(schedule.scheduleId);
+        }
+      }
+      return ids;
+    } catch (error) {
+      throw new ScheduleControlUnavailableError(
+        "listScheduleIds",
         error instanceof Error ? error : undefined
       );
     }

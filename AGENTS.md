@@ -121,6 +121,7 @@ pnpm test:component           # Component tests (isolated testcontainers, no ser
 pnpm test:contract            # Contract tests (in-memory, no HTTP)
 pnpm test:stack:dev           # Full Stack tests (requires dev:stack:test running)
 pnpm test:stack:docker        # Full Stack tests (requires docker:test:stack running)
+pnpm dotenv -e .env.test -- vitest run --config vitest.stack.config.mts <testfile> # run a specific stack test file
 pnpm format                   # prettier format fixes
 pnpm check:docs               # lint AGENTS.md documentation
 pnpm e2e                      # Black box end-to-end tests (run on pnpm docker:stack)
