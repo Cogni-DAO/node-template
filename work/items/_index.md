@@ -57,6 +57,8 @@
 | 1   | 1   | Done        | spike.0046 | Research PII-safe user context passing to OpenClaw agents                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Todo        | task.0047  | OpenClaw user context v0 — inject PII-safe identity into gateway agent messages                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 1   | Backlog     | bug.0050   | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0               |                            |                                 |
+| 2   | 1   | Backlog     | bug.0061   | UI balance display hides negative with $0 default                                              | Payments Enhancements      | proj.payments-enhancements      |
+| 2   | 1   | Backlog     | task.0064  | OpenClaw preflight cost estimate 10x audit — real token consumption                            | Reliability & Uptime       | proj.reliability                |
 | 1   | 2   | Backlog     | bug.0051   | Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls       | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 1   | Backlog     | bug.0012   | pre-commit check:docs validates all files, not just staged                                     |                            |                                 |
 | 2   | 2   | Backlog     | bug.0013   | Sandbox stack tests flaky — proxy container vanishes                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |

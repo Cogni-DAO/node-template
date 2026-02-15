@@ -134,6 +134,15 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
           },
           {
+            "id": "kimi-k2.5",
+            "name": "Kimi K2.5",
+            "reasoning": true,
+            "input": ["text"],
+            "contextWindow": 262144,
+            "maxTokens": 65536,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          },
+          {
             "id": "minimax-m2",
             "name": "Minimax M2",
             "reasoning": false,
@@ -210,6 +219,7 @@
         "cogni/gemini-3-pro": {},
         "cogni/gemini-3-flash": {},
         "cogni/kimi-k2-thinking": {},
+        "cogni/kimi-k2.5": {},
         "cogni/minimax-m2": {},
         "cogni/qwen3-vl-8b": {},
         "cogni/grok-4.1-fast": {},

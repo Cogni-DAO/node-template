@@ -207,6 +207,18 @@ model_list:
       is_free: false
       provider_key: "kimi"
 
+  - model_name: kimi-k2.5
+    litellm_params:
+      model: openrouter/moonshotai/kimi-k2.5
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Kimi K2.5"
+      is_free: false
+      provider_key: "kimi"
+      metadata:
+        cogni:
+          fallback_thinking: true
+
   # Minimax
   - model_name: minimax-m2
     litellm_params:

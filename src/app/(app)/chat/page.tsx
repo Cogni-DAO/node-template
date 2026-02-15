@@ -80,6 +80,7 @@ export default function ChatPage(): ReactNode {
   const modelsQuery = useModels();
   const { data: creditsData, isLoading: isCreditsLoading } =
     useCreditsSummary();
+  // Display raw balance (including negative); no unsafe defaults
   const balance = creditsData?.balanceCredits ?? 0;
 
   // Refs for user intent tracking (prevent re-init after user selection)
