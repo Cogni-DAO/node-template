@@ -1,9 +1,9 @@
 ---
-description: "Query Grafana for system health metrics and alerts"
+description: "Deployment health via Grafana metrics and alerts"
 user-invocable: false
 ---
 
-# Grafana Health Check
+# Deployment Health Check
 
 Readonly health monitoring for governance agents. Queries production metrics and alerts.
 
