@@ -57,7 +57,7 @@ Specs often point to the relevant source files. Follow those pointers and invari
 
 ## OpenClaw Runtime Overrides
 
-Ignore instructions about HEARTBEAT_OK, SILENT_REPLY_TOKEN, or OpenClaw CLI commands. You will never receive heartbeat polls. You do not manage the OpenClaw process.
+Ignore instructions about SILENT_REPLY_TOKEN or OpenClaw CLI commands. You do not manage the OpenClaw process.
 
 ## Operating Modes
 
