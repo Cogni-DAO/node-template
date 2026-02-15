@@ -28,6 +28,13 @@ import { serverEnv } from "@/shared/env/server-env";
 
 const GOVERNANCE_GRANT_SCOPES = ["graph:execute:sandbox:openclaw"] as const;
 
+export interface GovernanceScheduleSyncSummary {
+  created: number;
+  resumed: number;
+  skipped: number;
+  paused: number;
+}
+
 /**
  * Run the governance schedules sync job.
  *
@@ -35,14 +42,14 @@ const GOVERNANCE_GRANT_SCOPES = ["graph:execute:sandbox:openclaw"] as const;
  * 2. Resolves deps from the application container
  * 3. Calls syncGovernanceSchedules with repo-spec config
  */
-export async function runGovernanceSchedulesSyncJob(): Promise<void> {
+export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceScheduleSyncSummary> {
   const container = getContainer();
   const { log } = container;
 
   // Skip if governance schedules disabled (e.g., in preview environments)
   if (!serverEnv().GOVERNANCE_SCHEDULES_ENABLED) {
     log.info({}, "Governance schedules disabled, skipping sync");
-    return;
+    return { created: 0, resumed: 0, skipped: 0, paused: 0 };
   }
 
   log.info({}, "Starting governance schedule sync job");
@@ -56,7 +63,7 @@ export async function runGovernanceSchedulesSyncJob(): Promise<void> {
     ?.acquired;
   if (!acquired) {
     log.info({}, "Governance sync already running, skipping");
-    return;
+    return { created: 0, resumed: 0, skipped: 0, paused: 0 };
   }
 
   try {
@@ -87,6 +94,13 @@ export async function runGovernanceSchedulesSyncJob(): Promise<void> {
       },
       "Governance schedule sync complete"
     );
+
+    return {
+      created: result.created.length,
+      resumed: result.resumed.length,
+      skipped: result.skipped.length,
+      paused: result.paused.length,
+    };
   } finally {
     // Release advisory lock
     await serviceDb.execute(
