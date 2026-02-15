@@ -37,8 +37,8 @@ Governance schedule sync — creates, resumes, and prunes Temporal schedules for
 ## Public Surface
 
 - **Exports:** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`
-- **Routes:** none (system-ops only, called via CLI)
-- **CLI:** `pnpm governance:schedules:sync` (via `src/scripts/governance-schedules-sync.ts`)
+- **Routes:** none (system-ops only; triggered via internal ops endpoint)
+- **CLI:** `pnpm governance:schedules:sync` (endpoint trigger helper)
 - **Env/Config keys:** `.cogni/repo-spec.yaml` → `governance.schedules`
 - **Files considered API:** `services/syncGovernanceSchedules.ts`
 
@@ -56,7 +56,7 @@ Governance schedule sync — creates, resumes, and prunes Temporal schedules for
 
 ```bash
 pnpm test tests/unit/features/governance/  # unit tests
-pnpm governance:schedules:sync             # run sync (needs DB + Temporal)
+pnpm governance:schedules:sync             # trigger internal route (app must be running)
 ```
 
 ## Standards

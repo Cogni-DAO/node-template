@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Job modules that wire business logic to the application container for CLI-invoked tasks. Each job acquires an advisory lock, resolves dependencies from the container, and delegates to a service function.
+Job modules that wire business logic to the application container for ops-triggered tasks (CLI and internal routes). Each job acquires an advisory lock, resolves dependencies from the container, and delegates to a service function.
 
 ## Pointers
 
@@ -31,7 +31,7 @@ Job modules that wire business logic to the application container for CLI-invoke
 
 - **Exports:** `runGovernanceSchedulesSyncJob()`
 - **Routes (if any):** none
-- **CLI (if any):** `pnpm governance:schedules:sync` (via `src/scripts/governance-schedules-sync.ts`)
+- **CLI (if any):** `pnpm governance:schedules:sync` (calls internal ops route)
 - **Env/Config keys:** none
 - **Files considered API:** `syncGovernanceSchedules.job.ts`
 
@@ -48,7 +48,7 @@ Job modules that wire business logic to the application container for CLI-invoke
 ## Usage
 
 ```bash
-pnpm governance:schedules:sync  # runs via src/scripts/ entry point
+pnpm governance:schedules:sync  # POST /api/internal/ops/governance/schedules/sync
 ```
 
 ## Standards

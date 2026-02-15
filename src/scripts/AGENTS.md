@@ -10,7 +10,7 @@
 
 ## Purpose
 
-CLI entry points for operational tasks. Each script is a thin wrapper — zero logic, zero wiring — that delegates to a job module in `src/bootstrap/jobs/`.
+Operational command surface for script-based tasks.
 
 ## Pointers
 
@@ -26,20 +26,20 @@ CLI entry points for operational tasks. Each script is a thin wrapper — zero l
 }
 ```
 
-Note: dep-cruiser allows `scripts → bootstrap`. The AGENTS.md policy is more restrictive; actual imports go through bootstrap job modules.
+Note: This directory currently has no governance sync entrypoint file; sync is triggered via internal HTTP endpoint.
 
 ## Public Surface
 
 - **Exports:** none (entry points only)
 - **Routes (if any):** none
-- **CLI (if any):** `pnpm governance:schedules:sync`
+- **CLI (if any):** `pnpm governance:schedules:sync` (curl to internal ops endpoint)
 - **Env/Config keys:** none
 - **Files considered API:** none
 
 ## Responsibilities
 
-- This directory **does**: Provide process entry points (exit codes, error logging)
-- This directory **does not**: Contain logic, wiring, or business rules
+- This directory **does**: Host script-facing conventions
+- This directory **does not**: Contain governance schedule sync runtime logic
 
 ## Usage
 
@@ -49,8 +49,7 @@ pnpm governance:schedules:sync
 
 ## Standards
 
-- Scripts call a single job function, then `process.exit(0)` or `process.exit(1)`
-- No imports beyond bootstrap layer
+- `governance:schedules:sync` triggers `/api/internal/ops/governance/schedules/sync`
 
 ## Dependencies
 

@@ -5,7 +5,7 @@ title: Governance Schedule Sync
 status: active
 spec_state: active
 trust: draft
-summary: Declarative governance schedules in repo-spec.yaml synced to Temporal at deploy time via idempotent CLI.
+summary: Declarative governance schedules in repo-spec.yaml synced to Temporal at deploy time via internal ops endpoint.
 read_when: Understanding how governance runs are scheduled, how repo-spec declares charters, or how the sync function works.
 implements: proj.system-tenant-governance
 owner: derekg1729
@@ -32,7 +32,7 @@ flowchart TD
     RS[".cogni/repo-spec.yaml<br/><i>governance.schedules[]</i>"] -->|getGovernanceConfig| SYNC
 
     subgraph "deploy.sh Step 10.1"
-        CLI["pnpm governance:schedules:sync"] --> JOB["Job module<br/><i>pg_advisory_lock</i>"]
+        OPS["POST /api/internal/ops/governance/schedules/sync<br/><i>Bearer INTERNAL_OPS_TOKEN</i>"] --> JOB["Job module<br/><i>pg_advisory_lock</i>"]
         JOB --> SYNC["syncGovernanceSchedules()"]
     end
 
@@ -79,7 +79,7 @@ governance:
 
 | Layer     | File                                                              | Responsibility                   |
 | --------- | ----------------------------------------------------------------- | -------------------------------- |
-| CLI       | `src/scripts/governance-schedules-sync.ts`                        | Process lifecycle (exit codes)   |
+| Endpoint  | `src/app/api/internal/ops/governance/schedules/sync/route.ts`     | Internal auth + deploy trigger   |
 | Job       | `src/bootstrap/jobs/syncGovernanceSchedules.job.ts`               | Advisory lock + container wiring |
 | Service   | `packages/scheduler-core/src/services/syncGovernanceSchedules.ts` | Pure orchestration via ports     |
 | Re-export | `src/features/governance/services/syncGovernanceSchedules.ts`     | Feature-layer convenience        |
@@ -96,15 +96,15 @@ Repo-spec is source of truth for governance schedules. Temporal is derived state
 
 ## Invariants
 
-| Rule                         | Constraint                                                               |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| REPO_SPEC_IS_SOURCE_OF_TRUTH | `.cogni/repo-spec.yaml` declares schedules; Temporal is derived          |
-| PRUNE_IS_PAUSE               | Removed schedules are paused, never deleted (reversible)                 |
-| SYSTEM_OPS_ONLY              | Sync runs at deploy time via CLI, never callable by tenants              |
-| GRANT_ON_DEMAND              | Governance grant created idempotently by sync, not by migration          |
-| OVERLAP_SKIP_ALWAYS          | All governance schedules use `overlap=SKIP` (one run at a time)          |
-| SINGLE_WRITER                | `pg_advisory_lock(hashtext('governance_sync'))` prevents concurrent sync |
-| PURE_ORCHESTRATION           | Sync function depends only on ports/types — no adapters, no DB           |
+| Rule                         | Constraint                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| REPO_SPEC_IS_SOURCE_OF_TRUTH | `.cogni/repo-spec.yaml` declares schedules; Temporal is derived               |
+| PRUNE_IS_PAUSE               | Removed schedules are paused, never deleted (reversible)                      |
+| SYSTEM_OPS_ONLY              | Sync runs at deploy time via internal ops endpoint, never callable by tenants |
+| GRANT_ON_DEMAND              | Governance grant created idempotently by sync, not by migration               |
+| OVERLAP_SKIP_ALWAYS          | All governance schedules use `overlap=SKIP` (one run at a time)               |
+| SINGLE_WRITER                | `pg_advisory_lock(hashtext('governance_sync'))` prevents concurrent sync      |
+| PURE_ORCHESTRATION           | Sync function depends only on ports/types — no adapters, no DB                |
 
 ### File Pointers
 
@@ -114,8 +114,8 @@ Repo-spec is source of truth for governance schedules. Temporal is derived state
 | `src/shared/config/repoSpec.schema.ts`                            | `governanceScheduleSchema`       |
 | `src/shared/config/repoSpec.server.ts`                            | `getGovernanceConfig()` accessor |
 | `packages/scheduler-core/src/services/syncGovernanceSchedules.ts` | Canonical sync logic             |
+| `src/app/api/internal/ops/governance/schedules/sync/route.ts`     | Internal trigger endpoint        |
 | `src/bootstrap/jobs/syncGovernanceSchedules.job.ts`               | Job module (lock + wiring)       |
-| `src/scripts/governance-schedules-sync.ts`                        | CLI entry point                  |
 | `platform/ci/scripts/deploy.sh`                                   | Deploy integration (Step 10.1)   |
 | `packages/scheduler-core/src/ports/schedule-control.port.ts`      | `listScheduleIds`                |
 | `packages/scheduler-core/src/ports/execution-grant.port.ts`       | `ensureGrant`                    |
