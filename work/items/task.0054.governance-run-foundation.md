@@ -5,8 +5,8 @@ title: "Governance run foundation — declarative schedule sync"
 status: Done
 priority: 0
 estimate: 2
-summary: Declarative governance schedules in repo-spec.yaml synced to Temporal at deploy time. Config layer + sync function + CLI wrapper + deploy wiring.
-outcome: "pnpm governance:schedules:sync creates Temporal schedules for each charter in repo-spec; pnpm check passes."
+summary: Declarative governance schedules in repo-spec.yaml synced to Temporal at deploy time. Config layer + sync function + internal ops route + deploy wiring.
+outcome: "POST /api/internal/ops/governance/schedules/sync creates Temporal schedules for each charter in repo-spec; pnpm governance:schedules:sync triggers that route."
 spec_refs:
   - governance-scheduling-spec
   - scheduler-spec
@@ -35,7 +35,8 @@ task.0046 seeded `cogni_system` billing account + revenue share. This task enabl
 - `repoSpecSchema` (Zod) validates governance section with `governanceScheduleSchema` (optional, defaults to empty)
 - `repoSpec.server.ts` exposes `getGovernanceConfig()` accessor (lazy-cached)
 - `syncGovernanceSchedules()` creates/resumes Temporal schedules, pauses removed ones
-- CLI wrapper `pnpm governance:schedules:sync` runs at deploy time (after migrations)
+- Internal ops endpoint `POST /api/internal/ops/governance/schedules/sync` runs at deploy time (after migrations)
+- `pnpm governance:schedules:sync` acts as a local helper that calls the internal ops endpoint
 - Unit tests for config schema + accessor + sync function
 
 ## Allowed Changes
@@ -46,9 +47,9 @@ task.0046 seeded `cogni_system` billing account + revenue share. This task enabl
 - `src/shared/config/index.ts` — barrel exports
 - `src/features/governance/services/syncGovernanceSchedules.ts` — sync function (new)
 - `src/features/governance/AGENTS.md` — new feature AGENTS.md
-- `src/scripts/governance-schedules-sync.ts` — CLI wrapper (new)
+- `src/app/api/internal/ops/governance/schedules/sync/route.ts` — internal deploy trigger route
 - `platform/ci/scripts/deploy.sh` — add sync step
-- `package.json` — add governance:schedules:sync script
+- `package.json` — governance:schedules:sync helper script (calls internal route)
 - `tests/unit/shared/config/` — governance config tests
 - `tests/unit/features/governance/` — sync function tests
 - `docs/spec/governance-scheduling.md` — as-built spec (new)
@@ -63,8 +64,8 @@ task.0046 seeded `cogni_system` billing account + revenue share. This task enabl
 - [x] Write unit tests for governance config (5 tests, all passing)
 - [x] Implement `syncGovernanceSchedules()` with `GovernanceScheduleSyncDeps` interface
 - [x] Write unit tests for sync function (8 tests)
-- [x] Create CLI wrapper (`src/scripts/governance-schedules-sync.ts`)
-- [x] Add `governance:schedules:sync` script to `package.json`
+- [x] Create internal ops route (`src/app/api/internal/ops/governance/schedules/sync/route.ts`)
+- [x] Add `governance:schedules:sync` helper script in `package.json` (calls internal route)
 - [x] Wire into `platform/ci/scripts/deploy.sh` (Step 10.1, after stack-up)
 - [x] Create `src/features/governance/AGENTS.md`
 - [x] Update doc headers on touched files
