@@ -17,6 +17,15 @@ tags: [ai, models, openclaw, billing]
 
 All models route through OpenRouter via LiteLLM proxy. The gateway agent selects models per-task; these tiers guide that selection.
 
+## Selected Governance Models
+
+| Tier         | Model                 | Why                                                                                    |
+| ------------ | --------------------- | -------------------------------------------------------------------------------------- |
+| **Thinking** | `cogni/deepseek-v3.2` | Strong reasoning, 64k context, $0.63/M total cost. VALUE FIRST: 20x cheaper than Opus. |
+| **Flash**    | `cogni/llama-3.3-70b` | Incredible open-weight quality, $0.42/M total cost. Best cost/quality for agent work.  |
+
+**Decision**: Governance runs use DeepSeek (not Opus) per COST_CRISIS_RESPONSE. Opus 4.6 is removed from routing due to bug.0060 (billing). Sonnet is fallback only. Multi-turn OpenClaw workloads with memory_search require ≥64k context — DeepSeek meets this threshold at 1/20th the cost of premium alternatives.
+
 ## Goal
 
 **COST CRISIS RESPONSE.** Value is now 10x more important than premium. Maintain a value-first tiered catalog: thinking tier defaults to DeepSeek ($0.25/0.38) and QwQ ($0.05/0.22), NOT Opus. Flash tier defaults to Haiku ($1/$5), GPT-4o-Mini ($0.15/$0.60), or Llama ($0.10/$0.32). Reserve Opus + Sonnet strictly for governance agent only. Both "fast" (flash) and "thinking" (reasoning) remain required, but cost discipline is non-negotiable.
