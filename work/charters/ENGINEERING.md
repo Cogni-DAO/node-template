@@ -16,6 +16,18 @@ Ship reliable code that brings charters' goals to life. Maintain quality through
 
 See [@docs/spec/development-lifecycle.md](../../docs/spec/development-lifecycle.md) for workflow standards.
 
+## Charter Work Requests
+
+_Updated by governance skills - shows what work other charters need from ENGINEERING_
+
+| Charter | Priority | Severity | Work Item                      | Status      | Notes                                               |
+| ------- | -------- | -------- | ------------------------------ | ----------- | --------------------------------------------------- |
+| SUSTAIN | 0        | High     | `proj.observability-hardening` | Queued      | BLOCKING: Can't optimize what you can't see         |
+| COMM    | 0        | High     | `proj.messenger-channels`      | Queued      | BLOCKING: P0 for community reach                    |
+| SUSTAIN | 1        | High     | `proj.context-optimization`    | In Progress | $5.50/run unsustainable (needs observability first) |
+| SUSTAIN | 1        | Med      | `proj.governance-agents`       | Queued      | Signal infra for governance loops                   |
+| COMM    | 2        | Low      | `proj.sourcecred-onchain`      | Paused      | Cred system doesn't run                             |
+
 ## Principles
 
 - **Maximize OSS**: Prefer open-source tools and dependencies over proprietary/vendor solutions
@@ -37,11 +49,11 @@ See [@docs/spec/development-lifecycle.md](../../docs/spec/development-lifecycle.
 
 ### Core mission / priorities
 
-| Priority | Target                                                    | Score (0-5) | Status      | Notes |
-| -------- | --------------------------------------------------------- | ----------- | ----------- | ----- |
-| 0        | Workflow excellence: standardized dev lifecycle           | 0           | Not Started |       |
-| 1        | Test infrastructure: agents + humans validate before ship | 0           | Not Started |       |
-| 2        | Delivery velocity: optimize iteration speed               | 0           | Not Started |       |
+| Priority | Target                                                                 | Score (0-5) | Status      | Notes |
+| -------- | ---------------------------------------------------------------------- | ----------- | ----------- | ----- |
+| 0        | Delivery velocity: tight feedback loops accelerate workflow efficiency | 0           | Not Started |       |
+| 1        | Test infrastructure: agents + humans validate before ship              | 0           | Not Started |       |
+| 2        | Code quality: specs enforced, best practices followed                  | 0           | Not Started |       |
 
 ### Top projects (max 4)
 
@@ -64,10 +76,11 @@ _ENGINEERING-owned infrastructure. Feature delivery projects live in their respe
 
 ### Skills / resources
 
-| Resource               | Use                                | Where                    | /skill | Notes                      |
-| ---------------------- | ---------------------------------- | ------------------------ | ------ | -------------------------- |
-| Development lifecycle  | Command-driven workflows           | `.claude/commands/`      |        | Standards documented       |
-| Test infrastructure    | Mock-LLM, system integration tests | `tests/`, docker-compose |        | Partial coverage           |
-| CI/CD pipelines        | GitHub Actions workflows           | `.github/workflows/`     |        | App CI only; no gov CI yet |
-| Specs and architecture | Technical contracts and boundaries | `docs/spec/`             |        | Active specs enforce       |
-| Work tracking system   | Projects, tasks, issues            | `work/`                  |        | Read/write via commands    |
+| Resource               | Use                                | Where                    | /skill | Notes                    |
+| ---------------------- | ---------------------------------- | ------------------------ | ------ | ------------------------ |
+| Governance skills      | Charter-scoped governance runs     | `.openclaw/skills/gov-*` |        | Trigger-routed execution |
+| Development skills     | Command-driven workflows           | `.openclaw/skills/`      |        | /idea → /closeout        |
+| Test infrastructure    | Mock-LLM, system integration tests | `tests/`, docker-compose |        | Partial coverage         |
+| CI/CD pipelines        | GitHub Actions workflows           | `.github/workflows/`     |        | App CI only; no gov CI   |
+| Specs and architecture | Technical contracts and boundaries | `docs/spec/`             |        | Active specs enforce     |
+| Work tracking system   | Projects, tasks, issues            | `work/`                  |        | Via OpenClaw skills      |
