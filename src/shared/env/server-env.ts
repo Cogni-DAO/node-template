@@ -122,6 +122,10 @@ export const serverSchema = z.object({
   // Required: Internal execution API will not function without this token.
   SCHEDULER_API_TOKEN: z.string().min(32),
 
+  // Internal ops token - Bearer auth for deploy-time internal operations endpoints
+  // Optional in schema to avoid breaking environments that do not use ops endpoints.
+  INTERNAL_OPS_TOKEN: z.string().min(32).optional(),
+
   // Governance schedules - Deploy-time schedule sync control
   // When false, governance schedule sync job is skipped (prevents duplicate ops in preview)
   // Default: true (enabled in production/staging)
