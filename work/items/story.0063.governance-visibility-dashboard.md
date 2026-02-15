@@ -2,7 +2,7 @@
 id: story.0063
 type: story
 title: Governance visibility dashboard — real-time AI council activity
-status: Backlog
+status: Todo
 priority: 0
 estimate: 3
 summary: Users can see when the next governance run happens, what the AI council is doing right now, and recent governance decisions across all charters
@@ -10,7 +10,7 @@ outcome: System tenant has a dedicated governance dashboard showing countdown ti
 spec_refs: openclaw-govern-distributed, docs-work-system-spec
 assignees: []
 credit:
-project:
+project: proj.system-tenant-governance
 branch:
 pr:
 reviewer:
@@ -24,12 +24,18 @@ external_refs:
 
 ## Problem
 
-Users have no visibility into when governance runs happen or what decisions the AI council is making. The governance system operates as a black box. People need to see:
+Users have no visibility into when governance runs happen or what decisions the AI council is making. The governance system operates as a black box.
+
+**Critical incident (2026-02-15):** All 4 governance schedules failed silently for hours due to 0 credit balance in the governance billing account. The system appeared healthy (schedules triggering on time) but every run was rejected before execution with `insufficient_credits` error. No monitoring detected the outage.
+
+People need to see:
 
 - When the next governance run will trigger (countdown timer)
 - What the governance AI is doing right now (live activity)
 - What decisions were made recently (past few hours)
 - Status of each charter's latest heartbeat
+- **Credit balance and health status (prevent silent failures)**
+- **Failed runs with error details (detect outages immediately)**
 - Budget gate status (allow_runs, burn_rate, token limits)
 
 This addresses the observability ideal from MEMORY.md: "Cogni AI should be able to monitor its own stats (self-aware system health)".

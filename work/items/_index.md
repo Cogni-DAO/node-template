@@ -62,7 +62,7 @@
 | 2   | 1   | Backlog     | task.0064  | OpenClaw preflight cost estimate 10x audit — real token consumption                            | Reliability & Uptime       | proj.reliability                |
 | 1   | 2   | Backlog     | bug.0051   | Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls       | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Backlog     | bug.0067   | OpenClaw model allowlist blocks openrouter/auto — governance sessions.patch failures at 75%    | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 1   | 2   | Backlog     | bug.0065   | OpenClaw gateway agent uses wrong tools for governance visibility — sessions_history vs files  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 2   | Done        | bug.0065   | OpenClaw gateway agent uses wrong tools for governance visibility — sessions_history vs files  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Backlog     | bug.0066   | LiteLLM reports $0 cost for gpt-4o-mini — billing creates 0-credit receipts for paid models    | Payments Enhancements      | proj.payments-enhancements      |
 | 2   | 1   | Backlog     | bug.0012   | pre-commit check:docs validates all files, not just staged                                     |                            |                                 |
 | 2   | 2   | Backlog     | bug.0013   | Sandbox stack tests flaky — proxy container vanishes                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
@@ -70,6 +70,7 @@
 | 1   | 2   | Todo        | task.0043  | Wire Fumadocs docs site — render /docs and /work at /docs/\*                                   | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 1   | 2   | Todo        | task.0062  | Standardized LiteLLM model update workflow — REQUIRED billing validation for all new models    | Reliability & Uptime       | proj.reliability                |
 | 1   | 2   | Todo        | task.0068  | Dynamic default model selection from LiteLLM config metadata                                   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 2   | Backlog     | bug.0069   | Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite                |                            |                                 |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
 > Sort: priority → status (completed last) → estimate → type
