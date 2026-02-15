@@ -24,7 +24,7 @@ All models route through OpenRouter via LiteLLM proxy. The gateway agent selects
 | **Thinking** | `cogni/deepseek-v3.2` | Strong reasoning, 64k context, $0.63/M total cost. VALUE FIRST: 20x cheaper than Opus. |
 | **Flash**    | `cogni/llama-3.3-70b` | Incredible open-weight quality, $0.42/M total cost. Best cost/quality for agent work.  |
 
-**Decision**: Governance runs use DeepSeek (not Opus) per COST_CRISIS_RESPONSE. Opus 4.6 is removed from routing due to bug.0060 (billing). Sonnet is fallback only. Multi-turn OpenClaw workloads with memory_search require ≥64k context — DeepSeek meets this threshold at 1/20th the cost of premium alternatives.
+**Decision**: Governance runs use DeepSeek (not Opus) per COST_CRISIS_RESPONSE. Opus 4.6 is removed from routing due to bug.0060 (billing). Fallback is Kimi K2.5 (~$2/M output vs Sonnet $15/M — 7.5x cheaper, 256k context). Multi-turn OpenClaw workloads with memory_search require ≥64k context — DeepSeek meets this threshold at 1/20th the cost of premium alternatives.
 
 ## Goal
 
@@ -42,14 +42,14 @@ All models route through OpenRouter via LiteLLM proxy. The gateway agent selects
 
 Strong reasoning models for all file mutations: writes, edits, commits, code generation, architecture decisions, EDOs. **VALUE FIRST. ⚠️ HARD CONSTRAINT: ≥64k context minimum.** (16k empirically unusable with OpenClaw's memory_search + multi-turn overhead.) These tiers reflect 2026 pricing via OpenRouter.
 
-| Model             | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Preference | Known Issues                                                             | Notes                                                               |
-| ----------------- | --------- | ------- | ------- | ------ | ------- | --- | ---------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| **DeepSeek-V3.2** | DeepSeek  | 64k     | 8k      | $0.25  | $0.38   | No  | 🎯 DEFAULT | None                                                                     | THE PRIMARY CHOICE. 64k context (minimum viable), strong reasoning. |
-| Claude Sonnet 4.5 | Anthropic | 200k    | 4k      | $3.00  | $15.00  | Yes | Fallback   | None                                                                     | Fallback for governance if DeepSeek insufficient.                   |
-| Claude Opus 4.6   | Anthropic | 1M      | 128k    | $5.00  | $25.00  | Yes | ❌ Removed | **bug.0060:** LiteLLM `response_cost=$0` for OpenRouter. Breaks billing. | Removed from routing. Use Sonnet 4.5 instead.                       |
-| QwQ-32B           | Qwen      | 16k     | —       | $0.05  | $0.22   | No  | ❌ No      | Context too small (16k < 64k minimum).                                   | Unusable for multi-turn OpenClaw workloads.                         |
-| Kimi K2 Thinking  | Moonshot  | 256k    | 65k     | $0.60  | $2.50   | No  | Strong     | None                                                                     | Advanced MoE reasoning. Multi-turn agentic workflows.               |
-| Kimi K2.5         | Moonshot  | 256k    | 65k     | ~$0.50 | ~$2.00  | No  | Strong     | None                                                                     | Latest iteration, enhanced efficiency over K2.                      |
+| Model             | Provider  | Context | Max Out | $/M in | $/M out | ZDR | Preference  | Known Issues                                                             | Notes                                                               |
+| ----------------- | --------- | ------- | ------- | ------ | ------- | --- | ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **DeepSeek-V3.2** | DeepSeek  | 64k     | 8k      | $0.25  | $0.38   | No  | 🎯 DEFAULT  | None                                                                     | THE PRIMARY CHOICE. 64k context (minimum viable), strong reasoning. |
+| Claude Sonnet 4.5 | Anthropic | 200k    | 4k      | $3.00  | $15.00  | Yes | ❌ No       | Too expensive ($15/M output); use Kimi K2.5 instead.                     | Removed from governance tier; too costly.                           |
+| Claude Opus 4.6   | Anthropic | 1M      | 128k    | $5.00  | $25.00  | Yes | ❌ Removed  | **bug.0060:** LiteLLM `response_cost=$0` for OpenRouter. Breaks billing. | Removed from routing. Use Sonnet 4.5 instead.                       |
+| QwQ-32B           | Qwen      | 16k     | —       | $0.05  | $0.22   | No  | ❌ No       | Context too small (16k < 64k minimum).                                   | Unusable for multi-turn OpenClaw workloads.                         |
+| Kimi K2 Thinking  | Moonshot  | 256k    | 65k     | $0.60  | $2.50   | No  | Strong      | None                                                                     | Advanced MoE reasoning. Multi-turn agentic workflows.               |
+| Kimi K2.5         | Moonshot  | 256k    | 65k     | ~$0.50 | ~$2.00  | No  | 🎯 FALLBACK | None                                                                     | Fallback thinking model: 7.5x cheaper than Sonnet, 256k context.    |
 
 ## Flash Tier
 
