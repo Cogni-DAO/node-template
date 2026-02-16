@@ -3,13 +3,15 @@
 
 /**
  * Module: `@adapters/server/temporal/schedule-control`
- * Purpose: Temporal implementation of ScheduleControlPort.
+ * Purpose: Temporal implementation of ScheduleControlPort (create/update/pause/resume/delete/describe).
  * Scope: Implements schedule lifecycle via Temporal client. Does not handle workflow execution logic.
  * Invariants:
- *   - Per CRUD_IS_TEMPORAL_AUTHORITY: Only CRUD endpoints use this adapter
+ *   - Per CRUD_IS_TEMPORAL_AUTHORITY: Only CRUD endpoints and governance sync use this adapter
  *   - Per WORKER_NEVER_CONTROLS_SCHEDULES: Worker must not depend on this
  *   - Per OVERLAP_SKIP_DEFAULT: Schedules use overlap=SKIP
  *   - Per CATCHUP_WINDOW_ZERO: No backfill (catchupWindow=0)
+ *   - updateSchedule preserves existing state (pause, notes) via previous.state
+ *   - describeSchedule extracts input from action.args[0]; cron returns null (compiled to calendars by Temporal)
  * Side-effects: IO (Temporal RPC calls)
  * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md, ScheduleControlPort
  * @public
@@ -57,7 +59,6 @@ function toTemporalOverlapPolicy(
       return ScheduleOverlapPolicy.SKIP;
     case "allow_all":
       return ScheduleOverlapPolicy.ALLOW_ALL;
-    case "buffer_one":
     default:
       return ScheduleOverlapPolicy.BUFFER_ONE;
   }
@@ -215,6 +216,53 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
     }
   }
 
+  async updateSchedule(
+    scheduleId: string,
+    params: CreateScheduleParams
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    try {
+      const handle = client.schedule.getHandle(scheduleId);
+      await handle.update((previous) => ({
+        spec: {
+          cronExpressions: [params.cron],
+          timezone: params.timezone,
+        },
+        action: {
+          type: "startWorkflow" as const,
+          workflowType: SCHEDULED_RUN_WORKFLOW_TYPE,
+          workflowId: params.scheduleId,
+          args: [
+            {
+              scheduleId: params.scheduleId,
+              temporalScheduleId: params.scheduleId,
+              dbScheduleId: params.dbScheduleId ?? null,
+              graphId: params.graphId,
+              executionGrantId: params.executionGrantId,
+              input: params.input,
+            },
+          ],
+          taskQueue: this.config.taskQueue,
+        },
+        policies: {
+          overlap: toTemporalOverlapPolicy(params.overlapPolicy),
+          catchupWindow: params.catchupWindowMs ?? 60_000,
+        },
+        // Preserve existing state (pause, notes, limits) — don't reset with empty object
+        state: previous.state,
+      }));
+    } catch (error) {
+      if (error instanceof TemporalScheduleNotFoundError) {
+        throw new ScheduleControlNotFoundError(scheduleId);
+      }
+      throw new ScheduleControlUnavailableError(
+        "updateSchedule",
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
   async describeSchedule(
     scheduleId: string
   ): Promise<ScheduleDescription | null> {
@@ -230,11 +278,30 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
       const nextTime = nextActionTimes[0];
       const lastAction = recentActions[recentActions.length - 1];
 
+      // Extract config fields for drift detection
+      // NOTE: Temporal compiles cronExpressions into calendars at create time,
+      // so we can't read the original cron string back. Set to null — cron drift
+      // detection is an MVP tradeoff; input comparison catches the critical cases.
+      // Future: store canonical config in schedule memo for full drift detection.
+      const tz =
+        typeof description.spec.timezone === "string"
+          ? description.spec.timezone
+          : null;
+      const action = description.action;
+      const actionInput: ScheduleDescription["input"] =
+        action.type === "startWorkflow" && action.args?.[0]
+          ? (((action.args[0] as Record<string, unknown>)
+              .input as ScheduleDescription["input"]) ?? null)
+          : null;
+
       return {
         scheduleId,
         nextRunAtIso: nextTime ? nextTime.toISOString() : null,
         lastRunAtIso: lastAction ? lastAction.scheduledAt.toISOString() : null,
         isPaused: description.state.paused,
+        cron: null, // Temporal compiles crons to calendars; can't read back
+        timezone: tz,
+        input: actionInput,
       };
     } catch (error) {
       if (error instanceof TemporalScheduleNotFoundError) {

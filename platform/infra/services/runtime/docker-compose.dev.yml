@@ -536,11 +536,16 @@ services:
       - internal # needed for host port binding (internal:true blocks port publish)
     ports:
       - "127.0.0.1:3333:18789"
-    entrypoint: ["node", "/app/dist/index.js", "gateway"]
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "mkdir -p /workspace/.openclaw-config && cp /opt/openclaw-config-source.json /workspace/.openclaw-config/openclaw.json && exec node /app/dist/index.js gateway",
+      ]
     environment:
       - HOME=/workspace
       - npm_config_store_dir=/pnpm-store
-      - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
+      - OPENCLAW_CONFIG_PATH=/workspace/.openclaw-config/openclaw.json
       - OPENCLAW_STATE_DIR=/workspace/.openclaw-state
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN?OPENCLAW_GATEWAY_TOKEN is required}
       - OPENCLAW_LOAD_SHELL_ENV=0
@@ -557,11 +562,13 @@ services:
       # Grafana observability (for grafana-health skill)
       - GRAFANA_URL=${GRAFANA_URL}
       - GRAFANA_SERVICE_ACCOUNT_TOKEN=${GRAFANA_SERVICE_ACCOUNT_TOKEN}
+      # Discord bot (OpenClaw channel plugin)
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m
     volumes:
-      - ../../../../services/sandbox-openclaw/${OPENCLAW_CONFIG:-openclaw-gateway.json}:/etc/openclaw/openclaw.json:ro
+      - ../../../../services/sandbox-openclaw/${OPENCLAW_CONFIG:-openclaw-gateway.json}:/opt/openclaw-config-source.json:ro # seed config — copied to writable path on startup
       - ../../../../services/sandbox-openclaw/gateway-workspace:/workspace/gateway
       - repo_data:/repo:ro # git-synced codebase (read-only mirror, updated by git-sync)
       - pnpm_store:/pnpm-store # persistent pnpm content-addressable store

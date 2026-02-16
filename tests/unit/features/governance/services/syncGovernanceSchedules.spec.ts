@@ -4,8 +4,8 @@
 /**
  * Module: `@tests/unit/features/governance/services/syncGovernanceSchedules`
  * Purpose: Unit tests for governance schedule sync logic.
- * Scope: Tests sync function with mocked ScheduleControlPort; verifies create/resume/skip/prune behavior. Does not test Temporal integration or DB operations.
- * Invariants: Prune pauses (never deletes); conflict = skip or resume; idempotent on repeat.
+ * Scope: Tests sync function with mocked ScheduleControlPort; verifies create/update/resume/skip/prune behavior. Does not test Temporal integration or DB operations.
+ * Invariants: Prune pauses (never deletes); conflict = update or skip or resume; idempotent on repeat.
  * Side-effects: none (all deps mocked)
  * Links: src/features/governance/services/syncGovernanceSchedules.ts
  * @public
@@ -33,6 +33,7 @@ function makeMockDeps(
     ensureGovernanceGrant: vi.fn().mockResolvedValue(GRANT_ID),
     scheduleControl: {
       createSchedule: vi.fn().mockResolvedValue(undefined),
+      updateSchedule: vi.fn().mockResolvedValue(undefined),
       pauseSchedule: vi.fn().mockResolvedValue(undefined),
       resumeSchedule: vi.fn().mockResolvedValue(undefined),
       deleteSchedule: vi.fn().mockResolvedValue(undefined),
@@ -63,6 +64,43 @@ function makeConfig(
   };
 }
 
+/** Helper: build a ScheduleDescription matching the desired config (no drift) */
+function makeMatchingDesc(
+  scheduleId: string,
+  cron: string,
+  entrypoint: string,
+  opts?: { isPaused?: boolean; timezone?: string }
+): ScheduleDescription {
+  return {
+    scheduleId,
+    nextRunAtIso: "2026-02-15T06:00:00Z",
+    lastRunAtIso: null,
+    isPaused: opts?.isPaused ?? false,
+    cron,
+    timezone: opts?.timezone ?? "UTC",
+    input: { message: entrypoint, model: "deepseek-v3.2" },
+  };
+}
+
+/** Helper: build a ScheduleDescription with stale config (drift) */
+function makeDriftedDesc(
+  scheduleId: string,
+  cron: string,
+  entrypoint: string,
+  opts?: { isPaused?: boolean }
+): ScheduleDescription {
+  return {
+    scheduleId,
+    nextRunAtIso: "2026-02-15T06:00:00Z",
+    lastRunAtIso: null,
+    isPaused: opts?.isPaused ?? false,
+    cron,
+    timezone: "UTC",
+    // Stale: missing model field (the bug we're fixing)
+    input: { message: entrypoint },
+  };
+}
+
 describe("syncGovernanceSchedules", () => {
   let deps: GovernanceScheduleSyncDeps;
 
@@ -90,7 +128,7 @@ describe("syncGovernanceSchedules", () => {
         timezone: "UTC",
         graphId: "sandbox:openclaw",
         executionGrantId: GRANT_ID,
-        input: { message: "COMMUNITY", model: "gpt-4o-mini" },
+        input: { message: "COMMUNITY", model: "deepseek-v3.2" },
         overlapPolicy: "skip",
         catchupWindowMs: 0,
       })
@@ -107,13 +145,12 @@ describe("syncGovernanceSchedules", () => {
     expect(deps.ensureGovernanceGrant).toHaveBeenCalledOnce();
   });
 
-  it("skips creation when schedule already exists and is running", async () => {
-    const runningDesc: ScheduleDescription = {
-      scheduleId: "governance:community",
-      nextRunAtIso: "2026-02-15T06:00:00Z",
-      lastRunAtIso: null,
-      isPaused: false,
-    };
+  it("skips when schedule exists, is running, and config matches", async () => {
+    const matchingDesc = makeMatchingDesc(
+      "governance:community",
+      "0 */6 * * *",
+      "COMMUNITY"
+    );
 
     deps.scheduleControl.createSchedule = vi
       .fn()
@@ -122,7 +159,7 @@ describe("syncGovernanceSchedules", () => {
       );
     deps.scheduleControl.describeSchedule = vi
       .fn()
-      .mockResolvedValue(runningDesc);
+      .mockResolvedValue(matchingDesc);
 
     const config = makeConfig([
       { charter: "COMMUNITY", cron: "0 */6 * * *", entrypoint: "COMMUNITY" },
@@ -132,16 +169,82 @@ describe("syncGovernanceSchedules", () => {
 
     expect(result.skipped).toEqual(["governance:community"]);
     expect(result.created).toEqual([]);
+    expect(result.updated).toEqual([]);
+    expect(deps.scheduleControl.updateSchedule).not.toHaveBeenCalled();
     expect(deps.scheduleControl.resumeSchedule).not.toHaveBeenCalled();
   });
 
-  it("resumes schedule when it exists but is paused", async () => {
-    const pausedDesc: ScheduleDescription = {
-      scheduleId: "governance:community",
-      nextRunAtIso: null,
-      lastRunAtIso: null,
-      isPaused: true,
-    };
+  it("updates schedule when config has changed (model drift)", async () => {
+    const driftedDesc = makeDriftedDesc(
+      "governance:community",
+      "0 */6 * * *",
+      "COMMUNITY"
+    );
+
+    deps.scheduleControl.createSchedule = vi
+      .fn()
+      .mockRejectedValue(
+        new ScheduleControlConflictError("governance:community")
+      );
+    deps.scheduleControl.describeSchedule = vi
+      .fn()
+      .mockResolvedValue(driftedDesc);
+
+    const config = makeConfig([
+      { charter: "COMMUNITY", cron: "0 */6 * * *", entrypoint: "COMMUNITY" },
+    ]);
+
+    const result = await syncGovernanceSchedules(config, deps);
+
+    expect(result.updated).toEqual(["governance:community"]);
+    expect(result.skipped).toEqual([]);
+    expect(deps.scheduleControl.updateSchedule).toHaveBeenCalledWith(
+      "governance:community",
+      expect.objectContaining({
+        input: { message: "COMMUNITY", model: "deepseek-v3.2" },
+      })
+    );
+    // Running schedule — should not be resumed
+    expect(deps.scheduleControl.resumeSchedule).not.toHaveBeenCalled();
+  });
+
+  it("updates and resumes a paused schedule with changed config", async () => {
+    const driftedPaused = makeDriftedDesc(
+      "governance:community",
+      "0 */6 * * *",
+      "COMMUNITY",
+      { isPaused: true }
+    );
+
+    deps.scheduleControl.createSchedule = vi
+      .fn()
+      .mockRejectedValue(
+        new ScheduleControlConflictError("governance:community")
+      );
+    deps.scheduleControl.describeSchedule = vi
+      .fn()
+      .mockResolvedValue(driftedPaused);
+
+    const config = makeConfig([
+      { charter: "COMMUNITY", cron: "0 */6 * * *", entrypoint: "COMMUNITY" },
+    ]);
+
+    const result = await syncGovernanceSchedules(config, deps);
+
+    expect(result.updated).toEqual(["governance:community"]);
+    expect(deps.scheduleControl.updateSchedule).toHaveBeenCalledOnce();
+    expect(deps.scheduleControl.resumeSchedule).toHaveBeenCalledWith(
+      "governance:community"
+    );
+  });
+
+  it("resumes paused schedule when config matches", async () => {
+    const pausedDesc = makeMatchingDesc(
+      "governance:community",
+      "0 */6 * * *",
+      "COMMUNITY",
+      { isPaused: true }
+    );
 
     deps.scheduleControl.createSchedule = vi
       .fn()
@@ -162,6 +265,7 @@ describe("syncGovernanceSchedules", () => {
     expect(deps.scheduleControl.resumeSchedule).toHaveBeenCalledWith(
       "governance:community"
     );
+    expect(deps.scheduleControl.updateSchedule).not.toHaveBeenCalled();
   });
 
   it("pauses stale governance schedules not in config", async () => {
@@ -212,22 +316,22 @@ describe("syncGovernanceSchedules", () => {
     const result1 = await syncGovernanceSchedules(config, deps);
     expect(result1.created).toEqual(["governance:community"]);
 
-    // Second call: schedule exists now
+    // Second call: schedule exists now with matching config
     deps.scheduleControl.createSchedule = vi
       .fn()
       .mockRejectedValue(
         new ScheduleControlConflictError("governance:community")
       );
-    deps.scheduleControl.describeSchedule = vi.fn().mockResolvedValue({
-      scheduleId: "governance:community",
-      nextRunAtIso: "2026-02-15T06:00:00Z",
-      lastRunAtIso: null,
-      isPaused: false,
-    } satisfies ScheduleDescription);
+    deps.scheduleControl.describeSchedule = vi
+      .fn()
+      .mockResolvedValue(
+        makeMatchingDesc("governance:community", "0 */6 * * *", "COMMUNITY")
+      );
 
     const result2 = await syncGovernanceSchedules(config, deps);
     expect(result2.skipped).toEqual(["governance:community"]);
     expect(result2.created).toEqual([]);
+    expect(result2.updated).toEqual([]);
   });
 
   it("returns empty result for config with no schedules", async () => {
@@ -236,6 +340,7 @@ describe("syncGovernanceSchedules", () => {
     const result = await syncGovernanceSchedules(config, deps);
 
     expect(result.created).toEqual([]);
+    expect(result.updated).toEqual([]);
     expect(result.skipped).toEqual([]);
     expect(result.resumed).toEqual([]);
     expect(result.paused).toEqual([]);

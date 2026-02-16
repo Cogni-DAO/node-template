@@ -71,6 +71,7 @@ describe("POST /api/internal/ops/governance/schedules/sync", () => {
     });
     runGovernanceSchedulesSyncJob.mockResolvedValue({
       created: 2,
+      updated: 0,
       resumed: 1,
       skipped: 0,
       paused: 1,
@@ -143,6 +144,7 @@ describe("POST /api/internal/ops/governance/schedules/sync", () => {
     const parsed = GovernanceSchedulesSyncSummarySchema.parse(body);
     expect(parsed).toEqual({
       created: 2,
+      updated: 0,
       resumed: 1,
       skipped: 0,
       paused: 1,

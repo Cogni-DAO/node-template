@@ -256,7 +256,7 @@ describe("Governance Schedule Sync Job (Stack)", () => {
       .update(
         JSON.stringify({
           graphId: "sandbox:openclaw",
-          input: { message: "GOVERN", model: "gpt-4o-mini" },
+          input: { message: "GOVERN", model: "deepseek-v3.2" },
         }),
         "utf8"
       )

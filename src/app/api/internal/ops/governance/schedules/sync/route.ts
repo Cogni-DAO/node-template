@@ -85,6 +85,7 @@ export const POST = wrapRouteHandlerWithLogging(
         durationMs,
         outcome: "success",
         created: summary.created,
+        updated: summary.updated,
         resumed: summary.resumed,
         skipped: summary.skipped,
         paused: summary.paused,

@@ -157,9 +157,9 @@
   },
   "agents": {
     "defaults": {
-      "model": { "primary": "cogni/llama-3.3-70b" },
+      "model": { "primary": "cogni/deepseek-v3.2" },
       "subagents": {
-        "model": "cogni/llama-3.3-70b",
+        "model": "cogni/gpt-4o-mini",
         "maxConcurrent": 3,
         "archiveAfterMinutes": 30
       },
@@ -199,12 +199,35 @@
       }
     },
     "list": [
-      { "id": "main", "default": true, "workspace": "/workspace/gateway" }
+      {
+        "id": "main",
+        "default": true,
+        "workspace": "/workspace/gateway",
+        "subagents": {
+          "allowAgents": ["*"]
+        }
+      }
     ]
   },
   "skills": {
     "load": {
       "extraDirs": ["/repo/current/.openclaw/skills"]
+    }
+  },
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "groupPolicy": "open",
+      "accounts": {
+        "default": {
+          "token": "${DISCORD_BOT_TOKEN}"
+        }
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "discord": { "enabled": true }
     }
   },
   "tools": {
@@ -214,10 +237,8 @@
       "cron",
       "gateway",
       "nodes",
-      "sessions_send",
       "sessions_list",
-      "sessions_history",
-      "message"
+      "sessions_history"
     ]
   },
   "cron": { "enabled": false },

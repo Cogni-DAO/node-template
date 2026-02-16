@@ -18,6 +18,7 @@ import { z } from "zod";
 
 export const GovernanceSchedulesSyncSummarySchema = z.object({
   created: z.number().int().min(0),
+  updated: z.number().int().min(0),
   resumed: z.number().int().min(0),
   skipped: z.number().int().min(0),
   paused: z.number().int().min(0),
