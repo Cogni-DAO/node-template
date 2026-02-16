@@ -32,8 +32,8 @@ import type {
   aiActivityOperation,
   TimeRange,
 } from "@/contracts/ai.activity.v1.contract";
-import { creditsToUsd } from "@/core";
 import { useGovernanceStatus } from "@/features/governance/hooks/useGovernanceStatus";
+import { creditsToUsd } from "@/features/payments/public";
 import { fetchGovernanceActivity } from "./_api/fetchGovernanceActivity";
 
 export function GovernanceView(): ReactElement {
