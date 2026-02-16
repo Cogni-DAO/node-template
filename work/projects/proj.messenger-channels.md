@@ -44,6 +44,8 @@ The existing gateway compose service needs channel sections enabled in its confi
 | Add `OPENCLAW_STATE_DIR` volume mount in gateway compose for persistent channel auth state                        | Not Started | 1   | task.0041 |
 | Namespace state dirs by accountId — each account's auth state in `${STATE_DIR}/channels/${channel}/${accountId}/` | Not Started | 1   | —         |
 | Verify gateway restarts reconnect Discord (bot token) automatically                                               | Not Started | 1   | task.0041 |
+| Dedicated Discord community agent — separate agent with bindings, workspace, cost-effective model                 | Not Started | 2   | task.0076 |
+| Governance scheduled runs post status updates to `#continuous-cogni-updates` Discord channel                      | Not Started | 2   | task.0075 |
 
 #### 3 Proxy Endpoints (Cogni → OpenClaw Gateway)
 
@@ -88,6 +90,7 @@ Single Next.js page showing connected channels with connect/disconnect actions.
 | Rate limits on connect/disconnect endpoints (prevent QR abuse, token brute-force)                                                                                               | Not Started | 1   | (create at P1 start) |
 | Audit log: connect/disconnect events recorded with timestamp + billingAccountId + channel + accountId                                                                           | Not Started | 1   | (create at P1 start) |
 | Health poll: periodic `channels.status` probe, push alerts to observability if account disconnects unexpectedly                                                                 | Not Started | 1   | (create at P1 start) |
+| Discord billing user attribution — propagate Discord user ID into LLM proxy billing metadata                                                                                    | Not Started | 2   | task.0077            |
 
 ### Run (P2+) — Cogni-Mediated Messaging + Cloud API + Scaling
 

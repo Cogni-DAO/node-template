@@ -553,7 +553,7 @@ Deferred to later:
 
 ## PR / Links
 
-- Handoff: [task.0070.handoff.md](../handoffs/task.0070.handoff.md) (updated 2026-02-16 after checkpoint 1)
+- Handoff: [task.0070.handoff.md](../handoffs/task.0070.handoff.md) (updated 2026-02-16 — all checkpoints done, activity charts remaining)
 
 ## Attribution
 
