@@ -41,8 +41,14 @@ Run `./queries.sh <command>` from this directory:
 
 - **cost** - LLM spend in last hour (USD)
 - **tokens** - Total tokens consumed (last hour)
-- **errors** - LLM error count (last hour)
+- **errors** - LLM error count (last hour, alias for llm-errors)
+- **llm-errors** - LLM-specific error count (last hour)
 - **breakdown** - Cost/tokens by provider
+
+### Error Visibility
+
+- **http-errors** - HTTP 4xx/5xx errors by route with error rate
+- **log-errors** - Warn/error log counts by service (from Loki)
 
 ### Alerts & Incidents
 
@@ -91,7 +97,20 @@ scheduler-worker:
 === Aggregate Metrics ===
 LLM Cost (1h): $0.05
 Tokens (1h): 12450
-Errors (1h): 0
+LLM Errors (1h): 0
+
+=== HTTP Errors ===
+HTTP Errors (1h):
+  4xx: 24
+    graphs.run.internal: 20
+    ai.chat: 4
+  5xx: 0
+  Error Rate: 8.2%
+
+=== Log Errors ===
+Log Errors (1h):
+  scheduler-worker: 20
+  app: 4
 
 === Cost Breakdown ===
   OpenRouter: $0.045
@@ -117,6 +136,10 @@ Note: Alerts & incidents not configured yet
 - OOM events >0 = critical, service was killed
 - Cost spikes = investigate model usage
 - Empty services list = metric collection failure
+- HTTP 4xx on internal routes = config issue (model, grant, input validation)
+- HTTP 5xx > 0 = service error, investigate immediately
+- HTTP error rate > 5% = concerning, check route breakdown
+- Log errors in scheduler-worker = likely governance run failures
 
 **v0 Known Issues:**
 

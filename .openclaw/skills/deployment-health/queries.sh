@@ -3,7 +3,7 @@
 # Usage: ./queries.sh <command>
 # Env vars: DEPLOY_ENV (production|preview, default: production)
 #           TIME_WINDOW (1h|6h|24h, default: 1h)
-# Commands: cost, tokens, errors, memory, alerts, incidents, deployments, all
+# Commands: cost, tokens, errors, http-errors, log-errors, memory, alerts, incidents, deployments, all
 
 set -euo pipefail
 
@@ -30,6 +30,14 @@ prom_query() {
     --data-urlencode "query=${query}"
 }
 
+# Helper: Query Loki instant
+loki_query() {
+  local query="$1"
+  curl -s -G "${GRAFANA_URL}/api/datasources/uid/${LOKI_UID}/resources/loki/api/v1/query" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    --data-urlencode "query=${query}"
+}
+
 # Helper: Extract single value
 extract_value() {
   jq -r '.data.result[0].value[1] // "0"'
@@ -51,11 +59,53 @@ cmd_tokens() {
   echo ""
 }
 
-cmd_errors() {
-  echo -n "Errors (${TIME_WINDOW}): "
+cmd_llm_errors() {
+  echo -n "LLM Errors (${TIME_WINDOW}): "
   prom_query "sum(increase(ai_llm_errors_total{env=\"${ENV}\"}[${TIME_WINDOW}]))" \
     | extract_value | awk '{printf "%.0f", $1}'
   echo ""
+}
+
+# Legacy alias
+cmd_errors() {
+  cmd_llm_errors
+}
+
+cmd_http_errors() {
+  echo "HTTP Errors (${TIME_WINDOW}):"
+
+  # 4xx total
+  echo -n "  4xx: "
+  prom_query "sum(increase(http_requests_total{env=\"${ENV}\", status=\"4xx\"}[${TIME_WINDOW}]))" \
+    | extract_value | awk '{printf "%.0f", $1}'
+  echo ""
+
+  # 4xx breakdown by route (top offenders, skip zeros)
+  prom_query "topk(5, sum by (route) (increase(http_requests_total{env=\"${ENV}\", status=\"4xx\"}[${TIME_WINDOW}])))" \
+    | jq -r '.data.result[] | select((.value[1] | tonumber) > 0) | "    \(.metric.route): \(.value[1] | tonumber | floor)"'
+
+  # 5xx total
+  echo -n "  5xx: "
+  prom_query "sum(increase(http_requests_total{env=\"${ENV}\", status=\"5xx\"}[${TIME_WINDOW}]))" \
+    | extract_value | awk '{printf "%.0f", $1}'
+  echo ""
+
+  # 5xx breakdown by route (top offenders, skip zeros)
+  prom_query "topk(5, sum by (route) (increase(http_requests_total{env=\"${ENV}\", status=\"5xx\"}[${TIME_WINDOW}])))" \
+    | jq -r '.data.result[] | select((.value[1] | tonumber) > 0) | "    \(.metric.route): \(.value[1] | tonumber | floor)"'
+
+  # Overall error rate
+  echo -n "  Error Rate: "
+  prom_query "sum(increase(http_requests_total{env=\"${ENV}\", status=~\"4xx|5xx\"}[${TIME_WINDOW}])) / sum(increase(http_requests_total{env=\"${ENV}\"}[${TIME_WINDOW}])) * 100" \
+    | extract_value | awk '{printf "%.1f%%", $1}'
+  echo ""
+}
+
+cmd_log_errors() {
+  echo "Log Errors (${TIME_WINDOW}):"
+  # Count level>=40 (warn+error) logs per service
+  loki_query "sum by (service) (count_over_time({app=\"cogni-template\", env=\"${ENV}\"} | json | level >= 40 [${TIME_WINDOW}]))" \
+    | jq -r '.data.result[] | "  \(.metric.service): \(.value[1])"'
 }
 
 cmd_memory() {
@@ -94,7 +144,7 @@ cmd_services() {
   echo "Services:"
   # Get unique container names from cAdvisor metrics
   prom_query 'count by (container) (container_memory_working_set_bytes{container!=""})' \
-    | jq -r '.data.result[] | "  ✓ \(.metric.container)"' | sort
+    | jq -r '.data.result[] | "  \(.metric.container)"' | sort
 }
 
 cmd_service_health() {
@@ -143,7 +193,13 @@ cmd_all() {
   echo "=== Aggregate Metrics ==="
   cmd_cost
   cmd_tokens
-  cmd_errors
+  cmd_llm_errors
+  echo ""
+  echo "=== HTTP Errors ==="
+  cmd_http_errors
+  echo ""
+  echo "=== Log Errors ==="
+  cmd_log_errors
   echo ""
   echo "=== Cost Breakdown ==="
   cmd_cost_breakdown
@@ -164,6 +220,9 @@ case "$CMD" in
   cost) cmd_cost ;;
   tokens) cmd_tokens ;;
   errors) cmd_errors ;;
+  llm-errors) cmd_llm_errors ;;
+  http-errors) cmd_http_errors ;;
+  log-errors) cmd_log_errors ;;
   memory) cmd_memory ;;
   alerts) cmd_alerts ;;
   incidents) cmd_incidents ;;
@@ -174,7 +233,7 @@ case "$CMD" in
   all) cmd_all ;;
   *)
     echo "Unknown command: $CMD"
-    echo "Available: cost, tokens, errors, memory, alerts, incidents, deployments, services, health, breakdown, all"
+    echo "Available: cost, tokens, errors, llm-errors, http-errors, log-errors, memory, alerts, incidents, deployments, services, health, breakdown, all"
     exit 1
     ;;
 esac

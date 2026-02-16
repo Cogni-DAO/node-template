@@ -38,6 +38,19 @@ When invoked, run a health check and provide a concise report covering:
 - LLM error count (last hour)
 - Cost/tokens breakdown by provider
 
+### HTTP Traffic
+
+- Query ALL routes dynamically — do not hardcode route names
+- Use PromQL: `sum by (route, status) (increase(http_requests_total{app="cogni-template", env="production"}[1h]))`
+- Show as a table: route, 2xx count, 4xx count, 5xx count
+- Calculate overall error rate: `(4xx + 5xx) / total * 100`
+- Flag any route with >0 errors
+
+### Log Errors
+
+- Error/warn log counts by service (level >= 40) — dynamically discovers all services
+- Use LogQL: `sum by (service) (count_over_time({app="cogni-template", env="production"} | json | level >= 40 [1h]))`
+
 ### Alerts & Incidents
 
 - Active alert rules status
@@ -63,13 +76,21 @@ scheduler-worker:
 === Aggregate Metrics ===
 LLM Cost (1h): $0.05
 Tokens (1h): 12450
-Errors (1h): 0
+LLM Errors (1h): 0
 
 === Cost Breakdown ===
   OpenRouter: $0.045
 
-Tokens by Provider:
-  OpenRouter: 11200 tokens
+=== HTTP Traffic (1h) ===
+Route                      2xx   4xx   5xx
+ai.chat                     42     0     0
+graphs.run.internal          0    16     0
+schedules.crud                3     1     0
+Error Rate: 8.2%
+
+=== Log Errors (1h, level >= 40) ===
+  scheduler-worker: 16
+  app: 2
 
 === Alerts & Incidents ===
 Active Alerts: 0
@@ -83,6 +104,10 @@ Recent Deployments (24h): 2
 - OOM events >0 = critical, service was killed
 - Cost spikes = investigate model usage
 - Empty services list = metric collection failure
+- 4xx on internal routes (e.g. `graphs.run.internal`) = config issue (model, grant, validation)
+- 5xx on any route = service error, investigate immediately
+- Error rate >5% = concerning, check log errors for root cause
+- Log errors in `scheduler-worker` = likely governance execution failures
 
 ## Usage Context
 
