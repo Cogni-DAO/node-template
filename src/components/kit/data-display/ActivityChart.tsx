@@ -94,7 +94,7 @@ export function ActivityChart({
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         <ChartContainer config={config} className="aspect-auto h-64 w-full">
-          <BarChart data={data}>
+          <BarChart data={data} barCategoryGap="10%">
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="date"

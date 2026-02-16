@@ -39,13 +39,13 @@ export const STEP_MS: Record<ActivityStep, number> = {
 };
 
 /**
- * Maximum allowed range (in ms) for each step to enforce maxPoints cap (~240 buckets).
+ * Maximum allowed range (in ms) for each step to enforce maxPoints cap (~48 buckets).
  */
 export const MAX_RANGE_FOR_STEP: Record<ActivityStep, number> = {
-  "5m": 20 * 60 * 60 * 1000, // 20 hours (240 buckets)
-  "15m": 60 * 60 * 60 * 1000, // 60 hours / 2.5 days (240 buckets)
-  "1h": 10 * 24 * 60 * 60 * 1000, // 10 days (240 buckets)
-  "6h": 60 * 24 * 60 * 60 * 1000, // 60 days (240 buckets)
+  "5m": 4 * 60 * 60 * 1000, // 4 hours (48 buckets)
+  "15m": 12 * 60 * 60 * 1000, // 12 hours (48 buckets)
+  "1h": 2 * 24 * 60 * 60 * 1000, // 2 days (48 buckets)
+  "6h": 12 * 24 * 60 * 60 * 1000, // 12 days (48 buckets)
   "1d": 90 * 24 * 60 * 60 * 1000, // 90 days (max range, 90 buckets)
 };
 
