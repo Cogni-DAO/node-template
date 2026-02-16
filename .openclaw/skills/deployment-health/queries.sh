@@ -10,6 +10,8 @@ set -euo pipefail
 # Load from workspace env (required, no defaults)
 : "${GRAFANA_URL:?GRAFANA_URL not set - run /env-update}"
 : "${GRAFANA_SERVICE_ACCOUNT_TOKEN:?GRAFANA_SERVICE_ACCOUNT_TOKEN not set - run /env-update}"
+# Remove trailing slash to prevent double slash in URLs
+GRAFANA_URL="${GRAFANA_URL%/}"
 TOKEN="${GRAFANA_SERVICE_ACCOUNT_TOKEN}"
 
 # Environment selection (production or preview)
@@ -194,6 +196,16 @@ cmd_all() {
   cmd_cost
   cmd_tokens
   cmd_llm_errors
+  echo ""
+  echo "=== Data Quality Notes ==="
+  echo "⚠️  Known bug.0037: Streaming (SSE) completions miss cost header, leading to undercounting."
+  echo "   - Affects sandbox:openclaw calls (gateway proxy billing)."
+  echo "   - If cost per 1k tokens is abnormally low (< \$0.001), cost data may be incomplete."
+  echo "   - Real cost for DeepSeek V3.2 is expected to be ~\$0.14–0.50 per 1k tokens."
+  echo ""
+  echo "✅ Metrics source: Prometheus (ai_llm_cost_usd_total, ai_llm_tokens_total)"
+  echo "✅ Provider label: 'litellm' (generic)."
+  echo "✅ Model class: derived from model catalog (free vs standard)."
   echo ""
   echo "=== HTTP Errors ==="
   cmd_http_errors
