@@ -16,10 +16,10 @@ import type { ChartConfig } from "@/components/vendor/shadcn/chart";
 /** Palette for per-group bar colors — theme chart vars at 70% for a subdued look. */
 const GROUP_COLORS = [
   "hsl(var(--chart-1) / 0.7)", // blue
-  "hsl(var(--chart-2) / 0.7)", // teal
   "hsl(var(--chart-3) / 0.7)", // amber
   "hsl(var(--chart-4) / 0.7)", // purple
   "hsl(var(--chart-5) / 0.7)", // rose
+  "hsl(var(--chart-2) / 0.7)", // teal
   "hsl(var(--chart-3) / 0.35)", // Others — faded amber
 ] as const;
 
