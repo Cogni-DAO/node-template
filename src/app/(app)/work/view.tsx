@@ -44,6 +44,27 @@ const STATUS_ORDER: Record<string, number> = {
   Complete: 5,
 };
 
+function priorityPill(pri: number | undefined): string {
+  if (pri === 0) return "bg-danger/15 text-danger";
+  if (pri === 1) return "bg-primary/15 text-primary-foreground";
+  if (pri !== undefined) return "bg-muted text-muted-foreground";
+  return "bg-muted text-muted-foreground";
+}
+
+/** Soft-tinted pill classes: bg at 15% opacity + matching text color */
+const STATUS_PILL: Record<string, string> = {
+  "In Progress": "bg-primary/15 text-primary-foreground",
+  InProgress: "bg-primary/15 text-primary-foreground",
+  Active: "bg-primary/15 text-primary-foreground",
+  Todo: "bg-warning/15 text-warning",
+  Blocked: "bg-danger/15 text-danger",
+  Backlog: "bg-muted text-muted-foreground",
+  Done: "bg-success/15 text-success",
+  Archived: "bg-muted text-muted-foreground",
+  Complete: "bg-success/15 text-success",
+  Paused: "bg-muted text-muted-foreground",
+};
+
 function sortItems(items: WorkItem[]): WorkItem[] {
   return [...items].sort((a, b) => {
     // Priority ascending (undefined last)
@@ -225,12 +246,12 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">Pri</TableHead>
-              <TableHead className="w-10">Est</TableHead>
-              <TableHead className="w-24">ID</TableHead>
+              <TableHead className="w-14">Pri</TableHead>
+              <TableHead className="w-12">Est</TableHead>
+              <TableHead className="w-28">ID</TableHead>
               <TableHead>Title</TableHead>
-              <TableHead className="w-24">Status</TableHead>
-              <TableHead className="w-24">Updated</TableHead>
+              <TableHead className="w-28">Status</TableHead>
+              <TableHead className="w-28">Updated</TableHead>
               <TableHead>Branch</TableHead>
             </TableRow>
           </TableHeader>
@@ -247,8 +268,12 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
             ) : (
               filtered.map((item) => (
                 <TableRow key={item.path}>
-                  <TableCell className="text-center text-xs">
-                    {item.priority ?? "\u2014"}
+                  <TableCell className="text-center">
+                    <span
+                      className={`inline-flex w-8 justify-center rounded-md px-2 py-1 font-medium text-xs ${priorityPill(item.priority)}`}
+                    >
+                      {item.priority ?? "\u2014"}
+                    </span>
                   </TableCell>
                   <TableCell className="text-center text-xs">
                     {item.estimate ?? "\u2014"}
@@ -259,8 +284,18 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
                   <TableCell className="text-sm">
                     {item.title || "\u2014"}
                   </TableCell>
-                  <TableCell className="text-xs">
-                    {item.status || "\u2014"}
+                  <TableCell>
+                    {item.status ? (
+                      <span
+                        className={`inline-flex w-24 justify-center rounded-md px-2 py-1 text-center font-medium text-xs ${STATUS_PILL[item.status] ?? "bg-muted text-muted-foreground"}`}
+                      >
+                        {item.status}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">
+                        {"\u2014"}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {item.updated || item.created || "\u2014"}
