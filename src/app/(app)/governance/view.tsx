@@ -64,19 +64,19 @@ export function GovernanceView(): ReactElement {
   return (
     <div className="mx-auto flex max-w-[var(--max-width-container-screen)] flex-col gap-8 p-4 md:p-8 lg:px-16">
       <h1 className="font-bold text-3xl tracking-tight">
-        DAO Governance Status
+        Cogni System Activity
       </h1>
 
       {/* Stats row */}
       <div className="grid gap-4 md:grid-cols-2">
-        <SectionCard title="Credit Balance">
+        <SectionCard title="System Credit Balance">
           <span className="font-bold text-4xl">
             {Number(data.systemCredits).toLocaleString()}
           </span>
           <span className="ml-2 text-lg text-muted-foreground">credits</span>
         </SectionCard>
 
-        <SectionCard title="Next Governance Run">
+        <SectionCard title="Next Scheduled Run">
           {data.nextRunAt ? (
             <>
               <span className="font-bold text-4xl">
@@ -101,12 +101,14 @@ export function GovernanceView(): ReactElement {
 
       {/* Recent Runs table */}
       <div className="space-y-4">
-        <h2 className="font-semibold text-xl tracking-tight">Recent Runs</h2>
+        <h2 className="font-semibold text-xl tracking-tight">
+          Recent Activity
+        </h2>
         {data.recentRuns.length === 0 ? (
           <div className="rounded-lg border bg-card p-12 text-center">
-            <p className="text-muted-foreground">No governance runs yet</p>
+            <p className="text-muted-foreground">No recent activity</p>
             <p className="mt-2 text-muted-foreground text-sm">
-              Runs will appear here once the governance council executes.
+              System activity will appear here once scheduled runs execute.
             </p>
           </div>
         ) : (
