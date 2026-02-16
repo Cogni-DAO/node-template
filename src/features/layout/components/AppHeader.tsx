@@ -67,6 +67,7 @@ export function AppHeader(): ReactElement {
               aria-label="Primary"
             >
               <NavigationLink href="/chat">Chat</NavigationLink>
+              <NavigationLink href="/work">Work</NavigationLink>
               <NavigationLink href="/activity">Activity</NavigationLink>
               <NavigationLink href="/credits">Credits</NavigationLink>
               <NavigationLink href="/sourcecred/">SourceCred</NavigationLink>
