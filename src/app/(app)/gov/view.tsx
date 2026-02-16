@@ -27,16 +27,14 @@ import {
   TableHeader,
   TableRow,
   TimeRangeSelector,
+  ToggleGroup,
+  ToggleGroupItem,
 } from "@/components";
 import { ActivityChart } from "@/components/kit/data-display/ActivityChart";
 import {
   buildAggregateChartData,
   buildGroupedChartData,
 } from "@/components/kit/data-display/activity-chart-utils";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/vendor/shadcn/toggle-group";
 import type {
   ActivityGroupBy,
   aiActivityOperation,
@@ -60,7 +58,8 @@ export function GovernanceView(): ReactElement {
     error: activityError,
   } = useQuery({
     queryKey: ["governance-activity", range, groupBy],
-    queryFn: () => fetchGovernanceActivity({ range, groupBy }),
+    queryFn: () =>
+      fetchGovernanceActivity({ range, ...(groupBy && { groupBy }) }),
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     retry: 2,

@@ -99,6 +99,7 @@ export {
   TableHeader,
   TableRow,
 } from "./vendor/shadcn/table";
+export { ToggleGroup, ToggleGroupItem } from "./vendor/shadcn/toggle-group";
 export {
   Tooltip,
   TooltipContent,

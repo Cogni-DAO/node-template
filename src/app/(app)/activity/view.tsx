@@ -4,8 +4,8 @@
 /**
  * Module: `@app/(app)/activity/view`
  * Purpose: Client-side view for Activity dashboard with URL-driven time range and groupBy toggle.
- * Scope: Manages time range and groupBy in URL, fetches data via React Query, renders charts and table. Does not implement business logic.
- * Invariants: Time range and groupBy persist in URL searchParams, refetches on change
+ * Scope: Manages time range in URL and groupBy in component state, fetches data via React Query, renders charts and table. Does not implement business logic.
+ * Invariants: Time range persists in URL searchParams; groupBy in component state; refetches on change
  * Side-effects: IO
  * Links: [ActivityChart](../../../components/kit/data-display/ActivityChart.tsx), [fetchActivity](./_api/fetchActivity.ts)
  * @public
@@ -16,17 +16,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { TimeRangeSelector } from "@/components";
+import { TimeRangeSelector, ToggleGroup, ToggleGroupItem } from "@/components";
 import { ActivityChart } from "@/components/kit/data-display/ActivityChart";
 import { ActivityTable } from "@/components/kit/data-display/ActivityTable";
 import {
   buildAggregateChartData,
   buildGroupedChartData,
 } from "@/components/kit/data-display/activity-chart-utils";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/vendor/shadcn/toggle-group";
 import type {
   ActivityGroupBy,
   TimeRange,
@@ -41,7 +37,7 @@ export function ActivityView() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["activity", range, groupBy],
-    queryFn: () => fetchActivity({ range, groupBy }),
+    queryFn: () => fetchActivity({ range, ...(groupBy && { groupBy }) }),
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     retry: 2,

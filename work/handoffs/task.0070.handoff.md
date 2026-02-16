@@ -4,80 +4,72 @@ type: handoff
 work_item_id: task.0070
 status: active
 created: 2026-02-16
-updated: 2026-02-16
-branch: feat/gov-dashboard
-last_commit: 982e1b2e
+updated: 2026-02-17
+branch: feat/bar-charts
+last_commit: b63bd2f5
 ---
 
-# Handoff: DAO Governance Status Dashboard
+# Handoff: Activity Bar Charts + Per-Model/Agent Breakdown
 
 ## Context
 
-- **Goal**: User-facing `/governance` page showing system tenant governance health for DAO transparency
-- **NOT** an ops monitoring tool — this is public DAO visibility, not incident prevention
-- **Displays**: Credit balance (hero number), next governance run time, recent 10 runs (table)
-- **Architecture**: Strict hexagonal — Route → Feature Service → Ports (AccountService + GovernanceStatusPort) → Drizzle Adapter
-- **Spec**: [governance-status-api.md](../../docs/spec/governance-status-api.md)
+- **Goal**: Replace wavy line charts with stacked bar charts on `/activity` and `/gov`, matching OpenRouter's dashboard style
+- **Extends task.0070**: The governance dashboard was built on `feat/gov-dashboard` (merged as #430). This branch (`feat/bar-charts`) adds the chart redesign on top of staging
+- **Scope**: Both `/activity` (user's own usage) and `/gov` (system tenant usage) get identical chart upgrades
+- **Key feature**: Toggle between "By Model" and "By Agent" to see per-model or per-graphId usage breakdown in stacked bars
+- **Data already existed**: `llm_charge_details` table has `model` and `graphId` columns — the facade just needed to group by them
 
 ## Current State
 
-**All 6 implementation checkpoints complete** (commits c22ee70c → 982e1b2e):
-
-- ✅ Port & Contract (`governance-status.port.ts`, `governance.status.v1.contract.ts`)
-- ✅ Drizzle adapter (`drizzle-governance-status.adapter.ts`) — queries `schedules` + `ai_threads`
-- ✅ Feature service (`get-governance-status.ts`) — orchestrates AccountService + GovernanceStatusPort
-- ✅ Container wiring (`container.ts` → `governanceStatus` property)
-- ✅ API route (`GET /api/v1/governance/status` — auth required, contract validated)
-- ✅ UI (page + view + React Query hook with 30s polling)
-- ✅ Unit tests (5/5 passing)
-- ✅ UI refactor: proper skeleton loading, error state, Table components, hero number display
-
-**Not started — requested by owner:**
-
-- ❌ Activity metrics charts (spend/tokens/requests) scoped to the governance agent account
-- This requires a new `/api/v1/governance/activity` endpoint reusing the existing `getActivity()` facade from `src/app/_facades/ai/activity.server.ts` but scoped to `COGNI_SYSTEM_PRINCIPAL_USER_ID` instead of the session user
-- The `ActivityChart` component from `src/components/kit/data-display/ActivityChart.tsx` would be reused on the governance view
-- A `TimeRangeSelector` would be added for chart period control
-
-**Not validated:**
-
-- ❌ Manual validation (requires `pnpm dev:stack` → navigate to `/governance`)
+- ✅ `ActivityChart` component: `AreaChart` → `BarChart` with stacked bars, dynamic series from config keys
+- ✅ Contract: `ActivityGroupBySchema` (`"model" | "graphId"`) input, `groupedSeries` optional output
+- ✅ Facade: `buildGroupedSeries()` groups receipts by dimension, ranks by spend, caps at top 5 + "Others", zero-fills
+- ✅ API routes: both `/api/v1/activity` and `/api/v1/governance/activity` accept `?groupBy=model|graphId`
+- ✅ Client fetchers: `fetchActivity()` and `fetchGovernanceActivity()` forward `groupBy`
+- ✅ Views: `ToggleGroup` control ("By Model" / "By Agent") on both pages, React Query key includes `groupBy`
+- ✅ Utility: `activity-chart-utils.ts` — pure transforms from `groupedSeries` to recharts flat data + `ChartConfig`
+- ✅ Types pass (`tsc --noEmit`), lint passes (biome), doc headers updated
+- ❌ No tests written for `buildGroupedSeries` or `buildGroupedChartData`
+- ❌ No manual validation (requires `pnpm dev:stack`)
+- ❌ No PR created yet
 
 ## Decisions Made
 
-- Port-based design even for single caller (hexagonal compliance) — [spec](../../docs/spec/governance-status-api.md)
-- `AccountService.getBalance()` returns `number` (not bigint) — contract uses `z.string()` via `.toString()` for future-proofing
-- System tenant scoping: all adapter queries filter by `COGNI_SYSTEM_PRINCIPAL_USER_ID` constant
-- UI layout: standard dashboard pattern (`max-w-[var(--max-width-container-screen)]`), not `PageContainer`
-- 30s React Query polling (governance runs are infrequent)
+- Stacked bar chart (not grouped bar) — matches OpenRouter's visual style, shows relative contribution
+- Top 5 groups + "Others" bucket — prevents legend/color explosion with many models
+- Groups ranked by total spend descending — most expensive model is always at bottom of stack
+- `groupBy` is optional — omitting it returns the existing aggregate `chartSeries` (backwards compatible)
+- `groupedSeries` uses numeric `spend` (not decimal string) — simpler for chart rendering, aggregate `chartSeries` keeps decimal strings for precision
+- Toggle defaults to `"model"` (most useful breakdown for cost tracking)
+- `activity-chart-utils.ts` sanitizes group names for CSS variable keys via `toDataKey()`
 
 ## Next Actions
 
-- [ ] Add activity charts for governance account (new endpoint + reuse ActivityChart + TimeRangeSelector)
-- [ ] Manual validation: `pnpm dev:stack` → `/governance` → verify all sections render
+- [ ] Manual validation: `pnpm dev:stack` → navigate to `/activity` and `/gov` → verify bar charts render
+- [ ] Verify the toggle switches between model and agent breakdown correctly
+- [ ] Add unit tests for `buildGroupedSeries` (facade) and `buildGroupedChartData` (utils)
 - [ ] Run `/review-implementation` for code review
-- [ ] Create PR via `/pull-request`
+- [ ] Create PR via `/pull-request` targeting `staging`
 
 ## Risks / Gotchas
 
-- `docs/spec/streaming-status.md` has unstaged changes on this branch unrelated to governance — exclude from PR scope
-- `getActivity()` facade is tightly coupled to `sessionUser` — to reuse for governance charts, pass a synthetic session user with `id = COGNI_SYSTEM_PRINCIPAL_USER_ID` and `walletAddress = ""` (the facade only uses `id` for account lookup)
-- `ai_threads.metadata` is JSONB with optional `title` field — cast as `{ title?: string }` when accessing
-- Adapter queries are not RLS-scoped (uses `getAppDb()` directly) — works because queries explicitly filter by system tenant user ID
+- The facade caps receipts at 1000 (existing limitation) — heavy users may see truncated breakdown
+- `ToggleGroup` from shadcn fires `onValueChange("")` when deselecting — the handler maps empty string to `undefined` to fall back to aggregate mode
+- Group colors are hardcoded in `GROUP_COLORS` array (6 colors) — if `MAX_GROUPS` changes, palette needs extending
+- `toDataKey()` replaces non-alphanumeric chars with `_` — two models differing only in special chars could collide (unlikely in practice)
 
 ## Pointers
 
-| File / Resource                                                       | Why it matters                                       |
-| --------------------------------------------------------------------- | ---------------------------------------------------- |
-| [task.0070](../items/task.0070.governance-credit-health-dashboard.md) | Work item with full plan and checkpoint progress     |
-| [governance-status-api.md](../../docs/spec/governance-status-api.md)  | Spec: architecture diagram, invariants, data sources |
-| `src/ports/governance-status.port.ts`                                 | Port interface (getScheduleStatus, getRecentRuns)    |
-| `src/contracts/governance.status.v1.contract.ts`                      | Zod contract for status endpoint                     |
-| `src/adapters/server/governance/drizzle-governance-status.adapter.ts` | Drizzle queries against schedules + ai_threads       |
-| `src/features/governance/services/get-governance-status.ts`           | Feature service orchestrating ports                  |
-| `src/bootstrap/container.ts`                                          | DI wiring (governanceStatus property)                |
-| `src/app/api/v1/governance/status/route.ts`                           | API route handler                                    |
-| `src/app/(app)/governance/view.tsx`                                   | Client view component                                |
-| `src/app/_facades/ai/activity.server.ts`                              | Activity facade to reuse for governance charts       |
-| `src/components/kit/data-display/ActivityChart.tsx`                   | Chart component to reuse on governance page          |
-| `tests/unit/features/governance/get-governance-status.test.ts`        | Unit tests for feature service                       |
+| File / Resource                                           | Why it matters                                       |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| `src/components/kit/data-display/ActivityChart.tsx`       | Bar chart component (was AreaChart)                  |
+| `src/components/kit/data-display/activity-chart-utils.ts` | Pure transforms: groupedSeries → recharts data       |
+| `src/contracts/ai.activity.v1.contract.ts`                | `ActivityGroupBySchema` + `groupedSeries` schema     |
+| `src/app/_facades/ai/activity.server.ts`                  | `buildGroupedSeries()` — grouping + ranking + Others |
+| `src/app/(app)/activity/view.tsx`                         | Activity page with ToggleGroup                       |
+| `src/app/(app)/gov/view.tsx`                              | Governance page with ToggleGroup                     |
+| `src/app/api/v1/activity/route.ts`                        | Parses `groupBy` query param                         |
+| `src/app/api/v1/governance/activity/route.ts`             | Parses `groupBy` query param (system tenant scope)   |
+| Commit `d2fe9200`                                         | AreaChart → BarChart conversion                      |
+| Commit `1c7c2dec`                                         | Contract + facade + utils for groupBy                |
+| Commit `6bab5d27`                                         | UI wiring (routes, fetchers, views)                  |
