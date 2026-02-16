@@ -30,6 +30,7 @@ const GOVERNANCE_GRANT_SCOPES = ["graph:execute:sandbox:openclaw"] as const;
 
 export interface GovernanceScheduleSyncSummary {
   created: number;
+  updated: number;
   resumed: number;
   skipped: number;
   paused: number;
@@ -49,7 +50,7 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
   // Skip if governance schedules disabled (e.g., in preview environments)
   if (!serverEnv().GOVERNANCE_SCHEDULES_ENABLED) {
     log.info({}, "Governance schedules disabled, skipping sync");
-    return { created: 0, resumed: 0, skipped: 0, paused: 0 };
+    return { created: 0, updated: 0, resumed: 0, skipped: 0, paused: 0 };
   }
 
   log.info({}, "Starting governance schedule sync job");
@@ -63,7 +64,7 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
     ?.acquired;
   if (!acquired) {
     log.info({}, "Governance sync already running, skipping");
-    return { created: 0, resumed: 0, skipped: 0, paused: 0 };
+    return { created: 0, updated: 0, resumed: 0, skipped: 0, paused: 0 };
   }
 
   try {
@@ -88,6 +89,7 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
     log.info(
       {
         created: result.created.length,
+        updated: result.updated.length,
         resumed: result.resumed.length,
         skipped: result.skipped.length,
         paused: result.paused.length,
@@ -97,6 +99,7 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
 
     return {
       created: result.created.length,
+      updated: result.updated.length,
       resumed: result.resumed.length,
       skipped: result.skipped.length,
       paused: result.paused.length,

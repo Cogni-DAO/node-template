@@ -65,6 +65,12 @@ export interface ScheduleDescription {
   readonly lastRunAtIso: string | null;
   /** Whether schedule is paused */
   readonly isPaused: boolean;
+  /** Current cron expression, null if unavailable */
+  readonly cron: string | null;
+  /** Current IANA timezone, null if unavailable */
+  readonly timezone: string | null;
+  /** Current graph input payload, null if unavailable */
+  readonly input: JsonValue | null;
 }
 
 /**
@@ -140,6 +146,7 @@ export function isScheduleControlNotFoundError(
  * | Method           | Idempotent? | On Not Found                    | On Already Exists              |
  * |------------------|-------------|---------------------------------|--------------------------------|
  * | createSchedule   | No          | N/A                             | Throw ScheduleControlConflict  |
+ * | updateSchedule   | Yes         | Throw ScheduleControlNotFound   | N/A (updates in place)         |
  * | pauseSchedule    | Yes         | Throw ScheduleControlNotFound   | No-op if already paused        |
  * | resumeSchedule   | Yes         | Throw ScheduleControlNotFound   | No-op if already running       |
  * | deleteSchedule   | Yes         | No-op (success)                 | N/A                            |
@@ -154,6 +161,20 @@ export interface ScheduleControlPort {
    * @throws ScheduleControlUnavailableError if backend unavailable
    */
   createSchedule(params: CreateScheduleParams): Promise<void>;
+
+  /**
+   * Updates an existing schedule's configuration (spec, action, policies).
+   * Used by governance sync to apply config changes without delete+recreate.
+   *
+   * @param scheduleId - Schedule to update
+   * @param params - New schedule configuration
+   * @throws ScheduleControlNotFoundError if schedule doesn't exist
+   * @throws ScheduleControlUnavailableError if backend unavailable
+   */
+  updateSchedule(
+    scheduleId: string,
+    params: CreateScheduleParams
+  ): Promise<void>;
 
   /**
    * Pauses a schedule (stops future runs).
