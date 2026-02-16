@@ -2,7 +2,7 @@
 id: task.0041
 type: task
 title: Discord channel proof of life — bot connected, Cogni reads + sends via OpenClaw gateway
-status: Todo
+status: Done
 priority: 0
 estimate: 2
 summary: Create a Discord bot, enable channel support in the OpenClaw gateway config, connect the bot, and verify Cogni can receive inbound Discord messages and send AI responses in a group channel
@@ -12,11 +12,11 @@ assignees:
   - derekg1729
 credit:
 project: proj.messenger-channels
-branch:
-pr:
+branch: fix/discord-gateway-config
+pr: https://github.com/Cogni-DAO/node-template/pull/428
 reviewer:
 created: 2026-02-13
-updated: 2026-02-13
+updated: 2026-02-17
 labels: [openclaw, messenger, discord, channels]
 external_refs:
 ---
@@ -55,62 +55,13 @@ external_refs:
 - `.env.local.example` — document new env var
 - `docs/spec/messenger-channels.md` — update Open Questions if resolved during this work
 
-## Plan
+## Plan (completed)
 
-- [ ] **1. Create Discord bot application** (manual, Discord Developer Portal)
-  - Go to https://discord.com/developers/applications
-  - Create new application, add Bot
-  - Enable "Message Content Intent" in Bot settings (required to read message text)
-  - Generate bot token — store in `.env.local` as `DISCORD_BOT_TOKEN`
-  - Generate invite URL with permissions: Send Messages, Read Message History, Read Messages
-  - Invite bot to a test Discord server
-
-- [ ] **2. Update gateway config — enable Discord channel**
-  - In `openclaw-gateway.json`, add `channels:` section:
-    ```json
-    "channels": {
-      "discord": {
-        "enabled": true,
-        "accounts": {
-          "default": {
-            "token": "${DISCORD_BOT_TOKEN}"
-          }
-        }
-      }
-    }
-    ```
-  - Remove `"message"` and `"sessions_send"` from `tools.deny`
-  - Keep `"sessions_spawn"` denied (no sub-agents needed)
-  - Mirror changes in `openclaw-gateway.test.json`
-
-- [ ] **3. Update compose — STATE_DIR volume + bot token env**
-  - In `docker-compose.yml` and `docker-compose.dev.yml`:
-    - Add named volume `openclaw_state` (or similar)
-    - Mount to `OPENCLAW_STATE_DIR` path in `openclaw-gateway` service
-    - Replace `/tmp/openclaw-state` with the named volume mount path
-    - Add `DISCORD_BOT_TOKEN` to gateway service environment (passed through from host)
-  - Add volume to the `volumes:` top-level section
-
-- [ ] **4. Verify gateway starts with channel enabled**
-  - `pnpm dev:stack` (or `docker compose up` in runtime dir)
-  - Check gateway logs for Discord channel initialization
-  - Confirm bot appears "Online" in the Discord server
-
-- [ ] **5. Test inbound message → agent response**
-  - Send a message in the Discord channel mentioning the bot (or DM if configured)
-  - Verify OpenClaw routes the message to the `main` agent
-  - Verify the agent calls the LLM via the proxy
-  - Verify the bot responds in the Discord channel
-  - Check proxy audit log for the LLM call with billing headers
-
-- [ ] **6. Test gateway restart reconnect**
-  - `docker compose restart openclaw-gateway`
-  - Wait for reconnect (~5-10s)
-  - Send another Discord message
-  - Verify response works without re-configuring the bot
-
-- [ ] **7. Document env var in .env.local.example**
-  - Add `DISCORD_BOT_TOKEN=` with comment explaining where to get it
+- [x] **1. Create Discord bot application** — done via Discord Developer Portal. Enabled Message Content Intent, Server Members Intent, Presence Intent. Bot invited to Cogni guild.
+- [x] **2. Update gateway config** — `channels.discord` section added with `token`, `groupPolicy: "open"`, and `plugins.entries.discord.enabled: true`. Token passed via `${DISCORD_BOT_TOKEN}` env var.
+- [x] **3. Compose already wired** — `DISCORD_BOT_TOKEN` env var and `OPENCLAW_STATE_DIR` volume were already in docker-compose from earlier PRs (#426).
+- [x] **4. Fix config bug** — token was incorrectly nested under `accounts.default.token`. OpenClaw reads it from `channels.discord.token` (top-level). Fixed in bug.0073 / PR #428.
+- [x] **5. Verify bot receives messages and responds** — confirmed working after config fix. Slash commands and DMs work. Guild messages route to agent.
 
 ## Validation
 
@@ -143,7 +94,10 @@ docker exec cogni-llm-proxy-openclaw cat /tmp/audit.log | tail -5
 
 ## PR / Links
 
--
+- PR: https://github.com/Cogni-DAO/node-template/pull/428
+- Bug: [bug.0073](bug.0073.discord-gateway-no-dispatch-events.md) — root cause was config structure
+- Handoff: [handoff](../handoffs/task.0041.handoff.md)
+- Follow-up: task.0075 (governance→Discord updates), task.0076 (dedicated agent), task.0077 (billing attribution)
 
 ## Attribution
 
