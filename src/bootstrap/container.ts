@@ -27,6 +27,7 @@ import {
   DrizzleExecutionGrantUserAdapter,
   DrizzleExecutionGrantWorkerAdapter,
   DrizzleExecutionRequestAdapter,
+  DrizzleGovernanceStatusAdapter,
   DrizzleScheduleRunAdapter,
   DrizzleScheduleUserAdapter,
   DrizzleThreadPersistenceAdapter,
@@ -67,6 +68,7 @@ import type {
   ExecutionGrantUserPort,
   ExecutionGrantWorkerPort,
   ExecutionRequestPort,
+  GovernanceStatusPort,
   LangfusePort,
   LlmService,
   MetricsQueryPort,
@@ -128,6 +130,8 @@ export interface Container {
   toolSource: ToolSourcePort;
   /** Thread persistence scoped to a user (RLS enforced) */
   threadPersistenceForUser(userId: UserId): ThreadPersistencePort;
+  /** Governance status queries (system tenant scope) */
+  governanceStatus: GovernanceStatusPort;
 }
 
 // Feature-specific dependency types
@@ -372,6 +376,7 @@ function createContainer(): Container {
     toolSource,
     threadPersistenceForUser: (userId: UserId) =>
       new DrizzleThreadPersistenceAdapter(db, userActor(userId)),
+    governanceStatus: new DrizzleGovernanceStatusAdapter(db),
   };
 }
 
