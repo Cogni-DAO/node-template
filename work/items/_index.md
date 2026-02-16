@@ -28,7 +28,7 @@
 | 0   | 3   | Todo        | task.0031  | Build unified cogni-sandbox-openclaw devtools image + pnpm cache volumes                       | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Done        | bug.0071   | Governance schedule sync skips config updates — Temporal schedules stuck with stale input      | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | bug.0072   | HTTP errors invisible in dashboards — no error rate metrics, agent reports 0 errors            | Reliability & Uptime       | proj.reliability                |
-| 0   | 2   | Todo        | task.0070  | Governance credit health dashboard — prevent silent credit outages                             | System Tenant & Governance | proj.system-tenant-governance   |
+| 0   | 2   | Done        | task.0070  | Governance credit health dashboard — prevent silent credit outages                             | System Tenant & Governance | proj.system-tenant-governance   |
 | 1   | 3   | Todo        | story.0063 | Governance visibility dashboard — real-time AI council activity                                | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | bug.0027   | Gateway billing fails in production — Docker socket ENOENT crashes all OpenClaw runs           | Payments Enhancements      | proj.payments-enhancements      |
 | 0   | 2   | Backlog     | bug.0026   | Scheduler worker silently stops polling — schedules enabled but runs cease                     | Reliability & Uptime       | proj.reliability                |

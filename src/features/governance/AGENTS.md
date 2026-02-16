@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-16
+- **Last reviewed:** 2026-02-17
 - **Status:** draft
 
 ## Purpose
@@ -36,11 +36,11 @@ Governance feature slice — schedule sync for DAO charter governance runs, and 
 
 ## Public Surface
 
-- **Exports:** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`, `getGovernanceStatus()`, `GovernanceStatusResult`
+- **Exports:** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`, `getGovernanceStatus()`, `GovernanceStatusResult`, `useGovernanceStatus()`
 - **Routes:** none (system-ops only; triggered via internal ops endpoint)
 - **CLI:** `pnpm governance:schedules:sync` (endpoint trigger helper)
 - **Env/Config keys:** `.cogni/repo-spec.yaml` → `governance.schedules`
-- **Files considered API:** `services/syncGovernanceSchedules.ts`, `services/get-governance-status.ts`
+- **Files considered API:** `services/syncGovernanceSchedules.ts`, `services/get-governance-status.ts`, `hooks/useGovernanceStatus.ts`
 
 ## Ports
 

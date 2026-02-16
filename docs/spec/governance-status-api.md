@@ -2,15 +2,15 @@
 id: governance-status-api
 type: spec
 title: Governance Status API
-status: draft
-spec_state: draft
-trust: draft
+status: active
+spec_state: active
+trust: reviewed
 summary: User-facing governance transparency API showing system tenant credit balance, scheduled runs, and recent execution history
 read_when: Building governance dashboards, system health monitoring, or DAO transparency features
 implements: proj.system-tenant-governance
 owner: derekg1729
 created: 2026-02-16
-verified: 2026-02-16
+verified: 2026-02-17
 tags: [governance, api, transparency]
 ---
 
@@ -45,15 +45,16 @@ Governance status follows strict hexagonal architecture with proper port abstrac
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ /governance page (user-facing)                                   │
-└────────────────────┬────────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ GET /api/v1/governance/status (route)                            │
-│ ────────────────────────────────────                             │
-│ Contract: governance.status.v1.contract.ts                       │
-└────────────────────┬────────────────────────────────────────────┘
+│ /gov page (user-facing)                                          │
+└──────────┬──────────────────────────┬───────────────────────────┘
+           │                          │
+           ▼                          ▼
+┌────────────────────────┐  ┌──────────────────────────────────┐
+│ GET /api/v1/governance │  │ GET /api/v1/governance/activity   │
+│ /status (route)        │  │ (reuses getActivity facade)      │
+│ governance.status.v1   │  │ ai.activity.v1 contract          │
+└──────────┬─────────────┘  └──────────────────────────────────┘
+           │
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -204,8 +205,10 @@ When additional governance data is needed:
 | `src/adapters/server/governance/drizzle-governance-status.adapter.ts` | Drizzle implementation of port              |
 | `src/features/governance/services/get-governance-status.ts`           | Feature service (orchestrates ports)        |
 | `src/app/api/v1/governance/status/route.ts`                           | Route handler (calls feature service)       |
-| `src/app/(app)/governance/page.tsx`                                   | Server component (auth check)               |
-| `src/app/(app)/governance/view.tsx`                                   | Client component with React Query polling   |
+| `src/app/api/v1/governance/activity/route.ts`                         | Activity metrics route (system-scoped)      |
+| `src/app/(app)/gov/page.tsx`                                          | Server component (auth check)               |
+| `src/app/(app)/gov/view.tsx`                                          | Client component with charts + status       |
+| `src/app/(app)/gov/_api/fetchGovernanceActivity.ts`                   | Client fetch wrapper for activity endpoint  |
 | `src/features/governance/hooks/useGovernanceStatus.ts`                | React Query hook (30s polling)              |
 | `src/features/governance/AGENTS.md`                                   | Feature slice documentation                 |
 | `src/shared/constants/system-tenant.ts`                               | System tenant constants (already exists)    |
