@@ -124,9 +124,10 @@ Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md)
 
 #### Streaming Status Events
 
-| Deliverable                                                                             | Status | Est | Work Item |
-| --------------------------------------------------------------------------------------- | ------ | --- | --------- |
-| Consume OpenClaw agent events (lifecycle, tool, compaction) — surface status in chat UI | Todo   | 2   | task.0074 |
+| Deliverable                                                                                | Status | Est | Work Item |
+| ------------------------------------------------------------------------------------------ | ------ | --- | --------- |
+| Consume OpenClaw agent events (lifecycle, tool, compaction) — surface status in chat UI    | Done   | 2   | task.0074 |
+| Stream reasoning tokens from OpenClaw → AI SDK reasoning parts → assistant-ui Reasoning UI | Todo   | 2   | task.0078 |
 
 #### Gateway Client Hardening
 
@@ -211,6 +212,7 @@ Host still owns push+PR in warm pool mode — workers never need GitHub credenti
 - [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md) — Invariants 20-25: git relay, dynamic catalog, credential strategy, anti-patterns
 - [openclaw-sandbox-spec.md](../../docs/spec/openclaw-sandbox-spec.md) — Invariants 13-19: container image, LLM protocol, I/O protocol, billing
 - [sandboxed-agents.md](../../docs/spec/sandboxed-agents.md) — Invariants 1-12: core sandbox architecture, socket bridge
+- [streaming-status.md](../../docs/spec/streaming-status.md) — StatusEvent pipeline: OpenClaw agent events → AiEvent → transient data-status SSE chunks
 
 ## Design Notes
 

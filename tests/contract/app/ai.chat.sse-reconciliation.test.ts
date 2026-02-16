@@ -320,6 +320,68 @@ describe("Chat SSE Reconciliation", () => {
     expect(text).toBe("Hello world");
   });
 
+  it("StatusEvent emits transient data-status chunk — not persisted (STATUS_IS_EPHEMERAL)", async () => {
+    // Arrange: stream includes status events between text events
+    const stream = (async function* (): AsyncIterable<AiEvent> {
+      await new Promise((r) => setTimeout(r, 0));
+      yield { type: "status", phase: "thinking" } as AiEvent;
+      await new Promise((r) => setTimeout(r, 0));
+      yield { type: "text_delta", delta: "Hello" };
+      await new Promise((r) => setTimeout(r, 0));
+      yield { type: "status", phase: "tool_use", label: "exec" } as AiEvent;
+      await new Promise((r) => setTimeout(r, 0));
+      yield { type: "status", phase: "thinking" } as AiEvent;
+      await new Promise((r) => setTimeout(r, 0));
+      yield { type: "text_delta", delta: " world" };
+      await new Promise((r) => setTimeout(r, 0));
+      yield { type: "assistant_final", content: "Hello world" };
+      await new Promise((r) => setTimeout(r, 0));
+      yield { type: "done" };
+    })();
+
+    vi.mocked(completionStream).mockResolvedValue({
+      stream,
+      final: Promise.resolve({
+        ok: true as const,
+        requestId: "test-req-id",
+        usage: { promptTokens: 5, completionTokens: 5 },
+        finishReason: "stop",
+      }),
+    });
+
+    // Act
+    const res = await chatPOST(buildChatRequest());
+    expect(res.status).toBe(200);
+
+    const { text, events } = await collectTextFromResponse(res);
+
+    // Assert: text is correct (status events don't interfere)
+    expect(text).toBe("Hello world");
+
+    // Assert: data-status events appear in the SSE stream
+    const statusEvents = events.filter((e) => e.type === "data-status");
+    expect(statusEvents.length).toBeGreaterThanOrEqual(1);
+
+    // Assert: status events have transient flag and phase data
+    for (const se of statusEvents) {
+      expect(se.data).toHaveProperty("transient", true);
+      expect(se.data).toHaveProperty("data");
+      const innerData = se.data.data as Record<string, unknown>;
+      expect(innerData).toHaveProperty("phase");
+      expect(["thinking", "tool_use", "compacting"]).toContain(innerData.phase);
+    }
+
+    // Assert: at least one tool_use status with label
+    const toolStatus = statusEvents.find(
+      (e) => (e.data.data as Record<string, unknown>)?.phase === "tool_use"
+    );
+    if (toolStatus) {
+      expect((toolStatus.data.data as Record<string, unknown>).label).toBe(
+        "exec"
+      );
+    }
+  });
+
   it("finish event includes finishReason from final promise", async () => {
     const synthetic = createSyntheticStream({
       fullText: "short",

@@ -158,11 +158,13 @@
   "agents": {
     "defaults": {
       "model": { "primary": "cogni/deepseek-v3.2" },
+      "thinkingDefault": "high",
       "subagents": {
         "model": "cogni/gpt-4o-mini",
         "maxConcurrent": 3,
         "archiveAfterMinutes": 30
       },
+      "verboseDefault": "full",
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
       "timeoutSeconds": 540,
