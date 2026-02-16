@@ -11,6 +11,7 @@
  *   - METADATA_ON_INSERT: thread metadata (model, graphName) saved on first persist only (expectedLen === 0)
  *   - Uses AI SDK createUIMessageStream (no custom SSE)
  *   - Per ASSISTANT_FINAL_REQUIRED: reconciles truncated text_delta events with assistant_final
+ *   - Per STATUS_IS_EPHEMERAL: StatusEvent maps to transient data-status chunk, never persisted
  * Side-effects: IO (HTTP request/response, DB persistence)
  * Notes: P1 wire format — createUIMessageStream + createUIMessageStreamResponse (SSE). UIMessage accumulator is persistence-only.
  * Links: Uses ai.chat.v1 contract, completion.server facade, AI SDK streaming, ThreadPersistencePort
@@ -420,6 +421,17 @@ export const POST = wrapRouteHandlerWithLogging(
                   part.output = event.result;
                   part.state = "output-available";
                 }
+              } else if (event.type === "status") {
+                // STATUS_IS_EPHEMERAL: transient data part, never persisted in UIMessage
+                // STATUS_BEST_EFFORT: safe to skip if stream is backpressured
+                writer.write({
+                  type: "data-status",
+                  data: {
+                    phase: event.phase,
+                    ...(event.label ? { label: event.label } : {}),
+                  },
+                  transient: true,
+                } as UIMessageChunk);
               }
             }
 
