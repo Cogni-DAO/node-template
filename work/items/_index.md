@@ -17,6 +17,7 @@
 | 0   | 2   | Done        | task.0054  | Governance run foundation — repo-spec config + system tenant execution grant                   | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 1   | Done        | task.0052  | Get OpenClaw Grafana access — spend visibility for sandbox agents                              | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Todo        | task.0053  | Token + model optimization — stop 85K input token hemorrhage on Opus                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 2   | Backlog     | bug.0073   | Discord gateway receives zero dispatch events — MESSAGE_CREATE never delivered                 | Messenger Channels         | proj.messenger-channels         |
 | 0   | 2   | Todo        | task.0041  | Discord channel proof of life — bot connected, Cogni reads + sends via OpenClaw                | Messenger Channels         | proj.messenger-channels         |
 | 0   | 2   | In Progress | task.0023  | Gateway agent system prompt — dedicated workspace, SOUL.md, heartbeat fix                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Backlog     | bug.0017   | Deploy does not reload Alloy when bind-mounted config changes                                  | Reliability & Uptime       | proj.reliability                |
@@ -75,6 +76,7 @@
 | 1   | 2   | Todo        | task.0068  | Dynamic default model selection from LiteLLM config metadata                                   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Backlog     | bug.0069   | Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite                |                            |                                 |
 | 1   | 1   | Backlog     | bug.0070   | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail                     | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 2   | Todo        | task.0074  | OpenClaw streaming status events — surface agent activity in UI                                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
 > Sort: priority → status (completed last) → estimate → type

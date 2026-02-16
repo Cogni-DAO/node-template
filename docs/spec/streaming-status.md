@@ -47,7 +47,7 @@ emitAgentEvent({                    │    openclaw-gateway-client.ts
     toolCallId: "tc1"               │      yield { type: "status", ... }
   }                                 │
 })                                  │    Chat route
-                                    │      writer.write(annotation)
+                                    │      writer.write({ type: "data-status", transient })
 emitAgentEvent({                    │
   stream: "assistant",              │    Client
   data: { text: "..." }            │      status indicator UI
@@ -81,12 +81,42 @@ Tool event emission is gated by a per-session `verboseLevel` setting:
 
 Set via `agents.defaults.verboseDefault` in gateway config. For this feature, set to `"names"` — we need tool names for status display but not results.
 
-### LangGraph Alignment
+### Provider Asymmetry (OpenClaw vs LangGraph)
 
-LangGraph's stream translator (`stream-translator.ts`) currently handles `chunk.event === "messages"` only. Two paths for status events:
+**OpenClaw** — StatusEvent is the **only** signal for agent activity. The sandbox agent's tool calls are internal — Cogni only receives `text_delta` and `chat_final` via the chat stream. Without agent events, users see silence during tool execution. This is the primary UX problem this spec solves.
 
-1. **Existing tool events**: `tool_call_start` and `tool_call_result` AiEvents already exist. The route can derive `status:tool_use` from these without changes to the translator.
-2. **Future node events**: Adding `streamMode: ["messages-tuple", "updates"]` would provide node-level transitions. Not required for MVP.
+**LangGraph** — `tool_call_start` and `tool_call_result` AiEvents already exist in the stream. The route can derive `data-status` from these without changes to the translator. StatusEvent adds value only for the `compacting` phase (no equivalent in LangGraph). For MVP, LangGraph status is derived in the route from existing AiEvents — no translator changes needed.
+
+### GatewayAgentEvent Extension
+
+The gateway client type must be extended to carry agent lifecycle events:
+
+```typescript
+// openclaw-gateway-client.ts — extend union
+export type GatewayAgentEvent =
+  | { type: "accepted"; runId: string }
+  | { type: "text_delta"; text: string }
+  | { type: "chat_final"; text: string }
+  | { type: "chat_error"; message: string }
+  | {
+      type: "status";
+      phase: "thinking" | "tool_use" | "compacting";
+      label?: string;
+    }; // new
+```
+
+The gateway client maps inbound `event: "agent"` WS frames to `GatewayAgentEvent.status`:
+
+- Filter: only `stream === "lifecycle" | "tool" | "compaction"` — drop `"assistant"` (redundant) and `"error"` (handled by chat_error)
+- SessionKey filter applies identically to chat events (WS_EVENT_CAUSALITY)
+
+### Agent Event Flood Mitigation
+
+OpenClaw emits tool events at high frequency. Chat deltas are already throttled to 150ms (`server-chat.ts:230`), but agent events have no such throttle. Mitigation:
+
+- Gateway client filters to only the 3 relevant streams (lifecycle, tool, compaction)
+- `status` events are best-effort — the route can drop them if the stream is backpressured
+- No state machine or dedup needed in v0; the client simply displays the latest status received
 
 ### New AiEvent Type
 
@@ -114,25 +144,32 @@ export type AiEvent =
 
 ### Wire Mapping (AiEvent → AI SDK Data Stream)
 
-StatusEvent is mapped to an AI SDK **stream annotation**, not a message part. Annotations are metadata sent alongside the stream but not persisted in UIMessage:
+StatusEvent is mapped to an AI SDK **`DataUIMessageChunk`** with `transient: true`. This is the SDK mechanism for ephemeral custom data — sent alongside the stream but not persisted in UIMessage parts:
 
 ```typescript
+// Define custom UIDataTypes for the stream
+type CogniDataTypes = {
+  status: { phase: "thinking" | "tool_use" | "compacting"; label?: string };
+};
+
 // In chat route, within createUIMessageStream execute callback:
 if (event.type === "status") {
   writer.write({
-    type: "annotation",
-    value: { status: event.phase, label: event.label },
-  } as UIMessageChunk);
+    type: "data-status",
+    data: { phase: event.phase, label: event.label },
+    transient: true,
+  });
 }
 ```
 
-**Rationale**: Status events are ephemeral — they represent the current agent phase during streaming, not persisted conversation content. Annotations are the AI SDK mechanism for exactly this: metadata alongside the stream that the client can consume but that doesn't become part of the message.
+**Rationale**: Status events are ephemeral — they represent the current agent phase during streaming, not persisted conversation content. `DataUIMessageChunk` with `transient: true` is the AI SDK v6 mechanism for exactly this: custom metadata alongside the stream that the client can consume but that doesn't become part of the message. (Note: the spec previously proposed `{ type: "annotation" }` which does not exist in AI SDK v6.0.85.)
 
 ### Client Consumption
 
 ```typescript
-// Client reads annotations from the stream
-// assistant-ui runtime exposes annotations via message metadata
+// Client reads transient data parts from the stream
+// assistant-ui runtime exposes data parts via message.parts filtering
+// DataUIPart { type: "data", data: { phase, label } }
 // v0: simple text indicator — "Thinking...", "Using tool: exec", "Compacting..."
 ```
 
@@ -159,14 +196,14 @@ Enable clients to show meaningful status indicators during agent execution inste
 
 ## Invariants
 
-| Rule                       | Constraint                                                                                                                                                                     |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| STATUS_IS_EPHEMERAL        | StatusEvent is never persisted in `ai_threads.messages`. It maps to a stream annotation, not a UIMessage part. The UIMessage accumulator ignores it.                           |
-| STATUS_BEST_EFFORT         | StatusEvent emission is best-effort. Missing status events must not break streaming, persistence, or billing. Client must handle streams with zero StatusEvents gracefully.    |
-| STATUS_SESSIONKEY_FILTERED | OpenClaw agent events are filtered by `sessionKey` using the same WS_EVENT_CAUSALITY invariant as chat events. Agent events with mismatched or missing sessionKey are dropped. |
-| STATUS_NEVER_LEAKS_CONTENT | StatusEvent `label` field contains at most a tool name (e.g., `"exec"`, `"memory_search"`). Never tool arguments, results, or reasoning content.                               |
-| AIEVENT_NEVER_VERBATIM     | Unchanged — StatusEvent is an AiEvent mapped to wire format by the route, never sent verbatim.                                                                                 |
-| VERBOSE_NAMES_DEFAULT      | OpenClaw gateway config sets `agents.defaults.verboseDefault: "names"` to enable tool name emission without result content.                                                    |
+| Rule                       | Constraint                                                                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| STATUS_IS_EPHEMERAL        | StatusEvent is never persisted in `ai_threads.messages`. It maps to a transient `DataUIMessageChunk` (`transient: true`), not a UIMessage part. The UIMessage accumulator ignores transient data. |
+| STATUS_BEST_EFFORT         | StatusEvent emission is best-effort. Missing status events must not break streaming, persistence, or billing. Client must handle streams with zero StatusEvents gracefully.                       |
+| STATUS_SESSIONKEY_FILTERED | OpenClaw agent events are filtered by `sessionKey` using the same WS_EVENT_CAUSALITY invariant as chat events. Agent events with mismatched or missing sessionKey are dropped.                    |
+| STATUS_NEVER_LEAKS_CONTENT | StatusEvent `label` field contains at most a tool name (e.g., `"exec"`, `"memory_search"`). Never tool arguments, results, or reasoning content.                                                  |
+| AIEVENT_NEVER_VERBATIM     | Unchanged — StatusEvent is an AiEvent mapped to wire format by the route, never sent verbatim.                                                                                                    |
+| VERBOSE_NAMES_DEFAULT      | OpenClaw gateway config sets `agents.defaults.verboseDefault: "names"` to enable tool name emission without result content.                                                                       |
 
 ### File Pointers
 
@@ -175,7 +212,7 @@ Enable clients to show meaningful status indicators during agent execution inste
 | `packages/ai-core/src/events/ai-events.ts`                  | Add `StatusEvent` to AiEvent union                       |
 | `src/adapters/server/sandbox/openclaw-gateway-client.ts`    | Consume `"agent"` events (currently dropped at line 354) |
 | `src/adapters/server/sandbox/sandbox-graph.provider.ts`     | Map gateway agent events → StatusEvent                   |
-| `src/app/api/v1/ai/chat/route.ts`                           | Map StatusEvent → annotation in createUIMessageStream    |
+| `src/app/api/v1/ai/chat/route.ts`                           | Map StatusEvent → `data-status` in createUIMessageStream |
 | `services/sandbox-openclaw/openclaw-gateway.json`           | Set `verboseDefault: "names"`                            |
 | `src/adapters/server/ai/langgraph/dev/stream-translator.ts` | Future: derive StatusEvent from LangGraph update events  |
 
@@ -190,13 +227,14 @@ Enable clients to show meaningful status indicators during agent execution inste
    - SessionKey filter applies to agent events (mismatched keys dropped)
    - `stream: "assistant"` agent events are ignored (redundant with chat delta)
 
-3. **Wire annotation emitted**
-   - Chat route writes `{ type: "annotation", value: { status, label } }` for StatusEvent
-   - UIMessage accumulator does NOT include StatusEvent content
+3. **Wire data chunk emitted**
+   - Chat route writes `{ type: "data-status", data: { phase, label }, transient: true }` for StatusEvent
+   - UIMessage accumulator does NOT persist transient data parts
 
 4. **Status not persisted**
-   - After a streaming chat turn, `ai_threads.messages` contains no status/annotation data
+   - After a streaming chat turn, `ai_threads.messages` contains no status data
    - Only text parts and tool-call parts are persisted (existing behavior unchanged)
+   - `transient: true` flag ensures AI SDK does not include data-status in message parts
 
 5. **Graceful degradation**
    - If OpenClaw `verboseDefault` is `"off"`, no StatusEvents are emitted and streaming works unchanged
@@ -206,11 +244,18 @@ Enable clients to show meaningful status indicators during agent execution inste
    - StatusEvent `label` contains only tool name string, never args or results
    - Stack test: assert StatusEvent payloads contain no content beyond phase + label
 
+## Resolved Questions
+
+- [x] **AI SDK wire format**: `annotation` type does not exist in AI SDK v6.0.85. Use `DataUIMessageChunk` with `transient: true` via custom `UIDataTypes`. See Wire Mapping section.
+- [x] **LangGraph status**: Derive from existing `tool_call_start`/`tool_call_result` AiEvents in the route. No translator changes for MVP.
+- [x] **GatewayAgentEvent type**: Extend with `{ type: "status"; phase; label? }` member. See GatewayAgentEvent Extension section.
+- [x] **Provider asymmetry**: OpenClaw StatusEvent is the only tool signal (sandbox tools are invisible). LangGraph already has ToolCallStart/Result. Documented in Provider Asymmetry section.
+
 ## Open Questions
 
 - [ ] Should LangGraph InProc provider emit `status:thinking` on first `text_delta`? (Would require synthetic StatusEvent before first content — adds complexity for marginal UX gain with InProc graphs)
-- [ ] Should the client derive `status:thinking` implicitly from `accepted` + no content yet, or should the provider emit it explicitly? (Explicit is cleaner but requires lifecycle.start to arrive before first delta)
-- [ ] AI SDK annotation type — is `UIMessageChunk` the right cast, or does assistant-ui expose a typed annotation writer? (Needs verification against @assistant-ui/react-ai-sdk 0.12.x API)
+- [ ] Should the client derive `status:thinking` implicitly from stream start + no content yet, or should the provider emit it explicitly? (Explicit is cleaner but requires lifecycle.start to arrive before first delta)
+- [ ] Does assistant-ui's `DataUIPart` render hook support transient-only parts, or do we need a custom `useStatusIndicator` that reads from the raw stream? (Needs verification against @assistant-ui/react-ai-sdk)
 
 ## Related
 
