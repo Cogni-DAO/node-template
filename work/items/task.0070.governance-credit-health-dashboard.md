@@ -1,12 +1,12 @@
 ---
 id: task.0070
 type: task
-title: Governance credit health dashboard — prevent silent credit outages
+title: DAO governance status page — user-facing transparency
 status: Todo
 priority: 0
-estimate: 2
-summary: Build governance observability dashboard with credit health indicator, failed run visibility, and next run countdown to prevent incidents like 2026-02-15
-outcome: System operators can see governance credit balance with runway estimate (🟢/🟡/🔴), failed runs with error codes, and next scheduled run time
+estimate: 1
+summary: Single page showing system tenant credit balance, next governance run time, and recent run history for DAO transparency
+outcome: Users can see DAO governance financial status (credits), upcoming runs (next scheduled), and recent activity (last 10 runs)
 spec_refs: openclaw-govern-distributed
 assignees: []
 credit:
@@ -16,445 +16,172 @@ pr:
 reviewer:
 created: 2026-02-16
 updated: 2026-02-16
-labels: [governance, ui, observability, p0]
+labels: [governance, ui, observability]
 external_refs:
 ---
 
-# Governance credit health dashboard — prevent silent credit outages
+# DAO governance status page — user-facing transparency
 
 ## Context
 
-**2026-02-15 Incident:** All 4 governance schedules failed silently for hours due to 0 credit balance in the governance billing account (`cogni_system`). The system appeared healthy (schedules triggering on time) but every run was rejected with `insufficient_credits` error. No monitoring detected the outage.
+**User Goal:** DAO members want to see governance system status through the website - basic financials (credit balance), deployment health (next run timing), and run history.
+
+**NOT an ops monitoring tool** — this is user-facing transparency, not incident prevention. Absolute MVP.
 
 **Research:** [governance-visibility-dashboard.md](../../docs/research/governance-visibility-dashboard.md)
 
-**Design Decision:** Build server-component dashboard with React Query polling (Option A from research). Simplest path to production, reuses existing patterns, extensible for future real-time features.
+## Outcome
 
-## Requirements
+Users visiting `/governance` see:
 
-### Must Have (MVP)
+1. System tenant credit balance (how much runway the DAO has)
+2. Next governance run time (when the AI council runs next)
+3. Recent run history (last 10 governance executions)
 
-**Credit Health Widget:**
+## Design
 
-- Current credit balance for `cogni_system` billing account
-- Runway estimate: "XX hours of governance remaining"
-- Color-coded health indicator:
-  - 🟢 Green: > 24 hours runway
-  - 🟡 Yellow: 6-24 hours runway
-  - 🔴 Red: < 6 hours or balance ≤ 0
-- Last 24h burn rate (credits spent)
+### Approach
 
-**Failed Runs Table:**
+**Solution**: One page (`/governance`) + one API endpoint (`/api/v1/governance/status`) that queries existing tables.
 
-- Last 10 failed governance runs (status='error')
-- Columns: Charter (graphId), Scheduled Time, Error Message, Run ID
-- Filter: `cogni_system` billing account only
-- Time range: Last 24 hours by default
+**Reuses**:
 
-**Next Run Countdown:**
+- `ai_threads` table (governance runs already persisted here with system tenant ownership)
+- `schedules` table (has next_run_at for governance schedules)
+- `AccountService` port (balance queries)
+- React Query polling pattern (from `/credits` page)
+- shadcn/ui Card components
 
-- "Next governance run in: XX minutes"
-- Show all 4 governance charters with their next scheduled times
-- Highlight earliest upcoming run
+**Rejected**:
 
-**Last Successful Run:**
+- ❌ **New ports/adapters/services** — unnecessary for simple read operations
+- ❌ **Runway calculations with burn rate** — over-engineered, defer to later
+- ❌ **Health color coding (🟢/🟡/🔴)** — premature, just show the number
+- ❌ **Failed runs filtering** — `ai_threads` has full history, show recent only
+- ❌ **Separate endpoints per concern** — one status endpoint is simpler
 
-- Timestamp of last successful run per charter
-- Helps detect "all charters failing" vs "one charter broken"
+### Invariants
 
-### Nice to Have (Defer to Post-MVP)
+<!-- CODE REVIEW CRITERIA -->
 
-- Live activity stream during governance runs
-- Charter heartbeat history from gateway workspace
-- Budget gate status display
-- EDO (Event-Decision-Outcome) index
-- Revenue share distribution tracking
-- Export failed runs to CSV
+- [ ] SYSTEM_TENANT_QUERIES: All queries filter by `COGNI_SYSTEM_PRINCIPAL_USER_ID` (spec: system-tenant)
+- [ ] RLS_SAFE: Use proper RLS context when querying ai_threads (spec: architecture)
+- [ ] CONTRACT_FIRST: Define Zod contract for status endpoint (spec: architecture)
+- [ ] SIMPLE_SOLUTION: Leverages existing tables/ports, no new infrastructure
+- [ ] ARCHITECTURE_ALIGNMENT: Server component + React Query polling pattern (spec: architecture)
 
-## Allowed Changes
+### Files
 
-**Backend:**
+**Create:**
 
-- `src/contracts/governance.health.v1.contract.ts` (new)
-- `src/contracts/governance.failed-runs.v1.contract.ts` (new)
-- `src/contracts/governance.next-run.v1.contract.ts` (new)
-- `src/app/api/v1/governance/health/route.ts` (new)
-- `src/app/api/v1/governance/failed-runs/route.ts` (new)
-- `src/app/api/v1/governance/next-run/route.ts` (new)
-- `src/app/_facades/governance/` (new - business logic)
+- `src/contracts/governance.status.v1.contract.ts` — Status endpoint contract (balance, nextRunAt, recentRuns[])
+- `src/app/api/v1/governance/status/route.ts` — Query ai_threads + schedules + balance
+- `src/app/(app)/governance/page.tsx` — Server component (auth check)
+- `src/app/(app)/governance/view.tsx` — Client component with React Query polling
+- `src/features/governance/hooks/useGovernanceStatus.ts` — React Query hook (10s polling)
 
-**Frontend:**
+**Modify:**
 
-- `src/app/(app)/governance/page.tsx` (new)
-- `src/app/(app)/governance/view.tsx` (new - client component)
-- `src/features/governance/` (new - hooks, components, types)
+- None (purely additive)
 
-**Infrastructure:**
+**Test:**
 
-- No new dependencies (uses existing React Query, shadcn/ui)
+- Manual: Navigate to `/governance`, verify data displays
+- E2E: Load page, verify status endpoint returns expected shape
 
 ## Plan
 
-### Phase 1: API Contracts & Backend (2-3 hours)
-
-- [x] **Design decision:** Server-component dashboard with polling (from research)
-
-**1.1 Create API contracts**
-
-File: `src/contracts/governance.health.v1.contract.ts`
+### 1. Define Contract (10 min)
 
 ```typescript
-import { z } from "zod";
-
-export const governanceHealthOperation = {
-  input: z.object({
-    // No input - always queries cogni_system
-  }),
-  output: z.object({
-    balanceCredits: z
-      .bigint()
-      .describe("Current credit balance for cogni_system"),
-    runwayHours: z
-      .number()
-      .describe("Estimated hours until balance reaches zero"),
-    burnRateLast24h: z.bigint().describe("Credits spent in last 24 hours"),
-    healthStatus: z
-      .enum(["green", "yellow", "red"])
-      .describe("Color-coded health"),
-    lastUpdatedAt: z
-      .string()
-      .datetime()
-      .describe("When balance was last checked"),
-  }),
-};
-```
-
-File: `src/contracts/governance.failed-runs.v1.contract.ts`
-
-```typescript
-export const governanceFailedRunsOperation = {
-  input: z.object({
-    hours: z
-      .number()
-      .int()
-      .min(1)
-      .max(168)
-      .default(24)
-      .describe("Hours to look back"),
-    limit: z.number().int().min(1).max(100).default(10).describe("Max results"),
-  }),
-  output: z.object({
-    runs: z.array(
-      z.object({
-        runId: z.string(),
-        charter: z.string().describe("graphId of the charter"),
-        scheduledFor: z.string().datetime(),
-        status: z.literal("error"),
-        errorMessage: z.string().nullable(),
-      })
-    ),
-  }),
-};
-```
-
-File: `src/contracts/governance.next-run.v1.contract.ts`
-
-```typescript
-export const governanceNextRunOperation = {
+// src/contracts/governance.status.v1.contract.ts
+export const governanceStatusOperation = {
   input: z.object({}),
   output: z.object({
+    systemCredits: z.string().describe("Balance as string (BigInt serialized)"),
     nextRunAt: z
       .string()
       .datetime()
       .nullable()
-      .describe("Earliest next run across all charters"),
-    charters: z.array(
+      .describe("Next scheduled governance run"),
+    recentRuns: z.array(
       z.object({
-        graphId: z.string(),
-        nextRunAt: z.string().datetime().nullable(),
-        enabled: z.boolean(),
-        lastRunAt: z.string().datetime().nullable(),
+        id: z.string(),
+        title: z.string().nullable(),
+        startedAt: z.string().datetime(),
+        lastActivity: z.string().datetime(),
+        // Optional: graphId from metadata if structured
       })
     ),
   }),
 };
 ```
 
-**1.2 Implement governance health facade**
-
-File: `src/app/_facades/governance/health.server.ts`
+### 2. Implement API Route (30 min)
 
 ```typescript
-import { COGNI_SYSTEM_BILLING_ACCOUNT_ID } from "@/shared/constants/system-tenant";
-import type { RequestContext } from "@/shared/observability";
+// src/app/api/v1/governance/status/route.ts
+import {
+  COGNI_SYSTEM_BILLING_ACCOUNT_ID,
+  COGNI_SYSTEM_PRINCIPAL_USER_ID,
+} from "@/shared/constants/system-tenant";
+import { toUserId } from "@cogni/ids";
 
-export async function getGovernanceHealthFacade(ctx: RequestContext) {
-  const container = getContainer();
-  const accountService = container.accountsForSystem();
+export const GET = wrapRouteHandlerWithLogging(
+  { routeId: "governance.status", auth: { mode: "required", getSessionUser } },
+  async (ctx, _request, sessionUser) => {
+    const container = getContainer();
 
-  // Get current balance
-  const balanceCredits = await accountService.getBalance(
-    COGNI_SYSTEM_BILLING_ACCOUNT_ID
-  );
-
-  // Calculate burn rate (last 24h)
-  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentCharges = await db.query.chargeReceipts.findMany({
-    where: and(
-      eq(chargeReceipts.billingAccountId, COGNI_SYSTEM_BILLING_ACCOUNT_ID),
-      gte(chargeReceipts.createdAt, twentyFourHoursAgo)
-    ),
-  });
-
-  const burnRateLast24h = recentCharges.reduce(
-    (sum, charge) => sum + BigInt(charge.chargedCredits),
-    BigInt(0)
-  );
-
-  // Calculate runway (hours until balance reaches zero)
-  const hourlyBurnRate = Number(burnRateLast24h) / 24;
-  const runwayHours =
-    hourlyBurnRate > 0 ? Number(balanceCredits) / hourlyBurnRate : Infinity;
-
-  // Determine health status
-  let healthStatus: "green" | "yellow" | "red";
-  if (balanceCredits <= BigInt(0)) {
-    healthStatus = "red";
-  } else if (runwayHours < 6) {
-    healthStatus = "red";
-  } else if (runwayHours < 24) {
-    healthStatus = "yellow";
-  } else {
-    healthStatus = "green";
-  }
-
-  return {
-    balanceCredits,
-    runwayHours: runwayHours === Infinity ? 999 : Math.floor(runwayHours),
-    burnRateLast24h,
-    healthStatus,
-    lastUpdatedAt: new Date().toISOString(),
-  };
-}
-```
-
-**1.3 Implement failed runs facade**
-
-File: `src/app/_facades/governance/failed-runs.server.ts`
-
-```typescript
-export async function getGovernanceFailedRunsFacade(
-  input: { hours: number; limit: number },
-  ctx: RequestContext
-) {
-  const lookbackTime = new Date(Date.now() - input.hours * 60 * 60 * 1000);
-
-  const db = getContainer().db;
-  const runs = await db
-    .select({
-      runId: scheduleRuns.runId,
-      charter: schedules.graphId,
-      scheduledFor: scheduleRuns.scheduledFor,
-      status: scheduleRuns.status,
-      errorMessage: scheduleRuns.errorMessage,
-    })
-    .from(scheduleRuns)
-    .innerJoin(schedules, eq(scheduleRuns.scheduleId, schedules.id))
-    .innerJoin(
-      executionGrants,
-      eq(schedules.executionGrantId, executionGrants.id)
-    )
-    .where(
-      and(
-        eq(executionGrants.billingAccountId, COGNI_SYSTEM_BILLING_ACCOUNT_ID),
-        eq(scheduleRuns.status, "error"),
-        gte(scheduleRuns.scheduledFor, lookbackTime)
-      )
-    )
-    .orderBy(desc(scheduleRuns.scheduledFor))
-    .limit(input.limit);
-
-  return {
-    runs: runs.map((r) => ({
-      runId: r.runId,
-      charter: r.charter,
-      scheduledFor: r.scheduledFor.toISOString(),
-      status: "error" as const,
-      errorMessage: r.errorMessage,
-    })),
-  };
-}
-```
-
-**1.4 Implement next run facade**
-
-File: `src/app/_facades/governance/next-run.server.ts`
-
-```typescript
-export async function getGovernanceNextRunFacade(ctx: RequestContext) {
-  const db = getContainer().db;
-  const governanceSchedules = await db
-    .select({
-      graphId: schedules.graphId,
-      nextRunAt: schedules.nextRunAt,
-      enabled: schedules.enabled,
-      lastRunAt: schedules.lastRunAt,
-    })
-    .from(schedules)
-    .innerJoin(
-      executionGrants,
-      eq(schedules.executionGrantId, executionGrants.id)
-    )
-    .where(
-      eq(executionGrants.billingAccountId, COGNI_SYSTEM_BILLING_ACCOUNT_ID)
+    // 1. System credit balance (reuse AccountService)
+    const accountService = container.accountsForUser(
+      toUserId(COGNI_SYSTEM_PRINCIPAL_USER_ID)
+    );
+    const balance = await accountService.getBalance(
+      COGNI_SYSTEM_BILLING_ACCOUNT_ID
     );
 
-  const enabledRuns = governanceSchedules
-    .filter((s) => s.enabled && s.nextRunAt)
-    .map((s) => s.nextRunAt!)
-    .sort((a, b) => a.getTime() - b.getTime());
+    // 2. Next governance run (query schedules)
+    const db = container.db;
+    const governanceSchedules = await db.query.schedules.findMany({
+      where: and(
+        eq(schedules.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID),
+        eq(schedules.enabled, true),
+        isNotNull(schedules.nextRunAt)
+      ),
+      orderBy: asc(schedules.nextRunAt),
+      limit: 1,
+    });
 
-  const nextRunAt = enabledRuns[0] ?? null;
+    // 3. Recent runs (query ai_threads with system tenant RLS)
+    const threads = await db.query.aiThreads.findMany({
+      where: and(
+        eq(aiThreads.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID),
+        isNull(aiThreads.deletedAt) // Soft delete filter
+      ),
+      orderBy: desc(aiThreads.updatedAt),
+      limit: 10,
+    });
 
-  return {
-    nextRunAt: nextRunAt?.toISOString() ?? null,
-    charters: governanceSchedules.map((s) => ({
-      graphId: s.graphId,
-      nextRunAt: s.nextRunAt?.toISOString() ?? null,
-      enabled: s.enabled,
-      lastRunAt: s.lastRunAt?.toISOString() ?? null,
-    })),
-  };
-}
-```
-
-**1.5 Create API routes**
-
-File: `src/app/api/v1/governance/health/route.ts`
-
-```typescript
-export const GET = wrapRouteHandlerWithLogging(
-  { routeId: "governance.health", auth: { mode: "required", getSessionUser } },
-  async (ctx, _request, sessionUser) => {
-    if (!sessionUser) throw new Error("sessionUser required");
-
-    const health = await getGovernanceHealthFacade(ctx);
-    return NextResponse.json(governanceHealthOperation.output.parse(health));
+    return NextResponse.json(
+      governanceStatusOperation.output.parse({
+        systemCredits: balance.toString(), // BigInt → string
+        nextRunAt: governanceSchedules[0]?.nextRunAt?.toISOString() ?? null,
+        recentRuns: threads.map((t) => ({
+          id: t.stateKey,
+          title: t.metadata?.title ?? null,
+          startedAt: t.createdAt.toISOString(),
+          lastActivity: t.updatedAt.toISOString(),
+        })),
+      })
+    );
   }
 );
 ```
 
-Similar for `/failed-runs` and `/next-run` routes.
-
-### Phase 2: Frontend Dashboard (2-3 hours)
-
-**2.1 Create React Query hooks**
-
-File: `src/features/governance/hooks/useGovernanceHealth.ts`
+### 3. Create Page (20 min)
 
 ```typescript
-export function useGovernanceHealth() {
-  return useQuery({
-    queryKey: ["governance", "health"],
-    queryFn: async () => {
-      const res = await fetch("/api/v1/governance/health");
-      if (!res.ok) throw new Error("Failed to fetch governance health");
-      return res.json();
-    },
-    refetchInterval: 10000, // Poll every 10 seconds
-  });
-}
-```
-
-Similar for `useGovernanceFailedRuns` and `useGovernanceNextRun`.
-
-**2.2 Create credit health widget component**
-
-File: `src/features/governance/components/CreditHealthWidget.tsx`
-
-```typescript
-export function CreditHealthWidget() {
-  const { data, isLoading } = useGovernanceHealth();
-
-  if (isLoading) return <Skeleton />;
-  if (!data) return <ErrorAlert />;
-
-  const statusColors = {
-    green: "text-green-600 bg-green-50",
-    yellow: "text-yellow-600 bg-yellow-50",
-    red: "text-red-600 bg-red-50",
-  };
-
-  const statusEmoji = {
-    green: "🟢",
-    yellow: "🟡",
-    red: "🔴",
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Governance Credit Health</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className={cn("p-4 rounded-lg", statusColors[data.healthStatus])}>
-          <div className="text-2xl font-bold">
-            {statusEmoji[data.healthStatus]} {formatCredits(data.balanceCredits)}
-          </div>
-          <div className="text-sm mt-2">
-            {data.runwayHours} hours remaining
-          </div>
-          <div className="text-xs mt-1 opacity-75">
-            Burn rate: {formatCredits(data.burnRateLast24h)}/24h
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-```
-
-**2.3 Create failed runs table component**
-
-File: `src/features/governance/components/FailedRunsTable.tsx`
-
-```typescript
-export function FailedRunsTable() {
-  const { data, isLoading } = useGovernanceFailedRuns({ hours: 24, limit: 10 });
-
-  if (isLoading) return <Skeleton />;
-  if (!data?.runs.length) {
-    return <div className="text-muted-foreground">No failed runs in last 24 hours</div>;
-  }
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Charter</TableHead>
-          <TableHead>Scheduled</TableHead>
-          <TableHead>Error</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data.runs.map((run) => (
-          <TableRow key={run.runId}>
-            <TableCell>{run.charter}</TableCell>
-            <TableCell>{formatDateTime(run.scheduledFor)}</TableCell>
-            <TableCell className="text-red-600">{run.errorMessage}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-```
-
-**2.4 Create dashboard page**
-
-File: `src/app/(app)/governance/page.tsx` (server component)
-
-```typescript
+// src/app/(app)/governance/page.tsx
 export default async function GovernancePage() {
   const user = await getServerSessionUser();
   if (!user) redirect("/");
@@ -463,101 +190,121 @@ export default async function GovernancePage() {
 }
 ```
 
-File: `src/app/(app)/governance/view.tsx` (client component)
-
 ```typescript
+// src/app/(app)/governance/view.tsx
 "use client";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components";
+import { useGovernanceStatus } from "@/features/governance/hooks/useGovernanceStatus";
+
 export function GovernanceView() {
+  const { data, isLoading } = useGovernanceStatus();
+
+  if (isLoading) return <div>Loading...</div>;
+  if (!data) return <div>Failed to load governance status</div>;
+
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Governance Dashboard</h1>
+    <div className="container mx-auto py-8 space-y-6">
+      <h1 className="text-3xl font-bold">DAO Governance Status</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CreditHealthWidget />
-        <NextRunCountdown />
-      </div>
+      <Card>
+        <CardHeader><CardTitle>Credit Balance</CardTitle></CardHeader>
+        <CardContent>
+          <div className="text-2xl font-mono">{data.systemCredits} credits</div>
+        </CardContent>
+      </Card>
 
-      <div className="mt-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Failed Runs (Last 24h)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FailedRunsTable />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader><CardTitle>Next Run</CardTitle></CardHeader>
+        <CardContent>
+          {data.nextRunAt ? (
+            <div>Scheduled: {new Date(data.nextRunAt).toLocaleString()}</div>
+          ) : (
+            <div>No runs scheduled</div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Recent Runs</CardTitle></CardHeader>
+        <CardContent>
+          {data.recentRuns.map(run => (
+            <div key={run.id} className="border-b py-2 last:border-0">
+              <div className="font-medium">{run.title || run.id}</div>
+              <div className="text-sm text-muted-foreground">
+                Started: {new Date(run.startedAt).toLocaleString()}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 ```
 
-**2.5 Add navigation link**
+### 4. React Query Hook (10 min)
 
-Update main navigation to include "/governance" link (only for authenticated users).
+```typescript
+// src/features/governance/hooks/useGovernanceStatus.ts
+import { useQuery } from "@tanstack/react-query";
+import type { governanceStatusOperation } from "@/contracts/governance.status.v1.contract";
+import { z } from "zod";
+
+type GovernanceStatus = z.infer<typeof governanceStatusOperation.output>;
+
+export function useGovernanceStatus() {
+  return useQuery<GovernanceStatus>({
+    queryKey: ["governance", "status"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/governance/status");
+      if (!res.ok) throw new Error("Failed to fetch governance status");
+      return res.json();
+    },
+    refetchInterval: 30000, // 30s polling (not aggressive)
+  });
+}
+```
 
 ## Validation
+
+**Manual:**
+
+1. Start dev: `pnpm dev:stack`
+2. Navigate to `/governance`
+3. Verify:
+   - Credit balance displays (number)
+   - Next run time displays (or "No runs scheduled")
+   - Recent runs list shows last 10 threads
+4. Wait 30s, verify page auto-refreshes
 
 **Automated:**
 
 ```bash
 pnpm check  # Type check + lint
-pnpm test   # Unit tests for facades
 ```
 
-**Manual:**
+## Future Enhancements (NOT MVP)
 
-1. **Credit health indicator:**
-   - Start dev stack: `pnpm dev:stack`
-   - Navigate to `/governance`
-   - Verify credit balance displays
-   - Verify runway calculation is accurate
-   - Verify color matches runway (green/yellow/red)
+Deferred to later:
 
-2. **Failed runs table:**
-   - Manually cause a governance run to fail (disable credits)
-   - Wait for next scheduled run
-   - Verify failed run appears in table with error message
-
-3. **Next run countdown:**
-   - Verify countdown shows "Next run in: XX minutes"
-   - Wait until run time passes
-   - Verify countdown updates to next run
-
-4. **Polling:**
-   - Open browser dev tools → Network tab
-   - Verify API calls happen every 10 seconds
-   - Verify dashboard updates without page refresh
-
-**Test with zero credits:**
-
-```sql
--- Simulate zero credit scenario
-UPDATE credit_ledger
-SET amount = -1000000000, balance_after = 0
-WHERE billing_account_id = '00000000-0000-4000-b000-000000000000';
-```
-
-Verify dashboard shows 🔴 red status.
+- Runway calculation (balance ÷ burn rate → hours remaining)
+- Health color coding (🟢/🟡/🔴)
+- Failed runs filtering (status='error')
+- Per-charter breakdown
+- Drill-down into individual run transcripts
+- Real-time updates (WebSocket instead of polling)
 
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0070` linked in PR body
-- [ ] **Spec:** [openclaw-govern-distributed](../../docs/spec/governance-council.md) runtime state model upheld
-- [ ] **Research:** [governance-visibility-dashboard.md](../../docs/research/governance-visibility-dashboard.md) recommendations followed
-- [ ] **Tests:** Facades have unit tests, manual validation complete
-- [ ] **Contracts:** All API contracts defined with Zod schemas
-- [ ] **Performance:** Polling interval set to 10s (not too aggressive)
-- [ ] **Security:** Only queries `cogni_system` billing account (no user input for account ID)
+- [ ] **Spec:** System tenant constants used correctly
+- [ ] **Simplicity:** No new ports/adapters/services for simple reads
+- [ ] **Tests:** Manual validation complete
+- [ ] **Contracts:** Zod contract defined and used
 - [ ] **Reviewer:** assigned and approved
-
-## PR / Links
-
-- Research: [governance-visibility-dashboard.md](../../docs/research/governance-visibility-dashboard.md)
-- Story: [story.0063](./story.0063.governance-visibility-dashboard.md)
 
 ## Attribution
 
-- Research: Claude (Sonnet 4.5)
+- Design: Claude (Sonnet 4.5)
 - Implementation: TBD
