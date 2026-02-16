@@ -4,7 +4,7 @@
 /**
  * Module: `@components/kit/data-display/activity-chart-utils`
  * Purpose: Transform grouped activity series into the flat data shape consumed by ActivityChart.
- * Scope: Pure data transforms, no IO, no React.
+ * Scope: Pure data transforms, no IO, no React. Does not render components or fetch data.
  * Invariants: Output keys are sanitized for CSS variable compatibility (used as --color-<key>).
  * Side-effects: none
  * Links: [ActivityChart](./ActivityChart.tsx)
@@ -13,14 +13,14 @@
 
 import type { ChartConfig } from "@/components/vendor/shadcn/chart";
 
-/** Palette for per-group bar colors (up to 5 groups + Others). */
+/** Palette for per-group bar colors — theme chart vars at 70% for a subdued look. */
 const GROUP_COLORS = [
-  "hsl(24, 95%, 53%)", // orange
-  "hsl(221, 83%, 53%)", // blue
-  "hsl(142, 71%, 45%)", // green
-  "hsl(262, 83%, 58%)", // purple
-  "hsl(0, 84%, 60%)", // red
-  "hsl(0, 0%, 60%)", // gray (Others)
+  "hsl(var(--chart-1) / 0.7)", // blue
+  "hsl(var(--chart-2) / 0.7)", // teal
+  "hsl(var(--chart-3) / 0.7)", // amber
+  "hsl(var(--chart-4) / 0.7)", // purple
+  "hsl(var(--chart-5) / 0.7)", // rose
+  "hsl(var(--chart-3) / 0.35)", // Others — faded amber
 ] as const;
 
 type GroupedSeriesEntry = {
@@ -54,23 +54,24 @@ export function buildGroupedChartData(
   const config: ChartConfig = {};
   const dataKeys: { key: string; group: GroupedSeriesEntry }[] = [];
 
-  for (let i = 0; i < groupedSeries.length; i++) {
-    const entry = groupedSeries[i];
+  for (const [i, entry] of groupedSeries.entries()) {
     const key = toDataKey(entry.group);
-    config[key] = {
-      label: entry.group,
-      color: GROUP_COLORS[Math.min(i, GROUP_COLORS.length - 1)],
-    };
+    const color =
+      GROUP_COLORS[Math.min(i, GROUP_COLORS.length - 1)] ?? GROUP_COLORS[0];
+    config[key] = { label: entry.group, color };
     dataKeys.push({ key, group: entry });
   }
+
+  const ref = groupedSeries[0];
+  if (!ref) return { data: [], config };
 
   const data: Record<string, unknown>[] = [];
   for (let b = 0; b < bucketCount; b++) {
     const point: Record<string, unknown> = {
-      date: groupedSeries[0].buckets[b].bucketStart,
+      date: ref.buckets[b]?.bucketStart,
     };
     for (const { key, group } of dataKeys) {
-      point[key] = group.buckets[b][metric];
+      point[key] = group.buckets[b]?.[metric];
     }
     data.push(point);
   }
