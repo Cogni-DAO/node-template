@@ -109,7 +109,86 @@ Per [governance-status-api spec](../../docs/spec/governance-status-api.md), hexa
 - API: Verify `/api/v1/governance/status` matches contract schema
 - Manual: Navigate to `/governance`, verify data displays
 
-## Plan
+## Implementation Checkpoints
+
+- [x] **Checkpoint 1: Port & Contract Layer**
+  - Milestone: Port interface and API contract defined
+  - Invariants: CONTRACT_FIRST, PORT_ABSTRACTION
+  - Todos:
+    - [x] Create `src/ports/governance-status.port.ts`
+    - [x] Create `src/contracts/governance.status.v1.contract.ts`
+    - [x] Export port from `src/ports/index.ts`
+  - Validation:
+    - [x] `pnpm typecheck` passes
+    - [x] Port interface matches spec design
+    - [x] Contract includes `id` field
+
+- [ ] **Checkpoint 2: Adapter Layer**
+  - Milestone: Drizzle adapter implements GovernanceStatusPort
+  - Invariants: SYSTEM_TENANT_SCOPE, RLS_COMPATIBLE, HEXAGONAL_ARCHITECTURE
+  - Todos:
+    - [ ] Create `src/adapters/server/governance/drizzle-governance-status.adapter.ts`
+    - [ ] Create `src/adapters/server/governance/AGENTS.md`
+    - [ ] Export adapter (if needed for tests)
+  - Validation:
+    - [ ] `pnpm typecheck` passes
+    - [ ] Adapter queries filter by COGNI_SYSTEM_PRINCIPAL_USER_ID
+    - [ ] Unit test: Mock db calls, verify adapter logic
+
+- [ ] **Checkpoint 3: Feature Service Layer**
+  - Milestone: Feature service orchestrates ports
+  - Invariants: HEXAGONAL_ARCHITECTURE, FEATURE_SERVICE_LAYER, BIGINT_SERIALIZATION
+  - Todos:
+    - [ ] Create `src/features/governance/services/get-governance-status.ts`
+    - [ ] Create `src/features/governance/AGENTS.md`
+    - [ ] Update `src/features/AGENTS.md` exports list
+  - Validation:
+    - [ ] `pnpm typecheck` passes
+    - [ ] Service only imports ports (no adapters)
+    - [ ] Balance converted to string (BigInt serialization)
+    - [ ] Unit test: `tests/unit/features/governance/get-governance-status.test.ts`
+
+- [ ] **Checkpoint 4: Container Wiring**
+  - Milestone: GovernanceStatusPort adapter wired in DI container
+  - Invariants: PORT_ABSTRACTION
+  - Todos:
+    - [ ] Update `src/bootstrap/container.ts`
+  - Validation:
+    - [ ] `pnpm typecheck` passes
+    - [ ] Container exposes `governanceStatus` property
+
+- [ ] **Checkpoint 5: API Route Layer**
+  - Milestone: Route handler calls feature service
+  - Invariants: AUTH_REQUIRED, FEATURE_SERVICE_LAYER
+  - Todos:
+    - [ ] Create `src/app/api/v1/governance/status/route.ts`
+  - Validation:
+    - [ ] `pnpm typecheck` passes
+    - [ ] Route uses wrapRouteHandlerWithLogging
+    - [ ] Route requires authentication
+    - [ ] Route validates output with contract schema
+
+- [ ] **Checkpoint 6: UI Layer**
+  - Milestone: /governance page displays status
+  - Invariants: AUTH_REQUIRED
+  - Todos:
+    - [ ] Create `src/features/governance/hooks/useGovernanceStatus.ts`
+    - [ ] Create `src/app/(app)/governance/page.tsx`
+    - [ ] Create `src/app/(app)/governance/view.tsx`
+  - Validation:
+    - [ ] `pnpm check` passes
+    - [ ] Page requires authentication
+    - [ ] React Query polling interval = 30s
+    - [ ] Manual: Navigate to `/governance`, verify data displays
+
+- [ ] **Final Checkpoint**
+  - [ ] All unit tests pass
+  - [ ] `pnpm check` passes
+  - [ ] Update task status to "In Progress"
+  - [ ] Update `updated:` date
+  - [ ] Update `branch:` field
+
+## Original Plan (for reference)
 
 ### 1. Define Contract (5 min)
 
