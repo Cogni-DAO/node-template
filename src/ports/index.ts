@@ -81,6 +81,10 @@ export type {
 } from "./ai-telemetry.port";
 export type { Clock } from "./clock.port";
 export type {
+  GovernanceRun,
+  GovernanceStatusPort,
+} from "./governance-status.port";
+export type {
   AiExecutionErrorCode,
   GraphExecutorPort,
   GraphFinal,

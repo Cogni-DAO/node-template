@@ -24,7 +24,7 @@ import { fetchActivity } from "./_api/fetchActivity";
 export function ActivityView() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const range = (searchParams.get("range") as TimeRange) || "1m";
+  const range = (searchParams.get("range") as TimeRange) || "1d";
 
   // Fetch activity data keyed by range
   const { data, isLoading, error } = useQuery({
