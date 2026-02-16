@@ -2,7 +2,7 @@
 id: bug.0072
 type: bug
 title: "HTTP errors invisible in dashboards — no error rate metrics, agent reports 0 errors during outage"
-status: Todo
+status: Done
 priority: 0
 estimate: 2
 summary: "The deployment health dashboard and AI agent cannot see HTTP 4xx/5xx errors. `http_requests_total` uses status buckets (2xx/4xx/5xx) but no dashboard panel queries them. The scheduler-worker emits zero Prometheus metrics. During the governance 400 outage, the agent reported '0 errors in last hour' while 4 runs failed every 15 minutes."
@@ -12,7 +12,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.reliability
-branch: feat/v0-work-items
+branch: fix/gov-schedules
 pr:
 reviewer:
 created: 2026-02-16

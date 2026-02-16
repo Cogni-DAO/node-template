@@ -2,7 +2,7 @@
 id: bug.0071
 type: bug
 title: "Governance schedule sync skips config updates — Temporal schedules stuck with stale input"
-status: Todo
+status: Done
 priority: 0
 estimate: 2
 summary: "syncGovernanceSchedules only sets model/input at create time. Existing Temporal schedules hit the conflict→skip path and never get updated. All 4 governance runs fail with 400 'model field is required' because schedules created before the model-required enforcement still carry no model field."
@@ -13,7 +13,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.system-tenant-governance
-branch: feat/v0-work-items
+branch: fix/gov-schedules
 pr:
 reviewer:
 created: 2026-02-16

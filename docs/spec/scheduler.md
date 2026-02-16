@@ -8,7 +8,7 @@ summary: Temporal-based scheduling system for graph execution via internal HTTP 
 read_when: Implementing scheduled workflows, execution grants, or Temporal integration
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-12
+verified: 2026-02-16
 tags: [scheduler]
 ---
 
@@ -66,6 +66,8 @@ tags: [scheduler]
 17. **DB_TIMING_IS_CACHE_ONLY**: `schedules.next_run_at` and `last_run_at` are cache columns for UI/quick-queries. Authoritative timing lives in Temporal. Synced on CRUD only; drift is acceptable.
 
 18. **SKIP_MISSED_RUNS**: P0 does not backfill missed runs. Temporal `catchupWindow=0` enforces this.
+
+19. **UPDATE_ON_DRIFT**: `syncGovernanceSchedules` describes each existing Temporal schedule and compares input payload (model, message) and timezone against desired config. If config has drifted, it calls `updateSchedule()` to patch the schedule in-place. Unchanged schedules are skipped. This prevents stale schedules from running with outdated parameters after config changes.
 
 ---
 

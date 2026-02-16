@@ -3,14 +3,16 @@
 
 /**
  * Module: `@ports/schedule-control`
- * Purpose: Vendor-agnostic port for schedule lifecycle control (create/pause/resume/delete/list).
+ * Purpose: Vendor-agnostic port for schedule lifecycle control (create/update/pause/resume/delete/list).
  * Scope: Defines contract for schedule orchestration. Does not contain implementations or vendor imports.
  * Invariants:
  *   - Per CRUD_IS_TEMPORAL_AUTHORITY: CRUD endpoints control schedule lifecycle, worker never modifies schedules
  *   - Per WORKER_NEVER_CONTROLS_SCHEDULES: Worker must not depend on this port
  *   - createSchedule throws on conflict (caller-supplied scheduleId)
+ *   - updateSchedule replaces schedule config in-place; throws NotFound if missing
  *   - deleteSchedule is idempotent (no-op if not found)
  *   - pause/resume are idempotent (no-op if already in target state)
+ *   - describeSchedule returns config fields (cron, timezone, input) for drift detection
  * Side-effects: none (interface definition only)
  * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md
  * @public

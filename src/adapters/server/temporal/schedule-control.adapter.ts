@@ -3,13 +3,15 @@
 
 /**
  * Module: `@adapters/server/temporal/schedule-control`
- * Purpose: Temporal implementation of ScheduleControlPort.
+ * Purpose: Temporal implementation of ScheduleControlPort (create/update/pause/resume/delete/describe).
  * Scope: Implements schedule lifecycle via Temporal client. Does not handle workflow execution logic.
  * Invariants:
- *   - Per CRUD_IS_TEMPORAL_AUTHORITY: Only CRUD endpoints use this adapter
+ *   - Per CRUD_IS_TEMPORAL_AUTHORITY: Only CRUD endpoints and governance sync use this adapter
  *   - Per WORKER_NEVER_CONTROLS_SCHEDULES: Worker must not depend on this
  *   - Per OVERLAP_SKIP_DEFAULT: Schedules use overlap=SKIP
  *   - Per CATCHUP_WINDOW_ZERO: No backfill (catchupWindow=0)
+ *   - updateSchedule preserves existing state (pause, notes) via previous.state
+ *   - describeSchedule extracts input from action.args[0]; cron returns null (compiled to calendars by Temporal)
  * Side-effects: IO (Temporal RPC calls)
  * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md, ScheduleControlPort
  * @public

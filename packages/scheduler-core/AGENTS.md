@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2026-02-15
+- **Last reviewed:** 2026-02-16
 - **Status:** stable
 
 ## Purpose
@@ -40,7 +40,7 @@ Pure TypeScript types, port interfaces, and orchestration services for the sched
 ## Public Surface
 
 - **Exports:**
-  - `ScheduleControlPort` - Vendor-agnostic schedule lifecycle control (create/pause/resume/delete/list)
+  - `ScheduleControlPort` - Vendor-agnostic schedule lifecycle control (create/update/pause/resume/delete/list/describe)
   - `ScheduleUserPort` - User-facing schedule CRUD (callerUserId: UserId)
   - `ExecutionGrantUserPort.ensureGrant` - Idempotent find-or-create grant
   - `syncGovernanceSchedules()` - Pure orchestration service for governance schedule sync
@@ -50,7 +50,7 @@ Pure TypeScript types, port interfaces, and orchestration services for the sched
   - `ExecutionRequestPort` - Idempotency layer for execution requests
   - `ScheduleRunRepository` - Schedule run persistence
   - `ScheduleSpec`, `ScheduleRun`, `ExecutionGrant`, `ExecutionRequest` - Domain types
-  - `ScheduleDescription`, `CreateScheduleParams` - Schedule control types
+  - `ScheduleDescription` (includes cron/timezone/input for drift detection), `CreateScheduleParams` - Schedule control types
   - `IdempotencyCheckResult`, `ExecutionOutcome` - Execution request types
   - Error classes: `ScheduleControlUnavailableError`, `ScheduleControlConflictError`, `ScheduleControlNotFoundError`, grant errors, validation errors
   - Type guards: `isScheduleControl*Error`, `isGrant*Error`, `isSchedule*Error`
@@ -96,6 +96,6 @@ pnpm --filter @cogni/scheduler-core build
 ## Notes
 
 - `ScheduleControlPort` replaces the deprecated `JobQueuePort` (Graphile Worker)
-- Per CRUD_IS_TEMPORAL_AUTHORITY: Only CRUD endpoints use ScheduleControlPort
+- Per CRUD_IS_TEMPORAL_AUTHORITY: Only CRUD endpoints and governance sync use ScheduleControlPort
 - Per WORKER_NEVER_CONTROLS_SCHEDULES: Worker service must not depend on ScheduleControlPort
 - `services/syncGovernanceSchedules.ts` is pure orchestration — depends only on ports/types within this package
