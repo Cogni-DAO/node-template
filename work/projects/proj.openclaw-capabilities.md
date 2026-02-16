@@ -124,9 +124,10 @@ Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md)
 
 #### Streaming Status Events
 
-| Deliverable                                                                             | Status | Est | Work Item |
-| --------------------------------------------------------------------------------------- | ------ | --- | --------- |
-| Consume OpenClaw agent events (lifecycle, tool, compaction) — surface status in chat UI | Done   | 2   | task.0074 |
+| Deliverable                                                                                | Status | Est | Work Item |
+| ------------------------------------------------------------------------------------------ | ------ | --- | --------- |
+| Consume OpenClaw agent events (lifecycle, tool, compaction) — surface status in chat UI    | Done   | 2   | task.0074 |
+| Stream reasoning tokens from OpenClaw → AI SDK reasoning parts → assistant-ui Reasoning UI | Todo   | 2   | task.0078 |
 
 #### Gateway Client Hardening
 

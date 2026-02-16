@@ -77,6 +77,7 @@
 | 1   | 2   | Todo        | task.0068  | Dynamic default model selection from LiteLLM config metadata                                   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Backlog     | bug.0069   | Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite                |                            |                                 |
 | 1   | 1   | Backlog     | bug.0070   | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail                     | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 2   | Todo        | task.0078  | OpenClaw reasoning token streaming — display model thinking in collapsible UI                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Done        | task.0074  | OpenClaw streaming status events — surface agent activity in UI                                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Backlog     | task.0075  | Governance scheduled runs post status updates to #continuous-cogni-updates Discord channel     | Messenger Channels         | proj.messenger-channels         |
 | 1   | 2   | Backlog     | task.0076  | Dedicated Discord community agent — separate agent config with Discord-specific personality    | Messenger Channels         | proj.messenger-channels         |
