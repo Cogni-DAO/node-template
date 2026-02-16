@@ -3,9 +3,9 @@
 
 /**
  * Module: `@app/(app)/activity/view`
- * Purpose: Client-side view for Activity dashboard with URL-driven time range.
- * Scope: Manages time range in URL, fetches data via React Query, renders charts and table. Does not implement business logic.
- * Invariants: Time range persists in URL searchParams, refetches on change
+ * Purpose: Client-side view for Activity dashboard with URL-driven time range and groupBy toggle.
+ * Scope: Manages time range and groupBy in URL, fetches data via React Query, renders charts and table. Does not implement business logic.
+ * Invariants: Time range and groupBy persist in URL searchParams, refetches on change
  * Side-effects: IO
  * Links: [ActivityChart](../../../components/kit/data-display/ActivityChart.tsx), [fetchActivity](./_api/fetchActivity.ts)
  * @public
@@ -15,28 +15,39 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { TimeRangeSelector } from "@/components";
 import { ActivityChart } from "@/components/kit/data-display/ActivityChart";
 import { ActivityTable } from "@/components/kit/data-display/ActivityTable";
-import type { TimeRange } from "@/contracts/ai.activity.v1.contract";
+import {
+  buildAggregateChartData,
+  buildGroupedChartData,
+} from "@/components/kit/data-display/activity-chart-utils";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/vendor/shadcn/toggle-group";
+import type {
+  ActivityGroupBy,
+  TimeRange,
+} from "@/contracts/ai.activity.v1.contract";
 import { fetchActivity } from "./_api/fetchActivity";
 
 export function ActivityView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const range = (searchParams.get("range") as TimeRange) || "1d";
+  const [groupBy, setGroupBy] = useState<ActivityGroupBy | undefined>("model");
 
-  // Fetch activity data keyed by range
   const { data, isLoading, error } = useQuery({
-    queryKey: ["activity", range],
-    queryFn: () => fetchActivity({ range }),
-    staleTime: 30_000, // Consider data fresh for 30s
-    gcTime: 5 * 60_000, // Keep in cache for 5 minutes
+    queryKey: ["activity", range, groupBy],
+    queryFn: () => fetchActivity({ range, groupBy }),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
     retry: 2,
   });
 
   const handleRangeChange = (newRange: TimeRange) => {
-    // Update URL - React Query will auto-refetch due to queryKey change
     router.replace(`/activity?range=${newRange}`, { scroll: false });
   };
 
@@ -70,72 +81,85 @@ export function ActivityView() {
     );
   }
 
-  const { chartSeries, totals, rows, effectiveStep } = data;
+  const { chartSeries, groupedSeries, totals, rows, effectiveStep } = data;
 
-  const spendData = chartSeries.map((d) => ({
-    date: d.bucketStart,
-    value: Number.parseFloat(d.spend),
-  }));
+  const hasGrouped = groupedSeries && groupedSeries.length > 0;
 
-  const tokenData = chartSeries.map((d) => ({
-    date: d.bucketStart,
-    value: d.tokens,
-  }));
+  const spend = hasGrouped
+    ? buildGroupedChartData(groupedSeries, "spend")
+    : buildAggregateChartData(
+        chartSeries,
+        "spend",
+        "Spend ($)",
+        "hsl(var(--chart-1))"
+      );
 
-  const requestData = chartSeries.map((d) => ({
-    date: d.bucketStart,
-    value: d.requests,
-  }));
+  const tokens = hasGrouped
+    ? buildGroupedChartData(groupedSeries, "tokens")
+    : buildAggregateChartData(
+        chartSeries,
+        "tokens",
+        "Tokens",
+        "hsl(var(--chart-2))"
+      );
+
+  const requests = hasGrouped
+    ? buildGroupedChartData(groupedSeries, "requests")
+    : buildAggregateChartData(
+        chartSeries,
+        "requests",
+        "Requests",
+        "hsl(var(--chart-3))"
+      );
 
   return (
     <div className="mx-auto flex max-w-[var(--max-width-container-screen)] flex-col gap-8 p-4 md:p-8 lg:px-16">
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-3xl tracking-tight">Your Activity</h1>
-        <TimeRangeSelector
-          value={range}
-          onValueChange={handleRangeChange}
-          className="w-40 rounded-lg"
-        />
+        <div className="flex items-center gap-3">
+          <ToggleGroup
+            type="single"
+            value={groupBy ?? ""}
+            onValueChange={(v) =>
+              setGroupBy((v as ActivityGroupBy) || undefined)
+            }
+            className="rounded-lg border"
+          >
+            <ToggleGroupItem value="model" className="px-3 text-xs">
+              By Model
+            </ToggleGroupItem>
+            <ToggleGroupItem value="graphId" className="px-3 text-xs">
+              By Agent
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <TimeRangeSelector
+            value={range}
+            onValueChange={handleRangeChange}
+            className="w-40 rounded-lg"
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <ActivityChart
-          title="Total Spend"
+          title="Spend"
           description={`$${totals.spend.total} total`}
-          data={spendData}
-          config={{
-            value: {
-              label: "Spend ($)",
-              color: "hsl(var(--chart-1))",
-            },
-          }}
-          color="hsl(var(--chart-1))"
+          data={spend.data}
+          config={spend.config}
           effectiveStep={effectiveStep}
         />
         <ActivityChart
-          title="Total Tokens"
+          title="Tokens"
           description={`${totals.tokens.total.toLocaleString()} tokens`}
-          data={tokenData}
-          config={{
-            value: {
-              label: "Tokens",
-              color: "hsl(var(--chart-2))",
-            },
-          }}
-          color="hsl(var(--chart-2))"
+          data={tokens.data}
+          config={tokens.config}
           effectiveStep={effectiveStep}
         />
         <ActivityChart
-          title="Total Requests"
+          title="Requests"
           description={`${totals.requests.total.toLocaleString()} requests`}
-          data={requestData}
-          config={{
-            value: {
-              label: "Requests",
-              color: "hsl(var(--chart-3))",
-            },
-          }}
-          color="hsl(var(--chart-3))"
+          data={requests.data}
+          config={requests.config}
           effectiveStep={effectiveStep}
         />
       </div>
@@ -145,7 +169,6 @@ export function ActivityView() {
           Recent Activity
         </h2>
         <ActivityTable logs={rows} />
-        {/* Load More button would go here */}
       </div>
     </div>
   );
