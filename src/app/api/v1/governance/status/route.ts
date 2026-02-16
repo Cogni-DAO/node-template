@@ -27,12 +27,10 @@ export const dynamic = "force-dynamic";
 
 export const GET = wrapRouteHandlerWithLogging(
   {
-    routeId: "governance.status",
+    routeId: "governance.status.v1",
     auth: { mode: "required", getSessionUser: getServerSessionUser },
   },
-  async (_ctx, _request, sessionUser) => {
-    if (!sessionUser) throw new Error("sessionUser required");
-
+  async (_ctx, _request, _sessionUser) => {
     const container = getContainer();
 
     const accountService = container.accountsForUser(

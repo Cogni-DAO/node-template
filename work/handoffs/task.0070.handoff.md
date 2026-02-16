@@ -2,109 +2,108 @@
 id: task.0070.handoff
 type: handoff
 work_item_id: task.0070
-status: pending
+status: complete
 created: 2026-02-16
 updated: 2026-02-16
-branch: ""
-last_commit: ""
+branch: feat/gov-dashboard
+last_commit: dfe98b57
 ---
 
-# Handoff: Governance Status Dashboard (User-Facing)
+# Handoff: DAO Governance Status Dashboard
 
 ## Context
 
-- **Goal**: User-facing DAO transparency page showing system tenant governance health
-- **NOT** an ops monitoring tool — this is public visibility, not incident prevention
-- **Shows**: Credit balance, next governance run time, recent 10 runs
-- **Estimate**: 1 hour (purely additive, simple composition of existing infrastructure)
-- **Key Decision**: Composition-over-ports for MVP — reuse `AccountService`, direct DB queries acceptable for single caller
+- **Goal**: User-facing transparency page showing system tenant governance health
+- **NOT** an ops monitoring tool — this is public DAO visibility, not incident prevention
+- **Displays**: Credit balance, next governance run time, recent 10 runs
+- **Architecture decision**: Proper hexagonal with GovernanceStatusPort (design review completed)
 
 ## Current State
 
-**Not Started** — design complete, ready to implement.
+**All Checkpoints Completed** (commits c22ee70c → dfe98b57):
 
-- ✅ Spec written: `docs/spec/governance-status-api.md`
-- ✅ Task designed: `work/items/task.0070.governance-credit-health-dashboard.md`
-- ❌ No code written yet
-- ❌ No branch created
-- ❌ No tests written
+- ✅ **Checkpoint 1** (c22ee70c): Port & Contract Layer
+- ✅ **Checkpoint 2** (efbad073): Drizzle adapter implementation
+- ✅ **Checkpoint 3** (2339c97b): Feature service
+- ✅ **Checkpoint 4** (73e4c80c): Container wiring
+- ✅ **Checkpoint 5** (57794681): API route
+- ✅ **Checkpoint 6** (2adea212): UI components (page, view, hook)
+- ✅ **Final** (dfe98b57): Unit tests (5/5 passing)
 
 ## Decisions Made
 
-**Architectural Pattern**: [Composition Over Ports (governance-status-api.md)](../../docs/spec/governance-status-api.md#design)
+**Architecture** (from design review):
 
-- Reuse `AccountService` for balance queries (already account-agnostic)
-- Direct Drizzle queries for `ai_threads` and `schedules` tables (single caller = acceptable)
-- Extract to `GovernanceStatusPort` ONLY when second caller (MCP tool, CLI, worker) needs it
+- Port-based design: Route → Feature Service → Ports (AccountService + GovernanceStatusPort) → Adapters
+- Port created even for single caller (hexagonal compliance, not "YAGNI")
+- Link: [governance-status-api.md spec](../../docs/spec/governance-status-api.md)
 
-**Data Sources**:
+**Data Flow**:
 
-- System credits: `AccountService.getBalance(COGNI_SYSTEM_BILLING_ACCOUNT_ID)` → string (BigInt serialized)
-- Next run: `schedules` table query → `WHERE owner_user_id = SYSTEM_PRINCIPAL AND enabled = true ORDER BY next_run_at LIMIT 1`
-- Recent runs: `ai_threads` table query → `WHERE owner_user_id = SYSTEM_PRINCIPAL AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10`
+- Reuse `AccountService.getBalance()` for system balance
+- New `GovernanceStatusPort` with two methods: `getScheduleStatus()`, `getRecentRuns()`
+- Adapter queries: `schedules` table (next run), `ai_threads` table (recent runs)
 
-**Why No Port Extraction?**:
+**UI Pattern**:
 
-Per [architecture.md](../../docs/spec/architecture.md) and [governance-status-api.md](../../docs/spec/governance-status-api.md):
+- 30s polling interval (not aggressive for infrequent governance runs)
+- React Query hook pattern (like `/credits` page)
+- Server component + client view split
 
-- Single caller (one route) = direct queries acceptable
-- Simple filtering (owner_user_id = constant)
-- Read-only operations
-- Clear migration path documented in spec when second caller appears
+## Manual Validation (Next Steps)
 
-## Next Actions
+- [ ] Start dev server: `pnpm dev:stack`
+- [ ] Navigate to `/governance` in browser
+- [ ] Verify credit balance displays
+- [ ] Verify next run time displays (or "No runs scheduled")
+- [ ] Verify recent runs list shows governance threads
+- [ ] Wait 30s, verify page auto-refreshes
 
-- [ ] Create `src/contracts/governance.status.v1.contract.ts` — Zod contract (see task Plan section 1)
-- [ ] Create `src/app/api/v1/governance/status/route.ts` — API route (see task Plan section 2)
-- [ ] Create `src/app/(app)/governance/page.tsx` — Server component with auth check (see task Plan section 3)
-- [ ] Create `src/app/(app)/governance/view.tsx` — Client component with React Query polling (see task Plan section 3)
-- [ ] Create `src/features/governance/hooks/useGovernanceStatus.ts` — React Query hook with 30s polling (see task Plan section 4)
-- [ ] Manual validation: Navigate to `/governance`, verify data displays (see task Validation section)
-- [ ] Run `pnpm check` — type check + lint
-- [ ] Create PR with `/pull-request` skill
+## Pre-PR Cleanup
+
+- [ ] **IMPORTANT**: `docs/spec/streaming-status.md` was accidentally included in this branch (commit fa13657b) but is unrelated to governance status. Another developer has made modifications to it. Before creating the PR, this file needs to be cherry-picked to a separate branch or removed from the PR scope.
 
 ## Risks / Gotchas
 
 **BigInt Serialization**:
 
-- `balance` from `AccountService.getBalance()` returns `bigint`
-- Must call `.toString()` before JSON serialization or `JSON.stringify()` will throw
-- Contract expects `systemCredits: z.string()` — this enforces the conversion
-
-**RLS Compatibility**:
-
-- `ai_threads` table has RLS policy: `owner_user_id = current_setting('app.current_user_id')`
-- API route queries with `eq(aiThreads.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID)` — compatible with RLS filter
-- Route has elevated privileges but queries still filter by owner (good practice)
+- `AccountService.getBalance()` returns `bigint`
+- Must call `.toString()` before JSON serialization
+- Contract enforces `systemCredits: z.string()`
 
 **System Tenant Constants**:
 
-- Import from `@/shared/constants/system-tenant` (not hardcoded strings)
-- `COGNI_SYSTEM_PRINCIPAL_USER_ID` for user queries
-- `COGNI_SYSTEM_BILLING_ACCOUNT_ID` for balance queries
+- Import from `@/shared/constants/system-tenant`
+- Use `COGNI_SYSTEM_PRINCIPAL_USER_ID` for queries
+- Use `COGNI_SYSTEM_BILLING_ACCOUNT_ID` for balance
 
-**Polling Interval**:
+**RLS Compatibility**:
 
-- Task uses 30s (`refetchInterval: 30000`) — not aggressive for governance data
-- Research doc suggested 10s, but task simplified to 30s as governance runs are infrequent (15-60 min)
+- Queries use `owner_user_id` filter even though route has elevated privileges
+- Compatible with future RLS policies on `ai_threads` and `schedules`
 
-**When to Extract Port**:
+**Adapter Queries**:
 
-- DO NOT prematurely extract `GovernanceStatusPort` "just in case"
-- Extract ONLY when second caller needs it (MCP tool, CLI, worker, etc.)
-- Migration path documented in spec at governance-status-api.md#future-extensions
+- `schedules`: filter by `owner_user_id + enabled + nextRunAt IS NOT NULL`, order by `nextRunAt ASC`, limit 1
+- `ai_threads`: filter by `owner_user_id + deleted_at IS NULL`, order by `updatedAt DESC`, limit 10
+
+**Metadata Parsing**:
+
+- `ai_threads.metadata` is JSONB with optional `title` field
+- Cast as `{ title?: string }` when accessing
 
 ## Pointers
 
-| File / Resource                                    | Why it matters                                                             |
-| -------------------------------------------------- | -------------------------------------------------------------------------- |
-| `work/items/task.0070...md`                        | Full task with plan, code samples, validation steps                        |
-| `docs/spec/governance-status-api.md`               | Spec defining API contract, invariants, composition-over-ports decision    |
-| `packages/db-schema/src/ai-threads.ts`             | Schema for recent runs — has ownerUserId, stateKey, metadata, updatedAt    |
-| `packages/db-schema/src/scheduling.ts`             | Schema for schedules table — has nextRunAt, enabled, ownerUserId           |
-| `src/ports/accounts.port.ts`                       | AccountService.getBalance() — already works for any billing account        |
-| `src/shared/constants/system-tenant.ts`            | System tenant constants (COGNI_SYSTEM_PRINCIPAL_USER_ID, etc.)             |
-| `src/app/(app)/activity/page.tsx`                  | Existing pattern for server component with auth check                      |
-| `src/app/(app)/credits/view.tsx`                   | Existing pattern for React Query polling (credits balance)                 |
-| `docs/research/governance-visibility-dashboard.md` | Research doc explaining why polling > SSE/WebSocket for this use case      |
-| `work/items/story.0063...md`                       | Parent story (larger scope with heartbeats, EDOs, etc.) — this task is MVP |
+| File / Resource                                                       | Why it matters                                             |
+| --------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [task.0070](../items/task.0070.governance-credit-health-dashboard.md) | Full task with plan, code samples, validation steps        |
+| [governance-status-api.md](../../docs/spec/governance-status-api.md)  | Spec with architecture diagram, invariants, port interface |
+| `src/ports/governance-status.port.ts`                                 | Port interface (completed)                                 |
+| `src/contracts/governance.status.v1.contract.ts`                      | API contract (completed)                                   |
+| `src/shared/constants/system-tenant.ts`                               | System tenant constants                                    |
+| `src/ports/accounts.port.ts`                                          | AccountService port (reused for balance)                   |
+| `packages/db-schema/src/ai-threads.ts`                                | ai_threads schema (query for recent runs)                  |
+| `packages/db-schema/src/scheduling.ts`                                | schedules schema (query for next run)                      |
+| `src/app/(app)/credits/CreditsPage.client.tsx`                        | Pattern: React Query polling, balance display              |
+| `src/adapters/server/accounts/drizzle.adapter.ts`                     | Pattern: Drizzle adapter implementation                    |
+| Commit c22ee70c                                                       | Checkpoint 1: Port and contract layer                      |
