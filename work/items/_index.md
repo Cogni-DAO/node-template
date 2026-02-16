@@ -25,7 +25,10 @@
 | 0   | 2   | Todo        | task.0022  | Git publish relay: credential isolation + agent-triggered host push                            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 1   | Done        | task.0032  | Upgrade Cogni from Node 20 to Node 22 LTS                                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | Todo        | task.0031  | Build unified cogni-sandbox-openclaw devtools image + pnpm cache volumes                       | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 0   | 3   | Todo        | story.0063 | Governance visibility dashboard — real-time AI council activity                                | System Tenant & Governance | proj.system-tenant-governance   |
+| 0   | 2   | Done        | bug.0071   | Governance schedule sync skips config updates — Temporal schedules stuck with stale input      | System Tenant & Governance | proj.system-tenant-governance   |
+| 0   | 2   | Done        | bug.0072   | HTTP errors invisible in dashboards — no error rate metrics, agent reports 0 errors            | Reliability & Uptime       | proj.reliability                |
+| 0   | 2   | Todo        | task.0070  | Governance credit health dashboard — prevent silent credit outages                             | System Tenant & Governance | proj.system-tenant-governance   |
+| 1   | 3   | Todo        | story.0063 | Governance visibility dashboard — real-time AI council activity                                | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | bug.0027   | Gateway billing fails in production — Docker socket ENOENT crashes all OpenClaw runs           | Payments Enhancements      | proj.payments-enhancements      |
 | 0   | 2   | Backlog     | bug.0026   | Scheduler worker silently stops polling — schedules enabled but runs cease                     | Reliability & Uptime       | proj.reliability                |
 | 0   | 1   | Done        | task.0029  | Callback-driven billing — LiteLLM generic_api webhook replaces log scraping                    | Unified Graph Launch       | proj.unified-graph-launch       |
@@ -71,6 +74,7 @@
 | 1   | 2   | Todo        | task.0062  | Standardized LiteLLM model update workflow — REQUIRED billing validation for all new models    | Reliability & Uptime       | proj.reliability                |
 | 1   | 2   | Todo        | task.0068  | Dynamic default model selection from LiteLLM config metadata                                   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Backlog     | bug.0069   | Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite                |                            |                                 |
+| 1   | 1   | Backlog     | bug.0070   | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail                     | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
 > Sort: priority → status (completed last) → estimate → type

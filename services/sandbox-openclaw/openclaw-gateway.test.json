@@ -64,9 +64,28 @@
       "extraDirs": ["/repo/current/.openclaw/skills"]
     }
   },
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "token": "${DISCORD_BOT_TOKEN}",
+      "groupPolicy": "open"
+    }
+  },
+  "plugins": {
+    "entries": {
+      "discord": { "enabled": true }
+    }
+  },
   "tools": {
     "elevated": { "enabled": false },
-    "deny": ["browser", "cron", "gateway", "nodes", "sessions_send", "message"]
+    "deny": [
+      "browser",
+      "cron",
+      "gateway",
+      "nodes",
+      "sessions_list",
+      "sessions_history"
+    ]
   },
   "cron": { "enabled": false },
   "gateway": {

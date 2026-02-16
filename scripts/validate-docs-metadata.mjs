@@ -25,7 +25,7 @@ const ADR_DECISION = ["proposed", "accepted", "deprecated", "superseded"];
 
 // === WORK ENUMS ===
 const PROJECT_STATE = ["Active", "Paused", "Done", "Dropped"];
-const ITEM_STATUS = ["Backlog", "Todo", "In Progress", "Done", "Cancelled"];
+const ITEM_STATUS = ["Backlog", "Todo", "In Progress", "Blocked", "Done"];
 const ITEM_TYPES = ["task", "bug", "spike", "story", "subtask"];
 const PRIORITY = [0, 1, 2, 3];
 const ESTIMATE = [0, 1, 2, 3, 4, 5];

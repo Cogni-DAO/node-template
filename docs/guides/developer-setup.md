@@ -43,9 +43,13 @@ You are setting up the Cogni-Template repo for the first time, or need a referen
    ```
 
 3. **Setup development database:**
+
    ```bash
    pnpm db:setup
    ```
+
+4. **Discord bot (optional):**
+   If you want the OpenClaw gateway to connect a Discord bot, add `DISCORD_BOT_TOKEN` to `.env.local`. See [Discord Bot Setup](./discord-bot-setup.md) for full instructions.
 
 ## Daily Development
 
@@ -104,3 +108,4 @@ pnpm test           # run unit tests (no infra required)
 - [Environments Spec](../spec/environments.md) — deployment modes and stack configurations
 - [Databases Spec](../spec/databases.md) — migration architecture and database setup
 - [Testing Guide](./testing.md) — testing strategy and adapter patterns
+- [Discord Bot Setup](./discord-bot-setup.md) — connect a Discord bot to the OpenClaw gateway

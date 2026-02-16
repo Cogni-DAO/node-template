@@ -3,7 +3,7 @@ id: story.0063
 type: story
 title: Governance visibility dashboard — real-time AI council activity
 status: Todo
-priority: 0
+priority: 1
 estimate: 3
 summary: Users can see when the next governance run happens, what the AI council is doing right now, and recent governance decisions across all charters
 outcome: System tenant has a dedicated governance dashboard showing countdown timer, live activity stream, and recent heartbeats/EDOs
@@ -15,7 +15,7 @@ branch:
 pr:
 reviewer:
 created: 2026-02-15
-updated: 2026-02-15
+updated: 2026-02-16
 labels: [governance, ui, observability]
 external_refs:
 ---
@@ -52,6 +52,8 @@ This addresses the observability ideal from MEMORY.md: "Cogni AI should be able 
 
 1. **Home page countdown**: Shows "Next governance run in: XX:XX" based on scheduler config
 2. **Governance dashboard** (e.g., `/governance` or system tenant page):
+   - **Credit health indicator** (balance + runway with color-coded status)
+   - **Failed run list** with error details
    - Live activity stream from gateway (scrolling log of current run)
    - Latest heartbeat from each charter (COMMUNITY, ENGINEERING, SUSTAINABILITY, GOVERN)
    - Budget gate status from `memory/_budget_header.md`
@@ -61,6 +63,18 @@ This addresses the observability ideal from MEMORY.md: "Cogni AI should be able 
 ## Requirements
 
 ### Must Have
+
+**Credit Health (Prevent 2026-02-15 Incident):**
+
+- **Current credit balance** for governance billing account with health indicator:
+  - 🟢 Green: > 24 hours runway remaining
+  - 🟡 Yellow: 6-24 hours remaining
+  - 🔴 Red: < 6 hours or 0 balance
+- **Runway estimate**: "XX hours of governance remaining" (balance ÷ burn rate)
+- **Failed run visibility**: Show failed runs with timestamp, charter, error code
+- **Last successful run** timestamp per charter
+
+**Core Dashboard:**
 
 - Display countdown timer to next scheduled governance run
 - Show latest heartbeat for each charter (run_at, focus, decision, no_op_reason)
@@ -102,6 +116,15 @@ This addresses the observability ideal from MEMORY.md: "Cogni AI should be able 
    - Should all users see governance activity?
    - Or restrict to system tenant members only?
 
+5. **How to get credit balance efficiently?**
+   - Query billing account on page load?
+   - Cache with TTL?
+   - Real-time subscription?
+
+6. **Revenue share visibility?**
+   - Show last distribution timestamp?
+   - Expected vs actual distribution rate?
+
 ## Allowed Changes
 
 - New UI routes/pages (e.g., `src/app/governance/`)
@@ -134,6 +157,10 @@ High-level only — detailed planning happens in `/task`.
 5. Verify live activity appears during run
 6. Verify heartbeats update after run completes
 7. Verify EDOs appear in recent decisions list
+8. **Verify credit balance displays** with correct color coding
+9. **Verify runway calculation** is accurate (balance ÷ burn rate)
+10. **Simulate low credits** — verify yellow/red warnings trigger
+11. **Verify failed runs appear** in dashboard with error details
 
 **Automated:**
 
@@ -152,7 +179,10 @@ High-level only — detailed planning happens in `/task`.
 
 - Referenced specs: [governance-council.md](../../docs/spec/governance-council.md)
 - Related work: [task.0043 Fumadocs docs site](./task.0043.fumadocs-docs-site.md)
+- Research: [governance-visibility-dashboard.md](../../docs/research/governance-visibility-dashboard.md)
+- Implementation: [task.0070 Governance credit health dashboard](./task.0070.governance-credit-health-dashboard.md)
 
 ## Attribution
 
 - Idea: derekg1729
+- Research: Claude (Sonnet 4.5)

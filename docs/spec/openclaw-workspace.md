@@ -9,7 +9,7 @@ summary: Gateway agent workspace, governance trigger routing, and subagent deleg
 read_when: Configuring gateway agent workspace, understanding governance trigger routing, writing skills, or debugging agent system prompt content
 owner: derekg1729
 created: 2026-02-13
-verified: 2026-02-13
+verified: 2026-02-16
 tags: [sandbox, openclaw, system-prompt]
 ---
 
@@ -106,13 +106,23 @@ OpenClaw reads AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md from the workspace root a
 ### Container Mounts
 
 ```yaml
-# additions to openclaw-gateway service
+# openclaw-gateway service
+entrypoint:
+  [
+    "sh",
+    "-c",
+    "mkdir -p /workspace/.openclaw-config && cp /opt/openclaw-config-source.json /workspace/.openclaw-config/openclaw.json && exec node /app/dist/index.js gateway",
+  ]
+environment:
+  - OPENCLAW_CONFIG_PATH=/workspace/.openclaw-config/openclaw.json
 volumes:
-  - ./openclaw/gateway-workspace:/workspace/gateway # system prompt files (AGENTS.md, SOUL.md, TOOLS.md, MEMORY.md)
-  # existing:
-  - repo_data:/repo:ro # codebase mirror (volatile — git-sync replaces on deploy; .cogni/, .openclaw/skills/)
-  - cogni_workspace:/workspace # persistent workspace volume
+  - ./openclaw/openclaw-gateway.json:/opt/openclaw-config-source.json:ro # seed config
+  - ./openclaw/gateway-workspace:/workspace/gateway # system prompt files
+  - repo_data:/repo:ro # codebase mirror (volatile — git-sync replaces on deploy)
+  - cogni_workspace:/workspace # persistent workspace volume (RW)
 ```
+
+**Config seeding pattern**: The container runs with `read_only: true` (read-only rootfs). OpenClaw uses atomic writes to persist config changes (temp file → rename), which requires a **writable directory** — not just a writable file. Mounting the config file directly to `/etc/openclaw/` fails because the directory is on the read-only rootfs and temp file creation gets EROFS. The entrypoint copies the git-managed source config (mounted `:ro` at a staging path) into `/workspace/.openclaw-config/` on the writable `cogni_workspace` volume. OpenClaw can then freely create temp files and rename within that directory. Fresh config is seeded on every container restart; runtime mutations (plugin auto-enable, channel state) do not persist across restarts, which is fine — channel auth tokens come from env vars, not persisted config state.
 
 The bind mount overlays `/workspace/gateway/` inside the existing `cogni_workspace` named volume. The `memory/` directory is created at runtime by OpenClaw inside the bind-mounted workspace (ephemeral, gitignored). The repo at `/repo/current/` already contains `.cogni/` and `.openclaw/skills/` — no additional mounts needed for those.
 
@@ -334,15 +344,16 @@ For reference, `buildAgentSystemPrompt()` in OpenClaw injects these sections (fu
 
 ## Anti-Patterns
 
-| Pattern                                         | Problem                                                                                                   |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Workspace = repo root                           | Wrong AGENTS.md, memory indexes all source code                                                           |
-| Skills in `gateway-workspace/skills/`           | Not versioned with codebase, diverges from `.claude/` and `.gemini/` conventions                          |
-| Copy `.claude/commands/` verbatim               | Missing YAML frontmatter, `$ARGUMENTS` won't resolve                                                      |
-| `memorySearch.extraPaths` = `["/repo/current"]` | Indexes entire codebase including node_modules artifacts                                                  |
-| Omit `MEMORY.md`                                | Agent has no curated project context, relies entirely on search                                           |
-| Dump project knowledge into `MEMORY.md`         | General knowledge belongs in `docs/` and `work/` — MEMORY.md is for niche container-specific context only |
-| Agent edits files under `services/`             | Service config is infra, not agent workspace — only edit if specific to the container itself              |
+| Pattern                                         | Problem                                                                                                                           |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace = repo root                           | Wrong AGENTS.md, memory indexes all source code                                                                                   |
+| Skills in `gateway-workspace/skills/`           | Not versioned with codebase, diverges from `.claude/` and `.gemini/` conventions                                                  |
+| Copy `.claude/commands/` verbatim               | Missing YAML frontmatter, `$ARGUMENTS` won't resolve                                                                              |
+| `memorySearch.extraPaths` = `["/repo/current"]` | Indexes entire codebase including node_modules artifacts                                                                          |
+| Omit `MEMORY.md`                                | Agent has no curated project context, relies entirely on search                                                                   |
+| Dump project knowledge into `MEMORY.md`         | General knowledge belongs in `docs/` and `work/` — MEMORY.md is for niche container-specific context only                         |
+| Agent edits files under `services/`             | Service config is infra, not agent workspace — only edit if specific to the container itself                                      |
+| Mount config file directly to read-only rootfs  | OpenClaw atomic writes need a writable directory for temp files — mount `:ro` at staging path, copy to writable volume on startup |
 
 ## Acceptance Checks
 
