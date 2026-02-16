@@ -5,13 +5,13 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-03
+- **Last reviewed:** 2026-02-17
 - **Status:** stable
 - **Parent:** [components/kit](../AGENTS.md)
 
 ## Purpose
 
-Reusable kit components for displaying data including badges, avatars, scroll areas, and terminal frames.
+Reusable kit components for displaying data including badges, avatars, scroll areas, terminal frames, and activity charts.
 
 ## Pointers
 
@@ -38,7 +38,7 @@ Reusable kit components for displaying data including badges, avatars, scroll ar
 
 ## Public Surface
 
-- **Exports (via ../index.ts):** Avatar, Badge, GithubButton, ScrollArea, TerminalFrame
+- **Exports (via ../index.ts):** ActivityChart, Avatar, Badge, GithubButton, ScrollArea, TerminalFrame
 - **Routes:** none
 - **Env/Config keys:** none
 - **Files considered API:** All \*.tsx files in this directory
@@ -75,7 +75,7 @@ import { ScrollArea, Badge, Avatar } from "@/components/kit/data-display";
 
 ## Dependencies
 
-- **Internal:** @/components/vendor/shadcn (for ScrollArea), @/shared/util/cn
+- **Internal:** @/components/vendor/shadcn (for ScrollArea, chart, card), @/shared/util/cn
 - **External:** react, lucide-react (icons), @radix-ui/\* (primitives)
 
 ## Change Protocol

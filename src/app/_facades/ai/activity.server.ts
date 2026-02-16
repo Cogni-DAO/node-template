@@ -3,8 +3,8 @@
 
 /**
  * Module: `@app/_facades/ai/activity.server`
- * Purpose: App-layer facade for Activity dashboard with granular time bucketing.
- * Scope: Resolves session user to billing account, fetches receipts + LLM details, aggregates into buckets. Does not handle HTTP transport.
+ * Purpose: App-layer facade for Activity dashboard with granular time bucketing and optional per-model/agent breakdown.
+ * Scope: Resolves session user to billing account, fetches receipts + LLM details, aggregates into buckets. Supports groupBy (model|graphId) for stacked chart series. Does not handle HTTP transport.
  * Invariants:
  * - Only app layer imports this; validates billing account.
  * - Per CHARGE_RECEIPTS_IS_LEDGER_TRUTH: charge_receipts is the primary data source for Activity.
