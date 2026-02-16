@@ -32,13 +32,14 @@ import type {
   aiActivityOperation,
   TimeRange,
 } from "@/contracts/ai.activity.v1.contract";
+import { creditsToUsd } from "@/core";
 import { useGovernanceStatus } from "@/features/governance/hooks/useGovernanceStatus";
 import { fetchGovernanceActivity } from "./_api/fetchGovernanceActivity";
 
 export function GovernanceView(): ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const range = (searchParams.get("range") as TimeRange) || "1m";
+  const range = (searchParams.get("range") as TimeRange) || "1d";
 
   const { data, isLoading, error } = useGovernanceStatus();
 
@@ -105,9 +106,13 @@ export function GovernanceView(): ReactElement {
       <div className="grid gap-4 md:grid-cols-2">
         <SectionCard title="System Credit Balance">
           <span className="font-bold text-4xl">
-            {Number(data.systemCredits).toLocaleString()}
+            $
+            {creditsToUsd(Number(data.systemCredits)).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </span>
-          <span className="ml-2 text-lg text-muted-foreground">credits</span>
+          <span className="ml-2 text-lg text-muted-foreground">USD</span>
         </SectionCard>
 
         <SectionCard title="Next Scheduled Run">
