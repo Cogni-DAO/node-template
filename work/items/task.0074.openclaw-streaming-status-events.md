@@ -11,7 +11,7 @@ spec_refs: streaming-status, graph-execution, openclaw-sandbox-spec
 assignees: []
 credit:
 project: proj.openclaw-capabilities
-branch:
+branch: feat/openclaw-thinking-streaming
 pr:
 reviewer:
 created: 2026-02-16
@@ -38,7 +38,7 @@ This task picks up those events, maps them through the AiEvent pipeline, and emi
 - Status events are never persisted in `ai_threads.messages` (STATUS_IS_EPHEMERAL)
 - `label` contains only tool name, never args or results (STATUS_NEVER_LEAKS_CONTENT)
 - Missing status events don't break streaming, persistence, or billing (STATUS_BEST_EFFORT)
-- Gateway config sets `verboseDefault: "on"` (VERBOSE_ON_DEFAULT)
+- Gateway config sets `verboseDefault: "full"` (VERBOSE_FULL_DEFAULT)
 - `stream: "assistant"` agent events are ignored (redundant with chat deltas)
 - `stream: "error"` agent events are ignored (handled by existing chat_error)
 - Streams with zero StatusEvents work identically to today (graceful degradation)
@@ -77,7 +77,7 @@ This task picks up those events, maps them through the AiEvent pipeline, and emi
   - Define `CogniDataTypes` for type safety (or use `as UIMessageChunk` cast for v0)
 
 - [ ] **5. Set verboseDefault in gateway config** (`openclaw-gateway.json`)
-  - Set `agents.defaults.verboseDefault: "on"`
+  - Set `agents.defaults.verboseDefault: "full"`
 
 - [ ] **6. Verify graceful degradation**
   - Confirm existing streaming still works when no agent events arrive
@@ -103,7 +103,7 @@ pnpm packages:build # ai-core package builds with StatusEvent
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0074` linked in PR body
-- [ ] **Spec:** All streaming-status invariants upheld (STATUS_IS_EPHEMERAL, STATUS_BEST_EFFORT, STATUS_SESSIONKEY_FILTERED, STATUS_NEVER_LEAKS_CONTENT, VERBOSE_ON_DEFAULT)
+- [ ] **Spec:** All streaming-status invariants upheld (STATUS_IS_EPHEMERAL, STATUS_BEST_EFFORT, STATUS_SESSIONKEY_FILTERED, STATUS_NEVER_LEAKS_CONTENT, VERBOSE_FULL_DEFAULT)
 - [ ] **Tests:** StatusEvent handling in route doesn't break existing streaming tests
 - [ ] **No content leakage:** label contains only tool name string
 - [ ] **Reviewer:** assigned and approved

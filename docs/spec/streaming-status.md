@@ -79,7 +79,7 @@ Tool event emission is gated by a per-session `verboseLevel` setting:
 - `"on"` — tool name + args emitted as metadata-only messages with summaries, result stripped
 - `"full"` — everything including results
 
-Set via `agents.defaults.verboseDefault` in gateway config. For this feature, set to `"on"` — we need tool names for status display but not results. (OpenClaw accepts `"off" | "on" | "full"`.)
+Set via `agents.defaults.verboseDefault` in gateway config. For this feature, set to `"full"` — tool events include names, args, and results for maximum observability. (OpenClaw accepts `"off" | "on" | "full"`.)
 
 ### Provider Asymmetry (OpenClaw vs LangGraph)
 
@@ -197,13 +197,13 @@ Enable clients to show meaningful status indicators during agent execution inste
 ## Invariants
 
 | Rule                       | Constraint                                                                                                                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | -------- |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | STATUS_IS_EPHEMERAL        | StatusEvent is never persisted in `ai_threads.messages`. It maps to a transient `DataUIMessageChunk` (`transient: true`), not a UIMessage part. The UIMessage accumulator ignores transient data. |
 | STATUS_BEST_EFFORT         | StatusEvent emission is best-effort. Missing status events must not break streaming, persistence, or billing. Client must handle streams with zero StatusEvents gracefully.                       |
 | STATUS_SESSIONKEY_FILTERED | OpenClaw agent events are filtered by `sessionKey` using the same WS_EVENT_CAUSALITY invariant as chat events. Agent events with mismatched or missing sessionKey are dropped.                    |
 | STATUS_NEVER_LEAKS_CONTENT | StatusEvent `label` field contains at most a tool name (e.g., `"exec"`, `"memory_search"`). Never tool arguments, results, or reasoning content.                                                  |
 | AIEVENT_NEVER_VERBATIM     | Unchanged — StatusEvent is an AiEvent mapped to wire format by the route, never sent verbatim.                                                                                                    |
-| VERBOSE_ON_DEFAULT         | OpenClaw gateway config sets `agents.defaults.verboseDefault: "on"` to enable tool name emission without result content. Valid values: `"off"                                                     | "on" | "full"`. |
+| VERBOSE_FULL_DEFAULT       | OpenClaw gateway config sets `agents.defaults.verboseDefault: "full"` to enable full tool event emission (names, args, results). Valid values: `"off" \| "on" \| "full"`.                         |
 
 ### File Pointers
 
@@ -213,7 +213,7 @@ Enable clients to show meaningful status indicators during agent execution inste
 | `src/adapters/server/sandbox/openclaw-gateway-client.ts`    | Consume `"agent"` events (currently dropped at line 354) |
 | `src/adapters/server/sandbox/sandbox-graph.provider.ts`     | Map gateway agent events → StatusEvent                   |
 | `src/app/api/v1/ai/chat/route.ts`                           | Map StatusEvent → `data-status` in createUIMessageStream |
-| `services/sandbox-openclaw/openclaw-gateway.json`           | Set `verboseDefault: "names"`                            |
+| `services/sandbox-openclaw/openclaw-gateway.json`           | Set `verboseDefault: "full"`                             |
 | `src/adapters/server/ai/langgraph/dev/stream-translator.ts` | Future: derive StatusEvent from LangGraph update events  |
 
 ## Acceptance Checks
