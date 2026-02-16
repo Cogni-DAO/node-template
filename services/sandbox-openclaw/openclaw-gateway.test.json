@@ -67,12 +67,8 @@
   "channels": {
     "discord": {
       "enabled": true,
-      "groupPolicy": "open",
-      "accounts": {
-        "default": {
-          "token": "${DISCORD_BOT_TOKEN}"
-        }
-      }
+      "token": "${DISCORD_BOT_TOKEN}",
+      "groupPolicy": "open"
     }
   },
   "plugins": {
