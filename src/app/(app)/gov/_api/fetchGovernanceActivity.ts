@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/(app)/governance/_api/fetchGovernanceActivity`
+ * Module: `@app/(app)/gov/_api/fetchGovernanceActivity`
  * Purpose: Client-side fetch wrapper for governance account activity data.
  * Scope: Calls /api/v1/governance/activity with type-safe contract. Does not implement business logic.
  * Invariants: Returns typed ActivityData or throws

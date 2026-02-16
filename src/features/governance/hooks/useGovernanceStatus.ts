@@ -4,7 +4,7 @@
 /**
  * Module: `@features/governance/hooks/useGovernanceStatus`
  * Purpose: React Query hook for governance status dashboard with 30s polling.
- * Scope: Client-side data fetching for /governance page. Does not access database or server-side services directly.
+ * Scope: Client-side data fetching for /gov page. Does not access database or server-side services directly.
  * Invariants: 30s polling interval; typed with contract output schema.
  * Side-effects: IO (HTTP GET to /api/v1/governance/status); React Query cache.
  * Links: src/contracts/governance.status.v1.contract.ts
