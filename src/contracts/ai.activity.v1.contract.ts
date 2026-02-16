@@ -61,6 +61,14 @@ export const MAX_RANGE_MS = 90 * 24 * 60 * 60 * 1000;
 export const TimeRangeSchema = z.enum(["1d", "1w", "1m"]);
 export type TimeRange = z.infer<typeof TimeRangeSchema>;
 
+/**
+ * Grouping dimension for chart breakdown.
+ * - "model": group by LLM model name (e.g. "claude-opus-4.6", "deepseek-v3")
+ * - "graphId": group by agent/graph ID (e.g. "langgraph:poet", "raw-completion")
+ */
+export const ActivityGroupBySchema = z.enum(["model", "graphId"]);
+export type ActivityGroupBy = z.infer<typeof ActivityGroupBySchema>;
+
 export const aiActivityOperation = {
   id: "ai.activity.v1",
   summary: "Fetch AI activity statistics and logs",
@@ -88,6 +96,9 @@ export const aiActivityOperation = {
       step: ActivityStepSchema.optional().describe(
         "Bucket granularity (server-derived if omitted)"
       ),
+      groupBy: ActivityGroupBySchema.optional().describe(
+        "Breakdown dimension for chart series (model or graphId). Omit for aggregate-only."
+      ),
       cursor: z.string().optional().describe("Opaque cursor for pagination"),
       limit: z
         .number()
@@ -112,6 +123,22 @@ export const aiActivityOperation = {
         requests: z.number().int().nonnegative(),
       })
     ),
+    /** Per-group breakdown keyed by group name. Only present when groupBy is specified. */
+    groupedSeries: z
+      .array(
+        z.object({
+          group: z.string().describe("Group key (model name or graphId)"),
+          buckets: z.array(
+            z.object({
+              bucketStart: z.string().datetime(),
+              spend: z.number().nonnegative(),
+              tokens: z.number().int().nonnegative(),
+              requests: z.number().int().nonnegative(),
+            })
+          ),
+        })
+      )
+      .optional(),
     totals: z.object({
       spend: z.object({
         total: z.string().describe("Decimal string USD"),
