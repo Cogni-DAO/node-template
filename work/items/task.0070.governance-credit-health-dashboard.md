@@ -553,7 +553,7 @@ Deferred to later:
 
 ## PR / Links
 
-- Handoff: [task.0070.handoff.md](../handoffs/task.0070.handoff.md) (updated 2026-02-16 — all checkpoints done, activity charts remaining)
+- Handoff: [task.0070.handoff.md](../handoffs/task.0070.handoff.md) (updated 2026-02-17 — bar charts + per-model/agent breakdown on `feat/bar-charts`)
 
 ## Attribution
 
