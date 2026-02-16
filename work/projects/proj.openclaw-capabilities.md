@@ -122,6 +122,12 @@ Per [openclaw-sandbox-controls.md](../../docs/spec/openclaw-sandbox-controls.md)
 | Replace hardcoded `AVAILABLE_GRAPHS` in `ChatComposerExtras` with `useAgents()` hook   | Not Started | 1   | task.0018 |
 | [ ] Deduplicate agent name/description — catalog should derive from execution registry | Not Started | 1   |           |
 
+#### Streaming Status Events
+
+| Deliverable                                                                             | Status | Est | Work Item |
+| --------------------------------------------------------------------------------------- | ------ | --- | --------- |
+| Consume OpenClaw agent events (lifecycle, tool, compaction) — surface status in chat UI | Todo   | 2   | task.0074 |
+
 #### Gateway Client Hardening
 
 Model after upstream `openclaw/src/gateway/client.ts` features:

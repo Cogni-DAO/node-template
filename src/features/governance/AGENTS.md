@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-15
+- **Last reviewed:** 2026-02-17
 - **Status:** draft
 
 ## Purpose
 
-Governance schedule sync — creates, resumes, and prunes Temporal schedules for DAO charter governance runs based on `.cogni/repo-spec.yaml` config.
+Governance feature slice — schedule sync for DAO charter governance runs, and governance status dashboard service for DAO transparency.
 
 ## Pointers
 
@@ -36,15 +36,15 @@ Governance schedule sync — creates, resumes, and prunes Temporal schedules for
 
 ## Public Surface
 
-- **Exports:** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`
+- **Exports:** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`, `getGovernanceStatus()`, `GovernanceStatusResult`, `useGovernanceStatus()`
 - **Routes:** none (system-ops only; triggered via internal ops endpoint)
 - **CLI:** `pnpm governance:schedules:sync` (endpoint trigger helper)
 - **Env/Config keys:** `.cogni/repo-spec.yaml` → `governance.schedules`
-- **Files considered API:** `services/syncGovernanceSchedules.ts`
+- **Files considered API:** `services/syncGovernanceSchedules.ts`, `services/get-governance-status.ts`, `hooks/useGovernanceStatus.ts`
 
 ## Ports
 
-- **Uses ports:** `ScheduleControlPort` (Temporal lifecycle), `ExecutionGrantUserPort.ensureGrant` (stable grant)
+- **Uses ports:** `ScheduleControlPort` (Temporal lifecycle), `ExecutionGrantUserPort.ensureGrant` (stable grant), `AccountService` (balance), `GovernanceStatusPort` (schedule/run queries)
 - **Implements ports:** none
 
 ## Responsibilities
