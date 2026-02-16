@@ -34,14 +34,12 @@ import type { WorkItem } from "@/lib/work-scanner";
 
 const STATUS_ORDER: Record<string, number> = {
   "In Progress": 0,
-  InProgress: 0,
   Active: 0,
   Todo: 1,
   Blocked: 2,
   Backlog: 3,
+  Paused: 3,
   Done: 4,
-  Archived: 5,
-  Complete: 5,
 };
 
 function priorityPill(pri: number | undefined): string {
@@ -54,15 +52,12 @@ function priorityPill(pri: number | undefined): string {
 /** Soft-tinted pill classes: bg at 15% opacity + matching text color */
 const STATUS_PILL: Record<string, string> = {
   "In Progress": "bg-primary/15 text-primary-foreground",
-  InProgress: "bg-primary/15 text-primary-foreground",
   Active: "bg-primary/15 text-primary-foreground",
   Todo: "bg-warning/15 text-warning",
   Blocked: "bg-danger/15 text-danger",
   Backlog: "bg-muted text-muted-foreground",
-  Done: "bg-success/15 text-success",
-  Archived: "bg-muted text-muted-foreground",
-  Complete: "bg-success/15 text-success",
   Paused: "bg-muted text-muted-foreground",
+  Done: "bg-success/15 text-success",
 };
 
 function sortItems(items: WorkItem[]): WorkItem[] {
