@@ -36,6 +36,7 @@ jobs:
       INTERNAL_OPS_TOKEN: test-internal-ops-token-for-ci-min32
       OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token-for-ci-32ch
       OPENCLAW_GITHUB_RW_TOKEN: test-github-rw-token
+      DISCORD_BOT_TOKEN: test-discord-bot-token-for-ci
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -80,6 +81,7 @@ jobs:
       INTERNAL_OPS_TOKEN: test-internal-ops-token-for-ci-min32
       OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token-for-ci-32ch
       OPENCLAW_GITHUB_RW_TOKEN: test-github-rw-token
+      DISCORD_BOT_TOKEN: test-discord-bot-token-for-ci
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -153,6 +155,7 @@ jobs:
       INTERNAL_OPS_TOKEN: test-internal-ops-token-for-ci-min32
       OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token-for-ci-32ch
       OPENCLAW_GITHUB_RW_TOKEN: test-github-rw-token
+      DISCORD_BOT_TOKEN: test-discord-bot-token-for-ci
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -269,6 +272,7 @@ jobs:
       INTERNAL_OPS_TOKEN: test-internal-ops-token-for-ci-min32
       OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token-for-ci-32ch
       OPENCLAW_GITHUB_RW_TOKEN: test-github-rw-token
+      DISCORD_BOT_TOKEN: test-discord-bot-token-for-ci
       # LiteLLM test config routes to mock-openai-api (no real provider keys)
       LITELLM_CONFIG: litellm.test.config.yaml
       # OpenClaw gateway config with test models matching litellm.test.config.yaml
