@@ -17,7 +17,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 
 import {
-  Badge,
   Input,
   Select,
   SelectContent,
@@ -43,21 +42,6 @@ const STATUS_ORDER: Record<string, number> = {
   Done: 4,
   Archived: 5,
   Complete: 5,
-};
-
-const STATUS_INTENT: Record<
-  string,
-  "default" | "secondary" | "outline" | "destructive"
-> = {
-  "In Progress": "default",
-  InProgress: "default",
-  Active: "default",
-  Todo: "secondary",
-  Blocked: "destructive",
-  Backlog: "outline",
-  Done: "outline",
-  Archived: "outline",
-  Complete: "outline",
 };
 
 function sortItems(items: WorkItem[]): WorkItem[] {
@@ -241,22 +225,20 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">Pri</TableHead>
+              <TableHead className="w-10">Est</TableHead>
               <TableHead className="w-24">ID</TableHead>
               <TableHead>Title</TableHead>
-              <TableHead className="w-20">Type</TableHead>
               <TableHead className="w-24">Status</TableHead>
-              <TableHead className="w-12">Pri</TableHead>
-              <TableHead className="w-12">Est</TableHead>
-              <TableHead>Assignees</TableHead>
-              <TableHead>Labels</TableHead>
               <TableHead className="w-24">Updated</TableHead>
+              <TableHead>Branch</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={7}
                   className="py-8 text-center text-muted-foreground"
                 >
                   No work items found.
@@ -265,58 +247,37 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
             ) : (
               filtered.map((item) => (
                 <TableRow key={item.path}>
+                  <TableCell className="text-center text-xs">
+                    {item.priority ?? "\u2014"}
+                  </TableCell>
+                  <TableCell className="text-center text-xs">
+                    {item.estimate ?? "\u2014"}
+                  </TableCell>
                   <TableCell className="font-mono text-xs">
                     {item.id || "\u2014"}
                   </TableCell>
-                  <TableCell>
-                    <span className="font-medium text-sm">
-                      {item.title || "\u2014"}
-                    </span>
-                    <span className="block max-w-sm truncate text-muted-foreground text-xs">
-                      {item.path}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge intent="outline" className="text-xs">
-                      {item.type || "\u2014"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {item.status ? (
-                      <Badge
-                        intent={STATUS_INTENT[item.status] ?? "outline"}
-                        className="text-xs"
-                      >
-                        {item.status}
-                      </Badge>
-                    ) : (
-                      "\u2014"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {item.priority ?? "\u2014"}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {item.estimate ?? "\u2014"}
+                  <TableCell className="text-sm">
+                    {item.title || "\u2014"}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {item.assignees.length > 0
-                      ? item.assignees.join(", ")
-                      : "\u2014"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {item.labels.length > 0
-                        ? item.labels.map((l) => (
-                            <Badge key={l} intent="outline" className="text-xs">
-                              {l}
-                            </Badge>
-                          ))
-                        : "\u2014"}
-                    </div>
+                    {item.status || "\u2014"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {item.updated || item.created || "\u2014"}
+                  </TableCell>
+                  <TableCell className="font-mono text-muted-foreground text-xs">
+                    {item.branch ? (
+                      <a
+                        href={`https://github.com/Cogni-DAO/node-template/tree/${encodeURIComponent(item.branch)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-foreground hover:underline"
+                      >
+                        {item.branch}
+                      </a>
+                    ) : (
+                      "\u2014"
+                    )}
                   </TableCell>
                 </TableRow>
               ))

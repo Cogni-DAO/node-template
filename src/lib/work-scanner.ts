@@ -29,6 +29,7 @@ export interface WorkItem {
   labels: string[];
   created: string;
   updated: string;
+  branch: string;
   path: string;
   project: string;
 }
@@ -135,6 +136,7 @@ export async function getWorkItems(): Promise<WorkItem[]> {
         labels: toStringArray(fm.labels),
         created: toStr(fm.created),
         updated: toStr(fm.updated),
+        branch: toStr(fm.branch),
         path: relPath,
         project: toStr(fm.project || fm.primary_charter),
       });
