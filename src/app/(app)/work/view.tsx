@@ -266,18 +266,7 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
                     {item.updated || item.created || "\u2014"}
                   </TableCell>
                   <TableCell className="font-mono text-muted-foreground text-xs">
-                    {item.branch ? (
-                      <a
-                        href={`https://github.com/Cogni-DAO/node-template/tree/${encodeURIComponent(item.branch)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="hover:text-foreground hover:underline"
-                      >
-                        {item.branch}
-                      </a>
-                    ) : (
-                      "\u2014"
-                    )}
+                    {item.branch || "\u2014"}
                   </TableCell>
                 </TableRow>
               ))
