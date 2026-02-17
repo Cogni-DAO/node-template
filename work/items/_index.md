@@ -82,6 +82,10 @@
 | 1   | 2   | Backlog     | task.0075  | Governance scheduled runs post status updates to #continuous-cogni-updates Discord channel     | Messenger Channels         | proj.messenger-channels         |
 | 1   | 2   | Backlog     | task.0076  | Dedicated Discord community agent — separate agent config with Discord-specific personality    | Messenger Channels         | proj.messenger-channels         |
 | 2   | 2   | Backlog     | task.0077  | Discord billing user attribution — identify which Discord user triggered each LLM call         | Messenger Channels         | proj.messenger-channels         |
+| 1   | 4   | Backlog     | story.0079 | DID-first identity — decentralized member identifiers with verifiable account links            | Decentralized Identity     | proj.decentralized-identity     |
+| 1   | 2   | Done        | spike.0080 | Research current identity system + design minimal DID-first refactor                           | Decentralized Identity     | proj.decentralized-identity     |
+| 1   | 5   | Backlog     | story.0081 | Work receipts, transparency log, and deterministic epoch payouts                               |                            |                                 |
+| 1   | 2   | Todo        | spike.0082 | Design transparency log storage, receipt signing, and distribution engine                      |                            |                                 |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
 > Sort: priority → status (completed last) → estimate → type
