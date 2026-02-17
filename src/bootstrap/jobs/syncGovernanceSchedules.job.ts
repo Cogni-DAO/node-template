@@ -16,7 +16,8 @@
 
 import { toUserId } from "@cogni/ids";
 import { syncGovernanceSchedules } from "@cogni/scheduler-core";
-import { sql } from "drizzle-orm";
+import cronParser from "cron-parser";
+import { and, eq, sql } from "drizzle-orm";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { getContainer } from "@/bootstrap/container";
 import { getGovernanceConfig } from "@/shared/config";
@@ -24,9 +25,18 @@ import {
   COGNI_SYSTEM_BILLING_ACCOUNT_ID,
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
 } from "@/shared/constants/system-tenant";
+import { schedules } from "@/shared/db/schema";
 import { serverEnv } from "@/shared/env/server-env";
 
 const GOVERNANCE_GRANT_SCOPES = ["graph:execute:sandbox:openclaw"] as const;
+
+function computeNextRun(cron: string, timezone: string): Date {
+  const interval = cronParser.parseExpression(cron, {
+    currentDate: new Date(),
+    tz: timezone,
+  });
+  return interval.next().toDate();
+}
 
 export interface GovernanceScheduleSyncSummary {
   created: number;
@@ -80,6 +90,55 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
         });
         return grant.id;
       },
+      upsertGovernanceScheduleRow: async (params) => {
+        const nextRunAt = computeNextRun(params.cron, params.timezone);
+
+        // Scope lookup to system tenant to avoid cross-tenant collisions
+        const existingRows = await serviceDb
+          .select({ id: schedules.id })
+          .from(schedules)
+          .where(
+            and(
+              eq(schedules.ownerUserId, params.ownerUserId),
+              eq(schedules.temporalScheduleId, params.temporalScheduleId)
+            )
+          )
+          .limit(1);
+        const existing = existingRows[0];
+
+        if (existing) {
+          await serviceDb
+            .update(schedules)
+            .set({
+              executionGrantId: params.executionGrantId,
+              input: params.input,
+              cron: params.cron,
+              timezone: params.timezone,
+              enabled: true,
+              nextRunAt,
+              updatedAt: new Date(),
+            })
+            .where(eq(schedules.id, existing.id));
+          return existing.id;
+        }
+
+        const [row] = await serviceDb
+          .insert(schedules)
+          .values({
+            temporalScheduleId: params.temporalScheduleId,
+            ownerUserId: params.ownerUserId,
+            executionGrantId: params.executionGrantId,
+            graphId: params.graphId,
+            input: params.input,
+            cron: params.cron,
+            timezone: params.timezone,
+            enabled: true,
+            nextRunAt,
+          })
+          .returning();
+        return row!.id;
+      },
+      systemUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
       scheduleControl: container.scheduleControl,
       listGovernanceScheduleIds: () =>
         container.scheduleControl.listScheduleIds("governance:"),

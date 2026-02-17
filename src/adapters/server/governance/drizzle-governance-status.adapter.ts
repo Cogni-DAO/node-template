@@ -25,6 +25,8 @@ export class DrizzleGovernanceStatusAdapter implements GovernanceStatusPort {
   constructor(private readonly db: Database) {}
 
   async getScheduleStatus(): Promise<Date | null> {
+    // next_run_at is a cron-derived cache. Temporal is authoritative.
+    // Future: hydrate from ScheduleControlPort.describeSchedule() for precision.
     const results = await this.db
       .select({ nextRunAt: schedules.nextRunAt })
       .from(schedules)

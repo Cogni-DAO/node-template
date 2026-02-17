@@ -34,8 +34,8 @@ export interface CreateScheduleParams {
   /** Temporal schedule ID (caller-supplied) */
   readonly scheduleId: string;
   /**
-   * Optional DB schedule UUID for schedules that have a row in `schedules`.
-   * Set null/undefined for Temporal-only schedules (e.g., governance:*).
+   * DB schedule UUID for schedules that have a row in `schedules`.
+   * Set null/undefined only for legacy Temporal-only schedules.
    */
   readonly dbScheduleId?: string | null;
   /** Cron expression (5-field) */
@@ -73,6 +73,8 @@ export interface ScheduleDescription {
   readonly timezone: string | null;
   /** Current graph input payload, null if unavailable */
   readonly input: JsonValue | null;
+  /** DB schedule UUID from workflow args, null if Temporal-only (legacy) */
+  readonly dbScheduleId: string | null;
 }
 
 /**

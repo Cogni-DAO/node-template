@@ -102,16 +102,17 @@ Repo-spec is source of truth for governance schedules. Temporal is derived state
 
 ## Invariants
 
-| Rule                         | Constraint                                                                    |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| REPO_SPEC_IS_SOURCE_OF_TRUTH | `.cogni/repo-spec.yaml` declares schedules; Temporal is derived               |
-| PRUNE_IS_PAUSE               | Removed schedules are paused, never deleted (reversible)                      |
-| GOVERNANCE_IS_TEMPORAL_ONLY  | Governance schedule IDs are Temporal-only (`governance:*`), not DB UUID rows  |
-| SYSTEM_OPS_ONLY              | Sync runs at deploy time via internal ops endpoint, never callable by tenants |
-| GRANT_ON_DEMAND              | Governance grant created idempotently by sync, not by migration               |
-| OVERLAP_SKIP_ALWAYS          | All governance schedules use `overlap=SKIP` (one run at a time)               |
-| SINGLE_WRITER                | `pg_advisory_lock(hashtext('governance_sync'))` prevents concurrent sync      |
-| PURE_ORCHESTRATION           | Sync function depends only on ports/types — no adapters, no DB                |
+| Rule                         | Constraint                                                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| REPO_SPEC_IS_SOURCE_OF_TRUTH | `.cogni/repo-spec.yaml` declares schedules; Temporal is derived                                                                       |
+| PRUNE_IS_PAUSE               | Removed schedules are paused, never deleted (reversible)                                                                              |
+| SYSTEM_TENANT_IS_TENANT      | Governance schedules are first-class DB rows owned by system principal; Temporal schedule IDs stored in `temporal_schedule_id` column |
+| SYSTEM_OPS_ONLY              | Sync runs at deploy time via internal ops endpoint, never callable by tenants                                                         |
+| GRANT_ON_DEMAND              | Governance grant created idempotently by sync, not by migration                                                                       |
+| OVERLAP_SKIP_ALWAYS          | All governance schedules use `overlap=SKIP` (one run at a time)                                                                       |
+| SINGLE_WRITER                | `pg_advisory_lock(hashtext('governance_sync'))` prevents concurrent sync                                                              |
+| PURE_ORCHESTRATION           | Sync function depends only on ports/types/callbacks — no adapters                                                                     |
+| LINK_DRIFT_SELF_HEAL         | If Temporal schedule has wrong/missing `dbScheduleId`, sync detects drift and updates                                                 |
 
 ### File Pointers
 
