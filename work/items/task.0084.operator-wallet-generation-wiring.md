@@ -91,7 +91,7 @@ pnpm test tests/unit/scripts/generate-operator-wallet.test.ts
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0084.handoff.md)
 
 ## Attribution
 
