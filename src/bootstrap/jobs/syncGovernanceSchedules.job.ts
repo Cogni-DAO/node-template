@@ -17,7 +17,7 @@
 import { toUserId } from "@cogni/ids";
 import { syncGovernanceSchedules } from "@cogni/scheduler-core";
 import cronParser from "cron-parser";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { getContainer } from "@/bootstrap/container";
 import { getGovernanceConfig } from "@/shared/config";
@@ -65,14 +65,16 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
 
   log.info({}, "Starting governance schedule sync job");
 
-  // Advisory lock: non-blocking single-writer guard
+  // Advisory lock: non-blocking single-writer guard.
+  // Pin a single pool connection so lock + unlock use the same session
+  // (session-scoped advisory locks only release on the connection that acquired them).
   const serviceDb = getServiceDb();
-  const lockResult = await serviceDb.execute(
-    sql`SELECT pg_try_advisory_lock(hashtext('governance_sync')) AS acquired`
-  );
-  const acquired = (lockResult[0] as { acquired: boolean } | undefined)
-    ?.acquired;
+  const reservedConn = await serviceDb.$client.reserve();
+  const [lockRow] =
+    await reservedConn`SELECT pg_try_advisory_lock(hashtext('governance_sync')) AS acquired`;
+  const acquired = (lockRow as { acquired: boolean } | undefined)?.acquired;
   if (!acquired) {
+    reservedConn.release();
     log.info({}, "Governance sync already running, skipping");
     return { created: 0, updated: 0, resumed: 0, skipped: 0, paused: 0 };
   }
@@ -164,9 +166,8 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
       paused: result.paused.length,
     };
   } finally {
-    // Release advisory lock
-    await serviceDb.execute(
-      sql`SELECT pg_advisory_unlock(hashtext('governance_sync'))`
-    );
+    // Release advisory lock on the same connection that acquired it
+    await reservedConn`SELECT pg_advisory_unlock(hashtext('governance_sync'))`;
+    reservedConn.release();
   }
 }

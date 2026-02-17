@@ -44,6 +44,9 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
+// Real LLM roundtrip + async LiteLLM billing callback
+vi.setConfig({ testTimeout: 30_000 });
+
 describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
   afterEach(() => {
     vi.clearAllMocks();
