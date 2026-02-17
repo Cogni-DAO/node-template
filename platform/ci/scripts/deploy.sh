@@ -781,6 +781,28 @@ else
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 11.2: Checksum-gated recreate for OpenClaw config changes
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPENCLAW_CONFIG="/opt/cogni-template-runtime/openclaw/openclaw-gateway.json"
+OPENCLAW_HASH_FILE="$HASH_DIR/openclaw-gateway.sha256"
+
+mkdir -p "$HASH_DIR"
+
+NEW_HASH="$(hash_file "$OPENCLAW_CONFIG")"
+OLD_HASH="$(cat "$OPENCLAW_HASH_FILE" 2>/dev/null || true)"
+
+if [[ "$NEW_HASH" != "$OLD_HASH" ]]; then
+  log_info "OpenClaw config changed (hash: ${NEW_HASH:0:12}...), recreating gateway..."
+  emit_deployment_event "deployment.openclaw_recreate" "in_progress" "Recreating OpenClaw gateway due to config change"
+  $RUNTIME_COMPOSE --profile sandbox-openclaw up -d --no-deps --force-recreate openclaw-gateway \
+    && echo "$NEW_HASH" > "$OPENCLAW_HASH_FILE"
+  log_info "OpenClaw gateway recreated with new config"
+  emit_deployment_event "deployment.openclaw_recreate_complete" "success" "OpenClaw gateway recreated successfully"
+else
+  log_info "OpenClaw config unchanged (hash: ${NEW_HASH:0:12}...), no recreate needed"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 11.5: OpenClaw readiness gate (fail deploy if crash-looping)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Waiting for OpenClaw readiness..."
