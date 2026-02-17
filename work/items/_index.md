@@ -56,6 +56,7 @@
 | 1   | 2   | Todo        | task.0034  | Wire OpenClaw memory search + bootstrap files for cogni-template repo context                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Backlog     | task.0057  | OpenClaw OSS: per-section system prompt toggles + heartbeat guard                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Todo        | task.0045  | Enable OpenClaw subagent spawning — upstream header fix + config + delegation                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 1   | Backlog     | bug.0078   | OpenClaw subagent spawn fails with "pairing required" — callGateway resolves LAN IP            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 3   | Backlog     | task.0040  | Gateway memory curation worker — scan ephemeral state, persist, reset container                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
@@ -76,7 +77,11 @@
 | 1   | 2   | Todo        | task.0068  | Dynamic default model selection from LiteLLM config metadata                                   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Backlog     | bug.0069   | Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite                |                            |                                 |
 | 1   | 1   | Backlog     | bug.0070   | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail                     | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 1   | 2   | Todo        | task.0074  | OpenClaw streaming status events — surface agent activity in UI                                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 2   | Todo        | task.0078  | OpenClaw reasoning token streaming — display model thinking in collapsible UI                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 2   | Done        | task.0074  | OpenClaw streaming status events — surface agent activity in UI                                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 2   | Backlog     | task.0075  | Governance scheduled runs post status updates to #continuous-cogni-updates Discord channel     | Messenger Channels         | proj.messenger-channels         |
+| 1   | 2   | Backlog     | task.0076  | Dedicated Discord community agent — separate agent config with Discord-specific personality    | Messenger Channels         | proj.messenger-channels         |
+| 2   | 2   | Backlog     | task.0077  | Discord billing user attribution — identify which Discord user triggered each LLM call         | Messenger Channels         | proj.messenger-channels         |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
 > Sort: priority → status (completed last) → estimate → type

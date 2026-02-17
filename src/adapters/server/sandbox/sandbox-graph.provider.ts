@@ -11,6 +11,7 @@
  *   - Per SECRETS_HOST_ONLY: Only messages + model passed to sandbox, never credentials
  *   - Per BILLING_INDEPENDENT_OF_CLIENT: ephemeral emits usage_report for RunEventRelay billing; gateway relies on LiteLLM callback (COST_AUTHORITY_IS_LITELLM)
  *   - Per SESSION_MODEL_OVERRIDE: Gateway mode calls configureSession() before runAgent() so GraphRunRequest.model reaches LiteLLM via OpenClaw sessions.patch
+ *   - Per STATUS_BEST_EFFORT: StatusEvent pass-through from gateway — never blocks stream or billing
  * Side-effects: IO (creates tmp workspace, runs Docker containers via SandboxRunnerPort, HTTP to gateway)
  * Links: docs/spec/sandboxed-agents.md, graph-provider.ts, sandbox-runner.adapter.ts, openclaw-gateway-client.ts
  * @internal
@@ -519,6 +520,14 @@ export class SandboxGraphProvider implements GraphProvider {
               break;
             case "chat_error":
               throw new Error(`Gateway agent error: ${event.message}`);
+            case "status":
+              // STATUS_BEST_EFFORT: pass through as AiEvent, never blocks stream
+              yield {
+                type: "status",
+                phase: event.phase,
+                ...(event.label ? { label: event.label } : {}),
+              };
+              break;
           }
         }
 
