@@ -2,7 +2,7 @@
 id: bug.0044
 type: bug
 title: "Gateway billing reader finds 0 entries in stale audit log — kills execution after graph switch"
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 2
 summary: "ProxyBillingReader tail-reads the shared append-only audit.jsonl, finds 14k+ lines from previous runs but 0 matching the current runId. Execution killed with 'Billing failed: no proxy billing entries from gateway'. Triggered when switching graphName from a langgraph agent to sandbox:openclaw within the same chat session (same stateKey)."
@@ -19,6 +19,10 @@ created: 2026-02-13
 updated: 2026-02-13
 labels: [openclaw, billing, gateway]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 5
 ---
 
 # Gateway billing reader finds 0 entries in stale audit log

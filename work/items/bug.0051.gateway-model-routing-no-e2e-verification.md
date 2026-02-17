@@ -2,7 +2,7 @@
 id: bug.0051
 type: bug
 title: Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 2
 summary: After removing the nginx audit log (task.0029 proxy billing kill), there is no working mechanism to verify that a model override requested via configureSession() actually reaches LiteLLM. The 3 model routing stack tests are skipped.
@@ -18,6 +18,10 @@ created: 2026-02-13
 updated: 2026-02-13
 labels: [billing, openclaw, testing]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 7
 ---
 
 # Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls

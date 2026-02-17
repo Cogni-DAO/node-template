@@ -2,7 +2,7 @@
 id: task.0074
 type: task
 title: OpenClaw streaming status events — surface agent activity in UI
-status: Done
+status: done
 priority: 1
 estimate: 2
 summary: "Consume OpenClaw agent events (currently dropped) and emit transient data-status chunks so the client shows Thinking, Using tool, Compacting instead of silence"
@@ -18,6 +18,10 @@ created: 2026-02-16
 updated: 2026-02-17
 labels: [openclaw, streaming, ux]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # OpenClaw streaming status events — surface agent activity in UI

@@ -2,7 +2,7 @@
 id: task.0070
 type: task
 title: DAO governance status page — user-facing transparency
-status: Done
+status: done
 priority: 0
 estimate: 1
 summary: Single page showing system tenant credit balance, next governance run time, and recent run history for DAO transparency
@@ -18,6 +18,10 @@ created: 2026-02-16
 updated: 2026-02-17
 labels: [governance, ui, observability]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # DAO governance status page — user-facing transparency

@@ -2,7 +2,7 @@
 id: task.0041
 type: task
 title: Discord channel proof of life — bot connected, Cogni reads + sends via OpenClaw gateway
-status: Done
+status: done
 priority: 0
 estimate: 2
 summary: Create a Discord bot, enable channel support in the OpenClaw gateway config, connect the bot, and verify Cogni can receive inbound Discord messages and send AI responses in a group channel
@@ -19,6 +19,10 @@ created: 2026-02-13
 updated: 2026-02-17
 labels: [openclaw, messenger, discord, channels]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Discord Channel Proof of Life — Bot Connected, Cogni Reads + Sends via OpenClaw Gateway

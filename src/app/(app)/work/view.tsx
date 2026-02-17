@@ -33,13 +33,15 @@ import {
 import type { WorkItem } from "@/lib/work-scanner";
 
 const STATUS_ORDER: Record<string, number> = {
-  "In Progress": 0,
-  Active: 0,
-  Todo: 1,
-  Blocked: 2,
-  Backlog: 3,
-  Paused: 3,
-  Done: 4,
+  needs_merge: 0,
+  needs_closeout: 1,
+  needs_implement: 2,
+  needs_design: 3,
+  needs_research: 4,
+  needs_triage: 5,
+  blocked: 6,
+  done: 7,
+  cancelled: 8,
 };
 
 function priorityPill(pri: number | undefined): string {
@@ -51,13 +53,15 @@ function priorityPill(pri: number | undefined): string {
 
 /** Soft-tinted pill classes: bg at 15% opacity + matching text color */
 const STATUS_PILL: Record<string, string> = {
-  "In Progress": "bg-primary/15 text-primary-foreground",
-  Active: "bg-primary/15 text-primary-foreground",
-  Todo: "bg-warning/15 text-warning",
-  Blocked: "bg-danger/15 text-danger",
-  Backlog: "bg-muted text-muted-foreground",
-  Paused: "bg-muted text-muted-foreground",
-  Done: "bg-success/15 text-success",
+  needs_merge: "bg-primary/15 text-primary-foreground",
+  needs_closeout: "bg-primary/15 text-primary-foreground",
+  needs_implement: "bg-warning/15 text-warning",
+  needs_design: "bg-warning/15 text-warning",
+  needs_research: "bg-warning/15 text-warning",
+  needs_triage: "bg-muted text-muted-foreground",
+  blocked: "bg-danger/15 text-danger",
+  done: "bg-success/15 text-success",
+  cancelled: "bg-muted text-muted-foreground",
 };
 
 function sortItems(items: WorkItem[]): WorkItem[] {

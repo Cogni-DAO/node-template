@@ -2,7 +2,7 @@
 id: task.0077
 type: task
 title: "Discord billing user attribution — identify which Discord user triggered each LLM call"
-status: Backlog
+status: needs_triage
 priority: 2
 estimate: 2
 summary: Discord messages currently bypass Cogni's per-user billing — all LLM costs are charged to the system Cogni account with no attribution to the Discord user who triggered the run. Need to propagate Discord user identity into the LLM proxy billing metadata so costs are traceable per user.
@@ -19,6 +19,10 @@ created: 2026-02-16
 updated: 2026-02-16
 labels: [openclaw, discord, billing, channels]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 13
 ---
 
 # Discord Billing User Attribution

@@ -2,7 +2,7 @@
 id: task.0029
 type: task
 title: "Callback-driven billing — LiteLLM generic_api webhook replaces log scraping"
-status: Done
+status: done
 priority: 0
 estimate: 1
 summary: "P0 MVP: LiteLLM generic_api callback writes charge receipts via ingest endpoint. Fixes bug.0037 ($0 gateway billing). Old billing path coexists during cutover — idempotency prevents doubles."
@@ -18,6 +18,10 @@ created: 2026-02-11
 updated: 2026-02-14
 labels: [billing, litellm, p0, mvp]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # task.0029 — Callback-driven billing via LiteLLM generic_api webhook

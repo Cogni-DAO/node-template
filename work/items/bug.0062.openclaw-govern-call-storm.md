@@ -2,7 +2,7 @@
 id: bug.0062
 type: bug
 title: "OpenClaw gateway: single webchat message can trigger multi-call GOVERN loop (call storm)"
-status: Todo
+status: needs_design
 priority: 0
 estimate: 2
 summary: "A single sandbox:openclaw webchat message can produce ~10-20 sequential LLM calls in one run, rapidly increasing prompt tokens and cost."
@@ -18,6 +18,10 @@ created: 2026-02-14
 updated: 2026-02-14
 labels: [openclaw, cost, reliability, p0]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 3
 ---
 
 # bug.0062 — OpenClaw gateway call storm from a single user message

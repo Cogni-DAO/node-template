@@ -2,7 +2,7 @@
 id: spike.0080
 type: spike
 title: Research current identity system + design minimal DID-first refactor
-status: Done
+status: done
 priority: 1
 estimate: 2
 summary: Map every place wallet address / user_id is assumed in the codebase; design the minimal refactor to adopt did:pkh + VCs + PEX aligned with DIF standards.
@@ -18,6 +18,10 @@ created: 2026-02-17
 updated: 2026-02-17
 labels: [identity, web3, ssi, research]
 external_refs: docs/research/did-first-identity-refactor.md
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Research: DID-First Identity Refactor Design

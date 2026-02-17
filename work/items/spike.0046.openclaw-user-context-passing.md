@@ -2,7 +2,7 @@
 id: spike.0046
 type: spike
 title: "Research: PII-safe user context passing to OpenClaw agents"
-status: Done
+status: done
 priority: 1
 estimate: 1
 summary: How to give OpenClaw agents 1st-class user awareness (ID, trust tier, communication prefs) without leaking PII
@@ -18,6 +18,10 @@ updated: 2026-02-13
 labels: [openclaw, auth, identity]
 external_refs:
   - docs/research/openclaw-user-context-passing.md
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Research: PII-Safe User Context Passing to OpenClaw Agents

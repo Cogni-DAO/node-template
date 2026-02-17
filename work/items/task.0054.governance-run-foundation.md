@@ -2,7 +2,7 @@
 id: task.0054
 type: task
 title: "Governance run foundation — declarative schedule sync"
-status: Done
+status: done
 priority: 0
 estimate: 2
 summary: Declarative governance schedules in repo-spec.yaml synced to Temporal at deploy time. Config layer + sync function + internal ops route + deploy wiring.
@@ -21,6 +21,10 @@ updated: 2026-02-15
 labels: [governance, system-tenant, scheduling]
 external_refs:
   - docs/research/system-tenant-seeding-heartbeat-funding.md
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Governance Run Foundation — Declarative Schedule Sync

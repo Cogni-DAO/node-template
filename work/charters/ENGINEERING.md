@@ -32,7 +32,7 @@ _Updated by governance skills - shows what work other charters need from ENGINEE
 
 - **Maximize OSS**: Prefer open-source tools and dependencies over proprietary/vendor solutions
 - **Test-first reliability**: Code only works if tested end-to-end and aligned with spec invariants
-- **Workflow discipline**: Follow [@development-lifecycle](../../docs/spec/development-lifecycle.md) - from `/idea` to `/closeout`
+- **Workflow discipline**: Follow the [status-driven lifecycle](../../docs/spec/development-lifecycle.md) — every `needs_*` status maps to one `/command`, dispatched deterministically
 
 ## Key References
 
@@ -79,7 +79,7 @@ _ENGINEERING-owned infrastructure. Feature delivery projects live in their respe
 | Resource               | Use                                | Where                                | /skill | Notes                    |
 | ---------------------- | ---------------------------------- | ------------------------------------ | ------ | ------------------------ |
 | Governance skills      | Charter-scoped governance runs     | `.openclaw/skills/gov-*`             |        | Trigger-routed execution |
-| Development skills     | Command-driven workflows           | `.openclaw/skills/`                  |        | /idea → /closeout        |
+| Development skills     | Status-driven lifecycle commands   | `.claude/commands/`                  |        | `needs_*` → `/command`   |
 | Test infrastructure    | Mock-LLM, system integration tests | `tests/`, `docker-compose`           |        | Partial coverage         |
 | CI/CD pipelines        | GitHub Actions workflows           | `.github/workflows/`                 |        | App CI only; no gov CI   |
 | Specs and architecture | Technical contracts and boundaries | `docs/spec/`                         |        | Active specs enforce     |

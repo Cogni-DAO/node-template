@@ -29,7 +29,7 @@ Read these before starting:
    Then edit the copy:
    - `id: bug.<num>` — must match filename prefix
    - `type: bug`
-   - `status: Backlog` (or `In Progress` if actively fixing)
+   - `status: needs_triage`
    - `priority: 1` default; `0` for security/data-loss bugs
    - `project:` — leave empty (routing happens in `/triage`)
    - `spec_refs:` — spec IDs whose invariants are violated
@@ -44,9 +44,12 @@ Read these before starting:
 
 5. **Update `_index.md`**: Add row to `## Active` table, sorted by priority.
 
-6. **Validate**: Run `pnpm check:docs` and fix any errors.
+6. **Finalize**:
+   - Run `pnpm check:docs` and fix any errors until clean.
+   - Commit all changes (work item file, `_index.md`) on the current branch.
+   - Push to remote.
 
-7. **Report**: File path, ID, severity assessment. Suggest next step: `/triage` to route to a project.
+7. **Report**: File path, ID, severity assessment. Next command: `/triage`.
 
 ## Rules
 

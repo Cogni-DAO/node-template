@@ -2,7 +2,7 @@
 id: bug.0065
 type: bug
 title: OpenClaw gateway agent uses wrong tools for governance visibility — sessions_history vs git/files
-status: Done
+status: done
 priority: 1
 estimate: 2
 summary: Gateway agent tries to query governance results via sessions_history() which fails with pairing errors. Should read governance outputs from git commits and files instead.
@@ -18,6 +18,10 @@ created: 2026-02-15
 updated: 2026-02-15
 labels: [openclaw, governance, agent-prompt]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # OpenClaw gateway agent uses wrong tools for governance visibility

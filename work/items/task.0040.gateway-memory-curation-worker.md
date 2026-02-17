@@ -2,7 +2,7 @@
 id: task.0040
 type: task
 title: "Gateway memory curation worker — scan ephemeral state, persist valuable context, reset container"
-status: Backlog
+status: needs_triage
 priority: 2
 estimate: 3
 summary: "Periodic worker that scans the gateway container's ephemeral memory (daily logs, gitignored artifacts), extracts valuable snippets into durable storage (MEMORY.md or git), then resets the container to a clean state."
@@ -18,6 +18,10 @@ created: 2026-02-13
 updated: 2026-02-13
 labels: [openclaw, memory, automation]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 12
 ---
 
 # Gateway memory curation worker

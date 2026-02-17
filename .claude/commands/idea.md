@@ -26,7 +26,7 @@ Read these before starting:
    Then edit the copy:
    - `id: story.<num>` — must match filename prefix
    - `type: story`
-   - `status: Backlog`
+   - `status: needs_triage`
    - `project:` — leave empty (routing happens in `/triage`)
    - `created:` and `updated:` — today's date
    - **Requirements**: Capture the user's intent. What problem does this solve? Who benefits? What does success look like? Be specific enough that an engineer can scope it.
@@ -47,9 +47,12 @@ Read these before starting:
 
 6. **Update `_index.md`**: Add row(s) to `## Active` table, sorted by priority (0 first).
 
-7. **Validate**: Run `pnpm check:docs` and fix any errors.
+7. **Finalize**:
+   - Run `pnpm check:docs` and fix any errors until clean.
+   - Commit all changes (work item file(s), `_index.md`) on the current branch.
+   - Push to remote.
 
-8. **Report**: Show file path(s) and ID(s). Suggest next step: `/triage` to route to a project. If a spike was created, note that `/research spike.<num>` should follow triage.
+8. **Report**: Show file path(s) and ID(s). Next command: `/triage`.
 
 ## Rules
 
