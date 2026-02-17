@@ -64,19 +64,18 @@ Consider at least 2 approaches. Prefer the one with:
 
 ## Phase 4 — Document the Design
 
-**For Ideas/Stories** — decide scope:
-
-- If simple (1 PR): Recommend `/task` to create a task with your design insights
-- If complex (multi-PR): Recommend `/project` to create a roadmap
-- If unclear: Recommend `/research` to explore first
+**For Stories** (`type: story`):
+- Stories are intake records. Set `status: done`.
+- Create `task.*` items at `status: needs_implement` with your design insights.
+- If contract changes needed, write/update the spec first (see Phase 5).
 
 **For Projects** — add high-level design:
 
 - Update project doc with overall approach, patterns, OSS choices
 - Identify major deliverables and architectural decisions
-- Recommend `/spec` for any new contracts
+- Write/update specs for any new contracts
 
-**For Tasks/Bugs** — add Design section:
+**For Tasks/Bugs** (primary lifecycle path) — the item stays as the lifecycle carrier:
 
 ```markdown
 ## Design
@@ -112,41 +111,41 @@ Consider at least 2 approaches. Prefer the one with:
 
 Update frontmatter:
 
-- `status: Todo` (ready for `/review-design`)
+- `status: needs_implement` (design complete, ready for implementation)
 - `updated:` today's date
+- Set `branch:` if a feature branch is known
 
 ---
 
 ## Phase 5 — Decide on Artifacts
 
-**Most cases**: Design lives in the work item.
+**Most cases**: Design lives in the work item. `/design` writes/updates the spec contract directly.
 
-**If contract changes**: Recommend `/spec` to update or create spec first.
+**If contract changes**: Write or update the spec as part of this command (absorbs `/spec` for lifecycle items).
 
 **If architectural decision**: Create ADR in `docs/decisions/adr/`, link from work item.
 
+**If work decomposes**: Create additional `task.*` items at `needs_implement` for any sub-work discovered during design. The original item stays as the primary lifecycle carrier.
+
 ---
 
-## Phase 6 — Validate
+## Phase 6 — Finalize
 
-```bash
-pnpm check:docs
-```
-
-Verify the design:
-
-- ✅ Outcome is clear and specific
-- ✅ Approach is the simplest viable path
-- ✅ Reuse/OSS preferred over new code
-- ✅ All spec invariants captured (if applicable)
-- ✅ Architecture alignment documented
-- ✅ Rejected alternatives explained
-
-Report what was designed and recommend next step:
-
-- **For ideas/stories**: `/project` or `/task` (depending on scope)
-- **For projects**: `/spec` (if contracts change) or `/task` (to start decomposition)
-- **For tasks/bugs**: `/review-design` → `/implement`
+1. Update `_index.md` to reflect the new status of all changed items.
+2. Verify the design:
+   - ✅ Outcome is clear and specific
+   - ✅ Approach is the simplest viable path
+   - ✅ Reuse/OSS preferred over new code
+   - ✅ All spec invariants captured (if applicable)
+   - ✅ Architecture alignment documented
+   - ✅ Rejected alternatives explained
+3. Run `pnpm check:docs` and fix any errors until clean.
+4. Commit all changes (work item(s), specs, `_index.md`) on the work item's branch.
+5. Push to remote.
+6. Report what was designed and the next command:
+   - **For stories**: story is `done`; created task(s) at `needs_implement` → `/implement`
+   - **For projects**: `/task` (to start decomposition)
+   - **For tasks/bugs**: item is now at `needs_implement` → `/implement`
 
 ---
 
