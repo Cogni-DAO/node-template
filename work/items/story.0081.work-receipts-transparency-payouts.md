@@ -10,7 +10,7 @@ outcome: Every payout can be independently verified from receipts, inclusion pro
 spec_refs:
 assignees: derekg1729
 credit:
-project:
+project: proj.transparent-credit-payouts
 branch:
 pr:
 reviewer:

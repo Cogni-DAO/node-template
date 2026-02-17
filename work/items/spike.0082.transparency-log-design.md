@@ -10,7 +10,7 @@ outcome: Design doc with concrete schema definitions, storage choice rationale, 
 spec_refs:
 assignees: derekg1729
 credit:
-project:
+project: proj.transparent-credit-payouts
 branch:
 pr:
 reviewer:
