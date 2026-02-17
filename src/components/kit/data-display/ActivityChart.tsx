@@ -124,9 +124,7 @@ export function ActivityChart({
                 }
               />
             ))}
-            {seriesKeys.length > 1 && (
-              <ChartLegend content={<ChartLegendContent />} />
-            )}
+            <ChartLegend content={<ChartLegendContent />} />
           </BarChart>
         </ChartContainer>
       </CardContent>
