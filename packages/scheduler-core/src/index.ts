@@ -75,6 +75,7 @@ export {
   type GovernanceScheduleSyncResult,
   governanceScheduleId,
   syncGovernanceSchedules,
+  type UpsertGovernanceScheduleRowParams,
 } from "./services/syncGovernanceSchedules";
 // Types
 export {

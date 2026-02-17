@@ -22,12 +22,19 @@ export interface GovernanceRun {
   lastActivity: Date;
 }
 
+export interface UpcomingRun {
+  /** Display name derived from temporal_schedule_id (e.g. "Community") */
+  name: string;
+  /** Next occurrence computed live from cron expression — always in the future */
+  nextRunAt: Date;
+}
+
 export interface GovernanceStatusPort {
   /**
-   * Get next scheduled governance run time for system tenant.
-   * Returns null if no runs are scheduled.
+   * Get next N scheduled governance runs, computed live from cron expressions.
+   * Always returns future times — never stale DB cache.
    */
-  getScheduleStatus(): Promise<Date | null>;
+  getUpcomingRuns(params: { limit: number }): Promise<UpcomingRun[]>;
 
   /**
    * Get recent governance runs for system tenant.

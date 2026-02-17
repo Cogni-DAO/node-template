@@ -19,7 +19,7 @@ import type {
   WebSearchCapability,
 } from "@cogni/ai-tools";
 import type { UserId } from "@cogni/ids";
-import { userActor } from "@cogni/ids";
+import { toUserId, userActor } from "@cogni/ids";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
@@ -81,6 +81,7 @@ import type {
   ThreadPersistencePort,
   TreasuryReadPort,
 } from "@/ports";
+import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@/shared/constants/system-tenant";
 import { serverEnv } from "@/shared/env/server-env";
 import { makeLogger } from "@/shared/observability";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
@@ -376,7 +377,10 @@ function createContainer(): Container {
     toolSource,
     threadPersistenceForUser: (userId: UserId) =>
       new DrizzleThreadPersistenceAdapter(db, userActor(userId)),
-    governanceStatus: new DrizzleGovernanceStatusAdapter(db),
+    governanceStatus: new DrizzleGovernanceStatusAdapter(
+      db,
+      userActor(toUserId(COGNI_SYSTEM_PRINCIPAL_USER_ID))
+    ),
   };
 }
 

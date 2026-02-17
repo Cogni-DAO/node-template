@@ -16,7 +16,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ReactElement } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { z } from "zod";
 import {
   SectionCard,
@@ -125,25 +125,23 @@ export function GovernanceView(): ReactElement {
           <span className="ml-2 text-lg text-muted-foreground">USD</span>
         </SectionCard>
 
-        <SectionCard title="Next Scheduled Run">
-          {data.nextRunAt ? (
-            <>
-              <span className="font-bold text-4xl">
-                {new Date(data.nextRunAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })}
-              </span>
-              <span className="ml-2 text-lg text-muted-foreground">
-                {new Date(data.nextRunAt).toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
-              </span>
-            </>
-          ) : (
+        <SectionCard title="Upcoming Runs">
+          {data.upcomingRuns.length === 0 ? (
             <span className="text-muted-foreground">No runs scheduled</span>
+          ) : (
+            <ul className="space-y-3">
+              {data.upcomingRuns.map((run) => (
+                <li
+                  key={run.name}
+                  className="flex items-baseline justify-between gap-4"
+                >
+                  <span className="text-muted-foreground text-sm">
+                    {run.name}
+                  </span>
+                  <Countdown target={new Date(run.nextRunAt)} />
+                </li>
+              ))}
+            </ul>
           )}
         </SectionCard>
       </div>
@@ -235,6 +233,51 @@ export function GovernanceView(): ReactElement {
         )}
       </div>
     </div>
+  );
+}
+
+function Countdown({ target }: { target: Date }) {
+  const [secondsLeft, setSecondsLeft] = useState(() =>
+    Math.max(0, Math.floor((target.getTime() - Date.now()) / 1000))
+  );
+
+  useEffect(() => {
+    const tick = () => {
+      setSecondsLeft(
+        Math.max(0, Math.floor((target.getTime() - Date.now()) / 1000))
+      );
+    };
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+
+  if (secondsLeft === 0) {
+    return (
+      <span className="font-semibold text-muted-foreground text-sm">now</span>
+    );
+  }
+
+  const h = Math.floor(secondsLeft / 3600);
+  const m = Math.floor((secondsLeft % 3600) / 60);
+  const s = secondsLeft % 60;
+
+  return (
+    <span className="font-semibold text-sm tabular-nums">
+      {h > 0 && (
+        <>
+          {h}
+          <span className="font-normal text-muted-foreground">h </span>
+        </>
+      )}
+      {(h > 0 || m > 0) && (
+        <>
+          {m}
+          <span className="font-normal text-muted-foreground">m </span>
+        </>
+      )}
+      {String(s).padStart(2, "0")}
+      <span className="font-normal text-muted-foreground">s</span>
+    </span>
   );
 }
 

@@ -1,6 +1,6 @@
 {
-  "id": "d1b18288-7a2e-43ae-8262-0a904385525d",
-  "prevId": "7531e321-f509-49c5-8e89-44390dda1e38",
+  "id": "fe175121-46ee-44e7-96c5-7f3e86ff72ce",
+  "prevId": "d1b18288-7a2e-43ae-8262-0a904385525d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1716,6 +1716,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "temporal_schedule_id": {
+          "name": "temporal_schedule_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "enabled": {
           "name": "enabled",
           "type": "boolean",
@@ -1792,6 +1798,28 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "schedules_temporal_id_unique": {
+          "name": "schedules_temporal_id_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "temporal_schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "temporal_schedule_id IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}

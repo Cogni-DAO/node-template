@@ -10,7 +10,8 @@
  *   - CATCHUP_WINDOW_ZERO: No backfill (enforced by ScheduleControlPort)
  *   - PRUNE_IS_PAUSE: Removed schedules are paused, never deleted (reversible)
  *   - SYSTEM_OPS_ONLY: This function runs at deploy time, never exposed as an API endpoint
- *   - PURE_ORCHESTRATION: No adapters, no DB, no Temporal client — only ports/types
+ *   - PURE_ORCHESTRATION: No adapters, no Temporal client — only ports/types/callbacks
+ *   - SYSTEM_TENANT_IS_TENANT: Governance schedules are first-class DB rows owned by system principal
  *   - UPDATE_ON_DRIFT: Existing schedules are updated in-place when config changes (model, cron, timezone, input)
  * Side-effects: IO (Temporal RPC via ScheduleControlPort, grant creation via ensureGovernanceGrant)
  * Links: docs/spec/scheduler.md, docs/spec/governance-council.md, .cogni/repo-spec.yaml
@@ -55,10 +56,34 @@ interface SyncLogger {
   warn(obj: Record<string, unknown>, msg: string): void;
 }
 
+/** Parameters for upserting a governance schedule DB row */
+export interface UpsertGovernanceScheduleRowParams {
+  /** Temporal schedule ID (e.g., "governance:community") */
+  temporalScheduleId: string;
+  /** System tenant user ID */
+  ownerUserId: string;
+  /** Execution grant ID for authorization */
+  executionGrantId: string;
+  /** Graph ID (e.g., "sandbox:openclaw") */
+  graphId: string;
+  /** Graph input payload */
+  input: JsonValue;
+  /** Cron expression */
+  cron: string;
+  /** IANA timezone */
+  timezone: string;
+}
+
 /** Injectable dependencies for governance schedule sync */
 export interface GovernanceScheduleSyncDeps {
   /** Idempotent: ensures governance grant exists, returns grantId */
   ensureGovernanceGrant(): Promise<string>;
+  /** Upsert governance schedule row in DB, returns dbScheduleId (UUID) */
+  upsertGovernanceScheduleRow(
+    params: UpsertGovernanceScheduleRowParams
+  ): Promise<string>;
+  /** System tenant user ID (owner of governance schedules) */
+  systemUserId: string;
   /** Temporal schedule lifecycle control */
   scheduleControl: ScheduleControlPort;
   /** Returns all Temporal schedule IDs with 'governance:' prefix */
@@ -149,9 +174,20 @@ export async function syncGovernanceSchedules(
       model: GOVERNANCE_MODEL,
     };
 
+    // Upsert DB row first — governance schedules are first-class DB rows
+    const dbScheduleId = await deps.upsertGovernanceScheduleRow({
+      temporalScheduleId: scheduleId,
+      ownerUserId: deps.systemUserId,
+      executionGrantId: grantId,
+      graphId: GOVERNANCE_GRAPH_ID,
+      input: desiredInput,
+      cron: schedule.cron,
+      timezone: schedule.timezone,
+    });
+
     const desiredParams: CreateScheduleParams = {
       scheduleId,
-      dbScheduleId: null,
+      dbScheduleId,
       cron: schedule.cron,
       timezone: schedule.timezone,
       graphId: GOVERNANCE_GRAPH_ID,
@@ -170,7 +206,7 @@ export async function syncGovernanceSchedules(
       );
     } catch (error) {
       if (isScheduleControlConflictError(error)) {
-        // Schedule already exists — check for config drift
+        // Schedule already exists — check for config or link drift
         const desc = await scheduleControl.describeSchedule(scheduleId);
         if (!desc) {
           // Race condition: schedule disappeared between create and describe
@@ -178,22 +214,23 @@ export async function syncGovernanceSchedules(
           continue;
         }
 
-        const changed = scheduleConfigChanged(
+        const configChanged = scheduleConfigChanged(
           desc,
           schedule.cron,
           schedule.timezone,
           desiredInput
         );
+        const linkDrift = desc.dbScheduleId !== dbScheduleId;
 
-        if (changed) {
+        if (configChanged || linkDrift) {
           await scheduleControl.updateSchedule(scheduleId, desiredParams);
           if (desc.isPaused) {
             await scheduleControl.resumeSchedule(scheduleId);
           }
           result.updated.push(scheduleId);
           log.info(
-            { scheduleId },
-            "Updated governance schedule (config drift detected)"
+            { scheduleId, configChanged, linkDrift },
+            "Updated governance schedule (drift detected)"
           );
         } else if (desc.isPaused) {
           await scheduleControl.resumeSchedule(scheduleId);

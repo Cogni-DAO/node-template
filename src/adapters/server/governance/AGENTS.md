@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-16
+- **Last reviewed:** 2026-02-17
 - **Status:** draft
 
 ## Purpose
@@ -49,13 +49,14 @@ pnpm typecheck
 ## Standards
 
 - All queries filter by COGNI_SYSTEM_PRINCIPAL_USER_ID (system tenant scope)
+- All queries wrapped in `withTenantScope(db, systemActorId)` — RLS enforced, no BYPASSRLS
 - Return Date objects, not ISO strings (port contract)
-- RLS-compatible: uses owner_user_id filter
+- `getUpcomingRuns()` computes next occurrence from cron at query time (never returns stale DB cache)
 
 ## Dependencies
 
-- **Internal:** ports, shared/db, shared/constants
-- **External:** drizzle-orm
+- **Internal:** ports, shared/db, shared/constants, `@cogni/db-client` (withTenantScope)
+- **External:** drizzle-orm, cron-parser
 
 ## Change Protocol
 
@@ -65,5 +66,5 @@ pnpm typecheck
 
 ## Notes
 
-- Created for governance dashboard (single caller) but properly abstracted via port interface
-- Queries are bounded: LIMIT 1 for schedule, LIMIT 10 for recent runs
+- Adapter bound to `systemActorId` at construction (`userActor(toUserId(COGNI_SYSTEM_PRINCIPAL_USER_ID))`)
+- Queries are bounded: LIMIT 3 for upcoming runs, LIMIT 10 for recent runs

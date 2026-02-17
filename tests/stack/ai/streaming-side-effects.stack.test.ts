@@ -11,7 +11,7 @@
  *   - Error: 0 charge_receipts + 1 ai_invocation_summaries (status='error')
  *   - Abort: 0 charge_receipts + 1 ai_invocation_summaries (status='error', errorCode='aborted')
  * Side-effects: IO (database writes via container)
- * Notes: Requires dev stack running (pnpm dev:stack:test). This is a P0 regression test per COMPLETION_REFACTOR_PLAN.md.
+ * Notes: Requires dev stack (pnpm dev:stack:test). P0 regression test. testTimeout=30s for LLM roundtrip + async callback.
  * Links: docs/archive/COMPLETION_REFACTOR_PLAN.md, src/features/ai/services/completion.ts
  * @public
  */
@@ -43,6 +43,9 @@ import {
 vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
+
+// Real LLM roundtrip + async LiteLLM billing callback
+vi.setConfig({ testTimeout: 30_000 });
 
 describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
   afterEach(() => {
@@ -165,7 +168,7 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       expect(telemetryRows.length).toBe(1);
       expect(telemetryRows[0]?.status).toBe("success");
       expect(telemetryRows[0]?.errorCode).toBeNull();
-    });
+    }, 30_000); // real LLM roundtrip + async LiteLLM callback
 
     it.skip("does not create duplicate records on multiple stream iterations", async () => {
       // This test verifies that side effects don't fire per-chunk
