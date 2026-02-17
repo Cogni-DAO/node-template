@@ -10,7 +10,7 @@ summary: Replace wallet-address-as-identity with did:pkh canonical identifiers a
 outcome: Members identified by DIDs internally, account links are portable VC artifacts, verification uses PEX semantics, and DID ops are behind a method-agnostic port.
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-02-17
+updated: 2026-02-18
 labels: [identity, web3, ssi]
 ---
 
@@ -22,17 +22,16 @@ Make Cogni's identity layer speak decentralized identity standards natively. Mem
 
 ## Roadmap
 
-### Crawl (P0) — DID Foundation + Research
+### Crawl (P0) — DID Foundation
 
-**Goal:** Understand current identity surface, pick standards/libraries, ship `did:pkh` as canonical identifier with dual-write migration.
+**Goal:** Ship `did:pkh` as canonical identifier with dual-write migration and session integration.
 
-| Deliverable                                                | Status      | Est | Work Item  |
-| ---------------------------------------------------------- | ----------- | --- | ---------- |
-| Research spike: gap analysis + design doc                  | Done        | 2   | spike.0080 |
-| DID Registration/Resolution port (did:pkh only)            | Not Started | 2   | —          |
-| DB migration: add `did` column, dual-write from SIWE       | Not Started | 2   | —          |
-| Backfill existing users: deterministic did:pkh from wallet | Not Started | 1   | —          |
-| Switch internal reads to DID (deprecate raw wallet refs)   | Not Started | 2   | —          |
+| Deliverable                                                      | Status      | Est | Work Item  |
+| ---------------------------------------------------------------- | ----------- | --- | ---------- |
+| Research spike: gap analysis + design doc                        | Done        | 2   | spike.0080 |
+| DID derivation utility + DB migration + backfill                 | Not Started | 2   | —          |
+| SessionUser DID integration (JWT, session types, auth callbacks) | Not Started | 1   | —          |
+| Switch internal reads to DID (RBAC actor type, user context)     | Not Started | 2   | —          |
 
 ### Walk (P1) — Verifiable Credentials for Account Links
 
@@ -70,7 +69,7 @@ Make Cogni's identity layer speak decentralized identity standards natively. Mem
 
 ## Dependencies
 
-- [ ] spike.0080 — design doc must land before implementation begins
+- [x] spike.0080 — design doc landed ([research doc](../../docs/research/did-first-identity-refactor.md))
 - [ ] Existing SIWE auth stable (authentication spec — no breaking changes in flight)
 - [ ] RBAC actor type `user:{walletAddress}` migration coordinated (see rbac spec)
 - [ ] User context spec's `opaqueId` derivation aligned with DID (user-context spec)
@@ -107,9 +106,11 @@ The project adopts four DIF primitives without inventing new protocols:
 - Trust registry machinery — issuer = "our system" until we actually federate
 - On-chain reputation/cred tokens — orthogonal to identity primitives
 
-### Key Design Decisions (Pending spike.0080)
+### Key Design Decisions (Resolved — spike.0080)
 
-- **VC format**: JWT VC vs JSON-LD VC — spike should pick simplest that preserves portability
-- **Signature scheme**: EIP-191 vs EIP-712 for VC signing — spike should evaluate and justify
-- **GitHub proof method**: gist-based is MVP-acceptable but needs idempotency hardening
-- **Migration strategy**: dual-write → switch reads → deprecate legacy (standard 3-phase)
+- **VC format**: JWT VC via `did-jwt-vc`. Simpler than JSON-LD, W3C-compliant, upgrade path exists.
+- **VC signing**: System-issued VCs use ES256K server-side signer (`did:key`). EIP-712 wallet signing deferred to P2+ (user-signed credentials).
+- **DID derivation**: Hand-rolled `walletToDid()` utility (string concat). `did-resolver` + `pkh-did-resolver` added at Phase 2.
+- **Chain ID**: Read from SIWE message payload — never default to `1`.
+- **Migration strategy**: dual-write → switch reads → deprecate legacy (standard 3-phase).
+- **Phase 2 scope**: VC tables/endpoints designed when account linking actually ships (proj.messenger-channels), not pre-designed.

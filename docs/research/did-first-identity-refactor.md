@@ -99,7 +99,7 @@ This is good news: the VC-based linking system has no legacy to migrate.
 | `@didtools/pkh-ethereum` | 0.6.0   | 2024-10      | ~9.4K     | Skip. Heavier than needed — designed for Ceramic ecosystem, includes CACAO.   |
 | `@spruceid/didkit-wasm`  | 0.2.1   | 2025-05      | Low       | Skip. WASM binary adds bundle size. Pre-1.0. Overkill for did:pkh derivation. |
 
-**Recommendation:** `did-resolver` + `pkh-did-resolver`. DID derivation is a pure string operation (`did:pkh:eip155:1:<address>`), so we only need the resolver for validation/document generation.
+**Recommendation:** For Phase 0-1, a hand-rolled `walletToDid()` utility suffices — derivation is pure string concatenation. Add `did-resolver` + `pkh-did-resolver` at Phase 2 when external DID resolution is needed (accepting credentials from other issuers).
 
 ### 2. Verifiable Credentials
 
@@ -131,22 +131,19 @@ This is good news: the VC-based linking system has no legacy to migrate.
 
 ### 4. Signature Scheme
 
-**EIP-712 over EIP-191 because:**
+**Two signing contexts exist — don't conflate them:**
 
-- EIP-712 provides structured, typed data signing — the signer sees human-readable field names, not opaque hashes
-- `viem` (already in our dependency tree via Wagmi/RainbowKit) has first-class `signTypedData` support
-- W3C CCG has an `ethereum-eip712-signature-2021-spec` aligning EIP-712 with VC proofs
-- EIP-191 is simpler but produces opaque "personal_sign" messages — worse UX for credential signing
-- SIWE already uses EIP-191 for login; EIP-712 for VCs gives clear semantic separation
+- **System-issued VCs (v0):** The system is the sole issuer. `did-jwt-vc` uses `did-jwt` internally, which signs JWTs with ES256K (secp256k1). The system holds a server-side keypair (`did:key`) and signs credentials directly. No wallet interaction needed.
+- **User-signed credentials (future):** If users ever self-attest or co-sign credentials, EIP-712 via `viem.signTypedData()` gives structured, human-readable signing UX. Defer to P2+.
 
-**Recommendation:** EIP-712 via `viem.signTypedData()` for credential signing. Already in our dependency tree.
+**Recommendation:** For v0, use `did-jwt-vc` with a server-side `did:key` signer (ES256K). This is the library's native signing path — no custom JWT construction needed. EIP-712 wallet signing is orthogonal and only relevant when users sign their own credentials.
 
 ### 5. What's Missing (Build Behind Ports)
 
 | Capability                  | OSS Status                                      | Our Approach                                         |
 | --------------------------- | ----------------------------------------------- | ---------------------------------------------------- |
-| `did:pkh` string derivation | Trivial (string concat)                         | Utility function behind DID port                     |
-| VC issuance (system-signed) | `did-jwt-vc` covers it                          | Thin wrapper                                         |
+| `did:pkh` string derivation | Trivial (string concat)                         | `walletToDid()` utility; no library needed           |
+| VC issuance (system-signed) | `did-jwt-vc` + `did:key` signer                 | Thin wrapper, ES256K server-side key                 |
 | VC revocation (status list) | `@transmute/vc-status-rl-2021` exists but heavy | Simple DB status column for v0, StatusList2021 at P2 |
 | PEX validation              | `@sphereon/pex` exists                          | Internal types for v0, library at P1                 |
 | Identity event ledger       | Nothing specific                                | Append-only DB table                                 |
@@ -158,9 +155,10 @@ This is good news: the VC-based linking system has no legacy to migrate.
 ### Minimal Stack for v0
 
 ```
-DID parsing:        did-resolver + pkh-did-resolver
-VC issuance:        did-jwt-vc (JWT VC format)
-VC signing:         viem signTypedData (EIP-712) — already in deps
+DID derivation:     Hand-rolled walletToDid() utility (string concat)
+DID resolution:     did-resolver + pkh-did-resolver (add at Phase 2)
+VC issuance:        did-jwt-vc (JWT VC format, ES256K server-side signer)
+System issuer:      did:key from server-side secp256k1 keypair
 PEX semantics:      Internal types (no library for v0)
 Revocation:         DB status column (upgrade to StatusList2021 at P2)
 ```
@@ -193,56 +191,25 @@ Lookup bridge:      users.did column (UNIQUE)    (new, indexed)
 3. User context `opaqueId` derived from DID
 4. `walletAddress` still stored but treated as a "proof method", not identity
 
-**Phase 2 — Verifiable Credentials (2-3 PRs)**
+**Phase 2 — Verifiable Credentials (design when account linking ships)**
 
-1. New tables: `credentials`, `credential_status`, `identity_events`
-2. VC issuance endpoints for Discord/GitHub linking
-3. PEX verification interface
-4. Revocation flow
+Phase 2 tables, endpoints, and VC flows should be designed in a dedicated spec (`docs/spec/decentralized-identity.md`) when Discord/GitHub account linking is actually needed (see proj.messenger-channels). Pre-designing APIs for flows that don't exist yet would violate the codebase's no-premature-abstractions principle.
 
-### Data Model (Target)
+Directional sketch (not binding):
+
+- New tables: `credentials`, `identity_events`
+- VC issuance endpoints for Discord/GitHub linking
+- PEX verification interface
+- Revocation flow
+
+### Data Model (Phase 0)
 
 ```sql
--- Phase 0: add to existing users table
 ALTER TABLE users ADD COLUMN did TEXT UNIQUE;
 CREATE INDEX users_did_idx ON users(did);
-
--- Phase 2: new tables
-CREATE TABLE credentials (
-  id TEXT PRIMARY KEY,                    -- UUID
-  subject_did TEXT NOT NULL,              -- did:pkh:... (FK via users.did)
-  type TEXT NOT NULL,                     -- 'DiscordAccountLink', 'GitHubAccountLink'
-  issuer_did TEXT NOT NULL,               -- system issuer DID
-  credential_jwt TEXT NOT NULL,           -- signed JWT VC
-  evidence_ref TEXT,                      -- proof reference (gist URL, bot challenge ID)
-  proof_method TEXT NOT NULL,             -- 'discord_bot_challenge', 'github_gist'
-  status TEXT NOT NULL DEFAULT 'active',  -- 'active', 'revoked'
-  idempotency_key TEXT UNIQUE NOT NULL,   -- prevents duplicate credentials
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  revoked_at TIMESTAMPTZ
-);
-
-CREATE TABLE identity_events (
-  id TEXT PRIMARY KEY,                    -- UUID
-  subject_did TEXT NOT NULL,
-  event_type TEXT NOT NULL,               -- 'did_created', 'credential_issued', 'credential_revoked'
-  credential_id TEXT,                     -- FK to credentials.id (if applicable)
-  metadata JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
 ```
 
-### API Contracts (Phase 2)
-
-```
-GET  /api/v1/identity/did          → { did, walletAddress, credentials[] }
-POST /api/v1/identity/link/discord → { credentialId, jwt }  (idempotent)
-POST /api/v1/identity/link/github  → { credentialId, jwt }  (idempotent)
-POST /api/v1/identity/present      → { verified: bool, submission }  (PEX)
-POST /api/v1/identity/revoke       → { credentialId, revokedAt }
-```
-
-All endpoints derive identity from SIWE session (no arbitrary DID acceptance from client).
+Phase 2 tables (`credentials`, `identity_events`) will be designed when account linking ships. See invariants checklist for the constraints they must satisfy.
 
 ### Invariants Checklist
 
@@ -263,7 +230,7 @@ All endpoints derive identity from SIWE session (no arbitrary DID acceptance fro
 | Risk                                        | Mitigation                                                                              |
 | ------------------------------------------- | --------------------------------------------------------------------------------------- |
 | JWT VC format limits future JSON-LD interop | `did-jwt-vc` produces W3C-compliant VCs; format upgrade path exists                     |
-| EIP-712 signature replay                    | Include nonce + domain separation in typed data (same pattern as SIWE)                  |
+| Signature replay (future user-signed VCs)   | Include nonce + domain separation when EIP-712 wallet signing is introduced at P2       |
 | Discord usernames change                    | Use immutable numeric Discord user ID, never username                                   |
 | GitHub gist proof can be deleted            | Store evidence snapshot at issuance time; gist is proof method, not ongoing requirement |
 | Backfill assumes chain ID 1 (mainnet)       | Correct for current SIWE config; make chain ID configurable in DID derivation function  |
@@ -273,10 +240,10 @@ All endpoints derive identity from SIWE session (no arbitrary DID acceptance fro
 
 ## Open Questions
 
-1. **Chain ID handling**: Current SIWE config appears mainnet-only. Should DID derivation default to `eip155:1` or read from SIWE message? (Likely: read from SIWE for correctness.)
-2. **System issuer DID**: What DID method for the system issuer? `did:web:cogni.dev`? `did:key` from a server-side keypair? (Likely: `did:key` for simplicity, `did:web` at P2.)
-3. **Discord linking proof flow**: What specific bot challenge mechanism? DM-based code? Server role check? (Needs design when Discord integration matures.)
-4. **Credential export format**: Should users be able to download their VCs as files? (Defer to P2.)
+1. **Chain ID handling**: DID derivation must read `chainId` from the SIWE message payload — not default to `1`. The SIWE message contains chainId; Phase 0 must extract and persist it. Wrong chainId = wrong DID permanently.
+2. **System issuer DID**: `did:key` from a server-side secp256k1 keypair for v0. Upgrade to `did:web:cogni.dev` at P2 if federation requires a web-resolvable issuer.
+3. **Discord linking proof flow**: Design when Discord integration matures (see proj.messenger-channels). Not in scope for Phase 0-1.
+4. **Credential export format**: Defer to P2.
 
 ---
 
@@ -288,20 +255,28 @@ Already exists: `proj.decentralized-identity`
 
 ### Specs to Write/Update
 
-| Spec                                  | Action                                                           | When           |
-| ------------------------------------- | ---------------------------------------------------------------- | -------------- |
-| `docs/spec/decentralized-identity.md` | **Create** — DID port, VC data model, PEX types, identity events | Before Phase 1 |
-| `docs/spec/authentication.md`         | **Update** — `SIWE_CANONICAL_IDENTITY` evolves to include DID    | Phase 1        |
-| `docs/spec/rbac.md`                   | **Update** — actor type `user:{did}`                             | Phase 1        |
-| `docs/spec/user-context.md`           | **Update** — `opaqueId` from DID                                 | Phase 1        |
-| `docs/spec/accounts-design.md`        | **Update** — identity model section                              | Phase 1        |
+| Spec                                  | Action                                                                        | When           |
+| ------------------------------------- | ----------------------------------------------------------------------------- | -------------- |
+| `docs/spec/decentralized-identity.md` | **Create** — DID port, invariants (move from story.0079 to spec as canonical) | Before Phase 1 |
+| `docs/spec/authentication.md`         | **Update** — `SIWE_CANONICAL_IDENTITY` evolves to include DID                 | Phase 1        |
+| `docs/spec/rbac.md`                   | **Update** — actor type `user:{did}`                                          | Phase 1        |
+| `docs/spec/user-context.md`           | **Update** — `opaqueId` from DID                                              | Phase 1        |
+| `docs/spec/accounts-design.md`        | **Update** — identity model section                                           | Phase 1        |
 
-### Likely Tasks (rough sequence)
+**Note:** The 9 invariants (I-CANONICAL-DID through I-PRIVACY-DEFAULT) currently live in story.0079 — they must move to the spec as the authoritative source, not be duplicated.
 
-1. **task: DID derivation utility + DB migration** (Phase 0) — add `did` column, backfill, dual-write. Est: 2
+### Architecture Mapping
+
+Implementation must follow existing codebase patterns:
+
+- `src/contracts/identity.did.v1.contract.ts` — Zod schemas for identity endpoints
+- `src/ports/did-registration.port.ts` — following `accounts.port.ts` pattern (port-level errors, interface)
+- `src/features/identity/` — feature service orchestrating DID ops through ports
+
+### Likely Tasks (Phase 0-1 only)
+
+Phase 2 tasks created when account linking ships — not pre-planned.
+
+1. **task: DID derivation utility + DB migration** (Phase 0) — `walletToDid()`, `did` column, backfill, dual-write. Must read chainId from SIWE message. Est: 2
 2. **task: SessionUser DID integration** (Phase 0) — JWT, session types, auth callbacks. Est: 1
 3. **task: Switch identity reads to DID** (Phase 1) — business logic, RBAC actor type, user context. Est: 2
-4. **task: VC data model + credentials table** (Phase 2) — schema, `did-jwt-vc` integration, issuance port. Est: 2
-5. **task: Discord/GitHub linking endpoints** (Phase 2) — API routes, proof flows, idempotency. Est: 3
-6. **task: PEX verification interface** (Phase 2) — internal types, `/identity/present` endpoint. Est: 2
-7. **task: Identity event ledger** (Phase 2) — append-only table, event emission from all identity ops. Est: 1
