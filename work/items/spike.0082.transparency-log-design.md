@@ -2,7 +2,7 @@
 id: spike.0082
 type: spike
 title: Design transparency log storage, receipt signing, and distribution engine
-status: Todo
+status: Done
 priority: 1
 estimate: 2
 summary: Research and design the WorkReceipt schema, transparency log storage strategy, signing approach, Merkle integrity model, and distribution engine inputs/outputs before implementation begins.
@@ -17,7 +17,7 @@ reviewer:
 created: 2026-02-17
 updated: 2026-02-17
 labels: [governance, transparency, research]
-external_refs:
+external_refs: docs/research/transparency-log-receipt-design.md
 ---
 
 # Design: Transparency Log, Receipt Signing, and Distribution Engine
@@ -65,12 +65,12 @@ story.0081 introduces WorkReceipts, a transparency log, and a deterministic dist
 
 ## Plan
 
-- [ ] Survey existing receipt/payout schemas (Coordinape, SourceCred, Gitcoin)
-- [ ] Evaluate signing schemes (Ed25519 vs EIP-191) for receipt signatures
-- [ ] Design Postgres append-only table schema with Merkle integrity
-- [ ] Define epoch model and distribution engine contract
-- [ ] Write design doc with decisions, rationale, and diagrams
-- [ ] Identify task decomposition for story.0081 implementation
+- [x] Survey existing receipt/payout schemas (Coordinape, SourceCred, Gitcoin)
+- [x] Evaluate signing schemes (Ed25519 vs EIP-191) for receipt signatures
+- [x] Design Postgres append-only table schema with Merkle integrity
+- [x] Define epoch model and distribution engine contract
+- [x] Write design doc with decisions, rationale, and diagrams
+- [x] Identify task decomposition for story.0081 implementation
 
 ## Validation
 
