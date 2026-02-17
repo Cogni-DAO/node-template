@@ -2,7 +2,7 @@
 id: task.0038
 type: task
 title: "Rename tests/integration → tests/component with dependency-class subdirs"
-status: needs_implement
+status: needs_design
 priority: 1
 estimate: 2
 summary: "Rename tests/integration/ to tests/component/, rename sandbox/ to docker/, rename script/config/CI references, and reserve tests/external/ for future internet-dependent tests."

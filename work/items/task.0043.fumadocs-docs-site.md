@@ -2,7 +2,7 @@
 id: task.0043
 type: task
 title: Wire Fumadocs docs site — render /docs and /work at /docs/*
-status: needs_implement
+status: needs_design
 priority: 1
 estimate: 2
 summary: Install Fumadocs, create (docs) route group, content source config, and verify all 266 markdown files render

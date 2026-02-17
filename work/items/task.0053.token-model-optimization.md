@@ -2,7 +2,7 @@
 id: task.0053
 type: task
 title: "Token + model optimization — stop 85K input token hemorrhage on Opus"
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 2
 summary: "OpenClaw sandbox agent sends ~85K input tokens per LLM call to claude-opus-4.6. At Opus pricing this is catastrophically expensive ($20/30min observed). Root cause diagnosed: unbounded conversation history (~45K+), mandatory memory_search on every query (~2.4K/search accumulating), and default model = Opus. Fix via prompt caching, history caps, and model defaults."

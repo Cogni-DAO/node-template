@@ -2,7 +2,7 @@
 id: task.0078
 type: task
 title: OpenClaw reasoning token streaming — display model thinking in collapsible UI
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 2
 summary: "Enable OpenClaw reasoningLevel via sessions.patch, forward reasoning tokens through gateway WS, map to AI SDK reasoning parts, render with assistant-ui Reasoning component. Filter reasoning from persistence and model transcript."

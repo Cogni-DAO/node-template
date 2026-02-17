@@ -2,7 +2,7 @@
 id: task.0018
 type: task
 title: "Dynamic agent catalog in UI + OpenClaw model sync"
-status: needs_implement
+status: needs_design
 priority: 1
 estimate: 1
 summary: Replace hardcoded AVAILABLE_GRAPHS with useAgents() hook fetching from existing API, and sync LiteLLM model catalog into openclaw-gateway.json.

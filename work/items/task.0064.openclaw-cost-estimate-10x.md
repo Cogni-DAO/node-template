@@ -2,7 +2,7 @@
 id: task.0064
 type: task
 title: "OpenClaw preflight cost estimate 10x audit — real token consumption"
-status: needs_implement
+status: needs_design
 priority: 2
 estimate: 1
 summary: "OpenClaw AI consumes significant budget; preflight estimates are 10x too low. User account went severely negative because estimates didn't match reality. Increase ESTIMATED_USD_PER_1K_TOKENS from $0.002 to $0.02."

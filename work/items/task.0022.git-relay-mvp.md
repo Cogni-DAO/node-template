@@ -2,7 +2,7 @@
 id: task.0022
 type: task
 title: "Git publish relay: credential isolation + agent-triggered host push"
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 2
 summary: Remove GITHUB_TOKEN from gateway container, add host-side HTTP publish endpoint that agent curls when ready. Agent reads from file:///repo, commits locally, host extracts patches via docker exec and pushes with GIT_ASKPASS.

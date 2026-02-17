@@ -2,7 +2,7 @@
 id: task.0039
 type: task
 title: "Billing reconciler — LiteLLM spend/logs polling in scheduler worker"
-status: needs_implement
+status: needs_design
 priority: 2
 estimate: 2
 summary: "Periodic reconciliation loop in scheduler-worker. Queries LiteLLM /spend/logs API as universal reference set, LEFT JOINs against charge_receipts by litellm_call_id, replays missing entries through ingest path. No new DB tables."

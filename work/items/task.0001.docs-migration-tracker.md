@@ -2,7 +2,7 @@
 id: task.0001
 type: task
 title: Docs Migration Tracker
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 4
 summary: Track migration of 97 legacy docs to typed structure with YAML frontmatter

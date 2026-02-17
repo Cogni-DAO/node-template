@@ -147,6 +147,7 @@ type: task|bug|story|spike|subtask
 title: Example Task
 status: needs_triage|needs_research|needs_design|needs_implement|needs_closeout|needs_merge|done|blocked|cancelled
 priority: 0-3
+rank: 99 # positive integer, 1 = highest within priority band
 estimate: 0-5
 summary: One line
 outcome: Deliverable

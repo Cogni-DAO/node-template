@@ -2,7 +2,7 @@
 id: task.0009
 type: task
 title: "Sandbox repo refresh: on-demand git-sync for agent workspace"
-status: needs_implement
+status: needs_design
 priority: 1
 estimate: 3
 summary: Design and implement on-demand repo refresh so sandbox agents can trigger git-sync to pull latest code into their /repo mount, with per-session workspace isolation

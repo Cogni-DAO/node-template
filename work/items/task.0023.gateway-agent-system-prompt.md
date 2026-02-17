@@ -2,7 +2,7 @@
 id: task.0023
 type: task
 title: "Gateway agent workspace — dedicated context, skills integration, memory, and heartbeat fix"
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 3
 summary: The OpenClaw gateway agent reads the wrong AGENTS.md, has no persona or skills, no memory config, and HEARTBEAT_OK contaminates responses. Needs dual-workspace architecture with dedicated system prompt context, skills at repo root, and memory search over docs.

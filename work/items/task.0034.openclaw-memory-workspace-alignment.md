@@ -2,7 +2,7 @@
 id: task.0034
 type: task
 title: "Wire OpenClaw memory search + bootstrap files for cogni-template repo context"
-status: needs_implement
+status: needs_design
 priority: 1
 estimate: 2
 summary: Configure OpenClaw gateway to index cogni-template docs/work via memorySearch.extraPaths, add curated MEMORY.md + TOOLS.md to gateway workspace, and document the integration in openclaw-sandbox-spec

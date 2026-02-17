@@ -2,7 +2,7 @@
 id: task.0084
 type: task
 title: Operator wallet provisioning + wiring into existing payment flow
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 2
 summary: Provision operator wallet via Privy API, create OperatorWalletPort, wire operator wallet as receiving address — existing payment flow works unchanged.

@@ -39,6 +39,7 @@ Read these before starting:
    - Route to status based on complexity:
      - Clear scope, no design needed → `needs_implement`. Set `branch:` field.
      - Needs spec/design work → `needs_design`
+     - Unknown approach, needs investigation → `needs_research`
    - Update `updated:` date.
 
    **Bugs** (`type: bug`):
@@ -46,7 +47,7 @@ Read these before starting:
    - Route to status based on complexity:
      - Simple fix, clear scope → `needs_implement`. Set `branch:` field.
      - Needs design/investigation → `needs_design`
-     - Unknown root cause → `needs_research` (convert to spike or create companion spike)
+     - Unknown root cause, needs investigation → `needs_research`
    - Update `updated:` date.
 
 4. **Update `_index.md`**: Reflect new project linkage and status.

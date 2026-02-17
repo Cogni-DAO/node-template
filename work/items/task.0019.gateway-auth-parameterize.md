@@ -2,7 +2,7 @@
 id: task.0019
 type: task
 title: Parameterize gateway auth token — replace hardcoded secret with env substitution
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 1
 summary: Replace the hardcoded "openclaw-internal-token" in openclaw-gateway.json with OpenClaw's native ${VAR} substitution; pass the real token via compose environment; prevent config writeback from expanding secrets

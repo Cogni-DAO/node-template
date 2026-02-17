@@ -2,7 +2,7 @@
 id: task.0014
 type: task
 title: "VM watchdog: autoheal + HEALTHCHECK on /livez with resource limits"
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 2
 summary: Switch Docker HEALTHCHECK from /readyz to /livez, add hardened autoheal sidecar to auto-restart unhealthy containers, add mem_limit/memswap_limit to app

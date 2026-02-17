@@ -2,7 +2,7 @@
 id: bug.0056
 type: bug
 title: "Thread switch aborts in-flight stream — credits consumed, response lost to user"
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 3
 summary: "ChatRuntimeProvider uses `key={activeThreadKey ?? 'new'}` to force full React unmount/remount on thread switch. This aborts the in-flight SSE stream, wasting already-consumed LLM tokens. The server-side persist (PERSIST_AFTER_PUMP) still saves the response, but the user never sees the streaming output and must manually reload the thread to see the completed response."

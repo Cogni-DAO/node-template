@@ -94,6 +94,7 @@ type: task
 title: Add resource limits to sandbox containers
 status: needs_implement
 priority: 1
+rank: 99
 estimate: 2
 summary: Configure CPU/memory limits for sandbox containers
 outcome: All sandbox containers have enforced resource limits
@@ -142,6 +143,7 @@ external_refs:
 | `title`           | Yes         | Human readable                                                                                                     |
 | `status`          | Yes         | needs_triage, needs_research, needs_design, needs_implement, needs_closeout, needs_merge, done, blocked, cancelled |
 | `priority`        | Yes         | 0-3                                                                                                                |
+| `rank`            | Yes         | Positive integer, 1 = highest within priority band (default: 99)                                                   |
 | `estimate`        | Yes         | 0-5                                                                                                                |
 | `summary`         | Yes         | What needs to be done?                                                                                             |
 | `outcome`         | Yes         | What is the deliverable?                                                                                           |

@@ -2,7 +2,7 @@
 id: task.0036
 type: task
 title: "CI/CD pipeline for pnpm-store image rebuild on lockfile change"
-status: needs_implement
+status: needs_design
 priority: 1
 estimate: 2
 summary: Automate pnpm-store image builds triggered by pnpm-lock.yaml changes. Tag by lockfile hash. Deploy step syncs image contents into server pnpm_store volume. Enables offline pnpm install inside sandbox containers.

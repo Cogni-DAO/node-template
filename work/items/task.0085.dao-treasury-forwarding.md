@@ -2,7 +2,7 @@
 id: task.0085
 type: task
 title: DAO treasury USDC sweep from operator wallet
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 2
 summary: After credit settlement, sweep DAO's share of each payment as USDC from operator wallet to treasury via OperatorWalletPort. Idempotent, durable state tracking.

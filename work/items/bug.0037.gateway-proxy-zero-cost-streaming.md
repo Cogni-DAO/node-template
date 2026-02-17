@@ -2,7 +2,7 @@
 id: bug.0037
 type: bug
 title: "Gateway proxy billing records $0 cost — x-litellm-response-cost header absent for streaming"
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 2
 summary: "Nginx gateway proxy captures $upstream_http_x_litellm_response_cost from LiteLLM response headers, but this header is absent for streaming (SSE) completions. All sandbox:openclaw calls record $0 cost and 0 tokens — systematic under-billing for paid models."

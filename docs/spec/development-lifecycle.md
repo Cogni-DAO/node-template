@@ -76,10 +76,10 @@ graph LR
 
 /triage on story    → story: done (intake complete); may create task/bug items
 /triage on bug      → needs_implement | needs_design | needs_research
-/triage on task     → needs_implement | needs_design
+/triage on task     → needs_implement | needs_design | needs_research
 /triage on spike    → needs_research
 
-/research           → spike: done; creates follow-up task/bug/spike items as needed
+/research           → item: done; creates follow-up task/bug/spike items as needed
 
 /design on task/bug → same item: needs_implement (writes spec, may create additional tasks)
 /design on story    → story: done (intake); creates task items at needs_implement

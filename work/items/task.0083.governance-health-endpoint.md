@@ -2,7 +2,7 @@
 id: task.0083
 type: task
 title: Governance health brief endpoint — replace broken queries.sh with app-served health data
-status: needs_implement
+status: needs_design
 priority: 0
 estimate: 3
 summary: Build a server-side health brief endpoint that queries Prometheus + Loki via existing ports, replacing the broken shell-based queries.sh that the OpenClaw governance agent currently uses.

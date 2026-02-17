@@ -2,7 +2,7 @@
 id: bug.0011
 type: bug
 title: "Gateway streaming truncates output mid-sentence in UI"
-status: needs_implement
+status: needs_design
 priority: 1
 estimate: 1
 summary: Real model responses via the OpenClaw gateway are truncated mid-sentence when displayed in the Cogni chat UI. Example — nemotron returns full content in raw stream but UI renders "Just let me know what you'd like to dive into, and I" then stops.

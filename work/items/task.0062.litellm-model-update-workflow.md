@@ -2,7 +2,7 @@
 id: task.0062
 type: task
 title: "Standardized LiteLLM model update workflow — REQUIRED billing validation for all new models"
-status: needs_implement
+status: needs_design
 priority: 1
 estimate: 2
 summary: "No process ensures billing accuracy when adding models to litellm.config.yaml. Opus 4.6 shipped with $0 cost tracking because LiteLLM's pricing table didn't have it. Need a checklist/test gate that validates response_cost > 0 for paid models before production deployment."
