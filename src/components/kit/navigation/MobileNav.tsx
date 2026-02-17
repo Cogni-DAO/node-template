@@ -66,6 +66,15 @@ export function MobileNav({ className }: MobileNavProps): ReactElement {
             GitHub
             <ExternalLink className="h-4 w-4" />
           </a>
+          <a
+            href="https://discord.gg/3b9sSyhZ4z"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 font-medium text-muted-foreground text-sm transition-colors hover:text-foreground"
+          >
+            Discord
+            <ExternalLink className="h-4 w-4" />
+          </a>
         </nav>
 
         {/* Theme toggle in footer (OpenRouter-style) */}

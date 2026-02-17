@@ -11,7 +11,7 @@
  *   - Per OVERLAP_SKIP_DEFAULT: Schedules use overlap=SKIP
  *   - Per CATCHUP_WINDOW_ZERO: No backfill (catchupWindow=0)
  *   - updateSchedule preserves existing state (pause, notes) via previous.state
- *   - describeSchedule extracts input from action.args[0]; cron returns null (compiled to calendars by Temporal)
+ *   - describeSchedule extracts input + dbScheduleId from action.args[0]; cron returns null (compiled to calendars by Temporal)
  * Side-effects: IO (Temporal RPC calls)
  * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md, ScheduleControlPort
  * @public
@@ -288,11 +288,16 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
           ? description.spec.timezone
           : null;
       const action = description.action;
-      const actionInput: ScheduleDescription["input"] =
+      const actionArgs =
         action.type === "startWorkflow" && action.args?.[0]
-          ? (((action.args[0] as Record<string, unknown>)
-              .input as ScheduleDescription["input"]) ?? null)
+          ? (action.args[0] as Record<string, unknown>)
           : null;
+      const actionInput: ScheduleDescription["input"] = actionArgs
+        ? ((actionArgs.input as ScheduleDescription["input"]) ?? null)
+        : null;
+      const actionDbScheduleId: string | null = actionArgs
+        ? ((actionArgs.dbScheduleId as string | null) ?? null)
+        : null;
 
       return {
         scheduleId,
@@ -302,6 +307,7 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
         cron: null, // Temporal compiles crons to calendars; can't read back
         timezone: tz,
         input: actionInput,
+        dbScheduleId: actionDbScheduleId,
       };
     } catch (error) {
       if (error instanceof TemporalScheduleNotFoundError) {

@@ -6,7 +6,7 @@
  * Purpose: Job module that wires governance schedule sync to the application container.
  * Scope: Acquires advisory lock, resolves dependencies from container, and calls syncGovernanceSchedules. Does not contain business logic.
  * Invariants:
- *   - SINGLE_WRITER: pg_advisory_lock prevents concurrent sync runs
+ *   - SINGLE_WRITER: pg_advisory_lock on a reserved (pinned) pool connection prevents concurrent sync runs
  *   - GRANT_VIA_PORT: Uses ensureGrant on ExecutionGrantUserPort, no raw SQL
  *   - SYSTEM_PRINCIPAL: Grant created for COGNI_SYSTEM_PRINCIPAL_USER_ID
  * Side-effects: IO (database advisory lock, Temporal RPC, grant creation)
@@ -16,7 +16,8 @@
 
 import { toUserId } from "@cogni/ids";
 import { syncGovernanceSchedules } from "@cogni/scheduler-core";
-import { sql } from "drizzle-orm";
+import cronParser from "cron-parser";
+import { and, eq } from "drizzle-orm";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { getContainer } from "@/bootstrap/container";
 import { getGovernanceConfig } from "@/shared/config";
@@ -24,9 +25,18 @@ import {
   COGNI_SYSTEM_BILLING_ACCOUNT_ID,
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
 } from "@/shared/constants/system-tenant";
+import { schedules } from "@/shared/db/schema";
 import { serverEnv } from "@/shared/env/server-env";
 
 const GOVERNANCE_GRANT_SCOPES = ["graph:execute:sandbox:openclaw"] as const;
+
+function computeNextRun(cron: string, timezone: string): Date {
+  const interval = cronParser.parseExpression(cron, {
+    currentDate: new Date(),
+    tz: timezone,
+  });
+  return interval.next().toDate();
+}
 
 export interface GovernanceScheduleSyncSummary {
   created: number;
@@ -55,14 +65,16 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
 
   log.info({}, "Starting governance schedule sync job");
 
-  // Advisory lock: non-blocking single-writer guard
+  // Advisory lock: non-blocking single-writer guard.
+  // Pin a single pool connection so lock + unlock use the same session
+  // (session-scoped advisory locks only release on the connection that acquired them).
   const serviceDb = getServiceDb();
-  const lockResult = await serviceDb.execute(
-    sql`SELECT pg_try_advisory_lock(hashtext('governance_sync')) AS acquired`
-  );
-  const acquired = (lockResult[0] as { acquired: boolean } | undefined)
-    ?.acquired;
+  const reservedConn = await serviceDb.$client.reserve();
+  const [lockRow] =
+    await reservedConn`SELECT pg_try_advisory_lock(hashtext('governance_sync')) AS acquired`;
+  const acquired = (lockRow as { acquired: boolean } | undefined)?.acquired;
   if (!acquired) {
+    reservedConn.release();
     log.info({}, "Governance sync already running, skipping");
     return { created: 0, updated: 0, resumed: 0, skipped: 0, paused: 0 };
   }
@@ -80,6 +92,55 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
         });
         return grant.id;
       },
+      upsertGovernanceScheduleRow: async (params) => {
+        const nextRunAt = computeNextRun(params.cron, params.timezone);
+
+        // Scope lookup to system tenant to avoid cross-tenant collisions
+        const existingRows = await serviceDb
+          .select({ id: schedules.id })
+          .from(schedules)
+          .where(
+            and(
+              eq(schedules.ownerUserId, params.ownerUserId),
+              eq(schedules.temporalScheduleId, params.temporalScheduleId)
+            )
+          )
+          .limit(1);
+        const existing = existingRows[0];
+
+        if (existing) {
+          await serviceDb
+            .update(schedules)
+            .set({
+              executionGrantId: params.executionGrantId,
+              input: params.input,
+              cron: params.cron,
+              timezone: params.timezone,
+              enabled: true,
+              nextRunAt,
+              updatedAt: new Date(),
+            })
+            .where(eq(schedules.id, existing.id));
+          return existing.id;
+        }
+
+        const [row] = await serviceDb
+          .insert(schedules)
+          .values({
+            temporalScheduleId: params.temporalScheduleId,
+            ownerUserId: params.ownerUserId,
+            executionGrantId: params.executionGrantId,
+            graphId: params.graphId,
+            input: params.input,
+            cron: params.cron,
+            timezone: params.timezone,
+            enabled: true,
+            nextRunAt,
+          })
+          .returning();
+        return row!.id;
+      },
+      systemUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
       scheduleControl: container.scheduleControl,
       listGovernanceScheduleIds: () =>
         container.scheduleControl.listScheduleIds("governance:"),
@@ -105,9 +166,8 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
       paused: result.paused.length,
     };
   } finally {
-    // Release advisory lock
-    await serviceDb.execute(
-      sql`SELECT pg_advisory_unlock(hashtext('governance_sync'))`
-    );
+    // Release advisory lock on the same connection that acquired it
+    await reservedConn`SELECT pg_advisory_unlock(hashtext('governance_sync'))`;
+    reservedConn.release();
   }
 }

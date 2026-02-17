@@ -15,7 +15,7 @@ branch:
 pr:
 reviewer:
 created: 2026-02-15
-updated: 2026-02-15
+updated: 2026-02-17
 labels: [testing, billing, flaky]
 external_refs:
 ---
@@ -76,6 +76,12 @@ When 45 tests run sequentially (`vitest.stack.config.mts:51` sets `sequence: { c
 
 The intermittent nature confirms this is a timing/resource contention issue, not a logic bug.
 
+**Additional trigger — cold stack startup (2026-02-17):**
+
+A second failure mode exists independent of suite contention: after `pnpm dev:infra:test` restarts containers, ALL 5 tests fail on the first run even in isolation. The LiteLLM container reports healthy (`/health/readiness` → 200) but the `GENERIC_LOGGER_ENDPOINT` callback subsystem has a warmup period during which callbacks silently don't fire. After 2-3 minutes of uptime, callbacks begin working. The docker-compose healthcheck does not gate on callback readiness. This was observed in CI (GitHub Actions run 22088735569) and locally.
+
+CI evidence: `streaming-side-effects.stack.test.ts` consistently timed out at the default 10s — fixed by bumping `testTimeout` to 30s (`vi.setConfig`), but this only addresses the CI timing margin, not the cold-start root cause.
+
 ### Impact
 
 - **CI reliability**: Flaky failures require manual reruns, slowing development
@@ -120,6 +126,7 @@ done
 ## PR / Links
 
 - Related: bug.0013 (sandbox stack tests flaky — separate issue, Docker container disappearance)
+- CI failure: https://github.com/Cogni-DAO/node-template/actions/runs/22088735569/job/63830780223?pr=437
 
 ## Attribution
 

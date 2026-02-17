@@ -70,7 +70,7 @@ Governance status follows strict hexagonal architecture with proper port abstrac
 │ AccountService  │  │ GovernanceStatusPort   │
 │ (port)          │  │ (port)                 │
 │                 │  │                        │
-│ getBalance()    │  │ getScheduleStatus()    │
+│ getBalance()    │  │ getUpcomingRuns()      │
 │                 │  │ getRecentRuns()        │
 └─────────────────┘  └────────┬───────────────┘
                               │
@@ -100,17 +100,18 @@ Governance status follows strict hexagonal architecture with proper port abstrac
 
 ## Invariants
 
-| Rule                   | Constraint                                                                                                  |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------- |
-| SYSTEM_TENANT_SCOPE    | All queries filter by `COGNI_SYSTEM_PRINCIPAL_USER_ID` — never accepts userId parameter                     |
-| RLS_COMPATIBLE         | Queries use `owner_user_id` filter compatible with RLS policies (even though route has elevated privileges) |
-| CONTRACT_FIRST         | API shape defined via Zod contract before implementation                                                    |
-| BIGINT_SERIALIZATION   | Balance returned as string (BigInt cannot be JSON.stringify'd)                                              |
-| AUTH_REQUIRED          | Endpoint requires authenticated user (public read for DAO transparency)                                     |
-| NO_PAGINATION_MVP      | Recent runs limited to 10 (hard cap) — pagination deferred                                                  |
-| HEXAGONAL_ARCHITECTURE | Feature service calls ports only; never imports adapters or database clients directly                       |
-| FEATURE_SERVICE_LAYER  | Route delegates to feature service; route never queries database directly                                   |
-| PORT_ABSTRACTION       | GovernanceStatusPort provides clean interface; adapter handles Drizzle queries                              |
+| Rule                   | Constraint                                                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| SYSTEM_TENANT_SCOPE    | All queries filter by `COGNI_SYSTEM_PRINCIPAL_USER_ID` — never accepts userId parameter                              |
+| RLS_VIA_TENANT_SCOPE   | Adapter wraps queries in `withTenantScope(db, systemActorId)` — no BYPASSRLS, standard RLS path                      |
+| CONTRACT_FIRST         | API shape defined via Zod contract before implementation                                                             |
+| BIGINT_SERIALIZATION   | Balance returned as string (BigInt cannot be JSON.stringify'd)                                                       |
+| AUTH_REQUIRED          | Endpoint requires authenticated user (public read for DAO transparency)                                              |
+| NO_PAGINATION_MVP      | Recent runs limited to 10 (hard cap) — pagination deferred                                                           |
+| HEXAGONAL_ARCHITECTURE | Feature service calls ports only; never imports adapters or database clients directly                                |
+| FEATURE_SERVICE_LAYER  | Route delegates to feature service; route never queries database directly                                            |
+| PORT_ABSTRACTION       | GovernanceStatusPort provides clean interface; adapter handles Drizzle queries                                       |
+| UPCOMING_RUNS_LIVE     | `getUpcomingRuns()` computes next occurrence from cron expression at query time — never returns stale DB-cached time |
 
 ### API Contract
 
@@ -123,11 +124,19 @@ export const governanceStatusOperation = {
     systemCredits: z
       .string()
       .describe("System tenant balance (BigInt as string)"),
-    nextRunAt: z
-      .string()
-      .datetime()
-      .nullable()
-      .describe("Next scheduled governance run (ISO 8601)"),
+    upcomingRuns: z
+      .array(
+        z.object({
+          name: z.string().describe("Schedule display name (e.g. 'Community')"),
+          nextRunAt: z
+            .string()
+            .datetime()
+            .describe(
+              "Next occurrence computed live from cron (always future)"
+            ),
+        })
+      )
+      .describe("Next scheduled governance runs sorted by soonest first"),
     recentRuns: z.array(
       z.object({
         id: z.string().describe("Thread state key"),
@@ -142,11 +151,11 @@ export const governanceStatusOperation = {
 
 ### Data Sources
 
-| Field         | Port Method                                | Adapter Implementation                                                                            |
-| ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| systemCredits | `AccountService.getBalance()`              | Query `billing_accounts` table                                                                    |
-| nextRunAt     | `GovernanceStatusPort.getScheduleStatus()` | `WHERE owner_user_id = SYSTEM_PRINCIPAL AND enabled = true ORDER BY next_run_at LIMIT 1`          |
-| recentRuns    | `GovernanceStatusPort.getRecentRuns()`     | `WHERE owner_user_id = SYSTEM_PRINCIPAL AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10` |
+| Field         | Port Method                                          | Adapter Implementation                                                                                     |
+| ------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| systemCredits | `AccountService.getBalance()`                        | Query `billing_accounts` table via `withTenantScope`                                                       |
+| upcomingRuns  | `GovernanceStatusPort.getUpcomingRuns({ limit: 3 })` | Query `cron+timezone+temporal_schedule_id`; compute next occurrence live via `cron-parser`; sort ascending |
+| recentRuns    | `GovernanceStatusPort.getRecentRuns()`               | `WHERE owner_user_id = SYSTEM_PRINCIPAL AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10`          |
 
 ### Query Optimization
 
@@ -173,17 +182,16 @@ export interface GovernanceRun {
   lastActivity: Date;
 }
 
-export interface GovernanceStatusPort {
-  /**
-   * Get next scheduled governance run time for system tenant.
-   * Returns null if no runs are scheduled.
-   */
-  getScheduleStatus(): Promise<Date | null>;
+export interface UpcomingRun {
+  name: string; // display name derived from temporal_schedule_id
+  nextRunAt: Date; // computed live from cron — always in the future
+}
 
-  /**
-   * Get recent governance runs for system tenant.
-   * Returns up to `limit` runs ordered by most recent first.
-   */
+export interface GovernanceStatusPort {
+  /** Get next N scheduled runs, computed live from cron. Always future times. */
+  getUpcomingRuns(params: { limit: number }): Promise<UpcomingRun[]>;
+
+  /** Get recent governance runs for system tenant, most recent first. */
   getRecentRuns(params: { limit: number }): Promise<GovernanceRun[]>;
 }
 ```

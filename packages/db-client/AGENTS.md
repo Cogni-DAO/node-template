@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2026-02-15
+- **Last reviewed:** 2026-02-17
 - **Status:** stable
 
 ## Purpose
@@ -45,7 +45,7 @@ Database client factory and Drizzle adapter implementations for scheduling domai
   - `createAppDbClient(url)` — client factory for `app_user` role (RLS enforced)
   - `withTenantScope(db, actorId, fn)` — transaction wrapper setting RLS context
   - `setTenantContext(tx, actorId)` — sets RLS context in existing transaction
-  - `Database`, `LoggerLike` — Drizzle client type and logger interface
+  - `Database`, `LoggerLike` — Drizzle client type (includes `$client: Sql` for pool control) and logger interface
   - `DrizzleScheduleUserAdapter`, `DrizzleScheduleWorkerAdapter` — schedule adapters (split by trust boundary)
   - `DrizzleExecutionGrantUserAdapter`, `DrizzleExecutionGrantWorkerAdapter` — grant adapters (split by trust boundary)
   - `DrizzleExecutionRequestAdapter`, `DrizzleScheduleRunAdapter`
@@ -96,4 +96,5 @@ pnpm --filter @cogni/db-client build
 - Re-exports scheduling schema so consumers (scheduler-worker) get schema transitively
 - All adapters accept a `Database` instance via constructor (dependency injection)
 - `createServiceDbClient` is isolated in `./service` sub-path; root barrel does NOT re-export it
+- `Database` type is `ReturnType<typeof buildClient>` — preserves drizzle's `$client` accessor for `reserve()`, `begin()`, etc.
 - `Database` type lives in root only — not exported from `./service`
