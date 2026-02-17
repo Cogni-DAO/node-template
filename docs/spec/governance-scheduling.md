@@ -10,7 +10,7 @@ read_when: Understanding how governance runs are scheduled, how repo-spec declar
 implements: proj.system-tenant-governance
 owner: derekg1729
 created: 2026-02-14
-verified: 2026-02-15
+verified: 2026-02-17
 tags: [governance, scheduling, temporal]
 ---
 
@@ -50,17 +50,22 @@ flowchart TD
 
 ### Runtime Identity Model
 
-- Governance schedules are Temporal-only identities (`governance:*`).
-- Workflow payload includes `temporalScheduleId` and `dbScheduleId=null`.
+- Governance schedules are first-class DB rows in the `schedules` table, owned by `COGNI_SYSTEM_PRINCIPAL_USER_ID`.
+- Temporal schedule IDs (`governance:community` etc.) stored in the `temporal_schedule_id` column (partial unique index).
+- Workflow payload includes `temporalScheduleId` and `dbScheduleId` (UUID from the DB row).
 - Idempotency key uses `temporalScheduleId:scheduledFor`.
+- `next_run_at` in DB is a cron-derived cache computed at upsert time. Temporal is authoritative.
 
 ### Sync Logic (per schedule)
 
 ```mermaid
 flowchart LR
-    S[Schedule in config] -->|createSchedule| C{Conflict?}
+    S[Schedule in config] --> UPSERT[Upsert DB row<br/><i>temporal_schedule_id → dbScheduleId</i>]
+    UPSERT -->|createSchedule| C{Conflict in Temporal?}
     C -->|no| CREATED[Created]
-    C -->|yes| P{Paused?}
+    C -->|yes| D{Link drift?}
+    D -->|yes| UPDATED[Updated — dbScheduleId corrected]
+    D -->|no| P{Paused?}
     P -->|yes| RESUMED[Resumed]
     P -->|no| SKIPPED[Skipped]
 

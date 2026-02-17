@@ -7,11 +7,11 @@ priority: 0
 estimate: 1
 summary: Single page showing system tenant credit balance, next governance run time, and recent run history for DAO transparency
 outcome: Users can see DAO governance financial status (credits), upcoming runs (next scheduled), and recent activity (last 10 runs)
-spec_refs: governance-status-api, openclaw-govern-distributed
+spec_refs: governance-status-api, governance-scheduling
 assignees: []
 credit:
 project: proj.system-tenant-governance
-branch: feat/gov-dashboard
+branch: feat/governance-dashboard
 pr:
 reviewer:
 created: 2026-02-16
