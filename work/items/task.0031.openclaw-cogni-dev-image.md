@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 17
 ---
 
 # Build unified cogni-sandbox-openclaw devtools image + pnpm cache volumes

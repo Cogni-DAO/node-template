@@ -23,7 +23,7 @@ credit:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 4
 ---
 
 # Mock-LLM SSE streaming incompatible with OpenClaw pi-ai parser

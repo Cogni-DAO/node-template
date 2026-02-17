@@ -23,7 +23,7 @@ credit:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 10
 ---
 
 # Dedicated DB migrator role — separate DDL from runtime DML

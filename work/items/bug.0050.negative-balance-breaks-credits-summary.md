@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 1
 ---
 
 # bug.0050 — Negative credit balance breaks /credits/summary

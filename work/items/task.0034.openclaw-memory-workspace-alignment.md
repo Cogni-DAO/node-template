@@ -22,7 +22,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 12
 ---
 
 # Wire OpenClaw memory search + bootstrap files for cogni-template repo context

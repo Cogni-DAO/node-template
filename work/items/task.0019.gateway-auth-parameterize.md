@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 10
 ---
 
 # Parameterize gateway auth token — replace hardcoded secret with env substitution

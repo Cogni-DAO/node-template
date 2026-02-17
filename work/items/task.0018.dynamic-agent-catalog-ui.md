@@ -24,7 +24,7 @@ credit:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 13
 ---
 
 # Dynamic agent catalog in UI + OpenClaw model sync

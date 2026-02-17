@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 3
 ---
 
 # pre-commit check:docs validates all files, not just staged — blocks unrelated commits

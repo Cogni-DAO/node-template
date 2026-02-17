@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 7
 ---
 
 # Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls

@@ -22,7 +22,7 @@ credit:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 15
 ---
 
 # task.0057 — OpenClaw OSS: per-section system prompt toggles

@@ -22,7 +22,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 6
 ---
 
 # bug.0070 — OpenClaw CLI binary not executable as `openclaw`

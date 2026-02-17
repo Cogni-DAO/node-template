@@ -22,7 +22,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 5
 ---
 
 # Gateway billing reader finds 0 entries in stale audit log

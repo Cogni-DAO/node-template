@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 5
 ---
 
 # Thread switch aborts in-flight stream — credits consumed, response lost to user

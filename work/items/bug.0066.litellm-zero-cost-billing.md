@@ -22,7 +22,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 2
 ---
 
 # LiteLLM reports $0 cost for gpt-4o-mini — billing creates 0-credit receipts

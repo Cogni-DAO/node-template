@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 22
 ---
 
 # Create Grafana Cloud P0 alert rules (post-deploy, human)

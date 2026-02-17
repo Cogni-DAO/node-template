@@ -2,7 +2,7 @@
 id: spike.0037
 type: spike
 title: Research Tailscale/Headscale mesh VPN for Cogni infrastructure
-status: needs_implement
+status: needs_research
 priority: 2
 estimate: 1
 summary: Evaluate Tailscale (via Headscale OSS) for secure inter-node networking — when in the roadmap it becomes valuable and what problems it solves vs current architecture
@@ -30,7 +30,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 17
 ---
 
 # Research: Tailscale/Headscale Mesh VPN for Cogni Infrastructure

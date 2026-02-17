@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 7
 ---
 
 # OpenClaw model allowlist blocks openrouter/auto — governance sessions.patch failures

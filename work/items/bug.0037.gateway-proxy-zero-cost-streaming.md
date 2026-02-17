@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 4
 ---
 
 # bug.0037 — Gateway proxy billing records $0 cost

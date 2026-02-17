@@ -21,7 +21,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 5
 ---
 
 # Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite

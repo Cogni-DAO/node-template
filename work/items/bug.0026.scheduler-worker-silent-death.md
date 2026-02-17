@@ -23,7 +23,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 13
 ---
 
 # Scheduler worker silently stops polling — schedules enabled but runs cease

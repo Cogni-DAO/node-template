@@ -24,7 +24,7 @@ credit:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 8
 ---
 
 # task.0053 — Token + model optimization

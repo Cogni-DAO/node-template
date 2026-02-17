@@ -22,7 +22,7 @@ external_refs:
 revision: 0
 blocked_by:
 deploy_verified: false
-rank: 99
+rank: 15
 ---
 
 # Git publish relay: credential isolation + agent-triggered host push
