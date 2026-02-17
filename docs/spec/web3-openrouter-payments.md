@@ -68,6 +68,7 @@ The gross-up ensures OpenRouter always receives the exact provider cost after th
 ```mermaid
 sequenceDiagram
     participant User
+    participant Router as PaymentRouter (on-chain)
     participant App as Cogni App
     participant DB as Database
     participant Workflow as Top-Up Workflow
@@ -75,7 +76,10 @@ sequenceDiagram
     participant Wallet as Operator Wallet
     participant Chain as Base (8453)
 
-    User->>App: USDC payment (on-chain)
+    User->>Router: USDC payment
+    Router->>Router: split: DAO treasury (USDC) + operator wallet (ETH via swap)
+    Router-->>App: PurchaseRouted event (indexed)
+
     App->>DB: mint user credits + system tenant bonus
     App->>DB: insert outbound_topups row (CHARGE_PENDING)
 

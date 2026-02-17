@@ -2,131 +2,162 @@
 id: proj.ai-operator-wallet
 type: project
 primary_charter:
-title: AI Operator Wallet
+title: AI Operator Wallet + PaymentRouter
 state: Active
 priority: 1
-estimate: 3
-summary: Give the system-tenant AI a wallet it can use to pay for things — starting with OpenRouter credits via their crypto API.
-outcome: AI agent autonomously tops up OpenRouter credits from a DAO-funded wallet on Base, with off-chain budget tracking.
+estimate: 5
+summary: On-chain PaymentRouter splits every user purchase into DAO treasury + operator wallet funding. Operator wallet tops up OpenRouter credits autonomously. No DAO votes per purchase.
+outcome: Users pay USDC → PaymentRouter atomically funds operator wallet + DAO treasury → app tops up OpenRouter immediately → credits backed by real LLM spend.
 assignees: derekg1729
 created: 2026-02-11
-updated: 2026-02-11
-labels: [wallet, ai-agent, billing, web3]
+updated: 2026-02-17
+labels: [wallet, billing, web3, smart-contracts]
 ---
 
-# AI Operator Wallet
+# AI Operator Wallet + PaymentRouter
 
 > Research: [ai-operator-wallet-budgeted-spending](../../docs/research/ai-operator-wallet-budgeted-spending.md)
 
 ## Goal
 
-Give the `cogni_system` tenant a real crypto wallet so the AI can pay for its own infrastructure. P0 is laser-focused: agent holds ETH on Base, calls [OpenRouter's Crypto Payments API](https://openrouter.ai/docs/api/api-reference/credits/create-coinbase-charge) to top up LLM credits programmatically. No Vault, no Safe, no account abstraction — just an encrypted keystore file and a signer port.
+Close the financial loop so every credit purchase automatically provisions OpenRouter — no manual transfers, no DAO votes per purchase. A PaymentRouter contract atomically splits inbound payments between DAO treasury and operator wallet. The operator wallet tops up OpenRouter via the Coinbase Commerce protocol. The app mints credits only after on-chain confirmation.
 
 ## Roadmap
 
-### Crawl (P0) — Agent Has a Key, Can Pay OpenRouter
+### Crawl (P0) — Contracts Toolchain + PaymentRouter + Operator Wallet
 
-**Goal:** A server-side wallet exists, can sign transactions, and can call the OpenRouter crypto payments API to convert ETH→credits on Base.
+**Goal:** Foundry in the monorepo, PaymentRouter deployed on Base, operator wallet generated and signing OpenRouter top-ups.
 
-| Deliverable                                                                                     | Status      | Est | Work Item |
-| ----------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| `WalletSignerPort` interface + encrypted-keystore adapter                                       | Not Started | 2   | —         |
-| Keypair generation script (outputs encrypted keystore JSON + address)                           | Not Started | 1   | —         |
-| `operator_wallet` field in repo-spec.yaml schema + validation                                   | Not Started | 1   | —         |
-| OpenRouter crypto top-up service (`POST /api/v1/credits/coinbase` → sign + broadcast)           | Not Started | 2   | —         |
-| Off-chain budget tracking: log each top-up as a `charge_receipt` with reason `openrouter_topup` | Not Started | 1   | —         |
-| Integration test: generate key → sign a tx → verify signature (no on-chain)                     | Not Started | 1   | —         |
+6 atomic PRs, each shippable:
 
-**P0 key management is intentionally simple:**
+| #   | Deliverable                                  | Status      | Est | Work Item |
+| --- | -------------------------------------------- | ----------- | --- | --------- |
+| 1   | Contracts toolchain (`packages/contracts`)   | Not Started | 2   | —         |
+| 2   | PaymentRouter v1 (ETH-in, split, no swap)    | Not Started | 3   | —         |
+| 3   | PaymentRouter v1.1 (USDC-in + UniV3 swap)    | Not Started | 3   | —         |
+| 4   | Deploy script + formation wiring             | Not Started | 2   | —         |
+| 5   | App purchase flow switch + credit settlement | Not Started | 3   | —         |
+| 6   | OpenRouter top-up integration                | Not Started | 3   | —         |
 
-- `ethers.Wallet.encrypt(privateKey, passphrase)` → JSON keystore file (AES-128-CTR + scrypt)
-- Passphrase from env var (`OPERATOR_WALLET_PASSPHRASE`)
-- Keystore file path from env var (`OPERATOR_KEYSTORE_PATH`)
-- No Vault, no KMS, no external infra — just a file + a secret
-- This is the same format MetaMask, Geth, and every Ethereum client uses
+**PR 1 — Contracts toolchain:**
 
-**P0 payment flow:**
+- Add `packages/contracts/` with Foundry (foundry.toml, forge-std, OZ)
+- Mirror structure from [cogni-signal-evm-contracts](https://github.com/Cogni-DAO/cogni-signal-evm-contracts): `src/`, `test/unit/`, `test/e2e/`, `script/`
+- Add `forge build`, `forge test` to CI (`pnpm check`)
+- Reuse foundry.toml settings from sister repo (cancun EVM, optimizer 200, via_ir)
 
-```
-Agent decides to top up → calls OpenRouter API with amount + sender + chain_id(8453)
-  → gets back calldata (to, value, data)
-  → WalletSignerPort signs + broadcasts via EVM_RPC_URL
-  → OpenRouter credits appear (immediate for <$500)
-  → charge_receipt logged with tx_hash
-```
+**PR 2 — PaymentRouter v1 (ETH-in):**
 
-**P0 does NOT include:**
+- Accept ETH, split to `dao_treasury` + `operator_wallet` (fixed addresses, set at deploy)
+- Split ratio derived from on-chain constants matching app billing math
+- No fund retention (not a vault — forward everything in-tx)
+- Emit `PurchaseRouted(purchaseId, payer, ethIn, daoOut, operatorOut)` event
+- Replay protection: `purchaseId` must be unique (mapping, revert on replay)
+- Pausable (DAO-controlled), no EOA admin
+- Full test suite: replay, pause, cap, event receipts, invariant fuzzing
 
-- DAO governance approval flow (manual ETH funding for now)
-- USDC spending (OpenRouter takes native ETH on Base)
-- Automated budget decisions (human triggers top-ups)
-- Formation-time wallet creation (standalone script for now)
+**PR 3 — PaymentRouter v1.1 (USDC-in + swap):**
 
-### Walk (P1) — DAO-Governed Budget
+- Add USDC-in path: accept USDC, swap operator portion via UniswapV3 (USDC→ETH)
+- Bounded slippage (caller-set `minOut` + `deadline`, revert on excess)
+- DAO portion stays as USDC (no swap)
+- Invariant/fuzz tests: can't route to arbitrary recipients, can't retain funds
 
-**Goal:** DAO controls the wallet's funding via governance. Automated budget monitoring.
+**PR 4 — Deploy + formation wiring:**
 
-| Deliverable                                                                  | Status      | Est | Work Item            |
-| ---------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| DAO formation wizard step: generate operator keypair + record in repo-spec   | Not Started | 2   | (create at P1 start) |
-| Governance proposal helper: fund operator wallet with ETH from DAO treasury  | Not Started | 2   | (create at P1 start) |
-| ERC-20 allowance flow: DAO approves USDC spending cap for operator wallet    | Not Started | 2   | (create at P1 start) |
-| Budget monitoring: Grafana alerts on balance thresholds + spend rate         | Not Started | 1   | (create at P1 start) |
-| Upgrade key management: Vault or KMS signer adapter (replaces keystore file) | Not Started | 3   | (create at P1 start) |
+- `forge script` for deterministic deploy on Base
+- `scripts/generate-operator-wallet.ts` — generate keystore, output address
+- Store router + wallet addresses in `.cogni/repo-spec.yaml`
+- Formation docs: what an operator runs to set up a new deployment
+
+**PR 5 — App purchase flow switch:**
+
+- UI pays the PaymentRouter (not "send USDC to DAO wallet")
+- Index `PurchaseRouted` event for confirmation
+- Credits mint only after on-chain confirmation (no mint-before-funding)
+- `outbound_topups` table + state machine for tracking
+
+**PR 6 — OpenRouter top-up integration:**
+
+- `WalletSignerPort` with typed `signTopUpTransaction(intent)` method
+- Keystore adapter loads encrypted keystore at startup, verifies address against repo-spec
+- OpenRouter charge creation → Coinbase Commerce `swapAndTransferUniswapV3Native` → sign → broadcast
+- Circuit breaker: pause purchases if top-up failures exceed threshold
+- Charge receipt logging with `openrouter_topup` reason
+
+### Walk (P1) — Monitoring + Hardening
+
+**Goal:** Observability, automated balance checks, Vault/KMS key management.
+
+| Deliverable                                               | Status      | Est | Work Item            |
+| --------------------------------------------------------- | ----------- | --- | -------------------- |
+| Grafana alerts: operator balance, top-up failures, margin | Not Started | 2   | (create at P1 start) |
+| OpenRouter balance probe (GET /api/v1/credits polling)    | Not Started | 1   | (create at P1 start) |
+| Vault or KMS signer adapter (replaces keystore)           | Not Started | 3   | (create at P1 start) |
+| UI admin panel: trigger manual top-up, view status        | Not Started | 2   | (create at P1 start) |
 
 ### Run (P2+) — Autonomous Spending
 
-**Goal:** AI decides when and how much to spend within DAO-approved limits.
+**Goal:** AI monitors its own balance and tops up within DAO-approved limits.
 
-| Deliverable                                                               | Status      | Est | Work Item            |
-| ------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Automated top-up: agent monitors credit balance, triggers top-up when low | Not Started | 2   | (create at P2 start) |
-| On-chain spending limits (Zodiac Roles or session keys)                   | Not Started | 3   | (create at P2 start) |
-| x402 integration for AI-to-service micropayments                          | Not Started | 2   | (create at P2 start) |
-| Multi-wallet: per-service wallets with separate budgets                   | Not Started | 2   | (create at P2 start) |
+| Deliverable                                                 | Status      | Est | Work Item            |
+| ----------------------------------------------------------- | ----------- | --- | -------------------- |
+| Auto top-up: agent monitors credit balance, triggers top-up | Not Started | 2   | (create at P2 start) |
+| On-chain spending limits (Zodiac Roles or session keys)     | Not Started | 3   | (create at P2 start) |
+| x402 integration for AI-to-service micropayments            | Not Started | 2   | (create at P2 start) |
 
 ## Constraints
 
-- P0 has zero external infrastructure dependencies (no Vault, no KMS, no Safe)
-- Key material never in source control — encrypted keystore file + passphrase env var only
-- 100% OSS — no Privy, no Coinbase CDP, no vendor custody (per AGENTS.md)
-- `WalletSignerPort` is a proper hexagonal port — key management impl is swappable
-- Off-chain budget tracking uses existing billing tables, no new schema (except repo-spec field)
-- OpenRouter crypto API requires native ETH on Base, not USDC — P0 wallet holds ETH
+- All contracts on Base mainnet (8453) only for P0
+- No DAO votes per purchase — PaymentRouter makes funding atomic
+- No fund retention in router — all value forwarded in-tx
+- Key material never in source control
+- 100% OSS — no vendor custody (Privy, Coinbase CDP, etc.)
+- Credits only mint after on-chain confirmation — no mint-before-funding
+- Contracts are immutable v1 or upgradeable behind DAO-controlled timelock — no EOA admin
+- Sister repo [cogni-signal-evm-contracts](https://github.com/Cogni-DAO/cogni-signal-evm-contracts) is the Foundry reference — reuse its toolchain setup, test patterns, and deployment conventions
 
 ## Dependencies
 
-- [x] OpenRouter Crypto Payments API exists and supports Base (chain_id 8453)
-- [ ] `cogni_system` billing account exists (proj.system-tenant-governance P0)
+- [x] OpenRouter Crypto Payments API supports Base (chain_id 8453)
+- [x] `cogni_system` billing account exists (task.0046, merged)
+- [x] Revenue share constants exist (`SYSTEM_TENANT_REVENUE_SHARE`, `USER_PRICE_MARKUP_FACTOR`)
 - [ ] `EVM_RPC_URL` configured for Base mainnet
+- [ ] Foundry installed in CI environment
+- [ ] UniswapV3 USDC/ETH pool has sufficient liquidity on Base (check before PR 3)
 
 ## As-Built Specs
 
-- (none yet — specs created when code merges)
+- [web3-openrouter-payments](../../docs/spec/web3-openrouter-payments.md) — payment math, top-up state machine, circuit breaker (draft)
+- [operator-wallet](../../docs/spec/operator-wallet.md) — wallet lifecycle, signing port, access control (draft)
 
 ## Design Notes
 
-### Why encrypted keystore (not raw env var)?
+### Why a PaymentRouter contract (not off-chain split)?
 
-Raw private key in env is an anti-pattern — process dumps, logging accidents, container inspection all leak it. Ethereum's standard encrypted keystore (AES-128-CTR + scrypt KDF) is the minimum viable security. The passphrase is still in env, but the key at rest is encrypted. This is what Geth, MetaMask, and every Ethereum node uses.
+Without it, user USDC goes to the DAO treasury, then someone must manually (or via DAO vote) transfer funds to the operator wallet. That's slow and breaks the "immediate top-up" goal. The router makes the split atomic — one user tx funds both DAO and operator.
 
-### Why ETH on Base (not USDC)?
+### Why USDC-in with swap (not ETH-in only)?
 
-OpenRouter's crypto API (`POST /api/v1/credits/coinbase`) accepts native chain tokens only. On Base, that's ETH. USDC→ETH swap is possible but adds DEX complexity to P0 — defer to P1 if needed.
+Users already pay USDC (existing payment flow). OpenRouter's crypto API takes ETH on Base. The router accepts USDC and swaps the operator portion to ETH via Uniswap V3. DAO portion stays as USDC. This avoids changing the user-facing payment UX.
 
-### Why not integrate with formation wizard in P0?
+PR 2 ships ETH-in first as a simpler milestone. PR 3 adds the USDC path with swap.
 
-Formation is a 2-tx browser flow. Adding server-side key generation mid-wizard complicates the UX. P0 ships a standalone `scripts/generate-operator-wallet.ts` that the operator runs once. P1 integrates it into the wizard.
+### Why Foundry (not Hardhat)?
 
-### OpenRouter Crypto API shape
+Foundry gives us invariant testing + fuzzing (`forge test --fuzz`), fast iteration, and reproducible deploy scripts (`forge script`). For money-moving contracts, invariant tests are essential. The sister repo already uses Foundry — we reuse the same toolchain.
+
+### OpenRouter top-up is the Coinbase Commerce protocol
+
+OpenRouter returns a `transfer_intent` (not raw calldata). We encode `swapAndTransferUniswapV3Native(intent, poolFeesTier=500)` on the Coinbase Transfers contract (`0xeADE6bE02d043b3550bE19E960504dbA14A14971` on Base). Must `simulateContract()` before broadcast. See [web3-openrouter-payments spec](../../docs/spec/web3-openrouter-payments.md) for full flow.
+
+### Top-up economics (derived from constants)
 
 ```
-POST https://openrouter.ai/api/v1/credits/coinbase
-Authorization: Bearer <OPENROUTER_API_KEY>
+openrouterTopUpUsd = paymentUsd × (1 + REVENUE_SHARE) / (MARKUP × (1 - PROVIDER_FEE))
 
-{ "amount": 10, "sender": "0x...", "chain_id": "8453" }
-
-→ { "data": { "id", "web3_data": { "call_data": { "to", "value", "data" } } } }
+Defaults: 1.75 / (2.0 × 0.95) = $0.9211 per $1.00 purchase
+Net DAO margin: 7.9%
 ```
 
-Agent signs + broadcasts the returned calldata. Credits appear immediately for amounts under $500. 5% fee.
+See [web3-openrouter-payments spec](../../docs/spec/web3-openrouter-payments.md) for full derivation.
