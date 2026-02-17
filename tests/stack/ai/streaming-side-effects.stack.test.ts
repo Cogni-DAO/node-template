@@ -165,7 +165,7 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       expect(telemetryRows.length).toBe(1);
       expect(telemetryRows[0]?.status).toBe("success");
       expect(telemetryRows[0]?.errorCode).toBeNull();
-    });
+    }, 30_000); // real LLM roundtrip + async LiteLLM callback
 
     it.skip("does not create duplicate records on multiple stream iterations", async () => {
       // This test verifies that side effects don't fire per-chunk
