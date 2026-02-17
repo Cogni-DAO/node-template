@@ -164,7 +164,7 @@
         "maxConcurrent": 3,
         "archiveAfterMinutes": 30
       },
-      "verboseDefault": "full",
+      "verboseDefault": "off",
       "sandbox": { "mode": "off" },
       "skipBootstrap": true,
       "timeoutSeconds": 540,
@@ -220,7 +220,17 @@
     "discord": {
       "enabled": true,
       "token": "${DISCORD_BOT_TOKEN}",
-      "groupPolicy": "open"
+      "groupPolicy": "open",
+      "guilds": {
+        "*": {
+          "requireMention": true,
+          "channels": {
+            "*": {
+              "autoThread": true
+            }
+          }
+        }
+      }
     }
   },
   "plugins": {
@@ -234,6 +244,7 @@
       "browser",
       "cron",
       "gateway",
+      "message",
       "nodes",
       "sessions_list",
       "sessions_history"
