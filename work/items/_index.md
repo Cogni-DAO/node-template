@@ -16,7 +16,7 @@
 | 0   | 3   | Done        | task.0046  | System tenant bootstrap + purchase-time revenue share                                          | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | task.0054  | Governance run foundation — repo-spec config + system tenant execution grant                   | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 1   | Done        | task.0052  | Get OpenClaw Grafana access — spend visibility for sandbox agents                              | Reliability & Uptime       | proj.reliability                |
-| 0   | 2   | Backlog     | bug.0088   | Subagent LLM calls invisible in /activity — child session missing outboundHeaders   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 2   | Backlog     | bug.0088   | Subagent LLM calls invisible in /activity — child session missing outboundHeaders              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | Todo        | task.0083  | Governance health brief endpoint — replace broken queries.sh with app-served health data       | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Todo        | task.0053  | Token + model optimization — stop 85K input token hemorrhage on Opus                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Backlog     | bug.0073   | Discord gateway receives zero dispatch events — MESSAGE_CREATE never delivered                 | Messenger Channels         | proj.messenger-channels         |
@@ -59,7 +59,7 @@
 | 1   | 2   | Todo        | task.0034  | Wire OpenClaw memory search + bootstrap files for cogni-template repo context                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Backlog     | task.0057  | OpenClaw OSS: per-section system prompt toggles + heartbeat guard                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Todo        | task.0045  | Enable OpenClaw subagent spawning — upstream header fix + config + delegation                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 1   | 1   | Backlog     | bug.0078   | OpenClaw subagent spawn fails with "pairing required" — callGateway resolves LAN IP            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 1   | Done        | bug.0078   | OpenClaw subagent spawn fails with "pairing required" — callGateway resolves LAN IP            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 3   | Backlog     | task.0040  | Gateway memory curation worker — scan ephemeral state, persist, reset container                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |

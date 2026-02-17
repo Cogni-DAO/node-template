@@ -2,7 +2,7 @@
 id: bug.0078
 type: bug
 title: "OpenClaw subagent spawn fails with 'pairing required' — callGateway resolves LAN IP instead of loopback"
-status: Backlog
+status: Done
 priority: 1
 estimate: 1
 summary: "sessions_spawn calls callGateway() which resolves to the Docker LAN IP (172.18.0.x) instead of 127.0.0.1. Gateway treats non-loopback connections as remote, requires device pairing, and rejects the subagent WS handshake."
@@ -16,6 +16,7 @@ pr:
 reviewer:
 created: 2026-02-17
 updated: 2026-02-17
+note: Fixed via internalCallConfig() in sessions-spawn-tool.ts — forces bind:loopback for in-process callGateway() calls. Verified 2026-02-17 (gateway log showed "device pairing auto-approved").
 labels: [openclaw, subagents, gateway]
 external_refs:
 ---
