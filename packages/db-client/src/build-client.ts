@@ -12,16 +12,10 @@
  */
 
 import * as fullSchema from "@cogni/db-schema";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-export type Database = PostgresJsDatabase<typeof fullSchema>;
-
-export function buildClient(
-  connectionString: string,
-  applicationName: string
-): Database {
+export function buildClient(connectionString: string, applicationName: string) {
   const client = postgres(connectionString, {
     max: 10,
     idle_timeout: 20,
@@ -33,3 +27,6 @@ export function buildClient(
 
   return drizzle(client, { schema: fullSchema });
 }
+
+/** Drizzle client including the postgres.js `$client` accessor for pool control. */
+export type Database = ReturnType<typeof buildClient>;
