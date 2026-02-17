@@ -85,6 +85,20 @@ function computeRequestHash(graphId: string, input: unknown): string {
   return createHash("sha256").update(normalized, "utf8").digest("hex");
 }
 
+/**
+ * Extract the stable schedule ID from an idempotency key.
+ * Format: "{temporalScheduleId}:{ISO-8601 scheduledFor}"
+ * Schedule IDs may contain colons (e.g. "governance:govern"), so we match
+ * the ISO-8601 timestamp boundary (":YYYY-MM-DDT") rather than splitting naively.
+ * @internal Exported for testing only.
+ */
+export function extractScheduleId(idempotencyKey: string): string {
+  const isoSeparatorIdx = idempotencyKey.search(/:\d{4}-\d{2}-\d{2}T/);
+  return isoSeparatorIdx > 0
+    ? idempotencyKey.slice(0, isoSeparatorIdx)
+    : idempotencyKey;
+}
+
 interface RouteParams {
   params: Promise<{ graphId: string }>;
 }
@@ -323,6 +337,17 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       traceId
     );
 
+    // Extract scheduleId (stable) from idempotencyKey so runs of the same
+    // schedule share conversation state and Langfuse session grouping.
+    const scheduleId = extractScheduleId(idempotencyKey);
+
+    const stateKey = createHash("sha256")
+      .update(scheduleId, "utf8")
+      .digest("hex");
+
+    // gov: prefix distinguishes governance sessions from user sessions (ba:) in Langfuse
+    const sessionId = `gov:${grant.billingAccountId}:s:${stateKey.slice(0, 32)}`;
+
     // Build caller from grant + billing account
     const caller = {
       billingAccountId: grant.billingAccountId,
@@ -330,6 +355,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       requestId: ctx.reqId,
       traceId: ctx.traceId,
       userId: grant.userId,
+      sessionId,
     };
 
     // Parse input for graph execution
@@ -348,10 +374,6 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       );
     }
     const model = input.model;
-
-    const stateKey = createHash("sha256")
-      .update(idempotencyKey, "utf8")
-      .digest("hex");
 
     const accountService = container.accountsForUser(toUserId(grant.userId));
 

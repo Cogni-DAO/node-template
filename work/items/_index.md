@@ -16,6 +16,8 @@
 | 0   | 3   | Done        | task.0046  | System tenant bootstrap + purchase-time revenue share                                          | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | task.0054  | Governance run foundation — repo-spec config + system tenant execution grant                   | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 1   | Done        | task.0052  | Get OpenClaw Grafana access — spend visibility for sandbox agents                              | Reliability & Uptime       | proj.reliability                |
+| 0   | 2   | Backlog     | bug.0088   | Subagent LLM calls invisible in /activity — child session missing outboundHeaders              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 0   | 3   | Todo        | task.0083  | Governance health brief endpoint — replace broken queries.sh with app-served health data       | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Todo        | task.0053  | Token + model optimization — stop 85K input token hemorrhage on Opus                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Backlog     | bug.0073   | Discord gateway receives zero dispatch events — MESSAGE_CREATE never delivered                 | Messenger Channels         | proj.messenger-channels         |
 | 0   | 2   | Todo        | task.0041  | Discord channel proof of life — bot connected, Cogni reads + sends via OpenClaw                | Messenger Channels         | proj.messenger-channels         |
@@ -29,6 +31,7 @@
 | 0   | 2   | Done        | bug.0071   | Governance schedule sync skips config updates — Temporal schedules stuck with stale input      | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | bug.0072   | HTTP errors invisible in dashboards — no error rate metrics, agent reports 0 errors            | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Done        | task.0070  | Governance credit health dashboard — prevent silent credit outages                             | System Tenant & Governance | proj.system-tenant-governance   |
+| 1   | 1   | Done        | bug.0087   | Governance runs invisible in Langfuse Sessions — missing sessionId on scheduled caller         | System Tenant & Governance | proj.system-tenant-governance   |
 | 1   | 3   | Todo        | story.0063 | Governance visibility dashboard — real-time AI council activity                                | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | bug.0027   | Gateway billing fails in production — Docker socket ENOENT crashes all OpenClaw runs           | Payments Enhancements      | proj.payments-enhancements      |
 | 0   | 2   | Backlog     | bug.0026   | Scheduler worker silently stops polling — schedules enabled but runs cease                     | Reliability & Uptime       | proj.reliability                |
@@ -56,7 +59,7 @@
 | 1   | 2   | Todo        | task.0034  | Wire OpenClaw memory search + bootstrap files for cogni-template repo context                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 2   | Backlog     | task.0057  | OpenClaw OSS: per-section system prompt toggles + heartbeat guard                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Todo        | task.0045  | Enable OpenClaw subagent spawning — upstream header fix + config + delegation                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 1   | 1   | Backlog     | bug.0078   | OpenClaw subagent spawn fails with "pairing required" — callGateway resolves LAN IP            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
+| 1   | 1   | Done        | bug.0078   | OpenClaw subagent spawn fails with "pairing required" — callGateway resolves LAN IP            | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 2   | 3   | Backlog     | task.0040  | Gateway memory curation worker — scan ephemeral state, persist, reset container                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 3   | Done        | task.0010  | OpenClaw gateway model selection — session-level override                                      | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 1   | 1   | Done        | spike.0020 | Research messenger integration via OpenClaw channels                                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
@@ -82,6 +85,13 @@
 | 1   | 2   | Backlog     | task.0075  | Governance scheduled runs post status updates to #continuous-cogni-updates Discord channel     | Messenger Channels         | proj.messenger-channels         |
 | 1   | 2   | Backlog     | task.0076  | Dedicated Discord community agent — separate agent config with Discord-specific personality    | Messenger Channels         | proj.messenger-channels         |
 | 2   | 2   | Backlog     | task.0077  | Discord billing user attribution — identify which Discord user triggered each LLM call         | Messenger Channels         | proj.messenger-channels         |
+| 1   | 4   | Backlog     | story.0079 | DID-first identity — decentralized member identifiers with verifiable account links            | Decentralized Identity     | proj.decentralized-identity     |
+| 1   | 2   | Done        | spike.0080 | Research current identity system + design minimal DID-first refactor                           | Decentralized Identity     | proj.decentralized-identity     |
+| 1   | 5   | Backlog     | story.0081 | Work receipts, transparency log, and deterministic epoch payouts                               | Transparent Credit Payouts | proj.transparent-credit-payouts |
+| 1   | 2   | Done        | spike.0082 | Design transparency log storage, receipt signing, and distribution engine                      | Transparent Credit Payouts | proj.transparent-credit-payouts |
+| 0   | 2   | Todo        | task.0084  | Operator wallet generation + wiring into existing payment flow                                 | AI Operator Wallet         | proj.ai-operator-wallet         |
+| 0   | 2   | Todo        | task.0085  | DAO treasury USDC forwarding from operator wallet                                              | AI Operator Wallet         | proj.ai-operator-wallet         |
+| 0   | 3   | Todo        | task.0086  | OpenRouter credit top-up via operator wallet                                                   | AI Operator Wallet         | proj.ai-operator-wallet         |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |
 
 > Sort: priority → status (completed last) → estimate → type

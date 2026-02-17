@@ -11,6 +11,8 @@ set -euo pipefail
 : "${GRAFANA_URL:?GRAFANA_URL not set - run /env-update}"
 : "${GRAFANA_SERVICE_ACCOUNT_TOKEN:?GRAFANA_SERVICE_ACCOUNT_TOKEN not set - run /env-update}"
 TOKEN="${GRAFANA_SERVICE_ACCOUNT_TOKEN}"
+# Strip trailing slash to prevent double-slash in URLs (causes 301 redirect)
+GRAFANA_URL="${GRAFANA_URL%/}"
 
 # Environment selection (production or preview)
 ENV="${DEPLOY_ENV:-production}"
@@ -33,7 +35,7 @@ prom_query() {
 # Helper: Query Loki instant
 loki_query() {
   local query="$1"
-  curl -s -G "${GRAFANA_URL}/api/datasources/uid/${LOKI_UID}/resources/loki/api/v1/query" \
+  curl -s -G "${GRAFANA_URL}/api/datasources/proxy/uid/${LOKI_UID}/loki/api/v1/query" \
     -H "Authorization: Bearer ${TOKEN}" \
     --data-urlencode "query=${query}"
 }
@@ -103,9 +105,9 @@ cmd_http_errors() {
 
 cmd_log_errors() {
   echo "Log Errors (${TIME_WINDOW}):"
-  # Count level>=40 (warn+error) logs per service
-  loki_query "sum by (service) (count_over_time({app=\"cogni-template\", env=\"${ENV}\"} | json | level >= 40 [${TIME_WINDOW}]))" \
-    | jq -r '.data.result[] | "  \(.metric.service): \(.value[1])"'
+  # Count warn+error logs per service (level is a string label, not numeric)
+  loki_query "sum by (service) (count_over_time({app=\"cogni-template\", env=\"${ENV}\"} | json | level=~\"warn|error|fatal\" | __error__=\"\" [${TIME_WINDOW}]))" \
+    | jq -r '(.data.result // [])[] | "  \(.metric.service): \(.value[1])"'
 }
 
 cmd_memory() {
@@ -142,9 +144,18 @@ cmd_deployments() {
 
 cmd_services() {
   echo "Services:"
-  # Get unique container names from cAdvisor metrics
-  prom_query 'count by (container) (container_memory_working_set_bytes{container!=""})' \
-    | jq -r '.data.result[] | "  \(.metric.container)"' | sort
+  # Use Loki label values API — always available, always per-service
+  local result
+  result=$(curl -s -G "${GRAFANA_URL}/api/datasources/proxy/uid/${LOKI_UID}/loki/api/v1/label/service/values" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    --data-urlencode "query={app=\"cogni-template\", env=\"${ENV}\"}")
+  local count
+  count=$(echo "$result" | jq -r '(.data // []) | length')
+  if [ "$count" = "0" ]; then
+    echo "  (no services found — check Loki ingestion)"
+  else
+    echo "$result" | jq -r '.data[] | "  ✓ \(.)"'
+  fi
 }
 
 cmd_service_health() {
@@ -155,15 +166,15 @@ cmd_service_health() {
     echo "${service}:"
 
     # Memory usage
-    local mem_query="container_memory_working_set_bytes{container=\"${service}\"} / container_spec_memory_limit_bytes{container=\"${service}\"} * 100"
+    local mem_query="container_memory_working_set_bytes{env=\"${ENV}\", service=\"${service}\"} / container_spec_memory_limit_bytes{env=\"${ENV}\", service=\"${service}\"} * 100"
     local mem=$(prom_query "$mem_query" | jq -r '.data.result[0].value[1] // "0"' | awk '{printf "%.0f%%", $1}')
 
     # CPU (rate over 1m)
-    local cpu_query="rate(container_cpu_usage_seconds_total{container=\"${service}\"}[1m]) * 100"
+    local cpu_query="rate(container_cpu_usage_seconds_total{env=\"${ENV}\", service=\"${service}\"}[1m]) * 100"
     local cpu=$(prom_query "$cpu_query" | jq -r '.data.result[0].value[1] // "0"' | awk '{printf "%.1f%%", $1}')
 
     # OOM events
-    local oom=$(prom_query "container_oom_events_total{container=\"${service}\"}" | jq -r '.data.result[0].value[1] // "0"')
+    local oom=$(prom_query "container_oom_events_total{env=\"${ENV}\", service=\"${service}\"}" | jq -r '.data.result[0].value[1] // "0"')
 
     echo "  Memory: ${mem}  CPU: ${cpu}  OOMs: ${oom}"
   done
