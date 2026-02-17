@@ -2,7 +2,7 @@
 id: bug.0088
 type: bug
 title: Subagent LLM calls invisible in /activity — child session missing outboundHeaders
-status: Backlog
+status: needs_triage
 priority: 0
 estimate: 2
 summary: Spawned subagent LLM calls go through LiteLLM but billing ingest skips them because the child session has no outboundHeaders — billingAccountId cannot be resolved.
@@ -18,6 +18,10 @@ created: 2026-02-17
 updated: 2026-02-17
 labels: [billing, openclaw, observability]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Subagent LLM calls invisible in /activity

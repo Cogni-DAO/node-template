@@ -2,7 +2,7 @@
 id: task.0052
 type: task
 title: "Get OpenClaw Grafana access — spend visibility for sandbox agents"
-status: Done
+status: done
 priority: 0
 estimate: 1
 summary: "We have zero visibility into OpenClaw LLM spend. Need Grafana dashboard access to monitor OpenRouter/LiteLLM usage in real time — token counts, model selection, cost per call. Without this, we're flying blind on a platform that burned $20 in 30 minutes."
@@ -20,6 +20,10 @@ labels: [openclaw, grafana, observability, cost, p0]
 external_refs:
 assignees: derekg1729
 credit:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # task.0052 — Get OpenClaw Grafana access

@@ -2,7 +2,7 @@
 id: bug.0060
 type: bug
 title: "Cost authority bug: OpenRouter billed cost not flowing through LiteLLM callback (response_cost=0)"
-status: Todo
+status: needs_implement
 priority: 1
 estimate: 2
 summary: "LiteLLM generic_api callback is the billing cost oracle (response_cost). For new OpenRouter models missing from LiteLLM’s internal pricing table (e.g. claude-opus-4.6), LiteLLM computes response_cost=0 silently even though OpenRouter billed non-zero. This causes $0 charge receipts and underbilling."
@@ -19,6 +19,10 @@ updated: 2026-02-14
 labels: [billing, litellm, openrouter, p1]
 external_refs:
   - docs/postmortems/pm.billing-observability-gaps.2026-02-14.md
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # bug.0060 — Cost authority: OpenRouter → LiteLLM → callback `response_cost`

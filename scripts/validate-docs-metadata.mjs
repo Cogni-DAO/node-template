@@ -98,6 +98,7 @@ const ITEM_REQUIRED = [
   "title",
   "status",
   "priority",
+  "rank",
   "estimate",
   "summary",
   "outcome",
@@ -371,6 +372,16 @@ function validateItem(file, props, content, allIds, projectIds) {
   if (props.estimate !== undefined && !ESTIMATE.includes(props.estimate)) {
     errors.push(
       `invalid estimate: ${props.estimate} (expected: ${ESTIMATE.join("|")})`
+    );
+  }
+  if (
+    props.rank !== undefined &&
+    props.rank !== null &&
+    props.rank !== "" &&
+    (!Number.isInteger(props.rank) || props.rank < 1)
+  ) {
+    errors.push(
+      `invalid rank: ${props.rank} (expected positive integer, 1 = highest)`
     );
   }
 

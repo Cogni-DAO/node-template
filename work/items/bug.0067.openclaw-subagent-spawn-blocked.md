@@ -2,7 +2,7 @@
 id: bug.0067
 type: bug
 title: OpenClaw model allowlist blocks openrouter/auto — governance sessions.patch failures at 75% rate
-status: Backlog
+status: needs_triage
 priority: 0
 estimate: 1
 summary: Production OpenClaw gateway rejects openrouter/auto model in sessions.patch calls. Causes 75% failure rate for governance heartbeat updates and blocks subagent spawning.
@@ -18,6 +18,10 @@ created: 2026-02-15
 updated: 2026-02-15
 labels: [openclaw, governance, config, p0]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # OpenClaw model allowlist blocks openrouter/auto — governance sessions.patch failures

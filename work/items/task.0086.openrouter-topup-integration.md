@@ -2,7 +2,7 @@
 id: task.0086
 type: task
 title: OpenRouter credit top-up via operator wallet
-status: Todo
+status: needs_implement
 priority: 0
 estimate: 3
 summary: After credit settlement, top up OpenRouter via Coinbase Commerce protocol — create charge, encode swap tx, simulate, sign, broadcast. Durable state machine.
@@ -18,6 +18,10 @@ created: 2026-02-17
 updated: 2026-02-17
 labels: [wallet, web3, billing, openrouter]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # OpenRouter credit top-up via operator wallet

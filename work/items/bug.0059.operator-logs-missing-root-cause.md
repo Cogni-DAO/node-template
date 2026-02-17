@@ -2,7 +2,7 @@
 id: bug.0059
 type: bug
 title: "Operator logs show only 'internal' — root cause dropped in LiteLLM adapter"
-status: In Progress
+status: needs_implement
 priority: 0
 estimate: 1
 summary: "litellm.adapter.ts catches HTTP errors and deliberately strips the actual error message (comment: 'no raw provider message'). Operator-facing Loki logs show {kind: 'provider_4xx'} with zero debugging value — no response body, no provider error message. Network failures (ECONNREFUSED, ENOTFOUND) are also thrown without logging."
@@ -18,6 +18,10 @@ created: 2026-02-14
 updated: 2026-02-14
 labels: [observability, ai-graphs]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Operator logs show only 'internal' — root cause dropped in LiteLLM adapter

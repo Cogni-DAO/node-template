@@ -2,7 +2,7 @@
 id: task.0055
 type: task
 title: "Dedicated DB migrator role — separate DDL from runtime DML"
-status: Backlog
+status: needs_triage
 priority: 2
 estimate: 2
 summary: "app_user is both DB owner (DDL for migrations) and runtime role (DML with RLS). A compromised app_user credential can ALTER/DROP tables. Split into app_migrator (DDL, BYPASSRLS, used only by drizzle-kit) and app_user (DML-only, RLS enforced, no schema mutation)."
@@ -20,6 +20,10 @@ labels: [infra, database, security, p2]
 external_refs:
 assignees: derekg1729
 credit:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Dedicated DB migrator role — separate DDL from runtime DML

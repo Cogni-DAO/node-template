@@ -2,7 +2,7 @@
 id: task.0048
 type: task
 title: "Sub-agent billing attribution — track which OpenClaw sub-agent made each LLM call"
-status: Backlog
+status: needs_triage
 priority: 2
 estimate: 3
 summary: "Gateway LLM calls share a single run_id and graph_id per session. When a thinking agent spawns sub-agents (e.g. Flash for research, Sonnet for reasoning), all calls are billed correctly but indistinguishable by sub-agent. Need per-call sub-agent identity in spend_logs_metadata."
@@ -19,6 +19,10 @@ created: 2026-02-13
 updated: 2026-02-13
 labels: [openclaw, billing, observability]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Sub-agent billing attribution

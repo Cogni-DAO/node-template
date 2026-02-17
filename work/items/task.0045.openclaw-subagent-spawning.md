@@ -2,7 +2,7 @@
 id: task.0045
 type: task
 title: "Enable OpenClaw subagent spawning — upstream header fix + Cogni config + delegation instructions"
-status: Todo
+status: needs_implement
 priority: 1
 estimate: 3
 summary: Enable sessions_spawn in the gateway, fix upstream outboundHeaders inheritance so subagent LLM calls are billed to the parent account, configure multi-model tiers (flash for scanning, strong for writes), and update AGENTS.md with delegation strategy.
@@ -19,6 +19,10 @@ created: 2026-02-13
 updated: 2026-02-13
 labels: [openclaw, billing, subagents]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Enable OpenClaw subagent spawning — upstream header fix + Cogni config + delegation instructions

@@ -2,7 +2,7 @@
 id: task.0068
 type: task
 title: Dynamic default model selection from LiteLLM config metadata
-status: Todo
+status: needs_implement
 priority: 1
 estimate: 2
 summary: Replace hardcoded default model (gpt-4o-mini) with dynamic selection based on default_flash/default_thinking metadata in LiteLLM config
@@ -18,6 +18,10 @@ created: 2026-02-15
 updated: 2026-02-15
 labels: [ai, config, governance]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Dynamic default model selection from LiteLLM config metadata

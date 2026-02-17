@@ -2,7 +2,7 @@
 id: bug.0049
 type: bug
 title: Deploy never syncs gateway-workspace + repo mount blocks git — agent is blind and immobile
-status: Done
+status: done
 priority: 0
 estimate: 1
 summary: deploy.sh rsync's gateway-workspace/ to production; agent docs updated with safe clone-from-remote dev workflow; /repo/current/ documented as volatile
@@ -20,6 +20,10 @@ updated: 2026-02-13
 labels: [deploy, openclaw, P0]
 external_refs:
   - https://github.com/Cogni-DAO/node-template/pull/400
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Deploy never syncs gateway-workspace + repo mount blocks git — agent is blind and immobile

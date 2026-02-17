@@ -2,7 +2,7 @@
 id: bug.0070
 type: bug
 title: "OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail"
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 1
 summary: "OpenClaw container image ships the CLI as `/app/openclaw.mjs` but no `openclaw` command exists on PATH. The gateway agent's injected system prompt references `openclaw status`, `openclaw gateway status`, etc., which all fail with `sh: 1: openclaw: not found`."
@@ -19,6 +19,10 @@ created: 2026-02-16
 updated: 2026-02-16
 labels: [openclaw, cli, upstream]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # bug.0070 — OpenClaw CLI binary not executable as `openclaw`

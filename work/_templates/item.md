@@ -4,6 +4,7 @@ type: # task | bug | story | spike | subtask
 title:
 status: needs_triage
 priority: 1
+rank: 99
 estimate: 2
 summary:
 outcome:

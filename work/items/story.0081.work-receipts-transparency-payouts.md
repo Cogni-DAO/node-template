@@ -2,7 +2,7 @@
 id: story.0081
 type: story
 title: Work receipts, transparency log, and deterministic epoch payouts
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 5
 summary: Replace ad-hoc contribution tracking with signed WorkReceipts appended to a transparency log, enabling deterministic, auditable payouts computed from receipts plus published weight rules.
@@ -18,6 +18,10 @@ created: 2026-02-17
 updated: 2026-02-17
 labels: [governance, transparency, payments, web3]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Work Receipts, Transparency Log, and Deterministic Epoch Payouts

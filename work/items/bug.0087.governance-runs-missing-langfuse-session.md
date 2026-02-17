@@ -2,7 +2,7 @@
 id: bug.0087
 type: bug
 title: "Governance runs invisible in Langfuse Sessions — missing sessionId on scheduled caller"
-status: Done
+status: done
 priority: 1
 estimate: 1
 summary: Internal graph run route builds LlmCaller without sessionId, so governance traces have no Langfuse session grouping and don't appear in Sessions view. Traces exist but are orphaned.
@@ -18,6 +18,10 @@ created: 2026-02-17
 updated: 2026-02-17
 labels: [observability, governance, langfuse]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Governance runs invisible in Langfuse Sessions

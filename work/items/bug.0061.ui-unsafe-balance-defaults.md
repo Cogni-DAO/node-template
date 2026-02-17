@@ -2,7 +2,7 @@
 id: bug.0061
 type: bug
 title: "UI balance display hides negative with $0 default"
-status: In Progress
+status: needs_implement
 priority: 2
 estimate: 1
 summary: "Chat and credits pages default balance to $0 when missing, hiding negative account state. After bug.0050 merges, UI must show actual balances with red styling for negatives."
@@ -18,6 +18,10 @@ created: 2026-02-15
 updated: 2026-02-15
 labels: [billing, payments, ui, p2]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # bug.0061 — UI balance display hides negative

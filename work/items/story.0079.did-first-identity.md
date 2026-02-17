@@ -2,7 +2,7 @@
 id: story.0079
 type: story
 title: DID-first identity — decentralized member identifiers with verifiable account links
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 4
 summary: Replace wallet-address-as-identity with did:pkh canonical identifiers; represent Discord/GitHub account links as Verifiable Credentials instead of ad-hoc DB rows.
@@ -18,6 +18,10 @@ created: 2026-02-17
 updated: 2026-02-17
 labels: [identity, web3, ssi]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # DID-First Identity — Decentralized Member Identifiers

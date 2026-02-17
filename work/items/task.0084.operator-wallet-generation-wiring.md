@@ -2,7 +2,7 @@
 id: task.0084
 type: task
 title: Operator wallet generation + wiring into existing payment flow
-status: Todo
+status: needs_implement
 priority: 0
 estimate: 2
 summary: Generate encrypted keystore, create WalletSignerPort, wire operator wallet as receiving address — existing payment flow works unchanged.
@@ -18,6 +18,10 @@ created: 2026-02-17
 updated: 2026-02-17
 labels: [wallet, web3, billing]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Operator wallet generation + wiring into existing payment flow

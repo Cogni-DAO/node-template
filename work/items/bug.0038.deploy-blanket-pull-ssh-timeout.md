@@ -2,7 +2,7 @@
 id: bug.0038
 type: bug
 title: Deploy pulls all 15+ images every run — SSH timeout on slow pulls
-status: Done
+status: done
 priority: 0
 estimate: 2
 summary: deploy-remote.sh does a blanket `compose pull` of every service (including pinned-digest images that never change), wasting bandwidth and time. Combined with missing SSH keepalive on the deploy connection, slow pulls cause SSH disconnect (Broken pipe) and deploy failure.
@@ -18,6 +18,10 @@ created: 2026-02-12
 updated: 2026-02-12
 labels: [deploy, infra, ssh]
 external_refs: https://github.com/Cogni-DAO/node-template/actions/runs/21936705892/job/63354600251
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Deploy pulls all 15+ images every run — SSH timeout on slow pulls

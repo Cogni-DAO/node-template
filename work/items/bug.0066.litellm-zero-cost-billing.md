@@ -2,7 +2,7 @@
 id: bug.0066
 type: bug
 title: LiteLLM reports $0 cost for gpt-4o-mini — billing creates 0-credit receipts for paid models
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 3
 summary: Production logs show gpt-4o-mini calls with providerCostUsd=0 despite OpenRouter pricing at $0.15/$0.60 per 1M tokens. Billing system creates charge receipts with 0 credits.
@@ -19,6 +19,10 @@ updated: 2026-02-15
 labels: [billing, litellm, openrouter]
 external_refs:
   - https://openrouter.ai/openai/gpt-4o-mini
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # LiteLLM reports $0 cost for gpt-4o-mini — billing creates 0-credit receipts

@@ -2,7 +2,7 @@
 id: task.0085
 type: task
 title: DAO treasury USDC forwarding from operator wallet
-status: Todo
+status: needs_implement
 priority: 0
 estimate: 2
 summary: After credit settlement, forward DAO's share of each payment as USDC from operator wallet to treasury. Idempotent, durable state tracking.
@@ -18,6 +18,10 @@ created: 2026-02-17
 updated: 2026-02-17
 labels: [wallet, web3, billing]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # DAO treasury USDC forwarding from operator wallet
