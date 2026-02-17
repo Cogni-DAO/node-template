@@ -16,6 +16,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ReactElement } from "react";
+import { useState } from "react";
 import type { z } from "zod";
 import {
   SectionCard,
@@ -26,9 +27,16 @@ import {
   TableHeader,
   TableRow,
   TimeRangeSelector,
+  ToggleGroup,
+  ToggleGroupItem,
 } from "@/components";
 import { ActivityChart } from "@/components/kit/data-display/ActivityChart";
+import {
+  buildAggregateChartData,
+  buildGroupedChartData,
+} from "@/components/kit/data-display/activity-chart-utils";
 import type {
+  ActivityGroupBy,
   aiActivityOperation,
   TimeRange,
 } from "@/contracts/ai.activity.v1.contract";
@@ -40,6 +48,7 @@ export function GovernanceView(): ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
   const range = (searchParams.get("range") as TimeRange) || "1d";
+  const [groupBy, setGroupBy] = useState<ActivityGroupBy | undefined>("model");
 
   const { data, isLoading, error } = useGovernanceStatus();
 
@@ -48,8 +57,9 @@ export function GovernanceView(): ReactElement {
     isLoading: activityLoading,
     error: activityError,
   } = useQuery({
-    queryKey: ["governance-activity", range],
-    queryFn: () => fetchGovernanceActivity({ range }),
+    queryKey: ["governance-activity", range, groupBy],
+    queryFn: () =>
+      fetchGovernanceActivity({ range, ...(groupBy && { groupBy }) }),
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     retry: 2,
@@ -144,11 +154,28 @@ export function GovernanceView(): ReactElement {
           <h2 className="font-semibold text-xl tracking-tight">
             Usage Metrics
           </h2>
-          <TimeRangeSelector
-            value={range}
-            onValueChange={handleRangeChange}
-            className="w-40 rounded-lg"
-          />
+          <div className="flex items-center gap-3">
+            <ToggleGroup
+              type="single"
+              value={groupBy ?? ""}
+              onValueChange={(v) =>
+                setGroupBy((v as ActivityGroupBy) || undefined)
+              }
+              className="rounded-lg border"
+            >
+              <ToggleGroupItem value="model" className="px-3 text-xs">
+                By Model
+              </ToggleGroupItem>
+              <ToggleGroupItem value="graphId" className="px-3 text-xs">
+                By Agent
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <TimeRangeSelector
+              value={range}
+              onValueChange={handleRangeChange}
+              className="w-40 rounded-lg"
+            />
+          </div>
         </div>
 
         {activityError ? (
@@ -214,61 +241,58 @@ export function GovernanceView(): ReactElement {
 type ActivityData = z.infer<typeof aiActivityOperation.output>;
 
 function ActivityCharts({ activity }: { activity: ActivityData }) {
-  const spendData = activity.chartSeries.map((d) => ({
-    date: d.bucketStart,
-    value: Number.parseFloat(d.spend),
-  }));
+  const { chartSeries, groupedSeries, effectiveStep } = activity;
+  const hasGrouped = groupedSeries && groupedSeries.length > 0;
 
-  const tokenData = activity.chartSeries.map((d) => ({
-    date: d.bucketStart,
-    value: d.tokens,
-  }));
+  const spend = hasGrouped
+    ? buildGroupedChartData(groupedSeries, "spend")
+    : buildAggregateChartData(
+        chartSeries,
+        "spend",
+        "Spend ($)",
+        "hsl(var(--chart-1))"
+      );
 
-  const requestData = activity.chartSeries.map((d) => ({
-    date: d.bucketStart,
-    value: d.requests,
-  }));
+  const tokens = hasGrouped
+    ? buildGroupedChartData(groupedSeries, "tokens")
+    : buildAggregateChartData(
+        chartSeries,
+        "tokens",
+        "Tokens",
+        "hsl(var(--chart-2))"
+      );
+
+  const requests = hasGrouped
+    ? buildGroupedChartData(groupedSeries, "requests")
+    : buildAggregateChartData(
+        chartSeries,
+        "requests",
+        "Requests",
+        "hsl(var(--chart-3))"
+      );
 
   return (
     <div className="grid gap-4 md:grid-cols-3">
       <ActivityChart
-        title="Total Spend"
+        title="Spend"
         description={`$${activity.totals.spend.total} total`}
-        data={spendData}
-        config={{
-          value: {
-            label: "Spend ($)",
-            color: "hsl(var(--chart-1))",
-          },
-        }}
-        color="hsl(var(--chart-1))"
-        effectiveStep={activity.effectiveStep}
+        data={spend.data}
+        config={spend.config}
+        effectiveStep={effectiveStep}
       />
       <ActivityChart
-        title="Total Tokens"
+        title="Tokens"
         description={`${activity.totals.tokens.total.toLocaleString()} tokens`}
-        data={tokenData}
-        config={{
-          value: {
-            label: "Tokens",
-            color: "hsl(var(--chart-2))",
-          },
-        }}
-        color="hsl(var(--chart-2))"
-        effectiveStep={activity.effectiveStep}
+        data={tokens.data}
+        config={tokens.config}
+        effectiveStep={effectiveStep}
       />
       <ActivityChart
-        title="Total Requests"
+        title="Requests"
         description={`${activity.totals.requests.total.toLocaleString()} requests`}
-        data={requestData}
-        config={{
-          value: {
-            label: "Requests",
-            color: "hsl(var(--chart-3))",
-          },
-        }}
-        color="hsl(var(--chart-3))"
-        effectiveStep={activity.effectiveStep}
+        data={requests.data}
+        config={requests.config}
+        effectiveStep={effectiveStep}
       />
     </div>
   );

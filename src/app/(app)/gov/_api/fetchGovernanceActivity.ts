@@ -14,6 +14,7 @@
 import type { z } from "zod";
 
 import type {
+  ActivityGroupBy,
   aiActivityOperation,
   TimeRange,
 } from "@/contracts/ai.activity.v1.contract";
@@ -22,12 +23,16 @@ type ActivityData = z.infer<typeof aiActivityOperation.output>;
 
 export interface FetchGovernanceActivityParams {
   range: TimeRange;
+  groupBy?: ActivityGroupBy;
 }
 
 export async function fetchGovernanceActivity(
   params: FetchGovernanceActivityParams
 ): Promise<ActivityData> {
-  const searchParams = new URLSearchParams({ range: params.range });
+  const searchParams = new URLSearchParams({
+    range: params.range,
+    ...(params.groupBy && { groupBy: params.groupBy }),
+  });
 
   const response = await fetch(
     `/api/v1/governance/activity?${searchParams.toString()}`,
