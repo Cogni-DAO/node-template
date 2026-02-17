@@ -5,7 +5,7 @@
  * Module: `@tests/unit/features/governance/get-governance-status`
  * Purpose: Unit tests for governance status feature service.
  * Scope: Tests orchestration logic with mocked ports. Does not test database or HTTP.
- * Invariants: Validates BIGINT_SERIALIZATION, ISO date formatting, null handling.
+ * Invariants: Validates BIGINT_SERIALIZATION, ISO date formatting, upcomingRuns shape.
  * Side-effects: none
  * Links: src/features/governance/services/get-governance-status.ts
  * @public
@@ -13,7 +13,11 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { getGovernanceStatus } from "@/features/governance/services/get-governance-status";
-import type { AccountService, GovernanceStatusPort } from "@/ports";
+import type {
+  AccountService,
+  GovernanceStatusPort,
+  UpcomingRun,
+} from "@/ports";
 
 function mockAccountService(balance: number): AccountService {
   return {
@@ -22,7 +26,7 @@ function mockAccountService(balance: number): AccountService {
 }
 
 function mockGovernanceStatusPort(overrides?: {
-  nextRunAt?: Date | null;
+  upcomingRuns?: UpcomingRun[];
   recentRuns?: Array<{
     id: string;
     title: string | null;
@@ -31,7 +35,7 @@ function mockGovernanceStatusPort(overrides?: {
   }>;
 }): GovernanceStatusPort {
   return {
-    getScheduleStatus: vi.fn().mockResolvedValue(overrides?.nextRunAt ?? null),
+    getUpcomingRuns: vi.fn().mockResolvedValue(overrides?.upcomingRuns ?? []),
     getRecentRuns: vi.fn().mockResolvedValue(overrides?.recentRuns ?? []),
   };
 }
@@ -47,23 +51,33 @@ describe("getGovernanceStatus", () => {
     expect(typeof result.systemCredits).toBe("string");
   });
 
-  it("returns null nextRunAt when no schedule exists", async () => {
+  it("returns empty upcomingRuns when no schedules exist", async () => {
     const result = await getGovernanceStatus({
       accountService: mockAccountService(100),
-      governanceStatusPort: mockGovernanceStatusPort({ nextRunAt: null }),
+      governanceStatusPort: mockGovernanceStatusPort({ upcomingRuns: [] }),
     });
 
-    expect(result.nextRunAt).toBeNull();
+    expect(result.upcomingRuns).toEqual([]);
   });
 
-  it("returns nextRunAt as ISO string when schedule exists", async () => {
+  it("returns upcomingRuns with name and ISO nextRunAt", async () => {
     const date = new Date("2026-02-17T12:00:00Z");
     const result = await getGovernanceStatus({
       accountService: mockAccountService(100),
-      governanceStatusPort: mockGovernanceStatusPort({ nextRunAt: date }),
+      governanceStatusPort: mockGovernanceStatusPort({
+        upcomingRuns: [
+          { name: "Community", nextRunAt: date },
+          { name: "Engineering", nextRunAt: new Date("2026-02-17T12:15:00Z") },
+        ],
+      }),
     });
 
-    expect(result.nextRunAt).toBe("2026-02-17T12:00:00.000Z");
+    expect(result.upcomingRuns).toHaveLength(2);
+    expect(result.upcomingRuns[0]).toEqual({
+      name: "Community",
+      nextRunAt: "2026-02-17T12:00:00.000Z",
+    });
+    expect(result.upcomingRuns[1]?.name).toBe("Engineering");
   });
 
   it("maps recent runs with ISO date strings", async () => {

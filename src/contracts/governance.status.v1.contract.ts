@@ -21,11 +21,17 @@ export const governanceStatusOutputSchema = z.object({
   systemCredits: z
     .string()
     .describe("System tenant balance (BigInt as string)"),
-  nextRunAt: z
-    .string()
-    .datetime()
-    .nullable()
-    .describe("Next scheduled governance run (ISO 8601)"),
+  upcomingRuns: z
+    .array(
+      z.object({
+        name: z.string().describe("Schedule display name (e.g. 'Community')"),
+        nextRunAt: z
+          .string()
+          .datetime()
+          .describe("Next occurrence computed live from cron (always future)"),
+      })
+    )
+    .describe("Next scheduled governance runs sorted by soonest first"),
   recentRuns: z.array(
     z.object({
       id: z.string().describe("Thread state key"),

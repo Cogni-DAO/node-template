@@ -83,6 +83,7 @@ export type { Clock } from "./clock.port";
 export type {
   GovernanceRun,
   GovernanceStatusPort,
+  UpcomingRun,
 } from "./governance-status.port";
 export type {
   AiExecutionErrorCode,

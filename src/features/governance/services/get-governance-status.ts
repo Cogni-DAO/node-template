@@ -19,7 +19,7 @@ import { COGNI_SYSTEM_BILLING_ACCOUNT_ID } from "@/shared/constants/system-tenan
 
 export interface GovernanceStatusResult {
   systemCredits: string;
-  nextRunAt: string | null;
+  upcomingRuns: Array<{ name: string; nextRunAt: string }>;
   recentRuns: Array<{
     id: string;
     title: string | null;
@@ -34,15 +34,18 @@ export async function getGovernanceStatus(params: {
 }): Promise<GovernanceStatusResult> {
   const { accountService, governanceStatusPort } = params;
 
-  const [balance, nextRunAt, recentRuns] = await Promise.all([
+  const [balance, upcomingRuns, recentRuns] = await Promise.all([
     accountService.getBalance(COGNI_SYSTEM_BILLING_ACCOUNT_ID),
-    governanceStatusPort.getScheduleStatus(),
+    governanceStatusPort.getUpcomingRuns({ limit: 3 }),
     governanceStatusPort.getRecentRuns({ limit: 10 }),
   ]);
 
   return {
     systemCredits: balance.toString(),
-    nextRunAt: nextRunAt?.toISOString() ?? null,
+    upcomingRuns: upcomingRuns.map((r) => ({
+      name: r.name,
+      nextRunAt: r.nextRunAt.toISOString(),
+    })),
     recentRuns: recentRuns.map((run) => ({
       id: run.id,
       title: run.title,

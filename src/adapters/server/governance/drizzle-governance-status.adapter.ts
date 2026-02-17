@@ -16,10 +16,11 @@
 
 import { withTenantScope } from "@cogni/db-client";
 import type { ActorId } from "@cogni/ids";
-import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import cronParser from "cron-parser";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { Database } from "@/adapters/server/db/client";
-import type { GovernanceRun, GovernanceStatusPort } from "@/ports";
+import type { GovernanceRun, GovernanceStatusPort, UpcomingRun } from "@/ports";
 import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@/shared/constants/system-tenant";
 import { aiThreads, schedules } from "@/shared/db/schema";
 
@@ -29,24 +30,38 @@ export class DrizzleGovernanceStatusAdapter implements GovernanceStatusPort {
     private readonly actorId: ActorId
   ) {}
 
-  async getScheduleStatus(): Promise<Date | null> {
-    // next_run_at is a cron-derived cache. Temporal is authoritative.
-    // Future: hydrate from ScheduleControlPort.describeSchedule() for precision.
+  async getUpcomingRuns(params: { limit: number }): Promise<UpcomingRun[]> {
+    // Compute next occurrence live from cron so results are always in the future.
+    // next_run_at in DB is a stale cache — not used here.
     return withTenantScope(this.db, this.actorId, async (tx) => {
-      const results = await tx
-        .select({ nextRunAt: schedules.nextRunAt })
+      const rows = await tx
+        .select({
+          cron: schedules.cron,
+          timezone: schedules.timezone,
+          temporalScheduleId: schedules.temporalScheduleId,
+        })
         .from(schedules)
         .where(
           and(
             eq(schedules.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID),
             eq(schedules.enabled, true),
-            isNotNull(schedules.nextRunAt)
+            isNotNull(schedules.temporalScheduleId)
           )
-        )
-        .orderBy(asc(schedules.nextRunAt))
-        .limit(1);
+        );
 
-      return results[0]?.nextRunAt ?? null;
+      const now = new Date();
+      return rows
+        .map((row) => {
+          const rawName = row.temporalScheduleId!.replace(/^governance:/, "");
+          const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+          const nextRunAt = cronParser
+            .parseExpression(row.cron, { currentDate: now, tz: row.timezone })
+            .next()
+            .toDate();
+          return { name, nextRunAt };
+        })
+        .sort((a, b) => a.nextRunAt.getTime() - b.nextRunAt.getTime())
+        .slice(0, params.limit);
     });
   }
 
