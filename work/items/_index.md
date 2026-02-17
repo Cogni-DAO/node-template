@@ -89,7 +89,7 @@
 | 1   | 2   | Done        | spike.0080 | Research current identity system + design minimal DID-first refactor                           | Decentralized Identity     | proj.decentralized-identity     |
 | 1   | 5   | Backlog     | story.0081 | Work receipts, transparency log, and deterministic epoch payouts                               | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1   | 2   | Done        | spike.0082 | Design transparency log storage, receipt signing, and distribution engine                      | Transparent Credit Payouts | proj.transparent-credit-payouts |
-| 0   | 2   | Todo        | task.0084  | Operator wallet generation + wiring into existing payment flow                                 | AI Operator Wallet         | proj.ai-operator-wallet         |
+| 0   | 2   | needs_implement | task.0084  | Operator wallet generation + wiring into existing payment flow                                 | AI Operator Wallet         | proj.ai-operator-wallet         |
 | 0   | 2   | Todo        | task.0085  | DAO treasury USDC forwarding from operator wallet                                              | AI Operator Wallet         | proj.ai-operator-wallet         |
 | 0   | 3   | Todo        | task.0086  | OpenRouter credit top-up via operator wallet                                                   | AI Operator Wallet         | proj.ai-operator-wallet         |
 | 2   | 3   | Todo        | task.0003  | Sweep stale doc references across the codebase                                                 | Maximize OSS Tools         | proj.maximize-oss-tools         |

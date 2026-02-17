@@ -10,7 +10,7 @@ read_when: Creating any doc or work item, understanding what goes where
 implements: proj.docs-system-infrastructure
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-09
+verified: 2026-02-18
 tags: [docs, work, meta]
 ---
 
