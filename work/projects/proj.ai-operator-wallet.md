@@ -32,9 +32,9 @@ Close the financial loop so every credit purchase automatically provisions OpenR
 
 | #   | Deliverable                         | Status      | Est | Work Item |
 | --- | ----------------------------------- | ----------- | --- | --------- |
-| 1   | Operator wallet generation + wiring | Not Started | 2   | —         |
-| 2   | DAO treasury forwarding             | Not Started | 2   | —         |
-| 3   | OpenRouter top-up integration       | Not Started | 3   | —         |
+| 1   | Operator wallet generation + wiring | Not Started | 2   | task.0084 |
+| 2   | DAO treasury forwarding             | Not Started | 2   | task.0085 |
+| 3   | OpenRouter top-up integration       | Not Started | 3   | task.0086 |
 
 **PR 1 — Operator wallet generation + wiring:**
 
