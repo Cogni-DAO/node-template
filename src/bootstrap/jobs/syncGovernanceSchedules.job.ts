@@ -6,7 +6,7 @@
  * Purpose: Job module that wires governance schedule sync to the application container.
  * Scope: Acquires advisory lock, resolves dependencies from container, and calls syncGovernanceSchedules. Does not contain business logic.
  * Invariants:
- *   - SINGLE_WRITER: pg_advisory_lock prevents concurrent sync runs
+ *   - SINGLE_WRITER: pg_advisory_lock on a reserved (pinned) pool connection prevents concurrent sync runs
  *   - GRANT_VIA_PORT: Uses ensureGrant on ExecutionGrantUserPort, no raw SQL
  *   - SYSTEM_PRINCIPAL: Grant created for COGNI_SYSTEM_PRINCIPAL_USER_ID
  * Side-effects: IO (database advisory lock, Temporal RPC, grant creation)

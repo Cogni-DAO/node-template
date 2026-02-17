@@ -4,8 +4,10 @@
 /**
  * Module: `@cogni/db-client/build-client`
  * Purpose: Shared Drizzle client constructor used by both app and service factories.
- * Scope: Internal — not exported from any package entrypoint. Does not handle connection pooling or env resolution.
- * Invariants: Connection string injected, never from process.env
+ * Scope: Internal — not exported from any package entrypoint. Does not handle env resolution.
+ * Invariants:
+ *   - Connection string injected, never from process.env
+ *   - Database type preserves drizzle's `$client` accessor for pool control (e.g. `reserve()`)
  * Side-effects: IO (database connections)
  * Links: docs/spec/database-rls.md
  * @internal
