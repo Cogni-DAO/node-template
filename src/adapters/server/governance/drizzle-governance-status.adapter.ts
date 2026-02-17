@@ -14,6 +14,8 @@
  * @public
  */
 
+import { withTenantScope } from "@cogni/db-client";
+import type { ActorId } from "@cogni/ids";
 import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { Database } from "@/adapters/server/db/client";
@@ -22,50 +24,57 @@ import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@/shared/constants/system-tenant
 import { aiThreads, schedules } from "@/shared/db/schema";
 
 export class DrizzleGovernanceStatusAdapter implements GovernanceStatusPort {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly actorId: ActorId
+  ) {}
 
   async getScheduleStatus(): Promise<Date | null> {
     // next_run_at is a cron-derived cache. Temporal is authoritative.
     // Future: hydrate from ScheduleControlPort.describeSchedule() for precision.
-    const results = await this.db
-      .select({ nextRunAt: schedules.nextRunAt })
-      .from(schedules)
-      .where(
-        and(
-          eq(schedules.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID),
-          eq(schedules.enabled, true),
-          isNotNull(schedules.nextRunAt)
+    return withTenantScope(this.db, this.actorId, async (tx) => {
+      const results = await tx
+        .select({ nextRunAt: schedules.nextRunAt })
+        .from(schedules)
+        .where(
+          and(
+            eq(schedules.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID),
+            eq(schedules.enabled, true),
+            isNotNull(schedules.nextRunAt)
+          )
         )
-      )
-      .orderBy(asc(schedules.nextRunAt))
-      .limit(1);
+        .orderBy(asc(schedules.nextRunAt))
+        .limit(1);
 
-    return results[0]?.nextRunAt ?? null;
+      return results[0]?.nextRunAt ?? null;
+    });
   }
 
   async getRecentRuns(params: { limit: number }): Promise<GovernanceRun[]> {
-    const threads = await this.db
-      .select({
-        stateKey: aiThreads.stateKey,
-        metadata: aiThreads.metadata,
-        createdAt: aiThreads.createdAt,
-        updatedAt: aiThreads.updatedAt,
-      })
-      .from(aiThreads)
-      .where(
-        and(
-          eq(aiThreads.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID),
-          isNull(aiThreads.deletedAt)
+    return withTenantScope(this.db, this.actorId, async (tx) => {
+      const threads = await tx
+        .select({
+          stateKey: aiThreads.stateKey,
+          metadata: aiThreads.metadata,
+          createdAt: aiThreads.createdAt,
+          updatedAt: aiThreads.updatedAt,
+        })
+        .from(aiThreads)
+        .where(
+          and(
+            eq(aiThreads.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID),
+            isNull(aiThreads.deletedAt)
+          )
         )
-      )
-      .orderBy(desc(aiThreads.updatedAt))
-      .limit(params.limit);
+        .orderBy(desc(aiThreads.updatedAt))
+        .limit(params.limit);
 
-    return threads.map((t) => ({
-      id: t.stateKey,
-      title: (t.metadata as { title?: string } | null)?.title ?? null,
-      startedAt: t.createdAt,
-      lastActivity: t.updatedAt,
-    }));
+      return threads.map((t) => ({
+        id: t.stateKey,
+        title: (t.metadata as { title?: string } | null)?.title ?? null,
+        startedAt: t.createdAt,
+        lastActivity: t.updatedAt,
+      }));
+    });
   }
 }
