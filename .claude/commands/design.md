@@ -65,6 +65,7 @@ Consider at least 2 approaches. Prefer the one with:
 ## Phase 4 — Document the Design
 
 **For Stories** (`type: story`):
+
 - Stories are intake records. Set `status: done`.
 - Create `task.*` items at `status: needs_implement` with your design insights.
 - If contract changes needed, write/update the spec first (see Phase 5).

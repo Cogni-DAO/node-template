@@ -79,7 +79,7 @@ _ENGINEERING-owned infrastructure. Feature delivery projects live in their respe
 | Resource               | Use                                | Where                                | /skill | Notes                    |
 | ---------------------- | ---------------------------------- | ------------------------------------ | ------ | ------------------------ |
 | Governance skills      | Charter-scoped governance runs     | `.openclaw/skills/gov-*`             |        | Trigger-routed execution |
-| Development skills     | Status-driven lifecycle commands    | `.claude/commands/`                  |        | `needs_*` → `/command`   |
+| Development skills     | Status-driven lifecycle commands   | `.claude/commands/`                  |        | `needs_*` → `/command`   |
 | Test infrastructure    | Mock-LLM, system integration tests | `tests/`, `docker-compose`           |        | Partial coverage         |
 | CI/CD pipelines        | GitHub Actions workflows           | `.github/workflows/`                 |        | App CI only; no gov CI   |
 | Specs and architecture | Technical contracts and boundaries | `docs/spec/`                         |        | Active specs enforce     |
