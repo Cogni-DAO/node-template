@@ -16,6 +16,7 @@
 | 0   | 3   | Done        | task.0046  | System tenant bootstrap + purchase-time revenue share                                          | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | task.0054  | Governance run foundation — repo-spec config + system tenant execution grant                   | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 1   | Done        | task.0052  | Get OpenClaw Grafana access — spend visibility for sandbox agents                              | Reliability & Uptime       | proj.reliability                |
+| 0   | 2   | Backlog     | bug.0088   | Gateway + subagent LLM calls invisible in /activity — billing callback can't resolve account   | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 3   | Todo        | task.0083  | Governance health brief endpoint — replace broken queries.sh with app-served health data       | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Todo        | task.0053  | Token + model optimization — stop 85K input token hemorrhage on Opus                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 2   | Backlog     | bug.0073   | Discord gateway receives zero dispatch events — MESSAGE_CREATE never delivered                 | Messenger Channels         | proj.messenger-channels         |
@@ -30,6 +31,7 @@
 | 0   | 2   | Done        | bug.0071   | Governance schedule sync skips config updates — Temporal schedules stuck with stale input      | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | bug.0072   | HTTP errors invisible in dashboards — no error rate metrics, agent reports 0 errors            | Reliability & Uptime       | proj.reliability                |
 | 0   | 2   | Done        | task.0070  | Governance credit health dashboard — prevent silent credit outages                             | System Tenant & Governance | proj.system-tenant-governance   |
+| 1   | 1   | Done        | bug.0087   | Governance runs invisible in Langfuse Sessions — missing sessionId on scheduled caller         | System Tenant & Governance | proj.system-tenant-governance   |
 | 1   | 3   | Todo        | story.0063 | Governance visibility dashboard — real-time AI council activity                                | System Tenant & Governance | proj.system-tenant-governance   |
 | 0   | 2   | Done        | bug.0027   | Gateway billing fails in production — Docker socket ENOENT crashes all OpenClaw runs           | Payments Enhancements      | proj.payments-enhancements      |
 | 0   | 2   | Backlog     | bug.0026   | Scheduler worker silently stops polling — schedules enabled but runs cease                     | Reliability & Uptime       | proj.reliability                |
