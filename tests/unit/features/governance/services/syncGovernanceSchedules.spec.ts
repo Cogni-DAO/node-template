@@ -24,6 +24,13 @@ import {
 } from "@/features/governance/services/syncGovernanceSchedules";
 import type { GovernanceConfig } from "@/shared/config";
 
+// Mock the default model selection to keep tests stable
+vi.mock("@/shared/config/litellmConfig", () => ({
+  getDefaultModelFromLiteLLMConfig: vi.fn().mockReturnValue("deepseek-v3.2"),
+}));
+
+import { getDefaultModelFromLiteLLMConfig } from "@/shared/config/litellmConfig";
+
 const GRANT_ID = "test-grant-id-001";
 const SYSTEM_USER_ID = "00000000-0000-4000-a000-000000000001";
 const MOCK_DB_SCHEDULE_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -125,6 +132,7 @@ describe("syncGovernanceSchedules", () => {
 
   beforeEach(() => {
     deps = makeMockDeps();
+    vi.mocked(getDefaultModelFromLiteLLMConfig).mockClear();
   });
 
   it("creates schedules for each charter in config", async () => {
@@ -410,6 +418,20 @@ describe("syncGovernanceSchedules", () => {
     expect(result.skipped).toEqual([]);
     expect(result.resumed).toEqual([]);
     expect(result.paused).toEqual([]);
+  });
+
+  it("uses default_flash model from LiteLLM config", async () => {
+    vi.mocked(getDefaultModelFromLiteLLMConfig).mockReturnValue("llama-3.3-70b");
+    const config = makeConfig([
+      { charter: "COMMUNITY", cron: "0 */6 * * *", entrypoint: "COMMUNITY" },
+    ]);
+    await syncGovernanceSchedules(config, deps);
+    expect(getDefaultModelFromLiteLLMConfig).toHaveBeenCalledWith('flash');
+    expect(deps.scheduleControl.createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: { message: "COMMUNITY", model: "llama-3.3-70b" },
+      })
+    );
   });
 });
 

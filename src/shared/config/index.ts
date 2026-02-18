@@ -18,3 +18,10 @@ export {
   getPaymentConfig,
   type InboundPaymentConfig,
 } from "./repoSpec.server";
+
+export {
+  getDefaultModelFromLiteLLMConfig,
+  LiteLLMConfigNotFoundError,
+  InvalidLiteLLMConfigError,
+  MissingDefaultModelError,
+} from "./litellmConfig";

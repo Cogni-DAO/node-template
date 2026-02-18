@@ -14,7 +14,8 @@
     "rootDir": "src",
     "baseUrl": ".",
     "paths": {
-      "@cogni/db-schema/*": ["../db-schema/src/*"]
+      "@cogni/db-schema/*": ["../db-schema/src/*"],
+      "@/shared/*": ["../../src/shared/*"]
     }
   },
   "include": ["src/**/*.ts"],

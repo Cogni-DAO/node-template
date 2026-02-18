@@ -30,12 +30,13 @@ import {
   type ScheduleDescription,
 } from "../ports/schedule-control.port";
 
+import { getDefaultModelFromLiteLLMConfig } from "@/shared/config/litellmConfig";
+
 /** Graph ID for OpenClaw sandbox execution */
 const GOVERNANCE_GRAPH_ID = "sandbox:openclaw";
 
 /** Default model for governance agent runs */
-// TODO(task.0068): Use default_flash from LiteLLM config metadata instead of hardcoded model
-const GOVERNANCE_MODEL = "deepseek-v3.2";
+const GOVERNANCE_MODEL = getDefaultModelFromLiteLLMConfig('flash');
 
 /** Minimal governance schedule shape (no @/ imports — pure type) */
 export interface GovernanceScheduleEntry {

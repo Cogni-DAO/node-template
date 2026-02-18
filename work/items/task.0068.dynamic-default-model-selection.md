@@ -2,20 +2,20 @@
 id: task.0068
 type: task
 title: Dynamic default model selection from LiteLLM config metadata
-status: needs_design
+status: needs_merge
 priority: 1
 estimate: 2
 summary: Replace hardcoded default model (gpt-4o-mini) with dynamic selection based on default_flash/default_thinking metadata in LiteLLM config
 outcome: Graph execution and governance schedules use metadata-driven default model selection
-spec_refs: []
+spec_refs: [docs/spec/dynamic-default-model-selection.md]
 assignees: []
 credit:
 project: proj.openclaw-capabilities
-branch:
+branch: feat/dynamic-default-model
 pr:
 reviewer:
 created: 2026-02-15
-updated: 2026-02-15
+updated: 2026-02-18
 labels: [ai, config, governance]
 external_refs:
 revision: 0
