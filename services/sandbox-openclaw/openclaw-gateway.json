@@ -208,9 +208,26 @@
         "subagents": {
           "allowAgents": ["*"]
         }
+      },
+      {
+        "id": "poet",
+        "name": "Poet",
+        "workspace": "/workspace/gateway/poet",
+        "model": { "primary": "cogni/gpt-4o-mini" },
+        "skills": [],
+        "tools": { "deny": ["*"] }
       }
     ]
   },
+  "bindings": [
+    {
+      "agentId": "poet",
+      "match": {
+        "channel": "discord",
+        "peer": { "kind": "channel", "id": "1473360872607973542" }
+      }
+    }
+  ],
   "skills": {
     "load": {
       "extraDirs": ["/repo/current/.openclaw/skills"]
