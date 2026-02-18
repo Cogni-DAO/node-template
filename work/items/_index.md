@@ -55,6 +55,8 @@
 | 1   | 22   | 3   | needs_triage   | story.0063 | Governance visibility dashboard — real-time AI council activity                                | System Tenant & Governance | proj.system-tenant-governance   |
 | 1   | 23   | 4   | needs_triage   | story.0079 | DID-first identity — decentralized member identifiers with verifiable account links            | Decentralized Identity     | proj.decentralized-identity     |
 | 1   | 24   | 5   | needs_triage   | story.0081 | Work receipts, transparency log, and deterministic epoch payouts                               | Transparent Credit Payouts | proj.transparent-credit-payouts |
+| 1   | 25   | 3   | needs_triage   | story.0089 | Integrate Lenzy for AI agent conversation analytics                | OpenClaw Capabilities | proj.openclaw-capabilities |
+| 1   | 26   | 1   | needs_research | spike.0090 | Research Lenzy SDK integration for AI agent conversation analytics | OpenClaw Capabilities | proj.openclaw-capabilities |
 | 2   | 1    | 1   | needs_triage   | bug.0050   | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0               |                            |                                 |
 | 2   | 2    | 1   | needs_design   | bug.0061   | UI balance display hides negative with $0 default                                              | Payments Enhancements      | proj.payments-enhancements      |
 | 2   | 3    | 1   | needs_triage   | bug.0012   | pre-commit check:docs validates all files, not just staged                                     |                            |                                 |
