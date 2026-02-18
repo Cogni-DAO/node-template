@@ -49,7 +49,7 @@
 | 1   | 16   | 3   | needs_design   | task.0009  | Sandbox repo refresh: on-demand git-sync for agent workspace                                   | Sandboxed Agents           | proj.sandboxed-agents           |
 | 1   | 17   | 2   | needs_design   | task.0043  | Wire Fumadocs docs site — render /docs and /work at /docs/\*                                   | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 1   | 18   | 2   | needs_design   | task.0047  | OpenClaw user context v0 — inject PII-safe identity into gateway agent messages                | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 1   | 19   | 2   | needs_triage   | task.0075  | Governance scheduled runs post status updates to Discord channel                               | Messenger Channels         | proj.messenger-channels         |
+| 1   | 19   | 2   | needs_design   | task.0075  | Governance scheduled runs post status updates to Discord channel                               | Messenger Channels         | proj.messenger-channels         |
 | 1   | 20   | 2   | needs_triage   | task.0076  | Dedicated Discord community agent — separate agent config with Discord-specific personality    | Messenger Channels         | proj.messenger-channels         |
 | 1   | 21   | 2   | needs_design   | task.0038  | Rename tests/integration → tests/component with dependency-class subdirs                       |                            |                                 |
 | 1   | 22   | 3   | needs_triage   | story.0063 | Governance visibility dashboard — real-time AI council activity                                | System Tenant & Governance | proj.system-tenant-governance   |

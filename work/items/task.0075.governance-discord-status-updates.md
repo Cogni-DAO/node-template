@@ -2,7 +2,7 @@
 id: task.0075
 type: task
 title: "Governance scheduled runs post status updates to #continuous-cogni-updates Discord channel"
-status: needs_triage
+status: needs_design
 priority: 1
 estimate: 2
 summary: Wire governance scheduled runs (already running via Temporal) to post a summary to a designated Discord channel after each run completes. OpenClaw's sendMessageDiscord() can target a channel by ID — need to plumb the channel target into the governance run output path.
@@ -16,7 +16,7 @@ branch:
 pr:
 reviewer:
 created: 2026-02-16
-updated: 2026-02-16
+updated: 2026-02-18
 labels: [governance, discord, openclaw, channels]
 external_refs:
 revision: 0
