@@ -30,7 +30,7 @@ Read these before starting:
    Then edit the copy:
    - `id: task.<num>` — must match filename prefix
    - `type: task`
-   - `status: Todo`
+   - `status: needs_implement`
    - `project: proj.*` — tasks should trace to a project
    - `spec_refs:` — spec IDs whose invariants govern this work
    - `created:` and `updated:` — today's date
@@ -43,7 +43,10 @@ Read these before starting:
 
 7. **Update project**: If the task maps to a roadmap deliverable, add the task ID to that row's Work Item column.
 
-8. **Validate**: Run `pnpm check:docs` and fix any errors.
+8. **Finalize**:
+   - Run `pnpm check:docs` and fix any errors until clean.
+   - Commit all changes (work item file, `_index.md`, project file) on the current branch.
+   - Push to remote.
 
 ## Rules
 

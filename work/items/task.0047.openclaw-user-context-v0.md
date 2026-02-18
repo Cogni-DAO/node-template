@@ -2,7 +2,7 @@
 id: task.0047
 type: task
 title: "OpenClaw user context v0 — inject PII-safe identity into gateway agent messages"
-status: Todo
+status: needs_design
 priority: 1
 estimate: 2
 summary: Prepend server-generated <user-context> block (opaque ID, trust tier, style, medium) to OpenClaw gateway agent messages
@@ -18,6 +18,10 @@ created: 2026-02-13
 updated: 2026-02-13
 labels: [openclaw, auth, identity]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 19
 ---
 
 # OpenClaw User Context v0

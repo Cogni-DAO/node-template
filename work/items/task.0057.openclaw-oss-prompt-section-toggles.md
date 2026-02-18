@@ -2,7 +2,7 @@
 id: task.0057
 type: task
 title: "OpenClaw OSS: per-section system prompt toggles + heartbeat guard"
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 2
 summary: "OpenClaw's buildAgentSystemPrompt() unconditionally injects Heartbeats, Silent Replies, CLI Quick Reference, Self-Update, Model Aliases, and Memory Recall sections into every main agent system prompt. No per-section config toggles exist — only promptMode (full/minimal/none) which is too coarse. Need upstream PR adding section-level config so deployments can opt out of irrelevant sections."
@@ -19,6 +19,10 @@ labels: [openclaw, oss, upstream, prompt, tokens]
 external_refs:
 assignees: derekg1729
 credit:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 15
 ---
 
 # task.0057 — OpenClaw OSS: per-section system prompt toggles

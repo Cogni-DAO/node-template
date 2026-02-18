@@ -2,7 +2,7 @@
 id: task.0076
 type: task
 title: "Dedicated Discord community agent — separate agent config with Discord-specific personality and skills"
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 2
 summary: Configure a dedicated OpenClaw agent for Discord community interactions, separate from the default gateway agent. Route all Discord channels to this agent via bindings. Give it a Discord-appropriate system prompt, skill set, and model budget.
@@ -19,6 +19,10 @@ created: 2026-02-16
 updated: 2026-02-16
 labels: [openclaw, discord, channels, agent-config]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 21
 ---
 
 # Dedicated Discord Community Agent

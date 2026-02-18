@@ -2,7 +2,7 @@
 id: task.0079
 type: task
 title: "Create bot-generated Discord invite link for website"
-status: Todo
+status: needs_design
 priority: 2
 estimate: 1
 summary: "Current Discord invite link (discord.gg/3b9sSyhZ4z) is tied to a personal user account, showing 'derekg1729 invited you'. Create a bot-generated invite link so the inviter is the Cogni bot instead of a personal account. Alternatively, set up a vanity URL (discord.gg/cogni) if the server reaches Boost Level 1."
@@ -15,6 +15,10 @@ branch:
 pr:
 created: 2026-02-17
 updated: 2026-02-17
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 14
 ---
 
 ## Context

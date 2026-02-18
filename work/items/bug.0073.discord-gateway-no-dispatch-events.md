@@ -2,7 +2,7 @@
 id: bug.0073
 type: bug
 title: Discord gateway receives zero dispatch events — MESSAGE_CREATE never delivered despite valid connection
-status: Done
+status: done
 priority: 0
 estimate: 2
 summary: Carbon GatewayPlugin connects to Discord and the bot logs in via REST, but no gateway dispatch events (MESSAGE_CREATE, GUILD_CREATE, etc.) are ever received. After ~12 minutes the WebSocket drops with code 1006 and enters a permanent 1005 resume loop.
@@ -19,6 +19,10 @@ created: 2026-02-16
 updated: 2026-02-16
 labels: [openclaw, discord, carbon, gateway]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 99
 ---
 
 # Discord Gateway Receives Zero Dispatch Events

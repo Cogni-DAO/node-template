@@ -2,7 +2,7 @@
 id: bug.0069
 type: bug
 title: Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite
-status: Backlog
+status: needs_triage
 priority: 1
 estimate: 2
 summary: The 5 stack tests that poll for async LiteLLM billing callbacks via waitForReceipts() pass in isolation but intermittently time out during full suite runs due to callback latency accumulation.
@@ -18,6 +18,10 @@ created: 2026-02-15
 updated: 2026-02-17
 labels: [testing, billing, flaky]
 external_refs:
+revision: 0
+blocked_by:
+deploy_verified: false
+rank: 5
 ---
 
 # Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite

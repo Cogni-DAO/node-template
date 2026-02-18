@@ -1,12 +1,12 @@
 ---
 id: operator-wallet
 type: spec
-title: "Operator Wallet: Lifecycle, Signing & Access Control"
+title: "Operator Wallet: Lifecycle, Custody & Access Control"
 status: draft
 spec_state: draft
 trust: draft
-summary: Server-side operator wallet for autonomous on-chain payments — deterministic keystore-based signing, intent-only API surface for workflows and UI, hot wallet safety constraints.
-read_when: Working on wallet generation, WalletSignerPort, operator key management, or UI-triggered on-chain actions.
+summary: Server-side operator wallet that receives user USDC payments and executes outbound transfers — Privy-managed custody with intent-only API surface, strict caps, and automatic sweep.
+read_when: Working on OperatorWalletPort, operator wallet provisioning, key management, or outbound payment flows.
 implements: proj.ai-operator-wallet
 owner: derekg1729
 created: 2026-02-17
@@ -14,9 +14,9 @@ verified:
 tags: [web3, wallet, security]
 ---
 
-# Operator Wallet: Lifecycle, Signing & Access Control
+# Operator Wallet: Lifecycle, Custody & Access Control
 
-> A server-side wallet the platform uses to sign on-chain transactions — workflows submit intents, the signing port executes them, and the UI can trigger actions without ever touching key material.
+> A server-side wallet that receives user USDC payments and executes outbound transfers — Privy-managed custody, workflows submit typed intents, no raw signing in the app. No generic signing surface.
 
 ### Key References
 
@@ -24,235 +24,266 @@ tags: [web3, wallet, security]
 | ------------ | ------------------------------------------------------------------------- | --------------------------------------- |
 | **Project**  | [proj.ai-operator-wallet](../../work/projects/proj.ai-operator-wallet.md) | Roadmap and planning                    |
 | **Research** | [AI Operator Wallet](../research/ai-operator-wallet-budgeted-spending.md) | Custody options evaluation              |
-| **Spec**     | [Web3 → OpenRouter Top-Up](./web3-openrouter-payments.md)                 | First consumer of this wallet           |
+| **Spec**     | [Web3 → OpenRouter Top-Up](./web3-openrouter-payments.md)                 | First outbound consumer of this wallet  |
 | **Spec**     | [DAO Enforcement](./dao-enforcement.md)                                   | Chain + address governance in repo-spec |
+| **Spec**     | [Payments Design](./payments-design.md)                                   | Inbound USDC payment flow               |
+
+## Requirements
+
+1. **No DAO signing keys in the app.** DAO = cold treasury receiver only.
+2. **No human governance/voting per purchase.** Payments must "just work" automatically.
+3. **Immediate OpenRouter top-up after user payment.** No manual refills in the loop.
+4. **No new smart contracts (for now).** Keep rails simple and ship fast.
+5. **Programmatic setup.** No copy/paste private keys; secrets injected into deploy secret store.
+6. **Chain-agnostic core.** Most logic should be ports, not Base/EVM-specific code.
+7. **Hardened enough for MVP.** Privy-managed wallet with strict caps + scoped methods + sweep.
 
 ## Design
+
+### Role: Inbound Receiver + Outbound Actuator
+
+The operator wallet serves two roles:
+
+1. **Inbound:** Receives user USDC payments (replaces direct-to-DAO-wallet flow). The existing payment verification pipeline works unchanged — `receiving_address` in repo-spec points to the operator wallet.
+2. **Outbound:** Executes two types of transfers after credit settlement:
+   - Sweep DAO's share (USDC) to treasury
+   - Top up OpenRouter credits (ETH via Coinbase Commerce swap)
 
 ### Architecture: Three Access Layers
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                     UI (browser)                         │
-│  Can: submit top-up request via API                      │
+│  Can: trigger payment (sends USDC to operator wallet)    │
 │  Cannot: see key material, sign directly, choose dest    │
 └────────────────────┬────────────────────────────────────┘
-                     │ POST /api/v1/operator/topup {amount}
+                     │ existing USDC transfer flow
                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │                  Workflow Layer                           │
-│  Can: call WalletSignerPort with typed intents           │
+│  Can: call OperatorWalletPort with typed intents         │
 │  Cannot: access raw key, construct arbitrary calldata    │
-│  Validates: intent params, amount caps, circuit breaker  │
+│  Validates: intent params, amount caps                   │
 └────────────────────┬────────────────────────────────────┘
-                     │ signTopUpTransaction(intent)
+                     │ sweepUsdcToTreasury(amount)
+                     │ fundOpenRouterTopUp(intent)
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│              WalletSignerPort (signing layer)             │
-│  Can: load keystore, sign whitelisted tx types            │
-│  Cannot: be called with arbitrary calldata                │
-│  Validates: contract allowlist, sender match, simulation  │
+│           OperatorWalletPort (custody layer)              │
+│  Can: submit whitelisted tx types via Privy API          │
+│  Cannot: be called with arbitrary calldata               │
+│  Validates: destination allowlist, sender match           │
 └────────────────────┬────────────────────────────────────┘
-                     │ broadcast
+                     │ Privy signs + broadcasts
                      ▼
                   Base (8453)
 ```
 
-The key principle: **callers submit intents, the signing port controls execution.** No layer above the signing port ever sees the private key or constructs raw transaction bytes.
+### Wallet Provisioning (DAO Setup)
 
-### Wallet Generation (DAO Formation Script)
-
-A standalone script run once during DAO setup. Not part of the runtime application.
+Wallet creation is programmatic via Privy API — no local key generation, no copy/paste secrets.
 
 ```
-scripts/generate-operator-wallet.ts
+Setup flow (run once during DAO formation):
 
-Input:
-  --passphrase-env  ENV_VAR_NAME   (reads passphrase from this env var, never from CLI arg)
-  --out-keystore    PATH           (where to write the encrypted keystore JSON)
-  --out-address     stdout         (prints the derived address for repo-spec)
-
-Output:
-  1. Encrypted keystore JSON file (AES-128-CTR + scrypt KDF)
-     - Same format as MetaMask/Geth (Web3 Secret Storage v3)
-     - ethers.Wallet.createRandom() → wallet.encrypt(passphrase)
-  2. Public address printed to stdout
-
-Post-generation (manual operator steps):
-  1. Store keystore file in deployment secret store
-  2. Store passphrase in deployment secret store
-  3. Add address to .cogni/repo-spec.yaml as operator_wallet
-  4. Fund the address with a small ETH balance on Base via DAO governance proposal
+1. Create Privy app → obtain App ID + App Secret
+2. Enable wallet policies:
+   - Only Base (chain_id 8453)
+   - Only allowed contracts (USDC, Coinbase Transfers)
+   - Per-tx caps
+3. Enable "Require signed requests" → obtain Signing Key
+4. Programmatically create operator wallet via Privy API
+   → Returns checksummed address (no private key ever leaves Privy)
+5. Inject deploy secrets into secret store (GitHub Secrets / Vercel env / etc.):
+   - PRIVY_APP_ID
+   - PRIVY_APP_SECRET
+   - PRIVY_SIGNING_KEY
+6. Update .cogni/repo-spec.yaml:
+   a. Set operator_wallet.address to the Privy-returned address
+   b. Set payments_in.credits_topup.receiving_address to the same address
+7. Fund the address with initial USDC + small ETH balance on Base
 ```
 
-The script is idempotent in the sense that running it again produces a _new_ keypair (not the same one). There is exactly one operator wallet per deployment. Key rotation means generating a new wallet and updating repo-spec via governance.
+No keystore files. No passphrases. No local key material. Privy holds the signing key in its HSM infrastructure.
 
-### Keystore Loading (Runtime)
+### OperatorWalletPort Interface
 
-The wallet is loaded once at application startup and cached in memory for the process lifetime.
+The port is a narrow, typed interface — a bounded payments actuator, not a generic signer.
 
 ```typescript
-// Env vars
-OPERATOR_KEYSTORE_PATH     // absolute path to keystore JSON file
-OPERATOR_WALLET_PASSPHRASE // scrypt passphrase — from deploy secret store only
-
-// Loading flow (startup)
-1. Read keystore JSON from OPERATOR_KEYSTORE_PATH
-2. Decrypt with OPERATOR_WALLET_PASSPHRASE → in-memory ethers.Wallet
-3. Verify derived address matches operator_wallet from repo-spec
-4. If mismatch → fail fast (wrong keystore for this deployment)
-5. Cache wallet instance — no re-reads during runtime
-```
-
-The passphrase is used once (decrypt), then the in-memory wallet holds the key for signing. The passphrase itself is not retained after decryption.
-
-### WalletSignerPort Interface
-
-The port is a narrow, typed interface — not a generic transaction signer.
-
-```typescript
-interface WalletSignerPort {
+interface OperatorWalletPort {
   /** Return the operator wallet's public address (checksummed) */
   getAddress(): string;
 
   /**
-   * Sign and broadcast a top-up transaction for the Coinbase Commerce protocol.
+   * Sweep USDC from operator wallet to DAO treasury.
+   * Destination is hardcoded from repo-spec — caller cannot control it.
+   *
+   * @param amountRaw - USDC amount in raw units (6 decimals)
+   * @param reference - Idempotency key (clientPaymentId)
+   * @returns txHash on successful broadcast
+   * @throws if balance insufficient or tx fails
+   */
+  sweepUsdcToTreasury(amountRaw: bigint, reference: string): Promise<string>;
+
+  /**
+   * Fund OpenRouter credits via Coinbase Commerce protocol.
    * Encodes swapAndTransferUniswapV3Native internally — caller cannot control calldata.
    *
    * @param intent - TransferIntent from OpenRouter's /api/v1/credits/coinbase
    * @returns txHash on successful broadcast
-   * @throws if simulation fails, contract not allowlisted, sender mismatch, or value exceeds cap
+   * @throws if contract not allowlisted, sender mismatch, or value exceeds cap
    */
-  signTopUpTransaction(intent: TransferIntent): Promise<string>;
+  fundOpenRouterTopUp(intent: TransferIntent): Promise<string>;
 }
 ```
 
-Future transaction types (e.g., ERC-20 approve, DAO proposal execution) get their own named methods on the port — never a generic `signTransaction(calldata)`.
+Future transaction types get their own named methods on the port — never a generic `signTransaction(calldata)`.
 
-### P0 Adapter: Encrypted Keystore
+### P0 Adapter: Privy Server Wallet
 
 ```typescript
-// src/adapters/server/wallet/keystore-signer.adapter.ts
+// src/adapters/server/wallet/privy-operator-wallet.adapter.ts
 
-class KeystoreSignerAdapter implements WalletSignerPort {
-  private wallet: ethers.Wallet; // loaded at construction
-  private publicClient: PublicClient; // viem client for simulation + broadcast
-  private operatorAddress: string; // from repo-spec, verified against keystore
+class PrivyOperatorWalletAdapter implements OperatorWalletPort {
+  private privyClient: PrivyClient; // @privy-io/server-auth SDK
+  private walletId: string; // Privy wallet ID (from provisioning)
+  private operatorAddress: string; // from repo-spec, verified at startup
+  private treasuryAddress: string; // cogni_dao.dao_contract from repo-spec
 
-  async signTopUpTransaction(intent: TransferIntent): Promise<string> {
+  async sweepUsdcToTreasury(
+    amountRaw: bigint,
+    reference: string
+  ): Promise<string> {
+    // 1. Encode ERC20 transfer(treasuryAddress, amountRaw) on USDC contract
+    // 2. Submit via Privy API (Privy handles signing + broadcast)
+    // 3. Return txHash
+  }
+
+  async fundOpenRouterTopUp(intent: TransferIntent): Promise<string> {
     // 1. Validate intent.metadata.sender === this.operatorAddress
     // 2. Validate intent.metadata.contract_address === TRANSFERS_CONTRACT
     // 3. Validate intent.metadata.chain_id === repo-spec chain_id
-    // 4. Encode: swapAndTransferUniswapV3Native(intent, 500)
-    // 5. Set value: recipient_amount + fee_amount + slippage buffer
-    // 6. simulateContract() — abort on revert
-    // 7. Sign + broadcast
-    // 8. Return txHash
+    // 4. Validate value <= OPERATOR_MAX_TOPUP_USD cap
+    // 5. Encode: swapAndTransferUniswapV3Native(intent, 500)
+    // 6. Submit via Privy API (Privy handles signing + broadcast)
+    // 7. Return txHash
   }
 }
 ```
 
-### Hot Wallet Safety
+### P1 Adapter (future): Keystore / Vault / KMS
 
-| Constraint               | Enforcement                                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Small balance**        | Operator wallet holds only enough ETH for near-term top-ups. DAO governance refills.                                                                               |
-| **Max per-tx**           | `OPERATOR_MAX_TOPUP_USD` env cap. Port rejects any intent exceeding this.                                                                                          |
-| **No drain path**        | Port only signs `swapAndTransferUniswapV3Native` to the allowlisted contract. No transfers to arbitrary addresses.                                                 |
-| **Address in repo-spec** | Operator wallet address is governance-in-git. Changing it requires a commit (auditable).                                                                           |
-| **Key ≠ AI**             | The service process owns the signing key. The AI (OpenClaw, governance agents) submits intents through the workflow layer. The AI never loads or accesses the key. |
+The `OperatorWalletPort` abstraction makes the custody backend swappable. If the project moves to OSS-only custody later, a `KeystoreOperatorWalletAdapter` can implement the same port using local encrypted keystores + viem for broadcast. The port surface stays identical.
 
-### UI Access (Future)
+### Custody Safety
 
-The UI triggers top-ups without key access:
+| Constraint                | Enforcement                                                                                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Typed intents only**    | Port exposes `sweepUsdcToTreasury` and `fundOpenRouterTopUp` — no generic signing method.                                                                   |
+| **Destination allowlist** | Treasury sweep goes to `dao_contract` from repo-spec. Top-up goes to Coinbase Transfers contract. No other destinations possible.                           |
+| **Max per-tx**            | `OPERATOR_MAX_TOPUP_USD` env cap for top-ups. Port rejects any intent exceeding this.                                                                       |
+| **Address in repo-spec**  | Operator wallet address is governance-in-git. Changing it requires a commit (auditable).                                                                    |
+| **Key ≠ App**             | Privy HSM holds the signing key. The app never loads or accesses raw key material.                                                                          |
+| **Key ≠ AI**              | The AI (OpenClaw, governance agents) submits intents through the workflow layer. The AI never accesses key material or Privy credentials.                   |
+| **Privy wallet policies** | Privy-side policies restrict chain, contracts, and caps — defense in depth on top of app-side validation.                                                   |
+| **Signed requests**       | All Privy API calls use "Require signed requests" — `PRIVY_SIGNING_KEY` authenticates the app to Privy. Leaked `APP_SECRET` alone cannot sign transactions. |
+| **Sweep to cold**         | DAO treasury is cold (DAO multisig). Operator wallet is hot but auto-sweeps surplus to treasury.                                                            |
 
+### repo-spec Configuration
+
+```yaml
+# .cogni/repo-spec.yaml additions
+
+operator_wallet:
+  address: "0x..." # checksummed, from Privy wallet creation API
+
+payments_in:
+  credits_topup:
+    receiving_address: "0x..." # same as operator_wallet.address
 ```
-Browser → POST /api/v1/operator/topup { amountUsd }
-  → Server: SIWE session auth (admin-only or DAO-governed)
-  → Server: validate amount ≤ OPERATOR_MAX_TOPUP_USD
-  → Server: create outbound_topups row (CHARGE_PENDING)
-  → Server: dispatch top-up workflow
-  → Response: { topupId, status: "CHARGE_PENDING" }
 
-Browser → GET /api/v1/operator/topup/:id
-  → Response: { status, txHash?, chargeId?, error? }
-```
-
-The UI can poll status but never signs or sees key material. Authorization for who can trigger top-ups is handled by session roles — initially admin-only, later DAO-governed.
+The `receiving_address` update is the only change to the existing payment flow. The on-chain verifier, payment intent creation, and credit settlement all work as-is.
 
 ### Key Rotation
 
 Key rotation creates a new wallet and decommissions the old one:
 
-1. Generate new keypair (`scripts/generate-operator-wallet.ts`)
-2. Update `operator_wallet` in `.cogni/repo-spec.yaml` (PR + governance approval)
+1. Create new wallet via Privy API (programmatic)
+2. Update `operator_wallet.address` and `receiving_address` in `.cogni/repo-spec.yaml` (PR + governance approval)
 3. Fund the new address (DAO governance proposal)
-4. Deploy with new keystore + passphrase
-5. Drain remaining ETH from old address to DAO treasury (manual, one-time)
-
-There is no automatic rotation. Rotation is a governance event triggered by: suspected compromise, periodic security policy, or infrastructure migration.
+4. Update deploy secrets with new Privy wallet ID
+5. Sweep remaining funds from old address to treasury via `sweepUsdcToTreasury`
 
 ## Goal
 
-Provide a secure, narrow signing capability for the platform's on-chain payments — wallet generated at DAO formation, loaded deterministically at runtime, accessible only through typed intent methods, and eventually triggerable from the UI without exposing key material.
+Provide a secure, narrow payments actuator for the platform's outbound on-chain payments — wallet provisioned programmatically via Privy, accessible only through typed intent methods. The same wallet receives inbound user payments, unifying inbound and outbound flows. No raw signing in the application.
 
 ## Non-Goals
 
+- Custom smart contracts (PaymentRouter, etc.) — plain EOA is sufficient for P0
 - Multi-wallet per service (single operator wallet for P0)
 - Account abstraction / ERC-4337 (plain EOA for P0)
-- HSM / Vault / KMS integration (encrypted keystore for P0; Vault is P1)
-- AI-initiated signing (AI submits intents; service signs)
+- Local keystore / HSM / Vault custody (Privy for P0; keystore adapter is P1 fallback)
+- AI-initiated signing (AI submits intents; service signs via Privy)
 - Automated key rotation
-- USDC spending (ETH only for P0 — OpenRouter accepts native ETH on Base)
+- Atomic on-chain split (app handles split in two separate transactions)
+- DAO voting per purchase (fully automatic)
 
 ## Invariants
 
-| Rule                         | Constraint                                                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| KEY_NEVER_LOGGED             | Private key and passphrase MUST NOT appear in logs, error messages, telemetry, or API responses.                   |
-| KEY_NEVER_IN_SOURCE          | Keystore file and passphrase MUST NOT be checked into source control.                                              |
-| PASSPHRASE_FROM_SECRET_STORE | `OPERATOR_WALLET_PASSPHRASE` MUST be sourced from the deployment's secret store, not `.env` files.                 |
-| ADDRESS_VERIFIED_AT_STARTUP  | Derived address from keystore MUST match `operator_wallet` from `.cogni/repo-spec.yaml`. Mismatch → fail fast.     |
-| NO_GENERIC_SIGNING           | `WalletSignerPort` MUST NOT expose a generic `signTransaction(calldata)` method. Each tx type gets a named method. |
-| CONTRACT_ALLOWLIST           | The signing adapter MUST reject any transaction where `to` is not in the hardcoded contract allowlist.             |
-| SIMULATE_BEFORE_SIGN         | Every transaction MUST pass `simulateContract()` before signing. Simulation failure → abort.                       |
-| INTENT_ONLY_CALLERS          | Workflow and UI layers submit typed intents. They MUST NOT construct calldata or access key material.              |
-| SINGLE_OPERATOR_WALLET       | Exactly one operator wallet per deployment. Address recorded in repo-spec (governance-in-git).                     |
+| Rule                        | Constraint                                                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| KEY_NEVER_IN_APP            | No raw private key material in the application process. Privy HSM holds the signing key.                                                         |
+| SECRETS_NEVER_IN_SOURCE     | `PRIVY_APP_SECRET`, `PRIVY_SIGNING_KEY` MUST NOT be checked into source control.                                                                 |
+| SECRETS_FROM_SECRET_STORE   | All Privy credentials MUST be sourced from the deployment's secret store, not `.env` files.                                                      |
+| ADDRESS_VERIFIED_AT_STARTUP | Privy-reported wallet address MUST match `operator_wallet.address` from `.cogni/repo-spec.yaml`. Mismatch → fail fast.                           |
+| NO_GENERIC_SIGNING          | `OperatorWalletPort` MUST NOT expose a generic `signTransaction(calldata)` method. Each tx type gets a named method.                             |
+| DESTINATION_ALLOWLIST       | The adapter MUST reject any transaction where `to` is not in the hardcoded allowlist (USDC contract for sweeps, Coinbase Transfers for top-ups). |
+| SIMULATE_BEFORE_BROADCAST   | Every transaction SHOULD be simulated before broadcast where the custody provider supports it.                                                   |
+| INTENT_ONLY_CALLERS         | Workflow and UI layers submit typed intents. They MUST NOT construct calldata or access Privy credentials.                                       |
+| SINGLE_OPERATOR_WALLET      | Exactly one operator wallet per deployment. Address recorded in repo-spec (governance-in-git).                                                   |
+| RECEIVING_ADDRESS_MATCH     | `payments_in.credits_topup.receiving_address` MUST equal `operator_wallet.address`. Startup validation.                                          |
+| PRIVY_SIGNED_REQUESTS       | All Privy API calls MUST use signed requests (`PRIVY_SIGNING_KEY`). App Secret alone is insufficient for signing.                                |
 
 ### Schema
 
-No new tables for the wallet itself. The `outbound_topups` table (see [web3-openrouter-payments spec](./web3-openrouter-payments.md)) tracks transaction state. The wallet is stateless infrastructure — a key and a signing function.
+No new tables for the wallet itself. Outbound transfer state is tracked in:
 
-**repo-spec.yaml addition:**
-
-```yaml
-operator_wallet:
-  address: "0x..." # checksummed, from generate-operator-wallet.ts output
-  chain_id: 8453 # must match cogni_dao.chain_id
-```
+- `outbound_transfers` — DAO treasury USDC sweep (new, see PR 2)
+- `outbound_topups` — OpenRouter top-ups (new, see [web3-openrouter-payments spec](./web3-openrouter-payments.md))
 
 ### File Pointers
 
-| File                                                    | Purpose                                                                          |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `scripts/generate-operator-wallet.ts`                   | One-time keypair generation (new)                                                |
-| `src/ports/wallet-signer.port.ts`                       | `WalletSignerPort` interface (new)                                               |
-| `src/adapters/server/wallet/keystore-signer.adapter.ts` | P0 adapter: encrypted keystore + viem (new)                                      |
-| `src/shared/web3/coinbase-transfers.ts`                 | Contract ABI, address, tx encoding (new)                                         |
-| `src/shared/config/repoSpec.server.ts`                  | `getOperatorWalletConfig()` from repo-spec                                       |
-| `.cogni/repo-spec.yaml`                                 | `operator_wallet.address` (governance-in-git)                                    |
-| `src/shared/env/server-env.ts`                          | `OPERATOR_KEYSTORE_PATH`, `OPERATOR_WALLET_PASSPHRASE`, `OPERATOR_MAX_TOPUP_USD` |
+| File                                                          | Purpose                                                 |
+| ------------------------------------------------------------- | ------------------------------------------------------- |
+| `scripts/provision-operator-wallet.ts`                        | Programmatic wallet creation via Privy API (new)        |
+| `src/ports/operator-wallet.port.ts`                           | `OperatorWalletPort` interface (new)                    |
+| `src/adapters/server/wallet/privy-operator-wallet.adapter.ts` | P0 adapter: Privy server wallet (new)                   |
+| `src/shared/config/repoSpec.server.ts`                        | `getOperatorWalletConfig()` from repo-spec              |
+| `.cogni/repo-spec.yaml`                                       | `operator_wallet.address` + `receiving_address`         |
+| `src/shared/env/server-env.ts`                                | `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_SIGNING_KEY` |
+
+### Env Vars
+
+| Variable                 | Required | Purpose                                          |
+| ------------------------ | -------- | ------------------------------------------------ |
+| `PRIVY_APP_ID`           | Yes\*    | Privy application identifier                     |
+| `PRIVY_APP_SECRET`       | Yes\*    | Privy application secret (API auth)              |
+| `PRIVY_SIGNING_KEY`      | Yes\*    | Privy signed-requests key (tx auth)              |
+| `OPERATOR_MAX_TOPUP_USD` | No       | Per-tx cap for OpenRouter top-ups (default: 500) |
+
+\*Required when operator wallet features are enabled. Optional in schema so existing deployments don't break.
 
 ## Open Questions
 
-- [ ] Should `operator_wallet.address` live in `.cogni/repo-spec.yaml` (governance-in-git, consistent with `receiving_address`) or remain env-only for P0?
+- [x] ~~Should the keystore be loaded lazily or eagerly?~~ N/A — Privy is API-based, no local loading.
 - [ ] What is the right hot wallet balance target? Enough for N top-ups? Need operational data on typical purchase frequency.
-- [ ] Should the UI top-up endpoint be admin-only (RBAC) or require a DAO vote? For P0 admin-only seems sufficient.
-- [ ] Should the keystore be loaded lazily (first signing call) or eagerly (startup)? Eager catches misconfig early but slows startup.
+- [ ] Privy wallet policies: exact allowlist configuration (which contracts, which function selectors) — define during provisioning.
 
 ## Related
 
-- [Web3 → OpenRouter Top-Up](./web3-openrouter-payments.md) — First consumer (payment math + state machine)
+- [Web3 → OpenRouter Top-Up](./web3-openrouter-payments.md) — Outbound top-up flow (payment math + state machine)
 - [Payments Design](./payments-design.md) — Inbound USDC payment flow
 - [DAO Enforcement](./dao-enforcement.md) — Governance-in-git rails
 - [proj.ai-operator-wallet](../../work/projects/proj.ai-operator-wallet.md) — Project roadmap
