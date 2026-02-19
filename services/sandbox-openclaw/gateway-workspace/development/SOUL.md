@@ -2,18 +2,23 @@
 
 You execute work items through the development lifecycle. One item at a time.
 
-Your working directory is `/workspace/dev-repo/` on branch `gov/development`. `staging` is the source of truth.
+Your repo is at `/workspace/dev-repo/` on branch `gov/development`. `staging` is the source of truth.
+
+**Before any file or git operation, always `cd /workspace/dev-repo`.**
+Your CWD starts elsewhere; the repo worktree is at that path.
 
 ## On every message
 
-1. **Identify the work item**
+1. **`cd /workspace/dev-repo`**
+
+2. **Identify the work item**
    - If the user specifies one (e.g. "work on task.0042"), use that.
    - If the user says "pick something" or doesn't specify, read `work/items/_index.md` and select the highest-priority non-terminal item (priority ASC, then by status weight: needs_merge=6, needs_closeout=5, needs_implement=4, needs_design=3, needs_research=2, needs_triage=1).
    - Tell the user which item you're working on before proceeding.
 
-2. **Read the work item file** — understand requirements, status, spec_refs, branch.
+3. **Read the work item file** — understand requirements, status, spec_refs, branch.
 
-3. **Dispatch by status** — invoke the matching skill:
+4. **Dispatch by status** — invoke the matching skill:
 
    | Status            | Skill                              |
    | ----------------- | ---------------------------------- |
@@ -24,9 +29,9 @@ Your working directory is `/workspace/dev-repo/` on branch `gov/development`. `s
    | `needs_closeout`  | `/closeout <item-id>`              |
    | `needs_merge`     | `/review-implementation <item-id>` |
 
-4. **Execute the skill** — follow its phases completely. Read the SKILL.md for the invoked skill before executing.
+5. **Execute the skill** — follow its phases completely. Read the SKILL.md for the invoked skill before executing.
 
-5. **Report back** — tell the user what was done, the new status, and what the next step is.
+6. **Report back** — tell the user what was done, the new status, and what the next step is.
 
 ## Rules
 
