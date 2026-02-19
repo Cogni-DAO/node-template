@@ -1,30 +1,30 @@
 ---
 id: bug.0088
 type: bug
-title: Subagent LLM calls invisible in /activity — child session missing outboundHeaders
-status: needs_triage
+title: "OpenClaw gateway LLM calls missing billing headers — Discord + subagent calls unbilled"
+status: needs_implement
 priority: 0
 estimate: 2
-summary: Spawned subagent LLM calls go through LiteLLM but billing ingest skips them because the child session has no outboundHeaders — billingAccountId cannot be resolved.
-outcome: Subagent LLM calls appear in /activity with correct model, tokens, and cost.
+summary: "OpenClaw gateway does not send x-litellm-end-user-id on LLM requests for Discord-initiated or subagent-spawned sessions. Billing ingest has no billingAccountId to resolve, so charge receipts are never written. V0 workaround: fall back to system account for unattributed calls."
+outcome: All gateway LLM calls produce charge receipts. Proper per-user attribution via task.0077.
 spec_refs: billing-ingest
 assignees: derekg1729
 credit:
 project:
-branch:
+branch: feat/poet
 pr:
 reviewer:
 created: 2026-02-17
-updated: 2026-02-17
-labels: [billing, openclaw, observability]
+updated: 2026-02-19
+labels: [billing, openclaw, observability, discord]
 external_refs:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 rank: 6
 ---
 
-# Subagent LLM calls invisible in /activity
+# OpenClaw gateway LLM calls missing billing headers
 
 ## Requirements
 
@@ -90,7 +90,30 @@ The child session starts with no outbound headers → its LLM requests have no `
 - OpenClaw `src/agents/tools/sessions-helpers.ts` — if helper needed to read parent session headers
 - `src/adapters/server/sandbox/openclaw-gateway-client.ts` — if Cogni-side changes needed
 
-## Plan
+## V0 Workaround (2026-02-19, feat/poet)
+
+Instead of silently skipping LLM calls with no billing account, the billing ingest route now falls back to `COGNI_SYSTEM_BILLING_ACCOUNT_ID`. This means **all** unattributed gateway calls (Discord messages, subagent spawns, any session without outbound headers) are charged to the system account.
+
+**What this fixes:**
+
+- Charge receipts are written for every successful LLM call — no more invisible spend
+- `/activity` shows system-account charges for gateway calls
+
+**What this does NOT fix:**
+
+- No per-user attribution — all Discord users land on one account
+- No per-subagent attribution — parent vs child calls are indistinguishable
+- Logs a `warn` on every unattributed call so we can track volume
+
+**Changed files:**
+
+- `src/app/api/internal/billing/ingest/route.ts` — system account fallback instead of skip
+- `tests/_fakes/ids.ts` — shared `SYSTEM_BILLING_ACCOUNT` fixture
+- `tests/contract/app/billing-ingest.contract.test.ts` — updated to expect fallback
+
+**Proper fix:** task.0077 (per-user Discord attribution) + OpenClaw outboundHeaders propagation for subagents.
+
+## Plan (proper fix — still needed)
 
 - [ ] In OpenClaw: read parent session's outboundHeaders in sessions-spawn-tool.ts
 - [ ] Propagate outboundHeaders to child session via sessions.patch before agent call

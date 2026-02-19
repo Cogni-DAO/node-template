@@ -31,6 +31,7 @@ import {
 } from "@/contracts/billing-ingest.internal.v1.contract";
 import { commitUsageFact } from "@/features/ai/public.server";
 import { isModelFreeFromCache } from "@/shared/ai/model-catalog.server";
+import { COGNI_SYSTEM_BILLING_ACCOUNT_ID } from "@/shared/constants/system-tenant";
 import { serverEnv } from "@/shared/env";
 import { billingInvariantViolationTotal } from "@/shared/observability/server/metrics";
 import type { RunContext } from "@/types/run-context";
@@ -268,15 +269,16 @@ export const POST = wrapRouteHandlerWithLogging(
         continue;
       }
 
-      // Resolve billing account
-      const billingAccountId = resolveBillingAccountId(entry);
-      if (!billingAccountId) {
-        skipped++;
+      // Resolve billing account; fall back to system account for unattributed calls
+      // (e.g. Discord → OpenClaw gateway → LiteLLM with no end-user header)
+      const resolvedBillingAccountId = resolveBillingAccountId(entry);
+      const billingAccountId =
+        resolvedBillingAccountId ?? COGNI_SYSTEM_BILLING_ACCOUNT_ID;
+      if (!resolvedBillingAccountId) {
         log.warn(
           { callId: entry.id },
-          "Billing ingest: cannot resolve billingAccountId — skipping"
+          "Billing ingest: no billingAccountId resolved — attributing to system account"
         );
-        continue;
       }
 
       // Look up billing account to get virtualKeyId and ownerUserId
