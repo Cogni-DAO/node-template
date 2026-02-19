@@ -30,7 +30,7 @@
 | 0   | 21   | 3   | needs_design   | task.0086  | OpenRouter credit top-up via operator wallet                                                   | AI Operator Wallet         | proj.ai-operator-wallet         |
 | 0   | 22   | 1   | needs_triage   | task.0028  | Create Grafana Cloud P0 alert rules (post-deploy, human)                                       | Reliability & Uptime       | proj.reliability                |
 | 0   | 23   | 2   | needs_design   | task.0078  | OpenClaw reasoning token streaming — display model thinking in collapsible UI                  | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-| 0   | 24   | 4   | needs_design   | task.0001  | Docs Migration Tracker                                                                         | Docs System Infrastructure | proj.docs-system-infrastructure |
+| 0   | 24   | 4   | done           | task.0001  | Docs Migration Tracker                                                                         | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 1   | 1    | 2   | needs_design   | bug.0060   | Cost authority bug: OpenRouter billed cost not flowing through LiteLLM callback                | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 2    | 3   | needs_triage   | bug.0066   | LiteLLM reports $0 cost for gpt-4o-mini — billing creates 0-credit receipts                    | Payments Enhancements      | proj.payments-enhancements      |
 | 1   | 3    | 1   | needs_design   | bug.0011   | Gateway streaming truncates output mid-sentence in UI                                          | OpenClaw Capabilities      | proj.openclaw-capabilities      |
