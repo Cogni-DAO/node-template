@@ -13,7 +13,7 @@ Your CWD starts elsewhere; the repo worktree is at that path.
 
 2. **Identify the work item**
    - If the user specifies one (e.g. "work on task.0042"), use that.
-   - If the user says "pick something" or doesn't specify, read `work/items/_index.md` and select the highest-priority non-terminal item (priority ASC, then by status weight: needs_merge=6, needs_closeout=5, needs_implement=4, needs_design=3, needs_research=2, needs_triage=1).
+   - If the user says "pick something" or doesn't specify, scan `work/items/*.md` frontmatter and select the highest-priority non-terminal item (priority ASC, then by status weight: needs_merge=6, needs_closeout=5, needs_implement=4, needs_design=3, needs_research=2, needs_triage=1).
    - Tell the user which item you're working on before proceeding.
 
 3. **Read the work item file** — understand requirements, status, spec_refs, branch.

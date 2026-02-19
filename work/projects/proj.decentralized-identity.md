@@ -6,11 +6,11 @@ title: Decentralized Identity — DID-First Members with Verifiable Credentials
 state: Active
 priority: 1
 estimate: 4
-summary: Replace wallet-address-as-identity with did:pkh canonical identifiers and represent account links as Verifiable Credentials, enabling federation without database integration.
-outcome: Members identified by DIDs internally, account links are portable VC artifacts, verification uses PEX semantics, and DID ops are behind a method-agnostic port.
+summary: Replace wallet-address-as-identity with subject DID (did:key) as canonical identifier; wallet did:pkh and external accounts are linked identifiers/VCs, enabling federation without database integration.
+outcome: Members identified by stable subject DIDs regardless of first auth method, wallet/Discord/GitHub are linked identifiers, account links are portable VC artifacts, verification uses PEX semantics, and DID ops are behind a method-agnostic port.
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-02-18
+updated: 2026-02-19
 labels: [identity, web3, ssi]
 ---
 
@@ -18,20 +18,18 @@ labels: [identity, web3, ssi]
 
 ## Goal
 
-Make Cogni's identity layer speak decentralized identity standards natively. Members are identified by `did:pkh` DIDs (derived from SIWE wallets), external account links (Discord, GitHub) are stored as Verifiable Credentials instead of ad-hoc rows, and proof requests use Presentation Exchange semantics. This preserves existing SIWE auth while enabling future federation — other nodes accept credentials rather than integrate our database schema.
+Make Cogni's identity layer speak decentralized identity standards natively. Every member gets a stable subject DID (`did:key`) at first contact — regardless of auth method. Wallet `did:pkh` is a linked identifier, not the subject itself, so Discord-first users work without placeholder hacks. External account links (Discord, GitHub) are stored as Verifiable Credentials, and proof requests use Presentation Exchange semantics. This preserves existing SIWE auth while enabling future federation.
 
 ## Roadmap
 
 ### Crawl (P0) — DID Foundation
 
-**Goal:** Ship `did:pkh` as canonical identifier with dual-write migration and session integration.
+**Goal:** Ship subject DID (`did:key`) as canonical identifier with `user_dids` linked-DID table and session integration.
 
-| Deliverable                                                      | Status      | Est | Work Item  |
-| ---------------------------------------------------------------- | ----------- | --- | ---------- |
-| Research spike: gap analysis + design doc                        | Done        | 2   | spike.0080 |
-| DID derivation utility + DB migration + backfill                 | Not Started | 2   | —          |
-| SessionUser DID integration (JWT, session types, auth callbacks) | Not Started | 1   | —          |
-| Switch internal reads to DID (RBAC actor type, user context)     | Not Started | 2   | —          |
+| Deliverable                                                    | Status      | Est | Work Item  |
+| -------------------------------------------------------------- | ----------- | --- | ---------- |
+| Research spike: gap analysis + design doc                      | Done        | 2   | spike.0080 |
+| Subject DID + linked DIDs — schema, derivation, session wiring | Not Started | 2   | task.0089  |
 
 ### Walk (P1) — Verifiable Credentials for Account Links
 
@@ -91,14 +89,36 @@ These existing specs reference wallet address as identity and will need updates 
 
 ## Design Notes
 
+### Identity Model (Revised Post-Spike)
+
+**Key insight (design review feedback):** `did:pkh` cannot be the canonical identity because it doesn't exist until a wallet is linked. Discord-first users would hit a dead-end. The clean fix:
+
+```
+Subject DID:   did:key:z...     ← minted once at first contact (stable, auth-method-agnostic)
+Linked DID(s): did:pkh:eip155:… ← added when SIWE wallet connects
+Discord/GitHub: VC claims        ← about the subject DID
+```
+
+**DB schema:**
+
+- `users.subject_did TEXT UNIQUE NOT NULL` — the canonical identifier
+- `user_dids(did PK, user_id FK, kind)` — linked DIDs (wallet, alias)
+- `users.id UUID PK` — stays as relational FK target (no FK migration)
+
 ### Standards Alignment (DIF/SSI)
 
 The project adopts four DIF primitives without inventing new protocols:
 
-1. **did:pkh** — deterministic DID from wallet chain + address. No registry needed.
-2. **Verifiable Credentials (VC data model)** — account links as signed, revocable credential artifacts.
-3. **Presentation Exchange (PEX)** — verifier expresses requirements as Presentation Definition; holder responds with Presentation Submission. Transport-agnostic.
-4. **DID Registration** — internal port for create/update/deactivate/resolve. Method-agnostic from day one.
+1. **did:key** — subject DID minted at first contact (ed25519). Stable, auth-method-agnostic.
+2. **did:pkh** — deterministic DID from wallet chain + address. Linked to subject, not the subject itself.
+3. **Verifiable Credentials (VC data model)** — account links as signed, revocable credential artifacts.
+4. **Presentation Exchange (PEX)** — verifier expresses requirements as Presentation Definition; holder responds with Presentation Submission. Transport-agnostic.
+5. **DID Registration** — internal port for create/update/deactivate/resolve. Method-agnostic from day one.
+
+### Critical Invariants (Added Post-Spike)
+
+- **I-SUBJECT-DID**: Every member has a subject DID (`did:key`) minted at first contact. Wallet `did:pkh` is a linked DID, not the subject.
+- **I-NO-AUTO-MERGE**: If a DID is already linked to a different subject, require explicit merge with proofs. Never silently re-point links. Prevents account-takeover and attribution corruption.
 
 ### What We Explicitly Defer
 
@@ -106,11 +126,12 @@ The project adopts four DIF primitives without inventing new protocols:
 - Trust registry machinery — issuer = "our system" until we actually federate
 - On-chain reputation/cred tokens — orthogonal to identity primitives
 
-### Key Design Decisions (Resolved — spike.0080)
+### Key Design Decisions (Resolved — spike.0080 + design review)
 
+- **Subject DID**: `did:key` from ed25519 keypair, minted once per user at creation. Auth-method-agnostic.
+- **Wallet DID**: `did:pkh` is a _linked_ identifier, not the subject. Stored in `user_dids` table.
 - **VC format**: JWT VC via `did-jwt-vc`. Simpler than JSON-LD, W3C-compliant, upgrade path exists.
-- **VC signing**: System-issued VCs use ES256K server-side signer (`did:key`). EIP-712 wallet signing deferred to P2+ (user-signed credentials).
-- **DID derivation**: Hand-rolled `walletToDid()` utility (string concat). `did-resolver` + `pkh-did-resolver` added at Phase 2.
+- **VC signing**: System-issued VCs use ES256K server-side signer (`did:key`). EIP-712 wallet signing deferred to P2+.
 - **Chain ID**: Read from SIWE message payload — never default to `1`.
-- **Migration strategy**: dual-write → switch reads → deprecate legacy (standard 3-phase).
+- **No auto-merge**: DB-level unique constraint on `user_dids.did` prevents silent re-pointing.
 - **Phase 2 scope**: VC tables/endpoints designed when account linking actually ships (proj.messenger-channels), not pre-designed.
