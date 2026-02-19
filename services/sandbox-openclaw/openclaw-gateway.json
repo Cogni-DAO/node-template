@@ -157,7 +157,7 @@
   },
   "agents": {
     "defaults": {
-      "model": { "primary": "cogni/deepseek-v3.2" },
+      "model": { "primary": "cogni/kimi-k2.5" },
       "thinkingDefault": "high",
       "subagents": {
         "model": "cogni/gpt-4o-mini",
@@ -228,9 +228,10 @@
         "id": "development",
         "name": "Development",
         "workspace": "/workspace/gateway/development",
-        "model": { "primary": "cogni/gpt-4o-mini" },
-        "skills": [],
-        "tools": { "deny": ["*"] }
+        "model": { "primary": "cogni/kimi-k2.5" },
+        "subagents": {
+          "allowAgents": ["*"]
+        }
       }
     ]
   },
