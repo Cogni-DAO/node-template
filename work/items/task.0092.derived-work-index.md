@@ -13,7 +13,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.docs-system-infrastructure
-branch: feat/subject-did-foundation
+branch: fix/derived-work-index
 pr:
 reviewer:
 revision: 0
