@@ -31,17 +31,19 @@ Make Cogni's identity layer speak decentralized identity standards natively. Eve
 | Research spike: gap analysis + design doc                      | Done        | 2   | spike.0080 |
 | Subject DID + linked DIDs — schema, derivation, session wiring | Not Started | 2   | task.0089  |
 
-### Walk (P1) — Verifiable Credentials for Account Links
+### Walk (P1) — Account Linking + Credit-Gated Billing
 
-**Goal:** Discord and GitHub account links are VC-shaped artifacts with issuance, evidence, and revocation. PEX verification interface exists.
+**Goal:** Discord users link to Cogni subject DIDs via VC-based account linking. Linked users pay from prepaid credits; unlinked users stay on system account with spend caps.
+
+**Prerequisite:** task.0077 (Discord attribution + spend guard) must ship first — it provides the `discord_user_id` in billing metadata that P1 maps to subject DIDs.
 
 | Deliverable                                                     | Status      | Est | Work Item            |
 | --------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Discord account linking (discord_user_id → subject_did via VC)  | Not Started | 3   | (create at P1 start) |
+| Credit-gated billing for linked Discord users                   | Not Started | 2   | (create at P1 start) |
 | VC data model for account link credentials (Discord, GitHub)    | Not Started | 2   | (create at P1 start) |
-| Credential issuance flow (Discord bot challenge, GitHub gist)   | Not Started | 3   | (create at P1 start) |
 | Credential revocation (append-only, status-based)               | Not Started | 2   | (create at P1 start) |
 | PEX verification interface (Presentation Definition/Submission) | Not Started | 2   | (create at P1 start) |
-| Identity event ledger (append-only state transitions)           | Not Started | 2   | (create at P1 start) |
 
 ### Run (P2+) — Federation Readiness
 
@@ -71,6 +73,7 @@ Make Cogni's identity layer speak decentralized identity standards natively. Eve
 - [ ] Existing SIWE auth stable (authentication spec — no breaking changes in flight)
 - [ ] RBAC actor type `user:{walletAddress}` migration coordinated (see rbac spec)
 - [ ] User context spec's `opaqueId` derivation aligned with DID (user-context spec)
+- [ ] task.0077 (Discord attribution + spend guard) — ships `discord_user_id` in billing metadata, which P1 maps to subject DIDs for credit-gated billing
 
 ## Impacted Specs (Must Update)
 
