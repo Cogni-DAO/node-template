@@ -38,15 +38,15 @@ const {
   },
 });
 
-// Proxy executeGraphActivity with longer timeout for LLM execution
-// LLM calls can take 30-120+ seconds depending on model and input size
+// Proxy executeGraphActivity with timeout exceeding the gateway agent limit.
+// maxRuntimeSec defaults to 600s (10m); add buffer for queue + jitter.
+// maximumAttempts: 1 because retrying while the first attempt is still
+// running causes a 409 idempotency collision — the run will succeed or
+// timeout on its own, and the idempotency key prevents duplicate work.
 const { executeGraphActivity } = proxyActivities<Activities>({
-  startToCloseTimeout: "5 minutes",
+  startToCloseTimeout: "15 minutes",
   retry: {
-    initialInterval: "1 second",
-    maximumInterval: "30 seconds",
-    backoffCoefficient: 2,
-    maximumAttempts: 3,
+    maximumAttempts: 1,
   },
 });
 
