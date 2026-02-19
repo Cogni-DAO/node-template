@@ -81,22 +81,7 @@ gates:
 # Cron Format syntax: https://crontab.guru/
 governance:
   schedules:
-    - charter: GOVERN
-      cron: "0 * * * *" # :00 — every hour (orchestrator)
+    - charter: HEARTBEAT
+      cron: "0 * * * *" # once per hour — git delta check + Discord status
       timezone: UTC
-      entrypoint: GOVERN
-
-    - charter: COMMUNITY
-      cron: "15 * * * *" # :15 — every hour
-      timezone: UTC
-      entrypoint: COMMUNITY
-
-    - charter: ENGINEERING
-      cron: "30 * * * *" # :30 — every hour
-      timezone: UTC
-      entrypoint: ENGINEERING
-
-    - charter: SUSTAINABILITY
-      cron: "45 * * * *" # :45 — every hour
-      timezone: UTC
-      entrypoint: SUSTAINABILITY
+      entrypoint: HEARTBEAT

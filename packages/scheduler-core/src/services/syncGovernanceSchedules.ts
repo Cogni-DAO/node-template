@@ -35,7 +35,7 @@ const GOVERNANCE_GRAPH_ID = "sandbox:openclaw";
 
 /** Default model for governance agent runs */
 // TODO(task.0068): Use default_flash from LiteLLM config metadata instead of hardcoded model
-const GOVERNANCE_MODEL = "deepseek-v3.2";
+const GOVERNANCE_MODEL = "kimi-k2.5";
 
 /** Minimal governance schedule shape (no @/ imports — pure type) */
 export interface GovernanceScheduleEntry {
@@ -88,6 +88,8 @@ export interface GovernanceScheduleSyncDeps {
   scheduleControl: ScheduleControlPort;
   /** Returns all Temporal schedule IDs with 'governance:' prefix */
   listGovernanceScheduleIds(): Promise<string[]>;
+  /** Disable a governance schedule (DB + Temporal) by its Temporal schedule ID */
+  disableSchedule(temporalScheduleId: string): Promise<void>;
   /** Structured logger */
   log: SyncLogger;
 }
@@ -252,6 +254,7 @@ export async function syncGovernanceSchedules(
     if (!configScheduleIds.has(existingId)) {
       try {
         await scheduleControl.pauseSchedule(existingId);
+        await deps.disableSchedule(existingId);
         result.paused.push(existingId);
         log.warn(
           { scheduleId: existingId },

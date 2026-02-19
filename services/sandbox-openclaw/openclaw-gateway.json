@@ -291,7 +291,6 @@
       "browser",
       "cron",
       "gateway",
-      "message",
       "nodes",
       "sessions_list",
       "sessions_history"
