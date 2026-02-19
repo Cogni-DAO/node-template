@@ -135,9 +135,7 @@ export function GovernanceView(): ReactElement {
                   key={run.name}
                   className="flex items-baseline justify-between gap-4"
                 >
-                  <span className="text-muted-foreground text-sm">
-                    {run.name}
-                  </span>
+                  <span className="text-muted-foreground">{run.name}</span>
                   <Countdown target={new Date(run.nextRunAt)} />
                 </li>
               ))}
@@ -252,9 +250,7 @@ function Countdown({ target }: { target: Date }) {
   }, [target]);
 
   if (secondsLeft === 0) {
-    return (
-      <span className="font-semibold text-muted-foreground text-sm">now</span>
-    );
+    return <span className="font-semibold text-muted-foreground">now</span>;
   }
 
   const h = Math.floor(secondsLeft / 3600);
@@ -262,7 +258,7 @@ function Countdown({ target }: { target: Date }) {
   const s = secondsLeft % 60;
 
   return (
-    <span className="font-semibold text-sm tabular-nums">
+    <span className="font-semibold tabular-nums">
       {h > 0 && (
         <>
           {h}
