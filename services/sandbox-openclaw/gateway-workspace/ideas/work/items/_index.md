@@ -7,13 +7,14 @@
 
 | Pri | Rank | Est | Status         | ID         | Title                                                                                          | Project                    | Project ID                      |
 | --- | ---- | --- | -------------- | ---------- | ---------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------- |
+| 1   | 99   | 2   | needs_triage   | story.0089 | Governance run status summaries in Discord                                                     | Messenger Channels         | proj.messenger-channels         |
+| 1   | 100  | 2   | needs_triage   | story.0090 | Governance run status updates via Discord channel                                              | Messenger Channels         | proj.messenger-channels         |
 | 0   | 1    | 2   | needs_design   | bug.0002   | P0 SECURITY: Deploy artifacts expose all secrets                                               | Docs System Infrastructure | proj.docs-system-infrastructure |
 | 0   | 2    | 2   | needs_design   | bug.0059   | Operator logs show only 'internal' — root cause dropped in LiteLLM adapter                     | Reliability & Uptime       | proj.reliability                |
 | 0   | 3    | 2   | needs_design   | bug.0062   | OpenClaw gateway: single webchat message triggers multi-call GOVERN loop (call storm)          | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 4    | 2   | needs_design   | bug.0037   | Gateway proxy billing records $0 cost — streaming header absent                                | Payments Enhancements      | proj.payments-enhancements      |
 | 0   | 5    | 3   | needs_design   | bug.0056   | Thread switch aborts in-flight stream — credits consumed, response lost to user                | Thread Persistence         | proj.thread-persistence         |
 | 0   | 6    | 2   | needs_triage   | bug.0088   | Subagent LLM calls invisible in /activity — child session missing outboundHeaders              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
-|     |      |     | needs_triage   | bug.0091   | OpenClaw workspace path ≠ git repo path causes agent CWD mismatch                              | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 7    | 1   | needs_triage   | bug.0067   | OpenClaw model allowlist blocks openrouter/auto — governance sessions.patch failures at 75%    | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 8    | 2   | needs_design   | task.0053  | Token + model optimization — stop 85K input token hemorrhage on Opus                           | OpenClaw Capabilities      | proj.openclaw-capabilities      |
 | 0   | 9    | 2   | needs_design   | task.0023  | Gateway agent workspace — dedicated context, SOUL.md, heartbeat fix                            | OpenClaw Capabilities      | proj.openclaw-capabilities      |

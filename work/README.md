@@ -142,9 +142,9 @@ external_refs:
 | `type`            | Yes         | task, bug, spike, story, subtask                                                                                   |
 | `title`           | Yes         | Human readable                                                                                                     |
 | `status`          | Yes         | needs_triage, needs_research, needs_design, needs_implement, needs_closeout, needs_merge, done, blocked, cancelled |
-| `priority`        | Yes         | 0-3                                                                                                                |
-| `rank`            | Yes         | Positive integer, 1 = highest within priority band (default: 99)                                                   |
-| `estimate`        | Yes         | 0-5                                                                                                                |
+| `priority`        | Yes\*       | 0-3 (\*optional when `needs_triage`)                                                                               |
+| `rank`            | Yes\*       | Positive integer, 1 = highest within priority band (\*optional when `needs_triage`, default: 99)                   |
+| `estimate`        | Yes\*       | 0-5 (\*optional when `needs_triage`)                                                                               |
 | `summary`         | Yes         | What needs to be done?                                                                                             |
 | `outcome`         | Yes         | What is the deliverable?                                                                                           |
 | `spec_refs`       | No          | Spec IDs (not paths)                                                                                               |
