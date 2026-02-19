@@ -235,6 +235,7 @@ model_list:
       provider_key: "openrouter"
 
 litellm_settings:
+  drop_params: true
   include_cost_in_streaming_usage: true
   success_callback: ["langfuse", "generic_api"]
   failure_callback: ["langfuse"]

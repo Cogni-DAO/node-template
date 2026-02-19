@@ -1,0 +1,5 @@
+**Intention gathered:** Create a Discord channel for posting governance run status updates. 
+
+**User benefitting:** Discord community members.
+
+**Success looks like:** Regular updates on governance runs are easily accessible to all community members.

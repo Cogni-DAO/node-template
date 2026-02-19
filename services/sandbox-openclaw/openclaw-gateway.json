@@ -216,6 +216,21 @@
         "model": { "primary": "cogni/gpt-4o-mini" },
         "skills": [],
         "tools": { "deny": ["*"] }
+      },
+      {
+        "id": "ideas",
+        "name": "Ideas",
+        "workspace": "/workspace/gateway/ideas",
+        "model": { "primary": "cogni/kimi-k2.5" },
+        "skills": []
+      },
+      {
+        "id": "development",
+        "name": "Development",
+        "workspace": "/workspace/gateway/development",
+        "model": { "primary": "cogni/gpt-4o-mini" },
+        "skills": [],
+        "tools": { "deny": ["*"] }
       }
     ]
   },
@@ -225,6 +240,20 @@
       "match": {
         "channel": "discord",
         "peer": { "kind": "channel", "id": "1473360872607973542" }
+      }
+    },
+    {
+      "agentId": "ideas",
+      "match": {
+        "channel": "discord",
+        "peer": { "kind": "channel", "id": "1473361193879208018" }
+      }
+    },
+    {
+      "agentId": "development",
+      "match": {
+        "channel": "discord",
+        "peer": { "kind": "channel", "id": "1473361390369771835" }
       }
     }
   ],
