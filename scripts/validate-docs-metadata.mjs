@@ -368,12 +368,20 @@ function validateItem(file, props, content, allIds, projectIds) {
       `invalid status: ${props.status} (expected: ${ITEM_STATUS.join("|")})`
     );
   }
-  if (props.priority !== undefined && !PRIORITY.includes(props.priority)) {
+  if (
+    props.priority !== undefined &&
+    props.priority !== null &&
+    !PRIORITY.includes(props.priority)
+  ) {
     errors.push(
       `invalid priority: ${props.priority} (expected: ${PRIORITY.join("|")})`
     );
   }
-  if (props.estimate !== undefined && !ESTIMATE.includes(props.estimate)) {
+  if (
+    props.estimate !== undefined &&
+    props.estimate !== null &&
+    !ESTIMATE.includes(props.estimate)
+  ) {
     errors.push(
       `invalid estimate: ${props.estimate} (expected: ${ESTIMATE.join("|")})`
     );
