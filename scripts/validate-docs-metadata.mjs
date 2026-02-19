@@ -348,8 +348,12 @@ function validateCharter(file, props, content, allIds) {
 function validateItem(file, props, content, allIds, projectIds) {
   const errors = [];
 
+  const TRIAGE_OPTIONAL = ["priority", "rank", "estimate"];
   for (const key of ITEM_REQUIRED) {
     if (props[key] === undefined || props[key] === null || props[key] === "") {
+      if (props.status === "needs_triage" && TRIAGE_OPTIONAL.includes(key)) {
+        continue;
+      }
       errors.push(`missing required key: ${key}`);
     }
   }
