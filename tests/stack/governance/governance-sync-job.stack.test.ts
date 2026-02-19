@@ -91,34 +91,21 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     expect(grants[0]?.scopes).toContain("graph:execute:sandbox:openclaw");
     expect(grants[0]?.revokedAt).toBeNull();
 
-    // Verify schedules were created in Temporal
+    // Verify schedule was created in Temporal (use getHandle directly —
+    // schedule.list() has eventual consistency and may lag after create)
     const client = await getTestTemporalClient();
-    const governanceSchedules: string[] = [];
-
-    for await (const summary of client.schedule.list()) {
-      if (summary.scheduleId.startsWith("governance:")) {
-        governanceSchedules.push(summary.scheduleId);
-        createdScheduleIds.push(summary.scheduleId);
-      }
-    }
-
-    // Should match repo-spec.yaml governance.schedules (4 charters: COMMUNITY, ENGINEERING, SUSTAINABILITY, GOVERN)
-    expect(governanceSchedules).toHaveLength(4);
-    expect(governanceSchedules).toContain("governance:community");
-    expect(governanceSchedules).toContain("governance:engineering");
-    expect(governanceSchedules).toContain("governance:sustainability");
-    expect(governanceSchedules).toContain("governance:govern");
+    const handle = client.schedule.getHandle("governance:heartbeat");
+    const rawDesc = await handle.describe();
+    expect(rawDesc).toBeDefined();
+    createdScheduleIds.push("governance:heartbeat");
 
     // Verify schedule details using adapter
-    const desc = await adapter.describeSchedule("governance:community");
+    const desc = await adapter.describeSchedule("governance:heartbeat");
     expect(desc).toBeDefined();
     expect(desc?.isPaused).toBe(false);
     expect(desc?.nextRunAtIso).toBeDefined();
 
     // Verify raw Temporal schedule has correct policies (flat structure, not nested)
-    const handle = client.schedule.getHandle("governance:community");
-    const rawDesc = await handle.describe();
-
     expect(rawDesc.spec.timezone).toBe("UTC");
     expect(rawDesc.policies.overlap).toBe("SKIP");
     // Note: catchupWindow defaults to 1 year (31536000000ms) - tracked as separate issue
@@ -158,7 +145,7 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     expect(grantsAfterSecond).toHaveLength(1);
     expect(grantsAfterSecond[0]?.id).toBe(firstGrantId);
 
-    // Schedules should still be 4 (not duplicated)
+    // Schedules should still be 1 (not duplicated)
     const schedulesAfterSecond: string[] = [];
     for await (const summary of client.schedule.list()) {
       if (summary.scheduleId.startsWith("governance:")) {
@@ -166,7 +153,7 @@ describe("Governance Schedule Sync Job (Stack)", () => {
       }
     }
 
-    expect(schedulesAfterSecond).toHaveLength(4);
+    expect(schedulesAfterSecond).toHaveLength(1);
   });
 
   it("pauses schedules removed from config", async () => {
@@ -201,7 +188,7 @@ describe("Governance Schedule Sync Job (Stack)", () => {
 
   it("executes a governance schedule end-to-end", async () => {
     await runGovernanceSchedulesSyncJob();
-    const temporalScheduleId = "governance:govern";
+    const temporalScheduleId = "governance:heartbeat";
     createdScheduleIds.push(temporalScheduleId);
 
     const before = await getExecutionRequestsByPrefix(`${temporalScheduleId}:`);
@@ -256,7 +243,7 @@ describe("Governance Schedule Sync Job (Stack)", () => {
       .update(
         JSON.stringify({
           graphId: "sandbox:openclaw",
-          input: { message: "GOVERN", model: "deepseek-v3.2" },
+          input: { message: "HEARTBEAT", model: "kimi-k2.5" },
         }),
         "utf8"
       )
