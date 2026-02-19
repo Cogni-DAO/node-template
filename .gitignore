@@ -98,3 +98,7 @@ id_*
 platform/infra/providers/cherry/base/keys/*
 !platform/infra/providers/cherry/base/keys/*.pub
 services/*/dist
+
+# Generated work index (derived from frontmatter — never hand-edit)
+work/items/_index.md
+services/sandbox-openclaw/gateway-workspace/ideas/work/items/_index.md
