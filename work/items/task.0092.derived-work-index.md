@@ -14,7 +14,7 @@ assignees: derekg1729
 credit:
 project: proj.docs-system-infrastructure
 branch: fix/derived-work-index
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/448
 reviewer:
 revision: 0
 blocked_by:
