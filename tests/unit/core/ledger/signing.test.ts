@@ -87,6 +87,24 @@ describe("core/ledger/signing", () => {
       });
       expect(msgAuthor).not.toBe(msgReviewer);
     });
+
+    it("throws if any field contains a newline", () => {
+      expect(() =>
+        buildReceiptMessage(defaultContext, {
+          ...defaultFields,
+          artifactRef: "https://example.com\nevil-line",
+        })
+      ).toThrow(/must not contain newlines/);
+    });
+
+    it("throws if context field contains a newline", () => {
+      expect(() =>
+        buildReceiptMessage(
+          { ...defaultContext, appDomain: "bad\ndomain" },
+          defaultFields
+        )
+      ).toThrow(/must not contain newlines/);
+    });
   });
 
   describe("hashReceiptMessage", () => {

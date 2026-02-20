@@ -40,6 +40,15 @@ export function computePayouts(
     return [];
   }
 
+  // Guard: reject negative valuationUnits (append-only tables can't be fixed later)
+  for (const receipt of receipts) {
+    if (receipt.valuationUnits < 0n) {
+      throw new RangeError(
+        `Negative valuationUnits for user ${receipt.userId}: ${receipt.valuationUnits}`
+      );
+    }
+  }
+
   // Step 1: Group by userId, sum units
   const userUnits = new Map<string, bigint>();
   for (const receipt of receipts) {

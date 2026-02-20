@@ -63,19 +63,19 @@ external_refs:
 
 ## Plan
 
-- [ ] Define 6 tables in `packages/db-schema/src/ledger.ts` following `billing.ts` patterns (BIGINT, CHECK constraints, indexes, no RLS)
-- [ ] Add `export * from "./ledger"` to `packages/db-schema/src/index.ts`
-- [ ] Generate Drizzle migration: `pnpm --filter @cogni/db-schema drizzle-kit generate`
-- [ ] Add custom SQL to migration for append-only triggers on `work_receipts`, `receipt_events`, and `epoch_pool_components`
-- [ ] Add UNIQUE(epoch_id, component_id) constraint on `epoch_pool_components` (POOL_UNIQUE_PER_TYPE)
-- [ ] Create `packages/ledger-core/` package with `package.json`, `tsconfig.json`, `tsup.config.ts`
-- [ ] Create `packages/ledger-core/src/model.ts` — types and enums
-- [ ] Create `packages/ledger-core/src/errors.ts` — domain errors with type guards
-- [ ] Create `packages/ledger-core/src/rules.ts` — `computePayouts()` with BIGINT largest-remainder
-- [ ] Create `packages/ledger-core/src/signing.ts` — canonical message builder + SHA-256 hashing
-- [ ] Create `packages/ledger-core/src/index.ts` barrel export
-- [ ] Create `src/core/ledger/public.ts` re-exporting from `@cogni/ledger-core`, update `src/core/public.ts`
-- [ ] Write unit tests for payout math and signing in `tests/unit/core/ledger/`
+- [x] Define 6 tables in `packages/db-schema/src/ledger.ts` following `billing.ts` patterns (BIGINT, CHECK constraints, indexes, no RLS)
+- [x] Add `export * from "./ledger"` to `packages/db-schema/src/index.ts`
+- [x] Generate Drizzle migration: `pnpm --filter @cogni/db-schema drizzle-kit generate`
+- [x] Add custom SQL to migration for append-only triggers on `work_receipts`, `receipt_events`, and `epoch_pool_components`
+- [x] Add UNIQUE(epoch_id, component_id) constraint on `epoch_pool_components` (POOL_UNIQUE_PER_TYPE)
+- [x] Create `packages/ledger-core/` package with `package.json`, `tsconfig.json`, `tsup.config.ts`
+- [x] Create `packages/ledger-core/src/model.ts` — types and enums
+- [x] Create `packages/ledger-core/src/errors.ts` — domain errors with type guards
+- [x] Create `packages/ledger-core/src/rules.ts` — `computePayouts()` with BIGINT largest-remainder
+- [x] Create `packages/ledger-core/src/signing.ts` — canonical message builder + SHA-256 hashing
+- [x] Create `packages/ledger-core/src/index.ts` barrel export
+- [x] Create `src/core/ledger/public.ts` re-exporting from `@cogni/ledger-core`, update `src/core/public.ts`
+- [x] Write unit tests for payout math and signing in `tests/unit/core/ledger/`
 
 ## Validation
 
@@ -91,8 +91,8 @@ pnpm test tests/unit/core/ledger/
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0093` linked in PR body
-- [ ] **Spec:** RECEIPTS_IMMUTABLE, EVENTS_APPEND_ONLY, POOL_IMMUTABLE, POOL_UNIQUE_PER_TYPE, ONE_OPEN_EPOCH, IDEMPOTENT_RECEIPTS, ALL_MATH_BIGINT, SIGNATURE_DOMAIN_BOUND, ISSUER_AUTHORIZED, ADDRESS_NORMALIZED upheld
-- [ ] **Tests:** payout math edge cases, signing determinism, largest-remainder correctness
+- [x] **Spec:** RECEIPTS_IMMUTABLE, EVENTS_APPEND_ONLY, POOL_IMMUTABLE, POOL_UNIQUE_PER_TYPE, ONE_OPEN_EPOCH, IDEMPOTENT_RECEIPTS, ALL_MATH_BIGINT, SIGNATURE_DOMAIN_BOUND, ISSUER_AUTHORIZED, ADDRESS_NORMALIZED upheld
+- [x] **Tests:** payout math edge cases, signing determinism, largest-remainder correctness
 - [ ] **Reviewer:** assigned and approved
 
 ## Review Feedback

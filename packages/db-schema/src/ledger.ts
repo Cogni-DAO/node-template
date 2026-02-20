@@ -117,6 +117,10 @@ export const workReceipts = pgTable(
       "work_receipts_role_check",
       sql`${table.role} IN ('author', 'reviewer', 'approver')`
     ),
+    check(
+      "work_receipts_valuation_units_nonneg",
+      sql`${table.valuationUnits} >= 0`
+    ),
     uniqueIndex("work_receipts_idempotency_key_unique").on(
       table.idempotencyKey
     ),

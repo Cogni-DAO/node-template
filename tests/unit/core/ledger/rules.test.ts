@@ -199,5 +199,13 @@ describe("core/ledger/rules", () => {
       expect(result[1]?.userId).toBe("user-b");
       expect(result[1]?.amountCredits).toBe(7n);
     });
+
+    it("throws on negative valuationUnits", () => {
+      const receipts: ApprovedReceipt[] = [
+        { userId: "user-a", valuationUnits: 10n },
+        { userId: "user-b", valuationUnits: -5n },
+      ];
+      expect(() => computePayouts(receipts, 100n)).toThrow(RangeError);
+    });
   });
 });

@@ -33,6 +33,28 @@ export function buildReceiptMessage(
   context: SigningContext,
   fields: ReceiptMessageFields
 ): string {
+  // Validate no newlines in any field — newlines are line delimiters in the
+  // canonical format and would create ambiguous / colliding messages.
+  const allValues: Record<string, string> = {
+    "context.chainId": context.chainId,
+    "context.appDomain": context.appDomain,
+    "context.specVersion": context.specVersion,
+    "fields.epochId": fields.epochId,
+    "fields.userId": fields.userId,
+    "fields.workItemId": fields.workItemId,
+    "fields.role": fields.role,
+    "fields.valuationUnits": fields.valuationUnits,
+    "fields.artifactRef": fields.artifactRef,
+    "fields.rationaleRef": fields.rationaleRef,
+  };
+  for (const [name, value] of Object.entries(allValues)) {
+    if (value.includes("\n")) {
+      throw new Error(
+        `Receipt message field ${name} must not contain newlines`
+      );
+    }
+  }
+
   return [
     `${context.appDomain}:${context.specVersion}:${context.chainId}`,
     `epoch:${fields.epochId}`,
