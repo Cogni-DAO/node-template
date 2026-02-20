@@ -31,17 +31,17 @@ external_refs:
 - 5 workflows in `services/scheduler-worker/src/workflows/`:
   - `open-epoch.workflow.ts` — validates `can_close_epoch`, checks ONE_OPEN_EPOCH, inserts epoch with pinned policy
   - `issue-receipt.workflow.ts` — validates `can_issue`, verifies open epoch, verifies EIP-191 signature (SIGNATURE_DOMAIN_BOUND), inserts receipt + `proposed` event (IDEMPOTENT_RECEIPTS)
-  - `receipt-event.workflow.ts` — validates `can_approve`, inserts approve/revoke event
+  - `receipt-event.workflow.ts` — validates `can_approve`, inserts approve/revoke event (LATEST_EVENT_WINS — no transition guards)
   - `record-pool-component.workflow.ts` — validates `can_close_epoch`, verifies open epoch, inserts pool component
   - `close-epoch.workflow.ts` — validates `can_close_epoch`, checks EPOCH_CLOSE_IDEMPOTENT, verifies POOL_REQUIRES_BASE, reads pool components + approved receipts, computes payouts via `computePayouts()`, inserts statement atomically
 - Deterministic workflow IDs per spec:
   - `ledger-open-epoch-{policyCommitSha}`
   - `ledger-receipt-{idempotencyKey}`
-  - `ledger-event-{receiptId}-{eventType}-{timestamp}`
+  - `ledger-event-{receiptId}-{eventType}` (idempotent per receipt + event type)
   - `ledger-pool-{epochId}-{componentId}`
   - `ledger-close-{epochId}`
 - Activity functions in `services/scheduler-worker/src/activities/ledger.ts` following `createActivities(deps)` pattern
-- Activities use `LedgerStore` from `@cogni/db-client` + core domain functions from `src/core/ledger/`
+- Activities import pure domain logic from `@cogni/ledger-core` (never from `src/`) and DB operations from `@cogni/db-client` (`DrizzleLedgerWorkerAdapter`)
 - Signature verification via `viem.verifyMessage()` in the issue-receipt activity
 - Register workflows + activities in the scheduler-worker's Temporal worker
 

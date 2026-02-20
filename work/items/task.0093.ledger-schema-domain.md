@@ -39,12 +39,15 @@ external_refs:
 - Index on `receipt_events(receipt_id, created_at DESC)` for latest-event-per-receipt queries
 - `ledger_issuers` has boolean role columns: `can_issue`, `can_approve`, `can_close_epoch` (ISSUER_AUTHORIZED)
 - Custom SQL migration with DB triggers rejecting UPDATE/DELETE on `work_receipts` (RECEIPTS_IMMUTABLE), `receipt_events` (EVENTS_APPEND_ONLY), and `epoch_pool_components` (POOL_IMMUTABLE)
-- Core domain at `src/core/ledger/`:
+- Pure domain logic in `packages/ledger-core/src/` (shared between app and `scheduler-worker` — worker cannot import from `src/`):
   - `model.ts` — receipt, epoch, pool component, payout statement types; role/event enums
   - `rules.ts` — `computePayouts(receipts, poolTotal)` with BIGINT arithmetic + largest-remainder rounding (ALL_MATH_BIGINT)
   - `signing.ts` — `buildReceiptMessage(fields)` returns the canonical domain-bound string per SIGNATURE_DOMAIN_BOUND; `hashReceiptMessage(msg)` returns SHA-256; `computeReceiptSetHash(receipts)` for epoch close
   - `errors.ts` — domain error classes (EpochNotOpenError, ReceiptSignatureInvalidError, IssuerNotAuthorizedError, EpochAlreadyClosedError, PoolComponentMissingError)
-  - `public.ts` — barrel export
+  - `index.ts` — barrel export
+- `src/core/ledger/public.ts` — re-exports from `@cogni/ledger-core` so app code uses `@/core/ledger` unchanged
+- All Ethereum addresses normalized to EIP-55 checksummed format on write (ADDRESS_CHECKSUMMED)
+- UNIQUE(epoch_id, component_id) on `epoch_pool_components` (POOL_UNIQUE_PER_TYPE)
 - Unit tests for payout math: edge cases (1 recipient, many recipients, zero units, exact division, remainder distribution)
 - Unit tests for signing: canonical message format, hash determinism
 
@@ -53,9 +56,10 @@ external_refs:
 - `packages/db-schema/src/ledger.ts` (new)
 - `packages/db-schema/src/index.ts` (add barrel export)
 - `packages/db-schema/drizzle/migrations/` (new migration)
-- `src/core/ledger/` (new directory: model.ts, rules.ts, signing.ts, errors.ts, public.ts)
+- `packages/ledger-core/` (new package: model.ts, rules.ts, signing.ts, errors.ts, index.ts, package.json, tsconfig.json)
+- `src/core/ledger/public.ts` (re-export from `@cogni/ledger-core`)
 - `src/core/public.ts` (add ledger re-export)
-- `tests/unit/core/ledger/` (new test files)
+- `tests/unit/core/ledger/` (new test files — tests import from `@cogni/ledger-core`)
 
 ## Plan
 
@@ -63,11 +67,14 @@ external_refs:
 - [ ] Add `export * from "./ledger"` to `packages/db-schema/src/index.ts`
 - [ ] Generate Drizzle migration: `pnpm --filter @cogni/db-schema drizzle-kit generate`
 - [ ] Add custom SQL to migration for append-only triggers on `work_receipts`, `receipt_events`, and `epoch_pool_components`
-- [ ] Create `src/core/ledger/model.ts` — types and enums
-- [ ] Create `src/core/ledger/errors.ts` — domain errors with type guards
-- [ ] Create `src/core/ledger/rules.ts` — `computePayouts()` with BIGINT largest-remainder
-- [ ] Create `src/core/ledger/signing.ts` — canonical message builder + SHA-256 hashing
-- [ ] Create `src/core/ledger/public.ts` barrel, update `src/core/public.ts`
+- [ ] Add UNIQUE(epoch_id, component_id) constraint on `epoch_pool_components` (POOL_UNIQUE_PER_TYPE)
+- [ ] Create `packages/ledger-core/` package with `package.json`, `tsconfig.json`, `tsup.config.ts`
+- [ ] Create `packages/ledger-core/src/model.ts` — types and enums
+- [ ] Create `packages/ledger-core/src/errors.ts` — domain errors with type guards
+- [ ] Create `packages/ledger-core/src/rules.ts` — `computePayouts()` with BIGINT largest-remainder
+- [ ] Create `packages/ledger-core/src/signing.ts` — canonical message builder + SHA-256 hashing + address checksumming (ADDRESS_CHECKSUMMED)
+- [ ] Create `packages/ledger-core/src/index.ts` barrel export
+- [ ] Create `src/core/ledger/public.ts` re-exporting from `@cogni/ledger-core`, update `src/core/public.ts`
 - [ ] Write unit tests for payout math and signing in `tests/unit/core/ledger/`
 
 ## Validation
@@ -84,7 +91,7 @@ pnpm test tests/unit/core/ledger/
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0093` linked in PR body
-- [ ] **Spec:** RECEIPTS_IMMUTABLE, EVENTS_APPEND_ONLY, POOL_IMMUTABLE, ONE_OPEN_EPOCH, IDEMPOTENT_RECEIPTS, ALL_MATH_BIGINT, SIGNATURE_DOMAIN_BOUND, ISSUER_AUTHORIZED upheld
+- [ ] **Spec:** RECEIPTS_IMMUTABLE, EVENTS_APPEND_ONLY, POOL_IMMUTABLE, POOL_UNIQUE_PER_TYPE, ONE_OPEN_EPOCH, IDEMPOTENT_RECEIPTS, ALL_MATH_BIGINT, SIGNATURE_DOMAIN_BOUND, ISSUER_AUTHORIZED, ADDRESS_CHECKSUMMED upheld
 - [ ] **Tests:** payout math edge cases, signing determinism, largest-remainder correctness
 - [ ] **Reviewer:** assigned and approved
 

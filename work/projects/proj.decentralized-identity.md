@@ -93,7 +93,7 @@ These existing specs reference wallet address as identity and will need updates 
 
 [proj.transparent-credit-payouts](./proj.transparent-credit-payouts.md) depends on stable user identity:
 
-- `work_receipts.subject_id` will reference `user_id` (not wallet address)
+- `work_receipts.user_id` references `users.id` (not wallet address)
 - Epoch payout statements keyed by `user_id`
 - Identity merges must not rewrite receipt history — new events only
 

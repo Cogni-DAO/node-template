@@ -49,7 +49,10 @@ tags: [governance, transparency, payments, ledger]
 | VALUATION_IS_HUMAN     | The system never computes `valuation_units` algorithmically. They are human inputs from the approver.                                                                                           |
 | ALL_MATH_BIGINT        | No floating point in unit or credit calculations. All math uses BIGINT with largest-remainder rounding.                                                                                         |
 | APPROVED_RECEIPTS_ONLY | Epoch close considers only receipts whose latest `receipt_event` is `'approved'`.                                                                                                               |
+| LATEST_EVENT_WINS      | Receipt state is the most recent `receipt_event` by `created_at`. No transition matrix — any event type is valid after any other. Re-approval after revocation is allowed.                      |
 | POOL_REPRODUCIBLE      | `pool_total_credits = SUM(epoch_pool_components.amount_credits)`. Each component stores algorithm version + inputs + amount.                                                                    |
+| POOL_UNIQUE_PER_TYPE   | UNIQUE(epoch_id, component_id) — each component type (e.g. `base_issuance`, `kpi_bonus_v0`, `top_up`) appears at most once per epoch. To change an amount, record a new component_id.           |
+| ADDRESS_CHECKSUMMED    | All Ethereum addresses stored in EIP-55 checksummed format. Normalize on write (issuer creation, receipt insertion). Lookups use checksummed format.                                            |
 | WRITES_VIA_TEMPORAL    | All write operations (open epoch, issue receipt, record event, close epoch) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID. |
 
 ## Design
@@ -58,7 +61,9 @@ tags: [governance, transparency, payments, ledger]
 
 **Next.js** handles authentication (SIWE), authorization (issuer allowlist check), read queries (direct DB), and write request enqueuing (start Temporal workflow, return 202).
 
-**Temporal worker** (`services/scheduler-worker/`) handles all write/compute domain actions: signature verification, receipt insertion, epoch close computation, payout generation. All workflows are idempotent via deterministic workflow IDs.
+**Temporal worker** (`services/scheduler-worker/`) handles all write/compute domain actions: signature verification, receipt insertion, epoch close computation, payout generation. All workflows are idempotent via deterministic workflow IDs. The worker imports pure domain logic from `@cogni/ledger-core` (a workspace package) and DB operations from `@cogni/db-client` — it never imports from `src/`.
+
+**`packages/ledger-core/`** contains pure domain logic shared between the app and the worker: model types, `computePayouts()`, `buildReceiptMessage()`, `computeReceiptSetHash()`, and error classes. `src/core/ledger/public.ts` re-exports from this package so app code uses `@/core/ledger` unchanged.
 
 **Postgres** stores the append-only ledger with DB-trigger enforcement of immutability.
 
@@ -147,15 +152,15 @@ This ensures the policy is reproducibly fetchable without depending on GitHub av
 
 ### `ledger_issuers` — authorization allowlist
 
-| Column            | Type          | Notes                                            |
-| ----------------- | ------------- | ------------------------------------------------ |
-| `address`         | TEXT PK       | Ethereum wallet address (checksummed)            |
-| `user_id`         | TEXT FK→users | Internal user ID                                 |
-| `can_issue`       | BOOLEAN       | Can create receipts (issue `proposed` events)    |
-| `can_approve`     | BOOLEAN       | Can approve or revoke receipts                   |
-| `can_close_epoch` | BOOLEAN       | Can open/close epochs and record pool components |
-| `added_by`        | TEXT          | Address of who added this issuer                 |
-| `created_at`      | TIMESTAMPTZ   |                                                  |
+| Column            | Type          | Notes                                                             |
+| ----------------- | ------------- | ----------------------------------------------------------------- |
+| `address`         | TEXT PK       | Ethereum wallet address (EIP-55 checksummed, ADDRESS_CHECKSUMMED) |
+| `user_id`         | TEXT FK→users | Internal user ID                                                  |
+| `can_issue`       | BOOLEAN       | Can create receipts (issue `proposed` events)                     |
+| `can_approve`     | BOOLEAN       | Can approve or revoke receipts                                    |
+| `can_close_epoch` | BOOLEAN       | Can open/close epochs and record pool components                  |
+| `added_by`        | TEXT          | Address of who added this issuer                                  |
+| `created_at`      | TIMESTAMPTZ   |                                                                   |
 
 ### `epochs` — one open epoch at a time
 
@@ -226,6 +231,8 @@ Index: `receipt_events(receipt_id, created_at DESC)` — for latest-event-per-re
 | `computed_at`       | TIMESTAMPTZ      |                                                |
 
 DB trigger rejects UPDATE/DELETE (POOL_IMMUTABLE). Once recorded, budget inputs cannot be changed.
+
+Constraint: `UNIQUE(epoch_id, component_id)` — each component type appears at most once per epoch (POOL_UNIQUE_PER_TYPE).
 
 ### `payout_statements` — one per closed epoch, derived artifact
 
@@ -301,9 +308,9 @@ Deterministic workflow ID: `ledger-receipt-{idempotencyKey}`
 ### ReceiptEventWorkflow
 
 1. Validate actor has `can_approve` permission
-2. Insert approve or revoke event for the receipt
+2. Insert approve or revoke event for the receipt (LATEST_EVENT_WINS — no transition guards)
 
-Deterministic workflow ID: `ledger-event-{receiptId}-{eventType}-{timestamp}`
+Deterministic workflow ID: `ledger-event-{receiptId}-{eventType}` (idempotent per receipt + event type — re-sending the same approve is a no-op)
 
 ### RecordPoolComponentWorkflow
 

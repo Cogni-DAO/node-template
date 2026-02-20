@@ -39,7 +39,8 @@ external_refs:
   - Statement writes: `insertPayoutStatement(...)`
   - Statement reads: `getStatementForEpoch(epochId)`
 - Port-level error classes: `IssuerNotFoundPortError`, `EpochNotFoundPortError`, `ReceiptNotFoundPortError`
-- Drizzle adapter at `src/adapters/server/ledger/drizzle-ledger.ts` implementing `LedgerStore`
+- Drizzle adapter at `src/adapters/server/ledger/drizzle-ledger.ts` implementing `LedgerStore` (app-side)
+- Worker-facing adapter: `DrizzleLedgerWorkerAdapter` in `packages/db-client/` (follows existing `DrizzleExecutionGrantWorkerAdapter` pattern — `scheduler-worker` cannot import from `src/`)
 - Adapter uses `serviceDb` (BYPASSRLS) — Temporal worker context, not user-scoped
 - Wire into `src/bootstrap/container.ts`: `ledgerStore: LedgerStore`
 - Export from `src/ports/index.ts` and `src/adapters/server/index.ts`
@@ -52,6 +53,8 @@ external_refs:
 - `src/adapters/server/ledger/` (new directory)
 - `src/adapters/server/index.ts` (add export)
 - `src/bootstrap/container.ts` (wire adapter)
+- `packages/db-client/src/ledger/` (new — `DrizzleLedgerWorkerAdapter` for scheduler-worker)
+- `packages/db-client/src/index.ts` (add ledger adapter export)
 - `tests/contract/ledger-store.contract.ts` (new)
 
 ## Plan
@@ -60,6 +63,8 @@ external_refs:
 - [ ] Export from `src/ports/index.ts`
 - [ ] Implement `DrizzleLedgerStore` in `src/adapters/server/ledger/drizzle-ledger.ts`
 - [ ] Export from `src/adapters/server/index.ts`
+- [ ] Implement `DrizzleLedgerWorkerAdapter` in `packages/db-client/src/ledger/` (worker-facing subset)
+- [ ] Export from `packages/db-client/src/index.ts`
 - [ ] Add `ledgerStore` to `Container` interface and wire in `container.ts`
 - [ ] Write contract test exercising all methods against real DB
 
