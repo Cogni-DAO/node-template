@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@core/ledger/model`
+ * Module: `@cogni/ledger-core/model`
  * Purpose: Domain types and enums for the epoch ledger.
  * Scope: Pure types. Does not contain business logic or perform I/O.
  * Invariants: Mirrors epoch-ledger spec schema; all credit/unit fields are bigint (ALL_MATH_BIGINT).

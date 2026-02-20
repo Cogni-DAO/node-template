@@ -78,6 +78,13 @@
       "when": 1771585744850,
       "tag": "0010_familiar_doctor_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1771587773044,
+      "tag": "0011_strong_pestilence",
+      "breakpoints": true
     }
   ]
 }

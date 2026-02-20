@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@core/ledger/errors`
+ * Module: `@cogni/ledger-core/errors`
  * Purpose: Domain error classes for ledger operations.
  * Scope: Error definitions and type guards. Does not perform I/O or contain business logic.
  * Invariants: All errors have a readonly `code` discriminant for type guards.

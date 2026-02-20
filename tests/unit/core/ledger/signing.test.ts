@@ -11,13 +11,13 @@
  * @public
  */
 
-import { describe, expect, it } from "vitest";
-import type { ReceiptMessageFields, SigningContext } from "@/core/ledger/model";
+import type { ReceiptMessageFields, SigningContext } from "@cogni/ledger-core";
 import {
   buildReceiptMessage,
   computeReceiptSetHash,
   hashReceiptMessage,
-} from "@/core/ledger/signing";
+} from "@cogni/ledger-core";
+import { describe, expect, it } from "vitest";
 
 const defaultContext: SigningContext = {
   chainId: "8453",

@@ -3,28 +3,14 @@
 
 /**
  * Module: `@core/ledger/public`
- * Purpose: Public API barrel for the ledger domain.
+ * Purpose: Re-exports from @cogni/ledger-core so app code uses @/core/ledger unchanged.
  * Scope: Re-exports only. Does not define any logic.
  * Invariants: Only exports stable public interfaces and functions.
  * Side-effects: none
- * Links: docs/spec/epoch-ledger.md
+ * Links: docs/spec/epoch-ledger.md, packages/ledger-core/
  * @public
  */
 
-// Errors
-export {
-  EpochAlreadyClosedError,
-  EpochNotOpenError,
-  IssuerNotAuthorizedError,
-  isEpochAlreadyClosedError,
-  isEpochNotOpenError,
-  isIssuerNotAuthorizedError,
-  isPoolComponentMissingError,
-  isReceiptSignatureInvalidError,
-  PoolComponentMissingError,
-  ReceiptSignatureInvalidError,
-} from "./errors";
-// Model types and enums
 export type {
   ApprovedReceipt,
   EpochStatus,
@@ -33,15 +19,23 @@ export type {
   ReceiptMessageFields,
   ReceiptRole,
   SigningContext,
-} from "./model";
-export { EPOCH_STATUSES, EVENT_TYPES, RECEIPT_ROLES } from "./model";
-
-// Rules
-export { computePayouts } from "./rules";
-
-// Signing
+} from "@cogni/ledger-core";
 export {
   buildReceiptMessage,
+  computePayouts,
   computeReceiptSetHash,
+  EPOCH_STATUSES,
+  EpochAlreadyClosedError,
+  EpochNotOpenError,
+  EVENT_TYPES,
   hashReceiptMessage,
-} from "./signing";
+  IssuerNotAuthorizedError,
+  isEpochAlreadyClosedError,
+  isEpochNotOpenError,
+  isIssuerNotAuthorizedError,
+  isPoolComponentMissingError,
+  isReceiptSignatureInvalidError,
+  PoolComponentMissingError,
+  RECEIPT_ROLES,
+  ReceiptSignatureInvalidError,
+} from "@cogni/ledger-core";

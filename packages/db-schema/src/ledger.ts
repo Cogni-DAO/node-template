@@ -153,7 +153,7 @@ export const receiptEvents = pgTable(
     ),
     index("receipt_events_receipt_created_idx").on(
       table.receiptId,
-      table.createdAt
+      table.createdAt.desc()
     ),
   ]
 );

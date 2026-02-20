@@ -11,6 +11,7 @@
     { "path": "./packages/db-client" },
     { "path": "./packages/ids" },
     { "path": "./packages/db-schema" },
+    { "path": "./packages/ledger-core" },
     { "path": "./packages/scheduler-core" }
   ]
 }

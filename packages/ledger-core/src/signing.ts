@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@core/ledger/signing`
+ * Module: `@cogni/ledger-core/signing`
  * Purpose: Canonical receipt message builder and SHA-256 hashing (SIGNATURE_DOMAIN_BOUND).
  * Scope: Pure functions. Does not hold private keys, verify signatures, or perform network I/O.
  * Invariants:

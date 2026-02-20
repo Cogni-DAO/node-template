@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@core/ledger/rules`
+ * Module: `@cogni/ledger-core/rules`
  * Purpose: Payout computation with BIGINT arithmetic and largest-remainder rounding (ALL_MATH_BIGINT).
  * Scope: Pure function. Does not perform I/O or mutate external state.
  * Invariants:
@@ -15,12 +15,6 @@
  */
 
 import type { ApprovedReceipt, PayoutLineItem } from "./model";
-
-/**
- * Precision multiplier for share computation.
- * We use 18 decimal digits of precision (same as ETH wei) for intermediate share calculations.
- */
-const SHARE_PRECISION = 10n ** 18n;
 
 /**
  * Compute proportional payouts from approved receipts and a pool total.
@@ -119,10 +113,13 @@ export function computePayouts(
     const bonus = bonuses.get(userId) ?? 0n;
     const amountCredits = floor + bonus;
 
-    // Compute share as a decimal string with 6 digits of precision
-    const shareScaled = (units * SHARE_PRECISION) / totalUnits;
-    const shareWhole = shareScaled / 10n ** 12n; // 6 digits
-    const share = `0.${shareWhole.toString().padStart(6, "0")}`;
+    // Compute share as a decimal string with 6 fractional digits
+    // Scale to 6 decimal places: (units * 10^6) / totalUnits
+    const SHARE_SCALE = 10n ** 6n;
+    const scaledShare = (units * SHARE_SCALE) / totalUnits;
+    const wholePart = scaledShare / SHARE_SCALE;
+    const fracPart = scaledShare % SHARE_SCALE;
+    const share = `${wholePart}.${fracPart.toString().padStart(6, "0")}`;
 
     return {
       userId,

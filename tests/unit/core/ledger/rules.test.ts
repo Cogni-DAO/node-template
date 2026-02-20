@@ -11,9 +11,9 @@
  * @public
  */
 
+import type { ApprovedReceipt } from "@cogni/ledger-core";
+import { computePayouts } from "@cogni/ledger-core";
 import { describe, expect, it } from "vitest";
-import type { ApprovedReceipt } from "@/core/ledger/model";
-import { computePayouts } from "@/core/ledger/rules";
 
 describe("core/ledger/rules", () => {
   describe("computePayouts", () => {
@@ -39,7 +39,7 @@ describe("core/ledger/rules", () => {
       expect(result).toEqual([]);
     });
 
-    it("gives entire pool to single recipient", () => {
+    it("gives entire pool to single recipient with share = 1.000000", () => {
       const receipts: ApprovedReceipt[] = [
         { userId: "user-a", valuationUnits: 50n },
       ];
@@ -49,9 +49,10 @@ describe("core/ledger/rules", () => {
       expect(result[0]?.userId).toBe("user-a");
       expect(result[0]?.totalUnits).toBe(50n);
       expect(result[0]?.amountCredits).toBe(1000n);
+      expect(result[0]?.share).toBe("1.000000");
     });
 
-    it("distributes exact division evenly", () => {
+    it("distributes exact division evenly with share = 0.500000", () => {
       const receipts: ApprovedReceipt[] = [
         { userId: "user-a", valuationUnits: 50n },
         { userId: "user-b", valuationUnits: 50n },
@@ -60,7 +61,9 @@ describe("core/ledger/rules", () => {
 
       expect(result).toHaveLength(2);
       expect(result[0]?.amountCredits).toBe(500n);
+      expect(result[0]?.share).toBe("0.500000");
       expect(result[1]?.amountCredits).toBe(500n);
+      expect(result[1]?.share).toBe("0.500000");
 
       const total = result.reduce((s, r) => s + r.amountCredits, 0n);
       expect(total).toBe(1000n);
@@ -155,6 +158,29 @@ describe("core/ledger/rules", () => {
       const result = computePayouts(receipts, pool);
       const total = result.reduce((s, r) => s + r.amountCredits, 0n);
       expect(total).toBe(pool);
+    });
+
+    it("computes share correctly for thirds", () => {
+      const receipts: ApprovedReceipt[] = [
+        { userId: "user-a", valuationUnits: 1n },
+        { userId: "user-b", valuationUnits: 2n },
+      ];
+      const result = computePayouts(receipts, 300n);
+
+      // user-a: 1/3 → 0.333333, user-b: 2/3 → 0.666666
+      expect(result[0]?.share).toBe("0.333333");
+      expect(result[1]?.share).toBe("0.666666");
+    });
+
+    it("computes share correctly for 75/25 split", () => {
+      const receipts: ApprovedReceipt[] = [
+        { userId: "user-a", valuationUnits: 75n },
+        { userId: "user-b", valuationUnits: 25n },
+      ];
+      const result = computePayouts(receipts, 1000n);
+
+      expect(result[0]?.share).toBe("0.750000");
+      expect(result[1]?.share).toBe("0.250000");
     });
 
     it("distributes remainder to users with largest fractional parts", () => {
