@@ -15,11 +15,11 @@ project: proj.transparent-credit-payouts
 branch: feat/ledger-v0
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-02-20
-updated: 2026-02-20
+updated: 2026-02-21
 labels: [governance, ledger, schema]
 external_refs:
 ---
@@ -94,6 +94,18 @@ pnpm test tests/unit/core/ledger/
 - [ ] **Spec:** RECEIPTS_IMMUTABLE, EVENTS_APPEND_ONLY, POOL_IMMUTABLE, POOL_UNIQUE_PER_TYPE, ONE_OPEN_EPOCH, IDEMPOTENT_RECEIPTS, ALL_MATH_BIGINT, SIGNATURE_DOMAIN_BOUND, ISSUER_AUTHORIZED, ADDRESS_CHECKSUMMED upheld
 - [ ] **Tests:** payout math edge cases, signing determinism, largest-remainder correctness
 - [ ] **Reviewer:** assigned and approved
+
+## Review Feedback
+
+### Revision 1 — Blocking Issues
+
+1. **Domain code in wrong location** — Must be in `packages/ledger-core/` (not `src/core/ledger/`) per design review. `services/scheduler-worker/` cannot import from `src/`. Create the package, move `model.ts`, `rules.ts`, `signing.ts`, `errors.ts` there, update `src/core/ledger/public.ts` to re-export from `@cogni/ledger-core`.
+
+2. **`receipt_events` index missing DESC** — `ledger.ts:154-157` and migration line 85 create ASC index on `(receipt_id, created_at)`. Spec requires `(receipt_id, created_at DESC)` for LATEST_EVENT_WINS queries.
+
+3. **`share` computation wrong for 100% share** — `rules.ts:122-125` hardcodes `"0."` prefix. Single-recipient produces `"0.1000000"` (10%) instead of `"1.000000"`. Fix: compute whole and fractional parts separately.
+
+4. **No test coverage for `share` field** — Add assertions on `share` values in `rules.test.ts` (single-recipient 100%, 50/50 split, etc.).
 
 ## PR / Links
 

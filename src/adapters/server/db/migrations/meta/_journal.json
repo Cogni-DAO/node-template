@@ -71,6 +71,13 @@
       "when": 1771300772076,
       "tag": "0009_curly_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1771585744850,
+      "tag": "0010_familiar_doctor_spectrum",
+      "breakpoints": true
     }
   ]
 }
