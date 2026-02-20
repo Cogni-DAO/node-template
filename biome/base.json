@@ -207,6 +207,7 @@
         "packages/ids/tsup.config.ts",
         "packages/ids/vitest.config.ts",
         "packages/db-schema/tsup.config.ts",
+        "packages/ledger-core/tsup.config.ts",
         "services/scheduler-worker/tsup.config.ts",
         "services/scheduler-worker/vitest.config.ts",
         "vitest.workspace.ts",
