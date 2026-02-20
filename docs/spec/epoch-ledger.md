@@ -52,7 +52,7 @@ tags: [governance, transparency, payments, ledger]
 | LATEST_EVENT_WINS      | Receipt state is the most recent `receipt_event` by `created_at`. No transition matrix — any event type is valid after any other. Re-approval after revocation is allowed.                      |
 | POOL_REPRODUCIBLE      | `pool_total_credits = SUM(epoch_pool_components.amount_credits)`. Each component stores algorithm version + inputs + amount.                                                                    |
 | POOL_UNIQUE_PER_TYPE   | UNIQUE(epoch_id, component_id) — each component type (e.g. `base_issuance`, `kpi_bonus_v0`, `top_up`) appears at most once per epoch. To change an amount, record a new component_id.           |
-| ADDRESS_CHECKSUMMED    | All Ethereum addresses stored in EIP-55 checksummed format. Normalize on write (issuer creation, receipt insertion). Lookups use checksummed format.                                            |
+| ADDRESS_NORMALIZED     | All Ethereum addresses stored in lowercase hex. Normalize to lowercase on write (issuer creation, receipt insertion). EIP-55 checksum validation is optional and belongs in the UX/input layer. |
 | WRITES_VIA_TEMPORAL    | All write operations (open epoch, issue receipt, record event, close epoch) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID. |
 
 ## Design
@@ -152,15 +152,15 @@ This ensures the policy is reproducibly fetchable without depending on GitHub av
 
 ### `ledger_issuers` — authorization allowlist
 
-| Column            | Type          | Notes                                                             |
-| ----------------- | ------------- | ----------------------------------------------------------------- |
-| `address`         | TEXT PK       | Ethereum wallet address (EIP-55 checksummed, ADDRESS_CHECKSUMMED) |
-| `user_id`         | TEXT FK→users | Internal user ID                                                  |
-| `can_issue`       | BOOLEAN       | Can create receipts (issue `proposed` events)                     |
-| `can_approve`     | BOOLEAN       | Can approve or revoke receipts                                    |
-| `can_close_epoch` | BOOLEAN       | Can open/close epochs and record pool components                  |
-| `added_by`        | TEXT          | Address of who added this issuer                                  |
-| `created_at`      | TIMESTAMPTZ   |                                                                   |
+| Column            | Type          | Notes                                                       |
+| ----------------- | ------------- | ----------------------------------------------------------- |
+| `address`         | TEXT PK       | Ethereum wallet address (lowercase hex, ADDRESS_NORMALIZED) |
+| `user_id`         | TEXT FK→users | Internal user ID                                            |
+| `can_issue`       | BOOLEAN       | Can create receipts (issue `proposed` events)               |
+| `can_approve`     | BOOLEAN       | Can approve or revoke receipts                              |
+| `can_close_epoch` | BOOLEAN       | Can open/close epochs and record pool components            |
+| `added_by`        | TEXT          | Address of who added this issuer                            |
+| `created_at`      | TIMESTAMPTZ   |                                                             |
 
 ### `epochs` — one open epoch at a time
 

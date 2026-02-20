@@ -2,7 +2,7 @@
 id: task.0093
 type: task
 title: "Ledger DB schema (6 tables) + core domain (model, rules, signing, errors)"
-status: needs_implement
+status: done
 priority: 1
 rank: 1
 estimate: 3
@@ -46,7 +46,7 @@ external_refs:
   - `errors.ts` — domain error classes (EpochNotOpenError, ReceiptSignatureInvalidError, IssuerNotAuthorizedError, EpochAlreadyClosedError, PoolComponentMissingError)
   - `index.ts` — barrel export
 - `src/core/ledger/public.ts` — re-exports from `@cogni/ledger-core` so app code uses `@/core/ledger` unchanged
-- All Ethereum addresses normalized to EIP-55 checksummed format on write (ADDRESS_CHECKSUMMED)
+- All Ethereum addresses normalized to lowercase hex on write (ADDRESS_NORMALIZED) — EIP-55 checksum is UX-layer only
 - UNIQUE(epoch_id, component_id) on `epoch_pool_components` (POOL_UNIQUE_PER_TYPE)
 - Unit tests for payout math: edge cases (1 recipient, many recipients, zero units, exact division, remainder distribution)
 - Unit tests for signing: canonical message format, hash determinism
@@ -72,7 +72,7 @@ external_refs:
 - [ ] Create `packages/ledger-core/src/model.ts` — types and enums
 - [ ] Create `packages/ledger-core/src/errors.ts` — domain errors with type guards
 - [ ] Create `packages/ledger-core/src/rules.ts` — `computePayouts()` with BIGINT largest-remainder
-- [ ] Create `packages/ledger-core/src/signing.ts` — canonical message builder + SHA-256 hashing + address checksumming (ADDRESS_CHECKSUMMED)
+- [ ] Create `packages/ledger-core/src/signing.ts` — canonical message builder + SHA-256 hashing
 - [ ] Create `packages/ledger-core/src/index.ts` barrel export
 - [ ] Create `src/core/ledger/public.ts` re-exporting from `@cogni/ledger-core`, update `src/core/public.ts`
 - [ ] Write unit tests for payout math and signing in `tests/unit/core/ledger/`
@@ -91,7 +91,7 @@ pnpm test tests/unit/core/ledger/
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0093` linked in PR body
-- [ ] **Spec:** RECEIPTS_IMMUTABLE, EVENTS_APPEND_ONLY, POOL_IMMUTABLE, POOL_UNIQUE_PER_TYPE, ONE_OPEN_EPOCH, IDEMPOTENT_RECEIPTS, ALL_MATH_BIGINT, SIGNATURE_DOMAIN_BOUND, ISSUER_AUTHORIZED, ADDRESS_CHECKSUMMED upheld
+- [ ] **Spec:** RECEIPTS_IMMUTABLE, EVENTS_APPEND_ONLY, POOL_IMMUTABLE, POOL_UNIQUE_PER_TYPE, ONE_OPEN_EPOCH, IDEMPOTENT_RECEIPTS, ALL_MATH_BIGINT, SIGNATURE_DOMAIN_BOUND, ISSUER_AUTHORIZED, ADDRESS_NORMALIZED upheld
 - [ ] **Tests:** payout math edge cases, signing determinism, largest-remainder correctness
 - [ ] **Reviewer:** assigned and approved
 

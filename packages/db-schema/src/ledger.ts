@@ -36,7 +36,7 @@ import { users } from "./refs";
 /**
  * Issuer authorization allowlist.
  * Role flags: can_issue, can_approve, can_close_epoch (ISSUER_AUTHORIZED).
- * Address stored in EIP-55 checksummed format (ADDRESS_CHECKSUMMED).
+ * Address stored in lowercase hex (ADDRESS_NORMALIZED).
  */
 export const ledgerIssuers = pgTable("ledger_issuers", {
   address: text("address").primaryKey(),

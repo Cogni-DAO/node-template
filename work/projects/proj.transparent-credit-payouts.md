@@ -106,7 +106,7 @@ See [epoch-ledger spec](../../docs/spec/epoch-ledger.md) for full architecture, 
 - Receipts are immutable facts — state tracked via append-only events
 - Receipt signatures are domain-bound (chain_id + app_domain + spec_version) to prevent cross-context replay
 - Issuer permissions are role-based: `can_issue`, `can_approve`, `can_close_epoch` — separation of authority
-- All Ethereum addresses stored in EIP-55 checksummed format (ADDRESS_CHECKSUMMED)
+- All Ethereum addresses stored in lowercase hex (ADDRESS_NORMALIZED) — EIP-55 checksum is UX-layer only
 - Pool components are pre-recorded during epoch — close reads them, never creates budget
 - Each pool component type appears at most once per epoch (POOL_UNIQUE_PER_TYPE)
 - At least one `base_issuance` pool component required before epoch close
