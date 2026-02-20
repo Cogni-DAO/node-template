@@ -44,7 +44,7 @@ Receipts are deterministic records of human decisions. The system enforces proce
 | Design spike: schema, signing, storage, epoch model              | Done        | 2   | spike.0082      |
 | Design revision: decision ledger reframe + Temporal architecture | Done        | 1   | (this document) |
 | Spec: epoch-ledger.md                                            | Done        | 1   | —               |
-| DB schema (6 tables) + core domain (rules, signing, errors)      | Not Started | 3   | task.0093       |
+| DB schema (6 tables) + core domain (rules, signing, errors)      | Done        | 3   | task.0093       |
 | Ledger port + Drizzle adapter + container wiring                 | Not Started | 2   | task.0094       |
 | Temporal workflows (5 workflows + activities)                    | Not Started | 3   | task.0095       |
 | Zod contracts + API routes (5 write, 4 read) + stack tests       | Not Started | 2   | task.0096       |

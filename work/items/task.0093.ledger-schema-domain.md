@@ -2,7 +2,7 @@
 id: task.0093
 type: task
 title: "Ledger DB schema (6 tables) + core domain (model, rules, signing, errors)"
-status: done
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 3
