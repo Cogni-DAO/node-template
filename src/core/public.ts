@@ -57,6 +57,35 @@ export {
   pickDefaultModel,
   trimConversationHistory,
 } from "./chat/rules";
+// Ledger domain
+export type {
+  ApprovedReceipt,
+  EpochStatus,
+  EventType,
+  PayoutLineItem,
+  ReceiptMessageFields,
+  ReceiptRole,
+  SigningContext,
+} from "./ledger/public";
+export {
+  buildReceiptMessage,
+  computePayouts,
+  computeReceiptSetHash,
+  EPOCH_STATUSES,
+  EpochAlreadyClosedError,
+  EpochNotOpenError,
+  EVENT_TYPES,
+  hashReceiptMessage,
+  IssuerNotAuthorizedError,
+  isEpochAlreadyClosedError,
+  isEpochNotOpenError,
+  isIssuerNotAuthorizedError,
+  isPoolComponentMissingError,
+  isReceiptSignatureInvalidError,
+  PoolComponentMissingError,
+  RECEIPT_ROLES,
+  ReceiptSignatureInvalidError,
+} from "./ledger/public";
 export type {
   ClientVisibleStatus,
   PaymentAttempt,
