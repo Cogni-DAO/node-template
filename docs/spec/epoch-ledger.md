@@ -39,6 +39,7 @@ tags: [governance, transparency, payments, ledger]
 | RECEIPTS_WALLET_SIGNED | Every receipt has a valid EIP-191 signature from the issuer's wallet. The server verifies signatures but never holds private keys.                                                              |
 | ISSUER_AUTHORIZED      | Write operations check role flags on `ledger_issuers`: `can_issue` for receipts, `can_approve` for approve/revoke events, `can_close_epoch` for epoch open/close and pool component recording.  |
 | SIGNATURE_DOMAIN_BOUND | Receipt signatures include `chain_id`, `app_domain`, `spec_version`, and `epoch_id` in the signed message to prevent cross-context replay.                                                      |
+| MESSAGE_FIELDS_CLEAN   | All fields in the canonical receipt message must not contain newlines. The message uses newline-delimited format; embedded newlines would create ambiguous or colliding signatures.             |
 | POOL_PRE_RECORDED      | Pool components must be recorded via their own workflow before epoch close. Close reads existing components by reference — it never creates budget.                                             |
 | POOL_REQUIRES_BASE     | At least one `base_issuance` component must exist for the epoch before close is allowed.                                                                                                        |
 | EPOCH_POLICY_PINNED    | Policy reference (`repo` + `commit_sha` + `path` + `content_hash`) is set at epoch open and never modified.                                                                                     |
@@ -47,6 +48,7 @@ tags: [governance, transparency, payments, ledger]
 | IDEMPOTENT_RECEIPTS    | UNIQUE(idempotency_key) prevents duplicate receipts. Retries return the existing receipt.                                                                                                       |
 | ONE_OPEN_EPOCH         | Partial unique index enforces at most one epoch with `status = 'open'`.                                                                                                                         |
 | VALUATION_IS_HUMAN     | The system never computes `valuation_units` algorithmically. They are human inputs from the approver.                                                                                           |
+| UNITS_NON_NEGATIVE     | `valuation_units >= 0` enforced by DB CHECK constraint and runtime guard. Append-only tables cannot be corrected after the fact.                                                                |
 | ALL_MATH_BIGINT        | No floating point in unit or credit calculations. All math uses BIGINT with largest-remainder rounding.                                                                                         |
 | APPROVED_RECEIPTS_ONLY | Epoch close considers only receipts whose latest `receipt_event` is `'approved'`.                                                                                                               |
 | LATEST_EVENT_WINS      | Receipt state is the most recent `receipt_event` by `created_at`. No transition matrix — any event type is valid after any other. Re-approval after revocation is allowed.                      |
@@ -181,21 +183,21 @@ Constraints: partial unique index `UNIQUE (status) WHERE status = 'open'` enforc
 
 ### `work_receipts` — immutable facts, append-only
 
-| Column            | Type             | Notes                                                   |
-| ----------------- | ---------------- | ------------------------------------------------------- |
-| `id`              | UUID PK          |                                                         |
-| `epoch_id`        | BIGINT FK→epochs |                                                         |
-| `user_id`         | TEXT FK→users    | UUID — see [identity spec](./decentralized-identity.md) |
-| `work_item_id`    | TEXT             | e.g. `task.0054`                                        |
-| `artifact_ref`    | TEXT             | PR URL or commit SHA                                    |
-| `role`            | TEXT             | CHECK IN (`'author'`, `'reviewer'`, `'approver'`)       |
-| `valuation_units` | BIGINT           | Human-assigned by approver (VALUATION_IS_HUMAN)         |
-| `rationale_ref`   | TEXT             | Link to evidence or justification                       |
-| `issuer_address`  | TEXT             | Ethereum address of signer                              |
-| `issuer_id`       | TEXT FK→users    | Internal user ID of signer                              |
-| `signature`       | TEXT             | EIP-191 hex signature (client wallet signed)            |
-| `idempotency_key` | TEXT UNIQUE      | `{work_item_id}:{user_id}:{role}`                       |
-| `created_at`      | TIMESTAMPTZ      |                                                         |
+| Column            | Type             | Notes                                                                           |
+| ----------------- | ---------------- | ------------------------------------------------------------------------------- |
+| `id`              | UUID PK          |                                                                                 |
+| `epoch_id`        | BIGINT FK→epochs |                                                                                 |
+| `user_id`         | TEXT FK→users    | UUID — see [identity spec](./decentralized-identity.md)                         |
+| `work_item_id`    | TEXT             | e.g. `task.0054`                                                                |
+| `artifact_ref`    | TEXT             | PR URL or commit SHA                                                            |
+| `role`            | TEXT             | CHECK IN (`'author'`, `'reviewer'`, `'approver'`)                               |
+| `valuation_units` | BIGINT           | CHECK >= 0. Human-assigned by approver (VALUATION_IS_HUMAN, UNITS_NON_NEGATIVE) |
+| `rationale_ref`   | TEXT             | Link to evidence or justification                                               |
+| `issuer_address`  | TEXT             | Ethereum address of signer                                                      |
+| `issuer_id`       | TEXT FK→users    | Internal user ID of signer                                                      |
+| `signature`       | TEXT             | EIP-191 hex signature (client wallet signed)                                    |
+| `idempotency_key` | TEXT UNIQUE      | `{work_item_id}:{user_id}:{role}`                                               |
+| `created_at`      | TIMESTAMPTZ      |                                                                                 |
 
 No `status` column. Receipts are immutable facts. DB trigger rejects UPDATE/DELETE.
 
