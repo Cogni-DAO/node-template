@@ -20,13 +20,14 @@ tags: [governance, transparency, payments, ledger]
 
 ## Key References
 
-|              |                                                                                           |                                |
-| ------------ | ----------------------------------------------------------------------------------------- | ------------------------------ |
-| **Project**  | [proj.transparent-credit-payouts](../../work/projects/proj.transparent-credit-payouts.md) | Project roadmap                |
-| **Spike**    | [spike.0082](../../work/items/spike.0082.transparency-log-design.md)                      | Original design research       |
-| **Research** | [transparency-log-receipt-design](../research/transparency-log-receipt-design.md)         | Full design exploration        |
-| **Spec**     | [billing-evolution](./billing-evolution.md)                                               | Existing billing/credit system |
-| **Spec**     | [architecture](./architecture.md)                                                         | System architecture            |
+|              |                                                                                           |                                     |
+| ------------ | ----------------------------------------------------------------------------------------- | ----------------------------------- |
+| **Project**  | [proj.transparent-credit-payouts](../../work/projects/proj.transparent-credit-payouts.md) | Project roadmap                     |
+| **Spike**    | [spike.0082](../../work/items/spike.0082.transparency-log-design.md)                      | Original design research            |
+| **Research** | [transparency-log-receipt-design](../research/transparency-log-receipt-design.md)         | Full design exploration             |
+| **Spec**     | [billing-evolution](./billing-evolution.md)                                               | Existing billing/credit system      |
+| **Spec**     | [architecture](./architecture.md)                                                         | System architecture                 |
+| **Guide**    | [Fork vs Build](../guides/ledger-fork-vs-build.md)                                        | V0 cut-line: what to build vs reuse |
 
 ## Core Invariants
 
@@ -34,8 +35,12 @@ tags: [governance, transparency, payments, ledger]
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | RECEIPTS_IMMUTABLE     | DB trigger rejects UPDATE/DELETE on `work_receipts`. Receipts have no status column — they are immutable facts.                                                                                 |
 | EVENTS_APPEND_ONLY     | DB trigger rejects UPDATE/DELETE on `receipt_events`. State transitions are append-only.                                                                                                        |
+| POOL_IMMUTABLE         | DB trigger rejects UPDATE/DELETE on `epoch_pool_components`. Once recorded, a pool component's algorithm, inputs, and amount cannot be changed.                                                 |
 | RECEIPTS_WALLET_SIGNED | Every receipt has a valid EIP-191 signature from the issuer's wallet. The server verifies signatures but never holds private keys.                                                              |
-| ISSUER_ALLOWLISTED     | Only wallet addresses in `ledger_issuers` can create receipts, open epochs, and close epochs. Checked via SIWE session.                                                                         |
+| ISSUER_AUTHORIZED      | Write operations check role flags on `ledger_issuers`: `can_issue` for receipts, `can_approve` for approve/revoke events, `can_close_epoch` for epoch open/close and pool component recording.  |
+| SIGNATURE_DOMAIN_BOUND | Receipt signatures include `chain_id`, `app_domain`, `spec_version`, and `epoch_id` in the signed message to prevent cross-context replay.                                                      |
+| POOL_PRE_RECORDED      | Pool components must be recorded via their own workflow before epoch close. Close reads existing components by reference — it never creates budget.                                             |
+| POOL_REQUIRES_BASE     | At least one `base_issuance` component must exist for the epoch before close is allowed.                                                                                                        |
 | EPOCH_POLICY_PINNED    | Policy reference (`repo` + `commit_sha` + `path` + `content_hash`) is set at epoch open and never modified.                                                                                     |
 | PAYOUT_DETERMINISTIC   | Given approved receipts + pool components + policy → the payout statement is byte-for-byte reproducible.                                                                                        |
 | EPOCH_CLOSE_IDEMPOTENT | Closing a closed epoch returns the existing statement. No error, no mutation.                                                                                                                   |
@@ -59,20 +64,37 @@ tags: [governance, transparency, payments, ledger]
 
 ### Auth Model
 
-SIWE wallet login provides `{ id, walletAddress }` in the session. Write routes check the `ledger_issuers` table:
+SIWE wallet login provides `{ id, walletAddress }` in the session. Write routes check the `ledger_issuers` table with role-specific flags:
 
 1. User authenticates via SIWE → NextAuth session with `walletAddress`
 2. Existing proxy enforces session auth on `/api/v1/*` routes
-3. Write route handler calls `requireIssuer(session)` → queries `ledger_issuers` → 403 if not found
+3. Write route handler calls `requireIssuer(session, requiredRole)` → queries `ledger_issuers` → 403 if not found or role flag is false
 4. Route starts Temporal workflow, returns 202 + workflowId
 
-The `ledger_issuers` table is the minimal viable access control. It can be replaced by full RBAC later without modifying the ledger core.
+Role flags on `ledger_issuers`:
+
+- **`can_issue`** — create receipts (issue `proposed` events)
+- **`can_approve`** — approve or revoke receipts
+- **`can_close_epoch`** — open/close epochs and record pool components
+
+A single wallet can hold multiple roles. The `ledger_issuers` table is the minimal viable access control. It can be replaced by full RBAC later without modifying the ledger core.
 
 ### Receipt Signing
 
 The **client** (issuer's browser wallet) signs the receipt hash using EIP-191. The receipt creation request includes the pre-computed signature. The **server** (Temporal activity) verifies the signature against the claimed `issuer_address` using `viem`. The server never holds private keys.
 
-Receipt hash is the SHA-256 of the canonical receipt fields: `epoch_id`, `subject_id`, `work_item_id`, `artifact_ref`, `role`, `valuation_units`, `rationale_ref`.
+The signed message uses a canonical, domain-bound format (SIGNATURE_DOMAIN_BOUND) to prevent cross-context replay:
+
+```
+cogni-template.ledger:v0:{chain_id}
+epoch:{epoch_id}
+receipt:{user_id}:{work_item_id}:{role}
+units:{valuation_units}
+artifact:{artifact_ref}
+rationale:{rationale_ref}
+```
+
+The fields `chain_id` (e.g. `8453` for Base mainnet), `app_domain` (`cogni-template.ledger`), and `spec_version` (`v0`) are included so that a signature cannot be lifted from one chain, app, or protocol version and replayed in another. The receipt hash is SHA-256 of this canonical message. EIP-191 signs the hash bytes.
 
 ### Receipt Lifecycle
 
@@ -96,17 +118,17 @@ Each epoch's credit budget is the sum of independently computed pool components:
 
 Each component stores its `algorithm_version`, `inputs_json` (snapshotted KPI values), `amount_credits`, and `evidence_ref`. Anyone can recompute `pool_total_credits` from these inputs.
 
-Pool components are submitted as part of the epoch close request.
+Pool components are recorded via their own workflow during the open epoch (POOL_PRE_RECORDED). Only issuers with `can_close_epoch` (or a future `can_record_pool`) permission can record components. At least one `base_issuance` component must exist before epoch close is allowed (POOL_REQUIRES_BASE). The close workflow reads existing components by reference — it never creates budget.
 
 ### Payout Computation
 
 Given a set of approved receipts and a total pool, payouts are computed as:
 
-1. Group receipts by `subject_id`, sum `valuation_units` per subject
-2. Compute each subject's share: `subject_units / total_units`
+1. Group receipts by `user_id`, sum `valuation_units` per user
+2. Compute each user's share: `user_units / total_units`
 3. Distribute `pool_total_credits` proportionally using BIGINT arithmetic
 4. Apply largest-remainder rounding to ensure exact sum equals pool total
-5. Output: `[{ subject_id, total_units, share, amount_credits }]`
+5. Output: `[{ user_id, total_units, share, amount_credits }]`
 
 The receipt set hash (SHA-256 of canonical receipt data, sorted by receipt ID) pins the exact input set. Combined with `pool_total_credits` and `policy_content_hash`, the payout is fully deterministic and reproducible.
 
@@ -125,19 +147,22 @@ This ensures the policy is reproducibly fetchable without depending on GitHub av
 
 ### `ledger_issuers` — authorization allowlist
 
-| Column       | Type          | Notes                                 |
-| ------------ | ------------- | ------------------------------------- |
-| `address`    | TEXT PK       | Ethereum wallet address (checksummed) |
-| `user_id`    | TEXT FK→users | Internal user ID                      |
-| `added_by`   | TEXT          | Address of who added this issuer      |
-| `created_at` | TIMESTAMPTZ   |                                       |
+| Column            | Type          | Notes                                            |
+| ----------------- | ------------- | ------------------------------------------------ |
+| `address`         | TEXT PK       | Ethereum wallet address (checksummed)            |
+| `user_id`         | TEXT FK→users | Internal user ID                                 |
+| `can_issue`       | BOOLEAN       | Can create receipts (issue `proposed` events)    |
+| `can_approve`     | BOOLEAN       | Can approve or revoke receipts                   |
+| `can_close_epoch` | BOOLEAN       | Can open/close epochs and record pool components |
+| `added_by`        | TEXT          | Address of who added this issuer                 |
+| `created_at`      | TIMESTAMPTZ   |                                                  |
 
 ### `epochs` — one open epoch at a time
 
 | Column                | Type         | Notes                                                  |
 | --------------------- | ------------ | ------------------------------------------------------ |
 | `id`                  | BIGSERIAL PK |                                                        |
-| `status`              | TEXT         | `'open'` or `'closed'`                                 |
+| `status`              | TEXT         | CHECK IN (`'open'`, `'closed'`)                        |
 | `policy_repo`         | TEXT         | e.g. `cogni-dao/cogni-template`                        |
 | `policy_commit_sha`   | TEXT         | Git commit SHA                                         |
 | `policy_path`         | TEXT         | e.g. `docs/policy/valuation-policy.md`                 |
@@ -151,39 +176,43 @@ Constraints: partial unique index `UNIQUE (status) WHERE status = 'open'` enforc
 
 ### `work_receipts` — immutable facts, append-only
 
-| Column            | Type             | Notes                                                               |
-| ----------------- | ---------------- | ------------------------------------------------------------------- |
-| `id`              | UUID PK          |                                                                     |
-| `epoch_id`        | BIGINT FK→epochs |                                                                     |
-| `subject_id`      | TEXT             | `user_id` (UUID) — see [identity spec](./decentralized-identity.md) |
-| `work_item_id`    | TEXT             | e.g. `task.0054`                                                    |
-| `artifact_ref`    | TEXT             | PR URL or commit SHA                                                |
-| `role`            | TEXT             | `'author'`, `'reviewer'`, or `'approver'`                           |
-| `valuation_units` | BIGINT           | Human-assigned by approver (VALUATION_IS_HUMAN)                     |
-| `rationale_ref`   | TEXT             | Link to evidence or justification                                   |
-| `issuer_address`  | TEXT             | Ethereum address of signer                                          |
-| `issuer_id`       | TEXT FK→users    | Internal user ID of signer                                          |
-| `signature`       | TEXT             | EIP-191 hex signature (client wallet signed)                        |
-| `idempotency_key` | TEXT UNIQUE      | `{work_item_id}:{subject_id}:{role}`                                |
-| `created_at`      | TIMESTAMPTZ      |                                                                     |
+| Column            | Type             | Notes                                                   |
+| ----------------- | ---------------- | ------------------------------------------------------- |
+| `id`              | UUID PK          |                                                         |
+| `epoch_id`        | BIGINT FK→epochs |                                                         |
+| `user_id`         | TEXT FK→users    | UUID — see [identity spec](./decentralized-identity.md) |
+| `work_item_id`    | TEXT             | e.g. `task.0054`                                        |
+| `artifact_ref`    | TEXT             | PR URL or commit SHA                                    |
+| `role`            | TEXT             | CHECK IN (`'author'`, `'reviewer'`, `'approver'`)       |
+| `valuation_units` | BIGINT           | Human-assigned by approver (VALUATION_IS_HUMAN)         |
+| `rationale_ref`   | TEXT             | Link to evidence or justification                       |
+| `issuer_address`  | TEXT             | Ethereum address of signer                              |
+| `issuer_id`       | TEXT FK→users    | Internal user ID of signer                              |
+| `signature`       | TEXT             | EIP-191 hex signature (client wallet signed)            |
+| `idempotency_key` | TEXT UNIQUE      | `{work_item_id}:{user_id}:{role}`                       |
+| `created_at`      | TIMESTAMPTZ      |                                                         |
 
 No `status` column. Receipts are immutable facts. DB trigger rejects UPDATE/DELETE.
 
+Index: `work_receipts(epoch_id)` — for epoch receipt listing.
+
 ### `receipt_events` — append-only state transitions
 
-| Column          | Type                  | Notes                                      |
-| --------------- | --------------------- | ------------------------------------------ |
-| `id`            | UUID PK               |                                            |
-| `receipt_id`    | UUID FK→work_receipts |                                            |
-| `event_type`    | TEXT                  | `'proposed'`, `'approved'`, or `'revoked'` |
-| `actor_address` | TEXT                  | Ethereum address of actor                  |
-| `actor_id`      | TEXT FK→users         | Internal user ID                           |
-| `reason`        | TEXT                  | Optional — e.g. revocation reason          |
-| `created_at`    | TIMESTAMPTZ           |                                            |
+| Column          | Type                  | Notes                                              |
+| --------------- | --------------------- | -------------------------------------------------- |
+| `id`            | UUID PK               |                                                    |
+| `receipt_id`    | UUID FK→work_receipts |                                                    |
+| `event_type`    | TEXT                  | CHECK IN (`'proposed'`, `'approved'`, `'revoked'`) |
+| `actor_address` | TEXT                  | Ethereum address of actor                          |
+| `actor_id`      | TEXT FK→users         | Internal user ID                                   |
+| `reason`        | TEXT                  | Optional — e.g. revocation reason                  |
+| `created_at`    | TIMESTAMPTZ           |                                                    |
 
 DB trigger rejects UPDATE/DELETE.
 
-### `epoch_pool_components` — append-only, pinned inputs
+Index: `receipt_events(receipt_id, created_at DESC)` — for latest-event-per-receipt queries.
+
+### `epoch_pool_components` — immutable, append-only, pinned inputs
 
 | Column              | Type             | Notes                                          |
 | ------------------- | ---------------- | ---------------------------------------------- |
@@ -196,17 +225,19 @@ DB trigger rejects UPDATE/DELETE.
 | `evidence_ref`      | TEXT             | Link to KPI source or governance vote          |
 | `computed_at`       | TIMESTAMPTZ      |                                                |
 
+DB trigger rejects UPDATE/DELETE (POOL_IMMUTABLE). Once recorded, budget inputs cannot be changed.
+
 ### `payout_statements` — one per closed epoch, derived artifact
 
-| Column                | Type                    | Notes                                                |
-| --------------------- | ----------------------- | ---------------------------------------------------- |
-| `id`                  | UUID PK                 |                                                      |
-| `epoch_id`            | BIGINT UNIQUE FK→epochs | One statement per epoch                              |
-| `policy_content_hash` | TEXT                    | Must match epoch's policy_content_hash               |
-| `receipt_set_hash`    | TEXT                    | SHA-256 of canonical approved receipts               |
-| `pool_total_credits`  | BIGINT                  | Must match epoch's pool_total_credits                |
-| `payouts_json`        | JSONB                   | `[{subject_id, total_units, share, amount_credits}]` |
-| `created_at`          | TIMESTAMPTZ             |                                                      |
+| Column                | Type                    | Notes                                             |
+| --------------------- | ----------------------- | ------------------------------------------------- |
+| `id`                  | UUID PK                 |                                                   |
+| `epoch_id`            | BIGINT UNIQUE FK→epochs | One statement per epoch                           |
+| `policy_content_hash` | TEXT                    | Must match epoch's policy_content_hash            |
+| `receipt_set_hash`    | TEXT                    | SHA-256 of canonical approved receipts            |
+| `pool_total_credits`  | BIGINT                  | Must match epoch's pool_total_credits             |
+| `payouts_json`        | JSONB                   | `[{user_id, total_units, share, amount_credits}]` |
+| `created_at`          | TIMESTAMPTZ             |                                                   |
 
 No signature in V0. The statement is a deterministically derived artifact — anyone can recompute it from receipts + pool + policy. Signing (DAO multisig) deferred to P1.
 
@@ -214,14 +245,15 @@ No signature in V0. The statement is a deterministically derived artifact — an
 
 ### Write Routes (SIWE + issuer allowlist → Temporal workflow → 202)
 
-| Method | Route                                | Purpose                                            |
-| ------ | ------------------------------------ | -------------------------------------------------- |
-| POST   | `/api/v1/ledger/epochs`              | Open new epoch (pins policy reference)             |
-| POST   | `/api/v1/ledger/receipts`            | Create wallet-signed receipt (idempotent)          |
-| POST   | `/api/v1/ledger/receipts/:id/events` | Record receipt event (approve / revoke)            |
-| POST   | `/api/v1/ledger/epochs/:id/close`    | Close epoch with pool components → compute payouts |
+| Method | Route                                       | Required role     | Purpose                                   |
+| ------ | ------------------------------------------- | ----------------- | ----------------------------------------- |
+| POST   | `/api/v1/ledger/epochs`                     | `can_close_epoch` | Open new epoch (pins policy reference)    |
+| POST   | `/api/v1/ledger/receipts`                   | `can_issue`       | Create wallet-signed receipt (idempotent) |
+| POST   | `/api/v1/ledger/receipts/:id/events`        | `can_approve`     | Approve or revoke a receipt               |
+| POST   | `/api/v1/ledger/epochs/:id/pool-components` | `can_close_epoch` | Record a pool component for the epoch     |
+| POST   | `/api/v1/ledger/epochs/:id/close`           | `can_close_epoch` | Close epoch → compute payouts             |
 
-All write routes require SIWE session with wallet in `ledger_issuers`. Routes start a Temporal workflow and return 202 with the workflow ID. The Temporal worker executes the actual mutation.
+All write routes require SIWE session with wallet in `ledger_issuers` and the specified role flag. Routes start a Temporal workflow and return 202 with the workflow ID. The Temporal worker executes the actual mutation.
 
 ### Read Routes (public)
 
@@ -251,7 +283,7 @@ All write operations execute as Temporal workflows in the existing `scheduler-wo
 
 ### OpenEpochWorkflow
 
-1. Validate issuer is in `ledger_issuers`
+1. Validate issuer has `can_close_epoch` permission
 2. Check no epoch currently open (ONE_OPEN_EPOCH)
 3. Insert epoch row with policy reference
 
@@ -259,30 +291,39 @@ Deterministic workflow ID: `ledger-open-epoch-{policyCommitSha}`
 
 ### IssueReceiptWorkflow
 
-1. Validate issuer is in `ledger_issuers`
+1. Validate issuer has `can_issue` permission
 2. Verify epoch exists and is open
-3. Verify EIP-191 signature against claimed `issuer_address`
+3. Verify domain-bound EIP-191 signature against claimed `issuer_address` (SIGNATURE_DOMAIN_BOUND)
 4. Insert receipt (idempotent via `idempotency_key`) + `proposed` event
 
 Deterministic workflow ID: `ledger-receipt-{idempotencyKey}`
 
 ### ReceiptEventWorkflow
 
-1. Validate actor is in `ledger_issuers`
+1. Validate actor has `can_approve` permission
 2. Insert approve or revoke event for the receipt
 
 Deterministic workflow ID: `ledger-event-{receiptId}-{eventType}-{timestamp}`
 
+### RecordPoolComponentWorkflow
+
+1. Validate actor has `can_close_epoch` permission
+2. Verify epoch exists and is open
+3. Insert pool component row with `algorithm_version`, `inputs_json`, `amount_credits`, `evidence_ref`
+
+Deterministic workflow ID: `ledger-pool-{epochId}-{componentId}`
+
 ### CloseEpochWorkflow
 
-1. Validate issuer is in `ledger_issuers`
+1. Validate issuer has `can_close_epoch` permission
 2. If epoch already closed, return existing statement (EPOCH_CLOSE_IDEMPOTENT)
-3. Query receipts with latest event = `'approved'`
-4. Insert pool components, compute `pool_total_credits`
-5. Compute payouts (proportional, BIGINT, largest-remainder)
-6. Compute `receipt_set_hash`
-7. Atomic transaction: update epoch status to `'closed'`, insert payout statement
-8. Return statement
+3. Verify at least one `base_issuance` pool component exists (POOL_REQUIRES_BASE)
+4. Read existing pool components, compute `pool_total_credits = SUM(amount_credits)`
+5. Query receipts with latest event = `'approved'`
+6. Compute payouts (proportional, BIGINT, largest-remainder)
+7. Compute `receipt_set_hash`
+8. Atomic transaction: set `pool_total_credits` on epoch, update epoch status to `'closed'`, insert payout statement
+9. Return statement
 
 Deterministic workflow ID: `ledger-close-{epochId}`
 
@@ -306,4 +347,4 @@ Enable transparent, verifiable credit distribution where human valuation decisio
 - [billing-ingest](./billing-ingest.md) — Callback-driven billing pipeline
 - [architecture](./architecture.md) — System architecture
 - [sourcecred](./sourcecred.md) — SourceCred as-built (being superseded)
-- [decentralized-identity](./decentralized-identity.md) — User identity bindings (`subject_id` = `user_id`)
+- [decentralized-identity](./decentralized-identity.md) — User identity bindings (`user_id` is canonical)
