@@ -1,5 +1,5 @@
 {
-  "id": "953a260a-8aaa-4f18-9b3a-513d962b3fa2",
+  "id": "a2a26799-5b24-4838-a80a-c22ab7d68681",
   "prevId": "fe175121-46ee-44e7-96c5-7f3e86ff72ce",
   "version": "7",
   "dialect": "postgresql",
@@ -1750,7 +1750,7 @@
             {
               "expression": "created_at",
               "isExpression": false,
-              "asc": true,
+              "asc": false,
               "nulls": "last"
             }
           ],
@@ -1944,6 +1944,10 @@
         "work_receipts_role_check": {
           "name": "work_receipts_role_check",
           "value": "\"work_receipts\".\"role\" IN ('author', 'reviewer', 'approver')"
+        },
+        "work_receipts_valuation_units_nonneg": {
+          "name": "work_receipts_valuation_units_nonneg",
+          "value": "\"work_receipts\".\"valuation_units\" >= 0"
         }
       },
       "isRLSEnabled": false
