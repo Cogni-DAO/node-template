@@ -30,6 +30,7 @@ const ITEM_STATUS = [
   "needs_research",
   "needs_design",
   "needs_implement",
+  "needs_review",
   "needs_closeout",
   "needs_merge",
   "done",

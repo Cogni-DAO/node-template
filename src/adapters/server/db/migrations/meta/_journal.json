@@ -75,29 +75,15 @@
     {
       "idx": 10,
       "version": "7",
-      "when": 1771588691729,
-      "tag": "0010_redundant_misty_knight",
+      "when": 1771687355093,
+      "tag": "0010_shallow_paibok",
       "breakpoints": true
     },
     {
       "idx": 11,
       "version": "7",
-      "when": 1771588800000,
-      "tag": "0011_ledger_append_only_triggers",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1771675613430,
-      "tag": "0012_chief_vargas",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1771675800000,
-      "tag": "0013_identity_append_only_trigger_and_backfill",
+      "when": 1771687400000,
+      "tag": "0011_triggers_and_backfill",
       "breakpoints": true
     }
   ]

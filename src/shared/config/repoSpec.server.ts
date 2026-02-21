@@ -3,8 +3,8 @@
 
 /**
  * Module: `@shared/config/repoSpec.server`
- * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (payments + governance schedules).
- * Scope: Reads and caches repo-spec on first access; validates chain alignment and receiver address shape; exposes getPaymentConfig() and getGovernanceConfig(). Does not run in client bundles or accept env overrides.
+ * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (node identity + payments + governance schedules).
+ * Scope: Reads and caches repo-spec on first access; validates node_id UUID, chain alignment, and receiver address shape; exposes getNodeId(), getPaymentConfig(), and getGovernanceConfig(). Does not run in client bundles or accept env overrides.
  * Invariants: Chain ID must match CHAIN_ID; EVM address format required; governance schedules default to empty.
  * Side-effects: IO (reads repo-spec from disk) on first call only.
  * Links: .cogni/repo-spec.yaml, docs/spec/payments-design.md
@@ -107,6 +107,22 @@ export function getPaymentConfig(): InboundPaymentConfig {
   cachedPaymentConfig = validateAndMap(spec);
 
   return cachedPaymentConfig;
+}
+
+let cachedNodeId: string | null = null;
+
+/**
+ * Node identity from repo-spec. Scopes all ledger tables.
+ * Fails fast if repo-spec is missing or node_id is invalid.
+ */
+export function getNodeId(): string {
+  if (cachedNodeId) {
+    return cachedNodeId;
+  }
+
+  const spec = loadRepoSpec();
+  cachedNodeId = spec.node_id;
+  return cachedNodeId;
 }
 
 let cachedGovernanceConfig: GovernanceConfig | null = null;

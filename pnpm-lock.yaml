@@ -500,6 +500,9 @@ importers:
       '@cogni/ids':
         specifier: workspace:*
         version: link:../ids
+      '@cogni/ledger-core':
+        specifier: workspace:*
+        version: link:../ledger-core
       '@cogni/scheduler-core':
         specifier: workspace:*
         version: link:../scheduler-core
