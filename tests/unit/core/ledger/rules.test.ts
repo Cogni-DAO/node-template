@@ -11,7 +11,7 @@
  * @public
  */
 
-import type { ApprovedReceipt } from "@cogni/ledger-core";
+import type { FinalizedAllocation } from "@cogni/ledger-core";
 import { computePayouts } from "@cogni/ledger-core";
 import { describe, expect, it } from "vitest";
 
@@ -23,7 +23,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("returns empty array for zero pool", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 100n },
       ];
       const result = computePayouts(receipts, 0n);
@@ -31,7 +31,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("returns empty array when all units are zero", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 0n },
         { userId: "user-b", valuationUnits: 0n },
       ];
@@ -40,7 +40,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("gives entire pool to single recipient with share = 1.000000", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 50n },
       ];
       const result = computePayouts(receipts, 1000n);
@@ -53,7 +53,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("distributes exact division evenly with share = 0.500000", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 50n },
         { userId: "user-b", valuationUnits: 50n },
       ];
@@ -71,7 +71,7 @@ describe("core/ledger/rules", () => {
 
     it("applies largest-remainder rounding when division is inexact", () => {
       // 3 users with equal units, pool of 100 → 33, 33, 34
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 1n },
         { userId: "user-b", valuationUnits: 1n },
         { userId: "user-c", valuationUnits: 1n },
@@ -90,7 +90,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("aggregates multiple receipts per user", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 30n },
         { userId: "user-a", valuationUnits: 20n },
         { userId: "user-b", valuationUnits: 50n },
@@ -109,7 +109,7 @@ describe("core/ledger/rules", () => {
     it("handles large values without overflow", () => {
       // Simulate realistic credits: 10 million credits (10^7 * 10^6 micro-credits)
       const pool = 10_000_000_000_000n; // 10M in micro-credits
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 7500n },
         { userId: "user-b", valuationUnits: 2500n },
       ];
@@ -123,7 +123,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("is deterministic — same inputs produce identical output", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-c", valuationUnits: 7n },
         { userId: "user-a", valuationUnits: 3n },
         { userId: "user-b", valuationUnits: 5n },
@@ -137,7 +137,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("sorts output by userId for determinism", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "zeta", valuationUnits: 1n },
         { userId: "alpha", valuationUnits: 1n },
         { userId: "mu", valuationUnits: 1n },
@@ -149,10 +149,13 @@ describe("core/ledger/rules", () => {
 
     it("sum of payouts always equals pool total (PAYOUT_DETERMINISTIC)", () => {
       // Pathological case: 7 users, prime pool
-      const receipts: ApprovedReceipt[] = Array.from({ length: 7 }, (_, i) => ({
-        userId: `user-${String(i).padStart(2, "0")}`,
-        valuationUnits: BigInt(i + 1),
-      }));
+      const receipts: FinalizedAllocation[] = Array.from(
+        { length: 7 },
+        (_, i) => ({
+          userId: `user-${String(i).padStart(2, "0")}`,
+          valuationUnits: BigInt(i + 1),
+        })
+      );
       const pool = 9973n; // prime number
 
       const result = computePayouts(receipts, pool);
@@ -161,7 +164,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("computes share correctly for thirds", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 1n },
         { userId: "user-b", valuationUnits: 2n },
       ];
@@ -173,7 +176,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("computes share correctly for 75/25 split", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 75n },
         { userId: "user-b", valuationUnits: 25n },
       ];
@@ -188,7 +191,7 @@ describe("core/ledger/rules", () => {
       // user-a floor = 10/3 = 3, remainder = 10%3 = 1 (remainder/total = 1/3)
       // user-b floor = 20/3 = 6, remainder = 20%3 = 2 (remainder/total = 2/3)
       // Residual = 10 - 3 - 6 = 1 → goes to user-b (larger remainder)
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 1n },
         { userId: "user-b", valuationUnits: 2n },
       ];
@@ -201,7 +204,7 @@ describe("core/ledger/rules", () => {
     });
 
     it("throws on negative valuationUnits", () => {
-      const receipts: ApprovedReceipt[] = [
+      const receipts: FinalizedAllocation[] = [
         { userId: "user-a", valuationUnits: 10n },
         { userId: "user-b", valuationUnits: -5n },
       ];
