@@ -2,7 +2,7 @@
 id: task.0094
 type: task
 title: "Ledger port interface + Drizzle adapter + schema migration + container wiring"
-status: needs_review
+status: needs_merge
 priority: 1
 rank: 2
 estimate: 2
@@ -12,14 +12,14 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch: feat/user-identity-bindings
+branch: feat/activity-ledger-v0
 pr:
 reviewer:
 revision: 1
 blocked_by: task.0093
 deploy_verified: false
 created: 2026-02-20
-updated: 2026-02-21
+updated: 2026-02-22
 labels: [governance, ledger, adapter]
 external_refs:
 ---
@@ -39,7 +39,7 @@ external_refs:
 - `node_id UUID` on all ledger tables (NODE_SCOPED)
 - Port interface in `@cogni/ledger-core` (shared by app + worker)
 - Single `DrizzleLedgerAdapter` in `@cogni/db-client` (no duplication)
-- Old migrations 0010 + 0011 deleted (never shipped), replaced with new 0010 (DDL) + 0011 (triggers)
+- Old migrations 0010 + 0011 deleted (never shipped), replaced with 0014 (DDL) + 0015 (triggers)
 
 ## Implementation Summary
 
@@ -52,8 +52,8 @@ external_refs:
 - [x] `packages/ledger-core/src/store.ts` — `ActivityLedgerStore` interface + all param/result types
 - [x] `packages/ledger-core/src/index.ts` — updated barrel exports
 - [x] `packages/db-schema/src/ledger.ts` — full rewrite: 8 tables, 3-layer model, node_id
-- [x] `migrations/0010_ledger_activity_model.sql` — DDL for all new tables
-- [x] `migrations/0011_ledger_triggers.sql` — append-only + freeze-on-close triggers
+- [x] `migrations/0014_supreme_captain_marvel.sql` — DDL for all new tables
+- [x] `migrations/0015_ledger_triggers.sql` — append-only + freeze-on-close triggers
 - [x] `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — single shared adapter
 - [x] `packages/db-client/package.json` — added `@cogni/ledger-core` dependency
 - [x] `packages/db-client/tsconfig.json` — added ledger-core reference
@@ -76,7 +76,6 @@ external_refs:
 ### Remaining
 
 - [ ] `tests/component/db/drizzle-ledger.adapter.int.test.ts` — component test against real DB (testcontainers)
-- [ ] AGENTS.md updates (ledger-core, db-schema, db-client)
 
 ## Validation
 
