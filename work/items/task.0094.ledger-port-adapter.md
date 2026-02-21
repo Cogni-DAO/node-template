@@ -2,7 +2,7 @@
 id: task.0094
 type: task
 title: "Ledger port interface + Drizzle adapter + schema migration + container wiring"
-status: needs_merge
+status: done
 priority: 1
 rank: 2
 estimate: 2
@@ -19,7 +19,7 @@ revision: 1
 blocked_by: task.0093
 deploy_verified: false
 created: 2026-02-20
-updated: 2026-02-22
+updated: 2026-02-21
 labels: [governance, ledger, adapter]
 external_refs:
 ---
