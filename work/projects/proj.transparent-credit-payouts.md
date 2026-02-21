@@ -2,68 +2,92 @@
 id: proj.transparent-credit-payouts
 type: project
 primary_charter:
-title: Transparent Credit Payouts — Signed Receipts + Deterministic Distribution
+title: "Transparent Credit Payouts — Weekly Activity Pipeline"
 state: Active
 priority: 1
-estimate: 4
-summary: Merged PR → signed WorkReceipt → epoch close computes payouts from receipts + pinned rules → signed payout statement. Anyone can recompute and verify.
-outcome: A third party can fetch receipts + rules and recompute the payout table exactly. All receipts and the payout statement verify cryptographically (EIP-191).
+estimate: 5
+summary: "Epoch-based ledger where source adapters collect contribution activity (GitHub, Discord), the system proposes credit allocations via weight policy, and an admin finalizes the distribution. Payouts are deterministic and recomputable from stored data."
+outcome: "A third party can recompute the payout table exactly from stored activity events + pool components + weight config. All activity is attributed to contributors via identity bindings. Admin finalizes once per epoch."
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-02-17
+updated: 2026-02-21
 labels: [governance, transparency, payments, web3]
 ---
 
-# Transparent Credit Payouts — Signed Receipts + Deterministic Distribution
+# Transparent Credit Payouts — Weekly Activity Pipeline
 
 ## Goal
 
-Merged PR tied to a work item → approver issues signed WorkReceipt → epoch close computes payouts from receipts + pinned rules → signed payout statement published → anyone recomputes and verifies signatures. This supersedes SourceCred's opaque grain scoring with explicit, signed, verifiable artifacts.
+Build a transparent activity-to-payout pipeline. Every week the system collects contribution activity from configured sources (GitHub, Discord), attributes events to contributors, proposes a credit distribution using a weight policy, and lets an admin finalize the result. Payouts are deterministic and recomputable from stored data.
+
+The system makes **what happened** (activity), **how it was valued** (weights), and **who got paid** (allocations) fully transparent and auditable. Valuation weights are explicit and governable — not hidden in an algorithm.
 
 ## Supersedes
 
-**proj.sourcecred-onchain** (now Dropped) — Receipt-first architecture replaces SourceCred's algorithmic grain→CSV→Safe pipeline. SourceCred continues running until migration completes. Existing SourceCred specs ([sourcecred.md](../../docs/spec/sourcecred.md), [sourcecred-config-rationale.md](../../docs/spec/sourcecred-config-rationale.md)) remain valid as-built docs.
+**proj.sourcecred-onchain** (now Dropped) — Activity-ingestion pipeline replaces SourceCred's algorithmic grain→CSV→Safe pipeline. SourceCred continues running until migration completes. Existing SourceCred specs ([sourcecred.md](../../docs/spec/sourcecred.md), [sourcecred-config-rationale.md](../../docs/spec/sourcecred-config-rationale.md)) remain valid as-built docs.
+
+### Why not extend SourceCred?
+
+1. **Opaque**: Can't point to a specific activity that produced a specific score
+2. **Not portable**: Grain is internal state, not auditable data
+3. **Fake objectivity**: Algorithmic scoring pretends to be fair while hiding assumptions
+4. **Not composable**: Doesn't align with VC/DID standards
 
 ## Roadmap
 
-### Crawl (P0) — Ship It
+### Crawl (P0) — Ship the Activity Pipeline
 
-**Goal:** 3 tables, 5 API routes, EIP-191 signatures. A verifier can independently recompute payouts.
+**Goal:** Automated weekly activity collection from GitHub + Discord, best-effort attribution, admin-finalized credit distribution. Anyone can recompute payouts from stored data.
 
-| Deliverable                                                      | Status      | Est | Work Item  |
-| ---------------------------------------------------------------- | ----------- | --- | ---------- |
-| Design spike: schema, signing, storage, epoch model, valuation   | Done        | 2   | spike.0082 |
-| DB schema + core domain + receipt signing                        | Not Started | 3   | —          |
-| API: receipt issuance, epoch lifecycle, payout statement, verify | Not Started | 3   | —          |
-| Weight rules config + deterministic distribution engine          | Not Started | 2   | —          |
+| Deliverable                                                  | Status      | Est | Work Item       |
+| ------------------------------------------------------------ | ----------- | --- | --------------- |
+| Design spike: schema, signing, storage, epoch model          | Done        | 2   | spike.0082      |
+| Design revision: activity-ingestion reframe                  | Done        | 1   | (this document) |
+| Spec: epoch-ledger.md (revised)                              | Done        | 1   | —               |
+| DB schema (foundation tables) + core domain (rules, errors)  | Done        | 3   | task.0093       |
+| Identity bindings (user_bindings + identity_events)          | Not Started | 2   | task.0089       |
+| Ledger port + Drizzle adapter + schema migration + container | Not Started | 2   | task.0094       |
+| GitHub + Discord source adapters                             | Not Started | 3   | task.0097       |
+| Temporal workflows (collect + finalize)                      | Not Started | 2   | task.0095       |
+| Zod contracts + API routes + stack tests                     | Not Started | 2   | task.0096       |
 
 **V0 user story:**
 
-1. Contributor merges PR linked to a work item
-2. Approver issues signed WorkReceipt via `POST /api/v1/receipts`
-3. Epoch closes via `POST /api/v1/epochs/:id/close`
-4. Distribution engine computes payouts from receipts + pinned rules
-5. Signed payout statement published via `GET /api/v1/epochs/:id/payout-statement`
-6. Anyone fetches receipts + rules_version and recomputes the exact payout table
+1. Temporal cron opens a weekly epoch (`period_start` → `period_end`) with weight config
+2. `CollectEpochWorkflow` runs GitHub + Discord adapters for the time window
+3. Adapters normalize activity → `activity_events` (idempotent by deterministic ID)
+4. System resolves platform identities → `user_id` via `user_bindings` (best-effort)
+5. Weight policy computes `proposed_units` per contributor → `epoch_allocations`
+6. Admin reviews allocations, adjusts `final_units` where needed
+7. Admin records pool components (`base_issuance` at minimum)
+8. Admin triggers finalize → `computePayouts(final_units, pool_total)` → `payout_statement`
+9. Anyone can recompute payouts from stored `activity_events` + pool + weight config
 
 **Definition of done:**
 
-- [ ] A third party can fetch receipts + rules_version and recompute the payout table exactly
-- [ ] All receipts and the payout statement verify cryptographically (EIP-191)
-- [ ] Duplicate retries cannot mint duplicate receipts (idempotency_key enforced)
-- [ ] Rules cannot change mid-epoch (rules_version pinned in epochs row)
+- [ ] Weekly epoch collects GitHub PRs/reviews and Discord messages automatically
+- [ ] Activity attributed to contributors via identity bindings (unresolved events flagged)
+- [ ] Admin can review and adjust proposed allocations before finalizing
+- [ ] A third party can recompute the payout table from stored data exactly
+- [ ] Duplicate activity collection is idempotent (deterministic event IDs)
+- [ ] Epoch close is idempotent (closing twice yields identical statement hash)
+- [ ] All write operations execute in Temporal workflows (Next.js stateless)
+- [ ] All math is BIGINT — no floating point, including weight values (milli-units)
 
-### Walk (P1) — Merkle Integrity + UI + SourceCred Migration
+### Walk (P1) — Signed Receipts + UI + More Sources
 
-**Goal:** Merkle proofs for external verification without DB access. UI surfaces. Begin SourceCred migration.
+**Goal:** Per-receipt wallet signatures for cryptographic audit trail. UI surfaces. Additional activity sources.
 
-| Deliverable                                                   | Status      | Est | Work Item            |
-| ------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Merkle tree per epoch + inclusion proofs (add `merkletreejs`) | Not Started | 2   | (create at P1 start) |
-| UI: `/receipts`, `/epochs/:id`, `/contributors/:id` pages     | Not Started | 3   | (create at P1 start) |
-| SourceCred grain → receipt migration strategy                 | Not Started | 2   | (create at P1 start) |
-| Non-work-item contributions (governance, community, ops)      | Not Started | 2   | (create at P1 start) |
-| Automated issuance hooks (PR merge → receipt without manual)  | Not Started | 2   | (create at P1 start) |
+| Deliverable                                           | Status      | Est | Work Item            |
+| ----------------------------------------------------- | ----------- | --- | -------------------- |
+| Per-receipt EIP-191 wallet signing                    | Not Started | 2   | (create at P1 start) |
+| `ledger_issuers` role system (can_issue, can_approve) | Not Started | 2   | (create at P1 start) |
+| Statement signing (DAO multisig / key store)          | Not Started | 2   | (create at P1 start) |
+| UI: `/epochs/:id`, `/contributors/:id` pages          | Not Started | 3   | (create at P1 start) |
+| X/Twitter activity adapter                            | Not Started | 2   | (create at P1 start) |
+| Funding activity adapter                              | Not Started | 2   | (create at P1 start) |
+| Merkle tree per epoch + inclusion proofs              | Not Started | 2   | (create at P1 start) |
+| SourceCred grain → activity migration strategy        | Not Started | 2   | (create at P1 start) |
 
 ### Run (P2+) — Federation + SourceCred Removal
 
@@ -76,117 +100,82 @@ Merged PR tied to a work item → approver issues signed WorkReceipt → epoch c
 | SourceCred removal from stack                        | Not Started | 2   | (create at P2 start) |
 | On-chain Merkle root anchoring                       | Not Started | 2   | (create at P2 start) |
 
-## V0 Schema
+## Architecture & Schema
 
-### Tables
-
-**`epochs`** — one open epoch at a time
-
-| Column          | Type         | Notes                         |
-| --------------- | ------------ | ----------------------------- |
-| `id`            | BIGSERIAL PK |                               |
-| `status`        | TEXT         | `open`, `closed`              |
-| `rules_version` | TEXT         | Git SHA, locked at epoch open |
-| `opened_at`     | TIMESTAMPTZ  |                               |
-| `closed_at`     | TIMESTAMPTZ  | NULL while open               |
-| `created_at`    | TIMESTAMPTZ  |                               |
-
-**`work_receipts`** — append-only, DB trigger rejects UPDATE/DELETE
-
-| Column            | Type             | Notes                                 |
-| ----------------- | ---------------- | ------------------------------------- |
-| `id`              | UUID PK          |                                       |
-| `epoch_id`        | BIGINT FK→epochs |                                       |
-| `subject_id`      | TEXT             | Wallet address (P0), DID (P1+)        |
-| `work_item_id`    | TEXT             | e.g. `task.0054`                      |
-| `artifact_ref`    | TEXT             | PR URL or commit SHA                  |
-| `role`            | TEXT             | `author`, `reviewer`, `approver`      |
-| `units`           | BIGINT           | Post-split units (base × role weight) |
-| `issuer_address`  | TEXT             | Ethereum address of signer            |
-| `signature`       | TEXT             | EIP-191 hex signature                 |
-| `idempotency_key` | TEXT UNIQUE      | `{work_item_id}:{subject_id}:{role}`  |
-| `created_at`      | TIMESTAMPTZ      |                                       |
-
-**`payout_statements`** — one per finalized epoch
-
-| Column             | Type                    | Notes                                       |
-| ------------------ | ----------------------- | ------------------------------------------- |
-| `id`               | UUID PK                 |                                             |
-| `epoch_id`         | BIGINT UNIQUE FK→epochs |                                             |
-| `rules_version`    | TEXT                    | Must match epoch's rules_version            |
-| `receipt_set_hash` | TEXT                    | SHA-256 of canonical receipt IDs + payloads |
-| `payouts_json`     | JSONB                   | `[{subject_id, units, share, amount}]`      |
-| `issuer_address`   | TEXT                    |                                             |
-| `signature`        | TEXT                    | EIP-191 over statement hash                 |
-| `created_at`       | TIMESTAMPTZ             |                                             |
-
-### Valuation model (V0)
-
-- **Base units** = `work_item.estimate` (0–5 scale, already in work item metadata)
-- **Role split**: author 70%, reviewer 20%, approver 10%
-- **Post-split storage**: `work_receipts.units` stores the post-split value (e.g., estimate=5, author receipt → units=3.5 scaled to BIGINT as 3500)
-- **Non-code work** must be represented as a work item with an evidence link, or excluded in V0
-- **rules_version** = git SHA of `config/payout-rules.yaml`, pinned at epoch open
-
-### API (V0 minimum)
-
-| Method | Route                                 | Auth           | Purpose                                   |
-| ------ | ------------------------------------- | -------------- | ----------------------------------------- |
-| POST   | `/api/v1/receipts`                    | Admin/approver | Create signed receipt (idempotent)        |
-| GET    | `/api/v1/epochs/:id/receipts`         | Public         | List receipts for epoch                   |
-| POST   | `/api/v1/epochs/:id/close`            | Admin          | Compute payouts + create signed statement |
-| GET    | `/api/v1/epochs/:id/payout-statement` | Public         | Fetch signed payout statement             |
-| GET    | `/api/v1/verify/epoch/:id`            | Public         | Server-side verification report           |
+See [epoch-ledger spec](../../docs/spec/epoch-ledger.md) for full architecture, schema, invariants, API contracts, and Temporal workflows.
 
 ## Constraints
 
-- Receipt issuance requires explicit, signed approval — no implicit or algorithmic issuance
-- Rules cannot change mid-epoch (rules_version pinned in epochs row)
-- Append-only: DB trigger rejects UPDATE/DELETE on work_receipts
-- Idempotency: UNIQUE(idempotency_key) prevents duplicate receipts
-- All monetary math in BIGINT — no floating point
-- Wallet address as subject_id for V0; DID deferred to proj.decentralized-identity
+- Activity weights are transparent and governable — system never hides valuation logic
+- Weight config pinned per epoch (stored in epoch row) — reproducible
+- Activity events are immutable facts — append-only with DB triggers
+- Pool components are pre-recorded during epoch — finalize reads them, never creates budget
+- Each pool component type appears at most once per epoch (POOL_UNIQUE_PER_TYPE)
+- At least one `base_issuance` pool component required before epoch finalize
+- Epoch close is idempotent — same inputs produce identical statement hash
+- All write operations go through Temporal — Next.js stays stateless
+- All monetary math in BIGINT — no floating point, including weights (integer milli-units)
+- `user_id` (UUID) is the canonical identity for all attribution — see [identity spec](../../docs/spec/decentralized-identity.md)
+- Identity resolution is best-effort — unresolved events flagged, not silently dropped
+- Source adapters use cursor-based incremental sync — no full-window rescans
+- Verification = recompute from stored data — not re-fetch from external sources
 
 ## Biggest Risk
 
-If issuance is not constrained (who can issue, what qualifies, idempotency), you recreate SourceCred-style opacity with different plumbing. The choke-point is `POST /api/v1/receipts` — must be admin-only with explicit approval evidence.
+If the weight policy becomes a black box (complex formulas, hidden multipliers, auto-adjusted weights), you recreate SourceCred's core problem with nicer plumbing. Weights should be simple, explicit, and governable. Admin override exists precisely because no formula perfectly captures contribution value.
 
 ## Dependencies
 
 - [x] spike.0082 — design doc landed
 - [x] Existing governance approval flow stable (task.0054 — Done)
-- [ ] `RECEIPT_ISSUER_PRIVATE_KEY` env var wired
+- [x] Temporal + scheduler-worker service operational
+- [x] SIWE wallet auth operational
+- [ ] task.0089 — Identity bindings (user_bindings table)
+- [ ] GitHub API token configured
+- [ ] Discord bot token configured (already exists via OpenClaw)
 
 ## As-Built Specs
 
-- (none yet — specs created when code merges)
+- [epoch-ledger](../../docs/spec/epoch-ledger.md) — V0 schema, invariants, API, architecture
 
 ## Design Notes
 
+### Key reframes
+
+**From spike.0082:** spike.0082 designed a "deterministic distribution engine" with algorithmic valuation. This project corrects the model: weights propose, humans finalize.
+
+**From receipt-signing model:** The original P0 designed per-receipt wallet-signed receipts with SIWE-gated multi-role authorization. This revision moves wallet signing to P1 and replaces manual receipt creation with automated activity ingestion. The core payout math (`computePayouts`, BIGINT, largest-remainder) is unchanged.
+
+### Technical decisions
+
+| Decision       | Choice                                               | Why                                               |
+| -------------- | ---------------------------------------------------- | ------------------------------------------------- |
+| Ingestion      | Source adapters with cursor-based incremental sync   | Idempotent, handles pagination/rate limits        |
+| Auth (V0)      | SIWE + simple admin check                            | Minimal — multi-role deferred to P1               |
+| Storage        | Postgres append-only + DB triggers                   | Zero new deps, hard enforcement                   |
+| Activity state | Single `activity_events` table, append-only          | No lifecycle — events are immutable facts         |
+| Allocation     | `epoch_allocations` with proposed + final units      | Admin adjusts totals, not per-event               |
+| Epoch trigger  | Temporal cron (weekly) + manual collect option       | Automated with admin override                     |
+| Valuation      | Weight policy (integer milli-units) + admin override | Transparent defaults, human judgment preserved    |
+| Pool           | Sum of pinned components                             | Reproducible, governable                          |
+| Math           | BIGINT, largest-remainder rounding                   | Cross-platform determinism                        |
+| Identity       | user_bindings table (task.0089)                      | Cross-platform identity resolution                |
+| GitHub client  | `@octokit/graphql` + `@octokit/webhooks-types`       | Official, typed, maintained by GitHub             |
+| Discord client | `discord.js`                                         | Only serious Discord library for Node.js          |
+| Verification   | Recompute from stored data only                      | External sources may be private/non-deterministic |
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/proj.transparent-credit-payouts.handoff.md)
+
 ### What V0 explicitly defers
 
-See [research doc](../../docs/research/transparency-log-receipt-design.md) for full designs on deferred topics:
-
-- **Merkle trees / inclusion proofs** → P1. V0 verification = query DB + check EIP-191 signatures
-- **DID/VC alignment** → P2. V0 uses wallet addresses
+- **Per-receipt wallet signing** → P1 (EIP-191, domain-bound)
+- **`ledger_issuers` role system** → P1
+- **Merkle trees / inclusion proofs** → P1
+- **Statement signing** → P1 (requires key store / multisig)
+- **UI pages** → P1
+- **DID/VC alignment** → P2
 - **Federation / cross-org verification** → P2
-- **Non-work-item contributions** → P1. V0 requires a work item with evidence link
-- **Automated issuance hooks** (PR merge triggers) → P1. V0 is manual `POST /api/v1/receipts`
-- **TransparencyLogPort abstraction** → P1. V0 is direct Drizzle adapter
-- **`merkletreejs` dependency** → P1. V0 uses only `viem` (already installed)
-
-### Why not extend SourceCred?
-
-1. **Opaque**: Can't point to a specific approval that produced a specific score
-2. **Not portable**: Grain is internal state, not a signed artifact
-3. **Not composable**: Doesn't align with VC/DID standards
-
-### Technical decisions (resolved by spike.0082)
-
-| Decision      | Choice                             | Why                                          |
-| ------------- | ---------------------------------- | -------------------------------------------- |
-| Signing       | EIP-191 via `viem`                 | Already in deps, unifies with SIWE wallets   |
-| Storage       | Postgres append-only               | Zero new deps, DB trigger enforcement        |
-| Epoch trigger | Manual via API (V0)                | Simplest. Governance-triggered at P1         |
-| Valuation     | Estimate-based + role split        | Deterministic, already in work item metadata |
-| Math          | BIGINT, largest-remainder rounding | Cross-platform determinism                   |
+- **X/Twitter + funding adapters** → P1
+- **GitHub webhook fast-path** → P1
