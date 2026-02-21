@@ -14,7 +14,7 @@ assignees: derekg1729
 credit:
 project: proj.decentralized-identity
 branch: feat/user-identity-bindings
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/454
 reviewer:
 created: 2026-02-18
 updated: 2026-02-22
