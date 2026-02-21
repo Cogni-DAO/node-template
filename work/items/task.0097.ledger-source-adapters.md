@@ -2,7 +2,7 @@
 id: task.0097
 type: task
 title: "GitHub + Discord source adapters for epoch activity collection"
-status: in_progress
+status: needs_implement
 priority: 1
 rank: 3
 estimate: 3
@@ -99,7 +99,7 @@ pnpm test tests/unit/adapters/ingestion/
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0097.handoff.md)
 
 ## Attribution
 

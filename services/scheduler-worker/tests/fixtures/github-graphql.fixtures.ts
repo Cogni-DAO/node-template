@@ -1,5 +1,12 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
 /**
- * Mock GitHub GraphQL API response fixtures for unit tests.
+ * Module: `scheduler-worker/tests/fixtures/github-graphql.fixtures`
+ * Purpose: Mock GitHub GraphQL API response fixtures for unit tests.
+ * Scope: Test-only helpers for constructing mock GraphQL responses. Does not contain production logic or network I/O.
+ * Side-effects: none
+ * @internal
  */
 
 export function makePrNode(overrides: {

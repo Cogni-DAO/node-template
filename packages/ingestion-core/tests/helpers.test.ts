@@ -5,7 +5,9 @@
  * Module: `@cogni/ingestion-core/tests/helpers`
  * Purpose: Unit tests for deterministic ID construction, canonical JSON, and payload hashing.
  * Scope: Test-only. Does not contain production code.
+ * Invariants: Validates ACTIVITY_IDEMPOTENT (deterministic IDs and hashes).
  * Side-effects: none
+ * Links: packages/ingestion-core/src/helpers.ts
  * @internal
  */
 

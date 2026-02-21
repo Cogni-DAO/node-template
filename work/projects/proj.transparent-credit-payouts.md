@@ -168,6 +168,10 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 
 - Handoff: [handoff](../handoffs/proj.transparent-credit-payouts.handoff.md)
 
+### Known issues
+
+- **GitHub adapter only captures merged PRs and closed issues.** Reviews are only searched on merged PRs. This means: (1) opened-but-unmerged PRs are invisible, (2) reviews on open PRs are missed, (3) newly opened issues aren't tracked. The adapter should use broader queries (`created:`, `updated:`) and emit lifecycle event types (`pr_opened`/`pr_merged`, `issue_opened`/`issue_closed`) to capture all contribution activity. Low risk for V0 since epochs are weekly and most PRs merge within a week, but will under-count reviewers and issue authors.
+
 ### What V0 explicitly defers
 
 - **Per-receipt wallet signing** → P1 (EIP-191, domain-bound)

@@ -95,7 +95,7 @@ describe("GitHubSourceAdapter", () => {
       const result = await adapter.collect(makeCollectParams());
 
       expect(result.events).toHaveLength(1);
-      expect(result.events[0]!.id).toBe(
+      expect(result.events[0]?.id).toBe(
         "github:pr:cogni-dao/cogni-template:42"
       );
     });
@@ -114,10 +114,10 @@ describe("GitHubSourceAdapter", () => {
       const adapter2 = makeAdapter();
       const result2 = await adapter2.collect(makeCollectParams());
 
-      expect(result1.events[0]!.payloadHash).toBe(
-        result2.events[0]!.payloadHash
+      expect(result1.events[0]?.payloadHash).toBe(
+        result2.events[0]?.payloadHash
       );
-      expect(result1.events[0]!.payloadHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(result1.events[0]?.payloadHash).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it("uses numeric databaseId as platformUserId, not login", async () => {
@@ -132,8 +132,8 @@ describe("GitHubSourceAdapter", () => {
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
 
-      expect(result.events[0]!.platformUserId).toBe("99999");
-      expect(result.events[0]!.platformLogin).toBe("someuser");
+      expect(result.events[0]?.platformUserId).toBe("99999");
+      expect(result.events[0]?.platformLogin).toBe("someuser");
     });
 
     it("skips bot authors", async () => {
@@ -153,7 +153,7 @@ describe("GitHubSourceAdapter", () => {
       const result = await adapter.collect(makeCollectParams());
 
       expect(result.events).toHaveLength(1);
-      expect(result.events[0]!.id).toBe(
+      expect(result.events[0]?.id).toBe(
         "github:pr:cogni-dao/cogni-template:11"
       );
     });
@@ -168,8 +168,8 @@ describe("GitHubSourceAdapter", () => {
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
 
-      expect(result.events[0]!.eventType).toBe("pr_merged");
-      expect(result.events[0]!.source).toBe("github");
+      expect(result.events[0]?.eventType).toBe("pr_merged");
+      expect(result.events[0]?.source).toBe("github");
     });
   });
 
@@ -215,7 +215,7 @@ describe("GitHubSourceAdapter", () => {
 
       const adapter = makeAdapter();
       const cursorTime = "2026-01-04T00:00:00Z";
-      const result = await adapter.collect(
+      await adapter.collect(
         makeCollectParams({
           cursor: {
             streamId: "pull_requests",
@@ -302,10 +302,10 @@ describe("GitHubSourceAdapter", () => {
       );
 
       expect(result.events).toHaveLength(1);
-      expect(result.events[0]!.id).toBe(
+      expect(result.events[0]?.id).toBe(
         "github:review:cogni-dao/cogni-template:42:555"
       );
-      expect(result.events[0]!.eventType).toBe("review_submitted");
+      expect(result.events[0]?.eventType).toBe("review_submitted");
     });
 
     it("filters reviews outside the time window", async () => {
@@ -333,7 +333,7 @@ describe("GitHubSourceAdapter", () => {
       );
 
       expect(result.events).toHaveLength(1);
-      expect(result.events[0]!.id).toContain(":1"); // only inWindow review
+      expect(result.events[0]?.id).toContain(":1"); // only inWindow review
     });
 
     it("skips bot review authors", async () => {
@@ -372,10 +372,10 @@ describe("GitHubSourceAdapter", () => {
       );
 
       expect(result.events).toHaveLength(1);
-      expect(result.events[0]!.id).toBe(
+      expect(result.events[0]?.id).toBe(
         "github:issue:cogni-dao/cogni-template:99"
       );
-      expect(result.events[0]!.eventType).toBe("issue_closed");
+      expect(result.events[0]?.eventType).toBe("issue_closed");
     });
   });
 
