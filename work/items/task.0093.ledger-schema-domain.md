@@ -107,6 +107,40 @@ pnpm test tests/unit/core/ledger/
 
 4. **No test coverage for `share` field** — Add assertions on `share` values in `rules.test.ts` (single-recipient 100%, 50/50 split, etc.).
 
+## Activity-Ingestion Revision Notes
+
+> Added 2026-02-21: The P0 scope has been revised from per-receipt wallet signing to automated activity ingestion. This task's deliverables are assessed below.
+
+**Reused unchanged:**
+
+- `computePayouts()` in `rules.ts` — exact same BIGINT largest-remainder math
+- `ApprovedReceipt` type — used to feed `computePayouts()` from `epoch_allocations`
+- `epoch_pool_components` table — defines credit budget (unchanged)
+- `payout_statements` table — deterministic output (unchanged)
+- `errors.ts` — `EpochNotOpenError`, `EpochAlreadyClosedError`, `PoolComponentMissingError` still relevant
+- Append-only DB trigger pattern — reused for `activity_events`
+
+**Dropped (replaced by activity-ingestion model):**
+
+- `work_receipts` table + append-only trigger — replaced by `activity_events`
+- `receipt_events` table + append-only trigger — replaced by `epoch_allocations`
+- `ledger_issuers` table — replaced by simple admin check via existing SIWE + users
+- `signing.ts` module (`buildReceiptMessage`, `hashReceiptMessage`, `computeReceiptSetHash`) — removed from `packages/ledger-core/`
+- `ReceiptSignatureInvalidError`, `IssuerNotAuthorizedError` error classes — removed
+- `SigningContext`, `ReceiptMessageFields` types — removed
+- `policy_repo`, `policy_commit_sha`, `policy_path`, `policy_content_hash` columns on `epochs` — replaced by `weight_config`
+
+Previous migrations (0010, 0011) have not shipped — delete them and regenerate fresh via `drizzle-kit generate` with the revised schema in task.0094.
+
+**New schema (task.0094 generates a single fresh migration):**
+
+- `epochs` table revised: add `period_start`, `period_end`, `weight_config`; remove policy columns
+- `activity_events` table (append-only, provenance fields)
+- `epoch_allocations` table (proposed + final units)
+- `source_cursors` table (adapter sync state)
+- `epoch_pool_components` table (unchanged)
+- `payout_statements` table (unchanged)
+
 ## PR / Links
 
 - Handoff: [handoff](../handoffs/task.0093.handoff.md)

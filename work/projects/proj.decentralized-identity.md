@@ -10,7 +10,7 @@ summary: Unify Discord + GitHub + wallet under a single user_id (UUID). Ledger, 
 outcome: Users identified by stable UUID regardless of auth method; wallet/Discord/GitHub are evidenced bindings; ledger events reference user_id; DID compatibility layer available when cross-node portability is needed.
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-02-20
+updated: 2026-02-22
 labels: [identity, auth, web3, ssi]
 ---
 
@@ -29,9 +29,9 @@ Provide a stable, auth-method-agnostic identity for every user. The canonical id
 | Deliverable                                                    | Status      | Est | Work Item  |
 | -------------------------------------------------------------- | ----------- | --- | ---------- |
 | Research spike: gap analysis + design doc                      | Done        | 2   | spike.0080 |
-| `user_bindings` table + `identity_events` audit trail          | Not Started | 2   | task.0089  |
-| Binding flows: Discord (bot challenge), GitHub (PR/gist proof) | Not Started | 2   | task.0089  |
-| Backfill: existing `users.wallet_address` → `user_bindings`    | Not Started | 1   | task.0089  |
+| `user_bindings` table + `identity_events` audit trail          | In Review   | 2   | task.0089  |
+| Binding flows: Discord (bot challenge), GitHub (PR/gist proof) | Not Started | 2   | (future)   |
+| Backfill: existing `users.wallet_address` → `user_bindings`    | In Review   | 1   | task.0089  |
 
 **Exit criteria:** You can attribute work + messages to a user, deterministically, with `user_id` as the single stable ID that the ledger references.
 
@@ -93,13 +93,13 @@ These existing specs reference wallet address as identity and will need updates 
 
 [proj.transparent-credit-payouts](./proj.transparent-credit-payouts.md) depends on stable user identity:
 
-- `work_receipts.user_id` references `users.id` (not wallet address)
-- Epoch payout statements keyed by `user_id`
+- `activity_events.user_id` references `users.id` (resolved via `user_bindings`)
+- `epoch_allocations` and `payout_statements` keyed by `user_id`
 - Identity merges must not rewrite receipt history — new events only
 
 ## As-Built Specs
 
-- (none yet — specs created when code merges)
+- [decentralized-identity](../../docs/spec/decentralized-identity.md) — user_bindings + identity_events schema, invariants, auth flow
 
 ## Design Notes
 
@@ -126,6 +126,6 @@ The spike research remains valid — just deferred to P2. Key decisions preserve
 ### Critical Invariants
 
 - **I-USER-ID**: Every user has `users.id` (UUID) as canonical identifier. Wallets, Discord, GitHub are bindings — never the identity itself.
-- **I-NO-AUTO-MERGE**: If a binding is already attached to a different user, require explicit merge with proofs. Never silently re-point. DB-enforced via UNIQUE constraint on `user_bindings.external_id`.
-- **I-BINDINGS-ARE-EVIDENCED**: Every binding has explicit proof (SIWE signature, bot challenge, PR link) + audit trail in `identity_events`.
+- **I-NO-AUTO-MERGE**: If a binding is already attached to a different user, require explicit merge with proofs. Never silently re-point. DB-enforced via `UNIQUE(provider, external_id)`.
+- **I-BINDINGS-ARE-EVIDENCED**: Every binding has proof recorded in `identity_events.payload`. Bindings table is current-state index only.
 - **I-LEDGER-REFERENCES-USER-ID**: Receipts and payout events reference `user_id`, never wallet address or DID.

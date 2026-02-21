@@ -2,15 +2,15 @@
 id: decentralized-identity
 type: spec
 title: User Identity + Account Bindings
-status: draft
-spec_state: draft
-trust: draft
+status: active
+spec_state: active
+trust: reviewed
 summary: Stable user_id (UUID) as canonical identity. Wallet, Discord, and GitHub are evidenced bindings — never the identity itself. "Contributor" is a derived label, not an identity primitive. DID/VC portability deferred to P2.
 read_when: Working on identity, auth, account linking, RBAC actor types, user context injection, or ledger attribution
 implements: proj.decentralized-identity
 owner: derekg1729
 created: 2026-02-19
-verified: 2026-02-20
+verified: 2026-02-21
 tags: [identity, auth, web3]
 ---
 
@@ -47,8 +47,7 @@ tags: [identity, auth, web3]
 │  id: UUID (PK)                                        │
 │  user_id: UUID (FK → users.id)                        │
 │  provider: 'wallet' | 'discord' | 'github'           │
-│  external_id: TEXT (UNIQUE — enforces NO_AUTO_MERGE)  │
-│  evidence: TEXT (proof reference)                      │
+│  external_id: TEXT (UNIQUE per provider)               │
 │  created_at: TIMESTAMPTZ                              │
 └──────────────────────────────────────────────────────┘
                │ append-only
@@ -70,10 +69,10 @@ Examples:
 
 **Two identity tiers (P0):**
 
-| Tier           | Purpose                     | Type                   | Stability                                   |
-| -------------- | --------------------------- | ---------------------- | ------------------------------------------- |
-| **User ID**    | Canonical member identifier | UUID v4 (`users.id`)   | Permanent — minted once at first contact    |
-| **Binding(s)** | Auth methods bound to user  | provider + external_id | Append-only, evidenced, revocable via event |
+| Tier           | Purpose                     | Type                   | Stability                                           |
+| -------------- | --------------------------- | ---------------------- | --------------------------------------------------- |
+| **User ID**    | Canonical member identifier | UUID v4 (`users.id`)   | Permanent — minted once at first contact            |
+| **Binding(s)** | Auth methods bound to user  | provider + external_id | Current-state index; proof lives in identity_events |
 
 **Why UUID instead of DID at P0?** DID requires crypto dependencies (ed25519, multicodec, base58btc) with zero user-facing value until federation. Ledger correctness needs stable, unique IDs — UUID does this. DID is a portability concern for P2, not an identity correctness concern for P0.
 
@@ -86,10 +85,9 @@ Wallet Sign (RainbowKit) → SIWE Verify (src/auth.ts)
   → User Lookup by wallet_address
   → IF new user:
       createUser() → users.id (UUID)
-      createBinding('wallet', address, siweSignature) → user_bindings INSERT
-      emitIdentityEvent('bind', ...) → identity_events INSERT
+      createBinding('wallet', address, { method: 'siwe', ... }) → user_bindings INSERT + identity_events INSERT
   → IF existing user:
-      createBinding('wallet', address, siweSignature) → UPSERT (idempotent)
+      createBinding('wallet', address, { method: 'siwe', ... }) → UPSERT (idempotent)
   → JWT Session { id, walletAddress }
   → SessionUser { id, walletAddress }
 ```
@@ -122,16 +120,16 @@ Provide a stable, auth-method-agnostic identity for every user. `users.id` works
 
 ## Invariants
 
-| Rule                   | Constraint                                                                                                                                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| USER_ID_AT_CREATION    | Every user gets a UUID minted at first contact. No user exists without one.                                                                            |
-| CANONICAL_IS_USER_ID   | Business logic identity references use `user_id`, never `wallet_address`, `discord_user_id`, or DID.                                                   |
-| BINDINGS_ARE_EVIDENCED | Every binding has explicit proof (SIWE signature, bot challenge, PR link) + audit trail in `identity_events`.                                          |
-| NO_AUTO_MERGE          | If a binding's `external_id` is already bound to a different user, the bind attempt fails. Never silently re-point. DB-enforced via UNIQUE constraint. |
-| SIWE_UNCHANGED         | SIWE authentication continues working. Binding additions are additive — no existing auth flow breaks.                                                  |
-| UUID_STAYS_AS_PK       | `users.id` (UUID) remains the relational PK and FK target.                                                                                             |
-| APPEND_ONLY_EVENTS     | `identity_events` rows are append-only. Revocation creates a new event, never deletes rows.                                                            |
-| LEDGER_REFERENCES_USER | Receipts, epochs, and payout statements reference `user_id` — never wallet or DID directly.                                                            |
+| Rule                   | Constraint                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| USER_ID_AT_CREATION    | Every user gets a UUID minted at first contact. No user exists without one.                                                                             |
+| CANONICAL_IS_USER_ID   | Business logic identity references use `user_id`, never `wallet_address`, `discord_user_id`, or DID.                                                    |
+| BINDINGS_ARE_EVIDENCED | Every binding has proof recorded in `identity_events.payload` (SIWE signature, bot challenge, PR link). Bindings table is current-state index only.     |
+| NO_AUTO_MERGE          | If a binding's `(provider, external_id)` is already bound to a different user, the bind attempt fails. Never silently re-point. DB-enforced via UNIQUE. |
+| SIWE_UNCHANGED         | SIWE authentication continues working. Binding additions are additive — no existing auth flow breaks.                                                   |
+| UUID_STAYS_AS_PK       | `users.id` (UUID) remains the relational PK and FK target.                                                                                              |
+| APPEND_ONLY_EVENTS     | `identity_events` rows are append-only. DB trigger rejects UPDATE/DELETE. Revocation creates a new event, never deletes rows.                           |
+| LEDGER_REFERENCES_USER | Receipts, epochs, and payout statements reference `user_id` — never wallet or DID directly.                                                             |
 
 ### Schema
 
@@ -152,9 +150,10 @@ Provide a stable, auth-method-agnostic identity for every user. `users.id` works
 | `id`          | TEXT        | PK                                                 | UUID v4                                                           |
 | `user_id`     | TEXT        | FK → users.id, NOT NULL                            | User this binding belongs to                                      |
 | `provider`    | TEXT        | NOT NULL, CHECK IN ('wallet', 'discord', 'github') | Binding type                                                      |
-| `external_id` | TEXT        | UNIQUE, NOT NULL                                   | Provider-specific ID (address, discord snowflake, github user id) |
-| `evidence`    | TEXT        |                                                    | Proof reference (SIWE sig hash, challenge token)                  |
+| `external_id` | TEXT        | NOT NULL                                           | Provider-specific ID (address, discord snowflake, github user id) |
 | `created_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                            | When the binding was created                                      |
+
+**Constraint:** `UNIQUE(provider, external_id)` — same external ID across different providers is allowed (GitHub numeric ID can equal a Discord snowflake). Proof/evidence lives in `identity_events.payload`, not on the binding row.
 
 **Table:** `identity_events` (new, append-only)
 
@@ -166,20 +165,21 @@ Provide a stable, auth-method-agnostic identity for every user. `users.id` works
 | `payload`    | JSONB       | NOT NULL                                       | Event details (provider, external_id, evidence) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                        | When the event occurred                         |
 
-**Index:** `user_bindings(user_id)` — for lookup by user.
+**Indexes:** `user_bindings(user_id)` — for lookup by user.
 
-**NO_AUTO_MERGE enforcement:** `user_bindings.external_id` is UNIQUE. Inserting a binding already linked to a different user is a constraint violation at the DB level. No application-level race conditions.
+**Trigger:** `reject_identity_events_mutation` — rejects UPDATE/DELETE on `identity_events` (same pattern as ledger append-only triggers).
+
+**NO_AUTO_MERGE enforcement:** `UNIQUE(provider, external_id)` on `user_bindings`. Inserting a binding where that provider+external_id is already linked to a different user is a constraint violation at the DB level. No application-level race conditions.
 
 ### File Pointers
 
-| File                                       | Purpose                                                       |
-| ------------------------------------------ | ------------------------------------------------------------- |
-| `packages/db-schema/src/identity.ts`       | `user_bindings` + `identity_events` table definitions (new)   |
-| `packages/db-schema/src/utils/identity.ts` | `createBinding()` utility (new)                               |
-| `src/auth.ts`                              | SIWE authorize — bind wallet on login                         |
-| `src/shared/auth/session.ts`               | `SessionUser` type (id is already user_id)                    |
-| `src/types/next-auth.d.ts`                 | NextAuth type augmentation (no change needed if id = user_id) |
-| `src/lib/auth/server.ts`                   | `getServerSessionUser()` (no change needed if id = user_id)   |
+| File                                 | Purpose                                                       |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `packages/db-schema/src/identity.ts` | `user_bindings` + `identity_events` table definitions (new)   |
+| `src/auth.ts`                        | SIWE authorize — bind wallet on login                         |
+| `src/shared/auth/session.ts`         | `SessionUser` type (id is already user_id)                    |
+| `src/types/next-auth.d.ts`           | NextAuth type augmentation (no change needed if id = user_id) |
+| `src/lib/auth/server.ts`             | `getServerSessionUser()` (no change needed if id = user_id)   |
 
 ## DID Readiness (P2)
 
@@ -213,7 +213,7 @@ pnpm check:docs    # docs metadata valid
 
 ## Open Questions
 
-- [ ] Backfill strategy: migration script to create `user_bindings` rows for existing `users.wallet_address` values? (resolve at PR time)
+- [x] Backfill strategy: CTE + RETURNING migration in 0013 — idempotent, events only for inserted bindings.
 - [ ] Future: when RBAC actor type migrates from `user:{walletAddress}` to `user:{userId}`, does it happen in this spec or as an RBAC spec update?
 
 ## Related

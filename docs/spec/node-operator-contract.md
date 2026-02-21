@@ -103,7 +103,7 @@ Establish enforceable invariants ensuring Node sovereignty, deployment portabili
 | Operator | Node DB           | **NO**         | Never direct access          |
 | Operator | Node wallet       | **NO**         | Never custody                |
 
-**Operator Node Registry:** Operator maintains a derived `node_registry_nodes` table for control-plane routing. This is rebuildable from on-chain receipts + repo-spec snapshots. `node_id` (UUID) is the canonical tenant key in Operator APIs/headers/claims. See [Node Formation Spec §9](node-formation.md#9-operator-node-registry-p1).
+**Operator Node Registry:** Operator maintains a derived `node_registry_nodes` table for control-plane routing. This is rebuildable from on-chain receipts + repo-spec snapshots. `node_id` (UUID) is the Operator's federation/deployment identity — it identifies a deployed Node instance, not a tenant within the Node. Within a Node's own DB, tenant isolation uses `billing_account_id` (= `billing_accounts.id`); `node_id` is never used for RLS or tenant scoping inside the Node repo. A `node_id` may map to one or many `billing_account_id`s. See [Node Formation Spec §9](node-formation.md#9-operator-node-registry-p1) and [ROADMAP.md Terminology](../../ROADMAP.md#terminology--id-mapping).
 
 ### Deployment Portability
 

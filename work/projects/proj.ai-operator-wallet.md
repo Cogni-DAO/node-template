@@ -26,15 +26,31 @@ Close the financial loop so every credit purchase automatically provisions OpenR
 
 ### Crawl (P0) — Operator Wallet + Outbound Payments
 
-**Goal:** Operator wallet provisioned via Privy, Splits contract deployed for trustless revenue split, OpenRouter top-up wired.
+**Goal:** Validate payment chain experimentally, then: operator wallet via Privy, Splits contract for trustless revenue split, OpenRouter top-up wired.
 
-3 atomic PRs, each shippable:
+Spike + 3 atomic PRs, each shippable:
 
-| #   | Deliverable                                   | Status      | Est | Work Item |
-| --- | --------------------------------------------- | ----------- | --- | --------- |
-| 1   | Operator wallet provisioning + wiring         | Not Started | 2   | task.0084 |
-| 2   | Splits contract deployment + payment re-route | Not Started | 1   | task.0085 |
-| 3   | OpenRouter top-up integration                 | Not Started | 3   | task.0086 |
+| #   | Deliverable                                   | Status      | Est | Work Item  |
+| --- | --------------------------------------------- | ----------- | --- | ---------- |
+| 0   | Experimental spike: validate payment chain    | Not Started | 1   | spike.0090 |
+| 1   | Operator wallet provisioning + wiring         | Not Started | 2   | task.0084  |
+| 2   | Splits contract deployment + payment re-route | Not Started | 1   | task.0085  |
+| 3   | OpenRouter top-up integration                 | Not Started | 3   | task.0086  |
+
+**Spike 0 — Validate payment chain (hands-on, before building abstractions):**
+
+Three sub-experiments, run manually from scripts with a real wallet on Base:
+
+1. **OpenRouter crypto top-up** — `POST /api/v1/credits/coinbase` with `{amount: 5, sender, chain_id: "8453"}`. Record exactly what `metadata.function_name` comes back. If `swapAndTransferUniswapV3Native` → operator needs ETH. If `transferTokenPreApproved` or `swapAndTransferUniswapV3TokenPreApproved` → operator can pay with USDC directly. Execute the tx. Confirm credits appear via `GET /api/v1/credits`.
+2. **0xSplits deployment** — Deploy a mutable Split on Base via `@0xsplits/splits-sdk`. Two recipients (test wallets). Send USDC to the Split address. Call `distributeERC20()`. Verify both recipients received correct shares.
+3. **End-to-end chain** — Send USDC to the Split. Distribute. From the operator-share recipient, execute the OpenRouter top-up from step 1. Prove the full flow: USDC → Split → operator wallet → OpenRouter credits.
+
+**Key unknowns this spike resolves:**
+
+- Does OpenRouter return `Native` or `Token`/`TokenPreApproved` as function_name? (determines ETH vs USDC funding)
+- What is `metadata.contract_address`? Is it `0xeADE6...` (Coinbase Transfers) or something else?
+- Does Splits `distributeERC20()` work with Base USDC? Gas cost?
+- Can the full chain complete in < 2 minutes (user experience)?
 
 **PR 1 — Operator wallet provisioning + wiring:**
 
@@ -60,7 +76,9 @@ Close the financial loop so every credit purchase automatically provisions OpenR
 
 - `OperatorWalletPort.fundOpenRouterTopUp(intent)` — typed intent for Coinbase Commerce protocol
 - `calculateOpenRouterTopUp()` in `src/core/billing/pricing.ts`
-- OpenRouter charge creation → Coinbase Commerce `swapAndTransferUniswapV3Native` → submit via Privy
+- OpenRouter charge creation → Coinbase Commerce transfer function → submit via Privy
+- Function determined by spike: `swapAndTransferUniswapV3Native` (ETH input) or `transferTokenPreApproved` / `swapAndTransferUniswapV3TokenPreApproved` (USDC input)
+- Coinbase Transfers contract: `0xeADE6bE02d043b3550bE19E960504dbA14A14971` on Base (confirmed)
 - `outbound_topups` table + state machine (CHARGE_PENDING → CHARGE_CREATED → TX_BROADCAST → CONFIRMED)
 - Charge receipt logging with `openrouter_topup` reason
 - New env vars: `OPENROUTER_CRYPTO_FEE`, `OPERATOR_MAX_TOPUP_USD`
@@ -142,7 +160,13 @@ This project covers **operator revenue routing** (user pays → Split → operat
 
 ### OpenRouter top-up is the Coinbase Commerce protocol
 
-OpenRouter returns a `transfer_intent` (not raw calldata). We encode `swapAndTransferUniswapV3Native(intent, poolFeesTier=500)` on the Coinbase Transfers contract (`0xeADE6bE02d043b3550bE19E960504dbA14A14971` on Base). See [web3-openrouter-payments spec](../../docs/spec/web3-openrouter-payments.md) for full flow.
+OpenRouter returns a `transfer_intent` (not raw calldata) for the [Coinbase Commerce Onchain Payment Protocol](https://github.com/coinbase/commerce-onchain-payment-protocol). The Transfers contract (`0xeADE6bE02d043b3550bE19E960504dbA14A14971` on Base) supports 16 transfer functions including:
+
+- `swapAndTransferUniswapV3Native(intent, poolFeesTier)` — pays with ETH, swaps to recipient currency
+- `transferTokenPreApproved(intent)` — pays with ERC-20 directly (no swap if same token)
+- `swapAndTransferUniswapV3TokenPreApproved(intent, tokenIn, maxWillingToPay, poolFeesTier)` — pays with any ERC-20, swaps to recipient currency
+
+Which function OpenRouter's API returns in `metadata.function_name` determines whether the operator wallet needs ETH or can pay with USDC directly. **Spike 0 resolves this.** See [web3-openrouter-payments spec](../../docs/spec/web3-openrouter-payments.md) for full flow.
 
 ### Top-up economics (derived from constants)
 

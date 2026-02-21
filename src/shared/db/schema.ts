@@ -17,6 +17,7 @@ export * from "@cogni/db-schema/ai-threads";
 // Domain slices
 export * from "@cogni/db-schema/auth";
 export * from "@cogni/db-schema/billing";
+export * from "@cogni/db-schema/identity";
 // Core FK targets (users, billingAccounts)
 export * from "@cogni/db-schema/refs";
 export * from "@cogni/db-schema/scheduling";

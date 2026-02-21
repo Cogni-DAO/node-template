@@ -22,6 +22,7 @@ export const tsupConfig = defineConfig({
     "src/billing.ts",
     "src/ai.ts",
     "src/ai-threads.ts",
+    "src/identity.ts",
     "src/ledger.ts",
   ],
   format: ["esm"],
