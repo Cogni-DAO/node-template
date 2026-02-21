@@ -120,25 +120,26 @@ pnpm test tests/unit/core/ledger/
 - `errors.ts` — `EpochNotOpenError`, `EpochAlreadyClosedError`, `PoolComponentMissingError` still relevant
 - Append-only DB trigger pattern — reused for `activity_events`
 
-**Modified in follow-up migration (task.0094):**
+**Dropped (replaced by activity-ingestion model):**
 
-- `epochs` table — add `period_start`, `period_end`, `weight_config`; drop `policy_repo`, `policy_commit_sha`, `policy_path`, `policy_content_hash`
+- `work_receipts` table + append-only trigger — replaced by `activity_events`
+- `receipt_events` table + append-only trigger — replaced by `epoch_allocations`
+- `ledger_issuers` table — replaced by simple admin check via existing SIWE + users
+- `signing.ts` module (`buildReceiptMessage`, `hashReceiptMessage`, `computeReceiptSetHash`) — removed from `packages/ledger-core/`
+- `ReceiptSignatureInvalidError`, `IssuerNotAuthorizedError` error classes — removed
+- `SigningContext`, `ReceiptMessageFields` types — removed
+- `policy_repo`, `policy_commit_sha`, `policy_path`, `policy_content_hash` columns on `epochs` — replaced by `weight_config`
 
-**Kept in DB but superseded in P0 scope:**
+Previous migrations (0010, 0011) have not shipped — delete them and regenerate fresh via `drizzle-kit generate` with the revised schema in task.0094.
 
-- `work_receipts`, `receipt_events`, `ledger_issuers` — tables remain (append-only principle: don't delete), but P0 workflows use `activity_events` + `epoch_allocations` instead. These tables are reactivated in P1 when per-receipt wallet signing is added.
+**New schema (task.0094 generates a single fresh migration):**
 
-**Deferred to P1 (kept in package, not used in P0 workflows):**
-
-- `signing.ts` — `buildReceiptMessage()`, `hashReceiptMessage()`, `computeReceiptSetHash()`
-- `ReceiptSignatureInvalidError`, `IssuerNotAuthorizedError` error classes
-- `SigningContext`, `ReceiptMessageFields` types
-
-**New schema (handled by task.0094):**
-
+- `epochs` table revised: add `period_start`, `period_end`, `weight_config`; remove policy columns
 - `activity_events` table (append-only, provenance fields)
 - `epoch_allocations` table (proposed + final units)
 - `source_cursors` table (adapter sync state)
+- `epoch_pool_components` table (unchanged)
+- `payout_statements` table (unchanged)
 
 ## PR / Links
 

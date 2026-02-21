@@ -43,7 +43,9 @@ external_refs:
   - `activityEvents` table (append-only, provenance fields, DB trigger)
   - `epochAllocations` table (proposed + final units, UNIQUE(epoch_id, user_id))
   - `sourceCursors` table (PK: source, stream, scope)
-  - `epochs` table modifications: add `periodStart`, `periodEnd`, `weightConfig`; policy\_\* columns become nullable (kept for backward compat, not used in V0)
+  - `epochs` table modifications: add `periodStart`, `periodEnd`, `weightConfig`; drop `policyRepo`, `policyCommitSha`, `policyPath`, `policyContentHash` columns
+  - Drop `workReceipts`, `receiptEvents`, `ledgerIssuers` tables and their append-only triggers (replaced by activity-ingestion model)
+  - Delete previous migrations (0010, 0011) and regenerate a single fresh migration — previous migrations never shipped
 - Drizzle migration generated + custom SQL for `activity_events` append-only trigger
 - Drizzle adapter at `src/adapters/server/ledger/drizzle-ledger.ts` implementing `ActivityLedgerStore`
 - Worker-facing adapter: `DrizzleLedgerWorkerAdapter` in `packages/db-client/` (follows existing `DrizzleExecutionGrantWorkerAdapter` pattern)
