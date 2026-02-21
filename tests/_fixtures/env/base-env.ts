@@ -39,8 +39,6 @@ export const CORE_TEST_ENV = {
   OPENCLAW_GATEWAY_TOKEN: "x".repeat(32),
   // OpenClaw git relay token (host-side push)
   OPENCLAW_GITHUB_RW_TOKEN: "ghp_test_token",
-  // Node identity (required for ledger scoping)
-  NODE_ID: "00000000-0000-4000-8000-000000000001",
   // Repo access (required in all envs — no cwd fallback)
   COGNI_REPO_PATH: process.cwd(),
 } as const;
