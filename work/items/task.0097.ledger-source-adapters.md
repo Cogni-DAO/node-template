@@ -2,7 +2,7 @@
 id: task.0097
 type: task
 title: "GitHub + Discord source adapters for epoch activity collection"
-status: needs_design
+status: in_progress
 priority: 1
 rank: 3
 estimate: 3
@@ -12,14 +12,14 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch: feat/ledger-v0
+branch: worktree-ingestion-core-github-adapter
 pr:
 reviewer:
 revision: 0
 blocked_by: task.0089, task.0094
 deploy_verified: false
 created: 2026-02-21
-updated: 2026-02-21
+updated: 2026-02-22
 labels: [governance, ledger, ingestion]
 external_refs:
 ---
@@ -71,10 +71,11 @@ external_refs:
 
 ## Plan
 
-- [ ] Define `SourceAdapter`, `ActivityEvent`, `StreamDefinition`, `StreamCursor` types in port file
-- [ ] Implement GitHub adapter with GraphQL queries for PRs, reviews, issues
+- [x] Define `SourceAdapter`, `ActivityEvent`, `StreamDefinition`, `StreamCursor` types in `@cogni/ingestion-core` package
+- [x] Wire port re-exports into `src/ports/source-adapter.port.ts`
+- [x] Implement GitHub adapter with GraphQL queries for PRs, reviews, issues
+- [x] Add unit tests: 13 helper tests + 22 adapter tests (deterministic IDs, hashing, pagination, rate limits, bot filtering)
 - [ ] Implement Discord adapter with message fetching
-- [ ] Add unit tests: deterministic ID generation, provenance fields, cursor advancement
 - [ ] Add adapter registry/factory for workflow to iterate registered adapters
 
 ## Validation

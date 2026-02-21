@@ -47,7 +47,7 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 | DB schema (foundation tables) + core domain (rules, errors)  | Done        | 3   | task.0093       |
 | Identity bindings (user_bindings + identity_events)          | Not Started | 2   | task.0089       |
 | Ledger port + Drizzle adapter + schema migration + container | Not Started | 2   | task.0094       |
-| GitHub + Discord source adapters                             | Not Started | 3   | task.0097       |
+| GitHub + Discord source adapters                             | In Progress | 3   | task.0097       |
 | Temporal workflows (collect + finalize)                      | Not Started | 2   | task.0095       |
 | Zod contracts + API routes + stack tests                     | Not Started | 2   | task.0096       |
 
