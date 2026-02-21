@@ -77,13 +77,13 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
       const fetched = await adapter.getEpoch(epoch.id);
       expect(fetched).not.toBeNull();
-      expect(fetched!.id).toBe(epoch.id);
+      expect(fetched?.id).toBe(epoch.id);
     });
 
     it("getOpenEpoch returns the open epoch for the node", async () => {
       const open = await adapter.getOpenEpoch(TEST_NODE_ID);
       expect(open).not.toBeNull();
-      expect(open!.status).toBe("open");
+      expect(open?.status).toBe("open");
     });
 
     it("listEpochs returns all epochs for the node", async () => {
@@ -136,7 +136,8 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       );
       expect(closed).toBeDefined();
 
-      const result = await adapter.closeEpoch(closed!.id, 99999n);
+      if (!closed) throw new Error("Expected closed epoch");
+      const result = await adapter.closeEpoch(closed.id, 99999n);
       expect(result.status).toBe("closed");
       expect(result.poolTotalCredits).toBe(50000n); // unchanged
     });
@@ -258,7 +259,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     it("getUnresolvedCuration returns only entries with null userId", async () => {
       const unresolved = await adapter.getUnresolvedCuration(epochId);
       expect(unresolved).toHaveLength(1);
-      expect(unresolved[0]!.eventId).toBe("github:pr:test/repo:2");
+      expect(unresolved[0]?.eventId).toBe("github:pr:test/repo:2");
     });
 
     it("upsert updates existing curation (same epoch+event)", async () => {
@@ -320,8 +321,8 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
       const allocs = await adapter.getAllocationsForEpoch(epochId);
       expect(allocs).toHaveLength(1);
-      expect(allocs[0]!.proposedUnits).toBe(8000n);
-      expect(allocs[0]!.finalUnits).toBeNull();
+      expect(allocs[0]?.proposedUnits).toBe(8000n);
+      expect(allocs[0]?.finalUnits).toBeNull();
     });
 
     it("updateAllocationFinalUnits sets final_units and override_reason", async () => {
@@ -333,8 +334,8 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       );
 
       const allocs = await adapter.getAllocationsForEpoch(epochId);
-      expect(allocs[0]!.finalUnits).toBe(10000n);
-      expect(allocs[0]!.overrideReason).toBe("bonus for extra work");
+      expect(allocs[0]?.finalUnits).toBe(10000n);
+      expect(allocs[0]?.overrideReason).toBe("bonus for extra work");
     });
 
     it("updateAllocationFinalUnits throws AllocationNotFoundError for missing allocation", async () => {
@@ -363,7 +364,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         "test/repo"
       );
       expect(cursor).not.toBeNull();
-      expect(cursor!.cursorValue).toBe("2026-01-06T00:00:00Z");
+      expect(cursor?.cursorValue).toBe("2026-01-06T00:00:00Z");
     });
 
     it("upsert updates existing cursor value", async () => {
@@ -381,7 +382,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         "pull_requests",
         "test/repo"
       );
-      expect(cursor!.cursorValue).toBe("2026-01-07T00:00:00Z");
+      expect(cursor?.cursorValue).toBe("2026-01-07T00:00:00Z");
     });
 
     it("getCursor returns null for unknown cursor", async () => {
@@ -478,7 +479,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
       const fetched = await adapter.getStatementForEpoch(epochId);
       expect(fetched).not.toBeNull();
-      expect(fetched!.id).toBe(stmt.id);
+      expect(fetched?.id).toBe(stmt.id);
     });
 
     it("getStatementForEpoch returns null for epoch without statement", async () => {
@@ -529,7 +530,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
       const sigs = await adapter.getSignaturesForStatement(statementId);
       expect(sigs).toHaveLength(1);
-      expect(sigs[0]!.signerWallet).toBe(
+      expect(sigs[0]?.signerWallet).toBe(
         "0x1234567890abcdef1234567890abcdef12345678"
       );
     });
