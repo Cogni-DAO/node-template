@@ -50,8 +50,11 @@ export function makeActivityEvent(
     source: "github",
     eventType: "pr_merged",
     platformUserId: "12345",
+    payloadHash: "test-hash-placeholder",
     producer: "test-adapter",
+    producerVersion: "0.0.0-test",
     eventTime: new Date("2026-01-06T12:00:00Z"),
+    retrievedAt: new Date("2026-01-06T12:00:01Z"),
     ...overrides,
   };
 }

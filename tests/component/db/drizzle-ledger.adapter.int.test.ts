@@ -13,16 +13,6 @@
 
 import { DrizzleLedgerAdapter } from "@cogni/db-client";
 import {
-  activityCuration,
-  activityEvents,
-  epochAllocations,
-  epochPoolComponents,
-  epochs,
-  payoutStatements,
-  sourceCursors,
-  statementSignatures,
-} from "@cogni/db-schema/ledger";
-import {
   AllocationNotFoundError,
   EpochNotFoundError,
 } from "@cogni/ledger-core";
@@ -40,6 +30,14 @@ import { seedTestActor, type TestActor } from "@tests/_fixtures/stack/seed";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+/** Unwrap DrizzleQueryError → underlying PostgresError message */
+function drizzleCause(err: unknown): string {
+  if (err instanceof Error && err.cause instanceof Error)
+    return err.cause.message;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 describe("DrizzleLedgerAdapter (Component)", () => {
   const db = getSeedDb();
   const adapter = new DrizzleLedgerAdapter(db);
@@ -50,21 +48,19 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     actor = await seedTestActor(db);
   });
 
-  // Cleanup in FK-safe order
-  afterAll(async () => {
-    await db.delete(statementSignatures);
-    await db.delete(payoutStatements);
-    await db.delete(epochAllocations);
-    await db.delete(activityCuration);
-    await db.delete(epochPoolComponents);
-    await db.delete(sourceCursors);
-    await db.delete(activityEvents);
-    await db.delete(epochs);
-  });
+  // No global afterAll cleanup needed — testcontainers PostgreSQL is ephemeral.
 
   // ── Epochs ────────────────────────────────────────────────────
 
   describe("epochs", () => {
+    let createdEpochId: bigint;
+
+    afterAll(async () => {
+      // Ensure no open epoch leaks to subsequent describes
+      const open = await adapter.getOpenEpoch(TEST_NODE_ID);
+      if (open) await adapter.closeEpoch(open.id, 0n);
+    });
+
     it("creates an epoch and retrieves it", async () => {
       const window = weekWindow(0);
       const epoch = await adapter.createEpoch({
@@ -72,6 +68,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         ...window,
         weightConfig: TEST_WEIGHT_CONFIG,
       });
+      createdEpochId = epoch.id;
 
       expect(epoch.status).toBe("open");
       expect(epoch.nodeId).toBe(TEST_NODE_ID);
@@ -96,38 +93,32 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
 
     it("ONE_OPEN_EPOCH: rejects second open epoch for same node", async () => {
-      const window2 = weekWindow(1);
       await expect(
         adapter.createEpoch({
           nodeId: TEST_NODE_ID,
-          ...window2,
+          ...weekWindow(1),
           weightConfig: TEST_WEIGHT_CONFIG,
         })
       ).rejects.toThrow();
     });
 
     it("EPOCH_WINDOW_UNIQUE: rejects duplicate window for same node", async () => {
-      // Close the current open epoch first
-      const open = await adapter.getOpenEpoch(TEST_NODE_ID);
-      expect(open).not.toBeNull();
-      await adapter.closeEpoch(open!.id, 10000n);
+      // Close the open epoch so we can test the window constraint in isolation
+      await adapter.closeEpoch(createdEpochId, 10000n);
 
-      // Attempt to create duplicate window
-      const window = weekWindow(0);
       await expect(
         adapter.createEpoch({
           nodeId: TEST_NODE_ID,
-          ...window,
+          ...weekWindow(0), // same window as the closed epoch
           weightConfig: TEST_WEIGHT_CONFIG,
         })
       ).rejects.toThrow();
     });
 
     it("closeEpoch sets status, poolTotal, and closedAt", async () => {
-      const window = weekWindow(2);
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
-        ...window,
+        ...weekWindow(2),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
 
@@ -138,7 +129,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
 
     it("closeEpoch on already-closed epoch returns it (EPOCH_CLOSE_IDEMPOTENT)", async () => {
-      // Use the epoch closed in the previous test
+      // Find the epoch we just closed (50000n pool)
       const list = await adapter.listEpochs(TEST_NODE_ID);
       const closed = list.find(
         (e) => e.status === "closed" && e.poolTotalCredits === 50000n
@@ -146,9 +137,8 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       expect(closed).toBeDefined();
 
       const result = await adapter.closeEpoch(closed!.id, 99999n);
-      // Returns existing closed epoch, does NOT update poolTotal
       expect(result.status).toBe("closed");
-      expect(result.poolTotalCredits).toBe(50000n);
+      expect(result.poolTotalCredits).toBe(50000n); // unchanged
     });
 
     it("closeEpoch on non-existent epoch throws EpochNotFoundError", async () => {
@@ -195,7 +185,6 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         platformUserId: "111",
       });
 
-      // Should not throw
       await adapter.insertActivityEvents([event]);
 
       const results = await adapter.getActivityForWindow(
@@ -212,7 +201,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         db.execute(
           sql`UPDATE activity_events SET source = 'modified' WHERE id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`
         )
-      ).rejects.toThrow(/not allowed/i);
+      ).rejects.toSatisfy((err: unknown) =>
+        /not allowed/i.test(drizzleCause(err))
+      );
     });
 
     it("ACTIVITY_APPEND_ONLY: DELETE on activity_events is rejected by trigger", async () => {
@@ -220,46 +211,52 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         db.execute(
           sql`DELETE FROM activity_events WHERE id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`
         )
-      ).rejects.toThrow(/not allowed/i);
+      ).rejects.toSatisfy((err: unknown) =>
+        /not allowed/i.test(drizzleCause(err))
+      );
     });
   });
 
   // ── Curation ──────────────────────────────────────────────────
 
   describe("curation", () => {
-    let openEpochId: bigint;
+    let epochId: bigint;
 
     beforeAll(async () => {
-      // Create a fresh open epoch for curation tests
-      const window = weekWindow(3);
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
-        ...window,
+        ...weekWindow(3),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
-      openEpochId = epoch.id;
+      epochId = epoch.id;
+    });
+
+    // Freeze test closes the epoch; afterAll is a safety net
+    afterAll(async () => {
+      const open = await adapter.getOpenEpoch(TEST_NODE_ID);
+      if (open) await adapter.closeEpoch(open.id, 0n);
     });
 
     it("upserts curation entries and retrieves them", async () => {
       await adapter.upsertCuration([
         makeCuration({
-          epochId: openEpochId,
+          epochId,
           eventId: "github:pr:test/repo:1",
           userId: actor.user.id,
         }),
         makeCuration({
-          epochId: openEpochId,
+          epochId,
           eventId: "github:pr:test/repo:2",
           userId: null,
         }),
       ]);
 
-      const all = await adapter.getCurationForEpoch(openEpochId);
+      const all = await adapter.getCurationForEpoch(epochId);
       expect(all).toHaveLength(2);
     });
 
     it("getUnresolvedCuration returns only entries with null userId", async () => {
-      const unresolved = await adapter.getUnresolvedCuration(openEpochId);
+      const unresolved = await adapter.getUnresolvedCuration(epochId);
       expect(unresolved).toHaveLength(1);
       expect(unresolved[0]!.eventId).toBe("github:pr:test/repo:2");
     });
@@ -267,29 +264,29 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     it("upsert updates existing curation (same epoch+event)", async () => {
       await adapter.upsertCuration([
         makeCuration({
-          epochId: openEpochId,
+          epochId,
           eventId: "github:pr:test/repo:2",
           userId: actor.user.id,
         }),
       ]);
 
-      const unresolved = await adapter.getUnresolvedCuration(openEpochId);
+      const unresolved = await adapter.getUnresolvedCuration(epochId);
       expect(unresolved).toHaveLength(0);
     });
 
     it("CURATION_FREEZE_ON_CLOSE: rejects curation writes after epoch close", async () => {
-      await adapter.closeEpoch(openEpochId, 5000n);
+      await adapter.closeEpoch(epochId, 5000n);
 
       await expect(
         adapter.upsertCuration([
           makeCuration({
-            epochId: openEpochId,
+            epochId,
             eventId: "github:pr:test/repo:1",
             userId: null,
             note: "should fail",
           }),
         ])
-      ).rejects.toThrow(/closed/i);
+      ).rejects.toSatisfy((err: unknown) => /closed/i.test(drizzleCause(err)));
     });
   });
 
@@ -299,13 +296,16 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     let epochId: bigint;
 
     beforeAll(async () => {
-      const window = weekWindow(4);
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
-        ...window,
+        ...weekWindow(4),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
       epochId = epoch.id;
+    });
+
+    afterAll(async () => {
+      await adapter.closeEpoch(epochId, 0n);
     });
 
     it("inserts allocations and retrieves them", async () => {
@@ -401,13 +401,16 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     let epochId: bigint;
 
     beforeAll(async () => {
-      const window = weekWindow(5);
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
-        ...window,
+        ...weekWindow(5),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
       epochId = epoch.id;
+    });
+
+    afterAll(async () => {
+      await adapter.closeEpoch(epochId, 0n);
     });
 
     it("inserts and retrieves pool components", async () => {
@@ -433,7 +436,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         db.execute(
           sql`UPDATE epoch_pool_components SET amount_credits = 99999 WHERE epoch_id = ${epochId}`
         )
-      ).rejects.toThrow(/not allowed/i);
+      ).rejects.toSatisfy((err: unknown) =>
+        /not allowed/i.test(drizzleCause(err))
+      );
     });
   });
 
@@ -443,10 +448,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     let epochId: bigint;
 
     beforeAll(async () => {
-      const window = weekWindow(6);
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
-        ...window,
+        ...weekWindow(6),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
       await adapter.closeEpoch(epoch.id, 10000n);
@@ -486,26 +490,44 @@ describe("DrizzleLedgerAdapter (Component)", () => {
   // ── Statement Signatures ──────────────────────────────────────
 
   describe("statement signatures", () => {
+    let statementId: string;
+
+    beforeAll(async () => {
+      // Self-contained: create epoch → close → insert statement
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        ...weekWindow(7),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeEpoch(epoch.id, 20000n);
+
+      const stmt = await adapter.insertPayoutStatement({
+        nodeId: TEST_NODE_ID,
+        epochId: epoch.id,
+        allocationSetHash: "sig-test-hash",
+        poolTotalCredits: 20000n,
+        payoutsJson: [
+          {
+            user_id: "sig-test-user",
+            total_units: "20000",
+            share: "1.0",
+            amount_credits: "20000",
+          },
+        ],
+      });
+      statementId = stmt.id;
+    });
+
     it("inserts and retrieves a signature", async () => {
-      // Get the statement from previous test
-      const list = await adapter.listEpochs(TEST_NODE_ID);
-      const closedEpoch = list.find(
-        (e) => e.status === "closed" && e.poolTotalCredits === 10000n
-      );
-      expect(closedEpoch).toBeDefined();
-
-      const stmt = await adapter.getStatementForEpoch(closedEpoch!.id);
-      expect(stmt).not.toBeNull();
-
       await adapter.insertStatementSignature({
         nodeId: TEST_NODE_ID,
-        statementId: stmt!.id,
+        statementId,
         signerWallet: "0x1234567890abcdef1234567890abcdef12345678",
         signature: "0xdeadbeef",
         signedAt: new Date(),
       });
 
-      const sigs = await adapter.getSignaturesForStatement(stmt!.id);
+      const sigs = await adapter.getSignaturesForStatement(statementId);
       expect(sigs).toHaveLength(1);
       expect(sigs[0]!.signerWallet).toBe(
         "0x1234567890abcdef1234567890abcdef12345678"
