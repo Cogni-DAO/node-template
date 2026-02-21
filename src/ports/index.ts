@@ -93,6 +93,17 @@ export type {
   GraphRunResult,
   PreflightCreditCheckFn,
 } from "./graph-executor.port";
+export type {
+  ActivityLedgerStore,
+  LedgerActivityEvent,
+  LedgerAllocation,
+  LedgerCuration,
+  LedgerEpoch,
+  LedgerPayoutStatement,
+  LedgerPoolComponent,
+  LedgerSourceCursor,
+  LedgerStatementSignature,
+} from "./ledger-store.port";
 // LlmError types re-exported for adapters (adapters can only import from ports)
 // Features should import directly from @/core
 export {

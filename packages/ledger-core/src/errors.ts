@@ -27,28 +27,6 @@ export class EpochAlreadyClosedError extends Error {
   }
 }
 
-export class ReceiptSignatureInvalidError extends Error {
-  public readonly code = "RECEIPT_SIGNATURE_INVALID" as const;
-  constructor(
-    public readonly receiptId: string,
-    public readonly reason: string
-  ) {
-    super(`Invalid signature on receipt ${receiptId}: ${reason}`);
-    this.name = "ReceiptSignatureInvalidError";
-  }
-}
-
-export class IssuerNotAuthorizedError extends Error {
-  public readonly code = "ISSUER_NOT_AUTHORIZED" as const;
-  constructor(
-    public readonly address: string,
-    public readonly requiredRole: string
-  ) {
-    super(`Issuer ${address} lacks required role: ${requiredRole}`);
-    this.name = "IssuerNotAuthorizedError";
-  }
-}
-
 export class PoolComponentMissingError extends Error {
   public readonly code = "POOL_COMPONENT_MISSING" as const;
   constructor(
@@ -59,6 +37,25 @@ export class PoolComponentMissingError extends Error {
       `Epoch ${epochId} is missing required pool component: ${componentId}`
     );
     this.name = "PoolComponentMissingError";
+  }
+}
+
+export class EpochNotFoundError extends Error {
+  public readonly code = "EPOCH_NOT_FOUND" as const;
+  constructor(public readonly epochId: string) {
+    super(`Epoch ${epochId} not found`);
+    this.name = "EpochNotFoundError";
+  }
+}
+
+export class AllocationNotFoundError extends Error {
+  public readonly code = "ALLOCATION_NOT_FOUND" as const;
+  constructor(
+    public readonly epochId: string,
+    public readonly userId: string
+  ) {
+    super(`Allocation not found for epoch ${epochId}, user ${userId}`);
+    this.name = "AllocationNotFoundError";
   }
 }
 
@@ -76,22 +73,20 @@ export function isEpochAlreadyClosedError(
   return error instanceof Error && error.name === "EpochAlreadyClosedError";
 }
 
-export function isReceiptSignatureInvalidError(
-  error: unknown
-): error is ReceiptSignatureInvalidError {
-  return (
-    error instanceof Error && error.name === "ReceiptSignatureInvalidError"
-  );
-}
-
-export function isIssuerNotAuthorizedError(
-  error: unknown
-): error is IssuerNotAuthorizedError {
-  return error instanceof Error && error.name === "IssuerNotAuthorizedError";
-}
-
 export function isPoolComponentMissingError(
   error: unknown
 ): error is PoolComponentMissingError {
   return error instanceof Error && error.name === "PoolComponentMissingError";
+}
+
+export function isEpochNotFoundError(
+  error: unknown
+): error is EpochNotFoundError {
+  return error instanceof Error && error.name === "EpochNotFoundError";
+}
+
+export function isAllocationNotFoundError(
+  error: unknown
+): error is AllocationNotFoundError {
+  return error instanceof Error && error.name === "AllocationNotFoundError";
 }

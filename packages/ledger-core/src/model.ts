@@ -11,35 +11,9 @@
  * @public
  */
 
-/** Receipt roles — who performed the work */
-export const RECEIPT_ROLES = ["author", "reviewer", "approver"] as const;
-export type ReceiptRole = (typeof RECEIPT_ROLES)[number];
-
-/** Receipt event types — append-only lifecycle */
-export const EVENT_TYPES = ["proposed", "approved", "revoked"] as const;
-export type EventType = (typeof EVENT_TYPES)[number];
-
 /** Epoch statuses */
 export const EPOCH_STATUSES = ["open", "closed"] as const;
 export type EpochStatus = (typeof EPOCH_STATUSES)[number];
-
-/** Domain-bound signing parameters (SIGNATURE_DOMAIN_BOUND) */
-export interface SigningContext {
-  readonly chainId: string;
-  readonly appDomain: string;
-  readonly specVersion: string;
-}
-
-/** Fields included in the canonical receipt message */
-export interface ReceiptMessageFields {
-  readonly epochId: string;
-  readonly userId: string;
-  readonly workItemId: string;
-  readonly role: ReceiptRole;
-  readonly valuationUnits: string;
-  readonly artifactRef: string;
-  readonly rationaleRef: string;
-}
 
 /** Payout line item produced by computePayouts */
 export interface PayoutLineItem {
@@ -50,8 +24,8 @@ export interface PayoutLineItem {
   readonly amountCredits: bigint;
 }
 
-/** Input receipt for payout computation */
-export interface ApprovedReceipt {
+/** Input allocation for payout computation */
+export interface FinalizedAllocation {
   readonly userId: string;
   readonly valuationUnits: bigint;
 }

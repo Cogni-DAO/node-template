@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/ledger-core`
  * Purpose: Pure domain logic for the epoch ledger — shared between app and scheduler-worker.
- * Scope: Re-exports model types, payout computation, signing, and errors. Does not contain I/O or infrastructure code.
+ * Scope: Re-exports model types, payout computation, hashing, store port, and errors. Does not contain I/O or infrastructure code.
  * Invariants: No imports from src/ or services/. Pure domain logic only.
  * Side-effects: none
  * Links: docs/spec/epoch-ledger.md
@@ -13,35 +13,47 @@
 
 // Errors
 export {
+  AllocationNotFoundError,
   EpochAlreadyClosedError,
+  EpochNotFoundError,
   EpochNotOpenError,
-  IssuerNotAuthorizedError,
+  isAllocationNotFoundError,
   isEpochAlreadyClosedError,
+  isEpochNotFoundError,
   isEpochNotOpenError,
-  isIssuerNotAuthorizedError,
   isPoolComponentMissingError,
-  isReceiptSignatureInvalidError,
   PoolComponentMissingError,
-  ReceiptSignatureInvalidError,
 } from "./errors";
+
+// Hashing
+export { computeAllocationSetHash } from "./hashing";
+
 // Model types and enums
 export type {
-  ApprovedReceipt,
   EpochStatus,
-  EventType,
+  FinalizedAllocation,
   PayoutLineItem,
-  ReceiptMessageFields,
-  ReceiptRole,
-  SigningContext,
 } from "./model";
-export { EPOCH_STATUSES, EVENT_TYPES, RECEIPT_ROLES } from "./model";
+export { EPOCH_STATUSES } from "./model";
 
 // Rules
 export { computePayouts } from "./rules";
 
-// Signing
-export {
-  buildReceiptMessage,
-  computeReceiptSetHash,
-  hashReceiptMessage,
-} from "./signing";
+// Store port interface + types
+export type {
+  ActivityLedgerStore,
+  InsertActivityEventParams,
+  InsertAllocationParams,
+  InsertPayoutStatementParams,
+  InsertPoolComponentParams,
+  InsertSignatureParams,
+  LedgerActivityEvent,
+  LedgerAllocation,
+  LedgerCuration,
+  LedgerEpoch,
+  LedgerPayoutStatement,
+  LedgerPoolComponent,
+  LedgerSourceCursor,
+  LedgerStatementSignature,
+  UpsertCurationParams,
+} from "./store";

@@ -14,25 +14,25 @@
  * @public
  */
 
-import type { ApprovedReceipt, PayoutLineItem } from "./model";
+import type { FinalizedAllocation, PayoutLineItem } from "./model";
 
 /**
- * Compute proportional payouts from approved receipts and a pool total.
+ * Compute proportional payouts from finalized allocations and a pool total.
  *
- * 1. Group receipts by user_id, sum valuation_units per user
+ * 1. Group allocations by user_id, sum valuation_units per user
  * 2. Compute each user's share: user_units / total_units
  * 3. Distribute pool_total_credits proportionally using BIGINT arithmetic
  * 4. Apply largest-remainder rounding to ensure exact sum equals pool total
  *
- * @param receipts - Approved receipts (may contain multiple per user)
+ * @param allocations - Finalized allocations (may contain multiple per user)
  * @param poolTotalCredits - Total credit pool to distribute
  * @returns Sorted payout line items (deterministic order by userId)
  */
 export function computePayouts(
-  receipts: readonly ApprovedReceipt[],
+  allocations: readonly FinalizedAllocation[],
   poolTotalCredits: bigint
 ): PayoutLineItem[] {
-  if (receipts.length === 0) {
+  if (allocations.length === 0) {
     return [];
   }
 
@@ -41,19 +41,19 @@ export function computePayouts(
   }
 
   // Guard: reject negative valuationUnits (append-only tables can't be fixed later)
-  for (const receipt of receipts) {
-    if (receipt.valuationUnits < 0n) {
+  for (const alloc of allocations) {
+    if (alloc.valuationUnits < 0n) {
       throw new RangeError(
-        `Negative valuationUnits for user ${receipt.userId}: ${receipt.valuationUnits}`
+        `Negative valuationUnits for user ${alloc.userId}: ${alloc.valuationUnits}`
       );
     }
   }
 
   // Step 1: Group by userId, sum units
   const userUnits = new Map<string, bigint>();
-  for (const receipt of receipts) {
-    const current = userUnits.get(receipt.userId) ?? 0n;
-    userUnits.set(receipt.userId, current + receipt.valuationUnits);
+  for (const alloc of allocations) {
+    const current = userUnits.get(alloc.userId) ?? 0n;
+    userUnits.set(alloc.userId, current + alloc.valuationUnits);
   }
 
   // Compute total units
@@ -72,7 +72,7 @@ export function computePayouts(
     a.localeCompare(b)
   );
 
-  const allocations: Array<{
+  const floorAllocations: Array<{
     userId: string;
     totalUnits: bigint;
     floor: bigint;
@@ -88,12 +88,12 @@ export function computePayouts(
     // remainder = (units * poolTotalCredits) % totalUnits
     const remainder = (units * poolTotalCredits) % totalUnits;
 
-    allocations.push({
+    floorAllocations.push({
       userId,
       totalUnits: units,
       floor,
       remainder,
-      index: allocations.length,
+      index: floorAllocations.length,
     });
     floorSum += floor;
   }
@@ -103,7 +103,7 @@ export function computePayouts(
   let residual = poolTotalCredits - floorSum;
 
   // Sort by remainder descending, then by userId for deterministic tie-breaking
-  const byRemainder = [...allocations].sort((a, b) => {
+  const byRemainder = [...floorAllocations].sort((a, b) => {
     if (b.remainder !== a.remainder) {
       return b.remainder > a.remainder ? 1 : -1;
     }
@@ -118,7 +118,7 @@ export function computePayouts(
   }
 
   // Build final payouts, maintaining deterministic userId sort order
-  return allocations.map(({ userId, totalUnits: units, floor }) => {
+  return floorAllocations.map(({ userId, totalUnits: units, floor }) => {
     const bonus = bonuses.get(userId) ?? 0n;
     const amountCredits = floor + bonus;
 
