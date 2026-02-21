@@ -189,6 +189,10 @@ export const serverSchema = z.object({
     .url()
     .default("http://scheduler-worker:9000"),
 
+  // Node identity — per node-operator-contract spec, scopes all ledger tables
+  // Each deployment must set a unique UUID identifying this node
+  NODE_ID: z.string().uuid(),
+
   // Repo access (in-process ripgrep) — required, no default
   // Must be explicitly set in every environment (.env.local, CI, compose)
   // to prevent green-CI / broken-prod blind spots from silent cwd() fallback

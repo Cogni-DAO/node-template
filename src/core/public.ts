@@ -59,32 +59,24 @@ export {
 } from "./chat/rules";
 // Ledger domain
 export type {
-  ApprovedReceipt,
   EpochStatus,
-  EventType,
+  FinalizedAllocation,
   PayoutLineItem,
-  ReceiptMessageFields,
-  ReceiptRole,
-  SigningContext,
 } from "./ledger/public";
 export {
-  buildReceiptMessage,
+  AllocationNotFoundError,
+  computeAllocationSetHash,
   computePayouts,
-  computeReceiptSetHash,
   EPOCH_STATUSES,
   EpochAlreadyClosedError,
+  EpochNotFoundError,
   EpochNotOpenError,
-  EVENT_TYPES,
-  hashReceiptMessage,
-  IssuerNotAuthorizedError,
+  isAllocationNotFoundError,
   isEpochAlreadyClosedError,
+  isEpochNotFoundError,
   isEpochNotOpenError,
-  isIssuerNotAuthorizedError,
   isPoolComponentMissingError,
-  isReceiptSignatureInvalidError,
   PoolComponentMissingError,
-  RECEIPT_ROLES,
-  ReceiptSignatureInvalidError,
 } from "./ledger/public";
 export type {
   ClientVisibleStatus,

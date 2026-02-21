@@ -18,8 +18,10 @@ import type {
   RepoCapability,
   WebSearchCapability,
 } from "@cogni/ai-tools";
+import { DrizzleLedgerAdapter } from "@cogni/db-client";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
+import type { ActivityLedgerStore } from "@cogni/ledger-core";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
@@ -133,6 +135,8 @@ export interface Container {
   threadPersistenceForUser(userId: UserId): ThreadPersistencePort;
   /** Governance status queries (system tenant scope) */
   governanceStatus: GovernanceStatusPort;
+  /** Activity ledger store — shared by app and scheduler-worker */
+  activityLedgerStore: ActivityLedgerStore;
 }
 
 // Feature-specific dependency types
@@ -381,6 +385,7 @@ function createContainer(): Container {
       db,
       userActor(toUserId(COGNI_SYSTEM_PRINCIPAL_USER_ID))
     ),
+    activityLedgerStore: new DrizzleLedgerAdapter(serviceDb),
   };
 }
 
