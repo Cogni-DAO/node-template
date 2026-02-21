@@ -96,28 +96,28 @@ Schema per [decentralized-identity spec §Schema](../../docs/spec/decentralized-
 ### Backfill migration
 
 ```sql
--- Backfill existing wallet users into user_bindings
-INSERT INTO user_bindings (id, user_id, provider, external_id, created_at)
-SELECT
-  gen_random_uuid()::text,
-  id,
-  'wallet',
-  wallet_address,
-  NOW()
-FROM users
-WHERE wallet_address IS NOT NULL
-ON CONFLICT (provider, external_id) DO NOTHING;
-
--- Backfill identity_events for audit trail
+-- Idempotent backfill: emit identity_events only for actually-inserted bindings
+WITH inserted AS (
+  INSERT INTO user_bindings (id, user_id, provider, external_id, created_at)
+  SELECT
+    gen_random_uuid()::text,
+    u.id,
+    'wallet',
+    u.wallet_address,
+    NOW()
+  FROM users u
+  WHERE u.wallet_address IS NOT NULL
+  ON CONFLICT (provider, external_id) DO NOTHING
+  RETURNING user_id, provider, external_id
+)
 INSERT INTO identity_events (id, user_id, event_type, payload, created_at)
 SELECT
   gen_random_uuid()::text,
-  id,
+  i.user_id,
   'bind',
-  jsonb_build_object('provider', 'wallet', 'external_id', wallet_address, 'method', 'backfill:v0-migration'),
+  jsonb_build_object('provider', i.provider, 'external_id', i.external_id, 'method', 'backfill:v0-migration'),
   NOW()
-FROM users
-WHERE wallet_address IS NOT NULL;
+FROM inserted i;
 ```
 
 Small user base — runs in seconds. `users.wallet_address` is kept for SIWE session coherence; `user_bindings` is the normalized binding table for multi-provider lookups.
