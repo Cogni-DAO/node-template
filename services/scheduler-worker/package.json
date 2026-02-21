@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@cogni/db-client": "workspace:*",
+    "@cogni/ingestion-core": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
+    "@octokit/graphql": "^8.1.1",
     "@temporalio/activity": "^1.11.7",
     "@temporalio/client": "^1.11.7",
     "@temporalio/worker": "^1.11.7",

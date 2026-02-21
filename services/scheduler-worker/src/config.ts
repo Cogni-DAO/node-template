@@ -38,6 +38,12 @@ const EnvSchema = z.object({
   /** Base URL for internal API calls (required) */
   APP_BASE_URL: z.string().url("APP_BASE_URL must be a valid URL"),
 
+  /** GitHub PAT for activity collection (optional — only needed for ledger ingestion) */
+  GITHUB_TOKEN: z.string().min(1).optional(),
+
+  /** Comma-separated repos for GitHub activity collection (e.g., "cogni-dao/cogni-template") */
+  GITHUB_REPOS: z.string().optional(),
+
   /** Log level (default: info) */
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 
