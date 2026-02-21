@@ -3,13 +3,15 @@
 
 /**
  * Module: `@cogni/db-schema/ledger`
- * Purpose: Epoch ledger tables for auditable credit payout decisions.
- * Scope: Defines ledger_issuers, epochs, work_receipts, receipt_events, epoch_pool_components, payout_statements. Does not contain queries or business logic.
+ * Purpose: Three-layer immutable epoch ledger schema for auditable activity-based credit payouts.
+ * Scope: Defines all ledger tables (epochs, activity_events, activity_curation, epoch_allocations, source_cursors, epoch_pool_components, payout_statements, statement_signatures). Does not contain queries, business logic, or I/O.
  * Invariants:
  * - All credit/unit columns use BIGINT (ALL_MATH_BIGINT).
- * - work_receipts, receipt_events, epoch_pool_components are append-only (DB triggers in migration).
- * - ONE_OPEN_EPOCH: partial unique index on epochs.status WHERE status = 'open'.
- * - IDEMPOTENT_RECEIPTS: unique index on work_receipts.idempotency_key.
+ * - Layer 1 (activity_events, epoch_pool_components) are append-only (DB triggers in migration).
+ * - Layer 2 (activity_curation) is mutable while epoch open, frozen on close (CURATION_FREEZE_ON_CLOSE).
+ * - ONE_OPEN_EPOCH: partial unique index on epochs WHERE status = 'open', scoped to node_id.
+ * - EPOCH_WINDOW_UNIQUE: unique(node_id, period_start, period_end).
+ * - NODE_SCOPED: all ledger tables include node_id.
  * - No RLS in V0 — worker uses service-role connection.
  * Side-effects: none (schema definitions only)
  * Links: docs/spec/epoch-ledger.md
@@ -23,8 +25,10 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -33,38 +37,25 @@ import {
 
 import { users } from "./refs";
 
-/**
- * Issuer authorization allowlist.
- * Role flags: can_issue, can_approve, can_close_epoch (ISSUER_AUTHORIZED).
- * Address stored in lowercase hex (ADDRESS_NORMALIZED).
- */
-export const ledgerIssuers = pgTable("ledger_issuers", {
-  address: text("address").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  canIssue: boolean("can_issue").notNull().default(false),
-  canApprove: boolean("can_approve").notNull().default(false),
-  canCloseEpoch: boolean("can_close_epoch").notNull().default(false),
-  addedBy: text("added_by").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+// ---------------------------------------------------------------------------
+// Epochs — Layer 0 (time boundaries + config)
+// ---------------------------------------------------------------------------
 
 /**
- * Epochs — one open epoch at a time (ONE_OPEN_EPOCH).
- * Policy reference pinned at open time (EPOCH_POLICY_PINNED).
+ * Epochs — one open epoch at a time per node (ONE_OPEN_EPOCH).
+ * node_id scoped (NODE_SCOPED).
  */
 export const epochs = pgTable(
   "epochs",
   {
     id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    nodeId: uuid("node_id").notNull(),
     status: text("status").notNull().default("open"),
-    policyRepo: text("policy_repo").notNull(),
-    policyCommitSha: text("policy_commit_sha").notNull(),
-    policyPath: text("policy_path").notNull(),
-    policyContentHash: text("policy_content_hash").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    weightConfig: jsonb("weight_config")
+      .$type<Record<string, number>>()
+      .notNull(),
     poolTotalCredits: bigint("pool_total_credits", { mode: "bigint" }),
     openedAt: timestamp("opened_at", { withTimezone: true })
       .notNull()
@@ -76,91 +67,163 @@ export const epochs = pgTable(
   },
   (table) => [
     check("epochs_status_check", sql`${table.status} IN ('open', 'closed')`),
-    uniqueIndex("epochs_one_open_unique")
-      .on(table.status)
+    // EPOCH_WINDOW_UNIQUE: no overlapping windows per node
+    uniqueIndex("epochs_window_unique").on(
+      table.nodeId,
+      table.periodStart,
+      table.periodEnd
+    ),
+    // ONE_OPEN_EPOCH per node
+    uniqueIndex("epochs_one_open_per_node")
+      .on(table.nodeId, table.status)
       .where(sql`${table.status} = 'open'`),
   ]
 );
 
+// ---------------------------------------------------------------------------
+// Layer 1: Raw Activity (immutable always)
+// ---------------------------------------------------------------------------
+
 /**
- * Work receipts — immutable facts, append-only (RECEIPTS_IMMUTABLE).
+ * Activity events — immutable facts, append-only (ACTIVITY_APPEND_ONLY).
  * DB trigger rejects UPDATE/DELETE.
- * No status column — lifecycle tracked via receipt_events.
+ * No user_id — identity resolution happens at curation layer.
+ * No epoch_id — epoch membership derived from event_time at curation layer.
+ * Composite PK: (node_id, id) where id is deterministic (e.g., "github:pr:org/repo:42").
  */
-export const workReceipts = pgTable(
-  "work_receipts",
+export const activityEvents = pgTable(
+  "activity_events",
+  {
+    nodeId: uuid("node_id").notNull(),
+    id: text("id").notNull(),
+    source: text("source").notNull(),
+    eventType: text("event_type").notNull(),
+    platformUserId: text("platform_user_id").notNull(),
+    platformLogin: text("platform_login"),
+    artifactUrl: text("artifact_url"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    payloadHash: text("payload_hash").notNull(),
+    producer: text("producer").notNull(),
+    producerVersion: text("producer_version").notNull(),
+    eventTime: timestamp("event_time", { withTimezone: true }).notNull(),
+    retrievedAt: timestamp("retrieved_at", { withTimezone: true }).notNull(),
+    ingestedAt: timestamp("ingested_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.nodeId, table.id] }),
+    index("activity_events_node_time_idx").on(table.nodeId, table.eventTime),
+    index("activity_events_source_type_idx").on(table.source, table.eventType),
+    index("activity_events_platform_user_idx").on(table.platformUserId),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// Layer 2: Curation (mutable until epoch closes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Activity curation — admin decisions about which events count and how.
+ * Mutable while epoch is open, frozen by trigger when epoch closes (CURATION_FREEZE_ON_CLOSE).
+ * Links events to epochs (epoch membership assigned here, not on raw event).
+ */
+export const activityCuration = pgTable(
+  "activity_curation",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    nodeId: uuid("node_id").notNull(),
+    epochId: bigint("epoch_id", { mode: "bigint" })
+      .notNull()
+      .references(() => epochs.id),
+    eventId: text("event_id").notNull(),
+    userId: text("user_id").references(() => users.id),
+    included: boolean("included").notNull().default(true),
+    weightOverrideMilli: bigint("weight_override_milli", { mode: "bigint" }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("activity_curation_epoch_event_unique").on(
+      table.epochId,
+      table.eventId
+    ),
+    index("activity_curation_epoch_idx").on(table.epochId),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// Epoch allocations (computed from curation)
+// ---------------------------------------------------------------------------
+
+/**
+ * Epoch allocations — per-user credit allocation for an epoch.
+ * Replaces receipt_events from old schema.
+ */
+export const epochAllocations = pgTable(
+  "epoch_allocations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    nodeId: uuid("node_id").notNull(),
     epochId: bigint("epoch_id", { mode: "bigint" })
       .notNull()
       .references(() => epochs.id),
     userId: text("user_id")
       .notNull()
       .references(() => users.id),
-    workItemId: text("work_item_id").notNull(),
-    artifactRef: text("artifact_ref").notNull(),
-    role: text("role").notNull(),
-    valuationUnits: bigint("valuation_units", { mode: "bigint" }).notNull(),
-    rationaleRef: text("rationale_ref"),
-    issuerAddress: text("issuer_address").notNull(),
-    issuerId: text("issuer_id")
-      .notNull()
-      .references(() => users.id),
-    signature: text("signature").notNull(),
-    idempotencyKey: text("idempotency_key").notNull(),
+    proposedUnits: bigint("proposed_units", { mode: "bigint" }).notNull(),
+    finalUnits: bigint("final_units", { mode: "bigint" }),
+    overrideReason: text("override_reason"),
+    activityCount: integer("activity_count").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [
-    check(
-      "work_receipts_role_check",
-      sql`${table.role} IN ('author', 'reviewer', 'approver')`
+    uniqueIndex("epoch_allocations_epoch_user_unique").on(
+      table.epochId,
+      table.userId
     ),
-    check(
-      "work_receipts_valuation_units_nonneg",
-      sql`${table.valuationUnits} >= 0`
-    ),
-    uniqueIndex("work_receipts_idempotency_key_unique").on(
-      table.idempotencyKey
-    ),
-    index("work_receipts_epoch_id_idx").on(table.epochId),
+    index("epoch_allocations_epoch_idx").on(table.epochId),
   ]
 );
 
+// ---------------------------------------------------------------------------
+// Source cursors (ingestion state tracking)
+// ---------------------------------------------------------------------------
+
 /**
- * Receipt events — append-only state transitions (EVENTS_APPEND_ONLY).
- * DB trigger rejects UPDATE/DELETE.
- * LATEST_EVENT_WINS: most recent event_type determines receipt state.
+ * Source cursors — track ingestion position per source stream.
+ * Composite PK: (node_id, source, stream, scope).
  */
-export const receiptEvents = pgTable(
-  "receipt_events",
+export const sourceCursors = pgTable(
+  "source_cursors",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    receiptId: uuid("receipt_id")
-      .notNull()
-      .references(() => workReceipts.id),
-    eventType: text("event_type").notNull(),
-    actorAddress: text("actor_address").notNull(),
-    actorId: text("actor_id")
-      .notNull()
-      .references(() => users.id),
-    reason: text("reason"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    nodeId: uuid("node_id").notNull(),
+    source: text("source").notNull(),
+    stream: text("stream").notNull(),
+    scope: text("scope").notNull(),
+    cursorValue: text("cursor_value").notNull(),
+    retrievedAt: timestamp("retrieved_at", { withTimezone: true }).notNull(),
   },
   (table) => [
-    check(
-      "receipt_events_event_type_check",
-      sql`${table.eventType} IN ('proposed', 'approved', 'revoked')`
-    ),
-    index("receipt_events_receipt_created_idx").on(
-      table.receiptId,
-      table.createdAt.desc()
-    ),
+    primaryKey({
+      columns: [table.nodeId, table.source, table.stream, table.scope],
+    }),
   ]
 );
+
+// ---------------------------------------------------------------------------
+// Epoch pool components (immutable, append-only)
+// ---------------------------------------------------------------------------
 
 /**
  * Epoch pool components — immutable, append-only (POOL_IMMUTABLE).
@@ -171,6 +234,7 @@ export const epochPoolComponents = pgTable(
   "epoch_pool_components",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    nodeId: uuid("node_id").notNull(),
     epochId: bigint("epoch_id", { mode: "bigint" })
       .notNull()
       .references(() => epochs.id),
@@ -191,30 +255,72 @@ export const epochPoolComponents = pgTable(
   ]
 );
 
+// ---------------------------------------------------------------------------
+// Layer 3: Ledger Statement (immutable once signed)
+// ---------------------------------------------------------------------------
+
 /**
- * Payout statements — one per closed epoch, derived artifact.
- * No signature in V0.
+ * Payout statements — derived artifact from activity + curation + pool + weights.
+ * One per epoch (scoped to node). Amendments use supersedes_statement_id.
  */
-export const payoutStatements = pgTable("payout_statements", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  epochId: bigint("epoch_id", { mode: "bigint" })
-    .notNull()
-    .unique()
-    .references(() => epochs.id),
-  policyContentHash: text("policy_content_hash").notNull(),
-  receiptSetHash: text("receipt_set_hash").notNull(),
-  poolTotalCredits: bigint("pool_total_credits", { mode: "bigint" }).notNull(),
-  payoutsJson: jsonb("payouts_json")
-    .$type<
-      Array<{
-        user_id: string;
-        total_units: string;
-        share: string;
-        amount_credits: string;
-      }>
-    >()
-    .notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const payoutStatements = pgTable(
+  "payout_statements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    nodeId: uuid("node_id").notNull(),
+    epochId: bigint("epoch_id", { mode: "bigint" })
+      .notNull()
+      .references(() => epochs.id),
+    allocationSetHash: text("allocation_set_hash").notNull(),
+    poolTotalCredits: bigint("pool_total_credits", {
+      mode: "bigint",
+    }).notNull(),
+    payoutsJson: jsonb("payouts_json")
+      .$type<
+        Array<{
+          user_id: string;
+          total_units: string;
+          share: string;
+          amount_credits: string;
+        }>
+      >()
+      .notNull(),
+    supersedesStatementId: uuid("supersedes_statement_id").references(
+      // biome-ignore lint/suspicious/noExplicitAny: Drizzle self-referencing FK requires explicit type to break circular inference
+      (): any => payoutStatements.id
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("payout_statements_node_epoch_unique").on(
+      table.nodeId,
+      table.epochId
+    ),
+  ]
+);
+
+/**
+ * Statement signatures — client-side EIP-191 signatures on payout statements.
+ * Schema only — signing flow is a follow-up task.
+ */
+export const statementSignatures = pgTable(
+  "statement_signatures",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    nodeId: uuid("node_id").notNull(),
+    statementId: uuid("statement_id")
+      .notNull()
+      .references(() => payoutStatements.id),
+    signerWallet: text("signer_wallet").notNull(),
+    signature: text("signature").notNull(),
+    signedAt: timestamp("signed_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("statement_signatures_statement_signer_unique").on(
+      table.statementId,
+      table.signerWallet
+    ),
+  ]
+);
