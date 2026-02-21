@@ -152,6 +152,7 @@
     "@cogni/db-client": "workspace:*",
     "@cogni/db-schema": "workspace:*",
     "@cogni/ids": "workspace:*",
+    "@cogni/ingestion-core": "workspace:*",
     "@cogni/ledger-core": "workspace:*",
     "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
