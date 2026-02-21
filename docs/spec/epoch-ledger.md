@@ -31,26 +31,28 @@ tags: [governance, transparency, payments, ledger]
 
 ## Core Invariants
 
-| Rule                   | Constraint                                                                                                                                                                                                                   |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ACTIVITY_APPEND_ONLY   | DB trigger rejects UPDATE/DELETE on `activity_events`. Once ingested, activity records are immutable facts.                                                                                                                  |
-| ACTIVITY_IDEMPOTENT    | `activity_events.id` is deterministic from source data (e.g., `github:pr:owner/repo:42`). Re-ingestion of the same event is a no-op (PK conflict → skip).                                                                    |
-| POOL_IMMUTABLE         | DB trigger rejects UPDATE/DELETE on `epoch_pool_components`. Once recorded, a pool component's algorithm, inputs, and amount cannot be changed.                                                                              |
-| IDENTITY_BEST_EFFORT   | Activity events carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved events have `user_id = NULL` and are excluded from allocation until resolved. |
-| ADMIN_FINALIZES_ONCE   | An admin reviews proposed allocations, optionally adjusts `final_units`, then triggers finalize. Single action closes the epoch — no per-event approval workflow.                                                            |
-| WEIGHTS_INTEGER_ONLY   | All weight values are integer milli-units (e.g., 8000 for PR merged, 500 for Discord message). No floating point anywhere (ALL_MATH_BIGINT).                                                                                 |
-| PAYOUT_DETERMINISTIC   | Given final allocations + pool components → the payout statement is byte-for-byte reproducible.                                                                                                                              |
-| ALL_MATH_BIGINT        | No floating point in unit or credit calculations. All math uses BIGINT with largest-remainder rounding.                                                                                                                      |
-| EPOCH_CLOSE_IDEMPOTENT | Closing a closed epoch returns the existing statement. No error, no mutation.                                                                                                                                                |
-| ONE_OPEN_EPOCH         | Partial unique index enforces at most one epoch with `status = 'open'`.                                                                                                                                                      |
-| EPOCH_WINDOW_UNIQUE    | `UNIQUE(period_start, period_end)` prevents duplicate epochs for the same time window. Re-collection uses the existing epoch.                                                                                                |
-| POOL_REPRODUCIBLE      | `pool_total_credits = SUM(epoch_pool_components.amount_credits)`. Each component stores algorithm version + inputs + amount.                                                                                                 |
-| POOL_UNIQUE_PER_TYPE   | `UNIQUE(epoch_id, component_id)` — each component type appears at most once per epoch.                                                                                                                                       |
-| POOL_REQUIRES_BASE     | At least one `base_issuance` component must exist before epoch finalize is allowed.                                                                                                                                          |
-| WRITES_VIA_TEMPORAL    | All write operations (collect, finalize) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID.                                                                 |
-| PROVENANCE_REQUIRED    | Every activity event includes `producer`, `producer_version`, `payload_hash`, `retrieved_at`. Audit trail for reproducibility.                                                                                               |
-| CURSOR_STATE_PERSISTED | Source adapters use `source_cursors` table for incremental sync. Avoids full-window rescans and handles pagination/rate limits.                                                                                              |
-| ADAPTERS_NOT_IN_CORE   | Source adapters live in `services/scheduler-worker/` behind a port interface. `packages/ledger-core/` contains only pure domain logic (types, rules, errors).                                                                |
+| Rule                     | Constraint                                                                                                                                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ACTIVITY_APPEND_ONLY     | DB trigger rejects UPDATE/DELETE on `activity_events`. Once ingested, activity records are immutable facts.                                                                                                                  |
+| ACTIVITY_IDEMPOTENT      | `activity_events.id` is deterministic from source data (e.g., `github:pr:owner/repo:42`). Re-ingestion of the same event is a no-op (PK conflict → skip).                                                                    |
+| POOL_IMMUTABLE           | DB trigger rejects UPDATE/DELETE on `epoch_pool_components`. Once recorded, a pool component's algorithm, inputs, and amount cannot be changed.                                                                              |
+| IDENTITY_BEST_EFFORT     | Activity events carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved events have `user_id = NULL` and are excluded from allocation until resolved. |
+| ADMIN_FINALIZES_ONCE     | An admin reviews proposed allocations, optionally adjusts `final_units`, then triggers finalize. Single action closes the epoch — no per-event approval workflow.                                                            |
+| WEIGHTS_INTEGER_ONLY     | All weight values are integer milli-units (e.g., 8000 for PR merged, 500 for Discord message). No floating point anywhere (ALL_MATH_BIGINT).                                                                                 |
+| PAYOUT_DETERMINISTIC     | Given final allocations + pool components → the payout statement is byte-for-byte reproducible.                                                                                                                              |
+| ALL_MATH_BIGINT          | No floating point in unit or credit calculations. All math uses BIGINT with largest-remainder rounding.                                                                                                                      |
+| EPOCH_CLOSE_IDEMPOTENT   | Closing a closed epoch returns the existing statement. No error, no mutation.                                                                                                                                                |
+| ONE_OPEN_EPOCH           | Partial unique index enforces at most one epoch with `status = 'open'` per `node_id`.                                                                                                                                        |
+| EPOCH_WINDOW_UNIQUE      | `UNIQUE(node_id, period_start, period_end)` prevents duplicate epochs for the same time window per node. Re-collection uses the existing epoch.                                                                              |
+| CURATION_FREEZE_ON_CLOSE | DB trigger rejects INSERT/UPDATE/DELETE on `activity_curation` when the referenced epoch has `status = 'closed'`. Curation is mutable during review, immutable after close.                                                  |
+| NODE_SCOPED              | All ledger tables include `node_id UUID NOT NULL`. Per node-operator-contract spec, prevents collisions in multi-node scenarios.                                                                                             |
+| POOL_REPRODUCIBLE        | `pool_total_credits = SUM(epoch_pool_components.amount_credits)`. Each component stores algorithm version + inputs + amount.                                                                                                 |
+| POOL_UNIQUE_PER_TYPE     | `UNIQUE(epoch_id, component_id)` — each component type appears at most once per epoch.                                                                                                                                       |
+| POOL_REQUIRES_BASE       | At least one `base_issuance` component must exist before epoch finalize is allowed.                                                                                                                                          |
+| WRITES_VIA_TEMPORAL      | All write operations (collect, finalize) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID.                                                                 |
+| PROVENANCE_REQUIRED      | Every activity event includes `producer`, `producer_version`, `payload_hash`, `retrieved_at`. Audit trail for reproducibility.                                                                                               |
+| CURSOR_STATE_PERSISTED   | Source adapters use `source_cursors` table for incremental sync. Avoids full-window rescans and handles pagination/rate limits.                                                                                              |
+| ADAPTERS_NOT_IN_CORE     | Source adapters live in `services/scheduler-worker/` behind a port interface. `packages/ledger-core/` contains only pure domain logic (types, rules, errors).                                                                |
 
 ## Design
 
@@ -160,11 +162,12 @@ Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and 
 
 ## Schema
 
-### `epochs` — one open epoch at a time
+### `epochs` — one open epoch at a time per node
 
 | Column               | Type         | Notes                                                  |
 | -------------------- | ------------ | ------------------------------------------------------ |
 | `id`                 | BIGSERIAL PK |                                                        |
+| `node_id`            | UUID         | NOT NULL — per NODE_SCOPED                             |
 | `status`             | TEXT         | CHECK IN (`'open'`, `'closed'`)                        |
 | `period_start`       | TIMESTAMPTZ  | Epoch coverage start (NOT NULL)                        |
 | `period_end`         | TIMESTAMPTZ  | Epoch coverage end (NOT NULL)                          |
@@ -176,38 +179,59 @@ Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and 
 
 Constraints:
 
-- Partial unique index `UNIQUE (status) WHERE status = 'open'` enforces ONE_OPEN_EPOCH
-- `UNIQUE(period_start, period_end)` enforces EPOCH_WINDOW_UNIQUE
+- Partial unique index `UNIQUE (node_id, status) WHERE status = 'open'` enforces ONE_OPEN_EPOCH per node
+- `UNIQUE(node_id, period_start, period_end)` enforces EPOCH_WINDOW_UNIQUE
 
-### `activity_events` — append-only contribution records
+### `activity_events` — append-only contribution records (Layer 1)
 
-| Column             | Type             | Notes                                                     |
-| ------------------ | ---------------- | --------------------------------------------------------- |
-| `id`               | TEXT PK          | Deterministic from source (e.g., `github:pr:org/repo:42`) |
-| `epoch_id`         | BIGINT FK→epochs |                                                           |
-| `source`           | TEXT NOT NULL    | `github`, `discord`                                       |
-| `event_type`       | TEXT NOT NULL    | `pr_merged`, `review_submitted`, `message_sent`, etc.     |
-| `platform_user_id` | TEXT NOT NULL    | GitHub numeric ID, Discord snowflake                      |
-| `platform_login`   | TEXT             | Display name (github username, discord handle)            |
-| `user_id`          | TEXT FK→users    | Resolved cogni user (NULL = unresolved)                   |
-| `artifact_url`     | TEXT             | Canonical link to the activity                            |
-| `metadata`         | JSONB            | Source-specific payload                                   |
-| `payload_hash`     | TEXT NOT NULL    | SHA-256 of canonical payload (PROVENANCE_REQUIRED)        |
-| `producer`         | TEXT NOT NULL    | Adapter name (PROVENANCE_REQUIRED)                        |
-| `producer_version` | TEXT NOT NULL    | Adapter version (PROVENANCE_REQUIRED)                     |
-| `event_time`       | TIMESTAMPTZ      | When the activity happened                                |
-| `retrieved_at`     | TIMESTAMPTZ      | When adapter fetched from source (PROVENANCE_REQUIRED)    |
-| `ingested_at`      | TIMESTAMPTZ      | DB insert time                                            |
+| Column             | Type        | Notes                                                             |
+| ------------------ | ----------- | ----------------------------------------------------------------- |
+| `node_id`          | UUID        | NOT NULL — part of composite PK (NODE_SCOPED)                     |
+| `id`               | TEXT        | Deterministic from source (e.g., `github:pr:org/repo:42`)         |
+| `source`           | TEXT        | NOT NULL — `github`, `discord`                                    |
+| `event_type`       | TEXT        | NOT NULL — `pr_merged`, `review_submitted`, etc.                  |
+| `platform_user_id` | TEXT        | NOT NULL — GitHub numeric ID, Discord snowflake                   |
+| `platform_login`   | TEXT        | Display name (github username, discord handle)                    |
+| `artifact_url`     | TEXT        | Canonical link to the activity                                    |
+| `metadata`         | JSONB       | Source-specific payload                                           |
+| `payload_hash`     | TEXT        | NOT NULL — SHA-256 of canonical payload (PROVENANCE_REQUIRED)     |
+| `producer`         | TEXT        | NOT NULL — Adapter name (PROVENANCE_REQUIRED)                     |
+| `producer_version` | TEXT        | NOT NULL — Adapter version (PROVENANCE_REQUIRED)                  |
+| `event_time`       | TIMESTAMPTZ | NOT NULL — When the activity happened                             |
+| `retrieved_at`     | TIMESTAMPTZ | NOT NULL — When adapter fetched from source (PROVENANCE_REQUIRED) |
+| `ingested_at`      | TIMESTAMPTZ | DB insert time                                                    |
+
+Composite PK: `(node_id, id)`. No `epoch_id` — epoch membership assigned at curation layer. No `user_id` — identity resolution lands in `activity_curation.user_id` (truly immutable raw log).
 
 DB trigger rejects UPDATE/DELETE (ACTIVITY_APPEND_ONLY).
 
-Indexes: `(epoch_id)`, `(source, event_type)`, `(user_id)`
+Indexes: `(node_id, event_time)`, `(source, event_type)`, `(platform_user_id)`
+
+### `activity_curation` — identity resolution + admin decisions (Layer 2)
+
+| Column                  | Type             | Notes                                            |
+| ----------------------- | ---------------- | ------------------------------------------------ |
+| `id`                    | UUID PK          |                                                  |
+| `node_id`               | UUID             | NOT NULL (NODE_SCOPED)                           |
+| `epoch_id`              | BIGINT FK→epochs | Assigns epoch membership to an event             |
+| `event_id`              | TEXT             | FK→activity_events.id                            |
+| `user_id`               | TEXT FK→users    | Resolved cogni user (NULL = unresolved)          |
+| `included`              | BOOLEAN          | NOT NULL DEFAULT true — admin can exclude spam   |
+| `weight_override_milli` | BIGINT           | Override weight_config for this event (nullable) |
+| `note`                  | TEXT             | Admin rationale                                  |
+| `created_at`            | TIMESTAMPTZ      |                                                  |
+| `updated_at`            | TIMESTAMPTZ      |                                                  |
+
+Constraint: `UNIQUE(epoch_id, event_id)`
+
+DB trigger rejects INSERT/UPDATE/DELETE when `epochs.status = 'closed'` (CURATION_FREEZE_ON_CLOSE). Mutable during review, frozen after close.
 
 ### `epoch_allocations` — per-user credit distribution
 
 | Column            | Type             | Notes                                              |
 | ----------------- | ---------------- | -------------------------------------------------- |
 | `id`              | UUID PK          |                                                    |
+| `node_id`         | UUID             | NOT NULL (NODE_SCOPED)                             |
 | `epoch_id`        | BIGINT FK→epochs |                                                    |
 | `user_id`         | TEXT FK→users    | NOT NULL                                           |
 | `proposed_units`  | BIGINT NOT NULL  | Computed from weight policy                        |
@@ -223,13 +247,14 @@ Constraint: `UNIQUE(epoch_id, user_id)`
 
 | Column         | Type        | Notes                                      |
 | -------------- | ----------- | ------------------------------------------ |
+| `node_id`      | UUID        | NOT NULL (NODE_SCOPED)                     |
 | `source`       | TEXT        | `github`, `discord`                        |
 | `stream`       | TEXT        | `pull_requests`, `reviews`, `messages`     |
 | `scope`        | TEXT        | `cogni-dao/cogni-template`, `guild:123456` |
 | `cursor_value` | TEXT        | Timestamp or opaque pagination token       |
 | `retrieved_at` | TIMESTAMPTZ | When this cursor was last used             |
 
-Primary key: `(source, stream, scope)`
+Primary key: `(node_id, source, stream, scope)`
 
 ### `epoch_pool_components` — immutable, append-only, pinned inputs
 
@@ -238,6 +263,7 @@ Unchanged from original spec. See [original schema](#pool-model).
 | Column              | Type             | Notes                                          |
 | ------------------- | ---------------- | ---------------------------------------------- |
 | `id`                | UUID PK          |                                                |
+| `node_id`           | UUID             | NOT NULL (NODE_SCOPED)                         |
 | `epoch_id`          | BIGINT FK→epochs |                                                |
 | `component_id`      | TEXT             | e.g. `base_issuance`, `kpi_bonus_v0`, `top_up` |
 | `algorithm_version` | TEXT             | Git SHA or semver of the algorithm             |
@@ -249,18 +275,35 @@ Unchanged from original spec. See [original schema](#pool-model).
 DB trigger rejects UPDATE/DELETE (POOL_IMMUTABLE).
 Constraint: `UNIQUE(epoch_id, component_id)` (POOL_UNIQUE_PER_TYPE).
 
-### `payout_statements` — one per closed epoch, derived artifact
+### `payout_statements` — one per closed epoch, derived artifact (Layer 3)
 
-| Column                | Type                    | Notes                                             |
-| --------------------- | ----------------------- | ------------------------------------------------- |
-| `id`                  | UUID PK                 |                                                   |
-| `epoch_id`            | BIGINT UNIQUE FK→epochs | One statement per epoch                           |
-| `allocation_set_hash` | TEXT                    | SHA-256 of canonical finalized allocations        |
-| `pool_total_credits`  | BIGINT                  | Must match epoch's pool_total_credits             |
-| `payouts_json`        | JSONB                   | `[{user_id, total_units, share, amount_credits}]` |
-| `created_at`          | TIMESTAMPTZ             |                                                   |
+| Column                    | Type                      | Notes                                               |
+| ------------------------- | ------------------------- | --------------------------------------------------- |
+| `id`                      | UUID PK                   |                                                     |
+| `node_id`                 | UUID                      | NOT NULL (NODE_SCOPED)                              |
+| `epoch_id`                | BIGINT FK→epochs          | UNIQUE(node_id, epoch_id) — one statement per epoch |
+| `allocation_set_hash`     | TEXT                      | SHA-256 of canonical finalized allocations          |
+| `pool_total_credits`      | BIGINT                    | Must match epoch's pool_total_credits               |
+| `payouts_json`            | JSONB                     | `[{user_id, total_units, share, amount_credits}]`   |
+| `supersedes_statement_id` | UUID FK→payout_statements | For post-signing corrections (nullable)             |
+| `created_at`              | TIMESTAMPTZ               |                                                     |
 
-No signature in V0. The statement is a deterministically derived artifact — anyone can recompute it from allocations + pool + weight config.
+Post-signing corrections use amendment statements (`supersedes_statement_id`), never reopen-and-edit.
+
+### `statement_signatures` — client-side EIP-191 signatures (schema only)
+
+| Column          | Type                      | Notes                        |
+| --------------- | ------------------------- | ---------------------------- |
+| `id`            | UUID PK                   |                              |
+| `node_id`       | UUID                      | NOT NULL (NODE_SCOPED)       |
+| `statement_id`  | UUID FK→payout_statements |                              |
+| `signer_wallet` | TEXT                      | NOT NULL                     |
+| `signature`     | TEXT                      | NOT NULL — EIP-191 signature |
+| `signed_at`     | TIMESTAMPTZ               | NOT NULL                     |
+
+Constraint: `UNIQUE(statement_id, signer_wallet)`
+
+Signing UX/API is a follow-up task. Table + types defined for schema completeness.
 
 ## Source Adapter Interface
 

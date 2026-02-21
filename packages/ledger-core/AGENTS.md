@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Pure domain logic for the epoch ledger — shared between the Next.js app (`src/`) and the Temporal `scheduler-worker` service. Contains model types, payout computation (BIGINT, largest-remainder), receipt message signing (SHA-256, domain-bound), and domain error classes.
+Pure domain logic for the epoch ledger — shared between the Next.js app (`src/`) and the Temporal `scheduler-worker` service. Contains model types, payout computation (BIGINT, largest-remainder), allocation set hashing (SHA-256), port interface (`ActivityLedgerStore`), and domain error classes.
 
 ## Pointers
 
@@ -40,14 +40,14 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
 ## Public Surface
 
 - **Exports:**
-  - `RECEIPT_ROLES`, `EVENT_TYPES`, `EPOCH_STATUSES` — Enum arrays
-  - `ReceiptRole`, `EventType`, `EpochStatus` — Enum types
-  - `SigningContext`, `ReceiptMessageFields`, `ApprovedReceipt`, `PayoutLineItem` — Domain types
+  - `EPOCH_STATUSES` — Enum array
+  - `EpochStatus`, `FinalizedAllocation`, `PayoutLineItem` — Domain types
+  - `ActivityLedgerStore` — Port interface for ledger persistence
+  - `LedgerEpoch`, `LedgerActivityEvent`, `LedgerCuration`, `LedgerAllocation`, `LedgerSourceCursor`, `LedgerPoolComponent`, `LedgerPayoutStatement`, `LedgerStatementSignature` — Read-side record types
+  - `InsertActivityEventParams`, `UpsertCurationParams`, `InsertAllocationParams`, `InsertPoolComponentParams`, `InsertPayoutStatementParams`, `InsertSignatureParams` — Write-side param types
   - `computePayouts()` — BIGINT proportional distribution with largest-remainder rounding
-  - `buildReceiptMessage()` — Canonical domain-bound message format (SIGNATURE_DOMAIN_BOUND)
-  - `hashReceiptMessage()` — SHA-256 of message bytes
-  - `computeReceiptSetHash()` — Deterministic hash of sorted receipt IDs
-  - `EpochNotOpenError`, `EpochAlreadyClosedError`, `ReceiptSignatureInvalidError`, `IssuerNotAuthorizedError`, `PoolComponentMissingError` — Domain errors with type guards
+  - `computeAllocationSetHash()` — SHA-256 of canonical sorted allocation data
+  - `EpochNotOpenError`, `EpochAlreadyClosedError`, `PoolComponentMissingError` — Domain errors with type guards
 - **CLI:** none
 - **Env/Config keys:** none
 
@@ -55,11 +55,12 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
 
 - **Uses ports:** none
 - **Implements ports:** none
+- **Defines ports:** `ActivityLedgerStore` (implemented by `DrizzleLedgerAdapter` in `@cogni/db-client`)
 
 ## Responsibilities
 
-- This directory **does**: Define ledger domain types, compute deterministic payouts, build canonical signing messages, define domain errors
-- This directory **does not**: Perform I/O, access databases, verify signatures (that's the worker), import from `src/` or `services/`
+- This directory **does**: Define ledger domain types, port interface, compute deterministic payouts, compute allocation set hashes, define domain errors
+- This directory **does not**: Perform I/O, access databases, import from `src/` or `services/`
 
 ## Usage
 
@@ -73,7 +74,6 @@ pnpm --filter @cogni/ledger-core build
 - Pure functions and types only — no I/O, no framework deps
 - ALL_MATH_BIGINT: No floating point in credit/unit calculations
 - PAYOUT_DETERMINISTIC: Same inputs → byte-for-byte identical output
-- SIGNATURE_DOMAIN_BOUND: Messages include chain_id, app_domain, spec_version
 
 ## Dependencies
 

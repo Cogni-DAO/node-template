@@ -2,20 +2,20 @@
 id: task.0094
 type: task
 title: "Ledger port interface + Drizzle adapter + schema migration + container wiring"
-status: needs_design
+status: needs_review
 priority: 1
 rank: 2
 estimate: 2
-summary: "Define ActivityLedgerStore port, implement Drizzle adapter, add schema migration for activity_events/epoch_allocations/source_cursors + epochs modifications, wire into bootstrap container."
-outcome: "ActivityLedgerStore port with CRUD for activity events, allocations, cursors, epochs, pool, and statements. Drizzle adapter passes contract tests. Container exposes activityLedgerStore."
+summary: "Define ActivityLedgerStore port in @cogni/ledger-core, implement DrizzleLedgerAdapter in @cogni/db-client, add three-layer schema migration (activity_events/activity_curation/epoch_allocations/source_cursors/statement_signatures + epochs/epoch_pool_components/payout_statements modifications), wire into bootstrap container."
+outcome: "ActivityLedgerStore port with CRUD for activity events, curation, allocations, cursors, epochs, pool, statements, and signatures. Single DrizzleLedgerAdapter shared by app + worker. Container exposes activityLedgerStore. All node_id scoped."
 spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch: feat/ledger-v0
+branch: feat/user-identity-bindings
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by: task.0093
 deploy_verified: false
 created: 2026-02-20
@@ -26,83 +26,78 @@ external_refs:
 
 # Ledger Port + Drizzle Adapter + Schema Migration
 
-## Requirements
+## Design
 
-- `ActivityLedgerStore` port at `src/ports/ledger-store.port.ts` with methods for:
-  - Epoch CRUD: `createEpoch(...)`, `getOpenEpoch()`, `closeEpoch(epochId, poolTotal)`, `getEpoch(id)`, `listEpochs()`
-  - Activity events: `insertActivityEvents(events[])` (idempotent — PK conflict = skip), `getActivityForEpoch(epochId)`, `getUnresolvedActivity(epochId)` (user_id IS NULL)
-  - Identity resolution: `resolveActivityIdentity(eventId, userId)` — sets user_id on an activity event (only NULL → value, not update)
-  - Allocations: `insertAllocations(allocations[])`, `updateAllocation(epochId, userId, finalUnits, overrideReason)`, `getAllocationsForEpoch(epochId)`
-  - Cursors: `upsertCursor(source, stream, scope, cursorValue)`, `getCursor(source, stream, scope)`
-  - Pool component writes: `insertPoolComponent(...)`
-  - Pool component reads: `getPoolComponentsForEpoch(epochId)`
-  - Statement writes: `insertPayoutStatement(...)`
-  - Statement reads: `getStatementForEpoch(epochId)`
-- Port-level error classes: `EpochNotFoundPortError`, `AllocationNotFoundPortError`
-- Drizzle schema additions in `packages/db-schema/src/ledger.ts`:
-  - `activityEvents` table (append-only, provenance fields, DB trigger)
-  - `epochAllocations` table (proposed + final units, UNIQUE(epoch_id, user_id))
-  - `sourceCursors` table (PK: source, stream, scope)
-  - `epochs` table modifications: add `periodStart`, `periodEnd`, `weightConfig`; drop `policyRepo`, `policyCommitSha`, `policyPath`, `policyContentHash` columns
-  - Drop `workReceipts`, `receiptEvents`, `ledgerIssuers` tables and their append-only triggers (replaced by activity-ingestion model)
-  - Delete previous migrations (0010, 0011) and regenerate a single fresh migration — previous migrations never shipped
-- Drizzle migration generated + custom SQL for `activity_events` append-only trigger
-- Drizzle adapter at `src/adapters/server/ledger/drizzle-ledger.ts` implementing `ActivityLedgerStore`
-- Worker-facing adapter: `DrizzleLedgerWorkerAdapter` in `packages/db-client/` (follows existing `DrizzleExecutionGrantWorkerAdapter` pattern)
-- Adapter uses `serviceDb` (BYPASSRLS)
-- Wire into `src/bootstrap/container.ts`: `activityLedgerStore: ActivityLedgerStore`
-- Export from `src/ports/index.ts` and `src/adapters/server/index.ts`
-- Contract test at `tests/contract/ledger-store.contract.ts`
+### Three-Layer Immutability Model
 
-## Allowed Changes
+- **Layer 1 (Raw Activity)**: `activity_events` — append-only facts. DB trigger rejects UPDATE/DELETE. No `user_id` column — identity resolution happens at curation layer. No `epoch_id` — epoch membership assigned in curation.
+- **Layer 2 (Curation)**: `activity_curation` — admin decisions about event inclusion, identity resolution, weight overrides. Mutable while epoch open, frozen by trigger when epoch closes (CURATION_FREEZE_ON_CLOSE).
+- **Layer 3 (Ledger Statement)**: `payout_statements` + `statement_signatures` — derived, immutable artifacts. Post-signing corrections use `supersedes_statement_id`.
 
-- `packages/db-schema/src/ledger.ts` (add new tables, modify epochs)
-- `packages/db-schema/src/index.ts` (already exports ledger)
-- `src/adapters/server/db/migrations/` (new migration files)
-- `src/ports/ledger-store.port.ts` (new)
-- `src/ports/index.ts` (add export)
-- `src/adapters/server/ledger/` (new directory)
-- `src/adapters/server/index.ts` (add export)
-- `src/bootstrap/container.ts` (wire adapter)
-- `packages/db-client/src/ledger/` (new — worker adapter)
-- `packages/db-client/src/index.ts` (add ledger adapter export)
-- `tests/contract/ledger-store.contract.ts` (new)
+### Key Decisions
 
-## Plan
+- `node_id UUID` on all ledger tables (NODE_SCOPED)
+- Port interface in `@cogni/ledger-core` (shared by app + worker)
+- Single `DrizzleLedgerAdapter` in `@cogni/db-client` (no duplication)
+- Old migrations 0010 + 0011 deleted (never shipped), replaced with new 0010 (DDL) + 0011 (triggers)
 
-- [ ] Add `activityEvents`, `epochAllocations`, `sourceCursors` tables to `packages/db-schema/src/ledger.ts`
-- [ ] Modify `epochs` table: add `periodStart`, `periodEnd`, `weightConfig`; make `policy_*` nullable
-- [ ] Generate Drizzle migration + add custom SQL for `activity_events` append-only trigger
-- [ ] Define `ActivityLedgerStore` interface in `src/ports/ledger-store.port.ts` with error classes
-- [ ] Export from `src/ports/index.ts`
-- [ ] Implement `DrizzleLedgerStore` in `src/adapters/server/ledger/drizzle-ledger.ts`
-- [ ] Export from `src/adapters/server/index.ts`
-- [ ] Implement `DrizzleLedgerWorkerAdapter` in `packages/db-client/src/ledger/`
-- [ ] Export from `packages/db-client/src/index.ts`
-- [ ] Add `activityLedgerStore` to `Container` interface and wire in `container.ts`
-- [ ] Write contract test exercising all methods against real DB
+## Implementation Summary
+
+### Completed
+
+- [x] `packages/ledger-core/src/model.ts` — removed receipt types, renamed `ApprovedReceipt` → `FinalizedAllocation`
+- [x] `packages/ledger-core/src/errors.ts` — removed `ReceiptSignatureInvalidError`, `IssuerNotAuthorizedError`
+- [x] `packages/ledger-core/src/signing.ts` — deleted, replaced by `hashing.ts`
+- [x] `packages/ledger-core/src/hashing.ts` — `computeAllocationSetHash()`
+- [x] `packages/ledger-core/src/store.ts` — `ActivityLedgerStore` interface + all param/result types
+- [x] `packages/ledger-core/src/index.ts` — updated barrel exports
+- [x] `packages/db-schema/src/ledger.ts` — full rewrite: 8 tables, 3-layer model, node_id
+- [x] `migrations/0010_ledger_activity_model.sql` — DDL for all new tables
+- [x] `migrations/0011_ledger_triggers.sql` — append-only + freeze-on-close triggers
+- [x] `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — single shared adapter
+- [x] `packages/db-client/package.json` — added `@cogni/ledger-core` dependency
+- [x] `packages/db-client/tsconfig.json` — added ledger-core reference
+- [x] `src/ports/ledger-store.port.ts` — port re-export
+- [x] `src/ports/index.ts` — added ledger exports
+- [x] `src/shared/db/schema.ts` — added `@cogni/db-schema/ledger` re-export
+- [x] `src/shared/env/server-env.ts` — added `NODE_ID` env var (UUID)
+- [x] `src/bootstrap/container.ts` — wired `activityLedgerStore`
+- [x] `src/core/ledger/public.ts` — updated re-exports
+- [x] `src/core/public.ts` — updated re-exports
+- [x] `tests/unit/core/ledger/rules.test.ts` — updated for `FinalizedAllocation`
+- [x] `tests/unit/core/ledger/hashing.test.ts` — new unit test
+- [x] `tests/_fixtures/env/base-env.ts` — added `NODE_ID`
+- [x] `docs/spec/epoch-ledger.md` — updated schema + invariants
+- [x] `packages/ledger-core/src/errors.ts` — added `EpochNotFoundError`, `AllocationNotFoundError` + type guards (review fix)
+- [x] `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — `closeEpoch` distinguishes not-found vs already-closed; `updateAllocationFinalUnits` throws on missing allocation (review fix)
+- [x] `scripts/validate-docs-metadata.mjs` — added `needs_review` to valid status enum
+- [x] File header DH004 fixes (scope negative clause on both new files)
+
+### Remaining
+
+- [ ] `tests/component/db/drizzle-ledger.adapter.int.test.ts` — component test against real DB (testcontainers)
+- [ ] AGENTS.md updates (ledger-core, db-schema, db-client)
 
 ## Validation
 
-**Command:**
-
 ```bash
-pnpm check
-pnpm test tests/contract/ledger-store.contract.ts
+pnpm check                     # typecheck + lint + format
+pnpm test                      # unit tests (existing + new)
+pnpm check:docs                # docs validation
 ```
 
-**Expected:** Types pass, contract tests green against test DB.
+**Status:** typecheck pass, arch:check pass, all 1028 unit tests pass.
 
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0094` linked in PR body
-- [ ] **Spec:** ACTIVITY_APPEND_ONLY (trigger), ACTIVITY_IDEMPOTENT (PK skip), EPOCH_WINDOW_UNIQUE, CURSOR_STATE_PERSISTED
-- [ ] **Tests:** contract test covers all port methods including error cases
+- [ ] **Spec:** ACTIVITY_APPEND_ONLY, ACTIVITY_IDEMPOTENT, CURATION_FREEZE_ON_CLOSE, NODE_SCOPED, EPOCH_WINDOW_UNIQUE
+- [ ] **Tests:** unit tests pass, contract test covers port methods
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0094.handoff.md)
 
 ## Attribution
 
