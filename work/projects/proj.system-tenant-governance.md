@@ -41,7 +41,7 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 | PolicyResolverPort: interface + DrizzlePolicyResolverAdapter with system/customer policies                           | Not Started | 3   | —         |
 | ToolPolicyContext: required tenantId + test escape hatch                                                             | Not Started | 2   | —         |
 | Side-effect tool idempotency: `tool_execution_results` table + adapter check/store                                   | Not Started | 3   | —         |
-| Chores: tenant_id/actor_type in traces, update ACCOUNTS_DESIGN.md                                                    | Not Started | 1   | —         |
+| Chores: tenantId/actor_type in traces, update ACCOUNTS_DESIGN.md                                                     | Not Started | 1   | —         |
 
 #### Schema & Bootstrap
 
@@ -74,7 +74,7 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 
 #### Chores
 
-- [ ] Add `tenant_id`, `actor_type` to traces/logs
+- [ ] Add `tenantId`, `actor_type` to traces/logs
 - [ ] Documentation: update ACCOUNTS_DESIGN.md (done)
 
 ### Walk (P1): Enhanced Policy & Monitoring

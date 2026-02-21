@@ -3,6 +3,10 @@
 
 schema_version: "0.1.4"
 
+# Unique identity for this node deployment — scopes all ledger tables.
+# Generated once at init; must never change for an existing deployment.
+node_id: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d"
+
 intent:
   name: cogni-template
 

@@ -60,7 +60,7 @@ export function useLoadThread(
     queryKey: [THREAD_KEY, stateKey],
     queryFn: () =>
       fetchJson<LoadThreadOutput>(
-        `/api/v1/ai/threads/${encodeURIComponent(stateKey!)}`
+        `/api/v1/ai/threads/${encodeURIComponent(stateKey as string)}`
       ),
     enabled: !!stateKey,
     staleTime: 30_000,

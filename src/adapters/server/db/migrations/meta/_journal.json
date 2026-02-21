@@ -71,6 +71,20 @@
       "when": 1771300772076,
       "tag": "0009_curly_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1771687355093,
+      "tag": "0010_shallow_paibok",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1771687400000,
+      "tag": "0011_triggers_and_backfill",
+      "breakpoints": true
     }
   ]
 }

@@ -85,6 +85,9 @@ export type GovernanceSpec = z.infer<typeof governanceSpecSchema>;
  * Validates structure only; chain alignment checked in repoSpec.server.ts against chain.ts.
  */
 export const repoSpecSchema = z.object({
+  /** Unique node identity — scopes all ledger tables. Generated once at init, never changes. */
+  node_id: z.string().uuid("node_id must be a valid UUID"),
+
   /** DAO governance configuration */
   cogni_dao: z.object({
     /**

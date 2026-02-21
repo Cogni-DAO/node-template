@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@cogni/ledger-core`
+ * Purpose: Pure domain logic for the epoch ledger — shared between app and scheduler-worker.
+ * Scope: Re-exports model types, payout computation, hashing, store port, and errors. Does not contain I/O or infrastructure code.
+ * Invariants: No imports from src/ or services/. Pure domain logic only.
+ * Side-effects: none
+ * Links: docs/spec/epoch-ledger.md
+ * @public
+ */
+
+// Errors
+export {
+  AllocationNotFoundError,
+  EpochAlreadyClosedError,
+  EpochNotFoundError,
+  EpochNotOpenError,
+  isAllocationNotFoundError,
+  isEpochAlreadyClosedError,
+  isEpochNotFoundError,
+  isEpochNotOpenError,
+  isPoolComponentMissingError,
+  PoolComponentMissingError,
+} from "./errors";
+
+// Hashing
+export { computeAllocationSetHash } from "./hashing";
+
+// Model types and enums
+export type {
+  EpochStatus,
+  FinalizedAllocation,
+  PayoutLineItem,
+} from "./model";
+export { EPOCH_STATUSES } from "./model";
+
+// Rules
+export { computePayouts } from "./rules";
+
+// Store port interface + types
+export type {
+  ActivityLedgerStore,
+  InsertActivityEventParams,
+  InsertAllocationParams,
+  InsertPayoutStatementParams,
+  InsertPoolComponentParams,
+  InsertSignatureParams,
+  LedgerActivityEvent,
+  LedgerAllocation,
+  LedgerCuration,
+  LedgerEpoch,
+  LedgerPayoutStatement,
+  LedgerPoolComponent,
+  LedgerSourceCursor,
+  LedgerStatementSignature,
+  UpsertCurationParams,
+} from "./store";

@@ -1,0 +1,270 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@cogni/ledger-core/store`
+ * Purpose: Port interface for the activity ledger store. Shared by app and scheduler-worker.
+ * Scope: Type definitions only. Does not contain implementations or I/O.
+ * Invariants:
+ * - ACTIVITY_APPEND_ONLY: insertActivityEvents never updates existing rows.
+ * - CURATION_FREEZE_ON_CLOSE: upsertCuration rejects writes when epoch is closed.
+ * - ONE_OPEN_EPOCH: createEpoch enforced by DB constraint.
+ * - NODE_SCOPED: all operations are scoped to a node_id.
+ * Side-effects: none
+ * Links: docs/spec/epoch-ledger.md
+ * @public
+ */
+
+import type { EpochStatus } from "./model";
+
+// ---------------------------------------------------------------------------
+// Domain record types (read-side)
+// ---------------------------------------------------------------------------
+
+export interface LedgerEpoch {
+  readonly id: bigint;
+  readonly nodeId: string;
+  readonly status: EpochStatus;
+  readonly periodStart: Date;
+  readonly periodEnd: Date;
+  readonly weightConfig: Record<string, number>;
+  readonly poolTotalCredits: bigint | null;
+  readonly openedAt: Date;
+  readonly closedAt: Date | null;
+  readonly createdAt: Date;
+}
+
+export interface LedgerActivityEvent {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly source: string;
+  readonly eventType: string;
+  readonly platformUserId: string;
+  readonly platformLogin: string | null;
+  readonly artifactUrl: string | null;
+  readonly metadata: Record<string, unknown> | null;
+  readonly payloadHash: string;
+  readonly producer: string;
+  readonly producerVersion: string;
+  readonly eventTime: Date;
+  readonly retrievedAt: Date;
+  readonly ingestedAt: Date;
+}
+
+export interface LedgerCuration {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly eventId: string;
+  readonly userId: string | null;
+  readonly included: boolean;
+  readonly weightOverrideMilli: bigint | null;
+  readonly note: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface LedgerAllocation {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly userId: string;
+  readonly proposedUnits: bigint;
+  readonly finalUnits: bigint | null;
+  readonly overrideReason: string | null;
+  readonly activityCount: number;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface LedgerSourceCursor {
+  readonly nodeId: string;
+  readonly source: string;
+  readonly stream: string;
+  readonly scope: string;
+  readonly cursorValue: string;
+  readonly retrievedAt: Date;
+}
+
+export interface LedgerPoolComponent {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly componentId: string;
+  readonly algorithmVersion: string;
+  readonly inputsJson: Record<string, unknown>;
+  readonly amountCredits: bigint;
+  readonly evidenceRef: string | null;
+  readonly computedAt: Date;
+}
+
+export interface LedgerPayoutStatement {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly allocationSetHash: string;
+  readonly poolTotalCredits: bigint;
+  readonly payoutsJson: Array<{
+    user_id: string;
+    total_units: string;
+    share: string;
+    amount_credits: string;
+  }>;
+  readonly supersedesStatementId: string | null;
+  readonly createdAt: Date;
+}
+
+export interface LedgerStatementSignature {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly statementId: string;
+  readonly signerWallet: string;
+  readonly signature: string;
+  readonly signedAt: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Write-side parameter types
+// ---------------------------------------------------------------------------
+
+export interface InsertActivityEventParams {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly source: string;
+  readonly eventType: string;
+  readonly platformUserId: string;
+  readonly platformLogin?: string | null;
+  readonly artifactUrl?: string | null;
+  readonly metadata?: Record<string, unknown> | null;
+  readonly payloadHash: string;
+  readonly producer: string;
+  readonly producerVersion: string;
+  readonly eventTime: Date;
+  readonly retrievedAt: Date;
+}
+
+export interface UpsertCurationParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly eventId: string;
+  readonly userId?: string | null;
+  readonly included?: boolean;
+  readonly weightOverrideMilli?: bigint | null;
+  readonly note?: string | null;
+}
+
+export interface InsertAllocationParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly userId: string;
+  readonly proposedUnits: bigint;
+  readonly finalUnits?: bigint | null;
+  readonly overrideReason?: string | null;
+  readonly activityCount: number;
+}
+
+export interface InsertPoolComponentParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly componentId: string;
+  readonly algorithmVersion: string;
+  readonly inputsJson: Record<string, unknown>;
+  readonly amountCredits: bigint;
+  readonly evidenceRef?: string | null;
+}
+
+export interface InsertPayoutStatementParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly allocationSetHash: string;
+  readonly poolTotalCredits: bigint;
+  readonly payoutsJson: Array<{
+    user_id: string;
+    total_units: string;
+    share: string;
+    amount_credits: string;
+  }>;
+  readonly supersedesStatementId?: string | null;
+}
+
+export interface InsertSignatureParams {
+  readonly nodeId: string;
+  readonly statementId: string;
+  readonly signerWallet: string;
+  readonly signature: string;
+  readonly signedAt: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Port interface
+// ---------------------------------------------------------------------------
+
+export interface ActivityLedgerStore {
+  // Epochs
+  createEpoch(params: {
+    nodeId: string;
+    periodStart: Date;
+    periodEnd: Date;
+    weightConfig: Record<string, number>;
+  }): Promise<LedgerEpoch>;
+  getOpenEpoch(nodeId: string): Promise<LedgerEpoch | null>;
+  getEpoch(id: bigint): Promise<LedgerEpoch | null>;
+  listEpochs(nodeId: string): Promise<LedgerEpoch[]>;
+  closeEpoch(epochId: bigint, poolTotal: bigint): Promise<LedgerEpoch>;
+
+  // Activity events (append-only, epoch-agnostic raw log)
+  insertActivityEvents(events: InsertActivityEventParams[]): Promise<void>;
+  getActivityForWindow(
+    nodeId: string,
+    since: Date,
+    until: Date
+  ): Promise<LedgerActivityEvent[]>;
+
+  // Curation (mutable while epoch open)
+  upsertCuration(params: UpsertCurationParams[]): Promise<void>;
+  getCurationForEpoch(epochId: bigint): Promise<LedgerCuration[]>;
+  getUnresolvedCuration(epochId: bigint): Promise<LedgerCuration[]>;
+
+  // Allocations
+  insertAllocations(allocations: InsertAllocationParams[]): Promise<void>;
+  updateAllocationFinalUnits(
+    epochId: bigint,
+    userId: string,
+    finalUnits: bigint,
+    overrideReason?: string
+  ): Promise<void>;
+  getAllocationsForEpoch(epochId: bigint): Promise<LedgerAllocation[]>;
+
+  // Cursors (one stream per call)
+  upsertCursor(
+    nodeId: string,
+    source: string,
+    stream: string,
+    scope: string,
+    cursorValue: string
+  ): Promise<void>;
+  getCursor(
+    nodeId: string,
+    source: string,
+    stream: string,
+    scope: string
+  ): Promise<LedgerSourceCursor | null>;
+
+  // Pool components
+  insertPoolComponent(
+    params: InsertPoolComponentParams
+  ): Promise<LedgerPoolComponent>;
+  getPoolComponentsForEpoch(epochId: bigint): Promise<LedgerPoolComponent[]>;
+
+  // Payout statements
+  insertPayoutStatement(
+    params: InsertPayoutStatementParams
+  ): Promise<LedgerPayoutStatement>;
+  getStatementForEpoch(epochId: bigint): Promise<LedgerPayoutStatement | null>;
+
+  // Statement signatures (schema only — signing flow is a follow-up)
+  insertStatementSignature(params: InsertSignatureParams): Promise<void>;
+  getSignaturesForStatement(
+    statementId: string
+  ): Promise<LedgerStatementSignature[]>;
+}
