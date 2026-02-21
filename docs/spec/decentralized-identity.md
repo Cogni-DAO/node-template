@@ -2,15 +2,15 @@
 id: decentralized-identity
 type: spec
 title: User Identity + Account Bindings
-status: draft
-spec_state: draft
-trust: draft
+status: active
+spec_state: active
+trust: reviewed
 summary: Stable user_id (UUID) as canonical identity. Wallet, Discord, and GitHub are evidenced bindings — never the identity itself. "Contributor" is a derived label, not an identity primitive. DID/VC portability deferred to P2.
 read_when: Working on identity, auth, account linking, RBAC actor types, user context injection, or ledger attribution
 implements: proj.decentralized-identity
 owner: derekg1729
 created: 2026-02-19
-verified: 2026-02-20
+verified: 2026-02-21
 tags: [identity, auth, web3]
 ---
 
@@ -213,7 +213,7 @@ pnpm check:docs    # docs metadata valid
 
 ## Open Questions
 
-- [ ] Backfill strategy: migration script to create `user_bindings` rows for existing `users.wallet_address` values? (resolve at PR time)
+- [x] Backfill strategy: CTE + RETURNING migration in 0013 — idempotent, events only for inserted bindings.
 - [ ] Future: when RBAC actor type migrates from `user:{walletAddress}` to `user:{userId}`, does it happen in this spec or as an RBAC spec update?
 
 ## Related

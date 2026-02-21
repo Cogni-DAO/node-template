@@ -2,7 +2,7 @@
 id: task.0089
 type: task
 title: "User bindings + identity events — schema, binding flows, backfill"
-status: needs_closeout
+status: needs_merge
 priority: 1
 estimate: 2
 summary: Add user_bindings table for wallet/Discord/GitHub account linking, add identity_events append-only audit trail, backfill existing wallet_address rows into user_bindings.
@@ -165,6 +165,7 @@ pnpm check:docs    # docs validation
 - Parent story: story.0079
 - Spec: docs/spec/decentralized-identity.md
 - Project: work/projects/proj.decentralized-identity.md
+- Handoff: [handoff](../handoffs/task.0089.handoff.md)
 
 ## Attribution
 
