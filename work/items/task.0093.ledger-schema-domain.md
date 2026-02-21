@@ -107,6 +107,39 @@ pnpm test tests/unit/core/ledger/
 
 4. **No test coverage for `share` field** — Add assertions on `share` values in `rules.test.ts` (single-recipient 100%, 50/50 split, etc.).
 
+## Activity-Ingestion Revision Notes
+
+> Added 2026-02-21: The P0 scope has been revised from per-receipt wallet signing to automated activity ingestion. This task's deliverables are assessed below.
+
+**Reused unchanged:**
+
+- `computePayouts()` in `rules.ts` — exact same BIGINT largest-remainder math
+- `ApprovedReceipt` type — used to feed `computePayouts()` from `epoch_allocations`
+- `epoch_pool_components` table — defines credit budget (unchanged)
+- `payout_statements` table — deterministic output (unchanged)
+- `errors.ts` — `EpochNotOpenError`, `EpochAlreadyClosedError`, `PoolComponentMissingError` still relevant
+- Append-only DB trigger pattern — reused for `activity_events`
+
+**Modified in follow-up migration (task.0094):**
+
+- `epochs` table — add `period_start`, `period_end`, `weight_config`; drop `policy_repo`, `policy_commit_sha`, `policy_path`, `policy_content_hash`
+
+**Kept in DB but superseded in P0 scope:**
+
+- `work_receipts`, `receipt_events`, `ledger_issuers` — tables remain (append-only principle: don't delete), but P0 workflows use `activity_events` + `epoch_allocations` instead. These tables are reactivated in P1 when per-receipt wallet signing is added.
+
+**Deferred to P1 (kept in package, not used in P0 workflows):**
+
+- `signing.ts` — `buildReceiptMessage()`, `hashReceiptMessage()`, `computeReceiptSetHash()`
+- `ReceiptSignatureInvalidError`, `IssuerNotAuthorizedError` error classes
+- `SigningContext`, `ReceiptMessageFields` types
+
+**New schema (handled by task.0094):**
+
+- `activity_events` table (append-only, provenance fields)
+- `epoch_allocations` table (proposed + final units)
+- `source_cursors` table (adapter sync state)
+
 ## PR / Links
 
 - Handoff: [handoff](../handoffs/task.0093.handoff.md)
