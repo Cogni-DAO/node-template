@@ -149,11 +149,19 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // Record wallet binding (idempotent — skips if already bound)
-          await createBinding(db, user.id, "wallet", fields.address, {
-            method: "siwe",
-            domain: nextAuthUrl.host,
-          });
+          // Record wallet binding (idempotent — skips if already bound).
+          // Failure must not block login — binding is supplementary, not auth-critical.
+          try {
+            await createBinding(db, user.id, "wallet", fields.address, {
+              method: "siwe",
+              domain: nextAuthUrl.host,
+            });
+          } catch (bindingError) {
+            getLog().warn(
+              { error: bindingError, address: fields.address },
+              "[SIWE] Binding insert failed — login continues"
+            );
+          }
 
           getLog().info({ address: fields.address }, "[SIWE] Login success");
 
