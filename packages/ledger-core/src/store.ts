@@ -8,6 +8,8 @@
  * Invariants:
  * - ACTIVITY_APPEND_ONLY: insertActivityEvents never updates existing rows.
  * - CURATION_FREEZE_ON_CLOSE: upsertCuration rejects writes when epoch is closed.
+ * - CURATION_AUTO_POPULATE: insertCurationDoNothing + updateCurationUserId never overwrite admin-set fields.
+ * - IDENTITY_BEST_EFFORT: resolveIdentities is best-effort; unresolved events get userId=null.
  * - ONE_OPEN_EPOCH: createEpoch enforced by DB constraint.
  * - NODE_SCOPED: all operations are scoped to a node_id.
  * Side-effects: none

@@ -3,8 +3,8 @@
 
 /**
  * Module: `@cogni/scheduler-worker/tests/ledger-activities.test`
- * Purpose: Unit tests for ledger activity functions and epoch window computation.
- * Scope: Tests each activity in isolation with mocked store/adapter.
+ * Purpose: Unit tests for ledger activity functions, epoch window computation, and curateAndResolve.
+ * Scope: Tests each activity in isolation with mocked store/adapter. Covers identity resolution, curation auto-population, and admin-field preservation.
  * @internal
  */
 

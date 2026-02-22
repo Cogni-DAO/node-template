@@ -3,13 +3,15 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/activities/ledger`
- * Purpose: Temporal Activities for ledger epoch collection — cursor-based ingestion from source adapters.
+ * Purpose: Temporal Activities for ledger epoch collection and curation — cursor-based ingestion + identity resolution.
  * Scope: Plain async functions that perform I/O (DB, GitHub API). Called by CollectEpochWorkflow.
  * Invariants:
  *   - Per ACTIVITY_IDEMPOTENT: All activities idempotent via PK constraints or upsert
  *   - Per CURSOR_STATE_PERSISTED: Cursors saved after each collect() call
  *   - Per NODE_SCOPED: All operations pass nodeId + scopeId from deps
  *   - Per TEMPORAL_DETERMINISM: Activities contain all I/O; workflows call only these proxies
+ *   - Per CURATION_AUTO_POPULATE: curateAndResolve inserts new curations (DO NOTHING on conflict), updates only userId on unresolved rows
+ *   - Per IDENTITY_BEST_EFFORT: Unresolved events get userId=null in curation rows, never dropped
  * Side-effects: IO (database, GitHub API)
  * Links: docs/spec/epoch-ledger.md, docs/spec/temporal-patterns.md
  * @internal

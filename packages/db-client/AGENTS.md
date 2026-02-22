@@ -37,7 +37,7 @@ Database client factory and Drizzle adapter implementations for scheduling and l
 }
 ```
 
-**External deps:** `drizzle-orm`, `postgres`, `type-fest`. Internal deps: `@cogni/db-schema`, `@cogni/ledger-core`, `@cogni/scheduler-core`, `@cogni/ai-core`, `@cogni/ids`.
+**External deps:** `drizzle-orm`, `postgres`, `type-fest`. Internal deps: `@cogni/db-schema` (ledger + identity tables), `@cogni/ledger-core`, `@cogni/scheduler-core`, `@cogni/ai-core`, `@cogni/ids`.
 
 ## Public Surface
 

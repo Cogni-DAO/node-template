@@ -2,7 +2,7 @@
 id: task.0101
 type: task
 title: "Identity resolution activity + curation auto-population (GitHub V0)"
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 7
 estimate: 2

@@ -4,10 +4,11 @@
 /**
  * Module: `@cogni/db-client/adapters/drizzle-ledger`
  * Purpose: Drizzle ORM implementation of ActivityLedgerStore port.
- * Scope: Single adapter shared by app (via container.ts) and scheduler-worker. Implements all ActivityLedgerStore methods including getEpochByWindow (status-agnostic lookup). Does not contain domain logic or define port interfaces.
+ * Scope: Single adapter shared by app (via container.ts) and scheduler-worker. Implements all ActivityLedgerStore methods including identity resolution via user_bindings (cross-domain). Does not contain domain logic or define port interfaces.
  * Invariants:
  * - Uses serviceDb (BYPASSRLS) — no RLS in V0.
  * - ACTIVITY_IDEMPOTENT: insertActivityEvents uses onConflictDoNothing on PK.
+ * - CURATION_AUTO_POPULATE: insertCurationDoNothing uses onConflictDoNothing; updateCurationUserId only sets userId where NULL.
  * - CURATION_FREEZE_ON_CLOSE: DB trigger enforces; adapter does not duplicate check.
  * - ONE_OPEN_EPOCH: DB constraint enforces; adapter lets DB error propagate.
  * Side-effects: IO (database operations)

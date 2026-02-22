@@ -3,8 +3,8 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/workflows/collect-epoch`
- * Purpose: Temporal Workflow for epoch activity collection — cursor-based ingestion from source adapters.
- * Scope: Deterministic orchestration only. All I/O happens in Activities.
+ * Purpose: Temporal Workflow for epoch activity collection and curation — ingestion + identity resolution.
+ * Scope: Deterministic orchestration only. All I/O happens in Activities. Steps: compute window → ensure epoch → collect per source → curate and resolve identities.
  * Invariants:
  *   - Per TEMPORAL_DETERMINISM: No I/O, network calls, or direct imports of adapters
  *   - Per WRITES_VIA_TEMPORAL: All writes execute in Temporal activities

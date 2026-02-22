@@ -79,7 +79,7 @@ src/
 
 ## Responsibilities
 
-- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow + CollectEpochWorkflow, execute scheduler activities (validateGrant, executeGraph, updateRun, createRun) and ledger activities (ensureEpochForWindow, loadCursor, collectFromSource, insertEvents, saveCursor), handle SIGTERM/SIGINT
+- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow + CollectEpochWorkflow, execute scheduler activities (validateGrant, executeGraph, updateRun, createRun) and ledger activities (ensureEpochForWindow, loadCursor, collectFromSource, insertEvents, saveCursor, curateAndResolve), handle SIGTERM/SIGINT
 - This directory **does not**: Import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces (those live in packages)
 
 ## Usage
