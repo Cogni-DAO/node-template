@@ -14,7 +14,7 @@
  * @internal
  */
 
-import { WorkflowExecutionAlreadyStartedError } from "@temporalio/common";
+import { WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
 import {
   closeTemporalClient,
   getTestTemporalClient,
