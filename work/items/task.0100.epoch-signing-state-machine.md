@@ -1,13 +1,13 @@
 ---
 id: task.0100
 type: task
-title: "Epoch state machine (open→frozen→finalized), scope-level approvers, EIP-191 signing"
+title: "Epoch state machine (open→review→finalized), scope-level approvers, EIP-191 signing"
 status: needs_design
 priority: 1
 rank: 6
 estimate: 3
-summary: "Implement three-phase epoch lifecycle, per-scope approver config from repo-spec, EIP-191 statement signing, and freeze/sign/finalize API routes."
-outcome: "Epochs transition open→frozen→finalized with DB trigger enforcement. Payout statements require 1-of-N EIP-191 signature from scope approvers before finalize. Approvers configured in repo-spec.yaml."
+summary: "Implement three-phase epoch lifecycle, per-scope approver config from repo-spec, EIP-191 statement signing, and close-ingestion/sign/finalize API routes."
+outcome: "Epochs transition open→review→finalized with DB trigger enforcement. Ingestion locked on review; curation stays mutable until finalize. Payout statements require 1-of-N EIP-191 signature from scope approvers. Approvers configured in repo-spec.yaml."
 spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
@@ -28,12 +28,13 @@ external_refs:
 
 ## Requirements
 
-### 1. Epoch Status Enum: `open → frozen → finalized`
+### 1. Epoch Status Enum: `open → review → finalized`
 
-- Update `EpochStatus` in `packages/ledger-core/src/model.ts`: `"open" | "frozen" | "finalized"`
-- DB migration: alter CHECK constraint on `epochs.status` to `('open', 'frozen', 'finalized')`
+- Update `EpochStatus` in `packages/ledger-core/src/model.ts`: `"open" | "review" | "finalized"`
+- DB migration: alter CHECK constraint on `epochs.status` to `('open', 'review', 'finalized')`
 - Update partial unique index: `UNIQUE(node_id, scope_id) WHERE status != 'finalized'` (ONE_ACTIVE_EPOCH)
-- Update `activity_curation` DB trigger: reject writes when `epochs.status IN ('frozen', 'finalized')` (CURATION_FREEZE_ON_FREEZE)
+- **Ingestion trigger** (INGESTION_CLOSED_ON_REVIEW): reject INSERT on `activity_events` for epochs with `status IN ('review', 'finalized')`. Raw facts locked once review begins.
+- **Curation trigger** (CURATION_FREEZE_ON_FINALIZE): reject writes on `activity_curation` only when `epochs.status = 'finalized'`. Curation stays mutable during `open` and `review` — reviewers can adjust inclusion, weight overrides, identity resolution.
 - Add state transition validation in domain logic (no backward transitions)
 
 ### 2. Scope-Level Approvers in Repo-Spec
@@ -63,15 +64,16 @@ external_refs:
 - `verifyStatementSignature()` in `packages/ledger-core/` — ecrecover + check against approvers list
 - Use viem's `verifyMessage` / `recoverMessageAddress` (already a dependency)
 
-### 4. New API Routes
+### 4. API Routes
 
-- `POST /api/v1/ledger/epochs/:id/freeze` — SIWE + approver check, transitions `open → frozen`
-- `POST /api/v1/ledger/epochs/:id/sign` — SIWE + approver check, accepts `{ signature }`, verifies via ecrecover, stores in `statement_signatures`
-- Update `POST /api/v1/ledger/epochs/:id/finalize` — verify epoch is `frozen`, verify signature exists from scope approver, then finalize
+- `POST /api/v1/ledger/epochs/:id/close-ingestion` — SIWE + approver check, transitions `open → review`. Also triggered automatically by Temporal at `period_end + grace_period`.
+- `POST /api/v1/ledger/epochs/:id/sign` — SIWE + approver check, accepts `{ signature }`, verifies via ecrecover, stores in `statement_signatures`. Epoch must be `review`.
+- Update `POST /api/v1/ledger/epochs/:id/finalize` — verify epoch is `review`, verify signature exists from scope approver, then finalize
+- Update `PATCH /api/v1/ledger/epochs/:id/allocations` — allow during both `open` and `review`
 
 ### 5. Store Port Extensions
 
-- `ActivityLedgerStore.freezeEpoch(nodeId, epochId)` — transition open → frozen
+- `ActivityLedgerStore.closeIngestion(nodeId, epochId)` — transition open → review
 - `ActivityLedgerStore.insertSignature(params)` — insert into statement_signatures
 - `ActivityLedgerStore.getSignaturesForEpoch(nodeId, epochId)` — read signatures
 
@@ -85,20 +87,20 @@ external_refs:
 - `src/shared/config/repoSpec.server.ts` (add getLedgerConfig)
 - `src/shared/config/index.ts` (export getLedgerConfig)
 - `.cogni/repo-spec.yaml` (add ledger.approvers)
-- `src/app/api/v1/ledger/epochs/[id]/freeze/` (new route)
+- `src/app/api/v1/ledger/epochs/[id]/close-ingestion/` (new route)
 - `src/app/api/v1/ledger/epochs/[id]/sign/` (new route)
 - DB migration (new file)
 - Tests
 
 ## Plan
 
-- [ ] DB migration: epoch status enum `open/frozen/finalized`, update constraints + triggers
+- [ ] DB migration: epoch status enum `open/review/finalized`, update constraints + triggers (ingestion + curation)
 - [ ] Update `packages/ledger-core/` model types + add signing module
 - [ ] Add `ledger.approvers` to repo-spec schema + loader + accessor
-- [ ] Implement store port methods (freeze, signatures)
-- [ ] Implement freeze + sign API routes
-- [ ] Update finalize workflow to require frozen status + valid signature
-- [ ] Tests: state transitions, signing verification, scope-bound anti-replay
+- [ ] Implement store port methods (close-ingestion, signatures)
+- [ ] Implement close-ingestion + sign API routes
+- [ ] Update finalize workflow to require review status + valid signature
+- [ ] Tests: state transitions, signing verification, scope-bound anti-replay, curation-mutable-during-review
 
 ## Validation
 
@@ -114,8 +116,8 @@ pnpm dotenv -e .env.test -- vitest run --config vitest.stack.config.mts tests/st
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0100` linked in PR body
-- [ ] **Spec:** EPOCH_THREE_PHASE, APPROVERS_PER_SCOPE, SIGNATURE_SCOPE_BOUND, CURATION_FREEZE_ON_FREEZE invariants enforced
-- [ ] **Tests:** state machine transitions (happy + reject backward), signing verification, anti-replay across scopes
+- [ ] **Spec:** EPOCH_THREE_PHASE, APPROVERS_PER_SCOPE, SIGNATURE_SCOPE_BOUND, INGESTION_CLOSED_ON_REVIEW, CURATION_FREEZE_ON_FINALIZE invariants enforced
+- [ ] **Tests:** state machine transitions (happy + reject backward), signing verification, anti-replay across scopes, curation mutable during review
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
