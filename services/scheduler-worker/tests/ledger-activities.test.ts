@@ -17,6 +17,7 @@ import type {
   ActivityLedgerStore,
   LedgerEpoch,
   LedgerSourceCursor,
+  UncuratedEvent,
 } from "@cogni/ledger-core";
 import { computeEpochWindowV1 } from "@cogni/ledger-core";
 import { describe, expect, it, vi } from "vitest";
@@ -60,6 +61,9 @@ function makeMockStore(
     getStatementForEpoch: vi.fn(),
     insertStatementSignature: vi.fn(),
     getSignaturesForStatement: vi.fn(),
+    resolveIdentities: vi.fn().mockResolvedValue(new Map()),
+    getUncuratedEvents: vi.fn().mockResolvedValue([]),
+    updateCurationUserId: vi.fn(),
     ...overrides,
   } as ActivityLedgerStore;
 }
@@ -115,6 +119,35 @@ function makeEvent(id = "github:pr:test/repo:1"): ActivityEvent {
     metadata: { title: "Test PR" },
     payloadHash: "abc123",
     eventTime: new Date("2026-02-20T12:00:00Z"),
+  };
+}
+
+function makeUncuratedEvent(
+  overrides: Partial<UncuratedEvent["event"]> & {
+    hasExistingCuration?: boolean;
+  } = {}
+): UncuratedEvent {
+  const { hasExistingCuration = false, ...eventOverrides } = overrides;
+  return {
+    event: {
+      id: "github:pr:test/repo:1",
+      nodeId: NODE_ID,
+      scopeId: SCOPE_ID,
+      source: "github",
+      eventType: "pr_merged",
+      platformUserId: "12345",
+      platformLogin: "testuser",
+      artifactUrl: "https://github.com/test/repo/pull/1",
+      metadata: { title: "Test PR" },
+      payloadHash: "abc123",
+      producer: "github",
+      producerVersion: "0.3.0",
+      eventTime: new Date("2026-02-20T12:00:00Z"),
+      retrievedAt: new Date("2026-02-20T12:01:00Z"),
+      ingestedAt: new Date("2026-02-20T12:02:00Z"),
+      ...eventOverrides,
+    },
+    hasExistingCuration,
   };
 }
 
@@ -579,6 +612,224 @@ describe("saveCursor", () => {
       "pull_requests",
       "test/repo",
       "2026-02-21T00:00:00Z" // advanced to new, later value
+    );
+  });
+});
+
+// ── curateAndResolve ────────────────────────────────────────────
+
+describe("curateAndResolve", () => {
+  const epoch = makeEpoch({ id: 1n });
+
+  function makeDeps(storeOverrides: Partial<ActivityLedgerStore> = {}) {
+    const store = makeMockStore({
+      getEpoch: vi.fn().mockResolvedValue(epoch),
+      ...storeOverrides,
+    });
+    const { curateAndResolve } = createLedgerActivities({
+      ledgerStore: store,
+      sourceAdapters: new Map(),
+      nodeId: NODE_ID,
+      scopeId: SCOPE_ID,
+      logger: mockLogger,
+    });
+    return { store, curateAndResolve };
+  }
+
+  it("returns zero counts when no uncurated events", async () => {
+    const { curateAndResolve } = makeDeps({
+      getUncuratedEvents: vi.fn().mockResolvedValue([]),
+    });
+
+    const result = await curateAndResolve({ epochId: "1" });
+
+    expect(result).toEqual({
+      totalEvents: 0,
+      newCurations: 0,
+      resolved: 0,
+      unresolved: 0,
+    });
+  });
+
+  it("throws when epoch not found", async () => {
+    const { curateAndResolve } = makeDeps({
+      getEpoch: vi.fn().mockResolvedValue(null),
+    });
+
+    await expect(curateAndResolve({ epochId: "999" })).rejects.toThrow(
+      "epoch 999 not found"
+    );
+  });
+
+  it("creates new curation rows with resolved userId", async () => {
+    const uncurated = [
+      makeUncuratedEvent({ id: "ev1", platformUserId: "111" }),
+      makeUncuratedEvent({ id: "ev2", platformUserId: "222" }),
+    ];
+    const identityMap = new Map([["111", "user-aaa"]]);
+    const { store, curateAndResolve } = makeDeps({
+      getUncuratedEvents: vi.fn().mockResolvedValue(uncurated),
+      resolveIdentities: vi.fn().mockResolvedValue(identityMap),
+    });
+
+    const result = await curateAndResolve({ epochId: "1" });
+
+    expect(result.totalEvents).toBe(2);
+    expect(result.newCurations).toBe(2);
+    expect(result.resolved).toBe(1);
+    expect(result.unresolved).toBe(1);
+
+    // Should have called upsertCuration for each new event
+    expect(store.upsertCuration).toHaveBeenCalledTimes(2);
+
+    // First call: resolved
+    expect(vi.mocked(store.upsertCuration).mock.calls[0][0]).toEqual([
+      expect.objectContaining({
+        nodeId: NODE_ID,
+        epochId: 1n,
+        eventId: "ev1",
+        userId: "user-aaa",
+        included: true,
+      }),
+    ]);
+
+    // Second call: unresolved (userId null)
+    expect(vi.mocked(store.upsertCuration).mock.calls[1][0]).toEqual([
+      expect.objectContaining({
+        eventId: "ev2",
+        userId: null,
+        included: true,
+      }),
+    ]);
+
+    // No updateCurationUserId calls (all new events)
+    expect(store.updateCurationUserId).not.toHaveBeenCalled();
+  });
+
+  it("updates userId on existing unresolved curation rows", async () => {
+    const uncurated = [
+      makeUncuratedEvent({
+        id: "ev1",
+        platformUserId: "111",
+        hasExistingCuration: true,
+      }),
+    ];
+    const identityMap = new Map([["111", "user-aaa"]]);
+    const { store, curateAndResolve } = makeDeps({
+      getUncuratedEvents: vi.fn().mockResolvedValue(uncurated),
+      resolveIdentities: vi.fn().mockResolvedValue(identityMap),
+    });
+
+    const result = await curateAndResolve({ epochId: "1" });
+
+    expect(result.totalEvents).toBe(1);
+    expect(result.newCurations).toBe(0);
+    expect(result.resolved).toBe(1);
+
+    // Should update, not insert
+    expect(store.upsertCuration).not.toHaveBeenCalled();
+    expect(store.updateCurationUserId).toHaveBeenCalledWith(
+      1n,
+      "ev1",
+      "user-aaa"
+    );
+  });
+
+  it("skips existing unresolved rows when identity still not found", async () => {
+    const uncurated = [
+      makeUncuratedEvent({
+        id: "ev1",
+        platformUserId: "111",
+        hasExistingCuration: true,
+      }),
+    ];
+    const { store, curateAndResolve } = makeDeps({
+      getUncuratedEvents: vi.fn().mockResolvedValue(uncurated),
+      resolveIdentities: vi.fn().mockResolvedValue(new Map()),
+    });
+
+    const result = await curateAndResolve({ epochId: "1" });
+
+    expect(result.totalEvents).toBe(1);
+    expect(result.newCurations).toBe(0);
+    expect(result.resolved).toBe(0);
+    expect(result.unresolved).toBe(1);
+
+    // Neither insert nor update — existing row stays as-is
+    expect(store.upsertCuration).not.toHaveBeenCalled();
+    expect(store.updateCurationUserId).not.toHaveBeenCalled();
+  });
+
+  it("does NOT overwrite admin-set fields on re-run", async () => {
+    // Simulate: event has existing curation (hasExistingCuration=true) with userId already set
+    // getUncuratedEvents wouldn't return it (it filters by userId IS NULL).
+    // This test verifies the contract: updateCurationUserId is conditional.
+    // The activity only calls updateCurationUserId, which has WHERE user_id IS NULL.
+    // So an admin who manually set userId to something else is never overwritten.
+
+    // Scenario: event has existing unresolved curation, gets resolved
+    const uncurated = [
+      makeUncuratedEvent({
+        id: "ev1",
+        platformUserId: "111",
+        hasExistingCuration: true,
+      }),
+    ];
+    const identityMap = new Map([["111", "user-aaa"]]);
+    const { store, curateAndResolve } = makeDeps({
+      getUncuratedEvents: vi.fn().mockResolvedValue(uncurated),
+      resolveIdentities: vi.fn().mockResolvedValue(identityMap),
+    });
+
+    await curateAndResolve({ epochId: "1" });
+
+    // updateCurationUserId called — but the adapter's WHERE clause
+    // ensures it only updates when user_id IS NULL
+    expect(store.updateCurationUserId).toHaveBeenCalledWith(
+      1n,
+      "ev1",
+      "user-aaa"
+    );
+    // upsertCuration (which overwrites all fields) is NOT called for existing rows
+    expect(store.upsertCuration).not.toHaveBeenCalled();
+  });
+
+  it("handles mixed new and existing unresolved events", async () => {
+    const uncurated = [
+      makeUncuratedEvent({
+        id: "ev-new",
+        platformUserId: "111",
+        hasExistingCuration: false,
+      }),
+      makeUncuratedEvent({
+        id: "ev-existing",
+        platformUserId: "222",
+        hasExistingCuration: true,
+      }),
+    ];
+    const identityMap = new Map([
+      ["111", "user-aaa"],
+      ["222", "user-bbb"],
+    ]);
+    const { store, curateAndResolve } = makeDeps({
+      getUncuratedEvents: vi.fn().mockResolvedValue(uncurated),
+      resolveIdentities: vi.fn().mockResolvedValue(identityMap),
+    });
+
+    const result = await curateAndResolve({ epochId: "1" });
+
+    expect(result.totalEvents).toBe(2);
+    expect(result.newCurations).toBe(1);
+    expect(result.resolved).toBe(2);
+    expect(result.unresolved).toBe(0);
+
+    // New event → upsertCuration
+    expect(store.upsertCuration).toHaveBeenCalledTimes(1);
+    // Existing unresolved → updateCurationUserId
+    expect(store.updateCurationUserId).toHaveBeenCalledWith(
+      1n,
+      "ev-existing",
+      "user-bbb"
     );
   });
 });

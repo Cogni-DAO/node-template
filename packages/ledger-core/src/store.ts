@@ -200,6 +200,20 @@ export interface InsertSignatureParams {
 }
 
 // ---------------------------------------------------------------------------
+// Identity resolution types
+// ---------------------------------------------------------------------------
+
+/**
+ * An event that needs curation work — either no curation row exists,
+ * or the curation row has user_id IS NULL (unresolved).
+ */
+export interface UncuratedEvent {
+  readonly event: LedgerActivityEvent;
+  /** true = curation row exists with userId=NULL; false = no curation row */
+  readonly hasExistingCuration: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Port interface
 // ---------------------------------------------------------------------------
 
@@ -280,4 +294,36 @@ export interface ActivityLedgerStore {
   getSignaturesForStatement(
     statementId: string
   ): Promise<LedgerStatementSignature[]>;
+
+  // Identity resolution (cross-domain convenience — V0 on ledger port)
+  /**
+   * Resolves platform IDs to user UUIDs via user_bindings.
+   * V0: GitHub only. Extend provider union for discord etc.
+   */
+  resolveIdentities(
+    provider: "github",
+    externalIds: string[]
+  ): Promise<Map<string, string>>;
+
+  /**
+   * Returns events in the epoch window that need curation work:
+   * - No curation row exists (new events)
+   * - Curation row exists but user_id IS NULL (unresolved)
+   */
+  getUncuratedEvents(
+    nodeId: string,
+    epochId: bigint,
+    periodStart: Date,
+    periodEnd: Date
+  ): Promise<UncuratedEvent[]>;
+
+  /**
+   * Update user_id on a curation row ONLY when existing user_id IS NULL.
+   * Never touches included, weight_override_milli, or note (CURATION_AUTO_POPULATE).
+   */
+  updateCurationUserId(
+    epochId: bigint,
+    eventId: string,
+    userId: string
+  ): Promise<void>;
 }

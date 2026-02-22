@@ -2,7 +2,7 @@
 id: task.0101
 type: task
 title: "Identity resolution activity + curation auto-population (GitHub V0)"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 7
 estimate: 2
@@ -12,14 +12,14 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch:
+branch: feat/ledger-identity-resolution
 pr:
 reviewer:
 revision: 2
 blocked_by: task.0089, task.0095
 deploy_verified: false
 created: 2026-02-22
-updated: 2026-02-22
+updated: 2026-02-23
 labels: [governance, ledger, identity]
 external_refs:
 ---
@@ -45,22 +45,26 @@ After each daily collection run, every ingested activity event has a correspondi
 **Design decision — query by epochId, not window**: The activity takes `{ epochId }` as input and loads the epoch row to get `period_start`/`period_end`. The epoch row is authoritative for window boundaries. `periodStart`/`periodEnd` passed from the workflow serve only as a guard assertion (verify they match the epoch row), not as query parameters.
 
 **Design decision — delta processing**: Instead of processing all events in the window, query only events that need curation work:
+
 - Events with NO existing curation row (new events since last run)
 - Events with existing curation row where `user_id IS NULL` (unresolved — may have new bindings since last run)
 
 This reduces write amplification and vacuum pressure. Events already curated with a resolved `user_id` are never touched, preserving admin edits.
 
 **Design decision — insert-or-update-userId-only merge semantics**: The existing `upsertCuration` method uses `onConflictDoUpdate` which overwrites ALL fields — this would clobber admin edits to `included`, `weight_override_milli`, and `note`. Instead, use two-phase writes:
+
 1. **INSERT new curation rows** (`ON CONFLICT DO NOTHING`) for events with no curation row
 2. **UPDATE userId only** on existing rows where `user_id IS NULL` — never touch `included`, `weight_override_milli`, `note`
 
 This requires a new store method (`updateCurationUserId`) or a targeted SQL update — NOT the existing `upsertCuration`.
 
 **Design decision — DB query instead of workflow state**: The original requirements passed events through the workflow as an `allEvents` array. This is wrong:
+
 1. **Temporal payload limits**: A week of GitHub activity could produce hundreds of events. Serializing full `ActivityEvent` objects through workflow history grows unboundedly.
 2. **Idempotency**: If the workflow retries, events from workflow state would be stale. Querying the DB gets current truth.
 
 **Design decision — resolveIdentities on the ledger port**: The `user_bindings` table lives in the identity domain (`@cogni/db-schema/identity`). The cleanest architecture would be a separate `IdentityStore` port. However:
+
 - The scheduler-worker already has a single `LedgerContainer` with one `ledgerStore`
 - Adding a second store port + adapter + DI wiring for a single SELECT query is over-engineering
 - V0 has one consumer; extract to separate port when a second consumer appears
@@ -68,6 +72,7 @@ This requires a new store method (`updateCurationUserId`) or a targeted SQL upda
 **Design decision — provider typing**: Constrain `provider` to `'github'` (literal type in V0). The GitHub adapter stores `platformUserId` as the GitHub numeric `databaseId` (string). Verify this matches `user_bindings.external_id` format.
 
 **Reuses**:
+
 - Existing `createLedgerActivities(deps)` DI factory — just add one function
 - Existing `getActivityForWindow()` on store port — queries by (nodeId, since, until)
 - Existing `userBindings` table from `@cogni/db-schema/identity` — just a SELECT
@@ -75,6 +80,7 @@ This requires a new store method (`updateCurationUserId`) or a targeted SQL upda
 - Existing workflow proxy pattern — add to existing `proxyActivities` call
 
 **Rejected**:
+
 - **Full upsertCuration for auto-population**: Overwrites admin-set `included`/`weight_override_milli`/`note` — destructive on re-run. Use insert-only + targeted userId update instead.
 - **Separate IdentityStore port**: Over-engineered for V0. Extract when needed.
 - **Pass events through workflow state**: Unbounded Temporal payload growth. Query DB instead.
@@ -228,14 +234,14 @@ async updateCurationUserId(
 
 ```typescript
 export interface CurateAndResolveInput {
-  readonly epochId: string;       // bigint serialized as string for Temporal
+  readonly epochId: string; // bigint serialized as string for Temporal
 }
 
 export interface CurateAndResolveOutput {
   readonly totalEvents: number;
-  readonly newCurations: number;   // inserted (no prior row)
-  readonly resolved: number;       // userId filled in (new or updated)
-  readonly unresolved: number;     // userId still null
+  readonly newCurations: number; // inserted (no prior row)
+  readonly resolved: number; // userId filled in (new or updated)
+  readonly unresolved: number; // userId still null
 }
 ```
 
@@ -257,7 +263,7 @@ Update `getUncuratedEvents` return type to include a flag:
 ```typescript
 interface UncuratedEvent {
   event: LedgerActivityEvent;
-  hasExistingCuration: boolean;  // true = row exists with userId=NULL
+  hasExistingCuration: boolean; // true = row exists with userId=NULL
 }
 ```
 
@@ -278,19 +284,42 @@ Note: `periodStart`/`periodEnd` are NOT passed — the activity loads the epoch 
 
 ## Plan
 
-- [ ] Add `resolveIdentities()`, `getUncuratedEvents()`, `updateCurationUserId()` to `ActivityLedgerStore` interface in store.ts
-- [ ] Import `userBindings` and implement `resolveIdentities()` in DrizzleLedgerAdapter
-- [ ] Implement `getUncuratedEvents()` in DrizzleLedgerAdapter (LEFT JOIN query)
-- [ ] Implement `updateCurationUserId()` in DrizzleLedgerAdapter (conditional UPDATE)
-- [ ] Add `CurateAndResolveInput`, `CurateAndResolveOutput` types to ledger.ts
-- [ ] Implement `curateAndResolve` activity in `createLedgerActivities` factory (two-phase: insert new + update unresolved)
-- [ ] Add `curateAndResolve` to proxyActivities in workflow, call after collection loops (epochId only)
-- [ ] Unit test: `resolveIdentities` with mixed found/not-found identities
-- [ ] Unit test: `curateAndResolve` creates new curation rows with correct userId/null
-- [ ] Unit test: `curateAndResolve` re-run with new binding updates only unresolved rows
-- [ ] Unit test: `curateAndResolve` re-run does NOT overwrite admin-set `included=false` or `weight_override_milli`
-- [ ] Unit test: `curateAndResolve` with zero uncurated events (no-op)
-- [ ] Rebuild packages (`pnpm packages:build`)
+- [ ] **Checkpoint 1: Store port + adapter (3 new methods)**
+  - Milestone: Port interface and Drizzle adapter have resolveIdentities, getUncuratedEvents, updateCurationUserId
+  - Invariants: NODE_SCOPED, CURATION_AUTO_POPULATE, IDENTITY_BEST_EFFORT
+  - Todos:
+    - [ ] Add `UncuratedEvent` type + 3 methods to `ActivityLedgerStore` in `packages/ledger-core/src/store.ts`
+    - [ ] Import `userBindings` from `@cogni/db-schema/identity` in `packages/db-client/src/adapters/drizzle-ledger.adapter.ts`
+    - [ ] Implement `resolveIdentities()` — batch SELECT from user_bindings
+    - [ ] Implement `getUncuratedEvents()` — LEFT JOIN activity_events with activity_curation
+    - [ ] Implement `updateCurationUserId()` — conditional UPDATE where user_id IS NULL
+  - Validation:
+    - [ ] `pnpm packages:build` succeeds
+    - [ ] `pnpm check` passes (types + dep-cruiser)
+
+- [ ] **Checkpoint 2: curateAndResolve activity + workflow wiring**
+  - Milestone: Activity implemented, workflow calls it as step 5 after collection loops
+  - Invariants: TEMPORAL_DETERMINISM, NODE_SCOPED, CURATION_AUTO_POPULATE, IDENTITY_BEST_EFFORT
+  - Todos:
+    - [ ] Add `CurateAndResolveInput`, `CurateAndResolveOutput` types to `services/scheduler-worker/src/activities/ledger.ts`
+    - [ ] Implement `curateAndResolve` in `createLedgerActivities` factory (two-phase: insert new + update unresolved)
+    - [ ] Add `curateAndResolve` to proxyActivities in workflow, call after collection loops
+  - Validation:
+    - [ ] `pnpm check` passes
+
+- [ ] **Checkpoint 3: Tests**
+  - Milestone: 5+ unit tests proving curateAndResolve behavior
+  - Invariants: TESTS_PROVE_WORK
+  - Todos:
+    - [ ] Add mock store methods for new port methods
+    - [ ] Test: curateAndResolve creates new curation rows with correct userId/null
+    - [ ] Test: curateAndResolve re-run with new binding updates only unresolved rows
+    - [ ] Test: curateAndResolve re-run does NOT overwrite admin-set fields
+    - [ ] Test: curateAndResolve with zero uncurated events (no-op)
+    - [ ] Test: curateAndResolve with epoch not found throws
+  - Validation:
+    - [ ] `pnpm test -- services/scheduler-worker/tests/ledger-activities` passes
+    - [ ] `pnpm check` passes
 
 ## Validation
 

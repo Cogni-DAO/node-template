@@ -62,5 +62,6 @@ export type {
   LedgerPoolComponent,
   LedgerSourceCursor,
   LedgerStatementSignature,
+  UncuratedEvent,
   UpsertCurationParams,
 } from "./store";

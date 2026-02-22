@@ -34,21 +34,25 @@ These four rules are non-negotiable — the design review specifically required 
 ## What Exists (All Merged to Staging)
 
 ### Collection Pipeline (task.0095)
+
 - `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` — `CollectEpochWorkflow` with 4 steps. **You add step 5: curateAndResolve.**
 - `services/scheduler-worker/src/activities/ledger.ts` — `createLedgerActivities(deps)` factory with 5 activities. **You add `curateAndResolve` here.**
 - `LedgerActivities` type alias = `ReturnType<typeof createLedgerActivities>` — adding a function auto-exports it
 - `LedgerActivityDeps`: `{ ledgerStore, sourceAdapters, nodeId, scopeId, logger }`
 
 ### Identity Schema (task.0089)
+
 - `packages/db-schema/src/identity.ts` — `userBindings` table: `(id, user_id, provider, external_id, created_at)` with `UNIQUE(provider, external_id)`
 - Provider check constraint: `IN ('wallet', 'discord', 'github')`
 
 ### Store Port + Adapter
+
 - `packages/ledger-core/src/store.ts` — `ActivityLedgerStore` interface
 - `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — `DrizzleLedgerAdapter`
 - Currently does NOT import identity tables — you add `import { userBindings } from "@cogni/db-schema/identity"`
 
 ### Existing Curation Methods (DO NOT use for auto-population)
+
 - `upsertCuration(params[])` — uses `onConflictDoUpdate` which OVERWRITES all fields. Safe for admin API edits, NOT for auto-population.
 - `getCurationForEpoch(epochId)`, `getUnresolvedCuration(epochId)` — read methods, usable.
 
@@ -67,6 +71,7 @@ These four rules are non-negotiable — the design review specifically required 
 **`curateAndResolve({ epochId })`** — the sole input is epochId (string, bigint serialized for Temporal).
 
 Logic:
+
 1. Load epoch by ID → get periodStart, periodEnd (fail if not found)
 2. `getUncuratedEvents(nodeId, epochId, periodStart, periodEnd)` — delta only
 3. Group unique platformUserId by source
@@ -96,13 +101,13 @@ Add `curateAndResolve` to the existing default `proxyActivities` call (2-minute 
 
 ## File Map
 
-| File | Action | What |
-|------|--------|------|
-| `packages/ledger-core/src/store.ts` | Modify | Add 3 methods to `ActivityLedgerStore` |
-| `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` | Modify | Import `userBindings`, implement 3 methods |
-| `services/scheduler-worker/src/activities/ledger.ts` | Modify | Add `curateAndResolve` + types |
-| `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` | Modify | Add step 5, add to proxyActivities |
-| `services/scheduler-worker/tests/ledger-activities.test.ts` | Modify | Add 5+ tests |
+| File                                                                | Action | What                                       |
+| ------------------------------------------------------------------- | ------ | ------------------------------------------ |
+| `packages/ledger-core/src/store.ts`                                 | Modify | Add 3 methods to `ActivityLedgerStore`     |
+| `packages/db-client/src/adapters/drizzle-ledger.adapter.ts`         | Modify | Import `userBindings`, implement 3 methods |
+| `services/scheduler-worker/src/activities/ledger.ts`                | Modify | Add `curateAndResolve` + types             |
+| `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` | Modify | Add step 5, add to proxyActivities         |
+| `services/scheduler-worker/tests/ledger-activities.test.ts`         | Modify | Add 5+ tests                               |
 
 ## Validation
 

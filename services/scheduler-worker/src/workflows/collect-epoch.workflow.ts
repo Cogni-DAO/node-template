@@ -27,16 +27,21 @@ import type { LedgerActivities } from "../activities/ledger.js";
 
 // Proxy ledger activities with reasonable timeouts.
 // collectFromSource may hit GitHub API pagination — allow up to 5 minutes.
-const { ensureEpochForWindow, loadCursor, saveCursor, insertEvents } =
-  proxyActivities<LedgerActivities>({
-    startToCloseTimeout: "2 minutes",
-    retry: {
-      initialInterval: "2 seconds",
-      maximumInterval: "1 minute",
-      backoffCoefficient: 2,
-      maximumAttempts: 5,
-    },
-  });
+const {
+  ensureEpochForWindow,
+  loadCursor,
+  saveCursor,
+  insertEvents,
+  curateAndResolve,
+} = proxyActivities<LedgerActivities>({
+  startToCloseTimeout: "2 minutes",
+  retry: {
+    initialInterval: "2 seconds",
+    maximumInterval: "1 minute",
+    backoffCoefficient: 2,
+    maximumAttempts: 5,
+  },
+});
 
 const { collectFromSource } = proxyActivities<LedgerActivities>({
   startToCloseTimeout: "5 minutes",
@@ -147,6 +152,9 @@ export async function CollectEpochWorkflow(
       }
     }
   }
+
+  // 5. Curate events and resolve identities (CURATION_AUTO_POPULATE)
+  await curateAndResolve({ epochId: epoch.epochId });
 }
 
 /** V0 weight config derivation — pure, deterministic. */

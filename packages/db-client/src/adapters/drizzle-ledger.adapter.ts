@@ -15,6 +15,7 @@
  * @public
  */
 
+import { userBindings } from "@cogni/db-schema/identity";
 import {
   activityCuration,
   activityEvents,
@@ -40,6 +41,7 @@ import type {
   LedgerPoolComponent,
   LedgerSourceCursor,
   LedgerStatementSignature,
+  UncuratedEvent,
   UpsertCurationParams,
 } from "@cogni/ledger-core";
 import {
@@ -47,7 +49,7 @@ import {
   EpochNotFoundError,
   type EpochStatus,
 } from "@cogni/ledger-core";
-import { and, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import type { Database } from "../client";
 
 // ── Row mappers ─────────────────────────────────────────────────
@@ -574,5 +576,82 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       .from(statementSignatures)
       .where(eq(statementSignatures.statementId, statementId));
     return rows.map(toSignature);
+  }
+
+  // ── Identity resolution ───────────────────────────────────────
+
+  async resolveIdentities(
+    provider: "github",
+    externalIds: string[]
+  ): Promise<Map<string, string>> {
+    if (externalIds.length === 0) return new Map();
+    const uniqueIds = [...new Set(externalIds)];
+    const rows = await this.db
+      .select({
+        externalId: userBindings.externalId,
+        userId: userBindings.userId,
+      })
+      .from(userBindings)
+      .where(
+        and(
+          eq(userBindings.provider, provider),
+          inArray(userBindings.externalId, uniqueIds)
+        )
+      );
+    return new Map(rows.map((r) => [r.externalId, r.userId]));
+  }
+
+  async getUncuratedEvents(
+    nodeId: string,
+    epochId: bigint,
+    periodStart: Date,
+    periodEnd: Date
+  ): Promise<UncuratedEvent[]> {
+    const rows = await this.db
+      .select({
+        event: activityEvents,
+        curationId: activityCuration.id,
+      })
+      .from(activityEvents)
+      .leftJoin(
+        activityCuration,
+        and(
+          eq(activityCuration.epochId, epochId),
+          eq(activityCuration.eventId, activityEvents.id)
+        )
+      )
+      .where(
+        and(
+          eq(activityEvents.nodeId, nodeId),
+          gte(activityEvents.eventTime, periodStart),
+          lte(activityEvents.eventTime, periodEnd),
+          or(
+            isNull(activityCuration.id), // no curation row
+            isNull(activityCuration.userId) // curation exists but unresolved
+          )
+        )
+      )
+      .orderBy(activityEvents.eventTime);
+    return rows.map((r) => ({
+      event: toActivityEvent(r.event),
+      hasExistingCuration: r.curationId !== null,
+    }));
+  }
+
+  async updateCurationUserId(
+    epochId: bigint,
+    eventId: string,
+    userId: string
+  ): Promise<void> {
+    await this.db
+      .update(activityCuration)
+      .set({ userId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(activityCuration.epochId, epochId),
+          eq(activityCuration.eventId, eventId),
+          isNull(activityCuration.userId)
+        )
+      );
   }
 }
