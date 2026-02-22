@@ -2,7 +2,7 @@
 id: task.0089
 type: task
 title: "User bindings + identity events — schema, binding flows, backfill"
-status: needs_merge
+status: done
 priority: 1
 estimate: 2
 summary: Add user_bindings table for wallet/Discord/GitHub account linking, add identity_events append-only audit trail, backfill existing wallet_address rows into user_bindings.

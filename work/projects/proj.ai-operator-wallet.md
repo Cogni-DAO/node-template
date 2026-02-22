@@ -168,6 +168,16 @@ OpenRouter returns a `transfer_intent` (not raw calldata) for the [Coinbase Comm
 
 Which function OpenRouter's API returns in `metadata.function_name` determines whether the operator wallet needs ETH or can pay with USDC directly. **Spike 0 resolves this.** See [web3-openrouter-payments spec](../../docs/spec/web3-openrouter-payments.md) for full flow.
 
+### Coinbase CDP Wallets / Agentic Wallets as Privy alternative
+
+Coinbase launched [Agentic Wallets](https://www.coinbase.com/developer-platform/discover/launches/agentic-wallets) (Feb 2026) — wallet infrastructure purpose-built for AI agents on Base. TEE-backed signing (<200ms), declarative spending policies (per-tx caps, address allowlists, sanctions screening), and native [x402](https://docs.cdp.coinbase.com/agentic-wallet/welcome) support for machine-to-machine payments. SDKs in TypeScript, Python, Go.
+
+**Why this matters for us:** We're already on Base and topping up via Coinbase Commerce — CDP Wallets would be the same vendor stack end-to-end. Their policy engine (address allowlists + tx caps enforced at enclave layer) is more mature than Privy's wallet policies. Privy was acquired by Stripe (Jun 2025), raising long-term ecosystem drift concerns.
+
+**No architecture change needed.** `OperatorWalletPort` insulates us — a `CdpOperatorWalletAdapter` is a 1-PR swap. 0xSplits still handles revenue splitting (wallet providers don't solve that). Recommendation: spike is wallet-agnostic, evaluate CDP vs Privy stability at PR 1 time.
+
+**x402 for DAO agent autonomy (P2+).** x402 embeds stablecoin payments into HTTP requests — an AI agent with wallet controls can discover and pay for services autonomously. This is the path to giving a DAO agent leader its own spending authority with on-chain guardrails (session caps, contract allowlists) rather than app-level permission checks. CDP's x402 Bazaar already has 50M+ txs. Directly relevant to the P2 "autonomous spending" and "x402 integration" roadmap items.
+
 ### Top-up economics (derived from constants)
 
 ```
