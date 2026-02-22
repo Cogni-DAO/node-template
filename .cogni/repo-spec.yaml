@@ -3,9 +3,16 @@
 
 schema_version: "0.1.4"
 
-# Unique identity for this node deployment — scopes all ledger tables.
+# Unique identity for this node deployment (infrastructure only).
+# Scopes ledger tables alongside scope_id. Never used for governance domain.
 # Generated once at init; must never change for an existing deployment.
+# See: docs/spec/identity-model.md
 node_id: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d"
+
+# Governance domain (project). V0 default: 'default' (single-project node).
+# Multi-scope: declare named scopes in .cogni/projects/*.yaml instead.
+# scope_id is the canonical DB key; "project" is the human concept.
+scope_id: "default"
 
 intent:
   name: cogni-template

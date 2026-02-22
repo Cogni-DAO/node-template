@@ -242,6 +242,95 @@ const adapter = new GitHubSourceAdapter({
 
 The `tokenProvider` is an internal API exposed by `git-daemon` (or called in-process if scheduler-worker and git-daemon share a runtime).
 
+### Scope Routing at Ingestion
+
+When activity events are ingested, each event must be assigned a `scope_id` (governance/payout domain). See [Identity Model](./identity-model.md) and [Epoch Ledger §Project Scoping](./epoch-ledger.md#project-scoping).
+
+**Routing rules:**
+
+1. **Single-scope V0:** All events get `scope_id = 'default'`. No manifest needed.
+2. **Multi-scope:** Each `.cogni/projects/*.yaml` manifest declares which source repositories or file paths belong to the scope. The adapter assigns `scope_id` at ingestion time based on these rules.
+
+**Routing determinism (when multi-scope is active):**
+
+- **Non-overlapping scopes are the default.** If a repository belongs to exactly one scope, all events from that repository get that `scope_id`.
+- **Overlapping scopes** (a single repo serves multiple projects): route by file path using **longest-match-wins**. Each project manifest declares `include` path globs. The most specific matching glob wins.
+- **Excluded by default:** lockfiles (`**/pnpm-lock.yaml`, `**/package-lock.json`), generated code (`**/generated/**`), and vendor directories (`**/vendor/**`, `**/node_modules/**`) are excluded from path-based routing. These files do not contribute to any scope's attribution.
+- **Renames/moves:** A file rename in a PR is treated as two events — a remove from the old path's scope and an add to the new path's scope. If both resolve to the same scope, it collapses to one event.
+- **Unresolvable events:** If an event touches only excluded files, or no scope matches, the event is **rejected** (not silently dropped, not assigned to default). This forces explicit manifest configuration.
+
+**Ingestion scoping in the adapter call:**
+
+```typescript
+// CollectEpochWorkflow passes scope_id to the adapter context
+const events = await adapter.collect({
+  streams: ["pull_requests", "reviews"],
+  cursor,
+  window: { since, until },
+  scopeId: "chat-service", // ← scope for this collection run
+});
+// Events are inserted with scope_id = 'chat-service' on activity_events
+```
+
+### External Event Envelope
+
+For external repositories (not in this monorepo) that feed the same attribution pipeline, the system accepts **signed activity event envelopes** via a standardized contract. This enables a GitHub/GitLab repo to push events to a Node's ledger without sharing the monorepo.
+
+**Envelope schema:**
+
+```typescript
+interface ActivityEventEnvelope {
+  // Routing
+  source_repo: string; // "github:cogni-dao/external-lib"
+  scope_id: string; // Must match a declared scope in the receiving node
+  node_id: string; // Target node (must match receiving node's node_id)
+
+  // Event (same as ActivityEvent from ingestion-core)
+  event: {
+    id: string; // Deterministic ID (e.g., "github:pr:owner/repo:42")
+    source: string;
+    eventType: string;
+    platformUserId: string;
+    platformLogin?: string;
+    artifactUrl: string;
+    metadata: Record<string, unknown>;
+    payloadHash: string; // SHA-256 of canonical payload
+    eventTime: string; // ISO 8601
+  };
+
+  // Provenance
+  producer: string; // Adapter name (e.g., "github-adapter")
+  producer_version: string; // Adapter version
+  retrieved_at: string; // ISO 8601
+
+  // Integrity
+  idempotency_key: string; // = event.id (deterministic, dedup at receiver)
+  signature?: string; // Optional: Ed25519 or HMAC signature over canonical envelope
+  signer_id?: string; // Optional: identifies the signing key
+}
+```
+
+**Invariants for external envelopes:**
+
+| Rule                    | Constraint                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| ENVELOPE_SCOPE_REQUIRED | Every envelope must include a `scope_id` that matches a declared scope in the receiving node.               |
+| ENVELOPE_IDEMPOTENT     | `idempotency_key` (= `event.id`) prevents duplicate ingestion. Same semantics as ACTIVITY_IDEMPOTENT.       |
+| ENVELOPE_NODE_MATCH     | `node_id` in the envelope must match the receiving node's `node_id`. Rejects cross-node misdirects.         |
+| ENVELOPE_SIGNATURE_V1   | V0: signature is optional (trust the transport). V1: signature required, verified against a registered key. |
+
+**Receiving endpoint (future):**
+
+```
+POST /api/v1/ledger/events/ingest
+Content-Type: application/json
+Authorization: Bearer <node-api-key>
+
+Body: ActivityEventEnvelope
+```
+
+This endpoint validates the envelope, checks `scope_id` against manifests (SCOPE_VALIDATED), and inserts into `activity_events` with the same idempotency guarantees as adapter-collected events.
+
 ### GitLab Support (Future)
 
 The architecture is VCS-agnostic at the handler level:
@@ -357,3 +446,4 @@ Admin app variables are optional — a Node may install only the review app.
 - [Services Architecture](./services-architecture.md) — service contracts git-daemon must satisfy
 - [Packages Architecture](./packages-architecture.md) — package contracts github-core must satisfy
 - [Graph Execution](./graph-execution.md) — review handler executes via graphExecutor
+- [Identity Model](./identity-model.md) — node_id, scope_id, user_id definitions and relationships

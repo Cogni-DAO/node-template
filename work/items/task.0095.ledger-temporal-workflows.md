@@ -44,6 +44,7 @@ Admin (or daily cron) triggers activity collection for an epoch time window; the
 - Existing `computePayouts()` + `computeAllocationSetHash()` from `@cogni/ledger-core`
 - Existing `createServiceDbClient` for worker DB access
 - `node_id` from `repo-spec.yaml` (already in env via `NODE_ID`)
+- `scope_id` from repo-spec or project manifests (V0: `'default'`; multi-scope: from `.cogni/projects/*.yaml`)
 - Temporal `proxyActivities` pattern from `scheduled-run.workflow.ts`
 
 **Rejected**:
@@ -68,6 +69,8 @@ activity_ledger:
 ```
 
 The workflow reads `epoch_length_days` to compute `periodStart`/`periodEnd`. `activity_sources` declares which adapters to run. `credit_estimate_algo` is a named reference to the weight config version — V0 hardcodes `cogni-v0.0` weights in code; vNext loads scoring schemas from repo-spec.
+
+**Scope parameter:** Workflows accept `scope_id` (V0: always `'default'`). Deterministic workflow IDs include scope: `ledger-collect-{scopeId}-{periodStart}-{periodEnd}`. Epoch invariants (`ONE_OPEN_EPOCH`, `EPOCH_WINDOW_UNIQUE`) are composite on `(node_id, scope_id)`. See [epoch-ledger.md §Project Scoping](../../docs/spec/epoch-ledger.md#project-scoping).
 
 **Collection cadence** is a Temporal Schedule concern (daily cron `0 6 * * *`), not repo-spec. Daily runs let admins track epoch progress throughout the week. Each run is additive — cursor-based sync picks up where the last run left off.
 

@@ -48,6 +48,12 @@ updated: 2026-02-21
 - [ ] Update setup/init script to mint `node_id` and write to repo-spec
 - [ ] Add a single test: mismatch triggers startup error
 
+## Scope Clarification
+
+`node_id` is **deployment identity only** — it identifies the running instance (one DB, one infra, one `docker compose up`). It must never be overloaded for governance domain or epoch scoping. `scope_id` (governance/payout domain) is a separate key introduced alongside `node_id` in the ledger schema. See [identity-model.md](../../docs/spec/identity-model.md).
+
+A follow-up task should add `scope_id` column infrastructure to the ledger tables (with `DEFAULT 'default'` for V0 compatibility).
+
 ## Validation
 
 - Fresh DB + repo-spec node_id → boots and seeds

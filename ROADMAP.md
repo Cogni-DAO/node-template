@@ -163,19 +163,25 @@ Requirements:
 
 ### Terminology & ID Mapping
 
-| Term                 | Layer               | Value                             | Purpose                                                                                      |
-| -------------------- | ------------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
-| `billing_account_id` | DB column           | `billing_accounts.id` (UUID)      | Canonical tenant key for all RLS, FK references, data isolation                              |
-| `tenantId`           | Runtime context     | Same UUID as `billing_account_id` | Canonical name in `ToolInvocationContext`, `ToolPolicyContext`, workflow IDs, authz contexts |
-| `node_id`            | Federation (future) | `node_registry_nodes.id` (UUID)   | Operator-level deployed-instance identity; may map to one or many billing accounts           |
-| `dao_address`        | On-chain            | Contract address                  | Attribute linked to `node_id` (and optionally to a billing account); not a tenant key        |
+| Term                 | Layer             | Value                             | Purpose                                                                                      |
+| -------------------- | ----------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
+| `billing_account_id` | DB column         | `billing_accounts.id` (UUID)      | Canonical tenant key for all RLS, FK references, data isolation                              |
+| `tenantId`           | Runtime context   | Same UUID as `billing_account_id` | Canonical name in `ToolInvocationContext`, `ToolPolicyContext`, workflow IDs, authz contexts |
+| `node_id`            | Deployment        | `.cogni/repo-spec.yaml` (UUID)    | Deployment/instance identity. One node = one DB, one infra. Never governance scoping.        |
+| `scope_id`           | Governance domain | `.cogni/projects/*.yaml` (TEXT)   | Governance/payout domain (project). Each scope has its own DAO, weight policy, epoch stream. |
+| `dao_address`        | On-chain          | Contract address                  | Attribute of a scope (project), not a tenant key. Lives in project manifest.                 |
+
+> See [Identity Model spec](docs/spec/identity-model.md) for the full taxonomy, relationships, and prohibited overloading.
 
 **Rules:**
 
 - `billing_account_id` (DB) and `tenantId` (runtime) are the **same value** — `billing_accounts.id` UUID
-- Do NOT introduce new tenant synonyms (`org_id`, `account_id`, `tenant_id` DB column, etc.)
-- `node_id` is for federation/node-registry only — never used for RLS or tenant isolation in this repo
-- If federation work lands later, `node_registry_nodes` lives in the operator DB; do not retrofit this repo's RLS around `node_id`
+- `node_id` is deployment identity only — never used for governance domain, epoch scoping, or RLS
+- `scope_id` is governance identity only — never used for deployment routing or DB tenancy
+- `dao_address` is an attribute of a scope, not a database key
+- Do NOT introduce new synonyms (`org_id`, `account_id`, `tenant_id` DB column, `project_id` DB column, etc.)
+- External provider IDs (e.g., WalletConnect project ID) must be namespaced (e.g., `walletconnect_project_id`) to avoid collision with `scope_id`
+- V0 default: `scope_id = 'default'` everywhere. Multi-scope activates when `.cogni/projects/*.yaml` manifests are added.
 
 ### Transport & Auth
 
@@ -198,8 +204,9 @@ Requirements:
 | [AI Architecture & Evals](docs/spec/ai-evals.md)                       | LangGraph, Langfuse, eval gates    |
 | [Services Migration Guide](work/projects/proj.cicd-services-gitops.md) | Implementation checklist           |
 | [Architecture](docs/spec/architecture.md)                              | Hex architecture details           |
+| [Identity Model](docs/spec/identity-model.md)                          | All identity primitives            |
 
 ---
 
-**Last Updated**: 2026-02-21
+**Last Updated**: 2026-02-22
 **Status**: Design Approved

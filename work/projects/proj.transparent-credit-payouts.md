@@ -53,8 +53,8 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 
 **V0 user story:**
 
-1. Temporal cron opens a weekly epoch (`period_start` → `period_end`) with weight config
-2. `CollectEpochWorkflow` runs GitHub + Discord adapters for the time window
+1. Temporal cron opens a weekly epoch for `(node_id, scope_id)` pair with weight config
+2. `CollectEpochWorkflow` runs GitHub + Discord adapters for the time window, scoped to `scope_id`
 3. Adapters normalize activity → `activity_events` (idempotent by deterministic ID)
 4. System resolves platform identities → `user_id` via `user_bindings` (best-effort)
 5. Weight policy computes `proposed_units` per contributor → `epoch_allocations`
