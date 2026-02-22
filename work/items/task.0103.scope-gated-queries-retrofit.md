@@ -210,7 +210,7 @@ pnpm dotenv -e .env.test -- vitest run tests/component/db/drizzle-ledger.adapter
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0103.handoff.md)
 
 ## Attribution
 
