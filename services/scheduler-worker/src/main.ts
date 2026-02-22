@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/scheduler-worker-service/main`
  * Purpose: Service entry point with graceful shutdown.
- * Scope: Composition root that wires config and starts Temporal worker. Does not contain business logic.
+ * Scope: Entry point that calls env() and starts Temporal worker. Does not contain business logic.
  * Invariants:
  *   - Reads config from env (no hardcoded values)
  *   - Handles SIGTERM/SIGINT for graceful shutdown
@@ -14,14 +14,14 @@
  * @public
  */
 
-import { loadConfig } from "./config.js";
+import { env } from "./bootstrap/env.js";
 import { type HealthState, startHealthServer } from "./health.js";
 import { flushLogger, makeLogger } from "./observability/logger.js";
 import { startSchedulerWorker } from "./worker.js";
 
 async function main(): Promise<void> {
-  // Load and validate config
-  const config = loadConfig();
+  // Load and validate env
+  const config = env();
 
   // Create logger (composition root owns logger creation)
   const logger = makeLogger();
@@ -37,15 +37,7 @@ async function main(): Promise<void> {
   logger.info({ port: config.HEALTH_PORT }, "Health server started");
 
   // Start Temporal worker
-  const worker = await startSchedulerWorker({
-    temporalAddress: config.TEMPORAL_ADDRESS,
-    namespace: config.TEMPORAL_NAMESPACE,
-    taskQueue: config.TEMPORAL_TASK_QUEUE,
-    databaseUrl: config.DATABASE_URL,
-    appBaseUrl: config.APP_BASE_URL,
-    schedulerApiToken: config.SCHEDULER_API_TOKEN,
-    logger,
-  });
+  const worker = await startSchedulerWorker({ env: config, logger });
 
   // Mark ready after worker starts
   healthState.ready = true;
@@ -71,7 +63,7 @@ async function main(): Promise<void> {
 
     try {
       await worker.shutdown();
-      logger.info("Scheduler worker stopped");
+      logger.info({}, "Scheduler worker stopped");
       flushLogger();
       process.exit(0);
     } catch (err) {

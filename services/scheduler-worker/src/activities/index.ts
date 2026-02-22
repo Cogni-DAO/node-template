@@ -15,23 +15,23 @@
  * @internal
  */
 
-import type {
-  DrizzleExecutionGrantWorkerAdapter,
-  DrizzleScheduleRunAdapter,
-} from "@cogni/db-client";
-import type { createServiceDbClient } from "@cogni/db-client/service";
 import { SYSTEM_ACTOR } from "@cogni/ids/system";
 import { ApplicationFailure, activityInfo } from "@temporalio/activity";
-import type { Logger } from "pino";
+
+import type { Logger } from "../observability/logger.js";
+
+import type {
+  ExecutionGrantWorkerPort,
+  ScheduleRunRepository,
+} from "../ports/index.js";
 
 /**
  * Dependencies injected into activities at worker creation.
  * Activities are created as closures over these deps.
  */
 export interface ActivityDeps {
-  db: ReturnType<typeof createServiceDbClient>;
-  grantAdapter: DrizzleExecutionGrantWorkerAdapter;
-  runAdapter: DrizzleScheduleRunAdapter;
+  grantAdapter: ExecutionGrantWorkerPort;
+  runAdapter: ScheduleRunRepository;
   config: {
     appBaseUrl: string;
     schedulerApiToken: string;

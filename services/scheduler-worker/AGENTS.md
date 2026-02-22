@@ -5,18 +5,44 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-04
+- **Last reviewed:** 2026-02-22
 - **Status:** draft
 
 ## Purpose
 
-**SCHEDULER_WORKER_SERVICE:** Temporal Worker for scheduled graph execution. Connects to Temporal, registers workflows and activities, executes scheduled graphs via internal API. Runs independently of the Next.js app, enabling horizontal scaling.
+**SCHEDULER_WORKER_SERVICE:** Temporal Worker for scheduled graph execution and ingestion. Connects to Temporal, registers workflows and activities, executes scheduled graphs via internal API. Runs independently of the Next.js app, enabling horizontal scaling.
 
 ## Pointers
 
 - [Scheduler Spec](../../docs/spec/scheduler.md) - Full scheduler specification
 - [Temporal Patterns](../../docs/spec/temporal-patterns.md) - Temporal patterns and anti-patterns
 - [Services Architecture](../../docs/spec/services-architecture.md) - Service structure guidelines
+
+## Architecture
+
+```
+src/
+├── bootstrap/       # Composition root: env parsing + adapter wiring
+│   ├── env.ts       # Zod-validated env singleton (config parsing only)
+│   └── container.ts # Builds ServiceContainer (concrete adapters → port interfaces)
+├── ports/           # Port barrel — re-exports interfaces from packages
+│   └── index.ts     # ExecutionGrantWorkerPort, ScheduleRunRepository
+├── activities/      # Temporal activities (I/O via injected ports)
+├── workflows/       # Temporal workflows (deterministic, no I/O)
+├── adapters/        # Concrete implementations (Octokit, GitHub App auth)
+│   └── ingestion/   # GitHub source adapter + token provider
+├── observability/   # Logger factory (sole pino importer), redaction
+├── main.ts          # Entry point: env() → makeLogger() → startSchedulerWorker()
+├── worker.ts        # Temporal Worker lifecycle: createContainer() → createActivities()
+└── health.ts        # HTTP readiness probe
+```
+
+### Hard rules (enforced by dep-cruiser)
+
+- **activities/ and workflows/ import ports only** — never adapters/, bootstrap/, or @cogni/db-client
+- **bootstrap/container.ts is the only place** that instantiates concrete adapters
+- **observability/logger.ts is the only file** that imports pino directly
+- **ports/ contains no implementations** — pure type re-exports from packages
 
 ## Boundaries
 
@@ -41,59 +67,45 @@
 
 - Per WORKER_NEVER_CONTROLS_SCHEDULES: Does NOT depend on `ScheduleControlPort`
 - Schema access is transitive through `@cogni/db-client`
-- SCHEDULER_API_TOKEN is a secret - never log it
+- SCHEDULER_API_TOKEN is a secret — never log it
 
 ## Public Surface
 
 - **Exports:** none (standalone service, not a library)
 - **CLI:** `pnpm --filter @cogni/scheduler-worker-service dev|build|start`
-- **Env/Config keys:**
-  - `TEMPORAL_ADDRESS` (required) - Temporal server address
-  - `TEMPORAL_NAMESPACE` (required) - Temporal namespace (cogni-{APP_ENV})
-  - `TEMPORAL_TASK_QUEUE` (required) - Task queue name (scheduler-tasks)
-  - `DATABASE_URL` (required) - PostgreSQL for DB activities
-  - `SCHEDULER_API_TOKEN` (required, secret) - Bearer token for internal API
-  - `APP_BASE_URL` (required) - Base URL for internal API calls
-  - `LOG_LEVEL`, `SERVICE_NAME`, `HEALTH_PORT` - Optional config
+- **Env:** Validated in `src/bootstrap/env.ts` via Zod. Required: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `DATABASE_URL`, `SCHEDULER_API_TOKEN` (secret), `APP_BASE_URL`, `GITHUB_REVIEW_APP_ID`, `GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64`. Optional: `GITHUB_REVIEW_INSTALLATION_ID`, `GITHUB_REPOS`, `LOG_LEVEL`, `SERVICE_NAME`, `HEALTH_PORT`.
 - **Files considered API:** `src/main.ts` (entry point), `Dockerfile`
 
 ## Responsibilities
 
-- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow, execute activities (validateGrant, executeGraph, updateRun; createRun only for DB-backed schedules), handle SIGTERM/SIGINT
-- This directory **does not**: Import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces
+- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow, execute activities (validateGrant, executeGraph, updateRun, createRun), handle SIGTERM/SIGINT
+- This directory **does not**: Import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces (those live in packages)
 
 ## Usage
 
 ```bash
-# Development (requires Temporal running + env vars)
-pnpm --filter @cogni/scheduler-worker-service dev
-
-# Build for production
+pnpm --filter @cogni/scheduler-worker-service dev    # requires Temporal + env vars
 pnpm --filter @cogni/scheduler-worker-service build
-
-# Run tests
 pnpm --filter @cogni/scheduler-worker-service test
-
-# Docker
 docker build -f services/scheduler-worker/Dockerfile -t scheduler-worker .
 ```
 
 ## Standards
 
-- Workflows are deterministic (no I/O) - per TEMPORAL_DETERMINISM
-- Activities are plain async functions - all I/O happens here
-- Composition root owns logger creation via `pino`
-- Config validated via Zod schema in `src/config.ts`
+- Workflows are deterministic (no I/O) — per TEMPORAL_DETERMINISM
+- Activities are plain async functions — all I/O happens here
+- Dependencies injected via `ServiceContainer` from `bootstrap/container.ts`
+- Env validated via Zod schema in `bootstrap/env.ts` (lazy singleton)
 - Graceful shutdown on SIGTERM/SIGINT
 
 ## Dependencies
 
-- **Internal:** `@cogni/scheduler-core`, `@cogni/db-client`, `@cogni/ids`
+- **Internal:** `@cogni/scheduler-core` (ports), `@cogni/ingestion-core` (ports), `@cogni/db-client` (adapters, bootstrap only), `@cogni/ids`
 - **External:** `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity`, `pino`, `zod`
 
 ## Change Protocol
 
-- Update this file when env vars or activities change
+- Update this file when env vars, activities, or layer boundaries change
 - Coordinate with SCHEDULER_SPEC.md and TEMPORAL_PATTERNS.md invariants
 - Changes require updating docker-compose.dev.yml
 
@@ -102,3 +114,4 @@ docker build -f services/scheduler-worker/Dockerfile -t scheduler-worker .
 - Per NO_WORKER_RECONCILIATION: Temporal handles scheduling natively
 - Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: scheduledFor comes from Schedule action
 - Per EXECUTION_VIA_SERVICE_API: executeGraphActivity calls internal API with Idempotency-Key (`temporalScheduleId:scheduledFor`)
+- **Cleanup:** `VcsTokenProvider` in `@cogni/ingestion-core` should be renamed to `VcsTokenProviderPort` for consistency
