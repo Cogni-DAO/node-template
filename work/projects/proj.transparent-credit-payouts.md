@@ -45,10 +45,13 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 | Design revision: activity-ingestion reframe                  | Done        | 1   | (this document) |
 | Spec: epoch-ledger.md (revised)                              | Done        | 1   | —               |
 | DB schema (foundation tables) + core domain (rules, errors)  | Done        | 3   | task.0093       |
-| Identity bindings (user_bindings + identity_events)          | Not Started | 2   | task.0089       |
+| Identity bindings (user_bindings + identity_events)          | Needs Merge | 2   | task.0089       |
 | Ledger port + Drizzle adapter + schema migration + container | Done        | 2   | task.0094       |
-| GitHub + Discord source adapters                             | In Progress | 3   | task.0097       |
-| Temporal workflows (collect + finalize)                      | Not Started | 2   | task.0095       |
+| GitHub source adapter                                        | In Progress | 3   | task.0097       |
+| Temporal workflows (collection phase)                        | In Review   | 2   | task.0095       |
+| Identity resolution + curation auto-population               | Not Started | 2   | task.0101       |
+| Allocation computation + epoch close + FinalizeEpochWorkflow | Not Started | 3   | task.0102       |
+| Epoch 3-phase state machine + EIP-191 signing                | Not Started | 3   | task.0100       |
 | Zod contracts + API routes + stack tests                     | Not Started | 2   | task.0096       |
 
 **V0 user story:**
@@ -63,9 +66,39 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 8. Admin triggers finalize → `computePayouts(final_units, pool_total)` → `payout_statement`
 9. Anyone can recompute payouts from stored `activity_events` + pool + weight config
 
+**E2E pipeline status (gap analysis 2026-02-22):**
+
+```
+repo-spec.yaml → schedule sync → Temporal schedule → CollectEpochWorkflow (daily)
+→ epoch open → ingestion runs → close-ingestion → review → sign → finalize
+```
+
+- [x] Epoch config in repo-spec.yaml (epoch_length_days, activity_sources, scope)
+- [x] Schedule sync → Temporal (LEDGER_INGEST → CollectEpochWorkflow on ledger-tasks queue)
+- [x] CollectEpochWorkflow orchestration (create epoch, collect from sources, insert events, save cursors)
+- [x] GitHub source adapter (GraphQL, deterministic IDs, provenance, cursor-based)
+- [x] DB schema (epochs, activity_events, activity_curation, epoch_allocations, pool_components, payout_statements, statement_signatures, source_cursors)
+- [x] Store port + Drizzle adapter (all CRUD methods)
+- [x] `computePayouts()` pure function (BIGINT, largest-remainder)
+- [x] Identity bindings schema (user_bindings + identity_events tables) — task.0089 needs merge
+- [ ] **Identity resolution activity** — resolve platformUserId → userId via user_bindings (task.0101)
+- [ ] **Curation auto-population** — create activity_curation rows from collected events (task.0101)
+- [ ] **`computeProposedAllocations()`** — weight policy → epoch_allocations (task.0102)
+- [ ] **Epoch auto-close** — detect period_end+grace passed, transition open→review/closed (task.0102)
+- [ ] **FinalizeEpochWorkflow** — read allocations+pool, computePayouts, atomic close+statement (task.0102)
+- [ ] **`computeAllocationSetHash()`** — canonical hash for signing (task.0102)
+- [ ] **3-phase epoch status** — DB migration open/review/finalized + triggers (task.0100)
+- [ ] **EIP-191 signing** — canonical message, verify, store signatures (task.0100)
+- [ ] **close-ingestion API route** — manual trigger for open→review (task.0100)
+- [ ] **sign API route** — submit + verify EIP-191 signature (task.0100)
+- [ ] **finalize API route** — verify review+signature, trigger FinalizeEpochWorkflow (task.0100)
+- [ ] **pool-components API route** — record pool components for epoch (task.0096)
+- [ ] **Remaining read/write API routes** — list epochs, activity, allocations, statement, verify (task.0096)
+- [ ] **Discord source adapter** — deferred (GitHub-only for V0 launch)
+
 **Definition of done:**
 
-- [ ] Weekly epoch collects GitHub PRs/reviews and Discord messages automatically
+- [ ] Weekly epoch collects GitHub PRs/reviews automatically (Discord deferred)
 - [ ] Activity attributed to contributors via identity bindings (unresolved events flagged)
 - [ ] Admin can review and adjust proposed allocations before finalizing
 - [ ] A third party can recompute the payout table from stored data exactly
@@ -130,7 +163,11 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 - [x] Existing governance approval flow stable (task.0054 — Done)
 - [x] Temporal + scheduler-worker service operational
 - [x] SIWE wallet auth operational
-- [ ] task.0089 — Identity bindings (user_bindings table)
+- [ ] task.0089 — Identity bindings (user_bindings table) — needs merge
+- [ ] task.0101 — Identity resolution + curation (blocked by task.0089, task.0095)
+- [ ] task.0102 — Allocation computation + epoch close + finalize (blocked by task.0101)
+- [ ] task.0100 — 3-phase epoch status + signing (blocked by task.0093)
+- [ ] task.0096 — API routes (blocked by task.0095)
 - [ ] GitHub API token configured
 - [ ] Discord bot token configured (already exists via OpenClaw)
 
@@ -182,4 +219,5 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 - **DID/VC alignment** → P2
 - **Federation / cross-org verification** → P2
 - **X/Twitter + funding adapters** → P1
+- **Discord source adapter** → deferred from V0 launch (GitHub-only initially)
 - **GitHub webhook fast-path** → P1

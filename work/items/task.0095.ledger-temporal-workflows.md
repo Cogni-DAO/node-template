@@ -2,7 +2,7 @@
 id: task.0095
 type: task
 title: "Ledger Temporal workflows (collect + finalize) + weekly cron"
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 4
 estimate: 2
@@ -12,14 +12,14 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch: feat/temporal-ledger-workflow
+branch: feat/ledger-ingestion
 pr:
 reviewer:
 revision: 1
 blocked_by: task.0094
 deploy_verified: false
 created: 2026-02-20
-updated: 2026-02-23
+updated: 2026-02-22
 labels: [governance, ledger, temporal]
 external_refs:
 ---
@@ -288,11 +288,11 @@ Implementation in `DrizzleLedgerAdapter`: queries `user_bindings` table with `WH
 - [x] Extend `CreateScheduleParams` with optional `workflowType` + `taskQueueOverride`
 - [x] Extend `syncGovernanceSchedules` for LEDGER_INGEST → CollectEpochWorkflow on `ledger-tasks` queue
 - [x] Add LEDGER_INGEST schedule to governance schedules in repo-spec
-- [ ] Add `computeProposedAllocations()` to `packages/ledger-core/src/rules.ts` + unit tests (deferred — out of collection-phase scope)
-- [ ] Add `resolveIdentities()` to store port + implement in DrizzleLedgerAdapter (deferred — out of collection-phase scope)
+- [ ] Add `computeProposedAllocations()` to `packages/ledger-core/src/rules.ts` + unit tests → moved to task.0102
+- [ ] Add `resolveIdentities()` to store port + implement in DrizzleLedgerAdapter → moved to task.0101
 - [x] Create `services/scheduler-worker/src/activities/ledger.ts` with `createLedgerActivities(deps)`
 - [x] Implement `CollectEpochWorkflow` — create epoch, collect from sources, insert events, save cursors
-- [ ] Implement `FinalizeEpochWorkflow` — read allocations + pool, compute payouts, atomic close (deferred — out of collection-phase scope)
+- [ ] Implement `FinalizeEpochWorkflow` — read allocations + pool, compute payouts, atomic close → moved to task.0102
 - [x] Create `ledger-worker.ts` and wire into `main.ts`
 - [ ] Rename `governance:` schedule prefix to distinguish agent runs vs data pipelines (deferred)
 
