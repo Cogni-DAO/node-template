@@ -81,12 +81,50 @@ export const governanceSpecSchema = z.object({
 export type GovernanceSpec = z.infer<typeof governanceSpecSchema>;
 
 /**
+ * Schema for activity_ledger section — epoch and ingestion configuration.
+ */
+export const activitySourceSpecSchema = z.object({
+  /** Credit estimation algorithm reference (e.g., "cogni-v0.0") */
+  credit_estimate_algo: z.string().min(1),
+});
+
+export type ActivitySourceSpec = z.infer<typeof activitySourceSpecSchema>;
+
+export const activityLedgerSpecSchema = z.object({
+  /** Epoch length in days (1–90) */
+  epoch_length_days: z.number().int().min(1).max(90),
+  /** Map of source name → source config */
+  activity_sources: z.record(z.string(), activitySourceSpecSchema),
+});
+
+export type ActivityLedgerSpec = z.infer<typeof activityLedgerSpecSchema>;
+
+// ---------------------------------------------------------------------------
+// Scope identity primitives
+// ---------------------------------------------------------------------------
+
+/** Stable opaque scope identifier — always UUID */
+export const scopeIdSchema = z.string().uuid();
+
+/** Human-friendly scope slug — lowercase, kebab, max 32 chars */
+export const scopeKeySchema = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
+
+/**
  * Schema for full .cogni/repo-spec.yaml structure (payment-relevant subset).
  * Validates structure only; chain alignment checked in repoSpec.server.ts against chain.ts.
  */
 export const repoSpecSchema = z.object({
   /** Unique node identity — scopes all ledger tables. Generated once at init, never changes. */
   node_id: z.string().uuid("node_id must be a valid UUID"),
+
+  /** Stable opaque scope UUID — DB FK, never changes. Optional for backward compat. */
+  scope_id: scopeIdSchema.optional(),
+
+  /** Human-friendly scope slug — for display, logs, schedule IDs. Optional for backward compat. */
+  scope_key: scopeKeySchema.optional(),
+
+  /** Activity ledger configuration (optional — needed only when LEDGER_INGEST is enabled) */
+  activity_ledger: activityLedgerSpecSchema.optional(),
 
   /** DAO governance configuration */
   cogni_dao: z.object({
