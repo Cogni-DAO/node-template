@@ -61,7 +61,7 @@ beforeAll(async () => {
     ])
     .onConflictDoNothing();
 
-  const store = new DrizzleLedgerAdapter(db);
+  const store = new DrizzleLedgerAdapter(db, REPO_SCOPE_ID);
   seeded = await seedClosedEpoch(store, {
     nodeId: REPO_NODE_ID,
     scopeId: REPO_SCOPE_ID,

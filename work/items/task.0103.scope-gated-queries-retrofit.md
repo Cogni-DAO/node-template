@@ -2,11 +2,11 @@
 id: task.0103
 type: task
 title: "SCOPE_GATED_QUERIES: scope-gate all epochId-based adapter methods"
-status: needs_implement
+status: needs_review
 priority: 1
 rank: 4
 estimate: 1
-summary: "Retrofit DrizzleLedgerAdapter so every epochId-based read/write enforces scope_id via a validated epoch lookup. Prevents cross-tenant data access. No port signature changes."
+summary: "Retrofit DrizzleLedgerAdapter so every epochId-based read AND write enforces scope_id via a validated epoch lookup. Prevents cross-tenant data access. No port signature changes."
 outcome: "Every adapter method that accepts epochId verifies the epoch belongs to the expected scope before operating on child data. Callers get EpochNotFoundError for scope mismatches (same as non-existent epoch)."
 spec_refs: epoch-ledger-spec
 assignees: derekg1729
