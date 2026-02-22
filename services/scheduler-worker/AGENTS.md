@@ -73,7 +73,7 @@ src/
 
 - **Exports:** none (standalone service, not a library)
 - **CLI:** `pnpm --filter @cogni/scheduler-worker-service dev|build|start`
-- **Env:** Validated in `src/bootstrap/env.ts` via Zod. Required: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `DATABASE_URL`, `SCHEDULER_API_TOKEN` (secret), `APP_BASE_URL`, `GITHUB_REVIEW_APP_ID`, `GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64`. Optional: `GITHUB_REVIEW_INSTALLATION_ID`, `GITHUB_REPOS`, `LOG_LEVEL`, `SERVICE_NAME`, `HEALTH_PORT`.
+- **Env:** Validated in `src/bootstrap/env.ts` via Zod. Required: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `DATABASE_URL`, `SCHEDULER_API_TOKEN` (secret), `APP_BASE_URL`. Optional: `GITHUB_REVIEW_APP_ID`, `GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64`, `GITHUB_REVIEW_INSTALLATION_ID`, `GITHUB_REPOS`, `LOG_LEVEL`, `SERVICE_NAME`, `HEALTH_PORT`.
 - **Files considered API:** `src/main.ts` (entry point), `Dockerfile`
 
 ## Responsibilities

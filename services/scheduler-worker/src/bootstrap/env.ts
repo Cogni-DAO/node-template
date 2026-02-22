@@ -38,13 +38,11 @@ const EnvSchema = z.object({
   /** Base URL for internal API calls (required) */
   APP_BASE_URL: z.string().url("APP_BASE_URL must be a valid URL"),
 
-  /** GitHub App ID (required for GitHub ingestion) */
-  GITHUB_REVIEW_APP_ID: z.string().min(1, "GITHUB_REVIEW_APP_ID is required"),
+  /** GitHub App ID (optional — required only when GitHub ingestion is enabled) */
+  GITHUB_REVIEW_APP_ID: z.string().min(1).optional(),
 
-  /** GitHub App private key, base64-encoded PEM (required for GitHub ingestion) */
-  GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64: z
-    .string()
-    .min(1, "GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64 is required"),
+  /** GitHub App private key, base64-encoded PEM (optional — required only when GitHub ingestion is enabled) */
+  GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64: z.string().min(1).optional(),
 
   /** GitHub App installation ID — optional override, resolved dynamically if omitted */
   GITHUB_REVIEW_INSTALLATION_ID: z.coerce.number().int().positive().optional(),

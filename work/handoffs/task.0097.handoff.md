@@ -6,71 +6,69 @@ status: active
 created: 2026-02-21
 updated: 2026-02-22
 branch: worktree-ingestion-core-github-adapter
-last_commit: "65804255"
+last_commit: "e374616f"
 ---
 
-# Handoff: GitHub App Auth + Unified Octokit Client (task.0097)
+# Handoff: GitHub Source Adapter — Auth + Env Wiring (task.0097)
 
 ## Context
 
-- The epoch payout pipeline collects GitHub activity (PRs, reviews, issues) via `GitHubSourceAdapter`
-- Previously used a PAT with raw `@octokit/graphql` and bespoke rate-limit handling
-- This session replaced PAT auth with GitHub App auth (`@octokit/auth-app`) and standardized on `@octokit/core` with retry + throttling plugins
-- The adapter now requires a `VcsTokenProvider` — no PAT fallback, no dual-mode
-- Env vars are defined in scheduler-worker `config.ts` but **not yet wired** to compose/deploy infrastructure
+- Epoch payout pipeline collects GitHub activity (PRs, reviews, issues) via `GitHubSourceAdapter`
+- Auth was refactored from PAT to GitHub App only (`@octokit/auth-app`), with a `VcsTokenProvider` port abstraction
+- Client switched from `@octokit/graphql` to `@octokit/core` with retry + throttling plugins (no more bespoke rate-limit code)
+- **CI is broken** — scheduler-worker fails to boot in Docker because env vars (`GITHUB_REVIEW_APP_*`) are required but not passed through compose files or CI workflows
 
 ## Current State
 
-- **Done:** `VcsTokenProvider` port interface in `@cogni/ingestion-core`
-- **Done:** `GitHubAppTokenProvider` implementation using `@octokit/auth-app` with dynamic installation ID resolution
-- **Done:** `createGitHubClient()` factory with `@octokit/plugin-retry` + `@octokit/plugin-throttling`
-- **Done:** `GitHubSourceAdapter` refactored — accepts `tokenProvider` only, auto-refreshes tokens near expiry (5-min buffer)
-- **Done:** `config.ts` has `REVIEW_APP_ID`, `REVIEW_APP_PRIVATE_KEY_BASE64`, `REVIEW_INSTALLATION_ID` env vars
-- **Done:** 35 unit tests passing (21 adapter + 5 auth + 9 activities)
-- **Done:** External test updated to use `GitHubAppTokenProvider`
-- **Done:** `pnpm check` passes (only pre-existing `identity-model.md` doc failure)
-- **Not done:** Env wiring — compose files, deploy scripts, CI workflows do not pass the new vars
-- **Not done:** GitHub App not yet created — need to register in GitHub org settings
-- **Not done:** Discord adapter, adapter registry/factory
+- **Done:** `VcsTokenProvider` port in `@cogni/ingestion-core`, `GitHubAppTokenProvider` implementation, `createGitHubClient()` factory
+- **Done:** `GitHubSourceAdapter` accepts `tokenProvider` only, auto-refreshes tokens near expiry
+- **Done:** Env schema in `bootstrap/env.ts` defines `GITHUB_REVIEW_APP_ID`, `GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64`, `GITHUB_REVIEW_INSTALLATION_ID`
+- **Done:** 26 unit tests passing (adapter + auth)
+- **Done:** Env var rename `REVIEW_*` → `GITHUB_REVIEW_*` — applied in `bootstrap/env.ts`, external test file, compose files, and `.env.*.example` files
+- **Done:** Scheduler-worker clean architecture refactor (ports/, bootstrap/env + container, dep-cruiser rules)
+- **Done:** `GITHUB_REVIEW_APP_*` vars are optional in Zod schema — worker boots without them; ingestion fails at runtime only
+- **Done:** Compose files (`docker-compose.dev.yml`, `docker-compose.yml`) pass through `GITHUB_REVIEW_*` vars with empty defaults
+- **Not done:** Deploy scripts/CI workflows — `deploy-production.yml`, `staging-preview.yml`, `deploy.sh` need secrets wired
+- **Not done:** GitHub App not yet created in Cogni-DAO org
+- **Not done:** Discord adapter, adapter registry
 
 ## Decisions Made
 
-- **App-only auth, no PAT fallback** — user explicitly rejected dual-mode as tech debt
-- Removed `GitHubRateLimitError` class — plugins handle retries automatically
-- Adapter version bumped `0.2.0` → `0.3.0` for the auth change (breaking config shape)
-- `@octokit/graphql` removed, replaced by `@octokit/core` (which includes `.graphql()`)
-- Token refresh uses 5-minute buffer before `expiresAt` (installation tokens last ~60min)
-- Installation ID resolved dynamically from `repoRef` if not provided in config
+- **App-only auth** — user rejected PAT fallback as tech debt
+- Removed `GitHubRateLimitError` — plugins handle retries
+- Adapter version `0.2.0` → `0.3.0` (breaking: `token` field removed from config)
+- `@octokit/graphql` removed from `package.json`, replaced by `@octokit/core`
+- Env vars renamed to `GITHUB_REVIEW_*` prefix (partially applied)
+- **Env vars are required in Zod schema** — worker crashes at boot without them. Must either: (a) wire them everywhere, or (b) make them optional with a guard at ingestion call sites
 
 ## Next Actions
 
-- [ ] Create Review GitHub App in Cogni-DAO org (permissions: `contents:read`, `pull_requests:read`, `issues:read`), install on `Cogni-DAO/test-repo`
-- [ ] Wire env vars to scheduler-worker in `docker-compose.dev.yml` and `docker-compose.yml`
-- [ ] Wire secrets through `deploy-production.yml`, `staging-preview.yml`, and `deploy.sh`
-- [ ] Establish clean env-update workflow that covers both app and worker services
-- [ ] Run `pnpm test:external` with real App credentials to validate end-to-end
-- [ ] Update work item plan checklist to reflect completed auth items
-- [ ] Implement Discord adapter
-- [ ] Wire adapters into `CollectEpochWorkflow` (task.0095)
+- [x] Finish env var rename: `REVIEW_*` → `GITHUB_REVIEW_*` in external test, env schema, compose files
+- [x] **Fix CI:** Made `GITHUB_REVIEW_APP_*` optional in Zod — worker boots without them
+- [x] Add placeholders to `.env.local.example`, `.env.test.example`
+- [x] Wire env vars in `docker-compose.dev.yml` and `docker-compose.yml`
+- [ ] Wire secrets through `deploy-production.yml`, `staging-preview.yml`, `deploy.sh`
+- [ ] Create GitHub App in Cogni-DAO org (permissions: `contents:read`, `pull_requests:read`, `issues:read`), install on `Cogni-DAO/test-repo`
+- [ ] Run `pnpm test:external` with real App credentials
+- [ ] Commit the in-progress bootstrap/container refactor
 
 ## Risks / Gotchas
 
-- **Env vars not wired:** The scheduler-worker will fail to start in Docker until compose files pass `REVIEW_APP_ID` and `REVIEW_APP_PRIVATE_KEY_BASE64`
-- **`config.ts` makes App vars required:** If the worker starts without them, Zod validation will throw at boot. Consider making them optional if the worker has non-ingestion responsibilities
-- **External tests will skip** until `REVIEW_APP_ID` + `REVIEW_APP_PRIVATE_KEY_BASE64` are set (previously used `GITHUB_TOKEN`)
-- **Review pagination cap:** `reviews(first: 100)` per PR — PRs with 100+ reviews silently drop extras
+- **CI fixed** — `GITHUB_REVIEW_APP_*` vars are optional; worker boots without them
+- **Deploy wiring pending** — deploy scripts and CI workflows don't pass `GITHUB_REVIEW_*` secrets yet
+- **Review pagination cap:** `reviews(first: 100)` per PR — 100+ reviews silently dropped
 
 ## Pointers
 
-| File / Resource                                                      | Why it matters                                          |
-| -------------------------------------------------------------------- | ------------------------------------------------------- |
-| `services/scheduler-worker/src/adapters/ingestion/github.ts`         | Adapter — now uses `VcsTokenProvider`, no direct token  |
-| `services/scheduler-worker/src/adapters/ingestion/github-auth.ts`    | `GitHubAppTokenProvider` — App JWT + installation token |
-| `services/scheduler-worker/src/adapters/ingestion/octokit-client.ts` | Unified Octokit factory with retry/throttling           |
-| `packages/ingestion-core/src/vcs-token-provider.ts`                  | Port interface — lives in pure domain package           |
-| `services/scheduler-worker/src/config.ts`                            | Env schema — new `REVIEW_APP_*` vars                    |
-| `services/scheduler-worker/tests/github-auth.test.ts`                | Auth unit tests (5 tests)                               |
-| `services/scheduler-worker/tests/github-adapter.test.ts`             | Adapter tests (21 tests, mocks `octokit-client`)        |
-| `tests/external/ingestion/github-adapter.external.test.ts`           | Real API tests — now uses `GitHubAppTokenProvider`      |
-| Commit `65804255`                                                    | The auth refactor commit                                |
-| `work/items/task.0097.ledger-source-adapters.md`                     | Canonical work item                                     |
+| File / Resource                                                      | Why it matters                                       |
+| -------------------------------------------------------------------- | ---------------------------------------------------- |
+| `services/scheduler-worker/src/bootstrap/env.ts`                     | Env schema — `GITHUB_REVIEW_APP_*` vars defined here |
+| `services/scheduler-worker/src/adapters/ingestion/github.ts`         | Adapter — requires `tokenProvider`, no direct token  |
+| `services/scheduler-worker/src/adapters/ingestion/github-auth.ts`    | `GitHubAppTokenProvider` — JWT + installation token  |
+| `services/scheduler-worker/src/adapters/ingestion/octokit-client.ts` | Octokit factory with retry/throttling plugins        |
+| `packages/ingestion-core/src/vcs-token-provider.ts`                  | Port interface in pure domain package                |
+| `tests/external/ingestion/github-adapter.external.test.ts`           | Needs env var rename to `GITHUB_REVIEW_*`            |
+| `platform/infra/services/runtime/docker-compose.dev.yml`             | Scheduler-worker env block — needs new vars          |
+| `platform/infra/services/runtime/docker-compose.yml`                 | Production compose — needs new vars                  |
+| Commit `65804255`                                                    | Auth refactor commit                                 |
+| `work/items/task.0097.ledger-source-adapters.md`                     | Canonical work item                                  |
