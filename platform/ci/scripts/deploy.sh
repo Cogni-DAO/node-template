@@ -62,6 +62,10 @@ on_fail() {
     ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm 2>&1 || true" || true
 
     echo ""
+    echo "=== logs: scheduler-worker ==="
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 scheduler-worker 2>&1 || true" || true
+
+    echo ""
     echo "=== sourcecred compose ps ==="
     ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml ps 2>&1 || true" || true
 
