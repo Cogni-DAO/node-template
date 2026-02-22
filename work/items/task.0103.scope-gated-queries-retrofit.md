@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
 branch: fix/scope-gated-queries
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/465
 reviewer:
 revision: 0
 blocked_by: task.0093
