@@ -10,12 +10,18 @@
  *   - Per WRITES_VIA_TEMPORAL: All writes execute in Temporal activities
  *   - Per CURSOR_STATE_PERSISTED: Cursors saved after each adapter collect() call
  *   - Per ACTIVITY_IDEMPOTENT: All activities idempotent via PK constraints or upsert
+ *   - Per WEIGHT_PINNING: Epoch weightConfig is pinned at creation; subsequent runs use pinned value
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/epoch-ledger.md, docs/spec/temporal-patterns.md
  * @internal
  */
 
-import { proxyActivities } from "@temporalio/workflow";
+import { computeEpochWindowV1 } from "@cogni/ledger-core";
+import {
+  ApplicationFailure,
+  proxyActivities,
+  workflowInfo,
+} from "@temporalio/workflow";
 
 import type { LedgerActivities } from "../activities/ledger.js";
 
@@ -42,99 +48,118 @@ const { collectFromSource } = proxyActivities<LedgerActivities>({
   },
 });
 
-/**
- * Input for CollectEpochWorkflow.
- * Passed from the Temporal Schedule action args (set by syncGovernanceSchedules).
- */
-export interface CollectEpochWorkflowInput {
-  /** ISO date string — epoch window start */
-  readonly periodStart: string;
-  /** ISO date string — epoch window end */
-  readonly periodEnd: string;
-  /** Stable opaque scope UUID */
+/** Schedule adapter wrapper (infra — extract .input immediately) */
+interface ScheduleActionPayload {
+  scheduleId?: string;
+  temporalScheduleId?: string;
+  graphId?: string;
+  executionGrantId?: string;
+  input: LedgerIngestRunV1;
+}
+
+/** Versioned domain envelope — sole contract for this workflow. */
+export interface LedgerIngestRunV1 {
+  readonly version: 1;
   readonly scopeId: string;
-  /** Human-friendly scope slug (used in deterministic workflow ID) */
   readonly scopeKey: string;
-  /** Weight configuration snapshot for this epoch */
-  readonly weightConfig: Record<string, number>;
-  /** Source names to collect from (e.g., ["github"]) */
-  readonly sources: string[];
-  /** Source ref for cursor scoping (e.g., repo slug) */
-  readonly sourceRef: string;
+  readonly epochLengthDays: number;
+  /** Map of source → { creditEstimateAlgo, sourceRefs, streams } */
+  readonly activitySources: Record<
+    string,
+    {
+      creditEstimateAlgo: string;
+      sourceRefs: string[];
+      streams: string[];
+    }
+  >;
 }
 
 /**
  * CollectEpochWorkflow — orchestrates one epoch collection pass.
  *
- * 1. Ensure epoch exists for the time window (idempotent)
- * 2. For each source, for each stream: load cursor → collect → insert → save cursor
+ * 1. Compute epoch window from TemporalScheduledStartTime
+ * 2. Ensure epoch exists (any status) — pin weights on first create
+ * 3. For each source, sourceRef, stream: load cursor → collect → insert → save cursor
  *
+ * Receives ScheduleActionPayload from the schedule adapter; extracts .input immediately.
  * Deterministic workflow ID: ledger-collect-{scopeKey}-{periodStart}-{periodEnd}
  * (set by the schedule action, not by this workflow)
  */
 export async function CollectEpochWorkflow(
-  input: CollectEpochWorkflowInput
+  raw: ScheduleActionPayload
 ): Promise<void> {
-  const { periodStart, periodEnd, scopeId, weightConfig, sources, sourceRef } =
-    input;
+  const config = raw.input;
 
-  // 1. Create or find epoch for this window
+  // 1. Derive epoch window — pure helper from @cogni/ledger-core (safe in workflow code)
+  const info = workflowInfo();
+  const scheduledStartTime = (
+    info.searchAttributes?.TemporalScheduledStartTime as Date[] | undefined
+  )?.[0];
+  if (!scheduledStartTime) {
+    throw ApplicationFailure.nonRetryable(
+      "TemporalScheduledStartTime missing — workflow must be triggered by a schedule"
+    );
+  }
+  const { periodStartIso, periodEndIso } = computeEpochWindowV1({
+    asOfIso: scheduledStartTime.toISOString(),
+    epochLengthDays: config.epochLengthDays,
+    timezone: "UTC",
+    weekStart: "monday",
+  });
+
+  // 2. Derive weight config from activitySources (V0: hardcoded mapping)
+  const weightConfig = deriveWeightConfigV0(config.activitySources);
+
+  // 3. Ensure epoch (any status — pin weights on first create)
   const epoch = await ensureEpochForWindow({
-    periodStart,
-    periodEnd,
-    scopeId,
+    periodStart: periodStartIso,
+    periodEnd: periodEndIso,
     weightConfig,
   });
 
-  // If epoch is already closed/finalized, skip collection
-  if (epoch.status !== "open") {
-    return;
-  }
+  // If epoch already closed/finalized, skip collection
+  if (epoch.status !== "open") return;
 
-  // 2. For each source, collect all streams
-  for (const source of sources) {
-    // Each source adapter defines its own streams — we collect all of them.
-    // The adapter internally handles stream routing.
-    const streams = getStreamsForSource(source);
-
-    for (const stream of streams) {
-      // Load cursor for incremental sync
-      const cursorValue = await loadCursor({ source, stream, sourceRef });
-
-      // Collect events from source
-      const result = await collectFromSource({
-        source,
-        streams: [stream],
-        cursorValue,
-        periodStart,
-        periodEnd,
-      });
-
-      // Insert events (idempotent via PK)
-      if (result.events.length > 0) {
-        await insertEvents({ events: result.events });
+  // 4. Collect from each source, each sourceRef (external namespace), each stream
+  for (const [source, sourceConfig] of Object.entries(config.activitySources)) {
+    for (const sourceRef of sourceConfig.sourceRefs) {
+      for (const stream of sourceConfig.streams) {
+        const cursorValue = await loadCursor({ source, stream, sourceRef });
+        const result = await collectFromSource({
+          source,
+          streams: [stream],
+          cursorValue,
+          periodStart: periodStartIso,
+          periodEnd: periodEndIso,
+        });
+        if (result.events.length > 0) {
+          await insertEvents({
+            events: result.events,
+            producerVersion: result.producerVersion,
+          });
+        }
+        await saveCursor({
+          source,
+          stream,
+          sourceRef,
+          cursorValue: result.nextCursorValue,
+        });
       }
-
-      // Save cursor (monotonic advancement)
-      await saveCursor({
-        source,
-        stream,
-        sourceRef,
-        cursorValue: result.nextCursorValue,
-      });
     }
   }
 }
 
-/**
- * Returns the stream IDs for a given source.
- * This is a deterministic mapping — safe in workflow code.
- */
-function getStreamsForSource(source: string): string[] {
-  switch (source) {
-    case "github":
-      return ["pull_requests", "reviews", "issues"];
-    default:
-      return [];
+/** V0 weight config derivation — pure, deterministic. */
+function deriveWeightConfigV0(
+  sources: Record<string, { creditEstimateAlgo: string }>
+): Record<string, number> {
+  const weights: Record<string, number> = {};
+  for (const source of Object.keys(sources)) {
+    if (source === "github") {
+      weights["github:pr_merged"] = 1000;
+      weights["github:review_submitted"] = 500;
+      weights["github:issue_closed"] = 300;
+    }
   }
+  return weights;
 }

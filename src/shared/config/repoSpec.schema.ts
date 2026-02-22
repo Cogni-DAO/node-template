@@ -86,6 +86,10 @@ export type GovernanceSpec = z.infer<typeof governanceSpecSchema>;
 export const activitySourceSpecSchema = z.object({
   /** Credit estimation algorithm reference (e.g., "cogni-v0.0") */
   credit_estimate_algo: z.string().min(1),
+  /** External namespaces for cursor scoping (e.g., repo slugs) */
+  source_refs: z.array(z.string().min(1)).min(1),
+  /** Stream IDs to collect (e.g., ["pull_requests", "reviews", "issues"]) */
+  streams: z.array(z.string().min(1)).min(1),
 });
 
 export type ActivitySourceSpec = z.infer<typeof activitySourceSpecSchema>;

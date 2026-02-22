@@ -33,11 +33,11 @@ export interface LedgerActivityDeps {
 
 /**
  * Input for ensureEpochForWindow activity.
+ * scopeId is NOT in input — uses injected deps.scopeId only.
  */
 export interface EnsureEpochInput {
   readonly periodStart: string; // ISO date
   readonly periodEnd: string; // ISO date
-  readonly scopeId: string;
   readonly weightConfig: Record<string, number>;
 }
 
@@ -48,6 +48,7 @@ export interface EnsureEpochOutput {
   readonly epochId: string; // bigint serialized as string for Temporal
   readonly status: string;
   readonly isNew: boolean;
+  readonly weightConfig: Record<string, number>;
 }
 
 /**
@@ -77,6 +78,7 @@ export interface CollectFromSourceOutput {
   readonly events: ActivityEvent[];
   readonly nextCursorValue: string;
   readonly nextCursorStreamId: string;
+  readonly producerVersion: string;
 }
 
 /**
@@ -84,6 +86,7 @@ export interface CollectFromSourceOutput {
  */
 export interface InsertEventsInput {
   readonly events: ActivityEvent[];
+  readonly producerVersion: string;
 }
 
 /**
@@ -105,7 +108,8 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
 
   /**
    * Creates or returns an existing epoch for the given time window.
-   * Idempotent via EPOCH_WINDOW_UNIQUE constraint.
+   * Looks up by window (any status), not just open epochs — handles finalized epochs.
+   * Pins weightConfig on first create; returns existing config if epoch already exists.
    */
   async function ensureEpochForWindow(
     input: EnsureEpochInput
@@ -116,22 +120,38 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       "Ensuring epoch for window"
     );
 
-    // Check if an epoch already exists for this window
-    const existing = await ledgerStore.getOpenEpoch(nodeId, scopeId);
+    // Check if an epoch already exists for this window (any status)
+    const existing = await ledgerStore.getEpochByWindow(
+      nodeId,
+      scopeId,
+      new Date(periodStart),
+      new Date(periodEnd)
+    );
     if (existing) {
-      const existingStart = existing.periodStart.toISOString();
-      const existingEnd = existing.periodEnd.toISOString();
-      if (existingStart === periodStart && existingEnd === periodEnd) {
-        logger.info(
-          { epochId: existing.id.toString(), status: existing.status },
-          "Found existing epoch for window"
+      // Weight config drift detection — log warning but use pinned config
+      if (
+        JSON.stringify(weightConfig) !== JSON.stringify(existing.weightConfig)
+      ) {
+        logger.warn(
+          {
+            epochId: existing.id.toString(),
+            inputWeights: weightConfig,
+            pinnedWeights: existing.weightConfig,
+          },
+          "Weight config drift detected — using pinned config from epoch creation"
         );
-        return {
-          epochId: existing.id.toString(),
-          status: existing.status,
-          isNew: false,
-        };
       }
+
+      logger.info(
+        { epochId: existing.id.toString(), status: existing.status },
+        "Found existing epoch for window"
+      );
+      return {
+        epochId: existing.id.toString(),
+        status: existing.status,
+        isNew: false,
+        weightConfig: existing.weightConfig,
+      };
     }
 
     // Create new epoch — DB constraint ensures EPOCH_WINDOW_UNIQUE
@@ -152,6 +172,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       epochId: epoch.id.toString(),
       status: epoch.status,
       isNew: true,
+      weightConfig: epoch.weightConfig,
     };
   }
 
@@ -203,6 +224,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
         events: [],
         nextCursorValue: cursorValue ?? new Date(periodStart).toISOString(),
         nextCursorStreamId: streams[0] ?? source,
+        producerVersion: "unknown",
       };
     }
 
@@ -231,6 +253,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       events: result.events as ActivityEvent[],
       nextCursorValue: result.nextCursor.value,
       nextCursorStreamId: result.nextCursor.streamId,
+      producerVersion: adapter.version,
     };
   }
 
@@ -238,7 +261,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
    * Stores events via ledgerStore. Idempotent via onConflictDoNothing on PK.
    */
   async function insertEvents(input: InsertEventsInput): Promise<void> {
-    const { events } = input;
+    const { events, producerVersion } = input;
     if (events.length === 0) return;
 
     logger.info({ count: events.length }, "Inserting activity events");
@@ -256,7 +279,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
         metadata: e.metadata ?? null,
         payloadHash: e.payloadHash,
         producer: e.source,
-        producerVersion: "0.1.0",
+        producerVersion,
         eventTime: e.eventTime,
         retrievedAt: new Date(),
       }))

@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/scheduler-worker/tests/ledger-activities.test`
- * Purpose: Unit tests for ledger activity functions.
+ * Purpose: Unit tests for ledger activity functions and epoch window computation.
  * Scope: Tests each activity in isolation with mocked store/adapter.
  * @internal
  */
@@ -18,6 +18,7 @@ import type {
   LedgerEpoch,
   LedgerSourceCursor,
 } from "@cogni/ledger-core";
+import { computeEpochWindowV1 } from "@cogni/ledger-core";
 import { describe, expect, it, vi } from "vitest";
 
 import { createLedgerActivities } from "../src/activities/ledger.js";
@@ -39,6 +40,7 @@ function makeMockStore(
   return {
     createEpoch: vi.fn(),
     getOpenEpoch: vi.fn().mockResolvedValue(null),
+    getEpochByWindow: vi.fn().mockResolvedValue(null),
     getEpoch: vi.fn(),
     listEpochs: vi.fn(),
     closeEpoch: vi.fn(),
@@ -91,8 +93,8 @@ function makeEpoch(overrides: Partial<LedgerEpoch> = {}): LedgerEpoch {
     nodeId: NODE_ID,
     scopeId: SCOPE_ID,
     status: "open",
-    periodStart: new Date("2026-02-15T00:00:00Z"),
-    periodEnd: new Date("2026-02-22T00:00:00Z"),
+    periodStart: new Date("2026-02-16T00:00:00Z"),
+    periodEnd: new Date("2026-02-23T00:00:00Z"),
     weightConfig: { "github:pr_merged": 1000 },
     poolTotalCredits: null,
     openedAt: new Date(),
@@ -116,6 +118,81 @@ function makeEvent(id = "github:pr:test/repo:1"): ActivityEvent {
   };
 }
 
+// ── computeEpochWindowV1 ────────────────────────────────────────
+
+describe("computeEpochWindowV1", () => {
+  it("aligns to Monday 00:00 UTC for a 7-day epoch", () => {
+    // 2026-02-22 is a Sunday
+    const result = computeEpochWindowV1({
+      asOfIso: "2026-02-22T06:00:00Z",
+      epochLengthDays: 7,
+      timezone: "UTC",
+      weekStart: "monday",
+    });
+
+    expect(result.periodStartIso).toBe("2026-02-16T00:00:00.000Z");
+    expect(result.periodEndIso).toBe("2026-02-23T00:00:00.000Z");
+  });
+
+  it("returns same window for any day within the same week", () => {
+    const monday = computeEpochWindowV1({
+      asOfIso: "2026-02-16T00:00:00Z",
+      epochLengthDays: 7,
+      timezone: "UTC",
+      weekStart: "monday",
+    });
+    const wednesday = computeEpochWindowV1({
+      asOfIso: "2026-02-18T12:00:00Z",
+      epochLengthDays: 7,
+      timezone: "UTC",
+      weekStart: "monday",
+    });
+    const sunday = computeEpochWindowV1({
+      asOfIso: "2026-02-22T23:59:59Z",
+      epochLengthDays: 7,
+      timezone: "UTC",
+      weekStart: "monday",
+    });
+
+    expect(monday.periodStartIso).toBe(wednesday.periodStartIso);
+    expect(monday.periodStartIso).toBe(sunday.periodStartIso);
+    expect(monday.periodEndIso).toBe(wednesday.periodEndIso);
+  });
+
+  it("advances to next epoch on Monday boundary", () => {
+    const sunday = computeEpochWindowV1({
+      asOfIso: "2026-02-22T23:59:59Z",
+      epochLengthDays: 7,
+      timezone: "UTC",
+      weekStart: "monday",
+    });
+    const nextMonday = computeEpochWindowV1({
+      asOfIso: "2026-02-23T00:00:00Z",
+      epochLengthDays: 7,
+      timezone: "UTC",
+      weekStart: "monday",
+    });
+
+    expect(sunday.periodEndIso).toBe(nextMonday.periodStartIso);
+  });
+
+  it("handles 14-day epoch correctly", () => {
+    const result = computeEpochWindowV1({
+      asOfIso: "2026-02-22T06:00:00Z",
+      epochLengthDays: 14,
+      timezone: "UTC",
+      weekStart: "monday",
+    });
+
+    // 14-day periods from anchor (2026-01-05)
+    // Period 0: Jan 5 - Jan 19, Period 1: Jan 19 - Feb 2, Period 2: Feb 2 - Feb 16, Period 3: Feb 16 - Mar 2
+    expect(result.periodStartIso).toBe("2026-02-16T00:00:00.000Z");
+    expect(result.periodEndIso).toBe("2026-03-02T00:00:00.000Z");
+  });
+});
+
+// ── createLedgerActivities ──────────────────────────────────────
+
 describe("createLedgerActivities", () => {
   it("returns all expected activity functions", () => {
     const activities = createLedgerActivities({
@@ -134,11 +211,13 @@ describe("createLedgerActivities", () => {
   });
 });
 
+// ── ensureEpochForWindow ────────────────────────────────────────
+
 describe("ensureEpochForWindow", () => {
   it("creates a new epoch when none exists", async () => {
     const epoch = makeEpoch();
     const store = makeMockStore({
-      getOpenEpoch: vi.fn().mockResolvedValue(null),
+      getEpochByWindow: vi.fn().mockResolvedValue(null),
       createEpoch: vi.fn().mockResolvedValue(epoch),
     });
 
@@ -151,21 +230,21 @@ describe("ensureEpochForWindow", () => {
     });
 
     const result = await ensureEpochForWindow({
-      periodStart: "2026-02-15T00:00:00.000Z",
-      periodEnd: "2026-02-22T00:00:00.000Z",
-      scopeId: SCOPE_ID,
+      periodStart: "2026-02-16T00:00:00.000Z",
+      periodEnd: "2026-02-23T00:00:00.000Z",
       weightConfig: { "github:pr_merged": 1000 },
     });
 
     expect(result.isNew).toBe(true);
     expect(result.epochId).toBe("1");
+    expect(result.weightConfig).toEqual({ "github:pr_merged": 1000 });
     expect(store.createEpoch).toHaveBeenCalledOnce();
   });
 
-  it("returns existing epoch when window matches", async () => {
+  it("returns existing epoch when window matches (open)", async () => {
     const epoch = makeEpoch();
     const store = makeMockStore({
-      getOpenEpoch: vi.fn().mockResolvedValue(epoch),
+      getEpochByWindow: vi.fn().mockResolvedValue(epoch),
     });
 
     const { ensureEpochForWindow } = createLedgerActivities({
@@ -179,15 +258,77 @@ describe("ensureEpochForWindow", () => {
     const result = await ensureEpochForWindow({
       periodStart: epoch.periodStart.toISOString(),
       periodEnd: epoch.periodEnd.toISOString(),
-      scopeId: SCOPE_ID,
       weightConfig: { "github:pr_merged": 1000 },
     });
 
     expect(result.isNew).toBe(false);
     expect(result.epochId).toBe("1");
+    expect(result.weightConfig).toEqual({ "github:pr_merged": 1000 });
     expect(store.createEpoch).not.toHaveBeenCalled();
   });
+
+  it("returns closed epoch found by window — does not create new", async () => {
+    const epoch = makeEpoch({ status: "closed", closedAt: new Date() });
+    const store = makeMockStore({
+      getEpochByWindow: vi.fn().mockResolvedValue(epoch),
+    });
+
+    const { ensureEpochForWindow } = createLedgerActivities({
+      ledgerStore: store,
+      sourceAdapters: new Map(),
+      nodeId: NODE_ID,
+      scopeId: SCOPE_ID,
+      logger: mockLogger,
+    });
+
+    const result = await ensureEpochForWindow({
+      periodStart: epoch.periodStart.toISOString(),
+      periodEnd: epoch.periodEnd.toISOString(),
+      weightConfig: { "github:pr_merged": 1000 },
+    });
+
+    expect(result.isNew).toBe(false);
+    expect(result.status).toBe("closed");
+    expect(store.createEpoch).not.toHaveBeenCalled();
+  });
+
+  it("logs warning on weight config drift and returns pinned config", async () => {
+    const epoch = makeEpoch({
+      weightConfig: { "github:pr_merged": 500 },
+    });
+    const store = makeMockStore({
+      getEpochByWindow: vi.fn().mockResolvedValue(epoch),
+    });
+
+    const logger = {
+      ...mockLogger,
+      warn: vi.fn(),
+    } as unknown as Parameters<typeof createLedgerActivities>[0]["logger"];
+
+    const { ensureEpochForWindow } = createLedgerActivities({
+      ledgerStore: store,
+      sourceAdapters: new Map(),
+      nodeId: NODE_ID,
+      scopeId: SCOPE_ID,
+      logger,
+    });
+
+    const result = await ensureEpochForWindow({
+      periodStart: epoch.periodStart.toISOString(),
+      periodEnd: epoch.periodEnd.toISOString(),
+      weightConfig: { "github:pr_merged": 1000 },
+    });
+
+    // Returns pinned config from existing epoch, not input
+    expect(result.weightConfig).toEqual({ "github:pr_merged": 500 });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ pinnedWeights: { "github:pr_merged": 500 } }),
+      expect.stringContaining("Weight config drift")
+    );
+  });
 });
+
+// ── loadCursor ──────────────────────────────────────────────────
 
 describe("loadCursor", () => {
   it("returns null when no cursor exists", async () => {
@@ -241,6 +382,8 @@ describe("loadCursor", () => {
   });
 });
 
+// ── collectFromSource ───────────────────────────────────────────
+
 describe("collectFromSource", () => {
   it("returns empty events when no adapter exists for source", async () => {
     const { collectFromSource } = createLedgerActivities({
@@ -255,14 +398,15 @@ describe("collectFromSource", () => {
       source: "discord",
       streams: ["messages"],
       cursorValue: null,
-      periodStart: "2026-02-15T00:00:00Z",
-      periodEnd: "2026-02-22T00:00:00Z",
+      periodStart: "2026-02-16T00:00:00Z",
+      periodEnd: "2026-02-23T00:00:00Z",
     });
 
     expect(result.events).toHaveLength(0);
+    expect(result.producerVersion).toBe("unknown");
   });
 
-  it("calls adapter.collect() and returns events", async () => {
+  it("calls adapter.collect() and returns events with producerVersion", async () => {
     const event = makeEvent();
     const adapter = makeMockAdapter([event]);
     const adapters = new Map<string, SourceAdapter>([["github", adapter]]);
@@ -279,15 +423,18 @@ describe("collectFromSource", () => {
       source: "github",
       streams: ["pull_requests"],
       cursorValue: null,
-      periodStart: "2026-02-15T00:00:00Z",
-      periodEnd: "2026-02-22T00:00:00Z",
+      periodStart: "2026-02-16T00:00:00Z",
+      periodEnd: "2026-02-23T00:00:00Z",
     });
 
     expect(result.events).toHaveLength(1);
     expect(result.events[0].id).toBe("github:pr:test/repo:1");
+    expect(result.producerVersion).toBe("0.3.0");
     expect(adapter.collect).toHaveBeenCalledOnce();
   });
 });
+
+// ── insertEvents ────────────────────────────────────────────────
 
 describe("insertEvents", () => {
   it("does nothing when events array is empty", async () => {
@@ -300,12 +447,12 @@ describe("insertEvents", () => {
       logger: mockLogger,
     });
 
-    await insertEvents({ events: [] });
+    await insertEvents({ events: [], producerVersion: "0.3.0" });
 
     expect(store.insertActivityEvents).not.toHaveBeenCalled();
   });
 
-  it("maps events and calls store.insertActivityEvents", async () => {
+  it("maps events and uses producerVersion from input", async () => {
     const store = makeMockStore();
     const { insertEvents } = createLedgerActivities({
       ledgerStore: store,
@@ -315,15 +462,18 @@ describe("insertEvents", () => {
       logger: mockLogger,
     });
 
-    await insertEvents({ events: [makeEvent()] });
+    await insertEvents({ events: [makeEvent()], producerVersion: "0.3.0" });
 
     expect(store.insertActivityEvents).toHaveBeenCalledOnce();
     const args = vi.mocked(store.insertActivityEvents).mock.calls[0][0];
     expect(args[0].nodeId).toBe(NODE_ID);
     expect(args[0].scopeId).toBe(SCOPE_ID);
     expect(args[0].source).toBe("github");
+    expect(args[0].producerVersion).toBe("0.3.0");
   });
 });
+
+// ── saveCursor ──────────────────────────────────────────────────
 
 describe("saveCursor", () => {
   it("saves cursor when no existing cursor", async () => {

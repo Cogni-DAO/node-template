@@ -60,7 +60,14 @@ export interface LedgerScheduleConfig {
   /** Epoch length in days */
   epochLengthDays: number;
   /** Map of source name → source config */
-  activitySources: Record<string, { creditEstimateAlgo: string }>;
+  activitySources: Record<
+    string,
+    {
+      creditEstimateAlgo: string;
+      sourceRefs: string[];
+      streams: string[];
+    }
+  >;
 }
 
 /** Minimal governance config shape (no @/ imports — pure type) */
@@ -201,6 +208,7 @@ export async function syncGovernanceSchedules(
 
     if (isLedgerIngest && config.ledger) {
       desiredInput = {
+        version: 1,
         scopeId: config.ledger.scopeId,
         scopeKey: config.ledger.scopeKey,
         epochLengthDays: config.ledger.epochLengthDays,

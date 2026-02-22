@@ -224,6 +224,27 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
     return rows[0] ? toEpoch(rows[0]) : null;
   }
 
+  async getEpochByWindow(
+    nodeId: string,
+    scopeId: string,
+    periodStart: Date,
+    periodEnd: Date
+  ): Promise<LedgerEpoch | null> {
+    const rows = await this.db
+      .select()
+      .from(epochs)
+      .where(
+        and(
+          eq(epochs.nodeId, nodeId),
+          eq(epochs.scopeId, scopeId),
+          eq(epochs.periodStart, periodStart),
+          eq(epochs.periodEnd, periodEnd)
+        )
+      )
+      .limit(1);
+    return rows[0] ? toEpoch(rows[0]) : null;
+  }
+
   async getEpoch(id: bigint): Promise<LedgerEpoch | null> {
     const rows = await this.db
       .select()

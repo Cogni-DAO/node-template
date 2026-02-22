@@ -213,6 +213,12 @@ export interface ActivityLedgerStore {
     weightConfig: Record<string, number>;
   }): Promise<LedgerEpoch>;
   getOpenEpoch(nodeId: string, scopeId: string): Promise<LedgerEpoch | null>;
+  getEpochByWindow(
+    nodeId: string,
+    scopeId: string,
+    periodStart: Date,
+    periodEnd: Date
+  ): Promise<LedgerEpoch | null>;
   getEpoch(id: bigint): Promise<LedgerEpoch | null>;
   listEpochs(nodeId: string): Promise<LedgerEpoch[]>;
   closeEpoch(epochId: bigint, poolTotal: bigint): Promise<LedgerEpoch>;

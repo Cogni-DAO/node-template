@@ -27,8 +27,19 @@ export interface GovernanceSchedule {
   entrypoint: string;
 }
 
+export interface LedgerConfig {
+  scopeId: string;
+  scopeKey: string;
+  epochLengthDays: number;
+  activitySources: Record<
+    string,
+    { creditEstimateAlgo: string; sourceRefs: string[]; streams: string[] }
+  >;
+}
+
 export interface GovernanceConfig {
   schedules: GovernanceSchedule[];
+  ledger?: LedgerConfig;
 }
 
 export interface InboundPaymentConfig {
@@ -128,9 +139,31 @@ export function getNodeId(): string {
 let cachedGovernanceConfig: GovernanceConfig | null = null;
 
 function mapGovernanceConfig(spec: RepoSpec): GovernanceConfig {
-  return {
+  const config: GovernanceConfig = {
     schedules: spec.governance?.schedules ?? [],
   };
+
+  // Wire ledger config if activity_ledger + scope identity are present
+  if (spec.activity_ledger && spec.scope_id && spec.scope_key) {
+    const sources: LedgerConfig["activitySources"] = {};
+    for (const [name, src] of Object.entries(
+      spec.activity_ledger.activity_sources
+    )) {
+      sources[name] = {
+        creditEstimateAlgo: src.credit_estimate_algo,
+        sourceRefs: src.source_refs,
+        streams: src.streams,
+      };
+    }
+    config.ledger = {
+      scopeId: spec.scope_id,
+      scopeKey: spec.scope_key,
+      epochLengthDays: spec.activity_ledger.epoch_length_days,
+      activitySources: sources,
+    };
+  }
+
+  return config;
 }
 
 export function getGovernanceConfig(): GovernanceConfig {
