@@ -48,16 +48,33 @@ const EnvSchema = z.object({
   APP_BASE_URL: z.string().url("APP_BASE_URL must be a valid URL"),
 
   /** GitHub App ID (optional — required only when GitHub ingestion is enabled) */
-  GITHUB_REVIEW_APP_ID: z.string().min(1).optional(),
+  GITHUB_REVIEW_APP_ID: z
+    .string()
+    .min(1)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 
   /** GitHub App private key, base64-encoded PEM (optional — required only when GitHub ingestion is enabled) */
-  GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64: z.string().min(1).optional(),
+  GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64: z
+    .string()
+    .min(1)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 
   /** GitHub App installation ID — optional override, resolved dynamically if omitted */
-  GITHUB_REVIEW_INSTALLATION_ID: z.coerce.number().int().positive().optional(),
+  GITHUB_REVIEW_INSTALLATION_ID: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 
   /** Comma-separated repos for GitHub activity collection (e.g., "cogni-dao/cogni-template") */
-  GITHUB_REPOS: z.string().optional(),
+  GITHUB_REPOS: z
+    .string()
+    .min(1)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 
   /** Log level (default: info) */
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
