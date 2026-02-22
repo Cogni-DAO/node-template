@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-15
+- **Last reviewed:** 2026-02-23
 - **Status:** draft
 
 ## Purpose
 
-Server-only configuration helpers sourced from versioned repo metadata (`.cogni/repo-spec.yaml`). Provides typed accessors for inbound payment configuration (USDC credits top-up) and governance schedule configuration. Canonical source for chainId + receiving_address (payments) and charter schedule definitions (governance). These settings must not rely on environment variables.
+Server-only configuration helpers sourced from versioned repo metadata (`.cogni/repo-spec.yaml`). Provides typed accessors for node identity, inbound payment configuration (USDC credits top-up), and governance schedule configuration. Canonical source for node_id (ledger scoping), chainId + receiving_address (payments), and charter schedule definitions (governance). These settings must not rely on environment variables.
 
 ## Pointers
 
@@ -38,20 +38,20 @@ Server-only configuration helpers sourced from versioned repo metadata (`.cogni/
 
 ## Public Surface
 
-- **Exports:** `getPaymentConfig()`, `InboundPaymentConfig`, `getGovernanceConfig()`, `GovernanceConfig`, `GovernanceSchedule` - server-only helpers reading repo-spec metadata
-- **Exports (schema):** `repoSpecSchema`, `creditsTopupSpecSchema`, `governanceScheduleSchema`, `governanceSpecSchema` - Zod schemas and derived types
+- **Exports:** `getNodeId()`, `getPaymentConfig()`, `InboundPaymentConfig`, `getGovernanceConfig()`, `GovernanceConfig`, `GovernanceSchedule`, `getLedgerApprovers()` - server-only helpers reading repo-spec metadata
+- **Exports (schema):** `repoSpecSchema`, `creditsTopupSpecSchema`, `governanceScheduleSchema`, `governanceSpecSchema`, `activityLedgerSpecSchema` - Zod schemas and derived types
 - **Routes/CLI:** none
 - **Env/Config keys:** none (reads versioned files only)
 - **Files considered API:** index.ts, repoSpec.server.ts, repoSpec.schema.ts
 
 ## Responsibilities
 
-- This directory **does**: read repo-spec from `payments_in.credits_topup.*` and `governance.schedules` paths, validate payment config (chainId, receivingAddress, provider) and governance schedule config (charter, cron, entrypoint), expose typed helpers for server callers.
+- This directory **does**: read repo-spec `node_id`, `payments_in.credits_topup.*`, and `governance.schedules` paths; validate node identity (UUID), payment config (chainId, receivingAddress, provider), and governance schedule config (charter, cron, entrypoint); expose typed helpers for server callers.
 - This directory **does not**: access browser APIs, depend on frameworks, expose env overrides, or support legacy widget paths.
 
 ## Usage
 
-- Server components/helpers: `import { getPaymentConfig, getGovernanceConfig } from "@/shared/config";`
+- Server components/helpers: `import { getNodeId, getPaymentConfig, getGovernanceConfig } from "@/shared/config";`
 - Client components: `import type { InboundPaymentConfig } from "@/shared/config";` (props only, no direct file access)
 
 ## Standards

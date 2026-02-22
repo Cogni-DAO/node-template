@@ -4,7 +4,7 @@
 /**
  * Module: `@shared/config`
  * Purpose: Barrel export for governance-backed configuration helpers sourced from .cogni/repo-spec.yaml.
- * Scope: Server-only helpers; reads versioned config and exposes typed payment config and governance schedule config; does not expose env overrides or client-facing APIs.
+ * Scope: Server-only helpers; reads versioned config and exposes node identity, typed payment config, governance schedule config, and ledger approver allowlist; does not expose env overrides or client-facing APIs.
  * Invariants: No env overrides; callers import from this entry point only.
  * Side-effects: none (delegates to repoSpec.server.ts for IO)
  * Links: .cogni/repo-spec.yaml
@@ -15,6 +15,8 @@ export {
   type GovernanceConfig,
   type GovernanceSchedule,
   getGovernanceConfig,
+  getLedgerApprovers,
+  getNodeId,
   getPaymentConfig,
   type InboundPaymentConfig,
 } from "./repoSpec.server";

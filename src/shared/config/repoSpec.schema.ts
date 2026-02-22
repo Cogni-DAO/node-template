@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/config/repoSpec.schema`
- * Purpose: Zod schemas and derived types for .cogni/repo-spec.yaml validation (payments + governance).
- * Scope: Validates governance-managed payment and governance schedule configuration structures; does not enforce chain/token values (those checked against chain.ts constants).
- * Invariants: Receiving_address must be valid EVM format; provider must be non-empty; governance schedules require charter + cron + entrypoint.
+ * Purpose: Zod schemas and derived types for .cogni/repo-spec.yaml validation (payments + governance + ledger).
+ * Scope: Validates governance-managed payment, governance schedule, and activity ledger configuration structures. Does not enforce chain/token values (those checked against chain.ts constants).
+ * Invariants: EVM address format required; activity sources require source_refs + streams.
  * Side-effects: none
  * Links: .cogni/repo-spec.yaml, docs/spec/chain-config.md, docs/spec/payments-design.md
  * @public
@@ -81,10 +81,66 @@ export const governanceSpecSchema = z.object({
 export type GovernanceSpec = z.infer<typeof governanceSpecSchema>;
 
 /**
+ * Schema for activity_ledger section — epoch and ingestion configuration.
+ */
+export const activitySourceSpecSchema = z.object({
+  /** Credit estimation algorithm reference (e.g., "cogni-v0.0") */
+  credit_estimate_algo: z.string().min(1),
+  /** External namespaces for cursor scoping (e.g., repo slugs) */
+  source_refs: z.array(z.string().min(1)).min(1),
+  /** Stream IDs to collect (e.g., ["pull_requests", "reviews", "issues"]) */
+  streams: z.array(z.string().min(1)).min(1),
+});
+
+export type ActivitySourceSpec = z.infer<typeof activitySourceSpecSchema>;
+
+export const activityLedgerSpecSchema = z.object({
+  /** Epoch length in days (1–90) */
+  epoch_length_days: z.number().int().min(1).max(90),
+  /** EVM addresses allowed to mutate ledger data (allocations, pool components) */
+  approvers: z
+    .array(
+      z
+        .string()
+        .regex(
+          /^0x[a-fA-F0-9]{40}$/,
+          "Each approver must be a valid EVM address (0x + 40 hex chars)"
+        )
+    )
+    .default([]),
+  /** Map of source name → source config */
+  activity_sources: z.record(z.string(), activitySourceSpecSchema),
+});
+
+export type ActivityLedgerSpec = z.infer<typeof activityLedgerSpecSchema>;
+
+// ---------------------------------------------------------------------------
+// Scope identity primitives
+// ---------------------------------------------------------------------------
+
+/** Stable opaque scope identifier — always UUID */
+export const scopeIdSchema = z.string().uuid();
+
+/** Human-friendly scope slug — lowercase, kebab, max 32 chars */
+export const scopeKeySchema = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
+
+/**
  * Schema for full .cogni/repo-spec.yaml structure (payment-relevant subset).
  * Validates structure only; chain alignment checked in repoSpec.server.ts against chain.ts.
  */
 export const repoSpecSchema = z.object({
+  /** Unique node identity — scopes all ledger tables. Generated once at init, never changes. */
+  node_id: z.string().uuid("node_id must be a valid UUID"),
+
+  /** Stable opaque scope UUID — DB FK, never changes. Optional for backward compat. */
+  scope_id: scopeIdSchema.optional(),
+
+  /** Human-friendly scope slug — for display, logs, schedule IDs. Optional for backward compat. */
+  scope_key: scopeKeySchema.optional(),
+
+  /** Activity ledger configuration (optional — needed only when LEDGER_INGEST is enabled) */
+  activity_ledger: activityLedgerSpecSchema.optional(),
+
   /** DAO governance configuration */
   cogni_dao: z.object({
     /**
