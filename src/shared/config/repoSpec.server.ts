@@ -176,3 +176,22 @@ export function getGovernanceConfig(): GovernanceConfig {
 
   return cachedGovernanceConfig;
 }
+
+let cachedLedgerApprovers: string[] | null = null;
+
+/**
+ * Ledger approver allowlist from repo-spec.
+ * Returns lowercased EVM addresses for case-insensitive comparison.
+ * Returns empty array if ledger config not present (write routes will reject all).
+ */
+export function getLedgerApprovers(): string[] {
+  if (cachedLedgerApprovers) {
+    return cachedLedgerApprovers;
+  }
+
+  const spec = loadRepoSpec();
+  cachedLedgerApprovers = (spec.activity_ledger?.approvers ?? []).map((a) =>
+    a.toLowerCase()
+  );
+  return cachedLedgerApprovers;
+}

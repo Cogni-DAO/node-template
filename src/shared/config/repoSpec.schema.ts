@@ -97,6 +97,17 @@ export type ActivitySourceSpec = z.infer<typeof activitySourceSpecSchema>;
 export const activityLedgerSpecSchema = z.object({
   /** Epoch length in days (1–90) */
   epoch_length_days: z.number().int().min(1).max(90),
+  /** EVM addresses allowed to mutate ledger data (allocations, pool components) */
+  approvers: z
+    .array(
+      z
+        .string()
+        .regex(
+          /^0x[a-fA-F0-9]{40}$/,
+          "Each approver must be a valid EVM address (0x + 40 hex chars)"
+        )
+    )
+    .default([]),
   /** Map of source name → source config */
   activity_sources: z.record(z.string(), activitySourceSpecSchema),
 });

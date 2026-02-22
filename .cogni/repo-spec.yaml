@@ -19,6 +19,8 @@ scope_key: "default"
 # Activity ledger ingestion configuration
 activity_ledger:
   epoch_length_days: 7
+  approvers:
+    - "0x070075F1389Ae1182aBac722B36CA12285d0c949" # derekg1729.eth operator wallet
   activity_sources:
     github:
       credit_estimate_algo: cogni-v0.0

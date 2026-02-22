@@ -15,6 +15,7 @@ export {
   type GovernanceConfig,
   type GovernanceSchedule,
   getGovernanceConfig,
+  getLedgerApprovers,
   getNodeId,
   getPaymentConfig,
   type InboundPaymentConfig,
