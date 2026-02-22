@@ -10,7 +10,7 @@ read_when: Working on credit payouts, activity ingestion, epoch lifecycle, weigh
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-02-20
-verified: 2026-02-21
+verified: 2026-02-22
 tags: [governance, transparency, payments, ledger]
 ---
 
@@ -60,6 +60,8 @@ tags: [governance, transparency, payments, ledger]
 | PROVENANCE_REQUIRED         | Every activity event includes `producer`, `producer_version`, `payload_hash`, `retrieved_at`. Audit trail for reproducibility.                                                                                                                |
 | CURSOR_STATE_PERSISTED      | Source adapters use `source_cursors` table for incremental sync. Avoids full-window rescans and handles pagination/rate limits.                                                                                                               |
 | ADAPTERS_NOT_IN_CORE        | Source adapters live in `services/scheduler-worker/` behind a port interface. `packages/ledger-core/` contains only pure domain logic (types, rules, errors).                                                                                 |
+| WEIGHT_PINNING              | Weight config is pinned at epoch creation. Subsequent collection runs on the same epoch use the existing epoch's `weight_config`, not the input-derived config. Config drift logs a warning.                                                  |
+| EPOCH_WINDOW_DETERMINISTIC  | Epoch boundaries computed by `computeEpochWindowV1()` — pure function, Monday-aligned UTC, anchored to 2026-01-05. Same `(asOf, epochLengthDays)` always yields the same window.                                                              |
 
 ## Project Scoping
 
@@ -151,7 +153,7 @@ Credit allocation uses a simple per-event-type weight configuration stored as in
 }
 ```
 
-Proposed allocation per user = SUM of weights for their attributed events. The weight config is pinned per epoch (stored in the epoch row) for reproducibility.
+Proposed allocation per user = SUM of weights for their attributed events. The weight config is pinned per epoch (stored in the epoch row) for reproducibility. V0 derives weights from `activitySources` keys via `deriveWeightConfigV0()` — a pure, deterministic mapping (e.g., `github` → `github:pr_merged: 1000, github:review_submitted: 500, github:issue_closed: 300`). If an epoch already exists, its pinned config takes precedence over input-derived weights (WEIGHT_PINNING).
 
 ### Epoch Lifecycle
 
@@ -311,13 +313,13 @@ Constraint: `UNIQUE(epoch_id, user_id)`
 | `scope_id`     | TEXT        | NOT NULL DEFAULT `'default'` — per SCOPE_SCOPED (project) |
 | `source`       | TEXT        | `github`, `discord`                                       |
 | `stream`       | TEXT        | `pull_requests`, `reviews`, `messages`                    |
-| `source_scope` | TEXT        | `cogni-dao/cogni-template`, `guild:123456`                |
+| `source_ref`   | TEXT        | `cogni-dao/cogni-template`, `guild:123456`                |
 | `cursor_value` | TEXT        | Timestamp or opaque pagination token                      |
 | `retrieved_at` | TIMESTAMPTZ | When this cursor was last used                            |
 
-Primary key: `(node_id, scope_id, source, stream, source_scope)`
+Primary key: `(node_id, scope_id, source, stream, source_ref)`
 
-Note: `source_scope` is the external system's namespace (GitHub repo slug, Discord guild ID). `scope_id` is the internal project governance domain. One `scope_id` may map to multiple `source_scope` values (a project that spans multiple repos).
+Note: `source_ref` is the external system's namespace (GitHub repo slug, Discord guild ID). `scope_id` is the internal project governance domain. One `scope_id` may map to multiple `source_ref` values (a project that spans multiple repos).
 
 ### `epoch_pool_components` — immutable, append-only, pinned inputs
 
@@ -449,17 +451,44 @@ Adapters live in `services/scheduler-worker/src/adapters/ingestion/` (ADAPTERS_N
 
 ### CollectEpochWorkflow
 
-1. Create or find epoch for the target `(node_id, scope_id)` + time window (EPOCH_WINDOW_UNIQUE)
-2. Check no epoch currently active for a different window within this scope (ONE_ACTIVE_EPOCH)
-3. For each registered source adapter:
-   - Activity: load cursor from `source_cursors`
-   - Activity: `adapter.collect({ streams, cursor, window })` → events
-   - Activity: insert `activity_events` (idempotent by PK)
-   - Activity: save cursor to `source_cursors`
-4. Activity: resolve identities — lookup `user_bindings` for each `(source, platform_user_id)` → set `user_id`
-5. Activity: compute proposed allocations from events + weight_config → insert `epoch_allocations`
+The schedule adapter sends a `ScheduleActionPayload` wrapper; the workflow extracts `.input` immediately and treats it as `LedgerIngestRunV1`:
 
-Deterministic workflow ID: `ledger-collect-{scopeId}-{periodStart}-{periodEnd}`
+```typescript
+interface LedgerIngestRunV1 {
+  version: 1;
+  scopeId: string;
+  scopeKey: string;
+  epochLengthDays: number;
+  activitySources: Record<
+    string,
+    {
+      creditEstimateAlgo: string;
+      sourceRefs: string[]; // external namespaces (e.g., repo slugs)
+      streams: string[]; // e.g., ["pull_requests", "reviews", "issues"]
+    }
+  >;
+}
+```
+
+1. **Compute epoch window** — `computeEpochWindowV1()` (pure, deterministic) derives `periodStart`/`periodEnd` from `TemporalScheduledStartTime` + `epochLengthDays`. Monday-aligned UTC boundaries, anchored to 2026-01-05.
+2. **Derive weight config** — `deriveWeightConfigV0()` maps `activitySources` keys to hardcoded V0 weights (e.g., `github:pr_merged: 1000`).
+3. **Ensure epoch** — `ensureEpochForWindow` activity looks up by `(node_id, scope_id, period_start, period_end)` regardless of status via `getEpochByWindow`. If found, returns as-is with pinned `weightConfig`. If not found, creates with input-derived weights. Weight config drift (input differs from existing) logs a warning; existing epoch's config wins (WEIGHT_PINNING).
+4. **Skip if not open** — If epoch status is `review` or `finalized`, workflow exits immediately.
+5. **Collect per source/sourceRef/stream** — For each `activitySources` entry, for each `sourceRef`, for each `stream`:
+   - Activity: load cursor from `source_cursors`
+   - Activity: `adapter.collect({ streams: [stream], cursor, window })` → events + `producerVersion`
+   - Activity: insert `activity_events` (idempotent by PK, uses `adapter.version` as `producer_version`)
+   - Activity: save cursor to `source_cursors` (monotonic advancement)
+
+Deterministic workflow ID: managed by Temporal Schedule (overlap=SKIP, run IDs per firing).
+
+**Epoch window algorithm** (`computeEpochWindowV1`):
+
+- Floor `asOf` timestamp to Monday 00:00 UTC
+- Anchor: 2026-01-05 (first Monday of 2026)
+- Period index = `floor((mondayMs - anchor) / epochMs)`
+- `periodStart = anchor + periodIndex * epochMs`
+- `periodEnd = periodStart + epochMs`
 
 ### FinalizeEpochWorkflow
 

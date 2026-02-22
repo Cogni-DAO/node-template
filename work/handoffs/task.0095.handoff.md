@@ -4,73 +4,69 @@ type: handoff
 work_item_id: task.0095
 status: active
 created: 2026-02-22
-updated: 2026-02-22
-branch: worktree-ingestion-core-github-adapter
-last_commit: 88a5a842
+updated: 2026-02-23
+branch: feat/ledger-ingestion
+last_commit: fd71bcae
 ---
 
-# Handoff: Ledger Temporal Workflows (Collect + Finalize)
+# Handoff: Ledger Collection Pipeline — Review Feedback + Closeout
 
 ## Context
 
-- Building the orchestration layer for the transparent credit payouts pipeline (proj.transparent-credit-payouts)
-- Two Temporal workflows needed: `CollectEpochWorkflow` (daily data collection) and `FinalizeEpochWorkflow` (admin-triggered payout computation)
-- All domain logic, DB schema, store port/adapter, and GitHub source adapter already exist — this task wires them together via Temporal
-- Collection runs daily (not just at epoch close) so admins see progress throughout the week
-- Epoch configuration (length, sources) will be declared in `.cogni/repo-spec.yaml`
+- Building automated GitHub activity collection for the transparent credit payouts pipeline (`proj.transparent-credit-payouts`)
+- Three-layer design: (1) schedule reconciliation → (2) epoch lifecycle → (3) cursor-based ingestion — each idempotent, separately testable
+- Phases 1-3 (DB migration, config, schedule reconciliation) were done by a previous developer; phases 4-5 (activities, workflow, worker, tests) were completed in this session
+- A code review produced 9 feedback items — 3 blocking, 6 important — that need to be addressed before closeout
+- The work item is at `needs_closeout` but should remain there until review feedback is resolved
 
 ## Current State
 
-- **Done**: Full design written in task.0095 (status: `needs_implement`)
-- **Done**: DB schema (8 tables), migrations, triggers (task.0093, task.0094)
-- **Done**: `ActivityLedgerStore` port + `DrizzleLedgerAdapter` + DI wiring
-- **Done**: `@cogni/ledger-core` — `computePayouts()`, `computeAllocationSetHash()`, model types, errors
-- **Done**: `@cogni/ingestion-core` — `SourceAdapter` port, `ActivityEvent` types, helpers
-- **Done**: `GitHubSourceAdapter` (PRs, reviews, issues via GraphQL)
-- **Not started**: The 7 activity functions, 2 workflows, ledger worker, repo-spec config
-- **Not started**: `computeProposedAllocations()` pure function in ledger-core
-- **Not started**: `resolveIdentities()` method on store port + adapter
+- **Done (Phases 1-3):** `scope_id` on ledger tables, repo-spec config, `LEDGER_INGEST` schedule reconciliation
+- **Done (Phases 4-5):** 5 ledger activities, `CollectEpochWorkflow`, `ledger-worker.ts`, container wiring, dual-worker `main.ts`, 12 unit tests passing, `pnpm check` green
+- **Done:** Stack test proving workflow-ID semantics (3 tests, passing) — documents blocking bug #1
+- **Done:** External test for collection pipeline (10 tests) — **not yet validated** (requires GitHub App credentials + testcontainers)
+- **Not done:** 9 review feedback items (see Next Actions)
+- **Deferred:** `computeProposedAllocations()`, `resolveIdentities()`, `FinalizeEpochWorkflow` — out of collection-phase scope
 
 ## Decisions Made
 
-- Separate task queue (`ledger-tasks`) from scheduler queue — see Design § Architecture in [task.0095](../items/task.0095.ledger-temporal-workflows.md)
-- Separate `createLedgerActivities(deps)` factory (not merged with scheduler activities)
-- Single `finalizeEpoch` activity wraps the atomic close+insert transaction
-- `collectFromSource` calls adapter in-process (not via HTTP) — adapters are stateless
-- Daily collection via Temporal Schedule (`0 6 * * *`); schedule registration deferred to task.0096
-- Repo-spec declares `activity_ledger.epoch_length_days` + `activity_sources` — see Design § Repo-Spec
-- `blocked_by` reduced to just task.0094 (done); task.0097 GitHub adapter is done on this branch
+- Separate `ledger-tasks` task queue + `ledger-worker.ts` — existing `worker.ts` and `activities/index.ts` untouched
+- Ledger worker is opt-in: returns null if `NODE_ID`/`SCOPE_ID` env vars not set
+- Activities use closure-factory DI pattern matching existing `createActivities(deps)`
+- Monotonic cursor advancement: `saveCursor` enforces `cursor = max(existing, new)`
+- Epoch statuses in DB model are only `"open"` | `"closed"` (not review/finalized yet)
 
 ## Next Actions
 
-- [ ] Add `activity_ledger` section to `.cogni/repo-spec.yaml` (epoch_length_days: 7, activity_sources.github)
-- [ ] Add `computeProposedAllocations()` to `packages/ledger-core/src/rules.ts` + unit tests
-- [ ] Add `resolveIdentities()` to `ActivityLedgerStore` port + implement in `DrizzleLedgerAdapter`
-- [ ] Create `services/scheduler-worker/src/activities/ledger.ts` — 7 activity functions
-- [ ] Create `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts`
-- [ ] Create `services/scheduler-worker/src/workflows/finalize-epoch.workflow.ts`
-- [ ] Create `services/scheduler-worker/src/ledger-worker.ts` + wire into `main.ts`
-- [ ] Add `NODE_ID` to scheduler-worker config schema
-- [ ] Validate: `pnpm check && pnpm --filter scheduler-worker build && pnpm test -- tests/unit/core/ledger/`
+- [ ] **Fix blocking #1:** Workflow ID prevents multiple collects per epoch — include run date in ID or use ALLOW_DUPLICATE policy (`collect-epoch.workflow.ts`, schedule sync)
+- [ ] **Fix blocking #2:** `ensureEpochForWindow` throws on closed epoch — catch EPOCH_WINDOW_UNIQUE or query by window regardless of status (`activities/ledger.ts:110-156`)
+- [ ] **Fix blocking #3:** Hardcoded `getStreamsForSource` in workflow — pass stream IDs through workflow input instead (`collect-epoch.workflow.ts:133-140`)
+- [ ] **Fix #4:** Remove `scopeId` from `EnsureEpochInput` — use only the closure-captured value from deps
+- [ ] **Fix #5:** `producerVersion` hardcoded as `"0.1.0"` — propagate `adapter.version` through `CollectFromSourceOutput`
+- [ ] **Fix #6:** Cursor monotonicity assumes ISO timestamps — document or branch on cursor type
+- [ ] **Fix #8:** Dead ledger worker doesn't trigger shutdown — propagate `worker.run()` rejection
+- [ ] Add missing unit tests: closed-epoch handling, wrong-window epoch, cursor with non-null value, producerVersion mapping
+- [ ] Run `pnpm test:external` to validate external tests (requires GitHub App creds)
+- [ ] `/closeout` after all feedback resolved
 
 ## Risks / Gotchas
 
-- Pre-commit hook fails on `tests/external/AGENTS.md` (pre-existing, unrelated) — may need `--no-verify` for commits
-- `user_bindings` table exists in schema but task.0089 (identity bindings CRUD) is not started — `resolveIdentities` will return empty maps until bindings are populated
-- The existing `worker.ts` and `activities/index.ts` belong to the scheduler — do NOT modify them; create parallel `ledger-worker.ts` and `activities/ledger.ts`
-- `node_id` value is `4ff8eac1-4eba-4ed0-931b-b1fe4f64713d` from repo-spec — needs a `NODE_ID` env var
+- The external test for closed-epoch handling (`ensureEpochForWindow` with closed epoch) is written as a try/catch — it documents feedback bug #2 and will fail until fixed
+- The stack test for duplicate workflow IDs _expects_ `WorkflowExecutionAlreadyStartedError` — update the assertion after fixing #1
+- `NODE_ID`/`SCOPE_ID` are optional in env schema — ledger container returns null if missing, but the workflow still receives `scopeId` in input (dual-source confusion, feedback #4)
+- Feedback #7 (no allocation recomputation) is a product question, not a code bug — decide whether to add a step to `CollectEpochWorkflow` or defer to a separate on-demand API
 
 ## Pointers
 
-| File / Resource                                                                              | Why it matters                                                      |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [task.0095 (full design)](../items/task.0095.ledger-temporal-workflows.md)                   | Activity table, workflow pseudocode, invariants, file list          |
-| [epoch-ledger spec](../../docs/spec/epoch-ledger.md)                                         | 16 invariants, schema, API contracts, lifecycle                     |
-| [packages/ledger-core/src/](../../packages/ledger-core/src/)                                 | `store.ts` (port), `rules.ts` (computePayouts), `model.ts` (types)  |
-| [packages/ingestion-core/src/](../../packages/ingestion-core/src/)                           | `port.ts` (SourceAdapter), `model.ts` (ActivityEvent), `helpers.ts` |
-| [DrizzleLedgerAdapter](../../packages/db-client/src/adapters/drizzle-ledger.adapter.ts)      | Store implementation — all DB methods                               |
-| [GitHubSourceAdapter](../../services/scheduler-worker/src/adapters/ingestion/github.ts)      | Working adapter to wire into collect workflow                       |
-| [Existing activities pattern](../../services/scheduler-worker/src/activities/index.ts)       | `createActivities(deps)` — follow this exact DI pattern             |
-| [Existing workflow](../../services/scheduler-worker/src/workflows/scheduled-run.workflow.ts) | `proxyActivities` pattern to follow                                 |
-| [worker.ts](../../services/scheduler-worker/src/worker.ts)                                   | DO NOT MODIFY — create parallel `ledger-worker.ts`                  |
-| [.cogni/repo-spec.yaml](../../.cogni/repo-spec.yaml)                                         | `node_id` lives here; add `activity_ledger` section                 |
+| File / Resource                                                                                      | Why it matters                                                  |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [task.0095 work item](../items/task.0095.ledger-temporal-workflows.md)                               | Full design, invariants, plan checklist                         |
+| [activities/ledger.ts](../../services/scheduler-worker/src/activities/ledger.ts)                     | 5 activity functions — feedback items #2, #4, #5, #6 apply here |
+| [collect-epoch.workflow.ts](../../services/scheduler-worker/src/workflows/collect-epoch.workflow.ts) | Workflow orchestration — feedback items #1, #3 apply here       |
+| [ledger-worker.ts](../../services/scheduler-worker/src/ledger-worker.ts)                             | Ledger task queue worker — feedback #8 applies here             |
+| [main.ts](../../services/scheduler-worker/src/main.ts)                                               | Dual-worker startup                                             |
+| [container.ts](../../services/scheduler-worker/src/bootstrap/container.ts)                           | `createLedgerContainer()` — opt-in wiring                       |
+| [Unit tests](../../services/scheduler-worker/tests/ledger-activities.test.ts)                        | 12 tests — add missing coverage per feedback #9                 |
+| [External tests](../../tests/external/ingestion/ledger-collection.external.test.ts)                  | 10 tests — **unvalidated**, needs GitHub App creds              |
+| [Stack test](../../tests/stack/ledger/collect-epoch-workflow-id.stack.test.ts)                       | Workflow-ID semantics — 3 tests, passing                        |
+| [epoch-ledger spec](../../docs/spec/epoch-ledger.md)                                                 | Invariants, state machine, schema                               |

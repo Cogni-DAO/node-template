@@ -22,6 +22,8 @@ activity_ledger:
   activity_sources:
     github:
       credit_estimate_algo: cogni-v0.0
+      source_refs: ["cogni-dao/cogni-template"]
+      streams: ["pull_requests", "reviews", "issues"]
 
 intent:
   name: cogni-template

@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/config/repoSpec.server`
- * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (node identity + payments + governance schedules).
- * Scope: Reads and caches repo-spec on first access; validates node_id UUID, chain alignment, and receiver address shape; exposes getNodeId(), getPaymentConfig(), and getGovernanceConfig(). Does not run in client bundles or accept env overrides.
- * Invariants: Chain ID must match CHAIN_ID; EVM address format required; governance schedules default to empty.
+ * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (node identity + payments + governance schedules + ledger config).
+ * Scope: Reads and caches repo-spec on first access; validates node_id UUID, chain alignment, and receiver address shape; exposes getNodeId(), getPaymentConfig(), and getGovernanceConfig(). Maps activity_ledger config to LedgerConfig when scope identity is present. Does not run in client bundles or accept env overrides.
+ * Invariants: Chain ID must match CHAIN_ID; ledger config requires scope_id + scope_key.
  * Side-effects: IO (reads repo-spec from disk) on first call only.
  * Links: .cogni/repo-spec.yaml, docs/spec/payments-design.md
  * @public
@@ -27,8 +27,19 @@ export interface GovernanceSchedule {
   entrypoint: string;
 }
 
+export interface LedgerConfig {
+  scopeId: string;
+  scopeKey: string;
+  epochLengthDays: number;
+  activitySources: Record<
+    string,
+    { creditEstimateAlgo: string; sourceRefs: string[]; streams: string[] }
+  >;
+}
+
 export interface GovernanceConfig {
   schedules: GovernanceSchedule[];
+  ledger?: LedgerConfig;
 }
 
 export interface InboundPaymentConfig {
@@ -128,9 +139,31 @@ export function getNodeId(): string {
 let cachedGovernanceConfig: GovernanceConfig | null = null;
 
 function mapGovernanceConfig(spec: RepoSpec): GovernanceConfig {
-  return {
+  const config: GovernanceConfig = {
     schedules: spec.governance?.schedules ?? [],
   };
+
+  // Wire ledger config if activity_ledger + scope identity are present
+  if (spec.activity_ledger && spec.scope_id && spec.scope_key) {
+    const sources: LedgerConfig["activitySources"] = {};
+    for (const [name, src] of Object.entries(
+      spec.activity_ledger.activity_sources
+    )) {
+      sources[name] = {
+        creditEstimateAlgo: src.credit_estimate_algo,
+        sourceRefs: src.source_refs,
+        streams: src.streams,
+      };
+    }
+    config.ledger = {
+      scopeId: spec.scope_id,
+      scopeKey: spec.scope_key,
+      epochLengthDays: spec.activity_ledger.epoch_length_days,
+      activitySources: sources,
+    };
+  }
+
+  return config;
 }
 
 export function getGovernanceConfig(): GovernanceConfig {

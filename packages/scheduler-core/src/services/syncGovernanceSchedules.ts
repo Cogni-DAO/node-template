@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/scheduler-core/services/syncGovernanceSchedules`
  * Purpose: Sync governance schedules from config to Temporal. Pure orchestration — depends only on ports and types.
- * Scope: Creates/updates/resumes Temporal schedules for each charter in governance config; pauses schedules removed from config. Does not manage tenant-facing schedule CRUD or workflow execution.
+ * Scope: Creates/updates/resumes Temporal schedules for each charter in governance config; pauses schedules removed from config. Routes LEDGER_INGEST charters to CollectEpochWorkflow with versioned LedgerIngestRunV1 envelope. Does not manage tenant-facing schedule CRUD or workflow execution.
  * Invariants:
  *   - OVERLAP_SKIP_DEFAULT: All governance schedules use overlap=SKIP (enforced by ScheduleControlPort)
  *   - CATCHUP_WINDOW_ZERO: No backfill (enforced by ScheduleControlPort)
@@ -60,7 +60,14 @@ export interface LedgerScheduleConfig {
   /** Epoch length in days */
   epochLengthDays: number;
   /** Map of source name → source config */
-  activitySources: Record<string, { creditEstimateAlgo: string }>;
+  activitySources: Record<
+    string,
+    {
+      creditEstimateAlgo: string;
+      sourceRefs: string[];
+      streams: string[];
+    }
+  >;
 }
 
 /** Minimal governance config shape (no @/ imports — pure type) */
@@ -201,6 +208,7 @@ export async function syncGovernanceSchedules(
 
     if (isLedgerIngest && config.ledger) {
       desiredInput = {
+        version: 1,
         scopeId: config.ledger.scopeId,
         scopeKey: config.ledger.scopeKey,
         epochLengthDays: config.ledger.epochLengthDays,

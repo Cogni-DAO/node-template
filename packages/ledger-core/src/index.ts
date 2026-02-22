@@ -11,6 +11,13 @@
  * @public
  */
 
+// Epoch window computation (pure, deterministic — safe in Temporal workflow code)
+export {
+  computeEpochWindowV1,
+  type EpochWindow,
+  type EpochWindowParams,
+} from "./epoch-window";
+
 // Errors
 export {
   AllocationNotFoundError,

@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/db-client/adapters/drizzle-ledger`
  * Purpose: Drizzle ORM implementation of ActivityLedgerStore port.
- * Scope: Single adapter shared by app (via container.ts) and scheduler-worker. Does not contain domain logic or define port interfaces.
+ * Scope: Single adapter shared by app (via container.ts) and scheduler-worker. Implements all ActivityLedgerStore methods including getEpochByWindow (status-agnostic lookup). Does not contain domain logic or define port interfaces.
  * Invariants:
  * - Uses serviceDb (BYPASSRLS) — no RLS in V0.
  * - ACTIVITY_IDEMPOTENT: insertActivityEvents uses onConflictDoNothing on PK.
@@ -218,6 +218,27 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
           eq(epochs.nodeId, nodeId),
           eq(epochs.scopeId, scopeId),
           eq(epochs.status, "open")
+        )
+      )
+      .limit(1);
+    return rows[0] ? toEpoch(rows[0]) : null;
+  }
+
+  async getEpochByWindow(
+    nodeId: string,
+    scopeId: string,
+    periodStart: Date,
+    periodEnd: Date
+  ): Promise<LedgerEpoch | null> {
+    const rows = await this.db
+      .select()
+      .from(epochs)
+      .where(
+        and(
+          eq(epochs.nodeId, nodeId),
+          eq(epochs.scopeId, scopeId),
+          eq(epochs.periodStart, periodStart),
+          eq(epochs.periodEnd, periodEnd)
         )
       )
       .limit(1);

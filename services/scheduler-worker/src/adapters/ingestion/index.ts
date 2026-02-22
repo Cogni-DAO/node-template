@@ -12,11 +12,11 @@
 export {
   type GitHubAdapterConfig,
   GitHubSourceAdapter,
-} from "./github";
+} from "./github.js";
 
 export {
   type GitHubAppConfig,
   GitHubAppTokenProvider,
-} from "./github-auth";
+} from "./github-auth.js";
 
-export { createGitHubClient, type GitHubClient } from "./octokit-client";
+export { createGitHubClient, type GitHubClient } from "./octokit-client.js";

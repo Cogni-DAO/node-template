@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/config/repoSpec.schema`
- * Purpose: Zod schemas and derived types for .cogni/repo-spec.yaml validation (payments + governance).
- * Scope: Validates governance-managed payment and governance schedule configuration structures; does not enforce chain/token values (those checked against chain.ts constants).
- * Invariants: Receiving_address must be valid EVM format; provider must be non-empty; governance schedules require charter + cron + entrypoint.
+ * Purpose: Zod schemas and derived types for .cogni/repo-spec.yaml validation (payments + governance + ledger).
+ * Scope: Validates governance-managed payment, governance schedule, and activity ledger configuration structures. Does not enforce chain/token values (those checked against chain.ts constants).
+ * Invariants: EVM address format required; activity sources require source_refs + streams.
  * Side-effects: none
  * Links: .cogni/repo-spec.yaml, docs/spec/chain-config.md, docs/spec/payments-design.md
  * @public
@@ -86,6 +86,10 @@ export type GovernanceSpec = z.infer<typeof governanceSpecSchema>;
 export const activitySourceSpecSchema = z.object({
   /** Credit estimation algorithm reference (e.g., "cogni-v0.0") */
   credit_estimate_algo: z.string().min(1),
+  /** External namespaces for cursor scoping (e.g., repo slugs) */
+  source_refs: z.array(z.string().min(1)).min(1),
+  /** Stream IDs to collect (e.g., ["pull_requests", "reviews", "issues"]) */
+  streams: z.array(z.string().min(1)).min(1),
 });
 
 export type ActivitySourceSpec = z.infer<typeof activitySourceSpecSchema>;
