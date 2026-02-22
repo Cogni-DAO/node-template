@@ -6,69 +6,74 @@ status: active
 created: 2026-02-21
 updated: 2026-02-22
 branch: worktree-ingestion-core-github-adapter
-last_commit: "e374616f"
+last_commit: "d0d92133"
 ---
 
-# Handoff: GitHub Source Adapter — Auth + Env Wiring (task.0097)
+# Handoff: GitHub Ingestion — Build Temporal Workflows
 
 ## Context
 
-- Epoch payout pipeline collects GitHub activity (PRs, reviews, issues) via `GitHubSourceAdapter`
-- Auth was refactored from PAT to GitHub App only (`@octokit/auth-app`), with a `VcsTokenProvider` port abstraction
-- Client switched from `@octokit/graphql` to `@octokit/core` with retry + throttling plugins (no more bespoke rate-limit code)
-- **CI is broken** — scheduler-worker fails to boot in Docker because env vars (`GITHUB_REVIEW_APP_*`) are required but not passed through compose files or CI workflows
+- The epoch payout pipeline collects GitHub activity (PRs, reviews, issues) to reward contributors
+- A `GitHubSourceAdapter` exists that queries GitHub's GraphQL API via `@octokit/core` with retry/throttling
+- Auth uses GitHub App tokens (`GitHubAppTokenProvider` implementing `VcsTokenProvider` port), not PATs
+- The scheduler-worker service now has clean architecture: `ports/`, `bootstrap/` (env + container), dep-cruiser rules
+- **Next step:** Build Temporal workflows that invoke the adapter to collect activity on a schedule
 
 ## Current State
 
-- **Done:** `VcsTokenProvider` port in `@cogni/ingestion-core`, `GitHubAppTokenProvider` implementation, `createGitHubClient()` factory
-- **Done:** `GitHubSourceAdapter` accepts `tokenProvider` only, auto-refreshes tokens near expiry
-- **Done:** Env schema in `bootstrap/env.ts` defines `GITHUB_REVIEW_APP_ID`, `GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64`, `GITHUB_REVIEW_INSTALLATION_ID`
-- **Done:** 26 unit tests passing (adapter + auth)
-- **Done:** Env var rename `REVIEW_*` → `GITHUB_REVIEW_*` — applied in `bootstrap/env.ts`, external test file, compose files, and `.env.*.example` files
-- **Done:** Scheduler-worker clean architecture refactor (ports/, bootstrap/env + container, dep-cruiser rules)
-- **Done:** `GITHUB_REVIEW_APP_*` vars are optional in Zod schema — worker boots without them; ingestion fails at runtime only
-- **Done:** Compose files (`docker-compose.dev.yml`, `docker-compose.yml`) pass through `GITHUB_REVIEW_*` vars with empty defaults
-- **Not done:** Deploy scripts/CI workflows — `deploy-production.yml`, `staging-preview.yml`, `deploy.sh` need secrets wired
-- **Not done:** GitHub App not yet created in Cogni-DAO org
-- **Not done:** Discord adapter, adapter registry
+- **Done:** `GitHubSourceAdapter` — collects merged PRs, reviews, closed issues from repo-scoped GraphQL queries
+- **Done:** `GitHubAppTokenProvider` — JWT + installation token auth, auto-refreshes near expiry
+- **Done:** `VcsTokenProvider` port in `@cogni/ingestion-core`, `SourceAdapter` port for the adapter contract
+- **Done:** Clean architecture in scheduler-worker: `ports/index.ts` re-exports `ExecutionGrantWorkerPort` + `ScheduleRunRepository`; `bootstrap/container.ts` wires adapters; activities use port types only
+- **Done:** Dep-cruiser rules enforce activities/workflows cannot import adapters, db-client, or bootstrap
+- **Done:** `GITHUB_REVIEW_APP_*` env vars are optional (worker boots without them), wired through compose files
+- **Done:** 26 unit tests pass (adapter + auth), external tests pass with real GitHub App credentials
+- **Not done:** Temporal workflow to orchestrate ingestion (collect → store → update cursor)
+- **Not done:** Adapter registry (dispatching to GitHub vs future Discord adapter)
+- **Not done:** GitHub App not yet created in Cogni-DAO org (using personal test app)
+- **Not done:** Deploy pipeline wiring for `GITHUB_REVIEW_*` secrets
 
 ## Decisions Made
 
-- **App-only auth** — user rejected PAT fallback as tech debt
-- Removed `GitHubRateLimitError` — plugins handle retries
-- Adapter version `0.2.0` → `0.3.0` (breaking: `token` field removed from config)
-- `@octokit/graphql` removed from `package.json`, replaced by `@octokit/core`
-- Env vars renamed to `GITHUB_REVIEW_*` prefix (partially applied)
-- **Env vars are required in Zod schema** — worker crashes at boot without them. Must either: (a) wire them everywhere, or (b) make them optional with a guard at ingestion call sites
+- **App-only auth** — no PAT fallback, `VcsTokenProvider` port abstracts future auth methods
+- **Repo-scoped GraphQL** — queries `repository.pullRequests`, not `search()` (which is best-effort indexed)
+- **Early-stop pagination** — stops paging when `updatedAt < since`, avoids scanning entire history
+- **Optional env vars** — `GITHUB_REVIEW_APP_*` optional in Zod so worker boots for non-ingestion workflows
+- **Clean architecture** — activities/workflows import ports only; concrete adapters wired in `bootstrap/container.ts`
+- **Single pino importer** — only `observability/logger.ts` imports pino; all others get `Logger` type from there
+- **Cleanup noted:** `VcsTokenProvider` should be renamed to `VcsTokenProviderPort` for naming consistency
 
 ## Next Actions
 
-- [x] Finish env var rename: `REVIEW_*` → `GITHUB_REVIEW_*` in external test, env schema, compose files
-- [x] **Fix CI:** Made `GITHUB_REVIEW_APP_*` optional in Zod — worker boots without them
-- [x] Add placeholders to `.env.local.example`, `.env.test.example`
-- [x] Wire env vars in `docker-compose.dev.yml` and `docker-compose.yml`
-- [ ] Wire secrets through `deploy-production.yml`, `staging-preview.yml`, `deploy.sh`
-- [ ] Create GitHub App in Cogni-DAO org (permissions: `contents:read`, `pull_requests:read`, `issues:read`), install on `Cogni-DAO/test-repo`
-- [ ] Run `pnpm test:external` with real App credentials
-- [ ] Commit the in-progress bootstrap/container refactor
+- [ ] Design ingestion Temporal workflow (collect → deduplicate → store to ledger → advance cursor)
+- [ ] Add `SourceAdapter` + `VcsTokenProvider` to `bootstrap/container.ts` (wire `GitHubAppTokenProvider` + `GitHubSourceAdapter`)
+- [ ] Add ingestion-related ports to `ports/index.ts` if workflows consume them (e.g., `ActivityLedgerStore`)
+- [ ] Create ingestion activities (collect, store, cursor management) using port interfaces
+- [ ] Create adapter registry or factory for dispatching by source name
+- [ ] Wire secrets through deploy pipeline (`deploy-production.yml`, `staging-preview.yml`, `deploy.sh`)
+- [ ] Create GitHub App in Cogni-DAO org (permissions: `contents:read`, `pull_requests:read`, `issues:read`)
 
 ## Risks / Gotchas
 
-- **CI fixed** — `GITHUB_REVIEW_APP_*` vars are optional; worker boots without them
-- **Deploy wiring pending** — deploy scripts and CI workflows don't pass `GITHUB_REVIEW_*` secrets yet
-- **Review pagination cap:** `reviews(first: 100)` per PR — 100+ reviews silently dropped
+- **Deploy wiring pending** — CI/deploy scripts don't pass `GITHUB_REVIEW_*` secrets yet; compose files are wired
+- **Review pagination cap** — `reviews(first: 100)` per PR; 100+ reviews silently dropped
+- **Bot/Mannequin actors skipped** — actors without `databaseId` are excluded (no stable user ID)
+- **Dep-cruiser enforced** — new activities MUST import from `../ports/index.js`, never from adapters or `@cogni/db-client`
 
 ## Pointers
 
-| File / Resource                                                      | Why it matters                                       |
-| -------------------------------------------------------------------- | ---------------------------------------------------- |
-| `services/scheduler-worker/src/bootstrap/env.ts`                     | Env schema — `GITHUB_REVIEW_APP_*` vars defined here |
-| `services/scheduler-worker/src/adapters/ingestion/github.ts`         | Adapter — requires `tokenProvider`, no direct token  |
-| `services/scheduler-worker/src/adapters/ingestion/github-auth.ts`    | `GitHubAppTokenProvider` — JWT + installation token  |
-| `services/scheduler-worker/src/adapters/ingestion/octokit-client.ts` | Octokit factory with retry/throttling plugins        |
-| `packages/ingestion-core/src/vcs-token-provider.ts`                  | Port interface in pure domain package                |
-| `tests/external/ingestion/github-adapter.external.test.ts`           | Needs env var rename to `GITHUB_REVIEW_*`            |
-| `platform/infra/services/runtime/docker-compose.dev.yml`             | Scheduler-worker env block — needs new vars          |
-| `platform/infra/services/runtime/docker-compose.yml`                 | Production compose — needs new vars                  |
-| Commit `65804255`                                                    | Auth refactor commit                                 |
-| `work/items/task.0097.ledger-source-adapters.md`                     | Canonical work item                                  |
+| File / Resource                                                     | Why it matters                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `services/scheduler-worker/AGENTS.md`                               | Architecture diagram, hard rules, env var docs              |
+| `services/scheduler-worker/src/ports/index.ts`                      | Port barrel — add new ports here                            |
+| `services/scheduler-worker/src/bootstrap/container.ts`              | Composition root — wire new adapters here                   |
+| `services/scheduler-worker/src/bootstrap/env.ts`                    | Zod env schema with `GITHUB_REVIEW_*` vars                  |
+| `services/scheduler-worker/src/adapters/ingestion/github.ts`        | `GitHubSourceAdapter` — 3 streams, early-stop pagination    |
+| `services/scheduler-worker/src/adapters/ingestion/github-auth.ts`   | `GitHubAppTokenProvider` — JWT + installation tokens        |
+| `packages/ingestion-core/src/port.ts`                               | `SourceAdapter` interface (collect, streams, handleWebhook) |
+| `packages/ingestion-core/src/vcs-token-provider.ts`                 | `VcsTokenProvider` port interface                           |
+| `services/scheduler-worker/src/workflows/scheduled-run.workflow.ts` | Existing workflow — pattern reference for new workflows     |
+| `.dependency-cruiser.cjs`                                           | Boundary rules (search "no-service-activities")             |
+| `tests/external/ingestion/github-adapter.external.test.ts`          | External tests against real GitHub API                      |
+| Commit `4d6a5715`                                                   | Clean architecture refactor                                 |
+| Commit `d0d92133`                                                   | Env var optional + rename + compose wiring                  |
