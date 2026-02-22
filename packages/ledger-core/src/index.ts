@@ -51,6 +51,7 @@ export type {
   ActivityLedgerStore,
   InsertActivityEventParams,
   InsertAllocationParams,
+  InsertCurationAutoParams,
   InsertPayoutStatementParams,
   InsertPoolComponentParams,
   InsertSignatureParams,
@@ -62,5 +63,6 @@ export type {
   LedgerPoolComponent,
   LedgerSourceCursor,
   LedgerStatementSignature,
+  UncuratedEvent,
   UpsertCurationParams,
 } from "./store";

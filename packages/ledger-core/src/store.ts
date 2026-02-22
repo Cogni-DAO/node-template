@@ -8,6 +8,8 @@
  * Invariants:
  * - ACTIVITY_APPEND_ONLY: insertActivityEvents never updates existing rows.
  * - CURATION_FREEZE_ON_CLOSE: upsertCuration rejects writes when epoch is closed.
+ * - CURATION_AUTO_POPULATE: insertCurationDoNothing + updateCurationUserId never overwrite admin-set fields.
+ * - IDENTITY_BEST_EFFORT: resolveIdentities is best-effort; unresolved events get userId=null.
  * - ONE_OPEN_EPOCH: createEpoch enforced by DB constraint.
  * - NODE_SCOPED: all operations are scoped to a node_id.
  * Side-effects: none
@@ -199,6 +201,32 @@ export interface InsertSignatureParams {
   readonly signedAt: Date;
 }
 
+/**
+ * Narrowed params for auto-population INSERT (CURATION_AUTO_POPULATE).
+ * Intentionally excludes weightOverrideMilli and note to prevent accidental overwrites.
+ */
+export interface InsertCurationAutoParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly eventId: string;
+  readonly userId: string | null;
+  readonly included: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Identity resolution types
+// ---------------------------------------------------------------------------
+
+/**
+ * An event that needs curation work — either no curation row exists,
+ * or the curation row has user_id IS NULL (unresolved).
+ */
+export interface UncuratedEvent {
+  readonly event: LedgerActivityEvent;
+  /** true = curation row exists with userId=NULL; false = no curation row */
+  readonly hasExistingCuration: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Port interface
 // ---------------------------------------------------------------------------
@@ -233,6 +261,12 @@ export interface ActivityLedgerStore {
 
   // Curation (mutable while epoch open)
   upsertCuration(params: UpsertCurationParams[]): Promise<void>;
+  /**
+   * Insert curation rows with ON CONFLICT DO NOTHING semantics.
+   * Used by auto-population (CURATION_AUTO_POPULATE) to avoid overwriting
+   * admin-set fields if a row is created between getUncuratedEvents and insert.
+   */
+  insertCurationDoNothing(params: InsertCurationAutoParams[]): Promise<void>;
   getCurationForEpoch(epochId: bigint): Promise<LedgerCuration[]>;
   getUnresolvedCuration(epochId: bigint): Promise<LedgerCuration[]>;
 
@@ -280,4 +314,36 @@ export interface ActivityLedgerStore {
   getSignaturesForStatement(
     statementId: string
   ): Promise<LedgerStatementSignature[]>;
+
+  // Identity resolution (cross-domain convenience — V0 on ledger port)
+  /**
+   * Resolves platform IDs to user UUIDs via user_bindings.
+   * V0: GitHub only. Extend provider union for discord etc.
+   */
+  resolveIdentities(
+    provider: "github",
+    externalIds: string[]
+  ): Promise<Map<string, string>>;
+
+  /**
+   * Returns events in the epoch window that need curation work:
+   * - No curation row exists (new events)
+   * - Curation row exists but user_id IS NULL (unresolved)
+   */
+  getUncuratedEvents(
+    nodeId: string,
+    epochId: bigint,
+    periodStart: Date,
+    periodEnd: Date
+  ): Promise<UncuratedEvent[]>;
+
+  /**
+   * Update user_id on a curation row ONLY when existing user_id IS NULL.
+   * Never touches included, weight_override_milli, or note (CURATION_AUTO_POPULATE).
+   */
+  updateCurationUserId(
+    epochId: bigint,
+    eventId: string,
+    userId: string
+  ): Promise<void>;
 }

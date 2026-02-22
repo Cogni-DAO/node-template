@@ -44,7 +44,8 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
   - `EpochStatus`, `FinalizedAllocation`, `PayoutLineItem` — Domain types
   - `ActivityLedgerStore` — Port interface for ledger persistence
   - `LedgerEpoch`, `LedgerActivityEvent`, `LedgerCuration`, `LedgerAllocation`, `LedgerSourceCursor`, `LedgerPoolComponent`, `LedgerPayoutStatement`, `LedgerStatementSignature` — Read-side record types
-  - `InsertActivityEventParams`, `UpsertCurationParams`, `InsertAllocationParams`, `InsertPoolComponentParams`, `InsertPayoutStatementParams`, `InsertSignatureParams` — Write-side param types
+  - `InsertActivityEventParams`, `UpsertCurationParams`, `InsertCurationAutoParams`, `InsertAllocationParams`, `InsertPoolComponentParams`, `InsertPayoutStatementParams`, `InsertSignatureParams` — Write-side param types
+  - `UncuratedEvent` — Event + hasExistingCuration flag for delta curation processing
   - `computeEpochWindowV1()` — Pure, deterministic epoch window computation (Monday-aligned UTC). Safe in Temporal workflow code.
   - `EpochWindow`, `EpochWindowParams` — Types for epoch window computation
   - `computePayouts()` — BIGINT proportional distribution with largest-remainder rounding
@@ -57,7 +58,7 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
 
 - **Uses ports:** none
 - **Implements ports:** none
-- **Defines ports:** `ActivityLedgerStore` (implemented by `DrizzleLedgerAdapter` in `@cogni/db-client`). Includes `getEpochByWindow()` for status-agnostic epoch lookup by time window.
+- **Defines ports:** `ActivityLedgerStore` (implemented by `DrizzleLedgerAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUncuratedEvents`, `updateCurationUserId`, `insertCurationDoNothing`) for curation auto-population.
 
 ## Responsibilities
 

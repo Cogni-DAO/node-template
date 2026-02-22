@@ -3,19 +3,23 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/activities/ledger`
- * Purpose: Temporal Activities for ledger epoch collection — cursor-based ingestion from source adapters.
+ * Purpose: Temporal Activities for ledger epoch collection and curation — cursor-based ingestion + identity resolution.
  * Scope: Plain async functions that perform I/O (DB, GitHub API). Called by CollectEpochWorkflow.
  * Invariants:
  *   - Per ACTIVITY_IDEMPOTENT: All activities idempotent via PK constraints or upsert
  *   - Per CURSOR_STATE_PERSISTED: Cursors saved after each collect() call
  *   - Per NODE_SCOPED: All operations pass nodeId + scopeId from deps
  *   - Per TEMPORAL_DETERMINISM: Activities contain all I/O; workflows call only these proxies
+ *   - Per CURATION_AUTO_POPULATE: curateAndResolve inserts new curations (DO NOTHING on conflict), updates only userId on unresolved rows
+ *   - Per IDENTITY_BEST_EFFORT: Unresolved events get userId=null in curation rows, never dropped
  * Side-effects: IO (database, GitHub API)
  * Links: docs/spec/epoch-ledger.md, docs/spec/temporal-patterns.md
  * @internal
  */
 
 import type { ActivityEvent } from "@cogni/ingestion-core";
+
+import type { UncuratedEvent } from "@cogni/ledger-core";
 
 import type { Logger } from "../observability/logger.js";
 import type { ActivityLedgerStore, SourceAdapter } from "../ports/index.js";
@@ -97,6 +101,24 @@ export interface SaveCursorInput {
   readonly stream: string;
   readonly sourceRef: string;
   readonly cursorValue: string;
+}
+
+/**
+ * Input for curateAndResolve activity.
+ * epochId is the sole input — activity loads epoch row for period dates.
+ */
+export interface CurateAndResolveInput {
+  readonly epochId: string; // bigint serialized as string for Temporal
+}
+
+/**
+ * Output from curateAndResolve activity.
+ */
+export interface CurateAndResolveOutput {
+  readonly totalEvents: number;
+  readonly newCurations: number;
+  readonly resolved: number;
+  readonly unresolved: number;
 }
 
 /**
@@ -353,12 +375,120 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
     );
   }
 
+  /**
+   * Curates events and resolves platform identities for an epoch.
+   * Two-phase writes: INSERT new curation rows, UPDATE userId on existing unresolved rows.
+   * CURATION_AUTO_POPULATE: never overwrites admin-set included/weight_override_milli/note.
+   * IDENTITY_BEST_EFFORT: unresolved events get userId=null, never dropped.
+   */
+  async function curateAndResolve(
+    input: CurateAndResolveInput
+  ): Promise<CurateAndResolveOutput> {
+    const epochId = BigInt(input.epochId);
+
+    // 1. Load epoch → get period dates
+    const epoch = await ledgerStore.getEpoch(epochId);
+    if (!epoch) {
+      throw new Error(`curateAndResolve: epoch ${input.epochId} not found`);
+    }
+
+    // 2. Get uncurated events (delta: only events needing work)
+    const uncurated: UncuratedEvent[] = await ledgerStore.getUncuratedEvents(
+      nodeId,
+      epochId,
+      epoch.periodStart,
+      epoch.periodEnd
+    );
+
+    if (uncurated.length === 0) {
+      logger.info({ epochId: input.epochId }, "No uncurated events — skipping");
+      return { totalEvents: 0, newCurations: 0, resolved: 0, unresolved: 0 };
+    }
+
+    // 3. Collect unique platformUserIds by source
+    const idsBySource = new Map<string, Set<string>>();
+    for (const { event } of uncurated) {
+      const ids = idsBySource.get(event.source) ?? new Set();
+      ids.add(event.platformUserId);
+      idsBySource.set(event.source, ids);
+    }
+
+    // 4. Batch resolve identities per source
+    // V0: only github provider supported
+    const resolvedMap = new Map<string, string>();
+    for (const [source, ids] of idsBySource) {
+      if (source === "github") {
+        const result = await ledgerStore.resolveIdentities("github", [...ids]);
+        for (const [extId, userId] of result) {
+          resolvedMap.set(extId, userId);
+        }
+      }
+      // TODO: add discord etc. when sources expand
+    }
+
+    // 5. Two-phase writes
+    let newCurations = 0;
+    let resolved = 0;
+    let unresolved = 0;
+
+    for (const { event, hasExistingCuration } of uncurated) {
+      const resolvedUserId = resolvedMap.get(event.platformUserId) ?? null;
+
+      if (!hasExistingCuration) {
+        // Phase 1: INSERT new curation row (ON CONFLICT DO NOTHING for race safety)
+        // Uses insertCurationDoNothing — NOT upsertCuration which overwrites all fields
+        await ledgerStore.insertCurationDoNothing([
+          {
+            nodeId,
+            epochId,
+            eventId: event.id,
+            userId: resolvedUserId,
+            included: true,
+          },
+        ]);
+        newCurations++;
+      } else if (resolvedUserId) {
+        // Phase 2: UPDATE userId on existing unresolved row
+        await ledgerStore.updateCurationUserId(
+          epochId,
+          event.id,
+          resolvedUserId
+        );
+      }
+
+      if (resolvedUserId) {
+        resolved++;
+      } else {
+        unresolved++;
+      }
+    }
+
+    logger.info(
+      {
+        epochId: input.epochId,
+        totalEvents: uncurated.length,
+        newCurations,
+        resolved,
+        unresolved,
+      },
+      "Curation and identity resolution complete"
+    );
+
+    return {
+      totalEvents: uncurated.length,
+      newCurations,
+      resolved,
+      unresolved,
+    };
+  }
+
   return {
     ensureEpochForWindow,
     loadCursor,
     collectFromSource,
     insertEvents,
     saveCursor,
+    curateAndResolve,
   };
 }
 

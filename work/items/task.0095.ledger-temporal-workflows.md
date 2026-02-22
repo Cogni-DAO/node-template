@@ -2,7 +2,7 @@
 id: task.0095
 type: task
 title: "Ledger Temporal workflows (collect + finalize) + weekly cron"
-status: needs_merge
+status: done
 priority: 1
 rank: 4
 estimate: 2

@@ -10,7 +10,7 @@ summary: "Epoch-based ledger where source adapters collect contribution activity
 outcome: "A third party can recompute the payout table exactly from stored activity events + pool components + weight config. All activity is attributed to contributors via identity bindings. Admin finalizes once per epoch."
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-02-21
+updated: 2026-02-23
 labels: [governance, transparency, payments, web3]
 ---
 
@@ -45,11 +45,11 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 | Design revision: activity-ingestion reframe                  | Done        | 1   | (this document) |
 | Spec: epoch-ledger.md (revised)                              | Done        | 1   | —               |
 | DB schema (foundation tables) + core domain (rules, errors)  | Done        | 3   | task.0093       |
-| Identity bindings (user_bindings + identity_events)          | Needs Merge | 2   | task.0089       |
+| Identity bindings (user_bindings + identity_events)          | Done        | 2   | task.0089       |
 | Ledger port + Drizzle adapter + schema migration + container | Done        | 2   | task.0094       |
 | GitHub source adapter                                        | In Progress | 3   | task.0097       |
-| Temporal workflows (collection phase)                        | In Review   | 2   | task.0095       |
-| Identity resolution + curation auto-population               | Not Started | 2   | task.0101       |
+| Temporal workflows (collection phase)                        | Done        | 2   | task.0095       |
+| Identity resolution + curation auto-population               | In Review   | 2   | task.0101       |
 | Allocation computation + epoch close + FinalizeEpochWorkflow | Not Started | 3   | task.0102       |
 | Epoch 3-phase state machine + EIP-191 signing                | Not Started | 3   | task.0100       |
 | Zod contracts + API routes + stack tests                     | Not Started | 2   | task.0096       |
@@ -80,9 +80,9 @@ repo-spec.yaml → schedule sync → Temporal schedule → CollectEpochWorkflow 
 - [x] DB schema (epochs, activity_events, activity_curation, epoch_allocations, pool_components, payout_statements, statement_signatures, source_cursors)
 - [x] Store port + Drizzle adapter (all CRUD methods)
 - [x] `computePayouts()` pure function (BIGINT, largest-remainder)
-- [x] Identity bindings schema (user_bindings + identity_events tables) — task.0089 needs merge
-- [ ] **Identity resolution activity** — resolve platformUserId → userId via user_bindings (task.0101)
-- [ ] **Curation auto-population** — create activity_curation rows from collected events (task.0101)
+- [x] Identity bindings schema (user_bindings + identity_events tables) — task.0089 done
+- [x] **Identity resolution activity** — resolve platformUserId → userId via user_bindings (task.0101 in review)
+- [x] **Curation auto-population** — create activity_curation rows from collected events (task.0101 in review)
 - [ ] **`computeProposedAllocations()`** — weight policy → epoch_allocations (task.0102)
 - [ ] **Epoch auto-close** — detect period_end+grace passed, transition open→review/closed (task.0102)
 - [ ] **FinalizeEpochWorkflow** — read allocations+pool, computePayouts, atomic close+statement (task.0102)
@@ -163,8 +163,8 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 - [x] Existing governance approval flow stable (task.0054 — Done)
 - [x] Temporal + scheduler-worker service operational
 - [x] SIWE wallet auth operational
-- [ ] task.0089 — Identity bindings (user_bindings table) — needs merge
-- [ ] task.0101 — Identity resolution + curation (blocked by task.0089, task.0095)
+- [x] task.0089 — Identity bindings (user_bindings table) — done
+- [ ] task.0101 — Identity resolution + curation — in review
 - [ ] task.0102 — Allocation computation + epoch close + finalize (blocked by task.0101)
 - [ ] task.0100 — 3-phase epoch status + signing (blocked by task.0093)
 - [ ] task.0096 — API routes (blocked by task.0095)
