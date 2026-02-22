@@ -28,8 +28,8 @@ import type {
 } from "@cogni/ingestion-core";
 import { buildEventId, hashCanonicalPayload } from "@cogni/ingestion-core";
 
-import type { GitHubClient } from "./octokit-client";
-import { createGitHubClient } from "./octokit-client";
+import type { GitHubClient } from "./octokit-client.js";
+import { createGitHubClient } from "./octokit-client.js";
 
 // ---------------------------------------------------------------------------
 // Config
