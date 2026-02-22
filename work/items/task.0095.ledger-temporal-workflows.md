@@ -306,7 +306,7 @@ pnpm test -- tests/unit/core/ledger/
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0095.handoff.md)
 
 ## Attribution
 
