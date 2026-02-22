@@ -294,6 +294,7 @@ Implementation in `DrizzleLedgerAdapter`: queries `user_bindings` table with `WH
 - [ ] Implement `CollectEpochWorkflow` — create epoch, run adapters, curate, compute allocations
 - [ ] Implement `FinalizeEpochWorkflow` — read allocations + pool, compute payouts, atomic close
 - [ ] Create `ledger-worker.ts` and wire into `main.ts`
+- [ ] Rename `governance:` schedule prefix to distinguish agent runs vs data pipelines (e.g., `system:agent:heartbeat` vs `system:ledger:ingest`) — currently both heartbeat (OpenClaw sandbox) and ledger_ingest (CollectEpochWorkflow) share the `governance:` namespace despite being different workers/queues
 
 ## Validation
 
