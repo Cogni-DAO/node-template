@@ -4,7 +4,7 @@
 /**
  * Module: `scheduler-worker/tests/fixtures/github-graphql.fixtures`
  * Purpose: Mock GitHub GraphQL API response fixtures for unit tests.
- * Scope: Test-only helpers for constructing mock GraphQL responses. Does not contain production logic or network I/O.
+ * Scope: Test-only helpers for constructing mock repo-scoped GraphQL responses. Does not contain production logic or network I/O.
  * Side-effects: none
  * @internal
  */
@@ -12,19 +12,19 @@
 export function makePrNode(overrides: {
   number: number;
   mergedAt: string;
+  updatedAt?: string;
   authorLogin?: string;
   authorDatabaseId?: number;
   authorTypename?: string;
   repo?: string;
 }) {
-  const [owner, repoName] = (
-    overrides.repo ?? "cogni-dao/cogni-template"
-  ).split("/");
+  const repoFull = overrides.repo ?? "cogni-dao/cogni-template";
   return {
     number: overrides.number,
     title: `PR #${overrides.number}`,
     mergedAt: overrides.mergedAt,
-    url: `https://github.com/${owner}/${repoName}/pull/${overrides.number}`,
+    updatedAt: overrides.updatedAt ?? overrides.mergedAt,
+    url: `https://github.com/${repoFull}/pull/${overrides.number}`,
     author: {
       __typename: overrides.authorTypename ?? "User",
       login: overrides.authorLogin ?? "testuser",
@@ -33,7 +33,6 @@ export function makePrNode(overrides: {
     additions: 10,
     deletions: 5,
     changedFiles: 2,
-    repository: { nameWithOwner: `${owner}/${repoName}` },
   };
 }
 
@@ -60,14 +59,17 @@ export function makeReviewNode(overrides: {
 export function makePrWithReviewsNode(overrides: {
   number: number;
   reviews: ReturnType<typeof makeReviewNode>[];
+  mergedAt?: string;
+  updatedAt?: string;
   repo?: string;
 }) {
   const repoFull = overrides.repo ?? "cogni-dao/cogni-template";
-  const [owner, repoName] = repoFull.split("/");
   return {
     number: overrides.number,
-    url: `https://github.com/${owner}/${repoName}/pull/${overrides.number}`,
-    repository: { nameWithOwner: repoFull },
+    url: `https://github.com/${repoFull}/pull/${overrides.number}`,
+    mergedAt: overrides.mergedAt ?? "2026-01-02T00:00:00Z",
+    updatedAt:
+      overrides.updatedAt ?? overrides.mergedAt ?? "2026-01-02T00:00:00Z",
     reviews: { nodes: overrides.reviews },
   };
 }
@@ -75,36 +77,65 @@ export function makePrWithReviewsNode(overrides: {
 export function makeIssueNode(overrides: {
   number: number;
   closedAt: string;
+  updatedAt?: string;
   authorLogin?: string;
   authorDatabaseId?: number;
   authorTypename?: string;
   repo?: string;
 }) {
   const repoFull = overrides.repo ?? "cogni-dao/cogni-template";
-  const [owner, repoName] = repoFull.split("/");
   return {
     number: overrides.number,
     title: `Issue #${overrides.number}`,
     closedAt: overrides.closedAt,
-    url: `https://github.com/${owner}/${repoName}/issues/${overrides.number}`,
+    updatedAt: overrides.updatedAt ?? overrides.closedAt,
+    url: `https://github.com/${repoFull}/issues/${overrides.number}`,
     author: {
       __typename: overrides.authorTypename ?? "User",
       login: overrides.authorLogin ?? "issueauthor",
       databaseId: overrides.authorDatabaseId ?? 11111,
     },
-    repository: { nameWithOwner: repoFull },
   };
 }
 
-export function wrapSearchResponse<T>(
+/**
+ * Wraps nodes in repo-scoped connection response shape.
+ * @param connectionKey - "pullRequests" or "issues"
+ */
+export function wrapRepoResponse<T>(
+  connectionKey: "pullRequests" | "issues",
   nodes: T[],
   hasNextPage = false,
   endCursor: string | null = null
 ) {
   return {
-    search: {
-      pageInfo: { hasNextPage, endCursor },
-      nodes,
+    repository: {
+      [connectionKey]: {
+        pageInfo: { hasNextPage, endCursor },
+        nodes,
+      },
     },
   };
+}
+
+/**
+ * Convenience: wrap PR/review nodes in pullRequests connection.
+ */
+export function wrapPrResponse<T>(
+  nodes: T[],
+  hasNextPage = false,
+  endCursor: string | null = null
+) {
+  return wrapRepoResponse("pullRequests", nodes, hasNextPage, endCursor);
+}
+
+/**
+ * Convenience: wrap issue nodes in issues connection.
+ */
+export function wrapIssueResponse<T>(
+  nodes: T[],
+  hasNextPage = false,
+  endCursor: string | null = null
+) {
+  return wrapRepoResponse("issues", nodes, hasNextPage, endCursor);
 }

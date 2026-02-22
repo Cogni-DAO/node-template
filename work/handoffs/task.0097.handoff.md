@@ -6,61 +6,67 @@ status: active
 created: 2026-02-21
 updated: 2026-02-22
 branch: worktree-ingestion-core-github-adapter
-last_commit: 0810ca17
+last_commit: 986c8076
 ---
 
 # Handoff: GitHub + Discord Source Adapters (task.0097)
 
 ## Context
 
-- Part of [proj.transparent-credit-payouts](../projects/proj.transparent-credit-payouts.md) — epoch-based activity-to-payout pipeline
-- Implements the `SourceAdapter` port and GitHub adapter for automated weekly activity collection
-- `@cogni/ingestion-core` is a new pure package (types + helpers); adapter lives in `services/scheduler-worker/`
-- Blocked by task.0094 (ledger DB schema + store) — now merged into this worktree
-- Discord adapter is remaining work (same `SourceAdapter` interface)
+Epoch-based payout pipeline needs automated activity collection from GitHub (and later Discord). The `SourceAdapter` port + `GitHubSourceAdapter` were built, then validated with a new **external integration test tier** that hits real GitHub API against `Cogni-DAO/test-repo`.
+
+The external tests caught two real bugs — both now fixed in working tree (uncommitted):
+
+1. `@octokit/graphql` reserves `query` as variable name — renamed to `searchQuery`
+2. **GitHub Search API (`search()`) is incomplete** — only returned 3/7 merged PRs. Rewrote all 3 GraphQL queries to use authoritative repo-scoped connections (`repository.pullRequests`, `repository.issues`)
 
 ## Current State
 
-- **Done:** `@cogni/ingestion-core` package — `ActivityEvent`, `StreamDefinition`, `StreamCursor`, `CollectParams`, `CollectResult` types, `SourceAdapter` port, `buildEventId()`, `canonicalJson()`, `hashCanonicalPayload()` helpers
-- **Done:** `GitHubSourceAdapter` — 3 streams (merged PRs, submitted reviews, closed issues) via GraphQL, deterministic IDs, SHA-256 hashing, bot filtering, pagination, rate limit handling
-- **Done:** 35 tests passing (13 helper + 22 adapter), all packages build, worktree healthy
-- **Done:** Port re-exports wired into `src/ports/`, scheduler-worker config updated with `GITHUB_TOKEN`/`GITHUB_REPOS`
-- **Done:** task.0094 (ledger port + Drizzle adapter) merged into this worktree
-- **Not done:** Discord adapter (`services/scheduler-worker/src/adapters/ingestion/discord.ts`)
-- **Not done:** Adapter registry/factory for workflow iteration
+- **Done:** `@cogni/ingestion-core` package (types, port, helpers) — 13 tests
+- **Done:** `GitHubSourceAdapter` rewritten to use repo-scoped GraphQL (not search index) — 24 unit tests passing
+- **Done:** External test tier wired (`vitest.external.config.mts`, `pnpm test:external`, `tests/external/AGENTS.md`)
+- **Done:** External test file with 6 test cases (streams, PRs, issues, reviews, determinism, ledger round-trip)
+- **Done:** Test data in `Cogni-DAO/test-repo`: Issue #51 (closed), PR #52 (merged, reviewed by Cogni-1729)
+- **Done:** Lockfile fix for `@cogni/ingestion-core` workspace symlink
+- **Uncommitted:** All adapter rewrites + external test infrastructure. Need `pnpm check`, then commit.
+- **Not done:** `pnpm test:external` not yet run after the search→repo-scoped rewrite
+- **Not done:** Discord adapter, adapter registry/factory
 
 ## Decisions Made
 
-- Types + port in `@cogni/ingestion-core` package, adapters in `services/scheduler-worker/` (ADAPTERS_NOT_IN_CORE) — per [epoch-ledger spec](../../docs/spec/epoch-ledger.md)
-- `platformUserId` = GitHub numeric `databaseId` (stable), not `login` (mutable)
-- Bot/Mannequin actors skipped (no `databaseId` on non-User actors)
-- Payload hash uses `canonicalJson()` (sorted keys) → SHA-256 via Web Crypto — no external deps
-- Logger uses minimal `LoggerLike` interface — no hard pino dependency in adapter
-- Review collection searches PRs merged in window, then filters reviews by `submittedAt`
+- Replaced `search()` GraphQL with `repository.pullRequests(states: MERGED, orderBy: UPDATED_AT DESC)` and `repository.issues(states: CLOSED, orderBy: UPDATED_AT DESC)` — authoritative connections, not best-effort search index
+- Client-side time-window filtering (`mergedAt`/`closedAt`/`submittedAt` > since && <= until)
+- Early-stop optimization: stop paging when `updatedAt < since`
+- Exclusive lower bound on cursor (`eventTime > since`) to avoid duplicates
+- Adapter version bumped to `0.2.0` for the query rewrite
+- External tests skip gracefully if `GITHUB_TOKEN`/`GH_TOKEN` not set
+- External tests reuse testcontainers-postgres globalSetup for ledger round-trip
 
 ## Next Actions
 
-- [ ] Implement Discord adapter using `discord.js` (same `SourceAdapter` interface)
-- [ ] Add adapter registry/factory for `CollectEpochWorkflow` to iterate registered adapters
-- [ ] Wire into `CollectEpochWorkflow` Temporal workflow (task.0095) — calls `adapter.collect()`, inserts via `ActivityLedgerStore`
-- [ ] Consider per-stream cursors (current: single cursor across all streams in `collect()`)
-- [ ] Run `pnpm check` — may need minor lint/format fixes
+- [ ] Run `pnpm test:external` with `GITHUB_TOKEN=$(gh auth token)` — verify all 6 external tests pass after rewrite
+- [ ] Run `pnpm check` — verify lint/typecheck/format clean
+- [ ] Commit all uncommitted changes (adapter rewrite, external test tier, fixture updates)
+- [ ] Implement Discord adapter (`services/scheduler-worker/src/adapters/ingestion/discord.ts`)
+- [ ] Add adapter registry/factory for workflow iteration
+- [ ] Wire into `CollectEpochWorkflow` (task.0095)
 
 ## Risks / Gotchas
 
-- **Single cursor across streams:** `collect()` returns one `nextCursor` for all streams. If PR stream advances past reviews, reviews could be skipped. Consider per-stream cursor tracking in the workflow layer.
-- **Review search scope:** Reviews are found via PRs merged in the window. Reviews on unmerged PRs or PRs merged before the window are missed. May need `updated:` range instead.
-- **Worktree was corrupted** by another dev attempting deletion — restored via `git checkout HEAD -- .` and re-applied feature patch. All verified clean.
-- **`GITHUB_REPOS` config** is stored as raw string — caller must `split(",")` to get array.
+- **Review pagination cap:** `reviews(first: 100)` on each PR — PRs with 100+ reviews will silently drop extras
+- **Exclusive lower bound:** Uses `mergedAt > since` (not `>=`). If cursor value equals an event's mergedAt exactly, that event is excluded on re-collect. This is intentional to prevent duplicates.
+- **Single cursor across streams:** `collect()` returns one `nextCursor` for all streams. Per-stream cursors needed at workflow layer.
+- **`GITHUB_REPOS` config:** Stored as raw string in scheduler-worker config — caller must `split(",")` to get array
 
 ## Pointers
 
-| File / Resource                                              | Why it matters                                                           |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `packages/ingestion-core/src/`                               | Pure types (`model.ts`), port (`port.ts`), helpers (`helpers.ts`)        |
-| `services/scheduler-worker/src/adapters/ingestion/github.ts` | GitHub adapter — all GraphQL queries, normalization, rate limit handling |
-| `services/scheduler-worker/tests/github-adapter.test.ts`     | 22 adapter tests with fixture factories                                  |
-| `packages/ingestion-core/tests/helpers.test.ts`              | 13 helper tests (ID determinism, hashing)                                |
-| `src/ports/source-adapter.port.ts`                           | Type re-exports for app-layer consumers                                  |
-| `work/items/task.0097.ledger-source-adapters.md`             | Canonical work item with requirements + plan                             |
-| `docs/spec/epoch-ledger.md`                                  | Spec: schema, invariants, adapter interface contract                     |
+| File                                                                  | Why it matters                                                    |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `services/scheduler-worker/src/adapters/ingestion/github.ts`          | Adapter — repo-scoped GraphQL, normalization, early-stop          |
+| `services/scheduler-worker/tests/github-adapter.test.ts`              | 24 unit tests with mock fixtures                                  |
+| `services/scheduler-worker/tests/fixtures/github-graphql.fixtures.ts` | Mock response factories (`wrapPrResponse`, `wrapIssueResponse`)   |
+| `tests/external/ingestion/github-adapter.external.test.ts`            | 6 real-API tests against Cogni-DAO/test-repo                      |
+| `vitest.external.config.mts`                                          | External test runner config (testcontainers + generous timeouts)  |
+| `packages/ingestion-core/src/`                                        | Pure types (`model.ts`), port (`port.ts`), helpers (`helpers.ts`) |
+| `work/items/task.0097.ledger-source-adapters.md`                      | Canonical work item                                               |
+| `docs/spec/epoch-ledger.md`                                           | Spec: schema, invariants, adapter contract                        |

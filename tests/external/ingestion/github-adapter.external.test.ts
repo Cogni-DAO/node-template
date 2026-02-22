@@ -83,8 +83,8 @@ describeWithToken("GitHubSourceAdapter (external)", () => {
       window: WIDE_WINDOW,
     });
 
-    // test-repo has 7 merged PRs; some early ones may have null/bot authors and get filtered
-    expect(result.events.length).toBeGreaterThanOrEqual(3);
+    // test-repo has 7 merged PRs, all by real User authors — repo-scoped query returns all
+    expect(result.events.length).toBeGreaterThanOrEqual(7);
     expect(result.nextCursor).toBeDefined();
     expect(result.nextCursor.value).toBeTruthy();
 

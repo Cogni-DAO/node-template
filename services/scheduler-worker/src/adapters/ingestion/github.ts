@@ -8,7 +8,8 @@
  * Invariants:
  * - ACTIVITY_IDEMPOTENT: Deterministic event IDs from source data.
  * - PROVENANCE_REQUIRED: payloadHash (SHA-256), producer, version on every event.
- * - Cursor-based incremental sync — no full-window rescans.
+ * - Uses repo-scoped GraphQL connections (authoritative), NOT search() (best-effort index).
+ * - Client-side time-window filtering with updatedAt early-stop optimization.
  * - platformUserId = GitHub numeric databaseId (stable), not login (mutable).
  * - Bot authors skipped (no databaseId on Bot/Mannequin actors).
  * Side-effects: HTTP (GitHub GraphQL API)
@@ -77,12 +78,12 @@ interface PrNode {
   number: number;
   title: string;
   mergedAt: string;
+  updatedAt: string;
   url: string;
   author: GitHubActor | null;
   additions: number;
   deletions: number;
   changedFiles: number;
-  repository: { nameWithOwner: string };
 }
 
 interface ReviewNode {
@@ -95,7 +96,8 @@ interface ReviewNode {
 interface PrWithReviewsNode {
   number: number;
   url: string;
-  repository: { nameWithOwner: string };
+  mergedAt: string;
+  updatedAt: string;
   reviews: { nodes: ReviewNode[] };
 }
 
@@ -103,15 +105,15 @@ interface IssueNode {
   number: number;
   title: string;
   closedAt: string;
+  updatedAt: string;
   url: string;
   author: GitHubActor | null;
-  repository: { nameWithOwner: string };
 }
 
-interface SearchResponse<T> {
-  search: {
-    pageInfo: PageInfo;
-    nodes: T[];
+interface RepoConnectionResponse<T> {
+  repository: {
+    pullRequests?: { pageInfo: PageInfo; nodes: T[] };
+    issues?: { pageInfo: PageInfo; nodes: T[] };
   };
 }
 
@@ -130,24 +132,24 @@ const silentLogger: LoggerLike = {
 };
 
 // ---------------------------------------------------------------------------
-// GraphQL queries
+// GraphQL queries — repo-scoped connections (authoritative, not search index)
 // ---------------------------------------------------------------------------
 
 const MERGED_PRS_QUERY = /* GraphQL */ `
-  query CollectMergedPRs($query: String!, $cursor: String) {
-    search(query: $query, type: ISSUE, first: 100, after: $cursor) {
-      pageInfo { hasNextPage endCursor }
-      nodes {
-        ... on PullRequest {
+  query CollectMergedPRs($owner: String!, $name: String!, $cursor: String) {
+    repository(owner: $owner, name: $name) {
+      pullRequests(first: 100, after: $cursor, states: MERGED, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
           number
           title
           mergedAt
+          updatedAt
           url
           author { __typename login ... on User { databaseId } }
           additions
           deletions
           changedFiles
-          repository { nameWithOwner }
         }
       }
     }
@@ -155,15 +157,16 @@ const MERGED_PRS_QUERY = /* GraphQL */ `
 `;
 
 const REVIEWS_QUERY = /* GraphQL */ `
-  query CollectReviews($query: String!, $cursor: String) {
-    search(query: $query, type: ISSUE, first: 50, after: $cursor) {
-      pageInfo { hasNextPage endCursor }
-      nodes {
-        ... on PullRequest {
+  query CollectReviews($owner: String!, $name: String!, $cursor: String) {
+    repository(owner: $owner, name: $name) {
+      pullRequests(first: 100, after: $cursor, states: MERGED, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
           number
           url
-          repository { nameWithOwner }
-          reviews(first: 50) {
+          mergedAt
+          updatedAt
+          reviews(first: 100) {
             nodes {
               databaseId
               submittedAt
@@ -178,17 +181,17 @@ const REVIEWS_QUERY = /* GraphQL */ `
 `;
 
 const CLOSED_ISSUES_QUERY = /* GraphQL */ `
-  query CollectClosedIssues($query: String!, $cursor: String) {
-    search(query: $query, type: ISSUE, first: 100, after: $cursor) {
-      pageInfo { hasNextPage endCursor }
-      nodes {
-        ... on Issue {
+  query CollectClosedIssues($owner: String!, $name: String!, $cursor: String) {
+    repository(owner: $owner, name: $name) {
+      issues(first: 100, after: $cursor, states: CLOSED, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
           number
           title
           closedAt
+          updatedAt
           url
           author { __typename login ... on User { databaseId } }
-          repository { nameWithOwner }
         }
       }
     }
@@ -201,7 +204,7 @@ const CLOSED_ISSUES_QUERY = /* GraphQL */ `
 
 export class GitHubSourceAdapter implements SourceAdapter {
   readonly source = "github" as const;
-  readonly version = "0.1.0" as const;
+  readonly version = "0.2.0" as const;
 
   private readonly gql: typeof graphql;
   private readonly repos: readonly string[];
@@ -316,6 +319,8 @@ export class GitHubSourceAdapter implements SourceAdapter {
 
   // -------------------------------------------------------------------------
   // Private: Pull Requests (merged)
+  // Uses repository.pullRequests (authoritative) with client-side window filter.
+  // Ordered by UPDATED_AT DESC — early-stop when updatedAt < since.
   // -------------------------------------------------------------------------
 
   private async collectPullRequests(
@@ -327,25 +332,39 @@ export class GitHubSourceAdapter implements SourceAdapter {
   ): Promise<ActivityEvent[]> {
     const events: ActivityEvent[] = [];
     let pageCursor: string | null = null;
-    const searchQuery = `repo:${owner}/${repoName} is:pr is:merged merged:${since.toISOString()}..${until.toISOString()}`;
+    let reachedEarlyStop = false;
 
     do {
-      const response = await this.executeQuery<SearchResponse<PrNode>>(
+      const response = await this.executeQuery<RepoConnectionResponse<PrNode>>(
         MERGED_PRS_QUERY,
-        { query: searchQuery, cursor: pageCursor }
+        { owner, name: repoName, cursor: pageCursor }
       );
 
-      for (const pr of response.search.nodes) {
+      const connection = response.repository.pullRequests;
+      if (!connection) break;
+
+      for (const pr of connection.nodes) {
         if (events.length >= limit) break;
-        if (!pr.mergedAt) continue; // skip non-PR nodes from union
+
+        // Early-stop: ordered by updatedAt DESC, so once updatedAt < since
+        // no subsequent PRs can have mergedAt in our window
+        if (new Date(pr.updatedAt) < since) {
+          reachedEarlyStop = true;
+          break;
+        }
+
+        // Client-side time-window filter on mergedAt
+        const mergedAt = new Date(pr.mergedAt);
+        if (mergedAt <= since || mergedAt > until) continue;
 
         const event = await this.normalizePr(owner, repoName, pr);
         if (event) events.push(event);
       }
 
-      pageCursor = response.search.pageInfo.hasNextPage
-        ? response.search.pageInfo.endCursor
-        : null;
+      pageCursor =
+        !reachedEarlyStop && connection.pageInfo.hasNextPage
+          ? connection.pageInfo.endCursor
+          : null;
     } while (pageCursor && events.length < limit);
 
     return events;
@@ -397,6 +416,8 @@ export class GitHubSourceAdapter implements SourceAdapter {
 
   // -------------------------------------------------------------------------
   // Private: Reviews
+  // Pages merged PRs by updatedAt DESC, then filters reviews by submittedAt.
+  // Early-stop when updatedAt < since.
   // -------------------------------------------------------------------------
 
   private async collectReviews(
@@ -408,24 +429,33 @@ export class GitHubSourceAdapter implements SourceAdapter {
   ): Promise<ActivityEvent[]> {
     const events: ActivityEvent[] = [];
     let pageCursor: string | null = null;
-    // Fetch PRs that were updated in the window — reviews may exist on recently active PRs
-    const searchQuery = `repo:${owner}/${repoName} is:pr is:merged merged:${since.toISOString()}..${until.toISOString()}`;
+    let reachedEarlyStop = false;
 
     do {
       const response = await this.executeQuery<
-        SearchResponse<PrWithReviewsNode>
-      >(REVIEWS_QUERY, { query: searchQuery, cursor: pageCursor });
+        RepoConnectionResponse<PrWithReviewsNode>
+      >(REVIEWS_QUERY, { owner, name: repoName, cursor: pageCursor });
 
-      for (const pr of response.search.nodes) {
+      const connection = response.repository.pullRequests;
+      if (!connection) break;
+
+      for (const pr of connection.nodes) {
         if (events.length >= limit) break;
-        if (!pr.reviews) continue; // skip non-PR nodes
+
+        // Early-stop: no subsequent PRs can have reviews in our window
+        if (new Date(pr.updatedAt) < since) {
+          reachedEarlyStop = true;
+          break;
+        }
+
+        if (!pr.reviews) continue;
 
         for (const review of pr.reviews.nodes) {
           if (events.length >= limit) break;
 
-          // Filter reviews to the time window
+          // Client-side time-window filter on submittedAt
           const submittedAt = new Date(review.submittedAt);
-          if (submittedAt < since || submittedAt > until) continue;
+          if (submittedAt <= since || submittedAt > until) continue;
 
           const event = await this.normalizeReview(
             owner,
@@ -437,9 +467,10 @@ export class GitHubSourceAdapter implements SourceAdapter {
         }
       }
 
-      pageCursor = response.search.pageInfo.hasNextPage
-        ? response.search.pageInfo.endCursor
-        : null;
+      pageCursor =
+        !reachedEarlyStop && connection.pageInfo.hasNextPage
+          ? connection.pageInfo.endCursor
+          : null;
     } while (pageCursor && events.length < limit);
 
     return events;
@@ -497,6 +528,8 @@ export class GitHubSourceAdapter implements SourceAdapter {
 
   // -------------------------------------------------------------------------
   // Private: Issues (closed)
+  // Uses repository.issues (authoritative) with client-side window filter.
+  // Ordered by UPDATED_AT DESC — early-stop when updatedAt < since.
   // -------------------------------------------------------------------------
 
   private async collectIssues(
@@ -508,25 +541,37 @@ export class GitHubSourceAdapter implements SourceAdapter {
   ): Promise<ActivityEvent[]> {
     const events: ActivityEvent[] = [];
     let pageCursor: string | null = null;
-    const searchQuery = `repo:${owner}/${repoName} is:issue is:closed closed:${since.toISOString()}..${until.toISOString()}`;
+    let reachedEarlyStop = false;
 
     do {
-      const response = await this.executeQuery<SearchResponse<IssueNode>>(
-        CLOSED_ISSUES_QUERY,
-        { query: searchQuery, cursor: pageCursor }
-      );
+      const response = await this.executeQuery<
+        RepoConnectionResponse<IssueNode>
+      >(CLOSED_ISSUES_QUERY, { owner, name: repoName, cursor: pageCursor });
 
-      for (const issue of response.search.nodes) {
+      const connection = response.repository.issues;
+      if (!connection) break;
+
+      for (const issue of connection.nodes) {
         if (events.length >= limit) break;
-        if (!issue.closedAt) continue; // skip non-Issue nodes
+
+        // Early-stop: no subsequent issues can have closedAt in our window
+        if (new Date(issue.updatedAt) < since) {
+          reachedEarlyStop = true;
+          break;
+        }
+
+        // Client-side time-window filter on closedAt
+        const closedAt = new Date(issue.closedAt);
+        if (closedAt <= since || closedAt > until) continue;
 
         const event = await this.normalizeIssue(owner, repoName, issue);
         if (event) events.push(event);
       }
 
-      pageCursor = response.search.pageInfo.hasNextPage
-        ? response.search.pageInfo.endCursor
-        : null;
+      pageCursor =
+        !reachedEarlyStop && connection.pageInfo.hasNextPage
+          ? connection.pageInfo.endCursor
+          : null;
     } while (pageCursor && events.length < limit);
 
     return events;

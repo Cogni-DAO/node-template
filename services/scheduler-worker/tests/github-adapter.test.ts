@@ -11,7 +11,8 @@ import {
   makePrNode,
   makePrWithReviewsNode,
   makeReviewNode,
-  wrapSearchResponse,
+  wrapIssueResponse,
+  wrapPrResponse,
 } from "./fixtures/github-graphql.fixtures";
 
 // ---------------------------------------------------------------------------
@@ -89,7 +90,7 @@ describe("GitHubSourceAdapter", () => {
         number: 42,
         mergedAt: "2026-01-05T12:00:00Z",
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
@@ -106,11 +107,11 @@ describe("GitHubSourceAdapter", () => {
         mergedAt: "2026-01-05T12:00:00Z",
         authorDatabaseId: 12345,
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
       const adapter1 = makeAdapter();
       const result1 = await adapter1.collect(makeCollectParams());
 
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
       const adapter2 = makeAdapter();
       const result2 = await adapter2.collect(makeCollectParams());
 
@@ -127,7 +128,7 @@ describe("GitHubSourceAdapter", () => {
         authorLogin: "someuser",
         authorDatabaseId: 99999,
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
@@ -147,7 +148,7 @@ describe("GitHubSourceAdapter", () => {
         number: 11,
         mergedAt: "2026-01-04T00:00:00Z",
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([botPr, userPr]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([botPr, userPr]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
@@ -163,13 +164,64 @@ describe("GitHubSourceAdapter", () => {
         number: 1,
         mergedAt: "2026-01-02T00:00:00Z",
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
 
       expect(result.events[0]?.eventType).toBe("pr_merged");
       expect(result.events[0]?.source).toBe("github");
+    });
+
+    it("filters PRs outside the time window (client-side)", async () => {
+      const inWindow = makePrNode({
+        number: 1,
+        mergedAt: "2026-01-05T00:00:00Z",
+        updatedAt: "2026-01-05T00:00:00Z",
+      });
+      const beforeWindow = makePrNode({
+        number: 2,
+        mergedAt: "2025-12-15T00:00:00Z",
+        updatedAt: "2026-01-02T00:00:00Z", // updated in window, but merged before
+      });
+      const afterWindow = makePrNode({
+        number: 3,
+        mergedAt: "2026-01-10T00:00:00Z",
+        updatedAt: "2026-01-10T00:00:00Z",
+      });
+      mockGraphqlFn.mockResolvedValueOnce(
+        wrapPrResponse([afterWindow, inWindow, beforeWindow])
+      );
+
+      const adapter = makeAdapter();
+      const result = await adapter.collect(makeCollectParams());
+
+      expect(result.events).toHaveLength(1);
+      expect(result.events[0]?.id).toContain(":1");
+    });
+
+    it("early-stops when updatedAt falls before since", async () => {
+      const recentPr = makePrNode({
+        number: 1,
+        mergedAt: "2026-01-05T00:00:00Z",
+        updatedAt: "2026-01-05T00:00:00Z",
+      });
+      const oldPr = makePrNode({
+        number: 2,
+        mergedAt: "2025-06-01T00:00:00Z",
+        updatedAt: "2025-06-01T00:00:00Z",
+      });
+      // Page 1: recent + old (old triggers early-stop)
+      mockGraphqlFn.mockResolvedValueOnce(
+        wrapPrResponse([recentPr, oldPr], true, "more-pages")
+      );
+
+      const adapter = makeAdapter();
+      const result = await adapter.collect(makeCollectParams());
+
+      expect(result.events).toHaveLength(1);
+      // Should NOT make a second call — early-stop triggered
+      expect(mockGraphqlFn).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -187,7 +239,7 @@ describe("GitHubSourceAdapter", () => {
         number: 3,
         mergedAt: "2026-01-03T00:00:00Z",
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr1, pr2, pr3]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr1, pr2, pr3]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
@@ -195,44 +247,42 @@ describe("GitHubSourceAdapter", () => {
       expect(result.nextCursor.value).toBe("2026-01-05T00:00:00.000Z");
     });
 
-    it("uses window.until when no events returned", async () => {
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([]));
+    it("uses window.since when no events returned", async () => {
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
 
       expect(result.events).toHaveLength(0);
-      // cursor stays at window.since (no events to advance it)
       expect(result.nextCursor.value).toBe(baseWindow.since.toISOString());
     });
 
-    it("resumes from cursor value when provided", async () => {
+    it("resumes from cursor value as exclusive lower bound", async () => {
       const pr = makePrNode({
         number: 5,
         mergedAt: "2026-01-06T00:00:00Z",
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr]));
+      // PR merged exactly at cursor time should be excluded (exclusive lower bound)
+      const prAtCursor = makePrNode({
+        number: 4,
+        mergedAt: "2026-01-04T00:00:00Z",
+      });
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr, prAtCursor]));
 
       const adapter = makeAdapter();
-      const cursorTime = "2026-01-04T00:00:00Z";
-      await adapter.collect(
+      const result = await adapter.collect(
         makeCollectParams({
           cursor: {
             streamId: "pull_requests",
-            value: cursorTime,
+            value: "2026-01-04T00:00:00Z",
             retrievedAt: new Date(),
           },
         })
       );
 
-      // The GraphQL query should use the cursor time (with millis), not window.since
-      const callArgs = mockGraphqlFn.mock.calls[0];
-      const queryStr = callArgs?.[1]?.query as string;
-      // Cursor time gets parsed to Date then .toISOString() → adds .000Z
-      expect(queryStr).toContain("2026-01-04T00:00:00.000Z");
-      expect(queryStr).not.toContain(
-        `${baseWindow.since.toISOString().split("T")[0]}T00:00:00.000Z..`
-      ); // not from window.since
+      // prAtCursor should be excluded (mergedAt <= since)
+      expect(result.events).toHaveLength(1);
+      expect(result.events[0]?.id).toContain(":5");
     });
   });
 
@@ -240,18 +290,18 @@ describe("GitHubSourceAdapter", () => {
     it("follows pagination when hasNextPage is true", async () => {
       const page1Pr = makePrNode({
         number: 1,
-        mergedAt: "2026-01-02T00:00:00Z",
+        mergedAt: "2026-01-05T00:00:00Z",
+        updatedAt: "2026-01-05T00:00:00Z",
       });
       const page2Pr = makePrNode({
         number: 2,
         mergedAt: "2026-01-03T00:00:00Z",
+        updatedAt: "2026-01-03T00:00:00Z",
       });
 
       mockGraphqlFn
-        .mockResolvedValueOnce(
-          wrapSearchResponse([page1Pr], true, "cursor-page-1")
-        )
-        .mockResolvedValueOnce(wrapSearchResponse([page2Pr], false, null));
+        .mockResolvedValueOnce(wrapPrResponse([page1Pr], true, "cursor-page-1"))
+        .mockResolvedValueOnce(wrapPrResponse([page2Pr], false, null));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(makeCollectParams());
@@ -272,7 +322,7 @@ describe("GitHubSourceAdapter", () => {
         })
       );
       mockGraphqlFn.mockResolvedValueOnce(
-        wrapSearchResponse(prs, true, "more-pages")
+        wrapPrResponse(prs, true, "more-pages")
       );
 
       const adapter = makeAdapter({ maxEventsPerCall: 3 });
@@ -292,9 +342,11 @@ describe("GitHubSourceAdapter", () => {
       });
       const prWithReviews = makePrWithReviewsNode({
         number: 42,
+        mergedAt: "2026-01-02T00:00:00Z",
+        updatedAt: "2026-01-03T10:00:00Z",
         reviews: [review],
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([prWithReviews]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([prWithReviews]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(
@@ -323,9 +375,10 @@ describe("GitHubSourceAdapter", () => {
       });
       const pr = makePrWithReviewsNode({
         number: 10,
+        updatedAt: "2026-02-01T00:00:00Z",
         reviews: [inWindow, beforeWindow, afterWindow],
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(
@@ -345,9 +398,10 @@ describe("GitHubSourceAdapter", () => {
       });
       const pr = makePrWithReviewsNode({
         number: 20,
+        updatedAt: "2026-01-03T00:00:00Z",
         reviews: [botReview],
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([pr]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(
@@ -364,7 +418,7 @@ describe("GitHubSourceAdapter", () => {
         number: 99,
         closedAt: "2026-01-04T15:00:00Z",
       });
-      mockGraphqlFn.mockResolvedValueOnce(wrapSearchResponse([issue]));
+      mockGraphqlFn.mockResolvedValueOnce(wrapIssueResponse([issue]));
 
       const adapter = makeAdapter();
       const result = await adapter.collect(
@@ -458,6 +512,7 @@ describe("GitHubSourceAdapter", () => {
       });
       const prWithReviews = makePrWithReviewsNode({
         number: 1,
+        updatedAt: "2026-01-03T00:00:00Z",
         reviews: [review],
       });
       const issue = makeIssueNode({
@@ -466,9 +521,9 @@ describe("GitHubSourceAdapter", () => {
       });
 
       mockGraphqlFn
-        .mockResolvedValueOnce(wrapSearchResponse([pr])) // PRs
-        .mockResolvedValueOnce(wrapSearchResponse([prWithReviews])) // Reviews
-        .mockResolvedValueOnce(wrapSearchResponse([issue])); // Issues
+        .mockResolvedValueOnce(wrapPrResponse([pr])) // PRs
+        .mockResolvedValueOnce(wrapPrResponse([prWithReviews])) // Reviews
+        .mockResolvedValueOnce(wrapIssueResponse([issue])); // Issues
 
       const adapter = makeAdapter();
       const result = await adapter.collect(
