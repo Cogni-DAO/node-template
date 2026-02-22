@@ -174,6 +174,15 @@ export type {
   SandboxRunSpec,
   SandboxVolumeMount,
 } from "./sandbox-runner.port";
+// Ingestion ports - re-exported from @cogni/ingestion-core package
+export type {
+  ActivityEvent,
+  CollectParams,
+  CollectResult,
+  SourceAdapter,
+  StreamCursor,
+  StreamDefinition,
+} from "./source-adapter.port";
 export {
   ThreadConflictError,
   type ThreadPersistencePort,

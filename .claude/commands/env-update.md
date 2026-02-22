@@ -9,6 +9,7 @@ Use this checklist to verify you haven't missed anything.
 ## 1. Validation & Types (The Source of Truth)
 
 - [ ] **`src/shared/env/server.ts`** (or `client.ts`): Add the variable to the Zod schema. This ensures type safety and runtime validation.
+- [ ] **`services/scheduler-worker/src/bootstrap/env.ts`**: If the variable is for the scheduler-worker (separate Zod schema from the app).
 
 ## 2. Local Development & Documentation
 
@@ -41,16 +42,18 @@ To get the variable from GitHub Secrets into the VM:
 - [ ] **`.github/workflows/deploy-production.yml`**: Map the secret/var to the `env` block of the `deploy` job.
 - [ ] **`.github/workflows/staging-preview.yml`**: Map the secret/var to the `env` block of the `deploy` job.
 
-### B. Deployment Script (`deploy.sh`)
+### B. Deployment Script (`deploy.sh`) — 3 places!
+
+**CRITICAL**: Missing any one of these causes silent empty values in production.
 
 - [ ] **`platform/ci/scripts/deploy.sh`**:
-  1.  Add it to `REQUIRED_SECRETS` (if it's a secret) or `REQUIRED_ENV_VARS` (if it's a config).
-  2.  Add it to the `cat > /opt/cogni-template-runtime/.env << ENV_EOF` block (Step 1).
-  3.  Add it to the `ssh ... bash /tmp/deploy-remote.sh` command (at the bottom of the file) to pass it to the remote script.
+  1.  Add it to `REQUIRED_SECRETS` (if it's a secret), `OPTIONAL_SECRETS` (if optional), or `REQUIRED_ENV_VARS` (if it's a config).
+  2.  Add it to the `cat > "$RUNTIME_ENV"` heredoc (required vars) or via `append_env_if_set` (optional vars) in the Step 1 block.
+  3.  Add it to the `ssh ... bash /tmp/deploy-remote.sh` command at the **bottom** of the file to pass it into the remote script's environment. Use `'${VAR:-}'` quoting for optional vars.
 
-## 6. Setup Documentation
+## 6. Setup Documentation (CRITICAL)
 
-- [ ] **`scripts/setup/SETUP_DESIGN.md`**: Add the variable to the relevant secrets list so future fresh-clone setups know to provision it (e.g. under `production` or `staging` GitHub secrets).
+- [ ] **`scripts/setup/SETUP_DESIGN.md`**: Add the variable to the relevant secrets list so future fresh-clone setups know to provision it. Without this, new environments will silently miss the variable.
 
 ## 7. Special Cases: Isolated Services (e.g., SourceCred)
 
@@ -62,6 +65,6 @@ If the variable is for a standalone service running in its own Docker Compose pr
   - _Example_: `docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f ...`
   - _Reason_: Isolated services often run from a shared script context and won't automatically find their `.env` file unless explicitly told.
 
-## See Also
+## Reference
 
-- [scripts/setup/SETUP_DESIGN.md](file:///Users/derek/dev/cogni-template/scripts/setup/SETUP_DESIGN.md): Guidance on scripting setup, automated + manual env steps required.
+- [scripts/setup/SETUP_DESIGN.md](scripts/setup/SETUP_DESIGN.md): Full setup design including all secret provisioning lists.

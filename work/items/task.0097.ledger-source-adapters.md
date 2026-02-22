@@ -2,24 +2,24 @@
 id: task.0097
 type: task
 title: "GitHub + Discord source adapters for epoch activity collection"
-status: needs_design
+status: needs_implement
 priority: 1
 rank: 3
 estimate: 3
 summary: "Implement SourceAdapter port interface and two adapters (GitHub, Discord) that collect contribution activity and normalize to ActivityEvent. Uses @octokit/graphql and discord.js."
 outcome: "GitHub PRs/reviews and Discord messages collected automatically during epoch collection. Events have deterministic IDs, provenance fields, and platform identity for resolution."
-spec_refs: epoch-ledger-spec
+spec_refs: [epoch-ledger-spec, vcs-integration]
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch: feat/ledger-v0
+branch: worktree-ingestion-core-github-adapter
 pr:
 reviewer:
 revision: 0
 blocked_by: task.0089, task.0094
 deploy_verified: false
 created: 2026-02-21
-updated: 2026-02-21
+updated: 2026-02-22
 labels: [governance, ledger, ingestion]
 external_refs:
 ---
@@ -71,10 +71,15 @@ external_refs:
 
 ## Plan
 
-- [ ] Define `SourceAdapter`, `ActivityEvent`, `StreamDefinition`, `StreamCursor` types in port file
-- [ ] Implement GitHub adapter with GraphQL queries for PRs, reviews, issues
+- [x] Define `SourceAdapter`, `ActivityEvent`, `StreamDefinition`, `StreamCursor` types in `@cogni/ingestion-core` package
+- [x] Wire port re-exports into `src/ports/source-adapter.port.ts`
+- [x] Implement GitHub adapter with GraphQL queries for PRs, reviews, issues
+- [x] Add unit tests: 13 helper tests + 22 adapter tests (deterministic IDs, hashing, pagination, rate limits, bot filtering)
+- [ ] Create Review GitHub App (contents:read, PRs:read, issues:read), install on Cogni-DAO/test-repo
+- [ ] Add `InstallationTokenProvider` in scheduler-worker (sign JWT → POST /installations/{id}/access_tokens → cache until expiry)
+- [ ] Wire provider as default auth; gate PAT behind `GITHUB_AUTH=pat` env flag
+- [ ] Add env vars: `REVIEW_APP_ID`, `REVIEW_APP_PRIVATE_KEY`, `REVIEW_INSTALLATION_ID`
 - [ ] Implement Discord adapter with message fetching
-- [ ] Add unit tests: deterministic ID generation, provenance fields, cursor advancement
 - [ ] Add adapter registry/factory for workflow to iterate registered adapters
 
 ## Validation
@@ -98,7 +103,7 @@ pnpm test tests/unit/adapters/ingestion/
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0097.handoff.md)
 
 ## Attribution
 

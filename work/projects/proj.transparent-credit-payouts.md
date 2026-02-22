@@ -46,15 +46,15 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 | Spec: epoch-ledger.md (revised)                              | Done        | 1   | —               |
 | DB schema (foundation tables) + core domain (rules, errors)  | Done        | 3   | task.0093       |
 | Identity bindings (user_bindings + identity_events)          | Not Started | 2   | task.0089       |
-| Ledger port + Drizzle adapter + schema migration + container | In Review   | 2   | task.0094       |
-| GitHub + Discord source adapters                             | Not Started | 3   | task.0097       |
+| Ledger port + Drizzle adapter + schema migration + container | Done        | 2   | task.0094       |
+| GitHub + Discord source adapters                             | In Progress | 3   | task.0097       |
 | Temporal workflows (collect + finalize)                      | Not Started | 2   | task.0095       |
 | Zod contracts + API routes + stack tests                     | Not Started | 2   | task.0096       |
 
 **V0 user story:**
 
-1. Temporal cron opens a weekly epoch (`period_start` → `period_end`) with weight config
-2. `CollectEpochWorkflow` runs GitHub + Discord adapters for the time window
+1. Temporal cron opens a weekly epoch for `(node_id, scope_id)` pair with weight config
+2. `CollectEpochWorkflow` runs GitHub + Discord adapters for the time window, scoped to `scope_id`
 3. Adapters normalize activity → `activity_events` (idempotent by deterministic ID)
 4. System resolves platform identities → `user_id` via `user_bindings` (best-effort)
 5. Weight policy computes `proposed_units` per contributor → `epoch_allocations`
@@ -167,6 +167,10 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 ## PR / Links
 
 - Handoff: [handoff](../handoffs/proj.transparent-credit-payouts.handoff.md)
+
+### Known issues
+
+- **GitHub adapter only captures merged PRs and closed issues.** Reviews are only searched on merged PRs. This means: (1) opened-but-unmerged PRs are invisible, (2) reviews on open PRs are missed, (3) newly opened issues aren't tracked. The adapter should use broader queries (`created:`, `updated:`) and emit lifecycle event types (`pr_opened`/`pr_merged`, `issue_opened`/`issue_closed`) to capture all contribution activity. Low risk for V0 since epochs are weekly and most PRs merge within a week, but will under-count reviewers and issue authors.
 
 ### What V0 explicitly defers
 

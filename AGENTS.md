@@ -116,6 +116,7 @@ pnpm check                    # lint + type + format validation (fast, no infra)
 pnpm check:full               # CI-parity gate: full docker build, stack launch + all test suites
 pnpm check:full:fast          # Same as check:full but skip Docker rebuild
 pnpm test                     # run unit tests (no server required)
+pnpm test:external            # external API tests (requires GITHUB_TOKEN, not in CI)
 pnpm test:ci                  # run tests with test coverage statistics
 pnpm test:component           # Component tests (isolated testcontainers, no server)
 pnpm test:contract            # Contract tests (in-memory, no HTTP)

@@ -1,5 +1,5 @@
 ---
-id: decentralized-identity
+id: decentralized-user-identity
 type: spec
 title: User Identity + Account Bindings
 status: active
