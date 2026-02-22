@@ -61,6 +61,7 @@ function makeMockStore(
     getStatementForEpoch: vi.fn(),
     insertStatementSignature: vi.fn(),
     getSignaturesForStatement: vi.fn(),
+    insertCurationDoNothing: vi.fn(),
     resolveIdentities: vi.fn().mockResolvedValue(new Map()),
     getUncuratedEvents: vi.fn().mockResolvedValue([]),
     updateCurationUserId: vi.fn(),
@@ -680,10 +681,10 @@ describe("curateAndResolve", () => {
     expect(result.unresolved).toBe(1);
 
     // Should have called upsertCuration for each new event
-    expect(store.upsertCuration).toHaveBeenCalledTimes(2);
+    expect(store.insertCurationDoNothing).toHaveBeenCalledTimes(2);
 
     // First call: resolved
-    expect(vi.mocked(store.upsertCuration).mock.calls[0][0]).toEqual([
+    expect(vi.mocked(store.insertCurationDoNothing).mock.calls[0][0]).toEqual([
       expect.objectContaining({
         nodeId: NODE_ID,
         epochId: 1n,
@@ -694,7 +695,7 @@ describe("curateAndResolve", () => {
     ]);
 
     // Second call: unresolved (userId null)
-    expect(vi.mocked(store.upsertCuration).mock.calls[1][0]).toEqual([
+    expect(vi.mocked(store.insertCurationDoNothing).mock.calls[1][0]).toEqual([
       expect.objectContaining({
         eventId: "ev2",
         userId: null,
@@ -727,7 +728,7 @@ describe("curateAndResolve", () => {
     expect(result.resolved).toBe(1);
 
     // Should update, not insert
-    expect(store.upsertCuration).not.toHaveBeenCalled();
+    expect(store.insertCurationDoNothing).not.toHaveBeenCalled();
     expect(store.updateCurationUserId).toHaveBeenCalledWith(
       1n,
       "ev1",
@@ -756,7 +757,7 @@ describe("curateAndResolve", () => {
     expect(result.unresolved).toBe(1);
 
     // Neither insert nor update — existing row stays as-is
-    expect(store.upsertCuration).not.toHaveBeenCalled();
+    expect(store.insertCurationDoNothing).not.toHaveBeenCalled();
     expect(store.updateCurationUserId).not.toHaveBeenCalled();
   });
 
@@ -791,7 +792,7 @@ describe("curateAndResolve", () => {
       "user-aaa"
     );
     // upsertCuration (which overwrites all fields) is NOT called for existing rows
-    expect(store.upsertCuration).not.toHaveBeenCalled();
+    expect(store.insertCurationDoNothing).not.toHaveBeenCalled();
   });
 
   it("handles mixed new and existing unresolved events", async () => {
@@ -824,7 +825,7 @@ describe("curateAndResolve", () => {
     expect(result.unresolved).toBe(0);
 
     // New event → upsertCuration
-    expect(store.upsertCuration).toHaveBeenCalledTimes(1);
+    expect(store.insertCurationDoNothing).toHaveBeenCalledTimes(1);
     // Existing unresolved → updateCurationUserId
     expect(store.updateCurationUserId).toHaveBeenCalledWith(
       1n,

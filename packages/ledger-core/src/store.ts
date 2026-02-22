@@ -199,6 +199,18 @@ export interface InsertSignatureParams {
   readonly signedAt: Date;
 }
 
+/**
+ * Narrowed params for auto-population INSERT (CURATION_AUTO_POPULATE).
+ * Intentionally excludes weightOverrideMilli and note to prevent accidental overwrites.
+ */
+export interface InsertCurationAutoParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly eventId: string;
+  readonly userId: string | null;
+  readonly included: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Identity resolution types
 // ---------------------------------------------------------------------------
@@ -247,6 +259,12 @@ export interface ActivityLedgerStore {
 
   // Curation (mutable while epoch open)
   upsertCuration(params: UpsertCurationParams[]): Promise<void>;
+  /**
+   * Insert curation rows with ON CONFLICT DO NOTHING semantics.
+   * Used by auto-population (CURATION_AUTO_POPULATE) to avoid overwriting
+   * admin-set fields if a row is created between getUncuratedEvents and insert.
+   */
+  insertCurationDoNothing(params: InsertCurationAutoParams[]): Promise<void>;
   getCurationForEpoch(epochId: bigint): Promise<LedgerCuration[]>;
   getUnresolvedCuration(epochId: bigint): Promise<LedgerCuration[]>;
 

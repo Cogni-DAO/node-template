@@ -434,7 +434,8 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
 
       if (!hasExistingCuration) {
         // Phase 1: INSERT new curation row (ON CONFLICT DO NOTHING for race safety)
-        await ledgerStore.upsertCuration([
+        // Uses insertCurationDoNothing — NOT upsertCuration which overwrites all fields
+        await ledgerStore.insertCurationDoNothing([
           {
             nodeId,
             epochId,

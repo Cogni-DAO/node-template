@@ -30,6 +30,7 @@ import type {
   ActivityLedgerStore,
   InsertActivityEventParams,
   InsertAllocationParams,
+  InsertCurationAutoParams,
   InsertPayoutStatementParams,
   InsertPoolComponentParams,
   InsertSignatureParams,
@@ -360,6 +361,26 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
             note: p.note ?? null,
             updatedAt: new Date(),
           },
+        });
+    }
+  }
+
+  async insertCurationDoNothing(
+    params: InsertCurationAutoParams[]
+  ): Promise<void> {
+    if (params.length === 0) return;
+    for (const p of params) {
+      await this.db
+        .insert(activityCuration)
+        .values({
+          nodeId: p.nodeId,
+          epochId: p.epochId,
+          eventId: p.eventId,
+          userId: p.userId ?? null,
+          included: p.included,
+        })
+        .onConflictDoNothing({
+          target: [activityCuration.epochId, activityCuration.eventId],
         });
     }
   }

@@ -51,6 +51,7 @@ export type {
   ActivityLedgerStore,
   InsertActivityEventParams,
   InsertAllocationParams,
+  InsertCurationAutoParams,
   InsertPayoutStatementParams,
   InsertPoolComponentParams,
   InsertSignatureParams,
