@@ -16,7 +16,7 @@ branch:
 pr:
 reviewer:
 revision: 1
-blocked_by: task.0093
+blocked_by: task.0093, task.0103
 deploy_verified: false
 created: 2026-02-22
 updated: 2026-02-22
@@ -61,6 +61,7 @@ Epochs gain the `open → review → finalized` lifecycle required by EPOCH_THRE
 - [ ] INGESTION_CLOSED_ON_REVIEW: App-level enforcement — CollectEpochWorkflow exits when `status != 'open'`. No DB trigger on `activity_events`. (spec: epoch-ledger)
 - [ ] APPROVERS_PER_SCOPE: `ledger.approvers` in repo-spec as array of EVM addresses. `getLedgerApprovers()` accessor cached same as `getNodeId()`. (spec: epoch-ledger)
 - [ ] SIGNATURE_SCOPE_BOUND: `buildCanonicalMessage()` includes `node_id + scope_id + epoch_id + allocation_set_hash + pool_total_credits`. (spec: epoch-ledger)
+- [ ] SCOPE_GATED_QUERIES: New adapter methods (`closeIngestion`, `finalizeEpoch`) enforce `AND scope_id = this.scopeId` in WHERE clause. No cross-scope epoch transitions possible. (dep: task.0103)
 - [ ] SIMPLE_SOLUTION: Reuses existing store methods, DB trigger function, and repo-spec patterns.
 - [ ] ARCHITECTURE_ALIGNMENT: Pure function in ledger-core. Route uses existing auth wrappers. Config follows repo-spec pattern. (spec: architecture)
 
