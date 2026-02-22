@@ -67,12 +67,13 @@ export const GET = wrapRouteHandlerWithLogging<{
     const curations = await store.getCurationForEpoch(epochId);
     const curationMap = new Map(curations.map((c) => [c.eventId, c]));
 
-    const enriched = events.map((e) => ({
-      ...toActivityEventDto(e),
-      curation: curationMap.has(e.id)
-        ? toCurationDto(curationMap.get(e.id)!)
-        : null,
-    }));
+    const enriched = events.map((e) => {
+      const curation = curationMap.get(e.id);
+      return {
+        ...toActivityEventDto(e),
+        curation: curation ? toCurationDto(curation) : null,
+      };
+    });
 
     const page = enriched.slice(offset, offset + limit);
 

@@ -10,7 +10,7 @@ read_when: Working on credit payouts, activity ingestion, epoch lifecycle, weigh
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-02-20
-verified: 2026-02-22
+verified: 2026-02-23
 tags: [governance, transparency, payments, ledger]
 ---
 
@@ -127,7 +127,7 @@ Admin capability (wallet must be in scope's `approvers[]`) required for:
 - Recording pool components
 - Signing payout statements (EIP-191, required before finalize)
 
-Read routes are public — anyone can view epochs, activity, allocations, and payout statements.
+Public read routes expose closed-epoch data only (epochs list, allocations, statements). Activity events (PII fields: platformUserId, platformLogin, artifactUrl) require SIWE authentication. Open/current epoch data requires SIWE authentication.
 
 ### Activity Ingestion
 
@@ -447,15 +447,21 @@ Adapters live in `services/scheduler-worker/src/adapters/ingestion/` (ADAPTERS_N
 | POST   | `/api/v1/ledger/epochs/:id/sign`            | Submit EIP-191 signature for payout statement (epoch must be `review`)   |
 | POST   | `/api/v1/ledger/epochs/:id/finalize`        | Finalize epoch → compute payouts (requires signature + base_issuance)    |
 
-### Read Routes (public)
+### Public Read Routes (no auth, closed-epoch data only)
 
-| Method | Route                                   | Purpose                                      |
-| ------ | --------------------------------------- | -------------------------------------------- |
-| GET    | `/api/v1/ledger/epochs`                 | List all epochs                              |
-| GET    | `/api/v1/ledger/epochs/:id/activity`    | Activity events for an epoch                 |
-| GET    | `/api/v1/ledger/epochs/:id/allocations` | Proposed + final allocations                 |
-| GET    | `/api/v1/ledger/epochs/:id/statement`   | Payout statement for a finalized epoch       |
-| GET    | `/api/v1/ledger/verify/epoch/:id`       | Recompute payouts from stored data + compare |
+| Method | Route                                          | Purpose                                     |
+| ------ | ---------------------------------------------- | ------------------------------------------- |
+| GET    | `/api/v1/public/ledger/epochs`                 | List closed epochs (paginated)              |
+| GET    | `/api/v1/public/ledger/epochs/:id/allocations` | Allocations for a closed epoch              |
+| GET    | `/api/v1/public/ledger/epochs/:id/statement`   | Payout statement (null if none, always 200) |
+
+### Authenticated Read Routes (SIWE session required)
+
+| Method | Route                                | Purpose                                      |
+| ------ | ------------------------------------ | -------------------------------------------- |
+| GET    | `/api/v1/ledger/epochs`              | List all epochs including open               |
+| GET    | `/api/v1/ledger/epochs/:id/activity` | Activity events with PII + curation join     |
+| GET    | `/api/v1/ledger/verify/epoch/:id`    | Recompute payouts from stored data + compare |
 
 ## Temporal Workflows
 

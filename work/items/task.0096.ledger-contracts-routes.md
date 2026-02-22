@@ -2,7 +2,7 @@
 id: task.0096
 type: task
 title: "Ledger Zod contracts + API routes (2 write, 4 read) + stack tests"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 5
 estimate: 2

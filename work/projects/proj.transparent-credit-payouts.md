@@ -52,7 +52,7 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 | Identity resolution + curation auto-population               | In Review   | 2   | task.0101       |
 | Allocation computation + epoch close + FinalizeEpochWorkflow | Not Started | 3   | task.0102       |
 | Epoch 3-phase state machine + EIP-191 signing                | Not Started | 3   | task.0100       |
-| Zod contracts + API routes + stack tests                     | Not Started | 2   | task.0096       |
+| Zod contracts + API routes + stack tests                     | In Review   | 2   | task.0096       |
 
 **V0 user story:**
 
@@ -92,8 +92,8 @@ repo-spec.yaml → schedule sync → Temporal schedule → CollectEpochWorkflow 
 - [ ] **close-ingestion API route** — manual trigger for open→review (task.0100)
 - [ ] **sign API route** — submit + verify EIP-191 signature (task.0100)
 - [ ] **finalize API route** — verify review+signature, trigger FinalizeEpochWorkflow (task.0100)
-- [ ] **pool-components API route** — record pool components for epoch (task.0096)
-- [ ] **Remaining read/write API routes** — list epochs, activity, allocations, statement, verify (task.0096)
+- [x] **pool-components API route** — record pool components for epoch (task.0096)
+- [x] **Remaining read/write API routes** — list epochs, activity, allocations, statement (task.0096 — verify deferred to task.0102)
 - [ ] **Discord source adapter** — deferred (GitHub-only for V0 launch)
 
 **Definition of done:**
