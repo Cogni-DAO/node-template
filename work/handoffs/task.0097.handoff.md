@@ -6,67 +6,71 @@ status: active
 created: 2026-02-21
 updated: 2026-02-22
 branch: worktree-ingestion-core-github-adapter
-last_commit: 986c8076
+last_commit: "65804255"
 ---
 
-# Handoff: GitHub + Discord Source Adapters (task.0097)
+# Handoff: GitHub App Auth + Unified Octokit Client (task.0097)
 
 ## Context
 
-Epoch-based payout pipeline needs automated activity collection from GitHub (and later Discord). The `SourceAdapter` port + `GitHubSourceAdapter` were built, then validated with a new **external integration test tier** that hits real GitHub API against `Cogni-DAO/test-repo`.
-
-The external tests caught two real bugs — both now fixed in working tree (uncommitted):
-
-1. `@octokit/graphql` reserves `query` as variable name — renamed to `searchQuery`
-2. **GitHub Search API (`search()`) is incomplete** — only returned 3/7 merged PRs. Rewrote all 3 GraphQL queries to use authoritative repo-scoped connections (`repository.pullRequests`, `repository.issues`)
+- The epoch payout pipeline collects GitHub activity (PRs, reviews, issues) via `GitHubSourceAdapter`
+- Previously used a PAT with raw `@octokit/graphql` and bespoke rate-limit handling
+- This session replaced PAT auth with GitHub App auth (`@octokit/auth-app`) and standardized on `@octokit/core` with retry + throttling plugins
+- The adapter now requires a `VcsTokenProvider` — no PAT fallback, no dual-mode
+- Env vars are defined in scheduler-worker `config.ts` but **not yet wired** to compose/deploy infrastructure
 
 ## Current State
 
-- **Done:** `@cogni/ingestion-core` package (types, port, helpers) — 13 tests
-- **Done:** `GitHubSourceAdapter` rewritten to use repo-scoped GraphQL (not search index) — 24 unit tests passing
-- **Done:** External test tier wired (`vitest.external.config.mts`, `pnpm test:external`, `tests/external/AGENTS.md`)
-- **Done:** External test file with 6 test cases (streams, PRs, issues, reviews, determinism, ledger round-trip)
-- **Done:** Test data in `Cogni-DAO/test-repo`: Issue #51 (closed), PR #52 (merged, reviewed by Cogni-1729)
-- **Done:** Lockfile fix for `@cogni/ingestion-core` workspace symlink
-- **Uncommitted:** All adapter rewrites + external test infrastructure. Need `pnpm check`, then commit.
-- **Not done:** `pnpm test:external` not yet run after the search→repo-scoped rewrite
+- **Done:** `VcsTokenProvider` port interface in `@cogni/ingestion-core`
+- **Done:** `GitHubAppTokenProvider` implementation using `@octokit/auth-app` with dynamic installation ID resolution
+- **Done:** `createGitHubClient()` factory with `@octokit/plugin-retry` + `@octokit/plugin-throttling`
+- **Done:** `GitHubSourceAdapter` refactored — accepts `tokenProvider` only, auto-refreshes tokens near expiry (5-min buffer)
+- **Done:** `config.ts` has `REVIEW_APP_ID`, `REVIEW_APP_PRIVATE_KEY_BASE64`, `REVIEW_INSTALLATION_ID` env vars
+- **Done:** 35 unit tests passing (21 adapter + 5 auth + 9 activities)
+- **Done:** External test updated to use `GitHubAppTokenProvider`
+- **Done:** `pnpm check` passes (only pre-existing `identity-model.md` doc failure)
+- **Not done:** Env wiring — compose files, deploy scripts, CI workflows do not pass the new vars
+- **Not done:** GitHub App not yet created — need to register in GitHub org settings
 - **Not done:** Discord adapter, adapter registry/factory
 
 ## Decisions Made
 
-- Replaced `search()` GraphQL with `repository.pullRequests(states: MERGED, orderBy: UPDATED_AT DESC)` and `repository.issues(states: CLOSED, orderBy: UPDATED_AT DESC)` — authoritative connections, not best-effort search index
-- Client-side time-window filtering (`mergedAt`/`closedAt`/`submittedAt` > since && <= until)
-- Early-stop optimization: stop paging when `updatedAt < since`
-- Exclusive lower bound on cursor (`eventTime > since`) to avoid duplicates
-- Adapter version bumped to `0.2.0` for the query rewrite
-- External tests skip gracefully if `GITHUB_TOKEN`/`GH_TOKEN` not set
-- External tests reuse testcontainers-postgres globalSetup for ledger round-trip
+- **App-only auth, no PAT fallback** — user explicitly rejected dual-mode as tech debt
+- Removed `GitHubRateLimitError` class — plugins handle retries automatically
+- Adapter version bumped `0.2.0` → `0.3.0` for the auth change (breaking config shape)
+- `@octokit/graphql` removed, replaced by `@octokit/core` (which includes `.graphql()`)
+- Token refresh uses 5-minute buffer before `expiresAt` (installation tokens last ~60min)
+- Installation ID resolved dynamically from `repoRef` if not provided in config
 
 ## Next Actions
 
-- [ ] Run `pnpm test:external` with `GITHUB_TOKEN=$(gh auth token)` — verify all 6 external tests pass after rewrite
-- [ ] Run `pnpm check` — verify lint/typecheck/format clean
-- [ ] Commit all uncommitted changes (adapter rewrite, external test tier, fixture updates)
-- [ ] Implement Discord adapter (`services/scheduler-worker/src/adapters/ingestion/discord.ts`)
-- [ ] Add adapter registry/factory for workflow iteration
-- [ ] Wire into `CollectEpochWorkflow` (task.0095)
+- [ ] Create Review GitHub App in Cogni-DAO org (permissions: `contents:read`, `pull_requests:read`, `issues:read`), install on `Cogni-DAO/test-repo`
+- [ ] Wire env vars to scheduler-worker in `docker-compose.dev.yml` and `docker-compose.yml`
+- [ ] Wire secrets through `deploy-production.yml`, `staging-preview.yml`, and `deploy.sh`
+- [ ] Establish clean env-update workflow that covers both app and worker services
+- [ ] Run `pnpm test:external` with real App credentials to validate end-to-end
+- [ ] Update work item plan checklist to reflect completed auth items
+- [ ] Implement Discord adapter
+- [ ] Wire adapters into `CollectEpochWorkflow` (task.0095)
 
 ## Risks / Gotchas
 
-- **Review pagination cap:** `reviews(first: 100)` on each PR — PRs with 100+ reviews will silently drop extras
-- **Exclusive lower bound:** Uses `mergedAt > since` (not `>=`). If cursor value equals an event's mergedAt exactly, that event is excluded on re-collect. This is intentional to prevent duplicates.
-- **Single cursor across streams:** `collect()` returns one `nextCursor` for all streams. Per-stream cursors needed at workflow layer.
-- **`GITHUB_REPOS` config:** Stored as raw string in scheduler-worker config — caller must `split(",")` to get array
+- **Env vars not wired:** The scheduler-worker will fail to start in Docker until compose files pass `REVIEW_APP_ID` and `REVIEW_APP_PRIVATE_KEY_BASE64`
+- **`config.ts` makes App vars required:** If the worker starts without them, Zod validation will throw at boot. Consider making them optional if the worker has non-ingestion responsibilities
+- **External tests will skip** until `REVIEW_APP_ID` + `REVIEW_APP_PRIVATE_KEY_BASE64` are set (previously used `GITHUB_TOKEN`)
+- **Review pagination cap:** `reviews(first: 100)` per PR — PRs with 100+ reviews silently drop extras
 
 ## Pointers
 
-| File                                                                  | Why it matters                                                    |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `services/scheduler-worker/src/adapters/ingestion/github.ts`          | Adapter — repo-scoped GraphQL, normalization, early-stop          |
-| `services/scheduler-worker/tests/github-adapter.test.ts`              | 24 unit tests with mock fixtures                                  |
-| `services/scheduler-worker/tests/fixtures/github-graphql.fixtures.ts` | Mock response factories (`wrapPrResponse`, `wrapIssueResponse`)   |
-| `tests/external/ingestion/github-adapter.external.test.ts`            | 6 real-API tests against Cogni-DAO/test-repo                      |
-| `vitest.external.config.mts`                                          | External test runner config (testcontainers + generous timeouts)  |
-| `packages/ingestion-core/src/`                                        | Pure types (`model.ts`), port (`port.ts`), helpers (`helpers.ts`) |
-| `work/items/task.0097.ledger-source-adapters.md`                      | Canonical work item                                               |
-| `docs/spec/epoch-ledger.md`                                           | Spec: schema, invariants, adapter contract                        |
+| File / Resource                                                      | Why it matters                                          |
+| -------------------------------------------------------------------- | ------------------------------------------------------- |
+| `services/scheduler-worker/src/adapters/ingestion/github.ts`         | Adapter — now uses `VcsTokenProvider`, no direct token  |
+| `services/scheduler-worker/src/adapters/ingestion/github-auth.ts`    | `GitHubAppTokenProvider` — App JWT + installation token |
+| `services/scheduler-worker/src/adapters/ingestion/octokit-client.ts` | Unified Octokit factory with retry/throttling           |
+| `packages/ingestion-core/src/vcs-token-provider.ts`                  | Port interface — lives in pure domain package           |
+| `services/scheduler-worker/src/config.ts`                            | Env schema — new `REVIEW_APP_*` vars                    |
+| `services/scheduler-worker/tests/github-auth.test.ts`                | Auth unit tests (5 tests)                               |
+| `services/scheduler-worker/tests/github-adapter.test.ts`             | Adapter tests (21 tests, mocks `octokit-client`)        |
+| `tests/external/ingestion/github-adapter.external.test.ts`           | Real API tests — now uses `GitHubAppTokenProvider`      |
+| Commit `65804255`                                                    | The auth refactor commit                                |
+| `work/items/task.0097.ledger-source-adapters.md`                     | Canonical work item                                     |

@@ -62,15 +62,15 @@ last_commit: 88a5a842
 
 ## Pointers
 
-| File / Resource | Why it matters |
-| --- | --- |
-| [task.0095 (full design)](../items/task.0095.ledger-temporal-workflows.md) | Activity table, workflow pseudocode, invariants, file list |
-| [epoch-ledger spec](../../docs/spec/epoch-ledger.md) | 16 invariants, schema, API contracts, lifecycle |
-| [packages/ledger-core/src/](../../packages/ledger-core/src/) | `store.ts` (port), `rules.ts` (computePayouts), `model.ts` (types) |
-| [packages/ingestion-core/src/](../../packages/ingestion-core/src/) | `port.ts` (SourceAdapter), `model.ts` (ActivityEvent), `helpers.ts` |
-| [DrizzleLedgerAdapter](../../packages/db-client/src/adapters/drizzle-ledger.adapter.ts) | Store implementation — all DB methods |
-| [GitHubSourceAdapter](../../services/scheduler-worker/src/adapters/ingestion/github.ts) | Working adapter to wire into collect workflow |
-| [Existing activities pattern](../../services/scheduler-worker/src/activities/index.ts) | `createActivities(deps)` — follow this exact DI pattern |
-| [Existing workflow](../../services/scheduler-worker/src/workflows/scheduled-run.workflow.ts) | `proxyActivities` pattern to follow |
-| [worker.ts](../../services/scheduler-worker/src/worker.ts) | DO NOT MODIFY — create parallel `ledger-worker.ts` |
-| [.cogni/repo-spec.yaml](../../.cogni/repo-spec.yaml) | `node_id` lives here; add `activity_ledger` section |
+| File / Resource                                                                              | Why it matters                                                      |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [task.0095 (full design)](../items/task.0095.ledger-temporal-workflows.md)                   | Activity table, workflow pseudocode, invariants, file list          |
+| [epoch-ledger spec](../../docs/spec/epoch-ledger.md)                                         | 16 invariants, schema, API contracts, lifecycle                     |
+| [packages/ledger-core/src/](../../packages/ledger-core/src/)                                 | `store.ts` (port), `rules.ts` (computePayouts), `model.ts` (types)  |
+| [packages/ingestion-core/src/](../../packages/ingestion-core/src/)                           | `port.ts` (SourceAdapter), `model.ts` (ActivityEvent), `helpers.ts` |
+| [DrizzleLedgerAdapter](../../packages/db-client/src/adapters/drizzle-ledger.adapter.ts)      | Store implementation — all DB methods                               |
+| [GitHubSourceAdapter](../../services/scheduler-worker/src/adapters/ingestion/github.ts)      | Working adapter to wire into collect workflow                       |
+| [Existing activities pattern](../../services/scheduler-worker/src/activities/index.ts)       | `createActivities(deps)` — follow this exact DI pattern             |
+| [Existing workflow](../../services/scheduler-worker/src/workflows/scheduled-run.workflow.ts) | `proxyActivities` pattern to follow                                 |
+| [worker.ts](../../services/scheduler-worker/src/worker.ts)                                   | DO NOT MODIFY — create parallel `ledger-worker.ts`                  |
+| [.cogni/repo-spec.yaml](../../.cogni/repo-spec.yaml)                                         | `node_id` lives here; add `activity_ledger` section                 |
