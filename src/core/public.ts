@@ -57,6 +57,27 @@ export {
   pickDefaultModel,
   trimConversationHistory,
 } from "./chat/rules";
+// Ledger domain
+export type {
+  EpochStatus,
+  FinalizedAllocation,
+  PayoutLineItem,
+} from "./ledger/public";
+export {
+  AllocationNotFoundError,
+  computeAllocationSetHash,
+  computePayouts,
+  EPOCH_STATUSES,
+  EpochAlreadyClosedError,
+  EpochNotFoundError,
+  EpochNotOpenError,
+  isAllocationNotFoundError,
+  isEpochAlreadyClosedError,
+  isEpochNotFoundError,
+  isEpochNotOpenError,
+  isPoolComponentMissingError,
+  PoolComponentMissingError,
+} from "./ledger/public";
 export type {
   ClientVisibleStatus,
   PaymentAttempt,

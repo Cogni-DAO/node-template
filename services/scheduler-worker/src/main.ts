@@ -3,25 +3,28 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/main`
- * Purpose: Service entry point with graceful shutdown.
- * Scope: Composition root that wires config and starts Temporal worker. Does not contain business logic.
+ * Purpose: Service entry point with graceful shutdown. Starts scheduler + optional ledger worker.
+ * Scope: Entry point that calls env() and starts Temporal workers. Does not contain business logic.
  * Invariants:
  *   - Reads config from env (no hardcoded values)
  *   - Handles SIGTERM/SIGINT for graceful shutdown
  *   - Per READINESS_GATES_LOCALLY: ready=false stops work intake immediately
+ *   - Both workers must start before ready=true
  * Side-effects: IO (Temporal connection, process signals)
  * Links: docs/spec/scheduler.md, docs/spec/services-architecture.md
  * @public
  */
 
-import { loadConfig } from "./config.js";
+import { createLedgerContainer } from "./bootstrap/container.js";
+import { env } from "./bootstrap/env.js";
 import { type HealthState, startHealthServer } from "./health.js";
+import { startLedgerWorker } from "./ledger-worker.js";
 import { flushLogger, makeLogger } from "./observability/logger.js";
 import { startSchedulerWorker } from "./worker.js";
 
 async function main(): Promise<void> {
-  // Load and validate config
-  const config = loadConfig();
+  // Load and validate env
+  const config = env();
 
   // Create logger (composition root owns logger creation)
   const logger = makeLogger();
@@ -36,25 +39,34 @@ async function main(): Promise<void> {
   startHealthServer(healthState, config.HEALTH_PORT);
   logger.info({ port: config.HEALTH_PORT }, "Health server started");
 
-  // Start Temporal worker
-  const worker = await startSchedulerWorker({
-    temporalAddress: config.TEMPORAL_ADDRESS,
-    namespace: config.TEMPORAL_NAMESPACE,
-    taskQueue: config.TEMPORAL_TASK_QUEUE,
-    databaseUrl: config.DATABASE_URL,
-    appBaseUrl: config.APP_BASE_URL,
-    schedulerApiToken: config.SCHEDULER_API_TOKEN,
-    logger,
-  });
+  // Shutdown handles for all workers
+  const shutdownHandles: Array<{ shutdown: () => Promise<void> }> = [];
 
-  // Mark ready after worker starts
+  // Start scheduler worker (always)
+  const schedulerWorker = await startSchedulerWorker({ env: config, logger });
+  shutdownHandles.push(schedulerWorker);
+
+  // Start ledger worker (optional — requires NODE_ID + SCOPE_ID)
+  const ledgerContainer = createLedgerContainer(config, logger);
+  if (ledgerContainer) {
+    const ledgerWorker = await startLedgerWorker({
+      env: config,
+      logger,
+      container: ledgerContainer,
+    });
+    shutdownHandles.push(ledgerWorker);
+    logger.info({}, "Ledger worker started alongside scheduler worker");
+  }
+
+  // Mark ready after all workers start
   healthState.ready = true;
   logger.info(
     {
       namespace: config.TEMPORAL_NAMESPACE,
       taskQueue: config.TEMPORAL_TASK_QUEUE,
+      ledgerEnabled: !!ledgerContainer,
     },
-    "Scheduler worker started, ready for traffic"
+    "All workers started, ready for traffic"
   );
 
   // Graceful shutdown
@@ -70,8 +82,8 @@ async function main(): Promise<void> {
     logger.info({ signal }, "Received signal, shutting down");
 
     try {
-      await worker.shutdown();
-      logger.info("Scheduler worker stopped");
+      await Promise.all(shutdownHandles.map((h) => h.shutdown()));
+      logger.info({}, "All workers stopped");
       flushLogger();
       process.exit(0);
     } catch (err) {
