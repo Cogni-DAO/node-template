@@ -109,15 +109,15 @@ describe("CollectEpochWorkflow ID semantics (stack)", () => {
     });
     startedWorkflowIds.push(handle1.workflowId);
 
-    // Try to start second workflow with same ID — this is the "daily cron"
-    // scenario where a second daily run fires for the same epoch window.
+    // Try to start second workflow with same ID while first is still running.
     //
-    // Current behavior: Temporal rejects because workflow ID is already running.
-    // This proves the bug from review feedback #1 — the deterministic ID
-    // prevents multiple daily collections per epoch window.
+    // Expected behavior: Temporal rejects because workflow ID is already running.
+    // This is correct for schedule-driven execution — the Temporal Schedule's
+    // OVERLAP_SKIP policy prevents concurrent runs, and completed workflows
+    // allow new runs with the same ID on the next schedule firing.
     //
-    // After the fix (include run date in ID, or use ID reuse policy),
-    // this test should be updated to expect success.
+    // This would only be a problem if we needed concurrent daily runs within
+    // the same epoch window, which OVERLAP_SKIP prevents by design.
     await expect(
       client.workflow.start("CollectEpochWorkflow", {
         workflowId: DETERMINISTIC_WORKFLOW_ID,

@@ -154,26 +154,52 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       };
     }
 
-    // Create new epoch — DB constraint ensures EPOCH_WINDOW_UNIQUE
-    const epoch = await ledgerStore.createEpoch({
-      nodeId,
-      scopeId,
-      periodStart: new Date(periodStart),
-      periodEnd: new Date(periodEnd),
-      weightConfig,
-    });
+    // Create new epoch — DB constraint ensures EPOCH_WINDOW_UNIQUE.
+    // Race: another worker may create the same epoch between our read and write.
+    // On unique constraint violation, re-query and return the existing epoch.
+    try {
+      const epoch = await ledgerStore.createEpoch({
+        nodeId,
+        scopeId,
+        periodStart: new Date(periodStart),
+        periodEnd: new Date(periodEnd),
+        weightConfig,
+      });
 
-    logger.info(
-      { epochId: epoch.id.toString(), status: epoch.status },
-      "Created new epoch"
-    );
+      logger.info(
+        { epochId: epoch.id.toString(), status: epoch.status },
+        "Created new epoch"
+      );
 
-    return {
-      epochId: epoch.id.toString(),
-      status: epoch.status,
-      isNew: true,
-      weightConfig: epoch.weightConfig,
-    };
+      return {
+        epochId: epoch.id.toString(),
+        status: epoch.status,
+        isNew: true,
+        weightConfig: epoch.weightConfig,
+      };
+    } catch (err) {
+      // Unique constraint violation — another worker created the epoch concurrently
+      const raceEpoch = await ledgerStore.getEpochByWindow(
+        nodeId,
+        scopeId,
+        new Date(periodStart),
+        new Date(periodEnd)
+      );
+      if (raceEpoch) {
+        logger.info(
+          { epochId: raceEpoch.id.toString(), status: raceEpoch.status },
+          "Epoch created by concurrent worker — using existing"
+        );
+        return {
+          epochId: raceEpoch.id.toString(),
+          status: raceEpoch.status,
+          isNew: false,
+          weightConfig: raceEpoch.weightConfig,
+        };
+      }
+      // Not a race condition — rethrow original error
+      throw err;
+    }
   }
 
   /**
@@ -305,6 +331,8 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       sourceRef
     );
 
+    // Lexicographic comparison works for ISO-8601 timestamps (all cursor values are ISO dates).
+    // If cursor format changes (e.g., opaque pagination tokens), this comparison must be updated.
     const effectiveValue =
       existing && existing.cursorValue > cursorValue
         ? existing.cursorValue
