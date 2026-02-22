@@ -12,7 +12,7 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch:
+branch: fix/task.0103-scope-gated-queries
 pr:
 reviewer:
 revision: 0
