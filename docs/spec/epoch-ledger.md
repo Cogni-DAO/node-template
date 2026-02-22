@@ -50,6 +50,7 @@ tags: [governance, transparency, payments, ledger]
 | ONE_ACTIVE_EPOCH            | Partial unique index enforces at most one epoch with `status != 'finalized'` per `(node_id, scope_id)` pair.                                                                                                                                  |
 | EPOCH_WINDOW_UNIQUE         | `UNIQUE(node_id, scope_id, period_start, period_end)` prevents duplicate epochs for the same time window per scope. Re-collection uses the existing epoch.                                                                                    |
 | CURATION_FREEZE_ON_FINALIZE | DB trigger rejects INSERT/UPDATE/DELETE on `activity_curation` when the referenced epoch has `status = 'finalized'`. Curation is mutable during `open` and `review`, immutable only after finalize.                                           |
+| CURATION_AUTO_POPULATE      | Auto-population inserts curation rows for new events and updates `user_id` only on rows where it's NULL. Never overwrites admin-set fields (`included`, `weight_override_milli`, `note`). Delta processing: skip events already curated with a resolved `user_id`. |
 | NODE_SCOPED                 | All ledger tables include `node_id UUID NOT NULL`. Per node-operator-contract spec, prevents collisions in multi-node scenarios.                                                                                                              |
 | SCOPE_SCOPED                | All epoch-level tables include `scope_id TEXT NOT NULL DEFAULT 'default'`. `scope_id` identifies the governance/payout domain (project) within a node. See [Project Scoping](#project-scoping).                                               |
 | SCOPE_VALIDATED             | Every activity event's `scope_id` must be validated against current project manifests (`.cogni/projects/*.yaml`) or resolve to the `'default'` fallback scope. Unrecognized scope IDs are rejected at ingestion time.                         |
@@ -288,6 +289,15 @@ Constraint: `UNIQUE(epoch_id, event_id)`
 
 DB trigger rejects INSERT/UPDATE/DELETE when `epochs.status = 'finalized'` (CURATION_FREEZE_ON_FINALIZE). Mutable during `open` and `review`, immutable after finalize. Reviewers can adjust inclusion, weight overrides, and identity resolution during review — these are auditable human decisions, not silent edits.
 
+**Auto-population rules (CURATION_AUTO_POPULATE):**
+
+After each collection run, the `curateAndResolve` activity creates curation rows for newly ingested events:
+
+1. **Delta processing**: Only events without an existing curation row (or with `user_id IS NULL`) are processed. Events already curated with a resolved `user_id` are never overwritten. This preserves admin edits to `included`, `weight_override_milli`, and `note`.
+2. **Insert-or-update-userId-only**: New events get `INSERT` with resolved `user_id` (or NULL if unresolved), `included = true`. Existing rows with `user_id IS NULL` get only `user_id` updated (fills in newly-added bindings on re-run). Fields `included`, `weight_override_milli`, `note` are never touched by auto-population.
+3. **Query by epochId**: The activity queries events by epoch membership (via the epoch's `period_start`/`period_end`), using `epochId` as the authoritative scope. The epoch row is loaded first; period dates serve as a guard assertion.
+4. **Provider-scoped resolution**: Identity resolution queries `user_bindings` filtered by `provider` (e.g., `'github'`). No cross-provider resolution. The `platformUserId` stored in `activity_events` must match the `external_id` format in `user_bindings` (GitHub: numeric `databaseId` as string).
+
 ### `epoch_allocations` — per-user credit distribution
 
 | Column            | Type             | Notes                                              |
@@ -479,6 +489,12 @@ interface LedgerIngestRunV1 {
    - Activity: `adapter.collect({ streams: [stream], cursor, window })` → events + `producerVersion`
    - Activity: insert `activity_events` (idempotent by PK, uses `adapter.version` as `producer_version`)
    - Activity: save cursor to `source_cursors` (monotonic advancement)
+6. **Curate and resolve identities** — `curateAndResolve` activity (CURATION_AUTO_POPULATE):
+   - Load epoch by ID → get period_start/period_end (guard assertion)
+   - Query events in epoch window that are uncurated (no curation row) or unresolved (curation.user_id IS NULL)
+   - For each source: batch resolve `platformUserId` → `userId` via `user_bindings` (provider-scoped)
+   - INSERT new curation rows (included=true, userId=resolved or NULL)
+   - UPDATE existing unresolved rows: set userId only (never touch included/weight_override_milli/note)
 
 Deterministic workflow ID: managed by Temporal Schedule (overlap=SKIP, run IDs per firing).
 
