@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-21
+- **Last reviewed:** 2026-02-22
 - **Status:** draft
 
 ## Purpose
@@ -45,6 +45,8 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
   - `ActivityLedgerStore` — Port interface for ledger persistence
   - `LedgerEpoch`, `LedgerActivityEvent`, `LedgerCuration`, `LedgerAllocation`, `LedgerSourceCursor`, `LedgerPoolComponent`, `LedgerPayoutStatement`, `LedgerStatementSignature` — Read-side record types
   - `InsertActivityEventParams`, `UpsertCurationParams`, `InsertAllocationParams`, `InsertPoolComponentParams`, `InsertPayoutStatementParams`, `InsertSignatureParams` — Write-side param types
+  - `computeEpochWindowV1()` — Pure, deterministic epoch window computation (Monday-aligned UTC). Safe in Temporal workflow code.
+  - `EpochWindow`, `EpochWindowParams` — Types for epoch window computation
   - `computePayouts()` — BIGINT proportional distribution with largest-remainder rounding
   - `computeAllocationSetHash()` — SHA-256 of canonical sorted allocation data
   - `EpochNotOpenError`, `EpochAlreadyClosedError`, `PoolComponentMissingError` — Domain errors with type guards
@@ -55,7 +57,7 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
 
 - **Uses ports:** none
 - **Implements ports:** none
-- **Defines ports:** `ActivityLedgerStore` (implemented by `DrizzleLedgerAdapter` in `@cogni/db-client`)
+- **Defines ports:** `ActivityLedgerStore` (implemented by `DrizzleLedgerAdapter` in `@cogni/db-client`). Includes `getEpochByWindow()` for status-agnostic epoch lookup by time window.
 
 ## Responsibilities
 

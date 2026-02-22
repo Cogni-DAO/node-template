@@ -32,8 +32,9 @@ src/
 ├── adapters/        # Concrete implementations (Octokit, GitHub App auth)
 │   └── ingestion/   # GitHub source adapter + token provider
 ├── observability/   # Logger factory (sole pino importer), redaction
-├── main.ts          # Entry point: env() → makeLogger() → startSchedulerWorker()
+├── main.ts          # Entry point: env() → makeLogger() → startSchedulerWorker() + startLedgerWorker()
 ├── worker.ts        # Temporal Worker lifecycle: createContainer() → createActivities()
+├── ledger-worker.ts # Temporal Worker for ledger-tasks queue: createLedgerActivities()
 └── health.ts        # HTTP readiness probe
 ```
 
@@ -73,12 +74,12 @@ src/
 
 - **Exports:** none (standalone service, not a library)
 - **CLI:** `pnpm --filter @cogni/scheduler-worker-service dev|build|start`
-- **Env:** Validated in `src/bootstrap/env.ts` via Zod. Required: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `DATABASE_URL`, `SCHEDULER_API_TOKEN` (secret), `APP_BASE_URL`. Optional: `GITHUB_REVIEW_APP_ID`, `GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64`, `GITHUB_REVIEW_INSTALLATION_ID`, `GITHUB_REPOS`, `LOG_LEVEL`, `SERVICE_NAME`, `HEALTH_PORT`.
+- **Env:** Validated in `src/bootstrap/env.ts` via Zod. Required: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `DATABASE_URL`, `SCHEDULER_API_TOKEN` (secret), `APP_BASE_URL`, `NODE_ID`, `SCOPE_ID`, `SCOPE_KEY`. Optional: `GITHUB_REVIEW_APP_ID`, `GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64`, `GITHUB_REVIEW_INSTALLATION_ID`, `GITHUB_REPOS`, `LOG_LEVEL`, `SERVICE_NAME`, `HEALTH_PORT`.
 - **Files considered API:** `src/main.ts` (entry point), `Dockerfile`
 
 ## Responsibilities
 
-- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow, execute activities (validateGrant, executeGraph, updateRun, createRun), handle SIGTERM/SIGINT
+- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow + CollectEpochWorkflow, execute scheduler activities (validateGrant, executeGraph, updateRun, createRun) and ledger activities (ensureEpochForWindow, loadCursor, collectFromSource, insertEvents, saveCursor), handle SIGTERM/SIGINT
 - This directory **does not**: Import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces (those live in packages)
 
 ## Usage
@@ -100,7 +101,7 @@ docker build -f services/scheduler-worker/Dockerfile -t scheduler-worker .
 
 ## Dependencies
 
-- **Internal:** `@cogni/scheduler-core` (ports), `@cogni/ingestion-core` (ports), `@cogni/db-client` (adapters, bootstrap only), `@cogni/ids`
+- **Internal:** `@cogni/scheduler-core` (ports), `@cogni/ingestion-core` (ports), `@cogni/ledger-core` (domain logic + epoch window), `@cogni/db-client` (adapters, bootstrap only), `@cogni/ids`
 - **External:** `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity`, `pino`, `zod`
 
 ## Change Protocol

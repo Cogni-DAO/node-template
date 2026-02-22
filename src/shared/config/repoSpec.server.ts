@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/config/repoSpec.server`
- * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (node identity + payments + governance schedules).
- * Scope: Reads and caches repo-spec on first access; validates node_id UUID, chain alignment, and receiver address shape; exposes getNodeId(), getPaymentConfig(), and getGovernanceConfig(). Does not run in client bundles or accept env overrides.
- * Invariants: Chain ID must match CHAIN_ID; EVM address format required; governance schedules default to empty.
+ * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (node identity + payments + governance schedules + ledger config).
+ * Scope: Reads and caches repo-spec on first access; validates node_id UUID, chain alignment, and receiver address shape; exposes getNodeId(), getPaymentConfig(), and getGovernanceConfig(). Maps activity_ledger config to LedgerConfig when scope identity is present. Does not run in client bundles or accept env overrides.
+ * Invariants: Chain ID must match CHAIN_ID; ledger config requires scope_id + scope_key.
  * Side-effects: IO (reads repo-spec from disk) on first call only.
  * Links: .cogni/repo-spec.yaml, docs/spec/payments-design.md
  * @public
