@@ -8,7 +8,7 @@ rank: 3
 estimate: 3
 summary: "Implement SourceAdapter port interface and two adapters (GitHub, Discord) that collect contribution activity and normalize to ActivityEvent. Uses @octokit/graphql and discord.js."
 outcome: "GitHub PRs/reviews and Discord messages collected automatically during epoch collection. Events have deterministic IDs, provenance fields, and platform identity for resolution."
-spec_refs: epoch-ledger-spec
+spec_refs: [epoch-ledger-spec, vcs-integration]
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
@@ -75,6 +75,10 @@ external_refs:
 - [x] Wire port re-exports into `src/ports/source-adapter.port.ts`
 - [x] Implement GitHub adapter with GraphQL queries for PRs, reviews, issues
 - [x] Add unit tests: 13 helper tests + 22 adapter tests (deterministic IDs, hashing, pagination, rate limits, bot filtering)
+- [ ] Create Review GitHub App (contents:read, PRs:read, issues:read), install on Cogni-DAO/test-repo
+- [ ] Add `InstallationTokenProvider` in scheduler-worker (sign JWT → POST /installations/{id}/access_tokens → cache until expiry)
+- [ ] Wire provider as default auth; gate PAT behind `GITHUB_AUTH=pat` env flag
+- [ ] Add env vars: `REVIEW_APP_ID`, `REVIEW_APP_PRIVATE_KEY`, `REVIEW_INSTALLATION_ID`
 - [ ] Implement Discord adapter with message fetching
 - [ ] Add adapter registry/factory for workflow to iterate registered adapters
 

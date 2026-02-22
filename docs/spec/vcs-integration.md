@@ -107,28 +107,31 @@ For ingestion (no webhook trigger — cron-based):
 
 ```
 1. scheduler-worker needs a read-only token for GitHub GraphQL
-2. Option A (App): git-daemon exposes internal token-provider endpoint
-   → scheduler-worker requests token for (app=review, installation=X)
-   → git-daemon returns short-lived installation access token
-3. Option B (PAT): scheduler-worker uses GITHUB_TOKEN env var directly
-   → No git-daemon dependency; suitable for self-hosted Nodes
+2. V0: scheduler-worker owns an InstallationTokenProvider in-process
+   → Reads REVIEW_APP_ID, REVIEW_APP_PRIVATE_KEY, REVIEW_INSTALLATION_ID
+   → Signs JWT → POST /app/installations/{id}/access_tokens → caches until expiry
+   → Passes token into GitHubSourceAdapter
+3. V1: Resolve installation ID per-repo via GET /repos/{owner}/{repo}/installation
+   → Remove REVIEW_INSTALLATION_ID env var
+4. Fallback: GITHUB_TOKEN env var (PAT) for self-hosted Nodes without App auth
 ```
 
 ### Webhook Routing
 
-Both GitHub Apps point their webhook URLs at the same endpoint. The service distinguishes them by the `X-GitHub-Hook-Installation-Target-ID` header (contains the App ID):
+Each GitHub App gets its own webhook URL so signature verification implicitly identifies the app. (`X-GitHub-Hook-Installation-Target-ID` is NOT the App ID — it's the target resource ID and must not be used for routing.)
 
 ```
-POST /api/v1/webhooks/github
+POST /api/v1/webhooks/github/review   ← Review App webhook URL
   │
-  ├─ app_id == REVIEW_APP_ID
-  │   ├─ pull_request.opened/synchronize/reopened → reviewHandler
-  │   ├─ check_suite.rerequested                  → rerunHandler
-  │   └─ installation_repositories.added           → welcomeHandler
+  ├─ Verify X-Hub-Signature-256 with REVIEW_APP_WEBHOOK_SECRET
+  ├─ pull_request.opened/synchronize/reopened → reviewHandler
+  ├─ check_suite.rerequested                  → rerunHandler
+  └─ installation_repositories.added           → welcomeHandler
+
+POST /api/v1/webhooks/github/admin    ← Admin App webhook URL
   │
-  └─ app_id == ADMIN_APP_ID
-      ├─ (no direct GitHub webhook triggers in V0)
-      └─ admin actions triggered via onchain webhook path:
+  ├─ Verify X-Hub-Signature-256 with ADMIN_APP_WEBHOOK_SECRET
+  └─ (V0: no direct GitHub webhook triggers — admin via onchain path)
 
 POST /api/v1/webhooks/onchain
   │
@@ -299,17 +302,17 @@ Provide a unified, secure VCS integration layer where: (1) authentication is han
 
 ## Invariants
 
-| Rule                         | Constraint                                                                                                                               |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| TWO_APPS_SEPARATE_KEYS       | Review and admin GitHub Apps have independent APP_ID + PRIVATE_KEY pairs. A single compromised key cannot escalate to the other's scope. |
-| WEBHOOK_SIGNATURE_REQUIRED   | Every inbound webhook (GitHub, Alchemy) must pass HMAC-SHA256 signature verification before any handler executes.                        |
-| APP_ROUTE_BY_HEADER          | Webhook dispatch uses `X-GitHub-Hook-Installation-Target-ID` to identify which app sent the event. Never inspect payload to guess.       |
-| TOKEN_SHORT_LIVED            | Installation access tokens expire per GitHub's 1-hour TTL. Never persisted to disk or database.                                          |
-| PAT_FALLBACK_SUPPORTED       | `GitHubSourceAdapter` accepts any valid token string. Callers may provide a PAT or an installation token — adapter is auth-agnostic.     |
-| ADMIN_ACTIONS_DAO_AUTHORIZED | Admin app handlers (merge, grant, revoke) execute only after verifying on-chain CogniAction event from an authorized DAO.                |
-| NO_PROBOT_DEPENDENCY         | Neither `packages/github-core/` nor `services/git-daemon/` depend on Probot. Auth primitives are implemented directly.                   |
-| SERVICE_ISOLATION            | `services/git-daemon/` imports only from `packages/*`. Never from `src/` or other services. (Inherited from services-architecture.)      |
-| REVIEW_HANDLER_VIA_GRAPH     | PR review logic executes through the graphExecutor (LangGraph), not inline in the webhook handler.                                       |
+| Rule                         | Constraint                                                                                                                                                             |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TWO_APPS_SEPARATE_KEYS       | Review and admin GitHub Apps have independent APP_ID + PRIVATE_KEY pairs. A single compromised key cannot escalate to the other's scope.                               |
+| WEBHOOK_SIGNATURE_REQUIRED   | Every inbound webhook (GitHub, Alchemy) must pass HMAC-SHA256 signature verification before any handler executes.                                                      |
+| APP_ROUTE_BY_URL             | Each GitHub App has a distinct webhook URL (`/github/review`, `/github/admin`). Routing is by URL path + signature verification, not by inspecting payload or headers. |
+| TOKEN_SHORT_LIVED            | Installation access tokens expire per GitHub's 1-hour TTL. Never persisted to disk or database.                                                                        |
+| PAT_FALLBACK_SUPPORTED       | `GitHubSourceAdapter` accepts any valid token string. Callers may provide a PAT or an installation token — adapter is auth-agnostic.                                   |
+| ADMIN_ACTIONS_DAO_AUTHORIZED | Admin app handlers (merge, grant, revoke) execute only after verifying on-chain CogniAction event from an authorized DAO.                                              |
+| NO_PROBOT_DEPENDENCY         | Neither `packages/github-core/` nor `services/git-daemon/` depend on Probot. Auth primitives are implemented directly.                                                 |
+| SERVICE_ISOLATION            | `services/git-daemon/` imports only from `packages/*`. Never from `src/` or other services. (Inherited from services-architecture.)                                    |
+| REVIEW_HANDLER_VIA_GRAPH     | PR review logic executes through the graphExecutor (LangGraph), not inline in the webhook handler.                                                                     |
 
 ### Environment Configuration
 
