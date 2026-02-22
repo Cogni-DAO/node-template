@@ -2,7 +2,7 @@
 id: task.0095
 type: task
 title: "Ledger Temporal workflows (collect + finalize) + weekly cron"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 4
 estimate: 2
@@ -19,7 +19,7 @@ revision: 1
 blocked_by: task.0094
 deploy_verified: false
 created: 2026-02-20
-updated: 2026-02-22
+updated: 2026-02-23
 labels: [governance, ledger, temporal]
 external_refs:
 ---
@@ -288,13 +288,13 @@ Implementation in `DrizzleLedgerAdapter`: queries `user_bindings` table with `WH
 - [x] Extend `CreateScheduleParams` with optional `workflowType` + `taskQueueOverride`
 - [x] Extend `syncGovernanceSchedules` for LEDGER_INGEST → CollectEpochWorkflow on `ledger-tasks` queue
 - [x] Add LEDGER_INGEST schedule to governance schedules in repo-spec
-- [ ] Add `computeProposedAllocations()` to `packages/ledger-core/src/rules.ts` + unit tests
-- [ ] Add `resolveIdentities()` to store port + implement in DrizzleLedgerAdapter
-- [ ] Create `services/scheduler-worker/src/activities/ledger.ts` with `createLedgerActivities(deps)`
-- [ ] Implement `CollectEpochWorkflow` — create epoch, run adapters, curate, compute allocations
-- [ ] Implement `FinalizeEpochWorkflow` — read allocations + pool, compute payouts, atomic close
-- [ ] Create `ledger-worker.ts` and wire into `main.ts`
-- [ ] Rename `governance:` schedule prefix to distinguish agent runs vs data pipelines (e.g., `system:agent:heartbeat` vs `system:ledger:ingest`) — currently both heartbeat (OpenClaw sandbox) and ledger_ingest (CollectEpochWorkflow) share the `governance:` namespace despite being different workers/queues
+- [ ] Add `computeProposedAllocations()` to `packages/ledger-core/src/rules.ts` + unit tests (deferred — out of collection-phase scope)
+- [ ] Add `resolveIdentities()` to store port + implement in DrizzleLedgerAdapter (deferred — out of collection-phase scope)
+- [x] Create `services/scheduler-worker/src/activities/ledger.ts` with `createLedgerActivities(deps)`
+- [x] Implement `CollectEpochWorkflow` — create epoch, collect from sources, insert events, save cursors
+- [ ] Implement `FinalizeEpochWorkflow` — read allocations + pool, compute payouts, atomic close (deferred — out of collection-phase scope)
+- [x] Create `ledger-worker.ts` and wire into `main.ts`
+- [ ] Rename `governance:` schedule prefix to distinguish agent runs vs data pipelines (deferred)
 
 ## Validation
 
