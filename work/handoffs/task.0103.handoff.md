@@ -5,8 +5,8 @@ work_item_id: task.0103
 status: active
 created: 2026-02-23
 updated: 2026-02-23
-branch: feat/ledger-api-routes
-last_commit: 5d2c29fc
+branch: fix/scope-gated-queries
+last_commit: e2ac1b60
 ---
 
 # Handoff: SCOPE_GATED_QUERIES — scope-gate all epochId-based adapter methods

@@ -2,7 +2,7 @@
 id: task.0103
 type: task
 title: "SCOPE_GATED_QUERIES: scope-gate all epochId-based adapter methods"
-status: needs_review
+status: needs_merge
 priority: 1
 rank: 4
 estimate: 1
@@ -12,7 +12,7 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch: fix/task.0103-scope-gated-queries
+branch: fix/scope-gated-queries
 pr:
 reviewer:
 revision: 0
