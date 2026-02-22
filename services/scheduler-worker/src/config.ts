@@ -38,8 +38,16 @@ const EnvSchema = z.object({
   /** Base URL for internal API calls (required) */
   APP_BASE_URL: z.string().url("APP_BASE_URL must be a valid URL"),
 
-  /** GitHub PAT for activity collection (optional — only needed for ledger ingestion) */
-  GITHUB_TOKEN: z.string().min(1).optional(),
+  /** GitHub App ID (required for GitHub ingestion) */
+  REVIEW_APP_ID: z.string().min(1, "REVIEW_APP_ID is required"),
+
+  /** GitHub App private key, base64-encoded PEM (required for GitHub ingestion) */
+  REVIEW_APP_PRIVATE_KEY_BASE64: z
+    .string()
+    .min(1, "REVIEW_APP_PRIVATE_KEY_BASE64 is required"),
+
+  /** GitHub App installation ID — optional override, resolved dynamically if omitted */
+  REVIEW_INSTALLATION_ID: z.coerce.number().int().positive().optional(),
 
   /** Comma-separated repos for GitHub activity collection (e.g., "cogni-dao/cogni-template") */
   GITHUB_REPOS: z.string().optional(),

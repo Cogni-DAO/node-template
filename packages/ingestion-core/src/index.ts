@@ -23,5 +23,6 @@ export type {
   StreamCursor,
   StreamDefinition,
 } from "./model";
-// Port interface
+// Port interfaces
 export type { SourceAdapter } from "./port";
+export type { VcsTokenProvider, VcsTokenResult } from "./vcs-token-provider";

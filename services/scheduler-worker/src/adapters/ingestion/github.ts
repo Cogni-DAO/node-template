@@ -12,6 +12,7 @@
  * - Client-side time-window filtering with updatedAt early-stop optimization.
  * - platformUserId = GitHub numeric databaseId (stable), not login (mutable).
  * - Bot authors skipped (no databaseId on Bot/Mannequin actors).
+ * - Rate limiting handled by @octokit/plugin-retry + @octokit/plugin-throttling.
  * Side-effects: HTTP (GitHub GraphQL API)
  * Links: docs/spec/epoch-ledger.md, docs/research/epoch-event-ingestion-pipeline.md
  * @internal
@@ -23,40 +24,24 @@ import type {
   CollectResult,
   SourceAdapter,
   StreamDefinition,
+  VcsTokenProvider,
 } from "@cogni/ingestion-core";
 import { buildEventId, hashCanonicalPayload } from "@cogni/ingestion-core";
-import { graphql } from "@octokit/graphql";
+
+import type { GitHubClient } from "./octokit-client";
+import { createGitHubClient } from "./octokit-client";
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
 export interface GitHubAdapterConfig {
-  /** GitHub PAT or GitHub App installation token */
-  readonly token: string;
+  /** Token provider (GitHub App auth) */
+  readonly tokenProvider: VcsTokenProvider;
   /** Repos to collect from, format: "owner/repo" */
   readonly repos: readonly string[];
-  /** Max GraphQL requests per hour (default: 4500 — conservative for PAT's 5000 limit) */
-  readonly rateLimitPerHour?: number;
   /** Max events to return per collect() call (default: 500) */
   readonly maxEventsPerCall?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Error types
-// ---------------------------------------------------------------------------
-
-export class GitHubRateLimitError extends Error {
-  readonly name = "GitHubRateLimitError" as const;
-
-  constructor(
-    public readonly retryAfterSeconds: number,
-    public readonly endpoint: string
-  ) {
-    super(
-      `GitHub rate limit hit on ${endpoint}, retry after ${retryAfterSeconds}s`
-    );
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -198,27 +183,30 @@ const CLOSED_ISSUES_QUERY = /* GraphQL */ `
   }
 `;
 
+/** Buffer before token expiry to trigger refresh (5 minutes) */
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
 // ---------------------------------------------------------------------------
 // Adapter
 // ---------------------------------------------------------------------------
 
 export class GitHubSourceAdapter implements SourceAdapter {
   readonly source = "github" as const;
-  readonly version = "0.2.0" as const;
+  readonly version = "0.3.0" as const;
 
-  private readonly gql: typeof graphql;
+  private readonly tokenProvider: VcsTokenProvider;
   private readonly repos: readonly string[];
   private readonly maxEventsPerCall: number;
   private readonly logger: LoggerLike;
+
+  private octokit: GitHubClient | undefined;
+  private tokenExpiresAt: Date | undefined;
 
   constructor(config: GitHubAdapterConfig, logger?: LoggerLike) {
     this.repos = config.repos;
     this.maxEventsPerCall = config.maxEventsPerCall ?? 500;
     this.logger = logger ?? silentLogger;
-
-    this.gql = graphql.defaults({
-      headers: { authorization: `token ${config.token}` },
-    });
+    this.tokenProvider = config.tokenProvider;
   }
 
   streams(): StreamDefinition[] {
@@ -290,6 +278,32 @@ export class GitHubSourceAdapter implements SourceAdapter {
         retrievedAt: new Date(),
       },
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // Private: client management with token refresh
+  // -------------------------------------------------------------------------
+
+  private async getClient(): Promise<GitHubClient> {
+    const needsRefresh =
+      !this.octokit ||
+      !this.tokenExpiresAt ||
+      Date.now() >= this.tokenExpiresAt.getTime() - TOKEN_REFRESH_BUFFER_MS;
+
+    if (needsRefresh) {
+      const { token, expiresAt } = await this.tokenProvider.getToken({
+        provider: "github",
+        capability: "ingest",
+        repoRef: this.repos[0],
+      });
+      const client = createGitHubClient(token);
+      this.octokit = client;
+      this.tokenExpiresAt = expiresAt;
+      return client;
+    }
+
+    // Safe: needsRefresh is true when this.octokit is undefined
+    return this.octokit as GitHubClient;
   }
 
   // -------------------------------------------------------------------------
@@ -624,53 +638,15 @@ export class GitHubSourceAdapter implements SourceAdapter {
   }
 
   // -------------------------------------------------------------------------
-  // Private: GraphQL execution with rate limit handling
+  // Private: GraphQL execution via Octokit client
+  // Rate limiting is handled by @octokit/plugin-retry + @octokit/plugin-throttling.
   // -------------------------------------------------------------------------
 
   private async executeQuery<T>(
     query: string,
     variables: Record<string, unknown>
   ): Promise<T> {
-    try {
-      return await this.gql<T>(query, variables);
-    } catch (error: unknown) {
-      if (isGraphQLResponseError(error) && isRateLimited(error)) {
-        const retryAfter = extractRetryAfter(error);
-        throw new GitHubRateLimitError(retryAfter, "graphql");
-      }
-      throw error;
-    }
+    const client = await this.getClient();
+    return client.graphql<T>(query, variables);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Error inspection helpers
-// ---------------------------------------------------------------------------
-
-interface GraphQLResponseError {
-  status: number;
-  headers: Record<string, string>;
-}
-
-function isGraphQLResponseError(error: unknown): error is GraphQLResponseError {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    typeof (error as GraphQLResponseError).status === "number"
-  );
-}
-
-function isRateLimited(error: GraphQLResponseError): boolean {
-  return error.status === 403 || error.status === 429;
-}
-
-function extractRetryAfter(error: GraphQLResponseError): number {
-  const header = error.headers?.["retry-after"];
-  if (header) {
-    const seconds = Number.parseInt(header, 10);
-    if (!Number.isNaN(seconds)) return seconds;
-  }
-  // Default: wait 60 seconds if no Retry-After header
-  return 60;
 }

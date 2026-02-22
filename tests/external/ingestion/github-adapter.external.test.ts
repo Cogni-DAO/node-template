@@ -4,8 +4,8 @@
 /**
  * Module: `@cogni/tests/external/ingestion/github-adapter.external.test`
  * Purpose: Validate GitHubSourceAdapter against real GitHub API using Cogni-DAO/test-repo.
- * Scope: Proves GraphQL queries parse, all 3 streams produce ActivityEvent[], deterministic IDs, ledger round-trip. Does not test webhook handling or auth flows.
- * Invariants: Requires GITHUB_TOKEN or GH_TOKEN in env. Skips gracefully if missing.
+ * Scope: Proves GraphQL queries parse, all 3 streams produce ActivityEvent[], deterministic IDs, ledger round-trip. Does not test webhook handling.
+ * Invariants: Requires REVIEW_APP_ID + REVIEW_APP_PRIVATE_KEY_BASE64 in env. Skips gracefully if missing.
  * Side-effects: IO (GitHub GraphQL, testcontainers PostgreSQL)
  * Links: services/scheduler-worker/src/adapters/ingestion/github.ts, docs/spec/epoch-ledger.md
  * @internal
@@ -22,14 +22,21 @@ import {
 import { seedTestActor } from "@tests/_fixtures/stack/seed";
 import { beforeAll, describe, expect, it } from "vitest";
 import { GitHubSourceAdapter } from "../../../services/scheduler-worker/src/adapters/ingestion/github";
+import { GitHubAppTokenProvider } from "../../../services/scheduler-worker/src/adapters/ingestion/github-auth";
 
 // ---------------------------------------------------------------------------
-// Token resolution — skip entire suite if no GitHub token available
+// Auth resolution — skip entire suite if no GitHub App credentials available
 // ---------------------------------------------------------------------------
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "";
+const REVIEW_APP_ID = process.env.REVIEW_APP_ID ?? "";
+const REVIEW_APP_PRIVATE_KEY_BASE64 =
+  process.env.REVIEW_APP_PRIVATE_KEY_BASE64 ?? "";
+const REVIEW_INSTALLATION_ID = process.env.REVIEW_INSTALLATION_ID
+  ? Number(process.env.REVIEW_INSTALLATION_ID)
+  : undefined;
 
-const describeWithToken = GITHUB_TOKEN ? describe : describe.skip;
+const hasAppCreds = REVIEW_APP_ID && REVIEW_APP_PRIVATE_KEY_BASE64;
+const describeWithAuth = hasAppCreds ? describe : describe.skip;
 
 // ---------------------------------------------------------------------------
 // Test-repo known data (Cogni-DAO/test-repo)
@@ -57,9 +64,17 @@ const WIDE_WINDOW = {
 // Suite
 // ---------------------------------------------------------------------------
 
-describeWithToken("GitHubSourceAdapter (external)", () => {
+describeWithAuth("GitHubSourceAdapter (external)", () => {
+  const tokenProvider = new GitHubAppTokenProvider({
+    appId: REVIEW_APP_ID,
+    privateKey: Buffer.from(REVIEW_APP_PRIVATE_KEY_BASE64, "base64").toString(
+      "utf-8"
+    ),
+    installationId: REVIEW_INSTALLATION_ID,
+  });
+
   const adapter = new GitHubSourceAdapter({
-    token: GITHUB_TOKEN,
+    tokenProvider,
     repos: [TEST_REPO],
   });
 

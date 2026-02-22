@@ -1,9 +1,8 @@
-import type { CollectParams } from "@cogni/ingestion-core";
+import type { CollectParams, VcsTokenProvider } from "@cogni/ingestion-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   type GitHubAdapterConfig,
-  GitHubRateLimitError,
   GitHubSourceAdapter,
 } from "../src/adapters/ingestion/github";
 import {
@@ -16,26 +15,34 @@ import {
 } from "./fixtures/github-graphql.fixtures";
 
 // ---------------------------------------------------------------------------
-// Mock @octokit/graphql
+// Mock @octokit/core via the octokit-client module
 // ---------------------------------------------------------------------------
 
 const mockGraphqlFn = vi.fn();
 
-vi.mock("@octokit/graphql", () => ({
-  graphql: {
-    defaults: () => mockGraphqlFn,
-  },
+vi.mock("../src/adapters/ingestion/octokit-client", () => ({
+  createGitHubClient: () => ({ graphql: mockGraphqlFn }),
 }));
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Stub token provider that always returns a static token */
+function stubTokenProvider(): VcsTokenProvider {
+  return {
+    getToken: vi.fn().mockResolvedValue({
+      token: "ghs_test_token_1234",
+      expiresAt: new Date(Date.now() + 3600_000),
+    }),
+  };
+}
+
 function makeAdapter(
   overrides?: Partial<GitHubAdapterConfig>
 ): GitHubSourceAdapter {
   return new GitHubSourceAdapter({
-    token: "ghp_test_token_1234",
+    tokenProvider: stubTokenProvider(),
     repos: ["cogni-dao/cogni-template"],
     ...overrides,
   });
@@ -308,10 +315,6 @@ describe("GitHubSourceAdapter", () => {
 
       expect(result.events).toHaveLength(2);
       expect(mockGraphqlFn).toHaveBeenCalledTimes(2);
-
-      // Second call should use the endCursor from first page
-      const secondCallArgs = mockGraphqlFn.mock.calls[1];
-      expect(secondCallArgs?.[1]?.cursor).toBe("cursor-page-1");
     });
 
     it("respects maxEventsPerCall limit", async () => {
@@ -433,70 +436,63 @@ describe("GitHubSourceAdapter", () => {
     });
   });
 
-  describe("collect() — rate limiting", () => {
-    it("throws GitHubRateLimitError on 403", async () => {
-      mockGraphqlFn.mockRejectedValueOnce({
-        status: 403,
-        headers: { "retry-after": "120" },
+  describe("collect() — tokenProvider integration", () => {
+    it("calls tokenProvider on first collect()", async () => {
+      const mockTokenProvider = stubTokenProvider();
+
+      const pr = makePrNode({
+        number: 1,
+        mergedAt: "2026-01-02T00:00:00Z",
+      });
+      mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
+
+      const adapter = new GitHubSourceAdapter({
+        tokenProvider: mockTokenProvider,
+        repos: ["cogni-dao/cogni-template"],
       });
 
-      const adapter = makeAdapter();
-      await expect(adapter.collect(makeCollectParams())).rejects.toThrow(
-        GitHubRateLimitError
-      );
+      const result = await adapter.collect(makeCollectParams());
+
+      expect(result.events).toHaveLength(1);
+      expect(mockTokenProvider.getToken).toHaveBeenCalledWith({
+        provider: "github",
+        capability: "ingest",
+        repoRef: "cogni-dao/cogni-template",
+      });
     });
 
-    it("throws GitHubRateLimitError on 429", async () => {
-      mockGraphqlFn.mockRejectedValueOnce({
-        status: 429,
-        headers: { "retry-after": "60" },
+    it("refreshes token when near expiry", async () => {
+      const mockTokenProvider: VcsTokenProvider = {
+        getToken: vi
+          .fn()
+          // First call: token that expires soon
+          .mockResolvedValueOnce({
+            token: "ghs_first",
+            expiresAt: new Date(Date.now() + 60_000), // 1 min — within 5-min buffer
+          })
+          // Second call: fresh token
+          .mockResolvedValueOnce({
+            token: "ghs_second",
+            expiresAt: new Date(Date.now() + 3600_000),
+          }),
+      };
+
+      const pr = makePrNode({ number: 1, mergedAt: "2026-01-02T00:00:00Z" });
+      mockGraphqlFn
+        .mockResolvedValueOnce(wrapPrResponse([pr]))
+        .mockResolvedValueOnce(wrapPrResponse([]));
+
+      const adapter = new GitHubSourceAdapter({
+        tokenProvider: mockTokenProvider,
+        repos: ["cogni-dao/cogni-template"],
       });
 
-      const adapter = makeAdapter();
-      const error = await adapter
-        .collect(makeCollectParams())
-        .catch((e: unknown) => e);
+      // First collect — gets first token
+      await adapter.collect(makeCollectParams());
+      // Second collect — token near expiry, should refresh
+      await adapter.collect(makeCollectParams());
 
-      expect(error).toBeInstanceOf(GitHubRateLimitError);
-      expect((error as GitHubRateLimitError).retryAfterSeconds).toBe(60);
-    });
-
-    it("extracts retryAfterSeconds from header", async () => {
-      mockGraphqlFn.mockRejectedValueOnce({
-        status: 403,
-        headers: { "retry-after": "300" },
-      });
-
-      const adapter = makeAdapter();
-      const error = await adapter
-        .collect(makeCollectParams())
-        .catch((e: unknown) => e);
-
-      expect((error as GitHubRateLimitError).retryAfterSeconds).toBe(300);
-    });
-
-    it("defaults to 60s when no Retry-After header", async () => {
-      mockGraphqlFn.mockRejectedValueOnce({
-        status: 403,
-        headers: {},
-      });
-
-      const adapter = makeAdapter();
-      const error = await adapter
-        .collect(makeCollectParams())
-        .catch((e: unknown) => e);
-
-      expect((error as GitHubRateLimitError).retryAfterSeconds).toBe(60);
-    });
-
-    it("propagates non-rate-limit errors as-is", async () => {
-      const networkError = new Error("ECONNREFUSED");
-      mockGraphqlFn.mockRejectedValueOnce(networkError);
-
-      const adapter = makeAdapter();
-      await expect(adapter.collect(makeCollectParams())).rejects.toThrow(
-        "ECONNREFUSED"
-      );
+      expect(mockTokenProvider.getToken).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -11,6 +11,12 @@
 
 export {
   type GitHubAdapterConfig,
-  GitHubRateLimitError,
   GitHubSourceAdapter,
 } from "./github";
+
+export {
+  type GitHubAppConfig,
+  GitHubAppTokenProvider,
+} from "./github-auth";
+
+export { createGitHubClient, type GitHubClient } from "./octokit-client";
