@@ -9,8 +9,8 @@
  * - All credit/unit columns use BIGINT (ALL_MATH_BIGINT).
  * - Layer 1 (activity_events, epoch_pool_components) are append-only (DB triggers in migration).
  * - Layer 2 (activity_curation) is mutable while epoch open, frozen on close (CURATION_FREEZE_ON_CLOSE).
- * - ONE_OPEN_EPOCH: partial unique index on epochs WHERE status = 'open', scoped to node_id.
- * - EPOCH_WINDOW_UNIQUE: unique(node_id, period_start, period_end).
+ * - ONE_OPEN_EPOCH: partial unique index on epochs WHERE status = 'open', scoped to (node_id, scope_id).
+ * - EPOCH_WINDOW_UNIQUE: unique(node_id, scope_id, period_start, period_end).
  * - NODE_SCOPED: all ledger tables include node_id.
  * - No RLS in V0 — worker uses service-role connection.
  * Side-effects: none (schema definitions only)
@@ -50,6 +50,7 @@ export const epochs = pgTable(
   {
     id: bigserial("id", { mode: "bigint" }).primaryKey(),
     nodeId: uuid("node_id").notNull(),
+    scopeId: uuid("scope_id").notNull(),
     status: text("status").notNull().default("open"),
     periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
     periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
@@ -67,15 +68,16 @@ export const epochs = pgTable(
   },
   (table) => [
     check("epochs_status_check", sql`${table.status} IN ('open', 'closed')`),
-    // EPOCH_WINDOW_UNIQUE: no overlapping windows per node
+    // EPOCH_WINDOW_UNIQUE: no overlapping windows per node+scope
     uniqueIndex("epochs_window_unique").on(
       table.nodeId,
+      table.scopeId,
       table.periodStart,
       table.periodEnd
     ),
-    // ONE_OPEN_EPOCH per node
+    // ONE_OPEN_EPOCH per node+scope
     uniqueIndex("epochs_one_open_per_node")
-      .on(table.nodeId, table.status)
+      .on(table.nodeId, table.scopeId, table.status)
       .where(sql`${table.status} = 'open'`),
   ]
 );
@@ -95,6 +97,7 @@ export const activityEvents = pgTable(
   "activity_events",
   {
     nodeId: uuid("node_id").notNull(),
+    scopeId: uuid("scope_id").notNull(),
     id: text("id").notNull(),
     source: text("source").notNull(),
     eventType: text("event_type").notNull(),
@@ -113,7 +116,11 @@ export const activityEvents = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.nodeId, table.id] }),
-    index("activity_events_node_time_idx").on(table.nodeId, table.eventTime),
+    index("activity_events_node_time_idx").on(
+      table.nodeId,
+      table.scopeId,
+      table.eventTime
+    ),
     index("activity_events_source_type_idx").on(table.source, table.eventType),
     index("activity_events_platform_user_idx").on(table.platformUserId),
   ]
@@ -202,21 +209,28 @@ export const epochAllocations = pgTable(
 
 /**
  * Source cursors — track ingestion position per source stream.
- * Composite PK: (node_id, source, stream, scope).
+ * Composite PK: (node_id, scope_id, source, stream, source_ref).
  */
 export const sourceCursors = pgTable(
   "source_cursors",
   {
     nodeId: uuid("node_id").notNull(),
+    scopeId: uuid("scope_id").notNull(),
     source: text("source").notNull(),
     stream: text("stream").notNull(),
-    scope: text("scope").notNull(),
+    sourceRef: text("source_ref").notNull(),
     cursorValue: text("cursor_value").notNull(),
     retrievedAt: timestamp("retrieved_at", { withTimezone: true }).notNull(),
   },
   (table) => [
     primaryKey({
-      columns: [table.nodeId, table.source, table.stream, table.scope],
+      columns: [
+        table.nodeId,
+        table.scopeId,
+        table.source,
+        table.stream,
+        table.sourceRef,
+      ],
     }),
   ]
 );

@@ -85,6 +85,13 @@
       "when": 1771687400000,
       "tag": "0011_triggers_and_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1771900000000,
+      "tag": "0012_add_scope_id",
+      "breakpoints": true
     }
   ]
 }

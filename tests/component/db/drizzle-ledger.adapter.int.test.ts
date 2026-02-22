@@ -23,6 +23,7 @@ import {
   makeCuration,
   makePoolComponent,
   TEST_NODE_ID,
+  TEST_SCOPE_ID,
   TEST_WEIGHT_CONFIG,
   weekWindow,
 } from "@tests/_fixtures/ledger/seed-ledger";
@@ -57,7 +58,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
     afterAll(async () => {
       // Ensure no open epoch leaks to subsequent describes
-      const open = await adapter.getOpenEpoch(TEST_NODE_ID);
+      const open = await adapter.getOpenEpoch(TEST_NODE_ID, TEST_SCOPE_ID);
       if (open) await adapter.closeEpoch(open.id, 0n);
     });
 
@@ -65,6 +66,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       const window = weekWindow(0);
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
         ...window,
         weightConfig: TEST_WEIGHT_CONFIG,
       });
@@ -81,7 +83,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
 
     it("getOpenEpoch returns the open epoch for the node", async () => {
-      const open = await adapter.getOpenEpoch(TEST_NODE_ID);
+      const open = await adapter.getOpenEpoch(TEST_NODE_ID, TEST_SCOPE_ID);
       expect(open).not.toBeNull();
       expect(open?.status).toBe("open");
     });
@@ -96,6 +98,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       await expect(
         adapter.createEpoch({
           nodeId: TEST_NODE_ID,
+          scopeId: TEST_SCOPE_ID,
           ...weekWindow(1),
           weightConfig: TEST_WEIGHT_CONFIG,
         })
@@ -109,6 +112,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       await expect(
         adapter.createEpoch({
           nodeId: TEST_NODE_ID,
+          scopeId: TEST_SCOPE_ID,
           ...weekWindow(0), // same window as the closed epoch
           weightConfig: TEST_WEIGHT_CONFIG,
         })
@@ -118,6 +122,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     it("closeEpoch sets status, poolTotal, and closedAt", async () => {
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
         ...weekWindow(2),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
@@ -226,6 +231,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     beforeAll(async () => {
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
         ...weekWindow(3),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
@@ -234,7 +240,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
     // Freeze test closes the epoch; afterAll is a safety net
     afterAll(async () => {
-      const open = await adapter.getOpenEpoch(TEST_NODE_ID);
+      const open = await adapter.getOpenEpoch(TEST_NODE_ID, TEST_SCOPE_ID);
       if (open) await adapter.closeEpoch(open.id, 0n);
     });
 
@@ -299,6 +305,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     beforeAll(async () => {
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
         ...weekWindow(4),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
@@ -351,6 +358,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     it("upserts and retrieves a cursor", async () => {
       await adapter.upsertCursor(
         TEST_NODE_ID,
+        TEST_SCOPE_ID,
         "github",
         "pull_requests",
         "test/repo",
@@ -359,6 +367,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
       const cursor = await adapter.getCursor(
         TEST_NODE_ID,
+        TEST_SCOPE_ID,
         "github",
         "pull_requests",
         "test/repo"
@@ -370,6 +379,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     it("upsert updates existing cursor value", async () => {
       await adapter.upsertCursor(
         TEST_NODE_ID,
+        TEST_SCOPE_ID,
         "github",
         "pull_requests",
         "test/repo",
@@ -378,6 +388,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
       const cursor = await adapter.getCursor(
         TEST_NODE_ID,
+        TEST_SCOPE_ID,
         "github",
         "pull_requests",
         "test/repo"
@@ -388,6 +399,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     it("getCursor returns null for unknown cursor", async () => {
       const cursor = await adapter.getCursor(
         TEST_NODE_ID,
+        TEST_SCOPE_ID,
         "github",
         "unknown_stream",
         "test/repo"
@@ -404,6 +416,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     beforeAll(async () => {
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
         ...weekWindow(5),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
@@ -451,6 +464,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     beforeAll(async () => {
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
         ...weekWindow(6),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
@@ -497,6 +511,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       // Self-contained: create epoch → close → insert statement
       const epoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
         ...weekWindow(7),
         weightConfig: TEST_WEIGHT_CONFIG,
       });

@@ -17,6 +17,7 @@ import type { InsertActivityEventParams } from "@cogni/ledger-core";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
   TEST_NODE_ID,
+  TEST_SCOPE_ID,
   TEST_WEIGHT_CONFIG,
 } from "@tests/_fixtures/ledger/seed-ledger";
 import { seedTestActor } from "@tests/_fixtures/stack/seed";
@@ -202,6 +203,7 @@ describeWithAuth("GitHubSourceAdapter (external)", () => {
       await seedTestActor(db);
       await ledger.createEpoch({
         nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
         periodStart: FIXTURE_WINDOW.since,
         periodEnd: FIXTURE_WINDOW.until,
         weightConfig: TEST_WEIGHT_CONFIG,
@@ -222,6 +224,7 @@ describeWithAuth("GitHubSourceAdapter (external)", () => {
         (e: ActivityEvent) => ({
           id: e.id,
           nodeId: TEST_NODE_ID,
+          scopeId: TEST_SCOPE_ID,
           source: e.source,
           eventType: e.eventType,
           platformUserId: e.platformUserId,

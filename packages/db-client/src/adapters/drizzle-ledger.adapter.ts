@@ -56,6 +56,7 @@ function toEpoch(row: typeof epochs.$inferSelect): LedgerEpoch {
   return {
     id: row.id,
     nodeId: row.nodeId,
+    scopeId: row.scopeId,
     status: row.status as EpochStatus,
     periodStart: row.periodStart,
     periodEnd: row.periodEnd,
@@ -73,6 +74,7 @@ function toActivityEvent(
   return {
     id: row.id,
     nodeId: row.nodeId,
+    scopeId: row.scopeId,
     source: row.source,
     eventType: row.eventType,
     platformUserId: row.platformUserId,
@@ -123,9 +125,10 @@ function toAllocation(
 function toCursor(row: typeof sourceCursors.$inferSelect): LedgerSourceCursor {
   return {
     nodeId: row.nodeId,
+    scopeId: row.scopeId,
     source: row.source,
     stream: row.stream,
-    scope: row.scope,
+    sourceRef: row.sourceRef,
     cursorValue: row.cursorValue,
     retrievedAt: row.retrievedAt,
   };
@@ -184,6 +187,7 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
 
   async createEpoch(params: {
     nodeId: string;
+    scopeId: string;
     periodStart: Date;
     periodEnd: Date;
     weightConfig: Record<string, number>;
@@ -192,6 +196,7 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       .insert(epochs)
       .values({
         nodeId: params.nodeId,
+        scopeId: params.scopeId,
         periodStart: params.periodStart,
         periodEnd: params.periodEnd,
         weightConfig: params.weightConfig,
@@ -201,11 +206,20 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
     return toEpoch(row);
   }
 
-  async getOpenEpoch(nodeId: string): Promise<LedgerEpoch | null> {
+  async getOpenEpoch(
+    nodeId: string,
+    scopeId: string
+  ): Promise<LedgerEpoch | null> {
     const rows = await this.db
       .select()
       .from(epochs)
-      .where(and(eq(epochs.nodeId, nodeId), eq(epochs.status, "open")))
+      .where(
+        and(
+          eq(epochs.nodeId, nodeId),
+          eq(epochs.scopeId, scopeId),
+          eq(epochs.status, "open")
+        )
+      )
       .limit(1);
     return rows[0] ? toEpoch(rows[0]) : null;
   }
@@ -261,6 +275,7 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       .values(
         events.map((e) => ({
           nodeId: e.nodeId,
+          scopeId: e.scopeId,
           id: e.id,
           source: e.source,
           eventType: e.eventType,
@@ -401,27 +416,30 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
 
   async upsertCursor(
     nodeId: string,
+    scopeId: string,
     source: string,
     stream: string,
-    scope: string,
+    sourceRef: string,
     cursorValue: string
   ): Promise<void> {
     await this.db
       .insert(sourceCursors)
       .values({
         nodeId,
+        scopeId,
         source,
         stream,
-        scope,
+        sourceRef,
         cursorValue,
         retrievedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: [
           sourceCursors.nodeId,
+          sourceCursors.scopeId,
           sourceCursors.source,
           sourceCursors.stream,
-          sourceCursors.scope,
+          sourceCursors.sourceRef,
         ],
         set: {
           cursorValue,
@@ -432,9 +450,10 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
 
   async getCursor(
     nodeId: string,
+    scopeId: string,
     source: string,
     stream: string,
-    scope: string
+    sourceRef: string
   ): Promise<LedgerSourceCursor | null> {
     const rows = await this.db
       .select()
@@ -442,9 +461,10 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       .where(
         and(
           eq(sourceCursors.nodeId, nodeId),
+          eq(sourceCursors.scopeId, scopeId),
           eq(sourceCursors.source, source),
           eq(sourceCursors.stream, stream),
-          eq(sourceCursors.scope, scope)
+          eq(sourceCursors.sourceRef, sourceRef)
         )
       )
       .limit(1);

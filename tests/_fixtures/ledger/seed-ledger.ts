@@ -21,6 +21,9 @@ import type {
 /** Stable test node ID for ledger integration tests */
 export const TEST_NODE_ID = "00000000-0000-4000-8000-000000000001";
 
+/** Stable test scope ID for ledger integration tests */
+export const TEST_SCOPE_ID = "00000000-0000-4000-8000-000000000002";
+
 /** Epoch window helpers */
 export function weekWindow(weekOffset = 0): {
   periodStart: Date;
@@ -47,6 +50,7 @@ export function makeActivityEvent(
 ): InsertActivityEventParams {
   return {
     nodeId: TEST_NODE_ID,
+    scopeId: TEST_SCOPE_ID,
     source: "github",
     eventType: "pr_merged",
     platformUserId: "12345",
