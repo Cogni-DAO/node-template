@@ -38,7 +38,7 @@ Epochs gain the `open → review → finalized` lifecycle required by EPOCH_THRE
 
 **Reuses**:
 
-- Existing `closeEpoch()` store method (update transition from `open→closed` to `review→finalized`)
+- Existing `closeEpoch()` store method (rename to `finalizeEpoch()`, update transition from `open→closed` to `review→finalized`)
 - Existing repo-spec config pattern (`getNodeId()`, `getPaymentConfig()`, `getGovernanceConfig()`)
 - Existing `wrapRouteHandlerWithLogging({ auth: { mode: "required" } })` for SIWE route
 - Existing `insertStatementSignature()` / `getSignaturesForStatement()` store methods (already implemented)
@@ -95,29 +95,34 @@ uniqueIndex("epochs_one_active_per_node")
 
 Dev databases that ran old migrations: `pnpm db:reset` (drop + re-migrate).
 
-#### 3. Model type update (`packages/ledger-core/src/model.ts`)
+#### 2. Model type update (`packages/ledger-core/src/model.ts`)
 
 ```typescript
 export const EPOCH_STATUSES = ["open", "review", "finalized"] as const;
 export type EpochStatus = (typeof EPOCH_STATUSES)[number];
 ```
 
-#### 4. Store port: add `closeIngestion` (`packages/ledger-core/src/store.ts`)
+#### 3. Store port: add `closeIngestion`, rename `closeEpoch` → `finalizeEpoch` (`packages/ledger-core/src/store.ts`)
 
 ```typescript
 /** Transition epoch open → review (INGESTION_CLOSED_ON_REVIEW). */
-closeIngestion(nodeId: string, epochId: bigint): Promise<LedgerEpoch>;
+closeIngestion(epochId: bigint): Promise<LedgerEpoch>;
+
+/** Transition epoch review → finalized (was closeEpoch). */
+finalizeEpoch(epochId: bigint, poolTotal: bigint): Promise<LedgerEpoch>;
 ```
+
+Note: `closeIngestion` matches existing `closeEpoch` pattern — epochId only, no nodeId (epoch PK is sufficient). Rename `closeEpoch` → `finalizeEpoch` since it now transitions review→finalized, not open→closed.
 
 No new methods needed for signatures — `insertStatementSignature()` and `getSignaturesForStatement()` already exist on the port and adapter.
 
-#### 5. Store adapter: implement `closeIngestion`, update `closeEpoch` (`packages/db-client/src/adapters/drizzle-ledger.adapter.ts`)
+#### 4. Store adapter: implement `closeIngestion`, rename + update `closeEpoch` → `finalizeEpoch` (`packages/db-client/src/adapters/drizzle-ledger.adapter.ts`)
 
-**`closeIngestion(nodeId, epochId)`**: UPDATE epochs SET status='review' WHERE id=epochId AND node_id=nodeId AND status='open'. Idempotent: if already review, return as-is. If finalized, throw. If not found, throw.
+**`closeIngestion(epochId)`**: UPDATE epochs SET status='review' WHERE id=epochId AND status='open'. Idempotent: if already review, return as-is. If finalized, throw. If not found, throw.
 
-**`closeEpoch(epochId, poolTotal)`**: Change WHERE from `status='open'` to `status='review'`. Same idempotent pattern — already-finalized returns existing. This method is now the review→finalized transition used by FinalizeEpochWorkflow (task.0102).
+**`finalizeEpoch(epochId, poolTotal)`** (renamed from `closeEpoch`): Change WHERE from `status='open'` to `status='review'`. Same idempotent pattern — already-finalized returns existing. This method is the review→finalized transition used by FinalizeEpochWorkflow (task.0102).
 
-#### 6. Signing module (`packages/ledger-core/src/signing.ts`)
+#### 5. Signing module (`packages/ledger-core/src/signing.ts`)
 
 ```typescript
 export interface CanonicalMessageParams {
@@ -143,7 +148,7 @@ export function buildCanonicalMessage(params: CanonicalMessageParams): string {
 
 Zero runtime deps. Shared between frontend (wallet signing) and backend (verification in task.0102). Export from `packages/ledger-core/src/index.ts`.
 
-#### 7. Approvers config
+#### 6. Approvers config
 
 **`src/shared/config/repoSpec.schema.ts`** — add `ledger` section:
 
@@ -181,7 +186,7 @@ ledger:
     - "0xYourWalletAddress" # Replace with actual scope approver
 ```
 
-#### 8. API route: close-ingestion
+#### 7. API route: close-ingestion
 
 **Contract**: `src/contracts/ledger.close-ingestion.v1.contract.ts`
 
@@ -190,19 +195,21 @@ export const closeIngestionOperation = {
   id: "ledger.close-ingestion.v1",
   input: z.object({ epochId: z.string() }),
   output: z.object({
-    epoch: EpochDtoSchema, // reuse from task.0096 contracts
+    epoch: EpochDtoSchema, // if task.0096 contracts landed, import; otherwise define inline
   }),
 };
 ```
+
+If task.0096 contracts are not yet merged, define a minimal inline `EpochDtoSchema` (id, status, periodStart, periodEnd) and replace with the shared one later.
 
 **Route**: `src/app/api/v1/ledger/epochs/[id]/close-ingestion/route.ts`
 
 POST handler:
 
 1. SIWE session → get walletAddress
-2. Check walletAddress in `getLedgerApprovers()` → 403 if not
+2. Check `walletAddress.toLowerCase()` against `getLedgerApprovers().map(a => a.toLowerCase())` → 403 if not (EVM addresses are case-insensitive; SIWE returns EIP-55 checksummed)
 3. Parse epochId from URL param
-4. Call `store.closeIngestion(getNodeId(), BigInt(epochId))`
+4. Call `store.closeIngestion(BigInt(epochId))`
 5. Return epoch DTO
 
 Uses `wrapRouteHandlerWithLogging({ auth: { mode: "required" } })`. Route lives under `/api/v1/ledger/` (SIWE-protected namespace).
@@ -231,7 +238,7 @@ Uses `wrapRouteHandlerWithLogging({ auth: { mode: "required" } })`. Route lives 
 - Modify: `packages/ledger-core/src/model.ts` — `EPOCH_STATUSES = ["open", "review", "finalized"]`
 - Modify: `packages/ledger-core/src/store.ts` — add `closeIngestion()` to port
 - Modify: `packages/ledger-core/src/index.ts` — export signing module
-- Modify: `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — implement `closeIngestion()`, update `closeEpoch()` transition
+- Modify: `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — implement `closeIngestion()`, rename + update `closeEpoch()` → `finalizeEpoch()`
 - Modify: `src/shared/config/repoSpec.schema.ts` — add `ledger.approvers` schema
 - Modify: `src/shared/config/repoSpec.server.ts` — add `getLedgerApprovers()`
 - Modify: `src/shared/config/index.ts` — export `getLedgerApprovers`
