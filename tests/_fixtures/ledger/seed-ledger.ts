@@ -4,17 +4,23 @@
 /**
  * Module: `@tests/_fixtures/ledger/seed-ledger`
  * Purpose: Reusable ledger test fixtures for seeding epochs, activity events, and related data.
- * Scope: Factory functions for ledger test data. Does not contain test logic or assertions.
+ * Scope: Factory functions for ledger test data + composite seeders for common test scenarios. Does not contain test logic or assertions.
  * Invariants: All generated IDs are deterministic from inputs where possible.
- * Side-effects: none (pure data factories)
+ * Side-effects: none (pure data factories); composite seeders perform IO via store
  * Links: packages/ledger-core/src/store.ts, tests/component/db/drizzle-ledger.adapter.int.test.ts
  * @internal
  */
 
 import type {
+  ActivityLedgerStore,
   InsertActivityEventParams,
   InsertAllocationParams,
+  InsertCurationAutoParams,
+  InsertPayoutStatementParams,
   InsertPoolComponentParams,
+  LedgerEpoch,
+  LedgerPayoutStatement,
+  LedgerPoolComponent,
   UpsertCurationParams,
 } from "@cogni/ledger-core";
 
@@ -77,6 +83,21 @@ export function makeCuration(
   };
 }
 
+/** Build a curation auto-populate param (narrowed insert) */
+export function makeCurationAuto(
+  overrides: Partial<InsertCurationAutoParams> & {
+    epochId: bigint;
+    eventId: string;
+  }
+): InsertCurationAutoParams {
+  return {
+    nodeId: TEST_NODE_ID,
+    userId: null,
+    included: true,
+    ...overrides,
+  };
+}
+
 /** Build an allocation insert param with sensible defaults */
 export function makeAllocation(
   overrides: Partial<InsertAllocationParams> & {
@@ -104,4 +125,159 @@ export function makePoolComponent(
     amountCredits: 10000n,
     ...overrides,
   };
+}
+
+/** Build a payout statement insert param with sensible defaults */
+export function makePayoutStatement(
+  overrides: Partial<InsertPayoutStatementParams> & { epochId: bigint }
+): InsertPayoutStatementParams {
+  return {
+    nodeId: TEST_NODE_ID,
+    allocationSetHash: "test-hash-abc123",
+    poolTotalCredits: 10000n,
+    payoutsJson: [
+      {
+        user_id: "user-1",
+        total_units: "8000",
+        share: "0.800000",
+        amount_credits: "8000",
+      },
+      {
+        user_id: "user-2",
+        total_units: "2000",
+        share: "0.200000",
+        amount_credits: "2000",
+      },
+    ],
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Composite seeders — seed a full scenario in one call
+// ---------------------------------------------------------------------------
+
+/** Result of seeding a closed epoch with all related data */
+export interface SeededClosedEpoch {
+  epoch: LedgerEpoch;
+  poolComponent: LedgerPoolComponent;
+  statement: LedgerPayoutStatement;
+}
+
+/**
+ * Seeds a complete closed epoch with activity, curations, allocations,
+ * a pool component, and a payout statement. Suitable for testing read routes.
+ *
+ * @param store - The ActivityLedgerStore to seed into
+ * @param opts.nodeId - Node ID (defaults to TEST_NODE_ID)
+ * @param opts.scopeId - Scope ID (defaults to TEST_SCOPE_ID)
+ * @param opts.weekOffset - Week offset for epoch window (defaults to 0)
+ */
+export async function seedClosedEpoch(
+  store: ActivityLedgerStore,
+  opts: {
+    nodeId?: string;
+    scopeId?: string;
+    weekOffset?: number;
+  } = {}
+): Promise<SeededClosedEpoch> {
+  const nodeId = opts.nodeId ?? TEST_NODE_ID;
+  const scopeId = opts.scopeId ?? TEST_SCOPE_ID;
+  const { periodStart, periodEnd } = weekWindow(opts.weekOffset ?? 0);
+
+  // 1. Create epoch
+  const epoch = await store.createEpoch({
+    nodeId,
+    scopeId,
+    periodStart,
+    periodEnd,
+    weightConfig: TEST_WEIGHT_CONFIG,
+  });
+
+  // 2. Insert activity events within the epoch window
+  const eventMidpoint = new Date(
+    (periodStart.getTime() + periodEnd.getTime()) / 2
+  );
+  await store.insertActivityEvents([
+    makeActivityEvent({
+      id: `test-event-${epoch.id}-1`,
+      nodeId,
+      scopeId,
+      platformUserId: "gh-user-101",
+      platformLogin: "alice",
+      artifactUrl: "https://github.com/test/repo/pull/1",
+      eventTime: eventMidpoint,
+      retrievedAt: eventMidpoint,
+    }),
+    makeActivityEvent({
+      id: `test-event-${epoch.id}-2`,
+      nodeId,
+      scopeId,
+      source: "github",
+      eventType: "review_submitted",
+      platformUserId: "gh-user-202",
+      platformLogin: "bob",
+      artifactUrl: "https://github.com/test/repo/pull/1#review",
+      eventTime: eventMidpoint,
+      retrievedAt: eventMidpoint,
+    }),
+  ]);
+
+  // 3. Insert curations (auto-populate pattern)
+  await store.insertCurationDoNothing([
+    makeCurationAuto({
+      nodeId,
+      epochId: epoch.id,
+      eventId: `test-event-${epoch.id}-1`,
+      userId: "user-1",
+      included: true,
+    }),
+    makeCurationAuto({
+      nodeId,
+      epochId: epoch.id,
+      eventId: `test-event-${epoch.id}-2`,
+      userId: "user-2",
+      included: true,
+    }),
+  ]);
+
+  // 4. Insert allocations
+  await store.insertAllocations([
+    makeAllocation({
+      nodeId,
+      epochId: epoch.id,
+      userId: "user-1",
+      proposedUnits: 8000n,
+      activityCount: 1,
+    }),
+    makeAllocation({
+      nodeId,
+      epochId: epoch.id,
+      userId: "user-2",
+      proposedUnits: 2000n,
+      activityCount: 1,
+    }),
+  ]);
+
+  // 5. Insert pool component
+  const poolComponent = await store.insertPoolComponent(
+    makePoolComponent({
+      nodeId,
+      epochId: epoch.id,
+    })
+  );
+
+  // 6. Close the epoch
+  const poolTotal = 10000n;
+  const closedEpoch = await store.closeEpoch(epoch.id, poolTotal);
+
+  // 7. Insert payout statement (after close)
+  const statement = await store.insertPayoutStatement(
+    makePayoutStatement({
+      nodeId,
+      epochId: epoch.id,
+    })
+  );
+
+  return { epoch: closedEpoch, poolComponent, statement };
 }

@@ -2,7 +2,7 @@
 id: task.0096
 type: task
 title: "Ledger Zod contracts + API routes (2 write, 4 read) + stack tests"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 5
 estimate: 2
@@ -13,13 +13,13 @@ assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
 branch: feat/ledger-api-routes
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/464
 reviewer:
-revision: 2
-blocked_by: task.0095
+revision: 3
+blocked_by:
 deploy_verified: false
 created: 2026-02-20
-updated: 2026-02-22
+updated: 2026-02-23
 labels: [governance, ledger, api]
 external_refs:
 ---
@@ -34,19 +34,29 @@ The ledger pipeline collects activity and stores it in the DB, but nothing expos
 
 ### Outcome
 
-Frontend can fetch epoch data, activity events, allocations, and payout statements via public read routes. Admins can trigger activity collection, adjust allocations, and record pool components via SIWE-protected write routes.
+Public visitors can see finalized epoch results (closed epochs, allocations, statements). Authenticated operators can see live epoch data (open epochs, raw activity with PII). Approved operators can adjust allocations and record pool components.
 
 ### Approach
 
-**Solution**: 6 Zod contracts defining ledger API shapes. 4 read routes (public, under `/api/v1/public/ledger/`) and 2 write routes (SIWE-protected, under `/api/v1/ledger/`) following existing Next.js App Router patterns. Routes are thin HTTP handlers that validate with contracts, resolve `activityLedgerStore` from container, query with `getNodeId()`, and return validated output. No facades needed — each route is a single call to the store.
+**Solution**: 6 Zod contracts defining ledger API shapes. 3 public read routes (closed-epoch data only, under `/api/v1/public/ledger/`), 1 authenticated read route (activity with PII, under `/api/v1/ledger/`), and 2 approver-gated write routes (under `/api/v1/ledger/`). Routes are thin HTTP handlers that validate with contracts, resolve `activityLedgerStore` from container, query with `getNodeId()`, and return validated output.
 
-**URL namespace split** (per `src/proxy.ts` auth perimeter): The auth proxy rejects all `/api/v1/*` requests without a session, except `/api/v1/public/*`. Read routes MUST be under `/api/v1/public/ledger/` to be accessible without SIWE login. Write routes stay under `/api/v1/ledger/` (auth-protected).
+**Public vs Authenticated split** — Raw activity streams expose platformUserId/platformLogin/artifactUrl/metadata — PII-adjacent, scrapeable, harassment-bait. Transparency is satisfied by publishing closed-epoch allocations + statements.
 
-**Frontend data mapping** (from community-ledger mockup):
+| Route                                       | Auth            | Rationale                                                         |
+| ------------------------------------------- | --------------- | ----------------------------------------------------------------- |
+| `GET /public/ledger/epochs`                 | public          | Only returns `status: "closed"` epochs — finalized, safe to share |
+| `GET /public/ledger/epochs/:id/allocations` | public          | Only for closed epochs — shows who earned what                    |
+| `GET /public/ledger/epochs/:id/statement`   | public          | Signed payout statement — the transparency artifact               |
+| `GET /ledger/epochs`                        | SIWE            | Returns all epochs including open — operational detail            |
+| `GET /ledger/epochs/:id/activity`           | SIWE            | PII fields (platformUserId, platformLogin, artifactUrl, metadata) |
+| `PATCH /ledger/epochs/:id/allocations`      | SIWE + approver | Mutates allocations — must be in `ledger.approvers`               |
+| `POST /ledger/epochs/:id/pool-components`   | SIWE + approver | Mutates pool — must be in `ledger.approvers`                      |
 
-- **Current Epoch page** → `GET /public/ledger/epochs` (find active) + `GET /public/ledger/epochs/:id/activity` + `GET /public/ledger/epochs/:id/allocations`
-- **Epoch History page** → `GET /public/ledger/epochs` (finalized) + `GET /public/ledger/epochs/:id/allocations` + `GET /public/ledger/epochs/:id/statement`
-- **Holdings page** → Client-side aggregation from epochs + allocations (V0: few epochs, few users)
+**Approver allowlist**: Add `ledger.approvers` (array of EVM addresses) to repo-spec schema + yaml. Write routes check `sessionUser.address ∈ ledger.approvers` before allowing mutations. Reads the config from `getLedgerApprovers()` in `@/shared/config`.
+
+**Statement semantics**: Consistent `200 { statement: ... }` or `200 null` — no 404 ambiguity. Null means "no statement yet".
+
+**Activity pagination**: Hard-cap limit at 500 events. `getActivityForWindow()` returns all matching events; route applies in-memory `slice()` with enforced max. DB-level limit/offset deferred until data volumes warrant a store port change.
 
 **Reuses**:
 
@@ -54,7 +64,7 @@ Frontend can fetch epoch data, activity events, allocations, and payout statemen
 - Existing `getContainer().activityLedgerStore` — wired in bootstrap
 - Existing `getNodeId()` from `@/shared/config` — provides node_id for all queries
 - Existing `wrapRouteHandlerWithLogging` — auth + logging + error handling
-- Existing `wrapPublicRoute` — rate limiting + cache headers for read routes
+- Existing `wrapPublicRoute` — rate limiting + cache headers for public read routes
 - Existing Zod contract pattern from `src/contracts/schedules.*.v1.contract.ts`
 
 **Rejected**:
@@ -62,7 +72,7 @@ Frontend can fetch epoch data, activity events, allocations, and payout statemen
 - **Composite "epoch detail" endpoint**: Over-engineering — frontend can compose from 2-3 granular calls. Matches REST conventions.
 - **Server-side Holdings aggregation endpoint**: V0 has <10 epochs, <20 users. Client-side aggregation is trivial. Add when data volume warrants it.
 - **Facade layer**: Routes are single store calls — no shared wiring to extract. Facades add files without value.
-- **Approver check on write routes**: The `ledger.approvers` config doesn't exist in repo-spec yet. Deferred to task.0100 (signing + state machine). V0 write routes require SIWE session only — any logged-in user can manage the ledger. This is acceptable for a single-operator node.
+- **All-public reads**: Raw activity streams are PII-adjacent + scrapeable. Only finalized outputs are public.
 
 ### Deferred Routes (no stubs — contracts + routes created when features land)
 
@@ -82,8 +92,9 @@ No stub files created for deferred routes. Contracts and route handlers are adde
 
 - [ ] CONTRACTS_SINGLE_SOURCE: All request/response shapes defined in `src/contracts/ledger.*.v1.contract.ts`. Routes, tests, and frontend use `z.infer<>` — no parallel interfaces. (spec: architecture)
 - [ ] VALIDATE_IO: Routes parse input before processing, parse output before responding. Fail closed. (spec: architecture)
-- [ ] READ_ROUTES_PUBLIC: Read routes use `wrapPublicRoute()` — no auth required, rate-limited. (spec: architecture)
-- [ ] WRITE_ROUTES_AUTHED: Write routes use `wrapRouteHandlerWithLogging({ auth: { mode: "required" } })`. (spec: architecture)
+- [ ] PUBLIC_READS_CLOSED_ONLY: Public read routes only return closed-epoch data. Open/current epoch data requires SIWE session. (spec: epoch-ledger)
+- [ ] ACTIVITY_AUTHED: Activity events (PII fields) only served via authenticated route. Never public. (spec: epoch-ledger)
+- [ ] WRITE_ROUTES_APPROVER_GATED: Write routes require SIWE session + wallet in `ledger.approvers` from repo-spec. (spec: epoch-ledger)
 - [ ] NODE_SCOPED: All store queries pass `nodeId` from `getNodeId()`, never from user input. (spec: epoch-ledger)
 - [ ] ALL_MATH_BIGINT: BigInt values serialized as strings in JSON contracts. Parsed back with `BigInt()` in routes. (spec: epoch-ledger)
 - [ ] SIMPLE_SOLUTION: Thin routes, no facades, no extra abstractions. (spec: architecture)
@@ -182,7 +193,7 @@ const StatementSchema = z.object({
   supersedesStatementId: z.string().nullable(),
   createdAt: z.string().datetime(),
 });
-// Output: StatementSchema | null (404 if no statement)
+// Output: { statement: StatementSchema | null } (200 always, null = no statement yet)
 ```
 
 #### Write Routes (SIWE-protected — under `/api/v1/ledger/`)
@@ -225,18 +236,19 @@ Implementation: Parse epoch ID from URL, call `insertPoolComponent()` with nodeI
 
 ```
 src/app/api/v1/
-  public/ledger/                         # Read routes (no auth — proxy passes through)
+  public/ledger/                         # Public reads (closed-epoch data only)
     epochs/
-      route.ts                           # GET list
+      route.ts                           # GET list (closed only)
       [id]/
-        activity/route.ts               # GET
-        allocations/route.ts            # GET
+        allocations/route.ts            # GET (closed only)
         statement/route.ts              # GET
-  ledger/                                # Write routes (SIWE-protected by proxy)
+  ledger/                                # Authenticated (SIWE-protected by proxy)
     epochs/
+      route.ts                           # GET list (all epochs)
       [id]/
-        allocations/route.ts            # PATCH
-        pool-components/route.ts        # POST
+        activity/route.ts               # GET (PII fields)
+        allocations/route.ts            # PATCH (approver-gated)
+        pool-components/route.ts        # POST (approver-gated)
 ```
 
 ### BigInt Serialization Convention
@@ -259,12 +271,14 @@ Routes parse string → BigInt for store calls, and BigInt → string for respon
 - `src/contracts/ledger.epoch-statement.v1.contract.ts` — Payout statement output schema
 - `src/contracts/ledger.update-allocations.v1.contract.ts` — Allocation adjustment input schema
 - `src/contracts/ledger.record-pool-component.v1.contract.ts` — Pool component input/output schema
-- `src/app/api/v1/public/ledger/epochs/route.ts` — GET list (public)
-- `src/app/api/v1/public/ledger/epochs/[id]/activity/route.ts` — GET activity (public)
-- `src/app/api/v1/public/ledger/epochs/[id]/allocations/route.ts` — GET allocations (public)
+- `src/app/api/v1/public/ledger/epochs/route.ts` — GET list (public, closed only)
+- `src/app/api/v1/public/ledger/epochs/[id]/allocations/route.ts` — GET allocations (public, closed only)
 - `src/app/api/v1/public/ledger/epochs/[id]/statement/route.ts` — GET statement (public)
-- `src/app/api/v1/ledger/epochs/[id]/allocations/route.ts` — PATCH allocations (SIWE)
-- `src/app/api/v1/ledger/epochs/[id]/pool-components/route.ts` — POST pool component (SIWE)
+- `src/app/api/v1/ledger/epochs/route.ts` — GET list (authenticated, all epochs)
+- `src/app/api/v1/ledger/epochs/[id]/activity/route.ts` — GET activity (authenticated, PII)
+- `src/app/api/v1/ledger/epochs/[id]/allocations/route.ts` — PATCH allocations (approver-gated)
+- `src/app/api/v1/ledger/epochs/[id]/pool-components/route.ts` — POST pool component (approver-gated)
+- `src/app/api/v1/ledger/_lib/approver-guard.ts` — Shared approver check utility
 
 **Test:**
 
@@ -272,6 +286,9 @@ Routes parse string → BigInt for store calls, and BigInt → string for respon
 
 **Modify:**
 
+- `src/shared/config/repoSpec.schema.ts` — Add `ledger.approvers` EVM address array
+- `src/shared/config/repoSpec.server.ts` — Add `getLedgerApprovers()` helper
+- `.cogni/repo-spec.yaml` — Add `ledger.approvers` with operator wallet
 - `src/contracts/AGENTS.md` — Add ledger contracts to public surface list
 
 ### Implementation Details
@@ -355,10 +372,14 @@ const enriched = events.map((e) => ({
 
 ## Plan
 
-- [ ] Define 6 Zod contract files in `src/contracts/ledger.*.v1.contract.ts`
-- [ ] Create route directory structure under `src/app/api/v1/public/ledger/` (reads) and `src/app/api/v1/ledger/` (writes)
-- [ ] Implement 4 read routes: list-epochs (paginated), activity (paginated), allocations, statement
-- [ ] Implement 2 write routes: update-allocations, record-pool-component
+- [x] Define 6 Zod contract files in `src/contracts/ledger.*.v1.contract.ts`
+- [ ] Add `ledger.approvers` to repo-spec schema + yaml + `getLedgerApprovers()` helper
+- [ ] Create route directory structure under `src/app/api/v1/public/ledger/` (public closed reads) and `src/app/api/v1/ledger/` (auth reads + writes)
+- [ ] Implement 3 public read routes: list-epochs (closed only, paginated), allocations (closed only), statement
+- [ ] Implement 1 authenticated read route: activity (paginated, hard-cap 500)
+- [ ] Implement 1 authenticated read route: list-epochs (all, paginated)
+- [ ] Implement 2 approver-gated write routes: update-allocations, record-pool-component
+- [ ] Add approver guard utility (`_lib/approver-guard.ts`)
 - [ ] Add DTO mappers for BigInt/Date serialization
 - [ ] Write stack test: seed epoch + events → query all read routes → verify contract shapes
 - [ ] Update `src/contracts/AGENTS.md` public surface list
@@ -383,9 +404,26 @@ pnpm dotenv -e .env.test -- vitest run --config vitest.stack.config.mts tests/st
 - [ ] **Tests:** Stack test covers read routes with seeded data
 - [ ] **Reviewer:** assigned and approved
 
+## Review Feedback
+
+### r3 — Implementation Review (2026-02-23)
+
+**Blocking:**
+
+1. **Pagination null coercion** — `url.searchParams.get()` returns `null`, but `z.coerce.number().default()` only defaults on `undefined`. `Number(null) === 0` fails `.min(1)`. All paginated routes 500 on default calls. Fix: `searchParams.get("limit") ?? undefined`.
+2. **BigInt parsing uncaught throws** — `BigInt("abc")` throws `SyntaxError` → unhandled 500. All 4 `[id]` routes. Fix: try/catch returning 400.
+3. **Statement route missing PUBLIC_READS_CLOSED_ONLY** — Header declares invariant but implementation doesn't check epoch status. Fix: add closed-check matching allocations route.
+
+**Non-blocking:**
+
+- Activity contract description says "Public endpoint" — should say "Authenticated endpoint."
+- `ACTIVITY_HARD_CAP` (500) unreachable since contract limits to 200.
+- `handleRouteError` duplicated in 2 write routes.
+- Sequential allocation updates lack transaction boundary (partial failure possible).
+
 ## PR / Links
 
-- Handoff: TBD
+- Handoff: [handoff](../handoffs/task.0096.handoff.md)
 - Frontend mockup: `/Users/derek/dev/community-ledger/` (Lovable.dev React app)
 
 ## Attribution

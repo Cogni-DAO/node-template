@@ -172,3 +172,7 @@ The MCP server is the nucleus, but the interoperability story spans identity (ag
 **P0 is intentionally narrow:** implement the MCP server + auth. This makes our agents addressable with minimal new code — the tool catalog, policy system, and toolRunner pipeline already exist. The MCP server is a thin adapter over existing infrastructure, which is exactly what hexagonal architecture enables.
 
 **x402 is deliberately excluded.** The protocol is designed for pay-per-request (HTTP 402 → USDC → access). Our primary billing use case is streaming LLM inference with dynamic token costs, which x402 doesn't address. Our existing LiteLLM proxy audit → `charge_receipts` pipeline is the correct pattern for AI costs. We'll revisit x402 when it supports streaming/metered billing, or for non-streaming tool gating (data APIs, static resources) at P1+.
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/proj.agentic-interop.handoff.md)

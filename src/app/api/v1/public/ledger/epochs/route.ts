@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/api/v1/public/ledger/epochs/route`
+ * Purpose: Public HTTP endpoint for listing closed (finalized) ledger epochs.
+ * Scope: Public route using wrapPublicRoute(); only returns closed epochs. Does not expose open/current epoch data.
+ * Invariants: NODE_SCOPED, ALL_MATH_BIGINT, VALIDATE_IO, PUBLIC_READS_CLOSED_ONLY.
+ * Side-effects: IO (HTTP response, database read)
+ * Links: docs/spec/epoch-ledger.md, contracts/ledger.list-epochs.v1.contract
+ * @public
+ */
+
+import { NextResponse } from "next/server";
+import { toEpochDto } from "@/app/api/v1/public/ledger/_lib/ledger-dto";
+import { getContainer } from "@/bootstrap/container";
+import { wrapPublicRoute } from "@/bootstrap/http";
+import { listEpochsOperation } from "@/contracts/ledger.list-epochs.v1.contract";
+import { getNodeId } from "@/shared/config";
+
+export const dynamic = "force-dynamic";
+
+export const GET = wrapPublicRoute(
+  {
+    routeId: "ledger.list-epochs.public",
+    cacheTtlSeconds: 60,
+    staleWhileRevalidateSeconds: 300,
+  },
+  async (_ctx, request) => {
+    const url = new URL(request.url);
+    const { limit, offset } = listEpochsOperation.input.parse({
+      limit: url.searchParams.get("limit") ?? undefined,
+      offset: url.searchParams.get("offset") ?? undefined,
+    });
+
+    const store = getContainer().activityLedgerStore;
+    const allEpochs = await store.listEpochs(getNodeId());
+    // PUBLIC_READS_CLOSED_ONLY: only expose finalized epochs
+    const closedEpochs = allEpochs.filter((e) => e.status === "closed");
+    const page = closedEpochs.slice(offset, offset + limit);
+
+    return NextResponse.json(
+      listEpochsOperation.output.parse({
+        epochs: page.map(toEpochDto),
+        total: closedEpochs.length,
+      })
+    );
+  }
+);
