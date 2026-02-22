@@ -32,30 +32,33 @@ tags: [governance, transparency, payments, ledger]
 
 ## Core Invariants
 
-| Rule                     | Constraint                                                                                                                                                                                                                   |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ACTIVITY_APPEND_ONLY     | DB trigger rejects UPDATE/DELETE on `activity_events`. Once ingested, activity records are immutable facts.                                                                                                                  |
-| ACTIVITY_IDEMPOTENT      | `activity_events.id` is deterministic from source data (e.g., `github:pr:owner/repo:42`). Re-ingestion of the same event is a no-op (PK conflict → skip).                                                                    |
-| POOL_IMMUTABLE           | DB trigger rejects UPDATE/DELETE on `epoch_pool_components`. Once recorded, a pool component's algorithm, inputs, and amount cannot be changed.                                                                              |
-| IDENTITY_BEST_EFFORT     | Activity events carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved events have `user_id = NULL` and are excluded from allocation until resolved. |
-| ADMIN_FINALIZES_ONCE     | An admin reviews proposed allocations, optionally adjusts `final_units`, then triggers finalize. Single action closes the epoch — no per-event approval workflow.                                                            |
-| WEIGHTS_INTEGER_ONLY     | All weight values are integer milli-units (e.g., 8000 for PR merged, 500 for Discord message). No floating point anywhere (ALL_MATH_BIGINT).                                                                                 |
-| PAYOUT_DETERMINISTIC     | Given final allocations + pool components → the payout statement is byte-for-byte reproducible.                                                                                                                              |
-| ALL_MATH_BIGINT          | No floating point in unit or credit calculations. All math uses BIGINT with largest-remainder rounding.                                                                                                                      |
-| EPOCH_CLOSE_IDEMPOTENT   | Closing a closed epoch returns the existing statement. No error, no mutation.                                                                                                                                                |
-| ONE_OPEN_EPOCH           | Partial unique index enforces at most one epoch with `status = 'open'` per `(node_id, scope_id)` pair.                                                                                                                       |
-| EPOCH_WINDOW_UNIQUE      | `UNIQUE(node_id, scope_id, period_start, period_end)` prevents duplicate epochs for the same time window per scope. Re-collection uses the existing epoch.                                                                   |
-| CURATION_FREEZE_ON_CLOSE | DB trigger rejects INSERT/UPDATE/DELETE on `activity_curation` when the referenced epoch has `status = 'closed'`. Curation is mutable during review, immutable after close.                                                  |
-| NODE_SCOPED              | All ledger tables include `node_id UUID NOT NULL`. Per node-operator-contract spec, prevents collisions in multi-node scenarios.                                                                                             |
-| SCOPE_SCOPED             | All epoch-level tables include `scope_id TEXT NOT NULL DEFAULT 'default'`. `scope_id` identifies the governance/payout domain (project) within a node. See [Project Scoping](#project-scoping).                              |
-| SCOPE_VALIDATED          | Every activity event's `scope_id` must be validated against current project manifests (`.cogni/projects/*.yaml`) or resolve to the `'default'` fallback scope. Unrecognized scope IDs are rejected at ingestion time.        |
-| POOL_REPRODUCIBLE        | `pool_total_credits = SUM(epoch_pool_components.amount_credits)`. Each component stores algorithm version + inputs + amount.                                                                                                 |
-| POOL_UNIQUE_PER_TYPE     | `UNIQUE(epoch_id, component_id)` — each component type appears at most once per epoch.                                                                                                                                       |
-| POOL_REQUIRES_BASE       | At least one `base_issuance` component must exist before epoch finalize is allowed.                                                                                                                                          |
-| WRITES_VIA_TEMPORAL      | All write operations (collect, finalize) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID.                                                                 |
-| PROVENANCE_REQUIRED      | Every activity event includes `producer`, `producer_version`, `payload_hash`, `retrieved_at`. Audit trail for reproducibility.                                                                                               |
-| CURSOR_STATE_PERSISTED   | Source adapters use `source_cursors` table for incremental sync. Avoids full-window rescans and handles pagination/rate limits.                                                                                              |
-| ADAPTERS_NOT_IN_CORE     | Source adapters live in `services/scheduler-worker/` behind a port interface. `packages/ledger-core/` contains only pure domain logic (types, rules, errors).                                                                |
+| Rule                      | Constraint                                                                                                                                                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ACTIVITY_APPEND_ONLY      | DB trigger rejects UPDATE/DELETE on `activity_events`. Once ingested, activity records are immutable facts.                                                                                                                                   |
+| ACTIVITY_IDEMPOTENT       | `activity_events.id` is deterministic from source data (e.g., `github:pr:owner/repo:42`). Re-ingestion of the same event is a no-op (PK conflict → skip).                                                                                     |
+| POOL_IMMUTABLE            | DB trigger rejects UPDATE/DELETE on `epoch_pool_components`. Once recorded, a pool component's algorithm, inputs, and amount cannot be changed.                                                                                               |
+| IDENTITY_BEST_EFFORT      | Activity events carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved events have `user_id = NULL` and are excluded from allocation until resolved.                  |
+| ADMIN_FINALIZES_ONCE      | An admin reviews proposed allocations, optionally adjusts `final_units`, then triggers finalize. Single action closes the epoch — no per-event approval workflow.                                                                             |
+| APPROVERS_PER_SCOPE       | Each scope declares its own `approvers[]` list. Epoch finalize requires 1-of-N EIP-191 signature from the scope's approvers. V0: single scope, single approver in repo-spec. Multi-scope: each `.cogni/projects/*.yaml` carries its own list. |
+| SIGNATURE_SCOPE_BOUND     | Signed message must include `node_id + scope_id + allocation_set_hash`. Prevents cross-scope and cross-node signature replay.                                                                                                                 |
+| EPOCH_THREE_PHASE         | Epochs progress through `open → frozen → finalized`. No backward transitions. `open`: ingest + curation allowed. `frozen`: curation locked, signatures collected. `finalized`: immutable forever.                                             |
+| WEIGHTS_INTEGER_ONLY      | All weight values are integer milli-units (e.g., 8000 for PR merged, 500 for Discord message). No floating point anywhere (ALL_MATH_BIGINT).                                                                                                  |
+| PAYOUT_DETERMINISTIC      | Given final allocations + pool components → the payout statement is byte-for-byte reproducible.                                                                                                                                               |
+| ALL_MATH_BIGINT           | No floating point in unit or credit calculations. All math uses BIGINT with largest-remainder rounding.                                                                                                                                       |
+| EPOCH_FINALIZE_IDEMPOTENT | Finalizing a finalized epoch returns the existing statement. No error, no mutation.                                                                                                                                                           |
+| ONE_ACTIVE_EPOCH          | Partial unique index enforces at most one epoch with `status != 'finalized'` per `(node_id, scope_id)` pair.                                                                                                                                  |
+| EPOCH_WINDOW_UNIQUE       | `UNIQUE(node_id, scope_id, period_start, period_end)` prevents duplicate epochs for the same time window per scope. Re-collection uses the existing epoch.                                                                                    |
+| CURATION_FREEZE_ON_FREEZE | DB trigger rejects INSERT/UPDATE/DELETE on `activity_curation` when the referenced epoch has `status IN ('frozen', 'finalized')`. Curation is mutable while open, immutable once frozen.                                                      |
+| NODE_SCOPED               | All ledger tables include `node_id UUID NOT NULL`. Per node-operator-contract spec, prevents collisions in multi-node scenarios.                                                                                                              |
+| SCOPE_SCOPED              | All epoch-level tables include `scope_id TEXT NOT NULL DEFAULT 'default'`. `scope_id` identifies the governance/payout domain (project) within a node. See [Project Scoping](#project-scoping).                                               |
+| SCOPE_VALIDATED           | Every activity event's `scope_id` must be validated against current project manifests (`.cogni/projects/*.yaml`) or resolve to the `'default'` fallback scope. Unrecognized scope IDs are rejected at ingestion time.                         |
+| POOL_REPRODUCIBLE         | `pool_total_credits = SUM(epoch_pool_components.amount_credits)`. Each component stores algorithm version + inputs + amount.                                                                                                                  |
+| POOL_UNIQUE_PER_TYPE      | `UNIQUE(epoch_id, component_id)` — each component type appears at most once per epoch.                                                                                                                                                        |
+| POOL_REQUIRES_BASE        | At least one `base_issuance` component must exist before epoch finalize is allowed.                                                                                                                                                           |
+| WRITES_VIA_TEMPORAL       | All write operations (collect, finalize) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID.                                                                                  |
+| PROVENANCE_REQUIRED       | Every activity event includes `producer`, `producer_version`, `payload_hash`, `retrieved_at`. Audit trail for reproducibility.                                                                                                                |
+| CURSOR_STATE_PERSISTED    | Source adapters use `source_cursors` table for incremental sync. Avoids full-window rescans and handles pagination/rate limits.                                                                                                               |
+| ADAPTERS_NOT_IN_CORE      | Source adapters live in `services/scheduler-worker/` behind a port interface. `packages/ledger-core/` contains only pure domain logic (types, rules, errors).                                                                                 |
 
 ## Project Scoping
 
@@ -70,7 +73,7 @@ The ledger uses two orthogonal scoping keys:
 
 **Composite invariants:**
 
-- `ONE_OPEN_EPOCH` → `UNIQUE(node_id, scope_id, status) WHERE status = 'open'`
+- `ONE_ACTIVE_EPOCH` → `UNIQUE(node_id, scope_id) WHERE status != 'finalized'`
 - `EPOCH_WINDOW_UNIQUE` → `UNIQUE(node_id, scope_id, period_start, period_end)`
 - Workflow IDs include scope: `ledger-collect-{scopeId}-{periodStart}-{periodEnd}`
 
@@ -97,14 +100,28 @@ The ledger uses two orthogonal scoping keys:
 
 ### Auth Model (V0 — Simplified)
 
-SIWE wallet login provides `{ id, walletAddress }` in the session. Write routes check a simple admin flag — no multi-role `ledger_issuers` table in V0.
+SIWE wallet login provides `{ id, walletAddress }` in the session. Authorization is a per-scope wallet allowlist — no multi-role `ledger_issuers` table in V0.
 
-Admin capability required for:
+**Approver configuration** follows the repo-spec pattern (committed to repo, no env override, same as `node_id` and `dao_contract`):
+
+```yaml
+# .cogni/repo-spec.yaml — V0 default scope
+ledger:
+  approvers:
+    - "0xYourWalletAddress"
+```
+
+V0 has one scope (`default`), so `ledger.approvers` in repo-spec.yaml is the single source of truth. When multi-scope activates, each `.cogni/projects/*.yaml` carries its own `ledger.approvers[]` list, overriding the repo-spec default for that scope.
+
+Loaded via `getLedgerConfig()` in `repoSpec.server.ts`, validated by Zod schema (array of EVM addresses), cached at startup.
+
+Admin capability (wallet must be in scope's `approvers[]`) required for:
 
 - Triggering activity collection (or let Temporal cron handle it)
 - Adjusting allocation `final_units`
 - Triggering epoch finalize
 - Recording pool components
+- Signing payout statements (EIP-191, required before finalize)
 
 Read routes are public — anyone can view epochs, activity, allocations, and payout statements.
 
@@ -137,24 +154,29 @@ Proposed allocation per user = SUM of weights for their attributed events. The w
 
 ### Epoch Lifecycle
 
+Epoch status models **governance finality**, not payment execution. Distribution state lives on `payout_statements`.
+
 ```
 1. OPEN          Temporal cron (weekly) or admin triggers collection
-                 → Creates epoch with period_start/period_end + weight_config
+                 → Creates epoch with status='open', period_start/period_end + weight_config
                  → Runs source adapters → activity_events
-                 → Resolves identities → updates user_id on events
+                 → Resolves identities → updates user_id on curation rows
                  → Computes proposed allocations → epoch_allocations
+                 → Admin curates: adjust curation, resolve identities, record pool components
 
-2. REVIEW        Admin reviews proposed allocations via API/UI
-                 → Adjusts final_units where needed (PATCH)
-                 → Resolves unattributed events (link identities)
-                 → Records pool components
+2. FROZEN        Admin freezes epoch for review
+                 → No new curation (DB trigger rejects activity_curation writes)
+                 → Allocations + statement can be computed/recomputed
+                 → Admin reviews final numbers, collects 1-of-N signature from scope approvers
 
-3. FINALIZE      Admin triggers finalize
+3. FINALIZED     Admin triggers finalize (requires signature + base_issuance)
                  → Reads epoch_allocations (final_units, falling back to proposed_units)
                  → Reads pool components → pool_total_credits
                  → computePayouts(allocations, pool_total) → payout_statement
-                 → Closes epoch
+                 → Stores statement + signature atomically → epoch immutable forever
 ```
+
+State transitions: `open → frozen` (admin action), `frozen → finalized` (admin action, requires 1-of-N EIP-191 signature from scope's `approvers[]` + at least one `base_issuance` pool component). No backward transitions. Corrections use `supersedes_statement_id` on a new statement.
 
 ### Payout Computation
 
@@ -198,7 +220,7 @@ Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and 
 | `id`                 | BIGSERIAL PK |                                                           |
 | `node_id`            | UUID         | NOT NULL — per NODE_SCOPED                                |
 | `scope_id`           | TEXT         | NOT NULL DEFAULT `'default'` — per SCOPE_SCOPED (project) |
-| `status`             | TEXT         | CHECK IN (`'open'`, `'closed'`)                           |
+| `status`             | TEXT         | CHECK IN (`'open'`, `'frozen'`, `'finalized'`)            |
 | `period_start`       | TIMESTAMPTZ  | Epoch coverage start (NOT NULL)                           |
 | `period_end`         | TIMESTAMPTZ  | Epoch coverage end (NOT NULL)                             |
 | `weight_config`      | JSONB        | Milli-unit weights used for this epoch (NOT NULL)         |
@@ -209,7 +231,7 @@ Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and 
 
 Constraints:
 
-- Partial unique index `UNIQUE (node_id, scope_id, status) WHERE status = 'open'` enforces ONE_OPEN_EPOCH per (node, scope)
+- Partial unique index `UNIQUE (node_id, scope_id) WHERE status != 'finalized'` enforces ONE_ACTIVE_EPOCH per (node, scope)
 - `UNIQUE(node_id, scope_id, period_start, period_end)` enforces EPOCH_WINDOW_UNIQUE
 
 ### `activity_events` — append-only contribution records (Layer 1)
@@ -255,7 +277,7 @@ Indexes: `(node_id, scope_id, event_time)`, `(source, event_type)`, `(platform_u
 
 Constraint: `UNIQUE(epoch_id, event_id)`
 
-DB trigger rejects INSERT/UPDATE/DELETE when `epochs.status = 'closed'` (CURATION_FREEZE_ON_CLOSE). Mutable during review, frozen after close.
+DB trigger rejects INSERT/UPDATE/DELETE when `epochs.status IN ('frozen', 'finalized')` (CURATION_FREEZE_ON_FREEZE). Mutable while epoch is `open`, immutable once frozen.
 
 ### `epoch_allocations` — per-user credit distribution
 
@@ -337,7 +359,7 @@ Post-signing corrections use amendment statements (`supersedes_statement_id`), n
 
 Constraint: `UNIQUE(statement_id, signer_wallet)`
 
-Signing UX/API is a follow-up task. Table + types defined for schema completeness.
+Signer wallet is the `ecrecover`-derived address, not client-supplied. Signature message must include `node_id + scope_id + allocation_set_hash` (SIGNATURE_SCOPE_BOUND). See [Signing Workflow](#signing-workflow).
 
 ## Source Adapter Interface
 
@@ -395,14 +417,16 @@ Adapters live in `services/scheduler-worker/src/adapters/ingestion/` (ADAPTERS_N
 
 ## API
 
-### Write Routes (SIWE + admin check → Temporal workflow → 202)
+### Write Routes (SIWE + scope approver check → Temporal workflow → 202)
 
-| Method | Route                                       | Purpose                                            |
-| ------ | ------------------------------------------- | -------------------------------------------------- |
-| POST   | `/api/v1/ledger/epochs/collect`             | Trigger activity collection for new/existing epoch |
-| PATCH  | `/api/v1/ledger/epochs/:id/allocations`     | Admin adjusts final_units for users                |
-| POST   | `/api/v1/ledger/epochs/:id/pool-components` | Record a pool component for the epoch              |
-| POST   | `/api/v1/ledger/epochs/:id/finalize`        | Finalize epoch → compute payouts                   |
+| Method | Route                                       | Purpose                                                                  |
+| ------ | ------------------------------------------- | ------------------------------------------------------------------------ |
+| POST   | `/api/v1/ledger/epochs/collect`             | Trigger activity collection for new/existing epoch                       |
+| PATCH  | `/api/v1/ledger/epochs/:id/allocations`     | Admin adjusts final_units for users (epoch must be `open`)               |
+| POST   | `/api/v1/ledger/epochs/:id/pool-components` | Record a pool component for the epoch (epoch must be `open` or `frozen`) |
+| POST   | `/api/v1/ledger/epochs/:id/freeze`          | Freeze epoch for review (transitions `open → frozen`)                    |
+| POST   | `/api/v1/ledger/epochs/:id/sign`            | Submit EIP-191 signature for payout statement (epoch must be `frozen`)   |
+| POST   | `/api/v1/ledger/epochs/:id/finalize`        | Finalize epoch → compute payouts (requires signature + base_issuance)    |
 
 ### Read Routes (public)
 
@@ -411,7 +435,7 @@ Adapters live in `services/scheduler-worker/src/adapters/ingestion/` (ADAPTERS_N
 | GET    | `/api/v1/ledger/epochs`                 | List all epochs                              |
 | GET    | `/api/v1/ledger/epochs/:id/activity`    | Activity events for an epoch                 |
 | GET    | `/api/v1/ledger/epochs/:id/allocations` | Proposed + final allocations                 |
-| GET    | `/api/v1/ledger/epochs/:id/statement`   | Payout statement for a closed epoch          |
+| GET    | `/api/v1/ledger/epochs/:id/statement`   | Payout statement for a finalized epoch       |
 | GET    | `/api/v1/ledger/verify/epoch/:id`       | Recompute payouts from stored data + compare |
 
 ## Temporal Workflows
@@ -419,7 +443,7 @@ Adapters live in `services/scheduler-worker/src/adapters/ingestion/` (ADAPTERS_N
 ### CollectEpochWorkflow
 
 1. Create or find epoch for the target `(node_id, scope_id)` + time window (EPOCH_WINDOW_UNIQUE)
-2. Check no epoch currently open for a different window within this scope (ONE_OPEN_EPOCH)
+2. Check no epoch currently active for a different window within this scope (ONE_ACTIVE_EPOCH)
 3. For each registered source adapter:
    - Activity: load cursor from `source_cursors`
    - Activity: `adapter.collect({ streams, cursor, window })` → events
@@ -432,28 +456,69 @@ Deterministic workflow ID: `ledger-collect-{scopeId}-{periodStart}-{periodEnd}`
 
 ### FinalizeEpochWorkflow
 
-1. Verify epoch exists and is open
-2. If epoch already closed, return existing statement (EPOCH_CLOSE_IDEMPOTENT)
+1. Verify epoch exists and is `frozen`
+2. If epoch already `finalized`, return existing statement (EPOCH_FINALIZE_IDEMPOTENT)
 3. Verify at least one `base_issuance` pool component exists (POOL_REQUIRES_BASE)
-4. Read `epoch_allocations` — use `final_units` where set, fall back to `proposed_units`
-5. Read pool components, compute `pool_total_credits = SUM(amount_credits)`
-6. `computePayouts(allocations, pool_total)` — BIGINT, largest-remainder
-7. Compute `allocation_set_hash`
-8. Atomic transaction: set `pool_total_credits` on epoch, update status to `'closed'`, insert payout statement
-9. Return statement
+4. Verify at least one valid signature exists from scope's `approvers[]` (APPROVERS_PER_SCOPE)
+5. Read `epoch_allocations` — use `final_units` where set, fall back to `proposed_units`
+6. Read pool components, compute `pool_total_credits = SUM(amount_credits)`
+7. `computePayouts(allocations, pool_total)` — BIGINT, largest-remainder
+8. Compute `allocation_set_hash`
+9. Atomic transaction: set `pool_total_credits` on epoch, update status to `'finalized'`, insert payout statement
+10. Return statement
 
 Deterministic workflow ID: `ledger-finalize-{scopeId}-{epochId}`
+
+## Signing Workflow
+
+### Canonical Message Format
+
+The signed message binds to node, scope, and allocation data (SIGNATURE_SCOPE_BOUND):
+
+```
+Cogni Payout Statement
+Node: {node_id}
+Scope: {scope_id}
+Epoch: {epoch_id}
+Allocation Hash: {allocation_set_hash}
+Pool Total: {pool_total_credits}
+```
+
+Frontend constructs this message from epoch data, calls `walletClient.signMessage()` (EIP-191 `personal_sign`), and POSTs the signature to the sign route.
+
+### Verification
+
+Backend recovers the signer address via `ecrecover(message, signature)` and checks:
+
+1. Recovered address is in the scope's `approvers[]` (from repo-spec or project manifest)
+2. Message fields match the epoch's actual data (prevents signing stale/wrong data)
+
+### Storage
+
+Signatures stored in `statement_signatures` table (schema unchanged). The `signer_wallet` is the recovered address, not client-supplied.
+
+### Future Path
+
+```
+V0 (now):    DB-stored EIP-191 sigs, 1-of-N from scope approvers
+V1:          Multi-sig thresholds (close_epoch_threshold: 2), separate curation_admins vs payout_approvers
+V1:          Post sig hash to IPFS/Arweave → content hash on-chain
+V2:          On-chain attestation registry (smart contract accepts epoch_hash + sig)
+V3:          DAO multisig (Safe) — N-of-M signers required
+```
 
 ## V1+ Deferred Features
 
 The following are explicitly deferred from V0 and will be designed when needed:
 
-- **Per-receipt wallet signing** (EIP-191, SIGNATURE_DOMAIN_BOUND) — V1: receipts as signed artifacts
+- **Multi-sig thresholds** (`close_epoch_threshold: N`) — V1: require N-of-M approver signatures
+- **Role separation** (`curation_admins` vs `payout_approvers`) — V1: separate who curates from who signs
 - **`ledger_issuers` role system** (can_issue, can_approve, can_close_epoch) — V1: multi-role authorization
+- **Per-receipt wallet signing** (EIP-191, SIGNATURE_DOMAIN_BOUND) — V1: receipts as signed artifacts
 - **Receipt approval lifecycle** (proposed → approved → revoked, LATEST_EVENT_WINS) — V1: per-receipt workflows
-- **Cryptographic verification** — V0 verifies by recomputing from stored data; V1 adds signature verification
+- **On-chain attestation** — V0 verifies by recomputing from stored data; V1+ adds on-chain signature registry
 - **Merkle trees / inclusion proofs** — V1+
-- **Statement signing** (DAO multisig) — V1+
+- **Payout distribution state machine** (`payout_statements.status`: draft → signed → submitted → settled/failed) — V1+
 - **UI pages** — V1+
 - **DID/VC alignment** — V2+
 - **Automated webhook fast-path** (GitHub `handleWebhook`) — V1: real-time ingestion
@@ -466,7 +531,7 @@ Enable transparent, verifiable credit distribution where contribution activity i
 
 - Algorithmic valuation (SourceCred-style scoring) — weights are transparent, admin adjustable
 - Server-held signing keys
-- Full RBAC system (V0 uses simple admin check)
+- Full RBAC system (V0 uses per-scope approver allowlist)
 - Real-time streaming (poll-based collection sufficient for weekly epochs)
 
 ## Related
