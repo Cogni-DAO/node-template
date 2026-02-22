@@ -37,6 +37,12 @@ const GOVERNANCE_GRAPH_ID = "sandbox:openclaw";
 // TODO(task.0068): Use default_flash from LiteLLM config metadata instead of hardcoded model
 const GOVERNANCE_MODEL = "kimi-k2.5";
 
+/** Workflow type for ledger ingestion */
+const COLLECT_EPOCH_WORKFLOW_TYPE = "CollectEpochWorkflow";
+
+/** Task queue for ledger activities */
+const LEDGER_TASK_QUEUE = "ledger-tasks";
+
 /** Minimal governance schedule shape (no @/ imports — pure type) */
 export interface GovernanceScheduleEntry {
   charter: string;
@@ -45,9 +51,23 @@ export interface GovernanceScheduleEntry {
   entrypoint: string;
 }
 
+/** Ledger config for LEDGER_INGEST schedules */
+export interface LedgerScheduleConfig {
+  /** Stable opaque scope UUID */
+  scopeId: string;
+  /** Human-friendly scope slug */
+  scopeKey: string;
+  /** Epoch length in days */
+  epochLengthDays: number;
+  /** Map of source name → source config */
+  activitySources: Record<string, { creditEstimateAlgo: string }>;
+}
+
 /** Minimal governance config shape (no @/ imports — pure type) */
 export interface GovernanceScheduleConfig {
   schedules: GovernanceScheduleEntry[];
+  /** Ledger config — required when LEDGER_INGEST charter is present */
+  ledger?: LedgerScheduleConfig;
 }
 
 /** Logger interface matching pino shape */
@@ -171,17 +191,39 @@ export async function syncGovernanceSchedules(
     const scheduleId = governanceScheduleId(schedule.charter);
     configScheduleIds.add(scheduleId);
 
-    const desiredInput: JsonValue = {
-      message: schedule.entrypoint,
-      model: GOVERNANCE_MODEL,
-    };
+    // Determine if this is a LEDGER_INGEST schedule (different workflow + queue)
+    const isLedgerIngest = schedule.charter.toUpperCase() === "LEDGER_INGEST";
+
+    let desiredInput: JsonValue;
+    let workflowType: string | undefined;
+    let taskQueueOverride: string | undefined;
+    let graphId: string;
+
+    if (isLedgerIngest && config.ledger) {
+      desiredInput = {
+        scopeId: config.ledger.scopeId,
+        scopeKey: config.ledger.scopeKey,
+        epochLengthDays: config.ledger.epochLengthDays,
+        activitySources: config.ledger.activitySources,
+      };
+      workflowType = COLLECT_EPOCH_WORKFLOW_TYPE;
+      taskQueueOverride = LEDGER_TASK_QUEUE;
+      // Ledger workflows don't use graph/grant auth, but CreateScheduleParams requires graphId
+      graphId = "ledger:ingest";
+    } else {
+      desiredInput = {
+        message: schedule.entrypoint,
+        model: GOVERNANCE_MODEL,
+      };
+      graphId = GOVERNANCE_GRAPH_ID;
+    }
 
     // Upsert DB row first — governance schedules are first-class DB rows
     const dbScheduleId = await deps.upsertGovernanceScheduleRow({
       temporalScheduleId: scheduleId,
       ownerUserId: deps.systemUserId,
       executionGrantId: grantId,
-      graphId: GOVERNANCE_GRAPH_ID,
+      graphId,
       input: desiredInput,
       cron: schedule.cron,
       timezone: schedule.timezone,
@@ -192,11 +234,13 @@ export async function syncGovernanceSchedules(
       dbScheduleId,
       cron: schedule.cron,
       timezone: schedule.timezone,
-      graphId: GOVERNANCE_GRAPH_ID,
+      graphId,
       executionGrantId: grantId,
       input: desiredInput,
       overlapPolicy: "skip",
       catchupWindowMs: 0,
+      workflowType,
+      taskQueueOverride,
     };
 
     try {
