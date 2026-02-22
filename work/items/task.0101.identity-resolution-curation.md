@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
 branch: feat/ledger-identity-resolution
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/461
 reviewer:
 revision: 2
 blocked_by: task.0089, task.0095
