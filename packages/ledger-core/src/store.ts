@@ -24,6 +24,7 @@ import type { EpochStatus } from "./model";
 export interface LedgerEpoch {
   readonly id: bigint;
   readonly nodeId: string;
+  readonly scopeId: string;
   readonly status: EpochStatus;
   readonly periodStart: Date;
   readonly periodEnd: Date;
@@ -37,6 +38,7 @@ export interface LedgerEpoch {
 export interface LedgerActivityEvent {
   readonly id: string;
   readonly nodeId: string;
+  readonly scopeId: string;
   readonly source: string;
   readonly eventType: string;
   readonly platformUserId: string;
@@ -79,9 +81,10 @@ export interface LedgerAllocation {
 
 export interface LedgerSourceCursor {
   readonly nodeId: string;
+  readonly scopeId: string;
   readonly source: string;
   readonly stream: string;
-  readonly scope: string;
+  readonly sourceRef: string;
   readonly cursorValue: string;
   readonly retrievedAt: Date;
 }
@@ -130,6 +133,7 @@ export interface LedgerStatementSignature {
 export interface InsertActivityEventParams {
   readonly id: string;
   readonly nodeId: string;
+  readonly scopeId: string;
   readonly source: string;
   readonly eventType: string;
   readonly platformUserId: string;
@@ -203,11 +207,12 @@ export interface ActivityLedgerStore {
   // Epochs
   createEpoch(params: {
     nodeId: string;
+    scopeId: string;
     periodStart: Date;
     periodEnd: Date;
     weightConfig: Record<string, number>;
   }): Promise<LedgerEpoch>;
-  getOpenEpoch(nodeId: string): Promise<LedgerEpoch | null>;
+  getOpenEpoch(nodeId: string, scopeId: string): Promise<LedgerEpoch | null>;
   getEpoch(id: bigint): Promise<LedgerEpoch | null>;
   listEpochs(nodeId: string): Promise<LedgerEpoch[]>;
   closeEpoch(epochId: bigint, poolTotal: bigint): Promise<LedgerEpoch>;
@@ -238,16 +243,18 @@ export interface ActivityLedgerStore {
   // Cursors (one stream per call)
   upsertCursor(
     nodeId: string,
+    scopeId: string,
     source: string,
     stream: string,
-    scope: string,
+    sourceRef: string,
     cursorValue: string
   ): Promise<void>;
   getCursor(
     nodeId: string,
+    scopeId: string,
     source: string,
     stream: string,
-    scope: string
+    sourceRef: string
   ): Promise<LedgerSourceCursor | null>;
 
   // Pool components

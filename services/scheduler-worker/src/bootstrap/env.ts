@@ -30,6 +30,15 @@ const EnvSchema = z.object({
   /** Temporal task queue (required) */
   TEMPORAL_TASK_QUEUE: z.string().min(1, "TEMPORAL_TASK_QUEUE is required"),
 
+  /** Unique node identity UUID — scopes all ledger tables */
+  NODE_ID: z.string().uuid("NODE_ID must be a valid UUID").optional(),
+
+  /** Stable opaque scope UUID — DB FK for ledger scope */
+  SCOPE_ID: z.string().uuid("SCOPE_ID must be a valid UUID").optional(),
+
+  /** Human-friendly scope slug — for display, logs, schedule IDs */
+  SCOPE_KEY: z.string().min(1).default("default"),
+
   /** Scheduler API token for internal API calls (required, treat as secret - never log) */
   SCHEDULER_API_TOKEN: z
     .string()

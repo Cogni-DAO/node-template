@@ -470,7 +470,7 @@ hash_file() {
 # Usage: append_env_if_set FILE KEY VALUE
 append_env_if_set() {
     local file="${1:?file required}" key="${2:?key required}" val="${3-}"
-    [[ -n "$val" ]] && printf '%s=%s\n' "$key" "$val" >> "$file"
+    if [[ -n "$val" ]]; then printf '%s=%s\n' "$key" "$val" >> "$file"; fi
 }
 
 log_info "Setting up deployment environment on VM..."

@@ -12,7 +12,7 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch: worktree-ingestion-core-github-adapter
+branch: feat/temporal-ledger-workflow
 pr:
 reviewer:
 revision: 1
@@ -279,14 +279,22 @@ Implementation in `DrizzleLedgerAdapter`: queries `user_bindings` table with `WH
 
 ## Plan
 
-- [ ] Add `activity_ledger` section to `.cogni/repo-spec.yaml` (epoch_length_days, activity_sources)
+- [x] Add `scope_id` to ledger tables (epochs, activity_events, source_cursors) — DB schema, port, adapter, migration 0012, tests
+- [x] Rename `source_cursors.scope` → `source_ref` (reserve "scope" for governance domain)
+- [x] Add `activity_ledger` section to `.cogni/repo-spec.yaml` (epoch_length_days, activity_sources)
+- [x] Add `scope_id`, `scope_key` to repo-spec.yaml (uuidv5(node_id, "default"))
+- [x] Add `scopeIdSchema`, `scopeKeySchema`, `activityLedgerSpecSchema` to `repoSpec.schema.ts`
+- [x] Add `NODE_ID`, `SCOPE_ID`, `SCOPE_KEY` to scheduler-worker env schema
+- [x] Extend `CreateScheduleParams` with optional `workflowType` + `taskQueueOverride`
+- [x] Extend `syncGovernanceSchedules` for LEDGER_INGEST → CollectEpochWorkflow on `ledger-tasks` queue
+- [x] Add LEDGER_INGEST schedule to governance schedules in repo-spec
 - [ ] Add `computeProposedAllocations()` to `packages/ledger-core/src/rules.ts` + unit tests
 - [ ] Add `resolveIdentities()` to store port + implement in DrizzleLedgerAdapter
 - [ ] Create `services/scheduler-worker/src/activities/ledger.ts` with `createLedgerActivities(deps)`
 - [ ] Implement `CollectEpochWorkflow` — create epoch, run adapters, curate, compute allocations
 - [ ] Implement `FinalizeEpochWorkflow` — read allocations + pool, compute payouts, atomic close
 - [ ] Create `ledger-worker.ts` and wire into `main.ts`
-- [ ] Add `NODE_ID` to config schema
+- [ ] Rename `governance:` schedule prefix to distinguish agent runs vs data pipelines (e.g., `system:agent:heartbeat` vs `system:ledger:ingest`) — currently both heartbeat (OpenClaw sandbox) and ledger_ingest (CollectEpochWorkflow) share the `governance:` namespace despite being different workers/queues
 
 ## Validation
 
