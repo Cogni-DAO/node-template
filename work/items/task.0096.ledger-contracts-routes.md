@@ -2,7 +2,7 @@
 id: task.0096
 type: task
 title: "Ledger Zod contracts + API routes (2 write, 4 read) + stack tests"
-status: blocked
+status: needs_implement
 priority: 1
 rank: 5
 estimate: 2
@@ -16,7 +16,7 @@ branch: feat/ledger-api-routes
 pr:
 reviewer:
 revision: 3
-blocked_by: "Review loop limit — escalate to human. Fixes are mechanical (see Review Feedback r3)."
+blocked_by:
 deploy_verified: false
 created: 2026-02-20
 updated: 2026-02-23
