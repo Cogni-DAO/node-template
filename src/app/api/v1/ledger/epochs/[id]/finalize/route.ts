@@ -11,7 +11,11 @@
  * @public
  */
 
-import { Client, Connection } from "@temporalio/client";
+import {
+  Client,
+  Connection,
+  WorkflowExecutionAlreadyStartedError,
+} from "@temporalio/client";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { checkApprover } from "@/app/api/v1/ledger/_lib/approver-guard";
@@ -76,6 +80,8 @@ export const POST = wrapRouteHandlerWithLogging<{
 
     const workflowId = `ledger-finalize-${scopeId}-${epochId.toString()}`;
 
+    // TODO: Replace per-request connection with a singleton/connection manager
+    // to avoid connection overhead on every finalize call.
     const connection = await Connection.connect({
       address: env.TEMPORAL_ADDRESS,
     });
@@ -99,8 +105,7 @@ export const POST = wrapRouteHandlerWithLogging<{
       });
     } catch (err) {
       // WorkflowExecutionAlreadyStartedError → idempotent (already running or completed)
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes("already started") && !msg.includes("already exists")) {
+      if (!(err instanceof WorkflowExecutionAlreadyStartedError)) {
         throw err;
       }
       ctx.log.info(

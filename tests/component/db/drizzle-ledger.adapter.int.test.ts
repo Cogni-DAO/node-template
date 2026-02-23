@@ -401,6 +401,105 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
   });
 
+  // ── getCuratedEventsForAllocation ─────────────────────────────
+
+  describe("getCuratedEventsForAllocation", () => {
+    let epochId: bigint;
+    let resolvedActor: TestActor;
+
+    beforeAll(async () => {
+      resolvedActor = await seedTestActor(db);
+
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(31),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      epochId = epoch.id;
+
+      // Insert activity events within epoch window
+      const eventTime = new Date("2026-08-20T12:00:00Z");
+      await adapter.insertActivityEvents([
+        makeActivityEvent({
+          id: "join-test:resolved",
+          eventTime,
+          platformUserId: "gh-resolved",
+          source: "github",
+          eventType: "pr_merged",
+        }),
+        makeActivityEvent({
+          id: "join-test:unresolved",
+          eventTime,
+          platformUserId: "gh-unresolved",
+          source: "github",
+          eventType: "review_submitted",
+        }),
+        makeActivityEvent({
+          id: "join-test:excluded",
+          eventTime,
+          platformUserId: "gh-excluded",
+          source: "github",
+          eventType: "pr_merged",
+        }),
+      ]);
+
+      // Curate: one resolved, one unresolved (null userId), one excluded
+      await adapter.upsertCuration([
+        makeCuration({
+          epochId,
+          eventId: "join-test:resolved",
+          userId: resolvedActor.user.id,
+          included: true,
+        }),
+        makeCuration({
+          epochId,
+          eventId: "join-test:unresolved",
+          userId: null,
+          included: true,
+        }),
+        makeCuration({
+          epochId,
+          eventId: "join-test:excluded",
+          userId: resolvedActor.user.id,
+          included: false,
+        }),
+      ]);
+    });
+
+    afterAll(async () => {
+      await adapter.closeIngestion(
+        epochId,
+        "cleanup-hash",
+        "weight-sum-v0",
+        "cleanup-wch"
+      );
+      await adapter.finalizeEpoch(epochId, 0n);
+    });
+
+    it("returns only curations with non-null userId", async () => {
+      const events = await adapter.getCuratedEventsForAllocation(epochId);
+
+      // "resolved" has userId set → included
+      // "unresolved" has userId=null → excluded by join filter
+      // "excluded" has userId set but included=false → still returned (filtering is domain logic)
+      const eventIds = events.map((e) => e.eventId);
+      expect(eventIds).toContain("join-test:resolved");
+      expect(eventIds).toContain("join-test:excluded");
+      expect(eventIds).not.toContain("join-test:unresolved");
+    });
+
+    it("join populates source and eventType from activity_events", async () => {
+      const events = await adapter.getCuratedEventsForAllocation(epochId);
+      const resolved = events.find((e) => e.eventId === "join-test:resolved");
+
+      expect(resolved).toBeDefined();
+      expect(resolved?.source).toBe("github");
+      expect(resolved?.eventType).toBe("pr_merged");
+      expect(resolved?.userId).toBe(resolvedActor.user.id);
+    });
+  });
+
   // ── Allocations ───────────────────────────────────────────────
 
   describe("allocations", () => {
@@ -459,6 +558,66 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       await expect(
         adapter.updateAllocationFinalUnits(epochId, "nonexistent-user", 100n)
       ).rejects.toThrow(AllocationNotFoundError);
+    });
+
+    it("ALLOCATION_PRESERVES_OVERRIDES: upsertAllocations does not overwrite final_units", async () => {
+      // actor.user already has final_units=10000n from previous test
+      await adapter.upsertAllocations([
+        makeAllocation({
+          epochId,
+          userId: actor.user.id,
+          proposedUnits: 99999n,
+          activityCount: 10,
+        }),
+      ]);
+
+      const allocs = await adapter.getAllocationsForEpoch(epochId);
+      const alloc = allocs.find((a) => a.userId === actor.user.id);
+      expect(alloc).toBeDefined();
+      expect(alloc?.proposedUnits).toBe(99999n); // updated
+      expect(alloc?.activityCount).toBe(10); // updated
+      expect(alloc?.finalUnits).toBe(10000n); // preserved
+      expect(alloc?.overrideReason).toBe("bonus for extra work"); // preserved
+    });
+
+    it("deleteStaleAllocations does not remove rows with final_units set", async () => {
+      // Seed two more users
+      const actorB = await seedTestActor(db);
+      const actorC = await seedTestActor(db);
+
+      await adapter.insertAllocations([
+        makeAllocation({
+          epochId,
+          userId: actorB.user.id,
+          proposedUnits: 2000n,
+          activityCount: 1,
+        }),
+        makeAllocation({
+          epochId,
+          userId: actorC.user.id,
+          proposedUnits: 3000n,
+          activityCount: 1,
+        }),
+      ]);
+
+      // actorB gets an override (final_units set)
+      await adapter.updateAllocationFinalUnits(
+        epochId,
+        actorB.user.id,
+        5000n,
+        "admin override"
+      );
+
+      // Delete stale: only actor.user is "active" — actorB and actorC are "stale"
+      // But actorB has final_units → should be kept
+      await adapter.deleteStaleAllocations(epochId, [actor.user.id]);
+
+      const allocs = await adapter.getAllocationsForEpoch(epochId);
+      const userIds = allocs.map((a) => a.userId);
+
+      expect(userIds).toContain(actor.user.id); // active
+      expect(userIds).toContain(actorB.user.id); // stale but has final_units → kept
+      expect(userIds).not.toContain(actorC.user.id); // stale, no final_units → deleted
     });
   });
 
@@ -569,6 +728,36 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       ).rejects.toSatisfy((err: unknown) =>
         /not allowed/i.test(drizzleCause(err))
       );
+    });
+
+    it("POOL_LOCKED_AT_REVIEW: insertPoolComponent rejected after closeIngestion", async () => {
+      // Use a dedicated epoch to avoid interfering with afterAll cleanup
+      const reviewEpoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(30),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        reviewEpoch.id,
+        "pool-lock-hash",
+        "weight-sum-v0",
+        "pool-lock-wch"
+      );
+
+      await expect(
+        adapter.insertPoolComponent(
+          makePoolComponent({ epochId: reviewEpoch.id })
+        )
+      ).rejects.toThrow(EpochNotOpenError);
+
+      // Also rejected when finalized
+      await adapter.finalizeEpoch(reviewEpoch.id, 0n);
+      await expect(
+        adapter.insertPoolComponent(
+          makePoolComponent({ epochId: reviewEpoch.id })
+        )
+      ).rejects.toThrow(EpochNotOpenError);
     });
   });
 
