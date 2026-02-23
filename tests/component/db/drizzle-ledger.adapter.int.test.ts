@@ -731,7 +731,15 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
 
     it("POOL_LOCKED_AT_REVIEW: insertPoolComponent rejected after closeIngestion", async () => {
-      // Use a dedicated epoch to avoid interfering with afterAll cleanup
+      // Close the describe-level epoch so ONE_OPEN_EPOCH allows a new one
+      await adapter.closeIngestion(
+        epochId,
+        "pre-review-hash",
+        "weight-sum-v0",
+        "pre-review-wch"
+      );
+      await adapter.finalizeEpoch(epochId, 0n);
+
       const reviewEpoch = await adapter.createEpoch({
         nodeId: TEST_NODE_ID,
         scopeId: TEST_SCOPE_ID,
