@@ -35,7 +35,7 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
 }
 ```
 
-**External deps:** none (pure TypeScript, Web Crypto only).
+**External deps:** none (pure TypeScript, Node `crypto` for SHA-256).
 
 ## Public Surface
 
@@ -50,7 +50,8 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
   - `EpochWindow`, `EpochWindowParams` — Types for epoch window computation
   - `computePayouts()` — BIGINT proportional distribution with largest-remainder rounding
   - `computeAllocationSetHash()` — SHA-256 of canonical sorted allocation data
-  - `EpochNotOpenError`, `EpochAlreadyClosedError`, `PoolComponentMissingError` — Domain errors with type guards
+  - `EpochNotOpenError`, `EpochAlreadyFinalizedError`, `PoolComponentMissingError` — Domain errors with type guards
+  - `buildCanonicalMessage()`, `computeApproverSetHash()` — EIP-191 signing helpers (pure, zero runtime deps)
 - **CLI:** none
 - **Env/Config keys:** none
 

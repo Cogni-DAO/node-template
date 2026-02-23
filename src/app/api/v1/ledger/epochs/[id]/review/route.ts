@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/api/v1/ledger/epochs/[id]/review/route`
+ * Purpose: SIWE + approver-gated endpoint for transitioning an epoch from open → review.
+ * Scope: Auth-protected POST endpoint. Pins approver set hash. Does not accept a request body.
+ * Invariants: WRITE_ROUTES_APPROVER_GATED, APPROVERS_PINNED_AT_REVIEW, INGESTION_CLOSED_ON_REVIEW.
+ * Side-effects: IO (HTTP response, database write)
+ * Links: docs/spec/epoch-ledger.md, contracts/ledger.review-epoch.v1.contract
+ * @public
+ */
+
+import { computeApproverSetHash } from "@cogni/ledger-core";
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/app/_lib/auth/session";
+import { checkApprover } from "@/app/api/v1/ledger/_lib/approver-guard";
+import { toEpochDto } from "@/app/api/v1/public/ledger/_lib/ledger-dto";
+import { getContainer } from "@/bootstrap/container";
+import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import { reviewEpochOperation } from "@/contracts/ledger.review-epoch.v1.contract";
+import { getLedgerApprovers } from "@/shared/config";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export const POST = wrapRouteHandlerWithLogging<{
+  params: Promise<{ id: string }>;
+}>(
+  {
+    routeId: "ledger.review-epoch",
+    auth: { mode: "required", getSessionUser },
+  },
+  async (ctx, _request, sessionUser, context) => {
+    // WRITE_ROUTES_APPROVER_GATED
+    const denied = checkApprover(ctx, sessionUser?.walletAddress);
+    if (denied) return denied;
+
+    if (!context) throw new Error("context required for dynamic routes");
+    const { id } = await context.params;
+    let epochId: bigint;
+    try {
+      epochId = BigInt(id);
+    } catch {
+      return NextResponse.json({ error: "Invalid epoch ID" }, { status: 400 });
+    }
+
+    // APPROVERS_PINNED_AT_REVIEW: pin current approver set on the epoch
+    const approverSetHash = computeApproverSetHash(getLedgerApprovers());
+
+    const store = getContainer().activityLedgerStore;
+    const epoch = await store.closeIngestion(epochId, approverSetHash);
+
+    ctx.log.info(
+      { epochId: id, approverSetHash: `${approverSetHash.slice(0, 12)}...` },
+      "ledger.review-epoch_success"
+    );
+
+    return NextResponse.json(
+      reviewEpochOperation.output.parse({ epoch: toEpochDto(epoch) })
+    );
+  }
+);
