@@ -678,6 +678,237 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         "0x1234567890abcdef1234567890abcdef12345678"
       );
     });
+
+    it("insertStatementSignature duplicate is a no-op", async () => {
+      // Re-insert the same signature — should not throw
+      await expect(
+        adapter.insertStatementSignature({
+          nodeId: TEST_NODE_ID,
+          statementId,
+          signerWallet: "0x1234567890abcdef1234567890abcdef12345678",
+          signature: "0xdeadbeef",
+          signedAt: new Date(),
+        })
+      ).resolves.not.toThrow();
+
+      const sigs = await adapter.getSignaturesForStatement(statementId);
+      expect(sigs).toHaveLength(1);
+    });
+  });
+
+  // ── finalizeEpochAtomic ──────────────────────────────────────
+
+  describe("finalizeEpochAtomic", () => {
+    const SIGNER_WALLET = "0xaaaa000000000000000000000000000000000001";
+    const HASH = "atomic-test-hash-abc123";
+    const PAYOUTS_JSON = [
+      {
+        user_id: "user-1",
+        total_units: "8000",
+        share: "0.800000",
+        amount_credits: "8000",
+      },
+      {
+        user_id: "user-2",
+        total_units: "2000",
+        share: "0.200000",
+        amount_credits: "2000",
+      },
+    ];
+
+    function makeAtomicParams(epochId: bigint) {
+      return {
+        epochId,
+        poolTotal: 10000n,
+        statement: {
+          nodeId: TEST_NODE_ID,
+          allocationSetHash: HASH,
+          poolTotalCredits: 10000n,
+          payoutsJson: PAYOUTS_JSON,
+        },
+        signature: {
+          nodeId: TEST_NODE_ID,
+          signerWallet: SIGNER_WALLET,
+          signature: "0xsig_aaa",
+          signedAt: new Date(),
+        },
+        expectedAllocationSetHash: HASH,
+      };
+    }
+
+    it("happy path: review → finalized with statement + signature", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(20),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "atomic-approver-hash",
+        "weight-sum-v0",
+        "atomic-wch"
+      );
+
+      const { epoch: fin, statement } = await adapter.finalizeEpochAtomic(
+        makeAtomicParams(epoch.id)
+      );
+
+      expect(fin.status).toBe("finalized");
+      expect(fin.poolTotalCredits).toBe(10000n);
+      expect(fin.closedAt).not.toBeNull();
+      expect(statement.allocationSetHash).toBe(HASH);
+      expect(statement.poolTotalCredits).toBe(10000n);
+
+      // Signature was created
+      const sigs = await adapter.getSignaturesForStatement(statement.id);
+      expect(sigs).toHaveLength(1);
+      expect(sigs[0]?.signerWallet).toBe(SIGNER_WALLET);
+    });
+
+    it("retry: call twice with same inputs — no error, same statement", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(21),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "retry-hash",
+        "weight-sum-v0",
+        "retry-wch"
+      );
+
+      const params = makeAtomicParams(epoch.id);
+      const first = await adapter.finalizeEpochAtomic(params);
+      const second = await adapter.finalizeEpochAtomic(params);
+
+      expect(first.statement.id).toBe(second.statement.id);
+      expect(second.epoch.status).toBe("finalized");
+    });
+
+    it("already-finalized + missing signature → signature repaired", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(22),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "repair-hash",
+        "weight-sum-v0",
+        "repair-wch"
+      );
+
+      // First call creates statement + signature for signer A
+      const params = makeAtomicParams(epoch.id);
+      await adapter.finalizeEpochAtomic(params);
+
+      // Second call with different signer — should add the signature
+      const SIGNER_B = "0xbbbb000000000000000000000000000000000002";
+      const repairParams = {
+        ...params,
+        signature: {
+          ...params.signature,
+          signerWallet: SIGNER_B,
+          signature: "0xsig_bbb",
+        },
+      };
+      const { statement } = await adapter.finalizeEpochAtomic(repairParams);
+
+      const sigs = await adapter.getSignaturesForStatement(statement.id);
+      expect(sigs).toHaveLength(2);
+      const wallets = sigs.map((s) => s.signerWallet).sort();
+      expect(wallets).toEqual([SIGNER_WALLET, SIGNER_B].sort());
+    });
+
+    it("hash mismatch → throws", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(23),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "hash-mismatch-approver",
+        "weight-sum-v0",
+        "hash-wch"
+      );
+
+      // First call with hash A
+      const params = makeAtomicParams(epoch.id);
+      await adapter.finalizeEpochAtomic(params);
+
+      // Second call with different expected hash
+      const badParams = {
+        ...params,
+        expectedAllocationSetHash: "different-hash-xyz",
+      };
+      await expect(adapter.finalizeEpochAtomic(badParams)).rejects.toThrow(
+        /allocationSetHash mismatch/
+      );
+    });
+
+    it("signature divergence → throws", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(24),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "diverge-approver",
+        "weight-sum-v0",
+        "diverge-wch"
+      );
+
+      const params = makeAtomicParams(epoch.id);
+      await adapter.finalizeEpochAtomic(params);
+
+      // Same signer, different signature text
+      const divergeParams = {
+        ...params,
+        signature: {
+          ...params.signature,
+          signature: "0xdifferent_sig",
+        },
+      };
+      await expect(adapter.finalizeEpochAtomic(divergeParams)).rejects.toThrow(
+        /signature divergence/
+      );
+    });
+
+    it("open epoch → throws EpochNotOpenError", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(25),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+
+      await expect(
+        adapter.finalizeEpochAtomic(makeAtomicParams(epoch.id))
+      ).rejects.toThrow(EpochNotOpenError);
+
+      // Cleanup
+      await adapter.closeIngestion(
+        epoch.id,
+        "cleanup",
+        "weight-sum-v0",
+        "cleanup"
+      );
+      await adapter.finalizeEpoch(epoch.id, 0n);
+    });
+
+    it("missing epoch → throws EpochNotFoundError", async () => {
+      await expect(
+        adapter.finalizeEpochAtomic(makeAtomicParams(999999n))
+      ).rejects.toThrow(EpochNotFoundError);
+    });
   });
 
   // ── SCOPE_GATED_QUERIES ─────────────────────────────────────────

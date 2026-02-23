@@ -780,11 +780,11 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       throw new Error(`finalizeEpoch: epoch ${input.epochId} not found`);
     }
 
-    // EPOCH_FINALIZE_IDEMPOTENT: already finalized → return existing statement
+    // EPOCH_FINALIZE_IDEMPOTENT: already finalized → repair via atomic method
     if (epoch.status === "finalized") {
       logger.info(
         { epochId: input.epochId },
-        "Epoch already finalized — returning existing statement"
+        "Epoch already finalized — repairing via finalizeEpochAtomic"
       );
       const existing = await ledgerStore.getStatementForEpoch(epochId);
       if (!existing) {
@@ -792,6 +792,26 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
           `finalizeEpoch: epoch ${input.epochId} is finalized but no statement found`
         );
       }
+
+      // Repair: ensure this signer's signature exists via atomic method
+      await ledgerStore.finalizeEpochAtomic({
+        epochId,
+        poolTotal: existing.poolTotalCredits,
+        statement: {
+          nodeId,
+          allocationSetHash: existing.allocationSetHash,
+          poolTotalCredits: existing.poolTotalCredits,
+          payoutsJson: existing.payoutsJson,
+        },
+        signature: {
+          nodeId,
+          signerWallet: input.signerAddress,
+          signature: input.signature,
+          signedAt: new Date(),
+        },
+        expectedAllocationSetHash: existing.allocationSetHash,
+      });
+
       return {
         statementId: existing.id,
         poolTotalCredits: existing.poolTotalCredits.toString(),
@@ -889,29 +909,30 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       );
     }
 
-    // 9. Atomic transaction: finalize epoch + insert statement + insert signature
-    const finalizedEpoch = await ledgerStore.finalizeEpoch(epochId, poolTotal);
-
-    const statement = await ledgerStore.insertPayoutStatement({
-      nodeId,
-      epochId,
-      allocationSetHash,
-      poolTotalCredits: poolTotal,
-      payoutsJson: payouts.map((p) => ({
-        user_id: p.userId,
-        total_units: p.totalUnits.toString(),
-        share: p.share,
-        amount_credits: p.amountCredits.toString(),
-      })),
-    });
-
-    await ledgerStore.insertStatementSignature({
-      nodeId,
-      statementId: statement.id,
-      signerWallet: input.signerAddress,
-      signature: input.signature,
-      signedAt: new Date(),
-    });
+    // 9. Atomic finalize — epoch transition + statement + signature in one transaction
+    const { epoch: finalizedEpoch, statement } =
+      await ledgerStore.finalizeEpochAtomic({
+        epochId,
+        poolTotal,
+        statement: {
+          nodeId,
+          allocationSetHash,
+          poolTotalCredits: poolTotal,
+          payoutsJson: payouts.map((p) => ({
+            user_id: p.userId,
+            total_units: p.totalUnits.toString(),
+            share: p.share,
+            amount_credits: p.amountCredits.toString(),
+          })),
+        },
+        signature: {
+          nodeId,
+          signerWallet: input.signerAddress,
+          signature: input.signature,
+          signedAt: new Date(),
+        },
+        expectedAllocationSetHash: allocationSetHash,
+      });
 
     logger.info(
       {

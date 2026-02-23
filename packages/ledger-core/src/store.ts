@@ -345,6 +345,22 @@ export interface ActivityLedgerStore {
   ): Promise<LedgerPayoutStatement>;
   getStatementForEpoch(epochId: bigint): Promise<LedgerPayoutStatement | null>;
 
+  /**
+   * Atomic finalize: epoch transition + statement upsert + signature upsert in one DB transaction.
+   * Handles all states:
+   * - review → finalized: insert statement + signature, return both
+   * - already finalized: repair missing statement/signature, assert hash match
+   * - open or missing: throw domain error
+   * Uses ON CONFLICT for retry safety.
+   */
+  finalizeEpochAtomic(params: {
+    epochId: bigint;
+    poolTotal: bigint;
+    statement: Omit<InsertPayoutStatementParams, "epochId">;
+    signature: Omit<InsertSignatureParams, "statementId">;
+    expectedAllocationSetHash: string;
+  }): Promise<{ epoch: LedgerEpoch; statement: LedgerPayoutStatement }>;
+
   // Statement signatures (schema only — signing flow is a follow-up)
   insertStatementSignature(params: InsertSignatureParams): Promise<void>;
   getSignaturesForStatement(
