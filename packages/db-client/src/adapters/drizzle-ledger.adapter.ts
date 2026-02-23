@@ -50,6 +50,7 @@ import type {
 import {
   AllocationNotFoundError,
   EpochNotFoundError,
+  EpochNotOpenError,
   type EpochStatus,
 } from "@cogni/ledger-core";
 import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
@@ -319,13 +320,16 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       )
       .returning();
     if (!row) {
-      // Distinguish not-found/wrong-scope from already-review/finalized
       const existing = await this.getEpoch(epochId);
       if (!existing) {
         throw new EpochNotFoundError(epochId.toString());
       }
-      // Already in review or finalized — return as-is (idempotent)
-      return existing;
+      // Idempotent: already in review or finalized → return as-is
+      if (existing.status === "review" || existing.status === "finalized") {
+        return existing;
+      }
+      // Should not happen (open epoch that didn't match UPDATE) — defensive
+      throw new EpochNotOpenError(epochId.toString());
     }
     return toEpoch(row);
   }
@@ -350,13 +354,16 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       )
       .returning();
     if (!row) {
-      // Distinguish not-found/wrong-scope from already-finalized
       const existing = await this.getEpoch(epochId);
       if (!existing) {
         throw new EpochNotFoundError(epochId.toString());
       }
-      // Already finalized — return as-is (EPOCH_FINALIZE_IDEMPOTENT)
-      return existing;
+      // Idempotent: already finalized → return as-is
+      if (existing.status === "finalized") {
+        return existing;
+      }
+      // Wrong state (open) — caller must closeIngestion first
+      throw new EpochNotOpenError(epochId.toString());
     }
     return toEpoch(row);
   }
