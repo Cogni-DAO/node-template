@@ -136,7 +136,7 @@ export const activityEvents = pgTable(
 
 /**
  * Activity curation — admin decisions about which events count and how.
- * Mutable while epoch is open, frozen by trigger when epoch closes (CURATION_FREEZE_ON_CLOSE).
+ * Mutable while epoch is open or review, frozen by trigger when epoch finalizes (CURATION_FREEZE_ON_FINALIZE).
  * Links events to epochs (epoch membership assigned here, not on raw event).
  */
 export const activityCuration = pgTable(

@@ -35,7 +35,7 @@ Pure domain logic for the epoch ledger — shared between the Next.js app (`src/
 }
 ```
 
-**External deps:** none (pure TypeScript, Web Crypto only).
+**External deps:** none (pure TypeScript, Node `crypto` for SHA-256).
 
 ## Public Surface
 

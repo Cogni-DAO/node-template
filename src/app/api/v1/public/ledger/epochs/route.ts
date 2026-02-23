@@ -36,13 +36,13 @@ export const GET = wrapPublicRoute(
     const store = getContainer().activityLedgerStore;
     const allEpochs = await store.listEpochs(getNodeId());
     // PUBLIC_READS_FINALIZED_ONLY: only expose finalized epochs
-    const closedEpochs = allEpochs.filter((e) => e.status === "finalized");
-    const page = closedEpochs.slice(offset, offset + limit);
+    const finalizedEpochs = allEpochs.filter((e) => e.status === "finalized");
+    const page = finalizedEpochs.slice(offset, offset + limit);
 
     return NextResponse.json(
       listEpochsOperation.output.parse({
         epochs: page.map(toEpochDto),
-        total: closedEpochs.length,
+        total: finalizedEpochs.length,
       })
     );
   }
