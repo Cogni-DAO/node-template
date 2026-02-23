@@ -20,13 +20,18 @@
 import type { ActivityEvent } from "@cogni/ingestion-core";
 import type { UncuratedEvent } from "@cogni/ledger-core";
 import {
+  buildCanonicalMessage,
+  computeAllocationSetHash,
   computeApproverSetHash,
+  computePayouts,
   computeProposedAllocations,
   computeWeightConfigHash,
   deriveAllocationAlgoRef,
   estimatePoolComponentsV0,
   validateWeightConfig,
 } from "@cogni/ledger-core";
+
+import { verifyMessage } from "viem";
 
 import type { Logger } from "../observability/logger.js";
 import type { ActivityLedgerStore, SourceAdapter } from "../ports/index.js";
@@ -178,6 +183,26 @@ export interface AutoCloseIngestionInput {
 export interface AutoCloseIngestionOutput {
   readonly closed: boolean;
   readonly reason: string;
+}
+
+/**
+ * Input for finalizeEpoch compound activity.
+ */
+export interface FinalizeEpochInput {
+  readonly epochId: string; // bigint serialized
+  readonly signature: string; // EIP-191 hex
+  readonly signerAddress: string; // from SIWE session
+  readonly approvers: string[]; // EVM addresses (lowercased)
+}
+
+/**
+ * Output from finalizeEpoch compound activity.
+ */
+export interface FinalizeEpochOutput {
+  readonly statementId: string;
+  readonly poolTotalCredits: string; // bigint serialized
+  readonly allocationSetHash: string;
+  readonly payoutCount: number;
 }
 
 /**
@@ -734,6 +759,180 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
     return { closed: true, reason: "auto_closed" };
   }
 
+  /**
+   * Compound activity: atomically finalize an epoch with signature verification.
+   * EPOCH_FINALIZE_IDEMPOTENT: returns existing statement if already finalized.
+   * CONFIG_LOCKED_AT_REVIEW: verifies allocation_algo_ref and weight_config_hash are set.
+   */
+  async function finalizeEpoch(
+    input: FinalizeEpochInput
+  ): Promise<FinalizeEpochOutput> {
+    const epochId = BigInt(input.epochId);
+
+    logger.info(
+      { epochId: input.epochId, signerAddress: input.signerAddress },
+      "Finalizing epoch"
+    );
+
+    // 1. Load epoch — verify exists and is review (or finalized for idempotency)
+    const epoch = await ledgerStore.getEpoch(epochId);
+    if (!epoch) {
+      throw new Error(`finalizeEpoch: epoch ${input.epochId} not found`);
+    }
+
+    // EPOCH_FINALIZE_IDEMPOTENT: already finalized → return existing statement
+    if (epoch.status === "finalized") {
+      logger.info(
+        { epochId: input.epochId },
+        "Epoch already finalized — returning existing statement"
+      );
+      const existing = await ledgerStore.getStatementForEpoch(epochId);
+      if (!existing) {
+        throw new Error(
+          `finalizeEpoch: epoch ${input.epochId} is finalized but no statement found`
+        );
+      }
+      return {
+        statementId: existing.id,
+        poolTotalCredits: existing.poolTotalCredits.toString(),
+        allocationSetHash: existing.allocationSetHash,
+        payoutCount: existing.payoutsJson.length,
+      };
+    }
+
+    if (epoch.status !== "review") {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} is '${epoch.status}', expected 'review'`
+      );
+    }
+
+    // 2. CONFIG_LOCKED_AT_REVIEW: verify config is locked
+    if (!epoch.allocationAlgoRef || !epoch.weightConfigHash) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} missing allocation_algo_ref or weight_config_hash (CONFIG_LOCKED_AT_REVIEW violated)`
+      );
+    }
+
+    // 3. Verify signer is in approvers and matches pinned approverSetHash
+    const signerLower = input.signerAddress.toLowerCase();
+    const approversLower = input.approvers.map((a) => a.toLowerCase());
+    if (!approversLower.includes(signerLower)) {
+      throw new Error(
+        `finalizeEpoch: signer ${input.signerAddress} not in approvers`
+      );
+    }
+    const currentApproverSetHash = computeApproverSetHash(input.approvers);
+    if (epoch.approverSetHash !== currentApproverSetHash) {
+      throw new Error(
+        `finalizeEpoch: approver set hash mismatch — epoch has ${epoch.approverSetHash}, current is ${currentApproverSetHash}`
+      );
+    }
+
+    // 4. Load allocations — use final_units where set, fall back to proposed_units
+    const allocations = await ledgerStore.getAllocationsForEpoch(epochId);
+    if (allocations.length === 0) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} has no allocations`
+      );
+    }
+
+    const finalizedAllocations = allocations.map((a) => ({
+      userId: a.userId,
+      valuationUnits: a.finalUnits ?? a.proposedUnits,
+    }));
+
+    // 5. Load pool components → pool_total = SUM(amount_credits)
+    const poolComponents = await ledgerStore.getPoolComponentsForEpoch(epochId);
+    if (poolComponents.length === 0) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} has no pool components (POOL_REQUIRES_BASE)`
+      );
+    }
+    const hasBaseIssuance = poolComponents.some(
+      (c) => c.componentId === "base_issuance"
+    );
+    if (!hasBaseIssuance) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} missing base_issuance component (POOL_REQUIRES_BASE)`
+      );
+    }
+
+    const poolTotal = poolComponents.reduce(
+      (sum, c) => sum + c.amountCredits,
+      0n
+    );
+
+    // 6. Compute payouts (pure, deterministic)
+    const payouts = computePayouts(finalizedAllocations, poolTotal);
+
+    // 7. Compute allocation set hash (deterministic)
+    const allocationSetHash =
+      await computeAllocationSetHash(finalizedAllocations);
+
+    // 8. Build canonical message and verify signature
+    const canonicalMessage = buildCanonicalMessage({
+      nodeId,
+      scopeId,
+      epochId: input.epochId,
+      allocationSetHash,
+      poolTotalCredits: poolTotal.toString(),
+    });
+
+    const isValid = await verifyMessage({
+      address: input.signerAddress as `0x${string}`,
+      message: canonicalMessage,
+      signature: input.signature as `0x${string}`,
+    });
+    if (!isValid) {
+      throw new Error(
+        `finalizeEpoch: signature verification failed for signer ${input.signerAddress}`
+      );
+    }
+
+    // 9. Atomic transaction: finalize epoch + insert statement + insert signature
+    const finalizedEpoch = await ledgerStore.finalizeEpoch(epochId, poolTotal);
+
+    const statement = await ledgerStore.insertPayoutStatement({
+      nodeId,
+      epochId,
+      allocationSetHash,
+      poolTotalCredits: poolTotal,
+      payoutsJson: payouts.map((p) => ({
+        user_id: p.userId,
+        total_units: p.totalUnits.toString(),
+        share: p.share,
+        amount_credits: p.amountCredits.toString(),
+      })),
+    });
+
+    await ledgerStore.insertStatementSignature({
+      nodeId,
+      statementId: statement.id,
+      signerWallet: input.signerAddress,
+      signature: input.signature,
+      signedAt: new Date(),
+    });
+
+    logger.info(
+      {
+        epochId: input.epochId,
+        statementId: statement.id,
+        poolTotalCredits: poolTotal.toString(),
+        allocationSetHash: `${allocationSetHash.slice(0, 12)}...`,
+        payoutCount: payouts.length,
+        status: finalizedEpoch.status,
+      },
+      "Epoch finalized"
+    );
+
+    return {
+      statementId: statement.id,
+      poolTotalCredits: poolTotal.toString(),
+      allocationSetHash,
+      payoutCount: payouts.length,
+    };
+  }
+
   return {
     ensureEpochForWindow,
     loadCursor,
@@ -744,6 +943,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
     computeAllocations,
     ensurePoolComponents,
     autoCloseIngestion,
+    finalizeEpoch,
   };
 }
 

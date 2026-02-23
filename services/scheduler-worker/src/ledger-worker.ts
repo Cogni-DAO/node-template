@@ -66,10 +66,8 @@ export async function startLedgerWorker(
     connection,
     namespace: env.TEMPORAL_NAMESPACE,
     taskQueue: LEDGER_TASK_QUEUE,
-    workflowsPath: new URL(
-      "./workflows/collect-epoch.workflow.js",
-      import.meta.url
-    ).pathname,
+    workflowsPath: new URL("./workflows/ledger-workflows.js", import.meta.url)
+      .pathname,
     activities,
   });
 
