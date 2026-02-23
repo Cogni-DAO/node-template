@@ -16,6 +16,7 @@
 
 import type { AiEvent, AiExecutionErrorCode, ToolExecFn } from "@cogni/ai-core";
 import type { ToolContract } from "@cogni/ai-tools";
+import type { StructuredToolInterface } from "@langchain/core/tools";
 // Import shared graph types from graphs/types.ts (single source of truth)
 import type {
   CreateReactAgentGraphOptions,
@@ -113,6 +114,13 @@ export interface InProcRunnerOptions<TTool = unknown> {
 
   /** Graph execution request */
   readonly request: InProcGraphRequest;
+
+  /**
+   * Optional extra LangChain tools to merge alongside contract-derived tools.
+   * Spike: used for MCP tools that bypass ToolRunner pipeline.
+   * These tools are NOT subject to ToolRunner policy/billing/redaction.
+   */
+  readonly extraTools?: ReadonlyArray<StructuredToolInterface>;
 }
 
 /**

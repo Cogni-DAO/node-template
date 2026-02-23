@@ -30,6 +30,7 @@ import {
   createInProcGraphRunner,
   type GraphResult,
   type InProcGraphRequest,
+  type InProcRunnerOptions,
   LANGGRAPH_CATALOG,
   type ToolExecFn,
 } from "@cogni/langgraph-graphs";
@@ -93,11 +94,19 @@ export class LangGraphInProcProvider implements GraphProvider {
   private readonly log: Logger;
   private readonly catalog: LangGraphCatalog<CreateGraphFn>;
 
+  /**
+   * Optional pre-loaded MCP tools (as opaque array — LangChain types stay in package).
+   * Spike: these bypass ToolRunner pipeline entirely.
+   */
+  private readonly mcpTools: readonly unknown[];
+
   constructor(
     private readonly adapter: CompletionUnitAdapter,
-    private readonly toolSource: ToolSourcePort
+    private readonly toolSource: ToolSourcePort,
+    mcpTools?: readonly unknown[]
   ) {
     this.log = makeLogger({ component: "LangGraphInProcProvider" });
+    this.mcpTools = mcpTools ?? [];
 
     // Use catalog from package (single source of truth)
     this.catalog = LANGGRAPH_CATALOG as LangGraphCatalog<CreateGraphFn>;
@@ -106,6 +115,7 @@ export class LangGraphInProcProvider implements GraphProvider {
       {
         graphCount: Object.keys(this.catalog).length,
         graphs: Object.keys(this.catalog),
+        mcpToolCount: this.mcpTools.length,
       },
       "LangGraphInProcProvider initialized"
     );
@@ -219,12 +229,16 @@ export class LangGraphInProcProvider implements GraphProvider {
     };
 
     // Delegate to package runner — all LangChain logic is there
+    // Spike: mcpTools are passed as extraTools (opaque unknown[] → StructuredToolInterface[] in package)
     const { stream, final } = createInProcGraphRunner({
       createGraph: entry.graphFactory,
       completionFn,
       createToolExecFn,
       toolContracts,
       request: runnerRequest,
+      ...(this.mcpTools.length > 0 && {
+        extraTools: this.mcpTools as InProcRunnerOptions["extraTools"],
+      }),
     });
 
     // Map package result to GraphFinal

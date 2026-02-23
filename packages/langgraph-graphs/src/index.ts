@@ -45,3 +45,6 @@ export type {
 
 // Re-export runtime types (interfaces only, not implementations)
 export type { MakeLangChainToolOptions } from "./runtime/index";
+export type { McpServersConfig } from "./runtime/mcp";
+// MCP client integration (spike — tools bypass ToolRunner pipeline)
+export { loadMcpTools, parseMcpConfigFromEnv } from "./runtime/mcp";

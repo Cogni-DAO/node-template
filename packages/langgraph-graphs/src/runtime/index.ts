@@ -60,3 +60,16 @@ export {
   type ToolCall,
   toLangChainToolsFromContext,
 } from "./cogni";
+
+// ============================================================================
+// MCP client (spike — tools bypass ToolRunner pipeline)
+// ============================================================================
+
+export type {
+  McpHttpServerConfig,
+  McpServerConfig,
+  McpServersConfig,
+  McpSseServerConfig,
+  McpStdioServerConfig,
+} from "./mcp";
+export { loadMcpTools, parseMcpConfigFromEnv } from "./mcp";

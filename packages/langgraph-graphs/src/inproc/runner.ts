@@ -89,6 +89,7 @@ export function createInProcGraphRunner<TTool = unknown>(
     createToolExecFn,
     toolContracts,
     request,
+    extraTools,
   } = opts;
 
   // SINGLE_QUEUE_PER_RUN: Runner creates queue, all events flow here
@@ -120,10 +121,16 @@ export function createInProcGraphRunner<TTool = unknown>(
   const llm = new CogniCompletionAdapter();
 
   // Use toLangChainToolsCaptured since runner provides toolExecFn directly (not from ALS)
-  const tools = toLangChainToolsCaptured({
+  const contractTools = toLangChainToolsCaptured({
     contracts: toolContracts,
     toolExecFn,
   });
+
+  // Merge contract-derived tools with optional extra tools (e.g., MCP tools)
+  // Extra tools bypass ToolRunner pipeline — spike only, not for production
+  const tools = extraTools?.length
+    ? [...contractTools, ...extraTools]
+    : contractTools;
 
   // Use factory from catalog instead of hardcoded graph
   const graph = createGraph({ llm, tools });
