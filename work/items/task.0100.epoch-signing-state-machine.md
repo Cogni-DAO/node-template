@@ -2,7 +2,7 @@
 id: task.0100
 type: task
 title: "Epoch 3-phase state machine + approvers + canonical signing message"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 6
 estimate: 2
@@ -15,11 +15,11 @@ project: proj.transparent-credit-payouts
 branch: feat/task-0100-epoch-state-machine
 pr:
 reviewer:
-revision: 3
+revision: 4
 blocked_by: task.0093, task.0103
 deploy_verified: false
 created: 2026-02-22
-updated: 2026-02-23
+updated: 2026-02-24
 labels: [governance, ledger, signing, security]
 external_refs:
 ---
@@ -293,12 +293,12 @@ Uses `wrapRouteHandlerWithLogging({ auth: { mode: "required" } })`. Route lives 
     - [x] Update all references to "closed" status → "finalized" (contracts, routes, tests)
   - Validation: `pnpm check` + `pnpm test -- tests/unit/packages/ledger-core/signing`
 
-- [ ] **Checkpoint 3 — API Route + Contract**
-  - Milestone: close-ingestion route works, all tests green
+- [x] **Checkpoint 3 — API Route + Contract**
+  - Milestone: review route works, all tests green
   - Invariants: WRITE_ROUTES_APPROVER_GATED, APPROVERS_PER_SCOPE
   - Todos:
-    - [ ] Create `src/contracts/ledger.close-ingestion.v1.contract.ts`
-    - [ ] Create `src/app/api/v1/ledger/epochs/[id]/close-ingestion/route.ts`
+    - [x] Create `src/contracts/ledger.review-epoch.v1.contract.ts`
+    - [x] Create `src/app/api/v1/ledger/epochs/[id]/review/route.ts`
   - Validation: `pnpm check` passes
 
 ## Validation

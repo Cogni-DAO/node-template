@@ -451,7 +451,7 @@ Adapters live in `services/scheduler-worker/src/adapters/ingestion/` (ADAPTERS_N
 | POST   | `/api/v1/ledger/epochs/collect`             | Trigger activity collection for new/existing epoch                     |
 | PATCH  | `/api/v1/ledger/epochs/:id/allocations`     | Admin adjusts final_units for users (epoch must be `open` or `review`) |
 | POST   | `/api/v1/ledger/epochs/:id/pool-components` | Record a pool component (epoch must be `open` — POOL_LOCKED_AT_REVIEW) |
-| POST   | `/api/v1/ledger/epochs/:id/close-ingestion` | Close ingestion, transition `open → review` (or auto via Temporal)     |
+| POST   | `/api/v1/ledger/epochs/:id/review`          | Close ingestion, transition `open → review` (or auto via Temporal)     |
 | POST   | `/api/v1/ledger/epochs/:id/sign`            | Submit EIP-191 signature for payout statement (epoch must be `review`) |
 | POST   | `/api/v1/ledger/epochs/:id/finalize`        | Finalize epoch → compute payouts (requires signature + base_issuance)  |
 
@@ -543,7 +543,7 @@ Deterministic workflow ID: `ledger-finalize-{scopeId}-{epochId}`
 The signed message binds to node, scope, and allocation data (SIGNATURE_SCOPE_BOUND):
 
 ```
-Cogni Payout Statement
+Cogni Payout Statement v1
 Node: {node_id}
 Scope: {scope_id}
 Epoch: {epoch_id}
