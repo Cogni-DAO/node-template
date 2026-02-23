@@ -2,7 +2,7 @@
 id: task.0102
 type: task
 title: "Allocation computation, epoch auto-close, and FinalizeEpochWorkflow"
-status: needs_implement
+status: done
 priority: 1
 rank: 8
 estimate: 3
@@ -20,6 +20,7 @@ blocked_by: task.0100, task.0101
 deploy_verified: false
 created: 2026-02-22
 updated: 2026-02-23
+reviewed: 2026-02-23
 labels: [governance, ledger, temporal]
 external_refs:
 ---
