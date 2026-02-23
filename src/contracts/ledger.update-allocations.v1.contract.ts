@@ -17,11 +17,17 @@
 
 import { z } from "zod";
 
+/** Validates a string is a valid integer and transforms to bigint at parse time. */
+const zBigint = z
+  .string()
+  .regex(/^-?\d+$/, "Must be a valid integer string")
+  .transform(BigInt);
+
 export const UpdateAllocationInputSchema = z.object({
   adjustments: z.array(
     z.object({
       userId: z.string(),
-      finalUnits: z.string(), // bigint as string
+      finalUnits: zBigint,
       overrideReason: z.string().optional(),
     })
   ),
