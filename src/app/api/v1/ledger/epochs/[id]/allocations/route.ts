@@ -89,13 +89,13 @@ export const PATCH = wrapRouteHandlerWithLogging<{
         );
       }
 
-      // Apply each adjustment
+      // Apply each adjustment — adj.finalUnits is already bigint (zBigint transform)
       let updated = 0;
       for (const adj of input.adjustments) {
         await store.updateAllocationFinalUnits(
           epochId,
           adj.userId,
-          BigInt(adj.finalUnits),
+          adj.finalUnits,
           adj.overrideReason
         );
         updated++;

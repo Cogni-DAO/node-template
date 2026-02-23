@@ -12,6 +12,9 @@
  * - CURATION_AUTO_POPULATE: insertCurationDoNothing uses onConflictDoNothing; updateCurationUserId only sets userId where NULL.
  * - CURATION_FREEZE_ON_FINALIZE: DB trigger enforces; adapter does not duplicate check.
  * - ONE_OPEN_EPOCH: DB constraint enforces; adapter lets DB error propagate.
+ * - ALLOCATION_PRESERVES_OVERRIDES: upsertAllocations updates proposed_units/activity_count only; never touches final_units.
+ * - POOL_LOCKED_AT_REVIEW: insertPoolComponent rejects inserts when epoch status != 'open'.
+ * - CONFIG_LOCKED_AT_REVIEW: closeIngestion pins allocationAlgoRef + weightConfigHash.
  * Side-effects: IO (database operations)
  * Links: docs/spec/epoch-ledger.md, packages/ledger-core/src/store.ts
  * @public
@@ -30,6 +33,7 @@ import {
 } from "@cogni/db-schema/ledger";
 import type {
   ActivityLedgerStore,
+  CuratedEventForAllocation,
   InsertActivityEventParams,
   InsertAllocationParams,
   InsertCurationAutoParams,
@@ -53,7 +57,18 @@ import {
   EpochNotOpenError,
   type EpochStatus,
 } from "@cogni/ledger-core";
-import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "../client";
 
 // ── Row mappers ─────────────────────────────────────────────────
@@ -69,6 +84,8 @@ function toEpoch(row: typeof epochs.$inferSelect): LedgerEpoch {
     weightConfig: row.weightConfig,
     poolTotalCredits: row.poolTotalCredits,
     approverSetHash: row.approverSetHash,
+    allocationAlgoRef: row.allocationAlgoRef,
+    weightConfigHash: row.weightConfigHash,
     openedAt: row.openedAt,
     closedAt: row.closedAt,
     createdAt: row.createdAt,
@@ -303,13 +320,17 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
 
   async closeIngestion(
     epochId: bigint,
-    approverSetHash: string
+    approverSetHash: string,
+    allocationAlgoRef: string,
+    weightConfigHash: string
   ): Promise<LedgerEpoch> {
     const [row] = await this.db
       .update(epochs)
       .set({
         status: "review",
         approverSetHash,
+        allocationAlgoRef,
+        weightConfigHash,
       })
       .where(
         and(
@@ -366,6 +387,45 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       throw new EpochNotOpenError(epochId.toString());
     }
     return toEpoch(row);
+  }
+
+  // ── Allocation computation ──────────────────────────────────
+
+  async getCuratedEventsForAllocation(
+    epochId: bigint
+  ): Promise<CuratedEventForAllocation[]> {
+    await this.resolveEpochScoped(epochId);
+    const rows = await this.db
+      .select({
+        eventId: activityCuration.eventId,
+        userId: activityCuration.userId,
+        source: activityEvents.source,
+        eventType: activityEvents.eventType,
+        included: activityCuration.included,
+        weightOverrideMilli: activityCuration.weightOverrideMilli,
+      })
+      .from(activityCuration)
+      .innerJoin(
+        activityEvents,
+        and(
+          eq(activityEvents.id, activityCuration.eventId),
+          eq(activityEvents.nodeId, activityCuration.nodeId)
+        )
+      )
+      .where(
+        and(
+          eq(activityCuration.epochId, epochId),
+          isNotNull(activityCuration.userId)
+        )
+      );
+    return rows.map((r) => ({
+      eventId: r.eventId,
+      userId: r.userId!,
+      source: r.source,
+      eventType: r.eventType,
+      included: r.included,
+      weightOverrideMilli: r.weightOverrideMilli,
+    }));
   }
 
   // ── Activity events ─────────────────────────────────────────
@@ -508,6 +568,49 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
     );
   }
 
+  async upsertAllocations(params: InsertAllocationParams[]): Promise<void> {
+    if (params.length === 0) return;
+    await this.validateEpochIds(params.map((a) => a.epochId));
+    for (const a of params) {
+      await this.db
+        .insert(epochAllocations)
+        .values({
+          nodeId: a.nodeId,
+          epochId: a.epochId,
+          userId: a.userId,
+          proposedUnits: a.proposedUnits,
+          finalUnits: a.finalUnits ?? null,
+          overrideReason: a.overrideReason ?? null,
+          activityCount: a.activityCount,
+        })
+        .onConflictDoUpdate({
+          target: [epochAllocations.epochId, epochAllocations.userId],
+          set: {
+            proposedUnits: sql`EXCLUDED.proposed_units`,
+            activityCount: sql`EXCLUDED.activity_count`,
+            updatedAt: new Date(),
+          },
+        });
+    }
+  }
+
+  async deleteStaleAllocations(
+    epochId: bigint,
+    activeUserIds: string[]
+  ): Promise<void> {
+    await this.resolveEpochScoped(epochId);
+    if (activeUserIds.length === 0) return;
+    await this.db
+      .delete(epochAllocations)
+      .where(
+        and(
+          eq(epochAllocations.epochId, epochId),
+          notInArray(epochAllocations.userId, activeUserIds),
+          isNull(epochAllocations.finalUnits)
+        )
+      );
+  }
+
   async updateAllocationFinalUnits(
     epochId: bigint,
     userId: string,
@@ -607,7 +710,11 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
   async insertPoolComponent(
     params: InsertPoolComponentParams
   ): Promise<LedgerPoolComponent> {
-    await this.resolveEpochScoped(params.epochId);
+    const epoch = await this.resolveEpochScoped(params.epochId);
+    // POOL_LOCKED_AT_REVIEW: reject pool component inserts after closeIngestion
+    if (epoch.status !== "open") {
+      throw new EpochNotOpenError(params.epochId.toString());
+    }
     const [row] = await this.db
       .insert(epochPoolComponents)
       .values({
@@ -668,16 +775,184 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
     return rows[0] ? toStatement(rows[0]) : null;
   }
 
+  // ── Atomic finalize ────────────────────────────────────────
+
+  async finalizeEpochAtomic(params: {
+    epochId: bigint;
+    poolTotal: bigint;
+    statement: Omit<InsertPayoutStatementParams, "epochId">;
+    signature: Omit<InsertSignatureParams, "statementId">;
+    expectedAllocationSetHash: string;
+  }): Promise<{ epoch: LedgerEpoch; statement: LedgerPayoutStatement }> {
+    return await this.db.transaction(async (tx) => {
+      // 1. Load epoch with scope gate (inline — avoid separate connection)
+      const epochRows = await tx
+        .select()
+        .from(epochs)
+        .where(
+          and(eq(epochs.id, params.epochId), eq(epochs.scopeId, this.scopeId))
+        )
+        .limit(1);
+      if (!epochRows[0]) {
+        throw new EpochNotFoundError(params.epochId.toString());
+      }
+
+      const epochRow = epochRows[0];
+      const status = epochRow.status as string;
+
+      if (status === "open") {
+        throw new EpochNotOpenError(params.epochId.toString());
+      }
+
+      let finalEpochRow: typeof epochs.$inferSelect;
+
+      if (status === "review") {
+        // 2a. Transition review → finalized (re-check status in WHERE for concurrency guard)
+        const [updated] = await tx
+          .update(epochs)
+          .set({
+            status: "finalized",
+            poolTotalCredits: params.poolTotal,
+            closedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(epochs.id, params.epochId),
+              eq(epochs.scopeId, this.scopeId),
+              eq(epochs.status, "review")
+            )
+          )
+          .returning();
+
+        if (!updated) {
+          // Concurrent finalize won — reload
+          const [reloaded] = await tx
+            .select()
+            .from(epochs)
+            .where(
+              and(
+                eq(epochs.id, params.epochId),
+                eq(epochs.scopeId, this.scopeId)
+              )
+            )
+            .limit(1);
+          if (!reloaded || reloaded.status !== "finalized") {
+            throw new Error(
+              `finalizeEpochAtomic: concurrent state change for epoch ${params.epochId.toString()}`
+            );
+          }
+          finalEpochRow = reloaded;
+        } else {
+          finalEpochRow = updated;
+        }
+      } else if (status === "finalized") {
+        finalEpochRow = epochRow;
+      } else {
+        throw new Error(
+          `finalizeEpochAtomic: unexpected epoch status '${status}'`
+        );
+      }
+
+      // 2b/3a. Upsert statement — ON CONFLICT (node_id, epoch_id) DO NOTHING
+      await tx
+        .insert(payoutStatements)
+        .values({
+          nodeId: params.statement.nodeId,
+          epochId: params.epochId,
+          allocationSetHash: params.statement.allocationSetHash,
+          poolTotalCredits: params.statement.poolTotalCredits,
+          payoutsJson: params.statement.payoutsJson,
+          supersedesStatementId: params.statement.supersedesStatementId ?? null,
+        })
+        .onConflictDoNothing({
+          target: [payoutStatements.nodeId, payoutStatements.epochId],
+        });
+
+      // Fetch the statement (either just inserted or previously existing)
+      const [stmtRow] = await tx
+        .select()
+        .from(payoutStatements)
+        .where(
+          and(
+            eq(payoutStatements.nodeId, params.statement.nodeId),
+            eq(payoutStatements.epochId, params.epochId)
+          )
+        )
+        .limit(1);
+
+      if (!stmtRow) {
+        throw new Error(
+          `finalizeEpochAtomic: statement insert/select failed for epoch ${params.epochId.toString()}`
+        );
+      }
+
+      // Hash assertion — if statement pre-existed, verify hash matches
+      if (stmtRow.allocationSetHash !== params.expectedAllocationSetHash) {
+        throw new Error(
+          `finalizeEpochAtomic: allocationSetHash mismatch — expected ${params.expectedAllocationSetHash}, found ${stmtRow.allocationSetHash}`
+        );
+      }
+
+      // 2d/3b. Upsert signature — ON CONFLICT (statement_id, signer_wallet) DO NOTHING
+      await tx
+        .insert(statementSignatures)
+        .values({
+          nodeId: params.signature.nodeId,
+          statementId: stmtRow.id,
+          signerWallet: params.signature.signerWallet,
+          signature: params.signature.signature,
+          signedAt: params.signature.signedAt,
+        })
+        .onConflictDoNothing({
+          target: [
+            statementSignatures.statementId,
+            statementSignatures.signerWallet,
+          ],
+        });
+
+      // 2e/3c. Verify signature — if row exists with DIFFERENT signature text, throw
+      const [sigRow] = await tx
+        .select()
+        .from(statementSignatures)
+        .where(
+          and(
+            eq(statementSignatures.statementId, stmtRow.id),
+            eq(statementSignatures.signerWallet, params.signature.signerWallet)
+          )
+        )
+        .limit(1);
+
+      if (sigRow && sigRow.signature !== params.signature.signature) {
+        throw new Error(
+          `finalizeEpochAtomic: signature divergence — signer ${params.signature.signerWallet} has different signature on statement ${stmtRow.id}`
+        );
+      }
+
+      return {
+        epoch: toEpoch(finalEpochRow),
+        statement: toStatement(stmtRow),
+      };
+    });
+  }
+
   // ── Statement signatures ───────────────────────────────────
 
   async insertStatementSignature(params: InsertSignatureParams): Promise<void> {
-    await this.db.insert(statementSignatures).values({
-      nodeId: params.nodeId,
-      statementId: params.statementId,
-      signerWallet: params.signerWallet,
-      signature: params.signature,
-      signedAt: params.signedAt,
-    });
+    await this.db
+      .insert(statementSignatures)
+      .values({
+        nodeId: params.nodeId,
+        statementId: params.statementId,
+        signerWallet: params.signerWallet,
+        signature: params.signature,
+        signedAt: params.signedAt,
+      })
+      .onConflictDoNothing({
+        target: [
+          statementSignatures.statementId,
+          statementSignatures.signerWallet,
+        ],
+      });
   }
 
   async getSignaturesForStatement(

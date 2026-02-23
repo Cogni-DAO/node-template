@@ -78,13 +78,14 @@ export const POST = wrapRouteHandlerWithLogging<{
       const store = getContainer().activityLedgerStore;
       const nodeId = getNodeId();
 
+      // input.amountCredits is already bigint (zBigint transform)
       const component = await store.insertPoolComponent({
         nodeId,
         epochId,
         componentId: input.componentId,
         algorithmVersion: input.algorithmVersion,
         inputsJson: input.inputsJson,
-        amountCredits: BigInt(input.amountCredits),
+        amountCredits: input.amountCredits,
         evidenceRef: input.evidenceRef ?? null,
       });
 

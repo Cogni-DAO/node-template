@@ -2,7 +2,7 @@
 id: task.0102
 type: task
 title: "Allocation computation, epoch auto-close, and FinalizeEpochWorkflow"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 8
 estimate: 3
@@ -12,14 +12,15 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch:
-pr:
+branch: feat/task-0102-allocation-epoch-close
+pr: https://github.com/Cogni-DAO/node-template/pull/470
 reviewer:
-revision: 1
+revision: 2
 blocked_by: task.0100, task.0101
 deploy_verified: false
 created: 2026-02-22
 updated: 2026-02-23
+reviewed: 2026-02-23
 labels: [governance, ledger, temporal]
 external_refs:
 ---
@@ -442,9 +443,26 @@ pnpm dotenv -e .env.test -- vitest run --config vitest.stack.config.mts tests/st
 - [ ] **Tests:** allocation algorithm, pool estimation, allocation set hash, weight validation, upsert-preserves-overrides, pool freeze after review, config lock at closeIngestion, full pipeline stack test
 - [ ] **Reviewer:** assigned and approved
 
+## Review Feedback
+
+### Revision 2 — Blocking Issues
+
+1. **Non-atomic finalize with lost signature on retry** (`services/scheduler-worker/src/activities/ledger.ts:L892-914`): The `finalizeEpoch` activity makes 3 separate DB calls (`finalizeEpoch` → `insertPayoutStatement` → `insertStatementSignature`). On partial failure (e.g., signature insert fails after statement inserted), Temporal retry hits the EPOCH_FINALIZE_IDEMPOTENT path and returns the existing statement — but the signature is never written. Fix options: (a) wrap in a DB transaction via Drizzle `db.transaction()`, (b) add a `getSignaturesForStatement` check in the idempotent path and re-insert if missing, or (c) explicitly document as known V0 limitation with a TODO and tracking issue.
+
+2. **Missing component tests for new adapter methods**: `upsertAllocations`, `deleteStaleAllocations`, `getCuratedEventsForAllocation`, and POOL_LOCKED_AT_REVIEW (insertPoolComponent rejected after closeIngestion) have zero component test coverage. These methods have DB-level semantics (ON CONFLICT DO UPDATE, NOT IN, JOIN, epoch status check) that need real database verification. Especially critical: ALLOCATION_PRESERVES_OVERRIDES — verify that `final_units` survives an upsert against real Postgres.
+
+3. **Brittle error detection in finalize route** (`src/app/api/v1/ledger/epochs/[id]/finalize/route.ts:L102-103`): Error message string matching for `WorkflowExecutionAlreadyStartedError` is fragile. Use `instanceof` with the exported error class from `@temporalio/client`.
+
+### Suggestions (Non-blocking)
+
+- Hashing: `hashing.ts` uses Web Crypto (async) while `signing.ts` uses Node `createHash` (sync). Consider standardizing.
+- Finalize route `L79`: Connection-per-request. Add TODO for connection pooling.
+- `insertAllocations` still on store port alongside `upsertAllocations` (design said rename). Consider deprecating.
+- `creditEstimateAlgo` selection (`collect-epoch.workflow.ts:L173`): `Object.values(config.activitySources)[0]` depends on object key order — consider making this explicit at LedgerIngestRunV1 level.
+
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0102.handoff.md)
 
 ## Attribution
 

@@ -61,7 +61,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       // Ensure no open epoch leaks to subsequent describes
       const open = await adapter.getOpenEpoch(TEST_NODE_ID, TEST_SCOPE_ID);
       if (open) {
-        await adapter.closeIngestion(open.id, "cleanup-hash");
+        await adapter.closeIngestion(
+          open.id,
+          "cleanup-hash",
+          "weight-sum-v0",
+          "cleanup-wch"
+        );
         await adapter.finalizeEpoch(open.id, 0n);
       }
     });
@@ -111,7 +116,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
     it("EPOCH_WINDOW_UNIQUE: rejects duplicate window for same node", async () => {
       // Finalize the open epoch so we can test the window constraint in isolation
-      await adapter.closeIngestion(createdEpochId, "test-hash");
+      await adapter.closeIngestion(
+        createdEpochId,
+        "test-hash",
+        "weight-sum-v0",
+        "test-wch"
+      );
       await adapter.finalizeEpoch(createdEpochId, 10000n);
 
       await expect(
@@ -132,7 +142,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         weightConfig: TEST_WEIGHT_CONFIG,
       });
 
-      const reviewed = await adapter.closeIngestion(epoch.id, "abc123hash");
+      const reviewed = await adapter.closeIngestion(
+        epoch.id,
+        "abc123hash",
+        "weight-sum-v0",
+        "test-wch"
+      );
       expect(reviewed.status).toBe("review");
       expect(reviewed.approverSetHash).toBe("abc123hash");
     });
@@ -184,7 +199,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       );
 
       // Cleanup: transition to finalized so ONE_OPEN_EPOCH doesn't block later tests
-      await adapter.closeIngestion(epoch.id, "cleanup-hash");
+      await adapter.closeIngestion(
+        epoch.id,
+        "cleanup-hash",
+        "weight-sum-v0",
+        "cleanup-wch"
+      );
       await adapter.finalizeEpoch(epoch.id, 0n);
     });
 
@@ -196,7 +216,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
       const result = await adapter.closeIngestion(
         finalized.id,
-        "should-be-ignored"
+        "should-be-ignored",
+        "weight-sum-v0",
+        "ignored-wch"
       );
       expect(result.status).toBe("finalized");
       // approverSetHash unchanged — not overwritten
@@ -292,7 +314,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     afterAll(async () => {
       const open = await adapter.getOpenEpoch(TEST_NODE_ID, TEST_SCOPE_ID);
       if (open) {
-        await adapter.closeIngestion(open.id, "cleanup-hash");
+        await adapter.closeIngestion(
+          open.id,
+          "cleanup-hash",
+          "weight-sum-v0",
+          "cleanup-wch"
+        );
         await adapter.finalizeEpoch(open.id, 0n);
       }
     });
@@ -335,7 +362,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
 
     it("CURATION_FREEZE_ON_FINALIZE: curation is mutable during review", async () => {
-      await adapter.closeIngestion(epochId, "review-curation-test");
+      await adapter.closeIngestion(
+        epochId,
+        "review-curation-test",
+        "weight-sum-v0",
+        "review-wch"
+      );
 
       // Curation writes should succeed while epoch is in review
       await expect(
@@ -369,6 +401,105 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
   });
 
+  // ── getCuratedEventsForAllocation ─────────────────────────────
+
+  describe("getCuratedEventsForAllocation", () => {
+    let epochId: bigint;
+    let resolvedActor: TestActor;
+
+    beforeAll(async () => {
+      resolvedActor = await seedTestActor(db);
+
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(31),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      epochId = epoch.id;
+
+      // Insert activity events within epoch window
+      const eventTime = new Date("2026-08-20T12:00:00Z");
+      await adapter.insertActivityEvents([
+        makeActivityEvent({
+          id: "join-test:resolved",
+          eventTime,
+          platformUserId: "gh-resolved",
+          source: "github",
+          eventType: "pr_merged",
+        }),
+        makeActivityEvent({
+          id: "join-test:unresolved",
+          eventTime,
+          platformUserId: "gh-unresolved",
+          source: "github",
+          eventType: "review_submitted",
+        }),
+        makeActivityEvent({
+          id: "join-test:excluded",
+          eventTime,
+          platformUserId: "gh-excluded",
+          source: "github",
+          eventType: "pr_merged",
+        }),
+      ]);
+
+      // Curate: one resolved, one unresolved (null userId), one excluded
+      await adapter.upsertCuration([
+        makeCuration({
+          epochId,
+          eventId: "join-test:resolved",
+          userId: resolvedActor.user.id,
+          included: true,
+        }),
+        makeCuration({
+          epochId,
+          eventId: "join-test:unresolved",
+          userId: null,
+          included: true,
+        }),
+        makeCuration({
+          epochId,
+          eventId: "join-test:excluded",
+          userId: resolvedActor.user.id,
+          included: false,
+        }),
+      ]);
+    });
+
+    afterAll(async () => {
+      await adapter.closeIngestion(
+        epochId,
+        "cleanup-hash",
+        "weight-sum-v0",
+        "cleanup-wch"
+      );
+      await adapter.finalizeEpoch(epochId, 0n);
+    });
+
+    it("returns only curations with non-null userId", async () => {
+      const events = await adapter.getCuratedEventsForAllocation(epochId);
+
+      // "resolved" has userId set → included
+      // "unresolved" has userId=null → excluded by join filter
+      // "excluded" has userId set but included=false → still returned (filtering is domain logic)
+      const eventIds = events.map((e) => e.eventId);
+      expect(eventIds).toContain("join-test:resolved");
+      expect(eventIds).toContain("join-test:excluded");
+      expect(eventIds).not.toContain("join-test:unresolved");
+    });
+
+    it("join populates source and eventType from activity_events", async () => {
+      const events = await adapter.getCuratedEventsForAllocation(epochId);
+      const resolved = events.find((e) => e.eventId === "join-test:resolved");
+
+      expect(resolved).toBeDefined();
+      expect(resolved?.source).toBe("github");
+      expect(resolved?.eventType).toBe("pr_merged");
+      expect(resolved?.userId).toBe(resolvedActor.user.id);
+    });
+  });
+
   // ── Allocations ───────────────────────────────────────────────
 
   describe("allocations", () => {
@@ -385,7 +516,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
 
     afterAll(async () => {
-      await adapter.closeIngestion(epochId, "cleanup-hash");
+      await adapter.closeIngestion(
+        epochId,
+        "cleanup-hash",
+        "weight-sum-v0",
+        "cleanup-wch"
+      );
       await adapter.finalizeEpoch(epochId, 0n);
     });
 
@@ -422,6 +558,66 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       await expect(
         adapter.updateAllocationFinalUnits(epochId, "nonexistent-user", 100n)
       ).rejects.toThrow(AllocationNotFoundError);
+    });
+
+    it("ALLOCATION_PRESERVES_OVERRIDES: upsertAllocations does not overwrite final_units", async () => {
+      // actor.user already has final_units=10000n from previous test
+      await adapter.upsertAllocations([
+        makeAllocation({
+          epochId,
+          userId: actor.user.id,
+          proposedUnits: 99999n,
+          activityCount: 10,
+        }),
+      ]);
+
+      const allocs = await adapter.getAllocationsForEpoch(epochId);
+      const alloc = allocs.find((a) => a.userId === actor.user.id);
+      expect(alloc).toBeDefined();
+      expect(alloc?.proposedUnits).toBe(99999n); // updated
+      expect(alloc?.activityCount).toBe(10); // updated
+      expect(alloc?.finalUnits).toBe(10000n); // preserved
+      expect(alloc?.overrideReason).toBe("bonus for extra work"); // preserved
+    });
+
+    it("deleteStaleAllocations does not remove rows with final_units set", async () => {
+      // Seed two more users
+      const actorB = await seedTestActor(db);
+      const actorC = await seedTestActor(db);
+
+      await adapter.insertAllocations([
+        makeAllocation({
+          epochId,
+          userId: actorB.user.id,
+          proposedUnits: 2000n,
+          activityCount: 1,
+        }),
+        makeAllocation({
+          epochId,
+          userId: actorC.user.id,
+          proposedUnits: 3000n,
+          activityCount: 1,
+        }),
+      ]);
+
+      // actorB gets an override (final_units set)
+      await adapter.updateAllocationFinalUnits(
+        epochId,
+        actorB.user.id,
+        5000n,
+        "admin override"
+      );
+
+      // Delete stale: only actor.user is "active" — actorB and actorC are "stale"
+      // But actorB has final_units → should be kept
+      await adapter.deleteStaleAllocations(epochId, [actor.user.id]);
+
+      const allocs = await adapter.getAllocationsForEpoch(epochId);
+      const userIds = allocs.map((a) => a.userId);
+
+      expect(userIds).toContain(actor.user.id); // active
+      expect(userIds).toContain(actorB.user.id); // stale but has final_units → kept
+      expect(userIds).not.toContain(actorC.user.id); // stale, no final_units → deleted
     });
   });
 
@@ -497,7 +693,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
 
     afterAll(async () => {
-      await adapter.closeIngestion(epochId, "cleanup-hash");
+      await adapter.closeIngestion(
+        epochId,
+        "cleanup-hash",
+        "weight-sum-v0",
+        "cleanup-wch"
+      );
       await adapter.finalizeEpoch(epochId, 0n);
     });
 
@@ -528,6 +729,44 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         /not allowed/i.test(drizzleCause(err))
       );
     });
+
+    it("POOL_LOCKED_AT_REVIEW: insertPoolComponent rejected after closeIngestion", async () => {
+      // Close the describe-level epoch so ONE_OPEN_EPOCH allows a new one
+      await adapter.closeIngestion(
+        epochId,
+        "pre-review-hash",
+        "weight-sum-v0",
+        "pre-review-wch"
+      );
+      await adapter.finalizeEpoch(epochId, 0n);
+
+      const reviewEpoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(30),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        reviewEpoch.id,
+        "pool-lock-hash",
+        "weight-sum-v0",
+        "pool-lock-wch"
+      );
+
+      await expect(
+        adapter.insertPoolComponent(
+          makePoolComponent({ epochId: reviewEpoch.id })
+        )
+      ).rejects.toThrow(EpochNotOpenError);
+
+      // Also rejected when finalized
+      await adapter.finalizeEpoch(reviewEpoch.id, 0n);
+      await expect(
+        adapter.insertPoolComponent(
+          makePoolComponent({ epochId: reviewEpoch.id })
+        )
+      ).rejects.toThrow(EpochNotOpenError);
+    });
   });
 
   // ── Payout Statements ─────────────────────────────────────────
@@ -542,7 +781,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         ...epochWindow(6),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
-      await adapter.closeIngestion(epoch.id, "stmt-test-hash");
+      await adapter.closeIngestion(
+        epoch.id,
+        "stmt-test-hash",
+        "weight-sum-v0",
+        "stmt-wch"
+      );
       await adapter.finalizeEpoch(epoch.id, 10000n);
       epochId = epoch.id;
     });
@@ -591,7 +835,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         ...epochWindow(7),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
-      await adapter.closeIngestion(epoch.id, "sig-test-hash");
+      await adapter.closeIngestion(
+        epoch.id,
+        "sig-test-hash",
+        "weight-sum-v0",
+        "sig-wch"
+      );
       await adapter.finalizeEpoch(epoch.id, 20000n);
 
       const stmt = await adapter.insertPayoutStatement({
@@ -626,6 +875,237 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         "0x1234567890abcdef1234567890abcdef12345678"
       );
     });
+
+    it("insertStatementSignature duplicate is a no-op", async () => {
+      // Re-insert the same signature — should not throw
+      await expect(
+        adapter.insertStatementSignature({
+          nodeId: TEST_NODE_ID,
+          statementId,
+          signerWallet: "0x1234567890abcdef1234567890abcdef12345678",
+          signature: "0xdeadbeef",
+          signedAt: new Date(),
+        })
+      ).resolves.not.toThrow();
+
+      const sigs = await adapter.getSignaturesForStatement(statementId);
+      expect(sigs).toHaveLength(1);
+    });
+  });
+
+  // ── finalizeEpochAtomic ──────────────────────────────────────
+
+  describe("finalizeEpochAtomic", () => {
+    const SIGNER_WALLET = "0xaaaa000000000000000000000000000000000001";
+    const HASH = "atomic-test-hash-abc123";
+    const PAYOUTS_JSON = [
+      {
+        user_id: "user-1",
+        total_units: "8000",
+        share: "0.800000",
+        amount_credits: "8000",
+      },
+      {
+        user_id: "user-2",
+        total_units: "2000",
+        share: "0.200000",
+        amount_credits: "2000",
+      },
+    ];
+
+    function makeAtomicParams(epochId: bigint) {
+      return {
+        epochId,
+        poolTotal: 10000n,
+        statement: {
+          nodeId: TEST_NODE_ID,
+          allocationSetHash: HASH,
+          poolTotalCredits: 10000n,
+          payoutsJson: PAYOUTS_JSON,
+        },
+        signature: {
+          nodeId: TEST_NODE_ID,
+          signerWallet: SIGNER_WALLET,
+          signature: "0xsig_aaa",
+          signedAt: new Date(),
+        },
+        expectedAllocationSetHash: HASH,
+      };
+    }
+
+    it("happy path: review → finalized with statement + signature", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(20),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "atomic-approver-hash",
+        "weight-sum-v0",
+        "atomic-wch"
+      );
+
+      const { epoch: fin, statement } = await adapter.finalizeEpochAtomic(
+        makeAtomicParams(epoch.id)
+      );
+
+      expect(fin.status).toBe("finalized");
+      expect(fin.poolTotalCredits).toBe(10000n);
+      expect(fin.closedAt).not.toBeNull();
+      expect(statement.allocationSetHash).toBe(HASH);
+      expect(statement.poolTotalCredits).toBe(10000n);
+
+      // Signature was created
+      const sigs = await adapter.getSignaturesForStatement(statement.id);
+      expect(sigs).toHaveLength(1);
+      expect(sigs[0]?.signerWallet).toBe(SIGNER_WALLET);
+    });
+
+    it("retry: call twice with same inputs — no error, same statement", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(21),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "retry-hash",
+        "weight-sum-v0",
+        "retry-wch"
+      );
+
+      const params = makeAtomicParams(epoch.id);
+      const first = await adapter.finalizeEpochAtomic(params);
+      const second = await adapter.finalizeEpochAtomic(params);
+
+      expect(first.statement.id).toBe(second.statement.id);
+      expect(second.epoch.status).toBe("finalized");
+    });
+
+    it("already-finalized + missing signature → signature repaired", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(22),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "repair-hash",
+        "weight-sum-v0",
+        "repair-wch"
+      );
+
+      // First call creates statement + signature for signer A
+      const params = makeAtomicParams(epoch.id);
+      await adapter.finalizeEpochAtomic(params);
+
+      // Second call with different signer — should add the signature
+      const SIGNER_B = "0xbbbb000000000000000000000000000000000002";
+      const repairParams = {
+        ...params,
+        signature: {
+          ...params.signature,
+          signerWallet: SIGNER_B,
+          signature: "0xsig_bbb",
+        },
+      };
+      const { statement } = await adapter.finalizeEpochAtomic(repairParams);
+
+      const sigs = await adapter.getSignaturesForStatement(statement.id);
+      expect(sigs).toHaveLength(2);
+      const wallets = sigs.map((s) => s.signerWallet).sort();
+      expect(wallets).toEqual([SIGNER_WALLET, SIGNER_B].sort());
+    });
+
+    it("hash mismatch → throws", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(23),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "hash-mismatch-approver",
+        "weight-sum-v0",
+        "hash-wch"
+      );
+
+      // First call with hash A
+      const params = makeAtomicParams(epoch.id);
+      await adapter.finalizeEpochAtomic(params);
+
+      // Second call with different expected hash
+      const badParams = {
+        ...params,
+        expectedAllocationSetHash: "different-hash-xyz",
+      };
+      await expect(adapter.finalizeEpochAtomic(badParams)).rejects.toThrow(
+        /allocationSetHash mismatch/
+      );
+    });
+
+    it("signature divergence → throws", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(24),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      await adapter.closeIngestion(
+        epoch.id,
+        "diverge-approver",
+        "weight-sum-v0",
+        "diverge-wch"
+      );
+
+      const params = makeAtomicParams(epoch.id);
+      await adapter.finalizeEpochAtomic(params);
+
+      // Same signer, different signature text
+      const divergeParams = {
+        ...params,
+        signature: {
+          ...params.signature,
+          signature: "0xdifferent_sig",
+        },
+      };
+      await expect(adapter.finalizeEpochAtomic(divergeParams)).rejects.toThrow(
+        /signature divergence/
+      );
+    });
+
+    it("open epoch → throws EpochNotOpenError", async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(25),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+
+      await expect(
+        adapter.finalizeEpochAtomic(makeAtomicParams(epoch.id))
+      ).rejects.toThrow(EpochNotOpenError);
+
+      // Cleanup
+      await adapter.closeIngestion(
+        epoch.id,
+        "cleanup",
+        "weight-sum-v0",
+        "cleanup"
+      );
+      await adapter.finalizeEpoch(epoch.id, 0n);
+    });
+
+    it("missing epoch → throws EpochNotFoundError", async () => {
+      await expect(
+        adapter.finalizeEpochAtomic(makeAtomicParams(999999n))
+      ).rejects.toThrow(EpochNotFoundError);
+    });
   });
 
   // ── SCOPE_GATED_QUERIES ─────────────────────────────────────────
@@ -649,7 +1129,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     afterAll(async () => {
       const open = await adapter.getOpenEpoch(TEST_NODE_ID, TEST_SCOPE_ID);
       if (open) {
-        await adapter.closeIngestion(open.id, "cleanup-hash");
+        await adapter.closeIngestion(
+          open.id,
+          "cleanup-hash",
+          "weight-sum-v0",
+          "cleanup-wch"
+        );
         await adapter.finalizeEpoch(open.id, 0n);
       }
     });
@@ -661,7 +1146,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
     it("closeIngestion throws EpochNotFoundError for cross-scope epochId", async () => {
       await expect(
-        otherScopeAdapter.closeIngestion(scopeTestEpochId, "test-hash")
+        otherScopeAdapter.closeIngestion(
+          scopeTestEpochId,
+          "test-hash",
+          "weight-sum-v0",
+          "test-wch"
+        )
       ).rejects.toThrow(EpochNotFoundError);
     });
 

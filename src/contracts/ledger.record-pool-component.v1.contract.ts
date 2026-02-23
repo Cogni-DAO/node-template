@@ -17,11 +17,17 @@
 
 import { z } from "zod";
 
+/** Validates a string is a valid integer and transforms to bigint at parse time. */
+const zBigint = z
+  .string()
+  .regex(/^-?\d+$/, "Must be a valid integer string")
+  .transform(BigInt);
+
 export const PoolComponentInputSchema = z.object({
   componentId: z.string(),
   algorithmVersion: z.string(),
   inputsJson: z.record(z.string(), z.unknown()),
-  amountCredits: z.string(), // bigint as string
+  amountCredits: zBigint,
   evidenceRef: z.string().optional(),
 });
 

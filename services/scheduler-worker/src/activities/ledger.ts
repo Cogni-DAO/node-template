@@ -3,8 +3,8 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/activities/ledger`
- * Purpose: Temporal Activities for ledger epoch collection and curation — cursor-based ingestion + identity resolution.
- * Scope: Plain async functions that perform I/O (DB, GitHub API). Called by CollectEpochWorkflow.
+ * Purpose: Temporal Activities for the full ledger pipeline — ingestion, curation, allocation, pool, auto-close, and finalization.
+ * Scope: Plain async functions that perform I/O (DB, GitHub API, EIP-191 verification). Called by CollectEpochWorkflow and FinalizeEpochWorkflow. Does not contain deterministic orchestration logic.
  * Invariants:
  *   - Per ACTIVITY_IDEMPOTENT: All activities idempotent via PK constraints or upsert
  *   - Per CURSOR_STATE_PERSISTED: Cursors saved after each collect() call
@@ -12,14 +12,29 @@
  *   - Per TEMPORAL_DETERMINISM: Activities contain all I/O; workflows call only these proxies
  *   - Per CURATION_AUTO_POPULATE: curateAndResolve inserts new curations (DO NOTHING on conflict), updates only userId on unresolved rows
  *   - Per IDENTITY_BEST_EFFORT: Unresolved events get userId=null in curation rows, never dropped
- * Side-effects: IO (database, GitHub API)
+ *   - Per ALLOCATION_PRESERVES_OVERRIDES: upsertAllocations never touches admin-set final_units
+ *   - Per CONFIG_LOCKED_AT_REVIEW: autoCloseIngestion pins allocationAlgoRef + weightConfigHash
+ *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing statement if already finalized
+ * Side-effects: IO (database, GitHub API, viem EIP-191 verification)
  * Links: docs/spec/epoch-ledger.md, docs/spec/temporal-patterns.md
  * @internal
  */
 
 import type { ActivityEvent } from "@cogni/ingestion-core";
-
 import type { UncuratedEvent } from "@cogni/ledger-core";
+import {
+  buildCanonicalMessage,
+  computeAllocationSetHash,
+  computeApproverSetHash,
+  computePayouts,
+  computeProposedAllocations,
+  computeWeightConfigHash,
+  deriveAllocationAlgoRef,
+  estimatePoolComponentsV0,
+  validateWeightConfig,
+} from "@cogni/ledger-core";
+
+import { verifyMessage } from "viem";
 
 import type { Logger } from "../observability/logger.js";
 import type { ActivityLedgerStore, SourceAdapter } from "../ports/index.js";
@@ -119,6 +134,78 @@ export interface CurateAndResolveOutput {
   readonly newCurations: number;
   readonly resolved: number;
   readonly unresolved: number;
+}
+
+/**
+ * Input for computeAllocations activity.
+ */
+export interface ComputeAllocationsInput {
+  readonly epochId: string; // bigint serialized
+  readonly algorithmId: string;
+  readonly weightConfig: Record<string, number>;
+}
+
+/**
+ * Output from computeAllocations activity.
+ */
+export interface ComputeAllocationsOutput {
+  readonly totalAllocations: number;
+  readonly totalProposedUnits: string; // bigint serialized
+}
+
+/**
+ * Input for ensurePoolComponents activity.
+ */
+export interface EnsurePoolComponentsInput {
+  readonly epochId: string; // bigint serialized
+  readonly baseIssuanceCredits: string; // bigint serialized
+}
+
+/**
+ * Output from ensurePoolComponents activity.
+ */
+export interface EnsurePoolComponentsOutput {
+  readonly componentsEnsured: number;
+}
+
+/**
+ * Input for autoCloseIngestion activity.
+ */
+export interface AutoCloseIngestionInput {
+  readonly epochId: string; // bigint serialized
+  readonly periodEnd: string; // ISO date
+  readonly gracePeriodMs: number;
+  readonly weightConfig: Record<string, number>;
+  readonly creditEstimateAlgo: string;
+  readonly approvers: string[];
+}
+
+/**
+ * Output from autoCloseIngestion activity.
+ */
+export interface AutoCloseIngestionOutput {
+  readonly closed: boolean;
+  readonly reason: string;
+}
+
+/**
+ * Input for finalizeEpoch compound activity.
+ */
+export interface FinalizeEpochInput {
+  readonly epochId: string; // bigint serialized
+  readonly signature: string; // EIP-191 hex
+  readonly signerAddress: string; // from SIWE session
+  readonly approvers: string[]; // EVM addresses (lowercased)
+}
+
+/**
+ * Output from finalizeEpoch compound activity.
+ */
+export interface FinalizeEpochOutput {
+  readonly statementId: string;
+  readonly poolTotalCredits: string; // bigint serialized
+  readonly allocationSetHash: string;
+  readonly payoutCount: number;
 }
 
 /**
@@ -482,6 +569,394 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
     };
   }
 
+  /**
+   * Compute proposed allocations from curated events.
+   * Upserts results (ALLOCATION_PRESERVES_OVERRIDES) and removes stale allocations.
+   */
+  async function computeAllocations(
+    input: ComputeAllocationsInput
+  ): Promise<ComputeAllocationsOutput> {
+    const epochId = BigInt(input.epochId);
+    const { algorithmId, weightConfig } = input;
+
+    logger.info(
+      { epochId: input.epochId, algorithmId },
+      "Computing allocations"
+    );
+
+    // 1. Load curated events (resolved users only)
+    const events = await ledgerStore.getCuratedEventsForAllocation(epochId);
+
+    if (events.length === 0) {
+      logger.info({ epochId: input.epochId }, "No curated events — skipping");
+      return { totalAllocations: 0, totalProposedUnits: "0" };
+    }
+
+    // 2. Compute proposed allocations (pure)
+    const proposed = computeProposedAllocations(
+      algorithmId,
+      events,
+      weightConfig
+    );
+
+    // 3. Upsert allocations (preserves admin final_units)
+    await ledgerStore.upsertAllocations(
+      proposed.map((p) => ({
+        nodeId,
+        epochId,
+        userId: p.userId,
+        proposedUnits: p.proposedUnits,
+        activityCount: p.activityCount,
+      }))
+    );
+
+    // 4. Remove stale allocations (guard: skip if proposed is empty)
+    if (proposed.length > 0) {
+      const activeUserIds = proposed.map((p) => p.userId);
+      await ledgerStore.deleteStaleAllocations(epochId, activeUserIds);
+    }
+
+    const totalProposedUnits = proposed.reduce(
+      (acc, p) => acc + p.proposedUnits,
+      0n
+    );
+
+    logger.info(
+      {
+        epochId: input.epochId,
+        totalAllocations: proposed.length,
+        totalProposedUnits: totalProposedUnits.toString(),
+      },
+      "Allocations computed"
+    );
+
+    return {
+      totalAllocations: proposed.length,
+      totalProposedUnits: totalProposedUnits.toString(),
+    };
+  }
+
+  /**
+   * Ensure pool components exist for an epoch. Idempotent via POOL_UNIQUE_PER_TYPE.
+   * Only inserts when epoch is open (POOL_LOCKED_AT_REVIEW enforced by adapter).
+   */
+  async function ensurePoolComponents(
+    input: EnsurePoolComponentsInput
+  ): Promise<EnsurePoolComponentsOutput> {
+    const epochId = BigInt(input.epochId);
+    const baseIssuanceCredits = BigInt(input.baseIssuanceCredits);
+
+    logger.info(
+      {
+        epochId: input.epochId,
+        baseIssuanceCredits: input.baseIssuanceCredits,
+      },
+      "Ensuring pool components"
+    );
+
+    // Check epoch is open before attempting inserts
+    const epoch = await ledgerStore.getEpoch(epochId);
+    if (!epoch) {
+      throw new Error(`ensurePoolComponents: epoch ${input.epochId} not found`);
+    }
+    if (epoch.status !== "open") {
+      logger.info(
+        { epochId: input.epochId, status: epoch.status },
+        "Epoch not open — skipping pool component insert"
+      );
+      return { componentsEnsured: 0 };
+    }
+
+    const estimates = estimatePoolComponentsV0({ baseIssuanceCredits });
+    let ensured = 0;
+
+    for (const estimate of estimates) {
+      try {
+        await ledgerStore.insertPoolComponent({
+          nodeId,
+          epochId,
+          componentId: estimate.componentId,
+          algorithmVersion: estimate.algorithmVersion,
+          inputsJson: estimate.inputsJson,
+          amountCredits: estimate.amountCredits,
+          evidenceRef: estimate.evidenceRef,
+        });
+        ensured++;
+      } catch (err) {
+        // Idempotent: PK conflict means component already exists — skip
+        const msg = err instanceof Error ? err.message : String(err);
+        if (
+          msg.includes("duplicate key") ||
+          msg.includes("unique constraint")
+        ) {
+          logger.info(
+            { componentId: estimate.componentId },
+            "Pool component already exists — skipping"
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    logger.info(
+      { epochId: input.epochId, componentsEnsured: ensured },
+      "Pool components ensured"
+    );
+
+    return { componentsEnsured: ensured };
+  }
+
+  /**
+   * Auto-close ingestion if epoch period has passed + grace period.
+   * Locks config at review: pins allocationAlgoRef, weightConfigHash, approverSetHash.
+   */
+  async function autoCloseIngestion(
+    input: AutoCloseIngestionInput
+  ): Promise<AutoCloseIngestionOutput> {
+    const epochId = BigInt(input.epochId);
+    const periodEnd = new Date(input.periodEnd);
+    const now = new Date();
+
+    // Check if grace period has elapsed
+    const graceDeadline = new Date(periodEnd.getTime() + input.gracePeriodMs);
+    if (now < graceDeadline) {
+      logger.info(
+        {
+          epochId: input.epochId,
+          periodEnd: input.periodEnd,
+          graceDeadline: graceDeadline.toISOString(),
+        },
+        "Grace period not elapsed — skipping auto-close"
+      );
+      return { closed: false, reason: "grace_period_not_elapsed" };
+    }
+
+    // Validate and compute config hashes
+    validateWeightConfig(input.weightConfig);
+    const weightConfigHash = await computeWeightConfigHash(input.weightConfig);
+    const allocationAlgoRef = deriveAllocationAlgoRef(input.creditEstimateAlgo);
+    const approverSetHash = computeApproverSetHash(input.approvers);
+
+    logger.info(
+      {
+        epochId: input.epochId,
+        allocationAlgoRef,
+        weightConfigHash: `${weightConfigHash.slice(0, 12)}...`,
+      },
+      "Auto-closing ingestion"
+    );
+
+    const epoch = await ledgerStore.closeIngestion(
+      epochId,
+      approverSetHash,
+      allocationAlgoRef,
+      weightConfigHash
+    );
+
+    logger.info(
+      { epochId: input.epochId, status: epoch.status },
+      "Ingestion auto-closed"
+    );
+
+    return { closed: true, reason: "auto_closed" };
+  }
+
+  /**
+   * Compound activity: atomically finalize an epoch with signature verification.
+   * EPOCH_FINALIZE_IDEMPOTENT: returns existing statement if already finalized.
+   * CONFIG_LOCKED_AT_REVIEW: verifies allocation_algo_ref and weight_config_hash are set.
+   */
+  async function finalizeEpoch(
+    input: FinalizeEpochInput
+  ): Promise<FinalizeEpochOutput> {
+    const epochId = BigInt(input.epochId);
+
+    logger.info(
+      { epochId: input.epochId, signerAddress: input.signerAddress },
+      "Finalizing epoch"
+    );
+
+    // 1. Load epoch — verify exists and is review (or finalized for idempotency)
+    const epoch = await ledgerStore.getEpoch(epochId);
+    if (!epoch) {
+      throw new Error(`finalizeEpoch: epoch ${input.epochId} not found`);
+    }
+
+    // EPOCH_FINALIZE_IDEMPOTENT: already finalized → repair via atomic method
+    if (epoch.status === "finalized") {
+      logger.info(
+        { epochId: input.epochId },
+        "Epoch already finalized — repairing via finalizeEpochAtomic"
+      );
+      const existing = await ledgerStore.getStatementForEpoch(epochId);
+      if (!existing) {
+        throw new Error(
+          `finalizeEpoch: epoch ${input.epochId} is finalized but no statement found`
+        );
+      }
+
+      // Repair: ensure this signer's signature exists via atomic method
+      await ledgerStore.finalizeEpochAtomic({
+        epochId,
+        poolTotal: existing.poolTotalCredits,
+        statement: {
+          nodeId,
+          allocationSetHash: existing.allocationSetHash,
+          poolTotalCredits: existing.poolTotalCredits,
+          payoutsJson: existing.payoutsJson,
+        },
+        signature: {
+          nodeId,
+          signerWallet: input.signerAddress,
+          signature: input.signature,
+          signedAt: new Date(),
+        },
+        expectedAllocationSetHash: existing.allocationSetHash,
+      });
+
+      return {
+        statementId: existing.id,
+        poolTotalCredits: existing.poolTotalCredits.toString(),
+        allocationSetHash: existing.allocationSetHash,
+        payoutCount: existing.payoutsJson.length,
+      };
+    }
+
+    if (epoch.status !== "review") {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} is '${epoch.status}', expected 'review'`
+      );
+    }
+
+    // 2. CONFIG_LOCKED_AT_REVIEW: verify config is locked
+    if (!epoch.allocationAlgoRef || !epoch.weightConfigHash) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} missing allocation_algo_ref or weight_config_hash (CONFIG_LOCKED_AT_REVIEW violated)`
+      );
+    }
+
+    // 3. Verify signer is in approvers and matches pinned approverSetHash
+    const signerLower = input.signerAddress.toLowerCase();
+    const approversLower = input.approvers.map((a) => a.toLowerCase());
+    if (!approversLower.includes(signerLower)) {
+      throw new Error(
+        `finalizeEpoch: signer ${input.signerAddress} not in approvers`
+      );
+    }
+    const currentApproverSetHash = computeApproverSetHash(input.approvers);
+    if (epoch.approverSetHash !== currentApproverSetHash) {
+      throw new Error(
+        `finalizeEpoch: approver set hash mismatch — epoch has ${epoch.approverSetHash}, current is ${currentApproverSetHash}`
+      );
+    }
+
+    // 4. Load allocations — use final_units where set, fall back to proposed_units
+    const allocations = await ledgerStore.getAllocationsForEpoch(epochId);
+    if (allocations.length === 0) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} has no allocations`
+      );
+    }
+
+    const finalizedAllocations = allocations.map((a) => ({
+      userId: a.userId,
+      valuationUnits: a.finalUnits ?? a.proposedUnits,
+    }));
+
+    // 5. Load pool components → pool_total = SUM(amount_credits)
+    const poolComponents = await ledgerStore.getPoolComponentsForEpoch(epochId);
+    if (poolComponents.length === 0) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} has no pool components (POOL_REQUIRES_BASE)`
+      );
+    }
+    const hasBaseIssuance = poolComponents.some(
+      (c) => c.componentId === "base_issuance"
+    );
+    if (!hasBaseIssuance) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} missing base_issuance component (POOL_REQUIRES_BASE)`
+      );
+    }
+
+    const poolTotal = poolComponents.reduce(
+      (sum, c) => sum + c.amountCredits,
+      0n
+    );
+
+    // 6. Compute payouts (pure, deterministic)
+    const payouts = computePayouts(finalizedAllocations, poolTotal);
+
+    // 7. Compute allocation set hash (deterministic)
+    const allocationSetHash =
+      await computeAllocationSetHash(finalizedAllocations);
+
+    // 8. Build canonical message and verify signature
+    const canonicalMessage = buildCanonicalMessage({
+      nodeId,
+      scopeId,
+      epochId: input.epochId,
+      allocationSetHash,
+      poolTotalCredits: poolTotal.toString(),
+    });
+
+    const isValid = await verifyMessage({
+      address: input.signerAddress as `0x${string}`,
+      message: canonicalMessage,
+      signature: input.signature as `0x${string}`,
+    });
+    if (!isValid) {
+      throw new Error(
+        `finalizeEpoch: signature verification failed for signer ${input.signerAddress}`
+      );
+    }
+
+    // 9. Atomic finalize — epoch transition + statement + signature in one transaction
+    const { epoch: finalizedEpoch, statement } =
+      await ledgerStore.finalizeEpochAtomic({
+        epochId,
+        poolTotal,
+        statement: {
+          nodeId,
+          allocationSetHash,
+          poolTotalCredits: poolTotal,
+          payoutsJson: payouts.map((p) => ({
+            user_id: p.userId,
+            total_units: p.totalUnits.toString(),
+            share: p.share,
+            amount_credits: p.amountCredits.toString(),
+          })),
+        },
+        signature: {
+          nodeId,
+          signerWallet: input.signerAddress,
+          signature: input.signature,
+          signedAt: new Date(),
+        },
+        expectedAllocationSetHash: allocationSetHash,
+      });
+
+    logger.info(
+      {
+        epochId: input.epochId,
+        statementId: statement.id,
+        poolTotalCredits: poolTotal.toString(),
+        allocationSetHash: `${allocationSetHash.slice(0, 12)}...`,
+        payoutCount: payouts.length,
+        status: finalizedEpoch.status,
+      },
+      "Epoch finalized"
+    );
+
+    return {
+      statementId: statement.id,
+      poolTotalCredits: poolTotal.toString(),
+      allocationSetHash,
+      payoutCount: payouts.length,
+    };
+  }
+
   return {
     ensureEpochForWindow,
     loadCursor,
@@ -489,6 +964,10 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
     insertEvents,
     saveCursor,
     curateAndResolve,
+    computeAllocations,
+    ensurePoolComponents,
+    autoCloseIngestion,
+    finalizeEpoch,
   };
 }
 
