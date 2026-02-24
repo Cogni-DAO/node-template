@@ -1,18 +1,18 @@
 ---
 id: task.0107
 type: task
-title: Multi-provider auth — Discord + GitHub OAuth on NextAuth v4
-status: needs_implement
+title: Multi-provider auth — GitHub + Discord + Google OAuth on NextAuth v4
+status: needs_merge
 priority: 1
 rank: 10
 estimate: 3
-summary: Add Discord and GitHub OAuth providers to the existing NextAuth v4 setup. Resolve all providers to canonical user_id via user_bindings. Make SessionUser.walletAddress optional. No version upgrade, no new tables, no DrizzleAdapter.
-outcome: Users can sign in via SIWE wallet, Discord OAuth, or GitHub OAuth. All methods resolve to the same canonical user_id (UUID). SessionUser.walletAddress becomes optional. Existing SIWE login unchanged. Explicit account linking for binding additional providers to an existing user.
+summary: Add GitHub, Discord, and Google OAuth providers to the existing NextAuth v4 setup. Resolve all providers to canonical user_id via user_bindings. Make SessionUser.walletAddress optional. No version upgrade, no new tables, no DrizzleAdapter.
+outcome: Users can sign in via SIWE wallet, GitHub, Discord, or Google OAuth. All methods resolve to the same canonical user_id (UUID). SessionUser.walletAddress becomes optional. Existing SIWE login unchanged. Explicit account linking for binding additional providers to an existing user.
 spec_refs: decentralized-user-identity, authentication-spec
 assignees: derekg1729
 credit:
 project: proj.decentralized-identity
-branch:
+branch: feat/user-accounts
 pr:
 reviewer:
 revision: 2
