@@ -7,7 +7,7 @@
  * Scope: Governance feature component. Client-side timer with 60s interval. Does not perform data fetching or server-side logic.
  * Invariants: Progress computed from epoch start/end window. Timer updates every minute.
  * Side-effects: time
- * Links: src/contracts/governance.epoch.v1.contract.ts
+ * Links: src/features/governance/types.ts
  * @public
  */
 
@@ -17,11 +17,12 @@ import { Clock } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { Badge, Card, CardContent, Progress } from "@/components";
+import type { EpochView } from "@/features/governance/types";
 
 interface EpochCountdownProps {
   readonly periodStart: string;
   readonly periodEnd: string;
-  readonly status: "open" | "closed";
+  readonly status: EpochView["status"];
   readonly contributorCount: number;
   readonly totalPoints: number;
 }
@@ -51,6 +52,33 @@ function useCountdown(periodStart: string, periodEnd: string) {
   return { timeLeft, progress };
 }
 
+function StatusBadge({
+  status,
+}: {
+  status: EpochView["status"];
+}): ReactElement {
+  switch (status) {
+    case "open":
+      return (
+        <Badge intent="default" size="sm" className="animate-pulse">
+          ACTIVE
+        </Badge>
+      );
+    case "review":
+      return (
+        <Badge intent="secondary" size="sm">
+          IN REVIEW
+        </Badge>
+      );
+    case "finalized":
+      return (
+        <Badge intent="secondary" size="sm">
+          FINALIZED
+        </Badge>
+      );
+  }
+}
+
 export function EpochCountdown({
   periodStart,
   periodEnd,
@@ -66,15 +94,11 @@ export function EpochCountdown({
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Clock className="h-4 w-4" />
-            <span className="text-sm">Time remaining</span>
+            <span className="text-sm">
+              {status === "open" ? "Time remaining" : "Epoch ended"}
+            </span>
           </div>
-          <Badge
-            intent={status === "open" ? "default" : "secondary"}
-            size="sm"
-            className={status === "open" ? "animate-pulse" : ""}
-          >
-            {status === "open" ? "ACTIVE" : "CLOSED"}
-          </Badge>
+          <StatusBadge status={status} />
         </div>
         <div className="mb-3 font-bold font-mono text-4xl text-foreground">
           {timeLeft}

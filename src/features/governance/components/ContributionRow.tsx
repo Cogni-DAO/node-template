@@ -3,24 +3,21 @@
 
 /**
  * Module: `@features/governance/components/ContributionRow`
- * Purpose: Single activity row within a contributor card — source badge, type label, description.
+ * Purpose: Single activity row within a contributor card — source badge, type label.
  * Scope: Governance feature component. Does not perform data fetching or server-side logic.
  * Invariants: Event types map to display labels and emoji icons.
  * Side-effects: none
- * Links: src/contracts/governance.epoch.v1.contract.ts
+ * Links: src/features/governance/types.ts
  * @public
  */
 
 "use client";
 
 import type { ReactElement } from "react";
-import type { z } from "zod";
 
-import type { activityEventSchema } from "@/contracts/governance.epoch.v1.contract";
+import type { ActivityEvent } from "@/features/governance/types";
 
 import { SourceBadge } from "./SourceBadge";
-
-type ActivityEvent = z.infer<typeof activityEventSchema>;
 
 const TYPE_ICONS: Record<string, string> = {
   pr_merged: "⬆️",
@@ -51,7 +48,7 @@ export function ContributionRow({
         <span className="text-xs">
           {TYPE_ICONS[activity.eventType] ?? "📌"}
         </span>
-        <SourceBadge source={activity.source} />
+        <SourceBadge source={activity.source as "github" | "discord"} />
         <span className="text-muted-foreground text-xs">
           {TYPE_LABELS[activity.eventType] ?? activity.eventType}
         </span>

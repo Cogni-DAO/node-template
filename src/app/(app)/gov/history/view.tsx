@@ -7,7 +7,7 @@
  * Scope: Renders epoch history data fetched via useEpochHistory hook. Does not perform server-side logic or direct DB access.
  * Invariants: BigInt credits displayed via Number() for presentation only. Expand/collapse via local state.
  * Side-effects: IO (via useEpochHistory hook)
- * Links: docs/spec/epoch-ledger.md, src/contracts/governance.epoch.v1.contract.ts
+ * Links: docs/spec/epoch-ledger.md, src/features/governance/types.ts
  * @public
  */
 
@@ -21,7 +21,7 @@ import { useEpochHistory } from "@/features/governance/hooks/useEpochHistory";
 
 export function EpochHistoryView(): ReactElement {
   const { data, isLoading, error } = useEpochHistory();
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (error) {
     return (

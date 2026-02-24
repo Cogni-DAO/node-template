@@ -3,25 +3,21 @@
 
 /**
  * Module: `@features/governance/mock/epoch-mock-data`
- * Purpose: Static mock data for epoch ledger UI pages. Shaped to match contract schemas.
- * Scope: Consumed by feature hooks only. Will be replaced by real API calls. Does not perform IO or access external services.
- * Invariants: Data shapes match governance.epoch.v1 and governance.holdings.v1 contracts exactly.
+ * Purpose: Static mock data for epoch ledger UI pages. Shaped to match view model types.
+ * Scope: Consumed by feature hooks only (USE_MOCK path). Does not perform IO or access external services.
+ * Invariants: Data shapes match governance view model types in types.ts.
  * Side-effects: none
- * Links: src/contracts/governance.epoch.v1.contract.ts, src/contracts/governance.holdings.v1.contract.ts
+ * Links: src/features/governance/types.ts
  * @internal
  */
 
-import type { z } from "zod";
-
 import type {
-  currentEpochOperation,
-  epochHistoryOperation,
-} from "@/contracts/governance.epoch.v1.contract";
-import type { holdingsOperation } from "@/contracts/governance.holdings.v1.contract";
-
-type CurrentEpochOutput = z.infer<(typeof currentEpochOperation)["output"]>;
-type EpochHistoryOutput = z.infer<(typeof epochHistoryOperation)["output"]>;
-type HoldingsOutput = z.infer<(typeof holdingsOperation)["output"]>;
+  CurrentEpochData,
+  EpochContributor,
+  EpochHistoryData,
+  EpochView,
+  HoldingsData,
+} from "@/features/governance/types";
 
 const AVATARS = ["🦊", "🐙", "🦉", "🐺", "🦅", "🐋", "🦎"] as const;
 const COLORS = [
@@ -126,7 +122,6 @@ function makeActivities(seed: number) {
   return Array.from({ length: count }, (_, i) => {
     const type = EVENT_TYPES[(seed + i) % EVENT_TYPES.length] as EventType;
     const meta = EVENT_META[type];
-    const desc = meta.descriptions[(seed + i) % meta.descriptions.length] ?? "";
     const score = 5 + ((seed * 7 + i * 13) % 45);
     return {
       id: `${meta.source}:${type}:cogni-dao/cogni-template:${seed * 100 + i}`,
@@ -135,7 +130,6 @@ function makeActivities(seed: number) {
       platformLogin: NAMES[seed % NAMES.length] ?? "unknown",
       artifactUrl: `https://${meta.source === "github" ? "github.com" : "discord.com"}/example/${seed * 100 + i}`,
       eventTime: new Date(2026, 1, 14 + (i % 7), 10 + i).toISOString(),
-      description: desc,
       score,
     };
   });
@@ -154,104 +148,71 @@ function makeContributors(epochSeed: number, count: number) {
       finalUnits: null,
       creditShare: 0,
       activityCount: activities.length,
-      activities: activities.map(
-        ({ description: _d, score: _s, ...rest }) => rest
-      ),
+      activities: activities.map(({ score: _s, ...rest }) => rest),
       _totalScore: totalScore,
-      _activities: activities,
     };
   });
 
   const total = raw.reduce((s, c) => s + c._totalScore, 0);
-  return raw.map(({ _totalScore, _activities, ...c }) => ({
+  return raw.map(({ _totalScore, ...c }) => ({
     ...c,
     creditShare: Math.round((_totalScore / total) * 1000) / 10,
     _totalScore,
-    _activities,
   }));
 }
 
 // Current open epoch
 const currentContributors = makeContributors(5, 6);
-export const MOCK_CURRENT_EPOCH: CurrentEpochOutput = {
+export const MOCK_CURRENT_EPOCH: CurrentEpochData = {
   epoch: {
-    id: 5,
+    id: "5",
     status: "open",
     periodStart: new Date(2026, 1, 16).toISOString(),
     periodEnd: new Date(2026, 1, 23).toISOString(),
     poolTotalCredits: null,
-    signedBy: null,
-    signedAt: null,
     contributors: currentContributors.map(
-      ({ _totalScore, _activities, ...c }) => c
+      ({ _totalScore, ...c }): EpochContributor => c
     ),
   },
 };
 
-// Past closed epochs
+// Past finalized epochs
 function makePastEpoch(
   id: number,
   start: Date,
   end: Date,
   credits: number,
-  contributorCount: number,
-  signedAt: Date
-) {
+  contributorCount: number
+): { epoch: EpochView; _contributors: ReturnType<typeof makeContributors> } {
   const contributors = makeContributors(id, contributorCount);
   return {
-    id,
-    status: "closed" as const,
-    periodStart: start.toISOString(),
-    periodEnd: end.toISOString(),
-    poolTotalCredits: String(credits),
-    signedBy: "Admin",
-    signedAt: signedAt.toISOString(),
-    contributors: contributors.map(({ _totalScore, _activities, ...c }) => c),
+    epoch: {
+      id: String(id),
+      status: "finalized",
+      periodStart: start.toISOString(),
+      periodEnd: end.toISOString(),
+      poolTotalCredits: String(credits),
+      contributors: contributors.map(
+        ({ _totalScore, ...c }): EpochContributor => c
+      ),
+    },
     _contributors: contributors,
   };
 }
 
 const pastEpochsRaw = [
-  makePastEpoch(
-    4,
-    new Date(2026, 1, 9),
-    new Date(2026, 1, 16),
-    10000,
-    7,
-    new Date(2026, 1, 16, 14)
-  ),
-  makePastEpoch(
-    3,
-    new Date(2026, 1, 2),
-    new Date(2026, 1, 9),
-    8500,
-    5,
-    new Date(2026, 1, 9, 15)
-  ),
-  makePastEpoch(
-    2,
-    new Date(2026, 0, 26),
-    new Date(2026, 1, 2),
-    9200,
-    6,
-    new Date(2026, 1, 2, 12)
-  ),
-  makePastEpoch(
-    1,
-    new Date(2026, 0, 19),
-    new Date(2026, 0, 26),
-    7800,
-    4,
-    new Date(2026, 0, 26, 11)
-  ),
+  makePastEpoch(4, new Date(2026, 1, 9), new Date(2026, 1, 16), 10000, 7),
+  makePastEpoch(3, new Date(2026, 1, 2), new Date(2026, 1, 9), 8500, 5),
+  makePastEpoch(2, new Date(2026, 0, 26), new Date(2026, 1, 2), 9200, 6),
+  makePastEpoch(1, new Date(2026, 0, 19), new Date(2026, 0, 26), 7800, 4),
 ];
 
-export const MOCK_EPOCH_HISTORY: EpochHistoryOutput = {
-  epochs: pastEpochsRaw.map(({ _contributors, ...e }) => e),
+export const MOCK_EPOCH_HISTORY: EpochHistoryData = {
+  epochs: pastEpochsRaw.map((e) => e.epoch),
 };
 
 // Holdings — aggregate across all past epochs
-function computeHoldings() {
+function computeHoldings(): HoldingsData {
   const userMap = new Map<
     string,
     {
@@ -264,14 +225,14 @@ function computeHoldings() {
     }
   >();
 
-  for (const epoch of pastEpochsRaw) {
+  for (const { epoch, _contributors } of pastEpochsRaw) {
     const credits = Number(epoch.poolTotalCredits);
-    for (const c of epoch._contributors) {
+    for (const c of _contributors) {
       const existing = userMap.get(c.userId);
       const userCredits = Math.round((credits * c.creditShare) / 100);
       if (existing) {
         existing.totalCredits += userCredits;
-        existing.epochs.add(epoch.id);
+        existing.epochs.add(Number(epoch.id));
       } else {
         userMap.set(c.userId, {
           userId: c.userId,
@@ -279,7 +240,7 @@ function computeHoldings() {
           avatar: c.avatar,
           color: c.color,
           totalCredits: userCredits,
-          epochs: new Set([epoch.id]),
+          epochs: new Set([Number(epoch.id)]),
         });
       }
     }
@@ -307,4 +268,4 @@ function computeHoldings() {
   };
 }
 
-export const MOCK_HOLDINGS: HoldingsOutput = computeHoldings();
+export const MOCK_HOLDINGS: HoldingsData = computeHoldings();

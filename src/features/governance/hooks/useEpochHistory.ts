@@ -3,26 +3,90 @@
 
 /**
  * Module: `@features/governance/hooks/useEpochHistory`
- * Purpose: React Query hook for closed epoch history data.
- * Scope: Client-side data fetching for /gov/history page. Does not access database directly.
- * Invariants: Typed with contract output schema; mock data until API routes ship.
- * Side-effects: IO (mock for now, HTTP GET to /api/v1/ledger/epochs when ready)
- * Links: src/contracts/governance.epoch.v1.contract.ts
+ * Purpose: React Query hook for finalized epoch history with contributor drill-down.
+ * Scope: Client-side data fetching for /gov/history page. Fetches finalized epochs, then
+ * for each fetches statement + activity, composing into EpochView[].
+ * Invariants: Uses payout statements as source of truth for finalized epochs (frozen, deterministic). Does not access database directly.
+ * Side-effects: IO (HTTP GET to ledger API endpoints)
+ * Links: src/features/governance/types.ts, src/features/governance/lib/compose-epoch.ts
  * @public
  */
 
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
-import type { z } from "zod";
+import pLimit from "p-limit";
 
-import type { epochHistoryOperation } from "@/contracts/governance.epoch.v1.contract";
+import { composeEpochViewFromStatement } from "@/features/governance/lib/compose-epoch";
+import type {
+  ApiActivityEvent,
+  EpochDto,
+  StatementDto,
+} from "@/features/governance/lib/compose-epoch";
 import { MOCK_EPOCH_HISTORY } from "@/features/governance/mock/epoch-mock-data";
+import type { EpochHistoryData, EpochView } from "@/features/governance/types";
 
-type EpochHistoryData = z.infer<(typeof epochHistoryOperation)["output"]>;
+const USE_MOCK = false;
+const limit = pLimit(3);
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function fetchHistory(): Promise<EpochHistoryData> {
+  const { epochs } = await fetchJson<{ epochs: EpochDto[] }>(
+    "/api/v1/ledger/epochs?limit=200"
+  );
+  const finalized = epochs.filter((e) => e.status === "finalized");
+
+  const views: EpochView[] = await Promise.all(
+    finalized.map((epoch) =>
+      limit(async () => {
+        const [statementRes, activityRes] = await Promise.all([
+          fetchJson<{ statement: StatementDto | null }>(
+            `/api/v1/ledger/epochs/${epoch.id}/statement`
+          ),
+          fetchJson<{ events: ApiActivityEvent[] }>(
+            `/api/v1/ledger/epochs/${epoch.id}/activity?limit=200`
+          ),
+        ]);
+
+        // If no statement yet, return epoch with empty contributors
+        if (!statementRes.statement) {
+          return {
+            id: epoch.id,
+            status: epoch.status,
+            periodStart: epoch.periodStart,
+            periodEnd: epoch.periodEnd,
+            poolTotalCredits: epoch.poolTotalCredits,
+            contributors: [],
+          };
+        }
+
+        return composeEpochViewFromStatement(
+          epoch,
+          statementRes.statement,
+          activityRes.events
+        );
+      })
+    )
+  );
+
+  return { epochs: views };
+}
 
 export function useEpochHistory(): UseQueryResult<EpochHistoryData, Error> {
   return useQuery({
     queryKey: ["governance", "epoch", "history"],
-    queryFn: async () => MOCK_EPOCH_HISTORY,
+    queryFn: USE_MOCK ? async () => MOCK_EPOCH_HISTORY : fetchHistory,
     staleTime: 60_000,
   });
 }

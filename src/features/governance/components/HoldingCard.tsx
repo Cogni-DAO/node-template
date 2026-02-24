@@ -7,22 +7,19 @@
  * Scope: Governance feature component. Shows credit balance and ownership percentage. Does not perform data fetching or server-side logic.
  * Invariants: BigInt credits displayed via Number() for presentation only. Progress bar maps to ownership%.
  * Side-effects: none
- * Links: src/contracts/governance.holdings.v1.contract.ts
+ * Links: src/features/governance/types.ts
  * @public
  */
 
 "use client";
 
 import type { ReactElement } from "react";
-import type { z } from "zod";
 
 import { Card, CardContent, Progress } from "@/components";
-import type { holdingSchema } from "@/contracts/governance.holdings.v1.contract";
-
-type Holding = z.infer<typeof holdingSchema>;
+import type { HoldingView } from "@/features/governance/types";
 
 interface HoldingCardProps {
-  readonly holding: Holding;
+  readonly holding: HoldingView;
   readonly rank: number;
 }
 

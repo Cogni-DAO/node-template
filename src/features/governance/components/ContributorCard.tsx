@@ -7,24 +7,21 @@
  * Scope: Governance feature component for epoch detail pages. Does not perform data fetching or server-side logic.
  * Invariants: Colors applied via inline style (runtime HSL values). BigInt units displayed as Number for presentation.
  * Side-effects: none
- * Links: src/contracts/governance.epoch.v1.contract.ts
+ * Links: src/features/governance/types.ts
  * @public
  */
 
 "use client";
 
 import type { ReactElement } from "react";
-import type { z } from "zod";
 
 import { Card, CardContent } from "@/components";
-import type { epochContributorSchema } from "@/contracts/governance.epoch.v1.contract";
+import type { EpochContributor } from "@/features/governance/types";
 
 import { ContributionRow } from "./ContributionRow";
 
-type Contributor = z.infer<typeof epochContributorSchema>;
-
 interface ContributorCardProps {
-  readonly contributor: Contributor;
+  readonly contributor: EpochContributor;
   readonly rank: number;
 }
 

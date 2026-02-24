@@ -7,7 +7,7 @@
  * Scope: Renders holdings data fetched via useHoldings hook. Does not perform server-side logic or direct DB access.
  * Invariants: BigInt credits displayed via Number() for presentation only. No credit math in UI.
  * Side-effects: IO (via useHoldings hook)
- * Links: docs/spec/epoch-ledger.md, src/contracts/governance.holdings.v1.contract.ts
+ * Links: docs/spec/epoch-ledger.md, src/features/governance/types.ts
  * @public
  */
 

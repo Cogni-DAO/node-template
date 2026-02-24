@@ -7,7 +7,7 @@
  * Scope: Server component only; delegates all client behavior to HoldingsView. Does not perform data fetching.
  * Invariants: Auth enforced by (app) layout guard.
  * Side-effects: none (server render only)
- * Links: src/contracts/governance.holdings.v1.contract.ts
+ * Links: src/features/governance/types.ts
  * @public
  */
 

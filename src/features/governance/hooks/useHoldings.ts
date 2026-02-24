@@ -3,26 +3,66 @@
 
 /**
  * Module: `@features/governance/hooks/useHoldings`
- * Purpose: React Query hook for cumulative credit holdings data.
- * Scope: Client-side data fetching for /gov/holdings page. Does not access database directly.
- * Invariants: Typed with contract output schema; mock data until API routes ship.
- * Side-effects: IO (mock for now, HTTP GET to /api/v1/ledger/holdings when ready)
- * Links: src/contracts/governance.holdings.v1.contract.ts
+ * Purpose: React Query hook for cumulative credit holdings across finalized epochs.
+ * Scope: Client-side data fetching for /gov/holdings page. Fetches finalized epochs,
+ * then for each fetches statement, aggregating payouts into holdings.
+ * Invariants: Uses payout statements as source of truth (frozen, deterministic). Does not access database directly.
+ * Side-effects: IO (HTTP GET to ledger API endpoints)
+ * Links: src/features/governance/types.ts, src/features/governance/lib/compose-holdings.ts
  * @public
  */
 
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
-import type { z } from "zod";
+import pLimit from "p-limit";
 
-import type { holdingsOperation } from "@/contracts/governance.holdings.v1.contract";
+import type {
+  EpochDto,
+  StatementDto,
+} from "@/features/governance/lib/compose-epoch";
+import { composeHoldings } from "@/features/governance/lib/compose-holdings";
 import { MOCK_HOLDINGS } from "@/features/governance/mock/epoch-mock-data";
+import type { HoldingsData } from "@/features/governance/types";
 
-type HoldingsData = z.infer<(typeof holdingsOperation)["output"]>;
+const USE_MOCK = false;
+const limit = pLimit(3);
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function fetchHoldings(): Promise<HoldingsData> {
+  const { epochs } = await fetchJson<{ epochs: EpochDto[] }>(
+    "/api/v1/ledger/epochs?limit=200"
+  );
+  const finalized = epochs.filter((e) => e.status === "finalized");
+
+  const statements = await Promise.all(
+    finalized.map((e) =>
+      limit(() =>
+        fetchJson<{ statement: StatementDto | null }>(
+          `/api/v1/ledger/epochs/${e.id}/statement`
+        ).then((r) => r.statement)
+      )
+    )
+  );
+
+  return composeHoldings(finalized, statements);
+}
 
 export function useHoldings(): UseQueryResult<HoldingsData, Error> {
   return useQuery({
     queryKey: ["governance", "holdings"],
-    queryFn: async () => MOCK_HOLDINGS,
+    queryFn: USE_MOCK ? async () => MOCK_HOLDINGS : fetchHoldings,
     staleTime: 60_000,
   });
 }

@@ -7,7 +7,7 @@
  * Scope: Renders epoch data fetched via useCurrentEpoch hook. Does not perform server-side logic.
  * Invariants: BigInt units displayed via Number() for presentation only. No credit math in UI.
  * Side-effects: IO (via useCurrentEpoch hook)
- * Links: docs/spec/epoch-ledger.md, src/contracts/governance.epoch.v1.contract.ts
+ * Links: docs/spec/epoch-ledger.md, src/features/governance/types.ts
  * @public
  */
 

@@ -3,28 +3,63 @@
 
 /**
  * Module: `@features/governance/components/EpochCard`
- * Purpose: Collapsible card for a closed epoch in the history view.
+ * Purpose: Collapsible card for an epoch in the history view.
  * Scope: Governance feature component. Shows epoch summary, expandable to contributor breakdown. Does not perform data fetching or server-side logic.
  * Invariants: BigInt credits displayed via Number() for presentation only. No credit math in UI.
  * Side-effects: none
- * Links: src/contracts/governance.epoch.v1.contract.ts
+ * Links: src/features/governance/types.ts
  * @public
  */
 
 "use client";
 
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Clock, Eye } from "lucide-react";
 import type { ReactElement } from "react";
-import type { z } from "zod";
 import { Badge, Card, CardContent } from "@/components";
-import type { epochSummarySchema } from "@/contracts/governance.epoch.v1.contract";
-
-type EpochSummary = z.infer<typeof epochSummarySchema>;
+import type { EpochView } from "@/features/governance/types";
 
 interface EpochCardProps {
-  readonly epoch: EpochSummary;
+  readonly epoch: EpochView;
   readonly expanded: boolean;
   readonly onToggle: () => void;
+}
+
+function StatusBadge({
+  status,
+}: {
+  status: EpochView["status"];
+}): ReactElement {
+  switch (status) {
+    case "finalized":
+      return (
+        <Badge
+          intent="outline"
+          size="sm"
+          className="gap-1 border-success/40 text-success"
+        >
+          <CheckCircle className="h-3 w-3" />
+          Finalized
+        </Badge>
+      );
+    case "review":
+      return (
+        <Badge
+          intent="outline"
+          size="sm"
+          className="gap-1 border-warning/40 text-warning"
+        >
+          <Eye className="h-3 w-3" />
+          Review
+        </Badge>
+      );
+    default:
+      return (
+        <Badge intent="default" size="sm" className="animate-pulse gap-1">
+          <Clock className="h-3 w-3" />
+          Active
+        </Badge>
+      );
+  }
 }
 
 export function EpochCard({
@@ -57,9 +92,6 @@ export function EpochCard({
               </div>
               <div className="mt-0.5 text-muted-foreground text-xs">
                 {epoch.contributors.length} contributors
-                {epoch.signedBy &&
-                  epoch.signedAt &&
-                  ` · Signed by ${epoch.signedBy} on ${new Date(epoch.signedAt).toLocaleDateString()}`}
               </div>
             </div>
           </div>
@@ -74,14 +106,7 @@ export function EpochCard({
                 </div>
               </div>
             )}
-            <Badge
-              intent="outline"
-              size="sm"
-              className="gap-1 border-success/40 text-success"
-            >
-              <CheckCircle className="h-3 w-3" />
-              Signed
-            </Badge>
+            <StatusBadge status={epoch.status} />
           </div>
         </div>
 
