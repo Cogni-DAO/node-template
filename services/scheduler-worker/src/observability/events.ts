@@ -27,6 +27,15 @@ export const WORKER_EVENT_NAMES = {
   ACTIVITY_GRAPH_ERROR: "worker.activity.graph_error",
   ACTIVITY_RUN_UPDATED: "worker.activity.run_updated",
 
+  // Ledger activities — activities/ledger.ts
+  LEDGER_EPOCH_ENSURED: "worker.ledger.epoch_ensured",
+  LEDGER_EPOCH_CREATED: "worker.ledger.epoch_created",
+  LEDGER_CURSOR_LOADED: "worker.ledger.cursor_loaded",
+  LEDGER_COLLECTED: "worker.ledger.collected",
+  LEDGER_EVENTS_INSERTED: "worker.ledger.events_inserted",
+  LEDGER_CURSOR_SAVED: "worker.ledger.cursor_saved",
+  LEDGER_CURATED: "worker.ledger.curated",
+
   // Config — container bootstrap
   CONFIG_WEIGHT_DRIFT: "worker.config.weight_drift",
   CONFIG_ADAPTER_SKIPPED: "worker.config.adapter_skipped",
