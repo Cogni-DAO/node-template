@@ -14,13 +14,54 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { checkApprover } from "@/app/api/v1/ledger/_lib/approver-guard";
+import { toAllocationDto } from "@/app/api/v1/public/ledger/_lib/ledger-dto";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import { epochAllocationsOperation } from "@/contracts/ledger.epoch-allocations.v1.contract";
 import { updateAllocationsOperation } from "@/contracts/ledger.update-allocations.v1.contract";
-import { logRequestWarn, type RequestContext } from "@/shared/observability";
+import {
+  EVENT_NAMES,
+  logEvent,
+  logRequestWarn,
+  type RequestContext,
+} from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+export const GET = wrapRouteHandlerWithLogging<{
+  params: Promise<{ id: string }>;
+}>(
+  {
+    routeId: "ledger.epoch-allocations",
+    auth: { mode: "required", getSessionUser },
+  },
+  async (_ctx, _request, _sessionUser, context) => {
+    if (!context) throw new Error("context required for dynamic routes");
+    const { id } = await context.params;
+    let epochId: bigint;
+    try {
+      epochId = BigInt(id);
+    } catch {
+      return NextResponse.json({ error: "Invalid epoch ID" }, { status: 400 });
+    }
+
+    const store = getContainer().activityLedgerStore;
+    const epoch = await store.getEpoch(epochId);
+    if (!epoch) {
+      return NextResponse.json({ error: "Epoch not found" }, { status: 404 });
+    }
+
+    const allocations = await store.getAllocationsForEpoch(epochId);
+
+    return NextResponse.json(
+      epochAllocationsOperation.output.parse({
+        allocations: allocations.map(toAllocationDto),
+        epochId: id,
+      })
+    );
+  }
+);
 
 function handleRouteError(
   ctx: RequestContext,
@@ -101,10 +142,12 @@ export const PATCH = wrapRouteHandlerWithLogging<{
         updated++;
       }
 
-      ctx.log.info(
-        { epochId: id, updated },
-        "ledger.update-allocations_success"
-      );
+      logEvent(ctx.log, EVENT_NAMES.LEDGER_ALLOCATIONS_UPDATED, {
+        reqId: ctx.reqId,
+        routeId: "ledger.update-allocations",
+        epochId: id,
+        updated,
+      });
 
       return NextResponse.json(
         updateAllocationsOperation.output.parse({ updated })
