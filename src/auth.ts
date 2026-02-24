@@ -5,7 +5,7 @@
  * Module: `@/auth`
  * Purpose: NextAuth.js configuration and export.
  * Scope: App-wide authentication configuration. Does not handle client-side session management.
- * Invariants: Uses SIWE (Sign-In with Ethereum) provider with "credentials" ID; returns DB UUID as user ID.
+ * Invariants: SIWE Credentials provider (id="credentials") + GitHub OAuth. All providers resolve to canonical user_id via user_bindings.
  * Side-effects: IO
  * Notes: Handles session creation, validation, and persistence.
  * Links: docs/spec/authentication.md
@@ -16,15 +16,17 @@
 
 import nodeCrypto, { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import GitHub from "next-auth/providers/github";
 import { getCsrfToken } from "next-auth/react";
 import { SiweMessage } from "siwe";
 
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { createBinding } from "@/adapters/server/identity/create-binding";
-import { users } from "@/shared/db/schema";
+import { linkIntentStore } from "@/shared/auth/link-intent-store";
+import { identityEvents, userBindings, users } from "@/shared/db/schema";
 import { makeLogger } from "@/shared/observability";
 
 export const authSecret =
@@ -176,19 +178,138 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
+    GitHub({
+      clientId: process.env.GITHUB_CLIENT_ID ?? "",
+      clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
+    }),
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      // SIWE (Credentials) flow: user already resolved in authorize(), pass through
+      if (!account || account.provider === "credentials") return true;
+
+      // Only handle known OAuth providers
+      if (account.provider !== "github") return false;
+
+      const db = getServiceDb();
+      const provider = account.provider as "github";
+      const externalId = account.providerAccountId;
+
+      // Lookup existing binding
+      const existing = await db.query.userBindings.findFirst({
+        where: and(
+          eq(userBindings.provider, provider),
+          eq(userBindings.externalId, externalId)
+        ),
+      });
+
+      if (existing) {
+        // Returning user — set user.id so jwt callback picks it up
+        user.id = existing.userId;
+        return true;
+      }
+
+      // Check for link intent (authenticated user linking a new provider)
+      const linkIntent = linkIntentStore.getStore();
+
+      if (linkIntent) {
+        // Linking mode: bind to existing user instead of creating new one
+        try {
+          await createBinding(db, linkIntent.userId, provider, externalId, {
+            method: "oauth_link",
+            githubLogin:
+              (profile as Record<string, unknown> | undefined)?.login ?? null,
+          });
+        } catch {
+          // Race safety: UNIQUE constraint violation may be idempotent
+          const raceCheck = await db.query.userBindings.findFirst({
+            where: and(
+              eq(userBindings.provider, provider),
+              eq(userBindings.externalId, externalId)
+            ),
+          });
+          if (raceCheck && raceCheck.userId === linkIntent.userId) {
+            // Idempotent — same user, same binding
+            user.id = linkIntent.userId;
+            return true;
+          }
+          // Different user owns this binding — NO_AUTO_MERGE
+          getLog().warn(
+            { provider, externalId },
+            "[OAuth] Link binding failed — NO_AUTO_MERGE"
+          );
+          return false;
+        }
+
+        user.id = linkIntent.userId;
+        // Preserve walletAddress in the session
+        const existingUser = await db.query.users.findFirst({
+          where: eq(users.id, linkIntent.userId),
+        });
+        (user as unknown as Record<string, unknown>).walletAddress =
+          existingUser?.walletAddress ?? null;
+        getLog().info(
+          { provider, userId: linkIntent.userId },
+          "[OAuth] Account linked"
+        );
+        return true;
+      }
+
+      // New user — single transaction (user + binding + event atomically)
+      const userId = randomUUID();
+      const bindingId = randomUUID();
+      const eventId = randomUUID();
+      const githubLogin =
+        (profile as Record<string, unknown> | undefined)?.login ?? null;
+
+      await db.transaction(async (tx) => {
+        await tx.insert(users).values({
+          id: userId,
+          name: (profile as Record<string, unknown> | undefined)?.name as
+            | string
+            | null
+            | undefined,
+          walletAddress: null,
+        });
+        await tx
+          .insert(userBindings)
+          .values({ id: bindingId, userId, provider, externalId })
+          .onConflictDoNothing({
+            target: [userBindings.provider, userBindings.externalId],
+          });
+        await tx.insert(identityEvents).values({
+          id: eventId,
+          userId,
+          eventType: "bind",
+          payload: {
+            provider,
+            external_id: externalId,
+            method: "oauth",
+            githubLogin,
+          },
+        });
+      });
+
+      user.id = userId;
+      (user as unknown as Record<string, unknown>).walletAddress = null;
+      getLog().info({ provider, externalId }, "[OAuth] New user created");
+      return true;
+    },
     async jwt({ token, user }) {
+      // ALWAYS explicitly set — NextAuth does not auto-forward custom fields
       if (user) {
         token.id = user.id;
-        token.walletAddress = user.walletAddress ?? null;
+        token.walletAddress =
+          (user as { walletAddress?: string | null }).walletAddress ?? null;
       }
       return token;
     },
     async session({ session, token }) {
+      // ALWAYS explicitly set — NextAuth does not auto-forward custom fields
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.walletAddress = token.walletAddress as string | null;
+        session.user.walletAddress =
+          (token.walletAddress as string | null) ?? null;
       }
       return session;
     },
