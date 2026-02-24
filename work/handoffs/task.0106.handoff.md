@@ -6,65 +6,65 @@ status: active
 created: 2026-02-24
 updated: 2026-02-24
 branch: feat/ledger-ui
-last_commit: e4b9d37d
+last_commit: 6f9e7553
 ---
 
-# Handoff: Dev Seed Script + Missing Ledger API Routes
+# Handoff: Governance Epoch UI + Dev Seed — UI Refinement Pass
 
 ## Context
 
-- The governance UI (`/gov/epoch`, `/gov/history`, `/gov/holdings`) was wired to real ledger API endpoints in `c012921e` — hooks multi-fetch epochs, allocations, activity, and statements, then compose view models client-side
-- An empty dev database rendered blank pages — `pnpm db:seed` now populates realistic data for visual dev workflows
-- Two GET API routes were missing (`allocations`, `statement`) that the hooks depend on — these returned 405 and blocked rendering
-- Seed data is modeled after real GitHub activity from `Cogni-DAO/node-template` with 2 real contributors: `derekg1729` (human) and `Cogni-1729` (AI agent)
-- The seed script coexists safely with Temporal's `LEDGER_INGEST` schedule — `ensureEpochForWindow()` reuses seeded epochs by window match
+- The governance UI (`/gov/epoch`, `/gov/history`, `/gov/holdings`) renders epoch contribution data from real ledger API endpoints
+- A dev seed script (`pnpm db:seed`) populates 3 epochs (2 finalized, 1 open) with realistic GitHub activity from `Cogni-DAO/node-template`
+- `pnpm dev:setup` is the single onboarding command: `db:setup` + `db:setup:test` + `governance:schedules:sync`
+- PR #472 is open against `staging` — all checks pass, ready for UI refinement before merge
+- The next developer focuses on **UI polish and eliminating hardcoded values** across the governance pages and components
 
 ## Current State
 
-- **Done:** `scripts/db/seed.mts` seeds 2 finalized epochs + 1 open epoch with activity, curations, allocations, pool components, and payout statements
-- **Done:** `pnpm db:seed` command works via `node --import tsx/esm` (ESM loader required for `@cogni/*` subpath exports)
-- **Done:** `GET /api/v1/ledger/epochs/:id/allocations` route added (was PATCH-only, returning 405)
-- **Done:** `GET /api/v1/ledger/epochs/:id/statement` route created (didn't exist at all)
-- **Done:** All 3 governance UI pages render against seeded data
-- **MVP quality:** UI is functional but needs polish — placeholder avatars, no profile system, basic layout
-- **Not done:** `pnpm check` not run after latest commit; doc headers on new route files may need validation
-- **Not done:** task.0106 work item status still `needs_implement` — should be updated
+- **Done:** 3 governance pages render against seeded or live data, tab navigation, countdown timer, contributor ranking, holdings aggregation
+- **Done:** Seed script uses `computeEpochWindowV1()` for Monday-aligned UTC windows matching the scheduler grid
+- **Done:** Dead mock data removed from hooks (USE_MOCK flags, mock file deleted)
+- **Needs work:** UI is MVP quality — hardcoded colors, placeholder avatars, magic numbers, no responsive polish
+- **Needs work:** No user profile system — contributor display names come from seed data or platform logins
+- **Needs work:** No loading skeletons tuned to actual content shapes
 
 ## Decisions Made
 
-- Seed script uses `node --import tsx/esm` (not bare `tsx`) because root `package.json` lacks `"type": "module"` and tsx's CJS hook can't resolve ESM-only subpath exports from `@cogni/db-client`
-- File extension is `.mts` to explicitly signal ESM to Node — avoids `ERR_REQUIRE_CYCLE_MODULE` that occurs with `.ts` + `--import tsx/esm`
-- Seed creates user rows in `users` table (FK target for `activity_curation.user_id`) with deterministic UUIDs derived from GitHub databaseIds
-- `dotenv -e .env.local --` used for env loading (matches `db:migrate:dev` pattern), not manual `dotenv.config()` in script
-- No Temporal interaction needed — `ensureEpochForWindow()` in the scheduler worker reuses existing epochs by window match
+- Epoch windows use `computeEpochWindowV1()` everywhere (seed + scheduler) — [epoch-window.ts](../../packages/ledger-core/src/epoch-window.ts)
+- View models composed client-side from flat API responses — [compose-epoch.ts](../../src/features/governance/lib/compose-epoch.ts), [compose-holdings.ts](../../src/features/governance/lib/compose-holdings.ts)
+- Hooks fetch directly from ledger API, no mock fallback — [useCurrentEpoch.ts](../../src/features/governance/hooks/useCurrentEpoch.ts)
+- Components are presentational only — data fetching stays in hooks, composition in `lib/`
 
 ## Next Actions
 
-- [ ] Run `pnpm check` and fix any lint/header issues on new files
-- [ ] Update task.0106 status from `needs_implement` to `done` (or `needs_review`)
-- [ ] Add idempotency: seed script currently aborts if open epoch exists — consider a `--force` flag that cleans and re-seeds
-- [ ] Add user profile system (avatar, display name, color) — currently hardcoded placeholders
-- [ ] Consider adding a `db:seed:reset` script to truncate ledger tables (append-only triggers block DELETE on `activity_events`)
-- [ ] Verify `GIT_READ_TOKEN` in `.env.local` — was returning 401 (expired) during development
+- [ ] Audit hardcoded values in components: color arrays in `ContributorCard`, magic number `/1000` divisor in `view.tsx` files, hardcoded pool credit amounts
+- [ ] Replace placeholder avatars with real GitHub avatars (available via `platformLogin` → `github.com/{login}.png`)
+- [ ] Extract repeated `fetchJson<T>()` helper from hooks into a shared utility
+- [ ] Add proper empty/error states for each page (current ones are minimal)
+- [ ] Review responsive layout — tab nav overflows on mobile, cards lack breakpoint adjustments
+- [ ] Consider extracting weight config display names from a shared constant instead of hardcoding event type labels in `ContributionRow.tsx`
+- [ ] Evaluate whether `EpochCountdown` timer interval (60s) is appropriate or should be configurable
+- [ ] Verify accessibility: tab navigation a11y, color contrast on contributor cards, screen reader support for countdown
 
 ## Risks / Gotchas
 
-- `activity_events` table has an append-only trigger (`ledger_reject_mutation`) that blocks DELETE — to re-seed, you must drop/recreate the DB (`pnpm db:drop:test` pattern) or disable the trigger
-- `ONE_OPEN_EPOCH` invariant: DB unique constraint on `(node_id, scope_id, status='open')` — seed script checks for existing open epoch and aborts if found
-- `activity_curation.user_id` FK references `users.id` — seed must insert user rows before curations
-- `@cogni/*` packages are ESM-only (`format: ["esm"]` in tsup) — scripts that import them need ESM loader, not bare `tsx`
-- Seeded epoch windows are relative to `Date.now()` via `daysAgo()` — re-running seed on different days creates different windows
+- `activity_events` table has an append-only trigger (`ledger_reject_mutation`) — cannot DELETE to re-seed; must drop/recreate DB
+- `ONE_OPEN_EPOCH` constraint: seed aborts if an open epoch exists; to re-seed, finalize or drop existing epochs
+- `ContributorCard` uses a hardcoded HSL color palette (6 colors) — will repeat for >6 contributors
+- Event type → label mapping in `ContributionRow.tsx` is hardcoded — new event types render as raw strings
+- Credit math uses BigInt server-side but `Number()` conversion for display — safe for current scale but check if pool sizes grow
 
 ## Pointers
 
-| File / Resource                                             | Why it matters                                                    |
-| ----------------------------------------------------------- | ----------------------------------------------------------------- |
-| `scripts/db/seed.mts`                                       | The seed script — all epoch/event/allocation data definitions     |
-| `scripts/_seed-reference-data.json`                         | Real GitHub data from Cogni-DAO/node-template used to model seed  |
-| `src/app/api/v1/ledger/epochs/[id]/allocations/route.ts`    | GET + PATCH handlers for epoch allocations                        |
-| `src/app/api/v1/ledger/epochs/[id]/statement/route.ts`      | GET handler for epoch payout statements                           |
-| `src/features/governance/hooks/useCurrentEpoch.ts`          | Hook showing exact API endpoints the UI fetches                   |
-| `src/features/governance/lib/compose-epoch.ts`              | Composition functions joining API data into view models           |
-| `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` | `DrizzleLedgerAdapter` — the store used by seed + routes          |
-| `services/scheduler-worker/src/activities/ledger.ts`        | `ensureEpochForWindow()` — how Temporal coexists with seeded data |
-| `work/items/task.0106.ledger-dev-seed.md`                   | Full requirements and data shape reference                        |
+| File / Resource                                          | Why it matters                                                               |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `src/features/governance/AGENTS.md`                      | Full public surface: hooks, components, lib, types, routes                   |
+| `src/features/governance/components/ContributorCard.tsx` | Hardcoded color palette, `/1000` divisor, placeholder avatar                 |
+| `src/features/governance/components/ContributionRow.tsx` | Hardcoded event type → label/icon mapping                                    |
+| `src/features/governance/components/EpochCountdown.tsx`  | 60s timer interval, status badge labels                                      |
+| `src/features/governance/lib/compose-epoch.ts`           | View model composition — where display names/avatars would be enriched       |
+| `src/features/governance/types.ts`                       | All view model types — `avatar` and `color` fields exist but are placeholder |
+| `src/app/(app)/gov/epoch/view.tsx`                       | Magic number `/ 1000` for score display                                      |
+| `scripts/db/seed.mts`                                    | Seed data: hardcoded contributor names, deterministic UUIDs                  |
+| `packages/ledger-core/src/epoch-window.ts`               | `computeEpochWindowV1()` — shared by seed + scheduler                        |
+| `work/items/task.0106.ledger-dev-seed.md`                | Full requirements and data shape reference                                   |
