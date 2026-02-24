@@ -5,8 +5,7 @@
  * Module: `@app/api/auth/[...nextauth]`
  * Purpose: Expose NextAuth handlers for signin/session routes. Wraps handler with
  *   AsyncLocalStorage to propagate link_intent cookie to signIn callback.
- * Scope: Reads link_intent cookie on OAuth callbacks, populates linkIntentStore,
- *   delegates to NextAuth. Clears cookie on success or failure. Does not implement auth logic directly.
+ * Scope: Reads link_intent cookie on OAuth callbacks, populates linkIntentStore, delegates to NextAuth, and clears cookie. Does not implement auth logic or perform binding directly.
  * Invariants: Public infrastructure endpoint; session cookies managed by NextAuth.
  *   Link intent is session-bound (sessionTokenHash verified) and time-limited (5min TTL).
  * Side-effects: IO (NextAuth DB operations via Drizzle client, cookie read/clear)
