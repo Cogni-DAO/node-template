@@ -227,28 +227,15 @@ export const authOptions: NextAuthOptions = {
         ),
       });
 
-      if (existing) {
-        // Returning user — set user.id so jwt callback picks it up
-        user.id = existing.userId;
-        return true;
-      }
-
-      // Check for link intent (authenticated user linking a new provider)
+      // Check for link intent BEFORE returning-user shortcut.
+      // If a link intent is active, the caller is trying to bind this external
+      // account to their existing user — we must NOT silently log them in as
+      // the binding owner if it's a different user.
       const linkIntent = linkIntentStore.getStore();
 
-      if (linkIntent) {
-        // Linking mode: bind to existing user instead of creating new one.
-        // Pre-check for NO_AUTO_MERGE before attempting the binding.
-        // createBinding uses onConflictDoNothing — it never throws on UNIQUE
-        // violations, so any error it throws is a real DB failure.
-        const conflicting = await db.query.userBindings.findFirst({
-          where: and(
-            eq(userBindings.provider, provider),
-            eq(userBindings.externalId, externalId)
-          ),
-        });
-        if (conflicting) {
-          if (conflicting.userId === linkIntent.userId) {
+      if (existing) {
+        if (linkIntent) {
+          if (existing.userId === linkIntent.userId) {
             // Idempotent — already linked to this user
             user.id = linkIntent.userId;
             return true;
@@ -260,7 +247,12 @@ export const authOptions: NextAuthOptions = {
           );
           return false;
         }
+        // Returning user (no link intent) — set user.id so jwt callback picks it up
+        user.id = existing.userId;
+        return true;
+      }
 
+      if (linkIntent) {
         const profileData = profile as Record<string, unknown> | undefined;
         await createBinding(db, linkIntent.userId, provider, externalId, {
           method: "oauth_link",
