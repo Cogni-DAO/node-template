@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
 branch: fix/bug-0092-unresolved-visibility
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/475
 reviewer: derekg1729
 revision: 0
 blocked_by:
