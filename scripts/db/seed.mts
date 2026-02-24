@@ -6,7 +6,7 @@
  * Module: `@scripts/db/seed`
  * Purpose: Dev seed script for governance epoch UI — populates ledger with realistic multi-state epoch data.
  * Scope: Seeds users, epochs, activity events, curations, allocations, pool components, and payout statements for local dev. Does not modify production databases or run in CI.
- * Invariants: ONE_OPEN_EPOCH (only 1 open epoch per node/scope); idempotent via onConflictDoNothing on activity events and users.
+ * Invariants: ONE_OPEN_EPOCH (only 1 open epoch per node/scope); epoch windows aligned via computeEpochWindowV1 (same grid as scheduler); idempotent via onConflictDoNothing on activity events and users.
  * Side-effects: IO (database writes, console output)
  * Links: work/items/task.0106.ledger-dev-seed.md, tests/_fixtures/ledger/seed-ledger.ts
  * @public
@@ -15,6 +15,7 @@
 import { createServiceDbClient } from "@cogni/db-client/service";
 import { DrizzleLedgerAdapter } from "@cogni/db-client";
 import { users } from "@cogni/db-schema/refs";
+import { computeEpochWindowV1 } from "@cogni/ledger-core";
 import { createHash } from "node:crypto";
 
 // ── Configuration ───────────────────────────────────────────────
@@ -58,19 +59,33 @@ function payloadHash(data: Record<string, unknown>): string {
   return sha256(canonical);
 }
 
-function daysAgo(days: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/** Compute the Monday-aligned epoch window N weeks ago (0 = current week). */
+function epochWindowWeeksAgo(weeksAgo: number): { periodStart: Date; periodEnd: Date } {
+  const asOf = new Date(Date.now() - weeksAgo * 7 * 86_400_000);
+  const { periodStartIso, periodEndIso } = computeEpochWindowV1({
+    asOfIso: asOf.toISOString(),
+    epochLengthDays: 7,
+    timezone: "UTC",
+    weekStart: "monday",
+  });
+  return { periodStart: new Date(periodStartIso), periodEnd: new Date(periodEndIso) };
+}
+
+/** Return a Date `days` before a reference date, at the same time-of-day. */
+function daysBefore(ref: Date, days: number): Date {
+  return new Date(ref.getTime() - days * 86_400_000);
 }
 
 // ── Seed Data ───────────────────────────────────────────────────
 
+const WINDOW_1 = epochWindowWeeksAgo(3); // 3 weeks ago — heavy dev sprint
+const WINDOW_2 = epochWindowWeeksAgo(2); // 2 weeks ago — ledger infrastructure
+const WINDOW_3 = epochWindowWeeksAgo(0); // current week — ongoing work
+
 // Epoch 1 (finalized): ~3 weeks ago — heavy dev sprint
 const EPOCH_1 = {
-  periodStart: daysAgo(28),
-  periodEnd: daysAgo(21),
+  periodStart: WINDOW_1.periodStart,
+  periodEnd: WINDOW_1.periodEnd,
   events: [
     {
       id: "github:pr_merged:Cogni-DAO/node-template:458",
@@ -79,7 +94,7 @@ const EPOCH_1 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/458",
       title: "feat(ingestion): add ingestion-core package, GitHub adapter, and App auth",
-      eventTime: daysAgo(25),
+      eventTime: daysBefore(WINDOW_1.periodEnd, 3),
     },
     {
       id: "github:pr_merged:Cogni-DAO/node-template:460",
@@ -88,7 +103,7 @@ const EPOCH_1 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/460",
       title: "feat(ledger): add epoch collection pipeline via Temporal workflows",
-      eventTime: daysAgo(24),
+      eventTime: daysBefore(WINDOW_1.periodEnd, 2),
     },
     {
       id: "github:pr_merged:Cogni-DAO/node-template:447",
@@ -97,7 +112,7 @@ const EPOCH_1 = {
       contributor: COGNI,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/447",
       title: "feat(openclaw): Discord channel agents with lifecycle dispatch",
-      eventTime: daysAgo(26),
+      eventTime: daysBefore(WINDOW_1.periodEnd, 5),
     },
     {
       id: "github:review_submitted:Cogni-DAO/node-template:447:3823960987",
@@ -106,7 +121,7 @@ const EPOCH_1 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/447#pullrequestreview-3823960987",
       title: "Review: approve PR #447",
-      eventTime: daysAgo(26),
+      eventTime: daysBefore(WINDOW_1.periodEnd, 5),
     },
     {
       id: "github:pr_merged:Cogni-DAO/node-template:445",
@@ -115,7 +130,7 @@ const EPOCH_1 = {
       contributor: COGNI,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/445",
       title: "docs(dev): development lifecycle status updates, agent fixes",
-      eventTime: daysAgo(27),
+      eventTime: daysBefore(WINDOW_1.periodEnd, 6),
     },
     {
       id: "github:review_submitted:Cogni-DAO/node-template:445:3817607627",
@@ -124,15 +139,15 @@ const EPOCH_1 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/445#pullrequestreview-3817607627",
       title: "Review: approve PR #445",
-      eventTime: daysAgo(27),
+      eventTime: daysBefore(WINDOW_1.periodEnd, 6),
     },
   ],
 };
 
 // Epoch 2 (finalized): ~2 weeks ago — ledger infrastructure
 const EPOCH_2 = {
-  periodStart: daysAgo(21),
-  periodEnd: daysAgo(14),
+  periodStart: WINDOW_2.periodStart,
+  periodEnd: WINDOW_2.periodEnd,
   events: [
     {
       id: "github:pr_merged:Cogni-DAO/node-template:464",
@@ -141,7 +156,7 @@ const EPOCH_2 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/464",
       title: "feat(ledger): Zod contracts + API routes for epoch ledger (task.0096)",
-      eventTime: daysAgo(18),
+      eventTime: daysBefore(WINDOW_2.periodEnd, 3),
     },
     {
       id: "github:pr_merged:Cogni-DAO/node-template:468",
@@ -150,7 +165,7 @@ const EPOCH_2 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/468",
       title: "feat(ledger): epoch 3-phase state machine + approvers + canonical signing (task.0100)",
-      eventTime: daysAgo(17),
+      eventTime: daysBefore(WINDOW_2.periodEnd, 2),
     },
     {
       id: "github:pr_merged:Cogni-DAO/node-template:470",
@@ -159,7 +174,7 @@ const EPOCH_2 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/470",
       title: "feat(ledger): allocation computation, epoch auto-close, and FinalizeEpochWorkflow (task.0102)",
-      eventTime: daysAgo(16),
+      eventTime: daysBefore(WINDOW_2.periodEnd, 1),
     },
     {
       id: "github:pr_merged:Cogni-DAO/node-template:451",
@@ -168,7 +183,7 @@ const EPOCH_2 = {
       contributor: COGNI,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/451",
       title: "fix(gov): less frequent heartbeat, generated _index.md",
-      eventTime: daysAgo(19),
+      eventTime: daysBefore(WINDOW_2.periodEnd, 5),
     },
     {
       id: "github:review_submitted:Cogni-DAO/node-template:451:3826727409",
@@ -177,15 +192,15 @@ const EPOCH_2 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/451#pullrequestreview-3826727409",
       title: "Review: approve PR #451",
-      eventTime: daysAgo(19),
+      eventTime: daysBefore(WINDOW_2.periodEnd, 5),
     },
   ],
 };
 
 // Epoch 3 (open): current week — ongoing work
 const EPOCH_3 = {
-  periodStart: daysAgo(7),
-  periodEnd: daysAgo(0),
+  periodStart: WINDOW_3.periodStart,
+  periodEnd: WINDOW_3.periodEnd,
   events: [
     {
       id: "github:pr_merged:Cogni-DAO/node-template:435",
@@ -194,7 +209,7 @@ const EPOCH_3 = {
       contributor: COGNI,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/435",
       title: "feat(activity): stacked bar charts, and openclaw agent raw thinking streaming",
-      eventTime: daysAgo(5),
+      eventTime: daysBefore(WINDOW_3.periodEnd, 5),
     },
     {
       id: "github:review_submitted:Cogni-DAO/node-template:435:3811406373",
@@ -203,7 +218,7 @@ const EPOCH_3 = {
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/435#pullrequestreview-3811406373",
       title: "Review: approve PR #435",
-      eventTime: daysAgo(5),
+      eventTime: daysBefore(WINDOW_3.periodEnd, 5),
     },
     {
       id: "github:pr_merged:Cogni-DAO/node-template:434",
@@ -212,7 +227,7 @@ const EPOCH_3 = {
       contributor: COGNI,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/434",
       title: "feat(streaming): OpenClaw agent status events in chat UI (task.0074)",
-      eventTime: daysAgo(4),
+      eventTime: daysBefore(WINDOW_3.periodEnd, 4),
     },
   ],
 };
