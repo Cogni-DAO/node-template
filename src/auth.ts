@@ -213,40 +213,42 @@ export const authOptions: NextAuthOptions = {
       const linkIntent = linkIntentStore.getStore();
 
       if (linkIntent) {
-        // Linking mode: bind to existing user instead of creating new one
-        try {
-          await createBinding(db, linkIntent.userId, provider, externalId, {
-            method: "oauth_link",
-            githubLogin:
-              (profile as Record<string, unknown> | undefined)?.login ?? null,
-          });
-        } catch {
-          // Race safety: UNIQUE constraint violation may be idempotent
-          const raceCheck = await db.query.userBindings.findFirst({
-            where: and(
-              eq(userBindings.provider, provider),
-              eq(userBindings.externalId, externalId)
-            ),
-          });
-          if (raceCheck && raceCheck.userId === linkIntent.userId) {
-            // Idempotent — same user, same binding
+        // Linking mode: bind to existing user instead of creating new one.
+        // Pre-check for NO_AUTO_MERGE before attempting the binding.
+        // createBinding uses onConflictDoNothing — it never throws on UNIQUE
+        // violations, so any error it throws is a real DB failure.
+        const conflicting = await db.query.userBindings.findFirst({
+          where: and(
+            eq(userBindings.provider, provider),
+            eq(userBindings.externalId, externalId)
+          ),
+        });
+        if (conflicting) {
+          if (conflicting.userId === linkIntent.userId) {
+            // Idempotent — already linked to this user
             user.id = linkIntent.userId;
             return true;
           }
           // Different user owns this binding — NO_AUTO_MERGE
           getLog().warn(
             { provider, externalId },
-            "[OAuth] Link binding failed — NO_AUTO_MERGE"
+            "[OAuth] Link rejected — binding owned by different user"
           );
           return false;
         }
+
+        await createBinding(db, linkIntent.userId, provider, externalId, {
+          method: "oauth_link",
+          githubLogin:
+            (profile as Record<string, unknown> | undefined)?.login ?? null,
+        });
 
         user.id = linkIntent.userId;
         // Preserve walletAddress in the session
         const existingUser = await db.query.users.findFirst({
           where: eq(users.id, linkIntent.userId),
         });
-        (user as unknown as Record<string, unknown>).walletAddress =
+        (user as { walletAddress?: string | null }).walletAddress =
           existingUser?.walletAddress ?? null;
         getLog().info(
           { provider, userId: linkIntent.userId },
@@ -255,43 +257,78 @@ export const authOptions: NextAuthOptions = {
         return true;
       }
 
-      // New user — single transaction (user + binding + event atomically)
+      // New user — single transaction (user + binding + event atomically).
+      // If the binding insert is skipped (concurrent first-login race), the
+      // transaction rolls back so no orphaned user row is committed.
+      const BINDING_RACE = "BINDING_RACE";
       const userId = randomUUID();
       const bindingId = randomUUID();
       const eventId = randomUUID();
       const githubLogin =
         (profile as Record<string, unknown> | undefined)?.login ?? null;
 
-      await db.transaction(async (tx) => {
-        await tx.insert(users).values({
-          id: userId,
-          name: (profile as Record<string, unknown> | undefined)?.name as
-            | string
-            | null
-            | undefined,
-          walletAddress: null,
-        });
-        await tx
-          .insert(userBindings)
-          .values({ id: bindingId, userId, provider, externalId })
-          .onConflictDoNothing({
-            target: [userBindings.provider, userBindings.externalId],
+      try {
+        await db.transaction(async (tx) => {
+          await tx.insert(users).values({
+            id: userId,
+            name: (profile as Record<string, unknown> | undefined)?.name as
+              | string
+              | null
+              | undefined,
+            walletAddress: null,
           });
-        await tx.insert(identityEvents).values({
-          id: eventId,
-          userId,
-          eventType: "bind",
-          payload: {
-            provider,
-            external_id: externalId,
-            method: "oauth",
-            githubLogin,
-          },
+          const [inserted] = await tx
+            .insert(userBindings)
+            .values({ id: bindingId, userId, provider, externalId })
+            .onConflictDoNothing({
+              target: [userBindings.provider, userBindings.externalId],
+            })
+            .returning({ id: userBindings.id });
+          if (!inserted) {
+            // Another request won the race — roll back (no orphaned user)
+            throw new Error(BINDING_RACE);
+          }
+          await tx.insert(identityEvents).values({
+            id: eventId,
+            userId,
+            eventType: "bind",
+            payload: {
+              provider,
+              external_id: externalId,
+              method: "oauth",
+              githubLogin,
+            },
+          });
         });
-      });
+      } catch (txError) {
+        if (!(txError instanceof Error) || txError.message !== BINDING_RACE) {
+          throw txError;
+        }
+        // Race lost — re-fetch the winning binding and use that user
+        const winner = await db.query.userBindings.findFirst({
+          where: and(
+            eq(userBindings.provider, provider),
+            eq(userBindings.externalId, externalId)
+          ),
+        });
+        if (winner) {
+          user.id = winner.userId;
+          (user as { walletAddress?: string | null }).walletAddress = null;
+          getLog().info(
+            { provider, externalId },
+            "[OAuth] Race resolved — using existing user"
+          );
+          return true;
+        }
+        getLog().error(
+          { provider, externalId },
+          "[OAuth] Binding race: no winner found"
+        );
+        return false;
+      }
 
       user.id = userId;
-      (user as unknown as Record<string, unknown>).walletAddress = null;
+      (user as { walletAddress?: string | null }).walletAddress = null;
       getLog().info({ provider, externalId }, "[OAuth] New user created");
       return true;
     },
