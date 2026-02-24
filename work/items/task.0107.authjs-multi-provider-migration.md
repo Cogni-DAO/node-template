@@ -127,15 +127,12 @@ Authenticated user → hits /api/auth/link/discord (requires existing session)
 
 - `src/shared/auth/link-intent-store.ts` — `AsyncLocalStorage<LinkIntent | null>`, pure shared primitive
 - `src/app/api/auth/link/[provider]/route.ts` — account-linking initiation (session-bound signed JWT cookie, 5min TTL, redirects to OAuth)
+- `tests/unit/auth/oauth-signin-branches.test.ts` — unit tests for signIn early-return branches + WalletRequiredError guard
+- `tests/stack/auth/oauth-signin.stack.test.ts` — stack tests for signIn DB paths (new user, returning user, linking, NO_AUTO_MERGE)
 
-**Not yet modified:**
+**Not modified (no change needed):**
 
-- `src/types/next-auth.d.ts` — no change needed (already has `walletAddress?: string | null`)
-- `docs/spec/authentication.md` — pending (Step 4)
-
-**Not yet created:**
-
-- `tests/unit/auth/` — pending (Step 4)
+- `src/types/next-auth.d.ts` — already has `walletAddress?: string | null`
 
 ### Implementation Notes
 
@@ -213,10 +210,12 @@ Authenticated user → hits /api/auth/link/discord (requires existing session)
 - [x] Create `src/app/api/auth/link/[provider]/route.ts` — requires session, signs 5-min TTL JWT (`userId + sessionTokenHash + purpose`), sets `HttpOnly; Secure; SameSite=Lax; Path=/` cookie, redirects to `/api/auth/signin/{provider}`. `export const runtime = "nodejs"`.
 - [x] `pnpm typecheck` + `pnpm arch:check` + `pnpm lint:fix` — all pass
 
-### Step 4: Spec + tests — NOT STARTED
+### Step 4: Spec + tests — DONE
 
-- [ ] Update `docs/spec/authentication.md`: relax `SIWE_CANONICAL_IDENTITY` to `CANONICAL_IS_USER_ID`, add OAuth to design, move "Social login providers" from Non-Goals to design
-- [ ] Write tests: new OAuth user, returning OAuth user, link flow, NO_AUTO_MERGE rejection, null-wallet payment 403
+- [x] Update `docs/spec/authentication.md`: multi-provider auth flows, invariants, file pointers, acceptance checks
+- [x] Update `docs/spec/decentralized-user-identity.md`: OAuth auth flows, session type, file pointers, acceptance checks
+- [x] Write unit tests: SIWE passthrough, null account, unknown provider rejection, WalletRequiredError guard
+- [x] Write stack tests: new GitHub user (atomic), returning user, link-intent binding, idempotent link, NO_AUTO_MERGE rejection
 - [ ] Manual smoke test with real GitHub OAuth app (untested end-to-end)
 
 ## Validation
@@ -268,6 +267,7 @@ pnpm check:docs     # docs metadata valid
 - Depends on: task.0089 (user_bindings schema — done)
 - Spec: docs/spec/decentralized-user-identity.md
 - Spec: docs/spec/authentication.md
+- Handoff: [handoff](../handoffs/task.0107.handoff.md)
 
 ## Review Feedback (revision 2)
 
