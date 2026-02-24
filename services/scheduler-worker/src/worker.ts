@@ -16,9 +16,11 @@
  */
 
 import { NativeConnection, Worker } from "@temporalio/worker";
+
 import { createActivities } from "./activities/index.js";
 import { createContainer } from "./bootstrap/container.js";
 import type { Env } from "./bootstrap/env.js";
+import { logWorkerEvent, WORKER_EVENT_NAMES } from "./observability/index.js";
 import type { Logger } from "./observability/logger.js";
 
 /**
@@ -40,14 +42,12 @@ export async function startSchedulerWorker(
 ): Promise<{ shutdown: () => Promise<void> }> {
   const { env, logger } = config;
 
-  logger.info(
-    {
-      temporalAddress: env.TEMPORAL_ADDRESS,
-      namespace: env.TEMPORAL_NAMESPACE,
-      taskQueue: env.TEMPORAL_TASK_QUEUE,
-    },
-    "Connecting to Temporal"
-  );
+  logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
+    temporalAddress: env.TEMPORAL_ADDRESS,
+    namespace: env.TEMPORAL_NAMESPACE,
+    taskQueue: env.TEMPORAL_TASK_QUEUE,
+    phase: "temporal_connect",
+  });
 
   // Create Temporal connection
   const connection = await NativeConnection.connect({
@@ -79,29 +79,41 @@ export async function startSchedulerWorker(
     activities,
   });
 
-  logger.info(
-    { namespace: env.TEMPORAL_NAMESPACE, taskQueue: env.TEMPORAL_TASK_QUEUE },
-    "Temporal Worker created"
-  );
+  logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
+    namespace: env.TEMPORAL_NAMESPACE,
+    taskQueue: env.TEMPORAL_TASK_QUEUE,
+    phase: "worker_created",
+  });
 
   // Start the worker (runs in background)
   const runPromise = worker.run();
 
   // Handle worker errors
   runPromise.catch((err) => {
-    logger.error({ err }, "Worker run failed");
+    logger.error(
+      { event: WORKER_EVENT_NAMES.LIFECYCLE_FATAL, err },
+      WORKER_EVENT_NAMES.LIFECYCLE_FATAL
+    );
   });
 
-  logger.info({}, "Scheduler worker started, polling for tasks");
+  logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
+    phase: "polling",
+  });
 
   // Return shutdown function
   return {
     shutdown: async () => {
-      logger.info({}, "Shutting down Temporal Worker");
+      logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_SHUTDOWN, {
+        phase: "temporal_worker",
+      });
       worker.shutdown();
       await runPromise;
       await connection.close();
-      logger.info({}, "Temporal Worker shutdown complete");
+      logWorkerEvent(
+        logger,
+        WORKER_EVENT_NAMES.LIFECYCLE_SHUTDOWN_COMPLETE,
+        {}
+      );
     },
   };
 }
