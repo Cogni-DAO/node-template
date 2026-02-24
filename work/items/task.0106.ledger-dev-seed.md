@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
 branch: feat/ledger-ui
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/472
 reviewer: derekg1729
 revision: 0
 blocked_by:
