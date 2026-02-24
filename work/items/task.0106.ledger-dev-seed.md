@@ -2,7 +2,7 @@
 id: task.0106
 type: task
 title: "Dev seed script for governance epoch UI visual testing"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 99
 estimate: 2
@@ -14,7 +14,7 @@ credit:
 project: proj.transparent-credit-payouts
 branch: feat/ledger-ui
 pr:
-reviewer:
+reviewer: derekg1729
 revision: 0
 blocked_by:
 deploy_verified: false
@@ -148,7 +148,7 @@ pnpm dev
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0106.handoff.md)
 
 ## Attribution
 

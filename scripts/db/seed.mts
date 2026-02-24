@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
@@ -12,11 +13,11 @@
  * @public
  */
 
-import { createServiceDbClient } from "@cogni/db-client/service";
+import { createHash } from "node:crypto";
 import { DrizzleLedgerAdapter } from "@cogni/db-client";
+import { createServiceDbClient } from "@cogni/db-client/service";
 import { users } from "@cogni/db-schema/refs";
 import { computeEpochWindowV1 } from "@cogni/ledger-core";
-import { createHash } from "node:crypto";
 
 // ── Configuration ───────────────────────────────────────────────
 // From .cogni/repo-spec.yaml
@@ -60,7 +61,10 @@ function payloadHash(data: Record<string, unknown>): string {
 }
 
 /** Compute the Monday-aligned epoch window N weeks ago (0 = current week). */
-function epochWindowWeeksAgo(weeksAgo: number): { periodStart: Date; periodEnd: Date } {
+function epochWindowWeeksAgo(weeksAgo: number): {
+  periodStart: Date;
+  periodEnd: Date;
+} {
   const asOf = new Date(Date.now() - weeksAgo * 7 * 86_400_000);
   const { periodStartIso, periodEndIso } = computeEpochWindowV1({
     asOfIso: asOf.toISOString(),
@@ -68,7 +72,10 @@ function epochWindowWeeksAgo(weeksAgo: number): { periodStart: Date; periodEnd: 
     timezone: "UTC",
     weekStart: "monday",
   });
-  return { periodStart: new Date(periodStartIso), periodEnd: new Date(periodEndIso) };
+  return {
+    periodStart: new Date(periodStartIso),
+    periodEnd: new Date(periodEndIso),
+  };
 }
 
 /** Return a Date `days` before a reference date, at the same time-of-day. */
@@ -93,7 +100,8 @@ const EPOCH_1 = {
       eventType: "pr_merged",
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/458",
-      title: "feat(ingestion): add ingestion-core package, GitHub adapter, and App auth",
+      title:
+        "feat(ingestion): add ingestion-core package, GitHub adapter, and App auth",
       eventTime: daysBefore(WINDOW_1.periodEnd, 3),
     },
     {
@@ -102,7 +110,8 @@ const EPOCH_1 = {
       eventType: "pr_merged",
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/460",
-      title: "feat(ledger): add epoch collection pipeline via Temporal workflows",
+      title:
+        "feat(ledger): add epoch collection pipeline via Temporal workflows",
       eventTime: daysBefore(WINDOW_1.periodEnd, 2),
     },
     {
@@ -119,7 +128,8 @@ const EPOCH_1 = {
       source: "github",
       eventType: "review_submitted",
       contributor: DEREK,
-      artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/447#pullrequestreview-3823960987",
+      artifactUrl:
+        "https://github.com/Cogni-DAO/node-template/pull/447#pullrequestreview-3823960987",
       title: "Review: approve PR #447",
       eventTime: daysBefore(WINDOW_1.periodEnd, 5),
     },
@@ -137,7 +147,8 @@ const EPOCH_1 = {
       source: "github",
       eventType: "review_submitted",
       contributor: DEREK,
-      artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/445#pullrequestreview-3817607627",
+      artifactUrl:
+        "https://github.com/Cogni-DAO/node-template/pull/445#pullrequestreview-3817607627",
       title: "Review: approve PR #445",
       eventTime: daysBefore(WINDOW_1.periodEnd, 6),
     },
@@ -155,7 +166,8 @@ const EPOCH_2 = {
       eventType: "pr_merged",
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/464",
-      title: "feat(ledger): Zod contracts + API routes for epoch ledger (task.0096)",
+      title:
+        "feat(ledger): Zod contracts + API routes for epoch ledger (task.0096)",
       eventTime: daysBefore(WINDOW_2.periodEnd, 3),
     },
     {
@@ -164,7 +176,8 @@ const EPOCH_2 = {
       eventType: "pr_merged",
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/468",
-      title: "feat(ledger): epoch 3-phase state machine + approvers + canonical signing (task.0100)",
+      title:
+        "feat(ledger): epoch 3-phase state machine + approvers + canonical signing (task.0100)",
       eventTime: daysBefore(WINDOW_2.periodEnd, 2),
     },
     {
@@ -173,7 +186,8 @@ const EPOCH_2 = {
       eventType: "pr_merged",
       contributor: DEREK,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/470",
-      title: "feat(ledger): allocation computation, epoch auto-close, and FinalizeEpochWorkflow (task.0102)",
+      title:
+        "feat(ledger): allocation computation, epoch auto-close, and FinalizeEpochWorkflow (task.0102)",
       eventTime: daysBefore(WINDOW_2.periodEnd, 1),
     },
     {
@@ -190,7 +204,8 @@ const EPOCH_2 = {
       source: "github",
       eventType: "review_submitted",
       contributor: DEREK,
-      artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/451#pullrequestreview-3826727409",
+      artifactUrl:
+        "https://github.com/Cogni-DAO/node-template/pull/451#pullrequestreview-3826727409",
       title: "Review: approve PR #451",
       eventTime: daysBefore(WINDOW_2.periodEnd, 5),
     },
@@ -208,7 +223,8 @@ const EPOCH_3 = {
       eventType: "pr_merged",
       contributor: COGNI,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/435",
-      title: "feat(activity): stacked bar charts, and openclaw agent raw thinking streaming",
+      title:
+        "feat(activity): stacked bar charts, and openclaw agent raw thinking streaming",
       eventTime: daysBefore(WINDOW_3.periodEnd, 5),
     },
     {
@@ -216,7 +232,8 @@ const EPOCH_3 = {
       source: "github",
       eventType: "review_submitted",
       contributor: DEREK,
-      artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/435#pullrequestreview-3811406373",
+      artifactUrl:
+        "https://github.com/Cogni-DAO/node-template/pull/435#pullrequestreview-3811406373",
       title: "Review: approve PR #435",
       eventTime: daysBefore(WINDOW_3.periodEnd, 5),
     },
@@ -226,7 +243,8 @@ const EPOCH_3 = {
       eventType: "pr_merged",
       contributor: COGNI,
       artifactUrl: "https://github.com/Cogni-DAO/node-template/pull/434",
-      title: "feat(streaming): OpenClaw agent status events in chat UI (task.0074)",
+      title:
+        "feat(streaming): OpenClaw agent status events in chat UI (task.0074)",
       eventTime: daysBefore(WINDOW_3.periodEnd, 4),
     },
   ],
@@ -246,7 +264,7 @@ interface EventDef {
 
 function computeAllocations(
   events: EventDef[],
-  weightConfig: Record<string, number>,
+  weightConfig: Record<string, number>
 ): { userId: string; proposedUnits: bigint; activityCount: number }[] {
   const byUser = new Map<string, { units: bigint; count: number }>();
   for (const ev of events) {
@@ -266,9 +284,18 @@ function computeAllocations(
 }
 
 function computePayouts(
-  allocations: { userId: string; proposedUnits: bigint; activityCount: number }[],
-  poolTotal: bigint,
-): Array<{ user_id: string; total_units: string; share: string; amount_credits: string }> {
+  allocations: {
+    userId: string;
+    proposedUnits: bigint;
+    activityCount: number;
+  }[],
+  poolTotal: bigint
+): Array<{
+  user_id: string;
+  total_units: string;
+  share: string;
+  amount_credits: string;
+}> {
   const totalUnits = allocations.reduce((s, a) => s + a.proposedUnits, 0n);
   if (totalUnits === 0n) return [];
   return allocations.map((a) => {
@@ -287,7 +314,7 @@ function computePayouts(
 
 async function seedFinalizedEpoch(
   store: DrizzleLedgerAdapter,
-  epochDef: typeof EPOCH_1,
+  epochDef: typeof EPOCH_1
 ): Promise<void> {
   // 1. Create epoch
   const epoch = await store.createEpoch({
@@ -297,7 +324,9 @@ async function seedFinalizedEpoch(
     periodEnd: epochDef.periodEnd,
     weightConfig: WEIGHT_CONFIG,
   });
-  console.log(`  Created epoch ${epoch.id} (${epochDef.periodStart.toISOString().slice(0, 10)} → ${epochDef.periodEnd.toISOString().slice(0, 10)})`);
+  console.log(
+    `  Created epoch ${epoch.id} (${epochDef.periodStart.toISOString().slice(0, 10)} → ${epochDef.periodEnd.toISOString().slice(0, 10)})`
+  );
 
   // 2. Insert activity events
   await store.insertActivityEvents(
@@ -311,12 +340,16 @@ async function seedFinalizedEpoch(
       platformLogin: ev.contributor.login,
       artifactUrl: ev.artifactUrl,
       metadata: { title: ev.title },
-      payloadHash: payloadHash({ authorId: ev.contributor.platformUserId, id: ev.id, eventTime: ev.eventTime.toISOString() }),
+      payloadHash: payloadHash({
+        authorId: ev.contributor.platformUserId,
+        id: ev.id,
+        eventTime: ev.eventTime.toISOString(),
+      }),
       producer: PRODUCER,
       producerVersion: PRODUCER_VERSION,
       eventTime: ev.eventTime,
       retrievedAt: ev.eventTime,
-    })),
+    }))
   );
   console.log(`  Inserted ${epochDef.events.length} activity events`);
 
@@ -328,7 +361,7 @@ async function seedFinalizedEpoch(
       eventId: ev.id,
       userId: ev.contributor.userId,
       included: true,
-    })),
+    }))
   );
   console.log(`  Inserted ${epochDef.events.length} curations`);
 
@@ -341,7 +374,7 @@ async function seedFinalizedEpoch(
       userId: a.userId,
       proposedUnits: a.proposedUnits,
       activityCount: a.activityCount,
-    })),
+    }))
   );
   console.log(`  Inserted ${allocs.length} allocations`);
 
@@ -361,7 +394,7 @@ async function seedFinalizedEpoch(
     epoch.id,
     sha256("dev-seed-approver-set"),
     "weight-sum-v0",
-    sha256(JSON.stringify(WEIGHT_CONFIG)),
+    sha256(JSON.stringify(WEIGHT_CONFIG))
   );
   console.log("  Closed ingestion (open → review)");
 
@@ -374,7 +407,14 @@ async function seedFinalizedEpoch(
   await store.insertPayoutStatement({
     nodeId: NODE_ID,
     epochId: epoch.id,
-    allocationSetHash: sha256(JSON.stringify(allocs.map((a) => ({ userId: a.userId, units: a.proposedUnits.toString() })))),
+    allocationSetHash: sha256(
+      JSON.stringify(
+        allocs.map((a) => ({
+          userId: a.userId,
+          units: a.proposedUnits.toString(),
+        }))
+      )
+    ),
     poolTotalCredits: POOL_CREDITS,
     payoutsJson: payouts,
   });
@@ -383,7 +423,7 @@ async function seedFinalizedEpoch(
 
 async function seedOpenEpoch(
   store: DrizzleLedgerAdapter,
-  epochDef: typeof EPOCH_3,
+  epochDef: typeof EPOCH_3
 ): Promise<void> {
   // 1. Create epoch (stays open)
   const epoch = await store.createEpoch({
@@ -393,7 +433,9 @@ async function seedOpenEpoch(
     periodEnd: epochDef.periodEnd,
     weightConfig: WEIGHT_CONFIG,
   });
-  console.log(`  Created epoch ${epoch.id} (${epochDef.periodStart.toISOString().slice(0, 10)} → ${epochDef.periodEnd.toISOString().slice(0, 10)}) [OPEN]`);
+  console.log(
+    `  Created epoch ${epoch.id} (${epochDef.periodStart.toISOString().slice(0, 10)} → ${epochDef.periodEnd.toISOString().slice(0, 10)}) [OPEN]`
+  );
 
   // 2. Insert activity events
   await store.insertActivityEvents(
@@ -407,12 +449,16 @@ async function seedOpenEpoch(
       platformLogin: ev.contributor.login,
       artifactUrl: ev.artifactUrl,
       metadata: { title: ev.title },
-      payloadHash: payloadHash({ authorId: ev.contributor.platformUserId, id: ev.id, eventTime: ev.eventTime.toISOString() }),
+      payloadHash: payloadHash({
+        authorId: ev.contributor.platformUserId,
+        id: ev.id,
+        eventTime: ev.eventTime.toISOString(),
+      }),
       producer: PRODUCER,
       producerVersion: PRODUCER_VERSION,
       eventTime: ev.eventTime,
       retrievedAt: ev.eventTime,
-    })),
+    }))
   );
   console.log(`  Inserted ${epochDef.events.length} activity events`);
 
@@ -424,7 +470,7 @@ async function seedOpenEpoch(
       eventId: ev.id,
       userId: ev.contributor.userId,
       included: true,
-    })),
+    }))
   );
   console.log(`  Inserted ${epochDef.events.length} curations`);
 
@@ -437,7 +483,7 @@ async function seedOpenEpoch(
       userId: a.userId,
       proposedUnits: a.proposedUnits,
       activityCount: a.activityCount,
-    })),
+    }))
   );
   console.log(`  Inserted ${allocs.length} allocations`);
 
@@ -472,8 +518,12 @@ async function main(): Promise<void> {
   // Check for existing open epoch — avoid ONE_OPEN_EPOCH violation
   const existingOpen = await store.getOpenEpoch(NODE_ID, SCOPE_ID);
   if (existingOpen) {
-    console.log(`⚠️  Existing open epoch found (id=${existingOpen.id}). Skipping seed to avoid ONE_OPEN_EPOCH violation.`);
-    console.log("   To re-seed, first finalize or delete the existing open epoch.");
+    console.log(
+      `⚠️  Existing open epoch found (id=${existingOpen.id}). Skipping seed to avoid ONE_OPEN_EPOCH violation.`
+    );
+    console.log(
+      "   To re-seed, first finalize or delete the existing open epoch."
+    );
     await db.$client.end();
     return;
   }
@@ -487,10 +537,12 @@ async function main(): Promise<void> {
         CONTRIBUTORS.map((c) => ({
           id: c.userId,
           name: c.name,
-        })),
+        }))
       )
       .onConflictDoNothing();
-    console.log(`  Inserted ${CONTRIBUTORS.length} users (onConflictDoNothing)`);
+    console.log(
+      `  Inserted ${CONTRIBUTORS.length} users (onConflictDoNothing)`
+    );
     console.log();
 
     // Seed 2 finalized epochs
@@ -507,10 +559,14 @@ async function main(): Promise<void> {
     await seedOpenEpoch(store, EPOCH_3);
     console.log();
 
-    console.log("✅ Dev seed complete! Start the dev server with `pnpm dev` and visit:");
+    console.log(
+      "✅ Dev seed complete! Start the dev server with `pnpm dev` and visit:"
+    );
     console.log("   /gov/epoch    — current open epoch with live allocations");
     console.log("   /gov/history  — 2 finalized epochs with payout statements");
-    console.log("   /gov/holdings — aggregated holdings across finalized epochs");
+    console.log(
+      "   /gov/holdings — aggregated holdings across finalized epochs"
+    );
   } finally {
     // Close DB connection
     await db.$client.end();
