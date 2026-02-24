@@ -43,7 +43,10 @@ const LINK_COOKIE_ATTRS = {
   path: "/",
 };
 
-async function handler(req: NextRequest) {
+async function handler(
+  req: NextRequest,
+  context: { params: Promise<{ nextauth: string[] }> }
+) {
   // Check for link_intent cookie on OAuth callback requests
   const linkIntentCookie = req.cookies.get(LINK_INTENT_COOKIE)?.value;
   let linkIntent: { userId: string } | null = null;
@@ -76,7 +79,7 @@ async function handler(req: NextRequest) {
 
   // Run NextAuth within AsyncLocalStorage context
   const response = await linkIntentStore.run(linkIntent, () =>
-    nextAuthHandler(req, {} as never)
+    nextAuthHandler(req, context)
   );
 
   // Clear link_intent cookie after processing (success or failure)
