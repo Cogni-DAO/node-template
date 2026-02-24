@@ -14,5 +14,8 @@
     { "path": "./packages/ingestion-core" },
     { "path": "./packages/ledger-core" },
     { "path": "./packages/scheduler-core" }
-  ]
+  ],
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
 }

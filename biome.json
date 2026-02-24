@@ -1,6 +1,7 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.7/schema.json",
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "root": true,
+  "extends": ["ultracite/biome/core", "ultracite/biome/next"],
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -19,5 +20,211 @@
     ],
     "ignoreUnknown": false
   },
-  "extends": ["./biome/base.json", "./biome/app.json", "./biome/tests.json"]
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    },
+    "globals": ["React"]
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "noDefaultExport": "error",
+        "noProcessEnv": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": [
+                  "@vercel/**",
+                  "@sentry/**",
+                  "@datadog/**",
+                  "@clerk/**",
+                  "@auth0/**",
+                  "@supabase/**",
+                  "@upstash/**",
+                  "@amplitude/**",
+                  "@segment/**",
+                  "@fullstory/**",
+                  "@intercom/**",
+                  "newrelic",
+                  "dd-trace",
+                  "logrocket",
+                  "analytics-node",
+                  "mixpanel-browser",
+                  "mixpanel",
+                  "hotjar",
+                  "posthog-js",
+                  "posthog-node",
+                  "@hotjar/browser",
+                  "bugsnag",
+                  "rollbar",
+                  "honeybadger",
+                  "firebase/app",
+                  "firebase/auth",
+                  "firebase/firestore",
+                  "firebase/database",
+                  "appwrite",
+                  "pocketbase",
+                  "launchdarkly-node-server-sdk",
+                  "launchdarkly-react-client-sdk",
+                  "configcat-node",
+                  "configcat-js",
+                  "crisp-sdk-web",
+                  "@langchain/**",
+                  "langchain/**"
+                ],
+                "message": "Vendor SDK imports are restricted to infra adapters"
+              },
+              {
+                "group": ["**/__arch_probes__/**", "@/__arch_probes__/**"],
+                "message": "Architecture probe imports are forbidden outside of tests - probes are test-only fixtures"
+              }
+            ]
+          }
+        }
+      },
+      "nursery": {
+        "useSortedClasses": {
+          "level": "error",
+          "fix": "safe",
+          "options": {
+            "attributes": ["class", "className"],
+            "functions": ["cn", "clsx", "cva"]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/infra/**", "packages/langgraph-graphs/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/shared/env/**/*.ts",
+        "src/shared/env/**/*.tsx",
+        "src/auth.ts",
+        "src/shared/observability/clientLogger.ts",
+        "e2e/**/*.{ts,tsx}",
+        "playwright.config.ts",
+        "tests/**/*.ts",
+        "scripts/**/*.{ts,mts,js,cjs,mjs}",
+        "docs/templates/**/*.ts",
+        "services/**/*.ts",
+        "**/*.config.ts",
+        "**/*.config.js",
+        "**/*.config.cjs",
+        "**/*.config.mts",
+        "drizzle.config.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "e2e/**/*.{ts,tsx}",
+        "playwright.config.ts",
+        "tests/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,mts,js,cjs,mjs}",
+        "services/**/*.ts",
+        "**/*.config.ts",
+        "**/*.config.js",
+        "**/*.config.cjs",
+        "**/*.config.mts",
+        "drizzle.config.ts",
+        "src/shared/observability/logging/logger.ts",
+        "src/shared/observability/clientLogger.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.d.ts"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    },
+    {
+      "includes": ["tests/**/fixtures/**"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
+      "includes": ["src/**/__arch_probes__/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["tests/**", "e2e/**", "**/*.test.ts", "**/*.spec.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/app/**/page.tsx",
+        "src/app/**/layout.tsx",
+        "src/app/**/loading.tsx",
+        "src/app/**/error.tsx",
+        "src/app/**/not-found.tsx",
+        "src/app/**/template.tsx",
+        "src/app/**/global-error.tsx",
+        "src/app/**/default.tsx",
+        "src/app/**/opengraph-image.tsx",
+        "src/app/**/twitter-image.tsx",
+        "next.config.ts",
+        "tailwind.config.ts",
+        "drizzle.config.ts",
+        "playwright.config.ts",
+        "vitest.config.mts",
+        "vitest.integration.config.mts",
+        "vitest.stack.config.mts",
+        "postcss.config.mjs",
+        "commitlint.config.cjs",
+        "eslint.config.mjs",
+        "eslint/*.config.mjs",
+        "packages/*/tsup.config.ts",
+        "packages/*/vitest.config.ts",
+        "services/*/tsup.config.ts",
+        "services/*/vitest.config.ts",
+        "vitest.workspace.ts",
+        "vitest.component.config.mts",
+        "vitest.external.config.mts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    }
+  ]
 }
