@@ -35,14 +35,10 @@ function resolveDisplayName(
   bindings: Array<{
     provider: string;
     providerLogin: string | null;
-    isPrimary: boolean;
   }>,
   walletAddress: string | null
 ): string {
   if (profile?.displayName) return profile.displayName;
-
-  const primary = bindings.find((b) => b.isPrimary);
-  if (primary?.providerLogin) return primary.providerLogin;
 
   const anyLogin = bindings.find((b) => b.providerLogin);
   if (anyLogin?.providerLogin) return anyLogin.providerLogin;
@@ -65,9 +61,6 @@ export async function readProfile(
       .select({
         provider: userBindings.provider,
         providerLogin: userBindings.providerLogin,
-        providerAvatarUrl: userBindings.providerAvatarUrl,
-        isPrimary: userBindings.isPrimary,
-        lastUsedAt: userBindings.lastUsedAt,
       })
       .from(userBindings)
       .where(eq(userBindings.userId, sessionUser.id)),
@@ -90,9 +83,6 @@ export async function readProfile(
     linkedProviders: bindings.map((b) => ({
       provider: b.provider as "wallet" | "discord" | "github" | "google",
       providerLogin: b.providerLogin,
-      providerAvatarUrl: b.providerAvatarUrl,
-      isPrimary: b.isPrimary,
-      lastUsedAt: b.lastUsedAt?.toISOString() ?? null,
     })),
   };
 }
@@ -130,7 +120,6 @@ export async function updateProfile(
     .select({
       provider: userBindings.provider,
       providerLogin: userBindings.providerLogin,
-      isPrimary: userBindings.isPrimary,
     })
     .from(userBindings)
     .where(eq(userBindings.userId, sessionUser.id));

@@ -19,9 +19,6 @@ import { z } from "zod";
 const LinkedProviderSchema = z.object({
   provider: z.enum(["wallet", "discord", "github", "google"]),
   providerLogin: z.string().nullable(),
-  providerAvatarUrl: z.string().nullable(),
-  isPrimary: z.boolean(),
-  lastUsedAt: z.string().nullable(),
 });
 
 export const profileReadOperation = {
