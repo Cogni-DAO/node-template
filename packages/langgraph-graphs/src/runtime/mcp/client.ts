@@ -9,6 +9,7 @@
  *   - SPIKE_ONLY: This does NOT flow through ToolRunner (no policy, no billing, no redaction)
  *   - MCP tools are prefixed with server name to avoid collisions
  *   - Connection errors are logged and skipped (don't break the agent)
+ *   - ENV_INTERPOLATION: ${VAR} in config values are replaced with process.env[VAR]
  * Side-effects: IO (connects to MCP servers, spawns subprocesses for stdio transport)
  * Links: {@link ../types.ts McpServersConfig}
  * @internal
@@ -100,77 +101,141 @@ export async function loadMcpTools(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Environment variable interpolation
+// ---------------------------------------------------------------------------
+
 /**
- * Parse MCP server config from environment variable.
+ * Replace `${VAR_NAME}` placeholders in a string with values from process.env.
+ * Unresolved vars are replaced with empty string (logs a warning).
+ */
+export function interpolateEnvVars(
+  value: string,
+  env: Record<string, string | undefined> = process.env
+): string {
+  return value.replace(/\$\{([^}]+)}/g, (_match, varName: string) => {
+    const resolved = env[varName];
+    if (resolved === undefined) {
+      // biome-ignore lint/suspicious/noConsole: warning for missing env vars
+      console.warn(
+        `[mcp-config] Environment variable \${${varName}} is not set`
+      );
+      return "";
+    }
+    return resolved;
+  });
+}
+
+/**
+ * Deep-interpolate all string values in a JSON-like structure.
+ */
+function interpolateDeep<T>(
+  obj: T,
+  env: Record<string, string | undefined>
+): T {
+  if (typeof obj === "string") return interpolateEnvVars(obj, env) as T;
+  if (Array.isArray(obj)) return obj.map((v) => interpolateDeep(v, env)) as T;
+  if (obj !== null && typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      result[k] = interpolateDeep(v, env);
+    }
+    return result as T;
+  }
+  return obj;
+}
+
+// ---------------------------------------------------------------------------
+// Config parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Raw server entry as it appears in mcp.servers.json (pre-interpolation).
+ * Includes `disabled` flag that gets filtered out during parsing.
+ */
+interface RawServerEntry {
+  transport?: string;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+  disabled?: boolean;
+}
+
+/**
+ * Parse MCP server config from environment.
  *
- * Expects MCP_SERVERS env var as JSON matching McpServersConfig shape:
- * ```json
- * {
- *   "grafana": {
- *     "transport": "stdio",
- *     "command": "docker",
- *     "args": ["run", "--rm", "-i", "mcp/grafana"]
- *   }
- * }
- * ```
+ * Priority:
+ * 1. `MCP_SERVERS` env var — raw JSON (emergency override, already interpolated)
+ * 2. `MCP_CONFIG_PATH` env var — path to mcp.servers.json (primary)
  *
- * Also supports .mcp.json format (Claude Code config) via MCP_CONFIG_PATH:
+ * The config file format (mcp.servers.json):
  * ```json
  * {
  *   "mcpServers": {
  *     "grafana": {
- *       "command": "docker",
- *       "args": ["run", "--rm", "-i", "mcp/grafana"]
+ *       "transport": "http",
+ *       "url": "${MCP_GRAFANA_URL}",
+ *       "headers": { "Authorization": "Bearer ${GRAFANA_TOKEN}" },
+ *       "disabled": false
  *     }
  *   }
  * }
  * ```
  *
- * @returns Parsed config, or empty object if not configured
+ * - `${VAR}` placeholders are replaced with process.env values
+ * - Servers with `disabled: true` are skipped
+ * - Transport is inferred from `command` (stdio) or `url` (http) if not specified
+ *
+ * @param env - Environment to read from (defaults to process.env, injectable for tests)
+ * @returns Parsed config with env vars interpolated, disabled servers filtered
  */
-export function parseMcpConfigFromEnv(): McpServersConfig {
-  // Direct JSON config takes priority
-  // biome-ignore lint/style/noProcessEnv: env-based config is the design
-  const serversJson = process.env.MCP_SERVERS;
+export function parseMcpConfigFromEnv(
+  env: Record<string, string | undefined> = process.env
+): McpServersConfig {
+  // Priority 1: Direct JSON config (emergency override, no interpolation)
+  const serversJson = env.MCP_SERVERS;
   if (serversJson) {
     try {
       return JSON.parse(serversJson) as McpServersConfig;
     } catch {
       // biome-ignore lint/suspicious/noConsole: error logging for spike diagnostics
-      console.error("[mcp-client] Failed to parse MCP_SERVERS env var as JSON");
+      console.error("[mcp-config] Failed to parse MCP_SERVERS env var as JSON");
       return {};
     }
   }
 
-  // Fall back to .mcp.json file path
-  // biome-ignore lint/style/noProcessEnv: env-based config is the design
-  const configPath = process.env.MCP_CONFIG_PATH;
+  // Priority 2: Config file with env interpolation
+  const configPath = env.MCP_CONFIG_PATH;
   if (configPath) {
     try {
       const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      const servers: Record<string, RawServerEntry> = raw.mcpServers ?? raw;
 
-      // Support .mcp.json format: { mcpServers: { ... } }
-      const servers = raw.mcpServers ?? raw;
-
-      // Convert .mcp.json format (no transport field) to our format
       const config: Record<string, McpServerConfig> = {};
-      for (const [name, rawServer] of Object.entries(
-        servers as Record<string, Record<string, unknown>>
-      )) {
-        if (rawServer.command) {
+      for (const [name, rawServer] of Object.entries(servers)) {
+        // Skip disabled servers
+        if (rawServer.disabled) continue;
+
+        // Interpolate env vars in all string values
+        const server = interpolateDeep(rawServer, env);
+
+        // Determine transport
+        const transport = server.transport ?? (server.command ? "stdio" : server.url ? "http" : undefined);
+
+        if (transport === "stdio" && server.command) {
           config[name] = {
             transport: "stdio" as const,
-            command: rawServer.command as string,
-            args: rawServer.args as readonly string[] | undefined,
-            env: rawServer.env as Readonly<Record<string, string>> | undefined,
+            command: server.command,
+            args: server.args,
+            env: server.env,
           };
-        } else if (rawServer.url) {
+        } else if ((transport === "http" || transport === "sse") && server.url) {
           config[name] = {
-            transport: "http" as const,
-            url: rawServer.url as string,
-            headers: rawServer.headers as
-              | Readonly<Record<string, string>>
-              | undefined,
+            transport: transport as "http" | "sse",
+            url: server.url,
+            headers: server.headers,
           };
         }
       }
@@ -178,7 +243,7 @@ export function parseMcpConfigFromEnv(): McpServersConfig {
     } catch (error) {
       // biome-ignore lint/suspicious/noConsole: error logging for spike diagnostics
       console.error(
-        `[mcp-client] Failed to read MCP config from ${configPath}:`,
+        `[mcp-config] Failed to read MCP config from ${configPath}:`,
         error
       );
       return {};
