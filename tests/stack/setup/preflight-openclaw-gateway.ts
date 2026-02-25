@@ -20,8 +20,8 @@ const PROXY_CONTAINER = "llm-proxy-openclaw";
 const GATEWAY_HOST = "127.0.0.1";
 const GATEWAY_PORT = 3333;
 const BUDGET_MS = 120_000; // 120s — gateway has 20s start_period + CI cold-start variance
-const INTERVAL_MS = 3_000;
-const CONNECT_TIMEOUT_MS = 2_000;
+const INTERVAL_MS = 3000;
+const CONNECT_TIMEOUT_MS = 2000;
 
 function tryTcpConnect(
   host: string,
@@ -71,7 +71,7 @@ function collectDiagnostics(): string {
   try {
     const ps = execSync(
       "docker ps -a --filter name=openclaw-gateway --filter name=llm-proxy-openclaw --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'",
-      { timeout: 5_000, encoding: "utf-8" }
+      { timeout: 5000, encoding: "utf-8" }
     );
     lines.push("--- docker ps ---", ps.trim());
   } catch {
@@ -80,7 +80,7 @@ function collectDiagnostics(): string {
   for (const name of [GATEWAY_CONTAINER, PROXY_CONTAINER]) {
     try {
       const logs = execSync(`docker logs ${name} --tail 30 2>&1`, {
-        timeout: 5_000,
+        timeout: 5000,
         encoding: "utf-8",
       });
       lines.push(`--- ${name} logs (last 30) ---`, logs.trim());

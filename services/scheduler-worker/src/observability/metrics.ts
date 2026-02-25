@@ -25,7 +25,7 @@ export const activityDurationMs = new client.Histogram({
   name: "temporal_activity_duration_ms",
   help: "Duration of Temporal activity executions in milliseconds",
   labelNames: ["activity", "status"] as const,
-  buckets: [50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000],
+  buckets: [50, 100, 250, 500, 1000, 2500, 5000, 10_000, 30_000, 60_000],
   registers: [metricsRegistry],
 });
 

@@ -219,7 +219,7 @@ describe("AI Telemetry Stack Tests", () => {
 
       // Find recent error row
       const recentRows = rows.filter(
-        (r) => new Date(r.createdAt).getTime() > Date.now() - 60000
+        (r) => new Date(r.createdAt).getTime() > Date.now() - 60_000
       );
       expect(recentRows.length).toBeGreaterThan(0);
 

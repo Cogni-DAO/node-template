@@ -83,7 +83,7 @@ const EnvSchema = z.object({
   SERVICE_NAME: z.string().default("scheduler-worker"),
 
   /** Health endpoint port (default: 9000) */
-  HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(9000),
+  HEALTH_PORT: z.coerce.number().int().min(1).max(65_535).default(9000),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

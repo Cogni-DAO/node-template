@@ -28,7 +28,7 @@ export function makePrNode(overrides: {
     author: {
       __typename: overrides.authorTypename ?? "User",
       login: overrides.authorLogin ?? "testuser",
-      databaseId: overrides.authorDatabaseId ?? 12345,
+      databaseId: overrides.authorDatabaseId ?? 12_345,
     },
     additions: 10,
     deletions: 5,
@@ -51,7 +51,7 @@ export function makeReviewNode(overrides: {
     author: {
       __typename: overrides.authorTypename ?? "User",
       login: overrides.authorLogin ?? "reviewer1",
-      databaseId: overrides.authorDatabaseId ?? 67890,
+      databaseId: overrides.authorDatabaseId ?? 67_890,
     },
   };
 }
@@ -93,7 +93,7 @@ export function makeIssueNode(overrides: {
     author: {
       __typename: overrides.authorTypename ?? "User",
       login: overrides.authorLogin ?? "issueauthor",
-      databaseId: overrides.authorDatabaseId ?? 11111,
+      databaseId: overrides.authorDatabaseId ?? 11_111,
     },
   };
 }

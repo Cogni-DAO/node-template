@@ -33,7 +33,7 @@ function stubTokenProvider(): VcsTokenProvider {
   return {
     getToken: vi.fn().mockResolvedValue({
       token: "ghs_test_token_1234",
-      expiresAt: new Date(Date.now() + 3600_000),
+      expiresAt: new Date(Date.now() + 3_600_000),
     }),
   };
 }
@@ -112,7 +112,7 @@ describe("GitHubSourceAdapter", () => {
       const pr = makePrNode({
         number: 42,
         mergedAt: "2026-01-05T12:00:00Z",
-        authorDatabaseId: 12345,
+        authorDatabaseId: 12_345,
       });
       mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
       const adapter1 = makeAdapter();
@@ -133,7 +133,7 @@ describe("GitHubSourceAdapter", () => {
         number: 1,
         mergedAt: "2026-01-02T00:00:00Z",
         authorLogin: "someuser",
-        authorDatabaseId: 99999,
+        authorDatabaseId: 99_999,
       });
       mockGraphqlFn.mockResolvedValueOnce(wrapPrResponse([pr]));
 
@@ -473,7 +473,7 @@ describe("GitHubSourceAdapter", () => {
           // Second call: fresh token
           .mockResolvedValueOnce({
             token: "ghs_second",
-            expiresAt: new Date(Date.now() + 3600_000),
+            expiresAt: new Date(Date.now() + 3_600_000),
           }),
       };
 

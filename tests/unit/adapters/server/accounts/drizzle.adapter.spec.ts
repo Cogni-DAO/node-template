@@ -98,7 +98,7 @@ describe("UserDrizzleAccountService", () => {
       expect(result).toEqual({
         id: "acc-123",
         ownerUserId: "user-456",
-        balanceCredits: 100000,
+        balanceCredits: 100_000,
         defaultVirtualKeyId: "vk-789",
       });
     });

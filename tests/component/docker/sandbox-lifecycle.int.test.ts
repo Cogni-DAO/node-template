@@ -124,7 +124,7 @@ describe("Sandbox Lifecycle", () => {
       } finally {
         await cleanupWorkspace(workspace);
       }
-    }, 10000);
+    }, 10_000);
   });
 
   describe("cleanup", () => {

@@ -30,7 +30,7 @@ export function CreditsBody() {
   const [amount, setAmount] = useState("");
 
   const isValidAmount =
-    amount !== "" && Number(amount) >= 1 && Number(amount) <= 100000;
+    amount !== "" && Number(amount) >= 1 && Number(amount) <= 100_000;
   const showError = !isValidAmount;
 
   return (

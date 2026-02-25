@@ -92,7 +92,7 @@ describe("features/payments/services/creditsConfirm", () => {
       {
         billingAccountId,
         defaultVirtualKeyId,
-        amountUsdCents: 1_000,
+        amountUsdCents: 1000,
         clientPaymentId: "payment-1",
         metadata: { txHash: "0xabc" },
       }
@@ -112,7 +112,7 @@ describe("features/payments/services/creditsConfirm", () => {
       virtualKeyId: defaultVirtualKeyId,
       metadata: {
         provider: "depay",
-        amountUsdCents: 1_000,
+        amountUsdCents: 1000,
         txHash: "0xabc",
       },
     });
@@ -137,7 +137,7 @@ describe("features/payments/services/creditsConfirm", () => {
       id: "ledger-1",
       billingAccountId,
       virtualKeyId: defaultVirtualKeyId,
-      amount: 5_000,
+      amount: 5000,
       balanceAfter: 12_345,
       reason: WIDGET_PAYMENT_REASON,
       reference: "payment-duplicate",
@@ -205,7 +205,7 @@ describe("features/payments/services/creditsConfirm", () => {
       await confirmCreditsPayment(accountService, serviceAccountService, {
         billingAccountId,
         defaultVirtualKeyId,
-        amountUsdCents: 1_000,
+        amountUsdCents: 1000,
         clientPaymentId: "payment-rev-share",
       });
 
@@ -257,7 +257,7 @@ describe("features/payments/services/creditsConfirm", () => {
       await confirmCreditsPayment(accountService, serviceAccountService, {
         billingAccountId,
         defaultVirtualKeyId,
-        amountUsdCents: 1_000,
+        amountUsdCents: 1000,
         clientPaymentId: "payment-retry",
       });
 

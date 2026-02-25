@@ -13,7 +13,7 @@
  */
 
 const MIN_AMOUNT_USD = 1;
-const MAX_AMOUNT_USD = 100000;
+const MAX_AMOUNT_USD = 100_000;
 
 /**
  * Validate amount string while typing.

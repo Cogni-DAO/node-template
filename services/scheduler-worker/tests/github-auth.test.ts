@@ -34,7 +34,7 @@ describe("GitHubAppTokenProvider", () => {
 
   describe("getToken() with installationId override", () => {
     it("returns token and expiresAt from auth-app", async () => {
-      const expiresAt = new Date(Date.now() + 3600_000).toISOString();
+      const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
       mockAuth.mockResolvedValueOnce({
         token: "ghs_installation_token_123",
         expiresAt,
@@ -64,7 +64,7 @@ describe("GitHubAppTokenProvider", () => {
       // First call: app JWT for API call
       mockAuth.mockResolvedValueOnce({ token: "jwt_app_token" });
       // Second call: installation token
-      const expiresAt = new Date(Date.now() + 3600_000).toISOString();
+      const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
       mockAuth.mockResolvedValueOnce({
         token: "ghs_resolved_token",
         expiresAt,
@@ -105,7 +105,7 @@ describe("GitHubAppTokenProvider", () => {
         .mockResolvedValueOnce({ token: "jwt_token" }) // app JWT
         .mockResolvedValueOnce({
           token: "ghs_first",
-          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
         });
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -122,7 +122,7 @@ describe("GitHubAppTokenProvider", () => {
       // Second getToken: should NOT call fetch again
       mockAuth.mockResolvedValueOnce({
         token: "ghs_second",
-        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
       });
 
       const result2 = await provider.getToken({

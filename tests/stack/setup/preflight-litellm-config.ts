@@ -28,7 +28,7 @@ export default async function preflightLitellmConfig() {
   try {
     const res = await fetch(`${litellmBaseUrl}/v1/models`, {
       headers: { Authorization: `Bearer ${litellmMasterKey}` },
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!res.ok) {

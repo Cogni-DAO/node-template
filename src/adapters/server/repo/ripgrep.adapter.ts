@@ -133,7 +133,7 @@ export class RipgrepAdapter {
     this.repoRoot = resolve(config.repoRoot);
     this.repoId = config.repoId;
     this.getSha = config.getSha;
-    this.timeoutMs = config.timeoutMs ?? 30000;
+    this.timeoutMs = config.timeoutMs ?? 30_000;
   }
 
   /**

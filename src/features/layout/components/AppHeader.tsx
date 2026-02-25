@@ -103,7 +103,7 @@ export function AppHeader(): ReactElement {
                   showGithubIcon={true}
                   showStarIcon={true}
                   size="lg"
-                  targetStars={172900}
+                  targetStars={172_900}
                   username="cogni-DAO"
                   variant="default"
                 />

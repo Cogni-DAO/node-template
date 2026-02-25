@@ -31,14 +31,14 @@ describe("Pricing Logic", () => {
       // $1.00 = 10,000,000 credits
       expect(usdToCredits(1.0)).toBe(10_000_000n);
       // $0.0000001 = 1 credit
-      expect(usdToCredits(0.0000001)).toBe(1n);
+      expect(usdToCredits(0.000_000_1)).toBe(1n);
     });
 
     it("rounds up fractional credits (ceil)", () => {
       // $0.00000015 = 1.5 credits → 2 credits
-      expect(usdToCredits(0.00000015)).toBe(2n);
+      expect(usdToCredits(0.000_000_15)).toBe(2n);
       // $0.00000011 = 1.1 credits → 2 credits
-      expect(usdToCredits(0.00000011)).toBe(2n);
+      expect(usdToCredits(0.000_000_11)).toBe(2n);
     });
 
     it("handles zero cost", () => {
@@ -78,8 +78,8 @@ describe("Pricing Logic", () => {
       // Provider cost: $0.0006261
       // User cost: $0.0006261 * 2.0 = $0.0012522
       // Credits: ceil(0.0012522 * 10_000_000) = ceil(12522) = 12522
-      const result = calculateLlmUserCharge(0.0006261, MARKUP);
-      expect(result.userCostUsd).toBeCloseTo(0.0012522, 10);
+      const result = calculateLlmUserCharge(0.000_626_1, MARKUP);
+      expect(result.userCostUsd).toBeCloseTo(0.001_252_2, 10);
       expect(result.chargedCredits).toBe(12522n);
     });
 
@@ -105,7 +105,7 @@ describe("Pricing Logic", () => {
       // Provider cost: $0.00000001
       // User cost: $0.00000001 * 2.0 = $0.00000002
       // Credits: ceil(0.00000002 * 10_000_000) = ceil(0.2) = 1
-      const result = calculateLlmUserCharge(0.00000001, MARKUP);
+      const result = calculateLlmUserCharge(0.000_000_01, MARKUP);
       expect(result.chargedCredits).toBe(1n);
     });
 

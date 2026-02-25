@@ -75,7 +75,7 @@ describe("ScheduleControlPort.listScheduleIds (Contract)", () => {
 
   async function waitForScheduleListed(
     scheduleId: string,
-    timeoutMs = 3_000
+    timeoutMs = 3000
   ): Promise<void> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {

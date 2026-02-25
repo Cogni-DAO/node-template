@@ -210,7 +210,7 @@ describe("Chat Streaming", () => {
     // Wait for receipt from async LiteLLM callback (CALLBACK_IS_SOLE_WRITER)
     const receipts = await waitForReceipts(db, billingAccount.id, {
       minCount: initialReceiptCount + 1,
-      timeoutMs: 8_000,
+      timeoutMs: 8000,
     });
     const receipt = receipts.sort(
       (a, b) =>

@@ -42,7 +42,7 @@ export interface ChainConfig {
 export const CHAINS: Record<ChainKey, ChainConfig> = {
   SEPOLIA: {
     key: "SEPOLIA",
-    chainId: 11155111,
+    chainId: 11_155_111,
     explorerBaseUrl: "https://sepolia.etherscan.io",
     usdcTokenAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     minConfirmations: 2,

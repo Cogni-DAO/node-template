@@ -11,7 +11,7 @@
  * @public
  */
 
-export const SUPPORTED_CHAIN_IDS = [8453, 84532, 11155111] as const;
+export const SUPPORTED_CHAIN_IDS = [8453, 84_532, 11_155_111] as const;
 export type SupportedChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
 
 type HexAddress = `0x${string}`;

@@ -236,7 +236,7 @@ describe("features/analytics/services/analytics", () => {
 
       // Summary stats should be present
       expect(result.summary.totalRequests).toBe(100);
-      expect(result.summary.totalTokens).toBe(100000);
+      expect(result.summary.totalTokens).toBe(100_000);
       expect(result.summary.errorRatePercent).toBe(2.5);
     });
   });

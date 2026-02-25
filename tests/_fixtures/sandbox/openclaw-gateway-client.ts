@@ -182,7 +182,7 @@ export class OpenClawGatewayClient {
       agentId = "main",
       sessionKey,
       outboundHeaders,
-      timeoutMs = 15000,
+      timeoutMs = 15_000,
     } = options;
 
     const params: Record<string, unknown> = {

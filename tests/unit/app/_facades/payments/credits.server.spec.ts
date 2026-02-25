@@ -90,8 +90,8 @@ describe("app/_facades/payments/credits.server", () => {
 
     mockConfirmCreditsPayment.mockResolvedValue({
       billingAccountId: "billing-1",
-      balanceCredits: 2_000,
-      creditsApplied: 1_000,
+      balanceCredits: 2000,
+      creditsApplied: 1000,
     });
 
     const result = await confirmCreditsPaymentFacade(
@@ -127,7 +127,7 @@ describe("app/_facades/payments/credits.server", () => {
 
     expect(result).toEqual({
       billingAccountId: "billing-1",
-      balanceCredits: 2_000,
+      balanceCredits: 2000,
     });
   });
 

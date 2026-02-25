@@ -91,7 +91,7 @@ export const httpRequestDurationMs = getOrCreateHistogram(
   "http_request_duration_ms",
   "HTTP request duration in milliseconds",
   ["route", "method"] as const,
-  [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
+  [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000]
 );
 
 // =============================================================================
@@ -102,7 +102,7 @@ export const aiChatStreamDurationMs = getOrCreateHistogram(
   "ai_chat_stream_duration_ms",
   "AI chat stream duration in milliseconds (from response_started to stream_closed)",
   [] as const,
-  [100, 500, 1000, 2500, 5000, 10000, 30000, 60000]
+  [100, 500, 1000, 2500, 5000, 10_000, 30_000, 60_000]
 );
 
 // =============================================================================
@@ -113,7 +113,7 @@ export const aiLlmCallDurationMs = getOrCreateHistogram(
   "ai_llm_call_duration_ms",
   "AI LLM call duration in milliseconds",
   ["provider", "model_class"] as const,
-  [100, 500, 1000, 2500, 5000, 10000, 30000, 60000]
+  [100, 500, 1000, 2500, 5000, 10_000, 30_000, 60_000]
 );
 
 export const aiLlmTokensTotal = getOrCreateCounter(

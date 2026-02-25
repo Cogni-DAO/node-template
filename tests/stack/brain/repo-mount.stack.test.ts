@@ -35,7 +35,7 @@ describe("Brain repo mount smoke test", () => {
       repoRoot: REPO_PATH,
       repoId: "main",
       getSha: () => gitAdapter.getSha(),
-      timeoutMs: 2_000,
+      timeoutMs: 2000,
     });
   });
 

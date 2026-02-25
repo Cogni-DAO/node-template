@@ -16,7 +16,7 @@
 
 // Use timestamp-based offset to ensure IPs are unique across test runs
 // (in-memory rate limit buckets persist on server between test runs without restart)
-const runOffset = Date.now() % 60000;
+const runOffset = Date.now() % 60_000;
 let testIpCounter = runOffset;
 
 /**

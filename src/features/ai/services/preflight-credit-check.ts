@@ -115,7 +115,7 @@ export async function preflightCreditCheck(
 
   // Estimate from user/assistant messages only + buffer for OpenClaw graph overhead
   // OpenClaw uses ~20k tokens average for system prompts, tool use, and reasoning
-  const GRAPH_OVERHEAD_BUFFER = 10000;
+  const GRAPH_OVERHEAD_BUFFER = 10_000;
   const baseTokens = estimateTotalTokens(messages);
   const estimatedTokensUpperBound = baseTokens + GRAPH_OVERHEAD_BUFFER;
 

@@ -150,7 +150,7 @@ describe("[internal] POST /api/internal/billing/ingest", () => {
 
   it.skip("OpenRouter paid model with response_cost>0 writes non-zero receipt", async () => {
     const { entry, runId } = makeCallbackPayload(testActor.billingAccountId, {
-      response_cost: 0.00653,
+      response_cost: 0.006_53,
       model: "openrouter/anthropic/claude-opus-4-6",
       model_group: "test-paid-model",
       custom_llm_provider: "openrouter",

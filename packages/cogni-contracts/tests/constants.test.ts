@@ -69,7 +69,7 @@ describe("COGNI_SIGNAL_BYTECODE format", () => {
     // This catches accidental truncation or placeholder values
     expect(COGNI_SIGNAL_BYTECODE.length).toBeGreaterThan(500);
     // But not absurdly large
-    expect(COGNI_SIGNAL_BYTECODE.length).toBeLessThan(10000);
+    expect(COGNI_SIGNAL_BYTECODE.length).toBeLessThan(10_000);
   });
 
   it("is not a placeholder value", () => {

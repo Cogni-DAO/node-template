@@ -197,7 +197,7 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     const client = await getTestTemporalClient();
     const start = Date.now();
     let created = before;
-    while (Date.now() - start < 8_000) {
+    while (Date.now() - start < 8000) {
       created = await getExecutionRequestsByPrefix(`${temporalScheduleId}:`);
       if (created.length > before.length) {
         break;

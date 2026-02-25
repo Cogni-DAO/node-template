@@ -59,7 +59,7 @@ export class GitLsFilesAdapter {
   constructor(config: GitLsFilesAdapterConfig) {
     this.repoRoot = resolve(config.repoRoot);
     this.shaOverride = config.shaOverride;
-    this.timeoutMs = config.timeoutMs ?? 30000;
+    this.timeoutMs = config.timeoutMs ?? 30_000;
   }
 
   /**

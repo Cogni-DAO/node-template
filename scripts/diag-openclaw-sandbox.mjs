@@ -59,7 +59,7 @@ const config = {
             name: "Gemini 2.5 Flash",
             reasoning: false,
             input: ["text"],
-            contextWindow: 200000,
+            contextWindow: 200_000,
             maxTokens: 8192,
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           },

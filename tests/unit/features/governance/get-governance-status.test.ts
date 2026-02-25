@@ -43,7 +43,7 @@ function mockGovernanceStatusPort(overrides?: {
 describe("getGovernanceStatus", () => {
   it("returns balance as string (BIGINT_SERIALIZATION)", async () => {
     const result = await getGovernanceStatus({
-      accountService: mockAccountService(42000),
+      accountService: mockAccountService(42_000),
       governanceStatusPort: mockGovernanceStatusPort(),
     });
 

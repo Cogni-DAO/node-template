@@ -39,7 +39,7 @@ describe("core/payments/util", () => {
     });
 
     it("should convert arbitrary value ($123.45 = 12345 cents)", () => {
-      expect(usdCentsToRawUsdc(12345)).toBe(123_450_000n);
+      expect(usdCentsToRawUsdc(12_345)).toBe(123_450_000n);
     });
 
     it("should handle conversion formula: cents * 10,000", () => {
@@ -72,7 +72,7 @@ describe("core/payments/util", () => {
     });
 
     it("should convert arbitrary value (123,450,000 raw = 12345 cents = $123.45)", () => {
-      expect(rawUsdcToUsdCents(123_450_000n)).toBe(12345);
+      expect(rawUsdcToUsdCents(123_450_000n)).toBe(12_345);
     });
 
     it("should handle conversion formula: raw / 10,000", () => {
@@ -114,7 +114,7 @@ describe("core/payments/util", () => {
       });
 
       it("should preserve 12345 cents ($123.45 arbitrary)", () => {
-        const cents = 12345;
+        const cents = 12_345;
         const raw = usdCentsToRawUsdc(cents);
         const result = rawUsdcToUsdCents(raw);
         expect(result).toBe(cents);
@@ -164,7 +164,7 @@ describe("core/payments/util", () => {
           1, // minimum granularity
           100, // minimum payment
           500, // typical
-          12345, // arbitrary
+          12_345, // arbitrary
           1_000_000, // maximum
         ];
 

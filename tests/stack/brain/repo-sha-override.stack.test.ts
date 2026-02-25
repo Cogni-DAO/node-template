@@ -54,7 +54,7 @@ describe("Brain repo SHA override (production path)", () => {
         repoRoot: REPO_PATH,
         repoId: "main",
         getSha: () => gitAdapter.getSha(),
-        timeoutMs: 5_000,
+        timeoutMs: 5000,
       });
 
       const result = await rgAdapter.search({
@@ -76,7 +76,7 @@ describe("Brain repo SHA override (production path)", () => {
         repoRoot: REPO_PATH,
         repoId: "main",
         getSha: () => gitAdapter.getSha(),
-        timeoutMs: 5_000,
+        timeoutMs: 5000,
       });
 
       const result = await rgAdapter.open({ path: "ROADMAP.md" });

@@ -118,7 +118,7 @@ export function toUiError(err: unknown): UiError {
   }
 
   // Server errors range (-32000 to -32099) often include insufficient funds
-  if (code !== undefined && code >= -32099 && code <= -32000) {
+  if (code !== undefined && code >= -32_099 && code <= -32_000) {
     // Check for specific patterns in these server errors
     if (rawMessage.toLowerCase().includes("insufficient funds")) {
       return {
@@ -135,7 +135,7 @@ export function toUiError(err: unknown): UiError {
   }
 
   // Internal JSON-RPC error (-32603)
-  if (code === -32603) {
+  if (code === -32_603) {
     return {
       message: "Transaction simulation failed",
       detail: rawMessage,

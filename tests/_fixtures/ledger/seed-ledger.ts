@@ -124,7 +124,7 @@ export function makePoolComponent(
     nodeId: TEST_NODE_ID,
     componentId: "base_issuance",
     algorithmVersion: "v1.0.0",
-    inputsJson: { base_amount: 10000 },
+    inputsJson: { base_amount: 10_000 },
     amountCredits: 10000n,
     ...overrides,
   };

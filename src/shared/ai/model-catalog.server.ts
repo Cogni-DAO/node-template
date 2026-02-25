@@ -210,7 +210,7 @@ async function fetchModelsFromLiteLLM(): Promise<ModelsCatalog> {
 
   // AbortController for timeout (compatible with Node 16+)
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 10_000);
 
   try {
     const response = await fetch(`${serverEnv().LITELLM_BASE_URL}/model/info`, {

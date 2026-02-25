@@ -367,7 +367,7 @@ describe("MimirMetricsAdapter", () => {
         result: [
           {
             metric: { job: "test" },
-            value: [1609459200, "42"],
+            value: [1_609_459_200, "42"],
           },
         ],
       };

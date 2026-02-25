@@ -27,7 +27,7 @@ describe("buildEventId", () => {
   });
 
   it("builds github review id with PR and review IDs", () => {
-    expect(buildEventId("github", "review", "owner/repo", 42, 1234567)).toBe(
+    expect(buildEventId("github", "review", "owner/repo", 42, 1_234_567)).toBe(
       "github:review:owner/repo:42:1234567"
     );
   });

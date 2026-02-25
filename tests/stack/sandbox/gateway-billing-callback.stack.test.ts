@@ -65,7 +65,7 @@ const GATEWAY_CONTAINER = "openclaw-gateway";
 const PROXY_CONTAINER = "llm-proxy-openclaw";
 
 /** Max time to wait for LiteLLM generic_api callback to arrive and be processed. */
-const CALLBACK_SETTLE_MS = 5_000;
+const CALLBACK_SETTLE_MS = 5000;
 const CALLBACK_POLL_INTERVAL_MS = 500;
 
 async function isContainerHealthy(

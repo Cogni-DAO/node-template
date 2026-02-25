@@ -58,7 +58,7 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
   });
   it("should display responseCostUsd (USD), not chargedCredits (raw credits)", async () => {
     // Realistic scenario: $0.001023 charge = 10,230 credits
-    const providerCostUsd = 0.0005115; // LiteLLM provider cost
+    const providerCostUsd = 0.000_511_5; // LiteLLM provider cost
     const markupFactor = 2.0; // 100% markup
     const userCostUsd = providerCostUsd * markupFactor; // = 0.001023 USD
     const chargedCredits = Math.ceil(userCostUsd * CREDITS_PER_USD); // = 10,230 credits
@@ -242,7 +242,7 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
     expect(result.rows[2]?.cost).toBe("0.001234"); // receipt-1
 
     // Verify total is sum of USD values, NOT sum of credits
-    const expectedTotal = 0.001234 + 0.005678 + 0.00091; // = 0.007822 USD
+    const expectedTotal = 0.001_234 + 0.005_678 + 0.000_91; // = 0.007822 USD
     expect(result.totals.spend.total).toBe(expectedTotal.toFixed(6)); // "0.007822"
 
     // If we had mistakenly summed credits: 12340 + 56780 + 9100 = 78220 credits = $0.007822

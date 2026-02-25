@@ -20,7 +20,7 @@ export type AragonOsxAddresses = {
 };
 
 // Only BASE and SEPOLIA supported (matches chain.ts)
-export const SUPPORTED_CHAIN_IDS = [8453, 11155111] as const;
+export const SUPPORTED_CHAIN_IDS = [8453, 11_155_111] as const;
 export type SupportedChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
 
 /**

@@ -133,7 +133,7 @@ export const ErrorAlert = forwardRef<ErrorAlertRef, ErrorAlertProps>(
       if (retryable) {
         dismissTimerRef.current = setTimeout(() => {
           setVisible(false);
-        }, 10000);
+        }, 10_000);
       }
 
       return () => {

@@ -194,7 +194,7 @@ export function registerPaymentAttemptRepositoryContract(
         expect(found?.txHash).toBe(txHash);
 
         // Different chain returns null
-        const notFound = await serviceRepo.findByTxHash(11155111, txHash); // Sepolia, not active chain
+        const notFound = await serviceRepo.findByTxHash(11_155_111, txHash); // Sepolia, not active chain
         expect(notFound).toBeNull();
       });
 

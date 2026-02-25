@@ -89,7 +89,7 @@ describe("SIWE Session Stack Test", () => {
       domain,
       address: legitWallet.account.address,
       nonce: csrfToken,
-      chainId: 11155111,
+      chainId: 11_155_111,
     });
 
     // But sign with attacker's key
@@ -154,7 +154,7 @@ describe("SIWE Session Stack Test", () => {
       baseUrl: baseUrl(),
       wallet,
       domain,
-      chainId: 11155111,
+      chainId: 11_155_111,
     });
 
     // Assert: If login succeeds, walletAddress MUST be in session

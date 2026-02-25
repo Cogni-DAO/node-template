@@ -509,7 +509,7 @@ export const POST = wrapRouteHandlerWithLogging(
             await new Promise((r) => setTimeout(r, 0));
 
             // Wait for final result (billing) with 15s timeout
-            const FINAL_TIMEOUT_MS = 15000;
+            const FINAL_TIMEOUT_MS = 15_000;
             const finalTimeout = new Promise<{ ok: false; error: "timeout" }>(
               (resolve) =>
                 setTimeout(

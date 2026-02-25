@@ -75,7 +75,7 @@ describe("get_current_time contract", () => {
 
     it("rejects non-string currentTime", () => {
       expect(() =>
-        getCurrentTimeContract.outputSchema.parse({ currentTime: 12345 })
+        getCurrentTimeContract.outputSchema.parse({ currentTime: 12_345 })
       ).toThrow();
     });
   });

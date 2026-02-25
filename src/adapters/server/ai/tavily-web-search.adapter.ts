@@ -61,7 +61,7 @@ export class TavilyWebSearchAdapter implements WebSearchCapability {
 
   constructor(config: TavilyWebSearchConfig) {
     this.apiKey = config.apiKey;
-    this.timeoutMs = config.timeoutMs ?? 10000;
+    this.timeoutMs = config.timeoutMs ?? 10_000;
   }
 
   /**

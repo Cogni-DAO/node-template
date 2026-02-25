@@ -172,7 +172,7 @@ describe("RLS Adapter Wiring Gate", () => {
       const attempt = await repo.create({
         billingAccountId: tenantA.billingAccountId,
         fromAddress: generateTestWallet("rls-gate-pay"),
-        chainId: 84532,
+        chainId: 84_532,
         token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
         toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         amountRaw: 5_000_000n,
@@ -210,7 +210,7 @@ describe("RLS Adapter Wiring Gate", () => {
         .values({
           billingAccountId: otherBillingAccountId,
           fromAddress: generateTestWallet("rls-gate-other-pay"),
-          chainId: 84532,
+          chainId: 84_532,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
           toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
           amountRaw: 5_000_000n,

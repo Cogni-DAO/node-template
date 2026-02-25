@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // Full proxy+sandbox flow completes in <1s (see scripts/diag-full-flow.mjs).
 // 4s per test is generous; 10s for hooks (setup/teardown touch multiple containers).
-vi.setConfig({ testTimeout: 4_000, hookTimeout: 10_000 });
+vi.setConfig({ testTimeout: 4000, hookTimeout: 10_000 });
 
 import { SandboxRunnerAdapter } from "@/adapters/server/sandbox";
 

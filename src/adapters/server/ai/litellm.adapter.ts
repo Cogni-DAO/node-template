@@ -239,7 +239,7 @@ export class LiteLlmAdapter implements LlmService {
         },
         body: JSON.stringify(requestBody),
         /** 30 second timeout */
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(30_000),
       });
     } catch (error) {
       // Handle fetch errors (network, timeout, abort)
@@ -468,7 +468,7 @@ export class LiteLlmAdapter implements LlmService {
     let response: Response;
     // Use short timeout for connection/TTFB only (not entire stream duration)
     const connectCtl = new AbortController();
-    const connectTimer = setTimeout(() => connectCtl.abort(), 15000);
+    const connectTimer = setTimeout(() => connectCtl.abort(), 15_000);
     const env = serverEnv();
     // Validate runtime secrets at adapter boundary
     assertRuntimeSecrets(env);

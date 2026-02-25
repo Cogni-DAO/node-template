@@ -32,7 +32,7 @@ import type { UsageFact } from "@/types/usage";
 const log = makeLogger({ component: "langgraph-server-stream-translator" });
 
 // Buffer caps to prevent memory exhaustion
-const MAX_ARGS_BUFFER_BYTES = 65536; // 64KB per tool call
+const MAX_ARGS_BUFFER_BYTES = 65_536; // 64KB per tool call
 const MAX_PENDING_RESULTS = 100;
 
 /**

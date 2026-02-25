@@ -12,8 +12,8 @@
  */
 
 const LITELLM_BUDGET_MS = 10_000; // 10s — LiteLLM may retry internally before responding
-const LITELLM_INTERVAL_MS = 1_000;
-const LITELLM_TIMEOUT_MS = 5_000; // LiteLLM internal retries can take a few seconds
+const LITELLM_INTERVAL_MS = 1000;
+const LITELLM_TIMEOUT_MS = 5000; // LiteLLM internal retries can take a few seconds
 
 // biome-ignore lint/style/noDefaultExport: Vitest globalSetup requires default export
 export default async function preflightMockLlm() {

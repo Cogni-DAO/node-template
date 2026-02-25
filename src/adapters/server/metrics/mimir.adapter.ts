@@ -98,7 +98,7 @@ function generateQueryRef(
   step: string,
   endTime: Date
 ): string {
-  const bucket = Math.floor(endTime.getTime() / 60000); // 1-minute buckets
+  const bucket = Math.floor(endTime.getTime() / 60_000); // 1-minute buckets
   const input = `${params.template}|${params.service}|${params.environment}|${params.window}|${step}|${bucket}`;
   const hash = createHash("sha256").update(input).digest("hex").slice(0, 12);
   return `mqt_${hash}`;

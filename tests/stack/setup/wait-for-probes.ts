@@ -19,7 +19,7 @@ import { Agent, type Dispatcher, setGlobalDispatcher } from "undici";
 import { metaReadyzOutputSchema } from "@/contracts/meta.readyz.read.v1.contract";
 
 const LIVEZ_BUDGET_MS = 20_000; // 20s fail-fast budget
-const LIVEZ_INTERVAL_MS = 1_000; // Poll every 1s (fast fail-fast signal)
+const LIVEZ_INTERVAL_MS = 1000; // Poll every 1s (fast fail-fast signal)
 const LIVEZ_TIMEOUT_MS = 500; // Request timeout < interval
 const READYZ_BUDGET_MS = 120_000; // 120s correctness budget
 const READYZ_INTERVAL_MS = 20_000; // Poll every 20s (handler needs up to 13s for sequential checks)

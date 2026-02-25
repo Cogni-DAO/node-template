@@ -51,7 +51,7 @@ describe("/api/v1/analytics/summary contract tests", () => {
     cacheTtlSeconds: 60,
     summary: {
       totalRequests: 1000,
-      totalTokens: 50000,
+      totalTokens: 50_000,
       errorRatePercent: 2.5,
       latencyP50Ms: null,
       latencyP95Ms: null,

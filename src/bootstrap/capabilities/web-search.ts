@@ -59,7 +59,7 @@ export function createWebSearchCapability(env: ServerEnv): WebSearchCapability {
   // Configured: use real Tavily API adapter
   const adapter = new TavilyWebSearchAdapter({
     apiKey,
-    timeoutMs: 10000,
+    timeoutMs: 10_000,
   });
   return { search: (p) => adapter.search(p) };
 }
