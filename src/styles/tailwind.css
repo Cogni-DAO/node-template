@@ -67,6 +67,7 @@
   --max-width-container-2xl: 72rem;
   --max-width-container-3xl: 80rem;
   --max-width-container-screen: 1280px;
+  --min-width-table-scroll: 800px;
 
   /* Z-index layers */
   --z-index-overlay: 50;

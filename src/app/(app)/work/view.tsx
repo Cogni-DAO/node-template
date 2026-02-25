@@ -146,10 +146,12 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
 
   return (
     <div className="flex flex-col gap-6 p-5 md:p-6">
-      <h1 className="font-semibold text-2xl tracking-tight">Work Dashboard</h1>
+      <h1 className="font-semibold text-xl tracking-tight md:text-2xl">
+        Work Dashboard
+      </h1>
 
       {/* Filters */}
-      <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+      <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-3">
         <Select
           value={typeFilter}
           onValueChange={(v) => setParam("type", v === "all" ? "" : v)}
@@ -201,7 +203,7 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
         </Select>
 
         <Input
-          className="col-span-2 sm:w-48"
+          className="col-span-3 sm:w-48"
           placeholder="Search id, title, labels..."
           value={query}
           onChange={(e) => setParam("q", e.target.value)}
@@ -210,18 +212,16 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
 
       {/* Table — edge-to-edge on mobile, rounded on md+ */}
       <div className="-mx-5 overflow-x-auto border-t border-b md:mx-0 md:rounded-md md:border">
-        <Table>
+        <Table className="min-w-[var(--min-width-table-scroll)]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10 md:w-14">Pri</TableHead>
-              <TableHead className="hidden w-12 md:table-cell">Est</TableHead>
-              <TableHead className="hidden w-72 md:table-cell">ID</TableHead>
-              <TableHead>Title</TableHead>
+              <TableHead className="w-10">Est</TableHead>
+              <TableHead className="w-44 md:w-72">ID</TableHead>
               <TableHead className="w-24 md:w-28">Status</TableHead>
-              <TableHead className="hidden w-28 md:table-cell">
-                Updated
-              </TableHead>
-              <TableHead className="hidden md:table-cell">Branch</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead className="w-24">Updated</TableHead>
+              <TableHead>Branch</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -244,14 +244,11 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
                       {item.priority ?? "\u2014"}
                     </span>
                   </TableCell>
-                  <TableCell className="hidden text-center text-xs md:table-cell">
+                  <TableCell className="text-center text-xs">
                     {item.estimate ?? "\u2014"}
                   </TableCell>
-                  <TableCell className="hidden text-xs md:table-cell">
-                    {item.id || "\u2014"}
-                  </TableCell>
                   <TableCell className="text-xs">
-                    {item.title || "\u2014"}
+                    {item.id || "\u2014"}
                   </TableCell>
                   <TableCell className="text-xs">
                     {item.status ? (
@@ -264,10 +261,13 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
                       "\u2014"
                     )}
                   </TableCell>
-                  <TableCell className="hidden text-xs md:table-cell">
+                  <TableCell className="text-xs">
+                    {item.title || "\u2014"}
+                  </TableCell>
+                  <TableCell className="text-xs">
                     {item.updated || item.created || "\u2014"}
                   </TableCell>
-                  <TableCell className="hidden text-xs md:table-cell">
+                  <TableCell className="text-xs">
                     {item.branch || "\u2014"}
                   </TableCell>
                 </TableRow>
