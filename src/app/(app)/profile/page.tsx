@@ -145,7 +145,7 @@ function ConnectedBadge({ login }: { login: string }): ReactElement {
   return (
     <div className="flex items-center gap-2">
       <span className="text-muted-foreground text-sm">{login}</span>
-      <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+      <span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-primary">
         <Check className="size-3" strokeWidth={3} />
       </span>
     </div>
@@ -185,7 +185,7 @@ function ColorPickerSwatch({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="size-8 cursor-pointer rounded-full ring-2 ring-ring ring-offset-2 ring-offset-background transition-transform hover:scale-110"
+        className="size-8 cursor-pointer rounded-full outline outline-2 outline-ring outline-offset-2 transition-transform hover:scale-110"
         style={{ backgroundColor: selected }}
         aria-label="Change avatar color"
       />
@@ -202,7 +202,7 @@ function ColorPickerSwatch({
                 }}
                 className={`size-8 cursor-pointer rounded-full transition-all ${
                   selected === color
-                    ? "ring-2 ring-ring ring-offset-2 ring-offset-background"
+                    ? "outline outline-2 outline-ring outline-offset-2"
                     : "hover:scale-110"
                 }`}
                 style={{ backgroundColor: color }}
