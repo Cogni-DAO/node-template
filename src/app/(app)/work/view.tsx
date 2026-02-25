@@ -181,12 +181,12 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
         <Select
           value={typeFilter}
           onValueChange={(v) => setParam("type", v === "all" ? "" : v)}
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue placeholder="All types" />
           </SelectTrigger>
           <SelectContent>
@@ -203,7 +203,7 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
           value={statusFilter}
           onValueChange={(v) => setParam("status", v === "all" ? "" : v)}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full sm:w-40">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -220,7 +220,7 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
           value={maxPri}
           onValueChange={(v) => setParam("maxPri", v === "any" ? "" : v)}
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue placeholder="Any priority" />
           </SelectTrigger>
           <SelectContent>
@@ -233,25 +233,27 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
         </Select>
 
         <Input
-          className="w-48"
+          className="col-span-2 sm:w-48"
           placeholder="Search id, title, labels..."
           value={query}
           onChange={(e) => setParam("q", e.target.value)}
         />
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-md border">
+      {/* Table — edge-to-edge on mobile, rounded on md+ */}
+      <div className="-mx-4 overflow-x-auto border-t border-b md:mx-0 md:rounded-md md:border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-14">Pri</TableHead>
-              <TableHead className="w-12">Est</TableHead>
-              <TableHead className="w-28">ID</TableHead>
+              <TableHead className="w-10 md:w-14">Pri</TableHead>
+              <TableHead className="hidden w-12 md:table-cell">Est</TableHead>
+              <TableHead className="hidden w-28 md:table-cell">ID</TableHead>
               <TableHead>Title</TableHead>
-              <TableHead className="w-28">Status</TableHead>
-              <TableHead className="w-28">Updated</TableHead>
-              <TableHead>Branch</TableHead>
+              <TableHead className="w-24 md:w-28">Status</TableHead>
+              <TableHead className="hidden w-28 md:table-cell">
+                Updated
+              </TableHead>
+              <TableHead className="hidden md:table-cell">Branch</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -274,10 +276,10 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
                       {item.priority ?? "\u2014"}
                     </span>
                   </TableCell>
-                  <TableCell className="text-center text-xs">
+                  <TableCell className="hidden text-center text-xs md:table-cell">
                     {item.estimate ?? "\u2014"}
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="hidden font-mono text-xs md:table-cell">
                     {item.id || "\u2014"}
                   </TableCell>
                   <TableCell className="text-sm">
@@ -296,10 +298,10 @@ export function WorkDashboardView({ items }: { items: WorkItem[] }) {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-xs">
+                  <TableCell className="hidden text-muted-foreground text-xs md:table-cell">
                     {item.updated || item.created || "\u2014"}
                   </TableCell>
-                  <TableCell className="font-mono text-muted-foreground text-xs">
+                  <TableCell className="hidden font-mono text-muted-foreground text-xs md:table-cell">
                     {item.branch || "\u2014"}
                   </TableCell>
                 </TableRow>

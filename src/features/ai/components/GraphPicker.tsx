@@ -92,8 +92,9 @@ export function GraphPicker({
 
       <DialogContent
         className={cn(
-          // Mobile: bottom sheet
-          "fixed inset-x-0 bottom-0 rounded-t-2xl",
+          // Mobile: bottom sheet — reset base DialogContent centering
+          "fixed inset-x-0 top-auto bottom-0 translate-x-0 translate-y-0 rounded-t-2xl",
+          "max-w-full",
           // Desktop: centered modal
           "sm:top-[var(--center-50)] sm:bottom-auto sm:left-[var(--center-50)]",
           "sm:translate-x-[var(--center-neg-50)] sm:translate-y-[var(--center-neg-50)]",
