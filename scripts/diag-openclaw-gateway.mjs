@@ -136,7 +136,7 @@ ws.on("message", (data) => {
       phase = "accepted";
       console.log(`  runId: ${payload?.runId}`);
       console.log(
-        `  *** ACK received — waiting for chat events + final res ***`
+        "  *** ACK received — waiting for chat events + final res ***"
       );
     } else if (status === "ok") {
       phase = "final_res";
@@ -162,7 +162,7 @@ ws.on("message", (data) => {
           }
         }
       } else {
-        console.log(`  *** NO result.payloads — dumping full payload: ***`);
+        console.log("  *** NO result.payloads — dumping full payload: ***");
         console.log(JSON.stringify(payload, null, 2));
       }
       if (payload?.result?.meta) {
@@ -222,7 +222,7 @@ ws.on("message", (data) => {
         );
       }
       console.log(
-        `  *** chat_final is a SIGNAL, not terminal — waiting for final res ***`
+        "  *** chat_final is a SIGNAL, not terminal — waiting for final res ***"
       );
       console.log(`  (previous phase was: ${prevPhase})`);
     } else if (state === "error" || state === "aborted") {

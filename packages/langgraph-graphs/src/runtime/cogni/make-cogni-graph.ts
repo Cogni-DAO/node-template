@@ -83,7 +83,7 @@ export function makeCogniGraph<
   if (missingTools.length > 0) {
     throw new Error(
       `[makeCogniGraph:${name}] Missing tools in TOOL_CATALOG: ${missingTools.join(", ")}. ` +
-        `Ensure all tool IDs in toolIds exist in @cogni/ai-tools TOOL_CATALOG.`
+        "Ensure all tool IDs in toolIds exist in @cogni/ai-tools TOOL_CATALOG."
     );
   }
 

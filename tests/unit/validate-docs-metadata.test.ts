@@ -114,7 +114,7 @@ type:: spec`;
   });
 
   it("handles values with colons", () => {
-    const content = `summary:: This is a test: with colons`;
+    const content = "summary:: This is a test: with colons";
     const props = extractProperties(content);
     expect(props.summary).toBe("This is a test: with colons");
   });

@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   const password = process.env.POSTGRES_PASSWORD;
   const port = Number(process.env.DB_PORT ?? "5432");
 
-  console.log(`📋 Configuration loaded:`);
+  console.log("📋 Configuration loaded:");
   console.log(`   Database: ${dbName}`);
   console.log(`   Host: ${host}:${port}`);
   console.log(`   APP_ENV: ${process.env.APP_ENV}`);
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
     throw new Error(
       `❌ SAFETY VIOLATION: Database name "${dbName}" does not match expected test DB.\n` +
         `   Expected: "${EXPECTED_TEST_DB}"\n` +
-        `   This script ONLY operates on the hardcoded test database.`
+        "   This script ONLY operates on the hardcoded test database."
     );
   }
 
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
     throw new Error(
       `❌ SAFETY VIOLATION: Host "${host}" is not in the safe hosts list.\n` +
         `   Allowed hosts: ${Array.from(SAFE_HOSTS).join(", ")}\n` +
-        `   This script ONLY operates on localhost connections.`
+        "   This script ONLY operates on localhost connections."
     );
   }
 
@@ -65,14 +65,14 @@ async function main(): Promise<void> {
     throw new Error(
       `❌ SAFETY VIOLATION: APP_ENV must be "test" to run this script.\n` +
         `   Current APP_ENV: "${process.env.APP_ENV}"\n` +
-        `   This prevents accidental execution in non-test environments.`
+        "   This prevents accidental execution in non-test environments."
     );
   }
 
   // 5) Validate required connection parameters
   if (!(user && password)) {
     throw new Error(
-      `❌ CONFIGURATION ERROR: Missing required database credentials.\n` +
+      "❌ CONFIGURATION ERROR: Missing required database credentials.\n" +
         `   POSTGRES_USER: ${user ? "✓" : "❌ missing"}\n` +
         `   POSTGRES_PASSWORD: ${password ? "✓" : "❌ missing"}`
     );

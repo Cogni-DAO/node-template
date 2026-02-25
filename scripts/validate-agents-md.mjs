@@ -299,7 +299,7 @@ function validateBoundaries(block, filePathRaw) {
     j.may_import.some((x) => x === "platform" || x.startsWith("platform/"))
   ) {
     errors.push(
-      `Boundaries: src layers cannot import platform/** (CI/IaC not runtime dependency)`
+      "Boundaries: src layers cannot import platform/** (CI/IaC not runtime dependency)"
     );
   }
 

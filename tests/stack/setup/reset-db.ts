@@ -54,7 +54,7 @@ export async function setup() {
     if (UNSAFE_DBS.includes(connectionInfo.current_database)) {
       throw new Error(
         `❌ SAFETY VIOLATION: Attempted to reset unsafe database "${connectionInfo.current_database}".\n` +
-          `   This script is only for test databases (e.g. cogni_template_stack_test).`
+          "   This script is only for test databases (e.g. cogni_template_stack_test)."
       );
     }
 

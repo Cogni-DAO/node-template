@@ -260,8 +260,8 @@ export class OpenClawGatewayClient {
                 value: {
                   type: "chat_error",
                   message:
-                    `Gateway returned ok but result.payloads is empty — ` +
-                    `likely provider parse/wiring bug ` +
+                    "Gateway returned ok but result.payloads is empty — " +
+                    "likely provider parse/wiring bug " +
                     `(model=${model ?? "unknown"}, runId=${(payload?.runId as string) ?? "?"})`,
                 },
               });

@@ -140,7 +140,7 @@ function validateTokensInBrackets(bracketContent, cssTokens, cssPath) {
 
   // If no tokens found, this is a raw arbitrary value - block it
   if (tokens.length === 0) {
-    return `Raw arbitrary value not allowed. Use bracketed tokens with var(--token) syntax.`;
+    return "Raw arbitrary value not allowed. Use bracketed tokens with var(--token) syntax.";
   }
 
   // Validate all tokens exist in CSS (if we have token data)

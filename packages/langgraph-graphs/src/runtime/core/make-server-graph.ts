@@ -92,7 +92,7 @@ export async function makeServerGraph<
   if (missingTools.length > 0) {
     throw new Error(
       `[makeServerGraph:${name}] Missing tools in TOOL_CATALOG: ${missingTools.join(", ")}. ` +
-        `Ensure all tool IDs in toolIds exist in @cogni/ai-tools TOOL_CATALOG.`
+        "Ensure all tool IDs in toolIds exist in @cogni/ai-tools TOOL_CATALOG."
     );
   }
 

@@ -43,7 +43,7 @@ export function createBoundToolSource(
     if (!impl) {
       throw new Error(
         `TOOL_BINDING_REQUIRED: Missing implementation binding for tool "${toolId}". ` +
-          `Add binding in src/bootstrap/ai/tool-bindings.ts`
+          "Add binding in src/bootstrap/ai/tool-bindings.ts"
       );
     }
     runtimes.push(contractToRuntime(boundTool.contract, impl));

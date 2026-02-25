@@ -167,7 +167,7 @@ function validateDoc(file, props, content, allIds) {
   }
 
   if (props.status !== "draft" && !props.verified) {
-    errors.push(`verified required when status != draft`);
+    errors.push("verified required when status != draft");
   }
 
   if (props.type && !DOC_TYPES.includes(props.type)) {
@@ -236,7 +236,7 @@ function validateDoc(file, props, content, allIds) {
     // Accept either "Invariants" or "Core Invariants"
     const h2s = extractH2Headings(content);
     if (!(h2s.includes("Invariants") || h2s.includes("Core Invariants"))) {
-      errors.push(`missing required heading: ## Invariants`);
+      errors.push("missing required heading: ## Invariants");
     }
   }
   if (props.type === "adr") {
@@ -427,7 +427,7 @@ function validateItem(file, props, content, allIds, projectIds) {
   // branch field (optional) must be non-empty string when present
   if (props.branch !== undefined && props.branch !== null) {
     if (typeof props.branch !== "string" || props.branch.trim() === "") {
-      errors.push(`branch must be a non-empty string when present`);
+      errors.push("branch must be a non-empty string when present");
     }
   }
 

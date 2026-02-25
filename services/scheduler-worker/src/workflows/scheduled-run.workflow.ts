@@ -107,7 +107,7 @@ export async function GovernanceScheduledRunWorkflow(
     ?.TemporalScheduledStartTime as Date[] | undefined;
   if (!scheduledStartTime?.[0]) {
     throw ApplicationFailure.nonRetryable(
-      `TemporalScheduledStartTime search attribute missing - workflow must be started by Schedule. ` +
+      "TemporalScheduledStartTime search attribute missing - workflow must be started by Schedule. " +
         `temporalScheduleId=${temporalScheduleId}, workflowId=${info.workflowId}, runId=${info.runId}`
     );
   }

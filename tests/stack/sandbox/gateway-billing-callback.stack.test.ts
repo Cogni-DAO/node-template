@@ -139,8 +139,8 @@ describe("Gateway Billing Callback E2E", () => {
 
     if (!(gatewayOk && proxyOk)) {
       throw new Error(
-        `OpenClaw gateway containers not running. ` +
-          `Start with: pnpm sandbox:openclaw:up\n` +
+        "OpenClaw gateway containers not running. " +
+          "Start with: pnpm sandbox:openclaw:up\n" +
           `  ${GATEWAY_CONTAINER}: ${gatewayOk ? "healthy" : "not found/unhealthy"}\n` +
           `  ${PROXY_CONTAINER}: ${proxyOk ? "healthy" : "not found/unhealthy"}`
       );

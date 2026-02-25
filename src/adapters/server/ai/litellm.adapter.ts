@@ -249,7 +249,7 @@ export class LiteLlmAdapter implements LlmService {
             { requestId, traceId, model, rootCauseKind: "timeout" },
             "adapter.litellm.network_error"
           );
-          throw new LlmError(`LiteLLM request timed out`, "timeout", 408);
+          throw new LlmError("LiteLLM request timed out", "timeout", 408);
         }
         const causeCode = (error.cause as { code?: string } | undefined)?.code;
         logger.warn(

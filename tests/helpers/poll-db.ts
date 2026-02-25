@@ -66,7 +66,7 @@ export async function waitForReceipts(
 
   throw new Error(
     `waitForReceipts: timed out after ${timeoutMs}ms — expected ≥${minCount} receipts for billing account ${billingAccountId}, found ${rows.length}. ` +
-      `This likely means the LiteLLM callback (POST /api/internal/billing/ingest) did not fire. ` +
-      `Check LiteLLM container logs and GENERIC_LOGGER_ENDPOINT env var.`
+      "This likely means the LiteLLM callback (POST /api/internal/billing/ingest) did not fire. " +
+      "Check LiteLLM container logs and GENERIC_LOGGER_ENDPOINT env var."
   );
 }

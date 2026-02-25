@@ -100,7 +100,7 @@ export default async function preflightOpenclawGateway() {
   const initialStatus = await isDockerHealthy(docker, GATEWAY_CONTAINER);
   if (initialStatus === "not_found") {
     console.log(
-      `\n⏭️  OpenClaw gateway container not present — skipping preflight (run with --profile sandbox-openclaw to enable)\n`
+      "\n⏭️  OpenClaw gateway container not present — skipping preflight (run with --profile sandbox-openclaw to enable)\n"
     );
     return;
   }

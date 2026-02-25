@@ -52,8 +52,8 @@ export async function setup() {
     "bash",
     "-c",
     [
-      `DB_HOST=localhost`,
-      `DB_PORT=5432`,
+      "DB_HOST=localhost",
+      "DB_PORT=5432",
       `POSTGRES_ROOT_USER=${superuser}`,
       `POSTGRES_ROOT_PASSWORD=${superpass}`,
       `APP_DB_NAME=${APP_DB_NAME}`,
@@ -61,7 +61,7 @@ export async function setup() {
       `APP_DB_PASSWORD=${APP_DB_PASSWORD}`,
       `APP_DB_SERVICE_USER=${APP_DB_SERVICE_USER}`,
       `APP_DB_SERVICE_PASSWORD=${APP_DB_SERVICE_PASSWORD}`,
-      `bash /tmp/provision.sh`,
+      "bash /tmp/provision.sh",
     ].join(" "),
   ]);
 
