@@ -4,63 +4,68 @@ type: handoff
 work_item_id: "feat.profile"
 status: active
 created: 2026-02-25
-updated: 2026-02-25
+updated: 2026-02-26
 branch: "feat/profile"
-last_commit: "7c306d6e"
+last_commit: "1be001ec"
 ---
 
-# Handoff: Frontend Profile & UI Polish
+# Handoff: Profile Feature — Auth, Schema, UI Scaffolding
 
 ## Context
 
-- Continuing frontend polish started in `feat/opencollect-ui` (merged as #482 to staging)
-- Branch created off latest staging which includes sidebar layout, OC-inspired tables, mobile-first charts, and profile backend (user API, avatar menu, profile page scaffolding)
-- Goal: finish UI tweaks — footer improvements, profile page polish, and remaining mobile refinements
-- Reference UI: OpenCollective frontend at `/Users/derek/dev/opencollective-frontend/`
+- This branch adds user profile infrastructure to the Cogni platform: display name, avatar color, linked account display
+- Auth is wallet (SIWE) + OAuth providers (GitHub, Discord, Google) — no email/password
+- Parent project: `proj.decentralized-identity` — 3 follow-up tasks created (task.0110, task.0111, task.0112)
+- Builds on `feat/opencollect-ui` (#482) which added sidebar layout, tables, mobile polish
+- Reference UI: OpenCollective frontend patterns
 
 ## Current State
 
-- **Footer partially updated** (uncommitted): background color changed to `bg-muted/40`, bottom bar restructured for full-width social icons, brand SVGs for GitHub/Discord added — but import path needs verification (`.ts` → `.tsx` rename)
-- **Profile page exists** (`src/app/(app)/profile/page.tsx`) from staging but has 2 pre-existing lint errors (inline styles, ring token)
-- **UserAvatarMenu** component added from staging (dropdown in AppTopBar)
-- **All sidebar/table/chart/mobile work from #482** is in staging and merged into this branch
-- Build status unknown — footer changes are uncommitted and may have import issues from the `.ts` → `.tsx` rename
+- **Committed and clean** — 11 commits ahead of staging, `pnpm check` passes, working tree clean
+- **Profile page** (`src/app/(app)/profile/page.tsx`) — flat settings layout with SVG provider icons, color picker, display name field. Currently static/scaffolded (hardcoded "derekg" display name, no fetch/save wiring to API yet)
+- **UserAvatarMenu** — dropdown in AppTopBar with avatar, profile link, sign out, 3-way theme toggle. Uses session `displayName`/`avatarColor`
+- **API endpoint** `/api/v1/users/me` — GET (read profile + fallback display name) and PATCH (upsert display name/avatar color). Contract-validated.
+- **Schema** — `user_profiles` table defined (no migration yet), `providerLogin` column added to `user_bindings`
+- **Auth** — JWT/session callbacks cache `displayName`/`avatarColor` from DB. Empty profile row created on new user signup (both SIWE and OAuth). Provider login captured on OAuth sign-in.
+- **Footer** — brand SVGs for GitHub/Discord, restructured bottom bar
+- **Scope-creep stripped** — `providerAvatarUrl`, `isPrimary`, `lastUsedAt` columns removed. `userSettings` table pruned (dead code).
+- **No migration generated** — deferred to task.0110 which will also add RLS + constraints
 
 ## Decisions Made
 
-- Footer uses `bg-muted/40` for subtle background differentiation (not full `bg-muted`)
-- Social icons use proper brand SVGs (GitHub octocat, Discord logo) instead of Lucide generic icons
-- Footer bottom bar (copyright + social icons) extends full viewport width with its own `border-t`, while link columns stay within `max-w-7xl`
-- `footer-items.ts` renamed to `footer-items.tsx` to support JSX icon components
-- Icon type changed from `LucideIcon` to `ComponentType<{ className?: string }>` for flexibility
+- Display name fallback: `profile.displayName` → any binding `providerLogin` → wallet truncation → "Anonymous"
+- `isPrimary` binding concept deferred — fallback uses first binding with a login, not a "primary" flag
+- Theme stored client-side (next-themes localStorage), NOT in DB — `userSettings` table deleted
+- Avatar color is a hex string from a 12-color preset palette; validation deferred to task.0110
+- Profile page uses inline `style` for dynamic hex colors (color swatches) — Tailwind can't generate classes for runtime values
 
 ## Next Actions
 
-- [ ] **Fix footer import** — verify `footer-items.tsx` import works (may need to drop `.tsx` extension from import path)
-- [ ] **Lint the footer** — run `pnpm lint:fix` and fix any class sorting or token issues
-- [ ] **Commit footer changes** — stage AppFooter.tsx, footer-items.tsx, and the deleted footer-items.ts
-- [ ] **Fix profile page lint errors** — inline styles and ring token issues in `profile/page.tsx`
-- [ ] **Review profile page UI** — check mobile appearance, ensure consistent padding/margins with other (app) pages
-- [ ] **Additional mobile polish** — check chat composer area, gov sub-pages at 360px
-- [ ] **Fix logo redirect flash** — clicking Cogni logo → `/` → public layout flashes → redirects to `/chat` (from #482 known issue)
-- [ ] **Run `pnpm check`** before PR
+- [ ] **task.0110**: Add `.enableRLS()` to `userProfiles`/`userBindings`/`identityEvents`, add Zod + DB constraints (`displayName` max length, `avatarColor` hex regex), tighten `SessionUser` types (`string | null` not optional), generate migration
+- [ ] **task.0111**: Custom `/sign-in` page, middleware auth guards, "Link Provider" buttons on profile page, wire profile page to API (fetch/save)
+- [ ] **task.0112**: Fix SIWE post-sign-in flash (homepage briefly visible before redirect to `/chat`). Blocked by task.0111.
+- [ ] Wire profile page to `/api/v1/users/me` (currently static scaffold)
+- [ ] Unify `truncateWallet` — two implementations with different lengths (facade: 6+4, menu: 4+3)
+- [ ] Align client/server display name fallback (menu uses `user.name` from NextAuth, facade uses `providerLogin`)
 
 ## Risks / Gotchas
 
-- **`footer-items.ts` → `.tsx` rename**: git mv was done but the import in AppFooter.tsx uses `./footer-items.tsx` (explicit extension) — Next.js/TypeScript usually wants extensionless imports
-- **Pre-existing lint errors** in `profile/page.tsx` are from staging, not this branch's changes
-- **Logo redirect flash** remains from the sidebar work — two-layout architecture means cross-layout nav briefly shows wrong shell
-- **`exactOptionalPropertyTypes: true`** — optional props must include `| undefined`
+- **No migration exists** — `user_profiles` table and `provider_login` column are schema-only. App will crash on profile API calls until migration is generated (task.0110)
+- **Display name fallback divergence** — `UserAvatarMenu` uses `session.user.name` (OAuth display name) while the server facade uses `providerLogin` (OAuth username). Can produce different values for the same user.
+- **SIWE profile row creation is not atomic** with user row creation (separate try/catch). OAuth path is atomic (transaction). Task.0110 should fix.
+- **Profile page `style` props** — needed for dynamic hex colors but flagged in review. Accepted tradeoff.
 
 ## Pointers
 
-| File / Resource                                     | Why it matters                                                                 |
-| --------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `src/features/layout/components/AppFooter.tsx`      | Footer component — partially updated, needs commit                             |
-| `src/features/layout/components/footer-items.tsx`   | Footer data + brand SVG icons (renamed from .ts)                               |
-| `src/app/(app)/profile/page.tsx`                    | Profile page — has pre-existing lint errors to fix                             |
-| `src/features/layout/components/UserAvatarMenu.tsx` | User avatar dropdown in AppTopBar (from staging)                               |
-| `src/features/layout/components/AppSidebar.tsx`     | Sidebar — has duplicate DiscordIcon SVG that could be shared with footer-items |
-| `src/features/layout/components/AppTopBar.tsx`      | Top bar with avatar menu wired in                                              |
-| `/Users/derek/dev/opencollective-frontend/`         | Reference codebase for UI patterns                                             |
-| `work/handoffs/feat.opencollect-ui.handoff.md`      | Previous handoff covering sidebar + table work                                 |
+| File / Resource                                           | Why it matters                                       |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| `src/app/(app)/profile/page.tsx`                          | Profile page — static scaffold, needs API wiring     |
+| `src/features/layout/components/UserAvatarMenu.tsx`       | Avatar dropdown — display name fallback logic        |
+| `src/app/_facades/users/profile.server.ts`                | Server facade — `resolveDisplayName` fallback chain  |
+| `src/app/api/v1/users/me/route.ts`                        | GET/PATCH profile endpoint                           |
+| `src/contracts/users.profile.v1.contract.ts`              | Zod contract — source of truth for API shapes        |
+| `packages/db-schema/src/profile.ts`                       | `userProfiles` table definition (no migration yet)   |
+| `src/auth.ts`                                             | JWT/session profile caching, provider login capture  |
+| `work/items/task.0110.profile-identity-db-correctness.md` | DB correctness task (RLS, constraints, migration)    |
+| `work/items/task.0111.auth-ux-signin-linking-profile.md`  | Auth UX task (sign-in page, linking, profile wiring) |
+| `work/items/task.0112.siwe-zero-flash-route-guards.md`    | SIWE redirect flash fix                              |
