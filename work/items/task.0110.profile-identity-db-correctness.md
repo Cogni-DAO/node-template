@@ -13,7 +13,7 @@ assignees: unassigned
 credit:
 project: proj.decentralized-identity
 branch: feat/profile
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/483
 reviewer:
 revision: 0
 blocked_by:
