@@ -70,15 +70,15 @@ export function createScheduleUpdatePayload(overrides?: {
  * All timestamps are ISO strings.
  */
 export interface ScheduleResponseFixture {
-  id: string;
-  graphId: string;
-  input: Record<string, unknown>;
-  cron: string;
-  timezone: string;
-  enabled: boolean;
-  nextRunAt: string | null;
-  lastRunAt: string | null;
   createdAt: string;
+  cron: string;
+  enabled: boolean;
+  graphId: string;
+  id: string;
+  input: Record<string, unknown>;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  timezone: string;
   updatedAt: string;
 }
 

@@ -27,11 +27,11 @@ const READYZ_TIMEOUT_MS = 15_000; // Must exceed handler's internal timeouts (3s
 const MAX_BODY_PREVIEW = 2048; // Cap error body output (2KB)
 
 interface ProbeOptions {
-  url: string;
   budgetMs: number;
   intervalMs: number;
-  timeoutMs: number;
   probeName: string;
+  timeoutMs: number;
+  url: string;
   validatePayload?: (json: unknown) => void;
 }
 

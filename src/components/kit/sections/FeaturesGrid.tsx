@@ -31,21 +31,21 @@ const smallIcon = cva("h-[var(--size-icon-lg)] w-[var(--size-icon-lg)]");
 
 interface FeatureItemProps {
   /**
-   * Feature icon (SVG or Lucide component)
-   */
-  icon: ReactNode;
-  /**
-   * Feature title
-   */
-  title: string;
-  /**
    * Feature description
    */
   description: string;
   /**
+   * Feature icon (SVG or Lucide component)
+   */
+  icon: ReactNode;
+  /**
    * Whether this is the first item (no top margin)
    */
   isFirst?: boolean;
+  /**
+   * Feature title
+   */
+  title: string;
 }
 
 function FeatureGridItem({

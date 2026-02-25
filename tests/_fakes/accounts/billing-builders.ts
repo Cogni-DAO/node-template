@@ -20,15 +20,15 @@ import type { ChargeReceiptProvenance } from "@/ports";
  * Matches chargeReceipts schema exactly - no forbidden fields.
  */
 export interface TestChargeReceipt {
-  id: ReturnType<typeof randomUUID>;
   billingAccountId: string;
-  virtualKeyId: string;
-  requestId: string;
-  litellmCallId: string | null;
   chargedCredits: bigint;
-  responseCostUsd: string | null;
-  provenance: ChargeReceiptProvenance;
   createdAt: Date;
+  id: ReturnType<typeof randomUUID>;
+  litellmCallId: string | null;
+  provenance: ChargeReceiptProvenance;
+  requestId: string;
+  responseCostUsd: string | null;
+  virtualKeyId: string;
 }
 
 /**

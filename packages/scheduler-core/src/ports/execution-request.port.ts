@@ -24,20 +24,20 @@ import type { AiExecutionErrorCode } from "@cogni/ai-core";
  * Lifecycle: pending (ok=null) → finalized (ok=true/false)
  */
 export interface ExecutionRequest {
+  /** When request was first received */
+  readonly createdAt: Date;
+  /** AiExecutionErrorCode if ok=false, null if ok=true or pending */
+  readonly errorCode: AiExecutionErrorCode | null;
   /** Idempotency key (e.g., `scheduleId:TemporalScheduledStartTime`) */
   readonly idempotencyKey: string;
+  /** Execution outcome: true = success, false = error, null = pending */
+  readonly ok: boolean | null;
   /** SHA256 hash of normalized request payload */
   readonly requestHash: string;
   /** GraphExecutorPort runId */
   readonly runId: string;
   /** Langfuse trace ID (null if Langfuse not configured) */
   readonly traceId: string | null;
-  /** Execution outcome: true = success, false = error, null = pending */
-  readonly ok: boolean | null;
-  /** AiExecutionErrorCode if ok=false, null if ok=true or pending */
-  readonly errorCode: AiExecutionErrorCode | null;
-  /** When request was first received */
-  readonly createdAt: Date;
 }
 
 /**
@@ -57,10 +57,10 @@ export type IdempotencyCheckResult =
  * Outcome of graph execution to be persisted.
  */
 export interface ExecutionOutcome {
-  /** Execution succeeded */
-  readonly ok: boolean;
   /** AiExecutionErrorCode if ok=false */
   readonly errorCode: AiExecutionErrorCode | null;
+  /** Execution succeeded */
+  readonly ok: boolean;
 }
 
 /**

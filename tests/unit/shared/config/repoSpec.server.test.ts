@@ -21,8 +21,8 @@ import type { GovernanceConfig, InboundPaymentConfig } from "@/shared/config";
 import { CHAIN_ID } from "@/shared/web3";
 
 interface RepoSpecModule {
-  getPaymentConfig: () => InboundPaymentConfig;
   getGovernanceConfig: () => GovernanceConfig;
+  getPaymentConfig: () => InboundPaymentConfig;
 }
 
 const ORIGINAL_CWD = process.cwd();

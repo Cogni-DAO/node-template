@@ -55,18 +55,18 @@ const { executeGraphActivity } = proxyActivities<Activities>({
  * Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: scheduledFor derived from search attribute, not input.
  */
 export interface ScheduledRunWorkflowInput {
-  /** Temporal schedule ID (always present on new schedules) */
-  temporalScheduleId?: string;
   /** Optional DB schedule UUID for DB-backed schedules */
   dbScheduleId?: string | null;
-  /** Legacy field from older schedule payloads */
-  scheduleId?: string;
-  /** Graph ID to execute */
-  graphId: string;
   /** Execution grant ID for authorization */
   executionGrantId: string;
+  /** Graph ID to execute */
+  graphId: string;
   /** Graph input payload */
   input: Record<string, unknown>;
+  /** Legacy field from older schedule payloads */
+  scheduleId?: string;
+  /** Temporal schedule ID (always present on new schedules) */
+  temporalScheduleId?: string;
 }
 
 /**

@@ -13,9 +13,9 @@
  */
 
 export interface TestHarness {
+  cleanup?: (() => Promise<void>)[];
   // Basic test utilities
   tmpdir?: string;
-  cleanup?: (() => Promise<void>)[];
 }
 
 /**

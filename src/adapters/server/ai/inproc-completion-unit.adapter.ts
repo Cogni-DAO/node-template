@@ -42,11 +42,11 @@ import type { UsageFact } from "@/types/usage";
  * All required for delegation to completion.executeStream.
  */
 export interface InProcCompletionUnitDeps {
-  readonly llmService: LlmService;
   readonly accountService: AccountService;
-  readonly clock: Clock;
   readonly aiTelemetry: AiTelemetryPort;
+  readonly clock: Clock;
   readonly langfuse: LangfusePort | undefined;
+  readonly llmService: LlmService;
 }
 
 /**
@@ -55,30 +55,30 @@ export interface InProcCompletionUnitDeps {
  * Uses CompletionFinalResult from ports (canonical discriminated union).
  */
 export interface CompletionStreamResult {
-  stream: AsyncIterable<ChatDeltaEvent>;
   final: Promise<CompletionFinalResult>;
+  stream: AsyncIterable<ChatDeltaEvent>;
 }
 
 /**
  * Completion stream parameters.
  */
 export interface CompletionStreamParams {
+  abortSignal?: AbortSignal;
+  accountService: AccountService;
+  aiTelemetry: AiTelemetryPort;
+  caller: GraphRunRequest["caller"];
+  clock: Clock;
+  ctx: RequestContext;
+  langfuse: LangfusePort | undefined;
+  llmService: LlmService;
   messages: GraphRunRequest["messages"];
   model: string;
-  llmService: LlmService;
-  accountService: AccountService;
-  clock: Clock;
-  caller: GraphRunRequest["caller"];
-  ctx: RequestContext;
-  aiTelemetry: AiTelemetryPort;
-  langfuse: LangfusePort | undefined;
-  abortSignal?: AbortSignal;
-  /** Tool definitions for LLM (optional) */
-  tools?: readonly import("@/ports").LlmToolDefinition[];
-  /** Tool choice for LLM (optional) */
-  toolChoice?: import("@/ports").LlmToolChoice;
   /** Billing correlation metadata forwarded to LiteLLM as x-litellm-spend-logs-metadata header */
   spendLogsMetadata?: { run_id: string; graph_id: string };
+  /** Tool choice for LLM (optional) */
+  toolChoice?: import("@/ports").LlmToolChoice;
+  /** Tool definitions for LLM (optional) */
+  tools?: readonly import("@/ports").LlmToolDefinition[];
 }
 
 /**
@@ -86,18 +86,18 @@ export interface CompletionStreamParams {
  * Used by graph runners that need multiple LLM calls.
  */
 export interface CompletionUnitParams {
+  abortSignal?: AbortSignal;
+  caller: GraphRunRequest["caller"];
   messages: GraphRunRequest["messages"];
   model: string;
-  caller: GraphRunRequest["caller"];
   runContext: {
     runId: string;
     attempt: number;
     ingressRequestId: string;
     graphId: GraphId;
   };
-  abortSignal?: AbortSignal;
-  tools?: readonly import("@/ports").LlmToolDefinition[];
   toolChoice?: import("@/ports").LlmToolChoice;
+  tools?: readonly import("@/ports").LlmToolDefinition[];
 }
 
 /**
@@ -105,10 +105,10 @@ export interface CompletionUnitParams {
  * Stream includes text_delta + usage_report but NOT done.
  */
 export interface CompletionUnitResult {
-  /** Stream of AiEvents (text_delta, usage_report) - NO done event */
-  stream: AsyncIterable<AiEvent>;
   /** Final result including toolCalls */
   final: Promise<CompletionFinalResult>;
+  /** Stream of AiEvents (text_delta, usage_report) - NO done event */
+  stream: AsyncIterable<AiEvent>;
 }
 
 /**

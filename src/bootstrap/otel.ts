@@ -28,10 +28,10 @@ const TRACER_NAME = "cogni-template";
  * Result type from withRootSpan callback.
  */
 export interface RootSpanContext {
-  /** OTel trace ID (hex string, 32 chars). Non-zero when SDK is running. */
-  traceId: string;
   /** The active span for recording exceptions or adding attributes. */
   span: Span;
+  /** OTel trace ID (hex string, 32 chars). Non-zero when SDK is running. */
+  traceId: string;
 }
 
 /**

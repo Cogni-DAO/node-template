@@ -16,35 +16,35 @@
 
 /** A single activity event as displayed in the UI. */
 export interface ActivityEvent {
-  readonly id: string;
-  readonly source: string;
-  readonly eventType: string;
-  readonly platformLogin: string | null;
   readonly artifactUrl: string | null;
   readonly eventTime: string;
+  readonly eventType: string;
+  readonly id: string;
+  readonly platformLogin: string | null;
+  readonly source: string;
 }
 
 /** A contributor row within an epoch view. */
 export interface EpochContributor {
-  readonly userId: string;
-  readonly displayName: string | null;
+  readonly activities: readonly ActivityEvent[];
+  readonly activityCount: number;
   readonly avatar: string;
   readonly color: string;
-  readonly proposedUnits: string;
-  readonly finalUnits: string | null;
   readonly creditShare: number;
-  readonly activityCount: number;
-  readonly activities: readonly ActivityEvent[];
+  readonly displayName: string | null;
+  readonly finalUnits: string | null;
+  readonly proposedUnits: string;
+  readonly userId: string;
 }
 
 /** Composite view of a single epoch (current or historical). */
 export interface EpochView {
-  readonly id: string;
-  readonly status: "open" | "review" | "finalized";
-  readonly periodStart: string;
-  readonly periodEnd: string;
-  readonly poolTotalCredits: string | null;
   readonly contributors: readonly EpochContributor[];
+  readonly id: string;
+  readonly periodEnd: string;
+  readonly periodStart: string;
+  readonly poolTotalCredits: string | null;
+  readonly status: "open" | "review" | "finalized";
 }
 
 /** Hook return shape for current epoch. */
@@ -59,19 +59,19 @@ export interface EpochHistoryData {
 
 /** A single user's cumulative holdings. */
 export interface HoldingView {
-  readonly userId: string;
-  readonly displayName: string | null;
   readonly avatar: string;
   readonly color: string;
-  readonly totalCredits: string;
-  readonly ownershipPercent: number;
+  readonly displayName: string | null;
   readonly epochsContributed: number;
+  readonly ownershipPercent: number;
+  readonly totalCredits: string;
+  readonly userId: string;
 }
 
 /** Hook return shape for holdings. */
 export interface HoldingsData {
-  readonly holdings: readonly HoldingView[];
-  readonly totalCreditsIssued: string;
-  readonly totalContributors: number;
   readonly epochsCompleted: number;
+  readonly holdings: readonly HoldingView[];
+  readonly totalContributors: number;
+  readonly totalCreditsIssued: string;
 }

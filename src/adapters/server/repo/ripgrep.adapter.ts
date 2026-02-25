@@ -59,18 +59,18 @@ const DEFAULT_IGNORES = [
  * Ripgrep JSON output line types.
  */
 interface RgMatch {
-  type: "match";
   data: {
     path: { text: string };
     lines: { text: string };
     line_number: number;
     submatches: Array<{ start: number; end: number }>;
   };
+  type: "match";
 }
 
 interface RgEnd {
-  type: "end";
   data: { stats: { matched_lines: number } };
+  type: "end";
 }
 
 type RgLine = RgMatch | RgEnd | { type: string };
@@ -86,12 +86,12 @@ function canonicalizePath(p: string): string {
  * Configuration for RipgrepAdapter.
  */
 export interface RipgrepAdapterConfig {
-  /** Absolute path to repository root */
-  repoRoot: string;
-  /** Repository identifier (e.g., "main") */
-  repoId: string;
   /** Callback to get HEAD sha7 (owned by GitLsFilesAdapter) */
   getSha: () => Promise<string>;
+  /** Repository identifier (e.g., "main") */
+  repoId: string;
+  /** Absolute path to repository root */
+  repoRoot: string;
   /** Execution timeout in milliseconds (default: 30000) */
   timeoutMs?: number;
 }

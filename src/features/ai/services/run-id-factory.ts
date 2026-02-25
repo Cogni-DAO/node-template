@@ -22,12 +22,12 @@ import type { RequestContext } from "@/shared/observability";
  * Contains all fields needed to identify a graph run and its delivery context.
  */
 export interface RunIdentity {
-  /** Canonical execution identity (groups all LLM calls in one run) */
-  readonly runId: string;
   /** Retry attempt number (P0: always 0) */
   readonly attempt: number;
   /** Delivery-layer correlation (HTTP/SSE/worker/queue) */
   readonly ingressRequestId: string;
+  /** Canonical execution identity (groups all LLM calls in one run) */
+  readonly runId: string;
 }
 
 /**

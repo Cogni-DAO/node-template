@@ -30,15 +30,6 @@ import type {
  * ActivityLedgerStore.upsertCursor().
  */
 export interface SourceAdapter {
-  /** Source platform identifier: "github", "discord" */
-  readonly source: string;
-
-  /** Adapter version — bump on schema changes that affect payloadHash */
-  readonly version: string;
-
-  /** Available streams this adapter can collect from */
-  streams(): StreamDefinition[];
-
   /**
    * Collect activity events. Idempotent via deterministic event IDs.
    * Uses cursor for incremental sync (CURSOR_STATE_PERSISTED).
@@ -52,4 +43,12 @@ export interface SourceAdapter {
    * Deferred to P1 — not required for V0.
    */
   handleWebhook?(payload: unknown): Promise<ActivityEvent[]>;
+  /** Source platform identifier: "github", "discord" */
+  readonly source: string;
+
+  /** Available streams this adapter can collect from */
+  streams(): StreamDefinition[];
+
+  /** Adapter version — bump on schema changes that affect payloadHash */
+  readonly version: string;
 }

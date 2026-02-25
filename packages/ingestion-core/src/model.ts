@@ -20,26 +20,19 @@
  * The adapter produces these; the workflow/store maps them to DB rows with node_id, etc.
  */
 export interface ActivityEvent {
+  /** Canonical URL to the activity artifact */
+  readonly artifactUrl: string;
+
+  /** When the activity occurred on the source platform */
+  readonly eventTime: Date;
+
+  /** Event classification: "pr_merged", "review_submitted", "message_sent", "issue_closed" */
+  readonly eventType: string;
   /**
    * Deterministic from source data. Format: "{source}:{type}:{scope}:{identifier}"
    * Examples: "github:pr:owner/repo:42", "discord:message:guild:channel:msgId"
    */
   readonly id: string;
-
-  /** Source platform: "github", "discord", etc. */
-  readonly source: string;
-
-  /** Event classification: "pr_merged", "review_submitted", "message_sent", "issue_closed" */
-  readonly eventType: string;
-
-  /** Stable platform actor ID (GitHub numeric user ID, Discord snowflake). Never changes. */
-  readonly platformUserId: string;
-
-  /** Display-only actor name (GitHub username, Discord handle). May change over time. */
-  readonly platformLogin?: string;
-
-  /** Canonical URL to the activity artifact */
-  readonly artifactUrl: string;
 
   /** Source-specific payload. No domain-specific fields — raw provenance data only. */
   readonly metadata: Record<string, unknown>;
@@ -47,50 +40,53 @@ export interface ActivityEvent {
   /** SHA-256 of canonical payload fields (PROVENANCE_REQUIRED) */
   readonly payloadHash: string;
 
-  /** When the activity occurred on the source platform */
-  readonly eventTime: Date;
+  /** Display-only actor name (GitHub username, Discord handle). May change over time. */
+  readonly platformLogin?: string;
+
+  /** Stable platform actor ID (GitHub numeric user ID, Discord snowflake). Never changes. */
+  readonly platformUserId: string;
+
+  /** Source platform: "github", "discord", etc. */
+  readonly source: string;
 }
 
 /** Definition of a collectible stream within a source adapter. */
 export interface StreamDefinition {
-  /** Stream identifier: "pull_requests", "reviews", "issues", "messages" */
-  readonly id: string;
-
-  /** Human-readable name */
-  readonly name: string;
-
   /** How the cursor advances: ISO timestamp or opaque pagination token */
   readonly cursorType: "timestamp" | "token";
 
   /** Default polling interval in seconds */
   readonly defaultPollInterval: number;
+  /** Stream identifier: "pull_requests", "reviews", "issues", "messages" */
+  readonly id: string;
+
+  /** Human-readable name */
+  readonly name: string;
 }
 
 /** Cursor checkpoint for incremental sync. One per (source, stream, scope). */
 export interface StreamCursor {
+  /** When this cursor was last used to fetch data */
+  readonly retrievedAt: Date;
   /** Which stream this cursor belongs to */
   readonly streamId: string;
 
   /** Cursor value: ISO timestamp or opaque token */
   readonly value: string;
-
-  /** When this cursor was last used to fetch data */
-  readonly retrievedAt: Date;
 }
 
 /** Parameters for a collect() call. */
 export interface CollectParams {
-  /** Which streams to collect from */
-  readonly streams: string[];
-
   /** Resume from this cursor (null = start from window.since) */
   readonly cursor: StreamCursor | null;
 
-  /** Time window to collect within */
-  readonly window: { readonly since: Date; readonly until: Date };
-
   /** Maximum events to return (adapter may return fewer) */
   readonly limit?: number;
+  /** Which streams to collect from */
+  readonly streams: string[];
+
+  /** Time window to collect within */
+  readonly window: { readonly since: Date; readonly until: Date };
 }
 
 /** Result of a collect() call. */

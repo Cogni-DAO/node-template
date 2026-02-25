@@ -37,11 +37,11 @@ import type { CreateGraphFn } from "./inproc/types";
  * Providers resolve tools from TOOL_CATALOG using these IDs.
  */
 interface CatalogEntry {
-  readonly displayName: string;
   readonly description: string;
+  readonly displayName: string;
+  readonly graphFactory: CreateGraphFn;
   /** Tool IDs this graph may use. Providers resolve from TOOL_CATALOG. */
   readonly toolIds: readonly string[];
-  readonly graphFactory: CreateGraphFn;
 }
 
 /**

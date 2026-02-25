@@ -92,52 +92,52 @@ import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.
 export type UnhandledErrorPolicy = "rethrow" | "respond_500";
 
 export interface ContainerConfig {
-  /** How to handle unhandled errors in route wrappers: rethrow for dev/test, respond_500 for production safety */
-  unhandledErrorPolicy: UnhandledErrorPolicy;
-  /** Rate limit bypass config for stack tests; only enabled when APP_ENV=test */
-  rateLimitBypass: RateLimitBypassConfig;
   /** Deploy environment for metrics/logging (e.g., "local", "preview", "production") */
   DEPLOY_ENVIRONMENT: string;
+  /** Rate limit bypass config for stack tests; only enabled when APP_ENV=test */
+  rateLimitBypass: RateLimitBypassConfig;
+  /** How to handle unhandled errors in route wrappers: rethrow for dev/test, respond_500 for production safety */
+  unhandledErrorPolicy: UnhandledErrorPolicy;
 }
 
 export interface Container {
-  log: Logger;
-  config: ContainerConfig;
-  llmService: LlmService;
   accountsForUser(userId: UserId): AccountService;
-  serviceAccountService: ServiceAccountService;
-  clock: Clock;
-  paymentAttemptsForUser(userId: UserId): PaymentAttemptUserRepository;
-  paymentAttemptServiceRepository: PaymentAttemptServiceRepository;
-  onChainVerifier: OnChainVerifier;
-  evmOnchainClient: EvmOnchainClient;
-  metricsQuery: MetricsQueryPort;
-  treasuryReadPort: TreasuryReadPort;
+  /** Activity ledger store — shared by app and scheduler-worker */
+  activityLedgerStore: ActivityLedgerStore;
   /** AI telemetry DB writer - always wired */
   aiTelemetry: AiTelemetryPort;
-  /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
-  langfuse: LangfusePort | undefined;
-  // Scheduling ports (split by trust boundary)
-  scheduleControl: ScheduleControlPort;
+  clock: Clock;
+  config: ContainerConfig;
+  evmOnchainClient: EvmOnchainClient;
   executionGrantPort: ExecutionGrantUserPort;
   executionGrantWorkerPort: ExecutionGrantWorkerPort;
   executionRequestPort: ExecutionRequestPort;
-  scheduleRunRepository: ScheduleRunRepository;
-  scheduleManager: ScheduleUserPort;
-  /** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
-  metricsCapability: MetricsCapability;
-  /** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
-  webSearchCapability: WebSearchCapability;
-  /** Repo capability for AI tools - requires COGNI_REPO_PATH */
-  repoCapability: RepoCapability;
-  /** Tool source with real implementations for AI tool execution */
-  toolSource: ToolSourcePort;
-  /** Thread persistence scoped to a user (RLS enforced) */
-  threadPersistenceForUser(userId: UserId): ThreadPersistencePort;
   /** Governance status queries (system tenant scope) */
   governanceStatus: GovernanceStatusPort;
-  /** Activity ledger store — shared by app and scheduler-worker */
-  activityLedgerStore: ActivityLedgerStore;
+  /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
+  langfuse: LangfusePort | undefined;
+  llmService: LlmService;
+  log: Logger;
+  /** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
+  metricsCapability: MetricsCapability;
+  metricsQuery: MetricsQueryPort;
+  onChainVerifier: OnChainVerifier;
+  paymentAttemptServiceRepository: PaymentAttemptServiceRepository;
+  paymentAttemptsForUser(userId: UserId): PaymentAttemptUserRepository;
+  /** Repo capability for AI tools - requires COGNI_REPO_PATH */
+  repoCapability: RepoCapability;
+  // Scheduling ports (split by trust boundary)
+  scheduleControl: ScheduleControlPort;
+  scheduleManager: ScheduleUserPort;
+  scheduleRunRepository: ScheduleRunRepository;
+  serviceAccountService: ServiceAccountService;
+  /** Thread persistence scoped to a user (RLS enforced) */
+  threadPersistenceForUser(userId: UserId): ThreadPersistencePort;
+  /** Tool source with real implementations for AI tool execution */
+  toolSource: ToolSourcePort;
+  treasuryReadPort: TreasuryReadPort;
+  /** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
+  webSearchCapability: WebSearchCapability;
 }
 
 // Feature-specific dependency types

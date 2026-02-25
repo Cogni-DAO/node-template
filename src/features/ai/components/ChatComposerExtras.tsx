@@ -64,12 +64,12 @@ const AVAILABLE_GRAPHS: readonly GraphOption[] = [
 export const DEFAULT_GRAPH_ID: GraphId = "sandbox:openclaw";
 
 export interface ChatComposerExtrasProps {
-  selectedModel: string;
-  onModelChange: (model: string) => void;
-  defaultModelId: string;
   balance?: number;
-  selectedGraph?: GraphId;
+  defaultModelId: string;
   onGraphChange?: (graphId: GraphId) => void;
+  onModelChange: (model: string) => void;
+  selectedGraph?: GraphId;
+  selectedModel: string;
 }
 
 export function ChatComposerExtras({

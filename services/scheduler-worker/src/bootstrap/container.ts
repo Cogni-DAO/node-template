@@ -39,13 +39,13 @@ import type { Env } from "./env.js";
  * Passed to createActivities() and any future consumers.
  */
 export interface ServiceContainer {
-  grantAdapter: ExecutionGrantWorkerPort;
-  runAdapter: ScheduleRunRepository;
   config: {
     appBaseUrl: string;
     schedulerApiToken: string;
   };
+  grantAdapter: ExecutionGrantWorkerPort;
   logger: Logger;
+  runAdapter: ScheduleRunRepository;
 }
 
 /**
@@ -54,10 +54,10 @@ export interface ServiceContainer {
  */
 export interface LedgerContainer {
   ledgerStore: ActivityLedgerStore;
-  sourceAdapters: ReadonlyMap<string, SourceAdapter>;
+  logger: Logger;
   nodeId: string;
   scopeId: string;
-  logger: Logger;
+  sourceAdapters: ReadonlyMap<string, SourceAdapter>;
 }
 
 /**

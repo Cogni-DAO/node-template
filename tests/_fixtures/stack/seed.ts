@@ -24,8 +24,8 @@ import { billingAccounts, users, virtualKeys } from "@/shared/db";
  * Test actor with user credentials and billing account.
  */
 export interface TestActor {
-  user: SessionUser;
   billingAccountId: string;
+  user: SessionUser;
   virtualKeyId: string;
 }
 

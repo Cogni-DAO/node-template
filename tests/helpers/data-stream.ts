@@ -16,10 +16,10 @@
  * Parsed SSE event structure (UIMessageChunk from AI SDK)
  */
 export interface SseEvent {
-  /** The chunk type (e.g., "text-delta", "text-start", "finish", "error") */
-  type: string;
   /** The full parsed JSON payload */
   data: Record<string, unknown>;
+  /** The chunk type (e.g., "text-delta", "text-start", "finish", "error") */
+  type: string;
 }
 
 /**

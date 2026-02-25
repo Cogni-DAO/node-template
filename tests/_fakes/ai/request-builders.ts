@@ -25,24 +25,24 @@ export const TEST_GRAPH_NAME = "langgraph:poet";
  * Options for completion request builder.
  */
 export interface CompletionRequestOptions {
+  /** Graph name or fully-qualified graphId (defaults to TEST_GRAPH_NAME) */
+  graphName?: string;
   /** Messages array (defaults to single user message "Hello") */
   messages?: Array<{ role: string; content: string }>;
   /** Model ID (defaults to TEST_MODEL_ID) */
   model?: string;
-  /** Graph name or fully-qualified graphId (defaults to TEST_GRAPH_NAME) */
-  graphName?: string;
 }
 
 /**
  * Options for chat request builder (P1 — single message string).
  */
 export interface ChatRequestOptions {
+  /** Graph name or fully-qualified graphId (defaults to TEST_GRAPH_NAME) */
+  graphName?: string;
   /** User message text (defaults to "Hello") */
   message?: string;
   /** Model ID (defaults to TEST_MODEL_ID) */
   model?: string;
-  /** Graph name or fully-qualified graphId (defaults to TEST_GRAPH_NAME) */
-  graphName?: string;
   /** Optional state key for multi-turn conversations */
   stateKey?: string;
 }

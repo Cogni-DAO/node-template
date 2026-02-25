@@ -34,14 +34,14 @@ export interface DaoCreationResult {
 
 export interface TransactionLog {
   address: HexAddress;
-  topics: readonly `0x${string}`[];
   data: `0x${string}`;
+  topics: readonly `0x${string}`[];
 }
 
 export interface TransactionReceipt {
-  status: "success" | "reverted";
-  logs: readonly TransactionLog[];
   contractAddress?: HexAddress | null | undefined;
+  logs: readonly TransactionLog[];
+  status: "success" | "reverted";
 }
 
 /**

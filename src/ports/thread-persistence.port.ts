@@ -28,15 +28,20 @@ export class ThreadConflictError extends Error {
 
 /** Summary of a thread for listing (no full message content). */
 export interface ThreadSummary {
+  messageCount: number;
+  metadata?: Record<string, unknown> | undefined;
   stateKey: string;
   /** Auto-derived from first user text part, or metadata.title if set. */
   title?: string | undefined;
   updatedAt: Date;
-  messageCount: number;
-  metadata?: Record<string, unknown> | undefined;
 }
 
 export interface ThreadPersistencePort {
+  /** List threads for owner, ordered by recency. */
+  listThreads(
+    ownerUserId: string,
+    opts?: { limit?: number; offset?: number }
+  ): Promise<ThreadSummary[]>;
   /** Load thread messages. Returns empty array if thread doesn't exist. */
   loadThread(ownerUserId: string, stateKey: string): Promise<UIMessage[]>;
 
@@ -57,10 +62,4 @@ export interface ThreadPersistencePort {
 
   /** Soft delete thread. Sets deleted_at, messages still in DB for retention. */
   softDelete(ownerUserId: string, stateKey: string): Promise<void>;
-
-  /** List threads for owner, ordered by recency. */
-  listThreads(
-    ownerUserId: string,
-    opts?: { limit?: number; offset?: number }
-  ): Promise<ThreadSummary[]>;
 }

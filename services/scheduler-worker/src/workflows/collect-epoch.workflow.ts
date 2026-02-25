@@ -61,19 +61,15 @@ const { collectFromSource } = proxyActivities<LedgerActivities>({
 
 /** Schedule adapter wrapper (infra — extract .input immediately) */
 interface ScheduleActionPayload {
+  executionGrantId?: string;
+  graphId?: string;
+  input: LedgerIngestRunV1;
   scheduleId?: string;
   temporalScheduleId?: string;
-  graphId?: string;
-  executionGrantId?: string;
-  input: LedgerIngestRunV1;
 }
 
 /** Versioned domain envelope — sole contract for this workflow. */
 export interface LedgerIngestRunV1 {
-  readonly version: 1;
-  readonly scopeId: string;
-  readonly scopeKey: string;
-  readonly epochLengthDays: number;
   /** Map of source → { creditEstimateAlgo, sourceRefs, streams } */
   readonly activitySources: Record<
     string,
@@ -83,12 +79,16 @@ export interface LedgerIngestRunV1 {
       streams: string[];
     }
   >;
-  /** Pool budget config — base_issuance_credits as string (bigint serialized). Optional for backward compat. */
-  readonly baseIssuanceCredits?: string;
   /** EVM approver addresses for epoch close. Optional for backward compat. */
   readonly approvers?: string[];
   /** Grace period in ms after periodEnd before auto-close (default: 24h). */
   readonly autoCloseGracePeriodMs?: number;
+  /** Pool budget config — base_issuance_credits as string (bigint serialized). Optional for backward compat. */
+  readonly baseIssuanceCredits?: string;
+  readonly epochLengthDays: number;
+  readonly scopeId: string;
+  readonly scopeKey: string;
+  readonly version: 1;
 }
 
 /**

@@ -45,19 +45,19 @@ import { confirmCreditsPayment } from "./creditsConfirm";
 // ============================================================================
 
 export interface CreateIntentInput {
+  amountUsdCents: number;
   billingAccountId: string;
   fromAddress: string; // SIWE wallet address (checksummed via getAddress())
-  amountUsdCents: number;
 }
 
 export interface CreateIntentResult {
-  attemptId: string;
-  chainId: number;
-  token: string;
-  to: string;
   amountRaw: string; // bigint serialized as string for JSON
   amountUsdCents: number;
+  attemptId: string;
+  chainId: number;
   expiresAt: Date;
+  to: string;
+  token: string;
 }
 
 export interface SubmitTxHashInput {
@@ -69,11 +69,11 @@ export interface SubmitTxHashInput {
 
 export interface SubmitTxHashResult {
   attemptId: string;
-  status: PaymentAttemptStatus;
   chainId: number;
-  txHash: string;
   errorCode?: PaymentErrorCode | undefined;
   errorMessage?: string | undefined;
+  status: PaymentAttemptStatus;
+  txHash: string;
 }
 
 export interface GetStatusInput {
@@ -83,14 +83,14 @@ export interface GetStatusInput {
 }
 
 export interface GetStatusResult {
+  amountUsdCents: number;
   attemptId: string;
-  status: PaymentAttemptStatus;
   chainId: number;
   clientStatus: string; // ClientVisibleStatus from core
-  txHash: string | null;
-  amountUsdCents: number;
-  errorCode?: PaymentErrorCode | undefined;
   createdAt: Date;
+  errorCode?: PaymentErrorCode | undefined;
+  status: PaymentAttemptStatus;
+  txHash: string | null;
 }
 
 // ============================================================================

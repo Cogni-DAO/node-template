@@ -36,12 +36,12 @@ import { createGitHubClient } from "./octokit-client.js";
 // ---------------------------------------------------------------------------
 
 export interface GitHubAdapterConfig {
-  /** Token provider (GitHub App auth) */
-  readonly tokenProvider: VcsTokenProvider;
-  /** Repos to collect from, format: "owner/repo" */
-  readonly repos: readonly string[];
   /** Max events to return per collect() call (default: 500) */
   readonly maxEventsPerCall?: number;
+  /** Repos to collect from, format: "owner/repo" */
+  readonly repos: readonly string[];
+  /** Token provider (GitHub App auth) */
+  readonly tokenProvider: VcsTokenProvider;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,50 +49,50 @@ export interface GitHubAdapterConfig {
 // ---------------------------------------------------------------------------
 
 interface PageInfo {
-  hasNextPage: boolean;
   endCursor: string | null;
+  hasNextPage: boolean;
 }
 
 interface GitHubActor {
   __typename: string;
-  login: string;
   databaseId?: number; // Only on User, not Bot/Mannequin
+  login: string;
 }
 
 interface PrNode {
+  additions: number;
+  author: GitHubActor | null;
+  changedFiles: number;
+  deletions: number;
+  mergedAt: string;
   number: number;
   title: string;
-  mergedAt: string;
   updatedAt: string;
   url: string;
-  author: GitHubActor | null;
-  additions: number;
-  deletions: number;
-  changedFiles: number;
 }
 
 interface ReviewNode {
-  databaseId: number;
-  submittedAt: string;
-  state: string;
   author: GitHubActor | null;
+  databaseId: number;
+  state: string;
+  submittedAt: string;
 }
 
 interface PrWithReviewsNode {
-  number: number;
-  url: string;
   mergedAt: string;
-  updatedAt: string;
+  number: number;
   reviews: { nodes: ReviewNode[] };
+  updatedAt: string;
+  url: string;
 }
 
 interface IssueNode {
+  author: GitHubActor | null;
+  closedAt: string;
   number: number;
   title: string;
-  closedAt: string;
   updatedAt: string;
   url: string;
-  author: GitHubActor | null;
 }
 
 interface RepoConnectionResponse<T> {

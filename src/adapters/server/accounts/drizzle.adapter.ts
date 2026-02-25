@@ -66,8 +66,8 @@ function getDbFingerprint(databaseUrl: string): string {
 }
 
 interface QueryableDb extends Pick<Database, "query" | "insert"> {
-  query: Database["query"];
   insert: Database["insert"];
+  query: Database["query"];
 }
 
 interface VirtualKeyRow {

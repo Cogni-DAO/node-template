@@ -25,13 +25,13 @@ import {
 
 interface HomeHeroSectionProps {
   /**
-   * Hero text content (code block and action words)
-   */
-  textContent: ReactNode;
-  /**
    * Call-to-action button
    */
   buttonContent: ReactNode;
+  /**
+   * Hero text content (code block and action words)
+   */
+  textContent: ReactNode;
   /**
    * Terminal visual component
    */

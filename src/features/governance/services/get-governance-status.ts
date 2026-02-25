@@ -18,14 +18,14 @@ import type { AccountService, GovernanceStatusPort } from "@/ports";
 import { COGNI_SYSTEM_BILLING_ACCOUNT_ID } from "@/shared/constants/system-tenant";
 
 export interface GovernanceStatusResult {
-  systemCredits: string;
-  upcomingRuns: Array<{ name: string; nextRunAt: string }>;
   recentRuns: Array<{
     id: string;
     title: string | null;
     startedAt: string;
     lastActivity: string;
   }>;
+  systemCredits: string;
+  upcomingRuns: Array<{ name: string; nextRunAt: string }>;
 }
 
 export async function getGovernanceStatus(params: {

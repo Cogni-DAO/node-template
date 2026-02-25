@@ -13,32 +13,32 @@
  */
 
 export interface AiLlmCallEvent {
-  event: "ai.llm_call";
-  routeId: string;
-  reqId: string;
   billingAccountId: string;
-  model?: string | undefined;
   durationMs: number;
-  tokensUsed?: number | undefined;
+  event: "ai.llm_call";
+  model?: string | undefined;
   providerCostUsd?: number | undefined;
+  reqId: string;
+  routeId: string;
+  tokensUsed?: number | undefined;
 }
 
 export interface AiActivityQueryCompletedEvent {
-  event: "ai.activity.query_completed";
-  reqId: string;
-  routeId: string;
-  scope: "user" | "org" | "system";
   billingAccountId: string;
-  orgId?: string | undefined;
+  durationMs: number;
   /** Effective bucket step used (server-derived or validated) */
   effectiveStep: "5m" | "15m" | "1h" | "6h" | "1d";
-  durationMs: number;
-  resultCount: number;
+  event: "ai.activity.query_completed";
   /** Total logs fetched from LiteLLM for this range */
   fetchedLogCount: number;
+  orgId?: string | undefined;
+  reqId: string;
+  resultCount: number;
+  routeId: string;
+  scope: "user" | "org" | "system";
+  status: "success" | "error";
   /** Logs without matching receipt (no spend data) */
   unjoinedLogCount: number;
-  status: "success" | "error";
 }
 
 /**
@@ -46,15 +46,15 @@ export interface AiActivityQueryCompletedEvent {
  * Per GRAPH_EXECUTION.md: billing subscriber commits usage facts to ledger.
  */
 export interface AiBillingCommitCompleteEvent {
+  attempt: number;
+  chargedCredits?: string | undefined;
+  /** Populated only on error */
+  errorCode?: "db_error" | "validation" | "unknown" | undefined;
   event: "ai.billing.commit_complete";
+  outcome: "success" | "error";
   /** Request ID for Loki correlation (from context.ingressRequestId) */
   reqId: string;
   runId: string;
-  attempt: number;
-  outcome: "success" | "error";
-  /** Populated only on error */
-  errorCode?: "db_error" | "validation" | "unknown" | undefined;
-  chargedCredits?: string | undefined;
   sourceSystem: string;
 }
 
@@ -63,9 +63,9 @@ export interface AiBillingCommitCompleteEvent {
  * Per BILLING_INDEPENDENT_OF_CLIENT: pump errors are logged but never propagate.
  */
 export interface AiRelayPumpErrorEvent {
+  errorCode: "pump_failed";
   event: "ai.relay.pump_error";
   /** Request ID for Loki correlation (from context.ingressRequestId) */
   reqId: string;
   runId: string;
-  errorCode: "pump_failed";
 }

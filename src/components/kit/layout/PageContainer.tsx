@@ -27,8 +27,8 @@ const maxWidthClasses: Record<MaxWidth, string> = {
 
 interface PageContainerProps {
   children: React.ReactNode;
-  maxWidth?: MaxWidth;
   className?: string;
+  maxWidth?: MaxWidth;
 }
 
 export function PageContainer({

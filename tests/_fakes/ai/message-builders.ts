@@ -15,8 +15,8 @@
 import type { Message, MessageRole } from "../../../src/core/public";
 
 export interface MessageOptions {
-  role?: MessageRole;
   content?: string;
+  role?: MessageRole;
   timestamp?: string;
 }
 

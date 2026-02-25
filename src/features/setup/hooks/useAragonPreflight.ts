@@ -27,8 +27,8 @@ export type PreflightStatus =
 
 export interface UseAragonPreflightReturn {
   preflightStatus: PreflightStatus;
-  runPreflight: (chainId: SupportedChainId) => Promise<boolean>;
   reset: () => void;
+  runPreflight: (chainId: SupportedChainId) => Promise<boolean>;
 }
 
 export function useAragonPreflight(): UseAragonPreflightReturn {

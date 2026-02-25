@@ -27,21 +27,21 @@ export type PaymentFlowPhase = "READY" | "PENDING" | "DONE";
  * Consumed by UsdcPaymentFlow component, exported by usePaymentFlow hook.
  */
 export interface PaymentFlowState {
-  phase: PaymentFlowPhase;
+  creditsAdded: number | null;
+  errorMessage: string | null;
+  explorerUrl: string | null;
 
   // READY phase
   isCreatingIntent: boolean;
-
-  // PENDING phase
-  walletStep: "SIGNING" | "CONFIRMING" | "SUBMITTING" | "VERIFYING" | null;
-  txHash: string | null;
-  explorerUrl: string | null;
   isInFlight: boolean; // True only during PENDING phases (not TERMINAL)
+  phase: PaymentFlowPhase;
 
   // DONE phase
   result: "SUCCESS" | "ERROR" | null;
-  errorMessage: string | null;
-  creditsAdded: number | null;
+  txHash: string | null;
+
+  // PENDING phase
+  walletStep: "SIGNING" | "CONFIRMING" | "SUBMITTING" | "VERIFYING" | null;
 }
 
 // ============================================================================

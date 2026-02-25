@@ -93,10 +93,10 @@ export async function validateCreditsUpperBound(
  * Parameters for facade-level preflight credit check.
  */
 export interface PreflightCreditCheckParams {
+  readonly accountService: AccountService;
   readonly billingAccountId: string;
   readonly messages: Message[];
   readonly model: string;
-  readonly accountService: AccountService;
 }
 
 /**

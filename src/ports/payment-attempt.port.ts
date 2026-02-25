@@ -87,14 +87,14 @@ export function isTxHashAlreadyBoundPortError(
  * Parameters for creating a payment attempt
  */
 export interface CreatePaymentAttemptParams {
-  billingAccountId: string;
-  fromAddress: string;
-  chainId: number;
-  token: string;
-  toAddress: string;
   amountRaw: bigint;
   amountUsdCents: number;
+  billingAccountId: string;
+  chainId: number;
   expiresAt: Date;
+  fromAddress: string;
+  toAddress: string;
+  token: string;
 }
 
 /**
@@ -103,15 +103,15 @@ export interface CreatePaymentAttemptParams {
  */
 export interface LogPaymentEventParams {
   attemptId: string;
+  errorCode?: PaymentErrorCode;
   eventType:
     | "INTENT_CREATED"
     | "TX_SUBMITTED"
     | "VERIFICATION_ATTEMPTED"
     | "STATUS_CHANGED";
   fromStatus: PaymentAttemptStatus | null;
-  toStatus: PaymentAttemptStatus;
-  errorCode?: PaymentErrorCode;
   metadata?: Record<string, unknown>;
+  toStatus: PaymentAttemptStatus;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,27 +154,6 @@ export interface PaymentAttemptUserRepository {
  */
 export interface PaymentAttemptServiceRepository {
   /**
-   * Finds payment attempt by transaction hash (cross-user lookup).
-   * Used for duplicate detection and idempotency checks.
-   * Must be cross-user to detect txHash reuse across tenants.
-   */
-  findByTxHash(chainId: number, txHash: string): Promise<PaymentAttempt | null>;
-
-  /**
-   * Updates payment attempt status with tenant anchor.
-   * Feature service validates transitions via core/rules.isValidTransition().
-   * billingAccountId included in WHERE clause as defense-in-depth.
-   *
-   * @throws PaymentAttemptNotFoundPortError if not found or billingAccountId mismatch
-   */
-  updateStatus(
-    id: string,
-    billingAccountId: string,
-    status: PaymentAttemptStatus,
-    errorCode?: PaymentErrorCode
-  ): Promise<PaymentAttempt>;
-
-  /**
    * Binds transaction hash to payment attempt with tenant anchor.
    * Sets txHash, submittedAt, and clears expiresAt.
    * Cross-user duplicate detection remains unscoped (correct for security).
@@ -189,6 +168,12 @@ export interface PaymentAttemptServiceRepository {
     txHash: string,
     submittedAt: Date
   ): Promise<PaymentAttempt>;
+  /**
+   * Finds payment attempt by transaction hash (cross-user lookup).
+   * Used for duplicate detection and idempotency checks.
+   * Must be cross-user to detect txHash reuse across tenants.
+   */
+  findByTxHash(chainId: number, txHash: string): Promise<PaymentAttempt | null>;
 
   /**
    * Records verification attempt with tenant anchor.
@@ -199,6 +184,20 @@ export interface PaymentAttemptServiceRepository {
     id: string,
     billingAccountId: string,
     attemptedAt: Date
+  ): Promise<PaymentAttempt>;
+
+  /**
+   * Updates payment attempt status with tenant anchor.
+   * Feature service validates transitions via core/rules.isValidTransition().
+   * billingAccountId included in WHERE clause as defense-in-depth.
+   *
+   * @throws PaymentAttemptNotFoundPortError if not found or billingAccountId mismatch
+   */
+  updateStatus(
+    id: string,
+    billingAccountId: string,
+    status: PaymentAttemptStatus,
+    errorCode?: PaymentErrorCode
   ): Promise<PaymentAttempt>;
 }
 

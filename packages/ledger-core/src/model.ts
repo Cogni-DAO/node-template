@@ -17,11 +17,11 @@ export type EpochStatus = (typeof EPOCH_STATUSES)[number];
 
 /** Payout line item produced by computePayouts */
 export interface PayoutLineItem {
-  readonly userId: string;
-  readonly totalUnits: bigint;
+  readonly amountCredits: bigint;
   /** Proportional share as a string decimal (e.g. "0.333333") */
   readonly share: string;
-  readonly amountCredits: bigint;
+  readonly totalUnits: bigint;
+  readonly userId: string;
 }
 
 /** Input allocation for payout computation */

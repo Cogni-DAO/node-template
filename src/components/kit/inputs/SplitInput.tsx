@@ -19,8 +19,8 @@ import { cn } from "@/shared/util/cn";
 interface SplitInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange"> {
   label: string;
-  value: string;
   onChange: (value: string) => void;
+  value: string;
 }
 
 export function SplitInput({

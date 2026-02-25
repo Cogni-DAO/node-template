@@ -13,8 +13,8 @@
  */
 
 export interface VcsTokenResult {
-  readonly token: string;
   readonly expiresAt?: Date;
+  readonly token: string;
 }
 
 export interface VcsTokenProvider {

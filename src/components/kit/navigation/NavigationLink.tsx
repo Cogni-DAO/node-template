@@ -29,15 +29,15 @@ type NextLinkProps = ComponentPropsWithoutRef<typeof Link>;
 interface NavigationLinkProps
   extends VariantProps<typeof navLink>,
     Omit<NextLinkProps, "href" | "className"> {
-  readonly href: string;
-  readonly children: ReactNode;
-  readonly match?: MatchMode;
-  readonly localePrefix?: string;
   readonly basePath?: string;
+  readonly children: ReactNode;
   /**
    * Optional className for layout adjustments only (flex/gap/margin). Colors/typography remain CVA-controlled.
    */
   readonly className?: string;
+  readonly href: string;
+  readonly localePrefix?: string;
+  readonly match?: MatchMode;
 }
 
 function norm(path: string): string {

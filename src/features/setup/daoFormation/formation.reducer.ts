@@ -18,16 +18,16 @@ import type { HexAddress } from "@cogni/aragon-osx";
 // ============================================================================
 
 export interface DAOFormationConfig {
+  initialHolder: HexAddress;
   tokenName: string;
   tokenSymbol: string;
-  initialHolder: HexAddress;
 }
 
 export interface VerifiedAddresses {
   dao: HexAddress;
-  token: HexAddress;
   plugin: HexAddress;
   signal: HexAddress;
+  token: HexAddress;
 }
 
 export type FormationPhase =
@@ -42,18 +42,18 @@ export type FormationPhase =
   | "ERROR";
 
 export interface FormationState {
-  phase: FormationPhase;
-  config: DAOFormationConfig | null;
-  daoTxHash: HexAddress | null;
-  signalTxHash: HexAddress | null;
-  signalBlockNumber: number | null;
-  daoAddress: HexAddress | null;
-  pluginAddress: HexAddress | null;
   addresses: VerifiedAddresses | null;
-  repoSpecYaml: string | null;
+  config: DAOFormationConfig | null;
+  daoAddress: HexAddress | null;
+  daoTxHash: HexAddress | null;
   errorMessage: string | null;
+  phase: FormationPhase;
+  pluginAddress: HexAddress | null;
   /** True if user can retry from current state */
   recoverable: boolean;
+  repoSpecYaml: string | null;
+  signalBlockNumber: number | null;
+  signalTxHash: HexAddress | null;
 }
 
 // ============================================================================

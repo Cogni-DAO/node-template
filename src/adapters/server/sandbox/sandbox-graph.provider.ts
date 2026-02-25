@@ -51,45 +51,45 @@ export const SANDBOX_PROVIDER_ID = "sandbox" as const;
  * Workspace setup context passed to agent-specific workspace preparation functions.
  */
 interface WorkspaceSetupContext {
-  readonly workspaceDir: string;
   readonly cogniDir: string;
   readonly messages: readonly unknown[];
   readonly model: string;
   readonly runId: string;
+  readonly workspaceDir: string;
 }
 
 /** Sandbox agent definition with image, limits, and workspace setup */
 interface SandboxAgentEntry {
-  readonly name: string;
-  readonly description: string;
-  /** Docker image to use for this agent */
-  readonly image: string;
   /** Command to execute in the sandbox container */
   readonly argv: readonly string[];
-  /** Resource limits for the container */
-  readonly limits: {
-    readonly maxRuntimeSec: number;
-    readonly maxMemoryMb: number;
-  };
-  /**
-   * Prepare workspace files before container start.
-   * Default (undefined): writes messages.json to .cogni/
-   * Custom: writes agent-specific config files.
-   */
-  readonly setupWorkspace?: (ctx: WorkspaceSetupContext) => void;
-  /**
-   * Additional env vars to pass via llmProxy.env (merged with COGNI_MODEL).
-   * Used by OpenClaw for HOME, OPENCLAW_CONFIG_PATH, etc.
-   */
-  readonly extraEnv?: (ctx: WorkspaceSetupContext) => Record<string, string>;
+  readonly description: string;
   /**
    * Execution mode:
    * - "ephemeral" (default): one-shot container per run (existing path)
    * - "gateway": long-running shared service via HTTP/WS
    */
   readonly executionMode?: "ephemeral" | "gateway";
+  /**
+   * Additional env vars to pass via llmProxy.env (merged with COGNI_MODEL).
+   * Used by OpenClaw for HOME, OPENCLAW_CONFIG_PATH, etc.
+   */
+  readonly extraEnv?: (ctx: WorkspaceSetupContext) => Record<string, string>;
   /** Proxy container name for billing reader (gateway mode only) */
   readonly gatewayProxyContainer?: string;
+  /** Docker image to use for this agent */
+  readonly image: string;
+  /** Resource limits for the container */
+  readonly limits: {
+    readonly maxRuntimeSec: number;
+    readonly maxMemoryMb: number;
+  };
+  readonly name: string;
+  /**
+   * Prepare workspace files before container start.
+   * Default (undefined): writes messages.json to .cogni/
+   * Custom: writes agent-specific config files.
+   */
+  readonly setupWorkspace?: (ctx: WorkspaceSetupContext) => void;
 }
 
 /**

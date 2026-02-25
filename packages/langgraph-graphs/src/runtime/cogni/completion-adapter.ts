@@ -56,28 +56,28 @@ export type CompletionFn<TTool = unknown> = (params: {
  * Defined here to avoid src/ imports per PACKAGES_NO_SRC_IMPORTS.
  */
 export interface ToolCall {
-  readonly id: string;
-  readonly type: "function";
   readonly function: {
     readonly name: string;
     readonly arguments: string;
   };
+  readonly id: string;
+  readonly type: "function";
 }
 
 /**
  * Result from completion function.
  */
 export interface CompletionResult {
-  readonly ok: boolean;
   readonly content?: string;
+  readonly error?: string;
+  readonly finishReason?: string;
+  readonly ok: boolean;
   /** Tool calls in OpenAI format (nested function.name/arguments) */
   readonly toolCalls?: ToolCall[];
   readonly usage?: {
     promptTokens: number;
     completionTokens: number;
   };
-  readonly finishReason?: string;
-  readonly error?: string;
 }
 
 /**

@@ -29,24 +29,24 @@ import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface RequestFrame {
-  type: "req";
   id: string;
   method: string;
   params?: unknown;
+  type: "req";
 }
 
 interface ResponseFrame {
-  type: "res";
+  error?: { code: number; message: string };
   id: string;
   ok: boolean;
   payload?: unknown;
-  error?: { code: number; message: string };
+  type: "res";
 }
 
 interface EventFrame {
-  type: "event";
   event: string;
   payload?: unknown;
+  type: "event";
 }
 
 type GatewayFrame = RequestFrame | ResponseFrame | EventFrame;
@@ -69,7 +69,10 @@ export type GatewayAgentEvent =
 
 /** Options for {@link OpenClawGatewayClient.runAgent}. */
 export interface RunAgentOptions {
+  /** Caller-provided logger with pre-bound context (runId, etc.). */
+  log?: Logger;
   message: string;
+  outboundHeaders?: Record<string, string>;
   /**
    * Session correlation key — REQUIRED for event isolation.
    * Only chat events whose payload.sessionKey matches this value are processed;
@@ -77,11 +80,8 @@ export interface RunAgentOptions {
    * because the gateway broadcasts chat events to all connected WS clients.
    */
   sessionKey: string;
-  outboundHeaders?: Record<string, string>;
   /** Total timeout for the operation (default: 120s). */
   timeoutMs?: number;
-  /** Caller-provided logger with pre-bound context (runId, etc.). */
-  log?: Logger;
 }
 
 /**

@@ -22,16 +22,16 @@ import {
 import { serverEnv } from "@/shared/env";
 
 export interface CreditsConfirmInput {
-  billingAccountId: string;
-  defaultVirtualKeyId: string;
   amountUsdCents: number;
+  billingAccountId: string;
   clientPaymentId: string;
+  defaultVirtualKeyId: string;
   metadata?: Record<string, unknown> | undefined;
 }
 
 export interface CreditsConfirmResult {
-  billingAccountId: string;
   balanceCredits: number;
+  billingAccountId: string;
   creditsApplied: number;
 }
 

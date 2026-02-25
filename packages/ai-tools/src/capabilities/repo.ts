@@ -19,58 +19,58 @@
  * Single search hit from repository search.
  */
 export interface RepoSearchHit {
-  /** Repository identifier (e.g., "main") */
-  repoId: string;
-  /** File path relative to repo root */
-  path: string;
-  /** Starting line number (1-indexed) */
-  lineStart: number;
   /** Ending line number (1-indexed) */
   lineEnd: number;
-  /** Code snippet (max 20 lines) */
-  snippet: string;
+  /** Starting line number (1-indexed) */
+  lineStart: number;
+  /** File path relative to repo root */
+  path: string;
+  /** Repository identifier (e.g., "main") */
+  repoId: string;
   /** HEAD sha (7 chars) */
   sha: string;
+  /** Code snippet (max 20 lines) */
+  snippet: string;
 }
 
 /**
  * Result from repository search.
  */
 export interface RepoSearchResult {
-  /** Search query used */
-  query: string;
   /** Matching hits (max 50) */
   hits: RepoSearchHit[];
+  /** Search query used */
+  query: string;
 }
 
 /**
  * Parameters for repository search.
  */
 export interface RepoSearchParams {
-  /** Search query (regex supported) */
-  query: string;
   /** Optional glob pattern to filter files */
   glob?: string;
   /** Maximum results to return (1-50, default 10) */
   limit?: number;
+  /** Search query (regex supported) */
+  query: string;
 }
 
 /**
  * Result from opening a file.
  */
 export interface RepoOpenResult {
-  /** Repository identifier (e.g., "main") */
-  repoId: string;
-  /** File path relative to repo root */
-  path: string;
-  /** HEAD sha (7 chars) */
-  sha: string;
-  /** Starting line number (1-indexed) */
-  lineStart: number;
-  /** Ending line number (1-indexed) */
-  lineEnd: number;
   /** File content (max 200 lines) */
   content: string;
+  /** Ending line number (1-indexed) */
+  lineEnd: number;
+  /** Starting line number (1-indexed) */
+  lineStart: number;
+  /** File path relative to repo root */
+  path: string;
+  /** Repository identifier (e.g., "main") */
+  repoId: string;
+  /** HEAD sha (7 chars) */
+  sha: string;
 }
 
 /**
@@ -99,12 +99,12 @@ export interface RepoListResult {
  * Parameters for opening a file.
  */
 export interface RepoOpenParams {
-  /** File path relative to repo root */
-  path: string;
-  /** Starting line number (1-indexed, default 1) */
-  lineStart?: number;
   /** Ending line number (1-indexed, default lineStart + 199) */
   lineEnd?: number;
+  /** Starting line number (1-indexed, default 1) */
+  lineStart?: number;
+  /** File path relative to repo root */
+  path: string;
 }
 
 /**
@@ -116,22 +116,12 @@ export interface RepoOpenParams {
  */
 export interface RepoCapability {
   /**
-   * Search repository for matching content.
+   * Get current HEAD sha (7 chars).
    *
-   * @param params - Search parameters (query, glob, limit)
-   * @returns Search results with file paths, line numbers, and snippets
-   * @throws If search fails or repository is unavailable
+   * @returns 7-character SHA prefix of current HEAD
+   * @throws If repository is unavailable
    */
-  search(params: RepoSearchParams): Promise<RepoSearchResult>;
-
-  /**
-   * Open a file and retrieve its content.
-   *
-   * @param params - Open parameters (path, lineStart, lineEnd)
-   * @returns File content with path, sha, and line range
-   * @throws If file not found, path invalid, or file exceeds size limit
-   */
-  open(params: RepoOpenParams): Promise<RepoOpenResult>;
+  getSha(): Promise<string>;
 
   /**
    * List repository files, optionally filtered by glob pattern.
@@ -143,12 +133,21 @@ export interface RepoCapability {
   list(params: RepoListParams): Promise<RepoListResult>;
 
   /**
-   * Get current HEAD sha (7 chars).
+   * Open a file and retrieve its content.
    *
-   * @returns 7-character SHA prefix of current HEAD
-   * @throws If repository is unavailable
+   * @param params - Open parameters (path, lineStart, lineEnd)
+   * @returns File content with path, sha, and line range
+   * @throws If file not found, path invalid, or file exceeds size limit
    */
-  getSha(): Promise<string>;
+  open(params: RepoOpenParams): Promise<RepoOpenResult>;
+  /**
+   * Search repository for matching content.
+   *
+   * @param params - Search parameters (query, glob, limit)
+   * @returns Search results with file paths, line numbers, and snippets
+   * @throws If search fails or repository is unavailable
+   */
+  search(params: RepoSearchParams): Promise<RepoSearchResult>;
 }
 
 /**

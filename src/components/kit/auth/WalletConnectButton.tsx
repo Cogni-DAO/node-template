@@ -23,14 +23,14 @@ import { cn } from "@/shared/util";
 
 interface WalletConnectButtonProps {
   /**
+   * Optional className for layout adjustments
+   */
+  readonly className?: string;
+  /**
    * Visual variant: 'compact' for mobile, 'default' for desktop.
    * Both use treasury badge styling; variant controls width only.
    */
   readonly variant?: "default" | "compact";
-  /**
-   * Optional className for layout adjustments
-   */
-  readonly className?: string;
 }
 
 /**

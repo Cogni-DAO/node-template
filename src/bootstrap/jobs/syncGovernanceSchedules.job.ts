@@ -40,10 +40,10 @@ function computeNextRun(cron: string, timezone: string): Date {
 
 export interface GovernanceScheduleSyncSummary {
   created: number;
-  updated: number;
+  paused: number;
   resumed: number;
   skipped: number;
-  paused: number;
+  updated: number;
 }
 
 /**

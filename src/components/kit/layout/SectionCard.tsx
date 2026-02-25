@@ -21,9 +21,9 @@ import {
 import { cn } from "@/shared/util/cn";
 
 interface SectionCardProps {
-  title: string;
   children: React.ReactNode;
   className?: string;
+  title: string;
 }
 
 export function SectionCard({ title, children, className }: SectionCardProps) {

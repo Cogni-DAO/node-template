@@ -71,10 +71,10 @@ export interface CompletionUnitAdapter {
  * Per TOOL_CATALOG_IS_CANONICAL: tools referenced by ID, resolved from TOOL_CATALOG.
  */
 interface ProviderCatalogEntry {
-  readonly displayName: string;
   readonly description: string;
-  readonly toolIds: readonly string[];
+  readonly displayName: string;
   readonly graphFactory: CreateGraphFn;
+  readonly toolIds: readonly string[];
 }
 
 /**

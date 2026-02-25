@@ -22,10 +22,10 @@ import type {
 type ActivityData = z.infer<typeof aiActivityOperation.output>;
 
 export interface FetchActivityParams {
-  range: TimeRange;
-  groupBy?: ActivityGroupBy;
   cursor?: string;
+  groupBy?: ActivityGroupBy;
   limit?: number;
+  range: TimeRange;
 }
 
 export async function fetchActivity(

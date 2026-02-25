@@ -21,18 +21,18 @@ import { Button } from "@/components/kit/inputs/Button";
 export interface ChatErrorBubbleProps {
   /** Human-readable error message */
   message: string;
-  /** Show retry button */
-  showRetry?: boolean;
-  /** Show "Use Free Model" button */
-  showSwitchFree?: boolean;
-  /** Show "Add Credits" button */
-  showAddCredits?: boolean;
+  /** Callback when "Add Credits" clicked */
+  onAddCredits?: () => void;
   /** Callback when retry clicked */
   onRetry?: () => void;
   /** Callback when "Use Free Model" clicked */
   onSwitchFreeModel?: () => void;
-  /** Callback when "Add Credits" clicked */
-  onAddCredits?: () => void;
+  /** Show "Add Credits" button */
+  showAddCredits?: boolean;
+  /** Show retry button */
+  showRetry?: boolean;
+  /** Show "Use Free Model" button */
+  showSwitchFree?: boolean;
 }
 
 /**

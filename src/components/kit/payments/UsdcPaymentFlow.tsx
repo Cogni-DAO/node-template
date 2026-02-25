@@ -26,20 +26,20 @@ export interface UsdcPaymentFlowProps {
   /** Amount in USD cents */
   amountUsdCents: number;
 
-  /** Current flow state from usePaymentFlow */
-  state: PaymentFlowState;
-
-  /** Trigger payment initiation */
-  onStartPayment: () => void;
-
-  /** Reset to initial state */
-  onReset: () => void;
+  /** Layout className (flex/margin only) */
+  className?: string;
 
   /** Disable all interactions */
   disabled?: boolean;
 
-  /** Layout className (flex/margin only) */
-  className?: string;
+  /** Reset to initial state */
+  onReset: () => void;
+
+  /** Trigger payment initiation */
+  onStartPayment: () => void;
+
+  /** Current flow state from usePaymentFlow */
+  state: PaymentFlowState;
 }
 
 export function UsdcPaymentFlow({

@@ -25,22 +25,28 @@ import { serverEnv } from "@/shared/env";
  * Base context for all telemetry recording.
  */
 interface TelemetryContextBase {
+  readonly fallbackPromptHash: string;
   readonly invocationId: string;
+  readonly latencyMs: number;
+  readonly model: string;
   readonly requestId: string;
   readonly traceId: string;
-  readonly fallbackPromptHash: string;
-  readonly model: string;
-  readonly latencyMs: number;
 }
 
 /**
  * Context for success telemetry.
  */
 export interface TelemetryContextSuccess extends TelemetryContextBase {
-  readonly status: "success";
   readonly canonicalPromptHash: string | undefined;
-  readonly resolvedProvider: string | undefined;
+  readonly graphName?: string;
+  // Graph fields (P1-ready)
+  readonly graphRunId?: string;
+  readonly graphVersion?: string;
+  readonly litellmCallId: string | undefined;
+  readonly providerCostUsd: number | undefined;
   readonly resolvedModel: string | undefined;
+  readonly resolvedProvider: string | undefined;
+  readonly status: "success";
   readonly usage:
     | {
         promptTokens?: number;
@@ -48,20 +54,14 @@ export interface TelemetryContextSuccess extends TelemetryContextBase {
         totalTokens?: number;
       }
     | undefined;
-  readonly providerCostUsd: number | undefined;
-  readonly litellmCallId: string | undefined;
-  // Graph fields (P1-ready)
-  readonly graphRunId?: string;
-  readonly graphName?: string;
-  readonly graphVersion?: string;
 }
 
 /**
  * Context for error telemetry.
  */
 export interface TelemetryContextError extends TelemetryContextBase {
-  readonly status: "error";
   readonly errorCode: LlmErrorKind;
+  readonly status: "error";
 }
 
 /**

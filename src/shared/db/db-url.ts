@@ -13,11 +13,11 @@
  */
 
 export interface DbEnvInput {
-  POSTGRES_USER?: string;
-  POSTGRES_PASSWORD?: string;
-  POSTGRES_DB?: string;
   DB_HOST?: string;
   DB_PORT?: string | number;
+  POSTGRES_DB?: string;
+  POSTGRES_PASSWORD?: string;
+  POSTGRES_USER?: string;
 }
 
 export function buildDatabaseUrl(env: DbEnvInput): string {

@@ -23,16 +23,16 @@ export type ChainKey = "SEPOLIA" | "BASE";
  * Note: Currently EVM-only; Solana would require separate config.
  */
 export interface ChainConfig {
-  /** Human-readable chain identifier */
-  key: ChainKey;
   /** Chain ID (numeric) */
   chainId: number;
   /** Block explorer base URL (e.g., "https://sepolia.etherscan.io") */
   explorerBaseUrl: string;
-  /** USDC token address on this chain */
-  usdcTokenAddress: string;
+  /** Human-readable chain identifier */
+  key: ChainKey;
   /** Minimum confirmations for payment verification */
   minConfirmations: number;
+  /** USDC token address on this chain */
+  usdcTokenAddress: string;
 }
 
 /**

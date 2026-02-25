@@ -43,11 +43,11 @@ const TEST_RUN_ID = "pipeline-test-run";
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SpyableBoundToolOptions {
-  validateInputThrows?: boolean;
   execThrows?: boolean;
-  validateOutputThrows?: boolean;
-  redactThrows?: boolean;
   rawOutput?: Record<string, unknown>;
+  redactThrows?: boolean;
+  validateInputThrows?: boolean;
+  validateOutputThrows?: boolean;
 }
 
 /**

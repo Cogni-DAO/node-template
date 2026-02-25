@@ -17,17 +17,17 @@
 /** Input: joined curation + activity_events data (only resolved, included events) */
 export interface CuratedEventForAllocation {
   readonly eventId: string;
-  readonly userId: string;
-  readonly source: string;
   readonly eventType: string;
   readonly included: boolean;
+  readonly source: string;
+  readonly userId: string;
   readonly weightOverrideMilli: bigint | null;
 }
 
 export interface ProposedAllocation {
-  readonly userId: string;
-  readonly proposedUnits: bigint;
   readonly activityCount: number;
+  readonly proposedUnits: bigint;
+  readonly userId: string;
 }
 
 /**

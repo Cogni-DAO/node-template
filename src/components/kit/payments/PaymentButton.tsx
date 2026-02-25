@@ -22,14 +22,14 @@ export interface PaymentButtonProps {
   /** Amount in USD cents */
   amountUsdCents: number;
 
+  /** Disable all interactions */
+  disabled?: boolean;
+
   /** True only during pending phases (not TERMINAL) */
   isInFlight: boolean;
 
   /** Trigger payment initiation */
   onClick: () => void;
-
-  /** Disable all interactions */
-  disabled?: boolean;
 }
 
 export function PaymentButton({

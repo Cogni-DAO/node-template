@@ -29,8 +29,8 @@ function clearEchoCaptures(): void {
 }
 
 interface CapturedRequest {
-  url: string;
   headers: Record<string, string>;
+  url: string;
 }
 
 function readEchoCaptures(): CapturedRequest[] {

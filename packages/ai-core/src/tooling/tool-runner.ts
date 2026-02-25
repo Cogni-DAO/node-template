@@ -59,28 +59,15 @@ export interface ToolExecOptions {
  */
 export interface ToolRunnerConfig {
   /**
-   * Policy for tool execution.
-   * Default: DENY_ALL_POLICY (rejects all tools per DENY_BY_DEFAULT invariant)
-   */
-  readonly policy?: ToolPolicy;
-
-  /**
    * Context for policy decisions.
    * Default: { runId: 'unknown' }
    */
   readonly ctx?: ToolPolicyContext;
-
   /**
-   * Optional span port for tool instrumentation.
-   * Per SPAN_METADATA_ONLY: ai-core emits metadata-only spans by default.
+   * Policy for tool execution.
+   * Default: DENY_ALL_POLICY (rejects all tools per DENY_BY_DEFAULT invariant)
    */
-  readonly spanPort?: AiSpanPort;
-
-  /**
-   * Trace ID for span correlation.
-   * Required if spanPort is provided.
-   */
-  readonly traceId?: string;
+  readonly policy?: ToolPolicy;
 
   /**
    * Optional hook to prepare span input payload.
@@ -95,6 +82,18 @@ export interface ToolRunnerConfig {
    * Hook failures are swallowed (instrumentation must not break execution).
    */
   readonly spanOutput?: (result: unknown) => unknown;
+
+  /**
+   * Optional span port for tool instrumentation.
+   * Per SPAN_METADATA_ONLY: ai-core emits metadata-only spans by default.
+   */
+  readonly spanPort?: AiSpanPort;
+
+  /**
+   * Trace ID for span correlation.
+   * Required if spanPort is provided.
+   */
+  readonly traceId?: string;
 }
 
 /**

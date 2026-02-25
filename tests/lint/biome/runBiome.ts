@@ -27,8 +27,8 @@ import path from "node:path";
 
 interface BiomeDiagnostic {
   category: string;
-  severity: "error" | "warning" | "info";
   message?: { text?: string };
+  severity: "error" | "warning" | "info";
 }
 
 interface BiomeReport {

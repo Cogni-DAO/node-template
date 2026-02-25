@@ -27,28 +27,28 @@ import { cn } from "@/shared/util";
 import { Alert, AlertDescription, AlertTitle } from "./Alert";
 
 export interface ErrorAlertProps {
+  /** Additional CSS classes for layout */
+  className?: string;
   /** Machine-readable error code */
   code: string;
   /** Human-readable error message */
   message: string;
-  /** Whether error is transient and can be retried */
-  retryable?: boolean;
-  /** Request ID for deduplication (optional) */
-  requestId?: string;
-  /** Show retry button */
-  showRetry?: boolean;
-  /** Show "Use Free Model" button */
-  showSwitchFree?: boolean;
-  /** Show "Add Credits" button */
-  showAddCredits?: boolean;
+  /** Callback when "Add Credits" clicked */
+  onAddCredits?: () => void;
   /** Callback when retry clicked */
   onRetry?: () => void;
   /** Callback when "Use Free Model" clicked */
   onSwitchFreeModel?: () => void;
-  /** Callback when "Add Credits" clicked */
-  onAddCredits?: () => void;
-  /** Additional CSS classes for layout */
-  className?: string;
+  /** Request ID for deduplication (optional) */
+  requestId?: string;
+  /** Whether error is transient and can be retried */
+  retryable?: boolean;
+  /** Show "Add Credits" button */
+  showAddCredits?: boolean;
+  /** Show retry button */
+  showRetry?: boolean;
+  /** Show "Use Free Model" button */
+  showSwitchFree?: boolean;
 }
 
 export interface ErrorAlertRef {

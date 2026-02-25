@@ -69,11 +69,7 @@ export type { ToolExecFn, ToolExecResult } from "@cogni/ai-core";
  * Graph request (subset of GraphRunRequest, no src imports).
  */
 export interface InProcGraphRequest {
-  readonly runId: string;
-  readonly messages: readonly Message[];
   readonly abortSignal?: AbortSignal;
-  readonly traceId?: string;
-  readonly ingressRequestId?: string;
   /**
    * RunnableConfig.configurable passed to graph.invoke().
    * Per UNIFIED_INVOKE_SIGNATURE: same shape for server and inproc.
@@ -85,6 +81,10 @@ export interface InProcGraphRequest {
     readonly model: string;
     readonly toolIds?: readonly string[];
   };
+  readonly ingressRequestId?: string;
+  readonly messages: readonly Message[];
+  readonly runId: string;
+  readonly traceId?: string;
 }
 
 /**
@@ -93,11 +93,10 @@ export interface InProcGraphRequest {
  * Generic TTool allows src/ to specify LlmToolDefinition while package defaults to unknown.
  */
 export interface InProcRunnerOptions<TTool = unknown> {
-  /** Graph factory from catalog - creates compiled graph with LLM and tools */
-  readonly createGraph: CreateGraphFn;
-
   /** Per-LLM-call completion function (called N times in agentic loop) */
   readonly completionFn: CompletionFn<TTool>;
+  /** Graph factory from catalog - creates compiled graph with LLM and tools */
+  readonly createGraph: CreateGraphFn;
 
   /**
    * Factory that receives emit callback and returns ToolExecFn.
@@ -106,31 +105,31 @@ export interface InProcRunnerOptions<TTool = unknown> {
    */
   readonly createToolExecFn: (emit: (e: AiEvent) => void) => ToolExecFn;
 
+  /** Graph execution request */
+  readonly request: InProcGraphRequest;
+
   /** Tool contracts for LangChain tool wrapping */
   readonly toolContracts: ReadonlyArray<
     ToolContract<string, unknown, unknown, unknown>
   >;
-
-  /** Graph execution request */
-  readonly request: InProcGraphRequest;
 }
 
 /**
  * Graph execution result.
  */
 export interface GraphResult {
-  readonly ok: boolean;
-  readonly usage?: {
-    readonly promptTokens: number;
-    readonly completionTokens: number;
-  };
-  readonly finishReason?: string;
+  /** Final assistant response content (for trace output) */
+  readonly content?: string;
   readonly error?: AiExecutionErrorCode;
   /**
    * Error message for logging/debugging at adapter boundary.
    * Only populated on failure (ok: false). Not sent to clients.
    */
   readonly errorMessage?: string;
-  /** Final assistant response content (for trace output) */
-  readonly content?: string;
+  readonly finishReason?: string;
+  readonly ok: boolean;
+  readonly usage?: {
+    readonly promptTokens: number;
+    readonly completionTokens: number;
+  };
 }

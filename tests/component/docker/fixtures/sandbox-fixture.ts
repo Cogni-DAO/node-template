@@ -93,11 +93,11 @@ export function getRepoRootPath(): string {
  * because values are set in beforeAll which runs after module load.
  */
 export interface SandboxFixture {
-  readonly docker: Docker;
-  runner: SandboxRunnerAdapter | undefined;
-  imageAvailable: boolean;
   /** Unique prefix for this test file's containers */
   readonly containerPrefix: string;
+  readonly docker: Docker;
+  imageAvailable: boolean;
+  runner: SandboxRunnerAdapter | undefined;
 }
 
 /**

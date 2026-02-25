@@ -56,10 +56,10 @@ export type {
 // ============================================================================
 
 export interface UseDAOFormationReturn {
-  state: FormationState;
-  startFormation: (config: DAOFormationConfig) => void;
-  reset: () => void;
   isSupported: boolean;
+  reset: () => void;
+  startFormation: (config: DAOFormationConfig) => void;
+  state: FormationState;
 }
 
 export function useDAOFormation(): UseDAOFormationReturn {

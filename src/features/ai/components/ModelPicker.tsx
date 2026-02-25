@@ -32,11 +32,11 @@ import {
 import { cn } from "@/shared/util/cn";
 
 export interface ModelPickerProps {
-  models: Model[];
-  value: string;
-  onValueChange: (modelId: string) => void;
-  disabled?: boolean;
   balance?: number;
+  disabled?: boolean;
+  models: Model[];
+  onValueChange: (modelId: string) => void;
+  value: string;
 }
 
 export function ModelPicker({

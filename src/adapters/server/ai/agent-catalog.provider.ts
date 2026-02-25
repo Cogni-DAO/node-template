@@ -29,15 +29,6 @@ export type { AgentDescriptor } from "@/ports";
  * or any execution infrastructure.
  */
 export interface AgentCatalogProvider {
-  /** Provider identifier (e.g., "langgraph", "claude_sdk") */
-  readonly providerId: string;
-
-  /**
-   * List all agents available from this provider.
-   * Used for discovery and UI agent selector.
-   */
-  listAgents(): readonly AgentDescriptor[];
-
   /**
    * Check if this provider handles the given graphId.
    * Used by aggregator for routing.
@@ -46,4 +37,12 @@ export interface AgentCatalogProvider {
    * @returns true if this provider handles the graph
    */
   canHandle(graphId: string): boolean;
+
+  /**
+   * List all agents available from this provider.
+   * Used for discovery and UI agent selector.
+   */
+  listAgents(): readonly AgentDescriptor[];
+  /** Provider identifier (e.g., "langgraph", "claude_sdk") */
+  readonly providerId: string;
 }

@@ -48,9 +48,9 @@ export const DEFAULT_LIMITS = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SandboxTestContext {
+  docker: Docker;
   runner: SandboxRunnerAdapter;
   workspace: string;
-  docker: Docker;
 }
 
 export interface SandboxTestContextWithProxy extends SandboxTestContext {
@@ -233,8 +233,8 @@ export async function cleanupGatewayDir(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RunOptions {
-  maxRuntimeSec?: number;
   maxMemoryMb?: number;
+  maxRuntimeSec?: number;
 }
 
 /** Test billing account ID for sandbox tests */
@@ -359,15 +359,15 @@ export const LLM_ROUNDTRIP_LIMITS = {
 } as const;
 
 export interface AgentLlmOptions {
+  maxMemoryMb?: number;
+  maxRuntimeSec?: number;
   messages: Array<{ role: string; content: string }>;
   model?: string;
-  maxRuntimeSec?: number;
-  maxMemoryMb?: number;
 }
 
 export interface AgentLlmResult {
-  result: SandboxRunResult;
   envelope: SandboxProgramContract;
+  result: SandboxRunResult;
 }
 
 /**

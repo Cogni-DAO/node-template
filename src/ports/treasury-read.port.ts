@@ -16,32 +16,32 @@
  * Token balance in a treasury snapshot
  */
 export interface TokenBalance {
+  /** Balance formatted as decimal string */
+  balanceFormatted: string;
+  /** Balance in smallest unit (wei for ETH) */
+  balanceWei: bigint;
+  /** Token decimals (18 for ETH, 6 for USDC) */
+  decimals: number;
   /** Token symbol (e.g., 'ETH', 'USDC') */
   token: string;
   /** Token address (null for native token like ETH) */
   tokenAddress: string | null;
-  /** Balance in smallest unit (wei for ETH) */
-  balanceWei: bigint;
-  /** Balance formatted as decimal string */
-  balanceFormatted: string;
-  /** Token decimals (18 for ETH, 6 for USDC) */
-  decimals: number;
 }
 
 /**
  * Treasury snapshot containing balances at a specific block
  */
 export interface TreasurySnapshot {
-  /** Treasury address queried */
-  treasuryAddress: string;
-  /** Chain ID where treasury exists */
-  chainId: number;
-  /** Block number at query time */
-  blockNumber: bigint;
   /** Array of token balances */
   balances: TokenBalance[];
+  /** Block number at query time */
+  blockNumber: bigint;
+  /** Chain ID where treasury exists */
+  chainId: number;
   /** Timestamp when snapshot was taken */
   timestamp: number;
+  /** Treasury address queried */
+  treasuryAddress: string;
 }
 
 /**

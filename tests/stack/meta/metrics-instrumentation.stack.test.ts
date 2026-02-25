@@ -22,8 +22,8 @@ import { describe, expect, it, vi } from "vitest";
 // =============================================================================
 
 interface MetricSample {
-  name: string;
   labels: Record<string, string>;
+  name: string;
   value: number;
 }
 

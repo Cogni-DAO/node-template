@@ -17,23 +17,23 @@
  * Represents a request from the LLM to invoke a tool.
  */
 export interface MessageToolCall {
+  /** JSON-encoded arguments string */
+  readonly arguments: string;
   /** Unique ID for this tool call (model-provided) */
   readonly id: string;
   /** Tool name (snake_case) */
   readonly name: string;
-  /** JSON-encoded arguments string */
-  readonly arguments: string;
 }
 
 export interface Message {
-  role: MessageRole;
   content: string;
+  role: MessageRole;
   /** ISO 8601 string, optional - set by feature layer */
   timestamp?: string;
-  /** Tool calls requested by assistant (present when role="assistant" and LLM wants to use tools) */
-  toolCalls?: MessageToolCall[];
   /** Tool call ID this message responds to (present when role="tool") */
   toolCallId?: string;
+  /** Tool calls requested by assistant (present when role="assistant" and LLM wants to use tools) */
+  toolCalls?: MessageToolCall[];
 }
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";

@@ -34,8 +34,8 @@ const optionalString = z.preprocess(
 
 export interface EnvValidationMeta {
   code: "INVALID_ENV";
-  missing: string[];
   invalid: string[];
+  missing: string[];
 }
 
 export class EnvValidationError extends Error {

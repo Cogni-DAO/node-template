@@ -36,10 +36,10 @@ export type RedactionMode = "top_level_only";
  * Redaction configuration for tool output.
  */
 export interface ToolRedactionConfig {
-  /** Redaction strategy (P0: top_level_only) */
-  readonly mode: RedactionMode;
   /** Fields that are safe to expose to UI/logs */
   readonly allowlist: readonly string[];
+  /** Redaction strategy (P0: top_level_only) */
+  readonly mode: RedactionMode;
 }
 
 /**
@@ -52,14 +52,14 @@ export interface ToolRedactionConfig {
  * JSONSchema subset. Disallow oneOf/anyOf/allOf/not/if-then-else/patternProperties.
  */
 export interface ToolSpec {
-  /** Stable tool name (snake_case, namespaced: core:tool_name) */
-  readonly name: string;
   /** Human-readable description for LLM */
   readonly description: string;
-  /** JSONSchema7 for input validation (compiled from Zod) */
-  readonly inputSchema: JSONSchema7;
   /** Side-effect level for policy decisions */
   readonly effect: ToolEffect;
+  /** JSONSchema7 for input validation (compiled from Zod) */
+  readonly inputSchema: JSONSchema7;
+  /** Stable tool name (snake_case, namespaced: core:tool_name) */
+  readonly name: string;
   /** Redaction config for output */
   readonly redaction: ToolRedactionConfig;
   /**
@@ -94,28 +94,28 @@ export type ToolErrorCode =
  * for observability only; must be redacted/omitted from UI/logs.
  */
 export interface ToolInvocationRecord {
-  /** Stable ID for this tool call (model-provided or UUID) */
-  readonly toolCallId: string;
-  /** Tool name that was invoked */
-  readonly name: string;
   /** Parsed arguments passed to tool (flexible shape) */
   readonly args: unknown;
-  /** Tool execution result (redacted for UI safety, flexible shape) */
-  readonly result?: unknown;
+  /** When tool execution completed (epoch milliseconds) */
+  readonly endedAtMs?: number;
   /** Error info if tool execution failed */
   readonly error?: {
     readonly code: ToolErrorCode;
     readonly message: string;
   };
-  /** When tool execution started (epoch milliseconds for serialization) */
-  readonly startedAtMs: number;
-  /** When tool execution completed (epoch milliseconds) */
-  readonly endedAtMs?: number;
+  /** Tool name that was invoked */
+  readonly name: string;
   /**
    * Raw provider-native payload for observability.
    * Must be redacted/omitted from UI/logs. Never influences execution or billing.
    */
   readonly raw?: unknown;
+  /** Tool execution result (redacted for UI safety, flexible shape) */
+  readonly result?: unknown;
+  /** When tool execution started (epoch milliseconds for serialization) */
+  readonly startedAtMs: number;
+  /** Stable ID for this tool call (model-provided or UUID) */
+  readonly toolCallId: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -133,15 +133,15 @@ export interface ToolInvocationRecord {
  * FORBIDDEN fields: accessToken, apiKey, refreshToken, headers, secret, credential
  */
 export interface ToolInvocationContext {
-  /** Graph run ID for correlation */
-  readonly runId: string;
-  /** Stable tool call ID (model-provided or generated) */
-  readonly toolCallId: string;
   /**
    * Connection ID for authenticated tools (out-of-band, not in tool args).
    * Per CONNECTION_IN_CONTEXT_NOT_ARGS: connectionId in context, not tool schemas.
    */
   readonly connectionId?: string;
+  /** Graph run ID for correlation */
+  readonly runId: string;
+  /** Stable tool call ID (model-provided or generated) */
+  readonly toolCallId: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -184,32 +184,11 @@ export interface ParseableSchema {
  * ai-core only sees this semantic interface.
  */
 export interface BoundToolRuntime {
-  /** Namespaced tool ID (e.g., "core__get_current_time") */
-  readonly id: string;
-
-  /** Tool spec for LLM exposure (compiled from Zod, no runtime) */
-  readonly spec: ToolSpec;
-
-  /** Side-effect level for policy decisions */
-  readonly effect: ToolEffect;
-
-  /** Whether tool requires authenticated connection */
-  readonly requiresConnection: boolean;
-
   /** Capability dependencies (e.g., ['auth', 'clock']) */
   readonly capabilities: readonly string[];
 
-  // --- Method-based interface ---
-
-  /**
-   * Validate input args.
-   * Throws validation error on failure (Zod stays in ai-tools).
-   *
-   * @param rawArgs - Raw arguments from LLM
-   * @returns Validated and typed arguments
-   * @throws ZodError or similar on validation failure
-   */
-  validateInput(rawArgs: unknown): unknown;
+  /** Side-effect level for policy decisions */
+  readonly effect: ToolEffect;
 
   /**
    * Execute tool with validated args, context, and capabilities.
@@ -227,15 +206,8 @@ export interface BoundToolRuntime {
     ctx: ToolInvocationContext,
     capabilities: ToolCapabilities
   ): Promise<unknown>;
-
-  /**
-   * Validate output from tool execution.
-   *
-   * @param rawOutput - Output from exec()
-   * @returns Validated output
-   * @throws On validation failure
-   */
-  validateOutput(rawOutput: unknown): unknown;
+  /** Namespaced tool ID (e.g., "core__get_current_time") */
+  readonly id: string;
 
   /**
    * Redact output for UI/telemetry.
@@ -245,6 +217,33 @@ export interface BoundToolRuntime {
    * @returns Redacted output safe for UI/logs
    */
   redact(validatedOutput: unknown): unknown;
+
+  /** Whether tool requires authenticated connection */
+  readonly requiresConnection: boolean;
+
+  /** Tool spec for LLM exposure (compiled from Zod, no runtime) */
+  readonly spec: ToolSpec;
+
+  // --- Method-based interface ---
+
+  /**
+   * Validate input args.
+   * Throws validation error on failure (Zod stays in ai-tools).
+   *
+   * @param rawArgs - Raw arguments from LLM
+   * @returns Validated and typed arguments
+   * @throws ZodError or similar on validation failure
+   */
+  validateInput(rawArgs: unknown): unknown;
+
+  /**
+   * Validate output from tool execution.
+   *
+   * @param rawOutput - Output from exec()
+   * @returns Validated output
+   * @throws On validation failure
+   */
+  validateOutput(rawOutput: unknown): unknown;
 }
 
 /**

@@ -46,11 +46,11 @@ import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
 
 interface CompletionInput {
+  /** Graph name or fully-qualified graphId to execute (required) */
+  graphName: string;
   messages: MessageDto[];
   model: string;
   sessionUser: SessionUser;
-  /** Graph name or fully-qualified graphId to execute (required) */
-  graphName: string;
   /**
    * Conversation state key for multi-turn conversations.
    * If absent, server generates one.

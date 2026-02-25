@@ -20,10 +20,10 @@ import { Badge, Card, CardContent, Progress } from "@/components";
 import type { EpochView } from "@/features/governance/types";
 
 interface EpochCountdownProps {
-  readonly periodStart: string;
-  readonly periodEnd: string;
-  readonly status: EpochView["status"];
   readonly contributorCount: number;
+  readonly periodEnd: string;
+  readonly periodStart: string;
+  readonly status: EpochView["status"];
   readonly totalPoints: number;
 }
 

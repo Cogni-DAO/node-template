@@ -22,8 +22,8 @@ import type {
 type ActivityData = z.infer<typeof aiActivityOperation.output>;
 
 export interface FetchGovernanceActivityParams {
-  range: TimeRange;
   groupBy?: ActivityGroupBy;
+  range: TimeRange;
 }
 
 export async function fetchGovernanceActivity(

@@ -16,18 +16,18 @@ import type { Message } from "@/core";
 import type { LlmCaller, LlmCompletionResult, LlmService } from "@/ports";
 
 export interface FakeLlmOptions {
-  shouldThrow?: boolean;
+  delay?: number;
   errorMessage?: string;
-  responseContent?: string;
   finishReason?: string;
+  /** Custom promptHash to return (tests canonical hash propagation) */
+  promptHash?: string;
+  responseContent?: string;
+  shouldThrow?: boolean;
   usage?: {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
   };
-  delay?: number;
-  /** Custom promptHash to return (tests canonical hash propagation) */
-  promptHash?: string;
 }
 
 export class FakeLlmService implements LlmService {

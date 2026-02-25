@@ -26,10 +26,10 @@ export interface Clock {
 }
 
 export interface RequestContext {
+  clock: Clock; // Time provider for testability
   log: Logger; // Child logger with reqId, traceId, route, method
   reqId: string; // Request correlation ID
-  traceId: string; // OTel trace ID for distributed tracing (hex string)
   routeId: string; // Route identifier (e.g., "payments.intents")
   session?: SessionUser | undefined; // Authenticated user (optional)
-  clock: Clock; // Time provider for testability
+  traceId: string; // OTel trace ID for distributed tracing (hex string)
 }

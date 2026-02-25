@@ -46,10 +46,10 @@ const CONTAINER_LLM_SOCKET_PATH = `${CONTAINER_LLM_SOCKET_DIR}/${CONTAINER_LLM_S
 
 /** Options for SandboxRunnerAdapter */
 export interface SandboxRunnerAdapterOptions {
-  /** LiteLLM master key for proxy authentication. Required if using llmProxy. */
-  litellmMasterKey?: string;
   /** LiteLLM host:port (default: localhost:4000) */
   litellmHost?: string;
+  /** LiteLLM master key for proxy authentication. Required if using llmProxy. */
+  litellmMasterKey?: string;
 }
 
 /**

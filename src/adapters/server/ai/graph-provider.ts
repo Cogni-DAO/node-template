@@ -29,9 +29,6 @@ import type { GraphRunRequest, GraphRunResult } from "@/ports";
  * Note: Discovery (listAgents) is in AgentCatalogProvider, not here.
  */
 export interface GraphProvider {
-  /** Provider identifier (e.g., "langgraph", "claude_sdk") */
-  readonly providerId: string;
-
   /**
    * Check if this provider handles the given graphId.
    * Used by aggregator for routing.
@@ -40,6 +37,8 @@ export interface GraphProvider {
    * @returns true if this provider handles the graph
    */
   canHandle(graphId: string): boolean;
+  /** Provider identifier (e.g., "langgraph", "claude_sdk") */
+  readonly providerId: string;
 
   /**
    * Execute a graph run.

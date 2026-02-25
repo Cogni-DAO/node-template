@@ -17,12 +17,12 @@
  * Returned by startSpan(), call end() when operation completes.
  */
 export interface AiSpanHandle {
-  spanId: string;
   end: (params: {
     output?: unknown;
     level?: "DEFAULT" | "WARNING" | "ERROR";
     metadata?: Record<string, unknown>;
   }) => void;
+  spanId: string;
 }
 
 /**

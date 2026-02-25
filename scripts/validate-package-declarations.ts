@@ -29,8 +29,8 @@ interface PackageExports {
 }
 
 interface PackageJson {
-  name: string;
   exports?: PackageExports;
+  name: string;
   types?: string;
 }
 

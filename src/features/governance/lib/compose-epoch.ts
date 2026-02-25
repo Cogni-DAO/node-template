@@ -32,43 +32,43 @@ function getDisplayName(
 /** Minimal epoch shape expected from the list-epochs API. */
 export interface EpochDto {
   readonly id: string;
-  readonly status: "open" | "review" | "finalized";
-  readonly periodStart: string;
   readonly periodEnd: string;
+  readonly periodStart: string;
   readonly poolTotalCredits: string | null;
+  readonly status: "open" | "review" | "finalized";
 }
 
 /** Minimal allocation shape expected from the epoch-allocations API. */
 export interface AllocationDto {
-  readonly userId: string;
-  readonly proposedUnits: string;
-  readonly finalUnits: string | null;
   readonly activityCount: number;
+  readonly finalUnits: string | null;
+  readonly proposedUnits: string;
+  readonly userId: string;
 }
 
 /** Minimal activity event shape expected from the epoch-activity API. */
 export interface ApiActivityEvent {
-  readonly id: string;
-  readonly source: string;
-  readonly eventType: string;
-  readonly platformLogin: string | null;
   readonly artifactUrl: string | null;
-  readonly eventTime: string;
   readonly curation: { readonly userId: string | null } | null;
+  readonly eventTime: string;
+  readonly eventType: string;
+  readonly id: string;
+  readonly platformLogin: string | null;
+  readonly source: string;
 }
 
 /** Minimal payout line shape from the epoch-statement API. */
 export interface PayoutLineDto {
-  readonly user_id: string;
-  readonly total_units: string;
-  readonly share: string;
   readonly amount_credits: string;
+  readonly share: string;
+  readonly total_units: string;
+  readonly user_id: string;
 }
 
 /** Minimal statement shape from the epoch-statement API. */
 export interface StatementDto {
-  readonly poolTotalCredits: string;
   readonly payouts: readonly PayoutLineDto[];
+  readonly poolTotalCredits: string;
 }
 
 /**

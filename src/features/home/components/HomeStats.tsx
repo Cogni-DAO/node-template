@@ -20,8 +20,8 @@ import type { ReactElement } from "react";
 import { cn } from "@/shared/util/cn";
 
 interface StatItem {
-  value: string;
   label: string;
+  value: string;
 }
 
 const STATS: StatItem[] = [

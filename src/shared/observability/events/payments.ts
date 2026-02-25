@@ -13,59 +13,59 @@
  */
 
 export interface PaymentsIntentCreatedEvent {
-  event: "payments.intent_created";
-  routeId: string;
-  reqId: string;
   billingAccountId: string;
-  paymentIntentId: string;
   chainId: number;
   durationMs: number;
+  event: "payments.intent_created";
+  paymentIntentId: string;
+  reqId: string;
+  routeId: string;
 }
 
 export interface PaymentsStateTransitionEvent {
-  event: "payments.state_transition";
-  routeId: string;
-  reqId: string;
   billingAccountId: string;
-  paymentIntentId: string;
-  fromStatus?: string | undefined;
-  toStatus: string;
   chainId: number;
-  txHash?: string | undefined;
-  errorCode?: string | undefined;
   durationMs: number;
+  errorCode?: string | undefined;
+  event: "payments.state_transition";
+  fromStatus?: string | undefined;
   idempotentHit?: boolean | undefined;
+  paymentIntentId: string;
+  reqId: string;
+  routeId: string;
+  toStatus: string;
+  txHash?: string | undefined;
 }
 
 export interface PaymentsVerifiedEvent {
-  event: "payments.verified";
-  routeId: string;
-  reqId: string;
   billingAccountId: string;
-  paymentIntentId: string;
   chainId: number;
-  txHash: string;
   durationMs: number;
+  event: "payments.verified";
+  paymentIntentId: string;
+  reqId: string;
+  routeId: string;
+  txHash: string;
 }
 
 export interface PaymentsConfirmedEvent {
-  event: "payments.confirmed";
-  routeId: string;
-  reqId: string;
   billingAccountId: string;
-  paymentIntentId: string;
   chainId: number;
-  txHash: string;
   creditsApplied?: number | undefined;
   durationMs: number;
+  event: "payments.confirmed";
+  paymentIntentId: string;
+  reqId: string;
+  routeId: string;
+  txHash: string;
 }
 
 export interface PaymentsStatusReadEvent {
-  event: "payments.status_read";
-  routeId: string;
-  reqId: string;
   billingAccountId: string;
-  paymentIntentId: string;
-  status: string;
   durationMs: number;
+  event: "payments.status_read";
+  paymentIntentId: string;
+  reqId: string;
+  routeId: string;
+  status: string;
 }

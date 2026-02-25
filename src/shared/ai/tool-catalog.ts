@@ -29,9 +29,6 @@ import type { ToolPolicy, ToolPolicyContext, ToolSpec } from "@cogni/ai-core";
  * (e.g., "core__get_current_time"). There is no separate toolId field.
  */
 export interface ToolCatalog {
-  /** Tools exposed to the model for this request (post-policy filtering) */
-  readonly tools: ReadonlyMap<string, ToolSpec>;
-
   /**
    * Get tool spec by ID.
    * @param toolId - Namespaced tool ID (e.g., "core__get_current_time")
@@ -44,6 +41,8 @@ export interface ToolCatalog {
    * @returns Array of all tools in catalog
    */
   list(): readonly ToolSpec[];
+  /** Tools exposed to the model for this request (post-policy filtering) */
+  readonly tools: ReadonlyMap<string, ToolSpec>;
 }
 
 /** Shared frozen empty map for EMPTY_CATALOG (immutable singleton) */

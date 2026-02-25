@@ -34,19 +34,19 @@ import { cn } from "@/shared/util/cn";
  * Per LANGGRAPH_SERVER_ALIGNED: uses 'name' field.
  */
 export interface GraphOption {
+  /** Short description (nullable per LangGraph Server) */
+  readonly description: string | null;
   /** Fully-qualified graph ID (e.g., "langgraph:poet") */
   readonly graphId: GraphId;
   /** Human-readable name (matches LangGraph Server 'name' field) */
   readonly name: string;
-  /** Short description (nullable per LangGraph Server) */
-  readonly description: string | null;
 }
 
 export interface GraphPickerProps {
-  graphs: readonly GraphOption[];
-  value: GraphId;
-  onValueChange: (graphId: GraphId) => void;
   disabled?: boolean;
+  graphs: readonly GraphOption[];
+  onValueChange: (graphId: GraphId) => void;
+  value: GraphId;
 }
 
 export function GraphPicker({

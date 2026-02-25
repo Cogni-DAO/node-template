@@ -20,8 +20,8 @@ export interface RouteEntry {
 }
 
 export interface RouteManifest {
-  readonly version: 1;
   readonly routes: readonly RouteEntry[];
+  readonly version: 1;
 }
 
 export const routeManifest: RouteManifest = {

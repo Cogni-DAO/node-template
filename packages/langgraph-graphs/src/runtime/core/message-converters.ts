@@ -29,9 +29,9 @@ import {
  * Compatible with src/core/chat/model.ts MessageToolCall.
  */
 export interface MessageToolCall {
+  readonly arguments: string;
   readonly id: string;
   readonly name: string;
-  readonly arguments: string;
 }
 
 /**
@@ -39,11 +39,11 @@ export interface MessageToolCall {
  * Matches src/core/chat/model.ts Message interface.
  */
 export interface Message {
-  role: "user" | "assistant" | "system" | "tool";
   content: string;
+  role: "user" | "assistant" | "system" | "tool";
   timestamp?: string;
-  toolCalls?: MessageToolCall[];
   toolCallId?: string;
+  toolCalls?: MessageToolCall[];
 }
 
 /**

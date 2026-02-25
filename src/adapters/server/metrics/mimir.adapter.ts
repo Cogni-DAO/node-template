@@ -105,10 +105,10 @@ function generateQueryRef(
 }
 
 export interface MimirAdapterConfig {
-  url: string; // Grafana Cloud Mimir endpoint
-  username: string; // Basic auth username
   password: string; // Basic auth password/token
   timeoutMs: number; // Query timeout in milliseconds
+  url: string; // Grafana Cloud Mimir endpoint
+  username: string; // Basic auth username
 }
 
 /**

@@ -31,31 +31,31 @@ import type { JsonValue } from "type-fest";
 export type ScheduleOverlapPolicyHint = "skip" | "buffer_one" | "allow_all";
 
 export interface CreateScheduleParams {
-  /** Temporal schedule ID (caller-supplied) */
-  readonly scheduleId: string;
+  /** Catchup window in milliseconds. Default: 60_000 (1m). Governance passes 0. */
+  readonly catchupWindowMs?: number;
+  /** Cron expression (5-field) */
+  readonly cron: string;
   /**
    * DB schedule UUID for schedules that have a row in `schedules`.
    * Set null/undefined only for legacy Temporal-only schedules.
    */
   readonly dbScheduleId?: string | null;
-  /** Cron expression (5-field) */
-  readonly cron: string;
-  /** IANA timezone */
-  readonly timezone: string;
-  /** Graph ID to execute */
-  readonly graphId: string;
   /** Execution grant ID for authorization */
   readonly executionGrantId: string;
+  /** Graph ID to execute */
+  readonly graphId: string;
   /** Graph input payload (JSON-serializable) */
   readonly input: JsonValue;
   /** Overlap policy hint. Default: "buffer_one" for tenant schedules. Governance sync passes "skip". */
   readonly overlapPolicy?: ScheduleOverlapPolicyHint;
-  /** Catchup window in milliseconds. Default: 60_000 (1m). Governance passes 0. */
-  readonly catchupWindowMs?: number;
-  /** Workflow type to start (default: GovernanceScheduledRunWorkflow) */
-  readonly workflowType?: string;
+  /** Temporal schedule ID (caller-supplied) */
+  readonly scheduleId: string;
   /** Task queue override (default: uses adapter's configured queue) */
   readonly taskQueueOverride?: string;
+  /** IANA timezone */
+  readonly timezone: string;
+  /** Workflow type to start (default: GovernanceScheduledRunWorkflow) */
+  readonly workflowType?: string;
 }
 
 /**
@@ -63,22 +63,22 @@ export interface CreateScheduleParams {
  * Dates are ISO strings for serialization safety.
  */
 export interface ScheduleDescription {
-  /** Schedule ID */
-  readonly scheduleId: string;
-  /** Next scheduled run time (ISO string), null if paused/none */
-  readonly nextRunAtIso: string | null;
-  /** Last run time (ISO string), null if never run */
-  readonly lastRunAtIso: string | null;
-  /** Whether schedule is paused */
-  readonly isPaused: boolean;
   /** Current cron expression, null if unavailable */
   readonly cron: string | null;
-  /** Current IANA timezone, null if unavailable */
-  readonly timezone: string | null;
-  /** Current graph input payload, null if unavailable */
-  readonly input: JsonValue | null;
   /** DB schedule UUID from workflow args, null if Temporal-only (legacy) */
   readonly dbScheduleId: string | null;
+  /** Current graph input payload, null if unavailable */
+  readonly input: JsonValue | null;
+  /** Whether schedule is paused */
+  readonly isPaused: boolean;
+  /** Last run time (ISO string), null if never run */
+  readonly lastRunAtIso: string | null;
+  /** Next scheduled run time (ISO string), null if paused/none */
+  readonly nextRunAtIso: string | null;
+  /** Schedule ID */
+  readonly scheduleId: string;
+  /** Current IANA timezone, null if unavailable */
+  readonly timezone: string | null;
 }
 
 /**
@@ -171,40 +171,6 @@ export interface ScheduleControlPort {
   createSchedule(params: CreateScheduleParams): Promise<void>;
 
   /**
-   * Updates an existing schedule's configuration (spec, action, policies).
-   * Used by governance sync to apply config changes without delete+recreate.
-   *
-   * @param scheduleId - Schedule to update
-   * @param params - New schedule configuration
-   * @throws ScheduleControlNotFoundError if schedule doesn't exist
-   * @throws ScheduleControlUnavailableError if backend unavailable
-   */
-  updateSchedule(
-    scheduleId: string,
-    params: CreateScheduleParams
-  ): Promise<void>;
-
-  /**
-   * Pauses a schedule (stops future runs).
-   * Idempotent: no-op if already paused.
-   *
-   * @param scheduleId - Schedule to pause
-   * @throws ScheduleControlNotFoundError if schedule doesn't exist
-   * @throws ScheduleControlUnavailableError if backend unavailable
-   */
-  pauseSchedule(scheduleId: string): Promise<void>;
-
-  /**
-   * Resumes a paused schedule.
-   * Idempotent: no-op if already running.
-   *
-   * @param scheduleId - Schedule to resume
-   * @throws ScheduleControlNotFoundError if schedule doesn't exist
-   * @throws ScheduleControlUnavailableError if backend unavailable
-   */
-  resumeSchedule(scheduleId: string): Promise<void>;
-
-  /**
    * Deletes a schedule.
    * Idempotent: no-op if schedule doesn't exist.
    *
@@ -231,4 +197,38 @@ export interface ScheduleControlPort {
    * @throws ScheduleControlUnavailableError if backend unavailable
    */
   listScheduleIds(prefix: string): Promise<string[]>;
+
+  /**
+   * Pauses a schedule (stops future runs).
+   * Idempotent: no-op if already paused.
+   *
+   * @param scheduleId - Schedule to pause
+   * @throws ScheduleControlNotFoundError if schedule doesn't exist
+   * @throws ScheduleControlUnavailableError if backend unavailable
+   */
+  pauseSchedule(scheduleId: string): Promise<void>;
+
+  /**
+   * Resumes a paused schedule.
+   * Idempotent: no-op if already running.
+   *
+   * @param scheduleId - Schedule to resume
+   * @throws ScheduleControlNotFoundError if schedule doesn't exist
+   * @throws ScheduleControlUnavailableError if backend unavailable
+   */
+  resumeSchedule(scheduleId: string): Promise<void>;
+
+  /**
+   * Updates an existing schedule's configuration (spec, action, policies).
+   * Used by governance sync to apply config changes without delete+recreate.
+   *
+   * @param scheduleId - Schedule to update
+   * @param params - New schedule configuration
+   * @throws ScheduleControlNotFoundError if schedule doesn't exist
+   * @throws ScheduleControlUnavailableError if backend unavailable
+   */
+  updateSchedule(
+    scheduleId: string,
+    params: CreateScheduleParams
+  ): Promise<void>;
 }

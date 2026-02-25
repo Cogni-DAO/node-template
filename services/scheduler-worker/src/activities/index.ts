@@ -34,13 +34,13 @@ import type {
  * Activities are created as closures over these deps.
  */
 export interface ActivityDeps {
-  grantAdapter: ExecutionGrantWorkerPort;
-  runAdapter: ScheduleRunRepository;
   config: {
     appBaseUrl: string;
     schedulerApiToken: string;
   };
+  grantAdapter: ExecutionGrantWorkerPort;
   logger: Logger;
+  runAdapter: ScheduleRunRepository;
 }
 
 /**
@@ -64,32 +64,32 @@ export interface CreateScheduleRunInput {
  * Input for executeGraphActivity.
  */
 export interface ExecuteGraphInput {
-  temporalScheduleId: string;
-  graphId: string;
   executionGrantId: string;
+  graphId: string;
   input: Record<string, unknown>;
-  scheduledFor: string; // ISO string - used for idempotency key
   runId: string; // Canonical runId shared with schedule_runs and charge_receipts
+  scheduledFor: string; // ISO string - used for idempotency key
+  temporalScheduleId: string;
 }
 
 /**
  * Output from executeGraphActivity.
  */
 export interface ExecuteGraphOutput {
+  errorCode?: string;
   ok: boolean;
   runId: string;
   traceId: string | null;
-  errorCode?: string;
 }
 
 /**
  * Input for updateScheduleRunActivity.
  */
 export interface UpdateScheduleRunInput {
+  errorMessage?: string;
   runId: string;
   status: "running" | "success" | "error" | "skipped";
   traceId?: string | null;
-  errorMessage?: string;
 }
 
 /**

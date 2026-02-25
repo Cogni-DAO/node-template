@@ -23,8 +23,8 @@ import { type RepoSpec, repoSpecSchema } from "./repoSpec.schema";
 export interface GovernanceSchedule {
   charter: string;
   cron: string;
-  timezone: string;
   entrypoint: string;
+  timezone: string;
 }
 
 export interface LedgerPoolConfig {
@@ -32,29 +32,29 @@ export interface LedgerPoolConfig {
 }
 
 export interface LedgerConfig {
-  scopeId: string;
-  scopeKey: string;
-  epochLengthDays: number;
   activitySources: Record<
     string,
     { creditEstimateAlgo: string; sourceRefs: string[]; streams: string[] }
   >;
-  poolConfig: LedgerPoolConfig;
-  /** base_issuance_credits as string (bigint serialized) for schedule payload. */
-  baseIssuanceCredits?: string;
   /** EVM approver addresses from repo-spec. */
   approvers?: string[];
+  /** base_issuance_credits as string (bigint serialized) for schedule payload. */
+  baseIssuanceCredits?: string;
+  epochLengthDays: number;
+  poolConfig: LedgerPoolConfig;
+  scopeId: string;
+  scopeKey: string;
 }
 
 export interface GovernanceConfig {
-  schedules: GovernanceSchedule[];
   ledger?: LedgerConfig;
+  schedules: GovernanceSchedule[];
 }
 
 export interface InboundPaymentConfig {
   chainId: number;
-  receivingAddress: string;
   provider: string;
+  receivingAddress: string;
 }
 
 let cachedPaymentConfig: InboundPaymentConfig | null = null;

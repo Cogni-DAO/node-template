@@ -15,8 +15,8 @@ import type { ScheduleResponse } from "@/contracts/schedules.create.v1.contract"
 import type { ScheduleUpdateInput } from "@/contracts/schedules.update.v1.contract";
 
 export interface UpdateScheduleParams {
-  id: string;
   data: ScheduleUpdateInput;
+  id: string;
 }
 
 export async function updateSchedule({

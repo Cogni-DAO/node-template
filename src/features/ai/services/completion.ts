@@ -50,18 +50,18 @@ import { recordTelemetry } from "./telemetry";
  * Context for post-call handling (shared between execute and executeStream).
  */
 interface PostCallContext {
-  readonly invocationId: string;
-  readonly requestId: string;
-  readonly traceId: string;
-  readonly routeId: string;
-  readonly fallbackPromptHash: string;
-  readonly requestedModel: string;
-  readonly llmStart: number;
-  readonly caller: LlmCaller;
-  readonly provenance: "response" | "stream";
   readonly accountService: AccountService;
   readonly aiTelemetry: AiTelemetryPort;
+  readonly caller: LlmCaller;
+  readonly fallbackPromptHash: string;
+  readonly invocationId: string;
   readonly langfuse: LangfusePort | undefined;
+  readonly llmStart: number;
+  readonly provenance: "response" | "stream";
+  readonly requestedModel: string;
+  readonly requestId: string;
+  readonly routeId: string;
+  readonly traceId: string;
 }
 
 /**
@@ -244,22 +244,22 @@ export async function execute(
 }
 
 export interface ExecuteStreamParams {
+  abortSignal?: AbortSignal;
+  accountService: AccountService;
+  aiTelemetry: AiTelemetryPort;
+  caller: LlmCaller;
+  clock: Clock;
+  ctx: RequestContext;
+  langfuse: LangfusePort | undefined;
+  llmService: LlmService;
   messages: Message[];
   model: string;
-  llmService: LlmService;
-  accountService: AccountService;
-  clock: Clock;
-  caller: LlmCaller;
-  ctx: RequestContext;
-  aiTelemetry: AiTelemetryPort;
-  langfuse: LangfusePort | undefined;
-  abortSignal?: AbortSignal;
-  /** Optional tools for function calling (readonly for immutability) */
-  tools?: readonly import("@/ports").LlmToolDefinition[];
-  /** Optional tool choice policy */
-  toolChoice?: import("@/ports").LlmToolChoice;
   /** Billing correlation metadata forwarded to LiteLLM as x-litellm-spend-logs-metadata header */
   spendLogsMetadata?: { run_id: string; graph_id: string };
+  /** Optional tool choice policy */
+  toolChoice?: import("@/ports").LlmToolChoice;
+  /** Optional tools for function calling (readonly for immutability) */
+  tools?: readonly import("@/ports").LlmToolDefinition[];
 }
 
 /**

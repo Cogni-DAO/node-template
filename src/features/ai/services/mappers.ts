@@ -26,12 +26,12 @@ import {
  * Matches route.ts MessageToolCall and core MessageToolCall.
  */
 export interface MessageDtoToolCall {
+  /** JSON-encoded arguments string */
+  arguments: string;
   /** Unique ID for this tool call */
   id: string;
   /** Tool name */
   name: string;
-  /** JSON-encoded arguments string */
-  arguments: string;
 }
 
 /**
@@ -39,13 +39,13 @@ export interface MessageDtoToolCall {
  * Supports user, assistant (with optional tool calls), and tool (with tool result) messages.
  */
 export interface MessageDto {
-  role: "user" | "assistant" | "tool";
   content: string;
+  role: "user" | "assistant" | "tool";
   timestamp?: string | undefined;
-  /** Tool calls made by assistant (only for role: "assistant") */
-  toolCalls?: MessageDtoToolCall[];
   /** Tool call ID this message responds to (only for role: "tool") */
   toolCallId?: string;
+  /** Tool calls made by assistant (only for role: "assistant") */
+  toolCalls?: MessageDtoToolCall[];
 }
 
 /**

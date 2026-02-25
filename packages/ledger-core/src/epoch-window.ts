@@ -23,8 +23,8 @@ export interface EpochWindowParams {
 }
 
 export interface EpochWindow {
-  readonly periodStartIso: string;
   readonly periodEndIso: string;
+  readonly periodStartIso: string;
 }
 
 /**

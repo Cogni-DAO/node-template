@@ -24,8 +24,8 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (models change only on LiteLLM re
  * Stored in LiteLLM config as model_info.metadata.cogni.*
  */
 interface CogniMeta {
-  defaultPreferred?: boolean;
   defaultFree?: boolean;
+  defaultPreferred?: boolean;
 }
 
 /**
@@ -33,20 +33,20 @@ interface CogniMeta {
  * Decoupled from API contract to avoid circular dependencies.
  */
 export interface ModelMeta {
+  cogni?: CogniMeta | undefined;
   id: string;
-  name?: string | undefined;
   isFree: boolean;
   isZdr: boolean;
+  name?: string | undefined;
   providerKey?: string | undefined;
-  cogni?: CogniMeta | undefined;
 }
 
 export interface ModelsCatalog {
-  models: ModelMeta[];
   defaults: {
     defaultPreferredModelId: string | null;
     defaultFreeModelId: string | null;
   };
+  models: ModelMeta[];
 }
 
 interface CacheEntry {

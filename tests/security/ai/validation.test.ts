@@ -37,8 +37,8 @@ import {
 
 // Security test helper - allows testing invalid roles
 interface SecurityTestDto {
-  role: string;
   content: string;
+  role: string;
   timestamp?: string;
 }
 

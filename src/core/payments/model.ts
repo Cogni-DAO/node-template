@@ -26,36 +26,36 @@ export type { PaymentAttemptStatus, PaymentErrorCode, ClientVisibleStatus };
  * Represents a single USDC payment attempt for credit top-up
  */
 export interface PaymentAttempt {
-  /** Unique attempt identifier */
-  id: string;
-  /** Billing account that owns this attempt */
-  billingAccountId: string;
-  /** Checksummed wallet address from SIWE session */
-  fromAddress: string;
-  /** Chain ID (Ethereum Sepolia = 11155111 for MVP) */
-  chainId: number;
-  /** Token contract address (USDC) */
-  token: string;
-  /** Recipient address (DAO wallet) */
-  toAddress: string;
   /** USDC amount in raw units (6 decimals) */
   amountRaw: bigint;
   /** USD amount in cents */
   amountUsdCents: number;
-  /** Current status */
-  status: PaymentAttemptStatus;
-  /** Transaction hash (null until submitted) */
-  txHash: string | null;
+  /** Billing account that owns this attempt */
+  billingAccountId: string;
+  /** Chain ID (Ethereum Sepolia = 11155111 for MVP) */
+  chainId: number;
+  /** Creation timestamp */
+  createdAt: Date;
   /** Error code for terminal failure states */
   errorCode: PaymentErrorCode | null;
   /** Intent expiration (null after submission) */
   expiresAt: Date | null;
-  /** Submission timestamp (set when txHash bound) */
-  submittedAt: Date | null;
+  /** Checksummed wallet address from SIWE session */
+  fromAddress: string;
+  /** Unique attempt identifier */
+  id: string;
   /** Last verification attempt timestamp */
   lastVerifyAttemptAt: Date | null;
+  /** Current status */
+  status: PaymentAttemptStatus;
+  /** Submission timestamp (set when txHash bound) */
+  submittedAt: Date | null;
+  /** Recipient address (DAO wallet) */
+  toAddress: string;
+  /** Token contract address (USDC) */
+  token: string;
+  /** Transaction hash (null until submitted) */
+  txHash: string | null;
   /** Verification attempt count */
   verifyAttemptCount: number;
-  /** Creation timestamp */
-  createdAt: Date;
 }

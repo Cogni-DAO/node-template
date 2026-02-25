@@ -41,8 +41,8 @@ import {
  */
 export interface ToolBindingDeps {
   readonly metricsCapability: MetricsCapability;
-  readonly webSearchCapability: WebSearchCapability;
   readonly repoCapability: RepoCapability;
+  readonly webSearchCapability: WebSearchCapability;
 }
 
 /**

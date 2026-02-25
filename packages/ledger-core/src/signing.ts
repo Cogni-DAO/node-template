@@ -17,13 +17,13 @@
 import { createHash } from "node:crypto";
 
 export interface CanonicalMessageParams {
-  readonly nodeId: string;
-  readonly scopeId: string;
+  readonly allocationSetHash: string;
   /** Epoch ID as string (bigint serialized) */
   readonly epochId: string;
-  readonly allocationSetHash: string;
+  readonly nodeId: string;
   /** Pool total credits as string (bigint serialized) */
   readonly poolTotalCredits: string;
+  readonly scopeId: string;
 }
 
 /**

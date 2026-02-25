@@ -25,111 +25,111 @@ import type { EpochStatus } from "./model";
 // ---------------------------------------------------------------------------
 
 export interface LedgerEpoch {
-  readonly id: bigint;
-  readonly nodeId: string;
-  readonly scopeId: string;
-  readonly status: EpochStatus;
-  readonly periodStart: Date;
-  readonly periodEnd: Date;
-  readonly weightConfig: Record<string, number>;
-  readonly poolTotalCredits: bigint | null;
-  readonly approverSetHash: string | null;
   readonly allocationAlgoRef: string | null;
-  readonly weightConfigHash: string | null;
-  readonly openedAt: Date;
+  readonly approverSetHash: string | null;
   readonly closedAt: Date | null;
   readonly createdAt: Date;
+  readonly id: bigint;
+  readonly nodeId: string;
+  readonly openedAt: Date;
+  readonly periodEnd: Date;
+  readonly periodStart: Date;
+  readonly poolTotalCredits: bigint | null;
+  readonly scopeId: string;
+  readonly status: EpochStatus;
+  readonly weightConfig: Record<string, number>;
+  readonly weightConfigHash: string | null;
 }
 
 export interface LedgerActivityEvent {
-  readonly id: string;
-  readonly nodeId: string;
-  readonly scopeId: string;
-  readonly source: string;
-  readonly eventType: string;
-  readonly platformUserId: string;
-  readonly platformLogin: string | null;
   readonly artifactUrl: string | null;
+  readonly eventTime: Date;
+  readonly eventType: string;
+  readonly id: string;
+  readonly ingestedAt: Date;
   readonly metadata: Record<string, unknown> | null;
+  readonly nodeId: string;
   readonly payloadHash: string;
+  readonly platformLogin: string | null;
+  readonly platformUserId: string;
   readonly producer: string;
   readonly producerVersion: string;
-  readonly eventTime: Date;
   readonly retrievedAt: Date;
-  readonly ingestedAt: Date;
+  readonly scopeId: string;
+  readonly source: string;
 }
 
 export interface LedgerCuration {
-  readonly id: string;
-  readonly nodeId: string;
+  readonly createdAt: Date;
   readonly epochId: bigint;
   readonly eventId: string;
-  readonly userId: string | null;
+  readonly id: string;
   readonly included: boolean;
-  readonly weightOverrideMilli: bigint | null;
+  readonly nodeId: string;
   readonly note: string | null;
-  readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly userId: string | null;
+  readonly weightOverrideMilli: bigint | null;
 }
 
 export interface LedgerAllocation {
-  readonly id: string;
-  readonly nodeId: string;
-  readonly epochId: bigint;
-  readonly userId: string;
-  readonly proposedUnits: bigint;
-  readonly finalUnits: bigint | null;
-  readonly overrideReason: string | null;
   readonly activityCount: number;
   readonly createdAt: Date;
+  readonly epochId: bigint;
+  readonly finalUnits: bigint | null;
+  readonly id: string;
+  readonly nodeId: string;
+  readonly overrideReason: string | null;
+  readonly proposedUnits: bigint;
   readonly updatedAt: Date;
+  readonly userId: string;
 }
 
 export interface LedgerSourceCursor {
+  readonly cursorValue: string;
   readonly nodeId: string;
+  readonly retrievedAt: Date;
   readonly scopeId: string;
   readonly source: string;
-  readonly stream: string;
   readonly sourceRef: string;
-  readonly cursorValue: string;
-  readonly retrievedAt: Date;
+  readonly stream: string;
 }
 
 export interface LedgerPoolComponent {
-  readonly id: string;
-  readonly nodeId: string;
-  readonly epochId: bigint;
-  readonly componentId: string;
   readonly algorithmVersion: string;
-  readonly inputsJson: Record<string, unknown>;
   readonly amountCredits: bigint;
-  readonly evidenceRef: string | null;
+  readonly componentId: string;
   readonly computedAt: Date;
+  readonly epochId: bigint;
+  readonly evidenceRef: string | null;
+  readonly id: string;
+  readonly inputsJson: Record<string, unknown>;
+  readonly nodeId: string;
 }
 
 export interface LedgerPayoutStatement {
+  readonly allocationSetHash: string;
+  readonly createdAt: Date;
+  readonly epochId: bigint;
   readonly id: string;
   readonly nodeId: string;
-  readonly epochId: bigint;
-  readonly allocationSetHash: string;
-  readonly poolTotalCredits: bigint;
   readonly payoutsJson: Array<{
     user_id: string;
     total_units: string;
     share: string;
     amount_credits: string;
   }>;
+  readonly poolTotalCredits: bigint;
   readonly supersedesStatementId: string | null;
-  readonly createdAt: Date;
 }
 
 export interface LedgerStatementSignature {
   readonly id: string;
   readonly nodeId: string;
-  readonly statementId: string;
-  readonly signerWallet: string;
   readonly signature: string;
   readonly signedAt: Date;
+  readonly signerWallet: string;
+  readonly statementId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,72 +137,72 @@ export interface LedgerStatementSignature {
 // ---------------------------------------------------------------------------
 
 export interface InsertActivityEventParams {
-  readonly id: string;
-  readonly nodeId: string;
-  readonly scopeId: string;
-  readonly source: string;
-  readonly eventType: string;
-  readonly platformUserId: string;
-  readonly platformLogin?: string | null;
   readonly artifactUrl?: string | null;
+  readonly eventTime: Date;
+  readonly eventType: string;
+  readonly id: string;
   readonly metadata?: Record<string, unknown> | null;
+  readonly nodeId: string;
   readonly payloadHash: string;
+  readonly platformLogin?: string | null;
+  readonly platformUserId: string;
   readonly producer: string;
   readonly producerVersion: string;
-  readonly eventTime: Date;
   readonly retrievedAt: Date;
+  readonly scopeId: string;
+  readonly source: string;
 }
 
 export interface UpsertCurationParams {
-  readonly nodeId: string;
   readonly epochId: bigint;
   readonly eventId: string;
-  readonly userId?: string | null;
   readonly included?: boolean;
-  readonly weightOverrideMilli?: bigint | null;
+  readonly nodeId: string;
   readonly note?: string | null;
+  readonly userId?: string | null;
+  readonly weightOverrideMilli?: bigint | null;
 }
 
 export interface InsertAllocationParams {
-  readonly nodeId: string;
-  readonly epochId: bigint;
-  readonly userId: string;
-  readonly proposedUnits: bigint;
-  readonly finalUnits?: bigint | null;
-  readonly overrideReason?: string | null;
   readonly activityCount: number;
+  readonly epochId: bigint;
+  readonly finalUnits?: bigint | null;
+  readonly nodeId: string;
+  readonly overrideReason?: string | null;
+  readonly proposedUnits: bigint;
+  readonly userId: string;
 }
 
 export interface InsertPoolComponentParams {
-  readonly nodeId: string;
-  readonly epochId: bigint;
-  readonly componentId: string;
   readonly algorithmVersion: string;
-  readonly inputsJson: Record<string, unknown>;
   readonly amountCredits: bigint;
+  readonly componentId: string;
+  readonly epochId: bigint;
   readonly evidenceRef?: string | null;
+  readonly inputsJson: Record<string, unknown>;
+  readonly nodeId: string;
 }
 
 export interface InsertPayoutStatementParams {
-  readonly nodeId: string;
-  readonly epochId: bigint;
   readonly allocationSetHash: string;
-  readonly poolTotalCredits: bigint;
+  readonly epochId: bigint;
+  readonly nodeId: string;
   readonly payoutsJson: Array<{
     user_id: string;
     total_units: string;
     share: string;
     amount_credits: string;
   }>;
+  readonly poolTotalCredits: bigint;
   readonly supersedesStatementId?: string | null;
 }
 
 export interface InsertSignatureParams {
   readonly nodeId: string;
-  readonly statementId: string;
-  readonly signerWallet: string;
   readonly signature: string;
   readonly signedAt: Date;
+  readonly signerWallet: string;
+  readonly statementId: string;
 }
 
 /**
@@ -210,11 +210,11 @@ export interface InsertSignatureParams {
  * Intentionally excludes weightOverrideMilli and note to prevent accidental overwrites.
  */
 export interface InsertCurationAutoParams {
-  readonly nodeId: string;
   readonly epochId: bigint;
   readonly eventId: string;
-  readonly userId: string | null;
   readonly included: boolean;
+  readonly nodeId: string;
+  readonly userId: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,23 +236,6 @@ export interface UncuratedEvent {
 // ---------------------------------------------------------------------------
 
 export interface ActivityLedgerStore {
-  // Epochs
-  createEpoch(params: {
-    nodeId: string;
-    scopeId: string;
-    periodStart: Date;
-    periodEnd: Date;
-    weightConfig: Record<string, number>;
-  }): Promise<LedgerEpoch>;
-  getOpenEpoch(nodeId: string, scopeId: string): Promise<LedgerEpoch | null>;
-  getEpochByWindow(
-    nodeId: string,
-    scopeId: string,
-    periodStart: Date,
-    periodEnd: Date
-  ): Promise<LedgerEpoch | null>;
-  getEpoch(id: bigint): Promise<LedgerEpoch | null>;
-  listEpochs(nodeId: string): Promise<LedgerEpoch[]>;
   /** Transition epoch open → review (INGESTION_CLOSED_ON_REVIEW).
    *  Pins approverSetHash, allocationAlgoRef, and weightConfigHash. */
   closeIngestion(
@@ -261,45 +244,14 @@ export interface ActivityLedgerStore {
     allocationAlgoRef: string,
     weightConfigHash: string
   ): Promise<LedgerEpoch>;
-
-  /** Transition epoch review → finalized. Sets poolTotalCredits and closedAt. */
-  finalizeEpoch(epochId: bigint, poolTotal: bigint): Promise<LedgerEpoch>;
-
-  // Activity events (append-only, epoch-agnostic raw log)
-  insertActivityEvents(events: InsertActivityEventParams[]): Promise<void>;
-  getActivityForWindow(
-    nodeId: string,
-    since: Date,
-    until: Date
-  ): Promise<LedgerActivityEvent[]>;
-
-  // Allocation computation (joined query)
-  /**
-   * Returns curated events with resolved user IDs for allocation computation.
-   * Joined query: activity_curation JOIN activity_events, filtered to userId IS NOT NULL.
-   */
-  getCuratedEventsForAllocation(
-    epochId: bigint
-  ): Promise<CuratedEventForAllocation[]>;
-
-  // Curation (mutable while epoch open)
-  upsertCuration(params: UpsertCurationParams[]): Promise<void>;
-  /**
-   * Insert curation rows with ON CONFLICT DO NOTHING semantics.
-   * Used by auto-population (CURATION_AUTO_POPULATE) to avoid overwriting
-   * admin-set fields if a row is created between getUncuratedEvents and insert.
-   */
-  insertCurationDoNothing(params: InsertCurationAutoParams[]): Promise<void>;
-  getCurationForEpoch(epochId: bigint): Promise<LedgerCuration[]>;
-  getUnresolvedCuration(epochId: bigint): Promise<LedgerCuration[]>;
-
-  // Allocations
-  insertAllocations(allocations: InsertAllocationParams[]): Promise<void>;
-  /**
-   * Upsert allocations — ON CONFLICT (epoch_id, user_id) UPDATE proposed_units and activity_count.
-   * Never touches final_units or override_reason (ALLOCATION_PRESERVES_OVERRIDES).
-   */
-  upsertAllocations(allocations: InsertAllocationParams[]): Promise<void>;
+  // Epochs
+  createEpoch(params: {
+    nodeId: string;
+    scopeId: string;
+    periodStart: Date;
+    periodEnd: Date;
+    weightConfig: Record<string, number>;
+  }): Promise<LedgerEpoch>;
   /**
    * Delete allocation rows where user_id NOT IN activeUserIds AND final_units IS NULL.
    * Admin-overridden allocations (final_units set) are never auto-deleted.
@@ -308,42 +260,9 @@ export interface ActivityLedgerStore {
     epochId: bigint,
     activeUserIds: string[]
   ): Promise<void>;
-  updateAllocationFinalUnits(
-    epochId: bigint,
-    userId: string,
-    finalUnits: bigint,
-    overrideReason?: string
-  ): Promise<void>;
-  getAllocationsForEpoch(epochId: bigint): Promise<LedgerAllocation[]>;
 
-  // Cursors (one stream per call)
-  upsertCursor(
-    nodeId: string,
-    scopeId: string,
-    source: string,
-    stream: string,
-    sourceRef: string,
-    cursorValue: string
-  ): Promise<void>;
-  getCursor(
-    nodeId: string,
-    scopeId: string,
-    source: string,
-    stream: string,
-    sourceRef: string
-  ): Promise<LedgerSourceCursor | null>;
-
-  // Pool components
-  insertPoolComponent(
-    params: InsertPoolComponentParams
-  ): Promise<LedgerPoolComponent>;
-  getPoolComponentsForEpoch(epochId: bigint): Promise<LedgerPoolComponent[]>;
-
-  // Payout statements
-  insertPayoutStatement(
-    params: InsertPayoutStatementParams
-  ): Promise<LedgerPayoutStatement>;
-  getStatementForEpoch(epochId: bigint): Promise<LedgerPayoutStatement | null>;
+  /** Transition epoch review → finalized. Sets poolTotalCredits and closedAt. */
+  finalizeEpoch(epochId: bigint, poolTotal: bigint): Promise<LedgerEpoch>;
 
   /**
    * Atomic finalize: epoch transition + statement upsert + signature upsert in one DB transaction.
@@ -360,22 +279,42 @@ export interface ActivityLedgerStore {
     signature: Omit<InsertSignatureParams, "statementId">;
     expectedAllocationSetHash: string;
   }): Promise<{ epoch: LedgerEpoch; statement: LedgerPayoutStatement }>;
+  getActivityForWindow(
+    nodeId: string,
+    since: Date,
+    until: Date
+  ): Promise<LedgerActivityEvent[]>;
+  getAllocationsForEpoch(epochId: bigint): Promise<LedgerAllocation[]>;
 
-  // Statement signatures (schema only — signing flow is a follow-up)
-  insertStatementSignature(params: InsertSignatureParams): Promise<void>;
+  // Allocation computation (joined query)
+  /**
+   * Returns curated events with resolved user IDs for allocation computation.
+   * Joined query: activity_curation JOIN activity_events, filtered to userId IS NOT NULL.
+   */
+  getCuratedEventsForAllocation(
+    epochId: bigint
+  ): Promise<CuratedEventForAllocation[]>;
+  getCurationForEpoch(epochId: bigint): Promise<LedgerCuration[]>;
+  getCursor(
+    nodeId: string,
+    scopeId: string,
+    source: string,
+    stream: string,
+    sourceRef: string
+  ): Promise<LedgerSourceCursor | null>;
+  getEpoch(id: bigint): Promise<LedgerEpoch | null>;
+  getEpochByWindow(
+    nodeId: string,
+    scopeId: string,
+    periodStart: Date,
+    periodEnd: Date
+  ): Promise<LedgerEpoch | null>;
+  getOpenEpoch(nodeId: string, scopeId: string): Promise<LedgerEpoch | null>;
+  getPoolComponentsForEpoch(epochId: bigint): Promise<LedgerPoolComponent[]>;
   getSignaturesForStatement(
     statementId: string
   ): Promise<LedgerStatementSignature[]>;
-
-  // Identity resolution (cross-domain convenience — V0 on ledger port)
-  /**
-   * Resolves platform IDs to user UUIDs via user_bindings.
-   * V0: GitHub only. Extend provider union for discord etc.
-   */
-  resolveIdentities(
-    provider: "github",
-    externalIds: string[]
-  ): Promise<Map<string, string>>;
+  getStatementForEpoch(epochId: bigint): Promise<LedgerPayoutStatement | null>;
 
   /**
    * Returns events in the epoch window that need curation work:
@@ -388,6 +327,49 @@ export interface ActivityLedgerStore {
     periodStart: Date,
     periodEnd: Date
   ): Promise<UncuratedEvent[]>;
+  getUnresolvedCuration(epochId: bigint): Promise<LedgerCuration[]>;
+
+  // Activity events (append-only, epoch-agnostic raw log)
+  insertActivityEvents(events: InsertActivityEventParams[]): Promise<void>;
+
+  // Allocations
+  insertAllocations(allocations: InsertAllocationParams[]): Promise<void>;
+  /**
+   * Insert curation rows with ON CONFLICT DO NOTHING semantics.
+   * Used by auto-population (CURATION_AUTO_POPULATE) to avoid overwriting
+   * admin-set fields if a row is created between getUncuratedEvents and insert.
+   */
+  insertCurationDoNothing(params: InsertCurationAutoParams[]): Promise<void>;
+
+  // Payout statements
+  insertPayoutStatement(
+    params: InsertPayoutStatementParams
+  ): Promise<LedgerPayoutStatement>;
+
+  // Pool components
+  insertPoolComponent(
+    params: InsertPoolComponentParams
+  ): Promise<LedgerPoolComponent>;
+
+  // Statement signatures (schema only — signing flow is a follow-up)
+  insertStatementSignature(params: InsertSignatureParams): Promise<void>;
+  listEpochs(nodeId: string): Promise<LedgerEpoch[]>;
+
+  // Identity resolution (cross-domain convenience — V0 on ledger port)
+  /**
+   * Resolves platform IDs to user UUIDs via user_bindings.
+   * V0: GitHub only. Extend provider union for discord etc.
+   */
+  resolveIdentities(
+    provider: "github",
+    externalIds: string[]
+  ): Promise<Map<string, string>>;
+  updateAllocationFinalUnits(
+    epochId: bigint,
+    userId: string,
+    finalUnits: bigint,
+    overrideReason?: string
+  ): Promise<void>;
 
   /**
    * Update user_id on a curation row ONLY when existing user_id IS NULL.
@@ -397,5 +379,23 @@ export interface ActivityLedgerStore {
     epochId: bigint,
     eventId: string,
     userId: string
+  ): Promise<void>;
+  /**
+   * Upsert allocations — ON CONFLICT (epoch_id, user_id) UPDATE proposed_units and activity_count.
+   * Never touches final_units or override_reason (ALLOCATION_PRESERVES_OVERRIDES).
+   */
+  upsertAllocations(allocations: InsertAllocationParams[]): Promise<void>;
+
+  // Curation (mutable while epoch open)
+  upsertCuration(params: UpsertCurationParams[]): Promise<void>;
+
+  // Cursors (one stream per call)
+  upsertCursor(
+    nodeId: string,
+    scopeId: string,
+    source: string,
+    stream: string,
+    sourceRef: string,
+    cursorValue: string
   ): Promise<void>;
 }

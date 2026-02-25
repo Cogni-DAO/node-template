@@ -52,27 +52,27 @@ type KpiBadgeSize = VariantProps<typeof kpiBadge>["size"];
 type KpiBadgeKind = "text" | "external-image";
 
 export interface KpiBadgeProps {
-  /** Badge display mode */
-  kind?: KpiBadgeKind;
-  /** Visual tone for semantic meaning */
-  tone?: KpiBadgeTone;
-  /** Badge size */
-  size?: KpiBadgeSize;
-
-  /** Optional link URL */
-  href?: string;
   /** Accessibility label */
   ariaLabel?: string;
 
-  /** Text label for metric */
-  label?: string;
-  /** Metric value */
-  value?: string;
+  /** Optional link URL */
+  href?: string;
+  /** Alt text for external image */
+  imageAlt?: string;
 
   /** External badge image URL (e.g. SonarCloud, Shields.io) */
   imageSrc?: string;
-  /** Alt text for external image */
-  imageAlt?: string;
+  /** Badge display mode */
+  kind?: KpiBadgeKind;
+
+  /** Text label for metric */
+  label?: string;
+  /** Badge size */
+  size?: KpiBadgeSize;
+  /** Visual tone for semantic meaning */
+  tone?: KpiBadgeTone;
+  /** Metric value */
+  value?: string;
 }
 
 export function KpiBadge({

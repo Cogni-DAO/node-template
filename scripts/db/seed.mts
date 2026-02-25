@@ -253,13 +253,13 @@ const EPOCH_3 = {
 // ── Allocation computation ──────────────────────────────────────
 
 interface EventDef {
+  artifactUrl: string;
+  contributor: typeof DEREK;
+  eventTime: Date;
+  eventType: string;
   id: string;
   source: string;
-  eventType: string;
-  contributor: typeof DEREK;
-  artifactUrl: string;
   title: string;
-  eventTime: Date;
 }
 
 function computeAllocations(

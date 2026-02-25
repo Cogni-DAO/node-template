@@ -27,18 +27,18 @@ export type VerificationStatus = "VERIFIED" | "PENDING" | "FAILED";
  * Contains actual transaction data for validation
  */
 export interface VerificationResult {
-  /** Verification status */
-  status: VerificationStatus;
+  /** Actual transfer amount in raw units (null if not found) */
+  actualAmount: bigint | null;
   /** Actual sender address (checksummed, null if not found) */
   actualFrom: string | null;
   /** Actual recipient address (checksummed, null if not found) */
   actualTo: string | null;
-  /** Actual transfer amount in raw units (null if not found) */
-  actualAmount: bigint | null;
   /** Number of confirmations (null if not found) */
   confirmations: number | null;
   /** Error code if status is FAILED */
   errorCode?: PaymentErrorCode;
+  /** Verification status */
+  status: VerificationStatus;
 }
 
 /**

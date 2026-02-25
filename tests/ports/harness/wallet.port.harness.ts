@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dispose, makeHarness, type TestHarness } from "./factory";
 
 export interface WalletPort {
+  getAddress(): Promise<string>;
   // stub for now – align with src/ports/wallet.port.ts once it exists
   signMessage(message: string): Promise<string>;
   verifySignature(
@@ -24,7 +25,6 @@ export interface WalletPort {
     signature: string,
     address: string
   ): Promise<boolean>;
-  getAddress(): Promise<string>;
 }
 
 /**

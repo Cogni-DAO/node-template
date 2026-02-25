@@ -39,18 +39,12 @@ export type CodeTokenSpacing = "none" | "xs" | "xl" | "rainbow";
 export interface CodeToken {
   id: string;
   kind: CodeTokenKind;
-  text: string;
   spacingRight?: CodeTokenSpacing;
+  text: string;
 }
 
 // Components
 interface CodeTokenLineProps {
-  tokens: CodeToken[];
-  /**
-   * Typography tone for the entire line.
-   * Default uses standard foreground color.
-   */
-  tone?: "default" | "subdued";
   /**
    * Heading level for semantic HTML.
    * Default h1 for main hero content.
@@ -61,6 +55,12 @@ interface CodeTokenLineProps {
    * For token id X, render the provided content instead of token.text.
    */
   tokenReplacements?: Record<string, ReactNode>;
+  tokens: CodeToken[];
+  /**
+   * Typography tone for the entire line.
+   * Default uses standard foreground color.
+   */
+  tone?: "default" | "subdued";
 }
 
 export function CodeTokenLine({

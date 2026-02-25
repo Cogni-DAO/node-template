@@ -35,10 +35,10 @@ import { getAppDb } from "@/adapters/server/db/client";
 import { UserDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 
 interface TestTenant {
-  userId: string;
   billingAccountId: string;
   executionGrantId: string;
   scheduleId: string;
+  userId: string;
 }
 
 describe("RLS Adapter Wiring Gate", () => {

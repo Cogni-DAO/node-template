@@ -44,10 +44,10 @@ import type { ActivityLedgerStore, SourceAdapter } from "../ports/index.js";
  */
 export interface LedgerActivityDeps {
   readonly ledgerStore: ActivityLedgerStore;
-  readonly sourceAdapters: ReadonlyMap<string, SourceAdapter>;
+  readonly logger: Logger;
   readonly nodeId: string;
   readonly scopeId: string;
-  readonly logger: Logger;
+  readonly sourceAdapters: ReadonlyMap<string, SourceAdapter>;
 }
 
 /**
@@ -55,8 +55,8 @@ export interface LedgerActivityDeps {
  * scopeId is NOT in input — uses injected deps.scopeId only.
  */
 export interface EnsureEpochInput {
-  readonly periodStart: string; // ISO date
   readonly periodEnd: string; // ISO date
+  readonly periodStart: string; // ISO date
   readonly weightConfig: Record<string, number>;
 }
 
@@ -65,8 +65,8 @@ export interface EnsureEpochInput {
  */
 export interface EnsureEpochOutput {
   readonly epochId: string; // bigint serialized as string for Temporal
-  readonly status: string;
   readonly isNew: boolean;
+  readonly status: string;
   readonly weightConfig: Record<string, number>;
 }
 
@@ -75,19 +75,19 @@ export interface EnsureEpochOutput {
  */
 export interface LoadCursorInput {
   readonly source: string;
-  readonly stream: string;
   readonly sourceRef: string;
+  readonly stream: string;
 }
 
 /**
  * Input for collectFromSource activity.
  */
 export interface CollectFromSourceInput {
+  readonly cursorValue: string | null;
+  readonly periodEnd: string; // ISO date
+  readonly periodStart: string; // ISO date
   readonly source: string;
   readonly streams: string[];
-  readonly cursorValue: string | null;
-  readonly periodStart: string; // ISO date
-  readonly periodEnd: string; // ISO date
 }
 
 /**
@@ -95,8 +95,8 @@ export interface CollectFromSourceInput {
  */
 export interface CollectFromSourceOutput {
   readonly events: ActivityEvent[];
-  readonly nextCursorValue: string;
   readonly nextCursorStreamId: string;
+  readonly nextCursorValue: string;
   readonly producerVersion: string;
 }
 
@@ -112,10 +112,10 @@ export interface InsertEventsInput {
  * Input for saveCursor activity.
  */
 export interface SaveCursorInput {
-  readonly source: string;
-  readonly stream: string;
-  readonly sourceRef: string;
   readonly cursorValue: string;
+  readonly source: string;
+  readonly sourceRef: string;
+  readonly stream: string;
 }
 
 /**
@@ -130,9 +130,9 @@ export interface CurateAndResolveInput {
  * Output from curateAndResolve activity.
  */
 export interface CurateAndResolveOutput {
-  readonly totalEvents: number;
   readonly newCurations: number;
   readonly resolved: number;
+  readonly totalEvents: number;
   readonly unresolved: number;
 }
 
@@ -140,8 +140,8 @@ export interface CurateAndResolveOutput {
  * Input for computeAllocations activity.
  */
 export interface ComputeAllocationsInput {
-  readonly epochId: string; // bigint serialized
   readonly algorithmId: string;
+  readonly epochId: string; // bigint serialized
   readonly weightConfig: Record<string, number>;
 }
 
@@ -157,8 +157,8 @@ export interface ComputeAllocationsOutput {
  * Input for ensurePoolComponents activity.
  */
 export interface EnsurePoolComponentsInput {
-  readonly epochId: string; // bigint serialized
   readonly baseIssuanceCredits: string; // bigint serialized
+  readonly epochId: string; // bigint serialized
 }
 
 /**
@@ -172,12 +172,12 @@ export interface EnsurePoolComponentsOutput {
  * Input for autoCloseIngestion activity.
  */
 export interface AutoCloseIngestionInput {
-  readonly epochId: string; // bigint serialized
-  readonly periodEnd: string; // ISO date
-  readonly gracePeriodMs: number;
-  readonly weightConfig: Record<string, number>;
-  readonly creditEstimateAlgo: string;
   readonly approvers: string[];
+  readonly creditEstimateAlgo: string;
+  readonly epochId: string; // bigint serialized
+  readonly gracePeriodMs: number;
+  readonly periodEnd: string; // ISO date
+  readonly weightConfig: Record<string, number>;
 }
 
 /**
@@ -192,20 +192,20 @@ export interface AutoCloseIngestionOutput {
  * Input for finalizeEpoch compound activity.
  */
 export interface FinalizeEpochInput {
+  readonly approvers: string[]; // EVM addresses (lowercased)
   readonly epochId: string; // bigint serialized
   readonly signature: string; // EIP-191 hex
   readonly signerAddress: string; // from SIWE session
-  readonly approvers: string[]; // EVM addresses (lowercased)
 }
 
 /**
  * Output from finalizeEpoch compound activity.
  */
 export interface FinalizeEpochOutput {
-  readonly statementId: string;
-  readonly poolTotalCredits: string; // bigint serialized
   readonly allocationSetHash: string;
   readonly payoutCount: number;
+  readonly poolTotalCredits: string; // bigint serialized
+  readonly statementId: string;
 }
 
 /**

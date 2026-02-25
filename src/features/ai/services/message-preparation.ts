@@ -37,12 +37,12 @@ import {
  * Contains LLM-ready messages and metadata for downstream processing.
  */
 export interface PreparedMessages {
-  /** Messages ready for LLM call (with system prompt prepended) */
-  readonly messages: Message[];
-  /** Fallback promptHash computed before LLM call (for error path) */
-  readonly fallbackPromptHash: string;
   /** Estimated token count for credit pre-flight check */
   readonly estimatedTokensUpperBound: number;
+  /** Fallback promptHash computed before LLM call (for error path) */
+  readonly fallbackPromptHash: string;
+  /** Messages ready for LLM call (with system prompt prepended) */
+  readonly messages: Message[];
 }
 
 /**

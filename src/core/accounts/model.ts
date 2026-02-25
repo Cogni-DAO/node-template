@@ -19,12 +19,12 @@ import { InsufficientCreditsError } from "./errors";
  * Clean domain representation without infrastructure concerns
  */
 export interface Account {
-  /** Account identifier - maps to LlmCaller.accountId */
-  id: string;
   /** Credit balance as number (adapters convert to/from database Decimal) */
   balanceCredits: number;
   /** Optional human-readable display name */
   displayName?: string;
+  /** Account identifier - maps to LlmCaller.accountId */
+  id: string;
 }
 
 /**

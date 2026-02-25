@@ -24,9 +24,9 @@ import {
 export type TimeRange = "1d" | "1w" | "1m";
 
 export interface TimeRangeSelectorProps {
-  value: TimeRange;
-  onValueChange: (value: TimeRange) => void;
   className?: string;
+  onValueChange: (value: TimeRange) => void;
+  value: TimeRange;
 }
 
 const timeRangeLabels: Record<TimeRange, string> = {

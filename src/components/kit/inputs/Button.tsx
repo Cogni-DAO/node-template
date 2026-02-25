@@ -25,20 +25,20 @@ type ButtonBaseProps = ComponentProps<"button">;
 export interface ButtonProps
   extends Omit<ButtonBaseProps, "className">,
     VariantProps<typeof button> {
+  asChild?: boolean;
   /**
    * Optional className for layout/composition overrides only (flex/gap/margins).
    * Colors/typography remain controlled by CVA variants.
    */
   className?: string;
-  asChild?: boolean;
-  /**
-   * Right icon component (Lucide icon)
-   */
-  rightIcon?: ReactNode;
   /**
    * Icon size variant
    */
   iconSize?: "sm" | "md" | "lg";
+  /**
+   * Right icon component (Lucide icon)
+   */
+  rightIcon?: ReactNode;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

@@ -47,18 +47,12 @@ const LEDGER_TASK_QUEUE = "ledger-tasks";
 export interface GovernanceScheduleEntry {
   charter: string;
   cron: string;
-  timezone: string;
   entrypoint: string;
+  timezone: string;
 }
 
 /** Ledger config for LEDGER_INGEST schedules */
 export interface LedgerScheduleConfig {
-  /** Stable opaque scope UUID */
-  scopeId: string;
-  /** Human-friendly scope slug */
-  scopeKey: string;
-  /** Epoch length in days */
-  epochLengthDays: number;
   /** Map of source name → source config */
   activitySources: Record<
     string,
@@ -68,17 +62,23 @@ export interface LedgerScheduleConfig {
       streams: string[];
     }
   >;
-  /** Pool budget: base_issuance_credits as string (bigint serialized). */
-  baseIssuanceCredits?: string;
   /** EVM approver addresses for epoch close. */
   approvers?: string[];
+  /** Pool budget: base_issuance_credits as string (bigint serialized). */
+  baseIssuanceCredits?: string;
+  /** Epoch length in days */
+  epochLengthDays: number;
+  /** Stable opaque scope UUID */
+  scopeId: string;
+  /** Human-friendly scope slug */
+  scopeKey: string;
 }
 
 /** Minimal governance config shape (no @/ imports — pure type) */
 export interface GovernanceScheduleConfig {
-  schedules: GovernanceScheduleEntry[];
   /** Ledger config — required when LEDGER_INGEST charter is present */
   ledger?: LedgerScheduleConfig;
+  schedules: GovernanceScheduleEntry[];
 }
 
 /** Logger interface matching pino shape */
@@ -89,49 +89,49 @@ interface SyncLogger {
 
 /** Parameters for upserting a governance schedule DB row */
 export interface UpsertGovernanceScheduleRowParams {
-  /** Temporal schedule ID (e.g., "governance:community") */
-  temporalScheduleId: string;
-  /** System tenant user ID */
-  ownerUserId: string;
+  /** Cron expression */
+  cron: string;
   /** Execution grant ID for authorization */
   executionGrantId: string;
   /** Graph ID (e.g., "sandbox:openclaw") */
   graphId: string;
   /** Graph input payload */
   input: JsonValue;
-  /** Cron expression */
-  cron: string;
+  /** System tenant user ID */
+  ownerUserId: string;
+  /** Temporal schedule ID (e.g., "governance:community") */
+  temporalScheduleId: string;
   /** IANA timezone */
   timezone: string;
 }
 
 /** Injectable dependencies for governance schedule sync */
 export interface GovernanceScheduleSyncDeps {
+  /** Disable a governance schedule (DB + Temporal) by its Temporal schedule ID */
+  disableSchedule(temporalScheduleId: string): Promise<void>;
   /** Idempotent: ensures governance grant exists, returns grantId */
   ensureGovernanceGrant(): Promise<string>;
+  /** Returns all Temporal schedule IDs with 'governance:' prefix */
+  listGovernanceScheduleIds(): Promise<string[]>;
+  /** Structured logger */
+  log: SyncLogger;
+  /** Temporal schedule lifecycle control */
+  scheduleControl: ScheduleControlPort;
+  /** System tenant user ID (owner of governance schedules) */
+  systemUserId: string;
   /** Upsert governance schedule row in DB, returns dbScheduleId (UUID) */
   upsertGovernanceScheduleRow(
     params: UpsertGovernanceScheduleRowParams
   ): Promise<string>;
-  /** System tenant user ID (owner of governance schedules) */
-  systemUserId: string;
-  /** Temporal schedule lifecycle control */
-  scheduleControl: ScheduleControlPort;
-  /** Returns all Temporal schedule IDs with 'governance:' prefix */
-  listGovernanceScheduleIds(): Promise<string[]>;
-  /** Disable a governance schedule (DB + Temporal) by its Temporal schedule ID */
-  disableSchedule(temporalScheduleId: string): Promise<void>;
-  /** Structured logger */
-  log: SyncLogger;
 }
 
 /** Result of a governance schedule sync operation */
 export interface GovernanceScheduleSyncResult {
   created: string[];
-  updated: string[];
+  paused: string[];
   resumed: string[];
   skipped: string[];
-  paused: string[];
+  updated: string[];
 }
 
 /**

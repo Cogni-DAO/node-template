@@ -40,27 +40,27 @@ const MAX_PENDING_RESULTS = 100;
  * Per SDK_CHUNK_SHAPE: uses event + data, not type.
  */
 export interface SdkStreamChunk {
-  readonly event: string;
   readonly data: unknown;
+  readonly event: string;
 }
 
 /**
  * Run context for usage reporting.
  */
 export interface StreamRunContext {
-  readonly runId: string;
   readonly attempt: number;
   readonly caller: LlmCaller;
   readonly graphId: GraphId;
+  readonly runId: string;
 }
 
 /**
  * LangGraph ToolCall (complete).
  */
 interface ToolCall {
+  readonly args: Record<string, unknown>;
   readonly id: string;
   readonly name: string;
-  readonly args: Record<string, unknown>;
 }
 
 /**
@@ -68,10 +68,10 @@ interface ToolCall {
  * Per LangChain SDK: chunks merge by index, string fields concatenate.
  */
 interface ToolCallChunk {
-  readonly id?: string;
-  readonly name?: string;
   readonly args?: string; // Partial JSON string
+  readonly id?: string;
   readonly index?: number;
+  readonly name?: string;
 }
 
 /**
@@ -79,18 +79,18 @@ interface ToolCallChunk {
  * Keyed by `${messageId}:${index}` to isolate per-message.
  */
 interface ToolCallAccumulator {
+  argsBuffer: string;
   id?: string;
   name?: string;
-  argsBuffer: string;
 }
 
 /**
  * Buffered tool result for late visibility case.
  */
 interface PendingToolResult {
-  readonly toolCallId: string;
-  readonly result: Record<string, unknown>;
   readonly isError?: boolean;
+  readonly result: Record<string, unknown>;
+  readonly toolCallId: string;
 }
 
 /**

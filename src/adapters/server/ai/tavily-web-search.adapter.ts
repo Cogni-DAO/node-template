@@ -29,6 +29,7 @@ const logger = makeLogger({ component: "TavilyWebSearchAdapter" });
  * Note: Optional fields may be null or undefined depending on request params.
  */
 interface TavilySearchResponse {
+  query: string;
   results: Array<{
     title: string;
     url: string;
@@ -36,7 +37,6 @@ interface TavilySearchResponse {
     score?: number | null;
     raw_content?: string | null;
   }>;
-  query: string;
 }
 
 /**

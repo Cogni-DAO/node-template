@@ -30,14 +30,14 @@ export type { PaymentFlowPhase, PaymentFlowState } from "@/types/payments";
 
 export interface UsePaymentFlowOptions {
   amountUsdCents: number;
-  onSuccess?: (creditsAdded: number) => void;
   onError?: (message: string) => void;
+  onSuccess?: (creditsAdded: number) => void;
 }
 
 export interface UsePaymentFlowReturn {
-  state: PaymentFlowState;
-  startPayment: () => Promise<void>;
   reset: () => void;
+  startPayment: () => Promise<void>;
+  state: PaymentFlowState;
 }
 
 // Internal state machine

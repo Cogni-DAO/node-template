@@ -46,40 +46,40 @@ const PROXY_NETWORK = "sandbox-internal";
 
 /** Configuration for starting an LLM proxy instance */
 export interface LlmProxyConfig {
-  /** Unique run ID for this sandbox execution */
-  runId: string;
   /** Attempt number (for retry tracking) */
   attempt: number;
-  /** LiteLLM master key for authentication */
-  litellmMasterKey: string;
+  /** Base directory for socket dirs and logs (default: os.tmpdir()/cogni-llm-proxy) */
+  baseDir?: string;
   /** Billing account ID for cost attribution (matches in-proc `user` field). Required for production. */
   billingAccountId: string;
   /** LiteLLM host:port as seen from proxy container (default: litellm:4000) */
   litellmHost?: string;
-  /** Base directory for socket dirs and logs (default: os.tmpdir()/cogni-llm-proxy) */
-  baseDir?: string;
+  /** LiteLLM master key for authentication */
+  litellmMasterKey: string;
+  /** Unique run ID for this sandbox execution */
+  runId: string;
 }
 
 /** Result of starting an LLM proxy */
 export interface LlmProxyHandle {
-  /** Docker volume name for socket sharing (mount this into sandbox) */
-  socketVolume: string;
-  /** Socket filename within the volume */
-  socketName: string;
-  /** Path to the access log file (after stop) */
-  logPath: string;
   /** Path to the generated config file */
   configPath: string;
   /** Proxy container ID */
   containerId: string;
+  /** Path to the access log file (after stop) */
+  logPath: string;
+  /** Socket filename within the volume */
+  socketName: string;
+  /** Docker volume name for socket sharing (mount this into sandbox) */
+  socketVolume: string;
 }
 
 /** Result of stopping an LLM proxy — includes parsed billing data */
 export interface ProxyStopResult {
-  /** Path to the raw access log file on host */
-  logPath: string | null;
   /** Billing entries parsed from the proxy audit log (one per LLM call) */
   billingEntries: readonly ProxyBillingEntry[];
+  /** Path to the raw access log file on host */
+  logPath: string | null;
 }
 
 /** Path to the nginx config template */

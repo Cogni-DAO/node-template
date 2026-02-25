@@ -25,16 +25,16 @@ import {
 } from "@/components/vendor/shadcn/table";
 
 export interface ActivityLog {
-  id: string;
-  timestamp: string;
-  provider: string;
-  model: string;
+  cost: string;
+  finish?: string | undefined;
   graphId: string;
+  id: string;
+  model: string;
+  provider: string;
+  speed: number;
+  timestamp: string;
   tokensIn: number;
   tokensOut: number;
-  cost: string;
-  speed: number;
-  finish?: string | undefined;
 }
 
 export interface ActivityTableProps {

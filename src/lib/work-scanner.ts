@@ -17,21 +17,21 @@ import { join, relative } from "node:path";
 import YAML from "yaml";
 
 export interface WorkItem {
-  id: string;
-  type: string;
-  title: string;
-  status: string;
-  priority: number | undefined;
-  estimate: number | undefined;
-  summary: string;
-  outcome: string;
   assignees: string[];
-  labels: string[];
-  created: string;
-  updated: string;
   branch: string;
+  created: string;
+  estimate: number | undefined;
+  id: string;
+  labels: string[];
+  outcome: string;
   path: string;
+  priority: number | undefined;
   project: string;
+  status: string;
+  summary: string;
+  title: string;
+  type: string;
+  updated: string;
 }
 
 const SCAN_DIRS = ["work/items", "work/projects"];

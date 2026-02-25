@@ -15,12 +15,12 @@
  * UI-friendly error shape for display in dialogs/alerts.
  */
 export interface UiError {
-  /** Short user-friendly message */
-  message: string;
   /** Full error detail for debugging (optional) */
   detail?: string;
   /** Error category for potential styling/handling */
   kind: "user_rejected" | "insufficient_funds" | "rpc_error" | "unknown";
+  /** Short user-friendly message */
+  message: string;
 }
 
 // EIP-1193 standard error codes

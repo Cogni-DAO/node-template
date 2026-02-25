@@ -32,14 +32,14 @@ import {
 } from "@/components/vendor/shadcn/chart";
 
 export interface ActivityChartProps {
-  title: string;
-  description: string;
-  /** Each data point has `date` plus one numeric key per model/series */
-  data: Record<string, unknown>[];
   /** Keys in config correspond to data keys (model names or "value" for single-series) */
   config: ChartConfig;
+  /** Each data point has `date` plus one numeric key per model/series */
+  data: Record<string, unknown>[];
+  description: string;
   /** Bucket granularity: "5m" | "15m" | "1h" | "6h" | "1d" */
   effectiveStep?: string;
+  title: string;
 }
 
 export function ActivityChart({

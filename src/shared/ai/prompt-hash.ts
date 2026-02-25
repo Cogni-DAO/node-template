@@ -33,8 +33,8 @@ export type PromptHashVersion = typeof PROMPT_HASH_VERSION;
  * If support for richer message formats is needed, define a new canonical form.
  */
 export interface CanonicalMessage {
-  role: string;
   content: string;
+  role: string;
 }
 
 /**
@@ -47,11 +47,11 @@ export interface CanonicalMessage {
  * Currently `unknown[]` would serialize non-deterministically across runtimes.
  */
 export interface PromptHashPayloadV1 {
-  prompt_hash_version: "phv1";
-  model: string;
-  messages: CanonicalMessage[];
-  temperature: number;
   max_tokens: number;
+  messages: CanonicalMessage[];
+  model: string;
+  prompt_hash_version: "phv1";
+  temperature: number;
   // NOTE: tools intentionally excluded from P1 hash
 }
 
@@ -63,11 +63,11 @@ export interface PromptHashPayloadV1 {
  * Caller should NOT include prompt_hash_version; computePromptHash adds it.
  */
 export interface PromptHashInput {
-  model: string;
+  maxTokens: number;
   /** Already canonical: role + string content only */
   messages: CanonicalMessage[];
+  model: string;
   temperature: number;
-  maxTokens: number;
 }
 
 /**

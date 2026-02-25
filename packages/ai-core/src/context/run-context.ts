@@ -25,12 +25,12 @@
  * - All subscribers have consistent run identity
  */
 export interface RunContext {
-  /** Canonical execution identity (groups all LLM calls in one run) */
-  readonly runId: string;
   /** Retry attempt number (P0: always 0) */
   readonly attempt: number;
   /** Delivery-layer correlation (HTTP/SSE/worker/queue). For charge_receipts.request_id only. */
   readonly ingressRequestId: string;
+  /** Canonical execution identity (groups all LLM calls in one run) */
+  readonly runId: string;
   /** LangGraph thread scope (optional, for history/checkpoint correlation) */
   readonly threadId?: string;
 }

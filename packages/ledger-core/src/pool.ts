@@ -14,11 +14,11 @@
  */
 
 export interface PoolComponentEstimate {
-  readonly componentId: string;
   readonly algorithmVersion: string;
-  readonly inputsJson: Record<string, unknown>;
   readonly amountCredits: bigint;
+  readonly componentId: string;
   readonly evidenceRef?: string;
+  readonly inputsJson: Record<string, unknown>;
 }
 
 /** V0 pool component allowlist */

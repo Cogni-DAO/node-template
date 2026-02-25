@@ -63,42 +63,42 @@ const githubButtonVariants = cva(
 interface GithubButtonPrimitiveProps
   extends ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof githubButtonVariants> {
-  /** Whether to round stars */
-  roundStars?: boolean;
+  /** Animation delay in seconds */
+  animationDelay?: number;
+  /** Animation duration in seconds */
+  animationDuration?: number;
+  /** Whether to start animation automatically */
+  autoAnimate?: boolean;
+  /** Whether stars should be filled */
+  filled?: boolean;
   /** Whether to show Github icon */
   fixedWidth?: boolean;
   /** Initial number of stars */
   initialStars?: number;
-  /** Class for stars */
-  starsClass?: string;
-  /** Target number of stars to animate to */
-  targetStars?: number;
-  /** Animation duration in seconds */
-  animationDuration?: number;
-  /** Animation delay in seconds */
-  animationDelay?: number;
-  /** Whether to start animation automatically */
-  autoAnimate?: boolean;
+  /** In-view options */
+  inViewOptions?: UseInViewOptions;
+  /** Button text label */
+  label?: string;
   /** Callback when animation completes */
   onAnimationComplete?: () => void;
+  /** Repository URL for actual Github integration */
+  repoUrl?: string;
+  /** Whether to round stars */
+  roundStars?: boolean;
+  /** Whether to show separator */
+  separator?: boolean;
   /** Whether to show Github icon */
   showGithubIcon?: boolean;
   /** Whether to show star icon */
   showStarIcon?: boolean;
-  /** Whether to show separator */
-  separator?: boolean;
-  /** Whether stars should be filled */
-  filled?: boolean;
-  /** Repository URL for actual Github integration */
-  repoUrl?: string;
-  /** Button text label */
-  label?: string;
-  /** Use in-view detection to trigger animation */
-  useInViewTrigger?: boolean;
-  /** In-view options */
-  inViewOptions?: UseInViewOptions;
+  /** Class for stars */
+  starsClass?: string;
+  /** Target number of stars to animate to */
+  targetStars?: number;
   /** Spring transition options */
   transition?: SpringOptions;
+  /** Use in-view detection to trigger animation */
+  useInViewTrigger?: boolean;
 }
 
 function GithubButtonPrimitive({
@@ -353,23 +353,23 @@ function GithubButtonPrimitive({
 }
 
 export interface GithubButtonProps {
-  username: string;
-  repo: string;
-  roundStars?: boolean;
-  size?: "sm" | "default" | "lg";
-  variant?: "default" | "outline" | "inverse";
-  showGithubIcon?: boolean;
-  showStarIcon?: boolean;
-  label?: string;
-  animationDuration?: number;
   animationDelay?: number;
+  animationDuration?: number;
   autoAnimate?: boolean;
   initialStars?: number;
-  targetStars?: number;
-  useInViewTrigger?: boolean;
   inViewOptions?: UseInViewOptions;
-  transition?: SpringOptions;
+  label?: string;
+  repo: string;
+  roundStars?: boolean;
   separator?: boolean;
+  showGithubIcon?: boolean;
+  showStarIcon?: boolean;
+  size?: "sm" | "default" | "lg";
+  targetStars?: number;
+  transition?: SpringOptions;
+  useInViewTrigger?: boolean;
+  username: string;
+  variant?: "default" | "outline" | "inverse";
 }
 
 export function GithubButton({

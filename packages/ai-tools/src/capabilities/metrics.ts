@@ -34,12 +34,12 @@ export type MetricWindow = "5m" | "15m" | "1h" | "6h";
  * Parameters for template-based metrics queries.
  */
 export interface TemplateQueryParams {
-  /** Predefined template to execute */
-  template: MetricTemplate;
-  /** Service name (must be in allowlist) */
-  service: string;
   /** Deployment environment (must match Alloy DEPLOY_ENVIRONMENT values) */
   environment: "local" | "preview" | "production";
+  /** Service name (must be in allowlist) */
+  service: string;
+  /** Predefined template to execute */
+  template: MetricTemplate;
   /** Time window for the query */
   window: MetricWindow;
 }
@@ -58,12 +58,12 @@ export interface MetricDataPoint {
  * Summary statistics for the queried metric.
  */
 export interface MetricSummary {
+  /** Percent change from previous to current */
+  changePercent?: number;
   /** Current value at end of window */
   current: number;
   /** Previous value (start of window), if available */
   previous?: number;
-  /** Percent change from previous to current */
-  changePercent?: number;
 }
 
 /**
@@ -71,16 +71,16 @@ export interface MetricSummary {
  * Per QUERY_PROVENANCE: Always includes queryRef for audit trail.
  */
 export interface MetricQueryResult {
-  /** Unique query reference for audit trail */
-  queryRef: string;
-  /** ISO 8601 timestamp when query was executed */
-  executedAt: string;
   /** Whether result came from cache */
   cached: boolean;
-  /** Summary statistics */
-  summary: MetricSummary;
+  /** ISO 8601 timestamp when query was executed */
+  executedAt: string;
+  /** Unique query reference for audit trail */
+  queryRef: string;
   /** Time series data points (max 100) */
   series: MetricDataPoint[];
+  /** Summary statistics */
+  summary: MetricSummary;
   /** Whether series was truncated due to limits */
   truncated: boolean;
 }

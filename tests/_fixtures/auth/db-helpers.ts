@@ -18,10 +18,10 @@ import type { SessionUser } from "@/shared/auth/session";
 import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
 
 export interface SeedUserParams {
-  id?: string;
-  walletAddress?: string;
-  name?: string;
   email?: string;
+  id?: string;
+  name?: string;
+  walletAddress?: string;
 }
 
 export interface SeedBillingParams {
@@ -30,8 +30,8 @@ export interface SeedBillingParams {
 }
 
 export interface SeededAuthData {
-  user: typeof users.$inferSelect;
   billingAccount: typeof billingAccounts.$inferSelect;
+  user: typeof users.$inferSelect;
   virtualKey: typeof virtualKeys.$inferSelect;
 }
 

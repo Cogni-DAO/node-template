@@ -18,10 +18,10 @@
  */
 interface ParsedEnv {
   APP_ENV: "test" | "production";
-  NODE_ENV: "development" | "test" | "production";
-  DATABASE_URL: string;
   DATABASE_SERVICE_URL: string;
+  DATABASE_URL: string;
   LITELLM_MASTER_KEY: string;
+  NODE_ENV: "development" | "test" | "production";
 }
 
 /**

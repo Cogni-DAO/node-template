@@ -26,9 +26,9 @@ import { encode } from "next-auth/jwt";
 import type { NextAuthSessionCookie } from "./nextauth-http-helpers";
 
 export interface SyntheticSessionParams {
-  walletAddress: string;
-  userId?: string; // Optional UUID v4 for user ID (defaults to random UUID)
   authSecret?: string;
+  userId?: string; // Optional UUID v4 for user ID (defaults to random UUID)
+  walletAddress: string;
 }
 
 /**

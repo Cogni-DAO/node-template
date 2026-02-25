@@ -18,9 +18,9 @@ import type { MetricsQueryPort } from "@/ports";
  * Time window configuration with bucket size.
  */
 interface WindowConfig {
+  bucketLabel: string; // Human-readable label (e.g., "per hour")
   durationSeconds: number; // Total duration in seconds
   step: string; // Prometheus step (e.g., "1h", "6h", "1d")
-  bucketLabel: string; // Human-readable label (e.g., "per hour")
 }
 
 const WINDOW_CONFIGS: Record<string, WindowConfig> = {
@@ -53,11 +53,11 @@ export interface AnalyticsDataPoint {
  * Summary statistics (internal).
  */
 export interface AnalyticsSummaryStats {
-  totalRequests: number | null;
-  totalTokens: number | null;
   errorRatePercent: number | null;
   latencyP50Ms: number | null;
   latencyP95Ms: number | null;
+  totalRequests: number | null;
+  totalTokens: number | null;
 }
 
 /**
@@ -65,35 +65,35 @@ export interface AnalyticsSummaryStats {
  */
 export interface ModelClassDistribution {
   free: number | null;
-  standard: number | null;
   premium: number | null;
+  standard: number | null;
 }
 
 /**
  * Analytics summary result (internal format - facade maps to contract types).
  */
 export interface AnalyticsSummaryResult {
-  window: string;
-  generatedAt: Date;
   cacheTtlSeconds: number;
+  distribution: {
+    modelClass: ModelClassDistribution;
+  };
+  generatedAt: Date;
   summary: AnalyticsSummaryStats;
   timeseries: {
     requestRate: AnalyticsDataPoint[];
     tokenRate: AnalyticsDataPoint[];
     errorRate: AnalyticsDataPoint[];
   };
-  distribution: {
-    modelClass: ModelClassDistribution;
-  };
+  window: string;
 }
 
 /**
  * Parameters for analytics query.
  */
 export interface GetAnalyticsSummaryParams {
-  window: string; // "7d", "30d", "90d"
   env: string; // Deployment environment (e.g., "local", "preview", "production")
   kThreshold: number; // K-anonymity threshold
+  window: string; // "7d", "30d", "90d"
 }
 
 /**

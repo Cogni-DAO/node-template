@@ -18,14 +18,13 @@ import type { ReactElement } from "react";
 import { cn } from "@/shared/util/cn";
 
 export interface PaymentStatusChipProps {
-  /** Transaction hash */
-  txHash: string;
-
   /** Block explorer URL */
   explorerUrl: string;
 
   /** Reopen dialog */
   onClick: () => void;
+  /** Transaction hash */
+  txHash: string;
 }
 
 export function PaymentStatusChip({

@@ -23,9 +23,9 @@ import type { UsageFact } from "../usage/usage";
  * Emitted by runtime when receiving text chunks from LLM stream.
  */
 export interface TextDeltaEvent {
-  readonly type: "text_delta";
   /** Incremental text content */
   readonly delta: string;
+  readonly type: "text_delta";
 }
 
 /**
@@ -34,13 +34,13 @@ export interface TextDeltaEvent {
  * Per TOOLCALL_ID_STABLE: same toolCallId persists across start→result.
  */
 export interface ToolCallStartEvent {
-  readonly type: "tool_call_start";
+  /** Tool arguments (validated, may be redacted for streaming) */
+  readonly args: Record<string, unknown>;
   /** Stable ID for this tool call (model-provided or UUID) */
   readonly toolCallId: string;
   /** Tool name (snake_case, stable API identifier) */
   readonly toolName: string;
-  /** Tool arguments (validated, may be redacted for streaming) */
-  readonly args: Record<string, unknown>;
+  readonly type: "tool_call_start";
 }
 
 /**
@@ -49,13 +49,13 @@ export interface ToolCallStartEvent {
  * Per TOOLRUNNER_ALLOWLIST_HARD_FAIL: result is always redacted per allowlist.
  */
 export interface ToolCallResultEvent {
-  readonly type: "tool_call_result";
-  /** Same toolCallId as corresponding start event */
-  readonly toolCallId: string;
-  /** Redacted result (UI-safe fields only per tool allowlist) */
-  readonly result: Record<string, unknown>;
   /** True if tool execution failed */
   readonly isError?: boolean;
+  /** Redacted result (UI-safe fields only per tool allowlist) */
+  readonly result: Record<string, unknown>;
+  /** Same toolCallId as corresponding start event */
+  readonly toolCallId: string;
+  readonly type: "tool_call_result";
 }
 
 /**
@@ -67,8 +67,8 @@ export interface ToolCallResultEvent {
  * It is NOT forwarded to the UI subscriber - only to the billing subscriber.
  */
 export interface UsageReportEvent {
-  readonly type: "usage_report";
   readonly fact: UsageFact;
+  readonly type: "usage_report";
 }
 
 /**
@@ -80,9 +80,9 @@ export interface UsageReportEvent {
  * Relay provides run context (runId, threadId, accountId) - NOT included in event.
  */
 export interface AssistantFinalEvent {
-  readonly type: "assistant_final";
   /** Complete assistant response content */
   readonly content: string;
+  readonly type: "assistant_final";
 }
 
 /**
@@ -93,11 +93,11 @@ export interface AssistantFinalEvent {
  * Per STATUS_NEVER_LEAKS_CONTENT: label contains at most a tool name, never args or results.
  */
 export interface StatusEvent {
-  readonly type: "status";
-  /** Current agent phase. */
-  readonly phase: "thinking" | "tool_use" | "compacting";
   /** Optional label for display (e.g., tool name). */
   readonly label?: string;
+  /** Current agent phase. */
+  readonly phase: "thinking" | "tool_use" | "compacting";
+  readonly type: "status";
 }
 
 /**
@@ -117,8 +117,8 @@ export interface DoneEvent {
  * Details belong in logs, not in the event stream.
  */
 export interface ErrorEvent {
-  readonly type: "error";
   readonly error: AiExecutionErrorCode;
+  readonly type: "error";
 }
 
 /**

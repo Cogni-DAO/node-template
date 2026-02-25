@@ -31,8 +31,8 @@ import { cn } from "@/shared/util/cn";
 
 // Allow customization of welcome message via children prop
 export interface ThreadProps {
-  welcomeMessage?: ReactNode;
   errorMessage?: ReactNode;
+  welcomeMessage?: ReactNode;
 }
 
 export const Thread: FC<ThreadProps> = ({ welcomeMessage, errorMessage }) => {

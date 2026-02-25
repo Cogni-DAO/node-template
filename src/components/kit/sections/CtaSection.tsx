@@ -25,6 +25,10 @@ import {
 
 interface CtaSectionProps {
   /**
+   * Call-to-action button or link
+   */
+  action: ReactNode;
+  /**
    * Main heading content
    */
   heading: ReactNode;
@@ -32,10 +36,6 @@ interface CtaSectionProps {
    * Supporting paragraph content
    */
   paragraph: ReactNode;
-  /**
-   * Call-to-action button or link
-   */
-  action: ReactNode;
   /**
    * Background surface variant
    */

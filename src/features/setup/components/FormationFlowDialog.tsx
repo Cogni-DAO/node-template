@@ -33,18 +33,18 @@ import {
 } from "@/shared/web3/block-explorer";
 
 export interface FormationFlowDialogProps {
-  open: boolean;
-  phase: FormationPhase;
-  daoTxHash: string | null;
-  signalTxHash: string | null;
-  errorMessage: string | null;
-  repoSpecYaml: string | null;
   addresses: VerifiedAddresses | null;
-  tokenName: string | null;
+  daoTxHash: string | null;
+  errorMessage: string | null;
   isInFlight: boolean;
   isTerminal: boolean;
   onClose: () => void;
   onReset: () => void;
+  open: boolean;
+  phase: FormationPhase;
+  repoSpecYaml: string | null;
+  signalTxHash: string | null;
+  tokenName: string | null;
 }
 
 function getPhaseMessage(phase: FormationPhase): string {

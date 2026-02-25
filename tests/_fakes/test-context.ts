@@ -20,11 +20,11 @@ import { FakeClock } from "./fake-clock";
 const TEST_TRACE_ID = "00000000000000000000000000000000";
 
 export interface TestCtxOptions {
+  clockTime?: string;
   reqId?: string;
-  traceId?: string;
   routeId?: string;
   session?: SessionUser;
-  clockTime?: string;
+  traceId?: string;
 }
 
 /**

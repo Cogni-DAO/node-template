@@ -31,10 +31,10 @@ const { finalizeEpoch } = proxyActivities<LedgerActivities>({
 
 /** Input for FinalizeEpochWorkflow */
 export interface FinalizeEpochWorkflowInput {
+  readonly approvers: string[]; // EVM addresses (from repo-spec, lowercased)
   readonly epochId: string; // bigint serialized
   readonly signature: string; // EIP-191 hex
   readonly signerAddress: string; // from SIWE session
-  readonly approvers: string[]; // EVM addresses (from repo-spec, lowercased)
 }
 
 /**

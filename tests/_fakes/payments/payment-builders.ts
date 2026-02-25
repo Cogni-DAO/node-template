@@ -25,23 +25,23 @@ import { CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3/chain";
  * All fields are optional and will use deterministic defaults
  */
 export interface PaymentAttemptOptions {
-  id?: string;
-  billingAccountId?: string;
-  fromAddress?: string;
-  chainId?: number;
-  token?: string;
-  toAddress?: string;
   amountRaw?: bigint;
   amountUsdCents?: number;
-  status?: PaymentAttemptStatus;
-  txHash?: string | null;
+  billingAccountId?: string;
+  chainId?: number;
+  createdAt?: Date;
   errorCode?: PaymentErrorCode | null;
   expiresAt?: Date | null;
-  submittedAt?: Date | null;
+  fromAddress?: string;
+  id?: string;
   lastVerifyAttemptAt?: Date | null;
-  verifyAttemptCount?: number;
-  createdAt?: Date;
+  status?: PaymentAttemptStatus;
+  submittedAt?: Date | null;
+  toAddress?: string;
+  token?: string;
+  txHash?: string | null;
   updatedAt?: Date;
+  verifyAttemptCount?: number;
 }
 
 /**

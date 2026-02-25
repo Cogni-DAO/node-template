@@ -34,8 +34,8 @@ import {
 } from "@/shared/db/schema";
 
 interface TestTenant {
-  userId: string;
   billingAccountId: string;
+  userId: string;
   virtualKeyId: string;
 }
 

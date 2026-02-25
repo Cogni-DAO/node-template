@@ -31,16 +31,16 @@ import { createRunIdentity } from "./run-id-factory";
  * Input for AI runtime operations.
  */
 export interface AiRuntimeInput {
+  /** Abort signal for cancellation */
+  readonly abortSignal?: AbortSignal;
+  /** Caller info for billing and telemetry */
+  readonly caller: LlmCaller;
+  /** Graph name or fully-qualified graphId to execute (required) */
+  readonly graphName: string;
   /** Conversation messages */
   readonly messages: Message[];
   /** Model identifier */
   readonly model: string;
-  /** Caller info for billing and telemetry */
-  readonly caller: LlmCaller;
-  /** Abort signal for cancellation */
-  readonly abortSignal?: AbortSignal;
-  /** Graph name or fully-qualified graphId to execute (required) */
-  readonly graphName: string;
   /**
    * Thread key for multi-turn conversation state.
    * Passed to GraphExecutorPort; adapter decides semantics.
@@ -61,10 +61,10 @@ export interface AiRuntimeDeps {
  * AI runtime result with stream and completion promise.
  */
 export interface AiRuntimeResult {
-  /** Stream of AI events for real-time rendering (usage_report filtered out) */
-  readonly stream: AsyncIterable<AiEvent>;
   /** Promise resolving with final result (ok with usage/finishReason, or error) */
   readonly final: Promise<StreamFinalResult>;
+  /** Stream of AI events for real-time rendering (usage_report filtered out) */
+  readonly stream: AsyncIterable<AiEvent>;
 }
 
 /**

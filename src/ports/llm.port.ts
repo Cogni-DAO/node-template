@@ -36,10 +36,10 @@ export type { Message } from "@/core";
  * Simplified representation - full JSON Schema spec not needed for MVP.
  */
 export interface JsonSchemaObject {
-  readonly type: "object";
+  readonly additionalProperties?: boolean;
   readonly properties?: Record<string, unknown>;
   readonly required?: readonly string[];
-  readonly additionalProperties?: boolean;
+  readonly type: "object";
 }
 
 /**
@@ -47,12 +47,12 @@ export interface JsonSchemaObject {
  * Used to declare tools to the LLM.
  */
 export interface LlmToolDefinition {
-  readonly type: "function";
   readonly function: {
     readonly name: string;
     readonly description?: string;
     readonly parameters: JsonSchemaObject;
   };
+  readonly type: "function";
 }
 
 /**
@@ -60,12 +60,12 @@ export interface LlmToolDefinition {
  * Represents a fully-formed tool invocation request.
  */
 export interface LlmToolCall {
-  readonly id: string;
-  readonly type: "function";
   readonly function: {
     readonly name: string;
     readonly arguments: string; // JSON string, needs parsing
   };
+  readonly id: string;
+  readonly type: "function";
 }
 
 /**
@@ -73,12 +73,12 @@ export interface LlmToolCall {
  * Fragments are accumulated by index until complete.
  */
 export interface LlmToolCallDelta {
-  readonly index: number;
-  readonly id?: string;
   readonly function?: {
     readonly name?: string;
     readonly arguments?: string; // Partial JSON fragment
   };
+  readonly id?: string;
+  readonly index: number;
 }
 
 /**
@@ -102,17 +102,17 @@ export type LlmToolChoice =
  */
 export interface LlmCaller {
   billingAccountId: string;
-  virtualKeyId: string;
-  /** Request correlation ID - for LiteLLM metadata propagation */
-  requestId: string;
-  /** OTel trace ID - for LiteLLM metadata propagation */
-  traceId: string;
-  /** Session ID for Langfuse session grouping (<=200 chars) */
-  sessionId?: string;
-  /** Stable user ID for Langfuse user grouping (not email - internal ID) */
-  userId?: string;
   /** Per-user opt-out: true => Langfuse receives hashes only, no readable content */
   maskContent?: boolean;
+  /** Request correlation ID - for LiteLLM metadata propagation */
+  requestId: string;
+  /** Session ID for Langfuse session grouping (<=200 chars) */
+  sessionId?: string;
+  /** OTel trace ID - for LiteLLM metadata propagation */
+  traceId: string;
+  /** Stable user ID for Langfuse user grouping (not email - internal ID) */
+  userId?: string;
+  virtualKeyId: string;
 }
 
 /**
@@ -124,27 +124,27 @@ export interface LlmCaller {
  * - graphVersion: Git SHA at build time (for reproducibility)
  */
 export interface GraphLlmCaller extends LlmCaller {
-  /** UUID identifying this graph execution; same across all LLM calls in graph */
-  graphRunId: string;
   /** Graph module constant (e.g., "review_graph"); enables correlation in ai_invocation_summaries */
   graphName: string;
+  /** UUID identifying this graph execution; same across all LLM calls in graph */
+  graphRunId: string;
   /** Git SHA at build time; enables reproducibility across deployments */
   graphVersion: string;
 }
 
 export interface CompletionStreamParams {
+  abortSignal?: AbortSignal;
+  caller: LlmCaller;
+  maxTokens?: number;
   messages: Message[];
   model?: string;
-  temperature?: number;
-  maxTokens?: number;
-  caller: LlmCaller;
-  abortSignal?: AbortSignal;
-  /** Tool definitions for function calling (readonly - never mutated) */
-  tools?: readonly LlmToolDefinition[];
-  /** Tool choice strategy */
-  toolChoice?: LlmToolChoice;
   /** Billing correlation metadata forwarded to LiteLLM as x-litellm-spend-logs-metadata header */
   spendLogsMetadata?: { run_id: string; graph_id: string };
+  temperature?: number;
+  /** Tool choice strategy */
+  toolChoice?: LlmToolChoice;
+  /** Tool definitions for function calling (readonly - never mutated) */
+  tools?: readonly LlmToolDefinition[];
 }
 
 export type ChatDeltaEvent =
@@ -194,25 +194,25 @@ export type CompletionFinalResult =
  * Extended with reproducibility keys per AI_SETUP_SPEC.md.
  */
 export interface LlmCompletionResult {
+  finishReason?: "stop" | "length" | "tool_calls" | "content_filter" | string;
+  /** LiteLLM call ID for forensic correlation (x-litellm-call-id header or response id) */
+  litellmCallId?: string;
   message: Message;
+  /** SHA-256 hash of canonical outbound payload (model/messages/temperature/tools) for reproducibility */
+  promptHash?: string;
+  providerCostUsd?: number;
+  providerMeta?: Record<string, unknown>;
+  /** Resolved model ID (e.g., "gpt-4o-2024-11-20") from LiteLLM response */
+  resolvedModel?: string;
+  /** Resolved provider name (e.g., "openai", "anthropic") from LiteLLM response */
+  resolvedProvider?: string;
+  /** Accumulated tool calls from stream (when finish_reason == "tool_calls") */
+  toolCalls?: LlmToolCall[];
   usage?: {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
   };
-  finishReason?: "stop" | "length" | "tool_calls" | "content_filter" | string;
-  /** Accumulated tool calls from stream (when finish_reason == "tool_calls") */
-  toolCalls?: LlmToolCall[];
-  providerMeta?: Record<string, unknown>;
-  providerCostUsd?: number;
-  /** LiteLLM call ID for forensic correlation (x-litellm-call-id header or response id) */
-  litellmCallId?: string;
-  /** SHA-256 hash of canonical outbound payload (model/messages/temperature/tools) for reproducibility */
-  promptHash?: string;
-  /** Resolved provider name (e.g., "openai", "anthropic") from LiteLLM response */
-  resolvedProvider?: string;
-  /** Resolved model ID (e.g., "gpt-4o-2024-11-20") from LiteLLM response */
-  resolvedModel?: string;
 }
 
 export interface LlmService {

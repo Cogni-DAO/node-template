@@ -22,8 +22,8 @@ import { extractClientIp, type TokenBucketRateLimiter } from "./rateLimiter";
 import { wrapRouteHandlerWithLogging } from "./wrapRouteHandlerWithLogging";
 
 export interface PublicRouteConfig {
-  routeId: string;
   cacheTtlSeconds?: number; // Default: 60
+  routeId: string;
   staleWhileRevalidateSeconds?: number; // Default: 300
 }
 
@@ -48,9 +48,9 @@ export interface RateLimitBypassConfig {
  * Injected by bootstrap layer; no global state or env access.
  */
 export interface WrapPublicRouteDeps {
+  DEPLOY_ENVIRONMENT: string;
   rateLimitBypass: RateLimitBypassConfig;
   rateLimiter: TokenBucketRateLimiter;
-  DEPLOY_ENVIRONMENT: string;
 }
 
 /**

@@ -29,10 +29,10 @@ const REPO_MENTION_PATTERNS = [
  * Parse a citation token into its components.
  */
 export interface ParsedCitation {
-  repoId: string;
-  path: string;
-  lineStart: number;
   lineEnd: number;
+  lineStart: number;
+  path: string;
+  repoId: string;
   sha: string;
 }
 

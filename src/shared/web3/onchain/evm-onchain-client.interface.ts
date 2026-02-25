@@ -33,24 +33,25 @@ import type {
  */
 export interface EvmOnchainClient {
   /**
-   * Fetches a transaction by hash.
-   * Returns null if transaction not found.
-   */
-  getTransaction(txHash: `0x${string}`): Promise<Transaction | null>;
-
-  /**
-   * Fetches a transaction receipt by hash.
-   * Returns null if receipt not found (transaction pending or not mined).
-   */
-  getTransactionReceipt(
-    txHash: `0x${string}`
-  ): Promise<TransactionReceipt | null>;
-
-  /**
    * Gets the current block number.
    * Used for confirmation count calculations.
    */
   getBlockNumber(): Promise<bigint>;
+
+  /**
+   * Returns deployed contract bytecode at address.
+   * Useful for verifying that a contract exists at an address.
+   */
+  getBytecode(address: `0x${string}`): Promise<`0x${string}` | null>;
+
+  /**
+   * Gets ERC20 token balance for a holder address.
+   * Used for token balance queries (e.g., USDC treasury balance).
+   */
+  getErc20Balance(params: {
+    tokenAddress: `0x${string}`;
+    holderAddress: `0x${string}`;
+  }): Promise<bigint>;
 
   /**
    * Gets logs matching the filter criteria.
@@ -72,21 +73,19 @@ export interface EvmOnchainClient {
    * Used for native token balance queries.
    */
   getNativeBalance(address: `0x${string}`): Promise<bigint>;
+  /**
+   * Fetches a transaction by hash.
+   * Returns null if transaction not found.
+   */
+  getTransaction(txHash: `0x${string}`): Promise<Transaction | null>;
 
   /**
-   * Gets ERC20 token balance for a holder address.
-   * Used for token balance queries (e.g., USDC treasury balance).
+   * Fetches a transaction receipt by hash.
+   * Returns null if receipt not found (transaction pending or not mined).
    */
-  getErc20Balance(params: {
-    tokenAddress: `0x${string}`;
-    holderAddress: `0x${string}`;
-  }): Promise<bigint>;
-
-  /**
-   * Returns deployed contract bytecode at address.
-   * Useful for verifying that a contract exists at an address.
-   */
-  getBytecode(address: `0x${string}`): Promise<`0x${string}` | null>;
+  getTransactionReceipt(
+    txHash: `0x${string}`
+  ): Promise<TransactionReceipt | null>;
 
   /**
    * Generic contract read helper (typed wrapper over viem readContract).

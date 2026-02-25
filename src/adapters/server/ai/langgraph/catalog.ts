@@ -28,17 +28,17 @@
  * resolve BoundTool instances from TOOL_CATALOG at runtime.
  */
 export interface LangGraphCatalogEntry<TFactory> {
-  /** Human-readable name for UI display */
-  readonly displayName: string;
   /** Description of what this graph does */
   readonly description: string;
+  /** Human-readable name for UI display */
+  readonly displayName: string;
+  /** Graph factory function (opaque — only provider interprets this) */
+  readonly graphFactory: TFactory;
   /**
    * Tool IDs available to this graph.
    * Per TOOL_CATALOG_IS_CANONICAL: providers resolve BoundTool from TOOL_CATALOG.
    */
   readonly toolIds: readonly string[];
-  /** Graph factory function (opaque — only provider interprets this) */
-  readonly graphFactory: TFactory;
 }
 
 /**

@@ -16,8 +16,8 @@ import type { PaymentErrorCode } from "@/types/payments";
 
 export interface FormattedError {
   code: string;
-  userMessage: string;
   debug?: string; // Original error for logging only - NEVER render in UI
+  userMessage: string;
 }
 
 /**

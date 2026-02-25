@@ -25,9 +25,9 @@ import type { Logger } from "./observability/logger.js";
 export const LEDGER_TASK_QUEUE = "ledger-tasks";
 
 export interface LedgerWorkerConfig {
+  container: LedgerContainer;
   env: Env;
   logger: Logger;
-  container: LedgerContainer;
 }
 
 /**

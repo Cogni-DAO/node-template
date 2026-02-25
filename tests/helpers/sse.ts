@@ -16,10 +16,10 @@
  * Parsed SSE event structure
  */
 export interface SseEvent {
-  /** Event type (defaults to 'message' if not specified) */
-  event: string;
   /** Event data payload */
   data: string;
+  /** Event type (defaults to 'message' if not specified) */
+  event: string;
 }
 
 /**

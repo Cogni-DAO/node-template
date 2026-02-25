@@ -18,48 +18,48 @@ import WebSocket from "ws";
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface RequestFrame {
-  type: "req";
   id: string;
   method: string;
   params?: unknown;
+  type: "req";
 }
 
 interface ResponseFrame {
-  type: "res";
+  error?: { code: number; message: string };
   id: string;
   ok: boolean;
   payload?: unknown;
-  error?: { code: number; message: string };
+  type: "res";
 }
 
 interface EventFrame {
-  type: "event";
   event: string;
   payload?: unknown;
+  type: "event";
 }
 
 type GatewayFrame = RequestFrame | ResponseFrame | EventFrame;
 
 export interface ConnectOptions {
-  url: string;
-  token: string;
   /** Timeout for the full connect handshake (ms). Default: 5000 */
   connectTimeoutMs?: number;
+  token: string;
+  url: string;
 }
 
 export interface AgentCallOptions {
-  message: string;
   agentId?: string;
+  message: string;
+  outboundHeaders?: Record<string, string>;
   /** Session correlation key — REQUIRED per WS_EVENT_CAUSALITY. */
   sessionKey: string;
-  outboundHeaders?: Record<string, string>;
   /** Timeout waiting for the agent response (ms). Default: 15000 */
   timeoutMs?: number;
 }
 
 export interface SessionsPatchOptions {
-  sessionKey: string;
   outboundHeaders?: Record<string, string> | null;
+  sessionKey: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

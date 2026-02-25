@@ -38,31 +38,31 @@ export type GrantScopeAction = (typeof GRANT_SCOPE_ACTIONS)[number];
  * Note: virtualKeyId is resolved at runtime via AccountService (not stored in grant).
  */
 export interface ExecutionGrant {
-  readonly id: string;
-  readonly userId: string;
   readonly billingAccountId: string;
+  readonly createdAt: Date;
+  readonly expiresAt: Date | null;
+  readonly id: string;
+  readonly revokedAt: Date | null;
   /** Scopes in format "graph:execute:{graphId}" or "graph:execute:*" for wildcard */
   readonly scopes: readonly string[];
-  readonly expiresAt: Date | null;
-  readonly revokedAt: Date | null;
-  readonly createdAt: Date;
+  readonly userId: string;
 }
 
 /**
  * Schedule specification - defines a recurring graph execution.
  */
 export interface ScheduleSpec {
-  readonly id: string;
-  readonly ownerUserId: string;
+  readonly createdAt: Date;
+  readonly cron: string;
+  readonly enabled: boolean;
   readonly executionGrantId: string;
   readonly graphId: string;
+  readonly id: string;
   readonly input: unknown;
-  readonly cron: string;
-  readonly timezone: string;
-  readonly enabled: boolean;
-  readonly nextRunAt: Date | null;
   readonly lastRunAt: Date | null;
-  readonly createdAt: Date;
+  readonly nextRunAt: Date | null;
+  readonly ownerUserId: string;
+  readonly timezone: string;
   readonly updatedAt: Date;
 }
 
@@ -71,14 +71,14 @@ export interface ScheduleSpec {
  * Per P0 feedback: Minimal execution persistence for governance and debugging.
  */
 export interface ScheduleRun {
+  readonly attemptCount: number;
+  readonly completedAt: Date | null;
+  readonly errorMessage: string | null;
   readonly id: string;
-  readonly scheduleId: string;
+  readonly langfuseTraceId: string | null;
   readonly runId: string;
   readonly scheduledFor: Date;
+  readonly scheduleId: string;
   readonly startedAt: Date | null;
-  readonly completedAt: Date | null;
   readonly status: ScheduleRunStatus;
-  readonly attemptCount: number;
-  readonly langfuseTraceId: string | null;
-  readonly errorMessage: string | null;
 }

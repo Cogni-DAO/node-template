@@ -18,11 +18,11 @@ import { relative } from "node:path";
 import { glob } from "fast-glob";
 
 interface Violation {
-  file: string;
   code: string;
-  msg: string;
-  line: number;
   col: number;
+  file: string;
+  line: number;
+  msg: string;
 }
 
 const INCLUDE = process.argv.slice(2).length

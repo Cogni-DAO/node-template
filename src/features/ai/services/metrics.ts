@@ -30,13 +30,13 @@ import {
  * Per ERROR_NORMALIZATION_ONCE: errorCode is pre-normalized AiExecutionErrorCode.
  */
 export interface MetricsContext {
-  readonly model: string;
   readonly durationMs: number;
-  readonly tokensUsed?: number;
-  readonly providerCostUsd?: number;
-  readonly isError: boolean;
   /** Pre-normalized error code from completion boundary */
   readonly errorCode?: AiExecutionErrorCode;
+  readonly isError: boolean;
+  readonly model: string;
+  readonly providerCostUsd?: number;
+  readonly tokensUsed?: number;
 }
 
 /**

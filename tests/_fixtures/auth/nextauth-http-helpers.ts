@@ -26,8 +26,8 @@ export interface NextAuthSessionCookie {
 }
 
 export interface CsrfTokenResult {
-  csrfToken: string;
   csrfCookie: string;
+  csrfToken: string;
 }
 
 interface CsrfResponse {
@@ -113,15 +113,15 @@ export function extractSessionCookie(
 
 export interface SiweLoginParams {
   baseUrl: string;
-  wallet: TestWallet;
-  domain: string;
   chainId?: number;
+  domain: string;
+  wallet: TestWallet;
 }
 
 export interface SiweLoginResult {
-  success: boolean;
-  sessionCookie: NextAuthSessionCookie | null;
   error?: string;
+  sessionCookie: NextAuthSessionCookie | null;
+  success: boolean;
 }
 
 /**

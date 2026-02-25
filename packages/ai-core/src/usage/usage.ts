@@ -38,9 +38,38 @@ export type ExecutorType =
  * Idempotency: (source_system, source_reference) where source_reference = runId/attempt/usageUnitId
  */
 export interface UsageFact {
+  readonly attempt: number;
+
+  // Required billing context
+  readonly billingAccountId: string;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
+  readonly costUsd?: number;
+
+  /**
+   * Executor type for cross-executor billing (REQUIRED).
+   * Per EXECUTOR_TYPE_REQUIRED invariant in LANGGRAPH_SERVER.md.
+   */
+  readonly executorType: ExecutorType;
+
+  // Graph identifier for per-agent analytics (required)
+  readonly graphId: GraphId;
+
+  // Usage metrics
+  readonly inputTokens?: number;
+  readonly model?: string;
+  readonly outputTokens?: number;
+
+  // Provider details
+  readonly provider?: string;
   // Required for idempotency key computation
   readonly runId: string;
-  readonly attempt: number;
+
+  /** Source system for source_system column (NOT in idempotency key) */
+  readonly source: SourceSystem;
+
+  /** Raw payload for debugging (adapter can stash native IDs here) */
+  readonly usageRaw?: Record<string, unknown>;
   /**
    * Adapter-provided stable ID for this usage unit.
    * For LiteLLM: captured from `x-litellm-call-id` response header.
@@ -51,36 +80,7 @@ export interface UsageFact {
    * Optional for external executors (validated via hints schema).
    */
   readonly usageUnitId?: string;
-
-  /** Source system for source_system column (NOT in idempotency key) */
-  readonly source: SourceSystem;
-
-  /**
-   * Executor type for cross-executor billing (REQUIRED).
-   * Per EXECUTOR_TYPE_REQUIRED invariant in LANGGRAPH_SERVER.md.
-   */
-  readonly executorType: ExecutorType;
-
-  // Required billing context
-  readonly billingAccountId: string;
   readonly virtualKeyId: string;
-
-  // Graph identifier for per-agent analytics (required)
-  readonly graphId: GraphId;
-
-  // Provider details
-  readonly provider?: string;
-  readonly model?: string;
-
-  // Usage metrics
-  readonly inputTokens?: number;
-  readonly outputTokens?: number;
-  readonly cacheReadTokens?: number;
-  readonly cacheWriteTokens?: number;
-  readonly costUsd?: number;
-
-  /** Raw payload for debugging (adapter can stash native IDs here) */
-  readonly usageRaw?: Record<string, unknown>;
 }
 
 /**

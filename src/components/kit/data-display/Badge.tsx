@@ -19,16 +19,16 @@ import { cn } from "@/shared/util";
 import { badge } from "@/styles/ui";
 
 export interface BadgeProps {
+  /** Render as child element (for links/buttons) */
+  asChild?: boolean;
+  /** Badge content */
+  children: ReactNode;
+  /** Optional layout-only overrides (e.g., margin). */
+  className?: string;
   /** Badge visual intent/style */
   intent?: "default" | "secondary" | "destructive" | "outline";
   /** Badge size */
   size?: "sm" | "md" | "lg" | "xl";
-  /** Badge content */
-  children: ReactNode;
-  /** Render as child element (for links/buttons) */
-  asChild?: boolean;
-  /** Optional layout-only overrides (e.g., margin). */
-  className?: string;
 }
 
 export function Badge({

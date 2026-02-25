@@ -26,38 +26,38 @@ export type InvocationStatus = "success" | "error";
  * Per AI_SETUP_SPEC.md ai_invocation_summaries schema.
  */
 export interface RecordInvocationParams {
-  // Identity & Correlation
-  invocationId: string; // UUID, idempotency key (UNIQUE)
-  requestId: string; // Request correlation ID
-  traceId: string; // OTel trace ID
-
-  // Optional external IDs
-  langfuseTraceId?: string; // Langfuse trace ID (same as traceId when enabled)
-  litellmCallId?: string; // LiteLLM call ID for /spend/logs join
-
-  // Reproducibility keys
-  promptHash: string; // SHA-256 of canonical outbound payload
-  routerPolicyVersion: string; // Semver or git SHA of routing policy
+  errorCode?: LlmErrorKind; // Only when status='error'
+  graphName?: string;
 
   // Optional graph context
   graphRunId?: string;
-  graphName?: string;
   graphVersion?: string;
+  // Identity & Correlation
+  invocationId: string; // UUID, idempotency key (UNIQUE)
+
+  // Optional external IDs
+  langfuseTraceId?: string; // Langfuse trace ID (same as traceId when enabled)
+  latencyMs: number;
+  litellmCallId?: string; // LiteLLM call ID for /spend/logs join
+  model: string; // e.g., "gpt-4o", "claude-3-5-sonnet"
+
+  // Reproducibility keys
+  promptHash: string; // SHA-256 of canonical outbound payload
 
   // Resolved target
   provider: string; // e.g., "openai", "anthropic"
-  model: string; // e.g., "gpt-4o", "claude-3-5-sonnet"
+  providerCostUsd?: number;
+  requestId: string; // Request correlation ID
+  routerPolicyVersion: string; // Semver or git SHA of routing policy
+
+  // Status
+  status: InvocationStatus;
 
   // Usage metrics (nullable for error cases)
   tokensIn?: number;
   tokensOut?: number;
   tokensTotal?: number;
-  providerCostUsd?: number;
-  latencyMs: number;
-
-  // Status
-  status: InvocationStatus;
-  errorCode?: LlmErrorKind; // Only when status='error'
+  traceId: string; // OTel trace ID
 }
 
 /**
@@ -78,12 +78,12 @@ export interface AiTelemetryPort {
  * Per LANGFUSE_NON_NULL_IO: input is set at creation; output on terminal.
  */
 export interface CreateTraceWithIOParams {
-  traceId: string;
-  sessionId?: string;
-  userId?: string;
   input: unknown;
-  tags: string[];
   metadata: Record<string, unknown>;
+  sessionId?: string;
+  tags: string[];
+  traceId: string;
+  userId?: string;
 }
 
 /**
@@ -91,12 +91,12 @@ export interface CreateTraceWithIOParams {
  * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: spans visible in Langfuse, not logged.
  */
 export interface LangfuseSpanHandle {
-  spanId: string;
   end: (params: {
     output?: unknown;
     level?: "DEFAULT" | "WARNING" | "ERROR";
     metadata?: Record<string, unknown>;
   }) => void;
+  spanId: string;
 }
 
 /**
@@ -127,6 +127,26 @@ export interface LangfusePort {
     }
   ): Promise<string>;
 
+  // =========================================================================
+  // Extended methods for ObservabilityGraphExecutorDecorator + ToolRunner
+  // Per OBSERVABILITY.md#langfuse-integration
+  // =========================================================================
+
+  /**
+   * Create a Langfuse trace with full I/O context.
+   * Per LANGFUSE_NON_NULL_IO: input is set at creation; output on terminal.
+   *
+   * @param params - Trace creation params with input and metadata
+   * @returns The trace ID (same as input traceId)
+   */
+  createTraceWithIO(params: CreateTraceWithIOParams): string;
+
+  /**
+   * Flush pending traces.
+   * Only call if trace was created; never await on request path.
+   */
+  flush(): Promise<void>;
+
   /**
    * Record generation metrics on the trace.
    * Per GENERATION_UNDER_EXISTING_TRACE: attaches to trace created by decorator.
@@ -152,35 +172,6 @@ export interface LangfusePort {
   ): void;
 
   /**
-   * Flush pending traces.
-   * Only call if trace was created; never await on request path.
-   */
-  flush(): Promise<void>;
-
-  // =========================================================================
-  // Extended methods for ObservabilityGraphExecutorDecorator + ToolRunner
-  // Per OBSERVABILITY.md#langfuse-integration
-  // =========================================================================
-
-  /**
-   * Create a Langfuse trace with full I/O context.
-   * Per LANGFUSE_NON_NULL_IO: input is set at creation; output on terminal.
-   *
-   * @param params - Trace creation params with input and metadata
-   * @returns The trace ID (same as input traceId)
-   */
-  createTraceWithIO(params: CreateTraceWithIOParams): string;
-
-  /**
-   * Update trace output on terminal resolution.
-   * Per LANGFUSE_TERMINAL_ONCE_GUARD: called exactly once per trace.
-   *
-   * @param traceId - The trace to update
-   * @param output - Scrubbed output content
-   */
-  updateTraceOutput(traceId: string, output: unknown): void;
-
-  /**
    * Create a span for tool execution.
    * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: tool spans visible in Langfuse, not logged.
    *
@@ -193,4 +184,13 @@ export interface LangfusePort {
     input?: unknown;
     metadata?: Record<string, unknown>;
   }): LangfuseSpanHandle;
+
+  /**
+   * Update trace output on terminal resolution.
+   * Per LANGFUSE_TERMINAL_ONCE_GUARD: called exactly once per trace.
+   *
+   * @param traceId - The trace to update
+   * @param output - Scrubbed output content
+   */
+  updateTraceOutput(traceId: string, output: unknown): void;
 }

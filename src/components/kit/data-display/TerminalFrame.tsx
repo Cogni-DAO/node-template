@@ -33,9 +33,9 @@ type DivNoClass = Omit<HTMLAttributes<HTMLDivElement>, "className">;
 export interface TerminalFrameProps
   extends DivNoClass,
     VariantProps<typeof terminalFrame> {
-  onCopy?: () => void;
-  copied?: boolean;
   children: ReactNode;
+  copied?: boolean;
+  onCopy?: () => void;
 }
 
 export function TerminalFrame({

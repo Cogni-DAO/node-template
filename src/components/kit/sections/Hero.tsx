@@ -17,10 +17,10 @@ import type { ReactNode } from "react";
 import { pageContainer, section, twoColumn } from "@/styles/ui";
 
 interface HeroProps {
+  maxWidth?: "md" | "lg" | "xl";
+  reverse?: boolean;
   textSide: ReactNode;
   visualSide: ReactNode;
-  reverse?: boolean;
-  maxWidth?: "md" | "lg" | "xl";
 }
 
 export function Hero({

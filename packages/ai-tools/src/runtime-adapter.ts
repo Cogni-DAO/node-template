@@ -28,17 +28,16 @@ import type { BoundTool, ToolContract, ToolImplementation } from "./types";
  */
 export interface ToBoundToolRuntimeOptions {
   /**
+   * Capability dependencies for this tool.
+   * Default: [] (or ['auth'] if requiresConnection is true)
+   */
+  readonly capabilities?: readonly string[];
+  /**
    * Whether this tool requires an authenticated connection.
    * If true, exec() will expect ctx.connectionId and capabilities.auth.
    * Default: false
    */
   readonly requiresConnection?: boolean;
-
-  /**
-   * Capability dependencies for this tool.
-   * Default: [] (or ['auth'] if requiresConnection is true)
-   */
-  readonly capabilities?: readonly string[];
 }
 
 /**

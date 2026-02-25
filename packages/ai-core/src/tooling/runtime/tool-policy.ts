@@ -44,9 +44,6 @@ export interface ToolPolicy {
   /** Explicit allowlist of tool IDs that may execute */
   readonly allowedTools: readonly string[];
 
-  /** Effects that require approval before execution (P1: human-in-the-loop) */
-  readonly requireApprovalForEffects?: readonly ToolEffect[];
-
   /** Runtime budgets per tool invocation */
   readonly budgets?: {
     readonly maxRuntimeMs?: number;
@@ -67,6 +64,9 @@ export interface ToolPolicy {
     toolId: string,
     effect: ToolEffect
   ): ToolPolicyDecision;
+
+  /** Effects that require approval before execution (P1: human-in-the-loop) */
+  readonly requireApprovalForEffects?: readonly ToolEffect[];
 }
 
 /**

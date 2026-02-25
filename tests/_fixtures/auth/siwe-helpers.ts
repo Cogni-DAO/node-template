@@ -37,12 +37,12 @@ export function generateTestWallet(seed?: string): TestWallet {
 }
 
 export interface SiweMessageParams {
-  domain: string;
   address: string;
-  nonce: string;
   chainId?: number;
+  domain: string;
   expirationTime?: string;
   issuedAt?: string;
+  nonce: string;
 }
 
 /**

@@ -38,18 +38,18 @@ export interface ToolSourcePort {
   getBoundTool(toolId: string): BoundToolRuntime | undefined;
 
   /**
-   * List all tool specs for LLM exposure.
-   * Used to build the tool catalog sent to the model.
-   *
-   * @returns Array of ToolSpec (compiled from BoundToolRuntime.spec)
-   */
-  listToolSpecs(): readonly ToolSpec[];
-
-  /**
    * Check if a tool ID exists in this source.
    *
    * @param toolId - Namespaced tool ID
    * @returns true if tool exists in this source
    */
   hasToolId(toolId: string): boolean;
+
+  /**
+   * List all tool specs for LLM exposure.
+   * Used to build the tool catalog sent to the model.
+   *
+   * @returns Array of ToolSpec (compiled from BoundToolRuntime.spec)
+   */
+  listToolSpecs(): readonly ToolSpec[];
 }

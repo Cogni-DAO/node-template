@@ -44,16 +44,6 @@ export interface ScheduleRunRepository {
   ) => Promise<ScheduleRun>;
 
   /**
-   * Marks run as started (status = 'running', sets startedAt).
-   * @param actorId - Actor performing the operation (for RLS SET LOCAL / audit trail)
-   */
-  markRunStarted: (
-    actorId: ActorId,
-    runId: string,
-    langfuseTraceId?: string
-  ) => Promise<void>;
-
-  /**
    * Marks run as completed with final status.
    * @param actorId - Actor performing the operation (for RLS SET LOCAL / audit trail)
    */
@@ -62,5 +52,15 @@ export interface ScheduleRunRepository {
     runId: string,
     status: "success" | "error" | "skipped",
     errorMessage?: string
+  ) => Promise<void>;
+
+  /**
+   * Marks run as started (status = 'running', sets startedAt).
+   * @param actorId - Actor performing the operation (for RLS SET LOCAL / audit trail)
+   */
+  markRunStarted: (
+    actorId: ActorId,
+    runId: string,
+    langfuseTraceId?: string
   ) => Promise<void>;
 }

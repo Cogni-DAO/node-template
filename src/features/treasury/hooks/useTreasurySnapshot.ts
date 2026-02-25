@@ -35,18 +35,18 @@ async function fetchTreasurySnapshot(): Promise<TreasurySnapshotResponseV1> {
 }
 
 export interface UseTreasurySnapshotResult {
-  /** USDC balance formatted as decimal string (e.g., "3726.42") */
-  usdcBalance: string | null;
-  /** Treasury address from API response */
-  treasuryAddress: string | null;
   /** Chain ID from API response */
   chainId: number | null;
-  /** Whether data is currently loading */
-  isLoading: boolean;
   /** Error if fetch failed */
   error: Error | null;
+  /** Whether data is currently loading */
+  isLoading: boolean;
   /** Warning flag indicating stale/unavailable RPC data */
   staleWarning: boolean;
+  /** Treasury address from API response */
+  treasuryAddress: string | null;
+  /** USDC balance formatted as decimal string (e.g., "3726.42") */
+  usdcBalance: string | null;
 }
 
 /**

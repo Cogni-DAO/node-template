@@ -18,9 +18,9 @@ export type UiPhase = "READY" | "PENDING" | "DONE";
 export type UiResult = "SUCCESS" | "ERROR" | null;
 
 export interface MappedStatus {
+  errorMessage: string | null;
   phase: UiPhase;
   result: UiResult;
-  errorMessage: string | null;
 }
 
 /**

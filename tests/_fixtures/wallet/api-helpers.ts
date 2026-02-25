@@ -24,8 +24,8 @@ export interface WalletLinkResponse {
 }
 
 export interface ErrorResponse {
-  error: string;
   details?: unknown;
+  error: string;
 }
 
 /**

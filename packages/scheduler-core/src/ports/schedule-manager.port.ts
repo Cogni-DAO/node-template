@@ -91,17 +91,17 @@ export function isInvalidTimezoneError(
 }
 
 export interface CreateScheduleInput {
+  cron: string;
   graphId: string;
   input: unknown;
-  cron: string;
   timezone: string;
 }
 
 export interface UpdateScheduleInput {
-  input?: unknown;
   cron?: string;
-  timezone?: string;
   enabled?: boolean;
+  input?: unknown;
+  timezone?: string;
 }
 
 /**
@@ -120,14 +120,20 @@ export interface ScheduleUserPort {
     input: CreateScheduleInput
   ) => Promise<ScheduleSpec>;
 
-  /** Lists schedules owned by caller. */
-  listSchedules: (callerUserId: UserId) => Promise<readonly ScheduleSpec[]>;
+  /**
+   * Deletes schedule and revokes associated grant.
+   * @throws ScheduleNotFoundError, ScheduleAccessDeniedError
+   */
+  deleteSchedule: (callerUserId: UserId, scheduleId: string) => Promise<void>;
 
   /** Gets schedule by ID, scoped to caller via RLS. */
   getSchedule: (
     callerUserId: UserId,
     scheduleId: string
   ) => Promise<ScheduleSpec | null>;
+
+  /** Lists schedules owned by caller. */
+  listSchedules: (callerUserId: UserId) => Promise<readonly ScheduleSpec[]>;
 
   /**
    * Updates schedule. Recomputes next_run_at if cron/timezone/enabled changed.
@@ -138,12 +144,6 @@ export interface ScheduleUserPort {
     scheduleId: string,
     patch: UpdateScheduleInput
   ) => Promise<ScheduleSpec>;
-
-  /**
-   * Deletes schedule and revokes associated grant.
-   * @throws ScheduleNotFoundError, ScheduleAccessDeniedError
-   */
-  deleteSchedule: (callerUserId: UserId, scheduleId: string) => Promise<void>;
 }
 
 /**
@@ -153,18 +153,13 @@ export interface ScheduleUserPort {
  * Function properties (not methods) for contravariant param checking on branded types.
  */
 export interface ScheduleWorkerPort {
+  /** Finds enabled schedules with stale next_run_at (used by reconciler). */
+  findStaleSchedules: (actorId: ActorId) => Promise<readonly ScheduleSpec[]>;
   /** Gets schedule by ID for worker processing. */
   getScheduleForWorker: (
     actorId: ActorId,
     scheduleId: string
   ) => Promise<ScheduleSpec | null>;
-
-  /** Updates next_run_at after execution (used by worker). */
-  updateNextRunAt: (
-    actorId: ActorId,
-    scheduleId: string,
-    nextRunAt: Date
-  ) => Promise<void>;
 
   /** Updates last_run_at when execution starts (used by worker). */
   updateLastRunAt: (
@@ -173,6 +168,10 @@ export interface ScheduleWorkerPort {
     lastRunAt: Date
   ) => Promise<void>;
 
-  /** Finds enabled schedules with stale next_run_at (used by reconciler). */
-  findStaleSchedules: (actorId: ActorId) => Promise<readonly ScheduleSpec[]>;
+  /** Updates next_run_at after execution (used by worker). */
+  updateNextRunAt: (
+    actorId: ActorId,
+    scheduleId: string,
+    nextRunAt: Date
+  ) => Promise<void>;
 }

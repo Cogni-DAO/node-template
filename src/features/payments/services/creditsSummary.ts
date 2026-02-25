@@ -23,8 +23,8 @@ export interface CreditsSummaryInput {
 }
 
 export interface CreditsSummaryResult {
-  billingAccountId: string;
   balanceCredits: number;
+  billingAccountId: string;
   ledger: CreditLedgerEntry[];
 }
 

@@ -17,14 +17,14 @@
 import type { NextRequest } from "next/server";
 
 interface BucketState {
-  tokens: number; // Remaining tokens
   lastSeen: number; // Timestamp of last update (ms)
+  tokens: number; // Remaining tokens
 }
 
 interface RateLimiterConfig {
+  burstSize: number; // Burst allowance beyond maxTokens (e.g., 5)
   maxTokens: number; // Bucket capacity (e.g., 10)
   refillRate: number; // Tokens per second (e.g., 10/60 = 0.166...)
-  burstSize: number; // Burst allowance beyond maxTokens (e.g., 5)
 }
 
 /**

@@ -17,9 +17,9 @@
 
 export interface GovernanceRun {
   id: string;
-  title: string | null;
-  startedAt: Date;
   lastActivity: Date;
+  startedAt: Date;
+  title: string | null;
 }
 
 export interface UpcomingRun {
@@ -31,14 +31,13 @@ export interface UpcomingRun {
 
 export interface GovernanceStatusPort {
   /**
-   * Get next N scheduled governance runs, computed live from cron expressions.
-   * Always returns future times — never stale DB cache.
-   */
-  getUpcomingRuns(params: { limit: number }): Promise<UpcomingRun[]>;
-
-  /**
    * Get recent governance runs for system tenant.
    * Returns up to `limit` runs ordered by most recent first.
    */
   getRecentRuns(params: { limit: number }): Promise<GovernanceRun[]>;
+  /**
+   * Get next N scheduled governance runs, computed live from cron expressions.
+   * Always returns future times — never stale DB cache.
+   */
+  getUpcomingRuns(params: { limit: number }): Promise<UpcomingRun[]>;
 }

@@ -20,10 +20,10 @@ import { Client } from "@langchain/langgraph-sdk";
  * Configuration for LangGraph dev client.
  */
 export interface LangGraphDevClientConfig {
-  /** API URL for langgraph dev server (e.g., "http://localhost:2024") */
-  readonly apiUrl: string;
   /** Optional API key (not needed for local dev) */
   readonly apiKey?: string;
+  /** API URL for langgraph dev server (e.g., "http://localhost:2024") */
+  readonly apiUrl: string;
 }
 
 /**

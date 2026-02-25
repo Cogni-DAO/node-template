@@ -13,9 +13,9 @@
  */
 
 export interface DePayTransactionInfo {
-  txHash: string;
   blockchain: string;
   token: string;
+  txHash: string;
 }
 
 export interface ConfirmPayload {

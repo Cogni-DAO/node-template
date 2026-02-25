@@ -18,10 +18,10 @@ import { createAppAuth } from "@octokit/auth-app";
 
 export interface GitHubAppConfig {
   readonly appId: string;
-  /** PEM-encoded private key (decoded from base64 by caller) */
-  readonly privateKey: string;
   /** Optional override; resolved dynamically from repoRef if omitted */
   readonly installationId?: number;
+  /** PEM-encoded private key (decoded from base64 by caller) */
+  readonly privateKey: string;
 }
 
 export class GitHubAppTokenProvider implements VcsTokenProvider {

@@ -36,6 +36,8 @@ export interface AgentDescriptor {
    * P1+: stable across assistant variants.
    */
   readonly agentId: string;
+  /** Description of what this agent does (nullable per LangGraph Server) */
+  readonly description: string | null;
   /**
    * Internal graph reference for routing.
    * Format: "${providerId}:${graphName}" (e.g., "langgraph:poet").
@@ -44,8 +46,6 @@ export interface AgentDescriptor {
   readonly graphId: string;
   /** Human-readable name (matches LangGraph Server 'name' field) */
   readonly name: string;
-  /** Description of what this agent does (nullable per LangGraph Server) */
-  readonly description: string | null;
 }
 
 /**

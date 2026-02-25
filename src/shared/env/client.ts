@@ -16,8 +16,8 @@ import { ZodError, z } from "zod";
 
 export interface ClientEnvValidationMeta {
   code: "INVALID_CLIENT_ENV";
-  missing: string[];
   invalid: string[];
+  missing: string[];
 }
 
 export class ClientEnvValidationError extends Error {

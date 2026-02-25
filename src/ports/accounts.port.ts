@@ -91,22 +91,22 @@ export function isVirtualKeyNotFoundPortError(
 }
 
 export interface BillingAccount {
-  id: string;
-  ownerUserId: string;
   balanceCredits: number;
   defaultVirtualKeyId: string;
+  id: string;
+  ownerUserId: string;
 }
 
 export interface CreditLedgerEntry {
-  id: string;
-  billingAccountId: string;
-  virtualKeyId: string;
   amount: number;
   balanceAfter: number;
+  billingAccountId: string;
+  createdAt: Date;
+  id: string;
+  metadata: Record<string, unknown> | null;
   reason: string;
   reference: string | null;
-  metadata: Record<string, unknown> | null;
-  createdAt: Date;
+  virtualKeyId: string;
 }
 
 /**
@@ -171,16 +171,6 @@ export type ChargeReceiptParams = {
  * Exposes methods needed by auth mapping, internal routes, and system tenant operations.
  */
 export interface ServiceAccountService {
-  getBillingAccountById(
-    billingAccountId: string
-  ): Promise<BillingAccount | null>;
-
-  getOrCreateBillingAccountForUser(params: {
-    userId: string;
-    walletAddress?: string;
-    displayName?: string;
-  }): Promise<BillingAccount>;
-
   /**
    * Credit billing account for system-level operations (e.g., revenue share bonus).
    * Uses BYPASSRLS — not scoped to a user's RLS context.
@@ -203,9 +193,58 @@ export interface ServiceAccountService {
     reason: string;
     reference: string;
   }): Promise<CreditLedgerEntry | null>;
+  getBillingAccountById(
+    billingAccountId: string
+  ): Promise<BillingAccount | null>;
+
+  getOrCreateBillingAccountForUser(params: {
+    userId: string;
+    walletAddress?: string;
+    displayName?: string;
+  }): Promise<BillingAccount>;
 }
 
 export interface AccountService {
+  /**
+   * Credit billing account for funding/testing flows.
+   * Inserts positive delta into ledger and returns new balance atomically.
+   */
+  creditAccount(params: {
+    billingAccountId: string;
+    amount: number;
+    reason: string;
+    reference?: string;
+    virtualKeyId?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ newBalance: number }>;
+
+  /**
+   * Atomic credit deduction after LLM usage.
+   * Prevents race conditions with single operation.
+   * Throws InsufficientCreditsError if balance would go negative.
+   */
+  debitForUsage(params: {
+    billingAccountId: string;
+    virtualKeyId: string;
+    cost: number;
+    requestId: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void>;
+
+  /**
+   * Lookup a specific credit ledger entry by reference and reason for idempotency checks.
+   */
+  findCreditLedgerEntryByReference(params: {
+    billingAccountId: string;
+    reason: string;
+    reference: string;
+  }): Promise<CreditLedgerEntry | null>;
+
+  /**
+   * Reads cached balance from billing_accounts table.
+   * Not recomputed from ledger for performance.
+   */
+  getBalance(billingAccountId: string): Promise<number>;
   /**
    * Read-only lookup of billing account by ID.
    * Returns null if not found. Does not create.
@@ -223,67 +262,6 @@ export interface AccountService {
     walletAddress?: string;
     displayName?: string;
   }): Promise<BillingAccount>;
-
-  /**
-   * Reads cached balance from billing_accounts table.
-   * Not recomputed from ledger for performance.
-   */
-  getBalance(billingAccountId: string): Promise<number>;
-
-  /**
-   * Atomic credit deduction after LLM usage.
-   * Prevents race conditions with single operation.
-   * Throws InsufficientCreditsError if balance would go negative.
-   */
-  debitForUsage(params: {
-    billingAccountId: string;
-    virtualKeyId: string;
-    cost: number;
-    requestId: string;
-    metadata?: Record<string, unknown>;
-  }): Promise<void>;
-
-  /**
-   * Credit billing account for funding/testing flows.
-   * Inserts positive delta into ledger and returns new balance atomically.
-   */
-  creditAccount(params: {
-    billingAccountId: string;
-    amount: number;
-    reason: string;
-    reference?: string;
-    virtualKeyId?: string;
-    metadata?: Record<string, unknown>;
-  }): Promise<{ newBalance: number }>;
-
-  /**
-   * Fetch credit ledger entries for a billing account ordered by newest first.
-   */
-  listCreditLedgerEntries(params: {
-    billingAccountId: string;
-    limit?: number | undefined;
-    reason?: string | undefined;
-  }): Promise<CreditLedgerEntry[]>;
-
-  /**
-   * Records a charge receipt for an LLM call.
-   * Atomic: writes charge_receipt + debits credit_ledger in transaction.
-   * Idempotent: request_id as PK prevents duplicate inserts.
-   *
-   * INVARIANT: This method must NEVER throw InsufficientCreditsPortError.
-   * Post-call billing is non-blocking per ACTIVITY_METRICS.md.
-   * If balance goes negative, log critical but complete the write.
-   */
-  recordChargeReceipt(params: ChargeReceiptParams): Promise<void>;
-
-  /**
-   * Lookup a specific credit ledger entry by reference and reason for idempotency checks.
-   */
-  findCreditLedgerEntryByReference(params: {
-    billingAccountId: string;
-    reason: string;
-    reference: string;
-  }): Promise<CreditLedgerEntry | null>;
 
   /**
    * List charge receipts for a billing account.
@@ -307,6 +285,15 @@ export interface AccountService {
   >;
 
   /**
+   * Fetch credit ledger entries for a billing account ordered by newest first.
+   */
+  listCreditLedgerEntries(params: {
+    billingAccountId: string;
+    limit?: number | undefined;
+    reason?: string | undefined;
+  }): Promise<CreditLedgerEntry[]>;
+
+  /**
    * Fetch LLM charge details for a set of charge receipt IDs.
    * Used by Activity facade to enrich receipts with model/tokens.
    */
@@ -324,4 +311,15 @@ export interface AccountService {
       graphId: GraphId;
     }>
   >;
+
+  /**
+   * Records a charge receipt for an LLM call.
+   * Atomic: writes charge_receipt + debits credit_ledger in transaction.
+   * Idempotent: request_id as PK prevents duplicate inserts.
+   *
+   * INVARIANT: This method must NEVER throw InsufficientCreditsPortError.
+   * Post-call billing is non-blocking per ACTIVITY_METRICS.md.
+   * If balance goes negative, log critical but complete the write.
+   */
+  recordChargeReceipt(params: ChargeReceiptParams): Promise<void>;
 }

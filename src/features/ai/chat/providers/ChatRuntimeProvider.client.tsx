@@ -45,8 +45,6 @@ export interface ChatRuntimeRef {
 
 interface ChatRuntimeProviderProps {
   children: ReactNode;
-  selectedModel: string;
-  selectedGraph: GraphId;
   defaultModelId: string;
   /** Pre-loaded messages for an existing thread, or [] for a new thread. */
   initialMessages: UIMessage[];
@@ -56,6 +54,8 @@ interface ChatRuntimeProviderProps {
   onError?: (error: ChatError) => void;
   /** Called after each assistant response finishes (for sidebar refresh, etc.). */
   onFinish?: () => void;
+  selectedGraph: GraphId;
+  selectedModel: string;
 }
 
 export function ChatRuntimeProvider({

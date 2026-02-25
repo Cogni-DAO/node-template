@@ -16,8 +16,8 @@ import { cn } from "@/shared/util/cn";
 
 interface HintTextProps {
   children: React.ReactNode;
-  icon?: React.ReactNode;
   className?: string;
+  icon?: React.ReactNode;
 }
 
 export function HintText({ children, icon, className }: HintTextProps) {

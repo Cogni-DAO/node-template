@@ -21,8 +21,8 @@ import { createHash } from "node:crypto";
  * Compatible with Message from @/core but decoupled for architectural compliance.
  */
 interface ScrubbableMessage {
-  role: string;
   content: string;
+  role: string;
 }
 
 // ============================================================================
@@ -66,47 +66,47 @@ export const PAYLOAD_LIMITS = {
 // ============================================================================
 
 export interface ScrubbedTraceInput {
+  contentHash: string;
+  conversationPreview: string | null;
+  lastUserMessage: string | null;
   messageCount: number;
   roles: string[];
-  lastUserMessage: string | null;
-  conversationPreview: string | null;
-  contentHash: string;
   totalBytes: number;
 }
 
 export interface ScrubbedTraceOutput {
-  status: "success" | "error" | "aborted" | "finalization_lost";
   assistantResponse: string | null;
-  finishReason?: string;
-  errorCode?: string;
   contentHash: string | null;
+  errorCode?: string;
+  finishReason?: string;
+  status: "success" | "error" | "aborted" | "finalization_lost";
   usage?: { promptTokens: number; completionTokens: number };
 }
 
 export interface ScrubbedToolInput {
-  argsSummary: unknown;
-  argHash: string;
   argBytes: number;
+  argHash: string;
+  argsSummary: unknown;
 }
 
 export interface ScrubbedToolOutput {
-  resultSummary: unknown;
-  resultHash: string;
   resultBytes: number;
+  resultHash: string;
+  resultSummary: unknown;
 }
 
 export interface MaskedPayload {
-  masked: true;
-  hash: string;
   bytes: number;
+  hash: string;
+  masked: true;
   reason: "user_opt_out" | "size_exceeded";
 }
 
 export interface PayloadSizeExceeded {
-  truncated: true;
-  hash: string;
   bytes: number;
+  hash: string;
   preview: string;
+  truncated: true;
 }
 
 // ============================================================================

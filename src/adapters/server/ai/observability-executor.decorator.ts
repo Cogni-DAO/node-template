@@ -42,9 +42,9 @@ import type { AiEvent } from "@/types/ai-events";
  * Terminal state tracking for once-guard.
  */
 interface TerminalState {
-  resolved: boolean;
-  outcome?: "success" | "error" | "aborted" | "finalization_lost";
   finalizationTimer?: ReturnType<typeof setTimeout>;
+  outcome?: "success" | "error" | "aborted" | "finalization_lost";
+  resolved: boolean;
 }
 
 /**

@@ -64,8 +64,8 @@ export interface ToolContract<
   TOutput,
   TRedacted,
 > {
-  /** Stable tool name (snake_case, namespaced: core:tool_name) */
-  readonly name: TName;
+  /** Allowlisted fields that appear in redacted output */
+  readonly allowlist: ReadonlyArray<keyof TOutput>;
   /** Human-readable description for LLM */
   readonly description: string;
   /** Side-effect level for policy decisions */
@@ -75,14 +75,14 @@ export interface ToolContract<
    * Source of truth — used by LangChain wrappers and compiled to JSONSchema7.
    */
   readonly inputSchema: z.ZodType<TInput>;
+  /** Stable tool name (snake_case, namespaced: core:tool_name) */
+  readonly name: TName;
   /**
    * Zod schema for output validation.
    */
   readonly outputSchema: z.ZodType<TOutput>;
   /** Redact output to UI-safe fields */
   readonly redact: (output: TOutput) => TRedacted;
-  /** Allowlisted fields that appear in redacted output */
-  readonly allowlist: ReadonlyArray<keyof TOutput>;
 }
 
 /**

@@ -31,8 +31,8 @@ export interface PrometheusTimeSeries {
  * Contains multiple time series matching the query.
  */
 export interface PrometheusRangeResult {
-  resultType: "matrix";
   result: PrometheusTimeSeries[];
+  resultType: "matrix";
 }
 
 /**
@@ -48,20 +48,20 @@ export interface PrometheusInstantValue {
  * Contains vector of instant values.
  */
 export interface PrometheusInstantResult {
-  resultType: "vector";
   result: PrometheusInstantValue[];
+  resultType: "vector";
 }
 
 /**
  * Parameters for range query.
  */
 export interface RangeQueryParams {
+  /** End timestamp */
+  end: Date;
   /** PromQL expression */
   query: string;
   /** Start timestamp */
   start: Date;
-  /** End timestamp */
-  end: Date;
   /** Query resolution step (e.g., "1h", "5m") */
   step: string;
 }
@@ -82,16 +82,15 @@ export interface InstantQueryParams {
  */
 export interface MetricsQueryPort {
   /**
-   * Execute a range query (query_range).
-   * Returns time series data over a specified time range with given resolution.
-   */
-  queryRange(params: RangeQueryParams): Promise<PrometheusRangeResult>;
-
-  /**
    * Execute an instant query (query).
    * Returns metric values at a single point in time.
    */
   queryInstant(params: InstantQueryParams): Promise<PrometheusInstantResult>;
+  /**
+   * Execute a range query (query_range).
+   * Returns time series data over a specified time range with given resolution.
+   */
+  queryRange(params: RangeQueryParams): Promise<PrometheusRangeResult>;
 
   /**
    * Execute a template-based metrics query.
@@ -129,12 +128,12 @@ export type MetricWindow = "5m" | "15m" | "1h" | "6h";
  * Parameters for template-based metrics queries.
  */
 export interface TemplateQueryParams {
-  /** Predefined template to execute */
-  template: MetricTemplate;
-  /** Service name (must be in allowlist) */
-  service: string;
   /** Deployment environment (must match Alloy DEPLOY_ENVIRONMENT values) */
   environment: "local" | "preview" | "production";
+  /** Service name (must be in allowlist) */
+  service: string;
+  /** Predefined template to execute */
+  template: MetricTemplate;
   /** Time window for the query */
   window: MetricWindow;
 }
@@ -153,12 +152,12 @@ export interface TemplateDataPoint {
  * Summary statistics for the queried metric.
  */
 export interface TemplateSummary {
+  /** Percent change from previous to current */
+  changePercent?: number;
   /** Current value at end of window */
   current: number;
   /** Previous value (start of window), if available */
   previous?: number;
-  /** Percent change from previous to current */
-  changePercent?: number;
 }
 
 /**
@@ -166,16 +165,16 @@ export interface TemplateSummary {
  * Per QUERY_PROVENANCE: Always includes queryRef for audit trail.
  */
 export interface TemplateQueryResult {
-  /** Unique query reference for audit trail */
-  queryRef: string;
-  /** ISO 8601 timestamp when query was executed */
-  executedAt: string;
   /** Whether result came from cache */
   cached: boolean;
-  /** Summary statistics */
-  summary: TemplateSummary;
+  /** ISO 8601 timestamp when query was executed */
+  executedAt: string;
+  /** Unique query reference for audit trail */
+  queryRef: string;
   /** Time series data points (max 100) */
   series: TemplateDataPoint[];
+  /** Summary statistics */
+  summary: TemplateSummary;
   /** Whether series was truncated due to limits */
   truncated: boolean;
 }

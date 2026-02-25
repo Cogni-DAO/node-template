@@ -114,9 +114,6 @@ export interface ExecutionGrantUserPort {
     expiresAt?: Date;
   }) => Promise<ExecutionGrant>;
 
-  /** Revokes a grant (soft delete via revoked_at timestamp). */
-  revokeGrant: (callerUserId: UserId, grantId: string) => Promise<void>;
-
   /**
    * Deletes a grant permanently (hard delete).
    * Used for atomicity cleanup when schedule creation fails.
@@ -133,6 +130,9 @@ export interface ExecutionGrantUserPort {
     billingAccountId: string;
     scopes: readonly string[];
   }) => Promise<ExecutionGrant>;
+
+  /** Revokes a grant (soft delete via revoked_at timestamp). */
+  revokeGrant: (callerUserId: UserId, grantId: string) => Promise<void>;
 }
 
 /**

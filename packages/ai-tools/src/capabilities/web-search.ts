@@ -23,30 +23,30 @@ export type WebSearchTopic = "general" | "news" | "finance";
  * Parameters for web search queries.
  */
 export interface WebSearchParams {
-  /** The search query */
-  query: string;
-  /** Maximum number of results (1-20) */
-  maxResults?: number;
-  /** Search topic category */
-  topic?: WebSearchTopic;
   /** Include raw page content in results */
   includeRawContent?: boolean;
+  /** Maximum number of results (1-20) */
+  maxResults?: number;
+  /** The search query */
+  query: string;
+  /** Search topic category */
+  topic?: WebSearchTopic;
 }
 
 /**
  * Single search result.
  */
 export interface WebSearchResultItem {
+  /** Snippet or content from the result */
+  content: string;
+  /** Raw page content (if requested) */
+  rawContent?: string;
+  /** Relevance score (if available) */
+  score?: number;
   /** Title of the search result */
   title: string;
   /** URL of the search result */
   url: string;
-  /** Snippet or content from the result */
-  content: string;
-  /** Relevance score (if available) */
-  score?: number;
-  /** Raw page content (if requested) */
-  rawContent?: string;
 }
 
 /**

@@ -26,9 +26,9 @@ import type {
 } from "@/ports";
 
 export interface LangfuseAdapterConfig {
+  baseUrl?: string;
   publicKey: string;
   secretKey: string;
-  baseUrl?: string;
   // Note: environment is read by Langfuse SDK from LANGFUSE_TRACING_ENVIRONMENT env var
 }
 

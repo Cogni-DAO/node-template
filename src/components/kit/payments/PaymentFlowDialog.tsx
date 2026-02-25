@@ -25,35 +25,34 @@ import {
 import type { PaymentFlowState } from "@/types/payments";
 
 export interface PaymentFlowDialogProps {
-  /** Dialog open state */
-  open: boolean;
-
-  /** True only during pending phases (from state.isInFlight) */
-  isInFlight: boolean;
-
-  /** Current wallet step (for IN_FLIGHT states) */
-  walletStep: PaymentFlowState["walletStep"];
-
-  /** Transaction hash (when available) */
-  txHash: string | null;
-
-  /** Block explorer URL (when txHash available) */
-  explorerUrl: string | null;
-
-  /** Result state (SUCCESS/ERROR) */
-  result: "SUCCESS" | "ERROR" | null;
+  /** Credits added (on success) */
+  creditsAdded: number | null;
 
   /** User-friendly error message */
   errorMessage: string | null;
 
-  /** Credits added (on success) */
-  creditsAdded: number | null;
+  /** Block explorer URL (when txHash available) */
+  explorerUrl: string | null;
 
-  /** Reset payment state */
-  onReset: () => void;
+  /** True only during pending phases (from state.isInFlight) */
+  isInFlight: boolean;
 
   /** Close dialog */
   onClose: () => void;
+
+  /** Reset payment state */
+  onReset: () => void;
+  /** Dialog open state */
+  open: boolean;
+
+  /** Result state (SUCCESS/ERROR) */
+  result: "SUCCESS" | "ERROR" | null;
+
+  /** Transaction hash (when available) */
+  txHash: string | null;
+
+  /** Current wallet step (for IN_FLIGHT states) */
+  walletStep: PaymentFlowState["walletStep"];
 }
 
 function assertNever(x: never): never {

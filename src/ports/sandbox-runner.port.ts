@@ -18,10 +18,10 @@
  * Mount specification for binding host paths into the container.
  */
 export interface SandboxMount {
-  /** Host filesystem path to mount */
-  readonly hostPath: string;
   /** Path inside container where mount appears */
   readonly containerPath: string;
+  /** Host filesystem path to mount */
+  readonly hostPath: string;
   /** Mount mode: 'ro' for read-only, 'rw' for read-write */
   readonly mode: "ro" | "rw";
 }
@@ -32,12 +32,12 @@ export interface SandboxMount {
  * Defaults to read-only — callers must explicitly opt into read-write.
  */
 export interface SandboxVolumeMount {
-  /** Docker named volume (e.g., "repo_data") */
-  readonly volume: string;
   /** Path inside container (e.g., "/repo") */
   readonly containerPath: string;
   /** Defaults to true. Force explicit override if ever needed. */
   readonly readOnly?: boolean;
+  /** Docker named volume (e.g., "repo_data") */
+  readonly volume: string;
 }
 
 /**
@@ -59,12 +59,12 @@ export interface SandboxNetworkMode {
  * Per SANDBOXED_AGENTS.md P0.5: Enables LLM access via unix socket bridge.
  */
 export interface SandboxLlmProxyConfig {
-  /** Enable LLM proxy for this run */
-  readonly enabled: true;
-  /** Billing account ID for cost attribution. Injected as x-litellm-end-user-id. */
-  readonly billingAccountId: string;
   /** Run attempt number for billing attribution (goes in metadata, not end-user-id) */
   readonly attempt: number;
+  /** Billing account ID for cost attribution. Injected as x-litellm-end-user-id. */
+  readonly billingAccountId: string;
+  /** Enable LLM proxy for this run */
+  readonly enabled: true;
   /** Additional environment variables to set in container */
   readonly env?: Readonly<Record<string, string>>;
 }
@@ -73,18 +73,14 @@ export interface SandboxLlmProxyConfig {
  * Specification for a single sandbox command execution.
  */
 export interface SandboxRunSpec {
-  /** Unique run ID for correlation and logging */
-  readonly runId: string;
-  /** Host filesystem path to mount as /workspace in container */
-  readonly workspacePath: string;
-  /** Docker image to use for this run. */
-  readonly image: string;
   /**
    * Command arguments to execute.
    * For shell commands, use: ['bash', '-lc', 'your command here']
    * For direct binaries, use: ['/usr/bin/node', 'script.js']
    */
   readonly argv: readonly string[];
+  /** Docker image to use for this run. */
+  readonly image: string;
   /** Resource limits for the container */
   readonly limits: {
     /** Maximum runtime in seconds before timeout */
@@ -94,21 +90,25 @@ export interface SandboxRunSpec {
     /** Maximum combined stdout+stderr bytes (default: 2MB) */
     readonly maxOutputBytes?: number;
   };
-  /** Additional bind mounts (e.g., host paths) */
-  readonly mounts?: readonly SandboxMount[];
-  /** Named Docker volume mounts (e.g., git-sync repo_data at /repo:ro) */
-  readonly volumes?: readonly SandboxVolumeMount[];
-  /**
-   * Network mode for container. Defaults to { mode: 'none' } for complete isolation.
-   * Note: P0.5 uses network=none + llmProxy for LLM access, not internal network.
-   */
-  readonly networkMode?: SandboxNetworkMode;
   /**
    * LLM proxy configuration. When enabled, starts a host-side proxy and mounts
    * the socket into the container. Sets OPENAI_API_BASE=http://localhost:8080.
    * Per SANDBOXED_AGENTS.md P0.5: Enables LLM access while maintaining network=none.
    */
   readonly llmProxy?: SandboxLlmProxyConfig;
+  /** Additional bind mounts (e.g., host paths) */
+  readonly mounts?: readonly SandboxMount[];
+  /**
+   * Network mode for container. Defaults to { mode: 'none' } for complete isolation.
+   * Note: P0.5 uses network=none + llmProxy for LLM access, not internal network.
+   */
+  readonly networkMode?: SandboxNetworkMode;
+  /** Unique run ID for correlation and logging */
+  readonly runId: string;
+  /** Named Docker volume mounts (e.g., git-sync repo_data at /repo:ro) */
+  readonly volumes?: readonly SandboxVolumeMount[];
+  /** Host filesystem path to mount as /workspace in container */
+  readonly workspacePath: string;
 }
 
 /**
@@ -127,26 +127,22 @@ export type SandboxErrorCode =
  * response headers (x-litellm-call-id, x-litellm-response-cost).
  */
 export interface ProxyBillingEntry {
-  /** LiteLLM call ID from x-litellm-call-id response header (usageUnitId) */
-  readonly litellmCallId: string;
   /** Provider cost in USD from x-litellm-response-cost response header */
   readonly costUsd?: number;
+  /** LiteLLM call ID from x-litellm-call-id response header (usageUnitId) */
+  readonly litellmCallId: string;
 }
 
 /**
  * Result of a sandbox command execution.
  */
 export interface SandboxRunResult {
-  /** True if command exited with code 0 */
-  readonly ok: boolean;
-  /** Standard output from the command */
-  readonly stdout: string;
-  /** Standard error from the command */
-  readonly stderr: string;
-  /** Exit code from the command */
-  readonly exitCode: number;
   /** Error code if execution failed (timeout, OOM, etc.) */
   readonly errorCode?: SandboxErrorCode;
+  /** Exit code from the command */
+  readonly exitCode: number;
+  /** True if command exited with code 0 */
+  readonly ok: boolean;
   /** True if output was truncated due to size limits */
   readonly outputTruncated?: boolean;
   /**
@@ -155,6 +151,10 @@ export interface SandboxRunResult {
    * Present only when llmProxy was enabled.
    */
   readonly proxyBillingEntries?: readonly ProxyBillingEntry[];
+  /** Standard error from the command */
+  readonly stderr: string;
+  /** Standard output from the command */
+  readonly stdout: string;
 }
 
 /**
@@ -168,8 +168,6 @@ export interface SandboxRunResult {
  * swapping run.mjs for OpenClaw requires zero provider changes.
  */
 export interface SandboxProgramContract {
-  /** Response payloads. Typically one entry with the LLM response text. */
-  readonly payloads: ReadonlyArray<{ readonly text: string }>;
   /** Execution metadata. */
   readonly meta: {
     /** Wall-clock duration inside the container (ms). */
@@ -182,6 +180,8 @@ export interface SandboxProgramContract {
     /** LiteLLM call ID from x-litellm-call-id response header (for billing usageUnitId). */
     readonly litellmCallId?: string;
   };
+  /** Response payloads. Typically one entry with the LLM response text. */
+  readonly payloads: ReadonlyArray<{ readonly text: string }>;
 }
 
 /**

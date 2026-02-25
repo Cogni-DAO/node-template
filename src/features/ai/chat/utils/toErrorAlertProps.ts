@@ -19,13 +19,13 @@ import type { ChatError } from "@/contracts/error.chat.v1.contract";
  * Defined here to avoid component importing contracts.
  */
 export interface ErrorAlertProps {
+  blocking: boolean;
   code: string;
   message: string;
   retryable: boolean;
-  blocking: boolean;
+  showAddCredits: boolean;
   showRetry: boolean;
   showSwitchFree: boolean;
-  showAddCredits: boolean;
 }
 
 /**
