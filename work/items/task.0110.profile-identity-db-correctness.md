@@ -6,7 +6,7 @@ status: needs_implement
 priority: 0
 rank: 10
 estimate: 2
-summary: Add RLS to user-owned identity/profile tables, add DB + Zod constraints (displayName max, avatarColor hex, is_primary partial unique), tighten SessionUser types (nullable not optional).
+summary: Add RLS to user-owned identity/profile tables, add DB + Zod constraints (displayName max, avatarColor hex), tighten SessionUser types (nullable not optional).
 outcome: All user-owned tables have RLS enabled; profile input validated at DB + Zod layers; SessionUser types are strict nullable (not optional); pnpm check clean.
 spec_refs: decentralized-user-identity, authentication-spec
 assignees: unassigned
@@ -32,7 +32,6 @@ external_refs:
 - **DB constraints** added:
   - `display_name` length CHECK on `user_profiles` (max 100 chars).
   - `avatar_color` hex regex CHECK on `user_profiles` (`^#[0-9a-fA-F]{6}$`).
-  - Partial unique index on `user_bindings(user_id) WHERE is_primary = true` — prevents multiple primary bindings per user.
 - **Zod contract validation** tightened in `users.profile.v1.contract.ts`:
   - `displayName` input: `.max(100)`.
   - `avatarColor` input: `.regex(/^#[0-9a-fA-F]{6}$/)`.
@@ -42,7 +41,7 @@ external_refs:
 
 ## Allowed Changes
 
-- `packages/db-schema/src/identity.ts` — `.enableRLS()` on both tables, partial unique index on `user_bindings`
+- `packages/db-schema/src/identity.ts` — `.enableRLS()` on both tables
 - `packages/db-schema/src/profile.ts` — `.enableRLS()` on both tables, CHECK constraints
 - `packages/db-schema/src/migrations/` — new migration file
 - `src/contracts/users.profile.v1.contract.ts` — tighten Zod input schemas
@@ -55,7 +54,6 @@ external_refs:
 - [ ] Add `.enableRLS()` to `userBindings` and `identityEvents` in `packages/db-schema/src/identity.ts`
 - [ ] Add `.enableRLS()` to `userProfiles` and `userSettings` in `packages/db-schema/src/profile.ts`
 - [ ] Add `display_name` length CHECK and `avatar_color` hex CHECK to `userProfiles`
-- [ ] Add partial unique index on `user_bindings(user_id) WHERE is_primary = true`
 - [ ] Run `pnpm db:generate` to create migration
 - [ ] Tighten Zod contract inputs: `displayName.max(100)`, `avatarColor.regex()`
 - [ ] Audit `SessionUser` type across `session.ts`, `next-auth.d.ts`, `auth.ts` — ensure consistent `string | null`
