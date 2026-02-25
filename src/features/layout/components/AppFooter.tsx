@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@features/layout/components/AppFooter`
+ * Purpose: Data-driven site footer with link columns and brand section.
+ * Scope: Renders footer for public pages. Does not handle authentication or dynamic content.
+ * Invariants: Columns sourced from footer-items.ts; external links open in new tab.
+ * Side-effects: none
+ * Links: src/features/layout/components/footer-items.ts
+ * @public
+ */
+
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactElement } from "react";

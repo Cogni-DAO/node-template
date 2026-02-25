@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@features/layout/components/footer-items`
+ * Purpose: Footer column and link data for AppFooter.
+ * Scope: Static data definitions only. Does not render UI or handle routing.
+ * Invariants: All external links have external: true.
+ * Side-effects: none
+ * Links: src/features/layout/components/AppFooter.tsx
+ * @public
+ */
+
 export interface FooterLink {
   label: string;
   href: string;
