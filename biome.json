@@ -96,7 +96,7 @@
         "noBarrelFile": "off"
       },
       "suspicious": {
-        "noSkippedTests": "warn"
+        "noSkippedTests": "off"
       },
       "nursery": {
         "useSortedClasses": {
