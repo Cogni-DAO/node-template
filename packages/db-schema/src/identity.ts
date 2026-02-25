@@ -42,6 +42,7 @@ export const userBindings = pgTable(
       .references(() => users.id),
     provider: text("provider").notNull(),
     externalId: text("external_id").notNull(),
+    providerLogin: text("provider_login"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

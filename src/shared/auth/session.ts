@@ -19,4 +19,6 @@ export interface SessionUser {
    */
   id: string;
   walletAddress: string | null;
+  displayName?: string | null;
+  avatarColor?: string | null;
 }
