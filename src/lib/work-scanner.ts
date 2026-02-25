@@ -40,7 +40,9 @@ const EXCLUDE_DIRS = ["_templates", "archive", ".git", "node_modules"];
 
 function parseFrontmatter(raw: string): Record<string, unknown> | null {
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!match?.[1]) return null;
+  if (!match?.[1]) {
+    return null;
+  }
   try {
     return YAML.parse(match[1]) as Record<string, unknown>;
   } catch {
@@ -49,14 +51,19 @@ function parseFrontmatter(raw: string): Record<string, unknown> | null {
 }
 
 function toStringArray(val: unknown): string[] {
-  if (Array.isArray(val)) return val.map(String);
-  if (typeof val === "string" && val.length > 0)
+  if (Array.isArray(val)) {
+    return val.map(String);
+  }
+  if (typeof val === "string" && val.length > 0) {
     return val.split(",").map((s) => s.trim());
+  }
   return [];
 }
 
 function toNumber(val: unknown): number | undefined {
-  if (typeof val === "number") return val;
+  if (typeof val === "number") {
+    return val;
+  }
   if (typeof val === "string") {
     const n = Number(val);
     return Number.isNaN(n) ? undefined : n;
@@ -65,7 +72,9 @@ function toNumber(val: unknown): number | undefined {
 }
 
 function toStr(val: unknown): string {
-  if (val == null) return "";
+  if (val == null) {
+    return "";
+  }
   return String(val);
 }
 
@@ -82,7 +91,9 @@ async function scanDir(
   }
 
   for (const entry of entries) {
-    if (EXCLUDE_DIRS.includes(entry.name)) continue;
+    if (EXCLUDE_DIRS.includes(entry.name)) {
+      continue;
+    }
     const fullPath = join(dir, entry.name);
 
     if (entry.isDirectory()) {
@@ -117,11 +128,15 @@ export async function getWorkItems(): Promise<WorkItem[]> {
       }
 
       const fm = parseFrontmatter(raw);
-      if (!fm) continue;
+      if (!fm) {
+        continue;
+      }
 
       // Projects use "state" instead of "status"
       const status = toStr(fm.status || fm.state);
-      if (!status && !fm.id) continue; // Skip files with no meaningful frontmatter
+      if (!status && !fm.id) {
+        continue; // Skip files with no meaningful frontmatter
+      }
 
       items.push({
         id: toStr(fm.id),

@@ -10,7 +10,9 @@
       ? "dark"
       : "light";
     const resolved = theme === "system" ? systemTheme : theme;
-    if (resolved === "dark") document.documentElement.classList.add("dark");
+    if (resolved === "dark") {
+      document.documentElement.classList.add("dark");
+    }
   } catch {
     // ignore
   }

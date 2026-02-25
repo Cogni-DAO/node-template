@@ -155,7 +155,9 @@ describe("clientLogger", () => {
       });
 
       const call = (console.warn as ReturnType<typeof vi.fn>).mock.calls[0];
-      if (!call) throw new Error("Expected console.warn to be called");
+      if (!call) {
+        throw new Error("Expected console.warn to be called");
+      }
       const metaStr = call[1] as string;
       const parsed = JSON.parse(metaStr);
 
@@ -181,7 +183,9 @@ describe("clientLogger", () => {
       });
 
       const call = (console.warn as ReturnType<typeof vi.fn>).mock.calls[0];
-      if (!call) throw new Error("Expected console.warn to be called");
+      if (!call) {
+        throw new Error("Expected console.warn to be called");
+      }
       const metaStr = call[1] as string;
       const parsed = JSON.parse(metaStr);
 
@@ -203,7 +207,9 @@ describe("clientLogger", () => {
       clientLogger.warn(EVENT_NAMES.TEST_EVENT, { large: largeString });
 
       const call = (console.warn as ReturnType<typeof vi.fn>).mock.calls[0];
-      if (!call) throw new Error("Expected console.warn to be called");
+      if (!call) {
+        throw new Error("Expected console.warn to be called");
+      }
       const metaStr = call[1] as string;
       const parsed = JSON.parse(metaStr);
 
@@ -219,7 +225,9 @@ describe("clientLogger", () => {
       clientLogger.warn(EVENT_NAMES.TEST_EVENT, { items: largeArray });
 
       const call = (console.warn as ReturnType<typeof vi.fn>).mock.calls[0];
-      if (!call) throw new Error("Expected console.warn to be called");
+      if (!call) {
+        throw new Error("Expected console.warn to be called");
+      }
       const metaStr = call[1] as string;
       const parsed = JSON.parse(metaStr);
 
@@ -240,7 +248,9 @@ describe("clientLogger", () => {
       }).not.toThrow();
 
       const call = (console.warn as ReturnType<typeof vi.fn>).mock.calls[0];
-      if (!call) throw new Error("Expected console.warn to be called");
+      if (!call) {
+        throw new Error("Expected console.warn to be called");
+      }
       const metaStr = call[1] as string;
 
       // Should produce valid stringified output (fast-safe-stringify handles circulars)
@@ -267,7 +277,9 @@ describe("clientLogger", () => {
       }).not.toThrow();
 
       const call = (console.warn as ReturnType<typeof vi.fn>).mock.calls[0];
-      if (!call) throw new Error("Expected console.warn to be called");
+      if (!call) {
+        throw new Error("Expected console.warn to be called");
+      }
       const metaStr = call[1] as string;
 
       // Should fail-closed with SERIALIZATION_FAILED marker

@@ -24,15 +24,20 @@ const TERMINAL_STATUSES = new Set(["done", "cancelled"]);
 
 function extractFrontmatter(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!match) throw new Error("missing YAML frontmatter");
+  if (!match) {
+    throw new Error("missing YAML frontmatter");
+  }
   const props = parseYaml(match[1]);
-  if (!props || typeof props !== "object")
+  if (!props || typeof props !== "object") {
     throw new Error("invalid YAML frontmatter");
+  }
   return props;
 }
 
 function norm(v) {
-  if (v == null) return "";
+  if (v == null) {
+    return "";
+  }
   return String(v).trim();
 }
 
@@ -104,7 +109,9 @@ function main() {
     }
 
     const id = norm(fm.id);
-    if (!id) continue;
+    if (!id) {
+      continue;
+    }
 
     // Duplicate ID check
     if (idMap.has(id)) {
@@ -132,7 +139,9 @@ function main() {
 
   if (errors.length > 0) {
     console.error("work:index errors:");
-    for (const e of errors) console.error(`  ${e}`);
+    for (const e of errors) {
+      console.error(`  ${e}`);
+    }
     process.exit(1);
   }
 
@@ -144,10 +153,14 @@ function main() {
   active.sort((a, b) => {
     const pa = a.priority ?? 99;
     const pb = b.priority ?? 99;
-    if (pa !== pb) return pa - pb;
+    if (pa !== pb) {
+      return pa - pb;
+    }
     const ra = a.rank ?? 99;
     const rb = b.rank ?? 99;
-    if (ra !== rb) return ra - rb;
+    if (ra !== rb) {
+      return ra - rb;
+    }
     return idNum(a.id) - idNum(b.id);
   });
 
@@ -155,7 +168,9 @@ function main() {
   done.sort((a, b) => {
     const pa = a.priority ?? 99;
     const pb = b.priority ?? 99;
-    if (pa !== pb) return pa - pb;
+    if (pa !== pb) {
+      return pa - pb;
+    }
     return idNum(a.id) - idNum(b.id);
   });
 

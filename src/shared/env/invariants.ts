@@ -117,7 +117,9 @@ let _prodSecretsValidated = false;
  */
 export function assertRuntimeSecrets(env: ParsedEnv): void {
   // Only memoize in production (env is immutable after deployment)
-  if (env.APP_ENV === "production" && _prodSecretsValidated) return;
+  if (env.APP_ENV === "production" && _prodSecretsValidated) {
+    return;
+  }
 
   // Set flag only in production
   if (env.APP_ENV === "production") {
@@ -167,7 +169,9 @@ interface EnvWithRpc extends ParsedEnv {
  */
 export function assertEvmRpcConfig(env: EnvWithRpc): void {
   // Test mode uses FakeEvmOnchainClient - no RPC URL needed
-  if (env.APP_ENV === "test") return;
+  if (env.APP_ENV === "test") {
+    return;
+  }
 
   // Production/preview/dev requires EVM_RPC_URL for payment verification
   if (!env.EVM_RPC_URL || env.EVM_RPC_URL.trim() === "") {
@@ -192,7 +196,9 @@ export async function assertEvmRpcConnectivity(
   env: ParsedEnv
 ): Promise<void> {
   // Test mode uses FakeEvmOnchainClient - skip connectivity check
-  if (env.APP_ENV === "test") return;
+  if (env.APP_ENV === "test") {
+    return;
+  }
 
   // Production/preview/dev: Verify RPC connection works
   try {

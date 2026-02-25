@@ -198,7 +198,9 @@ describe.skip("Chat Tool Replay", () => {
     const rawLines: string[] = [];
 
     const reader = res.body?.getReader();
-    if (!reader) throw new Error("No response body reader");
+    if (!reader) {
+      throw new Error("No response body reader");
+    }
 
     const decoder = new TextDecoder();
     let buf = "";

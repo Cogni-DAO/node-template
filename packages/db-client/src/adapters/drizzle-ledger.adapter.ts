@@ -223,7 +223,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       .from(epochs)
       .where(and(eq(epochs.id, epochId), eq(epochs.scopeId, this.scopeId)))
       .limit(1);
-    if (!rows[0]) throw new EpochNotFoundError(epochId.toString());
+    if (!rows[0]) {
+      throw new EpochNotFoundError(epochId.toString());
+    }
     return toEpoch(rows[0]);
   }
 
@@ -257,7 +259,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
         weightConfig: params.weightConfig,
       })
       .returning();
-    if (!row) throw new Error("createEpoch: INSERT returned no rows");
+    if (!row) {
+      throw new Error("createEpoch: INSERT returned no rows");
+    }
     return toEpoch(row);
   }
 
@@ -433,7 +437,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
   async insertActivityEvents(
     events: InsertActivityEventParams[]
   ): Promise<void> {
-    if (events.length === 0) return;
+    if (events.length === 0) {
+      return;
+    }
     await this.db
       .insert(activityEvents)
       .values(
@@ -479,7 +485,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
   // ── Curation ────────────────────────────────────────────────
 
   async upsertCuration(params: UpsertCurationParams[]): Promise<void> {
-    if (params.length === 0) return;
+    if (params.length === 0) {
+      return;
+    }
     await this.validateEpochIds(params.map((p) => p.epochId));
     for (const p of params) {
       await this.db
@@ -509,7 +517,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
   async insertCurationDoNothing(
     params: InsertCurationAutoParams[]
   ): Promise<void> {
-    if (params.length === 0) return;
+    if (params.length === 0) {
+      return;
+    }
     await this.validateEpochIds(params.map((p) => p.epochId));
     for (const p of params) {
       await this.db
@@ -553,7 +563,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
   // ── Allocations ─────────────────────────────────────────────
 
   async insertAllocations(params: InsertAllocationParams[]): Promise<void> {
-    if (params.length === 0) return;
+    if (params.length === 0) {
+      return;
+    }
     await this.validateEpochIds(params.map((a) => a.epochId));
     await this.db.insert(epochAllocations).values(
       params.map((a) => ({
@@ -569,7 +581,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
   }
 
   async upsertAllocations(params: InsertAllocationParams[]): Promise<void> {
-    if (params.length === 0) return;
+    if (params.length === 0) {
+      return;
+    }
     await this.validateEpochIds(params.map((a) => a.epochId));
     for (const a of params) {
       await this.db
@@ -599,7 +613,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
     activeUserIds: string[]
   ): Promise<void> {
     await this.resolveEpochScoped(epochId);
-    if (activeUserIds.length === 0) return;
+    if (activeUserIds.length === 0) {
+      return;
+    }
     await this.db
       .delete(epochAllocations)
       .where(
@@ -727,7 +743,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
         evidenceRef: params.evidenceRef ?? null,
       })
       .returning();
-    if (!row) throw new Error("insertPoolComponent: INSERT returned no rows");
+    if (!row) {
+      throw new Error("insertPoolComponent: INSERT returned no rows");
+    }
     return toPoolComponent(row);
   }
 
@@ -759,7 +777,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
         supersedesStatementId: params.supersedesStatementId ?? null,
       })
       .returning();
-    if (!row) throw new Error("insertPayoutStatement: INSERT returned no rows");
+    if (!row) {
+      throw new Error("insertPayoutStatement: INSERT returned no rows");
+    }
     return toStatement(row);
   }
 
@@ -971,7 +991,9 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
     provider: "github",
     externalIds: string[]
   ): Promise<Map<string, string>> {
-    if (externalIds.length === 0) return new Map();
+    if (externalIds.length === 0) {
+      return new Map();
+    }
     const uniqueIds = [...new Set(externalIds)];
     const rows = await this.db
       .select({

@@ -34,9 +34,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /** Unwrap DrizzleQueryError → underlying PostgresError message */
 function drizzleCause(err: unknown): string {
-  if (err instanceof Error && err.cause instanceof Error)
+  if (err instanceof Error && err.cause instanceof Error) {
     return err.cause.message;
-  if (err instanceof Error) return err.message;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
   return String(err);
 }
 
@@ -159,7 +162,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         (e) => e.status === "review" && e.approverSetHash === "abc123hash"
       );
       expect(review).toBeDefined();
-      if (!review) throw new Error("Expected review epoch");
+      if (!review) {
+        throw new Error("Expected review epoch");
+      }
 
       const finalized = await adapter.finalizeEpoch(review.id, 50000n);
       expect(finalized.status).toBe("finalized");
@@ -174,7 +179,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       );
       expect(finalized).toBeDefined();
 
-      if (!finalized) throw new Error("Expected finalized epoch");
+      if (!finalized) {
+        throw new Error("Expected finalized epoch");
+      }
       const result = await adapter.finalizeEpoch(finalized.id, 99999n);
       expect(result.status).toBe("finalized");
       expect(result.poolTotalCredits).toBe(50000n); // unchanged
@@ -212,7 +219,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       const list = await adapter.listEpochs(TEST_NODE_ID);
       const finalized = list.find((e) => e.status === "finalized");
       expect(finalized).toBeDefined();
-      if (!finalized) throw new Error("Expected finalized epoch");
+      if (!finalized) {
+        throw new Error("Expected finalized epoch");
+      }
 
       const result = await adapter.closeIngestion(
         finalized.id,

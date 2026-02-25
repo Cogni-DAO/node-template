@@ -88,7 +88,9 @@ function transformModelInfoResponse(data: unknown): ModelMeta[] {
 
   return modelsList
     .map((item): ModelMeta | null => {
-      if (typeof item !== "object" || item === null) return null;
+      if (typeof item !== "object" || item === null) {
+        return null;
+      }
 
       // Prefer model_name, fallback to id
       const id =
@@ -96,7 +98,9 @@ function transformModelInfoResponse(data: unknown): ModelMeta[] {
         (item as { id?: string }).id;
 
       // Drop malformed entries with no valid ID
-      if (!id) return null;
+      if (!id) {
+        return null;
+      }
 
       const modelInfo = ((item as Record<string, unknown>).model_info ??
         {}) as {
@@ -332,7 +336,9 @@ export async function isModelFree(modelId: string): Promise<boolean> {
  * - Returns `false` for unknown models when cache exists (treat as paid).
  */
 export function isModelFreeFromCache(modelId: string): boolean | null {
-  if (!cache) return null;
+  if (!cache) {
+    return null;
+  }
   const model = cache.data.models.find((m) => m.id === modelId);
   return model?.isFree ?? false;
 }

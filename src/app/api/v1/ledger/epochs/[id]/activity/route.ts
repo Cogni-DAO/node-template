@@ -33,7 +33,9 @@ export const GET = wrapRouteHandlerWithLogging<{
     auth: { mode: "required", getSessionUser },
   },
   async (_ctx, request, _sessionUser, context) => {
-    if (!context) throw new Error("context required for dynamic routes");
+    if (!context) {
+      throw new Error("context required for dynamic routes");
+    }
     const { id } = await context.params;
     let epochId: bigint;
     try {

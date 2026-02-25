@@ -80,7 +80,9 @@ describe("ScheduleControlPort.listScheduleIds (Contract)", () => {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const allIds = await adapter.listScheduleIds("");
-      if (allIds.includes(scheduleId)) return;
+      if (allIds.includes(scheduleId)) {
+        return;
+      }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     throw new Error(`Timed out waiting for schedule to appear: ${scheduleId}`);

@@ -62,7 +62,9 @@ export function DAOFormationPageClient(): ReactElement {
     formation.state.phase === "SUCCESS" || formation.state.phase === "ERROR";
 
   const handleSubmit = () => {
-    if (!canSubmit || !isIdle) return;
+    if (!canSubmit || !isIdle) {
+      return;
+    }
 
     formation.startFormation({
       tokenName,

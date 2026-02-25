@@ -237,7 +237,9 @@ export function useDAOFormation(): UseDAOFormationReturn {
         initialHolder: config.initialHolder,
       });
 
-      if (attemptIdRef.current !== currentAttempt) return;
+      if (attemptIdRef.current !== currentAttempt) {
+        return;
+      }
 
       if (result.ok) {
         dispatch({

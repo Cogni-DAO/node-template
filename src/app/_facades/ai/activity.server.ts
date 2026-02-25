@@ -114,7 +114,9 @@ function buildGroupedSeries(
 
   function getOrCreateEpochMap(group: string): Map<number, Bucket> {
     const existing = grouped.get(group);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
     const fresh = new Map<number, Bucket>();
     grouped.set(group, fresh);
     return fresh;
@@ -143,7 +145,9 @@ function buildGroupedSeries(
   const ranked = [...grouped.entries()]
     .map(([group, epochs]) => {
       let totalSpend = 0;
-      for (const b of epochs.values()) totalSpend += b.spend;
+      for (const b of epochs.values()) {
+        totalSpend += b.spend;
+      }
       return { group, totalSpend, epochs };
     })
     .sort((a, b) => b.totalSpend - a.totalSpend);

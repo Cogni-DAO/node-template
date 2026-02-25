@@ -55,7 +55,9 @@ const MAX_TOKEN_LENGTH = 256;
 function safeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a, "utf8");
   const bufB = Buffer.from(b, "utf8");
-  if (bufA.length !== bufB.length) return false;
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
   return timingSafeEqual(bufA, bufB);
 }
 
@@ -63,16 +65,24 @@ function safeCompare(a: string, b: string): boolean {
  * Extract bearer token from Authorization header.
  */
 function extractBearerToken(authHeader: string | null): string | null {
-  if (!authHeader) return null;
-  if (authHeader.length > MAX_AUTH_HEADER_LENGTH) return null;
+  if (!authHeader) {
+    return null;
+  }
+  if (authHeader.length > MAX_AUTH_HEADER_LENGTH) {
+    return null;
+  }
 
   const trimmed = authHeader.trim();
   const lowerPrefix = trimmed.toLowerCase();
 
-  if (!lowerPrefix.startsWith("bearer ")) return null;
+  if (!lowerPrefix.startsWith("bearer ")) {
+    return null;
+  }
 
   const token = trimmed.slice(7).trim();
-  if (token.length > MAX_TOKEN_LENGTH) return null;
+  if (token.length > MAX_TOKEN_LENGTH) {
+    return null;
+  }
 
   return token;
 }

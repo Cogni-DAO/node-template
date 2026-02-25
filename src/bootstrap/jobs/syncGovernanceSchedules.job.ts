@@ -138,7 +138,9 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
             nextRunAt,
           })
           .returning();
-        if (!row) throw new Error("Insert returned no row");
+        if (!row) {
+          throw new Error("Insert returned no row");
+        }
         return row.id;
       },
       systemUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,

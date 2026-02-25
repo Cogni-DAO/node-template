@@ -107,23 +107,39 @@ const IGNORE_PATH_REGEX =
   /src[\\/](components[\\/]vendor(?:[\\/]|$)|styles[\\/]|__tests__[\\/])/;
 
 function normalizeToken(raw) {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   const base = raw.split(":").pop();
-  if (!base) return null;
+  if (!base) {
+    return null;
+  }
   let token = base.trim();
-  if (!token) return null;
-  if (token.startsWith("!")) token = token.slice(1);
-  if (token.startsWith("-")) token = token.slice(1);
+  if (!token) {
+    return null;
+  }
+  if (token.startsWith("!")) {
+    token = token.slice(1);
+  }
+  if (token.startsWith("-")) {
+    token = token.slice(1);
+  }
   return token;
 }
 
 function tokenize(text) {
   const tokens = [];
-  if (!text) return tokens;
+  if (!text) {
+    return tokens;
+  }
   for (const raw of text.split(/\s+/)) {
-    if (!raw) continue;
+    if (!raw) {
+      continue;
+    }
     const normalized = normalizeToken(raw);
-    if (!normalized) continue;
+    if (!normalized) {
+      continue;
+    }
     tokens.push({ raw, normalized });
   }
   return tokens;
@@ -235,18 +251,28 @@ function analyzeToken(meta) {
 }
 
 function* extractStrings(node) {
-  if (!node) return;
+  if (!node) {
+    return;
+  }
   switch (node.type) {
     case "Literal":
-      if (typeof node.value === "string") yield [node, node.value];
+      if (typeof node.value === "string") {
+        yield [node, node.value];
+      }
       break;
     case "TemplateLiteral":
       for (const quasi of node.quasis) {
-        if (quasi.value?.cooked) yield [quasi, quasi.value.cooked];
+        if (quasi.value?.cooked) {
+          yield [quasi, quasi.value.cooked];
+        }
       }
       break;
     case "ArrayExpression":
-      for (const el of node.elements) if (el) yield* extractStrings(el);
+      for (const el of node.elements) {
+        if (el) {
+          yield* extractStrings(el);
+        }
+      }
       break;
     case "ConditionalExpression":
       yield* extractStrings(node.consequent);
@@ -287,7 +313,9 @@ function createClassRule(ruleId, filterTypes) {
       function reportFromText(node, text) {
         for (const token of tokenize(text)) {
           for (const issue of analyzeToken(token)) {
-            if (!filterTypes.has(issue.type)) continue;
+            if (!filterTypes.has(issue.type)) {
+              continue;
+            }
             context.report({ node, message: issue.message });
           }
         }
@@ -297,7 +325,9 @@ function createClassRule(ruleId, filterTypes) {
        * Determine if call expression callee matches trackedNames
        */
       function isTrackedCall(node) {
-        if (!node || !node.callee) return false;
+        if (!node || !node.callee) {
+          return false;
+        }
         if (
           node.callee.type === "Identifier" &&
           trackedNames.has(node.callee.name)
@@ -318,7 +348,9 @@ function createClassRule(ruleId, filterTypes) {
       return {
         ImportDeclaration(node) {
           const source = node.source?.value;
-          if (typeof source !== "string") return;
+          if (typeof source !== "string") {
+            return;
+          }
           if (
             source === "clsx" ||
             source === "classnames" ||
@@ -342,7 +374,9 @@ function createClassRule(ruleId, filterTypes) {
         },
 
         CallExpression(node) {
-          if (!isTrackedCall(node)) return;
+          if (!isTrackedCall(node)) {
+            return;
+          }
           for (const arg of node.arguments) {
             for (const [innerNode, text] of extractStrings(arg)) {
               reportFromText(innerNode, text);
@@ -377,7 +411,9 @@ function createVendorRule() {
       return {
         ImportDeclaration(node) {
           const source = node.source?.value;
-          if (typeof source !== "string") return;
+          if (typeof source !== "string") {
+            return;
+          }
           if (source.startsWith(vendorAlias)) {
             context.report({
               node,

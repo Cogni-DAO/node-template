@@ -26,7 +26,9 @@ test("[smoke] all a11y-smoke routes pass axe core checks", async ({ page }) => {
   expect(response?.ok()).toBeTruthy();
 
   const body = await response?.text();
-  if (!body) throw new Error("Empty response body");
+  if (!body) {
+    throw new Error("Empty response body");
+  }
   const json = JSON.parse(body) as { routes: RouteEntry[] };
   const a11yRoutes = json.routes;
 

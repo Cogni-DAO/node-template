@@ -297,7 +297,9 @@ function computePayouts(
   amount_credits: string;
 }> {
   const totalUnits = allocations.reduce((s, a) => s + a.proposedUnits, 0n);
-  if (totalUnits === 0n) return [];
+  if (totalUnits === 0n) {
+    return [];
+  }
   return allocations.map((a) => {
     const share = Number(a.proposedUnits) / Number(totalUnits);
     const credits = Math.round(share * Number(poolTotal));
@@ -576,6 +578,8 @@ async function main(): Promise<void> {
 main().catch((error: Error) => {
   console.error("\n💥 Seed failed:");
   console.error(error.message);
-  if (error.stack) console.error(error.stack);
+  if (error.stack) {
+    console.error(error.stack);
+  }
   process.exit(1);
 });

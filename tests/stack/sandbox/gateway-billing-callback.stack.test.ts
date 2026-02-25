@@ -113,7 +113,9 @@ async function waitForCallbackReceipt(
     const withCost = rows.find(
       (r) => r.responseCostUsd !== null && Number(r.responseCostUsd) > 0
     );
-    if (withCost) return withCost;
+    if (withCost) {
+      return withCost;
+    }
 
     await new Promise((r) => setTimeout(r, CALLBACK_POLL_INTERVAL_MS));
   }

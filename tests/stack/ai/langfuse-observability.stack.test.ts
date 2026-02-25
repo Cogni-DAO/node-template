@@ -174,7 +174,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -207,7 +209,9 @@ describe("Langfuse Observability Stack Tests", () => {
 
       // Consume stream
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - Trace was created with non-null input
@@ -232,7 +236,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -264,7 +270,9 @@ describe("Langfuse Observability Stack Tests", () => {
 
       // Consume stream
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - Output was set on terminal
@@ -291,7 +299,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -322,7 +332,9 @@ describe("Langfuse Observability Stack Tests", () => {
       expect(res.status).toBe(200);
 
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - traceId is valid 32-hex format
@@ -345,7 +357,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -379,7 +393,9 @@ describe("Langfuse Observability Stack Tests", () => {
       expect(res.status).toBe(200);
 
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - sessionId is truncated to 200 chars
@@ -402,7 +418,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -433,7 +451,9 @@ describe("Langfuse Observability Stack Tests", () => {
       expect(res.status).toBe(200);
 
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - Exactly one trace output update
@@ -454,7 +474,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -485,7 +507,9 @@ describe("Langfuse Observability Stack Tests", () => {
       expect(res.status).toBe(200);
 
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - Tags include graphId and environment
@@ -506,7 +530,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -537,7 +563,9 @@ describe("Langfuse Observability Stack Tests", () => {
       expect(res.status).toBe(200);
 
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - userId passed to trace (as top-level param, not in tags)
@@ -561,7 +589,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -592,7 +622,9 @@ describe("Langfuse Observability Stack Tests", () => {
       expect(res.status).toBe(200);
 
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - billingAccountId in metadata
@@ -613,7 +645,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -649,7 +683,9 @@ describe("Langfuse Observability Stack Tests", () => {
       expect(res.status).toBe(200);
 
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert - Input is scrubbed
@@ -686,7 +722,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -718,7 +756,9 @@ describe("Langfuse Observability Stack Tests", () => {
 
       // Consume stream fully
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert: One trace via createTraceWithIO (graph-execution), NOT createTrace (llm-completion)
@@ -752,7 +792,9 @@ describe("Langfuse Observability Stack Tests", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -783,7 +825,9 @@ describe("Langfuse Observability Stack Tests", () => {
       expect(res.status).toBe(200);
 
       for await (const e of readSseEvents(res)) {
-        if (isFinishEvent(e)) break;
+        if (isFinishEvent(e)) {
+          break;
+        }
       }
 
       // Assert: All three calls use the same traceId

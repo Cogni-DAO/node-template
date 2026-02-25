@@ -56,7 +56,9 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  if (repo) cleanupTempGitRepo(repo);
+  if (repo) {
+    cleanupTempGitRepo(repo);
+  }
 });
 
 describe("Repo wiring smoke test", () => {

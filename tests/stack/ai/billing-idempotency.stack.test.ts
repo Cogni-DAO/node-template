@@ -82,7 +82,9 @@ describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
       })
       .returning({ id: virtualKeys.id });
     const virtualKeyId = virtualKeyResult[0]?.id;
-    if (!virtualKeyId) throw new Error("Failed to create virtual key");
+    if (!virtualKeyId) {
+      throw new Error("Failed to create virtual key");
+    }
 
     // Step 1: Execute a real completion to produce a charge_receipt
     const completionReq = new NextRequest(
@@ -105,7 +107,9 @@ describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
 
     expect(receipts.length).toBe(1);
     const originalReceipt = receipts[0];
-    if (!originalReceipt) throw new Error("No charge receipt found");
+    if (!originalReceipt) {
+      throw new Error("No charge receipt found");
+    }
 
     // Extract exact values from DB - no hardcoding
     const { sourceSystem, sourceReference, runId, attempt, ingressRequestId } =

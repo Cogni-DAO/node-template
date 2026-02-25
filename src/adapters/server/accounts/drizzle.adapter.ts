@@ -625,7 +625,9 @@ export class UserDrizzleAccountService implements AccountService {
       graphId: GraphId;
     }>
   > {
-    if (params.chargeReceiptIds.length === 0) return [];
+    if (params.chargeReceiptIds.length === 0) {
+      return [];
+    }
 
     return withTenantScope(this.db, this.actorId, async (tx) => {
       const rows = await tx

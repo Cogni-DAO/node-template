@@ -57,7 +57,9 @@ describe("Sandbox LiteLLM Reachability (P0.5a)", () => {
   // ───────────────────────────────────────────────────────────────────────────
 
   it("container can reach LiteLLM health endpoint (HTTP 200)", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runOnInternalNetwork(
       ctx,
@@ -69,7 +71,9 @@ describe("Sandbox LiteLLM Reachability (P0.5a)", () => {
   });
 
   it("container CAN resolve litellm DNS (internal network works)", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runOnInternalNetwork(
       ctx,
@@ -84,7 +88,9 @@ describe("Sandbox LiteLLM Reachability (P0.5a)", () => {
   // ───────────────────────────────────────────────────────────────────────────
 
   it("container has no default route (internal network isolation)", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runOnInternalNetwork(
       ctx,
@@ -97,7 +103,9 @@ describe("Sandbox LiteLLM Reachability (P0.5a)", () => {
   });
 
   it("container cannot resolve external DNS", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runOnInternalNetwork(
       ctx,
@@ -109,7 +117,9 @@ describe("Sandbox LiteLLM Reachability (P0.5a)", () => {
   });
 
   it("container cannot reach external IP directly", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runOnInternalNetwork(
       ctx,
@@ -125,7 +135,9 @@ describe("Sandbox LiteLLM Reachability (P0.5a)", () => {
   // ───────────────────────────────────────────────────────────────────────────
 
   it("container cannot access Docker socket", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runOnInternalNetwork(
       ctx,

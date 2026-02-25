@@ -50,7 +50,9 @@ function makeInner(events: AiEvent[]): GraphExecutorPort {
   return {
     runGraph: () => ({
       stream: (async function* () {
-        for (const e of events) yield e;
+        for (const e of events) {
+          yield e;
+        }
       })(),
       final: Promise.resolve({
         ok: true,

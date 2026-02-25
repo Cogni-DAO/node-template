@@ -60,7 +60,9 @@ export function HeroActionWords({
   }, [actions, currentWord]);
 
   useEffect(() => {
-    if (actions.length <= 1) return;
+    if (actions.length <= 1) {
+      return;
+    }
     if (!isAnimating) {
       const timeout = setTimeout(() => rotateWord(), durationMs);
       return () => clearTimeout(timeout);

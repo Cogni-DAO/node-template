@@ -105,7 +105,9 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
     const getCurrentTheme = (): {
       icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
     } => {
-      if (!mounted) return getThemeConfig("light");
+      if (!mounted) {
+        return getThemeConfig("light");
+      }
       return getThemeConfig(theme ?? "light");
     };
 

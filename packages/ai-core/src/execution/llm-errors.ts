@@ -53,9 +53,17 @@ export function isLlmError(error: unknown): error is LlmError {
  * Classify LlmError kind from HTTP status code.
  */
 export function classifyLlmErrorFromStatus(status: number): LlmErrorKind {
-  if (status === 408) return "timeout";
-  if (status === 429) return "rate_limited";
-  if (status >= 400 && status < 500) return "provider_4xx";
-  if (status >= 500 && status < 600) return "provider_5xx";
+  if (status === 408) {
+    return "timeout";
+  }
+  if (status === 429) {
+    return "rate_limited";
+  }
+  if (status >= 400 && status < 500) {
+    return "provider_4xx";
+  }
+  if (status >= 500 && status < 600) {
+    return "provider_5xx";
+  }
   return "unknown";
 }

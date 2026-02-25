@@ -30,7 +30,9 @@ export function Terminal(): ReactElement {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (currentStep >= steps.length - 1) return;
+    if (currentStep >= steps.length - 1) {
+      return;
+    }
 
     const timer = setTimeout(() => {
       setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));

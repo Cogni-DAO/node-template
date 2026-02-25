@@ -50,7 +50,9 @@ export function isValidTransition(
   to: PaymentAttemptStatus
 ): boolean {
   // No transition from self
-  if (from === to) return false;
+  if (from === to) {
+    return false;
+  }
 
   // No transitions from terminal states
   if (from === "CREDITED" || from === "REJECTED" || from === "FAILED") {
@@ -93,8 +95,12 @@ export function isValidPaymentAmount(amountUsdCents: number): boolean {
  * @returns true if intent is expired
  */
 export function isIntentExpired(attempt: PaymentAttempt, now: Date): boolean {
-  if (attempt.status !== "CREATED_INTENT") return false;
-  if (!attempt.expiresAt) return false;
+  if (attempt.status !== "CREATED_INTENT") {
+    return false;
+  }
+  if (!attempt.expiresAt) {
+    return false;
+  }
   return now >= attempt.expiresAt;
 }
 
@@ -110,8 +116,12 @@ export function isVerificationTimedOut(
   attempt: PaymentAttempt,
   now: Date
 ): boolean {
-  if (attempt.status !== "PENDING_UNVERIFIED") return false;
-  if (!attempt.submittedAt) return false;
+  if (attempt.status !== "PENDING_UNVERIFIED") {
+    return false;
+  }
+  if (!attempt.submittedAt) {
+    return false;
+  }
 
   const elapsed = now.getTime() - attempt.submittedAt.getTime();
   return elapsed > PENDING_UNVERIFIED_TTL_MS;

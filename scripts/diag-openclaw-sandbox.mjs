@@ -179,8 +179,11 @@ console.log(`\n${ts()} workspace files after run:`);
 const walkSync = (dir, prefix = "") => {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const rel = path.join(prefix, entry.name);
-    if (entry.isDirectory()) walkSync(path.join(dir, entry.name), rel);
-    else console.log(`  ${rel}`);
+    if (entry.isDirectory()) {
+      walkSync(path.join(dir, entry.name), rel);
+    } else {
+      console.log(`  ${rel}`);
+    }
   }
 };
 walkSync(workspace);

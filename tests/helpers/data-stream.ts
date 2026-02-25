@@ -45,7 +45,9 @@ export interface SseEvent {
  */
 export async function* readSseEvents(res: Response): AsyncIterable<SseEvent> {
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("No response body reader");
+  if (!reader) {
+    throw new Error("No response body reader");
+  }
 
   const decoder = new TextDecoder();
   let buf = "";
@@ -53,7 +55,9 @@ export async function* readSseEvents(res: Response): AsyncIterable<SseEvent> {
   try {
     while (true) {
       const { value, done } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
 
       buf += decoder.decode(value, { stream: true });
 
@@ -65,12 +69,16 @@ export async function* readSseEvents(res: Response): AsyncIterable<SseEvent> {
 
         // Parse SSE data lines from block
         for (const line of block.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
+          if (!line.startsWith("data: ")) {
+            continue;
+          }
 
           const payload = line.slice(6); // Remove "data: " prefix
 
           // [DONE] signals end of stream
-          if (payload === "[DONE]") return;
+          if (payload === "[DONE]") {
+            return;
+          }
 
           let data: Record<string, unknown>;
           try {
@@ -91,9 +99,13 @@ export async function* readSseEvents(res: Response): AsyncIterable<SseEvent> {
     // Process any remaining content
     if (buf.trim().length > 0) {
       for (const line of buf.split("\n")) {
-        if (!line.startsWith("data: ")) continue;
+        if (!line.startsWith("data: ")) {
+          continue;
+        }
         const payload = line.slice(6);
-        if (payload === "[DONE]") return;
+        if (payload === "[DONE]") {
+          return;
+        }
         try {
           const data = JSON.parse(payload) as Record<string, unknown>;
           if (typeof data.type === "string") {

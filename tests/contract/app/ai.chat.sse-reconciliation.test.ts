@@ -182,7 +182,9 @@ async function collectTextFromResponse(res: Response): Promise<{
     if (isTextDeltaEvent(event)) {
       textParts.push(event.data.delta as string);
     }
-    if (isFinishEvent(event)) break;
+    if (isFinishEvent(event)) {
+      break;
+    }
   }
 
   return { text: textParts.join(""), events };

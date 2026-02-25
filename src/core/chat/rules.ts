@@ -61,7 +61,9 @@ export function trimConversationHistory(
   messages: Message[],
   maxChars: number
 ): Message[] {
-  if (messages.length === 0) return messages;
+  if (messages.length === 0) {
+    return messages;
+  }
 
   // Calculate total length using multi-byte aware counting
   let totalLength = 0;
@@ -70,7 +72,9 @@ export function trimConversationHistory(
   }
 
   // Return unchanged if within limit
-  if (totalLength <= maxChars) return messages;
+  if (totalLength <= maxChars) {
+    return messages;
+  }
 
   // Remove oldest messages until we fit the limit
   const result = [...messages];
@@ -78,7 +82,9 @@ export function trimConversationHistory(
 
   while (result.length > 1 && currentLength > maxChars) {
     const removedMessage = result.shift();
-    if (!removedMessage) break;
+    if (!removedMessage) {
+      break;
+    }
     currentLength -= Array.from(removedMessage.content).length;
   }
 

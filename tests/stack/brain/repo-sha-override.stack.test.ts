@@ -29,7 +29,9 @@ const REPO_PATH = process.env.COGNI_REPO_PATH ?? "";
 
 describe("Brain repo SHA override (production path)", () => {
   beforeAll(() => {
-    if (!REPO_PATH) throw new Error("COGNI_REPO_PATH is not set");
+    if (!REPO_PATH) {
+      throw new Error("COGNI_REPO_PATH is not set");
+    }
   });
 
   describe("adapter-level: GitLsFilesAdapter.shaOverride", () => {

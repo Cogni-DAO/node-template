@@ -32,7 +32,9 @@ async function* simulateAdapterParsing(chunks: string[]) {
 
     while (eventQueue.length > 0) {
       const event = eventQueue.shift();
-      if (!event) break;
+      if (!event) {
+        break;
+      }
       const data = event.data;
 
       if (data === "[DONE]") {

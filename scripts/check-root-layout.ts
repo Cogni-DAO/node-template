@@ -153,8 +153,12 @@ const IGNORED_ENTRIES = new Set([
 
 function existsAs(pathname: string, kind: PathRequirement["kind"]): boolean {
   const target = path.join(ROOT, pathname);
-  if (!fs.existsSync(target)) return false;
-  if (kind === "any") return true;
+  if (!fs.existsSync(target)) {
+    return false;
+  }
+  if (kind === "any") {
+    return true;
+  }
   const stats = fs.statSync(target);
   return kind === "dir" ? stats.isDirectory() : stats.isFile();
 }
@@ -165,7 +169,9 @@ function isGitIgnored(entry: string): boolean {
     stdio: "ignore",
   });
 
-  if (result.error) return false;
+  if (result.error) {
+    return false;
+  }
   return result.status === 0;
 }
 
@@ -174,7 +180,9 @@ function findMissingRequirements(): string[] {
     const found = requirement.anyOf.some((candidate) =>
       existsAs(candidate, requirement.kind)
     );
-    if (found) return [];
+    if (found) {
+      return [];
+    }
 
     const label =
       requirement.anyOf.length > 0
@@ -190,8 +198,12 @@ function findUnexpectedEntries(): string[] {
 
   for (const entry of entries) {
     const name = entry.name;
-    if (IGNORED_ENTRIES.has(name)) continue;
-    if (isGitIgnored(name)) continue;
+    if (IGNORED_ENTRIES.has(name)) {
+      continue;
+    }
+    if (isGitIgnored(name)) {
+      continue;
+    }
     if (!ALLOWED_ROOT_ENTRIES.has(name)) {
       unexpected.push(name);
     }

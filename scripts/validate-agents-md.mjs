@@ -164,7 +164,9 @@ function h(md) {
 
 function getBlockAfter(md, heading) {
   const idx = md.indexOf(`## ${heading}`);
-  if (idx === -1) return "";
+  if (idx === -1) {
+    return "";
+  }
   const slice = md.slice(idx);
   const next = slice.indexOf("\n## ");
   return next === -1 ? slice : slice.slice(0, next);
@@ -268,9 +270,12 @@ function validateBoundaries(block, filePathRaw) {
   const policy = POLICY_ALLOW[j.layer];
   if (policy && !policy.includes("*")) {
     const extras = j.may_import.filter((x) => {
-      if (x === "*" || policy.includes(x)) return false;
-      if (x.startsWith("adapters/") && policy.includes("adapters"))
+      if (x === "*" || policy.includes(x)) {
         return false;
+      }
+      if (x.startsWith("adapters/") && policy.includes("adapters")) {
+        return false;
+      }
       return true;
     });
     if (extras.length) {
@@ -419,7 +424,9 @@ for (const f of files) {
   }
 }
 if (allErrors.length) {
-  for (const e of allErrors) console.error(e);
+  for (const e of allErrors) {
+    console.error(e);
+  }
   process.exit(1);
 }
 console.log("AGENTS.md OK");

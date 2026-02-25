@@ -97,7 +97,9 @@ function validateSpdxHeader(file: string, source: string): Violation[] {
   let i = 0;
 
   // Optional shebang for scripts
-  if (lines[i]?.startsWith("#!")) i++;
+  if (lines[i]?.startsWith("#!")) {
+    i++;
+  }
 
   const licenseLine = lines[i] ?? "";
   const copyrightLine = lines[i + 1] ?? "";
@@ -133,7 +135,9 @@ function findHeader(
   let i = 0;
 
   // Optional shebang for scripts
-  if (lines[i]?.startsWith("#!")) i++;
+  if (lines[i]?.startsWith("#!")) {
+    i++;
+  }
 
   // allow up to 2 SPDX lines
   let spdxCount = 0;
@@ -141,7 +145,9 @@ function findHeader(
     i++;
     spdxCount++;
     i++;
-    if (spdxCount > 2) break;
+    if (spdxCount > 2) {
+      break;
+    }
   }
   // header must start within first 5 non-empty lines after SPDX
   const searchWindowEnd = Math.min(i + 5, lines.length);
@@ -183,8 +189,11 @@ function validateHeader(file: string, header: string): Violation[] {
 
   const requireLabel = (name: keyof typeof RX): string => {
     const m = RX[name].exec(header);
-    if (!m) v.push(err(file, "DH003", `missing-label:${name}`));
-    else if (!m[1]?.trim()) v.push(err(file, "DH004", `empty-label:${name}`));
+    if (!m) {
+      v.push(err(file, "DH003", `missing-label:${name}`));
+    } else if (!m[1]?.trim()) {
+      v.push(err(file, "DH004", `empty-label:${name}`));
+    }
     return m?.[1]?.trim() ?? "";
   };
 
@@ -206,9 +215,12 @@ function validateHeader(file: string, header: string): Violation[] {
 
   // Purpose: ≤ ~400 chars and at least one period
   if (purpose) {
-    if (purpose.length > 400) v.push(err(file, "DH004", "purpose-too-long"));
-    if (!/[.!?]/.test(purpose))
+    if (purpose.length > 400) {
+      v.push(err(file, "DH004", "purpose-too-long"));
+    }
+    if (!/[.!?]/.test(purpose)) {
       v.push(err(file, "DH004", "purpose-needs-sentence"));
+    }
   }
 
   // Scope: must include a negative clause indicator
@@ -222,10 +234,12 @@ function validateHeader(file: string, header: string): Violation[] {
       .split(/(?:^|\s)[-*•;]\s+/g)
       .map((s) => s.trim())
       .filter(Boolean);
-    if (items.length > 3)
+    if (items.length > 3) {
       v.push(err(file, "DH006", `invariants-too-many:${items.length}`));
-    if (items.some((x) => x.length > 140))
+    }
+    if (items.some((x) => x.length > 140)) {
       v.push(err(file, "DH006", "invariants-item-too-long"));
+    }
   }
 
   // Side-effects: comma-separated allowed tokens (with optional parenthetical descriptions)
@@ -237,10 +251,12 @@ function validateHeader(file: string, header: string): Violation[] {
       .map((t) => t.trim().split(/\s*\(/)[0])
       .filter((t): t is string => Boolean(t));
     const invalid = tokens.filter((t) => !ALLOWED_SIDE_EFFECTS.includes(t));
-    if (invalid.length > 0)
+    if (invalid.length > 0) {
       v.push(err(file, "DH005", `side-effects-invalid:${invalid.join("|")}`));
-    if (new Set(tokens).size !== tokens.length)
+    }
+    if (new Set(tokens).size !== tokens.length) {
       v.push(err(file, "DH005", "side-effects-duplicate"));
+    }
   }
 
   // Notes: up to 3 bullets
@@ -249,10 +265,12 @@ function validateHeader(file: string, header: string): Violation[] {
       .split(/(?:^|\s)[-*•;]\s+/g)
       .map((s) => s.trim())
       .filter(Boolean);
-    if (items.length > 3)
+    if (items.length > 3) {
       v.push(err(file, "DH007", `notes-too-many:${items.length}`));
-    if (items.some((x) => x.length > 140))
+    }
+    if (items.some((x) => x.length > 140)) {
       v.push(err(file, "DH007", "notes-item-too-long"));
+    }
   }
 
   // Links: at least one token
@@ -261,19 +279,24 @@ function validateHeader(file: string, header: string): Violation[] {
       .split(/[,\s]+/)
       .map((s) => s.trim())
       .filter(Boolean);
-    if (items.length === 0) v.push(err(file, "DH004", "links-empty"));
+    if (items.length === 0) {
+      v.push(err(file, "DH004", "links-empty"));
+    }
   }
 
   // Visibility: if present must be single and valid
   const visTags = Array.from(
     header.matchAll(/^\s*\*\s*@(public|internal|beta)\s*$/gm)
   ).map((m) => m[1]);
-  if (visTags.length > 1) v.push(err(file, "DH009", "visibility-multiple"));
+  if (visTags.length > 1) {
+    v.push(err(file, "DH009", "visibility-multiple"));
+  }
   if (
     visTags.length === 1 &&
     !["public", "internal", "beta"].includes(visibility)
-  )
+  ) {
     v.push(err(file, "DH009", "visibility-invalid"));
+  }
 
   return v;
 }

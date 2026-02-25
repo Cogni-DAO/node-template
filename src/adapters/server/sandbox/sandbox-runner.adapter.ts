@@ -437,12 +437,16 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
 
     let offset = 0;
     while (offset < buffer.length) {
-      if (offset + 8 > buffer.length) break;
+      if (offset + 8 > buffer.length) {
+        break;
+      }
 
       const streamType = buffer.readUInt8(offset);
       const frameSize = buffer.readUInt32BE(offset + 4);
 
-      if (offset + 8 + frameSize > buffer.length) break;
+      if (offset + 8 + frameSize > buffer.length) {
+        break;
+      }
 
       // Check if we'd exceed max bytes
       if (totalBytes + frameSize > maxBytes) {

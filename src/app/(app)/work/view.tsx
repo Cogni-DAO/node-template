@@ -45,9 +45,15 @@ const STATUS_ORDER: Record<string, number> = {
 };
 
 function priorityPill(pri: number | undefined): string {
-  if (pri === 0) return "bg-danger/15 text-danger";
-  if (pri === 1) return "bg-primary/15 text-primary-foreground";
-  if (pri !== undefined) return "bg-muted text-muted-foreground";
+  if (pri === 0) {
+    return "bg-danger/15 text-danger";
+  }
+  if (pri === 1) {
+    return "bg-primary/15 text-primary-foreground";
+  }
+  if (pri !== undefined) {
+    return "bg-muted text-muted-foreground";
+  }
   return "bg-muted text-muted-foreground";
 }
 
@@ -69,12 +75,16 @@ function sortItems(items: WorkItem[]): WorkItem[] {
     // Priority ascending (undefined last)
     const pa = a.priority ?? 999;
     const pb = b.priority ?? 999;
-    if (pa !== pb) return pa - pb;
+    if (pa !== pb) {
+      return pa - pb;
+    }
 
     // Status order
     const sa = STATUS_ORDER[a.status] ?? 6;
     const sb = STATUS_ORDER[b.status] ?? 6;
-    if (sa !== sb) return sa - sb;
+    if (sa !== sb) {
+      return sa - sb;
+    }
 
     // Updated descending (fallback to created)
     const da = a.updated || a.created || "";
@@ -87,7 +97,9 @@ function getUnique(items: WorkItem[], key: keyof WorkItem): string[] {
   const set = new Set<string>();
   for (const item of items) {
     const val = item[key];
-    if (typeof val === "string" && val) set.add(val);
+    if (typeof val === "string" && val) {
+      set.add(val);
+    }
   }
   return [...set].sort();
 }

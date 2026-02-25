@@ -33,7 +33,9 @@ describe("Sandbox Mounts", () => {
 
   describe("workspace (rw)", () => {
     it("container can write to /workspace", async () => {
-      if (!fixture.imageAvailable || !fixture.runner) return;
+      if (!fixture.imageAvailable || !fixture.runner) {
+        return;
+      }
 
       const workspace = await mkWorkspace();
 
@@ -57,7 +59,9 @@ describe("Sandbox Mounts", () => {
     });
 
     it("host sees files written by container", async () => {
-      if (!fixture.imageAvailable || !fixture.runner) return;
+      if (!fixture.imageAvailable || !fixture.runner) {
+        return;
+      }
 
       const workspace = await mkWorkspace();
 
@@ -90,7 +94,9 @@ describe("Sandbox Mounts", () => {
      */
 
     it("container can read /repo", async () => {
-      if (!fixture.imageAvailable || !fixture.runner) return;
+      if (!fixture.imageAvailable || !fixture.runner) {
+        return;
+      }
 
       const workspace = await mkWorkspace();
       const repoPath = getRepoRootPath();
@@ -117,7 +123,9 @@ describe("Sandbox Mounts", () => {
     });
 
     it("container cannot write to /repo (read-only enforced)", async () => {
-      if (!fixture.imageAvailable || !fixture.runner) return;
+      if (!fixture.imageAvailable || !fixture.runner) {
+        return;
+      }
 
       const workspace = await mkWorkspace();
       const repoPath = getRepoRootPath();

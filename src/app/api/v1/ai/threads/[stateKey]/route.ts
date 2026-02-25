@@ -47,11 +47,15 @@ export const GET = wrapRouteHandlerWithLogging<{
   },
   async (ctx, _request, sessionUser, context) => {
     try {
-      if (!context) throw new Error("context required for dynamic routes");
+      if (!context) {
+        throw new Error("context required for dynamic routes");
+      }
       const { stateKey } = await context.params;
       const input = loadThreadOperation.input.parse({ stateKey });
 
-      if (!sessionUser) throw new Error("sessionUser required");
+      if (!sessionUser) {
+        throw new Error("sessionUser required");
+      }
 
       const result = await loadThreadFacade({
         sessionUser,
@@ -63,7 +67,9 @@ export const GET = wrapRouteHandlerWithLogging<{
       });
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error;
     }
   }
@@ -78,11 +84,15 @@ export const DELETE = wrapRouteHandlerWithLogging<{
   },
   async (ctx, _request, sessionUser, context) => {
     try {
-      if (!context) throw new Error("context required for dynamic routes");
+      if (!context) {
+        throw new Error("context required for dynamic routes");
+      }
       const { stateKey } = await context.params;
       const input = deleteThreadOperation.input.parse({ stateKey });
 
-      if (!sessionUser) throw new Error("sessionUser required");
+      if (!sessionUser) {
+        throw new Error("sessionUser required");
+      }
 
       const result = await deleteThreadFacade({
         sessionUser,
@@ -92,7 +102,9 @@ export const DELETE = wrapRouteHandlerWithLogging<{
       return NextResponse.json(deleteThreadOperation.output.parse(result));
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error;
     }
   }

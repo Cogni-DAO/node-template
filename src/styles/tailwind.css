@@ -235,7 +235,8 @@
   /* Used by src/app/(app)/chat/layout.tsx to create fixed-height container for pinned composer */
   .chat-viewport {
     height: calc(
-      100dvh - var(--app-header-h)
+      100dvh -
+      var(--app-header-h)
     ); /* Full viewport minus header = available chat area */
   }
 }

@@ -63,7 +63,9 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -115,8 +117,12 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       // Consume stream fully
       let deltaCount = 0;
       for await (const e of readDataStreamEvents(res)) {
-        if (isTextDeltaEvent(e)) deltaCount++;
-        if (isFinishMessageEvent(e)) break;
+        if (isTextDeltaEvent(e)) {
+          deltaCount++;
+        }
+        if (isFinishMessageEvent(e)) {
+          break;
+        }
       }
 
       // Assert - Stream produced content
@@ -139,7 +145,9 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
 
       // Assert - Linked llm_charge_details row exists with model, graphId, tokens
       const receiptId = latestReceipt?.id;
-      if (!receiptId) throw new Error("Receipt missing id");
+      if (!receiptId) {
+        throw new Error("Receipt missing id");
+      }
 
       const details = await db
         .select()
@@ -158,7 +166,9 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       const requestId = latestReceipt?.ingressRequestId;
       expect(requestId).toBeTruthy();
 
-      if (!requestId) throw new Error("ingressRequestId missing from receipt");
+      if (!requestId) {
+        throw new Error("ingressRequestId missing from receipt");
+      }
 
       const telemetryRows = await db
         .select()
@@ -179,7 +189,9 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,
@@ -227,8 +239,12 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       // Count chunks received
       let chunkCount = 0;
       for await (const e of readDataStreamEvents(res)) {
-        if (isTextDeltaEvent(e)) chunkCount++;
-        if (isFinishMessageEvent(e)) break;
+        if (isTextDeltaEvent(e)) {
+          chunkCount++;
+        }
+        if (isFinishMessageEvent(e)) {
+          break;
+        }
       }
 
       // Should have received multiple chunks
@@ -245,11 +261,14 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       expect(latestReceipt).toBeDefined();
       expect(latestReceipt?.provenance).toBe("stream");
 
-      if (!latestReceipt) throw new Error("No receipt found");
+      if (!latestReceipt) {
+        throw new Error("No receipt found");
+      }
 
       // Query telemetry by ingressRequestId (P0: equals requestId for telemetry join)
-      if (!latestReceipt.ingressRequestId)
+      if (!latestReceipt.ingressRequestId) {
         throw new Error("ingressRequestId missing");
+      }
       const telemetryRows = await db
         .select()
         .from(aiInvocationSummaries)
@@ -272,7 +291,9 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         { balanceCredits: 100_000_000 }
       );
 
-      if (!user.walletAddress) throw new Error("walletAddress required");
+      if (!user.walletAddress) {
+        throw new Error("walletAddress required");
+      }
 
       const mockSessionUser: SessionUser = {
         id: user.id,

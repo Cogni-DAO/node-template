@@ -123,7 +123,9 @@ export const POST = wrapRouteHandlerWithLogging(
       // Validate with contract
       const input = schedulesCreateOperation.input.parse(body);
 
-      if (!sessionUser) throw new Error("sessionUser required");
+      if (!sessionUser) {
+        throw new Error("sessionUser required");
+      }
 
       const container = getContainer();
 
@@ -182,7 +184,9 @@ export const POST = wrapRouteHandlerWithLogging(
       );
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error;
     }
   }
@@ -195,7 +199,9 @@ export const GET = wrapRouteHandlerWithLogging(
   { routeId: "schedules.list", auth: { mode: "required", getSessionUser } },
   async (ctx, _request, sessionUser) => {
     try {
-      if (!sessionUser) throw new Error("sessionUser required");
+      if (!sessionUser) {
+        throw new Error("sessionUser required");
+      }
 
       const container = getContainer();
       const schedules = await container.scheduleManager.listSchedules(
@@ -212,7 +218,9 @@ export const GET = wrapRouteHandlerWithLogging(
       );
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error;
     }
   }

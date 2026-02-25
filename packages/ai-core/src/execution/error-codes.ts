@@ -100,8 +100,12 @@ export function normalizeErrorToExecutionCode(
   // LlmError with status/kind classification
   if (isLlmError(error)) {
     // Status-first (most reliable - HTTP status code)
-    if (error.status === 429) return "rate_limit";
-    if (error.status === 408) return "timeout";
+    if (error.status === 429) {
+      return "rate_limit";
+    }
+    if (error.status === 408) {
+      return "timeout";
+    }
 
     // Kind fallback
     switch (error.kind) {

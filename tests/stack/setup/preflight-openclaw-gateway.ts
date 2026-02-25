@@ -54,7 +54,9 @@ async function isDockerHealthy(
   try {
     const container = docker.getContainer(name);
     const info = await container.inspect();
-    if (!info.State.Running) return "not_found";
+    if (!info.State.Running) {
+      return "not_found";
+    }
     return (
       (info.State.Health?.Status as "healthy" | "unhealthy" | "starting") ??
       "starting"

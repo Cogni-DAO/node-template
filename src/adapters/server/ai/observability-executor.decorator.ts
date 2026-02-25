@@ -174,7 +174,9 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
       }
     ): Promise<void> => {
       // Once-guard
-      if (terminal.resolved) return;
+      if (terminal.resolved) {
+        return;
+      }
       terminal.resolved = true;
       terminal.outcome = outcome;
 

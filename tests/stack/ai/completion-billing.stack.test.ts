@@ -113,7 +113,9 @@ describe("Completion Billing Stack Test", () => {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-    if (!receipt) throw new Error("No charge receipt row");
+    if (!receipt) {
+      throw new Error("No charge receipt row");
+    }
 
     // Get the virtual key to verify
     const vkRows = await db
@@ -122,7 +124,9 @@ describe("Completion Billing Stack Test", () => {
       .where(eq(virtualKeys.billingAccountId, billingAccountId));
     expect(vkRows.length).toBeGreaterThan(0);
     const [vk] = vkRows;
-    if (!vk) throw new Error("No virtual key");
+    if (!vk) {
+      throw new Error("No virtual key");
+    }
     const virtualKeyId = vk.id;
 
     // Minimal charge_receipt fields per ACTIVITY_METRICS.md
@@ -140,7 +144,9 @@ describe("Completion Billing Stack Test", () => {
       .from(chargeReceipts)
       .where(eq(chargeReceipts.runId, receipt.runId));
     for (const r of allReceipts) {
-      if (!r.litellmCallId) continue;
+      if (!r.litellmCallId) {
+        continue;
+      }
       const byCallId = allReceipts.filter(
         (x) => x.litellmCallId === r.litellmCallId
       );
@@ -160,7 +166,9 @@ describe("Completion Billing Stack Test", () => {
 
     expect(details).toHaveLength(1);
     const detail = details[0];
-    if (!detail) throw new Error("No llm_charge_details row");
+    if (!detail) {
+      throw new Error("No llm_charge_details row");
+    }
     expect(detail.model).toBeTruthy();
     expect(detail.graphId).toBeTruthy();
     expect(typeof detail.tokensIn).toBe("number");
@@ -179,7 +187,9 @@ describe("Completion Billing Stack Test", () => {
 
     expect(ledgerRows.length).toBeGreaterThan(0);
     const [ledgerRow] = ledgerRows;
-    if (!ledgerRow) throw new Error("No ledger row");
+    if (!ledgerRow) {
+      throw new Error("No ledger row");
+    }
     expect(ledgerRow.virtualKeyId).toBe(virtualKeyId);
     expect(ledgerRow.amount).toBeLessThanOrEqual(0n); // Debit is negative or zero (free models)
     // Charge receipt's chargedCredits should match ledger debit magnitude
@@ -195,7 +205,9 @@ describe("Completion Billing Stack Test", () => {
 
     expect(updatedAccount.length).toBe(1);
     const [account] = updatedAccount;
-    if (!account) throw new Error("No account");
+    if (!account) {
+      throw new Error("No account");
+    }
     const finalBalance = account.balanceCredits;
     expect(finalBalance).toBe(initialBalance + ledgerRow.amount); // initial - cost
     expect(finalBalance).toBeLessThanOrEqual(initialBalance); // Balance decreased or unchanged (free model)
@@ -272,7 +284,9 @@ describe("Completion Billing Stack Test", () => {
 
     expect(account.length).toBe(1);
     const [billingAccount] = account;
-    if (!billingAccount) throw new Error("No billing account");
+    if (!billingAccount) {
+      throw new Error("No billing account");
+    }
     expect(billingAccount.balanceCredits).toBe(0n); // Still zero
   });
 });

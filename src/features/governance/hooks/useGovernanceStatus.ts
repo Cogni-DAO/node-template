@@ -22,7 +22,9 @@ export function useGovernanceStatus(): UseQueryResult<GovernanceStatus, Error> {
     queryKey: ["governance", "status"],
     queryFn: async () => {
       const res = await fetch("/api/v1/governance/status");
-      if (!res.ok) throw new Error("Failed to fetch governance status");
+      if (!res.ok) {
+        throw new Error("Failed to fetch governance status");
+      }
       return res.json() as Promise<GovernanceStatus>;
     },
     refetchInterval: 30_000,

@@ -125,7 +125,9 @@ function wrapAsRecord(value: unknown): Record<string, unknown> {
 function extractMessageChunk(
   data: unknown
 ): Record<string, unknown> | undefined {
-  if (!data || typeof data !== "object") return undefined;
+  if (!data || typeof data !== "object") {
+    return undefined;
+  }
 
   const obj = data as Record<string, unknown>;
   // messages-tuple mode: data is array or array-like with keys "0", "1"
@@ -186,7 +188,9 @@ export async function* translateDevServerStream(
     toolName: string,
     args: Record<string, unknown>
   ): Generator<AiEvent> {
-    if (emittedToolCalls.has(toolCallId)) return;
+    if (emittedToolCalls.has(toolCallId)) {
+      return;
+    }
 
     emittedToolCalls.add(toolCallId);
     const startEvent: ToolCallStartEvent = {
@@ -245,8 +249,12 @@ export async function* translateDevServerStream(
     }
 
     // Merge chunk fields (LangChain behavior: concatenate strings)
-    if (chunk.id) acc.id = chunk.id;
-    if (chunk.name) acc.name = chunk.name;
+    if (chunk.id) {
+      acc.id = chunk.id;
+    }
+    if (chunk.name) {
+      acc.name = chunk.name;
+    }
     if (chunk.args) {
       // Check buffer cap
       if (acc.argsBuffer.length + chunk.args.length > MAX_ARGS_BUFFER_BYTES) {
@@ -343,7 +351,9 @@ export async function* translateDevServerStream(
         );
         // Drop oldest entry
         const firstKey = pendingToolResults.keys().next().value;
-        if (firstKey) pendingToolResults.delete(firstKey);
+        if (firstKey) {
+          pendingToolResults.delete(firstKey);
+        }
       }
       pendingToolResults.set(toolCallId, { toolCallId, result });
     }
@@ -354,7 +364,9 @@ export async function* translateDevServerStream(
     switch (chunk.event) {
       case "messages": {
         const msg = extractMessageChunk(chunk.data);
-        if (!msg) break;
+        if (!msg) {
+          break;
+        }
 
         if (msg.type === "ai") {
           yield* processAiMessage(msg);

@@ -138,7 +138,9 @@ export function uiMessagesToMessageDtos(messages: UIMessage[]): MessageDto[] {
   const result: MessageDto[] = [];
 
   for (const msg of messages) {
-    if (msg.role === "system") continue;
+    if (msg.role === "system") {
+      continue;
+    }
 
     // Extract text content from parts
     const textParts = msg.parts.filter(

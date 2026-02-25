@@ -40,7 +40,9 @@ function generateToolCallId(): string {
   const bytes = new Uint8Array(9);
   crypto.getRandomValues(bytes);
   let id = "";
-  for (const b of bytes) id += TOOL_ID_CHARS[b % TOOL_ID_CHARS.length];
+  for (const b of bytes) {
+    id += TOOL_ID_CHARS[b % TOOL_ID_CHARS.length];
+  }
   return id;
 }
 
@@ -173,7 +175,9 @@ export function createToolRunner(
       level: "DEFAULT" | "WARNING" | "ERROR" = "DEFAULT",
       extraMetadata?: Record<string, unknown>
     ): void => {
-      if (!span) return;
+      if (!span) {
+        return;
+      }
       const durationMs = performance.now() - execStartTime;
       span.end({
         output,

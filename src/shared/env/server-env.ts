@@ -236,7 +236,9 @@ export function serverEnv(): ServerEnv {
           }
         } catch (e) {
           // URL parse failure on non-standard schemes (e.g., sqlite://) is fine
-          if (e instanceof Error && e.message.includes("sslmode")) throw e;
+          if (e instanceof Error && e.message.includes("sslmode")) {
+            throw e;
+          }
         }
       }
 
@@ -253,7 +255,9 @@ export function serverEnv(): ServerEnv {
             );
           }
         } catch (e) {
-          if (e instanceof Error && e.message.includes("sslmode")) throw e;
+          if (e instanceof Error && e.message.includes("sslmode")) {
+            throw e;
+          }
         }
       }
 
@@ -287,7 +291,9 @@ export function serverEnv(): ServerEnv {
 
         for (const issue of error.issues) {
           const key = issue.path[0]?.toString();
-          if (!key) continue;
+          if (!key) {
+            continue;
+          }
 
           /*
            * Treat all invalid_type as missing (avoids any casting)

@@ -71,7 +71,9 @@ export function SheetThemeToggle(): ReactElement {
       type="single"
       value={theme ?? "system"}
       onValueChange={(value) => {
-        if (value) setTheme(value);
+        if (value) {
+          setTheme(value);
+        }
       }}
       className="grid w-full grid-cols-3"
     >

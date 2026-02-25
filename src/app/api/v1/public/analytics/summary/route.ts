@@ -73,7 +73,9 @@ export const GET = wrapPublicRoute(
       return NextResponse.json(output);
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error; // Unhandled - let wrapper catch
     }
   }

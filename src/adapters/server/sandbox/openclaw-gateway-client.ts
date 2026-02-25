@@ -181,7 +181,9 @@ export class OpenClawGatewayClient {
         sessionKey: opts.sessionKey,
         idempotencyKey: `cogni-${randomUUID()}`,
       };
-      if (opts.outboundHeaders) params.outboundHeaders = opts.outboundHeaders;
+      if (opts.outboundHeaders) {
+        params.outboundHeaders = opts.outboundHeaders;
+      }
 
       ws.send(
         JSON.stringify({
@@ -432,8 +434,12 @@ export class OpenClawGatewayClient {
         while (queue.length > 0) {
           // biome-ignore lint/style/noNonNullAssertion: queue.length > 0 guarantees shift() returns
           const item = queue.shift()!;
-          if (item.kind === "done") return;
-          if (item.kind === "error") throw item.error;
+          if (item.kind === "done") {
+            return;
+          }
+          if (item.kind === "error") {
+            throw item.error;
+          }
           if (item.kind === "heartbeat") {
             const elapsedMs = Date.now() - startTime;
             log.warn(
@@ -697,14 +703,22 @@ export class OpenClawGatewayClient {
  * Per OpenClaw server-methods/agent.ts: final "ok" res carries result from agentCommand.
  */
 function extractTextFromResult(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
   const p = payload as Record<string, unknown>;
   const result = p.result;
-  if (!result || typeof result !== "object") return "";
+  if (!result || typeof result !== "object") {
+    return "";
+  }
   const r = result as Record<string, unknown>;
-  if (!Array.isArray(r.payloads) || r.payloads.length === 0) return "";
+  if (!Array.isArray(r.payloads) || r.payloads.length === 0) {
+    return "";
+  }
   const first = r.payloads[0] as Record<string, unknown> | undefined;
-  if (first && typeof first.text === "string") return first.text;
+  if (first && typeof first.text === "string") {
+    return first.text;
+  }
   return "";
 }
 
@@ -715,14 +729,20 @@ function extractTextFromResult(payload: unknown): string {
  * Used for streaming deltas only — NOT for final content extraction.
  */
 function extractTextFromMessage(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
   const p = payload as Record<string, unknown>;
   const message = p.message;
-  if (!message || typeof message !== "object") return "";
+  if (!message || typeof message !== "object") {
+    return "";
+  }
   const m = message as Record<string, unknown>;
   if (Array.isArray(m.content) && m.content.length > 0) {
     const first = m.content[0] as Record<string, unknown> | undefined;
-    if (first && typeof first.text === "string") return first.text;
+    if (first && typeof first.text === "string") {
+      return first.text;
+    }
   }
   return "";
 }

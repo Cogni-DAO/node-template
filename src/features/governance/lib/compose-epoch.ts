@@ -87,7 +87,9 @@ export function composeEpochView(
 
   for (const ev of events) {
     const resolvedUser = ev.curation?.userId;
-    if (!resolvedUser) continue;
+    if (!resolvedUser) {
+      continue;
+    }
     const mapped: ActivityEvent = {
       id: ev.id,
       source: ev.source,
@@ -165,7 +167,9 @@ export function composeEpochViewFromStatement(
 
   for (const ev of events) {
     const resolvedUser = ev.curation?.userId;
-    if (!resolvedUser) continue;
+    if (!resolvedUser) {
+      continue;
+    }
     const mapped: ActivityEvent = {
       id: ev.id,
       source: ev.source,

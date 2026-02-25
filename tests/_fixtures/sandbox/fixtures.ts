@@ -99,7 +99,9 @@ export async function ensureProxyImage(docker: Docker): Promise<void> {
   } catch {
     await new Promise<void>((resolve, reject) => {
       docker.pull(image, (err: Error | null, stream: NodeJS.ReadableStream) => {
-        if (err) return reject(err);
+        if (err) {
+          return reject(err);
+        }
         docker.modem.followProgress(stream, (pullErr: Error | null) =>
           pullErr ? reject(pullErr) : resolve()
         );

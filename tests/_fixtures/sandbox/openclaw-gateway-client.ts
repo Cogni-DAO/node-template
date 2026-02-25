@@ -191,7 +191,9 @@ export class OpenClawGatewayClient {
       sessionKey,
       idempotencyKey: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     };
-    if (outboundHeaders) params.outboundHeaders = outboundHeaders;
+    if (outboundHeaders) {
+      params.outboundHeaders = outboundHeaders;
+    }
 
     return this.request("agent", params, timeoutMs);
   }

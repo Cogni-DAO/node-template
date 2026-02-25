@@ -40,7 +40,9 @@ export const stubMetricsCapability: MetricsCapability = {
  * - Otherwise return undefined (invalid config)
  */
 export function derivePrometheusQueryUrl(env: ServerEnv): string | undefined {
-  if (env.PROMETHEUS_QUERY_URL) return env.PROMETHEUS_QUERY_URL;
+  if (env.PROMETHEUS_QUERY_URL) {
+    return env.PROMETHEUS_QUERY_URL;
+  }
 
   const writeUrl = env.PROMETHEUS_REMOTE_WRITE_URL;
   if (writeUrl?.endsWith("/api/prom/push")) {

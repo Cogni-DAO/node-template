@@ -153,7 +153,9 @@ function GithubButtonPrimitive({
 
   // Start animation
   const startAnimation = useCallback(() => {
-    if (isAnimating || hasAnimated) return;
+    if (isAnimating || hasAnimated) {
+      return;
+    }
 
     setIsAnimating(true);
     const startTime = Date.now();

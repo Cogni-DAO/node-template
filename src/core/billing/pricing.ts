@@ -94,7 +94,9 @@ export function calculateRevenueShareBonus(
   purchasedCredits: bigint,
   revenueShare: number
 ): bigint {
-  if (revenueShare <= 0) return 0n;
+  if (revenueShare <= 0) {
+    return 0n;
+  }
   const shareScaled = BigInt(
     Math.round(revenueShare * Number(REVENUE_SHARE_SCALE))
   );

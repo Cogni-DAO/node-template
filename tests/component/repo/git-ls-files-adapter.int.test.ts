@@ -43,7 +43,9 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  if (repo) cleanupTempGitRepo(repo);
+  if (repo) {
+    cleanupTempGitRepo(repo);
+  }
 });
 
 describe("GitLsFilesAdapter", () => {
@@ -112,7 +114,9 @@ describe("Cross-tool path invariants", () => {
     expect(searchResult.hits.length).toBe(1);
 
     const hit = searchResult.hits[0];
-    if (!hit) throw new Error("Expected at least one search hit");
+    if (!hit) {
+      throw new Error("Expected at least one search hit");
+    }
     expect(hit.path).not.toMatch(/^\.\//);
 
     const openResult = await rgAdapter.open({ path: hit.path });

@@ -86,7 +86,9 @@ export const POST = wrapRouteHandlerWithLogging<{
   async (ctx, request, sessionUser, context) => {
     try {
       // Extract attemptId from URL params
-      if (!context) throw new Error("context required for dynamic routes");
+      if (!context) {
+        throw new Error("context required for dynamic routes");
+      }
       const { id: attemptId } = await context.params;
 
       // Parse JSON body
@@ -104,7 +106,9 @@ export const POST = wrapRouteHandlerWithLogging<{
       const input = paymentSubmitOperation.input.parse(body);
 
       // Call facade with context
-      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      if (!sessionUser) {
+        throw new Error("sessionUser required"); // Enforced by wrapper
+      }
       const result = await submitPaymentTxHashFacade(
         {
           sessionUser,
@@ -118,7 +122,9 @@ export const POST = wrapRouteHandlerWithLogging<{
       return NextResponse.json(paymentSubmitOperation.output.parse(result));
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error; // Unhandled - let wrapper catch
     }
   }

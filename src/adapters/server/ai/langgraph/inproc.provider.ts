@@ -278,7 +278,9 @@ export class LangGraphInProcProvider implements GraphProvider {
       return {
         stream: result.stream,
         final: result.final.then((r) => {
-          if (!r.ok) return { ok: false as const, error: r.error };
+          if (!r.ok) {
+            return { ok: false as const, error: r.error };
+          }
           return {
             ok: true as const,
             content: r.content ?? "",

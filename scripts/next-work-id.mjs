@@ -20,7 +20,9 @@ const ROOT = process.cwd();
 
 function extractId(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   try {
     const props = parseYaml(match[1]);
     return props?.id ? String(props.id).trim() : null;
@@ -51,12 +53,16 @@ function main() {
     }
 
     const id = extractId(raw);
-    if (!id) continue;
+    if (!id) {
+      continue;
+    }
 
     const m = id.match(/\.(\d+)$/);
     if (m) {
       const n = Number(m[1]);
-      if (n > maxNum) maxNum = n;
+      if (n > maxNum) {
+        maxNum = n;
+      }
     }
   }
 

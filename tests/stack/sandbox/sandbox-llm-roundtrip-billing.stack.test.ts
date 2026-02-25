@@ -94,7 +94,9 @@ describe("Sandbox LLM Round-Trip Billing", () => {
 
   // Skip: flaky — proxy container vanishes mid-startup (bug.0013)
   it.skip("proxy audit log captures billing data and commits to charge_receipts", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     // 1. Run sandbox agent through full proxy chain
     const { result, envelope } = await runAgentWithLlm(ctx, {
@@ -179,7 +181,9 @@ describe("Sandbox LLM Round-Trip Billing", () => {
 
     // 7. Verify linked llm_charge_details row
     const receiptId = receipt?.id;
-    if (!receiptId) throw new Error("Receipt missing id");
+    if (!receiptId) {
+      throw new Error("Receipt missing id");
+    }
 
     const details = await db
       .select()

@@ -397,7 +397,9 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
    */
   async function insertEvents(input: InsertEventsInput): Promise<void> {
     const { events, producerVersion } = input;
-    if (events.length === 0) return;
+    if (events.length === 0) {
+      return;
+    }
 
     logger.info({ count: events.length }, "Inserting activity events");
 

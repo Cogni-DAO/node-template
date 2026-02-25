@@ -25,7 +25,9 @@ describe("Brain repo mount smoke test", () => {
   let adapter: RipgrepAdapter;
 
   beforeAll(() => {
-    if (!REPO_PATH) throw new Error("COGNI_REPO_PATH is not set");
+    if (!REPO_PATH) {
+      throw new Error("COGNI_REPO_PATH is not set");
+    }
     gitAdapter = new GitLsFilesAdapter({
       repoRoot: REPO_PATH,
     });
@@ -75,7 +77,9 @@ describe("Brain repo mount smoke test", () => {
     expect(result.hits.length).toBe(1);
 
     const hit = result.hits[0];
-    if (!hit) throw new Error("Expected at least one search hit");
+    if (!hit) {
+      throw new Error("Expected at least one search hit");
+    }
     expect(hit.sha).toMatch(/^[0-9a-f]{7}$/);
     expect(hit.path).toContain("Dockerfile");
     expect(hit.lineStart).toBeGreaterThanOrEqual(1);

@@ -65,7 +65,9 @@ export default async function preflightLitellmConfig() {
       ].join("\n")
     );
   } catch (err) {
-    if (err instanceof Error && err.message.includes("PROD config")) throw err;
+    if (err instanceof Error && err.message.includes("PROD config")) {
+      throw err;
+    }
     // Network errors are non-fatal here; preflight-mock-llm will catch them
     console.log(`⚠️  LiteLLM config check skipped: ${err}\n`);
   }

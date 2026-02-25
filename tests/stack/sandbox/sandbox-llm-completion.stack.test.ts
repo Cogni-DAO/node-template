@@ -88,7 +88,9 @@ describe.skip("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
 
   // Skip: flaky — proxy container vanishes mid-startup (bug.0013)
   it.skip("socket bridge connects sandbox to proxy health endpoint", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithProxy(
       ctx,
@@ -102,7 +104,9 @@ describe.skip("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
 
   // Skip: flaky — proxy container vanishes mid-startup (bug.0013)
   it.skip("socket bridge forwards to LiteLLM (connection test)", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithProxy(
       ctx,
@@ -119,7 +123,9 @@ describe.skip("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   // ───────────────────────────────────────────────────────────────────────────
 
   it("container without llmProxy cannot reach localhost:8080", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runIsolated(
       ctx,
@@ -131,7 +137,9 @@ describe.skip("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   });
 
   it("container without llmProxy cannot reach external IPs", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runIsolated(
       ctx,
@@ -147,7 +155,9 @@ describe.skip("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   // ───────────────────────────────────────────────────────────────────────────
 
   it("container env does not contain LITELLM_MASTER_KEY", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithProxy(
       ctx,
@@ -159,7 +169,9 @@ describe.skip("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   });
 
   it("container env does not contain OPENAI_API_KEY", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithProxy(
       ctx,
@@ -170,7 +182,9 @@ describe.skip("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   });
 
   it("container env has OPENAI_API_BASE pointing to proxy", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithProxy(ctx, "echo $OPENAI_API_BASE");
 
@@ -183,7 +197,9 @@ describe.skip("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
   // ───────────────────────────────────────────────────────────────────────────
 
   it("proxy accepts requests with spoofed headers (strips them)", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithProxy(
       ctx,

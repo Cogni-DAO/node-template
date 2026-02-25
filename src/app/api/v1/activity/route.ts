@@ -54,7 +54,9 @@ export const GET = wrapRouteHandlerWithLogging(
     }
 
     try {
-      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      if (!sessionUser) {
+        throw new Error("sessionUser required"); // Enforced by wrapper
+      }
 
       // Derive from/to from range preset if provided, otherwise use explicit from/to
       let from: string;

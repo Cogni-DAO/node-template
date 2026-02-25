@@ -26,10 +26,14 @@ const tokenCache = new Map();
 function resolveCssPath(context) {
   // 1) explicit option wins
   const optPath = context.options?.[0]?.cssPath || null;
-  if (optPath) return path.resolve(optPath);
+  if (optPath) {
+    return path.resolve(optPath);
+  }
 
   // 2) env var for tests
-  if (process.env.NO_RAW_TW_CSS) return path.resolve(process.env.NO_RAW_TW_CSS);
+  if (process.env.NO_RAW_TW_CSS) {
+    return path.resolve(process.env.NO_RAW_TW_CSS);
+  }
 
   // 3) default: project cwd
   return path.join(
@@ -163,14 +167,22 @@ function checkClassToken(token, cssTokens, cssPath) {
 
   // Strip ! prefix and leading - for proper validation
   let t = original;
-  if (t.startsWith("!")) t = t.slice(1);
-  if (t.startsWith("-")) t = t.slice(1);
+  if (t.startsWith("!")) {
+    t = t.slice(1);
+  }
+  if (t.startsWith("-")) {
+    t = t.slice(1);
+  }
 
   // Ignore structural utilities with no '-' at all (e.g. "flex", "grid")
-  if (!t.includes("-")) return null;
+  if (!t.includes("-")) {
+    return null;
+  }
 
   // Check for selector utilities first (has-[>svg], etc.)
-  if (HAS_SELECTOR.test(t)) return null;
+  if (HAS_SELECTOR.test(t)) {
+    return null;
+  }
 
   // Check for bracketed values: any-prefix-[content]
   const bracketedMatch = t.match(BRACKETED_PATTERN);
@@ -188,25 +200,41 @@ function checkClassToken(token, cssTokens, cssPath) {
   }
 
   // Allow semantic utilities
-  if (ALLOWED_SEMANTIC_SIZE.test(t)) return null;
-  if (ALLOWED_SEMANTIC_TEXT.test(t)) return null;
-  if (ALLOWED_STRUCTURAL.test(t)) return null;
+  if (ALLOWED_SEMANTIC_SIZE.test(t)) {
+    return null;
+  }
+  if (ALLOWED_SEMANTIC_TEXT.test(t)) {
+    return null;
+  }
+  if (ALLOWED_STRUCTURAL.test(t)) {
+    return null;
+  }
 
   // Allow CSS keywords for paint properties
-  if (ALLOWED_KEYWORDS.test(t)) return null;
+  if (ALLOWED_KEYWORDS.test(t)) {
+    return null;
+  }
 
   // Allow zero-only structural utilities
-  if (ALLOWED_ZERO.test(t)) return null;
+  if (ALLOWED_ZERO.test(t)) {
+    return null;
+  }
 
   // Allow narrow layout math
-  if (LAYOUT_MATH.test(t)) return null;
+  if (LAYOUT_MATH.test(t)) {
+    return null;
+  }
 
   // Allow semantic aliases with optional opacity
-  if (ALIAS_WITH_OPACITY.test(t)) return null;
+  if (ALIAS_WITH_OPACITY.test(t)) {
+    return null;
+  }
 
   // Split into prefix + suffix for further analysis
   const match = t.match(/^([a-z0-9-]+)-(.*)$/i);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
 
   const suffix = match[2];
 
@@ -230,15 +258,21 @@ function checkText(text, cssTokens, cssPath) {
   const rawTokens = text.split(/\s+/);
 
   for (const rawToken of rawTokens) {
-    if (!rawToken) continue;
+    if (!rawToken) {
+      continue;
+    }
 
     // Split variant chains: hover:bg-red-500 -> ["hover", "bg-red-500"]
     const segments = rawToken.split(":");
 
     for (const segment of segments) {
-      if (!segment) continue;
+      if (!segment) {
+        continue;
+      }
       const error = checkClassToken(segment, cssTokens, cssPath);
-      if (error) return error;
+      if (error) {
+        return error;
+      }
     }
   }
 
@@ -282,7 +316,9 @@ module.exports = {
          */
         function reportIfBad(node, text) {
           const msg = checkText(text, cssTokens, cssPath);
-          if (msg) context.report({ node, message: msg });
+          if (msg) {
+            context.report({ node, message: msg });
+          }
         }
 
         /**
@@ -291,17 +327,28 @@ module.exports = {
          * @returns {Generator<[any, string]>}
          */
         function* extractStrings(node) {
-          if (!node) return;
+          if (!node) {
+            return;
+          }
           switch (node.type) {
             case "Literal":
-              if (typeof node.value === "string") yield [node, node.value];
+              if (typeof node.value === "string") {
+                yield [node, node.value];
+              }
               break;
             case "TemplateLiteral":
-              for (const q of node.quasis)
-                if (q.value?.raw) yield [q, q.value.raw];
+              for (const q of node.quasis) {
+                if (q.value?.raw) {
+                  yield [q, q.value.raw];
+                }
+              }
               break;
             case "ArrayExpression":
-              for (const el of node.elements) if (el) yield* extractStrings(el);
+              for (const el of node.elements) {
+                if (el) {
+                  yield* extractStrings(el);
+                }
+              }
               break;
             case "ConditionalExpression":
               yield* extractStrings(node.consequent);

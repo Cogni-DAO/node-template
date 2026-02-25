@@ -63,7 +63,9 @@ export function buildGroupedChartData(
   }
 
   const ref = groupedSeries[0];
-  if (!ref) return { data: [], config };
+  if (!ref) {
+    return { data: [], config };
+  }
 
   const data: Record<string, unknown>[] = [];
   for (let b = 0; b < bucketCount; b++) {

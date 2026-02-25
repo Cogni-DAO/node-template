@@ -71,7 +71,9 @@ async function extractModelId(runId: string, endUser: string): Promise<string> {
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${env.LITELLM_MASTER_KEY}` },
     });
-    if (!res.ok) return "-";
+    if (!res.ok) {
+      return "-";
+    }
 
     const logs = (await res.json()) as Array<{
       model_id?: string;

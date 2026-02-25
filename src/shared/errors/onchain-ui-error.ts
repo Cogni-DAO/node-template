@@ -31,23 +31,31 @@ const EIP1193_UNAUTHORIZED = 4100;
  * Extract error code from various error shapes (wagmi, viem, MetaMask, WalletConnect).
  */
 function extractErrorCode(err: unknown): number | undefined {
-  if (typeof err !== "object" || err === null) return undefined;
+  if (typeof err !== "object" || err === null) {
+    return undefined;
+  }
 
   const obj = err as Record<string, unknown>;
 
   // Direct code property (EIP-1193)
-  if (typeof obj.code === "number") return obj.code;
+  if (typeof obj.code === "number") {
+    return obj.code;
+  }
 
   // Nested in cause (viem pattern)
   if (obj.cause && typeof obj.cause === "object") {
     const cause = obj.cause as Record<string, unknown>;
-    if (typeof cause.code === "number") return cause.code;
+    if (typeof cause.code === "number") {
+      return cause.code;
+    }
   }
 
   // Nested in data (some providers)
   if (obj.data && typeof obj.data === "object") {
     const data = obj.data as Record<string, unknown>;
-    if (typeof data.code === "number") return data.code;
+    if (typeof data.code === "number") {
+      return data.code;
+    }
   }
 
   return undefined;
@@ -65,8 +73,12 @@ function extractMessage(err: unknown): string {
   }
   if (typeof err === "object" && err !== null) {
     const obj = err as Record<string, unknown>;
-    if (typeof obj.message === "string") return obj.message;
-    if (typeof obj.shortMessage === "string") return obj.shortMessage;
+    if (typeof obj.message === "string") {
+      return obj.message;
+    }
+    if (typeof obj.shortMessage === "string") {
+      return obj.shortMessage;
+    }
   }
   return String(err);
 }

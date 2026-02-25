@@ -108,9 +108,13 @@ export default function ChatPage(): ReactNode {
   // Single initialization effect
   useEffect(() => {
     // Skip if user already selected or already initialized
-    if (hasInitializedRef.current || hasUserSelectedRef.current) return;
+    if (hasInitializedRef.current || hasUserSelectedRef.current) {
+      return;
+    }
     // Wait for both data sources
-    if (isCreditsLoading || !modelsQuery.data) return;
+    if (isCreditsLoading || !modelsQuery.data) {
+      return;
+    }
 
     const userChoice = getPreferredModelId();
 
@@ -210,7 +214,9 @@ export default function ChatPage(): ReactNode {
   const handleDeleteThread = useCallback(
     (key: string) => {
       deleteThread.mutate(key);
-      if (activeThreadKey === key) setActiveThreadKey(null);
+      if (activeThreadKey === key) {
+        setActiveThreadKey(null);
+      }
     },
     [activeThreadKey, deleteThread]
   );

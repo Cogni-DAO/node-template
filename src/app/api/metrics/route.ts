@@ -45,22 +45,30 @@ function safeCompare(a: string, b: string): boolean {
  * Returns null if header or token exceeds length limits to prevent DoS.
  */
 function extractBearerToken(authHeader: string | null): string | null {
-  if (!authHeader) return null;
+  if (!authHeader) {
+    return null;
+  }
 
   // Cap header length to prevent DoS
-  if (authHeader.length > MAX_AUTH_HEADER_LENGTH) return null;
+  if (authHeader.length > MAX_AUTH_HEADER_LENGTH) {
+    return null;
+  }
 
   // Case-insensitive prefix match
   const trimmed = authHeader.trim();
   const lowerPrefix = trimmed.toLowerCase();
 
-  if (!lowerPrefix.startsWith("bearer ")) return null;
+  if (!lowerPrefix.startsWith("bearer ")) {
+    return null;
+  }
 
   // Extract and trim the token (after "bearer ")
   const token = trimmed.slice(7).trim();
 
   // Cap token length after parsing (before hashing)
-  if (token.length > MAX_TOKEN_LENGTH) return null;
+  if (token.length > MAX_TOKEN_LENGTH) {
+    return null;
+  }
 
   return token;
 }

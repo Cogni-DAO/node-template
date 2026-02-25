@@ -71,7 +71,9 @@ export const POST = wrapRouteHandlerWithLogging(
       const input = paymentIntentOperation.input.parse(body);
 
       // Call facade with context
-      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      if (!sessionUser) {
+        throw new Error("sessionUser required"); // Enforced by wrapper
+      }
       const result = await createPaymentIntentFacade(
         {
           sessionUser,
@@ -84,7 +86,9 @@ export const POST = wrapRouteHandlerWithLogging(
       return NextResponse.json(paymentIntentOperation.output.parse(result));
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error; // Unhandled - let wrapper catch
     }
   }

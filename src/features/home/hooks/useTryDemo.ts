@@ -31,10 +31,14 @@ export function useTryDemo() {
 
   // Check for pending redirect after authentication
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status !== "authenticated") {
+      return;
+    }
 
     const next = sessionStorage.getItem(REDIRECT_KEY);
-    if (!next) return;
+    if (!next) {
+      return;
+    }
 
     sessionStorage.removeItem(REDIRECT_KEY);
     router.push(next);

@@ -54,9 +54,13 @@ export const POST = wrapRouteHandlerWithLogging<{
     try {
       // WRITE_ROUTES_APPROVER_GATED
       const denied = checkApprover(ctx, sessionUser?.walletAddress);
-      if (denied) return denied;
+      if (denied) {
+        return denied;
+      }
 
-      if (!context) throw new Error("context required for dynamic routes");
+      if (!context) {
+        throw new Error("context required for dynamic routes");
+      }
       const { id } = await context.params;
       let epochId: bigint;
       try {
@@ -109,7 +113,9 @@ export const POST = wrapRouteHandlerWithLogging<{
       );
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error;
     }
   }

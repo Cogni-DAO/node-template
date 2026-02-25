@@ -21,8 +21,12 @@ const MAX_AMOUNT_USD = 100000;
  * Rejects: thousands separators, multiple decimals, >2 decimal places.
  */
 export function isValidAmountInput(input: string): boolean {
-  if (input === "") return true; // Allow empty while typing
-  if (/[,\s]/.test(input)) return false; // Reject thousands separators
+  if (input === "") {
+    return true; // Allow empty while typing
+  }
+  if (/[,\s]/.test(input)) {
+    return false; // Reject thousands separators
+  }
   return /^\d+(\.\d{0,2})?$/.test(input);
 }
 
@@ -39,10 +43,14 @@ export function isValidAmountInput(input: string): boolean {
  * parseDollarsToCents("") → null
  */
 export function parseDollarsToCents(input: string): number | null {
-  if (input === "") return null;
+  if (input === "") {
+    return null;
+  }
 
   // Allow trailing dot or 1-2 decimal places
-  if (!/^\d+\.?\d{0,2}$/.test(input)) return null;
+  if (!/^\d+\.?\d{0,2}$/.test(input)) {
+    return null;
+  }
 
   const parts = input.split(".");
   const dollars = parts[0] ?? "0";
@@ -52,9 +60,15 @@ export function parseDollarsToCents(input: string): number | null {
     Number.parseInt(cents.padEnd(2, "0"), 10);
 
   // Clamp to valid range
-  if (totalCents < MIN_AMOUNT_USD * 100) return null;
-  if (totalCents > MAX_AMOUNT_USD * 100) return null;
-  if (!Number.isFinite(totalCents)) return null; // Safety for huge inputs
+  if (totalCents < MIN_AMOUNT_USD * 100) {
+    return null;
+  }
+  if (totalCents > MAX_AMOUNT_USD * 100) {
+    return null;
+  }
+  if (!Number.isFinite(totalCents)) {
+    return null; // Safety for huge inputs
+  }
 
   return totalCents;
 }

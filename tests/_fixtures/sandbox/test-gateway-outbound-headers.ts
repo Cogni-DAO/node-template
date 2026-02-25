@@ -37,7 +37,9 @@ function readEchoCaptures(): CapturedRequest[] {
   const raw = execSync("docker exec oc-echo cat /tmp/captured.jsonl")
     .toString()
     .trim();
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
   return raw.split("\n").map((line) => JSON.parse(line) as CapturedRequest);
 }
 

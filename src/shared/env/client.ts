@@ -53,7 +53,9 @@ export function clientEnv(): ClientEnv {
 
         for (const issue of error.issues) {
           const key = issue.path[0]?.toString();
-          if (!key) continue;
+          if (!key) {
+            continue;
+          }
 
           /*
            * Treat all invalid_type as missing (avoids any casting)

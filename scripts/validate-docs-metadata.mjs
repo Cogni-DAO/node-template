@@ -477,7 +477,9 @@ async function main() {
     try {
       const content = readFileSync(f, "utf8");
       const props = extractFrontmatter(content);
-      if (props.id) projectIds.add(String(props.id));
+      if (props.id) {
+        projectIds.add(String(props.id));
+      }
     } catch {
       // Ignore parse errors in phase 1
     }
@@ -502,7 +504,9 @@ async function main() {
       ];
       if (errors.length) {
         hasErrors = true;
-        for (const e of errors) console.error(`${f}: ${e}`);
+        for (const e of errors) {
+          console.error(`${f}: ${e}`);
+        }
       }
     } catch (e) {
       hasErrors = true;
@@ -521,7 +525,9 @@ async function main() {
       ];
       if (errors.length) {
         hasErrors = true;
-        for (const e of errors) console.error(`${f}: ${e}`);
+        for (const e of errors) {
+          console.error(`${f}: ${e}`);
+        }
       }
     } catch (e) {
       hasErrors = true;
@@ -541,7 +547,9 @@ async function main() {
       ];
       if (errors.length) {
         hasErrors = true;
-        for (const e of errors) console.error(`${f}: ${e}`);
+        for (const e of errors) {
+          console.error(`${f}: ${e}`);
+        }
       }
     } catch (e) {
       hasErrors = true;
@@ -565,7 +573,9 @@ async function main() {
       ];
       if (errors.length) {
         hasErrors = true;
-        for (const e of errors) console.error(`${f}: ${e}`);
+        for (const e of errors) {
+          console.error(`${f}: ${e}`);
+        }
       }
     } catch (e) {
       hasErrors = true;
@@ -573,7 +583,9 @@ async function main() {
     }
   }
 
-  if (hasErrors) process.exit(1);
+  if (hasErrors) {
+    process.exit(1);
+  }
 
   const total =
     docFiles.length +

@@ -107,10 +107,11 @@ describe("AI Telemetry Stack Tests", () => {
       expect(rows.length).toBe(1);
 
       const [row] = rows;
-      if (!row)
+      if (!row) {
         throw new Error(
           `No ai_invocation_summaries row for requestId=${returnedRequestId}`
         );
+      }
 
       // P0 Assertions per AI_SETUP_SPEC.md Test Gates
       // 1. status = 'success'
@@ -226,7 +227,9 @@ describe("AI Telemetry Stack Tests", () => {
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
-      if (!row) throw new Error("No ai_invocation_summaries error row found");
+      if (!row) {
+        throw new Error("No ai_invocation_summaries error row found");
+      }
 
       // P0 Assertions per AI_SETUP_SPEC.md Test Gates
       // 1. status = 'error'

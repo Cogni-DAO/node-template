@@ -47,7 +47,9 @@ function getOrCreateCounter<T extends string>(
   labelNames: readonly T[] = [] as readonly T[]
 ): Counter<T> {
   const existing = metricsRegistry.getSingleMetric(name);
-  if (existing) return existing as Counter<T>;
+  if (existing) {
+    return existing as Counter<T>;
+  }
   return new client.Counter({
     name,
     help,
@@ -63,7 +65,9 @@ function getOrCreateHistogram<T extends string>(
   buckets: number[]
 ): Histogram<T> {
   const existing = metricsRegistry.getSingleMetric(name);
-  if (existing) return existing as Histogram<T>;
+  if (existing) {
+    return existing as Histogram<T>;
+  }
   return new client.Histogram({
     name,
     help,
@@ -175,7 +179,11 @@ export const billingInvariantViolationTotal = getOrCreateCounter(
  * Returns '2xx', '4xx', or '5xx'.
  */
 export function statusBucket(status: number): "2xx" | "4xx" | "5xx" {
-  if (status >= 200 && status < 300) return "2xx";
-  if (status >= 400 && status < 500) return "4xx";
+  if (status >= 200 && status < 300) {
+    return "2xx";
+  }
+  if (status >= 400 && status < 500) {
+    return "4xx";
+  }
   return "5xx";
 }

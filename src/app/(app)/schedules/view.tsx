@@ -58,7 +58,9 @@ const TIMEZONE_PRESETS = [
 
 function cronToHumanReadable(cron: string): string {
   const preset = SCHEDULE_PRESETS.find((p) => p.value === cron);
-  if (preset) return preset.label;
+  if (preset) {
+    return preset.label;
+  }
   return cron;
 }
 
@@ -149,8 +151,9 @@ export function SchedulesView() {
   });
 
   const handleCreate = () => {
-    if (!prompt.trim() || !selectedAgent || !selectedCron || !selectedModel)
+    if (!prompt.trim() || !selectedAgent || !selectedCron || !selectedModel) {
       return;
+    }
     createMutation.mutate({
       graphId: selectedAgent,
       input: {

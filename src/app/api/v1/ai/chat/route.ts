@@ -216,7 +216,9 @@ export const POST = wrapRouteHandlerWithLogging(
         );
       }
 
-      if (!sessionUser) throw new Error("sessionUser required");
+      if (!sessionUser) {
+        throw new Error("sessionUser required");
+      }
 
       // --- stateKey lifecycle ---
       const stateKey = input.stateKey ?? nanoid(21);
@@ -254,7 +256,9 @@ export const POST = wrapRouteHandlerWithLogging(
           threadMetadata
         );
       } catch (e) {
-        if (!(e instanceof ThreadConflictError)) throw e;
+        if (!(e instanceof ThreadConflictError)) {
+          throw e;
+        }
         // Retry once: reload + re-append
         existingThread = await threadPersistence.loadThread(
           sessionUser.id,
@@ -341,7 +345,9 @@ export const POST = wrapRouteHandlerWithLogging(
             let eventSeq = 0;
 
             for await (const event of deltaStream) {
-              if (request.signal.aborted) break;
+              if (request.signal.aborted) {
+                break;
+              }
               eventSeq++;
 
               if (event.type === "text_delta") {
@@ -417,7 +423,9 @@ export const POST = wrapRouteHandlerWithLogging(
                 const partIdx = toolPartIndexByCallId.get(event.toolCallId);
                 if (partIdx !== undefined) {
                   const part = accToolParts[partIdx];
-                  if (!part) continue;
+                  if (!part) {
+                    continue;
+                  }
                   part.output = event.result;
                   part.state = "output-available";
                 }
@@ -645,7 +653,9 @@ export const POST = wrapRouteHandlerWithLogging(
       });
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error, input?.model);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error; // Unhandled → wrapper catches
     }
   }

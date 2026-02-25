@@ -478,7 +478,9 @@ export class LlmProxyManager {
       const streamType = buffer.readUInt8(offset);
       const frameSize = buffer.readUInt32BE(offset + 4);
 
-      if (offset + 8 + frameSize > buffer.length) break;
+      if (offset + 8 + frameSize > buffer.length) {
+        break;
+      }
 
       if (streamType === 1) {
         stdout.push(buffer.subarray(offset + 8, offset + 8 + frameSize));
@@ -514,7 +516,9 @@ export class LlmProxyManager {
       const callId = callIdMatch?.[1];
 
       // Skip lines without a call ID (health checks, non-LLM requests)
-      if (!callId || callId === "-") continue;
+      if (!callId || callId === "-") {
+        continue;
+      }
 
       const costMatch = line.match(/litellm_response_cost=(\S+)/);
       const costRaw = costMatch?.[1];
@@ -603,7 +607,9 @@ export class LlmProxyManager {
     let lastError: string | undefined;
 
     for (let attempt = 0; attempt < backoffs.length; attempt++) {
-      if (Date.now() - start >= timeoutMs) break;
+      if (Date.now() - start >= timeoutMs) {
+        break;
+      }
 
       try {
         const exec = await container.exec({
@@ -640,7 +646,9 @@ export class LlmProxyManager {
           const pollDeadline = Date.now() + 1000;
           while (Date.now() < pollDeadline) {
             const info = await exec.inspect();
-            if (info.ExitCode !== null) break;
+            if (info.ExitCode !== null) {
+              break;
+            }
             await new Promise((r) => setTimeout(r, 30));
           }
         }

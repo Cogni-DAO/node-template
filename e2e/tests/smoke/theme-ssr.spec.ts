@@ -21,7 +21,9 @@ import { instrumentHtmlClass } from "../../helpers/instrumentHtmlClass";
 test("SSR sets theme class and no hydration warnings", async ({ page }) => {
   const warnings: string[] = [];
   page.on("console", (m) => {
-    if (["warning", "error"].includes(m.type())) warnings.push(m.text());
+    if (["warning", "error"].includes(m.type())) {
+      warnings.push(m.text());
+    }
   });
 
   await page.addInitScript(instrumentHtmlClass);

@@ -79,7 +79,9 @@ describe("Sandbox Repo Volume Mount", () => {
   });
 
   it("/repo/current/package.json is readable", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithRepoVolume(
       ctx,
@@ -91,7 +93,9 @@ describe("Sandbox Repo Volume Mount", () => {
   });
 
   it("/repo/current has valid 40-hex git SHA", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithRepoVolume(
       ctx,
@@ -106,7 +110,9 @@ describe("Sandbox Repo Volume Mount", () => {
   });
 
   it("/repo is mounted read-only at mount table level", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithRepoVolume(
       ctx,
@@ -118,7 +124,9 @@ describe("Sandbox Repo Volume Mount", () => {
   });
 
   it("container cannot write to /repo (read-only enforced)", async () => {
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const result = await runWithRepoVolume(
       ctx,

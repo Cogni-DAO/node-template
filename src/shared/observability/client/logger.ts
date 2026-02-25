@@ -35,7 +35,9 @@ const TRUNCATED = "[TRUNCATED]";
  * Shallow scrub and truncate metadata, then safely stringify
  */
 function safeJson(meta: Record<string, unknown> | undefined): string {
-  if (!meta) return "{}";
+  if (!meta) {
+    return "{}";
+  }
 
   try {
     const scrubbed: Record<string, unknown> = {};
@@ -83,7 +85,9 @@ function isDev(): boolean {
  * @param event - Event name from EVENT_NAMES registry
  */
 export function debug(event: EventName, meta?: Record<string, unknown>): void {
-  if (!isDev()) return;
+  if (!isDev()) {
+    return;
+  }
 
   const metaStr = safeJson(meta);
   // biome-ignore lint/suspicious/noConsole: Client logger intentionally uses console
@@ -97,7 +101,9 @@ export function debug(event: EventName, meta?: Record<string, unknown>): void {
  * @param event - Event name from EVENT_NAMES registry
  */
 export function info(event: EventName, meta?: Record<string, unknown>): void {
-  if (!isDev()) return;
+  if (!isDev()) {
+    return;
+  }
 
   const metaStr = safeJson(meta);
   // biome-ignore lint/suspicious/noConsole: Client logger intentionally uses console

@@ -161,7 +161,9 @@ function reducer(state: InternalState, action: Action): InternalState {
       return state;
 
     case "SUBMIT_COMPLETED":
-      if (state.phase !== "SUBMITTING_HASH") return state;
+      if (state.phase !== "SUBMITTING_HASH") {
+        return state;
+      }
       if (action.needsPolling) {
         return {
           phase: "POLLING_VERIFICATION",
@@ -451,7 +453,9 @@ export function usePaymentFlow(
         // Check if backend immediately resolved (stub verifier case)
         // submitTxHash returns internal backend status (CREATED_INTENT | PENDING_UNVERIFIED | CREDITED | REJECTED | FAILED)
         // At this point, internalState is AWAITING_CONFIRMATION which has non-null txHash and chainId
-        if (internalState.phase !== "AWAITING_CONFIRMATION") return;
+        if (internalState.phase !== "AWAITING_CONFIRMATION") {
+          return;
+        }
         const { txHash, chainId } = internalState;
 
         if (result.data.status === "CREDITED") {

@@ -100,13 +100,17 @@ export async function register(): Promise<void> {
       const baseUrl = process.env.LITELLM_BASE_URL;
       // biome-ignore lint/style/noProcessEnv: startup check before config framework
       const masterKey = process.env.LITELLM_MASTER_KEY;
-      if (!baseUrl || !masterKey) return;
+      if (!baseUrl || !masterKey) {
+        return;
+      }
       try {
         const res = await fetch(`${baseUrl}/v1/models`, {
           headers: { Authorization: `Bearer ${masterKey}` },
           signal: AbortSignal.timeout(3_000),
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          return;
+        }
         const data = (await res.json()) as { data?: Array<{ id: string }> };
         const ids = (data.data ?? []).map((m) => m.id);
         if (ids.includes("test-model")) {

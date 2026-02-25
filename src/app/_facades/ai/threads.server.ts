@@ -36,8 +36,12 @@ export async function listThreadsFacade(
   const userId = toUserId(input.sessionUser.id);
   const port = getContainer().threadPersistenceForUser(userId);
   const opts: { limit?: number; offset?: number } = {};
-  if (input.limit !== undefined) opts.limit = input.limit;
-  if (input.offset !== undefined) opts.offset = input.offset;
+  if (input.limit !== undefined) {
+    opts.limit = input.limit;
+  }
+  if (input.offset !== undefined) {
+    opts.offset = input.offset;
+  }
   const threads = await port.listThreads(input.sessionUser.id, opts);
   return {
     threads: threads.map((t) => ({

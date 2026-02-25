@@ -59,7 +59,9 @@ const PROVIDER_ICONS = {
  */
 function getProviderKey(modelId: string): keyof typeof PROVIDER_ICONS {
   const match = modelId.match(/^([a-z]+)/i);
-  if (!match?.[1]) return "default";
+  if (!match?.[1]) {
+    return "default";
+  }
 
   const key = match[1].toLowerCase();
   return key in PROVIDER_ICONS
@@ -83,7 +85,9 @@ export function getProviderIcon(modelId: string): IconComponent {
 export function getIconByProviderKey(
   providerKey: string | undefined
 ): IconComponent {
-  if (!providerKey) return PROVIDER_ICONS.default;
+  if (!providerKey) {
+    return PROVIDER_ICONS.default;
+  }
   return providerKey in PROVIDER_ICONS
     ? PROVIDER_ICONS[providerKey as keyof typeof PROVIDER_ICONS]
     : PROVIDER_ICONS.default;

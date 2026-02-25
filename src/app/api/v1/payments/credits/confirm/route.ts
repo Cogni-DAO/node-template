@@ -74,7 +74,9 @@ export const POST = wrapRouteHandlerWithLogging(
       const input = creditsConfirmOperation.input.parse(body);
 
       // Call facade with context
-      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      if (!sessionUser) {
+        throw new Error("sessionUser required"); // Enforced by wrapper
+      }
       const result = await confirmCreditsPaymentFacade(
         {
           sessionUser,
@@ -87,7 +89,9 @@ export const POST = wrapRouteHandlerWithLogging(
       return NextResponse.json(creditsConfirmOperation.output.parse(result));
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error; // Unhandled - let wrapper catch
     }
   }

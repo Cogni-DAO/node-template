@@ -18,7 +18,9 @@ test("Homepage loads with basic layout elements", async ({ page }) => {
   const warnings: string[] = [];
   page.on("console", (msg) => {
     const type = msg.type();
-    if (type === "warning" || type === "error") warnings.push(msg.text());
+    if (type === "warning" || type === "error") {
+      warnings.push(msg.text());
+    }
   });
 
   await page.goto("/");

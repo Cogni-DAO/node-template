@@ -48,7 +48,9 @@ export const GET = wrapRouteHandlerWithLogging(
         offset: rawOffset ? Number(rawOffset) : undefined,
       });
 
-      if (!sessionUser) throw new Error("sessionUser required");
+      if (!sessionUser) {
+        throw new Error("sessionUser required");
+      }
 
       const result = await listThreadsFacade({
         sessionUser,
@@ -61,7 +63,9 @@ export const GET = wrapRouteHandlerWithLogging(
       });
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error;
     }
   }

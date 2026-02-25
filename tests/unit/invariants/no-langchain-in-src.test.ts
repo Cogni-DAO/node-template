@@ -35,17 +35,27 @@ describe("NO_LANGCHAIN_IN_SRC invariant", () => {
       .filter((line) => {
         // Extract file path and content (format: "file:num:content")
         const match = line.match(/^([^:]+):\d+:(.*)$/);
-        if (!match) return false;
+        if (!match) {
+          return false;
+        }
         const filePath = match[1];
         const content = match[2].trim();
 
         // Skip if it's a comment
-        if (content.startsWith("//")) return false;
-        if (content.startsWith("*")) return false;
-        if (content.startsWith("/*")) return false;
+        if (content.startsWith("//")) {
+          return false;
+        }
+        if (content.startsWith("*")) {
+          return false;
+        }
+        if (content.startsWith("/*")) {
+          return false;
+        }
 
         // Skip documentation references (in JSDoc or module headers)
-        if (content.includes("@langchain/*")) return false;
+        if (content.includes("@langchain/*")) {
+          return false;
+        }
 
         // Per OFFICIAL_SDK_ONLY: Allow @langchain/langgraph-sdk in langgraph dev adapter
         // This is the only allowed SDK import outside packages/

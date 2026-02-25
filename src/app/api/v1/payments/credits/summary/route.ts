@@ -62,7 +62,9 @@ export const GET = wrapRouteHandlerWithLogging(
 
       const input = creditsSummaryOperation.input.parse({ limit });
 
-      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      if (!sessionUser) {
+        throw new Error("sessionUser required"); // Enforced by wrapper
+      }
       const summary = await getCreditsSummaryFacade(
         {
           sessionUser,
@@ -75,7 +77,9 @@ export const GET = wrapRouteHandlerWithLogging(
       return NextResponse.json(creditsSummaryOperation.output.parse(summary));
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error; // Unhandled - let wrapper catch
     }
   }

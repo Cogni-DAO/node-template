@@ -63,7 +63,9 @@ function weightSumV0(
   const userCounts = new Map<string, number>();
 
   for (const event of events) {
-    if (!event.included) continue;
+    if (!event.included) {
+      continue;
+    }
 
     const configKey = `${event.source}:${event.eventType}`;
     const weight =

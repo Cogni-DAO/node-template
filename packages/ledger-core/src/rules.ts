@@ -112,7 +112,9 @@ export function computePayouts(
 
   const bonuses = new Map<string, bigint>();
   for (const alloc of byRemainder) {
-    if (residual <= 0n) break;
+    if (residual <= 0n) {
+      break;
+    }
     bonuses.set(alloc.userId, 1n);
     residual -= 1n;
   }

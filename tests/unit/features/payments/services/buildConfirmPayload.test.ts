@@ -128,7 +128,9 @@ describe("buildConfirmPayload", () => {
 
     // Should be valid ISO 8601 format
     expect(payload.metadata).toBeDefined();
-    if (!payload.metadata) throw new Error("metadata should be defined");
+    if (!payload.metadata) {
+      throw new Error("metadata should be defined");
+    }
     const timestamp = payload.metadata.timestamp;
     expect(timestamp).toBeDefined();
     expect(new Date(timestamp).toISOString()).toBe(timestamp);

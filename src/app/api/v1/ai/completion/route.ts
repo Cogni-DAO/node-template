@@ -123,7 +123,9 @@ export const POST = wrapRouteHandlerWithLogging(
       const input = aiCompletionOperation.input.parse(body);
 
       // Delegate to facade with context
-      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      if (!sessionUser) {
+        throw new Error("sessionUser required"); // Enforced by wrapper
+      }
       const result = await completion({ ...input, sessionUser }, ctx);
 
       // Validate output and return
@@ -131,7 +133,9 @@ export const POST = wrapRouteHandlerWithLogging(
       return NextResponse.json(output);
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error; // Unhandled → wrapper catches
     }
   }

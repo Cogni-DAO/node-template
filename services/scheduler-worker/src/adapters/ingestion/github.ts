@@ -240,7 +240,9 @@ export class GitHubSourceAdapter implements SourceAdapter {
     let latestTime = since;
 
     for (const repo of this.repos) {
-      if (allEvents.length >= this.maxEventsPerCall) break;
+      if (allEvents.length >= this.maxEventsPerCall) {
+        break;
+      }
 
       const [owner, repoName] = repo.split("/");
       if (!owner || !repoName) {
@@ -249,7 +251,9 @@ export class GitHubSourceAdapter implements SourceAdapter {
       }
 
       for (const streamId of streams) {
-        if (allEvents.length >= this.maxEventsPerCall) break;
+        if (allEvents.length >= this.maxEventsPerCall) {
+          break;
+        }
 
         const remaining = this.maxEventsPerCall - allEvents.length;
         const events = await this.collectStream(
@@ -355,10 +359,14 @@ export class GitHubSourceAdapter implements SourceAdapter {
       );
 
       const connection = response.repository.pullRequests;
-      if (!connection) break;
+      if (!connection) {
+        break;
+      }
 
       for (const pr of connection.nodes) {
-        if (events.length >= limit) break;
+        if (events.length >= limit) {
+          break;
+        }
 
         // Early-stop: ordered by updatedAt DESC, so once updatedAt < since
         // no subsequent PRs can have mergedAt in our window
@@ -369,10 +377,14 @@ export class GitHubSourceAdapter implements SourceAdapter {
 
         // Client-side time-window filter on mergedAt
         const mergedAt = new Date(pr.mergedAt);
-        if (mergedAt <= since || mergedAt > until) continue;
+        if (mergedAt <= since || mergedAt > until) {
+          continue;
+        }
 
         const event = await this.normalizePr(owner, repoName, pr);
-        if (event) events.push(event);
+        if (event) {
+          events.push(event);
+        }
       }
 
       pageCursor =
@@ -451,10 +463,14 @@ export class GitHubSourceAdapter implements SourceAdapter {
       >(REVIEWS_QUERY, { owner, name: repoName, cursor: pageCursor });
 
       const connection = response.repository.pullRequests;
-      if (!connection) break;
+      if (!connection) {
+        break;
+      }
 
       for (const pr of connection.nodes) {
-        if (events.length >= limit) break;
+        if (events.length >= limit) {
+          break;
+        }
 
         // Early-stop: no subsequent PRs can have reviews in our window
         if (new Date(pr.updatedAt) < since) {
@@ -462,14 +478,20 @@ export class GitHubSourceAdapter implements SourceAdapter {
           break;
         }
 
-        if (!pr.reviews) continue;
+        if (!pr.reviews) {
+          continue;
+        }
 
         for (const review of pr.reviews.nodes) {
-          if (events.length >= limit) break;
+          if (events.length >= limit) {
+            break;
+          }
 
           // Client-side time-window filter on submittedAt
           const submittedAt = new Date(review.submittedAt);
-          if (submittedAt <= since || submittedAt > until) continue;
+          if (submittedAt <= since || submittedAt > until) {
+            continue;
+          }
 
           const event = await this.normalizeReview(
             owner,
@@ -477,7 +499,9 @@ export class GitHubSourceAdapter implements SourceAdapter {
             pr.number,
             review
           );
-          if (event) events.push(event);
+          if (event) {
+            events.push(event);
+          }
         }
       }
 
@@ -563,10 +587,14 @@ export class GitHubSourceAdapter implements SourceAdapter {
       >(CLOSED_ISSUES_QUERY, { owner, name: repoName, cursor: pageCursor });
 
       const connection = response.repository.issues;
-      if (!connection) break;
+      if (!connection) {
+        break;
+      }
 
       for (const issue of connection.nodes) {
-        if (events.length >= limit) break;
+        if (events.length >= limit) {
+          break;
+        }
 
         // Early-stop: no subsequent issues can have closedAt in our window
         if (new Date(issue.updatedAt) < since) {
@@ -576,10 +604,14 @@ export class GitHubSourceAdapter implements SourceAdapter {
 
         // Client-side time-window filter on closedAt
         const closedAt = new Date(issue.closedAt);
-        if (closedAt <= since || closedAt > until) continue;
+        if (closedAt <= since || closedAt > until) {
+          continue;
+        }
 
         const event = await this.normalizeIssue(owner, repoName, issue);
-        if (event) events.push(event);
+        if (event) {
+          events.push(event);
+        }
       }
 
       pageCursor =

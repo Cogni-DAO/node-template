@@ -48,7 +48,9 @@ describe("Chat Streaming", () => {
     );
 
     // user.walletAddress guaranteed non-null by seedAuthenticatedUser (generates via generateTestWallet)
-    if (!user.walletAddress) throw new Error("walletAddress required");
+    if (!user.walletAddress) {
+      throw new Error("walletAddress required");
+    }
 
     const mockSessionUser: SessionUser = {
       id: user.id,
@@ -94,7 +96,9 @@ describe("Chat Streaming", () => {
       events.push({ ...e, t: Date.now() - start });
 
       // Stop once completed to avoid hanging tests
-      if (isFinishEvent(e)) break;
+      if (isFinishEvent(e)) {
+        break;
+      }
 
       // Safety timeout: stop if stream takes too long
       if (Date.now() - start > 30_000) {
@@ -142,7 +146,9 @@ describe("Chat Streaming", () => {
       { balanceCredits: 100_000_000 }
     );
 
-    if (!user.walletAddress) throw new Error("walletAddress required");
+    if (!user.walletAddress) {
+      throw new Error("walletAddress required");
+    }
 
     const mockSessionUser: SessionUser = {
       id: user.id,
@@ -164,7 +170,9 @@ describe("Chat Streaming", () => {
       where: eq(billingAccounts.ownerUserId, user.id),
     });
     expect(billingAccount).toBeTruthy();
-    if (!billingAccount) throw new Error("Billing account not found");
+    if (!billingAccount) {
+      throw new Error("Billing account not found");
+    }
 
     const receiptsBefore = await db
       .select()
@@ -194,7 +202,9 @@ describe("Chat Streaming", () => {
 
     // Consume stream to trigger completion
     for await (const e of readSseEvents(res)) {
-      if (isFinishEvent(e)) break;
+      if (isFinishEvent(e)) {
+        break;
+      }
     }
 
     // Wait for receipt from async LiteLLM callback (CALLBACK_IS_SOLE_WRITER)
@@ -224,7 +234,9 @@ describe("Chat Streaming", () => {
     );
 
     // user.walletAddress guaranteed non-null by seedAuthenticatedUser (generates via generateTestWallet)
-    if (!user.walletAddress) throw new Error("walletAddress required");
+    if (!user.walletAddress) {
+      throw new Error("walletAddress required");
+    }
 
     const mockSessionUser: SessionUser = {
       id: user.id,
@@ -274,7 +286,9 @@ describe("Chat Streaming", () => {
           }
         }
         // Safety timeout
-        if (Date.now() - start > 30_000) break;
+        if (Date.now() - start > 30_000) {
+          break;
+        }
       }
     } catch (error) {
       // Abort may cause the stream to throw - this is expected

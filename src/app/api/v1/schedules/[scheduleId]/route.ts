@@ -122,7 +122,9 @@ export const PATCH = wrapRouteHandlerWithLogging<{
   { routeId: "schedules.update", auth: { mode: "required", getSessionUser } },
   async (ctx, request, sessionUser, context) => {
     try {
-      if (!context) throw new Error("context required for dynamic routes");
+      if (!context) {
+        throw new Error("context required for dynamic routes");
+      }
       const { scheduleId } = await context.params;
 
       // Parse JSON body
@@ -139,7 +141,9 @@ export const PATCH = wrapRouteHandlerWithLogging<{
       // Validate with contract
       const parsed = schedulesUpdateOperation.input.parse(body);
 
-      if (!sessionUser) throw new Error("sessionUser required");
+      if (!sessionUser) {
+        throw new Error("sessionUser required");
+      }
 
       const container = getContainer();
 
@@ -166,7 +170,9 @@ export const PATCH = wrapRouteHandlerWithLogging<{
       );
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error;
     }
   }
@@ -181,10 +187,14 @@ export const DELETE = wrapRouteHandlerWithLogging<{
   { routeId: "schedules.delete", auth: { mode: "required", getSessionUser } },
   async (ctx, _request, sessionUser, context) => {
     try {
-      if (!context) throw new Error("context required for dynamic routes");
+      if (!context) {
+        throw new Error("context required for dynamic routes");
+      }
       const { scheduleId } = await context.params;
 
-      if (!sessionUser) throw new Error("sessionUser required");
+      if (!sessionUser) {
+        throw new Error("sessionUser required");
+      }
 
       const container = getContainer();
 
@@ -200,7 +210,9 @@ export const DELETE = wrapRouteHandlerWithLogging<{
       return new NextResponse(null, { status: 204 });
     } catch (error) {
       const errorResponse = handleRouteError(ctx, error);
-      if (errorResponse) return errorResponse;
+      if (errorResponse) {
+        return errorResponse;
+      }
       throw error;
     }
   }

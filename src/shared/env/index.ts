@@ -23,6 +23,8 @@ export { EnvValidationError, serverEnv } from "./server";
 export const getEnv = (k: string): string | undefined => process.env[k];
 export const requireEnv = (k: string): string => {
   const v = process.env[k];
-  if (!v) throw new Error(`Missing env: ${k}`);
+  if (!v) {
+    throw new Error(`Missing env: ${k}`);
+  }
   return v;
 };

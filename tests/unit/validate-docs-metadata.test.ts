@@ -46,7 +46,9 @@ function extractProperties(content) {
     if (match) {
       const key = match[1];
       const value = match[2].trim();
-      if (props[key]) throw new Error(`duplicate property key: ${key}`);
+      if (props[key]) {
+        throw new Error(`duplicate property key: ${key}`);
+      }
       props[key] = value;
     } else if (
       line.startsWith("#") ||
@@ -59,20 +61,31 @@ function extractProperties(content) {
 }
 
 function validateCSV(field, value) {
-  if (!value) return [];
+  if (!value) {
+    return [];
+  }
   const errors = [];
-  if (/,,/.test(value)) errors.push(`${field} has empty CSV segment`);
-  if (/^,|,$/.test(value)) errors.push(`${field} has leading/trailing comma`);
+  if (/,,/.test(value)) {
+    errors.push(`${field} has empty CSV segment`);
+  }
+  if (/^,|,$/.test(value)) {
+    errors.push(`${field} has leading/trailing comma`);
+  }
   const segments = value.split(",").map((s) => s.trim());
-  if (segments.some((s) => !s))
+  if (segments.some((s) => !s)) {
     errors.push(`${field} has empty CSV segment after trim`);
+  }
   return errors;
 }
 
 function checkForbidden(content) {
   const errors = [];
-  if (/^---\s*\n/.test(content)) errors.push("YAML frontmatter forbidden");
-  if (/\[\[.+?\]\]/.test(content)) errors.push("wikilinks forbidden");
+  if (/^---\s*\n/.test(content)) {
+    errors.push("YAML frontmatter forbidden");
+  }
+  if (/\[\[.+?\]\]/.test(content)) {
+    errors.push("wikilinks forbidden");
+  }
   return errors;
 }
 

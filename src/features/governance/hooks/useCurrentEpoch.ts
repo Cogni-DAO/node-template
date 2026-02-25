@@ -42,7 +42,9 @@ async function fetchCurrentEpoch(): Promise<CurrentEpochData> {
   const current =
     epochs.find((e) => e.status === "open") ??
     epochs.find((e) => e.status === "review");
-  if (!current) return { epoch: null };
+  if (!current) {
+    return { epoch: null };
+  }
 
   // 2. Fetch allocations + activity for this epoch
   const [allocationsRes, activityRes] = await Promise.all([

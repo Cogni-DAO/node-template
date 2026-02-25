@@ -146,7 +146,9 @@ export class SandboxGraphProvider implements GraphProvider {
   }
 
   canHandle(graphId: string): boolean {
-    if (!graphId.startsWith(`${this.providerId}:`)) return false;
+    if (!graphId.startsWith(`${this.providerId}:`)) {
+      return false;
+    }
     const agentName = graphId.slice(this.providerId.length + 1);
     return agentName in SANDBOX_AGENTS;
   }

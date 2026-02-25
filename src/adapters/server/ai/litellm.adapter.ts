@@ -81,8 +81,12 @@ function extractProviderFromModel(model: string): string {
     return model.slice(0, slashIndex);
   }
   // Fallback: try to infer from known model prefixes
-  if (model.startsWith("gpt-") || model.startsWith("o1")) return "openai";
-  if (model.startsWith("claude-")) return "anthropic";
+  if (model.startsWith("gpt-") || model.startsWith("o1")) {
+    return "openai";
+  }
+  if (model.startsWith("claude-")) {
+    return "anthropic";
+  }
   return "unknown";
 }
 
@@ -117,7 +121,9 @@ function defer<T>() {
  */
 function getProviderCostFromHeaders(response: Response): number | undefined {
   const raw = response.headers.get("x-litellm-response-cost");
-  if (!raw || raw.trim().length === 0) return undefined;
+  if (!raw || raw.trim().length === 0) {
+    return undefined;
+  }
 
   const parsed = Number.parseFloat(raw);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -129,7 +135,9 @@ function getProviderCostFromHeaders(response: Response): number | undefined {
  */
 function getLitellmCallIdFromHeaders(response: Response): string | undefined {
   const raw = response.headers.get("x-litellm-call-id");
-  if (!raw || raw.trim().length === 0) return undefined;
+  if (!raw || raw.trim().length === 0) {
+    return undefined;
+  }
   return raw.trim();
 }
 
@@ -601,7 +609,9 @@ export class LiteLlmAdapter implements LlmService {
         try {
           while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done) {
+              break;
+            }
 
             // Feed decoded chunk to eventsource-parser
             const chunk = decoder.decode(value, { stream: true });
@@ -610,7 +620,9 @@ export class LiteLlmAdapter implements LlmService {
             // Process all queued events
             while (eventQueue.length > 0) {
               const event = eventQueue.shift();
-              if (!event) break;
+              if (!event) {
+                break;
+              }
               const data = event.data;
 
               // TODO(stream-hang-risk): streamCompleted is only set when '[DONE]' is seen.
@@ -720,10 +732,15 @@ export class LiteLlmAdapter implements LlmService {
                       }
 
                       // Accumulate fragments
-                      if (tc.id) acc.id = tc.id;
-                      if (tc.function?.name) acc.name = tc.function.name;
-                      if (tc.function?.arguments)
+                      if (tc.id) {
+                        acc.id = tc.id;
+                      }
+                      if (tc.function?.name) {
+                        acc.name = tc.function.name;
+                      }
+                      if (tc.function?.arguments) {
                         acc.arguments += tc.function.arguments;
+                      }
 
                       // Build delta event for UI streaming
                       const delta: LlmToolCallDelta = {

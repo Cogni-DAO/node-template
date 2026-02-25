@@ -200,7 +200,9 @@ function extractLastUserText(
   }>
 ): string {
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
-  if (!lastUserMsg?.parts) return "";
+  if (!lastUserMsg?.parts) {
+    return "";
+  }
   return lastUserMsg.parts
     .filter((p) => p.type === "text" && p.text)
     .map((p) => p.text as string)

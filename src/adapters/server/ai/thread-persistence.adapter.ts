@@ -62,7 +62,9 @@ export class DrizzleThreadPersistenceAdapter implements ThreadPersistencePort {
         .limit(1);
 
       const row = rows[0];
-      if (!row) return [];
+      if (!row) {
+        return [];
+      }
       return row.messages as UIMessage[];
     });
   }
@@ -102,7 +104,9 @@ export class DrizzleThreadPersistenceAdapter implements ThreadPersistencePort {
         )
         .returning({ id: aiThreads.id });
 
-      if (updated.length > 0) return; // Success
+      if (updated.length > 0) {
+        return; // Success
+      }
 
       // No rows updated — either thread doesn't exist or count mismatch
       if (expectedMessageCount === 0) {

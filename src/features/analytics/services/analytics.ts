@@ -242,9 +242,13 @@ function extractScalar(result: {
   resultType: string;
   result: Array<{ value: [number, string] }>;
 }): number | null {
-  if (result.result.length === 0) return null;
+  if (result.result.length === 0) {
+    return null;
+  }
   const value = result.result[0]?.value[1];
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
   const parsed = Number.parseFloat(value);
   return Number.isNaN(parsed) ? null : parsed;
 }
@@ -257,9 +261,13 @@ function extractTimeseries(result: {
   resultType: string;
   result: Array<{ values: Array<[number, string]> }>;
 }): AnalyticsDataPoint[] {
-  if (result.result.length === 0) return [];
+  if (result.result.length === 0) {
+    return [];
+  }
   const series = result.result[0];
-  if (!series) return [];
+  if (!series) {
+    return [];
+  }
 
   return series.values.map(([timestamp, valueStr]) => ({
     timestamp: new Date(timestamp * 1000),

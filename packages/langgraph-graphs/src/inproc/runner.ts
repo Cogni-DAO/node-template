@@ -39,10 +39,14 @@ import type { GraphResult, InProcRunnerOptions } from "./types";
  * LangGraph returns messages array; last message is assistant response.
  */
 function extractAssistantContent(messages: BaseMessage[]): string {
-  if (messages.length === 0) return "";
+  if (messages.length === 0) {
+    return "";
+  }
 
   const lastMessage = messages[messages.length - 1];
-  if (!lastMessage) return "";
+  if (!lastMessage) {
+    return "";
+  }
 
   if (typeof lastMessage.content === "string") {
     return lastMessage.content;

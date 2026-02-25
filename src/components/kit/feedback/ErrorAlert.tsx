@@ -143,7 +143,9 @@ export const ErrorAlert = forwardRef<ErrorAlertRef, ErrorAlertProps>(
       };
     }, [code, message, requestId, retryable]);
 
-    if (!visible) return null;
+    if (!visible) {
+      return null;
+    }
 
     const hasActions = showRetry || showSwitchFree || showAddCredits;
 

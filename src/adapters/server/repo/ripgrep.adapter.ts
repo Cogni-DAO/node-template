@@ -300,7 +300,9 @@ export class RipgrepAdapter {
 
     // Convert to hits
     for (const [path, data] of matchesByFile) {
-      if (hits.length >= limit) break;
+      if (hits.length >= limit) {
+        break;
+      }
 
       const lineStart = Math.min(...data.lineNumbers);
       const lineEnd = Math.min(

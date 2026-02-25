@@ -30,7 +30,9 @@ describe("Sandbox Lifecycle", () => {
 
   describe("output capture", () => {
     it("captures stdout and stderr separately", async () => {
-      if (!fixture.imageAvailable || !fixture.runner) return;
+      if (!fixture.imageAvailable || !fixture.runner) {
+        return;
+      }
 
       const workspace = await mkWorkspace();
 
@@ -54,7 +56,9 @@ describe("Sandbox Lifecycle", () => {
 
   describe("exit codes", () => {
     it("returns exit code 0 on success", async () => {
-      if (!fixture.imageAvailable || !fixture.runner) return;
+      if (!fixture.imageAvailable || !fixture.runner) {
+        return;
+      }
 
       const workspace = await mkWorkspace();
 
@@ -75,7 +79,9 @@ describe("Sandbox Lifecycle", () => {
     });
 
     it("returns non-zero exit code on failure", async () => {
-      if (!fixture.imageAvailable || !fixture.runner) return;
+      if (!fixture.imageAvailable || !fixture.runner) {
+        return;
+      }
 
       const workspace = await mkWorkspace();
 
@@ -98,7 +104,9 @@ describe("Sandbox Lifecycle", () => {
 
   describe("timeouts", () => {
     it("kills container and returns timeout error", async () => {
-      if (!fixture.imageAvailable || !fixture.runner) return;
+      if (!fixture.imageAvailable || !fixture.runner) {
+        return;
+      }
 
       const workspace = await mkWorkspace();
 

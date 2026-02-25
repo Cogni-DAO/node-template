@@ -40,8 +40,12 @@ export function useThreads(
   opts: { limit?: number; offset?: number } = {}
 ): UseQueryResult<ListThreadsOutput, Error> {
   const params = new URLSearchParams();
-  if (opts.limit !== undefined) params.set("limit", String(opts.limit));
-  if (opts.offset !== undefined) params.set("offset", String(opts.offset));
+  if (opts.limit !== undefined) {
+    params.set("limit", String(opts.limit));
+  }
+  if (opts.offset !== undefined) {
+    params.set("offset", String(opts.offset));
+  }
   const qs = params.toString();
 
   return useQuery({

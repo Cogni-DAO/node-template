@@ -64,7 +64,9 @@ export function wrapPublicRoute<TContext = unknown>(
       })();
       await _initPromise;
     }
-    if (!_wrapPublicRoute) throw new Error("wrapPublicRoute init failed");
+    if (!_wrapPublicRoute) {
+      throw new Error("wrapPublicRoute init failed");
+    }
     return _wrapPublicRoute(config, handler)(request, context);
   };
 }

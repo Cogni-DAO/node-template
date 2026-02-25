@@ -27,7 +27,9 @@ describe("Sandbox Network Isolation", () => {
   const fixture = useSandboxFixture();
 
   it("network=none blocks external access", async () => {
-    if (!fixture.imageAvailable || !fixture.runner) return;
+    if (!fixture.imageAvailable || !fixture.runner) {
+      return;
+    }
 
     const workspace = await mkWorkspace();
 
@@ -55,7 +57,9 @@ describe("Sandbox Network Isolation", () => {
   });
 
   it("DNS resolution fails (no network)", async () => {
-    if (!fixture.imageAvailable || !fixture.runner) return;
+    if (!fixture.imageAvailable || !fixture.runner) {
+      return;
+    }
 
     const workspace = await mkWorkspace();
 

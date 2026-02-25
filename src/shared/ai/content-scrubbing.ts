@@ -457,6 +457,8 @@ export function isValidOtelTraceId(traceId: string | undefined): boolean {
 export function truncateSessionId(
   sessionId: string | undefined
 ): string | undefined {
-  if (!sessionId) return undefined;
+  if (!sessionId) {
+    return undefined;
+  }
   return sessionId.length <= 200 ? sessionId : sessionId.slice(0, 200);
 }

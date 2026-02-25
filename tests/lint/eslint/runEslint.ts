@@ -75,10 +75,14 @@ async function disableTypedTsRules(
     .map(([name]) => `@typescript-eslint/${name}`);
 
   return flat.map((entry: EsLintConfig) => {
-    if (!entry.rules) return entry;
+    if (!entry.rules) {
+      return entry;
+    }
     const rules = { ...entry.rules };
     for (const id of typedRuleIds) {
-      if (id in rules) rules[id] = "off";
+      if (id in rules) {
+        rules[id] = "off";
+      }
     }
     return { ...entry, rules };
   });
@@ -91,7 +95,9 @@ function preservePluginContext(flat: EsLintConfig[]): EsLintConfig[] {
   // First pass: collect unique plugin objects
   for (const entry of flat) {
     const p = entry.plugins;
-    if (!p) continue;
+    if (!p) {
+      continue;
+    }
     for (const [name, pluginObj] of Object.entries(p)) {
       if (!(name in seenPlugins)) {
         seenPlugins[name] = pluginObj; // keep first reference

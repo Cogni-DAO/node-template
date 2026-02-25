@@ -48,7 +48,9 @@ export interface SseEvent {
  */
 export async function* readSseEvents(res: Response): AsyncIterable<SseEvent> {
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("No response body reader");
+  if (!reader) {
+    throw new Error("No response body reader");
+  }
 
   const decoder = new TextDecoder();
   let buf = "";
@@ -56,7 +58,9 @@ export async function* readSseEvents(res: Response): AsyncIterable<SseEvent> {
   try {
     while (true) {
       const { value, done } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
 
       // Normalize \r\n to \n in the incoming chunk only (avoids O(n) work on entire buffer)
       const chunk = decoder.decode(value, { stream: true });
@@ -69,7 +73,9 @@ export async function* readSseEvents(res: Response): AsyncIterable<SseEvent> {
         buf = buf.slice(idx + 2);
 
         // Skip empty events (multiple blank lines)
-        if (raw.trim().length === 0) continue;
+        if (raw.trim().length === 0) {
+          continue;
+        }
 
         // Parse event and data lines
         let event = "message"; // Default event type

@@ -116,17 +116,22 @@ describe("Billing E2E Stack Test", () => {
     expect(receipt?.provenance).toBe("stream"); // Per UNIFIED_GRAPH_EXECUTOR: all execution flows through streaming
 
     // Query credit_ledger WHERE reference=sourceReference (ledger uses sourceReference as reference)
-    if (!receipt?.sourceReference)
+    if (!receipt?.sourceReference) {
       throw new Error("Receipt missing sourceReference");
+    }
     const ledgerRows = await db.query.creditLedger.findMany({
       where: eq(creditLedger.reference, receipt.sourceReference),
     });
     expect(ledgerRows).toHaveLength(1);
     const ledger = ledgerRows[0];
-    if (!ledger) throw new Error("Ledger row not found");
+    if (!ledger) {
+      throw new Error("Ledger row not found");
+    }
 
     // Assert amount === -chargedCredits using BigInt math
-    if (!receipt?.chargedCredits) throw new Error("Charge receipt not found");
+    if (!receipt?.chargedCredits) {
+      throw new Error("Charge receipt not found");
+    }
     const chargedCredits = receipt.chargedCredits;
     const amount = ledger.amount;
     expect(amount).toBe(-chargedCredits);

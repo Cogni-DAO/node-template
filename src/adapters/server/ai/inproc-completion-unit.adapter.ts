@@ -273,7 +273,9 @@ export class InProcCompletionUnitAdapter {
           sawDone = true;
           break;
       }
-      if (sawDone) break;
+      if (sawDone) {
+        break;
+      }
     }
 
     // Emit usage_report (but NOT done - caller handles that)

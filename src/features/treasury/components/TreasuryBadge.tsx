@@ -25,7 +25,9 @@ import { getDaoTreasuryUrl } from "@/shared/web3";
  */
 function formatBalanceForDisplay(balance: string): string {
   const num = Number.parseFloat(balance);
-  if (Number.isNaN(num)) return "--";
+  if (Number.isNaN(num)) {
+    return "--";
+  }
   return Math.floor(num).toLocaleString("en-US");
 }
 

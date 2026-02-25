@@ -148,13 +148,17 @@ export class TokenBucketRateLimiter {
 export function extractClientIp(request: NextRequest): string {
   // Prefer X-Real-IP (set by Caddy from TCP source, non-spoofable)
   const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
+  if (realIp) {
+    return realIp.trim();
+  }
 
   // Fallback: X-Forwarded-For first IP (for non-Caddy environments)
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
     const firstIp = forwardedFor.split(",")[0]?.trim();
-    if (firstIp) return firstIp;
+    if (firstIp) {
+      return firstIp;
+    }
   }
 
   // Last resort: group all unidentified clients together

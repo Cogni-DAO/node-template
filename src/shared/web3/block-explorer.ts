@@ -36,7 +36,9 @@ export function getAddressExplorerUrl(
   address: string
 ): string | null {
   const base = getBlockExplorerBase(chainId);
-  if (!base) return null;
+  if (!base) {
+    return null;
+  }
   return `${base}/address/${address}`;
 }
 
@@ -52,7 +54,9 @@ export function getTransactionExplorerUrl(
   txHash: string
 ): string | null {
   const base = getBlockExplorerBase(chainId);
-  if (!base) return null;
+  if (!base) {
+    return null;
+  }
   return `${base}/tx/${txHash}`;
 }
 
@@ -78,7 +82,9 @@ function getDaoNetworkId(chainId: number): string | null {
  */
 export function getDaoUrl(chainId: number, address: string): string | null {
   const network = getDaoNetworkId(chainId);
-  if (!network) return null;
+  if (!network) {
+    return null;
+  }
   return `https://app.aragon.org/dao/${network}/${address}`;
 }
 
@@ -95,6 +101,8 @@ export function getDaoTreasuryUrl(
   address: string
 ): string | null {
   const daoUrl = getDaoUrl(chainId, address);
-  if (!daoUrl) return null;
+  if (!daoUrl) {
+    return null;
+  }
   return `${daoUrl}/assets`;
 }

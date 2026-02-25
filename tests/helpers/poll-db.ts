@@ -47,7 +47,9 @@ export async function waitForReceipts(
       .from(chargeReceipts)
       .where(eq(chargeReceipts.billingAccountId, billingAccountId));
 
-    if (rows.length >= minCount) return rows;
+    if (rows.length >= minCount) {
+      return rows;
+    }
 
     await new Promise((r) => setTimeout(r, intervalMs));
   }
@@ -58,7 +60,9 @@ export async function waitForReceipts(
     .from(chargeReceipts)
     .where(eq(chargeReceipts.billingAccountId, billingAccountId));
 
-  if (rows.length >= minCount) return rows;
+  if (rows.length >= minCount) {
+    return rows;
+  }
 
   throw new Error(
     `waitForReceipts: timed out after ${timeoutMs}ms — expected ≥${minCount} receipts for billing account ${billingAccountId}, found ${rows.length}. ` +

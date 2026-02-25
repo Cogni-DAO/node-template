@@ -47,7 +47,9 @@ function norm(path: string): string {
 }
 
 function stripPrefix(path: string, prefix?: string): string {
-  if (!prefix) return path;
+  if (!prefix) {
+    return path;
+  }
   return path.startsWith(prefix) ? path.slice(prefix.length) || "/" : path;
 }
 

@@ -135,7 +135,9 @@ export async function CollectEpochWorkflow(
   });
 
   // If epoch already closed/finalized, skip collection
-  if (epoch.status !== "open") return;
+  if (epoch.status !== "open") {
+    return;
+  }
 
   // 4. Collect from each source, each sourceRef (external namespace), each stream
   for (const [source, sourceConfig] of Object.entries(config.activitySources)) {

@@ -126,7 +126,9 @@ interface KpiBadgeRowProps {
 }
 
 export function KpiBadgeRow({ badges }: KpiBadgeRowProps): ReactElement | null {
-  if (!badges.length) return null;
+  if (!badges.length) {
+    return null;
+  }
 
   return (
     <div className={kpiBadgeRow()}>

@@ -50,8 +50,12 @@ async function drainStream(res: Response) {
   const start = Date.now();
   for await (const e of readSseEvents(res)) {
     events.push(e);
-    if (isFinishEvent(e)) break;
-    if (Date.now() - start > 30_000) throw new Error("Stream timeout 30s");
+    if (isFinishEvent(e)) {
+      break;
+    }
+    if (Date.now() - start > 30_000) {
+      throw new Error("Stream timeout 30s");
+    }
   }
   return events;
 }
@@ -69,7 +73,9 @@ async function pollUntil<T>(
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const val = await fn();
-    if (check(val)) return val;
+    if (check(val)) {
+      return val;
+    }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   return fn(); // final attempt — let assertion fail naturally
@@ -95,7 +101,9 @@ describe("Thread Persistence", () => {
       { id: randomUUID() },
       { balanceCredits: 100_000_000 }
     );
-    if (!user.walletAddress) throw new Error("walletAddress required");
+    if (!user.walletAddress) {
+      throw new Error("walletAddress required");
+    }
 
     const sessionUser: SessionUser = {
       id: user.id,

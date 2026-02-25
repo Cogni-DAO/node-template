@@ -30,7 +30,9 @@ export const MarkdownText = memo(MarkdownTextImpl);
 const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   const { isCopied, copyToClipboard } = useCopyToClipboard();
   const onCopy = () => {
-    if (!code || isCopied) return;
+    if (!code || isCopied) {
+      return;
+    }
     copyToClipboard(code);
   };
 
@@ -55,7 +57,9 @@ const useCopyToClipboard = ({
   const [isCopied, setIsCopied] = useState<boolean>(false);
 
   const copyToClipboard = (value: string) => {
-    if (!value) return;
+    if (!value) {
+      return;
+    }
 
     navigator.clipboard.writeText(value).then(() => {
       setIsCopied(true);

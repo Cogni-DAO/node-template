@@ -37,7 +37,9 @@ function parsePrometheusText(text: string): MetricSample[] {
 
   for (const line of lines) {
     // Skip comments and empty lines
-    if (line.startsWith("#") || line.trim() === "") continue;
+    if (line.startsWith("#") || line.trim() === "") {
+      continue;
+    }
 
     // Match: metric_name{label="value",...} value
     // Or: metric_name value
@@ -83,13 +85,17 @@ function findSample(
   labels: Record<string, string>
 ): MetricSample | undefined {
   return samples.find((s) => {
-    if (s.name !== name) return false;
+    if (s.name !== name) {
+      return false;
+    }
     // Filter out default labels when comparing
     const sampleLabelKeys = Object.keys(s.labels).filter(
       (k) => k !== "app" && k !== "env"
     );
     const targetLabelKeys = Object.keys(labels);
-    if (sampleLabelKeys.length !== targetLabelKeys.length) return false;
+    if (sampleLabelKeys.length !== targetLabelKeys.length) {
+      return false;
+    }
     return targetLabelKeys.every((k) => s.labels[k] === labels[k]);
   });
 }
