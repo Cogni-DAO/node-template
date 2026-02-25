@@ -83,12 +83,32 @@ export {
   SelectTrigger,
   SelectValue,
 } from "./vendor/shadcn/select";
+export { Separator } from "./vendor/shadcn/separator";
 export {
   Sheet,
   SheetContent,
   SheetTitle,
   SheetTrigger,
 } from "./vendor/shadcn/sheet";
+export {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarSeparator,
+  SidebarTrigger,
+  useSidebar,
+} from "./vendor/shadcn/sidebar";
+export { Skeleton } from "./vendor/shadcn/skeleton";
 export {
   Table,
   TableBody,

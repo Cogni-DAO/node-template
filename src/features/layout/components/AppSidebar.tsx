@@ -38,7 +38,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
   SidebarSeparator,
-} from "@/components/vendor/shadcn/sidebar";
+} from "@/components";
 import { useChatSidebarStore } from "@/features/ai/chat/components/ChatSidebarContext";
 import { ChatThreadsSidebarGroup } from "@/features/ai/chat/components/ChatThreadsSidebarGroup";
 

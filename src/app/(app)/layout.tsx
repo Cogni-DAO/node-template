@@ -19,12 +19,8 @@ import { useSession } from "next-auth/react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/vendor/shadcn/sidebar";
-import { AppSidebar } from "@/features/layout/components/AppSidebar";
-import { AppTopBar } from "@/features/layout/components/AppTopBar";
+import { SidebarInset, SidebarProvider } from "@/components";
+import { AppSidebar, AppTopBar } from "@/features/layout";
 
 export default function AppLayout({
   children,

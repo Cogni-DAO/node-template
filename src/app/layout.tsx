@@ -21,8 +21,6 @@ import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 
-import { AppHeader } from "@/features/layout";
-
 import { AppProviders } from "./providers/app-providers.client";
 
 const manrope = Manrope({
@@ -52,8 +50,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AppProviders>
-            <AppHeader />
-            <main id="main">{children}</main>
+            <div id="main">{children}</div>
           </AppProviders>
         </ThemeProvider>
       </body>
