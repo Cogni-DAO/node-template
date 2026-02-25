@@ -3,11 +3,11 @@
 
 /**
  * Module: `@features/layout/components/AppSidebar`
- * Purpose: Cogni-specific sidebar composition with nav items, external links, and chat threads.
+ * Purpose: Cogni-specific sidebar composition with nav items, collapsible chat threads, and external links.
  * Scope: Composes vendor Sidebar primitives into the app sidebar. Does not handle authentication or data fetching.
- * Invariants: Nav items are static; chat threads group conditionally rendered on /chat routes.
+ * Invariants: Nav items are static; chat threads always visible as collapsible menu item.
  * Side-effects: none
- * Links: src/components/vendor/shadcn/sidebar.tsx, src/features/ai/chat/components/ChatSidebarContext.tsx
+ * Links: src/components/vendor/shadcn/sidebar.tsx, src/features/ai/chat/components/ChatThreadsSidebarGroup.tsx
  * @public
  */
 
@@ -19,7 +19,6 @@ import {
   CreditCard,
   ExternalLink,
   Github,
-  MessageSquare,
   Vote,
 } from "lucide-react";
 import Image from "next/image";
@@ -39,11 +38,9 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from "@/components";
-import { useChatSidebarStore } from "@/features/ai/chat/components/ChatSidebarContext";
 import { ChatThreadsSidebarGroup } from "@/features/ai/chat/components/ChatThreadsSidebarGroup";
 
 const NAV_ITEMS = [
-  { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/work", label: "Work", icon: Briefcase },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/gov", label: "Gov", icon: Vote },
@@ -79,8 +76,6 @@ function DiscordIcon({ className }: { className?: string }): ReactElement {
 
 export function AppSidebar(): ReactElement {
   const pathname = usePathname();
-  const isChat = pathname.startsWith("/chat");
-  const chatStore = useChatSidebarStore();
 
   return (
     <Sidebar collapsible="icon">
@@ -88,7 +83,7 @@ export function AppSidebar(): ReactElement {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="Cogni">
-              <Link href="/">
+              <Link href="/chat">
                 <div className="flex aspect-square size-8 items-center justify-center">
                   <Image
                     src="/TransparentBrainOnly.png"
@@ -128,24 +123,11 @@ export function AppSidebar(): ReactElement {
                 </SidebarMenuItem>
               );
             })}
+
+            {/* Collapsible Threads — last item so it can expand downward */}
+            <ChatThreadsSidebarGroup />
           </SidebarMenu>
         </SidebarGroup>
-
-        {isChat &&
-          chatStore.onSelectThread &&
-          chatStore.onNewThread &&
-          chatStore.onDeleteThread && (
-            <>
-              <SidebarSeparator />
-              <ChatThreadsSidebarGroup
-                threads={chatStore.threads}
-                activeThreadKey={chatStore.activeThreadKey}
-                onSelectThread={chatStore.onSelectThread}
-                onNewThread={chatStore.onNewThread}
-                onDeleteThread={chatStore.onDeleteThread}
-              />
-            </>
-          )}
       </SidebarContent>
 
       <SidebarFooter>

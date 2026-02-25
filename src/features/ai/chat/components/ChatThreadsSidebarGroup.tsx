@@ -3,88 +3,128 @@
 
 /**
  * Module: `@features/ai/chat/components/ChatThreadsSidebarGroup`
- * Purpose: Sidebar group rendering chat thread history with new/select/delete actions.
- * Scope: Renders thread list as SidebarGroup sub-components. Does not manage thread state or fetch data.
- * Invariants: Uses ThreadSummary from ai.threads.v1 contract; all callbacks required.
- * Side-effects: none
+ * Purpose: Collapsible "Threads" menu item in the global sidebar with thread sub-items.
+ * Scope: Fetches thread list via useThreads, renders as collapsible SidebarMenuItem. Does not manage chat runtime state.
+ * Invariants: Uses ThreadSummary from ai.threads.v1 contract; navigates to /chat on thread click when off-page.
+ * Side-effects: IO (thread list fetch via React Query)
  * Links: src/features/ai/chat/components/ChatSidebarContext.tsx, src/contracts/ai.threads.v1.contract.ts
  * @public
  */
 
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
-import type { ReactElement } from "react";
+import { ChevronDown, MessageSquare, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { type ReactElement, useState } from "react";
 
 import {
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarMenu,
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components";
-import type { ThreadSummary } from "@/contracts/ai.threads.v1.contract";
 import { cn } from "@/shared/util/cn";
+import { useDeleteThread, useThreads } from "../hooks/useThreads";
+import { useChatSidebarStore } from "./ChatSidebarContext";
 
-interface ChatThreadsSidebarGroupProps {
-  threads: ThreadSummary[];
-  activeThreadKey: string | null;
-  onSelectThread: (key: string) => void;
-  onNewThread: () => void;
-  onDeleteThread: (key: string) => void;
-}
+export function ChatThreadsSidebarGroup(): ReactElement {
+  const pathname = usePathname();
+  const isChat = pathname.startsWith("/chat");
+  const [open, setOpen] = useState(isChat);
 
-export function ChatThreadsSidebarGroup({
-  threads,
-  activeThreadKey,
-  onSelectThread,
-  onNewThread,
-  onDeleteThread,
-}: ChatThreadsSidebarGroupProps): ReactElement {
+  // Fetch threads directly — always available regardless of chat page mount
+  const threadsQuery = useThreads();
+  const threads = threadsQuery.data?.threads ?? [];
+
+  // Read callbacks from Zustand store (only non-null when chat page is mounted)
+  const chatStore = useChatSidebarStore();
+  const deleteThread = useDeleteThread();
+
+  const handleDeleteThread = (key: string) => {
+    if (chatStore.onDeleteThread) {
+      chatStore.onDeleteThread(key);
+    } else {
+      deleteThread.mutate(key);
+    }
+  };
+
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel>
-        <span className="flex-1">Threads</span>
-        <button
-          type="button"
-          onClick={onNewThread}
-          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs hover:bg-accent"
-        >
-          <Plus className="size-3" />
-          New
-        </button>
-      </SidebarGroupLabel>
-      <SidebarMenu>
-        {threads.map((thread) => {
-          const isActive = activeThreadKey === thread.stateKey;
-          return (
-            <SidebarMenuItem key={thread.stateKey}>
-              <SidebarMenuButton
-                isActive={isActive}
-                onClick={() => onSelectThread(thread.stateKey)}
-                tooltip={thread.title ?? "Untitled"}
-                className={cn("text-xs", isActive && "bg-accent")}
-              >
-                <span className="truncate">{thread.title ?? "Untitled"}</span>
-              </SidebarMenuButton>
-              <SidebarMenuAction
-                showOnHover
-                onClick={() => onDeleteThread(thread.stateKey)}
-                aria-label="Delete thread"
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 />
-              </SidebarMenuAction>
-            </SidebarMenuItem>
-          );
-        })}
-        {threads.length === 0 && (
-          <div className="px-3 py-4 text-center text-muted-foreground text-xs">
-            No conversations yet
-          </div>
-        )}
-      </SidebarMenu>
-    </SidebarGroup>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip="Threads"
+        isActive={isChat && !open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <MessageSquare />
+        <span>Threads</span>
+        <ChevronDown
+          className={cn(
+            "ml-auto size-4 transition-transform duration-200",
+            open && "rotate-180"
+          )}
+        />
+      </SidebarMenuButton>
+
+      <SidebarMenuAction
+        onClick={() => {
+          if (chatStore.onNewThread) {
+            chatStore.onNewThread();
+          }
+        }}
+        asChild
+      >
+        <Link href="/chat" aria-label="New thread">
+          <Plus />
+        </Link>
+      </SidebarMenuAction>
+
+      {open && (
+        <SidebarMenuSub>
+          {threads.map((thread) => {
+            const isActive = chatStore.activeThreadKey === thread.stateKey;
+            const title = thread.title ?? "Untitled";
+
+            return (
+              <SidebarMenuSubItem key={thread.stateKey}>
+                <SidebarMenuSubButton
+                  size="sm"
+                  isActive={isActive}
+                  asChild={!isChat || !chatStore.onSelectThread}
+                  onClick={
+                    isChat && chatStore.onSelectThread
+                      ? () => chatStore.onSelectThread?.(thread.stateKey)
+                      : undefined
+                  }
+                >
+                  {isChat && chatStore.onSelectThread ? (
+                    <span className="truncate">{title}</span>
+                  ) : (
+                    <Link href={`/chat?thread=${thread.stateKey}`}>
+                      <span className="truncate">{title}</span>
+                    </Link>
+                  )}
+                </SidebarMenuSubButton>
+                <SidebarMenuAction
+                  showOnHover
+                  onClick={() => handleDeleteThread(thread.stateKey)}
+                  aria-label="Delete thread"
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 />
+                </SidebarMenuAction>
+              </SidebarMenuSubItem>
+            );
+          })}
+          {threads.length === 0 && (
+            <div className="px-3 py-2 text-center text-muted-foreground text-xs">
+              No conversations yet
+            </div>
+          )}
+        </SidebarMenuSub>
+      )}
+    </SidebarMenuItem>
   );
 }
