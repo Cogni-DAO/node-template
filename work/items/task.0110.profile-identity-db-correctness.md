@@ -2,7 +2,7 @@
 id: task.0110
 type: task
 title: "Profile + identity DB correctness: RLS, constraints, type tightening"
-status: needs_merge
+status: done
 priority: 0
 rank: 10
 estimate: 2
