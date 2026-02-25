@@ -3,11 +3,11 @@
 
 /**
  * Module: `@app/(app)/profile/page`
- * Purpose: User profile settings page — display name, avatar color, wallet, and linked OAuth accounts.
- * Scope: Static scaffold (appearance only). Will be wired to /api/v1/users/me in a follow-up.
- * Invariants: Requires authenticated session (enforced by parent layout).
- * Side-effects: none (scaffold)
- * Links: src/contracts/users.profile.v1.contract.ts
+ * Purpose: User profile settings page — display name, avatar color, and linked accounts.
+ * Scope: Client component that reads/updates user profile via /api/v1/users/me. Does not handle OAuth linking flows or session management.
+ * Invariants: Requires authenticated session (enforced by parent layout); avatar color updates reflected in session via update().
+ * Side-effects: IO (fetch API, session update)
+ * Links: src/contracts/users.profile.v1.contract.ts, src/app/api/v1/users/me/route.ts
  * @public
  */
 
