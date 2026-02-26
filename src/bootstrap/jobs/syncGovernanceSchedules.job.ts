@@ -138,12 +138,29 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
             nextRunAt,
           })
           .returning();
-        return row!.id;
+        if (!row) throw new Error("Insert returned no row");
+        return row.id;
       },
       systemUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
       scheduleControl: container.scheduleControl,
       listGovernanceScheduleIds: () =>
         container.scheduleControl.listScheduleIds("governance:"),
+      disableSchedule: async (temporalScheduleId: string) => {
+        // Direct DB update via serviceDb (same pattern as upsertGovernanceScheduleRow).
+        // Cannot use ScheduleUserPort.updateSchedule here because the adapter
+        // passes DB UUID to scheduleControl.pauseSchedule() which expects a
+        // Temporal schedule ID — causing a rollback. The Temporal pause is
+        // already handled by the sync service's prune step.
+        await serviceDb
+          .update(schedules)
+          .set({ enabled: false, nextRunAt: null, updatedAt: new Date() })
+          .where(
+            and(
+              eq(schedules.ownerUserId, COGNI_SYSTEM_PRINCIPAL_USER_ID),
+              eq(schedules.temporalScheduleId, temporalScheduleId)
+            )
+          );
+      },
       log,
     });
 

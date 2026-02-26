@@ -37,10 +37,11 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 | Schema & bootstrap: `is_system_tenant` column, `cogni_system` seed, startup healthcheck, purchase-time revenue share | Done        | 3   | task.0046 |
 | Governance run foundation: repo-spec governance config + system tenant execution grant                               | Done        | 2   | task.0054 |
 | Governance health brief endpoint: app-served metrics/logs for governance agent consumption                           | Todo        | 3   | task.0083 |
+| Direct system account funding: "Keep Cogni Alive" on credits page                                                    | Todo        | 2   | task.0090 |
 | PolicyResolverPort: interface + DrizzlePolicyResolverAdapter with system/customer policies                           | Not Started | 3   | —         |
 | ToolPolicyContext: required tenantId + test escape hatch                                                             | Not Started | 2   | —         |
 | Side-effect tool idempotency: `tool_execution_results` table + adapter check/store                                   | Not Started | 3   | —         |
-| Chores: tenant_id/actor_type in traces, update ACCOUNTS_DESIGN.md                                                    | Not Started | 1   | —         |
+| Chores: tenantId/actor_type in traces, update ACCOUNTS_DESIGN.md                                                     | Not Started | 1   | —         |
 
 #### Schema & Bootstrap
 
@@ -73,7 +74,7 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 
 #### Chores
 
-- [ ] Add `tenant_id`, `actor_type` to traces/logs
+- [ ] Add `tenantId`, `actor_type` to traces/logs
 - [ ] Documentation: update ACCOUNTS_DESIGN.md (done)
 
 ### Walk (P1): Enhanced Policy & Monitoring

@@ -128,7 +128,7 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
         },
         action: {
           type: "startWorkflow",
-          workflowType: SCHEDULED_RUN_WORKFLOW_TYPE,
+          workflowType: params.workflowType ?? SCHEDULED_RUN_WORKFLOW_TYPE,
           // Per WORKFLOW_ID_INCLUDES_TIMESTAMP: workflowId includes schedule time
           // Temporal appends timestamp automatically for scheduled workflows
           workflowId: params.scheduleId,
@@ -143,7 +143,7 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
               input: params.input,
             },
           ],
-          taskQueue: this.config.taskQueue,
+          taskQueue: params.taskQueueOverride ?? this.config.taskQueue,
         },
         policies: {
           overlap: toTemporalOverlapPolicy(params.overlapPolicy),
@@ -231,7 +231,7 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
         },
         action: {
           type: "startWorkflow" as const,
-          workflowType: SCHEDULED_RUN_WORKFLOW_TYPE,
+          workflowType: params.workflowType ?? SCHEDULED_RUN_WORKFLOW_TYPE,
           workflowId: params.scheduleId,
           args: [
             {
@@ -243,7 +243,7 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
               input: params.input,
             },
           ],
-          taskQueue: this.config.taskQueue,
+          taskQueue: params.taskQueueOverride ?? this.config.taskQueue,
         },
         policies: {
           overlap: toTemporalOverlapPolicy(params.overlapPolicy),

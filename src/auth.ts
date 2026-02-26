@@ -5,7 +5,7 @@
  * Module: `@/auth`
  * Purpose: NextAuth.js configuration and export.
  * Scope: App-wide authentication configuration. Does not handle client-side session management.
- * Invariants: Uses SIWE (Sign-In with Ethereum) provider with "credentials" ID; returns DB UUID as user ID.
+ * Invariants: SIWE + OAuth resolve to canonical user_id via user_bindings ; NO_AUTO_MERGE enforced on link-intent conflicts ; atomic new-user tx (user + binding + event)
  * Side-effects: IO
  * Notes: Handles session creation, validation, and persistence.
  * Links: docs/spec/authentication.md
@@ -16,14 +16,24 @@
 
 import nodeCrypto, { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Discord from "next-auth/providers/discord";
+import GitHub from "next-auth/providers/github";
+import Google from "next-auth/providers/google";
 import { getCsrfToken } from "next-auth/react";
 import { SiweMessage } from "siwe";
 
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
-import { users } from "@/shared/db/schema";
+import { createBinding } from "@/adapters/server/identity/create-binding";
+import { linkIntentStore } from "@/shared/auth/link-intent-store";
+import {
+  identityEvents,
+  userBindings,
+  userProfiles,
+  users,
+} from "@/shared/db/schema";
 import { makeLogger } from "@/shared/observability";
 
 export const authSecret =
@@ -131,21 +141,49 @@ export const authOptions: NextAuthOptions = {
 
           if (!user) {
             // Create new user if not exists
+            const newUserId = randomUUID();
             const [newUser] = await db
               .insert(users)
               .values({
-                // Generate ID manually since it's not auto-generated in schema
-                id: randomUUID(),
+                id: newUserId,
                 walletAddress: fields.address,
-                // role: "user", // Removed as it might not be in schema, relying on default
               })
               .returning();
             user = newUser;
+
+            // Create empty profile row for new user
+            if (user) {
+              try {
+                await db
+                  .insert(userProfiles)
+                  .values({ userId: user.id })
+                  .onConflictDoNothing();
+              } catch {
+                getLog().warn(
+                  { userId: user.id },
+                  "[SIWE] Profile row creation failed — non-critical"
+                );
+              }
+            }
           }
 
           if (!user) {
             getLog().error("[SIWE] Failed to create or retrieve user");
             return null;
+          }
+
+          // Record wallet binding (idempotent — skips if already bound).
+          // Failure must not block login — binding is supplementary, not auth-critical.
+          try {
+            await createBinding(db, user.id, "wallet", fields.address, {
+              method: "siwe",
+              domain: nextAuthUrl.host,
+            });
+          } catch (bindingError) {
+            getLog().warn(
+              { error: bindingError, address: fields.address },
+              "[SIWE] Binding insert failed — login continues"
+            );
           }
 
           getLog().info({ address: fields.address }, "[SIWE] Login success");
@@ -161,19 +199,245 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
+    // Only register OAuth providers when credentials are configured
+    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+      ? [
+          GitHub({
+            clientId: process.env.GITHUB_CLIENT_ID,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET,
+          }),
+        ]
+      : []),
+    ...(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET
+      ? [
+          Discord({
+            clientId: process.env.DISCORD_CLIENT_ID,
+            clientSecret: process.env.DISCORD_CLIENT_SECRET,
+          }),
+        ]
+      : []),
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          }),
+        ]
+      : []),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn({ user, account, profile }) {
+      // SIWE (Credentials) flow: user already resolved in authorize(), pass through
+      if (!account || account.provider === "credentials") return true;
+
+      // Only handle known OAuth providers
+      const KNOWN_OAUTH = new Set(["github", "discord", "google"]);
+      if (!KNOWN_OAUTH.has(account.provider)) return false;
+
+      const db = getServiceDb();
+      const provider = account.provider as "github" | "discord" | "google";
+      const externalId = account.providerAccountId;
+
+      // Lookup existing binding
+      const existing = await db.query.userBindings.findFirst({
+        where: and(
+          eq(userBindings.provider, provider),
+          eq(userBindings.externalId, externalId)
+        ),
+      });
+
+      // Check for link intent BEFORE returning-user shortcut.
+      // If a link intent is active, the caller is trying to bind this external
+      // account to their existing user — we must NOT silently log them in as
+      // the binding owner if it's a different user.
+      const linkIntent = linkIntentStore.getStore();
+
+      // Extract provider login from OAuth profile
+      const profileData = profile as Record<string, unknown> | undefined;
+      const oauthLogin =
+        (profileData?.login as string | undefined) ??
+        (profileData?.username as string | undefined) ??
+        null;
+
+      if (existing) {
+        // Update provider login on existing binding
+        if (oauthLogin) {
+          try {
+            await db
+              .update(userBindings)
+              .set({ providerLogin: oauthLogin })
+              .where(eq(userBindings.id, existing.id));
+          } catch {
+            // Non-critical metadata update
+          }
+        }
+
+        if (linkIntent) {
+          if (existing.userId === linkIntent.userId) {
+            // Idempotent — already linked to this user
+            user.id = linkIntent.userId;
+            return true;
+          }
+          // Different user owns this binding — NO_AUTO_MERGE
+          getLog().warn(
+            { provider, externalId },
+            "[OAuth] Link rejected — binding owned by different user"
+          );
+          return false;
+        }
+        // Returning user (no link intent) — set user.id so jwt callback picks it up
+        user.id = existing.userId;
+        return true;
+      }
+
+      if (linkIntent) {
+        await createBinding(db, linkIntent.userId, provider, externalId, {
+          method: "oauth_link",
+          login: profileData?.login ?? profileData?.username ?? null,
+          name: profileData?.name ?? null,
+        });
+
+        user.id = linkIntent.userId;
+        // Preserve walletAddress in the session
+        const existingUser = await db.query.users.findFirst({
+          where: eq(users.id, linkIntent.userId),
+        });
+        (user as { walletAddress?: string | null }).walletAddress =
+          existingUser?.walletAddress ?? null;
+        getLog().info(
+          { provider, userId: linkIntent.userId },
+          "[OAuth] Account linked"
+        );
+        return true;
+      }
+
+      // New user — single transaction (user + binding + profile + event atomically).
+      // If the binding insert is skipped (concurrent first-login race), the
+      // transaction rolls back so no orphaned user row is committed.
+      const BINDING_RACE = "BINDING_RACE";
+      const userId = randomUUID();
+      const bindingId = randomUUID();
+      const eventId = randomUUID();
+
+      try {
+        await db.transaction(async (tx) => {
+          await tx.insert(users).values({
+            id: userId,
+            name: (profileData?.name as string | null | undefined) ?? null,
+            walletAddress: null,
+          });
+          const [inserted] = await tx
+            .insert(userBindings)
+            .values({
+              id: bindingId,
+              userId,
+              provider,
+              externalId,
+              providerLogin: oauthLogin,
+            })
+            .onConflictDoNothing({
+              target: [userBindings.provider, userBindings.externalId],
+            })
+            .returning({ id: userBindings.id });
+          if (!inserted) {
+            // Another request won the race — roll back (no orphaned user)
+            throw new Error(BINDING_RACE);
+          }
+          await tx.insert(identityEvents).values({
+            id: eventId,
+            userId,
+            eventType: "bind",
+            payload: {
+              provider,
+              external_id: externalId,
+              method: "oauth",
+              login: oauthLogin,
+            },
+          });
+          // Create empty profile row
+          await tx
+            .insert(userProfiles)
+            .values({ userId })
+            .onConflictDoNothing();
+        });
+      } catch (txError) {
+        if (!(txError instanceof Error) || txError.message !== BINDING_RACE) {
+          throw txError;
+        }
+        // Race lost — re-fetch the winning binding and use that user
+        const winner = await db.query.userBindings.findFirst({
+          where: and(
+            eq(userBindings.provider, provider),
+            eq(userBindings.externalId, externalId)
+          ),
+        });
+        if (winner) {
+          user.id = winner.userId;
+          (user as { walletAddress?: string | null }).walletAddress = null;
+          getLog().info(
+            { provider, externalId },
+            "[OAuth] Race resolved — using existing user"
+          );
+          return true;
+        }
+        getLog().error(
+          { provider, externalId },
+          "[OAuth] Binding race: no winner found"
+        );
+        return false;
+      }
+
+      user.id = userId;
+      (user as { walletAddress?: string | null }).walletAddress = null;
+      getLog().info({ provider, externalId }, "[OAuth] New user created");
+      return true;
+    },
+    /** Redirect authenticated users to /chat instead of landing on homepage */
+    redirect({ url, baseUrl }) {
+      // Default post-sign-in lands on "/"; send to /chat instead
+      if (url === baseUrl || url === `${baseUrl}/`) {
+        return `${baseUrl}/chat`;
+      }
+      // Allow relative URLs
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // Allow same-origin URLs
+      if (url.startsWith(baseUrl)) return url;
+      return baseUrl;
+    },
+    async jwt({ token, user, trigger }) {
+      // ALWAYS explicitly set — NextAuth does not auto-forward custom fields
       if (user) {
         token.id = user.id;
-        token.walletAddress = user.walletAddress ?? null;
+        token.walletAddress =
+          (user as { walletAddress?: string | null }).walletAddress ?? null;
+      }
+
+      // Load profile into token on initial sign-in or explicit update()
+      if (user || trigger === "update") {
+        try {
+          const db = getServiceDb();
+          const userId = (token.id as string) ?? user?.id;
+          if (userId) {
+            const profile = await db.query.userProfiles.findFirst({
+              where: eq(userProfiles.userId, userId),
+            });
+            token.displayName = profile?.displayName ?? null;
+            token.avatarColor = profile?.avatarColor ?? null;
+          }
+        } catch {
+          // Non-critical — profile fields stay null
+        }
       }
       return token;
     },
     async session({ session, token }) {
+      // ALWAYS explicitly set — NextAuth does not auto-forward custom fields
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.walletAddress = token.walletAddress as string | null;
+        session.user.walletAddress =
+          (token.walletAddress as string | null) ?? null;
+        session.user.displayName = (token.displayName as string | null) ?? null;
+        session.user.avatarColor = (token.avatarColor as string | null) ?? null;
       }
       return session;
     },

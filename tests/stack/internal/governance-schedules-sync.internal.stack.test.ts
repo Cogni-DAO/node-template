@@ -117,18 +117,12 @@ describe("[internal] POST /api/internal/ops/governance/schedules/sync", () => {
     expect(grants[0]?.billingAccountId).toBe(COGNI_SYSTEM_BILLING_ACCOUNT_ID);
     expect(grants[0]?.scopes).toContain("graph:execute:sandbox:openclaw");
 
+    // Use getHandle directly — schedule.list() has eventual consistency
+    // and may not reflect a just-created schedule immediately
     const client = await getTestTemporalClient();
-    const governanceSchedules: string[] = [];
-    for await (const summary of client.schedule.list()) {
-      if (summary.scheduleId.startsWith("governance:")) {
-        governanceSchedules.push(summary.scheduleId);
-        createdScheduleIds.push(summary.scheduleId);
-      }
-    }
-
-    expect(governanceSchedules).toContain("governance:community");
-    expect(governanceSchedules).toContain("governance:engineering");
-    expect(governanceSchedules).toContain("governance:sustainability");
-    expect(governanceSchedules).toContain("governance:govern");
+    const handle = client.schedule.getHandle("governance:heartbeat");
+    const desc = await handle.describe();
+    expect(desc).toBeDefined();
+    createdScheduleIds.push("governance:heartbeat");
   });
 });

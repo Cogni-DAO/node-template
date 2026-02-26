@@ -26,6 +26,7 @@ interface RepoSpecModule {
 }
 
 const ORIGINAL_CWD = process.cwd();
+const TEST_NODE_ID = "00000000-0000-4000-8000-000000000001";
 
 function writeRepoSpec(yaml: string): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "repo-spec-"));
@@ -49,6 +50,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("returns mapped inbound payment config for a valid repo-spec", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -76,6 +78,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("throws on missing or non-numeric chain_id", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         "  chain_id: not-a-number",
         "payments_in:",
@@ -97,6 +100,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("throws when chain_id does not match CHAIN_ID", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID + 1}"`,
         "payments_in:",
@@ -118,6 +122,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("throws on invalid receiving_address shape", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -139,6 +144,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("throws when provider is missing or empty", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -160,6 +166,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("accepts chain_id as a number (not just string)", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: ${CHAIN_ID}`,
         "payments_in:",
@@ -183,6 +190,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("throws on invalid EVM address format (schema validation)", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -204,6 +212,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("accepts any string values for allowed_chains (informational metadata)", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -231,6 +240,7 @@ describe("getPaymentConfig (repo-spec)", () => {
   it("throws when payments_in.credits_topup is missing", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:", // missing credits_topup
@@ -249,6 +259,7 @@ describe("getPaymentConfig (repo-spec)", () => {
 
 /** Minimal valid base YAML for governance tests (cogni_dao + payments_in required by schema) */
 const BASE_YAML = [
+  `node_id: "${TEST_NODE_ID}"`,
   "cogni_dao:",
   `  chain_id: "${CHAIN_ID}"`,
   "payments_in:",

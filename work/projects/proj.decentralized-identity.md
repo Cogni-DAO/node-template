@@ -2,115 +2,134 @@
 id: proj.decentralized-identity
 type: project
 primary_charter:
-title: Decentralized Identity — DID-First Members with Verifiable Credentials
+title: User Identity Bindings + DID Readiness
 state: Active
 priority: 1
 estimate: 4
-summary: Replace wallet-address-as-identity with did:pkh canonical identifiers and represent account links as Verifiable Credentials, enabling federation without database integration.
-outcome: Members identified by DIDs internally, account links are portable VC artifacts, verification uses PEX semantics, and DID ops are behind a method-agnostic port.
+summary: Unify Discord + GitHub + wallet under a single user_id (UUID). Ledger, receipts, and attribution reference user_id — never wallet. "Contributor" is a derived label, not an identity primitive. DID/VC portability deferred to P2.
+outcome: Users identified by stable UUID regardless of auth method; wallet/Discord/GitHub are evidenced bindings; ledger events reference user_id; DID compatibility layer available when cross-node portability is needed.
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-02-18
-labels: [identity, web3, ssi]
+updated: 2026-02-26
+labels: [identity, auth, web3, ssi]
 ---
 
-# Decentralized Identity — DID-First Members with Verifiable Credentials
+# User Identity Bindings + DID Readiness
 
 ## Goal
 
-Make Cogni's identity layer speak decentralized identity standards natively. Members are identified by `did:pkh` DIDs (derived from SIWE wallets), external account links (Discord, GitHub) are stored as Verifiable Credentials instead of ad-hoc rows, and proof requests use Presentation Exchange semantics. This preserves existing SIWE auth while enabling future federation — other nodes accept credentials rather than integrate our database schema.
+Provide a stable, auth-method-agnostic identity for every user. The canonical identifier is `user_id` (UUID, = `users.id`) — not a wallet address, not a DID. Wallet, Discord, and GitHub accounts are evidenced bindings attached to the user, never the identity itself. "Contributor" is a derived label (user has eligible contribution events), not a separate identity primitive. This unblocks the ledger (proj.transparent-credit-payouts) to reference users deterministically. DID/VC standards are adopted later as a portability layer, not as the foundation.
 
 ## Roadmap
 
-### Crawl (P0) — DID Foundation
+### Crawl (P0) — User Identity + Bindings
 
-**Goal:** Ship `did:pkh` as canonical identifier with dual-write migration and session integration.
+**Goal:** Unify Discord + GitHub + optional wallet under `users.id`. Ledger can attribute work and spend to a user.
 
-| Deliverable                                                      | Status      | Est | Work Item  |
-| ---------------------------------------------------------------- | ----------- | --- | ---------- |
-| Research spike: gap analysis + design doc                        | Done        | 2   | spike.0080 |
-| DID derivation utility + DB migration + backfill                 | Not Started | 2   | —          |
-| SessionUser DID integration (JWT, session types, auth callbacks) | Not Started | 1   | —          |
-| Switch internal reads to DID (RBAC actor type, user context)     | Not Started | 2   | —          |
+| Deliverable                                                                           | Status      | Est | Work Item  |
+| ------------------------------------------------------------------------------------- | ----------- | --- | ---------- |
+| Research spike: gap analysis + design doc                                             | Done        | 2   | spike.0080 |
+| `user_bindings` table + `identity_events` audit trail                                 | In Review   | 2   | task.0089  |
+| Multi-provider auth: GitHub + Discord + Google OAuth on NextAuth v4 via user_bindings | In Review   | 3   | task.0107  |
+| Backfill: existing `users.wallet_address` → `user_bindings`                           | In Review   | 1   | task.0089  |
+| Profile + identity DB correctness: RLS, constraints, type tightening                  | In Review   | 2   | task.0110  |
+| Auth UX: /sign-in page, middleware guards, account linking buttons, profile polish    | Not Started | 3   | task.0111  |
+| SIWE zero-flash: immediate post-sign navigation                                       | Not Started | 1   | task.0112  |
 
-### Walk (P1) — Verifiable Credentials for Account Links
+**Exit criteria:** You can attribute work + messages to a user, deterministically, with `user_id` as the single stable ID that the ledger references.
 
-**Goal:** Discord and GitHub account links are VC-shaped artifacts with issuance, evidence, and revocation. PEX verification interface exists.
+### Walk (P1) — Account Linking Hardening
 
-| Deliverable                                                     | Status      | Est | Work Item            |
-| --------------------------------------------------------------- | ----------- | --- | -------------------- |
-| VC data model for account link credentials (Discord, GitHub)    | Not Started | 2   | (create at P1 start) |
-| Credential issuance flow (Discord bot challenge, GitHub gist)   | Not Started | 3   | (create at P1 start) |
-| Credential revocation (append-only, status-based)               | Not Started | 2   | (create at P1 start) |
-| PEX verification interface (Presentation Definition/Submission) | Not Started | 2   | (create at P1 start) |
-| Identity event ledger (append-only state transitions)           | Not Started | 2   | (create at P1 start) |
+**Goal:** Conflict resolution, merge workflows, and admin tooling for identity bindings. Discord attribution (task.0077) ships `discord_user_id` in billing metadata.
 
-### Run (P2+) — Federation Readiness
+**Prerequisite:** task.0077 (Discord attribution + spend guard) must ship first.
 
-**Goal:** Identity layer supports multiple DID methods and cross-node credential acceptance.
+| Deliverable                                               | Status      | Est | Work Item            |
+| --------------------------------------------------------- | ----------- | --- | -------------------- |
+| Merge workflow: resolve conflicting bindings with proof   | Not Started | 2   | (create at P1 start) |
+| Admin tooling: binding review + conflict queue            | Not Started | 2   | (create at P1 start) |
+| Revocation flow (append-only status change, never delete) | Not Started | 1   | (create at P1 start) |
+| Discord → user_id mapping for credit-gated billing        | Not Started | 2   | (create at P1 start) |
 
-| Deliverable                                                     | Status      | Est | Work Item            |
-| --------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Additional DID method support via Registration port             | Not Started | 2   | (create at P2 start) |
-| Credential export (user can take their VCs elsewhere)           | Not Started | 2   | (create at P2 start) |
-| Multi-issuer trust policy (accept credentials from other nodes) | Not Started | 3   | (create at P2 start) |
-| DIDComm evaluation for private inter-node channels              | Not Started | 1   | (create at P2 start) |
+### Run (P2+) — DID/VC Compatibility Layer
+
+**Goal:** Add standards-based artifacts without changing ledger semantics. Adopt when cross-node portability is actually needed.
+
+| Deliverable                                                      | Status      | Est | Work Item            |
+| ---------------------------------------------------------------- | ----------- | --- | -------------------- |
+| `subject_did` column (did:key) as optional alias on users        | Not Started | 2   | (create at P2 start) |
+| `did:pkh` for wallets where wallet binding exists                | Not Started | 1   | (create at P2 start) |
+| Represent bindings as VC-shaped artifacts (JWT VC, store+export) | Not Started | 2   | (create at P2 start) |
+| PEX verification semantics for federation                        | Not Started | 2   | (create at P2 start) |
+| Multi-issuer trust policy (accept credentials from other nodes)  | Not Started | 3   | (create at P2 start) |
+| DIDComm evaluation for private inter-node channels               | Not Started | 1   | (create at P2 start) |
 
 ## Constraints
 
 - SIWE authentication must continue working uninterrupted throughout all phases
 - No blockchain DID registry, Sidetree network, or DIDComm required for P0/P1
 - No on-chain reputation tokens or cred contracts in scope
-- JWT VC format preferred over JSON-LD for simplicity in v0 (revisit at P2)
 - Discord identifiers must use immutable numeric IDs, never usernames
 - All identity state transitions must be append-only; current state is derived
-- Linking flows must be idempotent (retries don't mint duplicate credentials)
+- Binding flows must be idempotent (retries don't create duplicate bindings)
 - Raw external identifiers are private by default; not exposed publicly
+- Ledger (receipts, epochs, payout statements) references `user_id` — never wallet address or DID directly
 
 ## Dependencies
 
 - [x] spike.0080 — design doc landed ([research doc](../../docs/research/did-first-identity-refactor.md))
 - [ ] Existing SIWE auth stable (authentication spec — no breaking changes in flight)
-- [ ] RBAC actor type `user:{walletAddress}` migration coordinated (see rbac spec)
-- [ ] User context spec's `opaqueId` derivation aligned with DID (user-context spec)
+- [ ] task.0077 (Discord attribution + spend guard) — ships `discord_user_id` in billing metadata, which P1 maps to user_id for credit-gated billing
 
 ## Impacted Specs (Must Update)
 
 These existing specs reference wallet address as identity and will need updates as implementation lands:
 
-- [authentication.md](../../docs/spec/authentication.md) — `SIWE_CANONICAL_IDENTITY` invariant (wallet address → DID)
+- [authentication.md](../../docs/spec/authentication.md) — SIWE session identity
 - [security-auth.md](../../docs/spec/security-auth.md) — auth surface identity resolution
-- [accounts-design.md](../../docs/spec/accounts-design.md) — `ONE_USER_ONE_BILLING_ACCOUNT` mapping (user.id → DID)
-- [rbac.md](../../docs/spec/rbac.md) — actor type `user:{walletAddress}` → `user:{did}`
-- [user-context.md](../../docs/spec/user-context.md) — `opaqueId` derivation from DID
+- [accounts-design.md](../../docs/spec/accounts-design.md) — `ONE_USER_ONE_BILLING_ACCOUNT` mapping
+- [rbac.md](../../docs/spec/rbac.md) — actor type `user:{walletAddress}` → `user:{userId}`
+- [user-context.md](../../docs/spec/user-context.md) — `opaqueId` derivation from user_id
 - [billing-ingest.md](../../docs/spec/billing-ingest.md) — billing identity references
+
+## Consumer: Transparent Credit Payouts
+
+[proj.transparent-credit-payouts](./proj.transparent-credit-payouts.md) depends on stable user identity:
+
+- `activity_events.user_id` references `users.id` (resolved via `user_bindings`)
+- `epoch_allocations` and `payout_statements` keyed by `user_id`
+- Identity merges must not rewrite receipt history — new events only
 
 ## As-Built Specs
 
-- (none yet — specs created when code merges)
+- [decentralized-identity](../../docs/spec/decentralized-identity.md) — user_bindings + identity_events schema, invariants, auth flow
+- [authentication](../../docs/spec/authentication.md) — multi-provider auth (SIWE + OAuth), account linking, wallet-session coherence
 
 ## Design Notes
 
-### Standards Alignment (DIF/SSI)
+### Why user_id (UUID) instead of DID at P0?
 
-The project adopts four DIF primitives without inventing new protocols:
+1. **DID requires crypto dependencies** (ed25519, multicodec, base58btc) that add complexity with zero user-facing value until federation
+2. **Ledger correctness doesn't need DIDs** — it needs stable, unique user IDs. UUID does this.
+3. **Discord-first and GitHub-first users** don't have wallets, so `did:pkh` is a dead end as canonical ID
+4. **DID is a portability concern**, not an identity correctness concern. Portability matters when federating; correctness matters now.
 
-1. **did:pkh** — deterministic DID from wallet chain + address. No registry needed.
-2. **Verifiable Credentials (VC data model)** — account links as signed, revocable credential artifacts.
-3. **Presentation Exchange (PEX)** — verifier expresses requirements as Presentation Definition; holder responds with Presentation Submission. Transport-agnostic.
-4. **DID Registration** — internal port for create/update/deactivate/resolve. Method-agnostic from day one.
+### Why user_id not contributor_id?
 
-### What We Explicitly Defer
+"User" is the stable concept — accounts, billing, sessions, permissions all reference users. "Contributor" is contextual and mutable (a user can exist without contributing). Naming the canonical ID `contributor_id` would leak domain assumptions into every table and API. "Contributor" belongs as a derived label: `is_contributor` if user has eligible contribution events in an epoch.
 
-- DIDComm — useful for private agent-to-agent comms, not needed for identity standardization
-- Trust registry machinery — issuer = "our system" until we actually federate
-- On-chain reputation/cred tokens — orthogonal to identity primitives
+### DID Readiness (kept from spike.0080)
 
-### Key Design Decisions (Resolved — spike.0080)
+The spike research remains valid — just deferred to P2. Key decisions preserved:
 
+- **Subject DID**: `did:key` from ed25519 keypair. Auth-method-agnostic. Will be added as optional alias on `users` table.
+- **Wallet DID**: `did:pkh` is a _linked_ identifier, not the subject. Deterministic from chain + address.
 - **VC format**: JWT VC via `did-jwt-vc`. Simpler than JSON-LD, W3C-compliant, upgrade path exists.
-- **VC signing**: System-issued VCs use ES256K server-side signer (`did:key`). EIP-712 wallet signing deferred to P2+ (user-signed credentials).
-- **DID derivation**: Hand-rolled `walletToDid()` utility (string concat). `did-resolver` + `pkh-did-resolver` added at Phase 2.
-- **Chain ID**: Read from SIWE message payload — never default to `1`.
-- **Migration strategy**: dual-write → switch reads → deprecate legacy (standard 3-phase).
-- **Phase 2 scope**: VC tables/endpoints designed when account linking actually ships (proj.messenger-channels), not pre-designed.
+- **No auto-merge**: DB-level unique constraint on bindings prevents silent re-pointing. Same invariant, UUID-based instead of DID-based.
+
+### Critical Invariants
+
+- **I-USER-ID**: Every user has `users.id` (UUID) as canonical identifier. Wallets, Discord, GitHub are bindings — never the identity itself.
+- **I-NO-AUTO-MERGE**: If a binding is already attached to a different user, require explicit merge with proofs. Never silently re-point. DB-enforced via `UNIQUE(provider, external_id)`.
+- **I-BINDINGS-ARE-EVIDENCED**: Every binding has proof recorded in `identity_events.payload`. Bindings table is current-state index only.
+- **I-LEDGER-REFERENCES-USER-ID**: Receipts and payout events reference `user_id`, never wallet address or DID.

@@ -1,13 +1,5 @@
 {
-  "mcpServers": {
-    "grafana": {
-      "command": "bash",
-      "args": [
-        "-lc",
-        "set -euo pipefail; set -a; test -f .env.local && source .env.local; set +a; docker rm -f mcp-grafana >/dev/null 2>&1 || true; exec docker run --name mcp-grafana --rm --init -i -e GRAFANA_URL -e GRAFANA_SERVICE_ACCOUNT_TOKEN mcp/grafana -t stdio"
-      ]
-    }
-  },
+  "mcpServers": {},
   "_disabledMcpServers": {
     "shadcn": {
       "command": "npx",

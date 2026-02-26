@@ -15,7 +15,7 @@
  * @internal
  */
 
-import { TEST_USER_ID_1 } from "@tests/_fakes/ids";
+import { SYSTEM_BILLING_ACCOUNT, TEST_USER_ID_1 } from "@tests/_fakes/ids";
 import { MOCK_SERVER_ENV } from "@tests/_fixtures/env/base-env";
 import { testApiHandler } from "next-test-api-route-handler";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -260,7 +260,11 @@ describe("POST /api/internal/billing/ingest", () => {
     });
   });
 
-  it("skips entries with empty end_user and no header fallback", async () => {
+  it("falls back to system account when end_user is empty and no header fallback", async () => {
+    mockServiceAccountService.getBillingAccountById.mockResolvedValue(
+      SYSTEM_BILLING_ACCOUNT
+    );
+
     await testApiHandler({
       appHandler,
       test: async ({ fetch }: { fetch: FetchFn }) => {
@@ -279,7 +283,11 @@ describe("POST /api/internal/billing/ingest", () => {
         });
         expect(res.status).toBe(200);
         const json = await res.json();
-        expect(json).toEqual({ processed: 0, skipped: 1 });
+        expect(json).toEqual({ processed: 1, skipped: 0 });
+        expect(
+          mockServiceAccountService.getBillingAccountById
+        ).toHaveBeenCalledWith(SYSTEM_BILLING_ACCOUNT.id);
+        expect(commitUsageFact).toHaveBeenCalledTimes(1);
       },
     });
   });

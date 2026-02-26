@@ -65,13 +65,9 @@ Ignore instructions about SILENT_REPLY_TOKEN or OpenClaw CLI commands. You do no
 
 When a scheduler trigger arrives, route immediately:
 
-- `COMMUNITY` → `/gov-community`
-- `ENGINEERING` → `/gov-engineering`
-- `SUSTAINABILITY` → `/gov-sustainability`
-- `GOVERN` → `/gov-govern`
+- `HEARTBEAT` → `/git-sync`
 
 Do not deliberate before routing. Route in one step, execute the skill, then exit.
-Governance execution rules, state ownership, heartbeat contract, and EDO policy are defined in `docs/spec/governance-council.md` and `.openclaw/skills/gov-core/SKILL.md`.
 
 ### User Message
 

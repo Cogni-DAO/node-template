@@ -52,6 +52,7 @@ function makeMockDeps(
       listScheduleIds: vi.fn().mockResolvedValue([]),
     },
     listGovernanceScheduleIds: vi.fn().mockResolvedValue([]),
+    disableSchedule: vi.fn().mockResolvedValue(undefined),
     log: { info: vi.fn(), warn: vi.fn() },
     ...overrides,
   };
@@ -89,7 +90,7 @@ function makeMatchingDesc(
     isPaused: opts?.isPaused ?? false,
     cron,
     timezone: opts?.timezone ?? "UTC",
-    input: { message: entrypoint, model: "deepseek-v3.2" },
+    input: { message: entrypoint, model: "kimi-k2.5" },
     dbScheduleId:
       "dbScheduleId" in (opts ?? {})
         ? (opts?.dbScheduleId ?? null)
@@ -157,7 +158,7 @@ describe("syncGovernanceSchedules", () => {
         timezone: "UTC",
         graphId: "sandbox:openclaw",
         executionGrantId: GRANT_ID,
-        input: { message: "COMMUNITY", model: "deepseek-v3.2" },
+        input: { message: "COMMUNITY", model: "kimi-k2.5" },
         overlapPolicy: "skip",
         catchupWindowMs: 0,
       })
@@ -230,7 +231,7 @@ describe("syncGovernanceSchedules", () => {
     expect(deps.scheduleControl.updateSchedule).toHaveBeenCalledWith(
       "governance:community",
       expect.objectContaining({
-        input: { message: "COMMUNITY", model: "deepseek-v3.2" },
+        input: { message: "COMMUNITY", model: "kimi-k2.5" },
       })
     );
     // Running schedule — should not be resumed

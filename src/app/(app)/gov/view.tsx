@@ -5,7 +5,7 @@
  * Module: `@app/(app)/gov/view`
  * Purpose: Client component displaying DAO governance status — credit balance, next run, recent runs, and activity charts.
  * Scope: Renders governance data fetched via React Query hooks. Does not perform server-side logic or direct DB access.
- * Invariants: Matches dashboard layout pattern (max-width-container-screen); 30s polling for status, stale-while-revalidate for activity.
+ * Invariants: Layout container owned by gov/layout.tsx; 30s polling for status, stale-while-revalidate for activity.
  * Side-effects: IO (via useGovernanceStatus hook and activity fetch)
  * Links: docs/spec/governance-status-api.md
  * @public
@@ -72,7 +72,7 @@ export function GovernanceView(): ReactElement {
   // Error state — matches activity/schedules pattern
   if (error) {
     return (
-      <div className="mx-auto flex max-w-[var(--max-width-container-screen)] flex-col gap-8 p-4 md:p-8 lg:px-16">
+      <div className="flex flex-col gap-6">
         <div className="rounded-lg border border-destructive bg-destructive/10 p-6">
           <h2 className="font-semibold text-destructive text-lg">
             Error loading governance data
@@ -88,7 +88,7 @@ export function GovernanceView(): ReactElement {
   // Loading skeleton — matches activity page pattern
   if (isLoading || !data) {
     return (
-      <div className="mx-auto flex max-w-[var(--max-width-container-screen)] flex-col gap-8 p-4 md:p-8 lg:px-16">
+      <div className="flex flex-col gap-6">
         <div className="animate-pulse space-y-8">
           <div className="h-8 w-64 rounded-md bg-muted" />
           <div className="grid gap-4 md:grid-cols-2">
@@ -96,19 +96,19 @@ export function GovernanceView(): ReactElement {
             <div className="h-32 rounded-lg bg-muted" />
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="h-64 rounded-lg bg-muted" />
-            <div className="h-64 rounded-lg bg-muted" />
-            <div className="h-64 rounded-lg bg-muted" />
+            <div className="h-48 rounded-lg bg-muted" />
+            <div className="h-48 rounded-lg bg-muted" />
+            <div className="h-48 rounded-lg bg-muted" />
           </div>
-          <div className="h-64 rounded-lg bg-muted" />
+          <div className="h-48 rounded-lg bg-muted" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-[var(--max-width-container-screen)] flex-col gap-8 p-4 md:p-8 lg:px-16">
-      <h1 className="font-bold text-3xl tracking-tight">
+    <div className="flex flex-col gap-6">
+      <h1 className="font-bold text-2xl tracking-tight">
         Cogni System Activity
       </h1>
 
@@ -135,9 +135,7 @@ export function GovernanceView(): ReactElement {
                   key={run.name}
                   className="flex items-baseline justify-between gap-4"
                 >
-                  <span className="text-muted-foreground text-sm">
-                    {run.name}
-                  </span>
+                  <span className="text-muted-foreground">{run.name}</span>
                   <Countdown target={new Date(run.nextRunAt)} />
                 </li>
               ))}
@@ -148,7 +146,7 @@ export function GovernanceView(): ReactElement {
 
       {/* Activity charts */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-semibold text-xl tracking-tight">
             Usage Metrics
           </h2>
@@ -184,9 +182,9 @@ export function GovernanceView(): ReactElement {
           </div>
         ) : activityLoading || !activity ? (
           <div className="grid animate-pulse gap-4 md:grid-cols-3">
-            <div className="h-64 rounded-lg bg-muted" />
-            <div className="h-64 rounded-lg bg-muted" />
-            <div className="h-64 rounded-lg bg-muted" />
+            <div className="h-48 rounded-lg bg-muted" />
+            <div className="h-48 rounded-lg bg-muted" />
+            <div className="h-48 rounded-lg bg-muted" />
           </div>
         ) : (
           <ActivityCharts activity={activity} />
@@ -252,9 +250,7 @@ function Countdown({ target }: { target: Date }) {
   }, [target]);
 
   if (secondsLeft === 0) {
-    return (
-      <span className="font-semibold text-muted-foreground text-sm">now</span>
-    );
+    return <span className="font-semibold text-muted-foreground">now</span>;
   }
 
   const h = Math.floor(secondsLeft / 3600);
@@ -262,7 +258,7 @@ function Countdown({ target }: { target: Date }) {
   const s = secondsLeft % 60;
 
   return (
-    <span className="font-semibold text-sm tabular-nums">
+    <span className="font-semibold tabular-nums">
       {h > 0 && (
         <>
           {h}
@@ -318,21 +314,21 @@ function ActivityCharts({ activity }: { activity: ActivityData }) {
     <div className="grid gap-4 md:grid-cols-3">
       <ActivityChart
         title="Spend"
-        description={`$${activity.totals.spend.total} total`}
+        description={`$${activity.totals.spend.total}`}
         data={spend.data}
         config={spend.config}
         effectiveStep={effectiveStep}
       />
       <ActivityChart
         title="Tokens"
-        description={`${activity.totals.tokens.total.toLocaleString()} tokens`}
+        description={activity.totals.tokens.total.toLocaleString()}
         data={tokens.data}
         config={tokens.config}
         effectiveStep={effectiveStep}
       />
       <ActivityChart
         title="Requests"
-        description={`${activity.totals.requests.total.toLocaleString()} requests`}
+        description={activity.totals.requests.total.toLocaleString()}
         data={requests.data}
         config={requests.config}
         effectiveStep={effectiveStep}

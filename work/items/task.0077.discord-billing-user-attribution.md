@@ -2,11 +2,11 @@
 id: task.0077
 type: task
 title: "Discord billing user attribution — identify which Discord user triggered each LLM call"
-status: needs_triage
-priority: 2
+status: needs_design
+priority: 1
 estimate: 2
-summary: Discord messages currently bypass Cogni's per-user billing — all LLM costs are charged to the system Cogni account with no attribution to the Discord user who triggered the run. Need to propagate Discord user identity into the LLM proxy billing metadata so costs are traceable per user.
-outcome: "Each LLM call triggered by a Discord message carries the Discord user ID in billing metadata (x-litellm-spend-logs-metadata). Cost-per-Discord-user queries work in the billing dashboard."
+summary: Discord messages bypass Cogni's per-user billing — all LLM costs land on the system account. Propagate Discord user identity into LLM proxy headers and enforce per-user/channel/guild spend caps.
+outcome: "Each Discord LLM call carries discord_user_id in billing metadata. Per-user ($0.25/day), per-channel ($3/day), per-guild ($10/day) spend caps enforced at the OpenClaw handler level before any LLM call."
 spec_refs: messenger-channels
 assignees:
   - derekg1729
@@ -16,7 +16,7 @@ branch:
 pr:
 reviewer:
 created: 2026-02-16
-updated: 2026-02-16
+updated: 2026-02-19
 labels: [openclaw, discord, billing, channels]
 external_refs:
 revision: 0
@@ -39,29 +39,51 @@ Discord messages route through OpenClaw directly to the LLM proxy. All costs lan
 
 ### Solution Tiers
 
-**Tier 1 (now):** Propagate Discord user ID into LLM proxy billing metadata. Read-only — just attribution, no enforcement. This lets us query cost-per-user after the fact.
+**Tier 1 (this task):** Propagate Discord user ID into LLM proxy billing metadata AND enforce spend caps. Attribution + guard in one pass.
 
-**Tier 2 (later):** Enforce per-user budgets or route high-cost users to cheaper models. Could be as simple as: the Discord community agent uses `cogni/gpt-4o-mini` (free tier model) by default, and only escalates to expensive models for recognized/approved users.
+**Tier 2 (P1, with identity linking):** Discord users link to Cogni subject DIDs (VC-based). Costs shift from system account to the user's billing account. Prepaid credits only — deny if `available_credits < estimated_cost`. See proj.decentralized-identity P1.
 
-**Tier 3 (much later):** Full Cogni account linking — Discord users pair with a Cogni billing account, and costs flow to their account. Requires the pairing flow that OpenClaw already supports (`openclaw pairing approve discord <code>`).
+### This Task = Tier 1 (Attribution + Spend Guard)
 
-### This Task = Tier 1
+**Part A — Attribution (OpenClaw upstream change):**
 
-- OpenClaw's message handler already extracts `author.id` (Discord user snowflake) from each message
-- This identity needs to flow into the LLM proxy headers as `x-litellm-spend-logs-metadata` with a `discord_user_id` field
-- OpenClaw's `spend_logs_metadata` is configurable per-session — need to confirm it propagates the message author, not just the bot identity
+In `processDiscordMessage()`, before `dispatchInboundMessage()`, call `sessions.patch` to set outboundHeaders:
+
+```json
+{
+  "x-litellm-end-user-id": "discord:<senderId>",
+  "x-litellm-spend-logs-metadata": "{\"channel\":\"discord\",\"guild_id\":\"<guildId>\",\"channel_name\":\"#ideas\",\"discord_user_id\":\"<senderId>\",\"discord_username\":\"<senderUsername>\",\"message_sid\":\"<messageSid>\"}",
+  "x-cogni-run-id": "discord:<guildId>:<channelId>:<messageSid>"
+}
+```
+
+All data is already available in the handler — `sender.id`, `sender.name`, `guildInfo.id`, `message.id`, channel slug.
+
+**Part B — Spend Guard (OpenClaw upstream change):**
+
+Same handler, before agent dispatch. Check cumulative spend against hard caps:
+
+| Scope       | Daily USD Limit |
+| ----------- | --------------- |
+| Per guild   | $10             |
+| Per channel | $3              |
+| Per user    | $0.25           |
+
+Also enforce per-call limits: `max_output_tokens: 500`, `max_context_tokens: 4000`.
+
+On limit hit: return early with no LLM call + log structured event `spend_denied { scope, reason, remaining }`. Optional: downgrade model to cheapest tier before hard denial.
 
 **Not in scope:**
 
-- Per-user rate limiting or budget enforcement (Tier 2)
-- Cogni account pairing (Tier 3)
-- Changes to the Cogni billing UI (just get the data flowing first)
+- Cogni account linking / credit charging (Tier 2 — requires proj.decentralized-identity P1)
+- Changes to Cogni billing ingest (system account attribution stays for now)
+- Rerouting Discord through Cogni's GraphExecutorPort (premature — do when identity linking ships)
 
-## Investigation Needed
+### Investigation Resolved
 
-- How does OpenClaw set `x-litellm-spend-logs-metadata` for Discord-initiated sessions? Check `src/discord/monitor/message-handler.ts` and the session creation path
-- Does the current proxy billing pipeline (`LlmProxyManager` → `parseAuditLog`) already capture per-session metadata that includes user identity?
-- Can we configure this purely via `openclaw-gateway.json` or does it need a code change in OpenClaw?
+- **How does OpenClaw set headers?** Discord messages bypass Cogni's `SandboxGraphProvider` entirely. They enter OpenClaw's agent runner directly via the channel plugin. No `sessions.patch` currently sets `outboundHeaders` for Discord sessions — that's the gap.
+- **Where to fix?** OpenClaw's `src/discord/monitor/message-handler.process.ts` — add `sessions.patch` with billing headers before `dispatchInboundMessage()`.
+- **Config or code?** Code change in OpenClaw required. Cannot be done via config alone.
 
 ## Allowed Changes
 

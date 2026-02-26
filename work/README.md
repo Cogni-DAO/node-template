@@ -23,7 +23,7 @@ tags: [work, meta]
 | `charters/`       | Strategic themes (`chr.<slug>.md`)                |
 | `projects/`       | Phased roadmaps (`proj.<slug>.md`)                |
 | `items/`          | PR-sized work (`<type>.<num>.<slug>.md`)          |
-| `items/_index.md` | Canonical discoverability surface                 |
+| `items/_index.md` | Generated index (run `pnpm work:index`)           |
 | `items/_archive/` | Completed items archived by YYYY/MM               |
 | `handoffs/`       | Agent handoff packets (bounded, per work item)    |
 | `_templates/`     | Templates for charters, projects, items, handoffs |
@@ -142,9 +142,9 @@ external_refs:
 | `type`            | Yes         | task, bug, spike, story, subtask                                                                                   |
 | `title`           | Yes         | Human readable                                                                                                     |
 | `status`          | Yes         | needs_triage, needs_research, needs_design, needs_implement, needs_closeout, needs_merge, done, blocked, cancelled |
-| `priority`        | Yes         | 0-3                                                                                                                |
-| `rank`            | Yes         | Positive integer, 1 = highest within priority band (default: 99)                                                   |
-| `estimate`        | Yes         | 0-5                                                                                                                |
+| `priority`        | Yes\*       | 0-3 (\*optional when `needs_triage`)                                                                               |
+| `rank`            | Yes\*       | Positive integer, 1 = highest within priority band (\*optional when `needs_triage`, default: 99)                   |
+| `estimate`        | Yes\*       | 0-5 (\*optional when `needs_triage`)                                                                               |
 | `summary`         | Yes         | What needs to be done?                                                                                             |
 | `outcome`         | Yes         | What is the deliverable?                                                                                           |
 | `spec_refs`       | No          | Spec IDs (not paths)                                                                                               |
@@ -227,11 +227,14 @@ Required sections (6 max):
 5. **ITEMS_ARE_PR_SIZED** — If an item spans multiple PRs, break it up
 6. **PR_LINKS_ITEM** — Every PR references exactly one Work Item ID (e.g., `WI: bug.0004`)
 7. **SLUG_RENAME_OK** — Renaming the slug portion of a filename is allowed; renaming `<type>.<num>` is forbidden
+8. **INDEX_IS_DERIVED** — `_index.md` is generated from frontmatter by `pnpm work:index`. Never hand-edit. It is gitignored.
 
 ## Agent Safety
 
-- Agents must not directory-list `work/items/`; use `work/items/_index.md` and search by ID.
-- Creating or closing an item must update `_index.md`.
+- Agents may scan `work/items/*.md` and parse frontmatter directly.
+- `_index.md` is a generated convenience view — never edit it manually.
+- Creating or closing an item only requires editing the item file.
+- Use `pnpm work:next-id` to get the next available numeric ID.
 
 ## Related
 
