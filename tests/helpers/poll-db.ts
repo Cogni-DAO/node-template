@@ -12,7 +12,7 @@
  */
 
 import type { Database } from "@cogni/db-client";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { chargeReceipts } from "@/shared/db/schema";
 
 /**
@@ -60,9 +60,28 @@ export async function waitForReceipts(
 
   if (rows.length >= minCount) return rows;
 
+  // === DIAGNOSTIC: On timeout, dump ALL recent receipts to see what's happening ===
+  const allRecent = await db
+    .select({
+      id: chargeReceipts.id,
+      billingAccountId: chargeReceipts.billingAccountId,
+      runId: chargeReceipts.runId,
+      sourceSystem: chargeReceipts.sourceSystem,
+      sourceReference: chargeReceipts.sourceReference,
+      createdAt: chargeReceipts.createdAt,
+    })
+    .from(chargeReceipts)
+    .orderBy(desc(chargeReceipts.createdAt))
+    .limit(10);
+
+  const diagnosticInfo =
+    allRecent.length > 0
+      ? `\n  Recent receipts (any account):\n${allRecent.map((r) => `    - account=${r.billingAccountId} source=${r.sourceSystem} ref=${r.sourceReference} created=${r.createdAt.toISOString()}`).join("\n")}`
+      : "\n  No receipts in entire table.";
+
   throw new Error(
     `waitForReceipts: timed out after ${timeoutMs}ms — expected ≥${minCount} receipts for billing account ${billingAccountId}, found ${rows.length}. ` +
-      `This likely means the LiteLLM callback (POST /api/internal/billing/ingest) did not fire. ` +
-      `Check LiteLLM container logs and GENERIC_LOGGER_ENDPOINT env var.`
+      `This likely means the LiteLLM callback (POST /api/internal/billing/ingest) did not fire or wrote to a different account. ` +
+      `Check LiteLLM container logs and GENERIC_LOGGER_ENDPOINT env var.${diagnosticInfo}`
   );
 }
