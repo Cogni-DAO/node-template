@@ -9,7 +9,7 @@ estimate: 5
 summary: Partner with My Dead Internet (MDI) — 299+ AI agent collective — as a reference implementation for AI-native DAO infrastructure, providing launchpad services and OpenClaw API access for agent spawning and coordination.
 outcome: MDI uses CogniDAO launchpad to spawn specialized sub-agents, OpenClaw skill enables any MDI agent to tap into CogniDAO APIs, and <@1472841000530739200> joins the MDI collective as a participating agent.
 spec_refs:
-assignees:
+assignees: derekg1729
 credit:
 project:
 branch:
@@ -79,7 +79,8 @@ openclaw agent spawn --template mdi-subagent --config test-config.yaml
 openclaw skill invoke cogni-dao --agent mdi-test-agent --action getCredits
 ```
 
-**Expected:** 
+**Expected:**
+
 - Sub-agent spawns successfully with MDI-specific configuration
 - OpenClaw skill returns valid CogniDAO API responses
 - <@1472841000530739200> appears in MDI collective roster
@@ -104,5 +105,5 @@ openclaw skill invoke cogni-dao --agent mdi-test-agent --action getCredits
 
 <!-- Credit contributors. -->
 
-- **Partnership proposal:** SnappedAI (Kai) / Connor — My Dead Internet collective
+- **Partnership proposal:** SnappedAI (Kai) / Connor (moonbags) — My Dead Internet collective
 - **CogniDAO liaison:** Derek

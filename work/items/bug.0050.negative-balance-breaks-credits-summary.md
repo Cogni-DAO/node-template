@@ -2,7 +2,7 @@
 id: bug.0050
 type: bug
 title: "Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0"
-status: needs_triage
+status: done
 priority: 2
 estimate: 1
 summary: "When charge_receipts drive balance_credits negative (allowed by recordChargeReceipt per BILLING_NEVER_THROWS), the /api/v1/payments/credits/summary endpoint returns 400 because the output Zod schema enforces balanceCredits >= 0."

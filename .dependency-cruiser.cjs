@@ -583,6 +583,47 @@ module.exports = {
       comment: "adapters must not import the composition root",
     },
 
+    // activities/ and workflows/ cannot import adapters/ (clean architecture)
+    {
+      name: "no-service-activities-to-adapters",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/(activities|workflows)/",
+      },
+      to: {
+        path: "^services/[^/]+/src/adapters/",
+      },
+      comment:
+        "activities/workflows depend on ports, not adapters (clean architecture)",
+    },
+
+    // activities/ and workflows/ cannot import @cogni/db-client (concrete adapter package)
+    {
+      name: "no-service-activities-to-db-client",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/(activities|workflows)/",
+      },
+      to: {
+        path: "^packages/db-client/",
+      },
+      comment:
+        "activities/workflows use port interfaces, not concrete DB adapters",
+    },
+
+    // activities/ and workflows/ cannot import bootstrap/ (composition root)
+    {
+      name: "no-service-activities-to-bootstrap",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/(activities|workflows)/",
+      },
+      to: {
+        path: "^services/[^/]+/src/bootstrap/",
+      },
+      comment: "activities/workflows must not reach into the composition root",
+    },
+
     // =========================================================================
     // Scheduler worker boundary rules (per SCHEDULER_SPEC.md)
     // =========================================================================

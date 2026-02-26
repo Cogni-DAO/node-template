@@ -9,9 +9,9 @@ estimate: 3
 summary: Automated evaluation framework for Discord bot conversation channels to measure response quality, latency, and correctness
 outcome: A repeatable eval suite that tests bot behavior in Discord channels with metrics and regression detection
 spec_refs:
-assignees:
+assignees: derekg1729
 credit:
-project: Messenger Channels
+project: proj.messenger-channels
 branch:
 pr:
 reviewer:

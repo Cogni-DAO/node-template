@@ -6,11 +6,11 @@ title: AI Operator Wallet
 state: Active
 priority: 1
 estimate: 3
-summary: App-controlled operator wallet (Privy-managed) receives user USDC payments, sweeps DAO share to treasury, and tops up OpenRouter credits autonomously. No custom smart contracts, no raw signing in app.
-outcome: Users pay USDC to operator wallet → app mints credits + sweeps DAO treasury share + tops up OpenRouter → credits backed by real LLM spend. Zero manual transfers.
+summary: App-controlled operator wallet (Privy-managed) receives user USDC payments via a Splits contract that trustlessly routes DAO share to treasury, then tops up OpenRouter credits autonomously. No custom smart contracts, no raw signing in app.
+outcome: Users pay USDC to Split contract → on-chain split routes DAO share to treasury + operator share to wallet → app tops up OpenRouter → credits backed by real LLM spend. Zero manual transfers.
 assignees: derekg1729
 created: 2026-02-11
-updated: 2026-02-18
+updated: 2026-02-20
 labels: [wallet, billing, web3]
 ---
 
@@ -20,47 +20,65 @@ labels: [wallet, billing, web3]
 
 ## Goal
 
-Close the financial loop so every credit purchase automatically provisions OpenRouter — no manual transfers, no DAO votes per purchase. The operator wallet is a Privy-managed server wallet. Users pay USDC directly to it (reusing the existing payment flow). After credits mint, the app sweeps the DAO's share to treasury and tops up OpenRouter with the provider cost.
+Close the financial loop so every credit purchase automatically provisions OpenRouter — no manual transfers, no DAO votes per purchase. Users pay USDC to a [Splits](https://splits.org/) contract that trustlessly routes the DAO's share to treasury and the operator's share to a Privy-managed server wallet. After credits mint, the app tops up OpenRouter with the provider cost from the operator wallet.
 
 ## Roadmap
 
 ### Crawl (P0) — Operator Wallet + Outbound Payments
 
-**Goal:** Operator wallet provisioned via Privy, wired into existing payment flow, sweeping DAO share and topping up OpenRouter.
+**Goal:** Validate payment chain experimentally, then: operator wallet via Privy, Splits contract for trustless revenue split, OpenRouter top-up wired.
 
-3 atomic PRs, each shippable:
+Spike + 3 atomic PRs, each shippable:
 
-| #   | Deliverable                           | Status      | Est | Work Item |
-| --- | ------------------------------------- | ----------- | --- | --------- |
-| 1   | Operator wallet provisioning + wiring | Not Started | 2   | task.0084 |
-| 2   | DAO treasury USDC sweep               | Not Started | 2   | task.0085 |
-| 3   | OpenRouter top-up integration         | Not Started | 3   | task.0086 |
+| #   | Deliverable                                   | Status      | Est | Work Item  |
+| --- | --------------------------------------------- | ----------- | --- | ---------- |
+| 0   | Experimental spike: validate payment chain    | Not Started | 1   | spike.0090 |
+| 1   | Operator wallet provisioning + wiring         | Not Started | 2   | task.0084  |
+| 2   | Splits contract deployment + payment re-route | Not Started | 1   | task.0085  |
+| 3   | OpenRouter top-up integration                 | Not Started | 3   | task.0086  |
+
+**Spike 0 — Validate payment chain (hands-on, before building abstractions):**
+
+Three sub-experiments, run manually from scripts with a real wallet on Base:
+
+1. **OpenRouter crypto top-up** — `POST /api/v1/credits/coinbase` with `{amount: 5, sender, chain_id: "8453"}`. Record exactly what `metadata.function_name` comes back. If `swapAndTransferUniswapV3Native` → operator needs ETH. If `transferTokenPreApproved` or `swapAndTransferUniswapV3TokenPreApproved` → operator can pay with USDC directly. Execute the tx. Confirm credits appear via `GET /api/v1/credits`.
+2. **0xSplits deployment** — Deploy a mutable Split on Base via `@0xsplits/splits-sdk`. Two recipients (test wallets). Send USDC to the Split address. Call `distributeERC20()`. Verify both recipients received correct shares.
+3. **End-to-end chain** — Send USDC to the Split. Distribute. From the operator-share recipient, execute the OpenRouter top-up from step 1. Prove the full flow: USDC → Split → operator wallet → OpenRouter credits.
+
+**Key unknowns this spike resolves:**
+
+- Does OpenRouter return `Native` or `Token`/`TokenPreApproved` as function_name? (determines ETH vs USDC funding)
+- What is `metadata.contract_address`? Is it `0xeADE6...` (Coinbase Transfers) or something else?
+- Does Splits `distributeERC20()` work with Base USDC? Gas cost?
+- Can the full chain complete in < 2 minutes (user experience)?
 
 **PR 1 — Operator wallet provisioning + wiring:**
 
 - `scripts/provision-operator-wallet.ts` — create wallet via Privy API, output address
 - Add `operator_wallet.address` to `.cogni/repo-spec.yaml`
-- Update `payments_in.credits_topup.receiving_address` → operator wallet address
 - `OperatorWalletPort` interface in `src/ports/operator-wallet.port.ts`
 - Privy adapter: verify Privy-reported address matches repo-spec at startup
 - Wire into `src/bootstrap/container.ts`
-- Existing payment flow works unchanged — users now send USDC to operator wallet instead of DAO wallet
 
-**PR 2 — DAO treasury USDC sweep:**
+**PR 2 — Splits contract deployment + payment re-route:**
 
-- After credit settlement, app sweeps DAO share (USDC) from operator wallet to treasury
-- `OperatorWalletPort.sweepUsdcToTreasury(amount, reference)` — typed intent, not generic signing
-- `outbound_transfers` table to track sweep state (idempotent, keyed by clientPaymentId)
-- Treasury address from `cogni_dao.dao_contract` in repo-spec (existing config)
-- Sweep amount = `paymentUsd - topUpUsd` (DAO margin)
-- Add `calculateDaoShare()` to `src/core/billing/pricing.ts`
-- Charge receipt with `reason: dao_treasury_sweep`
+- Deploy a mutable Split contract on Base via Splits SDK (`@0xsplits/splits-sdk`)
+- Recipients: ~92.1% → operator wallet, ~7.9% → DAO treasury (derived from pricing constants)
+- Controller: Privy operator wallet (can update percentages if pricing constants change)
+- Add `operator_wallet.split_address` to `.cogni/repo-spec.yaml`
+- Update `payments_in.credits_topup.receiving_address` → Split contract address
+- After credit mint, app calls `SplitMain.distributeERC20()` to trigger USDC distribution
+- Existing payment flow works unchanged — users now send USDC to Split instead of DAO wallet
+- DAO treasury receives its share trustlessly on-chain — no app-level sweep needed
+- No `outbound_transfers` table, no `sweepUsdcToTreasury()`, no `calculateDaoShare()`
 
 **PR 3 — OpenRouter top-up integration:**
 
 - `OperatorWalletPort.fundOpenRouterTopUp(intent)` — typed intent for Coinbase Commerce protocol
 - `calculateOpenRouterTopUp()` in `src/core/billing/pricing.ts`
-- OpenRouter charge creation → Coinbase Commerce `swapAndTransferUniswapV3Native` → submit via Privy
+- OpenRouter charge creation → Coinbase Commerce transfer function → submit via Privy
+- Function determined by spike: `swapAndTransferUniswapV3Native` (ETH input) or `transferTokenPreApproved` / `swapAndTransferUniswapV3TokenPreApproved` (USDC input)
+- Coinbase Transfers contract: `0xeADE6bE02d043b3550bE19E960504dbA14A14971` on Base (confirmed)
 - `outbound_topups` table + state machine (CHARGE_PENDING → CHARGE_CREATED → TX_BROADCAST → CONFIRMED)
 - Charge receipt logging with `openrouter_topup` reason
 - New env vars: `OPENROUTER_CRYPTO_FEE`, `OPERATOR_MAX_TOPUP_USD`
@@ -91,7 +109,7 @@ Close the financial loop so every credit purchase automatically provisions OpenR
 ## Constraints
 
 - Base mainnet (8453) only for P0
-- No custom smart contracts — operator wallet is a plain EOA
+- No custom smart contracts — Splits contracts are pre-deployed, audited infrastructure (not ours to maintain)
 - No DAO votes per purchase — app handles routing autonomously
 - No raw key material in the application — Privy holds signing keys
 - Credits mint after on-chain USDC transfer confirmation (existing flow unchanged)
@@ -106,6 +124,7 @@ Close the financial loop so every credit purchase automatically provisions OpenR
 - [x] Existing USDC payment flow works end-to-end
 - [ ] `EVM_RPC_URL` configured for Base mainnet
 - [ ] Privy app created with wallet policies configured
+- [ ] Splits protocol verified on Base (chain 8453) — deploy Split contract with correct percentages
 
 ## As-Built Specs
 
@@ -126,24 +145,38 @@ Local keystores require generating, encrypting, and distributing private key mat
 
 The tradeoff: vendor dependency on Privy. Mitigated by the port abstraction — a `KeystoreOperatorWalletAdapter` can be built as a P1 OSS fallback.
 
-### Why operator wallet as receiving address (not a PaymentRouter contract)?
+### Why a Splits contract as receiving address?
 
-The existing payment flow already handles USDC transfers to a configured address, verifies on-chain, and mints credits. By making the operator wallet the receiving address, we reuse 100% of the existing payment infrastructure. The app then handles the split — sweeping DAO share as USDC, topping up OpenRouter with the rest. No new contracts, no Foundry toolchain, no on-chain split logic.
+The existing payment flow already handles USDC transfers to a configured address, verifies on-chain, and mints credits. A [Splits](https://splits.org/) mutable Split contract replaces app-level sweep logic with trustless on-chain distribution: ~92.1% to operator wallet, ~7.9% to DAO treasury. No custom contracts (Splits is pre-deployed, audited infrastructure — $250M+ distributed, zero protocol fees, non-upgradeable). The controller is the operator wallet, so percentages can be updated if pricing constants change.
 
-The tradeoff: the split is not atomic on-chain. If the app crashes between credit mint and DAO sweep, the operator wallet holds the USDC temporarily. This is acceptable because:
+After credit mint the app calls `distributeERC20()` — DAO treasury receives its share on-chain without any app-level sweep, `outbound_transfers` table, or retry logic.
 
-1. The operator wallet is controlled by the app (not a third party)
-2. `outbound_transfers` table provides durable state tracking + retry
-3. The DAO treasury sweep is idempotent (keyed by clientPaymentId)
-4. Worst case: USDC sits in operator wallet until next restart — no loss
+### Scope boundary: Layer 1 only
 
-### Why USDC sweep (not swap-then-forward)?
+This project covers **operator revenue routing** (user pays → Split → operator + treasury). It does NOT cover distributing treasury funds to DAO token holders or contributors. That is a separate concern:
 
-The DAO treasury share stays as USDC — no swap needed. Only the OpenRouter top-up requires ETH (via Coinbase Commerce protocol swap). This minimizes swap exposure and keeps the DAO's USDC position clean.
+- **Who earns what**: [proj.transparent-credit-payouts](proj.transparent-credit-payouts.md) — signed receipts, epoch-based payout statements
+- **On-chain distribution to holders**: [proj.dao-dividends](proj.dao-dividends.md) — treasury → contributors via a second Splits contract (snapshot-updated or Liquid Split)
 
 ### OpenRouter top-up is the Coinbase Commerce protocol
 
-OpenRouter returns a `transfer_intent` (not raw calldata). We encode `swapAndTransferUniswapV3Native(intent, poolFeesTier=500)` on the Coinbase Transfers contract (`0xeADE6bE02d043b3550bE19E960504dbA14A14971` on Base). See [web3-openrouter-payments spec](../../docs/spec/web3-openrouter-payments.md) for full flow.
+OpenRouter returns a `transfer_intent` (not raw calldata) for the [Coinbase Commerce Onchain Payment Protocol](https://github.com/coinbase/commerce-onchain-payment-protocol). The Transfers contract (`0xeADE6bE02d043b3550bE19E960504dbA14A14971` on Base) supports 16 transfer functions including:
+
+- `swapAndTransferUniswapV3Native(intent, poolFeesTier)` — pays with ETH, swaps to recipient currency
+- `transferTokenPreApproved(intent)` — pays with ERC-20 directly (no swap if same token)
+- `swapAndTransferUniswapV3TokenPreApproved(intent, tokenIn, maxWillingToPay, poolFeesTier)` — pays with any ERC-20, swaps to recipient currency
+
+Which function OpenRouter's API returns in `metadata.function_name` determines whether the operator wallet needs ETH or can pay with USDC directly. **Spike 0 resolves this.** See [web3-openrouter-payments spec](../../docs/spec/web3-openrouter-payments.md) for full flow.
+
+### Coinbase CDP Wallets / Agentic Wallets as Privy alternative
+
+Coinbase launched [Agentic Wallets](https://www.coinbase.com/developer-platform/discover/launches/agentic-wallets) (Feb 2026) — wallet infrastructure purpose-built for AI agents on Base. TEE-backed signing (<200ms), declarative spending policies (per-tx caps, address allowlists, sanctions screening), and native [x402](https://docs.cdp.coinbase.com/agentic-wallet/welcome) support for machine-to-machine payments. SDKs in TypeScript, Python, Go.
+
+**Why this matters for us:** We're already on Base and topping up via Coinbase Commerce — CDP Wallets would be the same vendor stack end-to-end. Their policy engine (address allowlists + tx caps enforced at enclave layer) is more mature than Privy's wallet policies. Privy was acquired by Stripe (Jun 2025), raising long-term ecosystem drift concerns.
+
+**No architecture change needed.** `OperatorWalletPort` insulates us — a `CdpOperatorWalletAdapter` is a 1-PR swap. 0xSplits still handles revenue splitting (wallet providers don't solve that). Recommendation: spike is wallet-agnostic, evaluate CDP vs Privy stability at PR 1 time.
+
+**x402 for DAO agent autonomy (P2+).** x402 embeds stablecoin payments into HTTP requests — an AI agent with wallet controls can discover and pay for services autonomously. This is the path to giving a DAO agent leader its own spending authority with on-chain guardrails (session caps, contract allowlists) rather than app-level permission checks. CDP's x402 Bazaar already has 50M+ txs. Directly relevant to the P2 "autonomous spending" and "x402 integration" roadmap items.
 
 ### Top-up economics (derived from constants)
 

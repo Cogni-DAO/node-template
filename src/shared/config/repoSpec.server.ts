@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/config/repoSpec.server`
- * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (payments + governance schedules).
- * Scope: Reads and caches repo-spec on first access; validates chain alignment and receiver address shape; exposes getPaymentConfig() and getGovernanceConfig(). Does not run in client bundles or accept env overrides.
- * Invariants: Chain ID must match CHAIN_ID; EVM address format required; governance schedules default to empty.
+ * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (node identity + payments + governance schedules + ledger config).
+ * Scope: Reads and caches repo-spec on first access; validates node_id UUID, chain alignment, and receiver address shape; exposes getNodeId(), getPaymentConfig(), and getGovernanceConfig(). Maps activity_ledger config to LedgerConfig when scope identity is present. Does not run in client bundles or accept env overrides.
+ * Invariants: Chain ID must match CHAIN_ID; ledger config requires scope_id + scope_key.
  * Side-effects: IO (reads repo-spec from disk) on first call only.
  * Links: .cogni/repo-spec.yaml, docs/spec/payments-design.md
  * @public
@@ -27,8 +27,28 @@ export interface GovernanceSchedule {
   entrypoint: string;
 }
 
+export interface LedgerPoolConfig {
+  baseIssuanceCredits: bigint;
+}
+
+export interface LedgerConfig {
+  scopeId: string;
+  scopeKey: string;
+  epochLengthDays: number;
+  activitySources: Record<
+    string,
+    { creditEstimateAlgo: string; sourceRefs: string[]; streams: string[] }
+  >;
+  poolConfig: LedgerPoolConfig;
+  /** base_issuance_credits as string (bigint serialized) for schedule payload. */
+  baseIssuanceCredits?: string;
+  /** EVM approver addresses from repo-spec. */
+  approvers?: string[];
+}
+
 export interface GovernanceConfig {
   schedules: GovernanceSchedule[];
+  ledger?: LedgerConfig;
 }
 
 export interface InboundPaymentConfig {
@@ -109,12 +129,80 @@ export function getPaymentConfig(): InboundPaymentConfig {
   return cachedPaymentConfig;
 }
 
+let cachedNodeId: string | null = null;
+
+/**
+ * Node identity from repo-spec. Scopes all ledger tables.
+ * Fails fast if repo-spec is missing or node_id is invalid.
+ */
+export function getNodeId(): string {
+  if (cachedNodeId) {
+    return cachedNodeId;
+  }
+
+  const spec = loadRepoSpec();
+  cachedNodeId = spec.node_id;
+  return cachedNodeId;
+}
+
+let cachedScopeId: string | null = null;
+
+/**
+ * Scope identity from repo-spec. Used by DrizzleLedgerAdapter for SCOPE_GATED_QUERIES.
+ * Fails fast if repo-spec is missing scope_id.
+ */
+export function getScopeId(): string {
+  if (cachedScopeId) {
+    return cachedScopeId;
+  }
+
+  const spec = loadRepoSpec();
+  if (!spec.scope_id) {
+    throw new Error(
+      "repo-spec missing scope_id — required for ledger scope gating"
+    );
+  }
+  cachedScopeId = spec.scope_id;
+  return cachedScopeId;
+}
+
 let cachedGovernanceConfig: GovernanceConfig | null = null;
 
 function mapGovernanceConfig(spec: RepoSpec): GovernanceConfig {
-  return {
+  const config: GovernanceConfig = {
     schedules: spec.governance?.schedules ?? [],
   };
+
+  // Wire ledger config if activity_ledger + scope identity are present
+  if (spec.activity_ledger && spec.scope_id && spec.scope_key) {
+    const sources: LedgerConfig["activitySources"] = {};
+    for (const [name, src] of Object.entries(
+      spec.activity_ledger.activity_sources
+    )) {
+      sources[name] = {
+        creditEstimateAlgo: src.credit_estimate_algo,
+        sourceRefs: src.source_refs,
+        streams: src.streams,
+      };
+    }
+    const poolCfg = spec.activity_ledger.pool_config;
+    const baseIssuanceCredits = poolCfg
+      ? BigInt(poolCfg.base_issuance_credits)
+      : 0n;
+    config.ledger = {
+      scopeId: spec.scope_id,
+      scopeKey: spec.scope_key,
+      epochLengthDays: spec.activity_ledger.epoch_length_days,
+      activitySources: sources,
+      poolConfig: {
+        baseIssuanceCredits,
+      },
+      baseIssuanceCredits: baseIssuanceCredits.toString(),
+      approvers: spec.activity_ledger.approvers,
+    };
+  }
+
+  return config;
 }
 
 export function getGovernanceConfig(): GovernanceConfig {
@@ -126,4 +214,23 @@ export function getGovernanceConfig(): GovernanceConfig {
   cachedGovernanceConfig = mapGovernanceConfig(spec);
 
   return cachedGovernanceConfig;
+}
+
+let cachedLedgerApprovers: string[] | null = null;
+
+/**
+ * Ledger approver allowlist from repo-spec.
+ * Returns lowercased EVM addresses for case-insensitive comparison.
+ * Returns empty array if ledger config not present (write routes will reject all).
+ */
+export function getLedgerApprovers(): string[] {
+  if (cachedLedgerApprovers) {
+    return cachedLedgerApprovers;
+  }
+
+  const spec = loadRepoSpec();
+  cachedLedgerApprovers = (spec.activity_ledger?.approvers ?? []).map((a) =>
+    a.toLowerCase()
+  );
+  return cachedLedgerApprovers;
 }

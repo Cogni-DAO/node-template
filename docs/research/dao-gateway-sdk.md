@@ -14,7 +14,7 @@ tags: [dao, sdk, billing, product, research]
 
 # Research: DAO Gateway SDK — Simplest Path to Empower AI Projects as DAOs
 
-> spike: spike.0113 | date: 2026-02-26
+> spike: spike.0115 | date: 2026-02-26
 
 ## Question
 

@@ -9,7 +9,7 @@ estimate: 5
 summary: Transform clawdbot into a high-level manager agent that delegates all coding and design work to spawned CLI agents (Claude Code, Codex), maintaining zero codebase awareness itself.
 outcome: Clawdbot operates purely as an orchestrator, spawning specialized coding agents via CLI to perform all implementation work while remaining completely isolated from the codebase.
 spec_refs:
-assignees:
+assignees: derekg1729
 credit:
 project:
 branch:
@@ -34,7 +34,7 @@ external_refs:
 - Clawdbot maintains zero awareness of the codebase (no file reads, no code context)
 - All coding tasks are delegated by spawning Claude Code or Codex via CLI
 - All design/architecture decisions are delegated to spawned agents
-- Clawdbot acts purely as an orchestrator/manager, defining *what* needs to happen
+- Clawdbot acts purely as an orchestrator/manager, defining _what_ needs to happen
 - Spawned agents receive clear task definitions and return results
 - Manager agent can chain multiple spawned agent calls to complete complex workflows
 - Proper error handling when spawned agents fail or return unexpected results
