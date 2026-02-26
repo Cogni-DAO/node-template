@@ -6,69 +6,70 @@ status: active
 created: 2026-02-25
 updated: 2026-02-25
 branch: "feat/opencollect-ui"
-last_commit: "e9e7df1c"
+last_commit: "5fd03538"
 ---
 
-# Handoff: Sidebar Navigation + Header Reorganization
+# Handoff: Sidebar Navigation + Mobile UI Polish
 
 ## Context
 
-- Adopting a left-side vertical sidebar (like OpenCollective / ChatGPT) for authenticated `(app)` pages
-- Homepage and public pages keep the existing full-width horizontal `AppHeader`
-- Sidebar component copied from OpenCollective's `Sidebar.tsx` and adapted to our import conventions
-- Chat thread history (previously an inline `<aside>` + `<Sheet>` in the chat page) moves into the global sidebar as a collapsible group
-- A new `AppTopBar` replaces the header for app pages (sidebar trigger + treasury badge + socials + wallet + theme)
+- Adopting a left-side vertical sidebar (like OpenCollective/ChatGPT) for authenticated `(app)` pages
+- Public pages keep `AppHeader` + `AppFooter`; authenticated pages get `AppSidebar` + `AppTopBar`
+- Chat threads are always visible in the sidebar as a collapsible menu item (like OC's "Settings" pattern) — threads fetch independently via `useThreads`, not gated to the chat page
+- Mobile views improved: model/agent picker dialogs render as compact cards with margins (not full-screen), work table hides non-essential columns, filters use 2-column grid
+- OpenCollective frontend (`/Users/derek/dev/opencollective-frontend/`) is the reference codebase for UI patterns — sidebar, table responsiveness, collapsible menus, drawer details
 
 ## Current State
 
-- **Build passes** (`pnpm build` — zero type errors, all pages compile)
-- **Lint has 6 ESLint errors remaining** (see Next Actions)
-- **Unit tests, check:docs not yet verified** — may have regressions
-- **Visual regressions observed** — chat page infinite scrolling, awkward layout in activity/gov pages (not investigated yet)
-- All 8 implementation phases are code-complete (CSS tokens, vendor components, AppSidebar, AppTopBar, layout rewiring, chat sidebar migration, AppFooter, barrel exports)
-- No commits made yet — all changes are unstaged on the branch
+- **Build passes** (`pnpm build` — zero type errors)
+- **Lint passes** (`pnpm lint:fix` — zero errors, zero warnings after biome-ignore on vendor cookie)
+- **`check:docs` passes**
+- **Auth guard test**: `tests/unit/app/app-layout-auth-guard.test.tsx` has mocks added but may need verification
+- **3 unstaged files** with partial fixes: `AuthRedirect.tsx`, `(public)/page.tsx` (doc header fixes), `app-layout-auth-guard.test.tsx`
+- **Visual regression: flashy redirect on logo click** — clicking Cogni logo → `/` → public layout flashes → `AuthRedirect` fires → navigates to `/chat`. See Risks.
 
 ## Decisions Made
 
-- **Zustand store** bridges chat thread state from `chat/page.tsx` to `AppSidebar.tsx` (can't use React context because sidebar is a sibling of the content tree, not an ancestor)
-- **`ThreadSummary`** type imported from `@/contracts/ai.threads.v1.contract` — follows project's "contracts are source of truth" rule
-- **`chat-viewport` CSS class removed** — the old `calc(100dvh - var(--app-header-h))` approach replaced with `flex flex-1 overflow-hidden` since the chat area is now inside `SidebarInset`
-- **`--app-header-h` CSS var** still exists in `tailwind.css` (not removed) — may be used elsewhere; verify before deleting
-- Sidebar uses `collapsible="icon"` mode (collapses to icon-only strip, not offcanvas)
+- **Zustand store** bridges chat thread state (active key, callbacks) from `chat/page.tsx` to sidebar. Thread _list_ is fetched directly by the sidebar via `useThreads` hook — no dependency on chat page mount.
+- **Collapsible threads** use plain React state + conditional render (no Radix Collapsible installed). `SidebarMenuSub`/`SidebarMenuSubButton` for sub-items match OC's pattern.
+- **Threads positioned last** in nav so expansion scrolls within `SidebarContent` (has `overflow-auto`), not past the GitHub/Discord footer.
+- **Model/agent picker dialogs**: mobile = centered card with `inset-3` margins + `--max-height-dialog-mobile: 70vh` token; desktop = centered modal. Native `overflow-y-auto` replaces Radix ScrollArea for reliable scroll.
+- **Work table**: edge-to-edge on mobile (`-mx-4 border-t border-b`), rounded on `md+`. Est/ID/Updated/Branch columns hidden on mobile via `hidden md:table-cell`.
+- **`sidebar_state` cookie**: vendor sidebar persists open/collapsed via `document.cookie` — suppressed with `biome-ignore` comment.
 
 ## Next Actions
 
-- [ ] **Fix 3 `no-restricted-imports` ESLint errors**: `AppSidebar.tsx`, `AppTopBar.tsx`, and `ChatThreadsSidebarGroup.tsx` import `@/components/vendor/shadcn/sidebar` directly — must import through `@/components` barrel instead
-- [ ] **Fix 2 `ui-governance/token-classname-patterns` errors**: `ChatThreadsSidebarGroup.tsx` uses `bg-sidebar-accent` / `hover:bg-sidebar-accent` — either add sidebar tokens to the ESLint allowlist or replace with `bg-accent` equivalents
-- [ ] **Fix 1 Biome warning**: `noDocumentCookie` in `sidebar.tsx` line 80 — consider suppressing with `// biome-ignore` for vendor code
-- [ ] **Fix chat page infinite scrolling** — likely the flex/overflow chain changed when the inline sidebar was removed; the chat area `div` may need height constraints
-- [ ] **Fix activity/gov page layout** — these pages may assume full-width without a sidebar; check their padding/max-width
-- [ ] **Run `pnpm test` and `pnpm check:docs`** — fix any regressions
-- [ ] **Verify mobile behavior** — sidebar should open as Sheet from trigger; test at <768px
-- [ ] **Verify sidebar collapse** — click rail/trigger to toggle icon-only mode
-- [ ] **Consider: remove MobileNav from AppHeader** — nav links now live in sidebar for app pages; public AppHeader still has them which is correct, but MobileNav overlap may be confusing
-- [ ] **Commit and open PR**
+- [ ] **More mobile UI polish** — continue reviewing pages at 360px; chat composer area, gov page, activity page may need attention
+- [ ] **Fix the flashy redirect on logo click** — options: (a) logo links to `/chat` in sidebar, (b) Next.js middleware redirect, (c) loading gate
+- [ ] **Consider Radix Collapsible** for animated open/close on threads (currently instant show/hide). Install `@radix-ui/react-collapsible` if animation is desired.
+- [ ] **Thread deep links** — clicking a thread from non-chat pages navigates to `/chat?thread={stateKey}`, but the chat page doesn't yet read the `thread` query param on mount
+- [ ] **Commit the 3 unstaged files** once verified
+- [ ] **Verify mobile sidebar** — opens as Sheet at <768px from SidebarTrigger
+- [ ] **Verify sidebar collapse** — icon-only mode via rail/trigger
+- [ ] **Run `pnpm check`** — full validation before PR
+- [ ] **Open PR to staging**
 
 ## Risks / Gotchas
 
-- The `SidebarInset` component renders a `<main>` tag, and root layout also has `<main id="main">` — this produces nested `<main>` elements (HTML validation issue). May need to change one to `<div>`.
-- Chat Zustand store (`useChatSidebarStore`) registers callbacks on mount and unregisters on unmount — if the chat page unmounts before sidebar reads, thread group may flash empty. Test navigation away from `/chat`.
-- The `exactOptionalPropertyTypes: true` tsconfig setting means optional props must explicitly include `| undefined` — this bit us once already with `ThreadSummary.title`.
-- `SidebarProvider` sets a cookie (`sidebar_state`) for persistence — Biome warns about `document.cookie`. OC does the same; acceptable for vendor code but may want a `// biome-ignore` directive.
-- The footer renders `new Date().getFullYear()` at build time for static pages — this is fine for SSR but will show build-year for ISR/static pages.
+- **Logo redirect flash** is the most user-visible regression. Two-layout architecture means cross-layout navigation briefly shows the wrong shell. Next.js middleware may be cleanest fix.
+- **`exactOptionalPropertyTypes: true`** — optional props must include `| undefined`. Previously bit with `ThreadSummary.title`.
+- **Chat Zustand store** registers/unregisters on mount/unmount — thread callbacks are null when off `/chat`. Sidebar handles this by falling back to direct `useDeleteThread` mutation and `<Link>` navigation.
+- **Thread `?thread=` param not wired** — sidebar generates these links for off-page navigation but chat page doesn't consume the param yet.
 
 ## Pointers
 
-| File / Resource                                               | Why it matters                                                                          |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `src/components/vendor/shadcn/sidebar.tsx`                    | Core sidebar component (adapted from OC) — all sub-components exported here             |
-| `src/features/layout/components/AppSidebar.tsx`               | Cogni-specific sidebar composition — nav items, chat threads group                      |
-| `src/features/layout/components/AppTopBar.tsx`                | Top bar for app pages — replaces AppHeader in (app) routes                              |
-| `src/features/ai/chat/components/ChatSidebarContext.tsx`      | Zustand store bridging chat page thread state to AppSidebar                             |
-| `src/features/ai/chat/components/ChatThreadsSidebarGroup.tsx` | Thread list rendered as a SidebarGroup                                                  |
-| `src/app/(app)/layout.tsx`                                    | Wires SidebarProvider + AppSidebar + SidebarInset + AppTopBar                           |
-| `src/app/(public)/layout.tsx`                                 | Wires AppHeader + AppFooter for public pages                                            |
-| `src/app/layout.tsx`                                          | Root layout — AppHeader removed (now in public layout)                                  |
-| `src/styles/tailwind.css`                                     | Sidebar CSS tokens added to `@theme`, `:root`, `.dark`                                  |
-| `src/contracts/ai.threads.v1.contract.ts`                     | Source of truth for `ThreadSummary` type used by chat sidebar                           |
-| `.eslintrc.cjs` (or equivalent)                               | Contains `no-restricted-imports` and `token-classname-patterns` rules that need updates |
+| File / Resource                                               | Why it matters                                                                       |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `/Users/derek/dev/opencollective-frontend/`                   | Reference codebase for all UI patterns (sidebar, tables, collapsible menus, drawers) |
+| `src/features/layout/components/AppSidebar.tsx`               | Cogni sidebar — nav items + collapsible ChatThreadsSidebarGroup                      |
+| `src/features/ai/chat/components/ChatThreadsSidebarGroup.tsx` | Collapsible threads menu item — fetches via useThreads, renders SidebarMenuSub       |
+| `src/features/ai/chat/components/ChatSidebarContext.tsx`      | Zustand store bridging active thread key + callbacks to sidebar                      |
+| `src/features/ai/components/ModelPicker.tsx`                  | Model picker dialog — mobile card + scroll fix                                       |
+| `src/features/ai/components/GraphPicker.tsx`                  | Agent picker dialog — same pattern as ModelPicker                                    |
+| `src/app/(app)/work/view.tsx`                                 | Work table — responsive columns, edge-to-edge mobile, filter grid                    |
+| `src/app/(app)/layout.tsx`                                    | Wires SidebarProvider + AppSidebar + SidebarInset + AppTopBar                        |
+| `src/app/(public)/layout.tsx`                                 | Wires AppHeader + AppFooter for public pages                                         |
+| `src/components/vendor/shadcn/sidebar.tsx`                    | Vendor sidebar primitives (adapted from OC)                                          |
+| `src/styles/tailwind.css`                                     | Sidebar tokens, `--max-height-dialog-mobile`, `--app-header-h`                       |
+| `scripts/eslint/plugins/ui-governance.cjs`                    | ESLint token allowlist (sidebar-\* tokens added)                                     |
+| `work/handoffs/archive/feat.opencollect-ui/`                  | Previous handoff versions                                                            |
