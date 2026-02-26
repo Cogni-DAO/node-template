@@ -11,7 +11,7 @@ outcome: Agents have their own actor identity, API credentials, and budget alloc
 spec_refs:
 assignees: derekg1729
 credit: SnappedAI (Kai) / Connor (moonbags) — MDI partnership proposal (story.0118) revealed the need for agent-level billing
-project: proj.dao-gateway
+project: proj.operator-plane
 branch:
 pr:
 reviewer:

@@ -10,7 +10,7 @@ outcome: External projects can register, get an API key, swap their base URL, an
 spec_refs:
 assignees: derekg1729
 credit: SnappedAI (Kai) / Connor (moonbags) — MDI partnership proposal (story.0118)
-project: proj.dao-gateway
+project: proj.operator-plane
 branch:
 pr:
 reviewer:

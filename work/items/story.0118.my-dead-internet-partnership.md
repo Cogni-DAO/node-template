@@ -11,7 +11,7 @@ outcome: MDI uses CogniDAO launchpad to spawn specialized sub-agents, OpenClaw s
 spec_refs:
 assignees: derekg1729
 credit: SnappedAI (Kai) / Connor (moonbags) — MDI partnership proposal
-project: proj.dao-gateway
+project: proj.operator-plane
 branch:
 pr:
 reviewer:

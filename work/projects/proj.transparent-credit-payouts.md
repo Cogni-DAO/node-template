@@ -230,6 +230,10 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 | Discord client | `discord.js`                                         | Only serious Discord library for Node.js          |
 | Verification   | Recompute from stored data only                      | External sources may be private/non-deterministic |
 
+### Actor integration (planned)
+
+`user_id` is correct for P0 (humans-only attribution). When `actors` ships ([proj.operator-plane](proj.operator-plane.md)), `epoch_allocations` gains `actor_id` alongside `user_id`. Human actors bridge 1:1; agent actors are a new attribution path. Provenance is always preserved: `earned_by_actor_id` records who did the work (even if an agent). `beneficiary_actor_id` determines who may claim — a separate field, never collapsed. No schema changes until the actor table exists. See [identity-model.md](../../docs/spec/identity-model.md) for the `actor_id` primitive.
+
 ## PR / Links
 
 - Handoff: [handoff](../handoffs/proj.transparent-credit-payouts.handoff.md)

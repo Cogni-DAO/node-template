@@ -299,7 +299,7 @@ For projects that want sovereignty (self-hosted):
 
 ### Project
 
-`proj.dao-gateway` — A minimal passthrough layer that lets any AI project add DAO governance + crypto billing via `.cogni/repo-spec.yaml`.
+`proj.operator-plane` — Unified actor model, multi-tenant gateway, and economic attribution for AI projects.
 
 **Phases**:
 

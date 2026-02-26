@@ -1,20 +1,20 @@
 ---
-id: proj.dao-gateway
+id: proj.operator-plane
 type: project
 primary_charter:
-title: DAO Gateway — Multi-Tenant AI Billing for External Projects
+title: "Operator Plane — Unified Actor Model, Multi-Tenant Gateway, and Economic Attribution"
 state: Active
 priority: 1
 estimate: 15
-summary: Multi-tenant the existing billing stack so external AI projects (starting with MDI) can get metered AI calls, credit budgets, and delegated agent spending via API key + gateway.
-outcome: MDI agents route traffic through Cogni gateway, metered per-agent, with delegated budgets, all charges settling against MDI's tenant balance.
+summary: "Establish actor_id as the canonical economic primitive (earns/spends/attributed) across billing, rewards, and budget delegation. Multi-tenant the existing billing stack as an OpenAI-compatible gateway. Unify usage metering, contribution attribution, and epoch rewards under one actor identity."
+outcome: "External projects route LLM traffic through Cogni gateway, metered per-actor. Actors (human or agent) earn epoch rewards under the same actor_id that tracks their spend. Reward rollup policy keeps governance rights separate from economic attribution."
 assignees: derekg1729
 created: 2026-02-26
 updated: 2026-02-26
 labels: [dao, billing, gateway, multi-tenant, agents]
 ---
 
-# DAO Gateway — Multi-Tenant AI Billing for External Projects
+# Operator Plane — Unified Actor Model, Multi-Tenant Gateway, and Economic Attribution
 
 > Research: [dao-gateway-sdk](../../docs/research/dao-gateway-sdk.md) (spike.0115)
 > Launch customer: My Dead Internet (MDI) — 299+ AI agent collective (story.0118)
@@ -42,6 +42,46 @@ MDI server.js
 
 **v0 requires zero code changes in MDI** beyond a base URL + API key swap and adding an agent ID header. Everything else is optional API calls MDI can adopt incrementally.
 
+## Unified Actor Model
+
+`actor_id` is the canonical economic subject across all Cogni economic systems. See [identity-model.md](../../docs/spec/identity-model.md) for the full primitive definition.
+
+### Core entities
+
+| Entity                       | Key fields                                                     | Purpose                                                      |
+| ---------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
+| `actors`                     | `id, tenant_id, kind, parent_actor_id, label, status`          | Economic subject — who earned, who spent, who was attributed |
+| `actor_bindings`             | `actor_id, provider, external_id`                              | External refs: wallets, OAuth IDs, platform identities       |
+| `budget_allocations`         | `actor_id, funded_by_actor_id, limit, spent, policy`           | Delegated spend slices                                       |
+| `charge_receipts.actor_id`   | FK → actors (nullable, v1+; v0 uses `external_agent_ref` TEXT) | Usage attribution: which actor made this LLM call            |
+| `epoch_allocations.actor_id` | FK → actors (planned, bridges to user_id)                      | Reward attribution: which actor earned this epoch            |
+| `claims`                     | `actor_id, statement_id, wallet, amount` (future)              | On-chain reward claiming                                     |
+
+### Actor kinds
+
+| Kind     | Description                                    | Example                 |
+| -------- | ---------------------------------------------- | ----------------------- |
+| `user`   | Human person. 1:1 FK to `users.id`.            | Connor (MDI operator)   |
+| `agent`  | AI agent. Has `parent_actor_id` for hierarchy. | MDI agent "Kai"         |
+| `system` | Internal system processes. Sentinel.           | `cogni_system`          |
+| `org`    | Treasury / collective. No direct login.        | MDI collective treasury |
+
+### Reward rollup policy
+
+Three layers, kept strictly separate:
+
+1. **`earned_by_actor_id`** — who did the work (always an actor_id, human or agent)
+2. **`beneficiary_actor_id`** — who can claim the reward (defaults to self for humans, parent for agents)
+3. **`claimant_wallet`** — where value is sent (resolved from actor_bindings at claim time)
+
+**Default policy:** Agents accrue rewards (`earned_by_actor_id` is always the agent). Provenance is never rewritten — the agent earned it, period. `beneficiary_actor_id` determines who may benefit (defaults to parent human or org treasury for agents). `claimant_wallet` is resolved from `actor_bindings` only at claim time. These three fields are never collapsed into one. Governance rights (voting, proposals) are a separate policy layer — economic attribution does NOT imply political participation.
+
+**`beneficiary_actor_id` is derived by policy but persisted on the reward record.** Resolution rule: nearest claimable ancestor, explicit override, or tenant treasury — evaluated at allocation time and stored. Not re-derived at read time. If ownership/governance changes after allocation, existing records are immutable — only future allocations reflect the new policy. This preserves auditability: a third party can verify who was entitled to what, when.
+
+### Relationship to proj.transparent-credit-payouts
+
+`epoch_allocations.user_id` is the current canonical reward subject (humans only). When `actors` ships (v1), allocations gain `actor_id` alongside `user_id`. Human actors bridge 1:1 via `actors WHERE kind='user'`. Agent actors enable a new attribution path: gateway usage → actor → epoch rewards. No changes to existing epoch invariants (PAYOUT_DETERMINISTIC, ALL_MATH_BIGINT).
+
 ## Roadmap
 
 ### v0 — Metered Gateway (MDI as Tenant #1)
@@ -52,7 +92,7 @@ MDI server.js
 
 - Gateway proxy route — OpenAI-compatible passthrough with billing middleware
 - API key → tenant resolution (replaces Auth.js session for gateway callers)
-- `X-Cogni-Agent-Id` header → `charge_receipts.actor_id` attribution (nullable column)
+- `X-Cogni-Agent-Id` header → `charge_receipts.external_agent_ref` attribution (nullable TEXT, freeform — NOT an actor_id FK)
 - Spend cap on the tenant account (hard limit, preflight rejects when exhausted)
 - MDI onboarding — create billing account, issue API key, seed initial credits
 
@@ -65,14 +105,14 @@ MDI server.js
 - Budget delegation (single pool, single spend cap)
 - OpenClaw skill (MDI calls REST API directly from server.js)
 
-| Deliverable                                                   | Status      | Est | Work Item  |
-| ------------------------------------------------------------- | ----------- | --- | ---------- |
-| Gateway proxy route (OpenAI-compatible, billing middleware)   | Not Started | 3   | story.0116 |
-| API key management (generation, hashed storage, gateway auth) | Not Started | 2   | story.0116 |
-| `charge_receipts.actor_id` column (nullable, from header)     | Not Started | 1   | story.0116 |
-| Tenant-level spend cap (preflight enforcement)                | Not Started | 1   | story.0116 |
-| MDI onboarding (billing account + API key + seed credits)     | Not Started | 1   | story.0118 |
-| Usage/balance API endpoints (GET balance, GET usage by agent) | Not Started | 1   | story.0116 |
+| Deliverable                                                                       | Status      | Est | Work Item  |
+| --------------------------------------------------------------------------------- | ----------- | --- | ---------- |
+| Gateway proxy route (OpenAI-compatible, billing middleware)                       | Not Started | 3   | story.0116 |
+| API key management (generation, hashed storage, gateway auth)                     | Not Started | 2   | story.0116 |
+| `charge_receipts.external_agent_ref` column (nullable TEXT, freeform from header) | Not Started | 1   | story.0116 |
+| Tenant-level spend cap (preflight enforcement)                                    | Not Started | 1   | story.0116 |
+| MDI onboarding (billing account + API key + seed credits)                         | Not Started | 1   | story.0118 |
+| Usage/balance API endpoints (GET balance, GET usage by agent)                     | Not Started | 1   | story.0116 |
 
 ### v1 — Agent Budgets (First-Class Actors)
 
@@ -172,7 +212,7 @@ MDI server.js
 
 ### Why v0 avoids the actor table
 
-The simplest thing that works for MDI is a freeform `X-Cogni-Agent-Id` header logged to `charge_receipts.actor_id`. This gives per-agent cost visibility immediately. No schema migration beyond a nullable column. MDI can start routing traffic and seeing cost breakdowns before we build the full actor model.
+The simplest thing that works for MDI is a freeform `X-Cogni-Agent-Id` header logged to `charge_receipts.external_agent_ref` (nullable TEXT). This gives per-agent cost visibility immediately. No schema migration beyond a nullable column. `external_agent_ref` is explicitly NOT `actor_id` — it's a freeform tag with no FK constraint. When the `actors` table ships (v1), a real `actor_id` FK column is added and `external_agent_ref` values are mapped to actors via `actor_bindings`.
 
 The actor table (v1) adds _enforcement_ — real API keys per agent, budget caps, spawn delegation. But enforcement without visibility is useless. Ship visibility first.
 
