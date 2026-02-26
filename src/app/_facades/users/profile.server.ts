@@ -13,6 +13,8 @@
  * @public
  */
 
+import { withTenantScope } from "@cogni/db-client";
+import { type UserId, userActor } from "@cogni/ids";
 import { eq } from "drizzle-orm";
 import { resolveAppDb } from "@/bootstrap/container";
 import type {
@@ -52,39 +54,42 @@ export async function readProfile(
   sessionUser: SessionUser
 ): Promise<ProfileReadOutput> {
   const db = resolveAppDb();
+  const actorId = userActor(sessionUser.id as UserId);
 
-  const [profile, bindings, user] = await Promise.all([
-    db.query.userProfiles.findFirst({
-      where: eq(userProfiles.userId, sessionUser.id),
-    }),
-    db
-      .select({
-        provider: userBindings.provider,
-        providerLogin: userBindings.providerLogin,
-      })
-      .from(userBindings)
-      .where(eq(userBindings.userId, sessionUser.id)),
-    db.query.users.findFirst({
-      where: eq(users.id, sessionUser.id),
-      columns: { walletAddress: true },
-    }),
-  ]);
+  return withTenantScope(db, actorId, async (tx) => {
+    const [profile, bindings, user] = await Promise.all([
+      tx.query.userProfiles.findFirst({
+        where: eq(userProfiles.userId, sessionUser.id),
+      }),
+      tx
+        .select({
+          provider: userBindings.provider,
+          providerLogin: userBindings.providerLogin,
+        })
+        .from(userBindings)
+        .where(eq(userBindings.userId, sessionUser.id)),
+      tx.query.users.findFirst({
+        where: eq(users.id, sessionUser.id),
+        columns: { walletAddress: true },
+      }),
+    ]);
 
-  const resolvedDisplayName = resolveDisplayName(
-    profile,
-    bindings,
-    user?.walletAddress ?? sessionUser.walletAddress
-  );
+    const resolvedDisplayName = resolveDisplayName(
+      profile,
+      bindings,
+      user?.walletAddress ?? sessionUser.walletAddress
+    );
 
-  return {
-    displayName: profile?.displayName ?? null,
-    avatarColor: profile?.avatarColor ?? null,
-    resolvedDisplayName,
-    linkedProviders: bindings.map((b) => ({
-      provider: b.provider as "wallet" | "discord" | "github" | "google",
-      providerLogin: b.providerLogin,
-    })),
-  };
+    return {
+      displayName: profile?.displayName ?? null,
+      avatarColor: profile?.avatarColor ?? null,
+      resolvedDisplayName,
+      linkedProviders: bindings.map((b) => ({
+        provider: b.provider as "wallet" | "discord" | "github" | "google",
+        providerLogin: b.providerLogin,
+      })),
+    };
+  });
 }
 
 export async function updateProfile(
@@ -92,52 +97,55 @@ export async function updateProfile(
   input: ProfileUpdateInput
 ): Promise<ProfileUpdateOutput> {
   const db = resolveAppDb();
+  const actorId = userActor(sessionUser.id as UserId);
   const { displayName, avatarColor } = input;
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
-  if (displayName !== undefined) updates.displayName = displayName;
-  if (avatarColor !== undefined) updates.avatarColor = avatarColor;
+  return withTenantScope(db, actorId, async (tx) => {
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (displayName !== undefined) updates.displayName = displayName;
+    if (avatarColor !== undefined) updates.avatarColor = avatarColor;
 
-  await db
-    .insert(userProfiles)
-    .values({
-      userId: sessionUser.id,
-      displayName: displayName ?? null,
-      avatarColor: avatarColor ?? null,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: userProfiles.userId,
-      set: updates,
+    await tx
+      .insert(userProfiles)
+      .values({
+        userId: sessionUser.id,
+        displayName: displayName ?? null,
+        avatarColor: avatarColor ?? null,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: userProfiles.userId,
+        set: updates,
+      });
+
+    // Re-read for response
+    const profile = await tx.query.userProfiles.findFirst({
+      where: eq(userProfiles.userId, sessionUser.id),
     });
 
-  // Re-read for response
-  const profile = await db.query.userProfiles.findFirst({
-    where: eq(userProfiles.userId, sessionUser.id),
+    const bindings = await tx
+      .select({
+        provider: userBindings.provider,
+        providerLogin: userBindings.providerLogin,
+      })
+      .from(userBindings)
+      .where(eq(userBindings.userId, sessionUser.id));
+
+    const user = await tx.query.users.findFirst({
+      where: eq(users.id, sessionUser.id),
+      columns: { walletAddress: true },
+    });
+
+    const resolvedDisplayName = resolveDisplayName(
+      profile,
+      bindings,
+      user?.walletAddress ?? sessionUser.walletAddress
+    );
+
+    return {
+      displayName: profile?.displayName ?? null,
+      avatarColor: profile?.avatarColor ?? null,
+      resolvedDisplayName,
+    };
   });
-
-  const bindings = await db
-    .select({
-      provider: userBindings.provider,
-      providerLogin: userBindings.providerLogin,
-    })
-    .from(userBindings)
-    .where(eq(userBindings.userId, sessionUser.id));
-
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, sessionUser.id),
-    columns: { walletAddress: true },
-  });
-
-  const resolvedDisplayName = resolveDisplayName(
-    profile,
-    bindings,
-    user?.walletAddress ?? sessionUser.walletAddress
-  );
-
-  return {
-    displayName: profile?.displayName ?? null,
-    avatarColor: profile?.avatarColor ?? null,
-    resolvedDisplayName,
-  };
 }
