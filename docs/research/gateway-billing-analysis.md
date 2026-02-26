@@ -1,269 +1,346 @@
-# Gateway Billing Analysis: Cogni in the Payments Path
+# Gateway Billing Analysis: The Crypto→AI Bridge Problem
 
 > **Status:** Research spike — critical architecture decision
 > **Date:** 2026-02-26
-> **Question:** Should Cogni sit in the API payments pathway (USDC → DAO → credits → usage tracking), or adopt a passthrough model?
+> **Core Question:** Cogni IS the crypto→AI payment bridge. How do we provide that service without becoming a bottleneck, and how does a new AI project become a Cogni node?
 
-## The Problem Statement
+---
 
-The current spec (`web3-openrouter-payments.md`, `billing-evolution.md`, `payments-design.md`) designs Cogni as a **financial middleman**:
+## Corrected Framing: Cogni is Not "Trying to Be" OpenRouter
+
+The first pass of this analysis compared Cogni to passthrough gateways (LiteLLM, Helicone, Portkey) and suggested Cogni should just route requests without touching money. **That analysis was wrong** because it missed the fundamental constraint:
+
+**OpenRouter is the only major AI aggregator that accepts crypto payments** (via Coinbase Commerce on Base). Anthropic, OpenAI, Google — none accept crypto directly. A fully crypto-native DAO cannot pay these providers without someone bridging USDC→provider credits.
+
+Cogni's entire value proposition is being this bridge: a closed-loop crypto-native revenue/expense cycle for AI services. The question isn't *whether* to sit in the payment path — the question is *where* this bridge lives and who runs it.
+
+---
+
+## The Real Architectural Trilemma
+
+Any AI project becoming a Cogni node faces three options:
+
+### Option A: Depend on Cogni Operator for the bridge
 
 ```
-User → USDC → Split Contract → Operator Wallet → OpenRouter top-up
-                ↓
-         DAO Treasury (7.9%)
+AI Project (Node)
+  └→ Users pay USDC → Node's DAO wallet
+  └→ Node calls Cogni Operator API: "top up my OpenRouter"
+  └→ Cogni Operator wallet → OpenRouter (via Coinbase Commerce)
+  └→ Node uses OpenRouter API keys provisioned by Operator
 ```
 
-This means Cogni:
-1. Accepts USDC payments
-2. Mints internal credits (at 2x markup)
-3. Tracks per-request usage via LiteLLM callbacks
-4. Tops up OpenRouter with the operator wallet
-5. Manages a credit ledger, charge receipts, outbound topups state machine
+**Pros:** Node is lightweight. No wallet custody, no Coinbase Commerce integration. Ship in days.
+**Cons:** Cogni is in the monetary critical path. If Operator is down, nodes can't get AI. Violates WALLET_CUSTODY and DEPLOY_INDEPENDENCE invariants.
 
-**That is five separate financial subsystems.** The question: how much of this is necessary, and how much is over-engineering?
-
----
-
-## How Top Gateways Actually Work
-
-### Pattern 1: Passthrough Gateway (LiteLLM, Helicone, Portkey)
-
-These platforms sit in the **request path** but **NOT the payment path**.
-
-| Platform | Payment Path? | API Key Model | Business Model | Self-Hostable? |
-|----------|--------------|---------------|----------------|----------------|
-| **LiteLLM** | No | BYOK (user's own keys stored as "virtual keys") | Open-source + enterprise hosting | Yes (MIT) |
-| **Helicone** | No | BYOK (passthrough, user's keys forwarded) | Freemium observability SaaS | Yes (open-source) |
-| **Portkey** | No | BYOK (virtual keys = encrypted user keys) | $49/mo+ SaaS, enterprise | Yes (open-source gateway) |
-
-**What they provide without touching money:**
-- Unified API across 100+ providers
-- Load balancing, fallbacks, retries
-- Observability (cost tracking, latency, errors)
-- Rate limiting, caching, guardrails
-- Budget alerts and spending caps
-
-**What they explicitly do NOT do:**
-- Accept payments from end users
-- Maintain credit balances
-- Top up provider accounts
-- Run payment state machines
-
-### Pattern 2: Centralized Marketplace (OpenRouter)
-
-OpenRouter is the **only** major gateway that sits in the payment path.
-
-| Aspect | OpenRouter |
-|--------|-----------|
-| Payment path? | **Yes** — collects money, pays providers |
-| API key model | Platform keys (OpenRouter issues its own) |
-| Fee | 5% on crypto top-ups, markup on some models |
-| Self-hostable? | No |
-| Business model | Financial intermediation margin |
-
-OpenRouter's value proposition is convenience: one API key, one bill, access to models you might not get direct access to. The trade-off is financial dependency on the intermediary.
-
-### The Industry Consensus
-
-**3 out of 4 major gateways use passthrough.** The passthrough pattern dominates because:
-
-1. **No financial compliance overhead** — no payment processing, refunds, credit systems, billing disputes
-2. **No provider agreements needed** — users bring their own keys
-3. **Self-hostable** — aligns with sovereignty principles
-4. **Decoupled scaling** — gateway scales independently from billing
-5. **Minimum viable value is immediate** — routing + observability from day one
-
----
-
-## Cogni's Current Spec: Honest Assessment
-
-### What's Well-Designed
-
-The **inbound payment flow** (`payments-design.md`) is solid engineering:
-- Clean state machine (5 states, clear transitions)
-- On-chain verification via viem (no trust in client)
-- Exactly-once credit settlement (3-layer idempotency)
-- DAO receiving address in git-committed repo-spec (no env override)
-
-The **billing accounting** (`billing-evolution.md`) is also clean:
-- LiteLLM as cost oracle (no hardcoded pricing)
-- Single billing path with transparent markup
-- Immutable charge receipts
-
-### What's Over-Engineered
-
-The **outbound payment flow** (`web3-openrouter-payments.md`) is where complexity explodes:
-
-| Component | Complexity | Actually Needed? |
-|-----------|-----------|-----------------|
-| Split contract (Splits.org) | Medium | Maybe — only if DAO margin is enforced on-chain |
-| Operator wallet (Privy custody) | High | Only if Cogni pays providers |
-| OpenRouter charge creation API | High | Only if Cogni pays providers |
-| Coinbase Commerce transfer intent | Very High | Only if Cogni pays providers |
-| Outbound topups state machine (5 states) | High | Only if Cogni pays providers |
-| Per-tx simulation + broadcast | High | Only if Cogni pays providers |
-| Retry/expiry logic for charges | Medium | Only if Cogni pays providers |
-
-**Every single item in that table exists because Cogni chose to sit in the payment path.** If nodes pay providers directly, all of it vanishes.
-
-### The Contradiction
-
-The Node vs Operator Contract (`node-operator-contract.md`) already says:
-
-> **AI Inference Billing:** Node-run inference: Node owns provider keys and pays directly.
-
-The Boot Seams Matrix explicitly lists:
-| Capability | Node Owns | Call Direction |
-|-----------|-----------|---------------|
-| AI inference (Node) | **Provider keys, billing** | **Node → Provider** |
-
-**The spec already says nodes pay providers directly.** The entire `web3-openrouter-payments.md` flow contradicts this by inserting Cogni (via operator wallet) into the payment path between the node and OpenRouter.
-
----
-
-## Proposed Simplification: Passthrough Model
-
-### What Cogni Should Be
+### Option B: Every node runs the full bridge (current spec)
 
 ```
-┌─────────────────────────────────────────────────┐
-│                    NODE                          │
-│                                                  │
-│  User ──USDC──→ DAO Wallet                       │
-│                    │                             │
-│              mint credits                        │
-│                    │                             │
-│  Agent ──request──→ LiteLLM Proxy ──→ Provider   │
-│                    │         ↑                    │
-│              track usage     │                    │
-│                    │    Node's own API keys       │
-│              debit credits                        │
-│                                                  │
-│  Provider billing: Node pays directly            │
-│  (OpenRouter account, Anthropic account, etc.)   │
-└─────────────────────────────────────────────────┘
+AI Project (Node)
+  └→ Users pay USDC → Split Contract
+  └→ Split → Node's own Operator Wallet (Privy)
+  └→ Node's wallet → OpenRouter (via Coinbase Commerce)
+  └→ Node uses its own OpenRouter API key
 ```
 
-### What Changes
+**Pros:** Full sovereignty. Each node owns its entire financial loop.
+**Cons:** Every node needs: Privy account + secrets, Split contract deployment, Coinbase Commerce transfer intent handling, outbound topups state machine, tx simulation + broadcast, OpenRouter charge creation API. That is a **massive** per-node deployment burden. Most AI projects won't do it.
 
-| Current Spec | Proposed | Why |
-|-------------|----------|-----|
-| USDC → Split → Operator → OpenRouter | USDC → DAO Wallet (direct) | Node pays provider with its own keys. No split contract needed. |
-| Operator wallet (Privy custody) | **Delete** | Node doesn't need Cogni to pay OpenRouter on its behalf. |
-| Outbound topups state machine | **Delete** | No outbound payments from Cogni to providers. |
-| Coinbase Commerce integration | **Delete** | No on-chain payment to OpenRouter needed. |
-| Credit system (inbound) | **Keep** | Internal accounting is valuable for usage tracking + budget enforcement. |
-| LiteLLM as cost oracle | **Keep** | Core value — unified routing + cost tracking. |
-| Charge receipts | **Keep** | Audit trail for credit consumption. |
-| DAO treasury share | Simplify — flat % on inbound only | DAO takes its cut when credits are purchased, period. No outbound routing needed. |
+### Option C: Protocol-level bridge via utility token
 
-### What Cogni's Gateway Actually Provides (Without Middleman Billing)
+```
+AI Project (Node)
+  └→ Users deposit USDC → Protocol mints COGNI tokens
+  └→ Node checks token balance, serves AI requests
+  └→ Node reports usage (signed off-chain receipts)
+  └→ Protocol treasury settles with OpenRouter in bulk
+```
 
-1. **Unified LLM routing** via LiteLLM (already deployed)
-2. **Usage tracking + observability** (already built — charge receipts, activity metrics)
-3. **Budget enforcement** (preflight credit checks — already built)
-4. **DAO governance** over which models/providers are available
-5. **Credit-based metering** for DAO members (already built)
-6. **Epoch-based payout** for contributors (already built)
-
-That is a real, substantial product. None of it requires Cogni to pay OpenRouter.
-
-### How Provider Funding Works in Passthrough
-
-**Option A: Node admin tops up OpenRouter manually**
-- Simplest. Node receives USDC from users, admin periodically tops up the OpenRouter account.
-- This is what every LiteLLM self-host deployment does today.
-
-**Option B: Automated sweep (future, if needed)**
-- A simple cron job checks OpenRouter balance, triggers top-up from DAO wallet when low.
-- Much simpler than the current per-payment state machine — no Coinbase Commerce, no Splits, no per-tx simulation.
-- This is a P2 enhancement, not MVP.
-
-**Option C: Users bring their own OpenRouter keys**
-- Full passthrough. Cogni just routes and observes.
-- Most aligned with node sovereignty.
-- Credits become optional (for DAO-subsidized usage only).
+**Pros:** Nodes are lightweight. Bridge is shared infrastructure built once. Credits are portable across nodes. DAO margin enforced at protocol level.
+**Cons:** Requires building and deploying the token protocol. Off-chain usage reporting needs a trust/dispute model.
 
 ---
 
-## Minimum Required Package Set for Node Autonomy
+## Industry Context: What's Actually Happening (2025-2026)
 
-Given the passthrough model, here's what a sovereign node actually needs:
+### The x402 Protocol (Coinbase/Stripe)
 
-### Must-Have (Current — Keep)
+The most significant development is **x402** — a protocol reviving HTTP status code 402 to enable machine-to-machine payments. When an AI agent requests a paid resource, it gets a structured payment request; the agent sends USDC on Base; access is granted automatically. No accounts, no API keys, no billing cycles.
 
-| Package/Feature | Purpose | Status |
-|----------------|---------|--------|
-| `src/core/billing/pricing.ts` | Credit unit standard, markup calculation | Built |
-| `src/core/payments/` | Inbound USDC payment state machine | Built |
-| `src/features/payments/` | Payment service + settlement | Built |
-| `src/shared/db/schema.billing.ts` | charge_receipts, credit_ledger, billing_accounts | Built |
-| `packages/ai-core/` | AiEvent, UsageFact, executor primitives | Built |
-| `packages/ledger-core/` | Epoch payout computation | Built |
-| `packages/aragon-osx/` | DAO formation encoding | Built |
-| LiteLLM proxy (Docker) | Unified LLM routing + cost oracle | Deployed |
+Stripe has already shipped x402 support. Coinbase's Erik Reppel compares it to HTTPS — the layer that made value transfer native to the web. Google Cloud, AWS, and Anthropic adopted it in late 2025.
 
-### Must-Have (Current — Simplify)
+**This is directly relevant to Cogni** because x402 could eventually eliminate the need for the OpenRouter→Coinbase Commerce bridge entirely. If AI providers adopt x402, nodes pay per-request in USDC on Base. No pre-funded accounts, no credit top-ups.
 
-| Package/Feature | Current | Proposed |
-|----------------|---------|----------|
-| DAO treasury share | Split contract + on-chain distribution | Flat % withheld at credit-mint time (DB-only) |
-| Provider payment | Operator wallet → OpenRouter Coinbase Commerce | Node admin manages provider account directly |
+**But we're not there yet.** OpenRouter's Coinbase Commerce integration remains the only production-ready crypto→AI payment rail today. x402 adoption by major AI providers is 2026+ timeline.
 
-### Should Delete
+### Existing Crypto-AI Token Protocols
 
-| Package/Feature | Reason |
-|----------------|--------|
-| `web3-openrouter-payments.md` (spec) | Unnecessary middleman flow |
-| `operator-wallet.md` (spec) | No operator wallet needed for passthrough |
-| Outbound topups table/state machine | No outbound payments |
-| Coinbase Commerce transfer intent handling | No on-chain payment to OpenRouter |
-| Split contract integration | DAO share computed at credit-mint, not on-chain |
-| `OPERATOR_MAX_TOPUP_USD` / signing gates | No operator signing needed |
+| Protocol | Token | What It Does | Bridge Model |
+|----------|-------|-------------|-------------|
+| **Bittensor** | TAO | Decentralized AI inference marketplace | Validators score miners, TAO flows as payment. No fiat bridge — pure crypto loop. |
+| **Render** | RNDR | GPU compute marketplace | Users pay RNDR, node operators provide GPU. Protocol handles matching. |
+| **Akash** | AKT | Decentralized cloud compute | Reverse auction: tenants bid AKT, providers accept. On-chain settlement. |
+| **Ritual** | — | AI inference on-chain | Smart contracts call AI models; payment via protocol fee. |
 
-### Operator Role (Simplified)
+**Common pattern:** All use a utility token to abstract the provider payment problem. The token protocol handles settlement; individual nodes/miners just do work and get paid in tokens.
 
-With passthrough billing, the Operator becomes purely a **governance + services** platform:
-
-| Operator Provides | How |
-|------------------|-----|
-| Git review (PR reviews) | git-review-daemon (already planned) |
-| Git admin (repo actions) | git-admin-daemon (already planned) |
-| Cred scoring | cognicred (already planned) |
-| Node registry | Control plane (already planned) |
-| **Billing/payments** | **Nothing. Nodes handle their own.** |
-
-This is cleaner and more aligned with the Node vs Operator Contract's own stated invariants.
+**Key difference from Cogni:** These protocols create their own compute supply side. Cogni routes to existing providers (OpenRouter, Anthropic, OpenAI). The bridge problem is USDC→provider, not token→compute.
 
 ---
 
-## Risk Assessment
+## Analysis: Does a Utility Token Materially Simplify This?
 
-### Risks of Current Approach (Middleman)
-- **Regulatory exposure**: Cogni processes payments on behalf of users → potential money transmitter classification
-- **Operational complexity**: 5 financial subsystems, each with failure modes
-- **Single point of failure**: If operator wallet fails, all nodes lose AI access
-- **Contradicts sovereignty**: Node depends on Cogni to fund its provider
-- **Engineering cost**: Privy custody, Coinbase Commerce, Splits.org — each is a significant integration
+### What DB Credits Currently Require (Per Node)
 
-### Risks of Proposed Approach (Passthrough)
-- **Less automated**: Node admin must manage provider accounts manually (mitigated by P2 auto-sweep)
-- **No margin on provider spend**: DAO only earns on credit purchase markup, not on provider intermediation (but the 7.9% was already thin)
-- **Users need provider accounts**: Not an issue for DAOs (they have one shared account), but matters for future multi-tenant hosting
+Every Cogni node today must run:
 
-### Net Assessment
+| Component | Purpose | Can it be shared? |
+|-----------|---------|-------------------|
+| `billing_accounts` table | Track who has credits | No — per-node DB |
+| `credit_ledger` table | Mint/burn credits | No — per-node DB |
+| `charge_receipts` table | Audit trail | No — per-node DB |
+| `payment_attempts` table | Inbound USDC state machine | No — per-node DB |
+| LiteLLM proxy | Cost oracle + routing | Could be shared, but per-node for sovereignty |
+| Pricing logic (`pricing.ts`) | Markup calculation | Shared code, per-node execution |
+| On-chain verifier | Verify USDC transfers | Shared code, per-node execution |
 
-The passthrough model eliminates ~60% of the financial system complexity while preserving all the user-facing value (credits, billing, observability, governance). The middleman model's only advantage is slightly more automation on provider funding — at the cost of massive infrastructure, regulatory risk, and sovereignty violation.
+Plus, if the node owns the OpenRouter bridge (Option B), add:
+| `outbound_topups` table | OpenRouter top-up state machine | No — per-node DB |
+| Operator wallet (Privy) | Sign outbound txs | No — per-node secrets |
+| Coinbase Commerce integration | Transfer intent handling | Shared code, per-node execution |
+| Split contract | DAO share distribution | Per-node on-chain deployment |
+
+**That's 11 financial subsystems per node.** Most AI projects will look at this and walk away.
+
+### What a Utility Token Protocol Would Replace
+
+If COGNI is an ERC-20 on Base:
+
+**On-chain (built once, shared by all nodes):**
+
+| Component | What It Does |
+|-----------|-------------|
+| COGNI token contract | ERC-20 on Base. Mint on USDC deposit, burn on usage settlement. |
+| Deposit contract | User sends USDC → mints COGNI at rate that bakes in DAO margin. E.g., 1 USDC → 0.875 COGNI-worth of AI credits (DAO keeps 12.5%). |
+| Settlement contract | Accepts signed usage reports from nodes → burns COGNI → releases USDC to provider treasury. |
+| Provider treasury | Multi-sig or automated: aggregates USDC, tops up OpenRouter periodically (one Coinbase Commerce integration for the whole network). |
+
+**Per-node (much lighter):**
+
+| Component | What It Does |
+|-----------|-------------|
+| Token balance check | Read COGNI balance before serving request (one RPC call) |
+| Off-chain usage tracking | Same as current `charge_receipts` — but against token balance, not DB balance |
+| Signed usage reports | Node signs usage attestations, submits to settlement contract periodically |
+
+**What disappears per-node:**
+- `billing_accounts` table → replaced by token balance
+- `credit_ledger` table → replaced by on-chain mint/burn events
+- `payment_attempts` table → replaced by deposit contract events
+- Operator wallet → moved to protocol level
+- Coinbase Commerce integration → moved to protocol level
+- Split contract → DAO margin baked into mint ratio
+- Outbound topups state machine → replaced by bulk settlement
+
+**Net: 11 subsystems → 3 per node.** The other 8 move to the protocol level where they're built once.
+
+### The Hybrid Reality: On-Chain Deposits, Off-Chain Metering
+
+You can't burn a token per AI request — gas costs would exceed the request cost. The practical model:
+
+```
+DEPOSIT (infrequent, on-chain):
+  User sends USDC → Deposit contract mints COGNI tokens
+  DAO margin taken at mint time (e.g., 1 USDC = 8,750,000 COGNI at 10M/USD with 12.5% margin)
+
+USAGE (frequent, off-chain):
+  Node reads user's COGNI balance (RPC or cached)
+  Node serves AI request via LiteLLM
+  Node records usage locally (same charge_receipts pattern)
+  Node decrements local balance shadow (optimistic)
+
+SETTLEMENT (periodic, on-chain):
+  Node submits signed usage report: "user X consumed Y COGNI worth of AI"
+  Settlement contract verifies signature, burns user's COGNI
+  Released USDC accumulates in provider treasury
+  Treasury tops up OpenRouter when threshold met
+
+  Settlement frequency: daily, or when accumulated usage > $X
+```
+
+This is essentially **the same off-chain metering Cogni already does**, but with the credit balance living on-chain instead of in a per-node database. The critical difference: it's **portable and verifiable** across nodes.
+
+---
+
+## How an AI Project Becomes a Cogni Node
+
+### With DB Credits (Current)
+
+1. Fork the node-template repo
+2. Deploy the full Next.js app + PostgreSQL + LiteLLM stack
+3. Deploy DAO smart contracts (Aragon)
+4. Set up Privy account for operator wallet
+5. Deploy Split contract on Base
+6. Configure OpenRouter account + Coinbase Commerce
+7. Set up all env vars (PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_SIGNING_KEY, OPENROUTER_API_KEY, LITELLM_MASTER_KEY, etc.)
+8. Run migrations for 6+ billing tables
+9. Configure repo-spec.yaml with all addresses
+
+**Time to first AI request paid with crypto: weeks.**
+
+### With Token Protocol
+
+1. Fork the node-template repo (lighter — no billing tables needed)
+2. Deploy the Next.js app + LiteLLM stack (no PostgreSQL billing schema)
+3. Deploy DAO smart contracts (Aragon) — or join existing COGNI protocol
+4. Point node at the COGNI token contract address in repo-spec
+5. Set up LiteLLM with provider API keys
+6. Register node with settlement contract (node signs usage reports)
+
+No Privy. No Split contract. No Coinbase Commerce. No outbound topups. No operator wallet.
+
+**Time to first AI request paid with crypto: days.** The protocol handles the USDC→OpenRouter bridge.
+
+---
+
+## The Node vs Operator Contract: Revised
+
+### Current Spec Says (node-operator-contract.md)
+
+> "AI Inference Billing: Node-run inference: Node owns provider keys and pays directly."
+
+This is aspirational but impractical today — "pays directly" implies the node has its own crypto→provider bridge, which is the heavyweight Option B.
+
+### Proposed Revision
+
+| Layer | Responsibility | Owner |
+|-------|---------------|-------|
+| **Token protocol** | USDC deposits, COGNI minting, DAO margin, provider settlement | Protocol (shared infrastructure) |
+| **Node** | AI request routing (LiteLLM), usage metering, signed usage reports | Node (sovereign) |
+| **Operator** | Node registry, git-review, git-admin, cred scoring | Operator (optional services) |
+
+**Key insight:** The token protocol is *neither* node nor operator. It's **shared protocol infrastructure** — like Aragon is shared DAO infrastructure. No single node or operator controls it. This preserves sovereignty while solving the bridge problem.
+
+The Operator's role becomes exactly what the current spec already describes — governance services, not financial intermediation:
+- git-review-daemon (PR reviews)
+- git-admin-daemon (repo actions)
+- cognicred (contributor scoring)
+- Node registry (federation)
+
+The Operator never touches money. The protocol handles money. Nodes handle AI.
+
+---
+
+## What's the Minimum Viable Token Protocol?
+
+Fighting over-engineering — here's the absolute minimum:
+
+### Smart Contracts (Base mainnet)
+
+1. **CogniCredit.sol** — ERC-20 token. Mint/burn authority restricted to Deposit and Settlement contracts.
+2. **CogniDeposit.sol** — Accepts USDC, mints COGNI at configured rate (with DAO margin). Emits `Deposit(user, usdcAmount, cogniAmount)`.
+3. **CogniSettlement.sol** — Accepts signed usage reports from registered nodes. Verifies signatures, burns user COGNI, transfers USDC from treasury to provider wallet. Emits `Settlement(node, user, cogniAmount, usdcAmount)`.
+
+That's 3 contracts. No governance token, no staking, no slashing, no validator set. Just mint, meter, settle.
+
+### Off-Chain (Per Node)
+
+Same LiteLLM + charge_receipts pattern, but:
+- Balance check reads from chain (with local cache + optimistic decrement)
+- Usage reports are signed and submitted to settlement contract
+- No inbound payment state machine needed (deposit contract handles it)
+- No outbound payment state machine needed (settlement contract handles it)
+
+### Provider Treasury
+
+One multi-sig wallet that:
+- Receives USDC from settlement contract
+- Tops up OpenRouter when balance exceeds threshold
+- This is the ONE place Coinbase Commerce integration lives (built once, not per-node)
+
+### What Stays From Current Spec
+
+| Keep | Why |
+|------|-----|
+| `charge_receipts` pattern | Off-chain usage metering per node (same schema, lighter) |
+| LiteLLM as cost oracle | Core routing + pricing value |
+| `CREDIT_UNIT_STANDARD` (1 credit = $0.0000001) | Token denomination matches existing standard |
+| `calculateLlmUserCharge()` | Same billing math, used for usage reports |
+| `LITELLM_COST_ORACLE` invariant | LiteLLM computes cost, node reports it |
+| Preflight balance check | Now reads token balance instead of DB balance |
+
+### What Gets Deleted
+
+| Delete | Why |
+|--------|-----|
+| `billing_accounts` table (balance tracking) | Token balance IS the balance |
+| `credit_ledger` table | On-chain mint/burn events ARE the ledger |
+| `payment_attempts` table | Deposit contract handles inbound |
+| `outbound_topups` table | Settlement contract handles outbound |
+| `operator-wallet.md` spec | No per-node operator wallet |
+| `web3-openrouter-payments.md` spec | Bridge moves to protocol level |
+| Split contract per node | DAO margin in mint ratio |
+| Privy integration per node | No per-node signing needed |
+| Coinbase Commerce per node | One integration at protocol treasury level |
+
+---
+
+## Evolution Path: Phased Approach
+
+### Phase 0 (Now): Ship with the current spec, but scoped correctly
+
+The current billing DB approach works for the first node (Cogni itself). Don't block shipping on a token protocol. But:
+- **Acknowledge** that the current outbound payment spec is for Cogni-the-first-node, not the node template
+- **Don't pretend** every new node will replicate the full Privy + Coinbase Commerce + Splits stack
+- **Isolate** the bridge code so it can be extracted later
+
+### Phase 1: Token protocol design + first contract
+
+- Design the 3-contract system (CogniCredit, CogniDeposit, CogniSettlement)
+- Deploy on Base testnet
+- Cogni's own node becomes the first settlement reporter
+- Provider treasury tops up OpenRouter (same Coinbase Commerce flow, but centralized in one place)
+
+### Phase 2: Second node onboards via token protocol
+
+- New AI project forks node-template (lighter version — no billing DB)
+- Registers as a settlement reporter
+- Users deposit USDC → get COGNI → use AI on the new node
+- Settlement flows through the shared protocol treasury
+
+### Phase 3: x402 integration (when providers adopt it)
+
+- Nodes can optionally pay providers directly via x402 (USDC per-request on Base)
+- Protocol treasury becomes optional for x402-enabled providers
+- Full sovereignty achieved: node pays provider directly, no intermediary at all
+
+---
+
+## Risk Assessment: Token Protocol
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Smart contract bugs | High | Audit before mainnet. Start with capped deposits. |
+| Off-chain usage report fraud | Medium | Economic: nodes stake COGNI to report. Slash on dispute. (Add later, not MVP.) |
+| Gas costs for settlement | Low | Batch settlements. Base L2 is cheap (~$0.001/tx). |
+| Token regulatory classification | Medium | Utility token (metering, not investment). No secondary market needed — COGNI is burned, not traded. |
+| Complexity of building contracts | Medium | 3 simple contracts. No governance, staking, or AMM. Simpler than the current Privy + Splits + Coinbase Commerce stack. |
+| OpenRouter changes crypto API | Medium | Same risk exists today. Protocol treasury is a single point to update, vs updating every node. |
 
 ---
 
 ## Recommendation
 
-1. **Keep** the inbound payment system (USDC → credits). It's well-built and provides real value.
-2. **Delete** the outbound payment system (operator wallet → OpenRouter). It's over-engineered middleman infrastructure that contradicts node sovereignty.
-3. **Simplify** DAO treasury share to a flat percentage withheld at credit-mint time (no Split contract).
-4. **Let nodes manage their own provider accounts.** This is what the Node vs Operator Contract already specifies.
-5. **Defer** automated provider top-ups to P2, and when you build it, make it a simple balance-threshold sweep — not a per-payment state machine with Coinbase Commerce.
+1. **Ship Phase 0** with current billing DB for Cogni's own node. Don't block on token protocol.
+2. **Isolate the bridge** — the operator wallet + OpenRouter top-up code should live in a clearly separated module, not spread across the node template.
+3. **Design the token protocol** as the answer to "how does a second node onboard?" — not as a theoretical future, but as the concrete next architecture milestone.
+4. **The token replaces the DB credit system**, not supplements it. 1 COGNI = 1 credit = $0.0000001. Same unit standard, on-chain instead of in-DB.
+5. **Provider settlement is protocol-level**, not per-node. One Coinbase Commerce integration in the protocol treasury, not one per node.
+6. **Watch x402 closely.** When AI providers accept USDC directly via HTTP 402, the protocol treasury becomes optional and nodes achieve full payment sovereignty.
 
-The result: Cogni is a **governance + observability + metering gateway**, not a financial intermediary. That's the right product.
+The cleanest definition:
+- **Protocol** = the crypto→AI payment bridge (token contracts + provider settlement)
+- **Node** = sovereign AI service (LiteLLM routing + usage metering + DAO governance)
+- **Operator** = optional platform services (git-review, cred scoring, node registry)
+
+Each layer does one thing. No layer does another layer's job.
