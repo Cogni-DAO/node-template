@@ -41,15 +41,15 @@ Define the minimum a new AI project needs to become a sovereign Cogni node, what
 
 All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) are retained. This spec adds:
 
-11. **NO_FINANCIAL_INTERMEDIATION**: Operator never sits in a payment path. Node→User and Node→Provider payments flow directly via x402. Operator never custodies, routes, or settles funds.
+11. **NO_FINANCIAL_INTERMEDIATION**: Operator never sits in a payment path. Inbound x402 settlements go directly to the Node's receiving address. Outbound provider payments use the Node's own API key. Operator never custodies, routes, or settles funds.
 
-12. **NODE_IS_WALLET**: A Node's on-chain identity IS its wallet address. The wallet receives user x402 payments, signs outbound x402 payments to providers, and accumulates DAO margin. No separate operator wallet, no Privy, no Splits.
+12. **NODE_HAS_RECEIVING_ADDRESS**: A Node's on-chain identity is its receiving wallet address (`NODE_RECEIVING_ADDRESS`). The x402 facilitator settles inbound payments to this address. **The Node does NOT sign transactions in P0** — it only receives. No private keys, no Privy, no Splits.
 
-13. **ONBOARD_IN_HOURS**: A new AI project becomes a Cogni node by: (1) fork template, (2) deploy with wallet address + provider API key, (3) accept x402 payments. No Operator account required. No smart contract deployment required for billing.
+13. **ONBOARD_IN_HOURS**: A new AI project becomes a Cogni node by: (1) fork template, (2) set 3 env vars (HYPERBOLIC_API_KEY, NODE_RECEIVING_ADDRESS, X402_FACILITATOR_URL), (3) `docker compose up`. No Operator account required. No smart contract deployment. No private keys.
 
-14. **SHARED_PACKAGES_NOT_SERVICES**: Shared code lives in `packages/` (npm-installable, version-pinned). Shared services (git-review, cred scoring) are optional. A Node must never REQUIRE a running Operator service to serve AI requests or collect payment.
+14. **OPERATOR_SHARES_CODE_NOT_SERVICES**: The Operator shares **code** (npm packages in `packages/`) with Nodes, not running services. Nodes run their own services (LiteLLM proxy, Next.js app, PostgreSQL). The Operator's optional running services (git-review, cognicred) are convenience, never required. A Node must never REQUIRE a running Operator service to serve AI requests or collect payment.
 
-15. **METERING_IS_LOCAL**: Each Node runs its own LiteLLM proxy and metering pipeline. Usage data never leaves the Node unless the Node explicitly shares it (e.g., for cred scoring). Operator cannot access Node usage data.
+15. **METERING_IS_LOCAL**: Each Node runs its own **LiteLLM proxy** (a per-node Docker service — not a package) and metering pipeline. LiteLLM is the cost oracle: it routes requests, computes per-request cost, and fires billing callbacks. Usage data never leaves the Node unless the Node explicitly shares it (e.g., for cred scoring). Operator cannot access Node usage data.
 
 ## Design
 
@@ -64,17 +64,15 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 │   and DAO governance. Serves AI requests. Collects x402 payments.    │
 │   Pays providers. Keeps margin.                                      │
 │                                                                      │
-│ What it RUNS:                                                        │
-│   - Next.js app (UI + API routes)                                    │
-│   - LiteLLM proxy (model routing + cost oracle)                      │
+│ What it RUNS (per-node services — Docker containers):                │
+│   - Next.js app (UI + API routes + x402 inbound middleware)          │
+│   - LiteLLM proxy (model routing + cost oracle — THE metering layer) │
 │   - PostgreSQL (charge_receipts, epoch ledger, virtual_keys)         │
-│   - x402 middleware (inbound payment verification + settlement)      │
-│   - Node wallet (signs outbound x402, receives inbound x402)         │
 │                                                                      │
 │ What it OWNS:                                                        │
-│   - Wallet keys (never shared)                                       │
+│   - Receiving address (where x402 USDC settlements land)             │
 │   - Usage data (charge_receipts, llm_charge_details)                 │
-│   - Provider relationships (Hyperbolic API key or x402 wallet auth)  │
+│   - Provider API key (HYPERBOLIC_API_KEY)                            │
 │   - Pricing policy (USER_PRICE_MARKUP_FACTOR)                        │
 │   - DAO governance (Aragon, repo-spec)                               │
 │   - Model catalog (which models to offer, at what markup)            │
@@ -115,7 +113,7 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 │ What they ARE:                                                       │
 │   npm packages that Node and Operator both import. Published to      │
 │   npm (or monorepo packages/ dir). Version-pinned. No runtime        │
-│   service dependency.                                                │
+│   service dependency. NOT running processes.                         │
 │                                                                      │
 │ Existing packages (carried forward):                                 │
 │   - @cogni/ai-core → AiEvent, UsageFact, tool schemas               │
@@ -125,12 +123,16 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 │                                                                      │
 │ New packages for x402:                                               │
 │   - @cogni/x402-middleware → Inbound x402 verification + settlement  │
-│   - @cogni/x402-client → Outbound x402 payment signing               │
+│     (calls hosted facilitator API — no node signing)                 │
 │   - @cogni/billing-core → pricing.ts, calculateLlmUserCharge,        │
 │     calculateMaxPayable, CREDITS_PER_USD                             │
 │                                                                      │
+│ NOT a package (it's a per-node service):                             │
+│   - LiteLLM proxy — Docker container, runs per-node, does metering   │
+│                                                                      │
 │ Key property: A Node gets x402 support by npm-installing packages.   │
-│ No Operator service call needed.                                     │
+│ LiteLLM is deployed as a Docker service alongside the app.           │
+│ No Operator service call needed for either.                          │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -143,12 +145,12 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
    $ git clone https://github.com/Cogni-DAO/node-template.git my-ai-dao
    $ cd my-ai-dao
 
-2. CONFIGURE (3 env vars + 1 config file)
+2. CONFIGURE (3 env vars + 1 config file — NO PRIVATE KEYS)
    .env:
-     HYPERBOLIC_API_KEY=hyp_xxx          # Hyperbolic account API key
-     NODE_WALLET_ADDRESS=0x...           # Your wallet on Base
-     NODE_WALLET_PRIVATE_KEY=0x...       # Signs outbound x402 (or keystore path)
-     LITELLM_MASTER_KEY=sk-xxx           # LiteLLM proxy auth
+     HYPERBOLIC_API_KEY=hyp_xxx          # Hyperbolic account API key (outbound auth)
+     NODE_RECEIVING_ADDRESS=0x...        # Your wallet on Base (receive-only, no signing)
+     X402_FACILITATOR_URL=https://...    # Facilitator for verifying inbound x402 payments
+     LITELLM_MASTER_KEY=sk-xxx           # LiteLLM proxy auth (internal only)
 
    litellm.config.yaml:
      (Default template includes DeepSeek-V3, Llama-3.3-70B, Qwen3-235B)
@@ -159,10 +161,11 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 
    That's it. The node:
    - Accepts x402 USDC payments from users/agents
-   - Routes AI requests through LiteLLM to Hyperbolic
-   - Pays Hyperbolic per-request via x402 from NODE_WALLET
-   - Keeps DAO margin in NODE_WALLET
-   - Writes charge_receipts for audit trail
+     (facilitator settles to NODE_RECEIVING_ADDRESS — no signing needed)
+   - Routes AI requests through LiteLLM (per-node service) to Hyperbolic
+   - LiteLLM computes actual cost → charge_receipt written
+   - DAO margin = x402 settlement - Hyperbolic cost
+   - No private keys anywhere
 
 4. DAO FORMATION (optional, adds governance)
    - Run the setup wizard → 2 wallet transactions
@@ -174,6 +177,7 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 **What is NOT required:**
 - No Operator account
 - No Privy account
+- No private keys or signing infrastructure
 - No Splits contract
 - No Coinbase Commerce integration
 - No OpenRouter account
@@ -194,7 +198,8 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 | Set up OpenRouter account | **Required** | **Not needed** |
 | Run billing DB migrations (6+ tables) | **Required** | 2 tables (charge_receipts, virtual_keys) |
 | Configure 8+ env vars for payments | **Required** | 3 env vars (wallet + Hyperbolic key) |
-| **Env vars for payment infra** | PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_SIGNING_KEY, OPENROUTER_API_KEY, OPENROUTER_CRYPTO_FEE, OPERATOR_MAX_TOPUP_USD, EVM_RPC_URL, COINBASE_COMMERCE_* | HYPERBOLIC_API_KEY, NODE_WALLET_ADDRESS, NODE_WALLET_PRIVATE_KEY |
+| **Env vars for payment infra** | PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_SIGNING_KEY, OPENROUTER_API_KEY, OPENROUTER_CRYPTO_FEE, OPERATOR_MAX_TOPUP_USD, EVM_RPC_URL, COINBASE_COMMERCE_* | HYPERBOLIC_API_KEY, NODE_RECEIVING_ADDRESS, X402_FACILITATOR_URL |
+| **Private keys needed** | Yes (Privy-managed) | **No** |
 | **Time to first paid request** | Days–weeks | Hours |
 
 ### Boot Seams Matrix (x402 Edition)
@@ -203,10 +208,10 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 | - | - | - | - | - |
 | App deployment | Infra keys, deploy scripts | — | — | Always self-host |
 | DAO wallet ops | Wallet keys, signing | — | — | Always self-host |
-| **Inbound payments (x402)** | **x402 middleware, wallet** | **—** | **User → Node** | **Always self-host** |
-| **Outbound payments (x402)** | **x402 client, wallet** | **—** | **Node → Hyperbolic** | **Always self-host** |
-| AI inference | LiteLLM proxy, Hyperbolic key | — | Node → Hyperbolic | Always self-host |
-| **Usage metering** | **LiteLLM + charge_receipts** | **—** | **Node-internal** | **Always self-host** |
+| **Inbound payments (x402)** | **x402 middleware + facilitator call (no signing)** | **—** | **User → Facilitator → Node receiving address** | **Always self-host** |
+| **Outbound payments (API key)** | **HYPERBOLIC_API_KEY** | **—** | **Node → Hyperbolic** | **Always self-host** |
+| AI inference + metering | **LiteLLM proxy (per-node Docker service)** | — | Node → Hyperbolic | Always self-host |
+| **Usage audit trail** | **charge_receipts (per-node PostgreSQL)** | **—** | **Node-internal** | **Always self-host** |
 | PR code review | Manual review | git-review-daemon | Operator → Node repo | OSS standalone |
 | Repo admin actions | Manual via GitHub UI | git-admin-daemon | Operator → Node repo | OSS standalone |
 | Cred scoring | — | cognicred | Operator internal | vNext |
@@ -228,16 +233,17 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 
 #### New Packages for x402
 
-| Package | Purpose | Used By |
-| - | - | - |
-| `@cogni/x402-middleware` | Express/Next.js middleware for inbound x402 verification + settlement. Responds 402 with `upto` payment requirements. Verifies authorization. Settles after completion. | Node |
-| `@cogni/x402-client` | HTTP client wrapper for outbound x402. Handles 402 responses from providers. Signs authorizations from node wallet. Records settlement tx hashes. | Node |
-| `@cogni/billing-core` | Extracted from `src/core/billing/pricing.ts`. Protocol constants (CREDITS_PER_USD), `calculateLlmUserCharge()`, `calculateMaxPayable()`, `usdToCredits()`. Pure functions, no IO. | Node, Operator (for display) |
+| Package | Purpose | Phase | Used By |
+| - | - | - | - |
+| `@cogni/x402-middleware` | Next.js middleware for inbound x402 verification + settlement. Responds 402 with `upto` payment requirements. Calls hosted facilitator to verify + settle. **No signing — node is receive-only.** | P0 | Node |
+| `@cogni/billing-core` | Extracted from `src/core/billing/pricing.ts`. Protocol constants (CREDITS_PER_USD), `calculateLlmUserCharge()`, `calculateMaxPayable()`, `usdToCredits()`. Pure functions, no IO. | P0 | Node, Operator (for display) |
+| `@cogni/x402-client` | HTTP client wrapper for outbound x402. Handles 402 responses from providers. Signs authorizations from node wallet via NodeWalletPort. | **P2** | Node |
 
 **Package design principles:**
-- **Pure code, no services.** Packages never make network calls at import time.
+- **Pure code, no services.** Packages never make network calls at import time. (LiteLLM is a per-node Docker service, NOT a package.)
 - **Version-pinned.** Node decides when to upgrade (UPGRADE_AUTONOMY invariant).
 - **No transitive Operator dependency.** Installing `@cogni/x402-middleware` does NOT require an Operator account, Operator service, or Operator API key.
+- **No private keys in P0.** `@cogni/x402-middleware` calls a hosted facilitator API. The node never signs. `@cogni/x402-client` (P2) introduces signing via a `NodeWalletPort` abstraction.
 - **Minimal dependencies.** `@cogni/x402-middleware` depends on Thirdweb x402 SDK + viem. Nothing else.
 
 ### Kai Example: MDI as a Cogni Node
@@ -252,10 +258,10 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
    - litellm.config.yaml: add/remove models for Kai's use case
    - .cogni/repo-spec.yaml: Kai's DAO address, governance config
    - UI: Kai's branding, features, agent personality
-3. Set env vars:
+3. Set env vars (NO PRIVATE KEYS):
    - HYPERBOLIC_API_KEY (Kai's own Hyperbolic account)
-   - NODE_WALLET_ADDRESS (Kai's DAO-controlled wallet)
-   - NODE_WALLET_PRIVATE_KEY (Kai's signing key)
+   - NODE_RECEIVING_ADDRESS (Kai's DAO-controlled wallet — receive-only)
+   - X402_FACILITATOR_URL (hosted facilitator)
 4. Deploy: docker compose up
 5. Optional: DAO formation via setup wizard
 6. Optional: Register with Cogni Operator for git-review, cred scoring
@@ -270,6 +276,7 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
 - Cred scoring for contributors (if registered with Operator)
 
 **What Kai does NOT need:**
+- Private keys or signing infrastructure
 - Privy account (no operator wallet)
 - Splits contract (no revenue splitting infrastructure)
 - Coinbase Commerce (no fiat bridge)
@@ -337,29 +344,27 @@ All 10 invariants from [node-operator-contract.md](./node-operator-contract.md) 
      │ Re-request + x402 auth    │                           │
      │──────────────────────────>│                           │
      │                           │ POST /v1/chat/completions │
-     │                           │──────────────────────────>│
-     │                           │                           │
-     │                           │ 402 {scheme:"exact",      │
-     │                           │  amount: $0.001}          │
-     │                           │<──────────────────────────│
-     │                           │                           │
-     │                           │ Re-request + x402 auth    │
-     │                           │  (signed by NODE_WALLET)  │
+     │                           │ (HYPERBOLIC_API_KEY auth) │
      │                           │──────────────────────────>│
      │                           │                           │
      │                           │ 200 + streamed response   │
      │  200 + streamed response  │<──────────────────────────│
      │<──────────────────────────│                           │
      │                           │                           │
-     │ settlePayment($0.002)     │ (already settled by       │
-     │  (actual cost × markup)   │  Hyperbolic: $0.001)      │
+     │                           │ LiteLLM: actual cost =    │
+     │                           │ $0.001 (from response)    │
      │                           │                           │
-     │                           │ Margin: $0.001 stays in   │
-     │                           │ Kai's NODE_WALLET         │
+     │ settlePayment($0.002)     │                           │
+     │ (via facilitator →        │                           │
+     │  NODE_RECEIVING_ADDRESS)  │                           │
+     │                           │                           │
+     │                           │ Margin: $0.001            │
+     │                           │ (settlement - provider)   │
      │                           │                           │
 
   Operator is NOWHERE in this flow.
-  No shared treasury. No financial intermediation. No token.
+  No shared treasury. No financial intermediation.
+  No token. No private keys.
 ```
 
 ### What About Multi-Node Federation?
@@ -382,9 +387,8 @@ With x402, federation is **agent discovery**, not financial pooling:
 ### P0: Package Extraction
 
 - [ ] Extract `@cogni/billing-core` from `src/core/billing/pricing.ts`
-- [ ] Create `@cogni/x402-middleware` package skeleton (Thirdweb SDK dependency)
-- [ ] Create `@cogni/x402-client` package skeleton (viem dependency)
-- [ ] Document "New Node Onboarding" in docs/guides/node-onboarding.md
+- [ ] Create `@cogni/x402-middleware` package skeleton (Thirdweb SDK dependency, calls hosted facilitator, no signing)
+- [ ] Document "New Node Onboarding" in docs/guides/node-onboarding.md (3 env vars, docker compose up)
 
 #### Chores
 
@@ -416,13 +420,13 @@ With x402, federation is **agent discovery**, not financial pooling:
 
 ## Open Questions
 
-1. **Node wallet key management** — Env var is simple but insecure for production. Options: encrypted keystore file, HashiCorp Vault, CDP Agentic Wallet, hardware wallet (for manual signing). The `NodeWalletPort` interface should abstract this.
+1. **Operator revenue model** — If the Operator never touches money, how does it fund itself? Options: (a) Nodes pay Operator for services via x402, (b) Operator runs its own Node and earns margin, (c) DAO treasury funds Operator from epoch allocations. This is a governance question, not a technical one.
 
-2. **Operator revenue model** — If the Operator never touches money, how does it fund itself? Options: (a) Nodes pay Operator for services via x402, (b) Operator runs its own Node and earns margin, (c) DAO treasury funds Operator from epoch allocations. This is a governance question, not a technical one.
+2. **Hyperbolic account funding** — P0 uses API key auth to Hyperbolic, which means the Hyperbolic account needs pre-funded balance. This is simpler than Privy+Splits+Coinbase Commerce, but still a manual step. P2 x402 outbound would eliminate this.
 
-3. **Node wallet working capital** — The node wallet must have USDC to pay Hyperbolic before receiving payment from the user (the outbound payment happens during request processing, before inbound settlement). In practice, the node needs starting capital. The first few requests require pre-funded USDC in the wallet.
+3. **Embedding provider for new nodes** — If Hyperbolic has no embeddings, what should the default template include? OpenAI direct (requires OpenAI API key + fiat billing) breaks the x402-only model.
 
-4. **Embedding provider for new nodes** — If Hyperbolic has no embeddings, what should the default template include? OpenAI direct (requires OpenAI API key + fiat billing) breaks the x402-only model.
+4. **Node wallet key management (P2 only)** — When/if x402 outbound is added, the node needs a signing wallet. Options: encrypted keystore, HashiCorp Vault, CDP Agentic Wallet. Raw private key env var is prohibited (per NO_PRIVATE_KEY_ENV_VARS precedent). Not a P0 concern — P0 is receive-only.
 
 ## Related
 

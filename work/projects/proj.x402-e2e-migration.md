@@ -6,8 +6,8 @@ primary_charter:
   state: Active
   priority: 1
   estimate: 13
-  summary: Replace OpenRouter credit-purchase-then-consume billing with x402 per-request settlement end-to-end — users pay nodes via x402 upto, nodes pay Hyperbolic via x402, no credit system.
-  outcome: Cogni node accepts x402 USDC payments per-request, routes to Hyperbolic via x402, settles dynamically — no credit_ledger, no Privy, no Splits, no Coinbase Commerce. A new node deploys with a wallet and a LiteLLM config, nothing else.
+  summary: Replace OpenRouter credit system with x402 inbound per-request settlement + Hyperbolic API key outbound. No credit_ledger, no Privy, no Splits, no private keys.
+  outcome: Cogni node accepts x402 USDC payments per-request (inbound), routes to Hyperbolic via API key (outbound). LiteLLM (per-node service) is the cost oracle. 3 env vars to deploy, no private keys. A new node forks, configures, docker compose up.
   assignees: derekg1729
   created: 2026-02-26
   updated: 2026-02-26
@@ -22,24 +22,24 @@ primary_charter:
 
 ## Goal
 
-Replace the entire credit-purchase-then-consume billing model with x402 per-request settlement. Users/agents pay Cogni nodes per-request via x402 `upto` scheme (USDC on Base). Nodes pay Hyperbolic per-request via x402. LiteLLM remains the cost oracle. charge_receipts remain the audit trail. Everything else (credit_ledger, payment_attempts, Privy, Splits, Coinbase Commerce, OpenRouter) is deleted.
+Replace the credit-purchase-then-consume billing model with x402 inbound per-request settlement + Hyperbolic API key outbound. Users/agents pay Cogni nodes per-request via x402 `upto` scheme (USDC on Base). Nodes route to Hyperbolic via standard API key auth. LiteLLM (a per-node Docker service) remains the cost oracle. charge_receipts remain the audit trail. Everything else (credit_ledger, payment_attempts, Privy, Splits, Coinbase Commerce, OpenRouter) is deleted.
 
-**The end state:** A new AI project becomes a Cogni node by forking the template, deploying with a wallet address and a LiteLLM config. No Privy account, no Splits contract, no Coinbase Commerce, no OpenRouter account. Just a wallet with USDC and a config pointing at Hyperbolic.
+**The end state:** A new AI project becomes a Cogni node by forking the template, setting 3 env vars (HYPERBOLIC_API_KEY, NODE_RECEIVING_ADDRESS, X402_FACILITATOR_URL), and running `docker compose up`. No Privy account, no Splits contract, no Coinbase Commerce, no OpenRouter account, **no private keys**.
 
 ## Roadmap
 
-### Crawl (P0) — Hyperbolic Migration + Outbound x402
+### Crawl (P0) — Hyperbolic Migration + Inbound x402
 
-**Goal:** Replace OpenRouter with Hyperbolic. Validate x402 outbound payments from node to provider. Keep current inbound credit system temporarily.
+**Goal:** Replace OpenRouter with Hyperbolic (API key auth). Add x402 inbound middleware so users/agents pay per-request. No private keys, no signing.
 
 | # | Deliverable | Status | Est | Work Item |
 | - | - | - | - | - |
 | 0 | Spike: Hyperbolic API validation — connect LiteLLM, run inference, verify cost reporting | Not Started | 1 | spike.0100 |
-| 1 | Spike: Hyperbolic x402 payment — pay for inference via x402, verify settlement | Not Started | 1 | spike.0101 |
-| 2 | LiteLLM config rewrite — replace all OpenRouter routes with Hyperbolic equivalents | Not Started | 1 | task.0100 |
-| 3 | x402 outbound client — handle Hyperbolic 402 responses, sign from node wallet | Not Started | 2 | task.0101 |
-| 4 | Embedding provider migration — replace OpenRouter text-embedding-3-small with alternative | Not Started | 1 | task.0102 |
-| 5 | Node wallet setup — env vars, key management, balance monitoring | Not Started | 1 | task.0103 |
+| 1 | Spike: x402 inbound verification — verify Thirdweb facilitator API works for payment verification + settlement | Not Started | 1 | spike.0101 |
+| 2 | LiteLLM config rewrite — replace all OpenRouter routes with Hyperbolic equivalents (API key auth) | Not Started | 1 | task.0100 |
+| 3 | x402 inbound middleware — respond 402 with `upto`, verify via facilitator, settle after completion | Not Started | 2 | task.0101 |
+| 4 | x402 facilitator adapter — call hosted facilitator for verify + settle (no node signing) | Not Started | 1 | task.0102 |
+| 5 | Embedding provider migration — replace OpenRouter text-embedding-3-small with alternative | Not Started | 1 | task.0103 |
 
 **Spike 0 — Hyperbolic API validation:**
 
@@ -51,42 +51,41 @@ Validate before building abstractions:
 5. Test 3-4 models: DeepSeek-V3, Llama-3.3-70B, Qwen3-235B, Kimi-K2
 6. Record actual costs vs. documented pricing
 
-**Spike 1 — Hyperbolic x402 payment:**
+**Spike 1 — x402 inbound verification:**
 
-1. Send request to `https://hyperbolic-x402.vercel.app/v1/chat/completions`
-2. Receive 402 response, examine payment payload (scheme, amount, chain)
-3. Sign x402 payment authorization with test wallet
-4. Verify settlement on Base (block explorer)
-5. **Key question:** Does Hyperbolic x402 use `exact` or `upto` scheme?
-6. Record latency overhead of x402 vs. API key auth
+1. Set up a test endpoint that responds 402 with `upto` scheme payment requirements
+2. Use Thirdweb x402 SDK `verifyPayment()` to verify a test authorization
+3. Call `settlePayment()` — verify USDC arrives at a test receiving address
+4. **Key question:** What does the facilitator API look like? What SDK calls?
+5. Record latency of verify + settle round-trip
+6. No node signing needed — facilitator handles on-chain settlement
 
-**Why spikes first:** Hyperbolic's x402 is deployed on a separate Vercel endpoint. We need to verify the actual protocol behavior before building the outbound client.
+**Why spikes first:** We need to verify the Thirdweb facilitator API behavior and Hyperbolic's LiteLLM cost reporting before building the middleware.
 
-### Walk (P1) — Inbound x402 + Credit System Removal
+### Walk (P1) — Credit System Removal + Hardening
 
-**Goal:** Add x402 inbound middleware so users/agents pay per-request. Delete the credit system.
-
-| # | Deliverable | Status | Est | Work Item |
-| - | - | - | - | - |
-| 6 | x402 inbound middleware — intercept requests, respond 402, verify payment | Not Started | 3 | (create at P1 start) |
-| 7 | x402 facilitator adapter — verify + settle inbound payments (Thirdweb SDK) | Not Started | 2 | (create at P1 start) |
-| 8 | billing_accounts wallet migration — add wallet_address, remove balance tracking | Not Started | 1 | (create at P1 start) |
-| 9 | Delete credit system — credit_ledger, payment_attempts, payment_events tables + services | Not Started | 1 | (create at P1 start) |
-| 10 | charge_receipts x402 columns — add x402_inbound_tx, x402_outbound_tx, provider_cost_usd | Not Started | 1 | (create at P1 start) |
-| 11 | calculateMaxPayable() in pricing.ts | Not Started | 1 | (create at P1 start) |
-| 12 | Delete Privy integration + Splits + Coinbase Commerce code | Not Started | 1 | (create at P1 start) |
-
-### Run (P2+) — Hardening + Multi-Turn + Federation
-
-**Goal:** Production hardening, session-based payments, cross-node routing.
+**Goal:** Delete the credit system. Harden x402 inbound. Production observability.
 
 | # | Deliverable | Status | Est | Work Item |
 | - | - | - | - | - |
-| 13 | "Sign once, settle many" for multi-turn chat sessions | Not Started | 2 | (create at P2 start) |
+| 6 | billing_accounts wallet migration — add wallet_address, remove balance tracking | Not Started | 1 | (create at P1 start) |
+| 7 | Delete credit system — credit_ledger, payment_attempts, payment_events tables + services | Not Started | 1 | (create at P1 start) |
+| 8 | charge_receipts x402 columns — add x402_settlement_tx, provider_cost_usd | Not Started | 1 | (create at P1 start) |
+| 9 | calculateMaxPayable() in pricing.ts | Not Started | 1 | (create at P1 start) |
+| 10 | Delete Privy integration + Splits + Coinbase Commerce code | Not Started | 1 | (create at P1 start) |
+| 11 | "Sign once, settle many" for multi-turn chat sessions | Not Started | 2 | (create at P1 start) |
+| 12 | Grafana dashboard — x402 settlements, margins, receiving wallet balance | Not Started | 1 | (create at P1 start) |
+
+### Run (P2+) — x402 Outbound + Sovereignty + Federation
+
+**Goal:** x402 outbound to Hyperbolic (eliminates API key), self-hosted facilitator, cross-node routing.
+
+| # | Deliverable | Status | Est | Work Item |
+| - | - | - | - | - |
+| 13 | x402 outbound client + NodeWalletPort abstraction (keystore/Vault/CDP — NOT raw private key) | Not Started | 3 | (create at P2 start) |
 | 14 | Self-hosted x402 facilitator (remove Coinbase verification dependency) | Not Started | 2 | (create at P2 start) |
-| 15 | Grafana dashboard — x402 settlements, margins, wallet balance | Not Started | 1 | (create at P2 start) |
-| 16 | Circuit breaker — pause serving if node wallet below threshold | Not Started | 1 | (create at P2 start) |
-| 17 | L402 (Lightning) as alternative inbound payment rail | Not Started | 3 | (create at P2 start) |
+| 15 | Circuit breaker — pause serving if Hyperbolic balance below threshold | Not Started | 1 | (create at P2 start) |
+| 16 | L402 (Lightning) as alternative inbound payment rail | Not Started | 3 | (create at P2 start) |
 
 ## Constraints
 
@@ -118,23 +117,22 @@ Validate before building abstractions:
 
 ### Why Hyperbolic over keeping OpenRouter?
 
-1. **x402 symmetry** — Hyperbolic is an x402 launch partner. Both legs use x402 USDC on Base. No fiat bridge.
-2. **No operator wallet** — No pre-funded provider balance. Each request pays independently.
-3. **No Privy** — Node wallet is direct (env var or keystore). No third-party custody dependency.
-4. **No Coinbase Commerce** — No fiat on-ramp integration needed for provider payments.
-5. **Node deployment is trivial** — Fork template, set wallet address + HYPERBOLIC_API_KEY, deploy. No Privy account, no Splits contract, no OpenRouter account.
+1. **Crypto-native** — Hyperbolic is an x402 launch partner. Accepts crypto. No fiat bridge needed long-term.
+2. **No operator wallet** — P0 uses standard API key, but no Privy/Splits/Coinbase Commerce stack.
+3. **No private keys in P0** — Node is x402 inbound (receive-only). Outbound is API key. Zero signing.
+4. **Node deployment is trivial** — Fork template, set 3 env vars, deploy. No accounts to create beyond Hyperbolic.
+5. **P2 path to full x402** — When x402 outbound is built, both legs are x402 USDC on Base.
 
 Tradeoff: No Claude, GPT, or Gemini. If proprietary models are required, a hybrid spec is needed (x402 for Hyperbolic open-source + credit bridge for OpenRouter proprietary). That is a SEPARATE project.
 
-### Outbound x402 scheme mismatch
+### P0 is NOT full x402 E2E — and that's correct
 
-Hyperbolic currently uses `exact` scheme (fixed per-request price), not `upto`. This means:
-- **Inbound** (user→node): `upto` scheme — node sets max, settles actual after LiteLLM computes cost
-- **Outbound** (node→Hyperbolic): `exact` scheme — Hyperbolic sets fixed price, node pays upfront
+P0 is: x402 inbound (users pay node) + API key outbound (node pays Hyperbolic). This is intentional:
+- **No private keys in P0** — The node never signs transactions. The facilitator handles inbound settlement.
+- **API key auth is proven** — LiteLLM's `hyperbolic/` prefix works today. No 402 negotiation on outbound.
+- **P2 adds x402 outbound** — Node signs payments to Hyperbolic via `NodeWalletPort`. Eliminates API key.
 
-This is still symmetric at the USDC-on-Base level — both legs are x402 USDC settlements. The scheme difference means the node pays a fixed price to Hyperbolic (possibly slightly more than per-token cost), then settles actual markup with the user. The node absorbs any pricing discrepancy as margin.
-
-If Hyperbolic upgrades to `upto`, the outbound client can switch without architecture changes.
+The previous version of this spec had `NODE_WALLET_PRIVATE_KEY` as a P0 env var — that was scope creep. A raw private key in an env var violates NO_PRIVATE_KEY_ENV_VARS (per operator-wallet.md precedent) and isn't needed when outbound is API key auth.
 
 ### Embedding gap
 
@@ -164,7 +162,7 @@ The operator wallet project (Privy + Splits + Coinbase Commerce → OpenRouter t
 | billing_accounts.balance | Remove column | P1 |
 | Privy integration | Delete | P1 |
 | Splits contract | Delete | P1 |
-| evm-rpc-onchain-verifier adapter | Replace with x402 facilitator | P1 |
+| evm-rpc-onchain-verifier adapter | Replace with x402 facilitator adapter (calls hosted facilitator, no signing) | P1 |
 | charge_receipts | Keep + add x402 columns | P1 |
 | pricing.ts | Keep + add calculateMaxPayable() | P1 |
 | LiteLLM proxy + callbacks | Keep unchanged | — |
