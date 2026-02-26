@@ -10,9 +10,52 @@
 
 The first pass of this analysis compared Cogni to passthrough gateways (LiteLLM, Helicone, Portkey) and suggested Cogni should just route requests without touching money. **That analysis was wrong** because it missed the fundamental constraint:
 
-**OpenRouter is the only major AI aggregator that accepts crypto payments** (via Coinbase Commerce on Base). Anthropic, OpenAI, Google — none accept crypto directly. A fully crypto-native DAO cannot pay these providers without someone bridging USDC→provider credits.
+**OpenRouter was the only major AI aggregator accepting crypto** (via Coinbase Commerce on Base). That's changing — Hyperbolic now accepts per-call USDC via x402, Venice AI offers staked token access, AI/ML API accepts Bitcoin — but Anthropic, OpenAI, and Google still don't accept crypto directly. For a fully crypto-native DAO consuming mainstream AI models, someone must bridge USDC→provider credits.
 
-Cogni's entire value proposition is being this bridge: a closed-loop crypto-native revenue/expense cycle for AI services. The question isn't *whether* to sit in the payment path — the question is *where* this bridge lives and who runs it.
+Cogni's value proposition is being this bridge: a closed-loop crypto-native revenue/expense cycle for AI services. The question isn't *whether* to sit in the payment path — the question is *where* this bridge lives, who runs it, and how fast x402 makes it obsolete.
+
+---
+
+## The Landscape Is Moving Fast
+
+### Providers Accepting Crypto (Feb 2026)
+
+| Provider | Method | Model |
+|----------|--------|-------|
+| **OpenRouter** | Coinbase Commerce (USDC on Base) | Credit top-up, 5% fee |
+| **Hyperbolic** | x402 (USDC on Base) | Per-call micropayment, x402 launch partner |
+| **Venice AI** | VVV staking → DIEM | Stake capital = perpetual API access ($1/day/DIEM) |
+| **AI/ML API** | Bitcoin + 300 cryptos | Subscription plans from $100/mo |
+| **Akash** | AKT + USDC on-chain escrow | Compute leasing, block-priced settlement |
+| **Render** | RENDER burn (Solana) | Burn-on-submit for GPU jobs |
+| **Bittensor** | TAO emissions | Subnet queries, inflation-subsidized |
+| **Anthropic, OpenAI, Google** | **None** | Fiat/credit card only |
+
+The bottom four rows are the constraint: mainstream frontier models (Claude, GPT, Gemini) have no crypto payment rails. Until they adopt x402 or equivalent, the bridge is necessary.
+
+### The x402 Protocol — Closer Than Expected
+
+x402 revives HTTP 402 for machine-to-machine payments. USDC on Base, ~200ms settlement, ~$0.0001 per tx. **This is already in production:**
+- 156,000 weekly transactions (492% growth)
+- Adopted by Hyperbolic (GPU inference), Neynar (Farcaster data), Token Metrics
+- Stripe integration shipped. Visa support announced. Cloudflare backing.
+- Google AP2 natively supports x402's crypto extension
+
+**When Anthropic/OpenAI adopt x402, the bridge problem disappears.** Nodes pay providers directly per-request in USDC. No credit top-ups, no operator wallets, no intermediaries.
+
+### The Sovereignty Warning (BlueMatt, Feb 25 2026)
+
+Worth noting: x402 is effectively Coinbase-controlled infrastructure. USDC is Coinbase's stablecoin. Base is Coinbase's L2. The facilitator is Coinbase's service. Lightning L402 (Lightning Labs, open-source tools released Feb 2026) is the truly permissionless alternative. For a DAO that values sovereignty, this matters — the "open" payment rail may not actually be open.
+
+### Deployed Burn-on-Use Token Precedents
+
+| Protocol | Token Model | Settlement | Status |
+|----------|-------------|-----------|--------|
+| **Render** | RENDER burned on job submit, providers paid from separate emission pool | 24-hour epochs | Live — 530K+ tokens burned Jan-Sep 2025 |
+| **Akash (BME proposal)** | Burn AKT → mint ACT (USD-pegged compute credit), ACT burned at settlement, AKT re-minted to providers | Block-priced, batched withdrawal | Proposed (AEP-76), not yet deployed |
+| **Venice** | Stake VVV → mint DIEM, 1 DIEM = $1/day API credit, DIEM tradeable on Aerodrome | Off-chain metering against staked allocation | Live — 33M+ VVV burned (42.8% of supply) |
+
+The Akash BME model is closest to what a COGNI token protocol would look like: burn a utility token to consume AI, re-mint to providers at settlement. The key difference is Cogni routes to external providers (OpenRouter/Anthropic) rather than operating its own compute.
 
 ---
 
@@ -61,30 +104,9 @@ AI Project (Node)
 
 ---
 
-## Industry Context: What's Actually Happening (2025-2026)
+## Industry Context
 
-### The x402 Protocol (Coinbase/Stripe)
-
-The most significant development is **x402** — a protocol reviving HTTP status code 402 to enable machine-to-machine payments. When an AI agent requests a paid resource, it gets a structured payment request; the agent sends USDC on Base; access is granted automatically. No accounts, no API keys, no billing cycles.
-
-Stripe has already shipped x402 support. Coinbase's Erik Reppel compares it to HTTPS — the layer that made value transfer native to the web. Google Cloud, AWS, and Anthropic adopted it in late 2025.
-
-**This is directly relevant to Cogni** because x402 could eventually eliminate the need for the OpenRouter→Coinbase Commerce bridge entirely. If AI providers adopt x402, nodes pay per-request in USDC on Base. No pre-funded accounts, no credit top-ups.
-
-**But we're not there yet.** OpenRouter's Coinbase Commerce integration remains the only production-ready crypto→AI payment rail today. x402 adoption by major AI providers is 2026+ timeline.
-
-### Existing Crypto-AI Token Protocols
-
-| Protocol | Token | What It Does | Bridge Model |
-|----------|-------|-------------|-------------|
-| **Bittensor** | TAO | Decentralized AI inference marketplace | Validators score miners, TAO flows as payment. No fiat bridge — pure crypto loop. |
-| **Render** | RNDR | GPU compute marketplace | Users pay RNDR, node operators provide GPU. Protocol handles matching. |
-| **Akash** | AKT | Decentralized cloud compute | Reverse auction: tenants bid AKT, providers accept. On-chain settlement. |
-| **Ritual** | — | AI inference on-chain | Smart contracts call AI models; payment via protocol fee. |
-
-**Common pattern:** All use a utility token to abstract the provider payment problem. The token protocol handles settlement; individual nodes/miners just do work and get paid in tokens.
-
-**Key difference from Cogni:** These protocols create their own compute supply side. Cogni routes to existing providers (OpenRouter, Anthropic, OpenAI). The bridge problem is USDC→provider, not token→compute.
+See "The Landscape Is Moving Fast" section above for the detailed market survey, x402 analysis, deployed token precedents, and the sovereignty warning about Coinbase-controlled payment rails.
 
 ---
 
@@ -297,6 +319,7 @@ The current billing DB approach works for the first node (Cogni itself). Don't b
 ### Phase 1: Token protocol design + first contract
 
 - Design the 3-contract system (CogniCredit, CogniDeposit, CogniSettlement)
+- Study Akash BME (AEP-76) and Render BME as reference architectures — they're closest to what COGNI needs
 - Deploy on Base testnet
 - Cogni's own node becomes the first settlement reporter
 - Provider treasury tops up OpenRouter (same Coinbase Commerce flow, but centralized in one place)
@@ -308,11 +331,21 @@ The current billing DB approach works for the first node (Cogni itself). Don't b
 - Users deposit USDC → get COGNI → use AI on the new node
 - Settlement flows through the shared protocol treasury
 
-### Phase 3: x402 integration (when providers adopt it)
+### Phase 3: x402 native payment rail
 
-- Nodes can optionally pay providers directly via x402 (USDC per-request on Base)
+x402 is closer than expected — 156K weekly txs, Stripe/Visa/Cloudflare backing, ~$0.0001/tx on Base. When frontier AI providers (Anthropic, OpenAI) adopt x402:
+- Nodes pay providers directly per-request in USDC (HTTP 402 → payment → response)
 - Protocol treasury becomes optional for x402-enabled providers
-- Full sovereignty achieved: node pays provider directly, no intermediary at all
+- COGNI token becomes a governance/metering token rather than a payment bridge
+- Full sovereignty achieved: no intermediary at all
+
+**Decision point:** Should Cogni implement x402 for its OWN gateway (letting agents pay per-request to Cogni nodes in USDC)? This would make Cogni nodes x402-compatible servers, which is a much cleaner protocol fit than the current credit-purchase-then-consume model.
+
+### Sovereignty consideration for Phase 3
+
+BlueMatt's warning (Feb 25 2026): x402 is Coinbase infrastructure (USDC + Base + facilitator). Lightning L402 is the truly permissionless alternative. A DAO protocol should consider supporting both rails:
+- **x402** for ecosystem compatibility (Stripe, Visa, mainstream adoption)
+- **L402** for sovereignty (permissionless, Bitcoin-native, no Coinbase dependency)
 
 ---
 
@@ -324,6 +357,8 @@ The current billing DB approach works for the first node (Cogni itself). Don't b
 | Off-chain usage report fraud | Medium | Economic: nodes stake COGNI to report. Slash on dispute. (Add later, not MVP.) |
 | Gas costs for settlement | Low | Batch settlements. Base L2 is cheap (~$0.001/tx). |
 | Token regulatory classification | Medium | Utility token (metering, not investment). No secondary market needed — COGNI is burned, not traded. |
+| x402 makes token protocol obsolete | Low-Medium | If x402 adoption is fast enough, COGNI token becomes governance-only (not payment-bridging). Design for this: token protocol should be modular enough that the settlement layer can be swapped for x402 direct payment. |
+| Coinbase dependency via x402/Base/USDC | Medium | BlueMatt's point: x402 is Coinbase-controlled. Support L402 (Lightning) as permissionless fallback. Design settlement contract to accept multiple payment proofs. |
 | Complexity of building contracts | Medium | 3 simple contracts. No governance, staking, or AMM. Simpler than the current Privy + Splits + Coinbase Commerce stack. |
 | OpenRouter changes crypto API | Medium | Same risk exists today. Protocol treasury is a single point to update, vs updating every node. |
 
@@ -333,10 +368,11 @@ The current billing DB approach works for the first node (Cogni itself). Don't b
 
 1. **Ship Phase 0** with current billing DB for Cogni's own node. Don't block on token protocol.
 2. **Isolate the bridge** — the operator wallet + OpenRouter top-up code should live in a clearly separated module, not spread across the node template.
-3. **Design the token protocol** as the answer to "how does a second node onboard?" — not as a theoretical future, but as the concrete next architecture milestone.
+3. **Design the token protocol** as the answer to "how does a second node onboard?" — not as a theoretical future, but as the concrete next architecture milestone. Study Akash BME (AEP-76) and Render BME as the closest reference architectures.
 4. **The token replaces the DB credit system**, not supplements it. 1 COGNI = 1 credit = $0.0000001. Same unit standard, on-chain instead of in-DB.
 5. **Provider settlement is protocol-level**, not per-node. One Coinbase Commerce integration in the protocol treasury, not one per node.
-6. **Watch x402 closely.** When AI providers accept USDC directly via HTTP 402, the protocol treasury becomes optional and nodes achieve full payment sovereignty.
+6. **Build for x402 compatibility.** x402 is further along than expected (156K weekly txs, Stripe/Visa backing). Design the settlement layer so it can be swapped for x402 direct payment when providers adopt it. Cogni nodes should themselves be x402-compatible servers — let agents pay per-request in USDC rather than pre-purchasing credits.
+7. **Support dual payment rails** for sovereignty: x402 (USDC/Base) for mainstream compatibility, L402 (Lightning) for permissionless fallback. Don't lock into Coinbase-controlled infrastructure as the only option.
 
 The cleanest definition:
 - **Protocol** = the crypto→AI payment bridge (token contracts + provider settlement)
@@ -344,3 +380,21 @@ The cleanest definition:
 - **Operator** = optional platform services (git-review, cred scoring, node registry)
 
 Each layer does one thing. No layer does another layer's job.
+
+---
+
+## Sources
+
+- [x402 Protocol — Coinbase Developer Docs](https://docs.cdp.coinbase.com/x402/welcome)
+- [x402 Whitepaper](https://www.x402.org/x402-whitepaper.pdf)
+- [Stripe x402 on Base (2026)](https://crypto.news/stripe-taps-base-ai-agent-x402-payment-protocol-2026/)
+- [Hyperbolic x402 Crypto Payments](https://www.hyperbolic.ai/blog/pay-for-gpu-and-ai-inference-models-with-crypto)
+- [BlueMatt — Open Source AI Needs Serious Payments (Feb 25, 2026)](https://bluematt.bitcoin.ninja/2026/02/25/open-source-ai-needs-to-get-serious/)
+- [Lightning Labs AI Agent Tools (Feb 2026)](https://lightning.engineering/posts/2026-02-11-ln-agent-tools/)
+- [Akash BME Proposal (AEP-76)](https://akash.network/roadmap/aep-76/)
+- [Render BME Documentation](https://know.rendernetwork.com/basics/burn-mint-equilibrium)
+- [Venice AI — DIEM Token](https://venice.ai/blog/introducing-diem-as-tokenized-intelligence-the-next-evolution-of-vvv)
+- [Bittensor Dynamic TAO](https://docs.learnbittensor.org/subnets/understanding-subnets)
+- [CoinGecko — AI Agent Payment Infrastructure](https://www.coingecko.com/learn/ai-agent-payment-infrastructure-crypto-and-big-tech)
+- [OpenRouter Crypto API](https://openrouter.ai/docs/guides/guides/crypto-api)
+- [Chainalysis — AI and Crypto Convergence](https://www.chainalysis.com/blog/ai-and-crypto-agentic-payments/)
