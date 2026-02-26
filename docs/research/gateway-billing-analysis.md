@@ -33,7 +33,7 @@ Cogni's value proposition is being this bridge: a closed-loop crypto-native reve
 
 The bottom four rows are the constraint: mainstream frontier models (Claude, GPT, Gemini) have no crypto payment rails. Until they adopt x402 or equivalent, the bridge is necessary.
 
-### The x402 Protocol — Traction, But a Fundamental Gap
+### The x402 Protocol — Traction, and Dynamic Pricing Is Closer Than Expected
 
 x402 revives HTTP 402 for machine-to-machine payments. USDC on Base, ~200ms settlement, ~$0.0001 per tx. **Real traction:**
 - 156,000 weekly transactions (492% growth)
@@ -41,11 +41,31 @@ x402 revives HTTP 402 for machine-to-machine payments. USDC on Base, ~200ms sett
 - Stripe integration shipped. Visa support announced. Cloudflare backing.
 - Google AP2 natively supports x402's crypto extension
 
-**But x402 cannot handle dynamic AI pricing as currently specified.**
+**The core Coinbase spec's `exact` scheme cannot handle dynamic AI pricing** — it requires the server to quote a fixed amount upfront. LLM inference cost depends on output token count, which is unknown until generation completes.
 
-The only shipped payment scheme is `exact` — the server tells the client "pay $X" upfront, the client signs an EIP-3009 `transferWithAuthorization` for that exact amount, and the facilitator settles on-chain. This works for static-priced resources (data API calls, content access) but **fundamentally breaks for LLM inference** where cost = `f(input_tokens, output_tokens)` and output tokens aren't known until generation completes.
+**However, the `upto` scheme HAS shipped — via Thirdweb, not Coinbase core.** Thirdweb SDK v5.114.0+ implements `upto` in production with an open-source reference implementation for pay-per-token AI inference with streaming ([thirdweb-example/x402-ai-inference](https://github.com/thirdweb-example/x402-ai-inference)). x402 V2's modular plugin architecture makes this possible without changes to the core spec.
 
-The proposed `upto` scheme (authorize a maximum, settle the actual amount) is **not implemented** — not in the x402 TypeScript SDK, not in the reference facilitator, not in any known deployment. Even Hyperbolic (x402 launch partner) appears to use fixed per-call pricing tiers, not true per-token dynamic billing, to work around this.
+**Thirdweb `upto` flow for AI inference:**
+```
+1. Client requests AI completion
+2. Server responds 402 with scheme: "upto", maxPayableAmount (worst-case estimate)
+3. Client signs authorization for up to maxPayableAmount
+4. Server calls verifyPayment() to confirm authorization covers max
+5. Server streams AI response (Vercel AI SDK streamText())
+6. In onFinish callback: actual cost = totalTokens * PRICE_PER_INFERENCE_TOKEN_WEI
+7. Server calls settlePayment() with ACTUAL cost (≤ max)
+```
+
+**Also shipped: "Sign once, settle many times" (Dec 2025)** — a single `upto` authorization covers a whole session. Client authorizes $1 once, server settles 100 micro-payments of $0.01 each without re-signing. Natural fit for multi-turn chat.
+
+**Other emerging x402 schemes (not yet shipped):**
+
+| Scheme | Description | Status |
+|--------|-------------|--------|
+| **`exact`** | Fixed price, pay before access | Shipped (Coinbase core) |
+| **`upto`** | Authorize max, settle actual | Shipped (Thirdweb), not in Coinbase core spec |
+| **`escrow`** | Lock funds in contract, draw per-usage, refund remainder | Spec proposal (x402 PR #873) |
+| **`deferred`** | Crypto handshake now, financial settlement later (batched) | Cloudflare private beta (pay-per-crawl) |
 
 ### Why This Matters for Cogni: The LiteLLM Cost Pipeline
 
@@ -68,38 +88,41 @@ The cost of a single Claude Sonnet request can range from $0.004 (short answer) 
 
 ### Four Approaches to Bridge x402 + Dynamic Pricing
 
-#### Approach 1: EIP-2612 Permit + Post-Settlement ("Authorize Max, Charge Actual")
+#### Approach 1: x402 `upto` Scheme — Authorize Max, Settle Actual (SHIPPED)
 
-Instead of EIP-3009 (exact transfer), use EIP-2612 (approve up to X):
+This is no longer theoretical. Thirdweb has this in production (SDK v5.114.0+):
 ```
 1. Client requests AI completion
-2. Server estimates max cost (e.g., max_tokens * output_cost_per_token + input_cost)
-3. Server responds 402 with max_amount
-4. Client signs EIP-2612 permit for max_amount
-5. Server generates response, LiteLLM calculates actual cost
-6. Server calls transferFrom for ACTUAL cost (not max)
-7. Remaining approval expires or is revoked
+2. Server estimates max cost (max_tokens * output_cost_per_token + input_cost)
+3. Server responds 402 with scheme: "upto", maxPayableAmount
+4. Client signs authorization for up to maxPayableAmount
+5. Server streams response, LiteLLM calculates actual cost in onFinish
+6. Server calls settlePayment() with ACTUAL cost (≤ max)
+7. Unused authorization expires — client's funds beyond actual cost are never touched
 ```
 
-**Pro:** Uses existing ERC-20 standards. True per-request settlement.
-**Con:** Requires trust that server won't overcharge. Max estimate can be 10-20x actual (confusing UX). Ties up user funds during generation. Needs dispute mechanism.
+**Pro:** Production-ready. True per-request settlement. Standard x402 flow. Open-source reference impl exists for AI inference specifically.
+**Con:** Max estimate can be 10-20x actual (client must have funds for max). Server bears execution risk (performs work before settlement guaranteed). Requires trust that server won't overcharge — needs dispute mechanism for adversarial settings.
 
-**Cogni fit:** Could work as an x402 extension. The node IS the server, so it controls both LiteLLM (cost oracle) and the settlement call. Signed `charge_receipts` provide an audit trail for disputes.
+**Cogni fit:** Strong. The node IS the server, so it controls both LiteLLM (cost oracle) and the `settlePayment()` call. Signed `charge_receipts` already provide an audit trail. The max estimate problem is bounded: we know `max_tokens` from the request config and `output_cost_per_token` from `litellm-config.yaml`. "Sign once, settle many" covers multi-turn chat naturally.
+
+**The key question for Cogni:** This works for Cogni nodes as x402 SERVERS (users/agents pay Cogni per-request). It does NOT help with Cogni nodes as x402 CLIENTS paying upstream providers — Anthropic/OpenAI don't accept x402. The outbound bridge problem remains.
 
 #### Approach 2: Session Escrow ("Deposit, Meter, Settle")
 
+Proposed as x402 `escrow` scheme ([PR #873](https://github.com/coinbase/x402/pull/873)) — spec only, not shipped:
 ```
-1. Client opens session by depositing USDC into per-session escrow
+1. Client locks funds in escrow smart contract
 2. Multiple AI requests served against escrow balance
-3. Each request: LiteLLM tracks actual cost off-chain
+3. Each request: LiteLLM tracks actual cost, provider draws from escrow
 4. Periodic on-chain settlement (every N requests or every T seconds)
-5. Session close: remaining escrow refunded
+5. Session close: remaining escrow refunded to client
 ```
 
-**Pro:** Amortizes gas across many requests. Natural for chat sessions (multiple turns).
-**Con:** Reinvents the credit system on-chain. Per-session escrow contracts are expensive.
+**Pro:** Amortizes gas across many requests. Natural for chat sessions. Trustless — funds locked in contract, not held by server.
+**Con:** Requires custom escrow contract. Per-session contract interactions are expensive. Reinvents the credit system on-chain.
 
-**Cogni fit:** This is essentially what the current billing DB does, just with USDC escrow instead of DB credits. Not a simplification — it's a lateral move.
+**Cogni fit:** Viable but heavy. The "sign once, settle many" variant of `upto` achieves similar session economics with less on-chain complexity. Consider for Phase 2+ if adversarial trust model is needed (multi-node settlement where nodes don't trust each other).
 
 #### Approach 3: Pre-Funded Balance + Off-Chain Metering ("The Pattern Everyone Actually Uses")
 
@@ -134,16 +157,25 @@ Instead of EIP-3009 (exact transfer), use EIP-2612 (approve up to X):
 
 ### The Honest Assessment
 
-**x402 as-is does not solve the AI billing problem.** The "when providers adopt x402, the bridge disappears" claim in the previous version of this analysis was wrong — or at least premature. Even if Anthropic adopted x402 tomorrow, a Cogni node couldn't pay per-request because the cost isn't known until after generation.
+The dynamic pricing problem is solvable on the INBOUND side (users/agents → Cogni nodes) using the `upto` scheme. But it does NOT solve the OUTBOUND side (Cogni nodes → Anthropic/OpenAI).
+
+**Two distinct problems:**
+
+| Direction | Problem | x402 Status |
+|-----------|---------|-------------|
+| **Inbound** (user → Cogni node) | User pays for dynamic-cost AI request | **Solvable now** via `upto` (Thirdweb, production). Node streams response, settles actual cost in `onFinish`. |
+| **Outbound** (Cogni node → AI provider) | Node pays Anthropic/OpenAI for inference | **Not solvable** — providers don't accept x402 or any crypto. Bridge still required. |
 
 What x402 CAN do for Cogni today:
-- **Inbound deposits:** Client pays Cogni node via x402 `exact` scheme to top up credits (replaces Coinbase Commerce for deposits)
-- **Fixed-price endpoints:** Cogni could offer simplified fixed-price tiers (e.g., "$0.05 per message" regardless of tokens) — but this shifts pricing risk to the node operator
-- **Session initiation:** x402 for opening a metered session, then off-chain metering within the session
+- **Inbound per-request billing:** Cogni nodes as x402 `upto` servers — agents/users pay per-request with dynamic settlement after generation. This REPLACES the credit-purchase-then-consume model for the user→node leg.
+- **Inbound deposits:** x402 `exact` scheme for credit/token top-ups (replaces Coinbase Commerce for deposits)
+- **Multi-turn sessions:** "Sign once, settle many" — one authorization covers a whole chat session
 
-What x402 CANNOT do without the `upto` scheme shipping:
-- True per-request dynamic settlement for AI inference
-- Trustless verification of actual cost at the protocol level
+What x402 CANNOT do:
+- **Outbound provider payments** — Anthropic, OpenAI, Google don't accept x402. The OpenRouter/Coinbase Commerce bridge is still needed on the provider side.
+- **Eliminate off-chain metering** — LiteLLM must still track actual token usage and cost. x402 settlement uses LiteLLM's cost as the source of truth.
+
+**Critical architectural implication:** The inbound and outbound legs are now asymmetric. Inbound can be x402 per-request (no pre-funded credits needed). Outbound is still pre-funded credit (OpenRouter top-ups). The node sits between these two models — collecting per-request from users via x402, paying pre-funded to providers via Coinbase Commerce.
 
 ### The Sovereignty Warning (BlueMatt, Feb 25 2026)
 
@@ -433,38 +465,50 @@ The current billing DB approach works for the first node (Cogni itself). Don't b
 - Users deposit USDC → get COGNI → use AI on the new node
 - Settlement flows through the shared protocol treasury
 
-### Phase 3: x402 as inbound deposit rail (not per-request settlement)
+### Phase 3: Cogni nodes as x402 `upto` servers (inbound per-request billing)
 
-x402 has real traction (156K weekly txs, Stripe/Visa/Cloudflare backing), but **it cannot replace the credit system for AI billing** because AI pricing is dynamic (see "Four Approaches to Bridge x402 + Dynamic Pricing" above). The `upto` scheme that would enable variable-amount payments is not shipped.
+The `upto` scheme is shipped (Thirdweb, production). This enables Cogni nodes to accept per-request payment from users/agents with dynamic pricing — the exact problem you raised.
 
-**What x402 CAN do now:**
-- Replace Coinbase Commerce for inbound USDC deposits (cleaner UX, standard protocol)
-- Enable agent-to-node deposits without manual credit purchase flows
-- Provide the deposit rail for the COGNI token protocol (x402 deposit → mint COGNI)
+**What this changes:**
+- Users/agents NO LONGER need to pre-purchase credits to use a Cogni node
+- Each AI request: agent authorizes max → node streams response → node settles actual cost via LiteLLM
+- "Sign once, settle many" covers multi-turn chat sessions
+- The credit-purchase-then-consume model becomes OPTIONAL (kept for users who prefer prepaid)
 
-**What x402 CANNOT do without `upto` shipping:**
-- Per-request dynamic settlement for AI inference
-- Eliminate the need for off-chain metering (LiteLLM → charge_receipts)
-- Make the COGNI token protocol unnecessary
+**What this does NOT change:**
+- Outbound: node still pre-funds OpenRouter via Coinbase Commerce (providers don't accept x402)
+- Metering: LiteLLM still tracks actual token usage and cost — this is the cost oracle for settlement
+- The node still needs working capital to pay providers between collecting from users
 
-**Decision point:** Cogni nodes as x402 servers for DEPOSITS makes sense. Cogni nodes as x402 servers for per-request AI billing does NOT work with dynamic pricing — unless we switch to fixed-price tiers (e.g., "$0.05 per message"), which shifts pricing risk to the node operator and loses the transparency of per-token billing.
-
-**The honest architecture:** Even in a fully x402-adopted world, AI billing will be:
+**Concrete integration with current LiteLLM pipeline:**
 ```
-Deposit: x402 (or direct transfer) → on-chain
-Metering: LiteLLM tracks actual token usage → off-chain
-Settlement: Periodic batch settlement → on-chain
+INBOUND (x402 upto — NEW):
+  1. Agent sends request to Cogni node
+  2. Node responds 402 with maxPayableAmount:
+     = (input_tokens * input_cost_per_token) + (max_tokens * output_cost_per_token)
+     + (markup_factor)
+     (All values from litellm-config.yaml + USER_PRICE_MARKUP_FACTOR)
+  3. Agent signs upto authorization
+  4. Node calls verifyPayment(), streams response via LiteLLM
+  5. LiteLLM onFinish: actual cost = response_cost * markup_factor
+  6. Node calls settlePayment(actual_cost)
+  7. charge_receipt written with litellm_call_id as idempotency key (same pattern)
+
+OUTBOUND (unchanged):
+  Node's OpenRouter balance → topped up from collected USDC
+  Periodic, not per-request (because providers don't accept x402)
 ```
-Not: `x402 per-request on-chain settlement` (which the current x402 spec cannot support for variable-cost AI).
 
-### Phase 3b: When `upto` ships (speculative)
+**Decision point:** This is a REAL option now. The question is whether to build this for Phase 1 (alongside the token protocol) or Phase 3 (after token protocol stabilizes). The argument for earlier: x402 `upto` eliminates the need for the COGNI token on the inbound leg entirely. Users pay USDC directly per-request — no token purchase, no credit system, no on-chain deposits. The token protocol only matters for the outbound settlement leg (provider treasury) and cross-node portability.
 
-IF the x402 `upto` scheme ships with EIP-2612 permit support:
-- Nodes could quote max cost (max_tokens × output_cost + input_cost)
-- Client authorizes up to max
-- Node settles actual cost after generation
-- This enables true per-request dynamic settlement
-- But: max estimate can be 10-20x actual (poor UX), and requires trust/dispute mechanism
+### Phase 3b: When providers adopt x402 (outbound leg — speculative)
+
+IF Anthropic/OpenAI adopt x402:
+- Nodes pay providers directly per-request in USDC (HTTP 402 → payment → response)
+- Protocol treasury becomes unnecessary
+- Full sovereignty achieved: no intermediary at all
+- But: this requires providers to accept x402 `upto` (not just `exact`)
+- Timeline: unclear. No signals from Anthropic/OpenAI on x402 adoption.
 
 ### Sovereignty consideration
 
@@ -484,7 +528,7 @@ The deposit rail (Phase 3) should be pluggable — accept x402, L402, and direct
 | Off-chain usage report fraud | Medium | Economic: nodes stake COGNI to report. Slash on dispute. (Add later, not MVP.) |
 | Gas costs for settlement | Low | Batch settlements. Base L2 is cheap (~$0.001/tx). |
 | Token regulatory classification | Medium | Utility token (metering, not investment). No secondary market needed — COGNI is burned, not traded. |
-| x402 makes token protocol obsolete | Low | x402 cannot handle dynamic AI pricing (`upto` scheme not shipped). Even with full x402 adoption, off-chain metering + periodic settlement is still needed. x402 replaces the deposit rail, not the metering/settlement layer. Token protocol remains necessary. |
+| x402 `upto` makes token protocol unnecessary for inbound | Medium | `upto` is shipped (Thirdweb). Users can pay per-request in USDC — no COGNI token needed for the user→node leg. Token protocol's remaining value: outbound provider settlement + cross-node portability. If outbound is only one node (Cogni itself), the token adds complexity without proportionate benefit. Reassess token protocol scope. |
 | Coinbase dependency via x402/Base/USDC | Medium | BlueMatt's point: x402 is Coinbase-controlled. Support L402 (Lightning) as permissionless fallback. Design settlement contract to accept multiple payment proofs. |
 | Complexity of building contracts | Medium | 3 simple contracts. No governance, staking, or AMM. Simpler than the current Privy + Splits + Coinbase Commerce stack. |
 | OpenRouter changes crypto API | Medium | Same risk exists today. Protocol treasury is a single point to update, vs updating every node. |
@@ -498,9 +542,10 @@ The deposit rail (Phase 3) should be pluggable — accept x402, L402, and direct
 3. **Design the token protocol** as the answer to "how does a second node onboard?" — not as a theoretical future, but as the concrete next architecture milestone. Study Akash BME (AEP-76) and Render BME as the closest reference architectures.
 4. **The token replaces the DB credit system**, not supplements it. 1 COGNI = 1 credit = $0.0000001. Same unit standard, on-chain instead of in-DB.
 5. **Provider settlement is protocol-level**, not per-node. One Coinbase Commerce integration in the protocol treasury, not one per node.
-6. **Use x402 for deposits, not per-request billing.** x402 cannot handle dynamic AI pricing (the `upto` scheme isn't shipped, and `exact` requires knowing the cost upfront). But x402 is a cleaner inbound deposit rail than Coinbase Commerce. Cogni nodes should accept x402 for credit/token purchases, while metering stays off-chain via LiteLLM.
-7. **Off-chain metering is permanent, not a stopgap.** Every deployed crypto-AI system (OpenRouter, Akash, Venice, Bittensor) uses off-chain metering with periodic on-chain settlement. The dream of "every AI request settles on-chain per-call" requires either the `upto` scheme to ship + EIP-2612 support, or AI providers switching to fixed-price-per-request (unlikely). Design the architecture assuming LiteLLM → charge_receipts → periodic settlement is the enduring pattern.
-8. **Support dual deposit rails** for sovereignty: x402 (USDC/Base) for mainstream compatibility, L402 (Lightning) for permissionless fallback. Don't lock into Coinbase-controlled infrastructure as the only option.
+6. **x402 `upto` is viable for inbound per-request billing NOW.** Thirdweb has this in production with an open-source AI inference reference impl. Cogni nodes as x402 `upto` servers means users/agents pay per-request with dynamic settlement — no pre-purchased credits needed. This potentially eliminates the COGNI token's role on the inbound leg. Evaluate whether to build this for Phase 1 instead of Phase 3.
+7. **Off-chain metering (LiteLLM) remains the cost oracle regardless of payment rail.** Whether settlement is x402 `upto` per-request, COGNI token periodic, or pre-funded credits — LiteLLM calculates the actual cost post-completion. `charge_receipts` remain the audit trail. The metering layer is invariant; only the settlement layer changes.
+8. **The inbound and outbound legs are now asymmetric.** Inbound can be x402 per-request (dynamic, no credits). Outbound is still pre-funded (OpenRouter doesn't accept x402). The node collects per-request from users and pays pre-funded to providers. This working capital gap is the remaining bridge problem.
+9. **Support dual payment rails** for sovereignty: x402 (USDC/Base) for mainstream compatibility, L402 (Lightning) for permissionless fallback. Don't lock into Coinbase-controlled infrastructure as the only option.
 
 The cleanest definition:
 - **Protocol** = the crypto→AI payment bridge (token contracts + provider settlement)
@@ -513,16 +558,38 @@ Each layer does one thing. No layer does another layer's job.
 
 ## Sources
 
+### x402 Protocol
 - [x402 Protocol — Coinbase Developer Docs](https://docs.cdp.coinbase.com/x402/welcome)
 - [x402 Whitepaper](https://www.x402.org/x402-whitepaper.pdf)
+- [x402 V2 Launch Announcement](https://www.x402.org/writing/x402-v2-launch)
+- [x402 GitHub Repository](https://github.com/coinbase/x402)
+- [x402 Escrow Scheme Proposal — PR #873](https://github.com/coinbase/x402/pull/873)
 - [Stripe x402 on Base (2026)](https://crypto.news/stripe-taps-base-ai-agent-x402-payment-protocol-2026/)
+
+### x402 `upto` Scheme & Dynamic Pricing (Thirdweb)
+- [Thirdweb: Dynamic Pricing for x402 Resources](https://blog.thirdweb.com/changelog/dynamic-pricing-for-x402-resources/)
+- [Thirdweb: Sign Once, Settle Many Times with x402](https://blog.thirdweb.com/changelog/sign-once-settle-many-times-with-x402/)
+- [Thirdweb x402 AI Inference Example (open source)](https://github.com/thirdweb-example/x402-ai-inference)
+- [Thirdweb x402 Server Docs](https://portal.thirdweb.com/x402/server)
+
+### Cloudflare Deferred Scheme
+- [Cloudflare: Launching the x402 Foundation](https://blog.cloudflare.com/x402/)
+- [Cloudflare x402 Agents Docs](https://developers.cloudflare.com/agents/x402/)
+
+### AI Payment Providers
 - [Hyperbolic x402 Crypto Payments](https://www.hyperbolic.ai/blog/pay-for-gpu-and-ai-inference-models-with-crypto)
+- [OpenRouter Crypto API](https://openrouter.ai/docs/guides/guides/crypto-api)
+
+### Sovereignty & Alternatives
 - [BlueMatt — Open Source AI Needs Serious Payments (Feb 25, 2026)](https://bluematt.bitcoin.ninja/2026/02/25/open-source-ai-needs-to-get-serious/)
 - [Lightning Labs AI Agent Tools (Feb 2026)](https://lightning.engineering/posts/2026-02-11-ln-agent-tools/)
+
+### Token Protocol Precedents
 - [Akash BME Proposal (AEP-76)](https://akash.network/roadmap/aep-76/)
 - [Render BME Documentation](https://know.rendernetwork.com/basics/burn-mint-equilibrium)
 - [Venice AI — DIEM Token](https://venice.ai/blog/introducing-diem-as-tokenized-intelligence-the-next-evolution-of-vvv)
 - [Bittensor Dynamic TAO](https://docs.learnbittensor.org/subnets/understanding-subnets)
+
+### Market Context
 - [CoinGecko — AI Agent Payment Infrastructure](https://www.coingecko.com/learn/ai-agent-payment-infrastructure-crypto-and-big-tech)
-- [OpenRouter Crypto API](https://openrouter.ai/docs/guides/guides/crypto-api)
 - [Chainalysis — AI and Crypto Convergence](https://www.chainalysis.com/blog/ai-and-crypto-agentic-payments/)
