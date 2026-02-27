@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
 branch: feat/scoring-plugin
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/490
 reviewer:
 revision: 2
 blocked_by:
