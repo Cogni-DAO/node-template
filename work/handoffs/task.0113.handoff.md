@@ -6,63 +6,71 @@ status: active
 created: 2026-02-27
 updated: 2026-02-27
 branch: feat/scoring-plugin
-last_commit: 94619b25
+last_commit: 71be222b
 ---
 
-# Handoff: Epoch Artifact Pipeline + Work-Item Scoring
+# Handoff: Epoch Artifact Pipeline — Checkpoints 4 & 5
 
 ## Context
 
-- The transparent credit payouts system (`proj.transparent-credit-payouts`) currently scores contributors using flat event-type weights (PR=1000, review=500, issue=300 milli-units). This rewards surface area, not work outcomes.
-- **task.0113** introduces a generic `epoch_artifacts` table and the first enricher (work-item-linker) that ties GitHub activity to planned work items (`.md` files in `work/items/`). Enrichers run continuously (draft artifacts for UI) and pin immutably at closeIngestion (locked artifacts for payouts).
-- **task.0114** (blocked by 0113) replaces `weight-sum-v0` with `work-item-budget-v0` — each work item gets a credit budget = `estimate * priority_multiplier`, contributors split that budget by their linked event weights. Unlinked events fall back to flat weights.
-- Together these establish the second plugin surface in the ledger: **Source Adapters** (what happened) → **Epoch Enrichers** (what does it mean) → **Allocation Algorithms** (who gets what).
-- Design was iterated through multiple review rounds. All architectural decisions are documented in the task files and the plan file.
+- **task.0113** builds a generic artifact pipeline for the epoch ledger. Source adapters collect events; enrichers produce typed artifacts; allocation algorithms consume them.
+- Checkpoints 1-3 shipped earlier: `epoch_artifacts` table, store port methods, drizzle adapter, canonical JSON hashing, work-item-linker pure functions.
+- This session implemented **Checkpoints 4 & 5**: envelope validation, pipeline wiring, echo enricher (`cogni.echo.v0`), and tests.
+- The echo enricher is a trivial plumbing proof (event counts by type/user). The real work-item-linker enricher (reading `.md` files, snapshotting frontmatter) is future work.
+- **task.0114** (blocked by 0113) replaces the flat `weight-sum-v0` allocation algorithm with `work-item-budget-v0`.
 
 ## Current State
 
-- Both task files written and committed (`94619b25` on `feat/scoring-plugin`)
-- P1 roadmap in `proj.transparent-credit-payouts.md` updated with task.0113 and task.0114
-- **No implementation code written yet** — task files are the spec. Ready for implementation.
-- The existing V0 pipeline (allocation, epoch close, finalize) is fully built and working — see P0 deliverables in the project file
-- Nothing has shipped to users, so no backward compatibility is needed
+- All implementation code is **unstaged/uncommitted** on `feat/scoring-plugin` (21 files changed/new)
+- `pnpm check` passes (lint, type, format, docs, arch)
+- `pnpm test` passes (151 files, 1216 tests, 0 failures)
+- Pre-work rename: `artifactType` → `artifactRef` across all code, schema, and migration
+- 3 new modules in `packages/ledger-core/src/`: `artifact-envelope.ts`, `enricher-inputs.ts`, `validated-store.ts`
+- New enrichment activity module: `services/scheduler-worker/src/activities/enrichment.ts`
+- Workflow wired: enrichEpochDraft after curation, buildFinalArtifacts before autoClose
+- `autoCloseIngestion` now always uses `closeIngestionWithArtifacts` (artifacts required)
+- Container wraps drizzle adapter with `createValidatedLedgerStore` for envelope validation
+- 2 new test files: `artifact-envelope.test.ts` (14 tests), `enrichment-activities.test.ts` (7 tests)
+- Work item status still says `needs_implement` — needs update to `needs_closeout`
+- **Not done**: GitHub adapter enhancement (body/branch/labels in metadata), work-item-linker enricher activity (filesystem reads), component/stack tests
 
 ## Decisions Made
 
-- **One generic table** (`epoch_artifacts`) instead of work-item-specific tables — see task.0113 §1b
-- **Draft/locked lifecycle**: `UNIQUE(epoch_id, artifact_type, status)` allows one draft + one locked row per type. Drafts power UI; locked artifacts drive payouts — see task.0113 §1b row model
-- **ARTIFACT_FINAL_ATOMIC**: Locked artifact writes + `artifacts_hash` + epoch state transition in one DB transaction — see task.0113 §Store Port Changes
-- **Namespaced artifact types**: `cogni.work_item_links.v0` convention — avoids cross-team collisions
-- **`repoCommitSha` in payload only, NOT in `inputs_hash`**: `frontmatterHash` per work item already detects content changes. Including commit SHA would create false staleness signals — see task.0113 §Hashing Invariants
-- **Missing `.md` files produce zero-budget items** (never throw) — enrichment is best-effort, allocation handles zero-budget naturally — see task.0113 §1d
-- **Unit semantics**: `proposedUnits` are milli-units throughout, additive across linked and unlinked paths — see task.0114 §Unit semantics
-- Full design plan: `/Users/derek/.claude/plans/golden-shimmying-spindle.md`
+- **`artifactType` → `artifactRef`**: Renamed before more code depended on it. `artifactRef` = stable namespaced versioned identifier (e.g. `cogni.echo.v0`)
+- **Envelope validation is metadata-only**: `validateArtifactEnvelope` checks ref pattern, hash format, non-null payload. Does NOT standardize payload shape — that's per-plugin.
+- **`computeEnricherInputsHash` is extensible**: Base shape (epochId + sorted events) is frozen. Enrichers add via `extensions` param (canonicalJsonStringify sorts keys).
+- **ValidatedLedgerStore wraps at bootstrap**: Thin proxy ensures all artifact writes pass validation regardless of which code calls the store.
+- **Echo enricher (`cogni.echo.v0`)**: Trivial aggregation (totalEvents, byEventType, byUserId) as pipeline proof. `enrichEpochDraft` writes draft; `buildFinalArtifacts` returns data without writing.
+- **`autoCloseIngestion` always requires artifacts**: Removed the old `closeIngestion()` path entirely — artifacts are mandatory for epoch close.
 
 ## Next Actions
 
-- [ ] Implement task.0113 — start with the `/implement task.0113` skill
-- [ ] After task.0113 merges, implement task.0114
-- [ ] Unrelated blocker: `docs/archive/moonbags.md` is an unstaged draft file moved from `docs/spec/` to pass validators — decide whether to commit or delete it
+- [ ] Commit the 21 changed/new files
+- [ ] Update `work/items/task.0113.epoch-artifact-pipeline.md` status to `needs_closeout`
+- [ ] Run `/closeout task.0113` to finalize — update scope checkboxes, file headers, AGENTS.md
+- [ ] Decide on remaining task.0113 scope items (GitHub adapter body/branch/labels, work-item-linker activity with filesystem reads) — these may be deferred to a follow-up task
+- [ ] Implement task.0114 (work-item-budget allocation algorithm)
+- [ ] Add component tests for artifact CRUD + unique constraints + draft/locked lifecycle
+- [ ] Add stack test: collect → enrich → close → verify artifacts pinned
 
 ## Risks / Gotchas
 
-- The `check:docs` pre-commit hook validates ALL `.md` in `docs/spec/`, `docs/research/`, `docs/guides/`. Untracked drafts without frontmatter will block commits.
-- Commitlint prohibits the word "final" in commit bodies (flagged as a "red flag" word). Use "locked" or "pinned" instead.
-- The enricher activity needs filesystem access to the repo checkout to read work item `.md` files and run `git rev-parse HEAD`. The scheduler-worker must have the repo mounted.
-- `canonicalJsonStringify()` must sort keys at every depth and serialize BigInt as string — this is a correctness-critical function. Test exhaustively.
-- The `closeIngestionWithArtifacts` transaction replaces the existing `closeIngestion()` call — coordinate with existing workflow code in `collect-epoch.workflow.ts`.
+- The migration file (`0016_quick_thunderbolts.sql`) was rewritten in-place (column `artifact_type` → `artifact_ref`, index renamed). This is safe because the branch hasn't been deployed, but must not be applied on top of any DB that already ran the old migration.
+- `autoCloseIngestion` now requires `artifacts` and `artifactsHash` in its input — any external callers of this activity must be updated.
+- The work-item-linker enricher (reading `.md` files from filesystem) is NOT wired yet. The echo enricher is a placeholder proving the pipeline works.
+- Commitlint prohibits the word "final" in commit bodies — use "locked" or "pinned" instead.
+- `canonicalJsonStringify()` is correctness-critical for all hashing — its tests are in `packages/ledger-core/tests/hashing.test.ts`.
 
 ## Pointers
 
-| File / Resource                                                     | Why it matters                                         |
-| ------------------------------------------------------------------- | ------------------------------------------------------ |
-| `work/items/task.0113.epoch-artifact-pipeline.md`                   | Full spec for artifact pipeline + enricher             |
-| `work/items/task.0114.work-item-budget-allocation.md`               | Full spec for budget allocation algorithm              |
-| `work/projects/proj.transparent-credit-payouts.md`                  | Project roadmap with P0 done list + P1 tasks           |
-| `packages/ledger-core/src/allocation.ts`                            | Current allocation algorithm to replace                |
-| `packages/ledger-core/src/store.ts`                                 | Store port — add artifact methods here                 |
-| `packages/db-schema/src/ledger.ts`                                  | DB schema — add `epoch_artifacts` table here           |
-| `services/scheduler-worker/src/adapters/ingestion/github.ts`        | GitHub adapter — extend GraphQL for body/branch/labels |
-| `services/scheduler-worker/src/activities/ledger.ts`                | Activities — add `enrichEpoch` here                    |
-| `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` | Workflow — wire enrichment step + correct ordering     |
-| `.claude/plans/golden-shimmying-spindle.md`                         | Full design plan with all review iterations            |
+| File / Resource                                                     | Why it matters                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `packages/ledger-core/src/artifact-envelope.ts`                     | NEW — `validateArtifactRef` + `validateArtifactEnvelope`    |
+| `packages/ledger-core/src/enricher-inputs.ts`                       | NEW — `computeEnricherInputsHash` with extensions           |
+| `packages/ledger-core/src/validated-store.ts`                       | NEW — `createValidatedLedgerStore` wrapper                  |
+| `services/scheduler-worker/src/activities/enrichment.ts`            | NEW — echo enricher activities                              |
+| `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` | MODIFIED — enrichment wired at steps 6 and 9                |
+| `services/scheduler-worker/src/activities/ledger.ts`                | MODIFIED — `AutoCloseIngestionInput` now requires artifacts |
+| `services/scheduler-worker/src/bootstrap/container.ts`              | MODIFIED — wraps store with validated wrapper               |
+| `work/items/task.0113.epoch-artifact-pipeline.md`                   | Full spec for artifact pipeline                             |
+| `work/items/task.0114.work-item-budget-allocation.md`               | Next task: budget allocation algorithm                      |

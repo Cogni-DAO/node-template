@@ -12,10 +12,10 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch:
+branch: feat/scoring-plugin
 pr:
 reviewer:
-revision: 1
+revision: 2
 blocked_by:
 deploy_verified: false
 created: 2026-02-27
@@ -234,6 +234,19 @@ pnpm test:component
 - [ ] Missing `.md` files produce work items with error field, never throw
 - [ ] `getCuratedEventsWithMetadata` returns metadata + payloadHash alongside curation fields
 - [ ] Existing `weight-sum-v0` allocation still works (no allocation changes in this task)
+
+## Review Feedback
+
+### Revision 2 (2026-02-27)
+
+**Blocking:**
+
+1. **BigInt serialization through Temporal** — `UpsertArtifactParams` contains `epochId: bigint`. Temporal serializes activity inputs as JSON. `JSON.stringify(1n)` throws `TypeError`. The workflow will crash at runtime when passing `buildFinalArtifacts` output to `autoCloseIngestion`. Fix: serialize `epochId` as string in the returned artifacts (same pattern as `enrichEpochDraft` input), reconstruct BigInt in the activity.
+
+**Non-blocking suggestions:**
+
+- `buildFinalArtifacts` runs even when grace period hasn't elapsed — wasted DB query on every pass. Consider moving grace-period check before `buildFinalArtifacts` call, or accept as minor inefficiency.
+- `enrichment-activities.test.ts` missing `Scope:`, `Invariants:`, `Side-effects:`, `Links:` labels in TSDoc header.
 
 ## PR / Links
 
