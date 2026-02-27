@@ -5,79 +5,79 @@ work_item_id: refactor.ledger-renaming
 status: active
 created: 2026-02-28
 updated: 2026-02-28
-branch: refactor/ledger-renaming
-last_commit: 4c11e429
+branch: refactor/attribution-ledger
+last_commit: 79028f0d
 ---
 
 # Handoff: Rename Epoch Ledger → Attribution Ledger
 
 ## Context
 
-The epoch ledger pipeline rename (activity→ingestion, curation→selection, artifact→evaluation, payout→statement) is **complete and merged** (`4c11e429`). Now we rename the **system concept** from "Ledger" to "Attribution Ledger" — separating the work attribution system from a future Financial Ledger.
-
-**Design constraints** (from user review):
-
-1. **No migration wipe.** Additive migrations only.
-2. **Ingestion types stay domain-neutral.** `IngestionReceipt`, `IngestionCursor` — shared spine for Treasury later.
-3. **Payout terminology fully cleaned.** `PayoutLineItem` → `StatementLineItem`, `computePayouts` → `computeStatementItems`, `payoutsJson` → `statementItems` (domain) / `statement_items_json` (DB column), API wire field `payouts` → `items`.
-4. **Route paths rename to `/api/v1/attribution/`.** No users yet.
-
-Plan: `.claude/plans/sunny-singing-balloon.md` (7 phases, full type/file rename maps).
+- The "Epoch Ledger" system is being renamed to "Attribution Ledger" to separate work attribution from a future Financial Ledger
+- The pipeline stage rename (activity→ingestion, curation→selection, artifact→evaluation, payout→statement) was completed in `4c11e429` on a prior branch
+- This branch (`refactor/attribution-ledger`) renames the system concept itself: package, types, files, routes, contracts, DB column, and API surface
+- Design constraints: no migration wipe, ingestion types stay domain-neutral, route paths change to `/api/v1/attribution/`
+- Original plan: `~/.claude/plans/sunny-singing-balloon.md` (7 phases)
 
 ## Current State
 
-- **Phases 1–3 are DONE but UNCOMMITTED** (~98 files changed in working tree).
-- Pre-commit hook failed on pre-existing biome lint errors (`result!` → `result?` in `tests/component/db/drizzle-ledger.adapter.int.test.ts` lines 1278-1283). Fix those, then commit.
-- `pnpm packages:build` passes. Full `pnpm check` not yet run.
-- **Phases 4–7 NOT started.**
+**Phases 1–6 are committed** across 3 clean commits. `pnpm check` passes. `pnpm check:docs` passes.
 
-### What's done (uncommitted):
+| Commit     | Phase | Scope                                                                                                          |
+| ---------- | ----- | -------------------------------------------------------------------------------------------------------------- |
+| `56f468e7` | 1-3   | Spec update, package rename (`@cogni/ledger-core` → `@cogni/attribution-ledger`), all type renames (100 files) |
+| `ada73e4b` | 4-5   | File/dir renames (`git mv`), route dirs, test file renames, all import paths (53 files)                        |
+| `79028f0d` | 6     | Additive migration 0018: `ALTER TABLE epoch_statements RENAME COLUMN payouts_json TO statement_items_json`     |
 
-| Phase | Scope                                                                                                                                                  | Status |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| 1     | Spec update (`docs/spec/epoch-ledger.md`) — title, tables, invariants, file pointers, routes                                                           | Done   |
-| 2     | Package rename (`packages/ledger-core/` → `packages/attribution-ledger/`, `@cogni/ledger-core` → `@cogni/attribution-ledger`) + all imports + lockfile | Done   |
-| 3     | Type renames (see map below) + container props + wire format                                                                                           | Done   |
+**Phase 7 is NOT done** — AGENTS.md updates and JSDoc `Module:`/`Links:` header cleanup in ~60 source files.
 
-### What's left:
+### Phase 7 remaining work
 
-| Phase | Scope                                                                                                                 | Notes                   |
-| ----- | --------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| 4     | File/dir renames (`git mv`): schema, adapter, ports, core, routes, contracts, fixtures, spec                          | See plan for full table |
-| 5     | Test file renames + import path updates                                                                               | ~15 test files          |
-| 6     | Additive migration: `ALTER TABLE epoch_statements RENAME COLUMN payouts_json TO statement_items_json` + 4 DB triggers | No wipe                 |
-| 7     | AGENTS.md (~7 files) + doc comment headers + cross-references                                                         | `pnpm check:docs`       |
+1. **AGENTS.md files** (~9 files) — stale type names and file references:
+   - `packages/attribution-ledger/AGENTS.md` — heavily stale, still says "ledger-core" with old type names throughout
+   - `packages/db-client/AGENTS.md` — references `ActivityLedgerStore` (→ `AttributionStore`)
+   - `services/scheduler-worker/AGENTS.md` — references `createLedgerActivities()` (→ `createAttributionActivities()`)
+   - `src/app/api/v1/attribution/AGENTS.md`, `src/app/api/v1/public/attribution/AGENTS.md`, `src/core/AGENTS.md`, `src/features/governance/AGENTS.md`, `packages/ingestion-core/AGENTS.md`, `packages/db-schema/AGENTS.md`
+
+2. **JSDoc doc headers** (~50 source files) — `Module:` and `Links:` lines reference old paths:
+   - `packages/ledger-core/` → `packages/attribution-ledger/`
+   - `docs/spec/epoch-ledger.md` → `docs/spec/attribution-ledger.md`
+   - `drizzle-ledger.adapter` → `drizzle-attribution.adapter`
+   - `@app/api/v1/ledger/` → `@app/api/v1/attribution/`
+   - `contracts/ledger.` → `contracts/attribution.`
 
 ## Decisions Made
 
-- **`IngestionReceipt`/`IngestionCursor`** (not `Attribution*`) — domain-neutral shared spine for future Treasury.
-- **`statementItems`** (not `payouts`/`distributions`) — the JSON blob contains line items of a statement, not executed payments.
-- **DB column** `payouts_json` → `statement_items_json` via additive `ALTER TABLE RENAME COLUMN`.
-- **API wire field** `payouts` → `items` in `StatementSchema`.
-- **Routes** rename to `/api/v1/attribution/` — no stable API surface concern (no users).
-- **Temporal workflow IDs** (`ledger-collect-*`, `ledger-finalize-*`) and repo-spec config key (`ledger.approvers`) stay as-is — runtime identifiers, renaming would break schedules.
+- **`IngestionReceipt`/`IngestionCursor`** — domain-neutral, shared spine for future Treasury
+- **`statementItems`** (not `payouts`/`distributions`) — JSON blob is statement line items, not payments
+- **DB column** `payouts_json` → `statement_items_json` via additive migration (no wipe)
+- **API wire field** `payouts` → `items` in `StatementSchema` (Zod contract)
+- **Routes** `/api/v1/ledger/` → `/api/v1/attribution/` — no users yet
+- **Temporal workflow IDs** (`ledger-collect-*`) and config key (`ledger.approvers`) intentionally NOT renamed — runtime identifiers
 
 ## Next Actions
 
-1. Fix biome lint in `tests/component/db/drizzle-ledger.adapter.int.test.ts` (replace `result!` with `result?` at lines 1278-1283)
-2. Commit phases 1-3: `refactor(attribution): rename Ledger → Attribution Ledger (phases 1-3)`
-3. Execute Phase 4 (file renames — see plan for git mv table)
-4. Execute Phase 5 (test fixes)
-5. Execute Phase 6 (additive migration + triggers)
-6. Execute Phase 7 (AGENTS.md + docs)
-7. `pnpm check` — must be fully clean
-8. `pnpm check:docs` — must pass
+- [ ] Update ~9 AGENTS.md files with current type/function names
+- [ ] Update ~50 JSDoc `Module:` and `Links:` headers in source files (sed replacements)
+- [ ] Run `pnpm check` and `pnpm check:docs` — must both pass
+- [ ] Create PR to `staging`
+
+## Risks / Gotchas
+
+- `packages/attribution-ledger/AGENTS.md` needs a near-complete rewrite — it still describes the pre-rename public surface
+- Archive handoffs and work items in `work/` contain historical `ledger-core` references — leave them as-is
+- The `~/.claude/plans/sunny-singing-balloon.md` plan file has the full type rename map if you need reference
+- Migration 0017 already contained the 4 DB triggers from the plan's Phase 6 — only the column rename was new in 0018
 
 ## Pointers
 
-| File / Resource                                             | Why it matters                                                                            |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `.claude/plans/sunny-singing-balloon.md`                    | Full plan with type rename maps, file rename tables, phase details                        |
-| `packages/attribution-ledger/src/store.ts`                  | Source of truth for all type names (already renamed)                                      |
-| `packages/attribution-ledger/src/rules.ts`                  | `computeStatementItems()` (was `computePayouts`)                                          |
-| `packages/attribution-ledger/src/model.ts`                  | `StatementLineItem` (was `PayoutLineItem`)                                                |
-| `packages/db-schema/src/ledger.ts`                          | DB schema — `statementItemsJson` field (file to be renamed → `attribution.ts` in Phase 4) |
-| `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` | `DrizzleAttributionAdapter` class (file to be renamed in Phase 4)                         |
-| `src/contracts/ledger.epoch-statement.v1.contract.ts`       | Wire format: `items` field (file to be renamed in Phase 4)                                |
-| `services/scheduler-worker/src/activities/ledger.ts`        | `createAttributionActivities()` (file rename deferred to Phase 4)                         |
-| `docs/spec/epoch-ledger.md`                                 | Spec content updated, file to be renamed → `attribution-ledger.md` in Phase 4             |
+| File / Resource                                                        | Why it matters                                              |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `packages/attribution-ledger/src/store.ts`                             | Source of truth for all Attribution\* type definitions      |
+| `packages/attribution-ledger/src/index.ts`                             | Barrel exports — canonical public surface                   |
+| `packages/db-schema/src/attribution.ts`                                | DB schema with `statementItemsJson` column                  |
+| `packages/db-client/src/adapters/drizzle-attribution.adapter.ts`       | `DrizzleAttributionAdapter` — implements `AttributionStore` |
+| `src/contracts/attribution.epoch-statement.v1.contract.ts`             | Wire format with `items` field                              |
+| `src/adapters/server/db/migrations/0018_attribution_column_rename.sql` | Column rename migration                                     |
+| `docs/spec/attribution-ledger.md`                                      | Spec (content already updated)                              |
+| `~/.claude/plans/sunny-singing-balloon.md`                             | Full 7-phase plan with all rename maps                      |
