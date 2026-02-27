@@ -20,6 +20,25 @@ export {
   validateWeightConfig,
 } from "./allocation";
 
+// Artifact envelope validation
+export {
+  validateArtifactEnvelope,
+  validateArtifactRef,
+} from "./artifact-envelope";
+
+// Enricher inputs hash
+export { computeEnricherInputsHash } from "./enricher-inputs";
+
+// Enrichers (pure functions)
+export {
+  extractWorkItemIds,
+  WORK_ITEM_LINKER_ALGO_REF,
+  WORK_ITEM_LINKS_ARTIFACT_REF,
+  type WorkItemLink,
+  type WorkItemLinksPayload,
+  type WorkItemSnapshot,
+} from "./enrichers/work-item-linker";
+
 // Epoch window computation (pure, deterministic — safe in Temporal workflow code)
 export {
   computeEpochWindowV1,
@@ -43,8 +62,11 @@ export {
 
 // Hashing
 export {
+  canonicalJsonStringify,
   computeAllocationSetHash,
+  computeArtifactsHash,
   computeWeightConfigHash,
+  sha256OfCanonicalJson,
 } from "./hashing";
 
 // Model types and enums
@@ -78,6 +100,8 @@ export {
 // Store port interface + types
 export type {
   ActivityLedgerStore,
+  CloseIngestionWithArtifactsParams,
+  CuratedEventWithMetadata,
   InsertActivityEventParams,
   InsertAllocationParams,
   InsertCurationAutoParams,
@@ -88,10 +112,15 @@ export type {
   LedgerAllocation,
   LedgerCuration,
   LedgerEpoch,
+  LedgerEpochArtifact,
   LedgerPayoutStatement,
   LedgerPoolComponent,
   LedgerSourceCursor,
   LedgerStatementSignature,
   UncuratedEvent,
+  UpsertArtifactParams,
   UpsertCurationParams,
 } from "./store";
+
+// Validated store wrapper
+export { createValidatedLedgerStore } from "./validated-store";

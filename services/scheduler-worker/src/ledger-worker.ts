@@ -3,8 +3,8 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/ledger-worker`
- * Purpose: Temporal Worker for the ledger-tasks queue — epoch collection workflows.
- * Scope: Creates Temporal Worker with ledger activities and CollectEpochWorkflow. Does not contain business logic.
+ * Purpose: Temporal Worker for the ledger-tasks queue — epoch collection and enrichment workflows.
+ * Scope: Creates Temporal Worker with ledger + enrichment activities and CollectEpochWorkflow. Does not contain business logic.
  * Invariants:
  *   - Separate task queue (ledger-tasks) from scheduler-tasks
  *   - All dependencies injected via LedgerContainer from bootstrap/container.ts
@@ -16,6 +16,7 @@
 
 import { NativeConnection, Worker } from "@temporalio/worker";
 
+import { createEnrichmentActivities } from "./activities/enrichment.js";
 import { createLedgerActivities } from "./activities/ledger.js";
 import type { LedgerContainer } from "./bootstrap/container.js";
 import type { Env } from "./bootstrap/env.js";
@@ -54,13 +55,21 @@ export async function startLedgerWorker(
     address: env.TEMPORAL_ADDRESS,
   });
 
-  const activities = createLedgerActivities({
+  const ledgerActivities = createLedgerActivities({
     ledgerStore: container.ledgerStore,
     sourceAdapters: container.sourceAdapters,
     nodeId: container.nodeId,
     scopeId: container.scopeId,
     logger: container.logger,
   });
+
+  const enrichmentActivities = createEnrichmentActivities({
+    ledgerStore: container.ledgerStore,
+    nodeId: container.nodeId,
+    logger: container.logger,
+  });
+
+  const activities = { ...ledgerActivities, ...enrichmentActivities };
 
   const worker = await Worker.create({
     connection,

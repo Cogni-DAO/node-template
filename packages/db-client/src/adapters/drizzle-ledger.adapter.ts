@@ -15,6 +15,7 @@
  * - ALLOCATION_PRESERVES_OVERRIDES: upsertAllocations updates proposed_units/activity_count only; never touches final_units.
  * - POOL_LOCKED_AT_REVIEW: insertPoolComponent rejects inserts when epoch status != 'open'.
  * - CONFIG_LOCKED_AT_REVIEW: closeIngestion pins allocationAlgoRef + weightConfigHash.
+ * - ARTIFACT_FINAL_ATOMIC: closeIngestionWithArtifacts inserts locked artifacts + sets artifacts_hash + transitions epoch in one transaction.
  * Side-effects: IO (database operations)
  * Links: docs/spec/epoch-ledger.md, packages/ledger-core/src/store.ts
  * @public
@@ -25,6 +26,7 @@ import {
   activityCuration,
   activityEvents,
   epochAllocations,
+  epochArtifacts,
   epochPoolComponents,
   epochs,
   payoutStatements,
@@ -33,7 +35,9 @@ import {
 } from "@cogni/db-schema/ledger";
 import type {
   ActivityLedgerStore,
+  CloseIngestionWithArtifactsParams,
   CuratedEventForAllocation,
+  CuratedEventWithMetadata,
   InsertActivityEventParams,
   InsertAllocationParams,
   InsertCurationAutoParams,
@@ -44,11 +48,13 @@ import type {
   LedgerAllocation,
   LedgerCuration,
   LedgerEpoch,
+  LedgerEpochArtifact,
   LedgerPayoutStatement,
   LedgerPoolComponent,
   LedgerSourceCursor,
   LedgerStatementSignature,
   UncuratedEvent,
+  UpsertArtifactParams,
   UpsertCurationParams,
 } from "@cogni/ledger-core";
 import {
@@ -86,6 +92,7 @@ function toEpoch(row: typeof epochs.$inferSelect): LedgerEpoch {
     approverSetHash: row.approverSetHash,
     allocationAlgoRef: row.allocationAlgoRef,
     weightConfigHash: row.weightConfigHash,
+    artifactsHash: row.artifactsHash,
     openedAt: row.openedAt,
     closedAt: row.closedAt,
     createdAt: row.createdAt,
@@ -199,6 +206,24 @@ function toSignature(
     signerWallet: row.signerWallet,
     signature: row.signature,
     signedAt: row.signedAt,
+  };
+}
+
+function toEpochArtifact(
+  row: typeof epochArtifacts.$inferSelect
+): LedgerEpochArtifact {
+  return {
+    id: row.id,
+    nodeId: row.nodeId,
+    epochId: row.epochId,
+    artifactRef: row.artifactRef,
+    status: row.status as "draft" | "locked",
+    algoRef: row.algoRef,
+    inputsHash: row.inputsHash,
+    payloadHash: row.payloadHash,
+    payloadJson: row.payloadJson,
+    payloadRef: row.payloadRef,
+    createdAt: row.createdAt,
   };
 }
 
@@ -387,6 +412,199 @@ export class DrizzleLedgerAdapter implements ActivityLedgerStore {
       throw new EpochNotOpenError(epochId.toString());
     }
     return toEpoch(row);
+  }
+
+  // ── Artifacts ──────────────────────────────────────────────
+
+  async closeIngestionWithArtifacts(
+    params: CloseIngestionWithArtifactsParams
+  ): Promise<LedgerEpoch> {
+    return await this.db.transaction(async (tx) => {
+      // 1. Scope gate + status check (inline)
+      const epochRows = await tx
+        .select()
+        .from(epochs)
+        .where(
+          and(eq(epochs.id, params.epochId), eq(epochs.scopeId, this.scopeId))
+        )
+        .limit(1);
+      if (!epochRows[0]) {
+        throw new EpochNotFoundError(params.epochId.toString());
+      }
+      if (epochRows[0].status !== "open") {
+        // Idempotent: already in review/finalized → return as-is
+        if (
+          epochRows[0].status === "review" ||
+          epochRows[0].status === "finalized"
+        ) {
+          return toEpoch(epochRows[0]);
+        }
+        throw new EpochNotOpenError(params.epochId.toString());
+      }
+
+      // 2. Insert locked artifacts
+      for (const artifact of params.artifacts) {
+        await tx
+          .insert(epochArtifacts)
+          .values({
+            nodeId: artifact.nodeId,
+            epochId: artifact.epochId,
+            artifactRef: artifact.artifactRef,
+            status: "locked",
+            algoRef: artifact.algoRef,
+            inputsHash: artifact.inputsHash,
+            payloadHash: artifact.payloadHash,
+            payloadJson: artifact.payloadJson,
+          })
+          .onConflictDoNothing({
+            target: [
+              epochArtifacts.epochId,
+              epochArtifacts.artifactRef,
+              epochArtifacts.status,
+            ],
+          });
+      }
+
+      // 3. Transition epoch open → review with config pins + artifacts_hash
+      const [updated] = await tx
+        .update(epochs)
+        .set({
+          status: "review",
+          approverSetHash: params.approverSetHash,
+          allocationAlgoRef: params.allocationAlgoRef,
+          weightConfigHash: params.weightConfigHash,
+          artifactsHash: params.artifactsHash,
+        })
+        .where(
+          and(
+            eq(epochs.id, params.epochId),
+            eq(epochs.scopeId, this.scopeId),
+            eq(epochs.status, "open")
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        // Concurrent close won — reload and return
+        const [reloaded] = await tx
+          .select()
+          .from(epochs)
+          .where(
+            and(eq(epochs.id, params.epochId), eq(epochs.scopeId, this.scopeId))
+          )
+          .limit(1);
+        if (!reloaded) {
+          throw new EpochNotFoundError(params.epochId.toString());
+        }
+        return toEpoch(reloaded);
+      }
+
+      return toEpoch(updated);
+    });
+  }
+
+  async upsertDraftArtifact(params: UpsertArtifactParams): Promise<void> {
+    await this.resolveEpochScoped(params.epochId);
+    await this.db
+      .insert(epochArtifacts)
+      .values({
+        nodeId: params.nodeId,
+        epochId: params.epochId,
+        artifactRef: params.artifactRef,
+        status: "draft",
+        algoRef: params.algoRef,
+        inputsHash: params.inputsHash,
+        payloadHash: params.payloadHash,
+        payloadJson: params.payloadJson,
+      })
+      .onConflictDoUpdate({
+        target: [
+          epochArtifacts.epochId,
+          epochArtifacts.artifactRef,
+          epochArtifacts.status,
+        ],
+        set: {
+          algoRef: params.algoRef,
+          inputsHash: params.inputsHash,
+          payloadHash: params.payloadHash,
+          payloadJson: params.payloadJson,
+          createdAt: new Date(),
+        },
+      });
+  }
+
+  async getArtifactsForEpoch(
+    epochId: bigint,
+    status?: "draft" | "locked"
+  ): Promise<LedgerEpochArtifact[]> {
+    await this.resolveEpochScoped(epochId);
+    const conditions = [eq(epochArtifacts.epochId, epochId)];
+    if (status) conditions.push(eq(epochArtifacts.status, status));
+    const rows = await this.db
+      .select()
+      .from(epochArtifacts)
+      .where(and(...conditions));
+    return rows.map(toEpochArtifact);
+  }
+
+  async getArtifact(
+    epochId: bigint,
+    artifactRef: string,
+    status?: "draft" | "locked"
+  ): Promise<LedgerEpochArtifact | null> {
+    await this.resolveEpochScoped(epochId);
+    const conditions = [
+      eq(epochArtifacts.epochId, epochId),
+      eq(epochArtifacts.artifactRef, artifactRef),
+    ];
+    if (status) conditions.push(eq(epochArtifacts.status, status));
+    const rows = await this.db
+      .select()
+      .from(epochArtifacts)
+      .where(and(...conditions))
+      .limit(1);
+    return rows[0] ? toEpochArtifact(rows[0]) : null;
+  }
+
+  async getCuratedEventsWithMetadata(
+    epochId: bigint
+  ): Promise<CuratedEventWithMetadata[]> {
+    await this.resolveEpochScoped(epochId);
+    const rows = await this.db
+      .select({
+        eventId: activityCuration.eventId,
+        userId: activityCuration.userId,
+        source: activityEvents.source,
+        eventType: activityEvents.eventType,
+        included: activityCuration.included,
+        weightOverrideMilli: activityCuration.weightOverrideMilli,
+        metadata: activityEvents.metadata,
+        payloadHash: activityEvents.payloadHash,
+      })
+      .from(activityCuration)
+      .innerJoin(
+        activityEvents,
+        and(
+          eq(activityEvents.id, activityCuration.eventId),
+          eq(activityEvents.nodeId, activityCuration.nodeId)
+        )
+      )
+      .where(
+        and(
+          eq(activityCuration.epochId, epochId),
+          isNotNull(activityCuration.userId)
+        )
+      );
+    return rows.map((r) => ({
+      eventId: r.eventId,
+      userId: r.userId as string,
+      source: r.source,
+      eventType: r.eventType,
+      included: r.included,
+      weightOverrideMilli: r.weightOverrideMilli,
+      metadata: r.metadata,
+      payloadHash: r.payloadHash,
+    }));
   }
 
   // ── Allocation computation ──────────────────────────────────

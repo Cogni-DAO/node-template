@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/db-schema/ledger`
  * Purpose: Three-layer immutable epoch ledger schema for auditable activity-based credit payouts.
- * Scope: Defines all ledger tables (epochs, activity_events, activity_curation, epoch_allocations, source_cursors, epoch_pool_components, payout_statements, statement_signatures). Does not contain queries, business logic, or I/O.
+ * Scope: Defines all ledger tables (epochs, activity_events, activity_curation, epoch_allocations, epoch_artifacts, source_cursors, epoch_pool_components, payout_statements, statement_signatures). Does not contain queries, business logic, or I/O.
  * Invariants:
  * - All credit/unit columns use BIGINT (ALL_MATH_BIGINT).
  * - Layer 1 (activity_events, epoch_pool_components) are append-only (DB triggers in migration).
@@ -12,6 +12,8 @@
  * - ONE_OPEN_EPOCH: partial unique index on epochs WHERE status = 'open', scoped to (node_id, scope_id).
  * - EPOCH_WINDOW_UNIQUE: unique(node_id, scope_id, period_start, period_end).
  * - NODE_SCOPED: all ledger tables include node_id.
+ * - ARTIFACT_UNIQUE_PER_REF_STATUS: UNIQUE(epoch_id, artifact_ref, status) — one draft + one locked per ref.
+ * - ARTIFACT_FINAL_ATOMIC: locked artifact writes + artifacts_hash + epoch open→review in one transaction (enforced in store).
  * - No RLS in V0 — worker uses service-role connection.
  * Side-effects: none (schema definitions only)
  * Links: docs/spec/epoch-ledger.md
@@ -64,6 +66,7 @@ export const epochs = pgTable(
     openedAt: timestamp("opened_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    artifactsHash: text("artifacts_hash"),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -325,6 +328,52 @@ export const payoutStatements = pgTable(
  * Statement signatures — client-side EIP-191 signatures on payout statements.
  * Schema only — signing flow is a follow-up task.
  */
+// ---------------------------------------------------------------------------
+// Epoch Artifacts — enrichment outputs (draft/locked lifecycle)
+// ---------------------------------------------------------------------------
+
+/**
+ * Epoch artifacts — typed enrichment outputs for scoring pipeline.
+ * ARTIFACT_UNIQUE_PER_REF_STATUS: one draft + one locked row per artifact_ref per epoch.
+ * Drafts overwritten via UPSERT each collection pass. Locked artifacts written once at closeIngestion.
+ */
+export const epochArtifacts = pgTable(
+  "epoch_artifacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    nodeId: uuid("node_id").notNull(),
+    epochId: bigint("epoch_id", { mode: "bigint" })
+      .notNull()
+      .references(() => epochs.id),
+    artifactRef: text("artifact_ref").notNull(),
+    status: text("status").notNull().default("draft"),
+    algoRef: text("algo_ref").notNull(),
+    inputsHash: text("inputs_hash").notNull(),
+    payloadHash: text("payload_hash").notNull(),
+    payloadJson: jsonb("payload_json").$type<Record<string, unknown>>(),
+    payloadRef: text("payload_ref"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("epoch_artifacts_ref_status_unique").on(
+      table.epochId,
+      table.artifactRef,
+      table.status
+    ),
+    check(
+      "epoch_artifacts_status_check",
+      sql`${table.status} IN ('draft', 'locked')`
+    ),
+    check(
+      "epoch_artifacts_payload_check",
+      sql`${table.payloadJson} IS NOT NULL OR ${table.payloadRef} IS NOT NULL`
+    ),
+    index("epoch_artifacts_epoch_idx").on(table.epochId),
+  ]
+);
+
 export const statementSignatures = pgTable(
   "statement_signatures",
   {

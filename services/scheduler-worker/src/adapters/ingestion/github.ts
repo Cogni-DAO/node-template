@@ -62,13 +62,16 @@ interface GitHubActor {
 interface PrNode {
   number: number;
   title: string;
+  body: string;
   mergedAt: string;
   updatedAt: string;
   url: string;
   author: GitHubActor | null;
+  headRefName: string;
   additions: number;
   deletions: number;
   changedFiles: number;
+  labels: { nodes: Array<{ name: string }> };
 }
 
 interface ReviewNode {
@@ -128,13 +131,16 @@ const MERGED_PRS_QUERY = /* GraphQL */ `
         nodes {
           number
           title
+          body
           mergedAt
           updatedAt
           url
           author { __typename login ... on User { databaseId } }
+          headRefName
           additions
           deletions
           changedFiles
+          labels(first: 20) { nodes { name } }
         }
       }
     }
@@ -418,6 +424,9 @@ export class GitHubSourceAdapter implements SourceAdapter {
       artifactUrl: pr.url,
       metadata: {
         title: pr.title,
+        body: pr.body,
+        branch: pr.headRefName,
+        labels: pr.labels.nodes.map((l) => l.name),
         additions: pr.additions,
         deletions: pr.deletions,
         changedFiles: pr.changedFiles,

@@ -14,6 +14,7 @@
  *   - Per IDENTITY_BEST_EFFORT: Unresolved events get userId=null in curation rows, never dropped
  *   - Per ALLOCATION_PRESERVES_OVERRIDES: upsertAllocations never touches admin-set final_units
  *   - Per CONFIG_LOCKED_AT_REVIEW: autoCloseIngestion pins allocationAlgoRef + weightConfigHash
+ *   - Per ARTIFACT_FINAL_ATOMIC: autoCloseIngestion passes artifacts to closeIngestionWithArtifacts for atomic write
  *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing statement if already finalized
  * Side-effects: IO (database, GitHub API, viem EIP-191 verification)
  * Links: docs/spec/epoch-ledger.md, docs/spec/temporal-patterns.md
@@ -178,6 +179,17 @@ export interface AutoCloseIngestionInput {
   readonly weightConfig: Record<string, number>;
   readonly creditEstimateAlgo: string;
   readonly approvers: string[];
+  readonly artifacts: ReadonlyArray<{
+    readonly nodeId: string;
+    readonly epochId: string; // bigint as decimal string for Temporal wire format
+    readonly artifactRef: string;
+    readonly status: "draft" | "locked";
+    readonly algoRef: string;
+    readonly inputsHash: string;
+    readonly payloadHash: string;
+    readonly payloadJson: Record<string, unknown>;
+  }>;
+  readonly artifactsHash: string;
 }
 
 /**
@@ -743,20 +755,29 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
         epochId: input.epochId,
         allocationAlgoRef,
         weightConfigHash: `${weightConfigHash.slice(0, 12)}...`,
+        artifactCount: input.artifacts.length,
       },
-      "Auto-closing ingestion"
+      "Auto-closing ingestion with artifacts"
     );
 
-    const epoch = await ledgerStore.closeIngestion(
+    // Reconstruct bigint epochId from wire string for domain layer
+    const artifacts = input.artifacts.map((a) => ({
+      ...a,
+      epochId: BigInt(a.epochId),
+    }));
+
+    const epoch = await ledgerStore.closeIngestionWithArtifacts({
       epochId,
       approverSetHash,
       allocationAlgoRef,
-      weightConfigHash
-    );
+      weightConfigHash,
+      artifacts,
+      artifactsHash: input.artifactsHash,
+    });
 
     logger.info(
       { epochId: input.epochId, status: epoch.status },
-      "Ingestion auto-closed"
+      "Ingestion auto-closed with artifacts"
     );
 
     return { closed: true, reason: "auto_closed" };
