@@ -197,7 +197,7 @@ export function composeEpochView(
 }
 
 /**
- * Compose an EpochView for a finalized epoch from its frozen payout statement.
+ * Compose an EpochView for a finalized epoch from its frozen statement.
  * Uses statement.payouts as source of truth (immutable, deterministic).
  */
 export function composeEpochViewFromStatement(

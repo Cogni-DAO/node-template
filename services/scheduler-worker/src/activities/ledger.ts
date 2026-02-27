@@ -15,7 +15,7 @@
  *   - Per ALLOCATION_PRESERVES_OVERRIDES: upsertAllocations never touches admin-set final_units
  *   - Per CONFIG_LOCKED_AT_REVIEW: autoCloseIngestion pins allocationAlgoRef + weightConfigHash
  *   - Per EVALUATION_FINAL_ATOMIC: autoCloseIngestion passes evaluations to closeIngestionWithEvaluations for atomic write
- *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing payout if already finalized
+ *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing statement if already finalized
  * Side-effects: IO (database, GitHub API, viem EIP-191 verification)
  * Links: docs/spec/epoch-ledger.md, docs/spec/temporal-patterns.md
  * @internal
@@ -214,7 +214,7 @@ export interface FinalizeEpochInput {
  * Output from finalizeEpoch compound activity.
  */
 export interface FinalizeEpochOutput {
-  readonly payoutId: string;
+  readonly statementId: string;
   readonly poolTotalCredits: string; // bigint serialized
   readonly allocationSetHash: string;
   readonly payoutCount: number;
@@ -792,7 +792,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
 
   /**
    * Compound activity: atomically finalize an epoch with signature verification.
-   * EPOCH_FINALIZE_IDEMPOTENT: returns existing payout if already finalized.
+   * EPOCH_FINALIZE_IDEMPOTENT: returns existing statement if already finalized.
    * CONFIG_LOCKED_AT_REVIEW: verifies allocation_algo_ref and weight_config_hash are set.
    */
   async function finalizeEpoch(
@@ -817,10 +817,10 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
         { epochId: input.epochId },
         "Epoch already finalized — repairing via finalizeEpochAtomic"
       );
-      const existing = await ledgerStore.getPayoutForEpoch(epochId);
+      const existing = await ledgerStore.getStatementForEpoch(epochId);
       if (!existing) {
         throw new Error(
-          `finalizeEpoch: epoch ${input.epochId} is finalized but no payout found`
+          `finalizeEpoch: epoch ${input.epochId} is finalized but no statement found`
         );
       }
 
@@ -828,7 +828,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       await ledgerStore.finalizeEpochAtomic({
         epochId,
         poolTotal: existing.poolTotalCredits,
-        payout: {
+        statement: {
           nodeId,
           allocationSetHash: existing.allocationSetHash,
           poolTotalCredits: existing.poolTotalCredits,
@@ -844,7 +844,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       });
 
       return {
-        payoutId: existing.id,
+        statementId: existing.id,
         poolTotalCredits: existing.poolTotalCredits.toString(),
         allocationSetHash: existing.allocationSetHash,
         payoutCount: existing.payoutsJson.length,
@@ -940,12 +940,12 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
       );
     }
 
-    // 9. Atomic finalize — epoch transition + payout + signature in one transaction
-    const { epoch: finalizedEpoch, payout } =
+    // 9. Atomic finalize — epoch transition + statement + signature in one transaction
+    const { epoch: finalizedEpoch, statement } =
       await ledgerStore.finalizeEpochAtomic({
         epochId,
         poolTotal,
-        payout: {
+        statement: {
           nodeId,
           allocationSetHash,
           poolTotalCredits: poolTotal,
@@ -968,7 +968,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
     logger.info(
       {
         epochId: input.epochId,
-        payoutId: payout.id,
+        statementId: statement.id,
         poolTotalCredits: poolTotal.toString(),
         allocationSetHash: `${allocationSetHash.slice(0, 12)}...`,
         payoutCount: payouts.length,
@@ -978,7 +978,7 @@ export function createLedgerActivities(deps: LedgerActivityDeps) {
     );
 
     return {
-      payoutId: payout.id,
+      statementId: statement.id,
       poolTotalCredits: poolTotal.toString(),
       allocationSetHash,
       payoutCount: payouts.length,

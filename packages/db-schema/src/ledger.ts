@@ -3,8 +3,8 @@
 
 /**
  * Module: `@cogni/db-schema/ledger`
- * Purpose: Five-stage epoch ledger schema for auditable activity-based credit payouts.
- * Scope: Defines all ledger tables (epochs, ingestion_receipts, epoch_selection, epoch_allocations, epoch_evaluations, ingestion_cursors, epoch_pool_components, epoch_payouts, epoch_payout_signatures). Does not contain queries, business logic, or I/O.
+ * Purpose: Five-stage epoch ledger schema for auditable activity-based credit distribution.
+ * Scope: Defines all ledger tables (epochs, ingestion_receipts, epoch_selection, epoch_allocations, epoch_evaluations, ingestion_cursors, epoch_pool_components, epoch_statements, epoch_statement_signatures). Does not contain queries, business logic, or I/O.
  * Invariants:
  * - All credit/unit columns use BIGINT (ALL_MATH_BIGINT).
  * - Ingestion layer (ingestion_receipts, epoch_pool_components) are append-only (DB triggers in migration).
@@ -326,15 +326,16 @@ export const epochEvaluations = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Finalization Layer: Payouts + Signatures (immutable once signed)
+// Finalization Layer: Statements + Signatures (immutable once signed)
 // ---------------------------------------------------------------------------
 
 /**
- * Epoch payouts — derived artifact from receipts + selection + pool + weights.
- * One per epoch (scoped to node). Amendments use supersedes_payout_id.
+ * Epoch statements — deterministic distribution plan from receipts + selection + pool + weights.
+ * One per epoch (scoped to node). Amendments use supersedes_statement_id.
+ * Note: "statement" = entitlement plan. Future settlement/payout layer will reference these.
  */
-export const epochPayouts = pgTable(
-  "epoch_payouts",
+export const epochStatements = pgTable(
+  "epoch_statements",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     nodeId: uuid("node_id").notNull(),
@@ -355,16 +356,16 @@ export const epochPayouts = pgTable(
         }>
       >()
       .notNull(),
-    supersedesPayoutId: uuid("supersedes_payout_id").references(
+    supersedesStatementId: uuid("supersedes_statement_id").references(
       // biome-ignore lint/suspicious/noExplicitAny: Drizzle self-referencing FK requires explicit type to break circular inference
-      (): any => epochPayouts.id
+      (): any => epochStatements.id
     ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("epoch_payouts_node_epoch_unique").on(
+    uniqueIndex("epoch_statements_node_epoch_unique").on(
       table.nodeId,
       table.epochId
     ),
@@ -372,23 +373,23 @@ export const epochPayouts = pgTable(
 );
 
 /**
- * Epoch payout signatures — client-side EIP-191 signatures on epoch payouts.
+ * Epoch statement signatures — client-side EIP-191 signatures on epoch statements.
  */
-export const epochPayoutSignatures = pgTable(
-  "epoch_payout_signatures",
+export const epochStatementSignatures = pgTable(
+  "epoch_statement_signatures",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     nodeId: uuid("node_id").notNull(),
-    payoutId: uuid("payout_id")
+    statementId: uuid("statement_id")
       .notNull()
-      .references(() => epochPayouts.id),
+      .references(() => epochStatements.id),
     signerWallet: text("signer_wallet").notNull(),
     signature: text("signature").notNull(),
     signedAt: timestamp("signed_at", { withTimezone: true }).notNull(),
   },
   (table) => [
-    uniqueIndex("epoch_payout_signatures_payout_signer_unique").on(
-      table.payoutId,
+    uniqueIndex("epoch_statement_signatures_statement_signer_unique").on(
+      table.statementId,
       table.signerWallet
     ),
   ]

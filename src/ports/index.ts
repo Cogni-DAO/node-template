@@ -97,12 +97,12 @@ export type {
   EpochLedgerStore,
   LedgerAllocation,
   LedgerEpoch,
-  LedgerEpochPayout,
+  LedgerEpochStatement,
   LedgerIngestionCursor,
   LedgerIngestionReceipt,
-  LedgerPayoutSignature,
   LedgerPoolComponent,
   LedgerSelection,
+  LedgerStatementSignature,
 } from "./ledger-store.port";
 // LlmError types re-exported for adapters (adapters can only import from ports)
 // Features should import directly from @/core

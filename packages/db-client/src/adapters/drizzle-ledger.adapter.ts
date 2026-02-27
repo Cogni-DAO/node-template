@@ -25,10 +25,10 @@ import { userBindings } from "@cogni/db-schema/identity";
 import {
   epochAllocations,
   epochEvaluations,
-  epochPayoutSignatures,
-  epochPayouts,
   epochPoolComponents,
   epochSelection,
+  epochStatementSignatures,
+  epochStatements,
   epochs,
   ingestionCursors,
   ingestionReceipts,
@@ -37,20 +37,20 @@ import type {
   CloseIngestionWithEvaluationsParams,
   EpochLedgerStore,
   InsertAllocationParams,
-  InsertEpochPayoutParams,
+  InsertEpochStatementParams,
   InsertIngestionReceiptParams,
-  InsertPayoutSignatureParams,
   InsertPoolComponentParams,
   InsertSelectionAutoParams,
+  InsertStatementSignatureParams,
   LedgerAllocation,
   LedgerEpoch,
   LedgerEpochEvaluation,
-  LedgerEpochPayout,
+  LedgerEpochStatement,
   LedgerIngestionCursor,
   LedgerIngestionReceipt,
-  LedgerPayoutSignature,
   LedgerPoolComponent,
   LedgerSelection,
+  LedgerStatementSignature,
   SelectedReceiptForAllocation,
   SelectedReceiptWithMetadata,
   UnselectedReceipt,
@@ -182,7 +182,9 @@ function toPoolComponent(
   };
 }
 
-function toPayout(row: typeof epochPayouts.$inferSelect): LedgerEpochPayout {
+function toStatement(
+  row: typeof epochStatements.$inferSelect
+): LedgerEpochStatement {
   return {
     id: row.id,
     nodeId: row.nodeId,
@@ -190,18 +192,18 @@ function toPayout(row: typeof epochPayouts.$inferSelect): LedgerEpochPayout {
     allocationSetHash: row.allocationSetHash,
     poolTotalCredits: row.poolTotalCredits,
     payoutsJson: row.payoutsJson,
-    supersedesPayoutId: row.supersedesPayoutId,
+    supersedesStatementId: row.supersedesStatementId,
     createdAt: row.createdAt,
   };
 }
 
-function toPayoutSignature(
-  row: typeof epochPayoutSignatures.$inferSelect
-): LedgerPayoutSignature {
+function toStatementSignature(
+  row: typeof epochStatementSignatures.$inferSelect
+): LedgerStatementSignature {
   return {
     id: row.id,
     nodeId: row.nodeId,
-    payoutId: row.payoutId,
+    statementId: row.statementId,
     signerWallet: row.signerWallet,
     signature: row.signature,
     signedAt: row.signedAt,
@@ -957,35 +959,37 @@ export class DrizzleLedgerAdapter implements EpochLedgerStore {
     return rows.map(toPoolComponent);
   }
 
-  // ── Epoch payouts ──────────────────────────────────────────
+  // ── Epoch statements ──────────────────────────────────────
 
-  async insertEpochPayout(
-    params: InsertEpochPayoutParams
-  ): Promise<LedgerEpochPayout> {
+  async insertEpochStatement(
+    params: InsertEpochStatementParams
+  ): Promise<LedgerEpochStatement> {
     await this.resolveEpochScoped(params.epochId);
     const [row] = await this.db
-      .insert(epochPayouts)
+      .insert(epochStatements)
       .values({
         nodeId: params.nodeId,
         epochId: params.epochId,
         allocationSetHash: params.allocationSetHash,
         poolTotalCredits: params.poolTotalCredits,
         payoutsJson: params.payoutsJson,
-        supersedesPayoutId: params.supersedesPayoutId ?? null,
+        supersedesStatementId: params.supersedesStatementId ?? null,
       })
       .returning();
-    if (!row) throw new Error("insertEpochPayout: INSERT returned no rows");
-    return toPayout(row);
+    if (!row) throw new Error("insertEpochStatement: INSERT returned no rows");
+    return toStatement(row);
   }
 
-  async getPayoutForEpoch(epochId: bigint): Promise<LedgerEpochPayout | null> {
+  async getStatementForEpoch(
+    epochId: bigint
+  ): Promise<LedgerEpochStatement | null> {
     await this.resolveEpochScoped(epochId);
     const rows = await this.db
       .select()
-      .from(epochPayouts)
-      .where(eq(epochPayouts.epochId, epochId))
+      .from(epochStatements)
+      .where(eq(epochStatements.epochId, epochId))
       .limit(1);
-    return rows[0] ? toPayout(rows[0]) : null;
+    return rows[0] ? toStatement(rows[0]) : null;
   }
 
   // ── Atomic finalize ────────────────────────────────────────
@@ -993,10 +997,10 @@ export class DrizzleLedgerAdapter implements EpochLedgerStore {
   async finalizeEpochAtomic(params: {
     epochId: bigint;
     poolTotal: bigint;
-    payout: Omit<InsertEpochPayoutParams, "epochId">;
-    signature: Omit<InsertPayoutSignatureParams, "payoutId">;
+    statement: Omit<InsertEpochStatementParams, "epochId">;
+    signature: Omit<InsertStatementSignatureParams, "statementId">;
     expectedAllocationSetHash: string;
-  }): Promise<{ epoch: LedgerEpoch; payout: LedgerEpochPayout }> {
+  }): Promise<{ epoch: LedgerEpoch; statement: LedgerEpochStatement }> {
     return await this.db.transaction(async (tx) => {
       // 1. Load epoch with scope gate (inline — avoid separate connection)
       const epochRows = await tx
@@ -1066,72 +1070,72 @@ export class DrizzleLedgerAdapter implements EpochLedgerStore {
         );
       }
 
-      // 2b/3a. Upsert payout — ON CONFLICT (node_id, epoch_id) DO NOTHING
+      // 2b/3a. Upsert statement — ON CONFLICT (node_id, epoch_id) DO NOTHING
       await tx
-        .insert(epochPayouts)
+        .insert(epochStatements)
         .values({
-          nodeId: params.payout.nodeId,
+          nodeId: params.statement.nodeId,
           epochId: params.epochId,
-          allocationSetHash: params.payout.allocationSetHash,
-          poolTotalCredits: params.payout.poolTotalCredits,
-          payoutsJson: params.payout.payoutsJson,
-          supersedesPayoutId: params.payout.supersedesPayoutId ?? null,
+          allocationSetHash: params.statement.allocationSetHash,
+          poolTotalCredits: params.statement.poolTotalCredits,
+          payoutsJson: params.statement.payoutsJson,
+          supersedesStatementId: params.statement.supersedesStatementId ?? null,
         })
         .onConflictDoNothing({
-          target: [epochPayouts.nodeId, epochPayouts.epochId],
+          target: [epochStatements.nodeId, epochStatements.epochId],
         });
 
-      // Fetch the payout (either just inserted or previously existing)
-      const [payoutRow] = await tx
+      // Fetch the statement (either just inserted or previously existing)
+      const [statementRow] = await tx
         .select()
-        .from(epochPayouts)
+        .from(epochStatements)
         .where(
           and(
-            eq(epochPayouts.nodeId, params.payout.nodeId),
-            eq(epochPayouts.epochId, params.epochId)
+            eq(epochStatements.nodeId, params.statement.nodeId),
+            eq(epochStatements.epochId, params.epochId)
           )
         )
         .limit(1);
 
-      if (!payoutRow) {
+      if (!statementRow) {
         throw new Error(
-          `finalizeEpochAtomic: payout insert/select failed for epoch ${params.epochId.toString()}`
+          `finalizeEpochAtomic: statement insert/select failed for epoch ${params.epochId.toString()}`
         );
       }
 
-      // Hash assertion — if payout pre-existed, verify hash matches
-      if (payoutRow.allocationSetHash !== params.expectedAllocationSetHash) {
+      // Hash assertion — if statement pre-existed, verify hash matches
+      if (statementRow.allocationSetHash !== params.expectedAllocationSetHash) {
         throw new Error(
-          `finalizeEpochAtomic: allocationSetHash mismatch — expected ${params.expectedAllocationSetHash}, found ${payoutRow.allocationSetHash}`
+          `finalizeEpochAtomic: allocationSetHash mismatch — expected ${params.expectedAllocationSetHash}, found ${statementRow.allocationSetHash}`
         );
       }
 
-      // 2d/3b. Upsert signature — ON CONFLICT (payout_id, signer_wallet) DO NOTHING
+      // 2d/3b. Upsert signature — ON CONFLICT (statement_id, signer_wallet) DO NOTHING
       await tx
-        .insert(epochPayoutSignatures)
+        .insert(epochStatementSignatures)
         .values({
           nodeId: params.signature.nodeId,
-          payoutId: payoutRow.id,
+          statementId: statementRow.id,
           signerWallet: params.signature.signerWallet,
           signature: params.signature.signature,
           signedAt: params.signature.signedAt,
         })
         .onConflictDoNothing({
           target: [
-            epochPayoutSignatures.payoutId,
-            epochPayoutSignatures.signerWallet,
+            epochStatementSignatures.statementId,
+            epochStatementSignatures.signerWallet,
           ],
         });
 
       // 2e/3c. Verify signature — if row exists with DIFFERENT signature text, throw
       const [sigRow] = await tx
         .select()
-        .from(epochPayoutSignatures)
+        .from(epochStatementSignatures)
         .where(
           and(
-            eq(epochPayoutSignatures.payoutId, payoutRow.id),
+            eq(epochStatementSignatures.statementId, statementRow.id),
             eq(
-              epochPayoutSignatures.signerWallet,
+              epochStatementSignatures.signerWallet,
               params.signature.signerWallet
             )
           )
@@ -1140,47 +1144,47 @@ export class DrizzleLedgerAdapter implements EpochLedgerStore {
 
       if (sigRow && sigRow.signature !== params.signature.signature) {
         throw new Error(
-          `finalizeEpochAtomic: signature divergence — signer ${params.signature.signerWallet} has different signature on payout ${payoutRow.id}`
+          `finalizeEpochAtomic: signature divergence — signer ${params.signature.signerWallet} has different signature on statement ${statementRow.id}`
         );
       }
 
       return {
         epoch: toEpoch(finalEpochRow),
-        payout: toPayout(payoutRow),
+        statement: toStatement(statementRow),
       };
     });
   }
 
-  // ── Payout signatures ───────────────────────────────────────
+  // ── Statement signatures ───────────────────────────────────
 
-  async insertPayoutSignature(
-    params: InsertPayoutSignatureParams
+  async insertStatementSignature(
+    params: InsertStatementSignatureParams
   ): Promise<void> {
     await this.db
-      .insert(epochPayoutSignatures)
+      .insert(epochStatementSignatures)
       .values({
         nodeId: params.nodeId,
-        payoutId: params.payoutId,
+        statementId: params.statementId,
         signerWallet: params.signerWallet,
         signature: params.signature,
         signedAt: params.signedAt,
       })
       .onConflictDoNothing({
         target: [
-          epochPayoutSignatures.payoutId,
-          epochPayoutSignatures.signerWallet,
+          epochStatementSignatures.statementId,
+          epochStatementSignatures.signerWallet,
         ],
       });
   }
 
-  async getSignaturesForPayout(
-    payoutId: string
-  ): Promise<LedgerPayoutSignature[]> {
+  async getSignaturesForStatement(
+    statementId: string
+  ): Promise<LedgerStatementSignature[]> {
     const rows = await this.db
       .select()
-      .from(epochPayoutSignatures)
-      .where(eq(epochPayoutSignatures.payoutId, payoutId));
-    return rows.map(toPayoutSignature);
+      .from(epochStatementSignatures)
+      .where(eq(epochStatementSignatures.statementId, statementId));
+    return rows.map(toStatementSignature);
   }
 
   // ── Identity resolution ───────────────────────────────────────

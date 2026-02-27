@@ -14,7 +14,7 @@
 import type {
   LedgerAllocation,
   LedgerEpoch,
-  LedgerEpochPayout,
+  LedgerEpochStatement,
   LedgerIngestionReceipt,
   LedgerPoolComponent,
   LedgerSelection,
@@ -69,14 +69,14 @@ export function toAllocationDto(a: LedgerAllocation) {
   };
 }
 
-export function toPayoutDto(s: LedgerEpochPayout) {
+export function toStatementDto(s: LedgerEpochStatement) {
   return {
     id: s.id,
     epochId: s.epochId.toString(),
     allocationSetHash: s.allocationSetHash,
     poolTotalCredits: s.poolTotalCredits.toString(),
     payouts: s.payoutsJson,
-    supersedesPayoutId: s.supersedesPayoutId,
+    supersedesStatementId: s.supersedesStatementId,
     createdAt: s.createdAt.toISOString(),
   };
 }

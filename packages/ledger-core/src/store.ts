@@ -14,7 +14,7 @@
  * - NODE_SCOPED: all operations are scoped to a node_id.
  * - RECEIPT_SCOPE_AGNOSTIC: receipts carry no scope_id; scope assigned at selection via epoch membership.
  * - EVALUATION_FINAL_ATOMIC: locked evaluation writes + artifacts_hash + epoch open→review in one transaction.
- * - PAYOUT_FROM_FINAL_ONLY: allocation for payouts consumes only status='locked' evaluations.
+ * - STATEMENT_FROM_FINAL_ONLY: allocation for statements consumes only status='locked' evaluations.
  * Side-effects: none
  * Links: docs/spec/epoch-ledger.md
  * @public
@@ -110,7 +110,7 @@ export interface LedgerPoolComponent {
   readonly computedAt: Date;
 }
 
-export interface LedgerEpochPayout {
+export interface LedgerEpochStatement {
   readonly id: string;
   readonly nodeId: string;
   readonly epochId: bigint;
@@ -122,14 +122,14 @@ export interface LedgerEpochPayout {
     share: string;
     amount_credits: string;
   }>;
-  readonly supersedesPayoutId: string | null;
+  readonly supersedesStatementId: string | null;
   readonly createdAt: Date;
 }
 
-export interface LedgerPayoutSignature {
+export interface LedgerStatementSignature {
   readonly id: string;
   readonly nodeId: string;
-  readonly payoutId: string;
+  readonly statementId: string;
   readonly signerWallet: string;
   readonly signature: string;
   readonly signedAt: Date;
@@ -206,7 +206,7 @@ export interface InsertPoolComponentParams {
   readonly evidenceRef?: string | null;
 }
 
-export interface InsertEpochPayoutParams {
+export interface InsertEpochStatementParams {
   readonly nodeId: string;
   readonly epochId: bigint;
   readonly allocationSetHash: string;
@@ -217,12 +217,12 @@ export interface InsertEpochPayoutParams {
     share: string;
     amount_credits: string;
   }>;
-  readonly supersedesPayoutId?: string | null;
+  readonly supersedesStatementId?: string | null;
 }
 
-export interface InsertPayoutSignatureParams {
+export interface InsertStatementSignatureParams {
   readonly nodeId: string;
-  readonly payoutId: string;
+  readonly statementId: string;
   readonly signerWallet: string;
   readonly signature: string;
   readonly signedAt: Date;
@@ -410,31 +410,35 @@ export interface EpochLedgerStore {
   ): Promise<LedgerPoolComponent>;
   getPoolComponentsForEpoch(epochId: bigint): Promise<LedgerPoolComponent[]>;
 
-  // Epoch payouts
-  insertEpochPayout(
-    params: InsertEpochPayoutParams
-  ): Promise<LedgerEpochPayout>;
-  getPayoutForEpoch(epochId: bigint): Promise<LedgerEpochPayout | null>;
+  // Epoch statements
+  insertEpochStatement(
+    params: InsertEpochStatementParams
+  ): Promise<LedgerEpochStatement>;
+  getStatementForEpoch(epochId: bigint): Promise<LedgerEpochStatement | null>;
 
   /**
-   * Atomic finalize: epoch transition + payout upsert + signature upsert in one DB transaction.
+   * Atomic finalize: epoch transition + statement upsert + signature upsert in one DB transaction.
    * Handles all states:
-   * - review → finalized: insert payout + signature, return both
-   * - already finalized: repair missing payout/signature, assert hash match
+   * - review → finalized: insert statement + signature, return both
+   * - already finalized: repair missing statement/signature, assert hash match
    * - open or missing: throw domain error
    * Uses ON CONFLICT for retry safety.
    */
   finalizeEpochAtomic(params: {
     epochId: bigint;
     poolTotal: bigint;
-    payout: Omit<InsertEpochPayoutParams, "epochId">;
-    signature: Omit<InsertPayoutSignatureParams, "payoutId">;
+    statement: Omit<InsertEpochStatementParams, "epochId">;
+    signature: Omit<InsertStatementSignatureParams, "statementId">;
     expectedAllocationSetHash: string;
-  }): Promise<{ epoch: LedgerEpoch; payout: LedgerEpochPayout }>;
+  }): Promise<{ epoch: LedgerEpoch; statement: LedgerEpochStatement }>;
 
-  // Payout signatures
-  insertPayoutSignature(params: InsertPayoutSignatureParams): Promise<void>;
-  getSignaturesForPayout(payoutId: string): Promise<LedgerPayoutSignature[]>;
+  // Statement signatures
+  insertStatementSignature(
+    params: InsertStatementSignatureParams
+  ): Promise<void>;
+  getSignaturesForStatement(
+    statementId: string
+  ): Promise<LedgerStatementSignature[]>;
 
   // Identity resolution (cross-domain convenience — V0 on ledger port)
   /**

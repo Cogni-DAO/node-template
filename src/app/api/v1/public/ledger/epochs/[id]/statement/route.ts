@@ -3,8 +3,8 @@
 
 /**
  * Module: `@app/api/v1/public/ledger/epochs/[id]/statement/route`
- * Purpose: Public HTTP endpoint for epoch payout.
- * Scope: Public route using wrapPublicRoute(); returns epoch payout (null if none exists). Always 200. Does not contain business logic.
+ * Purpose: Public HTTP endpoint for epoch statement.
+ * Scope: Public route using wrapPublicRoute(); returns epoch statement (null if none exists). Always 200. Does not contain business logic.
  * Invariants: NODE_SCOPED, ALL_MATH_BIGINT, VALIDATE_IO, PUBLIC_READS_FINALIZED_ONLY.
  * Side-effects: IO (HTTP response, database read)
  * Links: docs/spec/epoch-ledger.md, contracts/ledger.epoch-statement.v1.contract
@@ -12,7 +12,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { toPayoutDto } from "@/app/api/v1/public/ledger/_lib/ledger-dto";
+import { toStatementDto } from "@/app/api/v1/public/ledger/_lib/ledger-dto";
 import { getContainer } from "@/bootstrap/container";
 import { wrapPublicRoute } from "@/bootstrap/http";
 import { epochStatementOperation } from "@/contracts/ledger.epoch-statement.v1.contract";
@@ -43,11 +43,11 @@ export const GET = wrapPublicRoute(
       return NextResponse.json({ error: "Epoch not found" }, { status: 404 });
     }
 
-    const payout = await store.getPayoutForEpoch(epochId);
+    const statement = await store.getStatementForEpoch(epochId);
 
     return NextResponse.json(
       epochStatementOperation.output.parse({
-        statement: payout ? toPayoutDto(payout) : null,
+        statement: statement ? toStatementDto(statement) : null,
       })
     );
   }
