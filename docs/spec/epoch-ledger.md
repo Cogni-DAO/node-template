@@ -5,18 +5,18 @@ title: "Epoch Ledger: Weekly Activity Pipeline for Credit Payouts"
 status: draft
 spec_state: active
 trust: draft
-summary: "Epoch-based ledger where source adapters ingest contribution activity (GitHub, Discord), the system proposes credit allocations via weight policy, and an admin finalizes the distribution. Payouts are deterministic and recomputable from stored data."
-read_when: Working on credit payouts, activity ingestion, epoch lifecycle, weight policy, source adapters, or the ledger API.
+summary: "Epoch-based ledger pipeline with three plugin surfaces: source adapters ingest contribution activity, epoch enrichers produce typed artifacts from curated events, and allocation algorithms distribute credits. Payouts are deterministic and recomputable from stored data."
+read_when: Working on credit payouts, activity ingestion, epoch enrichers, epoch artifacts, epoch lifecycle, weight policy, source adapters, allocation algorithms, or the ledger API.
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-02-20
-verified: 2026-02-23
+verified: 2026-02-27
 tags: [governance, transparency, payments, ledger]
 ---
 
 # Epoch Ledger: Weekly Activity Pipeline for Credit Payouts
 
-> The system is a **transparent activity-to-payout pipeline**. Every week it collects contribution activity from configured sources (GitHub, Discord), attributes events to contributors via identity bindings, proposes a credit distribution using a weight policy, and lets an admin finalize the result. Payouts are deterministic and recomputable from stored data. No server-held signing keys in V0.
+> The system is a **transparent activity-to-payout pipeline** with three plugin surfaces. Every week: (1) **source adapters** collect contribution activity from configured sources, (2) **epoch enrichers** produce typed artifacts from curated events (e.g., work-item links, quality scores), and (3) **allocation algorithms** distribute credits using weight policy and enricher artifacts. An admin finalizes the result. Payouts are deterministic and recomputable from stored data. No server-held signing keys in V0.
 
 ## Key References
 
@@ -62,6 +62,14 @@ tags: [governance, transparency, payments, ledger]
 | SCOPE_GATED_QUERIES            | `DrizzleLedgerAdapter` takes `scopeId` at construction. Every epochId-based read/write calls `resolveEpochScoped(epochId)` — `WHERE id = $epochId AND scope_id = $scopeId`. Scope mismatches throw `EpochNotFoundError` (indistinguishable from missing epoch). No port signature changes; scope is an adapter-internal concern.                                                |
 | CURSOR_STATE_PERSISTED         | Source adapters use `source_cursors` table for incremental sync. Avoids full-window rescans and handles pagination/rate limits.                                                                                                                                                                                                                                                 |
 | ADAPTERS_NOT_IN_CORE           | Source adapters live in `services/scheduler-worker/` behind a port interface. `packages/ledger-core/` contains only pure domain logic (types, rules, errors).                                                                                                                                                                                                                   |
+| ARTIFACT_UNIQUE_PER_REF_STATUS | `UNIQUE(epoch_id, artifact_ref, status)` — one draft + one locked row per artifact ref per epoch. Drafts overwritten via UPSERT; locked artifacts written once at `closeIngestionWithArtifacts`.                                                                                                                                                                                |
+| ARTIFACT_FINAL_ATOMIC          | Locked artifact writes + `artifacts_hash` computation + epoch `open→review` transition happen in a single DB transaction. No partial finalization. If any step fails, nothing commits.                                                                                                                                                                                          |
+| PAYOUT_FROM_FINAL_ONLY         | `computeProposedAllocations` for payout purposes MUST consume only `status='locked'` artifacts. Draft artifacts are explicitly excluded from any binding computation.                                                                                                                                                                                                           |
+| CANONICAL_JSON                 | All payload and inputs hashing uses `canonicalJsonStringify()` — sorted keys at every depth, no whitespace, BigInt serialized as string. Defined once in `packages/ledger-core/src/hashing.ts`, used everywhere.                                                                                                                                                                |
+| INPUTS_HASH_COMPLETE           | Each enricher defines its own `inputs_hash` covering ALL meaningful dependencies consumed. Canonically serialized before hashing. If any input changes, `inputs_hash` changes, and the system knows the artifact is stale.                                                                                                                                                      |
+| PAYLOAD_HASH_COVERS_CONTENT    | `payload_hash` = SHA-256 of `canonicalJsonStringify(payload)`. Stored in DB regardless of inline vs. object storage. `artifacts_hash` on the epoch uses `payload_hash`, never re-serializes.                                                                                                                                                                                    |
+| ENRICHER_SNAPSHOT_RULE         | Enrichers may do I/O (read files, call APIs), but anything learned from outside the ledger MUST be snapshotted into the artifact payload (or referenced by content-hash). If it's not in the artifact, it doesn't exist for scoring. No live reads during allocation.                                                                                                           |
+| ARTIFACT_REF_NAMESPACED        | Artifact refs follow `org.type.version` format (e.g., `cogni.work_item_links.v0`, `cogni.echo.v0`). Regex: `/^[a-z][a-z0-9]*\.[a-z][a-z0-9_]*\.v\d+$/`. Prevents cross-team collisions.                                                                                                                                                                                         |
 | WEIGHT_PINNING                 | Weight config is set at epoch creation. Subsequent collection runs use the existing epoch's `weight_config`, not the input-derived config. Config drift logs a warning. `weight_config_hash` (SHA-256 of canonical JSON) is computed and locked at `closeIngestion` as the reproducibility anchor.                                                                              |
 | CONFIG_LOCKED_AT_REVIEW        | At `closeIngestion` (open→review), the epoch's `weight_config_hash` and `allocation_algo_ref` are computed and locked. These fields are NULL while open and immutable after review. All subsequent verification and payout computation uses these locked snapshots.                                                                                                             |
 | ALLOCATION_ALGO_PINNED         | `allocation_algo_ref` is NULL while epoch is open, set at `closeIngestion`. `computeProposedAllocations(algoRef, events, weightConfig)` dispatches to the correct versioned algorithm. Same inputs + same algoRef → identical output. V0: `weight-sum-v0` (simple per-event-type weight sum). Future: content-addressable ref.                                                  |
@@ -134,6 +142,67 @@ Admin capability (wallet must be in scope's `approvers[]`) required for:
 
 Public read routes expose closed-epoch data only (epochs list, allocations, statements). Activity events (PII fields: platformUserId, platformLogin, artifactUrl) require SIWE authentication. Open/current epoch data requires SIWE authentication.
 
+### Pipeline Architecture — Three Plugin Surfaces
+
+The ledger pipeline has three composable extension points. Each surface has a stable contract; new implementations slot in without touching core code.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        CollectEpochWorkflow                                │
+│                                                                             │
+│  1. SOURCE ADAPTERS          SourceAdapter → ActivityEvent[]                │
+│     "What happened?"         GitHub, Discord, manual...                     │
+│     Standardized receipt:    id, source, eventType, platformUserId,         │
+│                              metadata (bag of facts), payloadHash           │
+│                                                                             │
+│  2. EPOCH ENRICHERS          Enricher activity → EpochArtifact              │
+│     "What does it mean?"     work-item-linker, echo, ai-scorer...           │
+│     Reads curated events +   Each artifact: artifactRef, algoRef,           │
+│     external context.        inputsHash, payloadHash, payload               │
+│     Emits typed artifacts.   Draft = UI/estimates.                          │
+│     Draft on each pass,      Locked = payouts.                              │
+│     locked at close.         Stored in epoch_artifacts table.               │
+│                                                                             │
+│  3. ALLOCATION ALGORITHMS    algoRef dispatch → ProposedAllocation[]        │
+│     "Who gets what?"         weight-sum-v0, work-item-budget-v0...          │
+│     Pure function.           Consumes curated events + locked artifacts.    │
+│     No I/O. Deterministic.   Same inputs + same algoRef → identical output. │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Surface 1 (Source Adapters)** is fully implemented. See [Source Adapter Interface](#source-adapter-interface).
+
+**Surface 2 (Epoch Enrichers)** is the enrichment layer between "raw facts collected" and "allocation computed." Enrichers run as Temporal activities, consuming curated events via `getCuratedEventsWithMetadata()` and producing typed `EpochArtifact` rows. Each enricher defines its own `artifact_ref` (namespaced: `cogni.work_item_links.v0`), `algo_ref`, `inputs_hash` composition, and payload shape. The pipeline validates artifact envelopes (ref format, hash format) but treats payloads as opaque — payload shape is per-plugin.
+
+**Surface 3 (Allocation Algorithms)** dispatches by `algoRef`. V0: `weight-sum-v0` ignores artifacts. Future: `work-item-budget-v0` reads `cogni.work_item_links.v0` artifacts.
+
+### Artifact Lifecycle (Draft/Locked)
+
+All three layers run continuously throughout an epoch:
+
+- **Ingestion** — adapters collect events on each scheduled pass
+- **Enrichment** — enrichers re-run on each pass, emitting `status='draft'` artifacts. Drafts power the UI (provisional work-item links, projected allocations). Drafts are overwritten on each pass (UPSERT by `epoch_id + artifact_ref + status='draft'`).
+- **Allocation** — can run against draft artifacts for UI projections (labeled provisional)
+
+At **closeIngestion** (ARTIFACT_FINAL_ATOMIC):
+
+1. Enrichers run one final time against the complete curated event set
+2. Locked artifacts written as NEW rows (`status='locked'`) alongside existing drafts
+3. In a **single DB transaction**: insert locked artifacts + compute `artifacts_hash` + transition epoch `open→review`
+4. After this point: locked artifacts are immutable. Writes to a non-open epoch are rejected.
+5. Allocation runs against locked artifacts only for payout computation (PAYOUT_FROM_FINAL_ONLY)
+6. Draft rows retained for audit/diff visibility
+
+### Hashing Invariants
+
+All artifact hashing follows these non-negotiable rules:
+
+- **`canonicalJsonStringify(value)`** — deterministic JSON: sorted keys at every depth, no whitespace, BigInt as string. Defined once in `packages/ledger-core/src/hashing.ts` (CANONICAL_JSON).
+- **`inputs_hash`** — per-enricher composition covering ALL meaningful dependencies. If any input changes, the hash changes. Canonically serialized before SHA-256 (INPUTS_HASH_COMPLETE).
+- **`payload_hash`** — `sha256OfCanonicalJson(payload)`. Stored in DB regardless of inline vs. object storage (PAYLOAD_HASH_COVERS_CONTENT).
+- **`artifacts_hash`** — on `epochs` table. SHA-256 of sorted `(artifact_ref, algo_ref, inputs_hash, payload_hash)` tuples from locked artifacts only. Computed by `computeArtifactsHash()`. Set atomically at `closeIngestionWithArtifacts` (ARTIFACT_FINAL_ATOMIC).
+
 ### Activity Ingestion
 
 Source adapters collect contribution activity from external systems and normalize it into `activity_events`. Each adapter:
@@ -170,16 +239,18 @@ Epoch status models **governance finality**, not payment execution. Distribution
                  → Creates epoch with status='open', period_start/period_end + weight_config
                  → Runs source adapters → activity_events (raw facts)
                  → Resolves identities → updates user_id on curation rows
+                 → Runs enrichers → epoch_artifacts (draft, overwritten each pass)
                  → Computes proposed allocations → epoch_allocations
                  → Admin curates: adjust inclusion, resolve identities, record pool components
 
-2. REVIEW        closeIngestion locks config (CONFIG_LOCKED_AT_REVIEW)
-                 → Sets allocation_algo_ref, weight_config_hash on epoch (immutable after)
+2. REVIEW        closeIngestionWithArtifacts locks config + artifacts (CONFIG_LOCKED_AT_REVIEW, ARTIFACT_FINAL_ATOMIC)
+                 → Enrichers run one final time → locked artifacts
+                 → Sets allocation_algo_ref, weight_config_hash, artifacts_hash on epoch (immutable after)
                  → No new activity_events (INGESTION_CLOSED_ON_REVIEW)
                  → No new pool components (POOL_LOCKED_AT_REVIEW)
                  → Curation still mutable: adjust inclusion, weight overrides, identity resolution
                  → Admin reviews + tweaks proposed allocations (not blindly trusting the algo)
-                 → Allocations recomputed on demand from curated events + locked weight_config
+                 → Allocations recomputed on demand from curated events + locked artifacts + locked weight_config
 
 3. FINALIZED     Admin triggers finalize (requires signature + base_issuance)
                  → Reads epoch_allocations (final_units, falling back to proposed_units)
@@ -242,6 +313,7 @@ Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and 
 | `weight_config`       | JSONB        | Milli-unit weights (integer values, NOT NULL, set at creation)                           |
 | `weight_config_hash`  | TEXT         | SHA-256 of canonical weight config JSON (NULL while open, set at closeIngestion)         |
 | `allocation_algo_ref` | TEXT         | Algorithm version ref (NULL while open, set at closeIngestion — CONFIG_LOCKED_AT_REVIEW) |
+| `artifacts_hash`      | TEXT         | SHA-256 of locked artifacts (NULL while open, set at closeIngestionWithArtifacts)        |
 | `pool_total_credits`  | BIGINT       | Sum of pool components (set at finalize, NULL while open/review)                         |
 | `opened_at`           | TIMESTAMPTZ  |                                                                                          |
 | `closed_at`           | TIMESTAMPTZ  | NULL while open/review                                                                   |
@@ -388,6 +460,33 @@ Constraint: `UNIQUE(statement_id, signer_wallet)`
 
 Signer wallet is the `ecrecover`-derived address, not client-supplied. Signature message must include `node_id + scope_id + allocation_set_hash` (SIGNATURE_SCOPE_BOUND). See [Signing Workflow](#signing-workflow).
 
+### `epoch_artifacts` — enrichment outputs (draft/locked lifecycle)
+
+| Column         | Type             | Notes                                                                                        |
+| -------------- | ---------------- | -------------------------------------------------------------------------------------------- |
+| `id`           | UUID PK          |                                                                                              |
+| `node_id`      | UUID             | NOT NULL (NODE_SCOPED)                                                                       |
+| `epoch_id`     | BIGINT FK→epochs | NOT NULL                                                                                     |
+| `artifact_ref` | TEXT             | NOT NULL — namespaced: `cogni.work_item_links.v0`, `cogni.echo.v0` (ARTIFACT_REF_NAMESPACED) |
+| `status`       | TEXT             | NOT NULL DEFAULT `'draft'` — CHECK IN (`'draft'`, `'locked'`)                                |
+| `algo_ref`     | TEXT             | NOT NULL — enricher algorithm that produced this (e.g., `work-item-linker-v0`)               |
+| `inputs_hash`  | TEXT             | NOT NULL — SHA-256 of canonical inputs (INPUTS_HASH_COMPLETE)                                |
+| `payload_hash` | TEXT             | NOT NULL — SHA-256 of canonical payload (PAYLOAD_HASH_COVERS_CONTENT)                        |
+| `payload_json` | JSONB            | Inline artifact payload (NULL when `payload_ref` used)                                       |
+| `payload_ref`  | TEXT             | Object storage key for large artifacts (NULL when inline)                                    |
+| `created_at`   | TIMESTAMPTZ      |                                                                                              |
+
+Constraints:
+
+- `UNIQUE(epoch_id, artifact_ref, status)` — one draft + one locked per ref per epoch (ARTIFACT_UNIQUE_PER_REF_STATUS)
+- `CHECK (status IN ('draft', 'locked'))` — only two valid states
+- `CHECK (payload_json IS NOT NULL OR payload_ref IS NOT NULL)` — at least one payload source
+- Index on `epoch_id` for lookups
+
+**Row model:** Drafts are overwritten via UPSERT each collection pass. Locked artifacts are written once inside the `closeIngestionWithArtifacts` transaction (ARTIFACT_FINAL_ATOMIC). Both draft and locked rows coexist — draft for audit/diff visibility, locked for payout computation.
+
+**Payload sizing (V0):** All payloads inline (`payload_json`). `payload_ref` support stubbed for future large artifacts (> 256KB).
+
 ## Source Adapter Interface
 
 ```typescript
@@ -508,6 +607,16 @@ interface LedgerIngestRunV1 {
    - For each source: batch resolve `platformUserId` → `userId` via `user_bindings` (provider-scoped)
    - INSERT new curation rows (included=true, userId=resolved or NULL)
    - UPDATE existing unresolved rows: set userId only (never touch included/weight_override_milli/note)
+7. **Enrich (draft)** — `enrichEpochDraft` activity:
+   - Load curated events with metadata via `getCuratedEventsWithMetadata(epochId)`
+   - Run each registered enricher (e.g., echo enricher aggregates event counts)
+   - Compute `inputsHash` and `payloadHash` per artifact
+   - `upsertDraftArtifact()` — overwrites previous draft (ARTIFACT_UNIQUE_PER_REF_STATUS)
+8. **Compute allocations** — `computeAllocations` activity (unchanged, runs against curated events)
+9. **Ensure pool components** — `ensurePoolComponents` activity
+10. **Auto-close (at period end + grace):**
+    - `buildFinalArtifacts({ epochId })` — same computation as draft, returns artifacts + `artifactsHash` without writing
+    - `closeIngestionWithArtifacts({ epochId, artifacts, artifactsHash, ... })` — single transaction: insert locked artifacts + set `artifacts_hash` + pin config hashes + transition `open→review` (ARTIFACT_FINAL_ATOMIC)
 
 Deterministic workflow ID: managed by Temporal Schedule (overlap=SKIP, run IDs per firing).
 
@@ -593,10 +702,27 @@ The following are explicitly deferred from V0 and will be designed when needed:
 - **UI pages** — V1+
 - **DID/VC alignment** — V2+
 - **Automated webhook fast-path** (GitHub `handleWebhook`) — V1: real-time ingestion
+- **Formal `EpochEnricher` port** — V1: registration, dependency ordering between enrichers, lifecycle hooks. V0 calls enricher activities directly from the workflow.
+- **Object storage for large artifacts** (`payload_ref`) — V1: when an artifact exceeds 256KB inline threshold. V0: all payloads inline.
+- **AI quality scoring enricher** (`cogni.ai_scores.v0`) — future enricher, same `epoch_artifacts` table, different `artifact_ref`
+
+### File Pointers
+
+| File                                                                | Purpose                                                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `packages/db-schema/src/ledger.ts`                                  | Drizzle schema: all ledger tables including `epochArtifacts`              |
+| `packages/ledger-core/src/store.ts`                                 | Store port interface with artifact CRUD methods                           |
+| `packages/ledger-core/src/hashing.ts`                               | `canonicalJsonStringify`, `computeArtifactsHash`, `sha256OfCanonicalJson` |
+| `packages/ledger-core/src/enrichers/work-item-linker.ts`            | `extractWorkItemIds()` pure function + types                              |
+| `packages/ledger-core/src/allocation.ts`                            | Allocation algorithms (`weight-sum-v0`)                                   |
+| `packages/db-client/src/adapters/drizzle-ledger.adapter.ts`         | Drizzle adapter — all store port implementations                          |
+| `services/scheduler-worker/src/activities/ledger.ts`                | Temporal activities (ledger I/O)                                          |
+| `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` | `CollectEpochWorkflow` — pipeline orchestration                           |
+| `services/scheduler-worker/src/adapters/ingestion/github.ts`        | GitHub source adapter (GraphQL, body/branch/labels)                       |
 
 ## Goal
 
-Enable transparent, verifiable credit distribution where contribution activity is automatically collected, valued via explicit weight policy, and finalized by an admin. Anyone can recompute the payout table from stored data.
+Enable transparent, verifiable credit distribution where contribution activity is automatically collected, enriched with domain-specific context (work-item links, quality signals), valued via pluggable allocation algorithms, and finalized by an admin. Anyone can recompute the payout table from stored data.
 
 ### Actor Migration Path (Planned)
 
@@ -608,6 +734,8 @@ Enable transparent, verifiable credit distribution where contribution activity i
 - Server-held signing keys
 - Full RBAC system (V0 uses per-scope approver allowlist)
 - Real-time streaming (poll-based collection sufficient for weekly epochs)
+- Formal enricher registration/plugin framework (V0 calls enricher activities directly)
+- Payload shape standardization across enrichers (pipeline validates envelope only; payload is per-plugin, opaque)
 
 ## Related
 
