@@ -12,6 +12,8 @@
  * - IDENTITY_BEST_EFFORT: resolveIdentities is best-effort; unresolved events get userId=null.
  * - ONE_OPEN_EPOCH: createEpoch enforced by DB constraint.
  * - NODE_SCOPED: all operations are scoped to a node_id.
+ * - ARTIFACT_FINAL_ATOMIC: locked artifact writes + artifacts_hash + epoch open→review in one transaction.
+ * - PAYOUT_FROM_FINAL_ONLY: allocation for payouts consumes only status='locked' artifacts.
  * Side-effects: none
  * Links: docs/spec/epoch-ledger.md
  * @public
@@ -36,6 +38,7 @@ export interface LedgerEpoch {
   readonly approverSetHash: string | null;
   readonly allocationAlgoRef: string | null;
   readonly weightConfigHash: string | null;
+  readonly artifactsHash: string | null;
   readonly openedAt: Date;
   readonly closedAt: Date | null;
   readonly createdAt: Date;
@@ -132,6 +135,26 @@ export interface LedgerStatementSignature {
   readonly signedAt: Date;
 }
 
+export interface LedgerEpochArtifact {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly artifactType: string;
+  readonly status: "draft" | "locked";
+  readonly algoRef: string;
+  readonly inputsHash: string;
+  readonly payloadHash: string;
+  readonly payloadJson: Record<string, unknown> | null;
+  readonly payloadRef: string | null;
+  readonly createdAt: Date;
+}
+
+/** Curated event with raw event metadata, for enricher consumption. */
+export interface CuratedEventWithMetadata extends CuratedEventForAllocation {
+  readonly metadata: Record<string, unknown> | null;
+  readonly payloadHash: string;
+}
+
 // ---------------------------------------------------------------------------
 // Write-side parameter types
 // ---------------------------------------------------------------------------
@@ -205,6 +228,26 @@ export interface InsertSignatureParams {
   readonly signedAt: Date;
 }
 
+export interface UpsertArtifactParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly artifactType: string;
+  readonly status: "draft" | "locked";
+  readonly algoRef: string;
+  readonly inputsHash: string;
+  readonly payloadHash: string;
+  readonly payloadJson: Record<string, unknown>;
+}
+
+export interface CloseIngestionWithArtifactsParams {
+  readonly epochId: bigint;
+  readonly approverSetHash: string;
+  readonly allocationAlgoRef: string;
+  readonly weightConfigHash: string;
+  readonly artifacts: ReadonlyArray<UpsertArtifactParams>;
+  readonly artifactsHash: string;
+}
+
 /**
  * Narrowed params for auto-population INSERT (CURATION_AUTO_POPULATE).
  * Intentionally excludes weightOverrideMilli and note to prevent accidental overwrites.
@@ -264,6 +307,32 @@ export interface ActivityLedgerStore {
 
   /** Transition epoch review → finalized. Sets poolTotalCredits and closedAt. */
   finalizeEpoch(epochId: bigint, poolTotal: bigint): Promise<LedgerEpoch>;
+
+  /** Transition epoch open → review with locked artifacts in a single transaction (ARTIFACT_FINAL_ATOMIC).
+   *  Inserts locked artifacts + sets artifacts_hash + pins approverSetHash, allocationAlgoRef, weightConfigHash.
+   *  Rejects if epoch is not open. */
+  closeIngestionWithArtifacts(
+    params: CloseIngestionWithArtifactsParams
+  ): Promise<LedgerEpoch>;
+
+  // Artifacts
+  /** Upsert draft artifact — overwrites on (epoch_id, artifact_type, status='draft'). */
+  upsertDraftArtifact(params: UpsertArtifactParams): Promise<void>;
+  /** Get all artifacts for an epoch, optionally filtered by status. */
+  getArtifactsForEpoch(
+    epochId: bigint,
+    status?: "draft" | "locked"
+  ): Promise<LedgerEpochArtifact[]>;
+  /** Get single artifact by type and optional status. */
+  getArtifact(
+    epochId: bigint,
+    artifactType: string,
+    status?: "draft" | "locked"
+  ): Promise<LedgerEpochArtifact | null>;
+  /** Get curated events with raw metadata and payload hash for enricher consumption. */
+  getCuratedEventsWithMetadata(
+    epochId: bigint
+  ): Promise<CuratedEventWithMetadata[]>;
 
   // Activity events (append-only, epoch-agnostic raw log)
   insertActivityEvents(events: InsertActivityEventParams[]): Promise<void>;
