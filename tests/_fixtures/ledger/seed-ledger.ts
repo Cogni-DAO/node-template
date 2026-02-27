@@ -3,7 +3,7 @@
 
 /**
  * Module: `@tests/_fixtures/ledger/seed-ledger`
- * Purpose: Reusable ledger test fixtures for seeding epochs, activity events, and related data.
+ * Purpose: Reusable ledger test fixtures for seeding epochs, ingestion receipts, and related data.
  * Scope: Factory functions for ledger test data + composite seeders for common test scenarios. Does not contain test logic or assertions.
  * Invariants: All generated IDs are deterministic from inputs where possible.
  * Side-effects: none (pure data factories); composite seeders perform IO via store
@@ -12,16 +12,16 @@
  */
 
 import type {
-  ActivityLedgerStore,
-  InsertActivityEventParams,
+  EpochLedgerStore,
   InsertAllocationParams,
-  InsertCurationAutoParams,
-  InsertPayoutStatementParams,
+  InsertEpochStatementParams,
+  InsertIngestionReceiptParams,
   InsertPoolComponentParams,
+  InsertSelectionAutoParams,
   LedgerEpoch,
-  LedgerPayoutStatement,
+  LedgerEpochStatement,
   LedgerPoolComponent,
-  UpsertCurationParams,
+  UpsertSelectionParams,
 } from "@cogni/ledger-core";
 
 /** Stable test node ID for ledger integration tests */
@@ -53,13 +53,12 @@ export const TEST_WEIGHT_CONFIG: Record<string, number> = {
   "discord:message_sent": 500,
 };
 
-/** Build an activity event insert param with sensible defaults */
-export function makeActivityEvent(
-  overrides: Partial<InsertActivityEventParams> & { id: string }
-): InsertActivityEventParams {
+/** Build an ingestion receipt insert param with sensible defaults */
+export function makeIngestionReceipt(
+  overrides: Partial<InsertIngestionReceiptParams> & { receiptId: string }
+): InsertIngestionReceiptParams {
   return {
     nodeId: TEST_NODE_ID,
-    scopeId: TEST_SCOPE_ID,
     source: "github",
     eventType: "pr_merged",
     platformUserId: "12345",
@@ -72,13 +71,13 @@ export function makeActivityEvent(
   };
 }
 
-/** Build a curation upsert param with sensible defaults */
-export function makeCuration(
-  overrides: Partial<UpsertCurationParams> & {
+/** Build a selection upsert param with sensible defaults */
+export function makeSelection(
+  overrides: Partial<UpsertSelectionParams> & {
     epochId: bigint;
-    eventId: string;
+    receiptId: string;
   }
-): UpsertCurationParams {
+): UpsertSelectionParams {
   return {
     nodeId: TEST_NODE_ID,
     included: true,
@@ -86,13 +85,13 @@ export function makeCuration(
   };
 }
 
-/** Build a curation auto-populate param (narrowed insert) */
-export function makeCurationAuto(
-  overrides: Partial<InsertCurationAutoParams> & {
+/** Build a selection auto-populate param (narrowed insert) */
+export function makeSelectionAuto(
+  overrides: Partial<InsertSelectionAutoParams> & {
     epochId: bigint;
-    eventId: string;
+    receiptId: string;
   }
-): InsertCurationAutoParams {
+): InsertSelectionAutoParams {
   return {
     nodeId: TEST_NODE_ID,
     userId: null,
@@ -130,10 +129,10 @@ export function makePoolComponent(
   };
 }
 
-/** Build a payout statement insert param with sensible defaults */
-export function makePayoutStatement(
-  overrides: Partial<InsertPayoutStatementParams> & { epochId: bigint }
-): InsertPayoutStatementParams {
+/** Build an epoch statement insert param with sensible defaults */
+export function makeEpochStatement(
+  overrides: Partial<InsertEpochStatementParams> & { epochId: bigint }
+): InsertEpochStatementParams {
   return {
     nodeId: TEST_NODE_ID,
     allocationSetHash: "test-hash-abc123",
@@ -164,20 +163,20 @@ export function makePayoutStatement(
 export interface SeededClosedEpoch {
   epoch: LedgerEpoch;
   poolComponent: LedgerPoolComponent;
-  statement: LedgerPayoutStatement;
+  statement: LedgerEpochStatement;
 }
 
 /**
- * Seeds a complete closed epoch with activity, curations, allocations,
- * a pool component, and a payout statement. Suitable for testing read routes.
+ * Seeds a complete closed epoch with receipts, selections, allocations,
+ * a pool component, and a statement. Suitable for testing read routes.
  *
- * @param store - The ActivityLedgerStore to seed into
+ * @param store - The EpochLedgerStore to seed into
  * @param opts.nodeId - Node ID (defaults to TEST_NODE_ID)
  * @param opts.scopeId - Scope ID (defaults to TEST_SCOPE_ID)
  * @param opts.epochOffset - Epoch window offset for test isolation (defaults to 0)
  */
 export async function seedClosedEpoch(
-  store: ActivityLedgerStore,
+  store: EpochLedgerStore,
   opts: {
     nodeId?: string;
     scopeId?: string;
@@ -197,25 +196,23 @@ export async function seedClosedEpoch(
     weightConfig: TEST_WEIGHT_CONFIG,
   });
 
-  // 2. Insert activity events within the epoch window
+  // 2. Insert ingestion receipts within the epoch window
   const eventMidpoint = new Date(
     (periodStart.getTime() + periodEnd.getTime()) / 2
   );
-  await store.insertActivityEvents([
-    makeActivityEvent({
-      id: `test-event-${epoch.id}-1`,
+  await store.insertIngestionReceipts([
+    makeIngestionReceipt({
+      receiptId: `test-receipt-${epoch.id}-1`,
       nodeId,
-      scopeId,
       platformUserId: "gh-user-101",
       platformLogin: "alice",
       artifactUrl: "https://github.com/test/repo/pull/1",
       eventTime: eventMidpoint,
       retrievedAt: eventMidpoint,
     }),
-    makeActivityEvent({
-      id: `test-event-${epoch.id}-2`,
+    makeIngestionReceipt({
+      receiptId: `test-receipt-${epoch.id}-2`,
       nodeId,
-      scopeId,
       source: "github",
       eventType: "review_submitted",
       platformUserId: "gh-user-202",
@@ -226,19 +223,19 @@ export async function seedClosedEpoch(
     }),
   ]);
 
-  // 3. Insert curations (auto-populate pattern)
-  await store.insertCurationDoNothing([
-    makeCurationAuto({
+  // 3. Insert selections (auto-populate pattern)
+  await store.insertSelectionDoNothing([
+    makeSelectionAuto({
       nodeId,
       epochId: epoch.id,
-      eventId: `test-event-${epoch.id}-1`,
+      receiptId: `test-receipt-${epoch.id}-1`,
       userId: "user-1",
       included: true,
     }),
-    makeCurationAuto({
+    makeSelectionAuto({
       nodeId,
       epochId: epoch.id,
-      eventId: `test-event-${epoch.id}-2`,
+      receiptId: `test-receipt-${epoch.id}-2`,
       userId: "user-2",
       included: true,
     }),
@@ -280,9 +277,9 @@ export async function seedClosedEpoch(
   );
   const finalizedEpoch = await store.finalizeEpoch(epoch.id, poolTotal);
 
-  // 7. Insert payout statement (after finalize)
-  const statement = await store.insertPayoutStatement(
-    makePayoutStatement({
+  // 7. Insert epoch statement (after finalize)
+  const statement = await store.insertEpochStatement(
+    makeEpochStatement({
       nodeId,
       epochId: epoch.id,
     })

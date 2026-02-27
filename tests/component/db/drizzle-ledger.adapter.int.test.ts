@@ -4,8 +4,8 @@
 /**
  * Module: `@tests/component/db/drizzle-ledger.adapter.int`
  * Purpose: Component tests for DrizzleLedgerAdapter against real PostgreSQL via testcontainers.
- * Scope: Verifies adapter + DB triggers (ACTIVITY_APPEND_ONLY, CURATION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, ACTIVITY_IDEMPOTENT). Does not test domain logic or routes.
- * Invariants: ACTIVITY_APPEND_ONLY, ACTIVITY_IDEMPOTENT, CURATION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, SCOPE_GATED_QUERIES
+ * Scope: Verifies adapter + DB triggers (RECEIPT_APPEND_ONLY, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, RECEIPT_IDEMPOTENT). Does not test domain logic or routes.
+ * Invariants: RECEIPT_APPEND_ONLY, RECEIPT_IDEMPOTENT, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, SCOPE_GATED_QUERIES
  * Side-effects: IO (database operations via testcontainers)
  * Links: packages/db-client/src/adapters/drizzle-ledger.adapter.ts, packages/ledger-core/src/store.ts
  * @public
@@ -20,10 +20,10 @@ import {
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
   epochWindow,
-  makeActivityEvent,
   makeAllocation,
-  makeCuration,
+  makeIngestionReceipt,
   makePoolComponent,
+  makeSelection,
   TEST_NODE_ID,
   TEST_SCOPE_ID,
   TEST_WEIGHT_CONFIG,
@@ -226,68 +226,70 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
   });
 
-  // ── Activity Events ───────────────────────────────────────────
+  // ── Ingestion Receipts ───────────────────────────────────────────
 
-  describe("activity events", () => {
-    it("inserts events and retrieves by time window", async () => {
+  describe("ingestion receipts", () => {
+    it("inserts receipts and retrieves by time window", async () => {
       const events = [
-        makeActivityEvent({
-          id: "github:pr:test/repo:1",
+        makeIngestionReceipt({
+          receiptId: "github:pr:test/repo:1",
           eventTime: new Date("2026-01-06T10:00:00Z"),
           platformUserId: "111",
         }),
-        makeActivityEvent({
-          id: "github:pr:test/repo:2",
+        makeIngestionReceipt({
+          receiptId: "github:pr:test/repo:2",
           eventTime: new Date("2026-01-07T10:00:00Z"),
           platformUserId: "222",
         }),
       ];
 
-      await adapter.insertActivityEvents(events);
+      await adapter.insertIngestionReceipts(events);
 
-      const results = await adapter.getActivityForWindow(
+      const results = await adapter.getReceiptsForWindow(
         TEST_NODE_ID,
         new Date("2026-01-06T00:00:00Z"),
         new Date("2026-01-08T00:00:00Z")
       );
 
       expect(results.length).toBeGreaterThanOrEqual(2);
-      const ids = results.map((e) => e.id);
+      const ids = results.map((e) => e.receiptId);
       expect(ids).toContain("github:pr:test/repo:1");
       expect(ids).toContain("github:pr:test/repo:2");
     });
 
-    it("ACTIVITY_IDEMPOTENT: re-inserting same event is a no-op", async () => {
-      const event = makeActivityEvent({
-        id: "github:pr:test/repo:1",
+    it("RECEIPT_IDEMPOTENT: re-inserting same receipt is a no-op", async () => {
+      const event = makeIngestionReceipt({
+        receiptId: "github:pr:test/repo:1",
         platformUserId: "111",
       });
 
-      await adapter.insertActivityEvents([event]);
+      await adapter.insertIngestionReceipts([event]);
 
-      const results = await adapter.getActivityForWindow(
+      const results = await adapter.getReceiptsForWindow(
         TEST_NODE_ID,
         new Date("2026-01-06T00:00:00Z"),
         new Date("2026-01-08T00:00:00Z")
       );
-      const matching = results.filter((e) => e.id === "github:pr:test/repo:1");
+      const matching = results.filter(
+        (e) => e.receiptId === "github:pr:test/repo:1"
+      );
       expect(matching).toHaveLength(1);
     });
 
-    it("ACTIVITY_APPEND_ONLY: UPDATE on activity_events is rejected by trigger", async () => {
+    it("RECEIPT_APPEND_ONLY: UPDATE on ingestion_receipts is rejected by trigger", async () => {
       await expect(
         db.execute(
-          sql`UPDATE activity_events SET source = 'modified' WHERE id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`
+          sql`UPDATE ingestion_receipts SET source = 'modified' WHERE receipt_id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`
         )
       ).rejects.toSatisfy((err: unknown) =>
         /not allowed/i.test(drizzleCause(err))
       );
     });
 
-    it("ACTIVITY_APPEND_ONLY: DELETE on activity_events is rejected by trigger", async () => {
+    it("RECEIPT_APPEND_ONLY: DELETE on ingestion_receipts is rejected by trigger", async () => {
       await expect(
         db.execute(
-          sql`DELETE FROM activity_events WHERE id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`
+          sql`DELETE FROM ingestion_receipts WHERE receipt_id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`
         )
       ).rejects.toSatisfy((err: unknown) =>
         /not allowed/i.test(drizzleCause(err))
@@ -295,9 +297,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
   });
 
-  // ── Curation ──────────────────────────────────────────────────
+  // ── Selection ──────────────────────────────────────────────────
 
-  describe("curation", () => {
+  describe("selection", () => {
     let epochId: bigint;
 
     beforeAll(async () => {
@@ -324,44 +326,44 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       }
     });
 
-    it("upserts curation entries and retrieves them", async () => {
-      await adapter.upsertCuration([
-        makeCuration({
+    it("upserts selection entries and retrieves them", async () => {
+      await adapter.upsertSelection([
+        makeSelection({
           epochId,
-          eventId: "github:pr:test/repo:1",
+          receiptId: "github:pr:test/repo:1",
           userId: actor.user.id,
         }),
-        makeCuration({
+        makeSelection({
           epochId,
-          eventId: "github:pr:test/repo:2",
+          receiptId: "github:pr:test/repo:2",
           userId: null,
         }),
       ]);
 
-      const all = await adapter.getCurationForEpoch(epochId);
+      const all = await adapter.getSelectionForEpoch(epochId);
       expect(all).toHaveLength(2);
     });
 
-    it("getUnresolvedCuration returns only entries with null userId", async () => {
-      const unresolved = await adapter.getUnresolvedCuration(epochId);
+    it("getUnresolvedSelection returns only entries with null userId", async () => {
+      const unresolved = await adapter.getUnresolvedSelection(epochId);
       expect(unresolved).toHaveLength(1);
-      expect(unresolved[0]?.eventId).toBe("github:pr:test/repo:2");
+      expect(unresolved[0]?.receiptId).toBe("github:pr:test/repo:2");
     });
 
-    it("upsert updates existing curation (same epoch+event)", async () => {
-      await adapter.upsertCuration([
-        makeCuration({
+    it("upsert updates existing selection (same epoch+receipt)", async () => {
+      await adapter.upsertSelection([
+        makeSelection({
           epochId,
-          eventId: "github:pr:test/repo:2",
+          receiptId: "github:pr:test/repo:2",
           userId: actor.user.id,
         }),
       ]);
 
-      const unresolved = await adapter.getUnresolvedCuration(epochId);
+      const unresolved = await adapter.getUnresolvedSelection(epochId);
       expect(unresolved).toHaveLength(0);
     });
 
-    it("CURATION_FREEZE_ON_FINALIZE: curation is mutable during review", async () => {
+    it("SELECTION_FREEZE_ON_FINALIZE: selection is mutable during review", async () => {
       await adapter.closeIngestion(
         epochId,
         "review-curation-test",
@@ -369,12 +371,12 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         "review-wch"
       );
 
-      // Curation writes should succeed while epoch is in review
+      // Selection writes should succeed while epoch is in review
       await expect(
-        adapter.upsertCuration([
-          makeCuration({
+        adapter.upsertSelection([
+          makeSelection({
             epochId,
-            eventId: "github:pr:test/repo:1",
+            receiptId: "github:pr:test/repo:1",
             userId: actor.user.id,
             note: "updated during review",
           }),
@@ -382,15 +384,15 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       ).resolves.not.toThrow();
     });
 
-    it("CURATION_FREEZE_ON_FINALIZE: rejects curation writes after epoch finalize", async () => {
+    it("SELECTION_FREEZE_ON_FINALIZE: rejects selection writes after epoch finalize", async () => {
       // Epoch is already in review from the previous test
       await adapter.finalizeEpoch(epochId, 5000n);
 
       await expect(
-        adapter.upsertCuration([
-          makeCuration({
+        adapter.upsertSelection([
+          makeSelection({
             epochId,
-            eventId: "github:pr:test/repo:1",
+            receiptId: "github:pr:test/repo:1",
             userId: null,
             note: "should fail",
           }),
@@ -401,9 +403,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
   });
 
-  // ── getCuratedEventsForAllocation ─────────────────────────────
+  // ── getSelectedReceiptsForAllocation ─────────────────────────────
 
-  describe("getCuratedEventsForAllocation", () => {
+  describe("getSelectedReceiptsForAllocation", () => {
     let epochId: bigint;
     let resolvedActor: TestActor;
 
@@ -418,25 +420,25 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       });
       epochId = epoch.id;
 
-      // Insert activity events within epoch window
+      // Insert ingestion receipts within epoch window
       const eventTime = new Date("2026-08-20T12:00:00Z");
-      await adapter.insertActivityEvents([
-        makeActivityEvent({
-          id: "join-test:resolved",
+      await adapter.insertIngestionReceipts([
+        makeIngestionReceipt({
+          receiptId: "join-test:resolved",
           eventTime,
           platformUserId: "gh-resolved",
           source: "github",
           eventType: "pr_merged",
         }),
-        makeActivityEvent({
-          id: "join-test:unresolved",
+        makeIngestionReceipt({
+          receiptId: "join-test:unresolved",
           eventTime,
           platformUserId: "gh-unresolved",
           source: "github",
           eventType: "review_submitted",
         }),
-        makeActivityEvent({
-          id: "join-test:excluded",
+        makeIngestionReceipt({
+          receiptId: "join-test:excluded",
           eventTime,
           platformUserId: "gh-excluded",
           source: "github",
@@ -444,23 +446,23 @@ describe("DrizzleLedgerAdapter (Component)", () => {
         }),
       ]);
 
-      // Curate: one resolved, one unresolved (null userId), one excluded
-      await adapter.upsertCuration([
-        makeCuration({
+      // Select: one resolved, one unresolved (null userId), one excluded
+      await adapter.upsertSelection([
+        makeSelection({
           epochId,
-          eventId: "join-test:resolved",
+          receiptId: "join-test:resolved",
           userId: resolvedActor.user.id,
           included: true,
         }),
-        makeCuration({
+        makeSelection({
           epochId,
-          eventId: "join-test:unresolved",
+          receiptId: "join-test:unresolved",
           userId: null,
           included: true,
         }),
-        makeCuration({
+        makeSelection({
           epochId,
-          eventId: "join-test:excluded",
+          receiptId: "join-test:excluded",
           userId: resolvedActor.user.id,
           included: false,
         }),
@@ -477,21 +479,21 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       await adapter.finalizeEpoch(epochId, 0n);
     });
 
-    it("returns only curations with non-null userId", async () => {
-      const events = await adapter.getCuratedEventsForAllocation(epochId);
+    it("returns only selections with non-null userId", async () => {
+      const events = await adapter.getSelectedReceiptsForAllocation(epochId);
 
       // "resolved" has userId set → included
       // "unresolved" has userId=null → excluded by join filter
       // "excluded" has userId set but included=false → still returned (filtering is domain logic)
-      const eventIds = events.map((e) => e.eventId);
-      expect(eventIds).toContain("join-test:resolved");
-      expect(eventIds).toContain("join-test:excluded");
-      expect(eventIds).not.toContain("join-test:unresolved");
+      const receiptIds = events.map((e) => e.receiptId);
+      expect(receiptIds).toContain("join-test:resolved");
+      expect(receiptIds).toContain("join-test:excluded");
+      expect(receiptIds).not.toContain("join-test:unresolved");
     });
 
-    it("join populates source and eventType from activity_events", async () => {
-      const events = await adapter.getCuratedEventsForAllocation(epochId);
-      const resolved = events.find((e) => e.eventId === "join-test:resolved");
+    it("join populates source and eventType from ingestion_receipts", async () => {
+      const events = await adapter.getSelectedReceiptsForAllocation(epochId);
+      const resolved = events.find((e) => e.receiptId === "join-test:resolved");
 
       expect(resolved).toBeDefined();
       expect(resolved?.source).toBe("github");
@@ -769,9 +771,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
     });
   });
 
-  // ── Payout Statements ─────────────────────────────────────────
+  // ── Epoch Statements ─────────────────────────────────────────
 
-  describe("payout statements", () => {
+  describe("epoch statements", () => {
     let epochId: bigint;
 
     beforeAll(async () => {
@@ -791,8 +793,8 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       epochId = epoch.id;
     });
 
-    it("inserts and retrieves a payout statement", async () => {
-      const stmt = await adapter.insertPayoutStatement({
+    it("inserts and retrieves an epoch statement", async () => {
+      const stmt = await adapter.insertEpochStatement({
         nodeId: TEST_NODE_ID,
         epochId,
         allocationSetHash: "abc123def456",
@@ -843,7 +845,7 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       );
       await adapter.finalizeEpoch(epoch.id, 20000n);
 
-      const stmt = await adapter.insertPayoutStatement({
+      const stmt = await adapter.insertEpochStatement({
         nodeId: TEST_NODE_ID,
         epochId: epoch.id,
         allocationSetHash: "sig-test-hash",
@@ -1163,13 +1165,13 @@ describe("DrizzleLedgerAdapter (Component)", () => {
 
     it("getCurationForEpoch throws EpochNotFoundError for cross-scope epochId", async () => {
       await expect(
-        otherScopeAdapter.getCurationForEpoch(scopeTestEpochId)
+        otherScopeAdapter.getSelectionForEpoch(scopeTestEpochId)
       ).rejects.toThrow(EpochNotFoundError);
     });
 
     it("getUnresolvedCuration throws EpochNotFoundError for cross-scope epochId", async () => {
       await expect(
-        otherScopeAdapter.getUnresolvedCuration(scopeTestEpochId)
+        otherScopeAdapter.getUnresolvedSelection(scopeTestEpochId)
       ).rejects.toThrow(EpochNotFoundError);
     });
 
@@ -1201,9 +1203,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       ).rejects.toThrow(EpochNotFoundError);
     });
 
-    it("getUncuratedEvents throws EpochNotFoundError for cross-scope epochId", async () => {
+    it("getUnselectedReceipts throws EpochNotFoundError for cross-scope epochId", async () => {
       await expect(
-        otherScopeAdapter.getUncuratedEvents(
+        otherScopeAdapter.getUnselectedReceipts(
           TEST_NODE_ID,
           scopeTestEpochId,
           new Date("2026-01-01"),
@@ -1212,9 +1214,9 @@ describe("DrizzleLedgerAdapter (Component)", () => {
       ).rejects.toThrow(EpochNotFoundError);
     });
 
-    it("updateCurationUserId throws EpochNotFoundError for cross-scope epochId", async () => {
+    it("updateSelectionUserId throws EpochNotFoundError for cross-scope epochId", async () => {
       await expect(
-        otherScopeAdapter.updateCurationUserId(
+        otherScopeAdapter.updateSelectionUserId(
           scopeTestEpochId,
           "any-event",
           "any-user"
