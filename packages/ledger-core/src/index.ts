@@ -19,6 +19,15 @@ export {
   type ProposedAllocation,
   validateWeightConfig,
 } from "./allocation";
+// Enrichers (pure functions)
+export {
+  extractWorkItemIds,
+  WORK_ITEM_LINKER_ALGO_REF,
+  WORK_ITEM_LINKS_ARTIFACT_TYPE,
+  type WorkItemLink,
+  type WorkItemLinksPayload,
+  type WorkItemSnapshot,
+} from "./enrichers/work-item-linker";
 
 // Epoch window computation (pure, deterministic — safe in Temporal workflow code)
 export {

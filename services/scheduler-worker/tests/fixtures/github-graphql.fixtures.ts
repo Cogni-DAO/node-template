@@ -13,6 +13,10 @@ export function makePrNode(overrides: {
   number: number;
   mergedAt: string;
   updatedAt?: string;
+  title?: string;
+  body?: string;
+  headRefName?: string;
+  labels?: string[];
   authorLogin?: string;
   authorDatabaseId?: number;
   authorTypename?: string;
@@ -21,7 +25,8 @@ export function makePrNode(overrides: {
   const repoFull = overrides.repo ?? "cogni-dao/cogni-template";
   return {
     number: overrides.number,
-    title: `PR #${overrides.number}`,
+    title: overrides.title ?? `PR #${overrides.number}`,
+    body: overrides.body ?? "",
     mergedAt: overrides.mergedAt,
     updatedAt: overrides.updatedAt ?? overrides.mergedAt,
     url: `https://github.com/${repoFull}/pull/${overrides.number}`,
@@ -30,9 +35,11 @@ export function makePrNode(overrides: {
       login: overrides.authorLogin ?? "testuser",
       databaseId: overrides.authorDatabaseId ?? 12345,
     },
+    headRefName: overrides.headRefName ?? "main",
     additions: 10,
     deletions: 5,
     changedFiles: 2,
+    labels: { nodes: (overrides.labels ?? []).map((name) => ({ name })) },
   };
 }
 
