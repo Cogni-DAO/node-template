@@ -234,3 +234,7 @@ pnpm test:component
 - [ ] Missing `.md` files produce work items with error field, never throw
 - [ ] `getCuratedEventsWithMetadata` returns metadata + payloadHash alongside curation fields
 - [ ] Existing `weight-sum-v0` allocation still works (no allocation changes in this task)
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0113.handoff.md)

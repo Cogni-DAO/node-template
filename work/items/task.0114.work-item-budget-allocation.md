@@ -153,3 +153,7 @@ pnpm test
 - [ ] Unlinked event ratio is observable from artifact's `unlinkedEventIds`
 - [ ] Missing `.md` work items (error field from task.0113) get budgetMilli: "0", don't distort allocation
 - [ ] `weight-sum-v0` still works when no artifacts present (backward compat)
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0113.handoff.md)
