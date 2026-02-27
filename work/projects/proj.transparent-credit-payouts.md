@@ -128,12 +128,14 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 - [ ] All write operations execute in Temporal workflows (Next.js stateless)
 - [ ] All math is BIGINT — no floating point, including weight values (milli-units)
 
-### Walk (P1) — Signed Receipts + UI + Collection Hardening
+### Walk (P1) — Work-Item Scoring + Signed Receipts + UI
 
-**Goal:** Per-receipt wallet signatures for cryptographic audit trail. UI surfaces. Fix collection pipeline blindspots identified in [gap analysis](../../docs/research/ledger-collection-gap-analysis.md).
+**Goal:** Shift credit allocation from flat event weights to work-item-based budgets. Generic enrichment pipeline for future plugins (AI scoring, etc.). Per-receipt wallet signatures. UI surfaces.
 
 | Deliverable                                           | Status      | Est | Work Item             |
 | ----------------------------------------------------- | ----------- | --- | --------------------- |
+| Epoch artifact pipeline + work-item enricher          | Not Started | 3   | task.0113             |
+| work-item-budget-v0 allocation algorithm              | Not Started | 2   | task.0114             |
 | Retroactive backfill for finalized epochs             | Not Started | 2   | task.0110 (not filed) |
 | Pending credit for unresolved identities              | Not Started | 2   | task.0111 (not filed) |
 | Webhook-first GitHub collection                       | Not Started | 3   | task.0112 (not filed) |
