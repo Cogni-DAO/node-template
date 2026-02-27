@@ -1,0 +1,1 @@
+ALTER TABLE "epoch_statements" RENAME COLUMN "payouts_json" TO "statement_items_json";
