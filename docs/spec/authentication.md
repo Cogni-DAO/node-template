@@ -73,10 +73,10 @@ graph TD
     end
 
     subgraph "Account Linking (DB-backed, fail-closed)"
-        L1[Authenticated user] --> L2["GET /api/auth/link/{provider}"]
+        L1[Authenticated user] --> L2["POST /api/auth/link/{provider}"]
         L2 --> L3[Insert linkTransactions row]
         L3 --> L4[Set signed JWT cookie with txId]
-        L4 --> L5[Redirect to OAuth flow]
+        L4 --> L5["Client calls signIn(provider)"]
         L5 --> L6[Decode JWT → pending or failed intent]
         L6 --> L7{Atomic consume: UPDATE WHERE unconsumed + unexpired}
         L7 -->|row returned| L8["createBinding for existing user"]

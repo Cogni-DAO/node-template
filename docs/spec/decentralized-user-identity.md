@@ -102,10 +102,10 @@ NextAuth OAuth → signIn callback → user_bindings lookup(provider, providerAc
 **Account linking (authenticated user adds provider, DB-backed fail-closed):**
 
 ```
-GET /api/auth/link/{provider}
+POST /api/auth/link/{provider}
   → INSERT linkTransactions row (txId, userId, provider, expiresAt)
-  → Set signed JWT cookie { txId, userId, purpose: "link_intent" } (5min TTL)
-  → Redirect to /api/auth/signin/{provider}
+  → Set signed JWT cookie { txId, userId, purpose: "link_intent" } (Path=/api/auth/callback, 5min TTL)
+  → Return { ok: true }; client calls signIn(provider) to start OAuth
   → [...nextauth] route decodes JWT → pending or failed intent via AsyncLocalStorage
   → signIn callback: atomic consume (UPDATE WHERE consumedAt IS NULL AND expiresAt > now())
   → IF row returned → createBinding(provider, externalId) for existing user
