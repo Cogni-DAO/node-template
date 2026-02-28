@@ -51,7 +51,7 @@ The word "payout" still appears in ~40 locations. These fall into 3 categories:
 
 ## Next Actions
 
-- [ ] Fix 3 test headers: `PAYOUT_DETERMINISTIC` → `STATEMENT_DETERMINISTIC` in test JSDoc
+- [x] Fix 3 test headers: `PAYOUT_DETERMINISTIC` → `STATEMENT_DETERMINISTIC` in test JSDoc
 - [ ] Merge PR #494 to `staging`
 - [ ] Run `pnpm db:migrate` in deployed environment to apply migration 0018
 

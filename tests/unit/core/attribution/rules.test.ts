@@ -3,9 +3,9 @@
 
 /**
  * Module: `@tests/unit/core/attribution/rules`
- * Purpose: Unit tests for ledger payout computation with BIGINT arithmetic and largest-remainder rounding.
+ * Purpose: Unit tests for statement item computation with BIGINT arithmetic and largest-remainder rounding.
  * Scope: Pure business logic testing. Does not test external dependencies or I/O.
- * Invariants: ALL_MATH_BIGINT, PAYOUT_DETERMINISTIC — sum of payouts === poolTotalCredits.
+ * Invariants: ALL_MATH_BIGINT, STATEMENT_DETERMINISTIC — sum of statement items === poolTotalCredits.
  * Side-effects: none
  * Links: src/core/attribution/rules.ts, docs/spec/attribution-ledger.md#statement-item-computation
  * @public
@@ -147,7 +147,7 @@ describe("core/ledger/rules", () => {
       expect(result.map((r) => r.userId)).toEqual(["alpha", "mu", "zeta"]);
     });
 
-    it("sum of payouts always equals pool total (PAYOUT_DETERMINISTIC)", () => {
+    it("sum of statement items always equals pool total (STATEMENT_DETERMINISTIC)", () => {
       // Pathological case: 7 users, prime pool
       const receipts: FinalizedAllocation[] = Array.from(
         { length: 7 },

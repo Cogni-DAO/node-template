@@ -3,11 +3,11 @@
 
 /**
  * Module: `@cogni/attribution-ledger/rules`
- * Purpose: Payout computation with BIGINT arithmetic and largest-remainder rounding (ALL_MATH_BIGINT).
+ * Purpose: Statement item computation with BIGINT arithmetic and largest-remainder rounding (ALL_MATH_BIGINT).
  * Scope: Pure function. Does not perform I/O or mutate external state.
  * Invariants:
  * - All arithmetic uses BigInt — no floating point (ALL_MATH_BIGINT).
- * - Sum of payout amounts === poolTotalCredits (PAYOUT_DETERMINISTIC).
+ * - Sum of statement item amounts === poolTotalCredits (STATEMENT_DETERMINISTIC).
  * - Largest-remainder method distributes rounding residual.
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md#statement-item-computation

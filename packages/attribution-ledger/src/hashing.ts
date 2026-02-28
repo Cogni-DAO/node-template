@@ -6,7 +6,7 @@
  * Purpose: Deterministic SHA-256 hashing for allocation sets and epoch evaluations.
  * Scope: Pure functions. Does not perform network I/O or hold secrets.
  * Invariants:
- * - PAYOUT_DETERMINISTIC: Same inputs → byte-for-byte identical hash output.
+ * - STATEMENT_DETERMINISTIC: Same inputs → byte-for-byte identical hash output.
  * - CANONICAL_JSON: canonicalJsonStringify sorts keys at every depth, no whitespace, BigInt as string.
  * - Allocations are canonically sorted before hashing.
  * Side-effects: none (uses Web Crypto API)
