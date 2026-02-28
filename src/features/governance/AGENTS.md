@@ -15,7 +15,7 @@ Governance feature slice — schedule sync, governance status dashboard, and epo
 ## Pointers
 
 - [Governance Scheduling Spec](../../../docs/spec/governance-scheduling.md)
-- [Epoch Ledger Spec](../../../docs/spec/epoch-ledger.md)
+- [Attribution Ledger Spec](../../../docs/spec/attribution-ledger.md)
 - [Repo Spec Config](../../../.cogni/repo-spec.yaml)
 
 ## Boundaries
@@ -42,7 +42,7 @@ Governance feature slice — schedule sync, governance status dashboard, and epo
 - **Exports (lib):** `composeEpochView()`, `composeEpochViewFromStatement()`, `composeHoldings()`
 - **Exports (types):** `EpochView`, `EpochContributor`, `IngestionReceipt`, `HoldingView`, `CurrentEpochData`, `EpochHistoryData`, `HoldingsData`
 - **Routes (app pages):** `/gov` (system), `/gov/epoch` (current), `/gov/history` (finalized), `/gov/holdings` (aggregated)
-- **Routes (API — in `src/app/api/v1/ledger/`):** `GET /epochs`, `GET /epochs/:id/allocations`, `GET /epochs/:id/statement`, `GET /epochs/:id/activity`
+- **Routes (API — in `src/app/api/v1/attribution/`):** `GET /epochs`, `GET /epochs/:id/allocations`, `GET /epochs/:id/statement`, `GET /epochs/:id/activity`
 - **CLI:** `pnpm governance:schedules:sync`, `pnpm db:seed`, `pnpm dev:setup`
 - **Env/Config keys:** `.cogni/repo-spec.yaml` → `governance.schedules`
 
@@ -85,4 +85,4 @@ pnpm dev:setup                             # db:setup + db:setup:test + gov sche
 
 - Governance schedules are system-ops only; never exposed as tenant-facing API
 - PRUNE_IS_PAUSE: removed charters get paused, never deleted
-- Epoch seed script uses `computeEpochWindowV1()` from `@cogni/ledger-core` for Monday-aligned UTC windows matching the scheduler grid
+- Epoch seed script uses `computeEpochWindowV1()` from `@cogni/attribution-ledger` for Monday-aligned UTC windows matching the scheduler grid

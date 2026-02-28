@@ -7,19 +7,19 @@
  * Scope: Proves GraphQL queries parse, all 3 streams produce ActivityEvent[], deterministic IDs, ledger round-trip. Does not test webhook handling.
  * Invariants: Requires GITHUB_REVIEW_APP_ID + GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64 in env. Skips gracefully if missing.
  * Side-effects: IO (GitHub GraphQL, testcontainers PostgreSQL)
- * Links: services/scheduler-worker/src/adapters/ingestion/github.ts, docs/spec/epoch-ledger.md
+ * Links: services/scheduler-worker/src/adapters/ingestion/github.ts, docs/spec/attribution-ledger.md
  * @internal
  */
 
-import { DrizzleLedgerAdapter } from "@cogni/db-client";
+import type { InsertReceiptParams } from "@cogni/attribution-ledger";
+import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import type { ActivityEvent } from "@cogni/ingestion-core";
-import type { InsertIngestionReceiptParams } from "@cogni/ledger-core";
-import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
   TEST_NODE_ID,
   TEST_SCOPE_ID,
   TEST_WEIGHT_CONFIG,
-} from "@tests/_fixtures/ledger/seed-ledger";
+} from "@tests/_fixtures/attribution/seed-attribution";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { seedTestActor } from "@tests/_fixtures/stack/seed";
 import { beforeAll, describe, expect, it } from "vitest";
 import { GitHubSourceAdapter } from "../../../services/scheduler-worker/src/adapters/ingestion/github";
@@ -198,7 +198,7 @@ describeWithAuth("GitHubSourceAdapter (external)", () => {
 
   describe("ledger round-trip", () => {
     const db = getSeedDb();
-    const ledger = new DrizzleLedgerAdapter(db, TEST_SCOPE_ID);
+    const ledger = new DrizzleAttributionAdapter(db, TEST_SCOPE_ID);
     beforeAll(async () => {
       await seedTestActor(db);
       await ledger.createEpoch({
@@ -219,8 +219,8 @@ describeWithAuth("GitHubSourceAdapter (external)", () => {
       });
       expect(result.events.length).toBeGreaterThan(0);
 
-      // Map ActivityEvent → InsertIngestionReceiptParams
-      const params: InsertIngestionReceiptParams[] = result.events.map(
+      // Map ActivityEvent → InsertReceiptParams
+      const params: InsertReceiptParams[] = result.events.map(
         (e: ActivityEvent) => ({
           receiptId: e.id,
           nodeId: TEST_NODE_ID,
