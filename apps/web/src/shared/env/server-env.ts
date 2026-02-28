@@ -209,6 +209,11 @@ export const serverSchema = z.object({
   COGNI_REPO_PATH: z.string().min(1),
   // SHA override for mounts without .git (e.g., git-sync worktree)
   COGNI_REPO_SHA: optionalString,
+
+  // PostHog product analytics — optional (analytics disabled when unset)
+  // See docs/analytics/posthog.md for setup
+  POSTHOG_API_KEY: optionalString,
+  POSTHOG_HOST: optionalUrl,
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {
