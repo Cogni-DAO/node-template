@@ -65,7 +65,7 @@ export async function POST(
     // biome-ignore lint/style/noProcessEnv: auth infra runs before serverEnv() is available
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/",
+    path: "/api/auth/callback",
     maxAge: LINK_INTENT_TTL,
   });
 

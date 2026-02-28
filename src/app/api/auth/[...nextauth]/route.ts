@@ -30,24 +30,22 @@ const LINK_INTENT_SALT = "link-intent";
 
 const nextAuthHandler = NextAuth(authOptions);
 
-/** Cookie attributes must match exactly when clearing (browser ignores mismatched clears). */
-const LINK_COOKIE_ATTRS = {
-  httpOnly: true,
-  // biome-ignore lint/style/noProcessEnv: auth infra runs before serverEnv() is available
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-};
+function isCallbackRoute(segments: string[]): boolean {
+  return segments[0] === "callback";
+}
 
 async function handler(
   req: NextRequest,
   context: { params: Promise<{ nextauth: string[] }> }
 ) {
-  // Check for link_intent cookie on OAuth callback requests
+  const segments = (await context.params).nextauth;
+  const isCallback = isCallbackRoute(segments);
+
+  // Check for link_intent cookie — only decode on callback routes
   const linkIntentCookie = req.cookies.get(LINK_INTENT_COOKIE)?.value;
   let linkIntent: LinkIntent | null = null;
 
-  if (linkIntentCookie) {
+  if (linkIntentCookie && isCallback) {
     try {
       const decoded = await decode({
         token: linkIntentCookie,
@@ -73,19 +71,28 @@ async function handler(
   }
 
   // Run NextAuth within AsyncLocalStorage context
-  const response = await linkIntentStore.run(linkIntent, () =>
+  const res = await linkIntentStore.run(linkIntent, () =>
     nextAuthHandler(req, context)
   );
 
   // Clear link_intent cookie after processing (success or failure)
-  if (linkIntentCookie && response) {
-    response.cookies.set(LINK_INTENT_COOKIE, "", {
-      ...LINK_COOKIE_ATTRS,
-      maxAge: 0,
+  // Use raw Set-Cookie header — works regardless of Response vs NextResponse
+  if (isCallback && linkIntentCookie && res) {
+    // biome-ignore lint/style/noProcessEnv: auth infra runs before serverEnv() is available
+    const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+    const headers = new Headers(res.headers);
+    headers.append(
+      "Set-Cookie",
+      `${LINK_INTENT_COOKIE}=; HttpOnly; SameSite=Lax; Path=/api/auth/callback; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`
+    );
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
     });
   }
 
-  return response;
+  return res;
 }
 
 export { handler as GET, handler as POST };
