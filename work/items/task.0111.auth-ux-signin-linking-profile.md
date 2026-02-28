@@ -12,8 +12,8 @@ spec_refs: authentication-spec, decentralized-user-identity
 assignees: unassigned
 credit:
 project: proj.decentralized-identity
-branch: feat/task.0111-auth-ux-signin-linking
-pr:
+branch: feat/oauth-signin
+pr: https://github.com/Cogni-DAO/node-template/pull/496
 reviewer:
 revision: 1
 blocked_by:

@@ -20,6 +20,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
+import { useDisconnect } from "wagmi";
 
 import { Avatar, AvatarFallback } from "@/components/kit/data-display/Avatar";
 import { EthereumIcon } from "@/components/kit/data-display/ProviderIcons";
@@ -42,6 +43,7 @@ function truncateWallet(address: string): string {
 
 export function UserAvatarMenu(): ReactElement | null {
   const { data: session } = useSession();
+  const { disconnect } = useDisconnect();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -105,7 +107,10 @@ export function UserAvatarMenu(): ReactElement | null {
           {/* Sign out */}
           <DropdownMenuPrimitive.Item
             className={MENU_ITEM_CLASSES}
-            onClick={() => signOut({ callbackUrl: "/" })}
+            onClick={() => {
+              disconnect();
+              signOut({ callbackUrl: "/" });
+            }}
           >
             <LogOut className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
             <span>Sign Out</span>
