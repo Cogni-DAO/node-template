@@ -80,7 +80,7 @@ Three layers, kept strictly separate:
 
 ### Relationship to proj.transparent-credit-payouts
 
-`epoch_allocations.user_id` is the current canonical reward subject (humans only). When `actors` ships (v1), allocations gain `actor_id` alongside `user_id`. Human actors bridge 1:1 via `actors WHERE kind='user'`. Agent actors enable a new attribution path: gateway usage → actor → epoch rewards. No changes to existing epoch invariants (PAYOUT_DETERMINISTIC, ALL_MATH_BIGINT).
+`epoch_allocations.user_id` is the current canonical reward subject (humans only). When `actors` ships (v1), allocations gain `actor_id` alongside `user_id`. Human actors bridge 1:1 via `actors WHERE kind='user'`. Agent actors enable a new attribution path: gateway usage → actor → epoch rewards. No changes to existing epoch invariants (STATEMENT_DETERMINISTIC, ALL_MATH_BIGINT).
 
 ## Roadmap
 
