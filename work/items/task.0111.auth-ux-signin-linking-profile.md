@@ -128,7 +128,7 @@ pnpm check:docs       # docs metadata valid
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0111.handoff.md)
 
 ## Attribution
 

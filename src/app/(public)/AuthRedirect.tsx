@@ -15,17 +15,26 @@
 
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export function AuthRedirect(): null {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const redirected = useRef(false);
 
   useEffect(() => {
-    if (status === "authenticated") {
+    // Only redirect once per mount, and only when session has real user data.
+    // Prevents redirect loops when useSession() flickers between states
+    // during session transitions (SIWE completion, JWT refresh, link callbacks).
+    if (
+      status === "authenticated" &&
+      session?.user?.id &&
+      !redirected.current
+    ) {
+      redirected.current = true;
       router.replace("/chat");
     }
-  }, [status, router]);
+  }, [status, session, router]);
 
   return null;
 }

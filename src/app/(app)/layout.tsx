@@ -17,7 +17,7 @@
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { SidebarInset, SidebarProvider } from "@/components";
 import { AppSidebar, AppTopBar } from "@/features/layout";
@@ -29,11 +29,19 @@ export default function AppLayout({
 }): ReactNode {
   const { status } = useSession();
   const router = useRouter();
+  const wasAuthenticated = useRef(false);
 
-  // Redirect unauthenticated users to home
+  // Track if user was ever authenticated this mount — prevents redirect
+  // loops where useSession() flickers during session transitions.
+  if (status === "authenticated") {
+    wasAuthenticated.current = true;
+  }
+
+  // Redirect unauthenticated users to home — but only if they were never
+  // authenticated this mount (prevents bouncing during session refresh).
   // Note: No auto sign-out here - sign-out must be explicit user action
   useEffect(() => {
-    if (status === "unauthenticated") {
+    if (status === "unauthenticated" && !wasAuthenticated.current) {
       router.replace("/");
     }
   }, [status, router]);
