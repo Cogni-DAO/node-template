@@ -5,7 +5,7 @@
  * Module: `@app/api/auth/[...nextauth]`
  * Purpose: Expose NextAuth handlers for signin/session routes. Wraps handler with
  *   AsyncLocalStorage to propagate link intent to signIn callback.
- * Scope: Reads link_intent cookie on OAuth callbacks, decodes JWT, populates linkIntentStore with pending or failed intent, delegates to NextAuth, and clears cookie. Does not perform DB verification or binding.
+ * Scope: On callback routes only, reads link_intent cookie, decodes JWT, populates linkIntentStore with pending or failed intent, delegates to NextAuth, and clears cookie via raw Set-Cookie header. Non-callback routes (/providers, /session, /signout) pass through unmodified. Does not perform DB verification or binding.
  * Invariants: Public infrastructure endpoint; session cookies managed by NextAuth.
  *   Link intent is fail-closed: if JWT decode fails, the intent is rejected (never ignored).
  * Side-effects: IO (NextAuth DB operations via Drizzle client, cookie read/clear)

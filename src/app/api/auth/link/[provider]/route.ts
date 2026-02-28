@@ -5,7 +5,7 @@
  * Module: `@app/api/auth/link/[provider]`
  * Purpose: Account linking setup endpoint. Creates a DB-backed link transaction and
  *   sets a signed link_intent cookie. The client then calls signIn() to start OAuth.
- * Scope: POST-only. Requires existing session. Does not initiate OAuth, perform binding, or redirect — only sets the link_intent cookie.
+ * Scope: POST-only. Requires existing session. Does not initiate OAuth, perform binding, or redirect — only sets the link_intent cookie (path=/api/auth/callback, 5-min TTL).
  * Invariants: LINKING_IS_EXPLICIT — only authenticated users can initiate linking.
  *   Cookie is time-limited (5min), HttpOnly, Secure, SameSite=Lax. DB transaction is the authority.
  * Side-effects: IO (DB insert via auth helper, cookie set)
