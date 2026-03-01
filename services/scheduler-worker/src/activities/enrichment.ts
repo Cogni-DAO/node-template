@@ -87,6 +87,54 @@ export interface BuildLockedEvaluationsOutput {
   readonly artifactsHash: string;
 }
 
+async function buildClaimantSharesEvaluationData(params: {
+  readonly epochId: string;
+  readonly weightConfig: Record<string, number>;
+  readonly receipts: ReadonlyArray<{
+    receiptId: string;
+    userId: string | null;
+    source: string;
+    eventType: string;
+    included: boolean;
+    weightOverrideMilli: bigint | null;
+    platformUserId: string;
+    payloadHash: string;
+    platformLogin: string | null;
+    artifactUrl: string | null;
+    eventTime: Date;
+  }>;
+}): Promise<{
+  readonly inputsHash: string;
+  readonly payloadHash: string;
+  readonly payloadJson: Record<string, unknown>;
+}> {
+  const payloadJson = buildDefaultReceiptClaimantSharesPayload({
+    receipts: params.receipts,
+    weightConfig: params.weightConfig,
+  });
+  const payloadHash = await sha256OfCanonicalJson(payloadJson);
+  const inputsHash = await sha256OfCanonicalJson({
+    epochId: params.epochId,
+    weightConfig: params.weightConfig,
+    receipts: params.receipts.map((receipt) => ({
+      receiptId: receipt.receiptId,
+      userId: receipt.userId,
+      source: receipt.source,
+      eventType: receipt.eventType,
+      included: receipt.included,
+      weightOverrideMilli: receipt.weightOverrideMilli?.toString() ?? null,
+      platformUserId: receipt.platformUserId,
+      payloadHash: receipt.payloadHash,
+    })),
+  });
+
+  return {
+    inputsHash,
+    payloadHash,
+    payloadJson,
+  };
+}
+
 /**
  * Creates enrichment activity functions with injected dependencies.
  */
@@ -161,26 +209,10 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       payloadJson: payload,
     });
 
-    const claimantSharesPayload = buildDefaultReceiptClaimantSharesPayload({
-      receipts: attributionReceipts,
-      weightConfig: epoch.weightConfig,
-    });
-    const claimantSharesPayloadHash = await sha256OfCanonicalJson(
-      claimantSharesPayload
-    );
-    const claimantSharesInputsHash = await sha256OfCanonicalJson({
+    const claimantSharesEvaluation = await buildClaimantSharesEvaluationData({
       epochId: input.epochId,
       weightConfig: epoch.weightConfig,
-      receipts: attributionReceipts.map((r) => ({
-        receiptId: r.receiptId,
-        userId: r.userId,
-        source: r.source,
-        eventType: r.eventType,
-        included: r.included,
-        weightOverrideMilli: r.weightOverrideMilli?.toString() ?? null,
-        platformUserId: r.platformUserId,
-        payloadHash: r.payloadHash,
-      })),
+      receipts: attributionReceipts,
     });
 
     await attributionStore.upsertDraftEvaluation({
@@ -189,9 +221,9 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       evaluationRef: CLAIMANT_SHARES_EVALUATION_REF,
       status: "draft",
       algoRef: CLAIMANT_SHARES_ALGO_REF,
-      inputsHash: claimantSharesInputsHash,
-      payloadHash: claimantSharesPayloadHash,
-      payloadJson: claimantSharesPayload,
+      inputsHash: claimantSharesEvaluation.inputsHash,
+      payloadHash: claimantSharesEvaluation.payloadHash,
+      payloadJson: claimantSharesEvaluation.payloadJson,
     });
 
     logger.info(
@@ -254,27 +286,12 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       payloadJson: payload,
     };
 
-    const claimantSharesPayload = buildDefaultReceiptClaimantSharesPayload({
-      receipts: attributionReceipts,
-      weightConfig: epoch.weightConfig,
-    });
-    const claimantSharesPayloadHash = await sha256OfCanonicalJson(
-      claimantSharesPayload
-    );
-    const claimantSharesInputsHash = await sha256OfCanonicalJson({
-      epochId: input.epochId,
-      weightConfig: epoch.weightConfig,
-      receipts: attributionReceipts.map((r) => ({
-        receiptId: r.receiptId,
-        userId: r.userId,
-        source: r.source,
-        eventType: r.eventType,
-        included: r.included,
-        weightOverrideMilli: r.weightOverrideMilli?.toString() ?? null,
-        platformUserId: r.platformUserId,
-        payloadHash: r.payloadHash,
-      })),
-    });
+    const claimantSharesEvaluationData =
+      await buildClaimantSharesEvaluationData({
+        epochId: input.epochId,
+        weightConfig: epoch.weightConfig,
+        receipts: attributionReceipts,
+      });
 
     const claimantSharesEvaluation: UpsertEvaluationParamsWire = {
       nodeId,
@@ -282,9 +299,9 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       evaluationRef: CLAIMANT_SHARES_EVALUATION_REF,
       status: "locked",
       algoRef: CLAIMANT_SHARES_ALGO_REF,
-      inputsHash: claimantSharesInputsHash,
-      payloadHash: claimantSharesPayloadHash,
-      payloadJson: claimantSharesPayload,
+      inputsHash: claimantSharesEvaluationData.inputsHash,
+      payloadHash: claimantSharesEvaluationData.payloadHash,
+      payloadJson: claimantSharesEvaluationData.payloadJson,
     };
 
     const evaluations = [evaluation, claimantSharesEvaluation];

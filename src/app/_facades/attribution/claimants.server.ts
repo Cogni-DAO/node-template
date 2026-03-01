@@ -37,7 +37,7 @@ export async function loadClaimantShareSubjectsForEpoch(
   store: AttributionStore,
   epoch: AttributionEpoch
 ): Promise<readonly ClaimantSharesSubject[]> {
-  const evaluationStatus = epoch.status === "finalized" ? "locked" : "draft";
+  const evaluationStatus = epoch.status === "open" ? "draft" : "locked";
   const evaluation = await store.getEvaluation(
     epoch.id,
     CLAIMANT_SHARES_EVALUATION_REF,

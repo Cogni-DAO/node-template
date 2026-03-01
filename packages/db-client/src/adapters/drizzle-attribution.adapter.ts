@@ -28,6 +28,7 @@ import type {
   AttributionPoolComponent,
   AttributionSelection,
   AttributionStatement,
+  AttributionStatementItem,
   AttributionStatementSignature,
   AttributionStore,
   CloseIngestionWithEvaluationsParams,
@@ -196,6 +197,41 @@ function toStatement(
     supersedesStatementId: row.supersedesStatementId,
     createdAt: row.createdAt,
   };
+}
+
+type EpochStatementItemsJson = NonNullable<
+  typeof epochStatements.$inferInsert.statementItemsJson
+>;
+type EpochStatementItemJson = EpochStatementItemsJson[number];
+
+function toStatementItemsJson(
+  items: readonly AttributionStatementItem[]
+): EpochStatementItemsJson {
+  return items.map(
+    (item): EpochStatementItemJson => ({
+      user_id: item.user_id,
+      total_units: item.total_units,
+      share: item.share,
+      amount_credits: item.amount_credits,
+      claimant_key: item.claimant_key,
+      claimant: item.claimant
+        ? item.claimant.kind === "user"
+          ? {
+              kind: "user",
+              userId: item.claimant.userId,
+            }
+          : {
+              kind: "identity",
+              provider: item.claimant.provider,
+              externalId: item.claimant.externalId,
+              providerLogin: item.claimant.providerLogin,
+            }
+        : undefined,
+      // Clone nested arrays at the adapter boundary so core statement items stay
+      // readonly while Drizzle receives mutable JSON-compatible values.
+      receipt_ids: item.receipt_ids ? [...item.receipt_ids] : undefined,
+    })
+  );
 }
 
 function toStatementSignature(
@@ -1020,7 +1056,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
         epochId: params.epochId,
         allocationSetHash: params.allocationSetHash,
         poolTotalCredits: params.poolTotalCredits,
-        statementItemsJson: params.statementItems,
+        statementItemsJson: toStatementItemsJson(params.statementItems),
         supersedesStatementId: params.supersedesStatementId ?? null,
       })
       .returning();
@@ -1126,7 +1162,9 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           epochId: params.epochId,
           allocationSetHash: params.statement.allocationSetHash,
           poolTotalCredits: params.statement.poolTotalCredits,
-          statementItemsJson: params.statement.statementItems,
+          statementItemsJson: toStatementItemsJson(
+            params.statement.statementItems
+          ),
           supersedesStatementId: params.statement.supersedesStatementId ?? null,
         })
         .onConflictDoNothing({
