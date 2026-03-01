@@ -225,7 +225,9 @@ export const PATCH = wrapRouteHandlerWithLogging<{
           const sortedKeys = override.overrideShares.map((s) =>
             claimantKey(s.claimant)
           );
-          const expectedOrder = [...sortedKeys].sort();
+          const expectedOrder = [...sortedKeys].sort((a, b) =>
+            a.localeCompare(b)
+          );
           for (let i = 0; i < sortedKeys.length; i++) {
             if (sortedKeys[i] !== expectedOrder[i]) {
               return NextResponse.json(
