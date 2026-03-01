@@ -45,6 +45,29 @@ interface ProfileData {
   linkedProviders: LinkedProvider[];
 }
 
+interface OwnershipClaim {
+  epochId: string;
+  epochStatus: "open" | "review" | "finalized";
+  subjectRef: string;
+  source: string | null;
+  eventType: string | null;
+  units: string;
+  matchedVia: string;
+  eventTime: string | null;
+  artifactUrl: string | null;
+}
+
+interface OwnershipSummary {
+  totalUnits: string;
+  finalizedUnits: string;
+  activeUnits: string;
+  ownershipPercent: number;
+  epochsMatched: number;
+  claimsMatched: number;
+  linkedIdentityCount: number;
+  recentClaims: OwnershipClaim[];
+}
+
 /* ─── Preset avatar color palette ─────────────────────────────────── */
 
 const AVATAR_COLORS = [
@@ -139,6 +162,18 @@ function ConnectedBadge({ login }: { login: string }): ReactElement {
       </span>
     </div>
   );
+}
+
+function formatOwnershipUnits(units: string): string {
+  const value = Number(units);
+  if (!Number.isFinite(value)) return units;
+
+  const points = value / 1000;
+  const hasFraction = Math.abs(points % 1) > Number.EPSILON;
+  return points.toLocaleString(undefined, {
+    minimumFractionDigits: hasFraction ? 1 : 0,
+    maximumFractionDigits: 1,
+  });
 }
 
 /* ─── Feedback banner ──────────────────────────────────────────────── */
@@ -257,6 +292,7 @@ export function ProfileView(): ReactElement {
   const searchParams = useSearchParams();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [ownership, setOwnership] = useState<OwnershipSummary | null>(null);
   const [selectedColor, setSelectedColor] = useState("#6366f1");
   const [configuredProviders, setConfiguredProviders] = useState<Set<string>>(
     new Set()
@@ -285,6 +321,15 @@ export function ProfileView(): ReactElement {
       })
       .catch(() => {
         // Profile fetch failed — page still renders with session data
+      });
+
+    fetch("/api/v1/users/me/ownership")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: OwnershipSummary | null) => {
+        if (data) setOwnership(data);
+      })
+      .catch(() => {
+        // Ownership fetch failed — profile settings remain usable
       });
 
     fetch("/api/auth/providers")
@@ -359,6 +404,89 @@ export function ProfileView(): ReactElement {
       <div className="border-border border-b" />
 
       {/* ── Wallet section ── */}
+
+      <SectionHeading>Ownership</SectionHeading>
+
+      <div className="grid gap-3 py-5 md:grid-cols-3">
+        <div className="rounded-lg border border-border bg-card/50 p-4">
+          <div className="text-muted-foreground text-xs uppercase tracking-wide">
+            Total Ownership
+          </div>
+          <div className="mt-2 font-semibold text-2xl text-foreground">
+            {formatOwnershipUnits(ownership?.totalUnits ?? "0")} pts
+          </div>
+          <div className="mt-1 text-muted-foreground text-sm">
+            Across {ownership?.epochsMatched ?? 0} matched epoch
+            {(ownership?.epochsMatched ?? 0) === 1 ? "" : "s"}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-card/50 p-4">
+          <div className="text-muted-foreground text-xs uppercase tracking-wide">
+            Finalized
+          </div>
+          <div className="mt-2 font-semibold text-2xl text-foreground">
+            {formatOwnershipUnits(ownership?.finalizedUnits ?? "0")} pts
+          </div>
+          <div className="mt-1 text-muted-foreground text-sm">
+            {ownership?.ownershipPercent?.toFixed(2) ?? "0.00"}% finalized share
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-card/50 p-4">
+          <div className="text-muted-foreground text-xs uppercase tracking-wide">
+            Active Epochs
+          </div>
+          <div className="mt-2 font-semibold text-2xl text-foreground">
+            {formatOwnershipUnits(ownership?.activeUnits ?? "0")} pts
+          </div>
+          <div className="mt-1 text-muted-foreground text-sm">
+            {ownership?.claimsMatched ?? 0} matched claim
+            {(ownership?.claimsMatched ?? 0) === 1 ? "" : "s"} via{" "}
+            {ownership?.linkedIdentityCount ?? 0} linked identit
+            {(ownership?.linkedIdentityCount ?? 0) === 1 ? "y" : "ies"}
+          </div>
+        </div>
+      </div>
+
+      <div className="border-border border-b" />
+
+      <div className="py-5">
+        <div className="mb-3 font-medium text-foreground text-sm">
+          Recent matched contributions
+        </div>
+        {ownership && ownership.recentClaims.length > 0 ? (
+          <div className="space-y-2">
+            {ownership.recentClaims.map((claim) => (
+              <div
+                key={`${claim.epochId}:${claim.subjectRef}:${claim.matchedVia}`}
+                className="flex items-center justify-between rounded-lg border border-border bg-card/30 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-sm">
+                    Epoch #{claim.epochId} · {claim.source ?? "custom"} ·{" "}
+                    {claim.eventType ?? claim.subjectRef}
+                  </div>
+                  <div className="truncate text-muted-foreground text-xs">
+                    Matched via {claim.matchedVia}
+                    {claim.eventTime
+                      ? ` · ${new Date(claim.eventTime).toLocaleDateString()}`
+                      : ""}
+                  </div>
+                </div>
+                <div className="ml-4 shrink-0 font-medium text-sm">
+                  {formatOwnershipUnits(claim.units)} pts
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border px-4 py-3 text-muted-foreground text-sm">
+            Link your GitHub account to surface retroactive contribution
+            ownership here.
+          </div>
+        )}
+      </div>
+
+      <div className="border-border border-b" />
 
       <SectionHeading>Wallet</SectionHeading>
 

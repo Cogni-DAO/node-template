@@ -40,6 +40,7 @@ import type {
   InsertSignatureParams,
   InsertStatementParams,
   SelectedReceiptForAllocation,
+  SelectedReceiptForClaims,
   SelectedReceiptWithMetadata,
   UnselectedReceipt,
   UpsertEvaluationParams,
@@ -604,6 +605,49 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       included: r.included,
       weightOverrideMilli: r.weightOverrideMilli,
       metadata: r.metadata,
+      payloadHash: r.payloadHash,
+    }));
+  }
+
+  async getSelectedReceiptsForClaims(
+    epochId: bigint
+  ): Promise<SelectedReceiptForClaims[]> {
+    await this.resolveEpochScoped(epochId);
+    const rows = await this.db
+      .select({
+        receiptId: epochSelection.receiptId,
+        userId: epochSelection.userId,
+        source: ingestionReceipts.source,
+        eventType: ingestionReceipts.eventType,
+        included: epochSelection.included,
+        weightOverrideMilli: epochSelection.weightOverrideMilli,
+        platformUserId: ingestionReceipts.platformUserId,
+        platformLogin: ingestionReceipts.platformLogin,
+        artifactUrl: ingestionReceipts.artifactUrl,
+        eventTime: ingestionReceipts.eventTime,
+        payloadHash: ingestionReceipts.payloadHash,
+      })
+      .from(epochSelection)
+      .innerJoin(
+        ingestionReceipts,
+        and(
+          eq(ingestionReceipts.receiptId, epochSelection.receiptId),
+          eq(ingestionReceipts.nodeId, epochSelection.nodeId)
+        )
+      )
+      .where(eq(epochSelection.epochId, epochId));
+
+    return rows.map((r) => ({
+      receiptId: r.receiptId,
+      userId: r.userId,
+      source: r.source,
+      eventType: r.eventType,
+      included: r.included,
+      weightOverrideMilli: r.weightOverrideMilli,
+      platformUserId: r.platformUserId,
+      platformLogin: r.platformLogin,
+      artifactUrl: r.artifactUrl,
+      eventTime: r.eventTime,
       payloadHash: r.payloadHash,
     }));
   }

@@ -1,0 +1,191 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@tests/packages/attribution-ledger/claims`
+ * Purpose: Verifies claimant-share payload building and deterministic unit splitting.
+ * Scope: Pure domain tests only. Does not perform I/O or store interactions.
+ * Invariants:
+ * - DEFAULT_RECEIPT_CLAIMS_SINGLE_TARGET: default payload builder emits one full-share claimant per included receipt.
+ * - CLAIM_SPLIT_DETERMINISTIC: equal remainders are resolved in stable claimant-key order.
+ * Side-effects: none
+ * Links: packages/attribution-ledger/src/claims.ts
+ * @internal
+ */
+
+import { describe, expect, it } from "vitest";
+import {
+  buildDefaultClaimTargetsPayload,
+  CLAIM_SHARE_DENOMINATOR_PPM,
+  expandClaimUnits,
+  parseClaimTargetsPayload,
+} from "../src/claims";
+
+describe("buildDefaultClaimTargetsPayload", () => {
+  it("builds a single unresolved identity claimant by default", () => {
+    const payload = buildDefaultClaimTargetsPayload({
+      weightConfig: { "github:pr_merged": 1000 },
+      receipts: [
+        {
+          receiptId: "github:pr:test/repo:1",
+          userId: null,
+          source: "github",
+          eventType: "pr_merged",
+          included: true,
+          weightOverrideMilli: null,
+          platformUserId: "58641509",
+          platformLogin: "derekg1729",
+          artifactUrl: "https://github.com/test/repo/pull/1",
+          eventTime: new Date("2026-02-20T12:00:00Z"),
+          payloadHash: "hash-1",
+        },
+      ],
+    });
+
+    expect(payload.version).toBe(1);
+    expect(payload.subjects).toHaveLength(1);
+    expect(payload.subjects[0]?.subjectUnits).toBe("1000");
+    expect(payload.subjects[0]?.claimants[0]).toEqual({
+      claimant: {
+        kind: "identity",
+        provider: "github",
+        externalId: "58641509",
+        providerLogin: "derekg1729",
+      },
+      sharePpm: CLAIM_SHARE_DENOMINATOR_PPM,
+    });
+  });
+
+  it("skips excluded or zero-unit receipts", () => {
+    const payload = buildDefaultClaimTargetsPayload({
+      weightConfig: { "github:pr_merged": 0 },
+      receipts: [
+        {
+          receiptId: "excluded",
+          userId: "user-1",
+          source: "github",
+          eventType: "pr_merged",
+          included: false,
+          weightOverrideMilli: null,
+          platformUserId: "1",
+          platformLogin: "u1",
+          artifactUrl: null,
+          eventTime: new Date("2026-02-20T12:00:00Z"),
+          payloadHash: "hash-a",
+        },
+        {
+          receiptId: "zero",
+          userId: "user-2",
+          source: "github",
+          eventType: "pr_merged",
+          included: true,
+          weightOverrideMilli: null,
+          platformUserId: "2",
+          platformLogin: "u2",
+          artifactUrl: null,
+          eventTime: new Date("2026-02-20T12:00:00Z"),
+          payloadHash: "hash-b",
+        },
+      ],
+    });
+
+    expect(payload.subjects).toHaveLength(0);
+  });
+});
+
+describe("parseClaimTargetsPayload", () => {
+  it("parses a valid payload", () => {
+    const parsed = parseClaimTargetsPayload({
+      version: 1,
+      subjects: [
+        {
+          subjectRef: "work-item:task.0100",
+          subjectType: "work_item",
+          subjectUnits: "1200",
+          source: null,
+          eventType: null,
+          receiptIds: ["r1", "r2"],
+          claimants: [
+            {
+              claimant: { kind: "user", userId: "user-1" },
+              sharePpm: 500000,
+            },
+            {
+              claimant: {
+                kind: "identity",
+                provider: "github",
+                externalId: "42",
+                providerLogin: "alice",
+              },
+              sharePpm: 500000,
+            },
+          ],
+          metadata: null,
+        },
+      ],
+    });
+
+    expect(parsed).not.toBeNull();
+    expect(parsed?.subjects).toHaveLength(1);
+  });
+
+  it("rejects payloads whose shares do not sum to 100%", () => {
+    const parsed = parseClaimTargetsPayload({
+      version: 1,
+      subjects: [
+        {
+          subjectRef: "bad",
+          subjectType: "custom",
+          subjectUnits: "100",
+          source: null,
+          eventType: null,
+          receiptIds: [],
+          claimants: [
+            {
+              claimant: { kind: "user", userId: "user-1" },
+              sharePpm: 100,
+            },
+          ],
+          metadata: null,
+        },
+      ],
+    });
+
+    expect(parsed).toBeNull();
+  });
+});
+
+describe("expandClaimUnits", () => {
+  it("splits units deterministically using largest remainder", () => {
+    const expanded = expandClaimUnits({
+      version: 1,
+      subjects: [
+        {
+          subjectRef: "task.0100",
+          subjectType: "work_item",
+          subjectUnits: "5",
+          source: null,
+          eventType: null,
+          receiptIds: ["r1", "r2"],
+          claimants: [
+            {
+              claimant: { kind: "user", userId: "user-b" },
+              sharePpm: 500000,
+            },
+            {
+              claimant: { kind: "user", userId: "user-a" },
+              sharePpm: 500000,
+            },
+          ],
+          metadata: null,
+        },
+      ],
+    });
+
+    expect(expanded).toHaveLength(2);
+    expect(expanded[0]?.units).toBe(3n);
+    expect(expanded[0]?.claimant).toEqual({ kind: "user", userId: "user-a" });
+    expect(expanded[1]?.units).toBe(2n);
+    expect(expanded.reduce((sum, item) => sum + item.units, 0n)).toBe(5n);
+  });
+});

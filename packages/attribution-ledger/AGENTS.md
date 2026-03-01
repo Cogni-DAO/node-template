@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-27
+- **Last reviewed:** 2026-03-01
 - **Status:** draft
 
 ## Purpose
@@ -65,6 +65,9 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `validateArtifactRef()`, `validateArtifactEnvelope()` — Artifact metadata/hash validation (pure)
   - `computeEnricherInputsHash()` — Deterministic inputs hash for enrichers (base shape + extensions)
   - `createValidatedAttributionStore()` — Wraps `AttributionStore` with envelope validation on artifact writes
+  - `buildDefaultClaimTargetsPayload()`, `parseClaimTargetsPayload()`, `expandClaimUnits()` — Claimant-share helpers for multi-actor attribution
+  - `CLAIM_TARGETS_EVALUATION_REF`, `CLAIM_TARGETS_ALGO_REF`, `CLAIM_SHARE_DENOMINATOR_PPM` — Claim-target evaluation constants
+  - `AttributionClaimant`, `AttributionClaimTarget`, `AttributionClaimSubject`, `ClaimTargetsPayload`, `ExpandedClaimUnit`, `SelectedReceiptForClaims` — Claim-target domain types
   - `extractWorkItemIds()` — Regex extraction of work-item IDs from event metadata
   - `WORK_ITEM_LINKS_ARTIFACT_REF`, `WORK_ITEM_LINKER_ALGO_REF` — Namespaced constants for work-item-linker enricher
   - `UpsertArtifactParams`, `CuratedEventWithMetadata`, `AttributionEpochArtifact`, `CloseIngestionWithArtifactsParams` — Artifact-related types
@@ -75,7 +78,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
 
 - **Uses ports:** none
 - **Implements ports:** none
-- **Defines ports:** `AttributionStore` (implemented by `DrizzleAttributionAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUncuratedEvents`, `updateCurationUserId`, `insertCurationDoNothing`), allocation computation (`getCuratedEventsForAllocation`, `upsertAllocations`, `deleteStaleAllocations`), artifact lifecycle (`upsertDraftArtifact`, `closeIngestionWithArtifacts`, `getArtifactsForEpoch`, `getArtifact`, `getCuratedEventsWithMetadata`), and atomic finalization (`finalizeEpochAtomic`).
+- **Defines ports:** `AttributionStore` (implemented by `DrizzleAttributionAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUncuratedEvents`, `updateCurationUserId`, `insertCurationDoNothing`), allocation computation (`getCuratedEventsForAllocation`, `upsertAllocations`, `deleteStaleAllocations`), claim-target reads (`getSelectedReceiptsForClaims`), artifact lifecycle (`upsertDraftArtifact`, `closeIngestionWithArtifacts`, `getArtifactsForEpoch`, `getArtifact`, `getCuratedEventsWithMetadata`), and atomic finalization (`finalizeEpochAtomic`).
 
 ## Responsibilities
 

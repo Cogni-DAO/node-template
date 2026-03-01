@@ -25,11 +25,25 @@ export {
   validateEvaluationEnvelope,
   validateEvaluationRef,
 } from "./artifact-envelope";
-
+// Enrichers (pure functions)
+export {
+  type AttributionClaimant,
+  type AttributionClaimSubject,
+  type AttributionClaimTarget,
+  buildDefaultClaimTargetsPayload,
+  CLAIM_SHARE_DENOMINATOR_PPM,
+  CLAIM_TARGETS_ALGO_REF,
+  CLAIM_TARGETS_EVALUATION_REF,
+  type ClaimTargetsPayload,
+  claimantKey,
+  type ExpandedClaimUnit,
+  expandClaimUnits,
+  parseClaimTargetsPayload,
+  type SelectedReceiptForClaims,
+} from "./claims";
 // Enricher inputs hash
 export { computeEnricherInputsHash } from "./enricher-inputs";
 
-// Enrichers (pure functions)
 export {
   extractWorkItemIds,
   WORK_ITEM_LINKER_ALGO_REF,

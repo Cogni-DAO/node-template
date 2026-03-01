@@ -14,6 +14,9 @@
  */
 
 import {
+  buildDefaultClaimTargetsPayload,
+  CLAIM_TARGETS_ALGO_REF,
+  CLAIM_TARGETS_EVALUATION_REF,
   computeArtifactsHash,
   computeEnricherInputsHash,
   sha256OfCanonicalJson,
@@ -48,7 +51,7 @@ export interface EvaluateEpochDraftInput {
  * Output from evaluateEpochDraft activity.
  */
 export interface EvaluateEpochDraftOutput {
-  readonly evaluationRef: string;
+  readonly evaluationRefs: string[];
   readonly receiptCount: number;
 }
 
@@ -127,8 +130,15 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
 
     logger.info({ epochId: input.epochId }, "Evaluating epoch draft (echo)");
 
+    const epoch = await attributionStore.getEpoch(epochId);
+    if (!epoch) {
+      throw new Error(`evaluateEpochDraft: epoch ${input.epochId} not found`);
+    }
+
     const receipts =
       await attributionStore.getSelectedReceiptsWithMetadata(epochId);
+    const claimReceipts =
+      await attributionStore.getSelectedReceiptsForClaims(epochId);
 
     const payload = buildEchoPayload(receipts);
     const payloadHash = await sha256OfCanonicalJson(payload);
@@ -151,17 +161,48 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       payloadJson: payload,
     });
 
+    const claimPayload = buildDefaultClaimTargetsPayload({
+      receipts: claimReceipts,
+      weightConfig: epoch.weightConfig,
+    });
+    const claimPayloadHash = await sha256OfCanonicalJson(claimPayload);
+    const claimInputsHash = await sha256OfCanonicalJson({
+      epochId: input.epochId,
+      weightConfig: epoch.weightConfig,
+      receipts: claimReceipts.map((r) => ({
+        receiptId: r.receiptId,
+        userId: r.userId,
+        source: r.source,
+        eventType: r.eventType,
+        included: r.included,
+        weightOverrideMilli: r.weightOverrideMilli?.toString() ?? null,
+        platformUserId: r.platformUserId,
+        payloadHash: r.payloadHash,
+      })),
+    });
+
+    await attributionStore.upsertDraftEvaluation({
+      nodeId,
+      epochId,
+      evaluationRef: CLAIM_TARGETS_EVALUATION_REF,
+      status: "draft",
+      algoRef: CLAIM_TARGETS_ALGO_REF,
+      inputsHash: claimInputsHash,
+      payloadHash: claimPayloadHash,
+      payloadJson: claimPayload,
+    });
+
     logger.info(
       {
         epochId: input.epochId,
-        evaluationRef: ECHO_EVALUATION_REF,
+        evaluationRefs: [ECHO_EVALUATION_REF, CLAIM_TARGETS_EVALUATION_REF],
         receiptCount: receipts.length,
       },
-      "Echo draft evaluation written"
+      "Draft evaluations written"
     );
 
     return {
-      evaluationRef: ECHO_EVALUATION_REF,
+      evaluationRefs: [ECHO_EVALUATION_REF, CLAIM_TARGETS_EVALUATION_REF],
       receiptCount: receipts.length,
     };
   }
@@ -178,8 +219,17 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
 
     logger.info({ epochId: input.epochId }, "Building locked evaluations");
 
+    const epoch = await attributionStore.getEpoch(epochId);
+    if (!epoch) {
+      throw new Error(
+        `buildLockedEvaluations: epoch ${input.epochId} not found`
+      );
+    }
+
     const receipts =
       await attributionStore.getSelectedReceiptsWithMetadata(epochId);
+    const claimReceipts =
+      await attributionStore.getSelectedReceiptsForClaims(epochId);
 
     const payload = buildEchoPayload(receipts);
     const payloadHash = await sha256OfCanonicalJson(payload);
@@ -202,19 +252,51 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       payloadJson: payload,
     };
 
-    const artifactsHash = await computeArtifactsHash([evaluation]);
+    const claimPayload = buildDefaultClaimTargetsPayload({
+      receipts: claimReceipts,
+      weightConfig: epoch.weightConfig,
+    });
+    const claimPayloadHash = await sha256OfCanonicalJson(claimPayload);
+    const claimInputsHash = await sha256OfCanonicalJson({
+      epochId: input.epochId,
+      weightConfig: epoch.weightConfig,
+      receipts: claimReceipts.map((r) => ({
+        receiptId: r.receiptId,
+        userId: r.userId,
+        source: r.source,
+        eventType: r.eventType,
+        included: r.included,
+        weightOverrideMilli: r.weightOverrideMilli?.toString() ?? null,
+        platformUserId: r.platformUserId,
+        payloadHash: r.payloadHash,
+      })),
+    });
+
+    const claimEvaluation: UpsertEvaluationParamsWire = {
+      nodeId,
+      epochId: input.epochId,
+      evaluationRef: CLAIM_TARGETS_EVALUATION_REF,
+      status: "locked",
+      algoRef: CLAIM_TARGETS_ALGO_REF,
+      inputsHash: claimInputsHash,
+      payloadHash: claimPayloadHash,
+      payloadJson: claimPayload,
+    };
+
+    const evaluations = [evaluation, claimEvaluation];
+    const artifactsHash = await computeArtifactsHash(evaluations);
 
     logger.info(
       {
         epochId: input.epochId,
-        evaluationCount: 1,
+        evaluationCount: evaluations.length,
         artifactsHash: `${artifactsHash.slice(0, 12)}...`,
       },
       "Locked evaluations built"
     );
 
     return {
-      evaluations: [evaluation],
+      evaluations,
       artifactsHash,
     };
   }

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-02-23
+- **Last reviewed:** 2026-03-01
 - **Status:** draft
 
 ## Purpose
@@ -52,6 +52,8 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
   - `/api/v1/attribution/epochs/[id]/activity` [GET] - epoch activity events (SIWE auth)
   - `/api/v1/attribution/epochs/[id]/allocations` [PATCH] - adjust allocations (SIWE + approver)
   - `/api/v1/attribution/epochs/[id]/pool-components` [POST] - record pool component (SIWE + approver)
+  - `/api/v1/users/me` [GET, PATCH] - current profile
+  - `/api/v1/users/me/ownership` [GET] - current ownership summary derived from linked identities
 - **CLI (if any):** none
 - **Env/Config keys:** none
 - **Files considered API:** v1/_/route.ts, admin/_/route.ts
