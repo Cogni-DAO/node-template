@@ -239,11 +239,10 @@ export const PATCH = wrapRouteHandlerWithLogging<{
         }
       }
 
-      // Upsert each override
+      // Upsert all overrides atomically in a single transaction
       const nodeId = getNodeId();
-      let upserted = 0;
-      for (const override of input.overrides) {
-        await store.upsertSubjectOverride({
+      const results = await store.batchUpsertSubjectOverrides(
+        input.overrides.map((override) => ({
           nodeId,
           epochId,
           subjectRef: override.subjectRef,
@@ -252,9 +251,9 @@ export const PATCH = wrapRouteHandlerWithLogging<{
             ? (override.overrideShares as ClaimantShare[])
             : null,
           overrideReason: override.overrideReason ?? null,
-        });
-        upserted++;
-      }
+        }))
+      );
+      const upserted = results.length;
 
       logEvent(ctx.log, EVENT_NAMES.LEDGER_ALLOCATIONS_UPDATED, {
         reqId: ctx.reqId,

@@ -493,6 +493,10 @@ export interface AttributionStore {
   upsertSubjectOverride(
     params: UpsertSubjectOverrideParams
   ): Promise<SubjectOverrideRecord>;
+  /** Atomically upsert multiple subject overrides in a single transaction. */
+  batchUpsertSubjectOverrides(
+    paramsList: readonly UpsertSubjectOverrideParams[]
+  ): Promise<SubjectOverrideRecord[]>;
   /** Delete a subject override by epoch + subjectRef. */
   deleteSubjectOverride(epochId: bigint, subjectRef: string): Promise<void>;
   /** Get all subject overrides for an epoch. */

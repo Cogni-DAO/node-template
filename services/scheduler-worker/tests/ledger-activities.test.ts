@@ -84,6 +84,7 @@ function makeMockStore(
     getUnselectedReceipts: vi.fn().mockResolvedValue([]),
     updateSelectionUserId: vi.fn(),
     upsertSubjectOverride: vi.fn(),
+    batchUpsertSubjectOverrides: vi.fn().mockResolvedValue([]),
     deleteSubjectOverride: vi.fn(),
     getSubjectOverridesForEpoch: vi.fn().mockResolvedValue([]),
     ...overrides,

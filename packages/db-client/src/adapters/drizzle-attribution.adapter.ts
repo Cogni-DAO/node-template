@@ -1387,6 +1387,61 @@ export class DrizzleAttributionAdapter implements AttributionStore {
     });
   }
 
+  async batchUpsertSubjectOverrides(
+    paramsList: readonly UpsertSubjectOverrideParams[]
+  ): Promise<SubjectOverrideRecord[]> {
+    if (paramsList.length === 0) return [];
+    return await this.db.transaction(async (tx) => {
+      // Lock once for the batch — all params share the same epochId
+      const epoch = await this.resolveEpochScopedForUpdate(
+        paramsList[0]!.epochId,
+        tx
+      );
+      if (epoch.status !== "review") {
+        throw new EpochNotInReviewError(
+          paramsList[0]!.epochId.toString(),
+          epoch.status
+        );
+      }
+
+      const results: SubjectOverrideRecord[] = [];
+      const now = new Date();
+      for (const params of paramsList) {
+        const [row] = await tx
+          .insert(epochSubjectOverrides)
+          .values({
+            nodeId: params.nodeId,
+            epochId: params.epochId,
+            subjectRef: params.subjectRef,
+            overrideUnits: params.overrideUnits ?? null,
+            overrideSharesJson: params.overrideSharesJson ?? null,
+            overrideReason: params.overrideReason ?? null,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [
+              epochSubjectOverrides.epochId,
+              epochSubjectOverrides.subjectRef,
+            ],
+            set: {
+              overrideUnits: params.overrideUnits ?? null,
+              overrideSharesJson: params.overrideSharesJson ?? null,
+              overrideReason: params.overrideReason ?? null,
+              updatedAt: now,
+            },
+          })
+          .returning();
+        if (!row)
+          throw new Error(
+            "batchUpsertSubjectOverrides: INSERT/UPDATE returned no rows"
+          );
+        results.push(toSubjectOverride(row));
+      }
+      return results;
+    });
+  }
+
   async deleteSubjectOverride(
     epochId: bigint,
     subjectRef: string
