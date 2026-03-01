@@ -322,27 +322,144 @@ A retrospective reassessment mechanism that:
 4. **Produces correction epochs** — fits the journal accounting model, same lifecycle
    (open → review → finalized), same signing flow
 
-**Possible approaches (requires spike):**
+### Emerging model: weekly base + quarterly retro
 
-- **Downstream impact signals**: Track cheap proxy signals for retrospective value —
-  did this code survive? Was it built on? Was it reverted? How many downstream changes
-  depended on it? These signals accumulate passively and don't require LLM re-evaluation
-  of old receipts.
-- **Decay window**: Only reassess the last N epochs (e.g., 2 quarters). Older epochs
-  are "settled" and accepted as-is. Bounds cost at the expense of accuracy for old work.
-- **Sampling**: Reassess a statistical sample of old receipts, not all of them.
-  Extrapolate corrections to the population.
-- **Tiered evaluation**: Cheap automated pass identifies receipts that may be
-  significantly mis-scored (based on impact signals). Expensive LLM evaluation only
-  runs on the flagged subset.
-- **User-level correction without per-receipt re-scoring**: Compare total allocations
-  per user against a fairness metric derived from recent (well-scored) epochs. Apply
-  corrections at the user level. Avoids per-receipt cost but assumes recent behavior
-  predicts historical behavior.
+The most promising shape is a two-tier cadence:
 
-**None of these are designed yet.** This is the most important open problem in the
-attribution system. A dedicated research spike should evaluate these approaches before
-the rebalance epoch mechanism is spec'd.
+**Weekly (automated, cheap, event-centric):**
+Source adapters → receipts → cheap evaluation (heuristics, light LLM per epoch) →
+small base allocation from a weekly pool. This is the existing pipeline with better
+enrichers. "Alice did 5 PRs this week, here's her provisional credit." The weekly
+payout is explicitly provisional — small enough that imprecision is acceptable.
+
+**Quarterly (systematic, expensive, people-centric):**
+Top-down KPI/outcome review → identify which objectives advanced → for each active
+contributor, aggregate their receipts + impact signals → assess aggregate contribution
+against outcomes → distribute a meaningful bonus pool across contributors. "Alice drove
+the auth refactor that enabled 3 major features. Her aggregate impact this quarter was
+high."
+
+This maps to the existing architecture:
+- Weekly = activity epochs (existing, with better enrichers)
+- Quarterly = rebalance epochs (new, people-centric evaluation payload)
+
+#### Why people-centric quarterly reviews (not event-centric)
+
+The quarterly review could work at two levels:
+
+**(a) Event-centric:** KPI delta → trace to candidate receipts → re-score top-K
+receipts with expensive LLM → allocate bonuses based on receipt scores.
+
+**(b) People-centric:** KPI delta → who drove this? → aggregate each contributor's
+body of work → assess aggregate impact → allocate bonuses per contributor.
+
+**People-centric is the stronger model.** Reasons:
+
+1. **Cost.** Evaluate N contributors, not M receipts. For 10-20 active contributors,
+   that's 10-20 assessments. Event-centric means evaluating hundreds of receipts even
+   with importance sampling. Orders of magnitude cheaper.
+
+2. **Holistic assessment.** A contributor's impact is often greater than the sum of
+   individual events. Alice submits 5 small PRs that together restructure a critical
+   module. Individually each PR looks minor. Together they're transformative.
+   People-centric naturally captures this.
+
+3. **Cross-cutting work.** Some of the most valuable work doesn't produce events —
+   mentoring, architectural decisions, coordination, incident response. People-centric
+   assessment can credit these. Event-centric can't unless there's an event for it.
+
+4. **Natural for governance.** Quarterly review by humans is "who contributed the most
+   this quarter?" That's inherently a people question. Events serve as *evidence* for
+   the assessment, not as the scoring unit.
+
+5. **Receipts become evidence, not scoring targets.** In a people-centric review, the
+   receipt history supports the assessment: "Alice's quarterly impact is based on:
+   auth module refactor (PRs 42-46), incident response on Feb 15, mentoring Bob."
+   The evaluation payload cites events but scores the person.
+
+**Trade-off acknowledged:** People-centric review is less granular in auditability.
+"Why did Alice get 40%?" is answered with a holistic assessment and cited evidence,
+not a precise per-receipt breakdown. This is acceptable for a quarterly bonus pool
+but would not be acceptable for weekly base credit.
+
+#### Anchors and linkage edges
+
+For quarterly review to work at all — whether people-centric or event-centric — the
+system needs machine-linkable connections between receipts. Without them, quarterly
+review devolves into manual archaeology.
+
+Receipts already have natural anchors: `artifactUrl`, `source`, `eventType`, `metadata`.
+What's missing is **cross-receipt linkage**: "PR #42 touched the same files as PR #45",
+"issue #30 was closed by PR #42", "PR #42 was reverted by PR #50."
+
+These linkages don't require a separate knowledge graph or entity extraction framework.
+They can be built as enricher data during the existing weekly pipeline:
+
+- File-path overlap between receipts in an epoch (already available from diff data)
+- Issue/PR cross-references (available from GitHub metadata)
+- Revert detection (commit message parsing, cheap)
+- Code survival (is the code from PR #42 still present N weeks later? git blame, cheap)
+
+The key insight from external review: **the anchors/linkage edges must exist before
+quarterly review runs, or the quarterly scan is noisy, expensive, and politically
+fragile.** Building them continuously as a cheap enricher during weekly epochs is the
+right approach — not a separate "normalization plugin" layer.
+
+#### What we don't need: five plugin types
+
+The external proposal suggests five plugin types: ingestion, normalization, evaluation,
+signal, and allocation. The current architecture has three: source adapters (ingestion),
+enrichers (evaluation), and allocation algorithms. The proposed additions:
+
+- **Normalization plugins** — entity extraction, canonicalization, deduplication. This
+  is hiding a knowledge graph behind a bullet point. For V0, receipt-level metadata
+  (URLs, paths, actor IDs) is sufficient for linkage. Full entity resolution can be
+  deferred.
+- **Signal plugins** — KPI events, code survival, dependency fan-out. These are
+  valuable data but they fit naturally as enrichers, not a separate plugin type. A
+  "code-survival" enricher that runs weekly and annotates receipts with survival data
+  is simpler than a new plugin category.
+
+Adding plugin types multiplies the architecture. Prefer fitting new capabilities into
+existing extension points (enrichers, source adapters) until those extension points
+are proven insufficient.
+
+#### KPI sources: work with what we have
+
+The external proposal references enterprise KPIs (revenue, retention, conversions).
+For an early-stage DAO, the available KPIs are more limited:
+
+- Code shipped and merged (already captured in receipts)
+- Infrastructure uptime and incidents (operational, partially captured)
+- Issues resolved and bugs fixed (GitHub events, already captured)
+- Feature milestones reached (work item completion, linkable via work-item enricher)
+- Community growth metrics (Discord activity, if/when Discord adapter ships)
+
+The quarterly review should start from **whatever objectives governance actually
+tracks**, not from an idealized KPI framework. The system should be KPI-agnostic —
+it takes "here are the outcomes that mattered this quarter" as input, not "here are
+the standard enterprise metrics."
+
+### Possible approaches for quarterly reassessment (updated)
+
+Previous approaches (downstream impact signals, decay windows, sampling, tiered
+evaluation, user-level correction) remain on the table. The updated framing adds:
+
+- **People-centric quarterly review** (recommended): Aggregate each contributor's
+  receipts + impact signals for the quarter. LLM assesses aggregate contribution
+  against stated outcomes. Cost = O(contributors), not O(receipts). Rebalance epoch
+  payload contains per-actor assessments with cited evidence.
+- **Continuous cheap signal collection**: Code survival, revert detection,
+  cross-reference linkage run as weekly enrichers. Accumulated data available for
+  quarterly review without additional cost at review time.
+- **KPI-driven candidate selection**: Quarterly review starts from outcomes and works
+  backward to contributors, not from receipts forward to outcomes. This naturally
+  focuses assessment on the contributors who matter.
+
+**A dedicated research spike should validate the people-centric quarterly model** —
+specifically: what does the evaluation payload look like? How does the LLM aggregate
+a contributor's quarter? What evidence is cited? How does governance review the
+results?
 
 ### The rebalance epoch vehicle (solid, mechanism TBD)
 
@@ -516,38 +633,53 @@ For clarity — these parts of the design are well-grounded and should carry for
 - **Evaluation snapshots** — reproducibility from payload alone
 - **Rebalance epoch as a vehicle** — fits existing lifecycle, minimal schema change
 - **Positive-only V0** — safe default, clawbacks deferred correctly
+- **Weekly base + quarterly retro cadence** — cost-bounded, matches reality
+- **People-centric quarterly review** — assess contributors not receipts, O(N) not O(M)
+- **Existing extension points sufficient** — enrichers and source adapters cover new
+  capabilities without adding plugin types
 
 ## What's Unsolved
 
-- **Retrospective value reassessment** — how to systematically reassess historical
-  contributions without O(N×T) LLM cost. This is the most important open problem.
+- **People-centric quarterly evaluation payload** — what does the LLM assessment of
+  a contributor's quarter look like? What evidence is cited? How does governance review?
   Requires a dedicated research spike.
-- **Reassessment cadence** — quarterly is the working assumption, but the mechanism
-  that runs at that cadence is not designed.
-- **What signals indicate retrospective value** — downstream impact, code survival,
-  feature dependencies, revert rate. These need to be identified, validated, and
-  instrumented.
+- **Continuous signal collection** — which cheap signals (code survival, revert
+  detection, cross-references) are worth instrumenting as weekly enrichers? Which
+  actually correlate with retrospective value?
+- **KPI/outcome input format** — how does governance express "here are the outcomes
+  that mattered this quarter" in a way the quarterly review can consume?
+- **Quarterly pool sizing** — how much goes to weekly base vs quarterly retro? What
+  governance process sets this?
 
 ---
 
 ## Open Questions
 
-### LLM Evaluation (Layer 2)
+### Weekly Evaluation (Layer 2)
 - [ ] Should the evaluator score all receipts in a single LLM call, or chunk them?
       Single call enables relative scoring; chunking handles scale.
 - [ ] How do we handle evaluation cost? LLM calls per receipt add up. Should there be
       a cost budget per epoch, or is this an operator concern?
 - [ ] How should ENRICHER_IDEMPOTENT be relaxed for non-deterministic enrichers?
 
-### Retrospective Value (requires spike)
-- [ ] What cheap proxy signals indicate retrospective value? (code survival, downstream
-      dependency count, revert rate, feature adoption metrics)
-- [ ] Can reassessment be done at the user level (comparing allocation ratios across
-      eras) rather than per-receipt? What accuracy is lost?
-- [ ] Should reassessment use a decay window (only last N epochs) or cover all history?
-- [ ] Is sampling (reassess a subset, extrapolate) viable for bounded-cost correction?
-- [ ] How does the SourceCred BALANCED policy's continuous correction compare to
-      periodic batch reassessment? What's gained and lost?
+### People-Centric Quarterly Review (requires spike)
+- [ ] What does the quarterly evaluation payload look like? Per-actor assessment with
+      cited receipts? Relative ranking with reasoning?
+- [ ] How does the LLM aggregate a contributor's quarter — chronological narrative,
+      thematic grouping, or impact-ranked list?
+- [ ] What governance input format works? Free-text objectives? Structured KPI deltas?
+      Work-item completion status?
+- [ ] How do people-centric assessments handle contributors who worked across multiple
+      objectives? (Split credit? Primary/secondary attribution?)
+- [ ] What's the right pool split between weekly base and quarterly retro?
+
+### Continuous Signal Collection
+- [ ] Which cheap signals correlate with retrospective value? Code survival, revert
+      rate, dependency fan-out, issue cross-references?
+- [ ] Should signals be collected as enricher data on existing receipts, or as new
+      receipt types from a "signal adapter"?
+- [ ] How is cross-receipt linkage stored? Enricher payload on the source receipt?
+      Separate linkage table? Edge annotations?
 
 ### Rebalance Mechanism
 - [ ] Should the rebalance evaluation reference specific historical epoch IDs, or a
