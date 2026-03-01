@@ -51,7 +51,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `computeStatementItems()` — BIGINT proportional distribution with largest-remainder rounding
   - `computeAllocationSetHash()` — SHA-256 of canonical sorted allocation data
   - `computeWeightConfigHash()` — SHA-256 of canonical weight config JSON (key-sorted)
-  - `computeProposedAllocations()` — Versioned allocation dispatch (V0: `weight-sum-v0`)
+  - `computeProposedAllocations()` — Versioned allocation dispatch (V0: `weight-sum-v0`, V1: `work-item-budget-v0`)
   - `validateWeightConfig()` — Rejects floats, NaN, Infinity, unsafe integers
   - `deriveAllocationAlgoRef()` — Maps `credit_estimate_algo` to internal algorithm ref
   - `CuratedEventForAllocation`, `ProposedAllocation` — Allocation input/output types
@@ -66,6 +66,8 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `computeEnricherInputsHash()` — Deterministic inputs hash for enrichers (base shape + extensions)
   - `createValidatedAttributionStore()` — Wraps `AttributionStore` with envelope validation on artifact writes
   - `extractWorkItemIds()` — Regex extraction of work-item IDs from event metadata
+  - `computeWorkItemBudgetMilli()` — Pure budget computation: estimate × priority_multiplier (BigInt)
+  - `DEFAULT_PRIORITY_MULTIPLIERS` — Default priority multiplier policy `{ 0: 0, 1: 1000, 2: 2000, 3: 4000 }`
   - `WORK_ITEM_LINKS_ARTIFACT_REF`, `WORK_ITEM_LINKER_ALGO_REF` — Namespaced constants for work-item-linker enricher
   - `UpsertArtifactParams`, `CuratedEventWithMetadata`, `AttributionEpochArtifact`, `CloseIngestionWithArtifactsParams` — Artifact-related types
 - **CLI:** none

@@ -13,7 +13,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { extractWorkItemIds } from "../src/enrichers/work-item-linker";
+import {
+  computeWorkItemBudgetMilli,
+  DEFAULT_PRIORITY_MULTIPLIERS,
+  extractWorkItemIds,
+} from "../src/enrichers/work-item-linker";
 
 describe("extractWorkItemIds", () => {
   it("extracts task ID from title", () => {
@@ -105,5 +109,56 @@ describe("extractWorkItemIds", () => {
       title: "PR for (task.0102) review",
     });
     expect(links).toEqual([{ workItemId: "task.0102", linkSource: "title" }]);
+  });
+});
+
+describe("DEFAULT_PRIORITY_MULTIPLIERS", () => {
+  it("has expected default values", () => {
+    expect(DEFAULT_PRIORITY_MULTIPLIERS).toEqual({
+      0: 0,
+      1: 1000,
+      2: 2000,
+      3: 4000,
+    });
+  });
+});
+
+describe("computeWorkItemBudgetMilli", () => {
+  const multipliers = DEFAULT_PRIORITY_MULTIPLIERS;
+
+  it("computes budget = estimate * multiplier", () => {
+    expect(computeWorkItemBudgetMilli(3, 1, multipliers)).toBe(3000n);
+    expect(computeWorkItemBudgetMilli(3, 2, multipliers)).toBe(6000n);
+    expect(computeWorkItemBudgetMilli(3, 3, multipliers)).toBe(12000n);
+  });
+
+  it("returns 0n for priority 0 (multiplier is 0)", () => {
+    expect(computeWorkItemBudgetMilli(5, 0, multipliers)).toBe(0n);
+  });
+
+  it("returns 0n for null estimate", () => {
+    expect(computeWorkItemBudgetMilli(null, 1, multipliers)).toBe(0n);
+  });
+
+  it("returns 0n for null priority", () => {
+    expect(computeWorkItemBudgetMilli(3, null, multipliers)).toBe(0n);
+  });
+
+  it("returns 0n when both are null", () => {
+    expect(computeWorkItemBudgetMilli(null, null, multipliers)).toBe(0n);
+  });
+
+  it("returns 0n for unknown priority level", () => {
+    expect(computeWorkItemBudgetMilli(3, 99, multipliers)).toBe(0n);
+  });
+
+  it("uses custom multipliers", () => {
+    const custom = { 1: 500, 2: 1500 };
+    expect(computeWorkItemBudgetMilli(4, 1, custom)).toBe(2000n);
+    expect(computeWorkItemBudgetMilli(4, 2, custom)).toBe(6000n);
+  });
+
+  it("handles large estimates", () => {
+    expect(computeWorkItemBudgetMilli(100, 3, multipliers)).toBe(400000n);
   });
 });

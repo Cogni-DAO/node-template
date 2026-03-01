@@ -31,6 +31,8 @@ export { computeEnricherInputsHash } from "./enricher-inputs";
 
 // Enrichers (pure functions)
 export {
+  computeWorkItemBudgetMilli,
+  DEFAULT_PRIORITY_MULTIPLIERS,
   extractWorkItemIds,
   WORK_ITEM_LINKER_ALGO_REF,
   WORK_ITEM_LINKS_ARTIFACT_REF,

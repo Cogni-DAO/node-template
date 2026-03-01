@@ -26,12 +26,14 @@ export interface WorkItemSnapshot {
   readonly status: string | null;
   readonly title: string | null;
   readonly frontmatterHash: string;
+  readonly budgetMilli: string;
   readonly error?: "file_not_found" | "parse_error";
 }
 
 /** Full artifact payload for cogni.work_item_links.v0. */
 export interface WorkItemLinksPayload {
   readonly repoCommitSha: string;
+  readonly priorityMultipliers: Record<number, number>;
   readonly workItems: Record<string, WorkItemSnapshot>;
   readonly eventLinks: Record<string, WorkItemLink[]>;
   readonly unlinkedEventIds: string[];
@@ -85,6 +87,31 @@ export function extractWorkItemIds(
   }
 
   return links;
+}
+
+/** Default priority multipliers — pinned in artifact payload. */
+export const DEFAULT_PRIORITY_MULTIPLIERS: Record<number, number> = {
+  0: 0,
+  1: 1000,
+  2: 2000,
+  3: 4000,
+};
+
+/**
+ * Compute a work item's budget in milli-units.
+ * budget = BigInt(estimate) * BigInt(multipliers[priority] ?? 0)
+ *
+ * Returns 0n for missing/error items (null estimate or priority).
+ * ALL_MATH_BIGINT: pure BigInt arithmetic, no floats.
+ */
+export function computeWorkItemBudgetMilli(
+  estimate: number | null,
+  priority: number | null,
+  multipliers: Record<number, number>
+): bigint {
+  if (estimate == null || priority == null) return 0n;
+  const multiplier = multipliers[priority] ?? 0;
+  return BigInt(estimate) * BigInt(multiplier);
 }
 
 /** Namespaced artifact ref for the work-item linker. */

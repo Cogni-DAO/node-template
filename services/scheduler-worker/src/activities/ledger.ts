@@ -588,6 +588,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
   /**
    * Compute proposed allocations from selected receipts.
+   * Loads draft evaluations as artifacts for budget-aware algorithms.
    * Upserts results (ALLOCATION_PRESERVES_OVERRIDES) and removes stale allocations.
    */
   async function computeAllocations(
@@ -613,14 +614,28 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       return { totalAllocations: 0, totalProposedUnits: "0" };
     }
 
-    // 2. Compute proposed allocations (pure)
+    // 2. Load draft evaluations as artifacts for allocation algorithms
+    // Draft for UI projections; final artifacts used at payout (PAYOUT_FROM_FINAL_ONLY)
+    const evaluations = await attributionStore.getEvaluationsForEpoch(
+      epochId,
+      "draft"
+    );
+    const artifacts = new Map<string, unknown>();
+    for (const evaluation of evaluations) {
+      if (evaluation.payloadJson) {
+        artifacts.set(evaluation.evaluationRef, evaluation.payloadJson);
+      }
+    }
+
+    // 3. Compute proposed allocations (pure)
     const proposed = computeProposedAllocations(
       algorithmId,
       receipts,
-      weightConfig
+      weightConfig,
+      artifacts.size > 0 ? artifacts : undefined
     );
 
-    // 3. Upsert allocations (preserves admin final_units)
+    // 4. Upsert allocations (preserves admin final_units)
     await attributionStore.upsertAllocations(
       proposed.map((p) => ({
         nodeId,
@@ -631,7 +646,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       }))
     );
 
-    // 4. Remove stale allocations (guard: skip if proposed is empty)
+    // 5. Remove stale allocations (guard: skip if proposed is empty)
     if (proposed.length > 0) {
       const activeUserIds = proposed.map((p) => p.userId);
       await attributionStore.deleteStaleAllocations(epochId, activeUserIds);

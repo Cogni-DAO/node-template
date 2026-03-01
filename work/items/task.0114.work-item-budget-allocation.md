@@ -2,7 +2,7 @@
 id: task.0114
 type: task
 title: "Work-item budget enrichment + budget allocation algorithm"
-status: needs_triage
+status: needs_closeout
 priority: 1
 rank: 2
 estimate: 2
@@ -12,14 +12,14 @@ spec_refs: epoch-ledger-spec
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch:
+branch: task/0114-work-item-budget-allocation
 pr:
 reviewer:
 revision: 1
-blocked_by: [task.0113]
+blocked_by:
 deploy_verified: false
 created: 2026-02-27
-updated: 2026-02-27
+updated: 2026-03-01
 labels: [governance, ledger, scoring, allocation]
 external_refs:
 ---
