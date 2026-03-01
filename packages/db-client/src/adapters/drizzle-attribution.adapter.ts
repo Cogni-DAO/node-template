@@ -360,11 +360,14 @@ export class DrizzleAttributionAdapter implements AttributionStore {
   /**
    * Like resolveEpochScoped but acquires a row-level lock (SELECT ... FOR UPDATE).
    * Use for write operations that must serialize against concurrent finalization.
+   * Accepts optional `tx` to run within an existing transaction context.
    */
   private async resolveEpochScopedForUpdate(
-    epochId: bigint
+    epochId: bigint,
+    tx?: Parameters<Parameters<(typeof this.db)["transaction"]>[0]>[0]
   ): Promise<AttributionEpoch> {
-    const rows = await this.db
+    const queryRunner = tx ?? this.db;
+    const rows = await queryRunner
       .select()
       .from(epochs)
       .where(and(eq(epochs.id, epochId), eq(epochs.scopeId, this.scopeId)))
@@ -1341,58 +1344,67 @@ export class DrizzleAttributionAdapter implements AttributionStore {
   async upsertSubjectOverride(
     params: UpsertSubjectOverrideParams
   ): Promise<SubjectOverrideRecord> {
-    const epoch = await this.resolveEpochScopedForUpdate(params.epochId);
-    if (epoch.status !== "review") {
-      throw new EpochNotInReviewError(params.epochId.toString(), epoch.status);
-    }
+    return await this.db.transaction(async (tx) => {
+      const epoch = await this.resolveEpochScopedForUpdate(params.epochId, tx);
+      if (epoch.status !== "review") {
+        throw new EpochNotInReviewError(
+          params.epochId.toString(),
+          epoch.status
+        );
+      }
 
-    const now = new Date();
-    const [row] = await this.db
-      .insert(epochSubjectOverrides)
-      .values({
-        nodeId: params.nodeId,
-        epochId: params.epochId,
-        subjectRef: params.subjectRef,
-        overrideUnits: params.overrideUnits ?? null,
-        overrideSharesJson: params.overrideSharesJson ?? null,
-        overrideReason: params.overrideReason ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [
-          epochSubjectOverrides.epochId,
-          epochSubjectOverrides.subjectRef,
-        ],
-        set: {
+      const now = new Date();
+      const [row] = await tx
+        .insert(epochSubjectOverrides)
+        .values({
+          nodeId: params.nodeId,
+          epochId: params.epochId,
+          subjectRef: params.subjectRef,
           overrideUnits: params.overrideUnits ?? null,
           overrideSharesJson: params.overrideSharesJson ?? null,
           overrideReason: params.overrideReason ?? null,
+          createdAt: now,
           updatedAt: now,
-        },
-      })
-      .returning();
-    if (!row)
-      throw new Error("upsertSubjectOverride: INSERT/UPDATE returned no rows");
-    return toSubjectOverride(row);
+        })
+        .onConflictDoUpdate({
+          target: [
+            epochSubjectOverrides.epochId,
+            epochSubjectOverrides.subjectRef,
+          ],
+          set: {
+            overrideUnits: params.overrideUnits ?? null,
+            overrideSharesJson: params.overrideSharesJson ?? null,
+            overrideReason: params.overrideReason ?? null,
+            updatedAt: now,
+          },
+        })
+        .returning();
+      if (!row)
+        throw new Error(
+          "upsertSubjectOverride: INSERT/UPDATE returned no rows"
+        );
+      return toSubjectOverride(row);
+    });
   }
 
   async deleteSubjectOverride(
     epochId: bigint,
     subjectRef: string
   ): Promise<void> {
-    const epoch = await this.resolveEpochScopedForUpdate(epochId);
-    if (epoch.status !== "review") {
-      throw new EpochNotInReviewError(epochId.toString(), epoch.status);
-    }
-    await this.db
-      .delete(epochSubjectOverrides)
-      .where(
-        and(
-          eq(epochSubjectOverrides.epochId, epochId),
-          eq(epochSubjectOverrides.subjectRef, subjectRef)
-        )
-      );
+    await this.db.transaction(async (tx) => {
+      const epoch = await this.resolveEpochScopedForUpdate(epochId, tx);
+      if (epoch.status !== "review") {
+        throw new EpochNotInReviewError(epochId.toString(), epoch.status);
+      }
+      await tx
+        .delete(epochSubjectOverrides)
+        .where(
+          and(
+            eq(epochSubjectOverrides.epochId, epochId),
+            eq(epochSubjectOverrides.subjectRef, subjectRef)
+          )
+        );
+    });
   }
 
   async getSubjectOverridesForEpoch(
