@@ -15,7 +15,7 @@
 
 import type { ReactElement } from "react";
 
-import { Card, CardContent, Progress } from "@/components";
+import { Badge, Card, CardContent, Progress } from "@/components";
 import type { HoldingView } from "@/features/governance/types";
 
 interface HoldingCardProps {
@@ -40,7 +40,16 @@ export function HoldingCard({ holding, rank }: HoldingCardProps): ReactElement {
               {holding.avatar}
             </div>
             <div>
-              <div className="font-medium text-sm">#{rank}</div>
+              <div className="flex items-center gap-2 font-medium text-sm">
+                <span>
+                  #{rank} · {holding.displayName ?? "Contributor"}
+                </span>
+                {!holding.isLinked && (
+                  <Badge intent="outline" size="sm" className="h-5 px-1.5">
+                    Unlinked
+                  </Badge>
+                )}
+              </div>
               <div className="text-muted-foreground text-xs">
                 {holding.epochsContributed} epochs
               </div>

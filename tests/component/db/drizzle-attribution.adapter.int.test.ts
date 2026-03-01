@@ -503,6 +503,22 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       expect(resolved?.eventType).toBe("pr_merged");
       expect(resolved?.userId).toBe(resolvedActor.user.id);
     });
+
+    it("getSelectedReceiptsForAttribution keeps unresolved rows for later attribution", async () => {
+      const claims = await adapter.getSelectedReceiptsForAttribution(epochId);
+
+      const receiptIds = claims.map((claim) => claim.receiptId);
+      expect(receiptIds).toContain("join-test:resolved");
+      expect(receiptIds).toContain("join-test:unresolved");
+      expect(receiptIds).toContain("join-test:excluded");
+
+      const unresolved = claims.find(
+        (claim) => claim.receiptId === "join-test:unresolved"
+      );
+      expect(unresolved?.userId).toBeNull();
+      expect(unresolved?.platformUserId).toBe("gh-unresolved");
+      expect(unresolved?.eventType).toBe("review_submitted");
+    });
   });
 
   // ── Allocations ───────────────────────────────────────────────

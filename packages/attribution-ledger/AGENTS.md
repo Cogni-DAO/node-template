@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-27
+- **Last reviewed:** 2026-03-01
 - **Status:** draft
 
 ## Purpose
@@ -49,7 +49,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `computeEpochWindowV1()` — Pure, deterministic epoch window computation (Monday-aligned UTC). Safe in Temporal workflow code.
   - `EpochWindow`, `EpochWindowParams` — Types for epoch window computation
   - `computeStatementItems()` — BIGINT proportional distribution with largest-remainder rounding
-  - `computeAllocationSetHash()` — SHA-256 of canonical sorted allocation data
+  - `computeAllocationSetHash()`, `computeClaimantAllocationSetHash()` — SHA-256 of canonical sorted allocation data for user-only and claimant-aware finalization
   - `computeWeightConfigHash()` — SHA-256 of canonical weight config JSON (key-sorted)
   - `computeProposedAllocations()` — Versioned allocation dispatch (V0: `weight-sum-v0`)
   - `validateWeightConfig()` — Rejects floats, NaN, Infinity, unsafe integers
@@ -65,8 +65,9 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `validateArtifactRef()`, `validateArtifactEnvelope()` — Artifact metadata/hash validation (pure)
   - `computeEnricherInputsHash()` — Deterministic inputs hash for enrichers (base shape + extensions)
   - `createValidatedAttributionStore()` — Wraps `AttributionStore` with envelope validation on artifact writes
-  - `extractWorkItemIds()` — Regex extraction of work-item IDs from event metadata
-  - `WORK_ITEM_LINKS_ARTIFACT_REF`, `WORK_ITEM_LINKER_ALGO_REF` — Namespaced constants for work-item-linker enricher
+  - `buildDefaultReceiptClaimantSharesPayload()`, `parseClaimantSharesPayload()`, `expandClaimantUnits()`, `buildClaimantAllocations()`, `computeClaimantCreditLineItems()` — Canonical claimant-share helpers for multi-actor attribution and claimant-aware credit views
+  - `CLAIMANT_SHARES_EVALUATION_REF`, `CLAIMANT_SHARES_ALGO_REF`, `CLAIMANT_SHARE_DENOMINATOR_PPM` — Claimant-share evaluation constants
+  - `AttributionClaimant`, `ClaimantShare`, `ClaimantSharesSubject`, `ClaimantSharesPayload`, `ExpandedClaimantUnit`, `FinalizedClaimantAllocation`, `ClaimantCreditLineItem`, `SelectedReceiptForAttribution` — Claimant-share domain types
   - `UpsertArtifactParams`, `CuratedEventWithMetadata`, `AttributionEpochArtifact`, `CloseIngestionWithArtifactsParams` — Artifact-related types
 - **CLI:** none
 - **Env/Config keys:** none
@@ -75,12 +76,12 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
 
 - **Uses ports:** none
 - **Implements ports:** none
-- **Defines ports:** `AttributionStore` (implemented by `DrizzleAttributionAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUncuratedEvents`, `updateCurationUserId`, `insertCurationDoNothing`), allocation computation (`getCuratedEventsForAllocation`, `upsertAllocations`, `deleteStaleAllocations`), artifact lifecycle (`upsertDraftArtifact`, `closeIngestionWithArtifacts`, `getArtifactsForEpoch`, `getArtifact`, `getCuratedEventsWithMetadata`), and atomic finalization (`finalizeEpochAtomic`).
+- **Defines ports:** `AttributionStore` (implemented by `DrizzleAttributionAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUncuratedEvents`, `updateCurationUserId`, `insertCurationDoNothing`), allocation computation (`getCuratedEventsForAllocation`, `upsertAllocations`, `deleteStaleAllocations`), canonical attribution reads (`getSelectedReceiptsForAttribution`, `getUserDisplayNames`, `getEvaluation`), artifact lifecycle (`upsertDraftArtifact`, `closeIngestionWithArtifacts`, `getArtifactsForEpoch`, `getArtifact`, `getCuratedEventsWithMetadata`), and atomic finalization (`finalizeEpochAtomic`).
 
 ## Responsibilities
 
 - This directory **does**: Define ledger domain types, port interface, compute deterministic statement items, compute allocation set/config/artifact hashes, versioned allocation algorithm dispatch, pool estimation, artifact envelope validation, enricher inputs hashing, validated store wrapper, define domain errors
-- This directory **does not**: Perform I/O, access databases, import from `src/` or `services/`
+- This directory **does not**: Perform I/O, access databases, import from `src/` or `services/`, or ship concrete enricher plugin implementations
 
 ## Usage
 

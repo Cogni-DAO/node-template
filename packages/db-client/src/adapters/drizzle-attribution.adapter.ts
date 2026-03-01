@@ -16,6 +16,7 @@
  * - POOL_LOCKED_AT_REVIEW: insertPoolComponent rejects inserts when epoch status != 'open'.
  * - CONFIG_LOCKED_AT_REVIEW: closeIngestion pins allocationAlgoRef + weightConfigHash.
  * - EVALUATION_FINAL_ATOMIC: closeIngestionWithEvaluations inserts locked evaluations + sets artifacts_hash + transitions epoch in one transaction.
+ * - STATEMENT_ITEMS_BOUNDARY_CLONE: toStatementItemsJson converts readonly AttributionStatementItem[] to mutable Drizzle-compatible JSONB at the adapter boundary.
  * Side-effects: IO (database operations)
  * Links: docs/spec/attribution-ledger.md, packages/attribution-ledger/src/store.ts
  * @public
@@ -28,6 +29,7 @@ import type {
   AttributionPoolComponent,
   AttributionSelection,
   AttributionStatement,
+  AttributionStatementItem,
   AttributionStatementSignature,
   AttributionStore,
   CloseIngestionWithEvaluationsParams,
@@ -40,6 +42,7 @@ import type {
   InsertSignatureParams,
   InsertStatementParams,
   SelectedReceiptForAllocation,
+  SelectedReceiptForAttribution,
   SelectedReceiptWithMetadata,
   UnselectedReceipt,
   UpsertEvaluationParams,
@@ -63,6 +66,7 @@ import {
   ingestionReceipts,
 } from "@cogni/db-schema/attribution";
 import { userBindings } from "@cogni/db-schema/identity";
+import { userProfiles } from "@cogni/db-schema/profile";
 import {
   and,
   eq,
@@ -195,6 +199,41 @@ function toStatement(
     supersedesStatementId: row.supersedesStatementId,
     createdAt: row.createdAt,
   };
+}
+
+type EpochStatementItemsJson = NonNullable<
+  typeof epochStatements.$inferInsert.statementItemsJson
+>;
+type EpochStatementItemJson = EpochStatementItemsJson[number];
+
+function toStatementItemsJson(
+  items: readonly AttributionStatementItem[]
+): EpochStatementItemsJson {
+  return items.map(
+    (item): EpochStatementItemJson => ({
+      user_id: item.user_id,
+      total_units: item.total_units,
+      share: item.share,
+      amount_credits: item.amount_credits,
+      claimant_key: item.claimant_key,
+      claimant: item.claimant
+        ? item.claimant.kind === "user"
+          ? {
+              kind: "user",
+              userId: item.claimant.userId,
+            }
+          : {
+              kind: "identity",
+              provider: item.claimant.provider,
+              externalId: item.claimant.externalId,
+              providerLogin: item.claimant.providerLogin,
+            }
+        : undefined,
+      // Clone nested arrays at the adapter boundary so core statement items stay
+      // readonly while Drizzle receives mutable JSON-compatible values.
+      receipt_ids: item.receipt_ids ? [...item.receipt_ids] : undefined,
+    })
+  );
 }
 
 function toStatementSignature(
@@ -608,6 +647,49 @@ export class DrizzleAttributionAdapter implements AttributionStore {
     }));
   }
 
+  async getSelectedReceiptsForAttribution(
+    epochId: bigint
+  ): Promise<SelectedReceiptForAttribution[]> {
+    await this.resolveEpochScoped(epochId);
+    const rows = await this.db
+      .select({
+        receiptId: epochSelection.receiptId,
+        userId: epochSelection.userId,
+        source: ingestionReceipts.source,
+        eventType: ingestionReceipts.eventType,
+        included: epochSelection.included,
+        weightOverrideMilli: epochSelection.weightOverrideMilli,
+        platformUserId: ingestionReceipts.platformUserId,
+        platformLogin: ingestionReceipts.platformLogin,
+        artifactUrl: ingestionReceipts.artifactUrl,
+        eventTime: ingestionReceipts.eventTime,
+        payloadHash: ingestionReceipts.payloadHash,
+      })
+      .from(epochSelection)
+      .innerJoin(
+        ingestionReceipts,
+        and(
+          eq(ingestionReceipts.receiptId, epochSelection.receiptId),
+          eq(ingestionReceipts.nodeId, epochSelection.nodeId)
+        )
+      )
+      .where(eq(epochSelection.epochId, epochId));
+
+    return rows.map((r) => ({
+      receiptId: r.receiptId,
+      userId: r.userId,
+      source: r.source,
+      eventType: r.eventType,
+      included: r.included,
+      weightOverrideMilli: r.weightOverrideMilli,
+      platformUserId: r.platformUserId,
+      platformLogin: r.platformLogin,
+      artifactUrl: r.artifactUrl,
+      eventTime: r.eventTime,
+      payloadHash: r.payloadHash,
+    }));
+  }
+
   // ── Allocation computation ──────────────────────────────────
 
   async getSelectedReceiptsForAllocation(
@@ -976,7 +1058,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
         epochId: params.epochId,
         allocationSetHash: params.allocationSetHash,
         poolTotalCredits: params.poolTotalCredits,
-        statementItemsJson: params.statementItems,
+        statementItemsJson: toStatementItemsJson(params.statementItems),
         supersedesStatementId: params.supersedesStatementId ?? null,
       })
       .returning();
@@ -1082,7 +1164,9 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           epochId: params.epochId,
           allocationSetHash: params.statement.allocationSetHash,
           poolTotalCredits: params.statement.poolTotalCredits,
-          statementItemsJson: params.statement.statementItems,
+          statementItemsJson: toStatementItemsJson(
+            params.statement.statementItems
+          ),
           supersedesStatementId: params.statement.supersedesStatementId ?? null,
         })
         .onConflictDoNothing({
@@ -1210,6 +1294,52 @@ export class DrizzleAttributionAdapter implements AttributionStore {
         )
       );
     return new Map(rows.map((r) => [r.externalId, r.userId]));
+  }
+
+  async getUserDisplayNames(userIds: string[]): Promise<Map<string, string>> {
+    if (userIds.length === 0) return new Map();
+    const uniqueIds = [...new Set(userIds)];
+
+    const [profiles, bindings] = await Promise.all([
+      this.db
+        .select({
+          userId: userProfiles.userId,
+          displayName: userProfiles.displayName,
+        })
+        .from(userProfiles)
+        .where(
+          and(
+            inArray(userProfiles.userId, uniqueIds),
+            isNotNull(userProfiles.displayName)
+          )
+        ),
+      this.db
+        .select({
+          userId: userBindings.userId,
+          providerLogin: userBindings.providerLogin,
+        })
+        .from(userBindings)
+        .where(
+          and(
+            inArray(userBindings.userId, uniqueIds),
+            isNotNull(userBindings.providerLogin)
+          )
+        ),
+    ]);
+
+    const names = new Map<string, string>();
+    for (const row of profiles) {
+      if (row.displayName) {
+        names.set(row.userId, row.displayName);
+      }
+    }
+    for (const row of bindings) {
+      if (!names.has(row.userId) && row.providerLogin) {
+        names.set(row.userId, row.providerLogin);
+      }
+    }
+
+    return names;
   }
 
   async getUnselectedReceipts(

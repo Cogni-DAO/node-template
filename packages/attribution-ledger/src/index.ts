@@ -25,19 +25,28 @@ export {
   validateEvaluationEnvelope,
   validateEvaluationRef,
 } from "./artifact-envelope";
-
+// Canonical claimant-share attribution shape
+export {
+  type AttributionClaimant,
+  buildClaimantAllocations,
+  buildDefaultReceiptClaimantSharesPayload,
+  CLAIMANT_SHARE_DENOMINATOR_PPM,
+  CLAIMANT_SHARES_ALGO_REF,
+  CLAIMANT_SHARES_EVALUATION_REF,
+  type ClaimantCreditLineItem,
+  type ClaimantShare,
+  type ClaimantSharesPayload,
+  type ClaimantSharesSubject,
+  claimantKey,
+  computeClaimantCreditLineItems,
+  type ExpandedClaimantUnit,
+  expandClaimantUnits,
+  type FinalizedClaimantAllocation,
+  parseClaimantSharesPayload,
+  type SelectedReceiptForAttribution,
+} from "./claimant-shares";
 // Enricher inputs hash
 export { computeEnricherInputsHash } from "./enricher-inputs";
-
-// Enrichers (pure functions)
-export {
-  extractWorkItemIds,
-  WORK_ITEM_LINKER_ALGO_REF,
-  WORK_ITEM_LINKS_ARTIFACT_REF,
-  type WorkItemLink,
-  type WorkItemLinksPayload,
-  type WorkItemSnapshot,
-} from "./enrichers/work-item-linker";
 
 // Epoch window computation (pure, deterministic — safe in Temporal workflow code)
 export {
@@ -65,6 +74,7 @@ export {
   canonicalJsonStringify,
   computeAllocationSetHash,
   computeArtifactsHash,
+  computeClaimantAllocationSetHash,
   computeWeightConfigHash,
   sha256OfCanonicalJson,
 } from "./hashing";
@@ -105,6 +115,7 @@ export type {
   AttributionPoolComponent,
   AttributionSelection,
   AttributionStatement,
+  AttributionStatementItem,
   AttributionStatementSignature,
   AttributionStore,
   CloseIngestionWithEvaluationsParams,

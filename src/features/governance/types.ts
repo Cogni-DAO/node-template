@@ -27,8 +27,11 @@ export interface IngestionReceipt {
 
 /** A contributor row within an epoch view. */
 export interface EpochContributor {
-  readonly userId: string;
+  readonly claimantKey: string;
+  readonly claimantKind: "user" | "identity";
+  readonly isLinked: boolean;
   readonly displayName: string | null;
+  readonly claimantLabel: string;
   readonly avatar: string;
   readonly color: string;
   readonly proposedUnits: string;
@@ -71,8 +74,11 @@ export interface EpochHistoryData {
 
 /** A single user's cumulative holdings. */
 export interface HoldingView {
-  readonly userId: string;
+  readonly claimantKey: string;
+  readonly claimantKind: "user" | "identity";
+  readonly isLinked: boolean;
   readonly displayName: string | null;
+  readonly claimantLabel: string;
   readonly avatar: string;
   readonly color: string;
   readonly totalCredits: string;

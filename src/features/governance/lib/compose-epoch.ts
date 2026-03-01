@@ -24,11 +24,56 @@ import type {
 const DEFAULT_AVATAR = "👤";
 const DEFAULT_COLOR = "220 15% 50%";
 
-function getDisplayName(
-  platformLogin: string | null,
-  userId: string
-): string | null {
-  return platformLogin ?? userId.slice(0, 8);
+function formatSourceName(source: string): string {
+  switch (source) {
+    case "github":
+      return "GitHub";
+    case "discord":
+      return "Discord";
+    case "google":
+      return "Google";
+    default:
+      return source.charAt(0).toUpperCase() + source.slice(1);
+  }
+}
+
+function resolveDisplayName(platformLogin: string | null): string | null {
+  const trimmed = platformLogin?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
+function roundSharePercent(units: bigint, totalUnits: bigint): number {
+  if (totalUnits <= 0n) return 0;
+  return Math.round((Number(units) / Number(totalUnits)) * 1000) / 10;
+}
+
+function describeClaimant(params: {
+  claimant: EpochClaimantDto;
+  receipts: readonly IngestionReceipt[];
+}): {
+  claimantKind: "user" | "identity";
+  displayName: string | null;
+  claimantLabel: string;
+} {
+  const receiptLogin =
+    params.receipts.find((receipt) => receipt.platformLogin)?.platformLogin ??
+    null;
+
+  if (params.claimant.kind === "user") {
+    return {
+      claimantKind: "user",
+      displayName: resolveDisplayName(receiptLogin),
+      claimantLabel: "Linked account",
+    };
+  }
+
+  const fallback = params.claimant.providerLogin ?? receiptLogin;
+
+  return {
+    claimantKind: "identity",
+    displayName: resolveDisplayName(fallback),
+    claimantLabel: `${formatSourceName(params.claimant.provider)} account`,
+  };
 }
 
 /** Minimal epoch shape expected from the list-epochs API. */
@@ -37,6 +82,7 @@ export interface EpochDto {
   readonly status: "open" | "review" | "finalized";
   readonly periodStart: string;
   readonly periodEnd: string;
+  readonly weightConfig: Record<string, number>;
   readonly poolTotalCredits: string | null;
 }
 
@@ -53,24 +99,47 @@ export interface ApiIngestionReceipt {
   readonly receiptId: string;
   readonly source: string;
   readonly eventType: string;
+  readonly platformUserId: string;
   readonly platformLogin: string | null;
   readonly artifactUrl: string | null;
   readonly eventTime: string;
-  readonly selection: { readonly userId: string | null } | null;
+  readonly selection: {
+    readonly userId: string | null;
+    readonly included: boolean;
+    readonly weightOverrideMilli: string | null;
+  } | null;
 }
 
-/** Minimal statement line item shape from the epoch-statement API. */
-export interface StatementLineItemDto {
-  readonly user_id: string;
-  readonly total_units: string;
+/** Minimal claimant shape expected from the epoch-claimants API. */
+export type EpochClaimantDto =
+  | {
+      readonly kind: "user";
+      readonly userId: string;
+    }
+  | {
+      readonly kind: "identity";
+      readonly provider: string;
+      readonly externalId: string;
+      readonly providerLogin: string | null;
+    };
+
+/** Minimal claimant line item shape from the epoch-claimants API. */
+export interface EpochClaimantLineItemDto {
+  readonly claimantKey: string;
+  readonly claimant: EpochClaimantDto;
+  readonly displayName: string | null;
+  readonly isLinked: boolean;
+  readonly totalUnits: string;
   readonly share: string;
-  readonly amount_credits: string;
+  readonly amountCredits: string;
+  readonly receiptIds: readonly string[];
 }
 
-/** Minimal statement shape from the epoch-statement API. */
-export interface StatementDto {
+/** Minimal claimant-attribution response shape from the epoch-claimants API. */
+export interface EpochClaimantsDto {
+  readonly epochId: string;
   readonly poolTotalCredits: string;
-  readonly items: readonly StatementLineItemDto[];
+  readonly items: readonly EpochClaimantLineItemDto[];
 }
 
 /**
@@ -78,13 +147,11 @@ export interface StatementDto {
  * Pure helper — no IO.
  */
 function partitionReceipts(receipts: readonly ApiIngestionReceipt[]): {
-  receiptsByUser: Map<string, IngestionReceipt[]>;
-  loginByUser: Map<string, string>;
+  receiptsById: Map<string, IngestionReceipt>;
   unresolvedCount: number;
   unresolvedActivities: UnresolvedActivity[];
 } {
-  const receiptsByUser = new Map<string, IngestionReceipt[]>();
-  const loginByUser = new Map<string, string>();
+  const receiptsById = new Map<string, IngestionReceipt>();
   // Key: "source::platformLogin" → count
   const unresolvedMap = new Map<
     string,
@@ -93,6 +160,20 @@ function partitionReceipts(receipts: readonly ApiIngestionReceipt[]): {
   let unresolvedCount = 0;
 
   for (const r of receipts) {
+    const mapped: IngestionReceipt = {
+      receiptId: r.receiptId,
+      source: r.source,
+      eventType: r.eventType,
+      platformLogin: r.platformLogin,
+      artifactUrl: r.artifactUrl,
+      eventTime: r.eventTime,
+    };
+    receiptsById.set(r.receiptId, mapped);
+
+    if (r.selection?.included === false) {
+      continue;
+    }
+
     const resolvedUser = r.selection?.userId;
     if (!resolvedUser) {
       unresolvedCount++;
@@ -107,24 +188,6 @@ function partitionReceipts(receipts: readonly ApiIngestionReceipt[]): {
           count: 1,
         });
       }
-      continue;
-    }
-    const mapped: IngestionReceipt = {
-      receiptId: r.receiptId,
-      source: r.source,
-      eventType: r.eventType,
-      platformLogin: r.platformLogin,
-      artifactUrl: r.artifactUrl,
-      eventTime: r.eventTime,
-    };
-    const list = receiptsByUser.get(resolvedUser);
-    if (list) {
-      list.push(mapped);
-    } else {
-      receiptsByUser.set(resolvedUser, [mapped]);
-    }
-    if (r.platformLogin && !loginByUser.has(resolvedUser)) {
-      loginByUser.set(resolvedUser, r.platformLogin);
     }
   }
 
@@ -136,7 +199,11 @@ function partitionReceipts(receipts: readonly ApiIngestionReceipt[]): {
     }))
     .sort((a, b) => b.eventCount - a.eventCount);
 
-  return { receiptsByUser, loginByUser, unresolvedCount, unresolvedActivities };
+  return {
+    receiptsById,
+    unresolvedCount,
+    unresolvedActivities,
+  };
 }
 
 /**
@@ -148,36 +215,106 @@ export function composeEpochView(
   allocations: readonly AllocationDto[],
   receipts: readonly ApiIngestionReceipt[]
 ): EpochView {
-  const { receiptsByUser, loginByUser, unresolvedCount, unresolvedActivities } =
+  const { receiptsById, unresolvedCount, unresolvedActivities } =
     partitionReceipts(receipts);
+  const allocationByUser = new Map(
+    allocations.map((alloc) => [alloc.userId, alloc])
+  );
+  const contributorMap = new Map<
+    string,
+    {
+      claimantKey: string;
+      claimantKind: "user" | "identity";
+      displayName: string | null;
+      claimantLabel: string;
+      proposedUnits: bigint;
+      finalUnits: string | null;
+      receipts: IngestionReceipt[];
+    }
+  >();
 
-  // Sum all proposed units for share calculation
-  const totalProposed = allocations.reduce(
-    (sum, a) => sum + Number(a.proposedUnits),
-    0
+  for (const receipt of receipts) {
+    if (receipt.selection?.included === false) {
+      continue;
+    }
+
+    const mappedReceipt = receiptsById.get(receipt.receiptId);
+    if (!mappedReceipt) {
+      continue;
+    }
+
+    const weight =
+      receipt.selection?.weightOverrideMilli !== null &&
+      receipt.selection?.weightOverrideMilli !== undefined
+        ? BigInt(receipt.selection.weightOverrideMilli)
+        : BigInt(
+            epoch.weightConfig[`${receipt.source}:${receipt.eventType}`] ?? 0
+          );
+
+    if (weight <= 0n) {
+      continue;
+    }
+
+    const userId = receipt.selection?.userId ?? null;
+    if (userId) {
+      const key = `user:${userId}`;
+      const existing = contributorMap.get(key);
+      if (existing) {
+        existing.proposedUnits += weight;
+        existing.receipts.push(mappedReceipt);
+      } else {
+        contributorMap.set(key, {
+          claimantKey: key,
+          claimantKind: "user",
+          displayName: resolveDisplayName(receipt.platformLogin),
+          claimantLabel: "Linked account",
+          proposedUnits: weight,
+          finalUnits: allocationByUser.get(userId)?.finalUnits ?? null,
+          receipts: [mappedReceipt],
+        });
+      }
+      continue;
+    }
+
+    const key = `identity:${receipt.source}:${receipt.platformUserId}`;
+    const existing = contributorMap.get(key);
+    if (existing) {
+      existing.proposedUnits += weight;
+      existing.receipts.push(mappedReceipt);
+    } else {
+      contributorMap.set(key, {
+        claimantKey: key,
+        claimantKind: "identity",
+        displayName: resolveDisplayName(receipt.platformLogin),
+        claimantLabel: `${formatSourceName(receipt.source)} account`,
+        proposedUnits: weight,
+        finalUnits: null,
+        receipts: [mappedReceipt],
+      });
+    }
+  }
+
+  const totalProposed = [...contributorMap.values()].reduce(
+    (sum, contributor) => sum + contributor.proposedUnits,
+    0n
   );
 
-  const contributors: EpochContributor[] = allocations.map((alloc) => {
-    const userReceipts = receiptsByUser.get(alloc.userId) ?? [];
-    const login = loginByUser.get(alloc.userId) ?? null;
-    const proposed = Number(alloc.proposedUnits);
-    const share =
-      totalProposed > 0
-        ? Math.round((proposed / totalProposed) * 1000) / 10
-        : 0;
-
-    return {
-      userId: alloc.userId,
-      displayName: getDisplayName(login, alloc.userId),
+  const contributors: EpochContributor[] = [...contributorMap.values()].map(
+    (contributor) => ({
+      claimantKey: contributor.claimantKey,
+      claimantKind: contributor.claimantKind,
+      isLinked: contributor.claimantKind === "user",
+      displayName: contributor.displayName,
+      claimantLabel: contributor.claimantLabel,
       avatar: DEFAULT_AVATAR,
       color: DEFAULT_COLOR,
-      proposedUnits: alloc.proposedUnits,
-      finalUnits: alloc.finalUnits,
-      creditShare: share,
-      activityCount: alloc.activityCount,
-      receipts: userReceipts,
-    };
-  });
+      proposedUnits: contributor.proposedUnits.toString(),
+      finalUnits: contributor.finalUnits,
+      creditShare: roundSharePercent(contributor.proposedUnits, totalProposed),
+      activityCount: contributor.receipts.length,
+      receipts: contributor.receipts,
+    })
+  );
 
   // Sort by proposedUnits DESC
   contributors.sort(
@@ -197,33 +334,39 @@ export function composeEpochView(
 }
 
 /**
- * Compose an EpochView for a finalized epoch from its frozen statement.
- * Uses statement.items as source of truth (immutable, deterministic).
+ * Compose an EpochView for a finalized epoch from claimant-based finalized attribution.
  */
-export function composeEpochViewFromStatement(
+export function composeEpochViewFromClaimants(
   epoch: EpochDto,
-  statement: StatementDto,
+  claimants: Pick<EpochClaimantsDto, "poolTotalCredits" | "items">,
   receipts: readonly ApiIngestionReceipt[]
 ): EpochView {
-  const { receiptsByUser, loginByUser, unresolvedCount, unresolvedActivities } =
+  const { receiptsById, unresolvedCount, unresolvedActivities } =
     partitionReceipts(receipts);
 
-  const contributors: EpochContributor[] = statement.items.map((item) => {
-    const userReceipts = receiptsByUser.get(item.user_id) ?? [];
-    const login = loginByUser.get(item.user_id) ?? null;
-    // share from statement is a decimal string (e.g. "0.35"); convert to percentage
+  const contributors: EpochContributor[] = claimants.items.map((item) => {
+    const claimantReceipts = item.receiptIds
+      .map((receiptId) => receiptsById.get(receiptId) ?? null)
+      .filter((receipt): receipt is IngestionReceipt => receipt !== null);
+    const descriptor = describeClaimant({
+      claimant: item.claimant,
+      receipts: claimantReceipts,
+    });
     const share = Math.round(Number(item.share) * 1000) / 10;
 
     return {
-      userId: item.user_id,
-      displayName: getDisplayName(login, item.user_id),
+      claimantKey: item.claimantKey,
+      claimantKind: descriptor.claimantKind,
+      isLinked: item.isLinked,
+      displayName: item.displayName ?? descriptor.displayName,
+      claimantLabel: descriptor.claimantLabel,
       avatar: DEFAULT_AVATAR,
       color: DEFAULT_COLOR,
-      proposedUnits: item.total_units,
-      finalUnits: item.total_units,
+      proposedUnits: item.totalUnits,
+      finalUnits: item.totalUnits,
       creditShare: share,
-      activityCount: userReceipts.length,
-      receipts: userReceipts,
+      activityCount: claimantReceipts.length,
+      receipts: claimantReceipts,
     };
   });
 
@@ -237,7 +380,7 @@ export function composeEpochViewFromStatement(
     status: epoch.status,
     periodStart: epoch.periodStart,
     periodEnd: epoch.periodEnd,
-    poolTotalCredits: statement.poolTotalCredits,
+    poolTotalCredits: claimants.poolTotalCredits,
     contributors,
     unresolvedCount,
     unresolvedActivities,

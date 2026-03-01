@@ -13,6 +13,7 @@
 
 import {
   computeAllocationSetHash,
+  computeClaimantAllocationSetHash,
   computeWeightConfigHash,
 } from "@cogni/attribution-ledger";
 import { describe, expect, it } from "vitest";
@@ -86,5 +87,51 @@ describe("computeWeightConfigHash", () => {
   it("returns 64-char hex string (SHA-256)", async () => {
     const hash = await computeWeightConfigHash({ a: 1 });
     expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
+
+describe("computeClaimantAllocationSetHash", () => {
+  it("matches legacy allocation hashes for resolved-user-only inputs", async () => {
+    const legacy = await computeAllocationSetHash([
+      { userId: "alice", valuationUnits: 1000n },
+      { userId: "bob", valuationUnits: 2000n },
+    ]);
+
+    const claimant = await computeClaimantAllocationSetHash([
+      { claimant: { kind: "user", userId: "alice" }, valuationUnits: 1000n },
+      { claimant: { kind: "user", userId: "bob" }, valuationUnits: 2000n },
+    ]);
+
+    expect(claimant).toBe(legacy);
+  });
+
+  it("includes identity claimants in canonical order", async () => {
+    const a = await computeClaimantAllocationSetHash([
+      {
+        claimant: {
+          kind: "identity",
+          provider: "github",
+          externalId: "42",
+          providerLogin: "alice",
+        },
+        valuationUnits: 1000n,
+      },
+      { claimant: { kind: "user", userId: "bob" }, valuationUnits: 500n },
+    ]);
+
+    const b = await computeClaimantAllocationSetHash([
+      { claimant: { kind: "user", userId: "bob" }, valuationUnits: 500n },
+      {
+        claimant: {
+          kind: "identity",
+          provider: "github",
+          externalId: "42",
+          providerLogin: "alice",
+        },
+        valuationUnits: 1000n,
+      },
+    ]);
+
+    expect(a).toBe(b);
   });
 });

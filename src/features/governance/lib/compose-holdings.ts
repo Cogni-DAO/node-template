@@ -3,11 +3,11 @@
 
 /**
  * Module: `@features/governance/lib/compose-holdings`
- * Purpose: Aggregates statements across finalized epochs into cumulative holdings.
+ * Purpose: Aggregates finalized claimant attribution across epochs into cumulative holdings.
  * Scope: Pure function. Does not perform IO or access external services.
  * Invariants:
  *   - ALL_MATH_BIGINT: credit values stay as strings until final display derivation
- *   - Source of truth is frozen statements (not mutable allocations)
+ *   - Source of truth is finalized claimant attribution (not mutable allocations)
  * Side-effects: none
  * Links: src/features/governance/types.ts
  * @public
@@ -15,24 +15,22 @@
 
 import type { HoldingsData, HoldingView } from "@/features/governance/types";
 
-import type { EpochDto, StatementDto } from "./compose-epoch";
+import type { EpochClaimantsDto, EpochDto } from "./compose-epoch";
 
 const DEFAULT_AVATAR = "👤";
 const DEFAULT_COLOR = "220 15% 50%";
 
-/**
- * Aggregate statement line items across all finalized epochs into cumulative holdings.
- * Each entry in `statements` corresponds 1:1 with the epoch at the same index in `epochs`.
- * Statements may be null if not yet generated (skip those epochs).
- */
 export function composeHoldings(
   epochs: readonly EpochDto[],
-  statements: readonly (StatementDto | null)[]
+  claimants: readonly EpochClaimantsDto[]
 ): HoldingsData {
-  const userMap = new Map<
+  const claimantMap = new Map<
     string,
     {
-      userId: string;
+      claimantKey: string;
+      claimantKind: "user" | "identity";
+      isLinked: boolean;
+      displayName: string | null;
       totalCredits: number;
       epochs: Set<string>;
     }
@@ -42,20 +40,27 @@ export function composeHoldings(
 
   for (let i = 0; i < epochs.length; i++) {
     const epoch = epochs[i];
-    const statement = statements[i];
-    if (!epoch || !statement) continue;
+    const epochClaimants = claimants[i];
+    if (!epoch || !epochClaimants) continue;
 
-    for (const item of statement.items) {
-      const credits = Number(item.amount_credits);
+    for (const item of epochClaimants.items) {
+      const credits = Number(item.amountCredits);
       totalCreditsAll += credits;
 
-      const existing = userMap.get(item.user_id);
+      const existing = claimantMap.get(item.claimantKey);
       if (existing) {
         existing.totalCredits += credits;
         existing.epochs.add(epoch.id);
+        if (!existing.displayName && item.displayName) {
+          existing.displayName = item.displayName;
+        }
+        existing.isLinked = existing.isLinked || item.isLinked;
       } else {
-        userMap.set(item.user_id, {
-          userId: item.user_id,
+        claimantMap.set(item.claimantKey, {
+          claimantKey: item.claimantKey,
+          claimantKind: item.claimant.kind,
+          isLinked: item.isLinked,
+          displayName: item.displayName,
           totalCredits: credits,
           epochs: new Set([epoch.id]),
         });
@@ -63,29 +68,28 @@ export function composeHoldings(
     }
   }
 
-  const entries = [...userMap.values()];
-
-  const holdings: HoldingView[] = entries
+  const holdings: HoldingView[] = [...claimantMap.values()]
     .sort((a, b) => b.totalCredits - a.totalCredits)
-    .map((e) => ({
-      userId: e.userId,
-      displayName: e.userId.slice(0, 8),
+    .map((entry) => ({
+      claimantKey: entry.claimantKey,
+      claimantKind: entry.claimantKind,
+      isLinked: entry.isLinked,
+      displayName: entry.displayName,
+      claimantLabel: entry.isLinked ? "Linked account" : "Unlinked account",
       avatar: DEFAULT_AVATAR,
       color: DEFAULT_COLOR,
-      totalCredits: String(e.totalCredits),
+      totalCredits: String(entry.totalCredits),
       ownershipPercent:
         totalCreditsAll > 0
-          ? Math.round((e.totalCredits / totalCreditsAll) * 1000) / 10
+          ? Math.round((entry.totalCredits / totalCreditsAll) * 1000) / 10
           : 0,
-      epochsContributed: e.epochs.size,
+      epochsContributed: entry.epochs.size,
     }));
-
-  const epochsWithStatements = statements.filter(Boolean).length;
 
   return {
     holdings,
     totalCreditsIssued: String(totalCreditsAll),
-    totalContributors: entries.length,
-    epochsCompleted: epochsWithStatements,
+    totalContributors: holdings.length,
+    epochsCompleted: claimants.length,
   };
 }

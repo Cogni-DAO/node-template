@@ -10,7 +10,7 @@ read_when: Working on credit statements, activity ingestion, epoch enrichers, ep
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-02-20
-verified: 2026-02-27
+verified: 2026-03-01
 tags: [governance, transparency, payments, attribution]
 ---
 
@@ -37,7 +37,7 @@ tags: [governance, transparency, payments, attribution]
 | RECEIPT_APPEND_ONLY              | DB trigger rejects UPDATE/DELETE on `ingestion_receipts`. Once ingested, receipt records are immutable facts.                                                                                                                                                                                                                                                                           |
 | RECEIPT_IDEMPOTENT               | `ingestion_receipts.id` is deterministic from source data (e.g., `github:pr:owner/repo:42`). Re-ingestion of the same receipt is a no-op (PK conflict → skip).                                                                                                                                                                                                                          |
 | POOL_IMMUTABLE                   | DB trigger rejects UPDATE/DELETE on `epoch_pool_components`. Once recorded, a pool component's algorithm, inputs, and amount cannot be changed.                                                                                                                                                                                                                                         |
-| IDENTITY_BEST_EFFORT             | Ingestion receipts carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved receipts have `user_id = NULL` and are excluded from allocation until resolved. The UI surfaces unresolved counts and per-login breakdowns so admins can act before finalization.                                                     |
+| IDENTITY_BEST_EFFORT             | Ingestion receipts carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved receipts keep `user_id = NULL` in selection, but claimant-share evaluations preserve them as identity claimants so attribution remains visible and can resolve later when bindings appear.                                            |
 | ADMIN_FINALIZES_ONCE             | An admin reviews proposed allocations, optionally adjusts `final_units`, then triggers finalize. Single action closes the epoch — no per-event approval workflow.                                                                                                                                                                                                                       |
 | APPROVERS_PER_SCOPE              | Each scope declares its own `approvers[]` list. Epoch finalize requires 1-of-N EIP-191 signature from the scope's approvers. V0: single scope, single approver in repo-spec. Multi-scope: each `.cogni/projects/*.yaml` carries its own list.                                                                                                                                           |
 | SIGNATURE_SCOPE_BOUND            | Signed message must include `node_id + scope_id + allocation_set_hash`. Prevents cross-scope and cross-node signature replay.                                                                                                                                                                                                                                                           |
@@ -213,7 +213,7 @@ Source adapters collect contribution activity from external systems and normaliz
 3. **Normalizes** to `IngestionReceipt` with deterministic ID, provenance fields, and platform identity
 4. **Inserts** idempotently (PK conflict = skip)
 
-Identity resolution happens after ingestion: lookup `user_bindings` (from [decentralized-identity spec](./decentralized-user-identity.md)) to map `(source, platform_user_id)` → `user_id`. Unresolved events are flagged for admin attention.
+Identity resolution happens after ingestion: lookup `user_bindings` (from [decentralized-identity spec](./decentralized-user-identity.md)) to map `(source, platform_user_id)` → `user_id`. If no binding exists yet, the receipt still flows into claimant-share evaluation as an unresolved identity claimant keyed by stable external identity (`provider + externalId`).
 
 ### Weight Policy
 
@@ -241,7 +241,8 @@ Epoch status models **governance finality**, not payment execution. Distribution
                  → Runs source adapters → ingestion_receipts (raw facts)
                  → Resolves identities → updates user_id on selection rows
                  → Runs enrichers → epoch_evaluations (draft, overwritten each pass)
-                 → Computes proposed allocations → epoch_allocations
+                 → `cogni.claimant_shares.v0` emits claimant-share subjects from selected receipts
+                 → Computes proposed allocations → epoch_allocations (resolved-user override surface)
                  → Admin selects: adjust inclusion, resolve identities, record pool components
 
 2. REVIEW        closeIngestionWithEvaluations locks config + evaluations (CONFIG_LOCKED_AT_REVIEW, EVALUATION_FINAL_ATOMIC)
@@ -252,11 +253,13 @@ Epoch status models **governance finality**, not payment execution. Distribution
                  → Selection still mutable: adjust inclusion, weight overrides, identity resolution
                  → Admin reviews + tweaks proposed allocations (not blindly trusting the algo)
                  → Allocations recomputed on demand from selected receipts + locked evaluations + locked weight_config
+                 → Read models resolve current display names and linked/unlinked state at read time
 
 3. FINALIZED     Admin triggers finalize (requires signature + base_issuance)
-                 → Reads epoch_allocations (final_units, falling back to proposed_units)
+                 → Reads epoch_allocations (final_units, falling back to proposed_units for resolved users)
+                 → Reads locked claimant shares, applies resolved-user overrides, preserves unresolved identity claimants
                  → Reads pool components → pool_total_credits
-                 → computeStatementItems(allocations, pool_total) → epoch_statement
+                 → computeClaimantCreditLineItems(claimant_allocations, pool_total) → epoch_statement
                  → Stores statement + signature atomically → epoch immutable forever
 ```
 
@@ -268,15 +271,16 @@ Epoch status models **governance finality**, not payment execution. Distribution
 
 ### Statement Computation
 
-Unchanged from the original design. Given finalized allocations and a total pool:
+Finalization is claimant-aware. Given locked claimant-share subjects, resolved-user overrides, and a total pool:
 
-1. Collect `final_units` per user (fall back to `proposed_units` if `final_units` is NULL)
-2. Compute each user's share: `user_units / total_units`
-3. Distribute `pool_total_credits` proportionally using BIGINT arithmetic
-4. Apply largest-remainder rounding to ensure exact sum equals pool total
-5. Output: `[{ user_id, total_units, share, amount_credits }]`
+1. Load claimant-share subjects from the locked `cogni.claimant_shares.v0` evaluation (fallback: rebuild deterministically from selected receipts)
+2. Apply `final_units` overrides from `epoch_allocations` to resolved `user` claimants only; unresolved identity claimants remain unchanged
+3. Compute each claimant's share: `claimant_units / total_units`
+4. Distribute `pool_total_credits` proportionally using BIGINT arithmetic
+5. Apply largest-remainder rounding to ensure exact sum equals pool total
+6. Output statement items shaped like `[{ user_id, total_units, share, amount_credits, claimant_key, claimant, receipt_ids }]`
 
-The allocation set hash (SHA-256 of canonical allocation data, sorted by user_id) pins the exact input set. Combined with `pool_total_credits` and `weight_config`, the statement is fully deterministic and reproducible.
+The allocation set hash (SHA-256 of canonical claimant allocation data, sorted by claimant key) pins the exact finalized input set. Combined with `pool_total_credits`, locked evaluations, and `weight_config`, the statement is fully deterministic and reproducible.
 
 ### Pool Model
 
@@ -378,14 +382,14 @@ After each collection run, the `materializeSelection` activity creates selection
 3. **Query by epochId**: The activity queries receipts by epoch membership (via the epoch's `period_start`/`period_end`), using `epochId` as the authoritative scope. The epoch row is loaded first; period dates serve as a guard assertion.
 4. **Provider-scoped resolution**: Identity resolution queries `user_bindings` filtered by `provider` (e.g., `'github'`). No cross-provider resolution. The `platformUserId` stored in `ingestion_receipts` must match the `external_id` format in `user_bindings` (GitHub: numeric `databaseId` as string).
 
-### `epoch_allocations` — per-user credit distribution
+### `epoch_allocations` — per-user override surface
 
 | Column            | Type             | Notes                                              |
 | ----------------- | ---------------- | -------------------------------------------------- |
 | `id`              | UUID PK          |                                                    |
 | `node_id`         | UUID             | NOT NULL (NODE_SCOPED)                             |
 | `epoch_id`        | BIGINT FK→epochs |                                                    |
-| `user_id`         | TEXT FK→users    | NOT NULL                                           |
+| `user_id`         | TEXT FK→users    | NOT NULL — resolved human override subject         |
 | `proposed_units`  | BIGINT NOT NULL  | Computed from weight policy                        |
 | `final_units`     | BIGINT           | Admin-set (NULL = not yet finalized, use proposed) |
 | `override_reason` | TEXT             | Why admin changed it                               |
@@ -394,6 +398,8 @@ After each collection run, the `materializeSelection` activity creates selection
 | `updated_at`      | TIMESTAMPTZ      |                                                    |
 
 Constraint: `UNIQUE(epoch_id, user_id)`
+
+Note: finalized statement math is claimant-aware. `epoch_allocations` remains the admin override surface for resolved human users (`final_units`, `override_reason`, `activity_count`). Unresolved identity claimants are preserved in claimant-share evaluations and finalized statement items even when they have no `epoch_allocations` row.
 
 ### `ingestion_cursors` — adapter sync state
 
@@ -432,16 +438,16 @@ Constraint: `UNIQUE(epoch_id, component_id)` (POOL_UNIQUE_PER_TYPE).
 
 ### `epoch_statements` — one per closed epoch, deterministic distribution plan (Layer 3)
 
-| Column                    | Type                     | Notes                                               |
-| ------------------------- | ------------------------ | --------------------------------------------------- |
-| `id`                      | UUID PK                  |                                                     |
-| `node_id`                 | UUID                     | NOT NULL (NODE_SCOPED)                              |
-| `epoch_id`                | BIGINT FK→epochs         | UNIQUE(node_id, epoch_id) — one statement per epoch |
-| `allocation_set_hash`     | TEXT                     | SHA-256 of canonical finalized allocations          |
-| `pool_total_credits`      | BIGINT                   | Must match epoch's pool_total_credits               |
-| `statement_items_json`    | JSONB                    | `[{user_id, total_units, share, amount_credits}]`   |
-| `supersedes_statement_id` | UUID FK→epoch_statements | For post-signing corrections (nullable)             |
-| `created_at`              | TIMESTAMPTZ              |                                                     |
+| Column                    | Type                     | Notes                                                                                     |
+| ------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- |
+| `id`                      | UUID PK                  |                                                                                           |
+| `node_id`                 | UUID                     | NOT NULL (NODE_SCOPED)                                                                    |
+| `epoch_id`                | BIGINT FK→epochs         | UNIQUE(node_id, epoch_id) — one statement per epoch                                       |
+| `allocation_set_hash`     | TEXT                     | SHA-256 of canonical finalized allocations                                                |
+| `pool_total_credits`      | BIGINT                   | Must match epoch's pool_total_credits                                                     |
+| `statement_items_json`    | JSONB                    | `[{user_id, total_units, share, amount_credits, claimant_key?, claimant?, receipt_ids?}]` |
+| `supersedes_statement_id` | UUID FK→epoch_statements | For post-signing corrections (nullable)                                                   |
+| `created_at`              | TIMESTAMPTZ              |                                                                                           |
 
 Post-signing corrections use amendment statements (`supersedes_statement_id`), never reopen-and-edit.
 
@@ -638,12 +644,13 @@ Input: `{ epochId, signature }` — `signerAddress` derived from SIWE session (n
 4. Verify at least one `base_issuance` pool component exists (POOL_REQUIRES_BASE)
 5. Verify signer is in scope's `approvers[]` AND matches pinned `approverSetHash` (APPROVERS_PER_SCOPE)
 6. Build canonical finalize message from epoch data, `ecrecover(message, signature)` — verify recovered address matches `signerAddress`
-7. Read `epoch_allocations` — use `final_units` where set, fall back to `proposed_units`
-8. Read pool components, compute `pool_total_credits = SUM(amount_credits)`
-9. `computeStatementItems(allocations, pool_total)` — BIGINT, largest-remainder
-10. Compute `allocation_set_hash`
-11. Atomic transaction: set `pool_total_credits` on epoch, update status to `'finalized'`, insert epoch statement + statement signature
-12. Return statement
+7. Read `epoch_allocations` — use `final_units` where set as resolved-user overrides
+8. Read locked claimant-share evaluation (fallback: rebuild from selected receipts)
+9. Read pool components, compute `pool_total_credits = SUM(amount_credits)`
+10. `computeClaimantCreditLineItems(claimant_allocations, pool_total)` — BIGINT, largest-remainder
+11. Compute claimant-aware `allocation_set_hash`
+12. Atomic transaction: set `pool_total_credits` on epoch, update status to `'finalized'`, insert epoch statement + statement signature
+13. Return statement
 
 Deterministic workflow ID: `ledger-finalize-{scopeId}-{epochId}`
 
@@ -726,7 +733,7 @@ Enable transparent, verifiable credit distribution where contribution activity i
 
 ### Actor Migration Path (Planned)
 
-`epoch_allocations.user_id` is the current canonical subject for rewards — this is current truth, not planned. `actor_id` is a **migration target**: when the `actors` table ships ([proj.operator-plane](../../work/projects/proj.operator-plane.md) v1), allocations will gain an `actor_id` column alongside `user_id`. For human actors (`kind=user`), `actor_id` bridges 1:1 to `user_id` via the actors table. For agent actors, `actor_id` enables new attribution paths (gateway usage → agent → rewards). Every economic event remains scoped by `(node_id, scope_id)` — `actor_id` is locally unique per node, not a global identity. No invariant changes — PAYOUT_DETERMINISTIC and ALL_MATH_BIGINT apply regardless of subject key. See [identity-model.md](./identity-model.md).
+Finalized statements now preserve claimant identity explicitly (`claimant_key`, `claimant`) and treat `epoch_allocations.user_id` as the resolved-human override surface, not the only economic subject. `actor_id` is still the migration target: when the `actors` table ships ([proj.operator-plane](../../work/projects/proj.operator-plane.md) v1), claimant keys can resolve to actor-backed subjects without changing the deterministic statement model. For human actors (`kind=user`), `actor_id` bridges 1:1 to `user_id` via the actors table. For agent actors, `actor_id` enables new attribution paths (gateway usage → agent → rewards). Every economic event remains scoped by `(node_id, scope_id)` — `actor_id` is locally unique per node, not a global identity. No invariant changes — PAYOUT_DETERMINISTIC and ALL_MATH_BIGINT apply regardless of subject key. See [identity-model.md](./identity-model.md).
 
 ## Non-Goals
 

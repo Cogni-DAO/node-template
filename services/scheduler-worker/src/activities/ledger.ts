@@ -16,21 +16,31 @@
  *   - Per CONFIG_LOCKED_AT_REVIEW: autoCloseIngestion pins allocationAlgoRef + weightConfigHash
  *   - Per EVALUATION_FINAL_ATOMIC: autoCloseIngestion passes evaluations to closeIngestionWithEvaluations for atomic write
  *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing statement if already finalized
+ *   - Per FINALIZE_CLAIMANT_AWARE: finalizeEpoch loads locked claimant-share evaluations, builds claimant allocations with resolved-user overrides, and stores claimant metadata in statement items
  * Side-effects: IO (database, GitHub API, viem EIP-191 verification)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
  * @internal
  */
 
-import type { UnselectedReceipt } from "@cogni/attribution-ledger";
+import type {
+  AttributionClaimant,
+  ClaimantSharesSubject,
+  UnselectedReceipt,
+} from "@cogni/attribution-ledger";
 import {
   buildCanonicalMessage,
-  computeAllocationSetHash,
+  buildClaimantAllocations,
+  buildDefaultReceiptClaimantSharesPayload,
+  CLAIMANT_SHARES_EVALUATION_REF,
+  claimantKey,
   computeApproverSetHash,
+  computeClaimantAllocationSetHash,
+  computeClaimantCreditLineItems,
   computeProposedAllocations,
-  computeStatementItems,
   computeWeightConfigHash,
   deriveAllocationAlgoRef,
   estimatePoolComponentsV0,
+  parseClaimantSharesPayload,
   validateWeightConfig,
 } from "@cogni/attribution-ledger";
 import type { ActivityEvent } from "@cogni/ingestion-core";
@@ -218,6 +228,34 @@ export interface FinalizeEpochOutput {
   readonly poolTotalCredits: string; // bigint serialized
   readonly allocationSetHash: string;
   readonly statementItemCount: number;
+}
+
+function statementUserId(claimant: AttributionClaimant): string {
+  return claimant.kind === "user" ? claimant.userId : claimantKey(claimant);
+}
+
+async function loadFinalizedClaimantSubjects(
+  attributionStore: AttributionStore,
+  epoch: {
+    readonly id: bigint;
+    readonly weightConfig: Record<string, number>;
+  }
+): Promise<readonly ClaimantSharesSubject[]> {
+  const evaluation = await attributionStore.getEvaluation(
+    epoch.id,
+    CLAIMANT_SHARES_EVALUATION_REF,
+    "locked"
+  );
+  const parsed = parseClaimantSharesPayload(evaluation?.payloadJson ?? null);
+  if (parsed) return parsed.subjects;
+
+  const receipts = await attributionStore.getSelectedReceiptsForAttribution(
+    epoch.id
+  );
+  return buildDefaultReceiptClaimantSharesPayload({
+    receipts,
+    weightConfig: epoch.weightConfig,
+  }).subjects;
 }
 
 /**
@@ -881,18 +919,13 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       );
     }
 
-    // 4. Load allocations — use final_units where set, fall back to proposed_units
+    // 4. Load allocations — final_units remain the override surface for resolved users
     const allocations = await attributionStore.getAllocationsForEpoch(epochId);
     if (allocations.length === 0) {
       throw new Error(
         `finalizeEpoch: epoch ${input.epochId} has no allocations`
       );
     }
-
-    const finalizedAllocations = allocations.map((a) => ({
-      userId: a.userId,
-      valuationUnits: a.finalUnits ?? a.proposedUnits,
-    }));
 
     // 5. Load pool components → pool_total = SUM(amount_credits)
     const poolComponents =
@@ -916,12 +949,36 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       0n
     );
 
-    // 6. Compute statement items (pure, deterministic)
-    const items = computeStatementItems(finalizedAllocations, poolTotal);
+    // 6. Build claimant allocations from locked claimant shares + resolved-user overrides
+    const claimantSubjects = await loadFinalizedClaimantSubjects(
+      attributionStore,
+      epoch
+    );
+    const claimantAllocations = buildClaimantAllocations(
+      claimantSubjects,
+      new Map(
+        allocations
+          .filter((allocation) => allocation.finalUnits !== null)
+          .map((allocation) => [
+            allocation.userId,
+            allocation.finalUnits as bigint,
+          ])
+      )
+    );
+    if (claimantAllocations.length === 0) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} has no claimant allocations`
+      );
+    }
+
+    const items = computeClaimantCreditLineItems(
+      claimantAllocations,
+      poolTotal
+    );
 
     // 7. Compute allocation set hash (deterministic)
     const allocationSetHash =
-      await computeAllocationSetHash(finalizedAllocations);
+      await computeClaimantAllocationSetHash(claimantAllocations);
 
     // 8. Build canonical message and verify signature
     const canonicalMessage = buildCanonicalMessage({
@@ -953,10 +1010,13 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
           allocationSetHash,
           poolTotalCredits: poolTotal,
           statementItems: items.map((li) => ({
-            user_id: li.userId,
+            user_id: statementUserId(li.claimant),
             total_units: li.totalUnits.toString(),
             share: li.share,
             amount_credits: li.amountCredits.toString(),
+            claimant_key: claimantKey(li.claimant),
+            claimant: li.claimant,
+            receipt_ids: [...li.receiptIds],
           })),
         },
         signature: {
