@@ -8,6 +8,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./epoch-window": {
+      "types": "./dist/epoch-window.d.ts",
+      "import": "./dist/epoch-window.js"
+    },
+    "./allocation": {
+      "types": "./dist/allocation.d.ts",
+      "import": "./dist/allocation.js"
     }
   },
   "types": "./dist/index.d.ts",

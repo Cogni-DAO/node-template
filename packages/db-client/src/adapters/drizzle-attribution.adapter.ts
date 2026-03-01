@@ -1391,15 +1391,16 @@ export class DrizzleAttributionAdapter implements AttributionStore {
     paramsList: readonly UpsertSubjectOverrideParams[]
   ): Promise<SubjectOverrideRecord[]> {
     if (paramsList.length === 0) return [];
+    const firstParams = paramsList[0];
     return await this.db.transaction(async (tx) => {
       // Lock once for the batch — all params share the same epochId
       const epoch = await this.resolveEpochScopedForUpdate(
-        paramsList[0]!.epochId,
+        firstParams.epochId,
         tx
       );
       if (epoch.status !== "review") {
         throw new EpochNotInReviewError(
-          paramsList[0]!.epochId.toString(),
+          firstParams.epochId.toString(),
           epoch.status
         );
       }

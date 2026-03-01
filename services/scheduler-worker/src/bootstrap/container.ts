@@ -51,6 +51,15 @@ export interface ServiceContainer {
 }
 
 /**
+ * Hardcoded identity from .cogni/repo-spec.yaml.
+ * HACK: Temporary constants until task.0120 (@cogni/repo-spec package) replaces
+ * this with proper parsed repo-spec reading.
+ */
+const REPO_SPEC_NODE_ID = "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d";
+const REPO_SPEC_SCOPE_ID = "a28a8b1e-1f9d-5cd5-9329-569e4819feda";
+const REPO_SPEC_CHAIN_ID = 8453;
+
+/**
  * Ledger container — deps for ledger activities.
  * Created separately because ledger env vars (NODE_ID, SCOPE_ID) are optional.
  */
@@ -95,32 +104,24 @@ export function createAttributionContainer(
   config: Env,
   logger: Logger
 ): AttributionContainer | null {
-  if (!config.NODE_ID || !config.SCOPE_ID || !config.CHAIN_ID) {
-    logWorkerEvent(logger, WORKER_EVENT_NAMES.CONFIG_LEDGER_DISABLED, {
-      reason: "NODE_ID, SCOPE_ID, or CHAIN_ID not set",
-      nodeId: config.NODE_ID ?? "unset",
-      scopeId: config.SCOPE_ID ?? "unset",
-      chainId: config.CHAIN_ID ?? "unset",
-    });
-    logger.warn(
-      "NODE_ID, SCOPE_ID, or CHAIN_ID not set — ledger worker disabled. " +
-        "Epoch finalize workflows will not be processed."
-    );
-    return null;
-  }
+  // HACK: Hardcoded from .cogni/repo-spec.yaml until task.0120
+  // (@cogni/repo-spec package) replaces this with proper parsing.
+  const nodeId = REPO_SPEC_NODE_ID;
+  const scopeId = REPO_SPEC_SCOPE_ID;
+  const chainId = REPO_SPEC_CHAIN_ID;
 
   logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
     phase: "ledger_container",
-    nodeId: config.NODE_ID,
-    scopeId: config.SCOPE_ID,
-    chainId: config.CHAIN_ID,
+    nodeId,
+    scopeId,
+    chainId,
   });
 
   const db = createServiceDbClient(config.DATABASE_URL);
   const attributionLogger = logger.child?.({ component: "ledger" }) ?? logger;
 
   const attributionStore = createValidatedAttributionStore(
-    new DrizzleAttributionAdapter(db, config.SCOPE_ID)
+    new DrizzleAttributionAdapter(db, scopeId)
   );
 
   // Build source adapters
@@ -161,9 +162,9 @@ export function createAttributionContainer(
   return {
     attributionStore,
     sourceAdapters: adapters,
-    nodeId: config.NODE_ID,
-    scopeId: config.SCOPE_ID,
-    chainId: config.CHAIN_ID,
+    nodeId,
+    scopeId,
+    chainId,
     logger: attributionLogger,
   };
 }

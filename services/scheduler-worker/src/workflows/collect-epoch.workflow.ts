@@ -16,10 +16,8 @@
  * @internal
  */
 
-import {
-  computeEpochWindowV1,
-  deriveAllocationAlgoRef,
-} from "@cogni/attribution-ledger";
+import { deriveAllocationAlgoRef } from "@cogni/attribution-ledger/allocation";
+import { computeEpochWindowV1 } from "@cogni/attribution-ledger/epoch-window";
 import {
   ApplicationFailure,
   proxyActivities,
