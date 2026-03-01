@@ -8,7 +8,7 @@
  * Invariants:
  *   - WRITE_ROUTES_AUTHED: requires SIWE session
  *   - WRITE_ROUTES_APPROVER_GATED: requires wallet in ledger approvers
- *   - WRITES_VIA_TEMPORAL: returns 202 + workflowId (async)
+ *   - WRITES_VIA_TEMPORAL: returns 202 + {workflowId, created} (async)
  *   - Contract remains stable; breaking changes require new version
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md
@@ -18,7 +18,7 @@
 import { z } from "zod";
 
 export const FinalizeEpochInputSchema = z.object({
-  /** EIP-191 hex signature of the canonical finalize message */
+  /** EIP-712 hex signature of the typed payout statement */
   signature: z
     .string()
     .regex(/^0x[0-9a-fA-F]+$/, "Signature must be hex-encoded with 0x prefix"),
@@ -27,6 +27,8 @@ export const FinalizeEpochInputSchema = z.object({
 export const FinalizeEpochOutputSchema = z.object({
   /** Temporal workflow ID for tracking finalization progress */
   workflowId: z.string(),
+  /** Whether a new workflow was started (true) or an existing one was found (false) */
+  created: z.boolean(),
 });
 
 export const finalizeEpochOperation = {

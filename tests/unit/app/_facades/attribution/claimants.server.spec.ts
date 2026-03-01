@@ -91,7 +91,6 @@ function makeStore(
     insertAllocations: vi.fn(),
     upsertAllocations: vi.fn(),
     deleteStaleAllocations: vi.fn(),
-    updateAllocationFinalUnits: vi.fn(),
     getAllocationsForEpoch: vi.fn(),
     getSelectedReceiptsForAllocation: vi.fn(),
     upsertCursor: vi.fn(),

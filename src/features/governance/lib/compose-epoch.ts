@@ -102,6 +102,7 @@ export interface ApiIngestionReceipt {
   readonly platformUserId: string;
   readonly platformLogin: string | null;
   readonly artifactUrl: string | null;
+  readonly metadata: Record<string, unknown> | null;
   readonly eventTime: string;
   readonly selection: {
     readonly userId: string | null;
@@ -167,6 +168,8 @@ function partitionReceipts(receipts: readonly ApiIngestionReceipt[]): {
       platformLogin: r.platformLogin,
       artifactUrl: r.artifactUrl,
       eventTime: r.eventTime,
+      units: null,
+      metadata: r.metadata ?? null,
     };
     receiptsById.set(r.receiptId, mapped);
 
@@ -238,8 +241,8 @@ export function composeEpochView(
       continue;
     }
 
-    const mappedReceipt = receiptsById.get(receipt.receiptId);
-    if (!mappedReceipt) {
+    const baseReceipt = receiptsById.get(receipt.receiptId);
+    if (!baseReceipt) {
       continue;
     }
 
@@ -254,6 +257,11 @@ export function composeEpochView(
     if (weight <= 0n) {
       continue;
     }
+
+    const mappedReceipt: IngestionReceipt = {
+      ...baseReceipt,
+      units: weight.toString(),
+    };
 
     const userId = receipt.selection?.userId ?? null;
     if (userId) {
@@ -385,4 +393,52 @@ export function composeEpochViewFromClaimants(
     unresolvedCount,
     unresolvedActivities,
   };
+}
+
+/** Override entry shape matching useSubjectOverrides output. */
+export interface OverrideEntry {
+  readonly subjectRef: string;
+  readonly overrideUnits: string | null;
+}
+
+/**
+ * Recompute contributor sums after applying subject overrides client-side.
+ * Override units are in display scale (e.g. "2"); receipt.units are milli-units (e.g. "8000").
+ * Receipts are never mutated — only contributor-level proposedUnits and shares are recomputed.
+ */
+export function applyOverridesToEpochView(
+  epoch: EpochView,
+  overrides: ReadonlyMap<string, OverrideEntry>
+): EpochView {
+  if (overrides.size === 0) return epoch;
+
+  const updatedContributors: EpochContributor[] = epoch.contributors.map(
+    (contributor) => {
+      let totalUnits = 0n;
+      for (const receipt of contributor.receipts) {
+        const override = overrides.get(receipt.receiptId);
+        if (override?.overrideUnits != null) {
+          totalUnits += BigInt(override.overrideUnits) * 1000n;
+        } else {
+          totalUnits += BigInt(receipt.units ?? "0");
+        }
+      }
+      return { ...contributor, proposedUnits: totalUnits.toString() };
+    }
+  );
+
+  // Recompute shares
+  const grandTotal = updatedContributors.reduce(
+    (sum, c) => sum + BigInt(c.proposedUnits),
+    0n
+  );
+  const withShares: EpochContributor[] = updatedContributors.map((c) => ({
+    ...c,
+    creditShare: roundSharePercent(BigInt(c.proposedUnits), grandTotal),
+  }));
+
+  // Re-sort by proposedUnits DESC
+  withShares.sort((a, b) => Number(b.proposedUnits) - Number(a.proposedUnits));
+
+  return { ...epoch, contributors: withShares };
 }

@@ -23,7 +23,10 @@
 import type { SelectedReceiptForAllocation } from "./allocation";
 import type {
   AttributionClaimant,
+  ClaimantShare,
+  ReviewOverrideSnapshot,
   SelectedReceiptForAttribution,
+  SubjectOverride,
 } from "./claimant-shares";
 import type { EpochStatus } from "./model";
 
@@ -121,6 +124,7 @@ export interface AttributionStatement {
   readonly allocationSetHash: string;
   readonly poolTotalCredits: bigint;
   readonly statementItems: AttributionStatementItem[];
+  readonly reviewOverridesJson: ReviewOverrideSnapshot[] | null;
   readonly supersedesStatementId: string | null;
   readonly createdAt: Date;
 }
@@ -221,6 +225,7 @@ export interface InsertStatementParams {
   readonly allocationSetHash: string;
   readonly poolTotalCredits: bigint;
   readonly statementItems: AttributionStatementItem[];
+  readonly reviewOverridesJson?: ReviewOverrideSnapshot[] | null;
   readonly supersedesStatementId?: string | null;
 }
 
@@ -262,6 +267,46 @@ export interface InsertSelectionAutoParams {
   readonly receiptId: string;
   readonly userId: string | null;
   readonly included: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Subject override types
+// ---------------------------------------------------------------------------
+
+export interface SubjectOverrideRecord {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly subjectRef: string;
+  readonly overrideUnits: bigint | null;
+  readonly overrideSharesJson: ClaimantShare[] | null;
+  readonly overrideReason: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface UpsertSubjectOverrideParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly subjectRef: string;
+  readonly overrideUnits?: bigint | null;
+  readonly overrideSharesJson?: ClaimantShare[] | null;
+  readonly overrideReason?: string | null;
+}
+
+/**
+ * Convert store records to pure domain SubjectOverride[].
+ * Use this instead of inline .map() — keeps the mapping in one place.
+ */
+export function toSubjectOverrides(
+  records: readonly SubjectOverrideRecord[]
+): SubjectOverride[] {
+  return records.map((r) => ({
+    subjectRef: r.subjectRef,
+    overrideUnits: r.overrideUnits,
+    overrideShares: r.overrideSharesJson,
+    overrideReason: r.overrideReason,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -388,12 +433,6 @@ export interface AttributionStore {
     epochId: bigint,
     activeUserIds: string[]
   ): Promise<void>;
-  updateAllocationFinalUnits(
-    epochId: bigint,
-    userId: string,
-    finalUnits: bigint,
-    overrideReason?: string
-  ): Promise<void>;
   getAllocationsForEpoch(epochId: bigint): Promise<AttributionAllocation[]>;
 
   // Ingestion cursors (one stream per call)
@@ -448,6 +487,22 @@ export interface AttributionStore {
   getSignaturesForStatement(
     statementId: string
   ): Promise<AttributionStatementSignature[]>;
+
+  // Subject overrides (review-phase per-subject adjustments)
+  /** Upsert a subject override. Acquires epoch row lock and verifies status='review'. */
+  upsertSubjectOverride(
+    params: UpsertSubjectOverrideParams
+  ): Promise<SubjectOverrideRecord>;
+  /** Atomically upsert multiple subject overrides in a single transaction. */
+  batchUpsertSubjectOverrides(
+    paramsList: readonly UpsertSubjectOverrideParams[]
+  ): Promise<SubjectOverrideRecord[]>;
+  /** Delete a subject override by epoch + subjectRef. */
+  deleteSubjectOverride(epochId: bigint, subjectRef: string): Promise<void>;
+  /** Get all subject overrides for an epoch. */
+  getSubjectOverridesForEpoch(
+    epochId: bigint
+  ): Promise<SubjectOverrideRecord[]>;
 
   // Identity resolution (cross-domain convenience — V0 on ledger port)
   /**

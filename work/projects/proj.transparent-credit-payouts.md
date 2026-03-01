@@ -55,7 +55,7 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 | Zod contracts + API routes + stack tests                                                                        | Done         | 2   | task.0096       |
 | Scope-gate all epochId-based adapter methods                                                                    | Done         | 1   | task.0103       |
 | Dev seed script for governance UI visual testing                                                                | needs_merge  | 2   | task.0106       |
-| Epoch approver UI — EIP-712 signing + review/edit/finalize admin panel                                          | Not Started  | 4   | task.0119       |
+| Epoch approver UI — EIP-712 signing + review/edit/finalize admin panel                                          | In Review    | 4   | task.0119       |
 | **Collection pipeline hardening (from [gap analysis](../../docs/research/ledger-collection-gap-analysis.md)):** |              |     |                 |
 | Fix: unresolved contributors silently excluded                                                                  | Done         | 2   | bug.0092        |
 | Collection completeness verification                                                                            | needs_triage | 2   | task.0108       |
@@ -135,7 +135,9 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 
 | Deliverable                                           | Status      | Est | Work Item                                              |
 | ----------------------------------------------------- | ----------- | --- | ------------------------------------------------------ |
+| Scope-aware epoch API routing (blocks multi-scope)    | Not Started | 3   | task.0123                                              |
 | Epoch artifact pipeline + echo enricher               | In Review   | 3   | task.0113                                              |
+| Plugin pipeline framework + built-in plugins packages | Not Started | 3   | task.0124                                              |
 | work-item-budget-v0 allocation algorithm              | Not Started | 2   | task.0114                                              |
 | Retroactive backfill for finalized epochs             | Not Started | 2   | task.0110 (not filed)                                  |
 | Pending credit for unresolved identities              | Not Started | 2   | task.0111 (not filed)                                  |

@@ -44,13 +44,15 @@ import type {
   SelectedReceiptForAllocation,
   SelectedReceiptForAttribution,
   SelectedReceiptWithMetadata,
+  SubjectOverrideRecord,
   UnselectedReceipt,
   UpsertEvaluationParams,
   UpsertSelectionParams,
+  UpsertSubjectOverrideParams,
 } from "@cogni/attribution-ledger";
 import {
-  AllocationNotFoundError,
   EpochNotFoundError,
+  EpochNotInReviewError,
   EpochNotOpenError,
   type EpochStatus,
 } from "@cogni/attribution-ledger";
@@ -61,6 +63,7 @@ import {
   epochSelection,
   epochStatementSignatures,
   epochStatements,
+  epochSubjectOverrides,
   epochs,
   ingestionCursors,
   ingestionReceipts,
@@ -196,8 +199,25 @@ function toStatement(
     allocationSetHash: row.allocationSetHash,
     poolTotalCredits: row.poolTotalCredits,
     statementItems: row.statementItemsJson,
+    reviewOverridesJson: row.reviewOverridesJson ?? null,
     supersedesStatementId: row.supersedesStatementId,
     createdAt: row.createdAt,
+  };
+}
+
+function toSubjectOverride(
+  row: typeof epochSubjectOverrides.$inferSelect
+): SubjectOverrideRecord {
+  return {
+    id: row.id,
+    nodeId: row.nodeId,
+    epochId: row.epochId,
+    subjectRef: row.subjectRef,
+    overrideUnits: row.overrideUnits,
+    overrideSharesJson: row.overrideSharesJson ?? null,
+    overrideReason: row.overrideReason,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -234,6 +254,51 @@ function toStatementItemsJson(
       receipt_ids: item.receipt_ids ? [...item.receipt_ids] : undefined,
     })
   );
+}
+
+type EpochReviewOverridesJson = NonNullable<
+  typeof epochStatements.$inferInsert.reviewOverridesJson
+>;
+
+/**
+ * STATEMENT_ITEMS_BOUNDARY_CLONE: strips readonly from ReviewOverrideSnapshot[]
+ * so Drizzle's mutable JSONB types are satisfied.
+ */
+function toReviewOverridesJson(
+  snapshots: readonly import("@cogni/attribution-ledger").ReviewOverrideSnapshot[]
+): EpochReviewOverridesJson {
+  return snapshots.map((s) => ({
+    subject_ref: s.subject_ref,
+    original_units: s.original_units,
+    override_units: s.override_units,
+    original_shares: s.original_shares.map((cs) => ({
+      claimant:
+        cs.claimant.kind === "user"
+          ? { kind: "user" as const, userId: cs.claimant.userId }
+          : {
+              kind: "identity" as const,
+              provider: cs.claimant.provider,
+              externalId: cs.claimant.externalId,
+              providerLogin: cs.claimant.providerLogin,
+            },
+      sharePpm: cs.sharePpm,
+    })),
+    override_shares: s.override_shares
+      ? s.override_shares.map((cs) => ({
+          claimant:
+            cs.claimant.kind === "user"
+              ? { kind: "user" as const, userId: cs.claimant.userId }
+              : {
+                  kind: "identity" as const,
+                  provider: cs.claimant.provider,
+                  externalId: cs.claimant.externalId,
+                  providerLogin: cs.claimant.providerLogin,
+                },
+          sharePpm: cs.sharePpm,
+        }))
+      : null,
+    reason: s.reason,
+  }));
 }
 
 function toStatementSignature(
@@ -288,6 +353,26 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       .from(epochs)
       .where(and(eq(epochs.id, epochId), eq(epochs.scopeId, this.scopeId)))
       .limit(1);
+    if (!rows[0]) throw new EpochNotFoundError(epochId.toString());
+    return toEpoch(rows[0]);
+  }
+
+  /**
+   * Like resolveEpochScoped but acquires a row-level lock (SELECT ... FOR UPDATE).
+   * Use for write operations that must serialize against concurrent finalization.
+   * Accepts optional `tx` to run within an existing transaction context.
+   */
+  private async resolveEpochScopedForUpdate(
+    epochId: bigint,
+    tx?: Parameters<Parameters<(typeof this.db)["transaction"]>[0]>[0]
+  ): Promise<AttributionEpoch> {
+    const queryRunner = tx ?? this.db;
+    const rows = await queryRunner
+      .select()
+      .from(epochs)
+      .where(and(eq(epochs.id, epochId), eq(epochs.scopeId, this.scopeId)))
+      .limit(1)
+      .for("update");
     if (!rows[0]) throw new EpochNotFoundError(epochId.toString());
     return toEpoch(rows[0]);
   }
@@ -912,32 +997,6 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       );
   }
 
-  async updateAllocationFinalUnits(
-    epochId: bigint,
-    userId: string,
-    finalUnits: bigint,
-    overrideReason?: string
-  ): Promise<void> {
-    await this.resolveEpochScoped(epochId);
-    const [row] = await this.db
-      .update(epochAllocations)
-      .set({
-        finalUnits,
-        overrideReason: overrideReason ?? null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(epochAllocations.epochId, epochId),
-          eq(epochAllocations.userId, userId)
-        )
-      )
-      .returning({ id: epochAllocations.id });
-    if (!row) {
-      throw new AllocationNotFoundError(epochId.toString(), userId);
-    }
-  }
-
   async getAllocationsForEpoch(
     epochId: bigint
   ): Promise<AttributionAllocation[]> {
@@ -1059,6 +1118,9 @@ export class DrizzleAttributionAdapter implements AttributionStore {
         allocationSetHash: params.allocationSetHash,
         poolTotalCredits: params.poolTotalCredits,
         statementItemsJson: toStatementItemsJson(params.statementItems),
+        reviewOverridesJson: params.reviewOverridesJson
+          ? toReviewOverridesJson(params.reviewOverridesJson)
+          : null,
         supersedesStatementId: params.supersedesStatementId ?? null,
       })
       .returning();
@@ -1088,14 +1150,15 @@ export class DrizzleAttributionAdapter implements AttributionStore {
     expectedAllocationSetHash: string;
   }): Promise<{ epoch: AttributionEpoch; statement: AttributionStatement }> {
     return await this.db.transaction(async (tx) => {
-      // 1. Load epoch with scope gate (inline — avoid separate connection)
+      // 1. Load epoch with scope gate + row lock (prevents concurrent override writes)
       const epochRows = await tx
         .select()
         .from(epochs)
         .where(
           and(eq(epochs.id, params.epochId), eq(epochs.scopeId, this.scopeId))
         )
-        .limit(1);
+        .limit(1)
+        .for("update");
       if (!epochRows[0]) {
         throw new EpochNotFoundError(params.epochId.toString());
       }
@@ -1167,6 +1230,9 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           statementItemsJson: toStatementItemsJson(
             params.statement.statementItems
           ),
+          reviewOverridesJson: params.statement.reviewOverridesJson
+            ? toReviewOverridesJson(params.statement.reviewOverridesJson)
+            : null,
           supersedesStatementId: params.statement.supersedesStatementId ?? null,
         })
         .onConflictDoNothing({
@@ -1271,6 +1337,142 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       .from(epochStatementSignatures)
       .where(eq(epochStatementSignatures.statementId, statementId));
     return rows.map(toStatementSignature);
+  }
+
+  // ── Subject overrides ────────────────────────────────────────
+
+  async upsertSubjectOverride(
+    params: UpsertSubjectOverrideParams
+  ): Promise<SubjectOverrideRecord> {
+    return await this.db.transaction(async (tx) => {
+      const epoch = await this.resolveEpochScopedForUpdate(params.epochId, tx);
+      if (epoch.status !== "review") {
+        throw new EpochNotInReviewError(
+          params.epochId.toString(),
+          epoch.status
+        );
+      }
+
+      const now = new Date();
+      const [row] = await tx
+        .insert(epochSubjectOverrides)
+        .values({
+          nodeId: params.nodeId,
+          epochId: params.epochId,
+          subjectRef: params.subjectRef,
+          overrideUnits: params.overrideUnits ?? null,
+          overrideSharesJson: params.overrideSharesJson ?? null,
+          overrideReason: params.overrideReason ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [
+            epochSubjectOverrides.epochId,
+            epochSubjectOverrides.subjectRef,
+          ],
+          set: {
+            overrideUnits: params.overrideUnits ?? null,
+            overrideSharesJson: params.overrideSharesJson ?? null,
+            overrideReason: params.overrideReason ?? null,
+            updatedAt: now,
+          },
+        })
+        .returning();
+      if (!row)
+        throw new Error(
+          "upsertSubjectOverride: INSERT/UPDATE returned no rows"
+        );
+      return toSubjectOverride(row);
+    });
+  }
+
+  async batchUpsertSubjectOverrides(
+    paramsList: readonly UpsertSubjectOverrideParams[]
+  ): Promise<SubjectOverrideRecord[]> {
+    const firstParams = paramsList[0];
+    if (!firstParams) return [];
+    return await this.db.transaction(async (tx) => {
+      // Lock once for the batch — all params share the same epochId
+      const epoch = await this.resolveEpochScopedForUpdate(
+        firstParams.epochId,
+        tx
+      );
+      if (epoch.status !== "review") {
+        throw new EpochNotInReviewError(
+          firstParams.epochId.toString(),
+          epoch.status
+        );
+      }
+
+      const results: SubjectOverrideRecord[] = [];
+      const now = new Date();
+      for (const params of paramsList) {
+        const [row] = await tx
+          .insert(epochSubjectOverrides)
+          .values({
+            nodeId: params.nodeId,
+            epochId: params.epochId,
+            subjectRef: params.subjectRef,
+            overrideUnits: params.overrideUnits ?? null,
+            overrideSharesJson: params.overrideSharesJson ?? null,
+            overrideReason: params.overrideReason ?? null,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [
+              epochSubjectOverrides.epochId,
+              epochSubjectOverrides.subjectRef,
+            ],
+            set: {
+              overrideUnits: params.overrideUnits ?? null,
+              overrideSharesJson: params.overrideSharesJson ?? null,
+              overrideReason: params.overrideReason ?? null,
+              updatedAt: now,
+            },
+          })
+          .returning();
+        if (!row)
+          throw new Error(
+            "batchUpsertSubjectOverrides: INSERT/UPDATE returned no rows"
+          );
+        results.push(toSubjectOverride(row));
+      }
+      return results;
+    });
+  }
+
+  async deleteSubjectOverride(
+    epochId: bigint,
+    subjectRef: string
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const epoch = await this.resolveEpochScopedForUpdate(epochId, tx);
+      if (epoch.status !== "review") {
+        throw new EpochNotInReviewError(epochId.toString(), epoch.status);
+      }
+      await tx
+        .delete(epochSubjectOverrides)
+        .where(
+          and(
+            eq(epochSubjectOverrides.epochId, epochId),
+            eq(epochSubjectOverrides.subjectRef, subjectRef)
+          )
+        );
+    });
+  }
+
+  async getSubjectOverridesForEpoch(
+    epochId: bigint
+  ): Promise<SubjectOverrideRecord[]> {
+    await this.resolveEpochScoped(epochId);
+    const rows = await this.db
+      .select()
+      .from(epochSubjectOverrides)
+      .where(eq(epochSubjectOverrides.epochId, epochId))
+      .orderBy(epochSubjectOverrides.subjectRef);
+    return rows.map(toSubjectOverride);
   }
 
   // ── Identity resolution ───────────────────────────────────────

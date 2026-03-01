@@ -23,11 +23,11 @@ import type {
   CollectResult,
   SourceAdapter,
 } from "@cogni/ingestion-core";
-import { verifyMessage } from "viem";
+import { verifyTypedData } from "viem";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("viem", () => ({
-  verifyMessage: vi.fn(),
+  verifyTypedData: vi.fn(),
 }));
 
 import { createAttributionActivities } from "../src/activities/ledger.js";
@@ -66,7 +66,6 @@ function makeMockStore(
     getSelectionForEpoch: vi.fn(),
     getUnresolvedSelection: vi.fn(),
     insertAllocations: vi.fn(),
-    updateAllocationFinalUnits: vi.fn(),
     getAllocationsForEpoch: vi.fn(),
     upsertCursor: vi.fn(),
     getCursor: vi.fn().mockResolvedValue(null),
@@ -84,6 +83,10 @@ function makeMockStore(
     finalizeEpochAtomic: vi.fn(),
     getUnselectedReceipts: vi.fn().mockResolvedValue([]),
     updateSelectionUserId: vi.fn(),
+    upsertSubjectOverride: vi.fn(),
+    batchUpsertSubjectOverrides: vi.fn().mockResolvedValue([]),
+    deleteSubjectOverride: vi.fn(),
+    getSubjectOverridesForEpoch: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as AttributionStore;
 }
@@ -258,6 +261,7 @@ describe("createAttributionActivities", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -284,6 +288,7 @@ describe("ensureEpochForWindow", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -310,6 +315,7 @@ describe("ensureEpochForWindow", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -336,6 +342,7 @@ describe("ensureEpochForWindow", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -368,6 +375,7 @@ describe("ensureEpochForWindow", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger,
     });
 
@@ -396,6 +404,7 @@ describe("loadCursor", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -427,6 +436,7 @@ describe("loadCursor", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -449,6 +459,7 @@ describe("collectFromSource", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -474,6 +485,7 @@ describe("collectFromSource", () => {
       sourceAdapters: adapters,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -502,6 +514,7 @@ describe("insertReceipts", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -517,6 +530,7 @@ describe("insertReceipts", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -540,6 +554,7 @@ describe("saveCursor", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -579,6 +594,7 @@ describe("saveCursor", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -619,6 +635,7 @@ describe("saveCursor", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 
@@ -655,6 +672,7 @@ describe("materializeSelection", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
     return { store, materializeSelection };
@@ -860,7 +878,7 @@ describe("materializeSelection", () => {
 
 describe("finalizeEpoch", () => {
   it("finalizes using claimant allocations and preserves unresolved identities", async () => {
-    vi.mocked(verifyMessage).mockResolvedValue(true);
+    vi.mocked(verifyTypedData).mockResolvedValue(true);
 
     const signer = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const reviewEpoch = makeEpoch({
@@ -898,9 +916,22 @@ describe("finalizeEpoch", () => {
           epochId: reviewEpoch.id,
           userId: "user-1",
           proposedUnits: 1000n,
-          finalUnits: 1500n,
-          overrideReason: "manual adjustment",
+          finalUnits: null,
+          overrideReason: null,
           activityCount: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]),
+      getSubjectOverridesForEpoch: vi.fn().mockResolvedValue([
+        {
+          id: "override-1",
+          nodeId: NODE_ID,
+          epochId: reviewEpoch.id,
+          subjectRef: "receipt-1",
+          overrideUnits: 1500n,
+          overrideSharesJson: null,
+          overrideReason: "manual adjustment",
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -981,6 +1012,7 @@ describe("finalizeEpoch", () => {
       sourceAdapters: new Map(),
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
+      chainId: 8453,
       logger: mockLogger,
     });
 

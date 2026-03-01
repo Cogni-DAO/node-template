@@ -28,8 +28,10 @@ export {
 // Canonical claimant-share attribution shape
 export {
   type AttributionClaimant,
+  applySubjectOverrides,
   buildClaimantAllocations,
   buildDefaultReceiptClaimantSharesPayload,
+  buildReviewOverrideSnapshots,
   CLAIMANT_SHARE_DENOMINATOR_PPM,
   CLAIMANT_SHARES_ALGO_REF,
   CLAIMANT_SHARES_EVALUATION_REF,
@@ -43,7 +45,9 @@ export {
   expandClaimantUnits,
   type FinalizedClaimantAllocation,
   parseClaimantSharesPayload,
+  type ReviewOverrideSnapshot,
   type SelectedReceiptForAttribution,
+  type SubjectOverride,
 } from "./claimant-shares";
 // Enricher inputs hash
 export { computeEnricherInputsHash } from "./enricher-inputs";
@@ -60,10 +64,12 @@ export {
   AllocationNotFoundError,
   EpochAlreadyFinalizedError,
   EpochNotFoundError,
+  EpochNotInReviewError,
   EpochNotOpenError,
   isAllocationNotFoundError,
   isEpochAlreadyFinalizedError,
   isEpochNotFoundError,
+  isEpochNotInReviewError,
   isEpochNotOpenError,
   isPoolComponentMissingError,
   PoolComponentMissingError,
@@ -103,8 +109,14 @@ export { computeStatementItems } from "./rules";
 // Signing
 export {
   buildCanonicalMessage,
+  buildEIP712TypedData,
   type CanonicalMessageParams,
   computeApproverSetHash,
+  EIP712_DOMAIN_NAME,
+  EIP712_DOMAIN_VERSION,
+  type EIP712TypedData,
+  type EIP712TypedDataParams,
+  PAYOUT_STATEMENT_TYPES,
 } from "./signing";
 
 // Store port interface + types
@@ -128,10 +140,13 @@ export type {
   InsertSignatureParams,
   InsertStatementParams,
   SelectedReceiptWithMetadata,
+  SubjectOverrideRecord,
   UnselectedReceipt,
   UpsertEvaluationParams,
   UpsertSelectionParams,
+  UpsertSubjectOverrideParams,
 } from "./store";
+export { toSubjectOverrides } from "./store";
 
 // Validated store wrapper
 export { createValidatedAttributionStore } from "./validated-store";
