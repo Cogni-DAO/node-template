@@ -14,13 +14,21 @@ import type {
   IngestionCursor,
   UnselectedReceipt,
 } from "@cogni/attribution-ledger";
-import { computeEpochWindowV1 } from "@cogni/attribution-ledger";
+import {
+  computeApproverSetHash,
+  computeEpochWindowV1,
+} from "@cogni/attribution-ledger";
 import type {
   ActivityEvent,
   CollectResult,
   SourceAdapter,
 } from "@cogni/ingestion-core";
+import { verifyMessage } from "viem";
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("viem", () => ({
+  verifyMessage: vi.fn(),
+}));
 
 import { createAttributionActivities } from "../src/activities/ledger.js";
 
@@ -847,5 +855,159 @@ describe("materializeSelection", () => {
       "ev-existing",
       "user-bbb"
     );
+  });
+});
+
+describe("finalizeEpoch", () => {
+  it("finalizes using claimant allocations and preserves unresolved identities", async () => {
+    vi.mocked(verifyMessage).mockResolvedValue(true);
+
+    const signer = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const reviewEpoch = makeEpoch({
+      status: "review",
+      allocationAlgoRef: "weight-sum-v0",
+      weightConfigHash: "weight-hash",
+      approverSetHash: computeApproverSetHash([signer]),
+    });
+
+    const finalizeEpochAtomic = vi.fn().mockImplementation(async (params) => ({
+      epoch: {
+        ...reviewEpoch,
+        status: "finalized",
+        poolTotalCredits: params.poolTotal,
+        closedAt: new Date(),
+      },
+      statement: {
+        id: "stmt-1",
+        nodeId: NODE_ID,
+        epochId: reviewEpoch.id,
+        allocationSetHash: params.statement.allocationSetHash,
+        poolTotalCredits: params.statement.poolTotalCredits,
+        statementItems: params.statement.statementItems,
+        supersedesStatementId: null,
+        createdAt: new Date(),
+      },
+    }));
+
+    const store = makeMockStore({
+      getEpoch: vi.fn().mockResolvedValue(reviewEpoch),
+      getAllocationsForEpoch: vi.fn().mockResolvedValue([
+        {
+          id: "alloc-1",
+          nodeId: NODE_ID,
+          epochId: reviewEpoch.id,
+          userId: "user-1",
+          proposedUnits: 1000n,
+          finalUnits: 1500n,
+          overrideReason: "manual adjustment",
+          activityCount: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]),
+      getPoolComponentsForEpoch: vi.fn().mockResolvedValue([
+        {
+          id: "pool-1",
+          nodeId: NODE_ID,
+          epochId: reviewEpoch.id,
+          componentId: "base_issuance",
+          algorithmVersion: "v1",
+          inputsJson: { base_amount: 10000 },
+          amountCredits: 10000n,
+          evidenceRef: null,
+          computedAt: new Date(),
+        },
+      ]),
+      getEvaluation: vi.fn().mockResolvedValue({
+        id: "eval-1",
+        nodeId: NODE_ID,
+        epochId: reviewEpoch.id,
+        evaluationRef: "cogni.claimant_shares.v0",
+        status: "locked",
+        algoRef: "claimant-shares-v0",
+        inputsHash: "inputs-hash",
+        payloadHash: "payload-hash",
+        payloadJson: {
+          version: 1,
+          subjects: [
+            {
+              subjectRef: "receipt-1",
+              subjectKind: "receipt",
+              units: "1000",
+              source: "github",
+              eventType: "pr_merged",
+              receiptIds: ["receipt-1"],
+              claimantShares: [
+                {
+                  claimant: {
+                    kind: "user",
+                    userId: "user-1",
+                  },
+                  sharePpm: 1000000,
+                },
+              ],
+              metadata: null,
+            },
+            {
+              subjectRef: "receipt-2",
+              subjectKind: "receipt",
+              units: "500",
+              source: "github",
+              eventType: "pr_merged",
+              receiptIds: ["receipt-2"],
+              claimantShares: [
+                {
+                  claimant: {
+                    kind: "identity",
+                    provider: "github",
+                    externalId: "42",
+                    providerLogin: "alice",
+                  },
+                  sharePpm: 1000000,
+                },
+              ],
+              metadata: null,
+            },
+          ],
+        },
+        payloadRef: null,
+        createdAt: new Date(),
+      }),
+      finalizeEpochAtomic,
+    });
+
+    const activities = createAttributionActivities({
+      attributionStore: store,
+      sourceAdapters: new Map(),
+      nodeId: NODE_ID,
+      scopeId: SCOPE_ID,
+      logger: mockLogger,
+    });
+
+    const result = await activities.finalizeEpoch({
+      epochId: reviewEpoch.id.toString(),
+      signature: "0xdeadbeef",
+      signerAddress: signer,
+      approvers: [signer],
+    });
+
+    expect(result.statementItemCount).toBe(2);
+    expect(finalizeEpochAtomic).toHaveBeenCalledTimes(1);
+
+    const finalizeParams = finalizeEpochAtomic.mock.calls[0]?.[0];
+    expect(finalizeParams.statement.statementItems).toEqual([
+      expect.objectContaining({
+        user_id: "identity:github:42",
+        claimant_key: "identity:github:42",
+        total_units: "500",
+        amount_credits: "2500",
+      }),
+      expect.objectContaining({
+        user_id: "user-1",
+        claimant_key: "user:user-1",
+        total_units: "1500",
+        amount_credits: "7500",
+      }),
+    ]);
   });
 });

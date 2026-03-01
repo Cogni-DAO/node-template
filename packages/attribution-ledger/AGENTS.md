@@ -49,7 +49,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `computeEpochWindowV1()` — Pure, deterministic epoch window computation (Monday-aligned UTC). Safe in Temporal workflow code.
   - `EpochWindow`, `EpochWindowParams` — Types for epoch window computation
   - `computeStatementItems()` — BIGINT proportional distribution with largest-remainder rounding
-  - `computeAllocationSetHash()` — SHA-256 of canonical sorted allocation data
+  - `computeAllocationSetHash()`, `computeClaimantAllocationSetHash()` — SHA-256 of canonical sorted allocation data for user-only and claimant-aware finalization
   - `computeWeightConfigHash()` — SHA-256 of canonical weight config JSON (key-sorted)
   - `computeProposedAllocations()` — Versioned allocation dispatch (V0: `weight-sum-v0`)
   - `validateWeightConfig()` — Rejects floats, NaN, Infinity, unsafe integers
@@ -65,9 +65,9 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `validateArtifactRef()`, `validateArtifactEnvelope()` — Artifact metadata/hash validation (pure)
   - `computeEnricherInputsHash()` — Deterministic inputs hash for enrichers (base shape + extensions)
   - `createValidatedAttributionStore()` — Wraps `AttributionStore` with envelope validation on artifact writes
-  - `buildDefaultReceiptClaimantSharesPayload()`, `parseClaimantSharesPayload()`, `expandClaimantUnits()` — Canonical claimant-share helpers for multi-actor attribution
+  - `buildDefaultReceiptClaimantSharesPayload()`, `parseClaimantSharesPayload()`, `expandClaimantUnits()`, `buildClaimantAllocations()`, `computeClaimantCreditLineItems()` — Canonical claimant-share helpers for multi-actor attribution and claimant-aware credit views
   - `CLAIMANT_SHARES_EVALUATION_REF`, `CLAIMANT_SHARES_ALGO_REF`, `CLAIMANT_SHARE_DENOMINATOR_PPM` — Claimant-share evaluation constants
-  - `AttributionClaimant`, `ClaimantShare`, `ClaimantSharesSubject`, `ClaimantSharesPayload`, `ExpandedClaimantUnit`, `SelectedReceiptForAttribution` — Claimant-share domain types
+  - `AttributionClaimant`, `ClaimantShare`, `ClaimantSharesSubject`, `ClaimantSharesPayload`, `ExpandedClaimantUnit`, `FinalizedClaimantAllocation`, `ClaimantCreditLineItem`, `SelectedReceiptForAttribution` — Claimant-share domain types
   - `UpsertArtifactParams`, `CuratedEventWithMetadata`, `AttributionEpochArtifact`, `CloseIngestionWithArtifactsParams` — Artifact-related types
 - **CLI:** none
 - **Env/Config keys:** none

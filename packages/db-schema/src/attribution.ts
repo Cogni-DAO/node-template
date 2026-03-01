@@ -353,6 +353,16 @@ export const epochStatements = pgTable(
           total_units: string;
           share: string;
           amount_credits: string;
+          claimant_key?: string;
+          claimant?:
+            | { kind: "user"; userId: string }
+            | {
+                kind: "identity";
+                provider: string;
+                externalId: string;
+                providerLogin: string | null;
+              };
+          receipt_ids?: string[];
         }>
       >()
       .notNull(),

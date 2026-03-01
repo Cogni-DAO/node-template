@@ -14,6 +14,8 @@
  * @public
  */
 
+import { type AttributionClaimant, claimantKey } from "./claimant-shares";
+
 /**
  * Compute SHA-256 hash of a UTF-8 string.
  * Returns lowercase hex string.
@@ -120,6 +122,38 @@ export async function computeAllocationSetHash(
   );
   const canonical = sorted
     .map((a) => `${a.userId}:${a.valuationUnits.toString()}`)
+    .join("\n");
+  return sha256Hex(canonical);
+}
+
+/**
+ * Compute a deterministic hash of a claimant-based allocation set.
+ *
+ * User claimants retain their bare userId as the canonical key for backward
+ * compatibility with legacy allocation hashes. Non-user claimants use their
+ * full claimant key (for example `identity:github:12345`).
+ */
+export async function computeClaimantAllocationSetHash(
+  allocations: ReadonlyArray<{
+    readonly claimant: AttributionClaimant;
+    readonly valuationUnits: bigint;
+  }>
+): Promise<string> {
+  const sorted = [...allocations].sort((a, b) => {
+    const keyA =
+      a.claimant.kind === "user" ? a.claimant.userId : claimantKey(a.claimant);
+    const keyB =
+      b.claimant.kind === "user" ? b.claimant.userId : claimantKey(b.claimant);
+    return keyA.localeCompare(keyB);
+  });
+  const canonical = sorted
+    .map((allocation) => {
+      const key =
+        allocation.claimant.kind === "user"
+          ? allocation.claimant.userId
+          : claimantKey(allocation.claimant);
+      return `${key}:${allocation.valuationUnits.toString()}`;
+    })
     .join("\n");
   return sha256Hex(canonical);
 }
