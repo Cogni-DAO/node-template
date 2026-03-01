@@ -128,14 +128,17 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 - [ ] All write operations execute in Temporal workflows (Next.js stateless)
 - [ ] All math is BIGINT — no floating point, including weight values (milli-units)
 
-### Walk (P1) — Work-Item Scoring + Signed Receipts + UI
+### Walk (P1) — Work-Item Scoring + Attribution Scoring + UI
 
-**Goal:** Shift credit allocation from flat event weights to work-item-based budgets. Generic enrichment pipeline for future plugins (AI scoring, etc.). Per-receipt wallet signatures. UI surfaces.
+**Goal:** Shift credit allocation from flat event weights to content-aware scoring. Two tracks: (1) deterministic work-item-budget scoring, and (2) LLM-powered attribution scoring that fixes SourceCred's content-blindness. Generic enrichment pipeline for both. Per-receipt wallet signatures. UI surfaces. Research spike for quarterly retro review.
 
 | Deliverable                                           | Status      | Est | Work Item             |
 | ----------------------------------------------------- | ----------- | --- | --------------------- |
 | Epoch artifact pipeline + echo enricher               | In Review   | 3   | task.0113             |
 | work-item-budget-v0 allocation algorithm              | Not Started | 2   | task.0114             |
+| Spike: quarterly people-centric retro review          | Not Started | 3   | spike.0119            |
+| LLM evaluation enricher (`cogni.ai_scores.v0`)        | Not Started | 3   | (create after 0114)   |
+| `eval-scored-v0` allocation algorithm                 | Not Started | 2   | (create after 0114)   |
 | Retroactive backfill for finalized epochs             | Not Started | 2   | task.0110 (not filed) |
 | Pending credit for unresolved identities              | Not Started | 2   | task.0111 (not filed) |
 | Webhook-first GitHub collection                       | Not Started | 3   | task.0112 (not filed) |
@@ -148,12 +151,15 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 | Merkle tree per epoch + inclusion proofs              | Not Started | 2   | (create at P1 start)  |
 | SourceCred grain → activity migration strategy        | Not Started | 2   | (create at P1 start)  |
 
-### Run (P2+) — Federation + SourceCred Removal
+### Run (P2+) — Quarterly Retro + Federation + SourceCred Removal
 
-**Goal:** Receipts as portable VCs. SourceCred removed. Cross-org verification.
+**Goal:** Quarterly people-centric retro reviews (rebalance epochs). Receipts as portable VCs. SourceCred removed. Cross-org verification.
 
 | Deliverable                                          | Status      | Est | Work Item            |
 | ---------------------------------------------------- | ----------- | --- | -------------------- |
+| Rebalance epoch infrastructure (`epoch_kind` column) | Not Started | 2   | (create after spike)  |
+| Quarterly retro review workflow                      | Not Started | 3   | (create after spike)  |
+| Signal collection enrichers (code survival, reverts) | Not Started | 2   | (create after spike)  |
 | Receipt schema → VC data model (JWT VC, DID subject) | Not Started | 2   | (create at P2 start) |
 | Multi-issuer trust policy                            | Not Started | 3   | (create at P2 start) |
 | SourceCred removal from stack                        | Not Started | 2   | (create at P2 start) |
@@ -203,6 +209,7 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 
 ## Research
 
+- [attribution-scoring-design](../../docs/research/attribution-scoring-design.md) — LLM evaluation, weekly/quarterly cadence, people-centric retro reviews, SourceCred failure analysis
 - [ledger-collection-gap-analysis](../../docs/research/ledger-collection-gap-analysis.md) — Critical comparison vs. SourceCred's full-history model; collection blindspots + P0/P1 remediation plan
 - [epoch-event-ingestion-pipeline](../../docs/research/epoch-event-ingestion-pipeline.md) — Original adapter design spike, SourceCred plugin analysis, OSS tooling survey
 
