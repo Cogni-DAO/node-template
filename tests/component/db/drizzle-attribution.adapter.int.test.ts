@@ -12,7 +12,6 @@
  */
 
 import {
-  AllocationNotFoundError,
   EpochNotFoundError,
   EpochNotOpenError,
 } from "@cogni/attribution-ledger";
@@ -562,27 +561,12 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       expect(allocs[0]?.finalUnits).toBeNull();
     });
 
-    it("updateAllocationFinalUnits sets final_units and override_reason", async () => {
-      await adapter.updateAllocationFinalUnits(
-        epochId,
-        actor.user.id,
-        10000n,
-        "bonus for extra work"
-      );
-
-      const allocs = await adapter.getAllocationsForEpoch(epochId);
-      expect(allocs[0]?.finalUnits).toBe(10000n);
-      expect(allocs[0]?.overrideReason).toBe("bonus for extra work");
-    });
-
-    it("updateAllocationFinalUnits throws AllocationNotFoundError for missing allocation", async () => {
-      await expect(
-        adapter.updateAllocationFinalUnits(epochId, "nonexistent-user", 100n)
-      ).rejects.toThrow(AllocationNotFoundError);
-    });
-
     it("ALLOCATION_PRESERVES_OVERRIDES: upsertAllocations does not overwrite final_units", async () => {
-      // actor.user already has final_units=10000n from previous test
+      // Set final_units directly (actor.user allocation already exists from prior test)
+      await db.execute(
+        sql`UPDATE epoch_allocations SET final_units = 10000, override_reason = 'bonus for extra work' WHERE epoch_id = ${epochId} AND user_id = ${actor.user.id}`
+      );
+      // actor.user now has final_units=10000n
       await adapter.upsertAllocations([
         makeAllocation({
           epochId,
@@ -611,6 +595,8 @@ describe("DrizzleAttributionAdapter (Component)", () => {
           epochId,
           userId: actorB.user.id,
           proposedUnits: 2000n,
+          finalUnits: 5000n,
+          overrideReason: "admin override",
           activityCount: 1,
         }),
         makeAllocation({
@@ -620,14 +606,6 @@ describe("DrizzleAttributionAdapter (Component)", () => {
           activityCount: 1,
         }),
       ]);
-
-      // actorB gets an override (final_units set)
-      await adapter.updateAllocationFinalUnits(
-        epochId,
-        actorB.user.id,
-        5000n,
-        "admin override"
-      );
 
       // Delete stale: only actor.user is "active" — actorB and actorC are "stale"
       // But actorB has final_units → should be kept
@@ -1208,16 +1186,6 @@ describe("DrizzleAttributionAdapter (Component)", () => {
     it("getStatementForEpoch throws EpochNotFoundError for cross-scope epochId", async () => {
       await expect(
         otherScopeAdapter.getStatementForEpoch(scopeTestEpochId)
-      ).rejects.toThrow(EpochNotFoundError);
-    });
-
-    it("updateAllocationFinalUnits throws EpochNotFoundError for cross-scope epochId", async () => {
-      await expect(
-        otherScopeAdapter.updateAllocationFinalUnits(
-          scopeTestEpochId,
-          "any-user",
-          100n
-        )
       ).rejects.toThrow(EpochNotFoundError);
     });
 

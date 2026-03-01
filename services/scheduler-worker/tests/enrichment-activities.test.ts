@@ -65,7 +65,6 @@ function makeMockStore(
     insertAllocations: vi.fn(),
     upsertAllocations: vi.fn(),
     deleteStaleAllocations: vi.fn(),
-    updateAllocationFinalUnits: vi.fn(),
     getAllocationsForEpoch: vi.fn(),
     getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([]),
     upsertCursor: vi.fn(),
