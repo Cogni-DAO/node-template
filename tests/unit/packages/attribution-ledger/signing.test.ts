@@ -20,6 +20,8 @@ import {
   EIP712_DOMAIN_VERSION,
   PAYOUT_STATEMENT_TYPES,
 } from "@cogni/attribution-ledger";
+import { verifyTypedData } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 
 describe("buildCanonicalMessage", () => {
@@ -191,5 +193,65 @@ describe("buildEIP712TypedData", () => {
     expect(a.message.epochId).not.toBe(b.message.epochId);
     // domain is same — only message differs
     expect(a.domain).toEqual(b.domain);
+  });
+});
+
+describe("EIP-712 sign/verify round-trip", () => {
+  // Deterministic test private key — never used on-chain
+  const TEST_PRIVATE_KEY =
+    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const;
+  const account = privateKeyToAccount(TEST_PRIVATE_KEY);
+
+  const typedData = buildEIP712TypedData({
+    nodeId: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d",
+    scopeId: "a28a8b1e-1f9d-5cd5-9329-569e4819feda",
+    epochId: "42",
+    allocationSetHash: "abc123def456",
+    poolTotalCredits: "10000",
+    chainId: 8453,
+  });
+
+  it("signTypedData → verifyTypedData recovers the signer address", async () => {
+    const signature = await account.signTypedData({
+      domain: typedData.domain,
+      types: typedData.types,
+      primaryType: typedData.primaryType,
+      message: typedData.message,
+    });
+
+    const recovered = await verifyTypedData({
+      address: account.address,
+      domain: typedData.domain,
+      types: typedData.types,
+      primaryType: typedData.primaryType,
+      message: typedData.message,
+      signature,
+    });
+
+    expect(recovered).toBe(true);
+  });
+
+  it("verifyTypedData returns false for a different address", async () => {
+    const signature = await account.signTypedData({
+      domain: typedData.domain,
+      types: typedData.types,
+      primaryType: typedData.primaryType,
+      message: typedData.message,
+    });
+
+    const otherAccount = privateKeyToAccount(
+      "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+    );
+
+    const valid = await verifyTypedData({
+      address: otherAccount.address,
+      domain: typedData.domain,
+      types: typedData.types,
+      primaryType: typedData.primaryType,
+      message: typedData.message,
+      signature,
+    });
+
+    expect(valid).toBe(false);
   });
 });
