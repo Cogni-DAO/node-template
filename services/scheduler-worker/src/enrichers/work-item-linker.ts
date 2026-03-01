@@ -2,15 +2,15 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/attribution-ledger/enrichers/work-item-linker`
- * Purpose: Pure functions for extracting work-item IDs from GitHub event metadata and building artifact payloads.
- * Scope: Link extraction regex, artifact payload construction. Does not perform I/O or hold state.
+ * Module: `@cogni/scheduler-worker-service/enrichers/work-item-linker`
+ * Purpose: Provides a work-item linker plugin for extracting work-item IDs from event metadata and defining its evaluation payload shape.
+ * Scope: Pure plugin implementation for work-item link extraction and payload typing. Does not perform I/O or modify ledger core contracts.
  * Invariants:
- * - ENRICHER_SNAPSHOT_RULE: All external data must be snapshotted into the artifact payload.
- * - INPUTS_HASH_COMPLETE: inputs_hash covers epoch_id, sorted (receipt_id, receipt_payload_hash), sorted (work_item_id, frontmatter_hash). NOT repoCommitSha.
+ * - ENRICHER_SNAPSHOT_RULE: all external work-item state must be snapshotted into the plugin payload.
+ * - INPUTS_HASH_COMPLETE: inputs_hash covers epoch_id, sorted (receipt_id, receipt_payload_hash), and sorted (work_item_id, frontmatter_hash). It does not depend on repo commit SHA for invalidation.
  * Side-effects: none
  * Links: work/items/task.0113.epoch-artifact-pipeline.md
- * @public
+ * @internal
  */
 
 /** A detected link between an event and a work item. */
@@ -29,7 +29,7 @@ export interface WorkItemSnapshot {
   readonly error?: "file_not_found" | "parse_error";
 }
 
-/** Full artifact payload for cogni.work_item_links.v0. */
+/** Full evaluation payload for `cogni.work_item_links.v0`. */
 export interface WorkItemLinksPayload {
   readonly repoCommitSha: string;
   readonly workItems: Record<string, WorkItemSnapshot>;
@@ -43,9 +43,6 @@ const WORK_ITEM_ID_PATTERN = /\b(task|bug|spike|story)\.\d{4}\b/g;
 /**
  * Extract work-item IDs from event metadata fields.
  * Scans title, body, branch, and labels for patterns like task.0102, bug.0037, etc.
- *
- * @param metadata - Event metadata bag (may have title, body, branch, labels)
- * @returns Array of unique links with source attribution
  */
 export function extractWorkItemIds(
   metadata: Partial<{
@@ -87,8 +84,8 @@ export function extractWorkItemIds(
   return links;
 }
 
-/** Namespaced artifact ref for the work-item linker. */
-export const WORK_ITEM_LINKS_ARTIFACT_REF = "cogni.work_item_links.v0";
+/** Namespaced evaluation ref for the work-item linker plugin. */
+export const WORK_ITEM_LINKS_EVALUATION_REF = "cogni.work_item_links.v0";
 
-/** Algorithm ref for the work-item linker enricher. */
+/** Algorithm ref for the work-item linker plugin. */
 export const WORK_ITEM_LINKER_ALGO_REF = "work-item-linker-v0";

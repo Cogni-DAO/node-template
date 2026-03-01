@@ -68,8 +68,6 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `buildDefaultReceiptClaimantSharesPayload()`, `parseClaimantSharesPayload()`, `expandClaimantUnits()` — Canonical claimant-share helpers for multi-actor attribution
   - `CLAIMANT_SHARES_EVALUATION_REF`, `CLAIMANT_SHARES_ALGO_REF`, `CLAIMANT_SHARE_DENOMINATOR_PPM` — Claimant-share evaluation constants
   - `AttributionClaimant`, `ClaimantShare`, `ClaimantSharesSubject`, `ClaimantSharesPayload`, `ExpandedClaimantUnit`, `SelectedReceiptForAttribution` — Claimant-share domain types
-  - `extractWorkItemIds()` — Regex extraction of work-item IDs from event metadata
-  - `WORK_ITEM_LINKS_ARTIFACT_REF`, `WORK_ITEM_LINKER_ALGO_REF` — Namespaced constants for work-item-linker enricher
   - `UpsertArtifactParams`, `CuratedEventWithMetadata`, `AttributionEpochArtifact`, `CloseIngestionWithArtifactsParams` — Artifact-related types
 - **CLI:** none
 - **Env/Config keys:** none
@@ -83,7 +81,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
 ## Responsibilities
 
 - This directory **does**: Define ledger domain types, port interface, compute deterministic statement items, compute allocation set/config/artifact hashes, versioned allocation algorithm dispatch, pool estimation, artifact envelope validation, enricher inputs hashing, validated store wrapper, define domain errors
-- This directory **does not**: Perform I/O, access databases, import from `src/` or `services/`
+- This directory **does not**: Perform I/O, access databases, import from `src/` or `services/`, or ship concrete enricher plugin implementations
 
 ## Usage
 

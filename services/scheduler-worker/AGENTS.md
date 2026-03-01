@@ -25,6 +25,7 @@ src/
 ├── bootstrap/       # Composition root: env parsing + adapter wiring
 │   ├── env.ts       # Zod-validated env singleton (config parsing only)
 │   └── container.ts # Builds ServiceContainer (concrete adapters → port interfaces)
+├── enrichers/       # Concrete enrichment plugin implementations owned by the worker service
 ├── ports/           # Port barrel — re-exports interfaces from packages
 │   └── index.ts     # ExecutionGrantWorkerPort, ScheduleRunRepository
 ├── activities/      # Temporal activities (I/O via injected ports)
@@ -79,8 +80,8 @@ src/
 
 ## Responsibilities
 
-- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow + CollectEpochWorkflow + FinalizeEpochWorkflow, execute scheduler activities (validateGrant, executeGraph, updateRun, createRun), ledger activities (ensureEpochForWindow, loadCursor, collectFromSource, insertReceipts, saveCursor, materializeSelection, computeAllocations, ensurePoolComponents, autoCloseIngestion, finalizeEpoch), and enrichment activities (evaluateEpochDraft, buildLockedEvaluations), handle SIGTERM/SIGINT
-- This directory **does not**: Import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces (those live in packages)
+- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow + CollectEpochWorkflow + FinalizeEpochWorkflow, execute scheduler activities (validateGrant, executeGraph, updateRun, createRun), ledger activities (ensureEpochForWindow, loadCursor, collectFromSource, insertReceipts, saveCursor, materializeSelection, computeAllocations, ensurePoolComponents, autoCloseIngestion, finalizeEpoch), own concrete enrichment plugins and enrichment activities (evaluateEpochDraft, buildLockedEvaluations), handle SIGTERM/SIGINT
+- This directory **does not**: Import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces (those live in packages), change ledger core contracts for plugin-specific payloads
 
 ## Usage
 

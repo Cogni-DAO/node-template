@@ -2,18 +2,18 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/attribution-ledger/tests/work-item-linker`
- * Purpose: Unit tests for work-item ID extraction from event metadata.
- * Scope: Tests extractWorkItemIds regex patterns and deduplication. Does not test I/O or store.
+ * Module: `@cogni/scheduler-worker/tests/work-item-linker`
+ * Purpose: Verifies the work-item linker plugin extracts work-item IDs from event metadata.
+ * Scope: Tests regex patterns and deduplication only. Does not test I/O or workflow orchestration.
  * Invariants: Pattern matches (task|bug|spike|story).\d{4} with word boundaries.
  * Side-effects: none
- * Links: packages/attribution-ledger/src/enrichers/work-item-linker.ts
+ * Links: services/scheduler-worker/src/enrichers/work-item-linker.ts
  * @internal
  */
 
 import { describe, expect, it } from "vitest";
 
-import { extractWorkItemIds } from "../src/enrichers/work-item-linker";
+import { extractWorkItemIds } from "../src/enrichers/work-item-linker.js";
 
 describe("extractWorkItemIds", () => {
   it("extracts task ID from title", () => {
@@ -92,11 +92,6 @@ describe("extractWorkItemIds", () => {
     const links = extractWorkItemIds({
       title: "xtask.0102 and task.01 and task.00001",
     });
-    // task.0102 is preceded by 'x' but \b matches at word boundary of 'task'
-    // Actually 'xtask' has no word boundary before 'task' — x is a word char
-    // task.01 has only 2 digits, not 4
-    // task.00001 has 5 digits — \d{4} matches first 4, but \b after won't match
-    // because the 5th digit is still a word character
     expect(links).toEqual([]);
   });
 
