@@ -4,70 +4,70 @@ type: handoff
 work_item_id: task.0119
 status: active
 created: 2026-03-01
-updated: 2026-03-01
+updated: 2026-03-02
 branch: feat/epoch-signing-ui
-last_commit: 5fd356f9
+last_commit: 2e74fd67
 ---
 
-# Handoff: Epoch Approver UI — EIP-712 Signing + Review/Edit/Finalize Admin Panel
+# Handoff: Epoch Approver UI — Subject-Level Review Overrides (bug.0121 unblock)
 
 ## Context
 
-- The attribution ledger backend has a complete epoch lifecycle (open → review → finalized) with approver-gated API routes
-- The governance UI (`/gov/epoch`, `/gov/history`, `/gov/holdings`) is **read-only** — no admin controls exist
-- This task builds a `/gov/review` admin page for approvers to review allocations, sign with EIP-712, and finalize epochs
-- Signing was migrated from EIP-191 to EIP-712 for structured wallet UX and Safe multi-sig forward-compatibility
-- The existing wallet stack (wagmi, RainbowKit, SIWE) is fully wired — no new providers needed
+- task.0119 is blocked by bug.0121: the old `PATCH /epochs/[id]/allocations` only supports per-user overrides, which can't reach unresolved identity claimants or adjust individual contribution weights
+- Solution: new subject-level override system — two knobs per contribution: `overrideUnits` (change weight) and `overrideShares` (re-split among existing claimants only)
+- Overrides are mutable during review, snapshotted into the statement at finalization for transparency
+- The old PATCH allocations endpoint is deprecated (410 Gone); editing happens via new `PATCH /epochs/[id]/subject-overrides`
+- Prior work (steps 1-3 of task.0119): EIP-712 migration, sign-data endpoint, review page scaffolding — done by previous devs
 
 ## Current State
 
-- **Steps 1–3 DONE** (4 commits on branch):
-  - `buildEIP712TypedData()` pure function in `packages/attribution-ledger/src/signing.ts` (7 unit tests)
-  - Backend `verifyMessage` → `verifyTypedData` swap in scheduler-worker activity
-  - `CHAIN_ID` added to worker env schema + injected via `AttributionActivityDeps` (aligned with `nodeId`/`scopeId` pattern)
-  - `GET /api/v1/attribution/epochs/[id]/sign-data` endpoint with Zod contract — mirrors finalizeEpoch hash computation exactly
-- **Steps 4–6 NOT STARTED**: `useSignEpoch` hook, `/gov/review` page, nav tab
-- **Steps 7–8 NOT STARTED**: Integration tests, cleanup
-- `pnpm check` passes on the branch
-- `buildCanonicalMessage()` marked `@deprecated` but retained for one release cycle
+- **Done (uncommitted)**: DB schema + migration, pure functions, store port+adapter, API contract+route, finalization flow update, sign-data update, allocations PATCH deprecation, unit tests for pure functions
+- **Not committed**: All bug.0121 changes are unstaged working tree modifications — nothing committed yet
+- **`pnpm packages:build` passes**, `npx tsc --noEmit` passes at root
+- **`pnpm check` has failures**: typecheck/lint/format/check:docs — some may be pre-existing on this branch (view.tsx broken import from prior dev), some may need file header fixes on new files
+- **Migration generated** via `pnpm db:generate` — `0020_omniscient_blackheart.sql`
+- **Not done**: integration/contract tests, stack-level e2e verification, review page UI wiring to new endpoints
 
 ## Decisions Made
 
-- **EIP-712 over EIP-191** — structured wallet popup + Safe multi-sig compatibility
-- **`chainId` via worker env** (not workflow input) — aligns with how `nodeId`/`scopeId` flow: env → container → deps. Added `CHAIN_ID` to `services/scheduler-worker/src/bootstrap/env.ts`
-- **sign-data mirrors finalizeEpoch exactly** — uses same `loadFinalizedClaimantSubjects` logic (claimant shares eval → `buildClaimantAllocations` → `computeClaimantAllocationSetHash`) to ensure hash match
-- **Dedicated `/gov/review` page** — separate from read-only `/gov/epoch`; different audience, different intent
-- **Server component approver gate** — page.tsx calls `getLedgerApprovers()` + `auth()`, passes `isApprover` prop
-- **Follow `usePaymentFlow.ts` state machine pattern** for signing hook
+- **Subject-ref as canonical key**: overrides reference `subjectRef` from locked `ClaimantSharesPayload.subjects[]`, validated at write time
+- **Shares validation**: must sum to `1_000_000` PPM, claimant keys lexicographically sorted, only existing claimants allowed
+- **`buildClaimantAllocations` simplified**: old `userUnitOverrides` 2nd param removed — overrides pre-applied via `applySubjectOverrides()` before calling it
+- **Editing gated to review status**: both new and old endpoints check `epoch.status === "review"`
+- **Audit trail**: `epoch_statements.review_overrides_json` stores override snapshot at finalize time, pairing original + overridden values
 
 ## Next Actions
 
-- [ ] **Step 4**: Create `useSignEpoch(epochId)` hook in `src/features/governance/hooks/` — fetch sign-data, wagmi `useSignTypedData`, POST signature to finalize
-- [ ] **Step 5**: Build `/gov/review` page — server component approver gate, epoch list (review + finalized), allocation table with editable `finalUnits`, "Sign & Finalize" button, finalized read-only view
-- [ ] **Step 6**: Add "Review" tab in `src/app/(app)/gov/layout.tsx`
-- [ ] **Step 7**: Tests — EIP-712 round-trip with viem, component test for approver gating
-- [ ] **Step 8**: `pnpm check` + file headers + set status to `needs_closeout`
+- [ ] Fix `pnpm check` failures — file headers on new files, possibly pre-existing view.tsx broken import
+- [ ] Run `pnpm test` and fix any broken tests
+- [ ] Verify `claimants.server.ts` facade works (replaced old `allocations.finalUnits` path with subject override loading)
+- [ ] Wire review page UI (`src/app/(app)/gov/review/view.tsx`) to use new subject-overrides endpoints
+- [ ] Add integration tests for subject-overrides route (GET/PATCH/DELETE + status gates + validation)
+- [ ] Test full sign+finalize flow: override → sign-data → finalize → verify `review_overrides_json` in statement
+- [ ] Consider adding `SELECT ... FOR UPDATE` row locking in `upsertSubjectOverride` for race safety with finalize
+- [ ] Commit, update bug.0121 and task.0119 statuses, closeout
 
 ## Risks / Gotchas
 
-- **`packages/attribution-ledger` cannot import from `src/`** — `CHAIN_ID` must be passed as parameter, not imported
-- **sign-data hash must match finalizeEpoch hash exactly** — any divergence means wallet signature won't verify. Both paths must use identical claimant allocation logic
-- **wagmi/RainbowKit already installed** — do NOT add new providers or reinstall
-- **`usePaymentFlow.ts` is complex** (attemptId guards, polling) — the signing hook is simpler (no polling) but should follow the same state machine conventions
-- **Worker requires `CHAIN_ID` env var** — ledger worker won't start without it (alongside `NODE_ID` and `SCOPE_ID`)
+- `sign-data` and `finalizeEpoch` must produce identical `allocationSetHash` — both now use the same override chain, but needs stack verification
+- `claimants.server.ts` previously used `allocations.finalUnits` for preview — now uses subject overrides instead; preview path needs testing
+- `upsertSubjectOverride` adapter checks epoch status but doesn't use `SELECT ... FOR UPDATE` — simpler but has a theoretical race with finalize
+- `view.tsx` has a pre-existing broken import (`onSaveAdjustment`) from prior dev work — needs removal before check passes
+- The `scripts/db/seed.mts` was modified by another dev (adds review epoch) — avoid touching it
 
 ## Pointers
 
-| File / Resource                                               | Why it matters                                                   |
-| ------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `work/items/task.0119.epoch-signer-ui.md`                     | Full requirements, plan, and allowed changes                     |
-| `packages/attribution-ledger/src/signing.ts`                  | EIP-712 type builder + deprecated EIP-191 builder                |
-| `services/scheduler-worker/src/activities/ledger.ts:985-1001` | `finalizeEpoch` — `verifyTypedData` + `buildEIP712TypedData`     |
-| `services/scheduler-worker/src/bootstrap/env.ts`              | `CHAIN_ID` env var definition                                    |
-| `src/app/api/v1/attribution/epochs/[id]/sign-data/route.ts`   | Sign-data endpoint (mirrors finalizeEpoch hash logic)            |
-| `src/contracts/attribution.sign-data.v1.contract.ts`          | Zod contract for sign-data response                              |
-| `src/app/api/v1/attribution/epochs/[id]/finalize/route.ts`    | Finalize endpoint (receives signature, starts Temporal workflow) |
-| `src/app/api/v1/attribution/_lib/approver-guard.ts`           | `checkApprover()` — reuse for page-level gating                  |
-| `src/features/payments/hooks/usePaymentFlow.ts`               | Signing state machine pattern to follow                          |
-| `src/app/(app)/gov/layout.tsx`                                | Gov nav tabs — add "Review" link here                            |
-| `tests/unit/packages/attribution-ledger/signing.test.ts`      | 19 unit tests (EIP-191 + EIP-712)                                |
+| File / Resource                                                     | Why it matters                                                                                       |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `packages/db-schema/src/attribution.ts`                             | New `epochSubjectOverrides` table + `reviewOverridesJson` column on `epochStatements`                |
+| `packages/attribution-ledger/src/claimant-shares.ts`                | `applySubjectOverrides()`, `buildReviewOverrideSnapshots()`, simplified `buildClaimantAllocations()` |
+| `packages/attribution-ledger/src/store.ts`                          | New port methods + `SubjectOverrideRecord`/`UpsertSubjectOverrideParams` types                       |
+| `packages/db-client/src/adapters/drizzle-attribution.adapter.ts`    | Adapter impl + `toReviewOverridesJson` boundary converter                                            |
+| `src/contracts/attribution.subject-overrides.v1.contract.ts`        | New Zod contract (PATCH/GET/DELETE)                                                                  |
+| `src/app/api/v1/attribution/epochs/[id]/subject-overrides/route.ts` | New API route with subject-ref + claimant validation                                                 |
+| `services/scheduler-worker/src/activities/ledger.ts`                | Updated `finalizeEpoch` — loads overrides, applies, snapshots into statement                         |
+| `src/app/api/v1/attribution/epochs/[id]/sign-data/route.ts`         | Updated to mirror finalization with subject overrides                                                |
+| `src/app/api/v1/attribution/epochs/[id]/allocations/route.ts`       | PATCH deprecated (410 Gone), GET unchanged                                                           |
+| `src/app/_facades/attribution/claimants.server.ts`                  | Read-side preview updated to use subject overrides                                                   |
+| `packages/attribution-ledger/tests/claimant-shares.test.ts`         | Unit tests for new pure functions                                                                    |
+| `work/items/bug.0121.allocation-edit-granularity.md`                | The bug this work resolves                                                                           |
