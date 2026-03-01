@@ -21,6 +21,7 @@ import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { epochActivityOperation } from "@/contracts/attribution.epoch-activity.v1.contract";
 import { getNodeId } from "@/shared/config";
+import { EVENT_NAMES, logEvent } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,7 +33,7 @@ export const GET = wrapRouteHandlerWithLogging<{
     routeId: "ledger.epoch-activity",
     auth: { mode: "required", getSessionUser },
   },
-  async (_ctx, request, _sessionUser, context) => {
+  async (ctx, request, _sessionUser, context) => {
     if (!context) throw new Error("context required for dynamic routes");
     const { id } = await context.params;
     let epochId: bigint;
@@ -97,6 +98,14 @@ export const GET = wrapRouteHandlerWithLogging<{
       }
       // Don't await — background DB updates, response returns immediately
       void Promise.allSettled(updates);
+
+      logEvent(ctx.log, EVENT_NAMES.LEDGER_IDENTITY_RESOLVED_AT_READ, {
+        reqId: ctx.reqId,
+        routeId: "ledger.epoch-activity",
+        epochId: id,
+        resolvedCount: resolvedIdentities.size,
+        unresolvedCount: unresolvedGithubIds.size - resolvedIdentities.size,
+      });
     }
 
     const enriched = receipts.map((r) => {
