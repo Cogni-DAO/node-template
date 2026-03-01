@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import type { ReactElement } from "react";
 
-import { TableCell, TableRow } from "@/components/vendor/shadcn/table";
+import { TableCell, TableRow } from "@/components";
 import type { IngestionReceipt } from "@/features/governance/types";
 
 import { SourceBadge } from "./SourceBadge";

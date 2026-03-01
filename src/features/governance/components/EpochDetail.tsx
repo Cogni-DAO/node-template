@@ -151,12 +151,10 @@ export function EpochDetail({
                   ]}
                   expandedRows={
                     renderExpandedRows
-                      ? (renderExpandedRows(c) ?? undefined)
-                      : c.receipts.length > 0
-                        ? c.receipts.map((r) => (
-                            <ContributionRow key={r.receiptId} receipt={r} />
-                          ))
-                        : undefined
+                      ? (renderExpandedRows(c) ?? [])
+                      : c.receipts.map((r) => (
+                          <ContributionRow key={r.receiptId} receipt={r} />
+                        ))
                   }
                   cells={[
                     <span key="rank" className="text-muted-foreground text-xs">

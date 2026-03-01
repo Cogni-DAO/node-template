@@ -27,8 +27,7 @@ import {
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useMemo, useState } from "react";
-import { Badge, Button, Input } from "@/components";
-import { TableCell, TableRow } from "@/components/vendor/shadcn/table";
+import { Badge, Button, Input, TableCell, TableRow } from "@/components";
 import {
   receiptTitle,
   TYPE_ICONS,
