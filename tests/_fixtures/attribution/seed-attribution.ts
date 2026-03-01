@@ -307,3 +307,117 @@ export async function seedClosedEpoch(
 
   return { epoch: finalizedEpoch, poolComponent, statement };
 }
+
+/** Result of seeding an epoch in review status (not yet finalized) */
+export interface SeededReviewEpoch {
+  epoch: AttributionEpoch;
+  poolComponent: AttributionPoolComponent;
+  receiptIds: string[];
+}
+
+/**
+ * Seeds a complete epoch in review status with receipts, selections, allocations,
+ * and a pool component. Suitable for testing sign-data and subject-override routes.
+ */
+export async function seedReviewEpoch(
+  store: AttributionStore,
+  opts: {
+    nodeId?: string;
+    scopeId?: string;
+    epochOffset?: number;
+  } = {}
+): Promise<SeededReviewEpoch> {
+  const nodeId = opts.nodeId ?? TEST_NODE_ID;
+  const scopeId = opts.scopeId ?? TEST_SCOPE_ID;
+  const { periodStart, periodEnd } = epochWindow(opts.epochOffset ?? 0);
+
+  const epoch = await store.createEpoch({
+    nodeId,
+    scopeId,
+    periodStart,
+    periodEnd,
+    weightConfig: TEST_WEIGHT_CONFIG,
+  });
+
+  const eventMidpoint = new Date(
+    (periodStart.getTime() + periodEnd.getTime()) / 2
+  );
+  const receiptIds = [
+    `test-receipt-${epoch.id}-1`,
+    `test-receipt-${epoch.id}-2`,
+  ];
+
+  await store.insertIngestionReceipts([
+    makeIngestionReceipt({
+      receiptId: receiptIds[0],
+      nodeId,
+      platformUserId: "gh-user-101",
+      platformLogin: "alice",
+      artifactUrl: "https://github.com/test/repo/pull/1",
+      eventTime: eventMidpoint,
+      retrievedAt: eventMidpoint,
+    }),
+    makeIngestionReceipt({
+      receiptId: receiptIds[1],
+      nodeId,
+      source: "github",
+      eventType: "review_submitted",
+      platformUserId: "gh-user-202",
+      platformLogin: "bob",
+      artifactUrl: "https://github.com/test/repo/pull/1#review",
+      eventTime: eventMidpoint,
+      retrievedAt: eventMidpoint,
+    }),
+  ]);
+
+  await store.insertSelectionDoNothing([
+    makeSelectionAuto({
+      nodeId,
+      epochId: epoch.id,
+      receiptId: receiptIds[0],
+      userId: "user-1",
+      included: true,
+    }),
+    makeSelectionAuto({
+      nodeId,
+      epochId: epoch.id,
+      receiptId: receiptIds[1],
+      userId: "user-2",
+      included: true,
+    }),
+  ]);
+
+  await store.insertAllocations([
+    makeAllocation({
+      nodeId,
+      epochId: epoch.id,
+      userId: "user-1",
+      proposedUnits: 8000n,
+      activityCount: 1,
+    }),
+    makeAllocation({
+      nodeId,
+      epochId: epoch.id,
+      userId: "user-2",
+      proposedUnits: 2000n,
+      activityCount: 1,
+    }),
+  ]);
+
+  const poolComponent = await store.insertPoolComponent(
+    makePoolComponent({
+      nodeId,
+      epochId: epoch.id,
+    })
+  );
+
+  // Transition open → review (stop here — do NOT finalize)
+  const reviewEpoch = await store.closeIngestion(
+    epoch.id,
+    "test-approver-set-hash",
+    "weight-sum-v0",
+    "test-weight-config-hash"
+  );
+
+  return { epoch: reviewEpoch, poolComponent, receiptIds };
+}
