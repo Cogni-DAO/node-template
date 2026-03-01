@@ -34,16 +34,16 @@ export interface EpochDetailProps {
   readonly epoch: EpochView;
   /** Hide the header row (pie chart + epoch stats). Useful when shown inline under a parent. */
   readonly hideHeader?: boolean;
-  /** Custom renderer for expanded contributor content. Overrides default ContributionRow list. */
-  readonly renderExpandedContent?: (
+  /** Custom renderer for expanded contributor rows. Each element should be a TableRow. Overrides default ContributionRow list. */
+  readonly renderExpandedRows?: (
     contributor: EpochContributor
-  ) => ReactElement | null;
+  ) => ReactElement[] | null;
 }
 
 export function EpochDetail({
   epoch,
   hideHeader = false,
-  renderExpandedContent,
+  renderExpandedRows,
 }: EpochDetailProps): ReactElement {
   const sorted = useMemo(
     () =>
@@ -149,16 +149,14 @@ export function EpochDetail({
                     "text-right",
                     "text-right",
                   ]}
-                  expandedContent={
-                    renderExpandedContent ? (
-                      (renderExpandedContent(c) ?? undefined)
-                    ) : c.receipts.length > 0 ? (
-                      <div className="space-y-1">
-                        {c.receipts.map((r) => (
-                          <ContributionRow key={r.receiptId} receipt={r} />
-                        ))}
-                      </div>
-                    ) : undefined
+                  expandedRows={
+                    renderExpandedRows
+                      ? (renderExpandedRows(c) ?? undefined)
+                      : c.receipts.length > 0
+                        ? c.receipts.map((r) => (
+                            <ContributionRow key={r.receiptId} receipt={r} />
+                          ))
+                        : undefined
                   }
                   cells={[
                     <span key="rank" className="text-muted-foreground text-xs">

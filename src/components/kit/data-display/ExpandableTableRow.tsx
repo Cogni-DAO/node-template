@@ -24,7 +24,10 @@ interface ExpandableTableRowProps {
   readonly cells: readonly ReactNode[];
   /** Optional className per cell (same index as cells). */
   readonly cellClassNames?: readonly (string | undefined)[];
+  /** Legacy: free-form content rendered in a single colSpan cell. */
   readonly expandedContent?: ReactNode;
+  /** Preferred: pre-built TableRow elements rendered as siblings when expanded. */
+  readonly expandedRows?: readonly ReactNode[];
   readonly colSpan: number;
   readonly defaultExpanded?: boolean;
   readonly className?: string;
@@ -34,12 +37,14 @@ export function ExpandableTableRow({
   cells,
   cellClassNames,
   expandedContent,
+  expandedRows,
   colSpan,
   defaultExpanded = false,
   className,
 }: ExpandableTableRowProps): ReactElement {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const hasContent = expandedContent != null;
+  const hasRows = expandedRows != null && expandedRows.length > 0;
+  const hasContent = hasRows || expandedContent != null;
 
   return (
     <>
@@ -69,7 +74,8 @@ export function ExpandableTableRow({
           </TableCell>
         ))}
       </TableRow>
-      {expanded && hasContent && (
+      {expanded && hasRows && expandedRows}
+      {expanded && !hasRows && expandedContent != null && (
         <TableRow className="hover:bg-transparent">
           <TableCell colSpan={colSpan} className="p-0">
             <div className="border-muted border-t bg-muted/10 px-4 py-3">
