@@ -76,7 +76,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
 
 - **Uses ports:** none
 - **Implements ports:** none
-- **Defines ports:** `AttributionStore` (implemented by `DrizzleAttributionAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUncuratedEvents`, `updateCurationUserId`, `insertCurationDoNothing`), allocation computation (`getCuratedEventsForAllocation`, `upsertAllocations`, `deleteStaleAllocations`), canonical attribution reads (`getSelectedReceiptsForAttribution`), artifact lifecycle (`upsertDraftArtifact`, `closeIngestionWithArtifacts`, `getArtifactsForEpoch`, `getArtifact`, `getCuratedEventsWithMetadata`), and atomic finalization (`finalizeEpochAtomic`).
+- **Defines ports:** `AttributionStore` (implemented by `DrizzleAttributionAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUncuratedEvents`, `updateCurationUserId`, `insertCurationDoNothing`), allocation computation (`getCuratedEventsForAllocation`, `upsertAllocations`, `deleteStaleAllocations`), canonical attribution reads (`getSelectedReceiptsForAttribution`, `getUserDisplayNames`, `getEvaluation`), artifact lifecycle (`upsertDraftArtifact`, `closeIngestionWithArtifacts`, `getArtifactsForEpoch`, `getArtifact`, `getCuratedEventsWithMetadata`), and atomic finalization (`finalizeEpochAtomic`).
 
 ## Responsibilities
 

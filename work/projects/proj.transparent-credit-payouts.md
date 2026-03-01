@@ -10,7 +10,7 @@ summary: "Epoch-based ledger where source adapters collect contribution activity
 outcome: "A third party can recompute the payout table exactly from stored activity events + pool components + weight config. All activity is attributed to contributors via identity bindings. Admin finalizes once per epoch."
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-02-27
+updated: 2026-03-01
 labels: [governance, transparency, payments, web3]
 ---
 
@@ -43,7 +43,7 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 | --------------------------------------------------------------------------------------------------------------- | ------------ | --- | --------------- |
 | Design spike: schema, signing, storage, epoch model                                                             | Done         | 2   | spike.0082      |
 | Design revision: activity-ingestion reframe                                                                     | Done         | 1   | (this document) |
-| Spec: epoch-ledger.md (revised)                                                                                 | Done         | 1   | —               |
+| Spec: attribution-ledger.md                                                                                     | Done         | 1   | —               |
 | DB schema (foundation tables) + core domain (rules, errors)                                                     | Done         | 3   | task.0093       |
 | Identity bindings (user_bindings + identity_events)                                                             | Done         | 2   | task.0089       |
 | Ledger port + Drizzle adapter + schema migration + container                                                    | Done         | 2   | task.0094       |
@@ -54,7 +54,7 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 | Epoch 3-phase state machine + EIP-191 signing                                                                   | Done         | 3   | task.0100       |
 | Zod contracts + API routes + stack tests                                                                        | Done         | 2   | task.0096       |
 | Scope-gate all epochId-based adapter methods                                                                    | Done         | 1   | task.0103       |
-| Dev seed script for governance UI visual testing                                                                | Not Started  | 2   | task.0106       |
+| Dev seed script for governance UI visual testing                                                                | needs_merge  | 2   | task.0106       |
 | **Collection pipeline hardening (from [gap analysis](../../docs/research/ledger-collection-gap-analysis.md)):** |              |     |                 |
 | Fix: unresolved contributors silently excluded                                                                  | Done         | 2   | bug.0092        |
 | Collection completeness verification                                                                            | needs_triage | 2   | task.0108       |
@@ -108,7 +108,7 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 
 | Gap                                                                | Severity | Work Item        | Status       |
 | ------------------------------------------------------------------ | -------- | ---------------- | ------------ |
-| Unresolved contributors silently get zero credit                   | High     | bug.0092         | needs_triage |
+| Unresolved contributors silently get zero credit                   | High     | bug.0092         | done         |
 | No collection completeness verification                            | High     | task.0108        | needs_triage |
 | Only 3 GitHub event types (misses review comments, issue creation) | High     | task.0109        | needs_triage |
 | Missed events permanently lost after finalization (no backfill)    | Medium   | (P1 — task.0110) | not filed    |
@@ -118,8 +118,8 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 **Definition of done:**
 
 - [ ] Weekly epoch collects GitHub PRs/reviews automatically (Discord deferred)
-- [ ] Activity attributed to contributors via identity bindings (unresolved events flagged)
-- [ ] Unresolved contributors visible in epoch UI; finalization warns when unresolved activity exists (bug.0092)
+- [x] Activity attributed to contributors via identity bindings, with unresolved identities preserved as claimants
+- [x] Unlinked contributors render inline in epoch UI and finalized claimant reads without dropping their attribution (bug.0092)
 - [ ] Collection completeness verified against GitHub API totals before close (task.0108)
 - [ ] Admin can review and adjust proposed allocations before finalizing
 - [ ] A third party can recompute the payout table from stored data exactly
@@ -161,7 +161,7 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 
 ## Architecture & Schema
 
-See [epoch-ledger spec](../../docs/spec/epoch-ledger.md) for full architecture, schema, invariants, API contracts, and Temporal workflows.
+See [attribution-ledger spec](../../docs/spec/attribution-ledger.md) for full architecture, schema, invariants, API contracts, and Temporal workflows.
 
 ## Constraints
 
@@ -174,7 +174,7 @@ See [epoch-ledger spec](../../docs/spec/epoch-ledger.md) for full architecture, 
 - Epoch close is idempotent — same inputs produce identical statement hash
 - All write operations go through Temporal — Next.js stays stateless
 - All monetary math in BIGINT — no floating point, including weights (integer milli-units)
-- `user_id` (UUID) is the canonical identity for all attribution — see [identity spec](../../docs/spec/decentralized-identity.md)
+- `user_id` remains the resolved human override surface for attribution, while finalized statements preserve claimant identity explicitly for linked and unlinked subjects — see [identity-model](../../docs/spec/identity-model.md)
 - Identity resolution is best-effort — unresolved events flagged, not silently dropped
 - Source adapters use cursor-based incremental sync — no full-window rescans
 - Verification = recompute from stored data — not re-fetch from external sources
@@ -199,7 +199,7 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 
 ## As-Built Specs
 
-- [epoch-ledger](../../docs/spec/epoch-ledger.md) — V0 schema, invariants, API, architecture
+- [attribution-ledger](../../docs/spec/attribution-ledger.md) — V0 schema, invariants, API, claimant-aware finalization, architecture
 
 ## Research
 
@@ -243,7 +243,7 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 ### Known issues
 
 - **GitHub adapter only captures merged PRs and closed issues.** Reviews are only searched on merged PRs. This means: (1) opened-but-unmerged PRs are invisible, (2) reviews on open PRs are missed, (3) newly opened issues aren't tracked. The adapter should use broader queries (`created:`, `updated:`) and emit lifecycle event types (`pr_opened`/`pr_merged`, `issue_opened`/`issue_closed`) to capture all contribution activity. Low risk for V0 since epochs are weekly and most PRs merge within a week, but will under-count reviewers and issue authors. → **task.0109**
-- **Unresolved contributors silently excluded.** Contributors without `user_bindings` get `user_id=NULL` in curation and are dropped from allocations with no UI feedback. → **bug.0092**
+- **Ownership summary scales linearly with epoch count.** `readOwnershipSummary` loads claimant subjects per epoch sequentially. Acceptable now, but it becomes a real latency issue as finalized history grows. → **bug.0093**
 - **No collection completeness verification.** Under-collection from rate limits or API failures is indistinguishable from a quiet week. No comparison of collected counts vs. GitHub API totals. → **task.0108**
 - **No retroactive backfill.** If collection misses events and the epoch finalizes, those events are permanently lost. SourceCred's mirror model catches up on next run; our windowed model has no equivalent. → **P1 task.0110**
 

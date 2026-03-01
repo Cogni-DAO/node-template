@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Governance feature slice — schedule sync, governance status dashboard, and epoch contribution UI (current epoch, history, holdings).
+Governance feature slice — schedule sync, governance status dashboard, and claimant-aware epoch contribution UI (current epoch, history, holdings).
 
 ## Pointers
 
@@ -66,7 +66,7 @@ pnpm dev:setup                             # db:setup + db:setup:test + gov sche
 
 ## Standards
 
-- Hooks fetch from ledger API, compose via `lib/` pure functions into view models (`types.ts`)
+- Hooks fetch attribution activity and claimant endpoints, compose via `lib/` pure functions into view models (`types.ts`)
 - Components are presentational only — no data fetching
 - No direct adapter or DB imports
 
@@ -86,3 +86,4 @@ pnpm dev:setup                             # db:setup + db:setup:test + gov sche
 - Governance schedules are system-ops only; never exposed as tenant-facing API
 - PRUNE_IS_PAUSE: removed charters get paused, never deleted
 - Epoch seed script uses `computeEpochWindowV1()` from `@cogni/attribution-ledger` for Monday-aligned UTC windows matching the scheduler grid
+- Display names and linked/unlinked presentation are resolved server-side from claimant reads; UI never renders raw `userId` fragments
