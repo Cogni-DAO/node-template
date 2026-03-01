@@ -12,7 +12,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch: feat/claimant-share-ownership
+branch: feat/epoch-signing-ui
 pr:
 reviewer:
 revision: 0
@@ -163,7 +163,7 @@ The app already has a complete wallet stack — no new providers or dependencies
 
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0119.handoff.md)
 
 ## Attribution
 
