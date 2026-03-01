@@ -251,16 +251,24 @@ function ReviewReceiptRow({
 
   const handleSave = useCallback(async () => {
     if (!editUnits.trim() || !/^\d+$/.test(editUnits.trim())) return;
-    await onSave(
-      receipt.receiptId,
-      editUnits.trim(),
-      editReason.trim() || undefined
-    );
-    setIsEditing(false);
+    try {
+      await onSave(
+        receipt.receiptId,
+        editUnits.trim(),
+        editReason.trim() || undefined
+      );
+      setIsEditing(false);
+    } catch {
+      // Mutation error is surfaced via useSubjectOverrides hook state
+    }
   }, [receipt.receiptId, editUnits, editReason, onSave]);
 
   const handleRemove = useCallback(async () => {
-    await onRemove(receipt.receiptId);
+    try {
+      await onRemove(receipt.receiptId);
+    } catch {
+      // Mutation error is surfaced via useSubjectOverrides hook state
+    }
   }, [receipt.receiptId, onRemove]);
 
   const hasOverride = override !== null;
@@ -273,7 +281,7 @@ function ReviewReceiptRow({
   if (isEditing) {
     return (
       <TableRow className="bg-primary/5 hover:bg-primary/5">
-        <TableCell colSpan={6} className="p-2">
+        <TableCell colSpan={7} className="p-2">
           <div className="space-y-2">
             <div className="flex min-w-0 items-center gap-2 text-sm">
               <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -310,7 +318,7 @@ function ReviewReceiptRow({
                   className="h-7 text-xs"
                 />
               </div>
-              <div className="flex-2">
+              <div className="flex-[2]">
                 <label
                   htmlFor={`override-reason-${receipt.receiptId}`}
                   className="mb-1 block text-muted-foreground text-xs"

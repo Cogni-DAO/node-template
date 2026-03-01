@@ -14,7 +14,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 
 /** Shape of a single override as returned by the GET endpoint. */
 export interface SubjectOverrideView {
@@ -65,12 +65,15 @@ export function useSubjectOverrides(
     staleTime: 30_000,
   });
 
-  const overridesByRef = new Map<string, SubjectOverrideView>();
-  if (data) {
-    for (const o of data) {
-      overridesByRef.set(o.subjectRef, o);
+  const overridesByRef = useMemo(() => {
+    const m = new Map<string, SubjectOverrideView>();
+    if (data) {
+      for (const o of data) {
+        m.set(o.subjectRef, o);
+      }
     }
-  }
+    return m;
+  }, [data]);
 
   const upsertMutation = useMutation({
     mutationFn: async (params: {
@@ -137,14 +140,14 @@ export function useSubjectOverrides(
     async (subjectRef: string, overrideUnits: string, reason?: string) => {
       await upsertMutation.mutateAsync({ subjectRef, overrideUnits, reason });
     },
-    [upsertMutation]
+    [upsertMutation.mutateAsync]
   );
 
   const removeOverride = useCallback(
     async (subjectRef: string) => {
       await deleteMutation.mutateAsync(subjectRef);
     },
-    [deleteMutation]
+    [deleteMutation.mutateAsync]
   );
 
   return {
