@@ -67,11 +67,51 @@ export const GET = wrapRouteHandlerWithLogging<{
     const selections = await store.getSelectionForEpoch(epochId);
     const selectionMap = new Map(selections.map((s) => [s.receiptId, s]));
 
+    // Read-time identity resolution: resolve any unresolved GitHub identities
+    // so linked users appear immediately without waiting for the next scheduler run
+    const unresolvedGithubIds = new Set<string>();
+    for (const r of receipts) {
+      const sel = selectionMap.get(r.receiptId);
+      if ((!sel || sel.userId === null) && r.source === "github") {
+        unresolvedGithubIds.add(r.platformUserId);
+      }
+    }
+    const resolvedIdentities =
+      unresolvedGithubIds.size > 0
+        ? await store.resolveIdentities("github", [...unresolvedGithubIds])
+        : new Map<string, string>();
+
+    // Fire-and-forget: persist resolved userIds to selection rows for future reads
+    if (resolvedIdentities.size > 0) {
+      const updates: Promise<void>[] = [];
+      for (const r of receipts) {
+        const sel = selectionMap.get(r.receiptId);
+        if (sel && sel.userId === null && r.source === "github") {
+          const resolved = resolvedIdentities.get(r.platformUserId);
+          if (resolved) {
+            updates.push(
+              store.updateSelectionUserId(epochId, r.receiptId, resolved)
+            );
+          }
+        }
+      }
+      // Don't await — background DB updates, response returns immediately
+      void Promise.allSettled(updates);
+    }
+
     const enriched = receipts.map((r) => {
       const selection = selectionMap.get(r.receiptId);
+      const resolvedUserId =
+        selection?.userId === null && r.source === "github"
+          ? (resolvedIdentities.get(r.platformUserId) ?? null)
+          : null;
+      const patchedSelection =
+        selection && resolvedUserId
+          ? { ...selection, userId: resolvedUserId }
+          : selection;
       return {
         ...toIngestionReceiptDto(r),
-        selection: selection ? toSelectionDto(selection) : null,
+        selection: patchedSelection ? toSelectionDto(patchedSelection) : null,
       };
     });
 

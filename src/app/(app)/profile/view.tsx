@@ -450,45 +450,6 @@ export function ProfileView(): ReactElement {
 
       <div className="border-border border-b" />
 
-      <div className="py-5">
-        <div className="mb-3 font-medium text-foreground text-sm">
-          Recent matched attributions
-        </div>
-        {ownership && ownership.recentAttributions.length > 0 ? (
-          <div className="space-y-2">
-            {ownership.recentAttributions.map((claim) => (
-              <div
-                key={`${claim.epochId}:${claim.subjectRef}:${claim.matchedBy}`}
-                className="flex items-center justify-between rounded-lg border border-border bg-card/30 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-sm">
-                    Epoch #{claim.epochId} · {claim.source ?? "custom"} ·{" "}
-                    {claim.eventType ?? claim.subjectRef}
-                  </div>
-                  <div className="truncate text-muted-foreground text-xs">
-                    Matched by {claim.matchedBy}
-                    {claim.eventTime
-                      ? ` · ${new Date(claim.eventTime).toLocaleDateString()}`
-                      : ""}
-                  </div>
-                </div>
-                <div className="ml-4 shrink-0 font-medium text-sm">
-                  {formatOwnershipUnits(claim.units)} pts
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-border px-4 py-3 text-muted-foreground text-sm">
-            Link your GitHub account to surface retroactive contribution
-            ownership here.
-          </div>
-        )}
-      </div>
-
-      <div className="border-border border-b" />
-
       <SectionHeading>Wallet</SectionHeading>
 
       <SettingRow
