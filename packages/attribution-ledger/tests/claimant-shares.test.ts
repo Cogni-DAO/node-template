@@ -2,28 +2,28 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/packages/attribution-ledger/claims`
+ * Module: `@tests/packages/attribution-ledger/claimant-shares`
  * Purpose: Verifies claimant-share payload building and deterministic unit splitting.
  * Scope: Pure domain tests only. Does not perform I/O or store interactions.
  * Invariants:
  * - DEFAULT_RECEIPT_CLAIMS_SINGLE_TARGET: default payload builder emits one full-share claimant per included receipt.
- * - CLAIM_SPLIT_DETERMINISTIC: equal remainders are resolved in stable claimant-key order.
+ * - CLAIMANT_SHARE_SPLIT_DETERMINISTIC: equal remainders are resolved in stable claimant-key order.
  * Side-effects: none
- * Links: packages/attribution-ledger/src/claims.ts
+ * Links: packages/attribution-ledger/src/claimant-shares.ts
  * @internal
  */
 
 import { describe, expect, it } from "vitest";
 import {
-  buildDefaultClaimTargetsPayload,
-  CLAIM_SHARE_DENOMINATOR_PPM,
-  expandClaimUnits,
-  parseClaimTargetsPayload,
-} from "../src/claims";
+  buildDefaultReceiptClaimantSharesPayload,
+  CLAIMANT_SHARE_DENOMINATOR_PPM,
+  expandClaimantUnits,
+  parseClaimantSharesPayload,
+} from "../src/claimant-shares";
 
-describe("buildDefaultClaimTargetsPayload", () => {
+describe("buildDefaultReceiptClaimantSharesPayload", () => {
   it("builds a single unresolved identity claimant by default", () => {
-    const payload = buildDefaultClaimTargetsPayload({
+    const payload = buildDefaultReceiptClaimantSharesPayload({
       weightConfig: { "github:pr_merged": 1000 },
       receipts: [
         {
@@ -44,20 +44,20 @@ describe("buildDefaultClaimTargetsPayload", () => {
 
     expect(payload.version).toBe(1);
     expect(payload.subjects).toHaveLength(1);
-    expect(payload.subjects[0]?.subjectUnits).toBe("1000");
-    expect(payload.subjects[0]?.claimants[0]).toEqual({
+    expect(payload.subjects[0]?.units).toBe("1000");
+    expect(payload.subjects[0]?.claimantShares[0]).toEqual({
       claimant: {
         kind: "identity",
         provider: "github",
         externalId: "58641509",
         providerLogin: "derekg1729",
       },
-      sharePpm: CLAIM_SHARE_DENOMINATOR_PPM,
+      sharePpm: CLAIMANT_SHARE_DENOMINATOR_PPM,
     });
   });
 
   it("skips excluded or zero-unit receipts", () => {
-    const payload = buildDefaultClaimTargetsPayload({
+    const payload = buildDefaultReceiptClaimantSharesPayload({
       weightConfig: { "github:pr_merged": 0 },
       receipts: [
         {
@@ -93,19 +93,19 @@ describe("buildDefaultClaimTargetsPayload", () => {
   });
 });
 
-describe("parseClaimTargetsPayload", () => {
+describe("parseClaimantSharesPayload", () => {
   it("parses a valid payload", () => {
-    const parsed = parseClaimTargetsPayload({
+    const parsed = parseClaimantSharesPayload({
       version: 1,
       subjects: [
         {
-          subjectRef: "work-item:task.0100",
-          subjectType: "work_item",
-          subjectUnits: "1200",
+          subjectRef: "plugin.task_ref:task.0100",
+          subjectKind: "plugin.task_ref",
+          units: "1200",
           source: null,
           eventType: null,
           receiptIds: ["r1", "r2"],
-          claimants: [
+          claimantShares: [
             {
               claimant: { kind: "user", userId: "user-1" },
               sharePpm: 500000,
@@ -130,17 +130,17 @@ describe("parseClaimTargetsPayload", () => {
   });
 
   it("rejects payloads whose shares do not sum to 100%", () => {
-    const parsed = parseClaimTargetsPayload({
+    const parsed = parseClaimantSharesPayload({
       version: 1,
       subjects: [
         {
           subjectRef: "bad",
-          subjectType: "custom",
-          subjectUnits: "100",
+          subjectKind: "manual",
+          units: "100",
           source: null,
           eventType: null,
           receiptIds: [],
-          claimants: [
+          claimantShares: [
             {
               claimant: { kind: "user", userId: "user-1" },
               sharePpm: 100,
@@ -155,19 +155,19 @@ describe("parseClaimTargetsPayload", () => {
   });
 });
 
-describe("expandClaimUnits", () => {
+describe("expandClaimantUnits", () => {
   it("splits units deterministically using largest remainder", () => {
-    const expanded = expandClaimUnits({
+    const expanded = expandClaimantUnits({
       version: 1,
       subjects: [
         {
           subjectRef: "task.0100",
-          subjectType: "work_item",
-          subjectUnits: "5",
+          subjectKind: "plugin.task_ref",
+          units: "5",
           source: null,
           eventType: null,
           receiptIds: ["r1", "r2"],
-          claimants: [
+          claimantShares: [
             {
               claimant: { kind: "user", userId: "user-b" },
               sharePpm: 500000,

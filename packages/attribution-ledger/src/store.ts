@@ -21,7 +21,7 @@
  */
 
 import type { SelectedReceiptForAllocation } from "./allocation";
-import type { SelectedReceiptForClaims } from "./claims";
+import type { SelectedReceiptForAttribution } from "./claimant-shares";
 import type { EpochStatus } from "./model";
 
 // ---------------------------------------------------------------------------
@@ -337,10 +337,10 @@ export interface AttributionStore {
   getSelectedReceiptsWithMetadata(
     epochId: bigint
   ): Promise<SelectedReceiptWithMetadata[]>;
-  /** Get selected receipts including unresolved platform identities for claimant construction. */
-  getSelectedReceiptsForClaims(
+  /** Get selected receipts including unresolved platform identities for canonical attribution construction. */
+  getSelectedReceiptsForAttribution(
     epochId: bigint
-  ): Promise<SelectedReceiptForClaims[]>;
+  ): Promise<SelectedReceiptForAttribution[]>;
 
   // Ingestion receipts (append-only, epoch-agnostic raw log)
   insertIngestionReceipts(receipts: InsertReceiptParams[]): Promise<void>;

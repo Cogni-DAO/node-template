@@ -25,22 +25,22 @@ export {
   validateEvaluationEnvelope,
   validateEvaluationRef,
 } from "./artifact-envelope";
-// Enrichers (pure functions)
+// Canonical claimant-share attribution shape
 export {
   type AttributionClaimant,
-  type AttributionClaimSubject,
-  type AttributionClaimTarget,
-  buildDefaultClaimTargetsPayload,
-  CLAIM_SHARE_DENOMINATOR_PPM,
-  CLAIM_TARGETS_ALGO_REF,
-  CLAIM_TARGETS_EVALUATION_REF,
-  type ClaimTargetsPayload,
+  buildDefaultReceiptClaimantSharesPayload,
+  CLAIMANT_SHARE_DENOMINATOR_PPM,
+  CLAIMANT_SHARES_ALGO_REF,
+  CLAIMANT_SHARES_EVALUATION_REF,
+  type ClaimantShare,
+  type ClaimantSharesPayload,
+  type ClaimantSharesSubject,
   claimantKey,
-  type ExpandedClaimUnit,
-  expandClaimUnits,
-  parseClaimTargetsPayload,
-  type SelectedReceiptForClaims,
-} from "./claims";
+  type ExpandedClaimantUnit,
+  expandClaimantUnits,
+  parseClaimantSharesPayload,
+  type SelectedReceiptForAttribution,
+} from "./claimant-shares";
 // Enricher inputs hash
 export { computeEnricherInputsHash } from "./enricher-inputs";
 

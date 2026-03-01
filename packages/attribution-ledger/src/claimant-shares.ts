@@ -2,26 +2,23 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/attribution-ledger/claims`
- * Purpose: Defines pure domain types and helpers for multi-claimant attribution.
- * Scope: Defines claimant-share payloads, default receipt-backed claims, and deterministic unit splitting. Does not perform I/O or store access.
+ * Module: `@cogni/attribution-ledger/claimant-shares`
+ * Purpose: Defines the canonical claimant-share attribution shape and deterministic unit expansion helpers.
+ * Scope: Defines claimant-share payloads, a default receipt-backed builder, and deterministic unit splitting. Does not perform I/O or plugin-specific enrichment.
  * Invariants:
- * - CLAIMANTS_ARE_PLURAL: every attribution subject carries `claimants[]`, even
- *   when only one claimant is present.
- * - CLAIMS_CAN_BE_UNRESOLVED: identity claimants may reference provider +
- *   external_id without a resolved user_id.
- * - CLAIM_SUBJECT_UNITS_EXPLICIT: each subject carries explicit `subjectUnits`
- *   so plugin evaluators can attribute work-item or custom units directly.
- * - CLAIM_SPLIT_DETERMINISTIC: unit splitting uses integer math with
- *   largest-remainder tiebroken by claimant key.
+ * - CLAIMANTS_ARE_PLURAL: every attribution subject carries `claimantShares[]`, even when only one claimant is present.
+ * - CLAIMANTS_CAN_BE_UNRESOLVED: identity claimants may reference provider + external_id without a resolved user_id.
+ * - SUBJECT_KIND_OPEN_ENDED: subjectKind is an open string so plugin-defined attribution subjects do not leak into core enums.
+ * - SUBJECT_UNITS_EXPLICIT: each subject carries explicit units.
+ * - CLAIMANT_SHARE_SPLIT_DETERMINISTIC: unit splitting uses integer math with largest-remainder tiebroken by claimant key.
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md
  * @public
  */
 
-export const CLAIM_TARGETS_EVALUATION_REF = "cogni.claim_targets.v0";
-export const CLAIM_TARGETS_ALGO_REF = "claim-targets-v0";
-export const CLAIM_SHARE_DENOMINATOR_PPM = 1_000_000;
+export const CLAIMANT_SHARES_EVALUATION_REF = "cogni.claimant_shares.v0";
+export const CLAIMANT_SHARES_ALGO_REF = "claimant-shares-v0";
+export const CLAIMANT_SHARE_DENOMINATOR_PPM = 1_000_000;
 
 export interface UserClaimant {
   readonly kind: "user";
@@ -37,28 +34,28 @@ export interface IdentityClaimant {
 
 export type AttributionClaimant = UserClaimant | IdentityClaimant;
 
-export interface AttributionClaimTarget {
+export interface ClaimantShare {
   readonly claimant: AttributionClaimant;
   readonly sharePpm: number;
 }
 
-export interface AttributionClaimSubject {
+export interface ClaimantSharesSubject {
   readonly subjectRef: string;
-  readonly subjectType: "receipt" | "work_item" | "custom";
-  readonly subjectUnits: string;
+  readonly subjectKind: string;
+  readonly units: string;
   readonly source: string | null;
   readonly eventType: string | null;
   readonly receiptIds: readonly string[];
-  readonly claimants: readonly AttributionClaimTarget[];
+  readonly claimantShares: readonly ClaimantShare[];
   readonly metadata: Record<string, unknown> | null;
 }
 
-export interface ClaimTargetsPayload {
+export interface ClaimantSharesPayload {
   readonly version: 1;
-  readonly subjects: readonly AttributionClaimSubject[];
+  readonly subjects: readonly ClaimantSharesSubject[];
 }
 
-export interface SelectedReceiptForClaims {
+export interface SelectedReceiptForAttribution {
   readonly receiptId: string;
   readonly userId: string | null;
   readonly source: string;
@@ -72,9 +69,9 @@ export interface SelectedReceiptForClaims {
   readonly payloadHash: string;
 }
 
-export interface ExpandedClaimUnit {
+export interface ExpandedClaimantUnit {
   readonly subjectRef: string;
-  readonly subjectType: AttributionClaimSubject["subjectType"];
+  readonly subjectKind: string;
   readonly source: string | null;
   readonly eventType: string | null;
   readonly receiptIds: readonly string[];
@@ -87,12 +84,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
 function isValidSharePpm(value: unknown): value is number {
   return (
     typeof value === "number" &&
     Number.isInteger(value) &&
     value > 0 &&
-    value <= CLAIM_SHARE_DENOMINATOR_PPM
+    value <= CLAIMANT_SHARE_DENOMINATOR_PPM
   );
 }
 
@@ -101,20 +102,20 @@ export function claimantKey(claimant: AttributionClaimant): string {
   return `identity:${claimant.provider}:${claimant.externalId}`;
 }
 
-export function buildDefaultClaimTargetsPayload(params: {
-  receipts: readonly SelectedReceiptForClaims[];
+export function buildDefaultReceiptClaimantSharesPayload(params: {
+  receipts: readonly SelectedReceiptForAttribution[];
   weightConfig: Record<string, number>;
-}): ClaimTargetsPayload {
-  const subjects: AttributionClaimSubject[] = [];
+}): ClaimantSharesPayload {
+  const subjects: ClaimantSharesSubject[] = [];
 
   for (const receipt of params.receipts) {
     if (!receipt.included) continue;
 
     const configKey = `${receipt.source}:${receipt.eventType}`;
-    const subjectUnits =
+    const units =
       receipt.weightOverrideMilli ??
       BigInt(params.weightConfig[configKey] ?? 0);
-    if (subjectUnits <= 0n) continue;
+    if (units <= 0n) continue;
 
     const claimant: AttributionClaimant = receipt.userId
       ? {
@@ -130,15 +131,15 @@ export function buildDefaultClaimTargetsPayload(params: {
 
     subjects.push({
       subjectRef: receipt.receiptId,
-      subjectType: "receipt",
-      subjectUnits: subjectUnits.toString(),
+      subjectKind: "receipt",
+      units: units.toString(),
       source: receipt.source,
       eventType: receipt.eventType,
       receiptIds: [receipt.receiptId],
-      claimants: [
+      claimantShares: [
         {
           claimant,
-          sharePpm: CLAIM_SHARE_DENOMINATOR_PPM,
+          sharePpm: CLAIMANT_SHARE_DENOMINATOR_PPM,
         },
       ],
       metadata: {
@@ -157,40 +158,38 @@ export function buildDefaultClaimTargetsPayload(params: {
   };
 }
 
-export function parseClaimTargetsPayload(
+export function parseClaimantSharesPayload(
   payload: Record<string, unknown> | null
-): ClaimTargetsPayload | null {
+): ClaimantSharesPayload | null {
   if (!isRecord(payload) || payload.version !== 1) return null;
   if (!Array.isArray(payload.subjects)) return null;
 
-  const subjects: AttributionClaimSubject[] = [];
+  const subjects: ClaimantSharesSubject[] = [];
 
   for (const subject of payload.subjects) {
     if (!isRecord(subject)) return null;
     if (
-      typeof subject.subjectRef !== "string" ||
-      (subject.subjectType !== "receipt" &&
-        subject.subjectType !== "work_item" &&
-        subject.subjectType !== "custom") ||
-      typeof subject.subjectUnits !== "string" ||
+      !isNonEmptyString(subject.subjectRef) ||
+      !isNonEmptyString(subject.subjectKind) ||
+      typeof subject.units !== "string" ||
       !Array.isArray(subject.receiptIds) ||
-      !Array.isArray(subject.claimants)
+      !Array.isArray(subject.claimantShares)
     ) {
       return null;
     }
 
     let units: bigint;
     try {
-      units = BigInt(subject.subjectUnits);
+      units = BigInt(subject.units);
     } catch {
       return null;
     }
     if (units < 0n) return null;
 
-    const claimants: AttributionClaimTarget[] = [];
+    const claimantShares: ClaimantShare[] = [];
     let shareTotal = 0;
 
-    for (const target of subject.claimants) {
+    for (const target of subject.claimantShares) {
       if (!isRecord(target) || !isValidSharePpm(target.sharePpm)) return null;
       if (!isRecord(target.claimant)) return null;
 
@@ -221,15 +220,15 @@ export function parseClaimTargetsPayload(
       }
 
       shareTotal += target.sharePpm;
-      claimants.push({
+      claimantShares.push({
         claimant,
         sharePpm: target.sharePpm,
       });
     }
 
     if (
-      claimants.length === 0 ||
-      shareTotal !== CLAIM_SHARE_DENOMINATOR_PPM ||
+      claimantShares.length === 0 ||
+      shareTotal !== CLAIMANT_SHARE_DENOMINATOR_PPM ||
       subject.receiptIds.some((id) => typeof id !== "string")
     ) {
       return null;
@@ -237,13 +236,13 @@ export function parseClaimTargetsPayload(
 
     subjects.push({
       subjectRef: subject.subjectRef,
-      subjectType: subject.subjectType,
-      subjectUnits: units.toString(),
+      subjectKind: subject.subjectKind,
+      units: units.toString(),
       source: typeof subject.source === "string" ? subject.source : null,
       eventType:
         typeof subject.eventType === "string" ? subject.eventType : null,
       receiptIds: subject.receiptIds,
-      claimants,
+      claimantShares,
       metadata: isRecord(subject.metadata) ? subject.metadata : null,
     });
   }
@@ -254,21 +253,21 @@ export function parseClaimTargetsPayload(
   };
 }
 
-export function expandClaimUnits(
-  payload: ClaimTargetsPayload
-): ExpandedClaimUnit[] {
-  const expanded: ExpandedClaimUnit[] = [];
+export function expandClaimantUnits(
+  payload: ClaimantSharesPayload
+): ExpandedClaimantUnit[] {
+  const expanded: ExpandedClaimantUnit[] = [];
 
   for (const subject of payload.subjects) {
-    const totalUnits = BigInt(subject.subjectUnits);
+    const totalUnits = BigInt(subject.units);
     if (totalUnits <= 0n) continue;
 
-    const provisional = subject.claimants.map((target) => {
+    const provisional = subject.claimantShares.map((target) => {
       const numerator = totalUnits * BigInt(target.sharePpm);
       return {
         claimant: target.claimant,
-        floorUnits: numerator / BigInt(CLAIM_SHARE_DENOMINATOR_PPM),
-        remainder: numerator % BigInt(CLAIM_SHARE_DENOMINATOR_PPM),
+        floorUnits: numerator / BigInt(CLAIMANT_SHARE_DENOMINATOR_PPM),
+        remainder: numerator % BigInt(CLAIMANT_SHARE_DENOMINATOR_PPM),
       };
     });
 
@@ -288,7 +287,7 @@ export function expandClaimUnits(
 
       expanded.push({
         subjectRef: subject.subjectRef,
-        subjectType: subject.subjectType,
+        subjectKind: subject.subjectKind,
         source: subject.source,
         eventType: subject.eventType,
         receiptIds: subject.receiptIds,

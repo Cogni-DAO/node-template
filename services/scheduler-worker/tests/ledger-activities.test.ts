@@ -50,7 +50,7 @@ function makeMockStore(
     upsertDraftEvaluation: vi.fn(),
     getEvaluationsForEpoch: vi.fn().mockResolvedValue([]),
     getEvaluation: vi.fn().mockResolvedValue(null),
-    getSelectedReceiptsForClaims: vi.fn().mockResolvedValue([]),
+    getSelectedReceiptsForAttribution: vi.fn().mockResolvedValue([]),
     getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue([]),
     insertIngestionReceipts: vi.fn(),
     getReceiptsForWindow: vi.fn(),

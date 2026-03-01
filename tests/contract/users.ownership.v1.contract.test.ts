@@ -20,12 +20,12 @@ describe("users.ownership.read.v1 contract", () => {
     const data = {
       totalUnits: "1500",
       finalizedUnits: "1000",
-      activeUnits: "500",
-      ownershipPercent: 12.5,
+      pendingUnits: "500",
+      finalizedSharePercent: 12.5,
       epochsMatched: 2,
-      claimsMatched: 3,
+      matchedAttributionCount: 3,
       linkedIdentityCount: 2,
-      recentClaims: [
+      recentAttributions: [
         {
           epochId: "42",
           epochStatus: "finalized",
@@ -33,7 +33,7 @@ describe("users.ownership.read.v1 contract", () => {
           source: "github",
           eventType: "pr_merged",
           units: "1000",
-          matchedVia: "github",
+          matchedBy: "github",
           eventTime: "2026-02-20T12:00:00.000Z",
           artifactUrl: "https://github.com/test/repo/pull/1",
         },

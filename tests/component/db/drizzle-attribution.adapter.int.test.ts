@@ -504,8 +504,8 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       expect(resolved?.userId).toBe(resolvedActor.user.id);
     });
 
-    it("getSelectedReceiptsForClaims keeps unresolved rows for later claiming", async () => {
-      const claims = await adapter.getSelectedReceiptsForClaims(epochId);
+    it("getSelectedReceiptsForAttribution keeps unresolved rows for later attribution", async () => {
+      const claims = await adapter.getSelectedReceiptsForAttribution(epochId);
 
       const receiptIds = claims.map((claim) => claim.receiptId);
       expect(receiptIds).toContain("join-test:resolved");

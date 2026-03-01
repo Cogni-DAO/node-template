@@ -17,14 +17,14 @@
 
 import { z } from "zod";
 
-const claimMatchSchema = z.object({
+const attributionMatchSchema = z.object({
   epochId: z.string(),
   epochStatus: z.enum(["open", "review", "finalized"]),
   subjectRef: z.string(),
   source: z.string().nullable(),
   eventType: z.string().nullable(),
   units: z.string(),
-  matchedVia: z.string(),
+  matchedBy: z.string(),
   eventTime: z.string().nullable(),
   artifactUrl: z.string().nullable(),
 });
@@ -36,12 +36,12 @@ export const ownershipSummaryOperation = {
   output: z.object({
     totalUnits: z.string(),
     finalizedUnits: z.string(),
-    activeUnits: z.string(),
-    ownershipPercent: z.number(),
+    pendingUnits: z.string(),
+    finalizedSharePercent: z.number(),
     epochsMatched: z.number().int().nonnegative(),
-    claimsMatched: z.number().int().nonnegative(),
+    matchedAttributionCount: z.number().int().nonnegative(),
     linkedIdentityCount: z.number().int().nonnegative(),
-    recentClaims: z.array(claimMatchSchema),
+    recentAttributions: z.array(attributionMatchSchema),
   }),
 } as const;
 

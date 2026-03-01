@@ -15,12 +15,12 @@
 
 import type {
   AttributionStore,
-  SelectedReceiptForClaims,
+  SelectedReceiptForAttribution,
   SelectedReceiptWithMetadata,
 } from "@cogni/attribution-ledger";
 import {
-  CLAIM_TARGETS_ALGO_REF,
-  CLAIM_TARGETS_EVALUATION_REF,
+  CLAIMANT_SHARES_ALGO_REF,
+  CLAIMANT_SHARES_EVALUATION_REF,
 } from "@cogni/attribution-ledger";
 import { describe, expect, it, vi } from "vitest";
 
@@ -55,7 +55,7 @@ function makeMockStore(
     upsertDraftEvaluation: vi.fn(),
     getEvaluationsForEpoch: vi.fn().mockResolvedValue([]),
     getEvaluation: vi.fn().mockResolvedValue(null),
-    getSelectedReceiptsForClaims: vi.fn().mockResolvedValue([]),
+    getSelectedReceiptsForAttribution: vi.fn().mockResolvedValue([]),
     getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue([]),
     insertIngestionReceipts: vi.fn(),
     getReceiptsForWindow: vi.fn(),
@@ -98,7 +98,9 @@ function makeReceipts(count: number): SelectedReceiptWithMetadata[] {
   }));
 }
 
-function makeClaimReceipts(count: number): SelectedReceiptForClaims[] {
+function makeAttributionReceipts(
+  count: number
+): SelectedReceiptForAttribution[] {
   return Array.from({ length: count }, (_, i) => ({
     receiptId: `ev-${i}`,
     userId: i % 2 === 0 ? "user-aaa" : null,
@@ -144,9 +146,9 @@ describe("evaluateEpochDraft", () => {
     const receipts = makeReceipts(5);
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
-      getSelectedReceiptsForClaims: vi
+      getSelectedReceiptsForAttribution: vi
         .fn()
-        .mockResolvedValue(makeClaimReceipts(5)),
+        .mockResolvedValue(makeAttributionReceipts(5)),
       getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
     });
 
@@ -160,7 +162,7 @@ describe("evaluateEpochDraft", () => {
 
     expect(result.evaluationRefs).toEqual([
       ECHO_EVALUATION_REF,
-      CLAIM_TARGETS_EVALUATION_REF,
+      CLAIMANT_SHARES_EVALUATION_REF,
     ]);
     expect(result.receiptCount).toBe(5);
 
@@ -186,25 +188,25 @@ describe("evaluateEpochDraft", () => {
     expect(payload.byUserId["user-bbb"]).toBe(2);
 
     const claimsCall = vi.mocked(store.upsertDraftEvaluation).mock.calls[1][0];
-    expect(claimsCall.evaluationRef).toBe(CLAIM_TARGETS_EVALUATION_REF);
-    expect(claimsCall.algoRef).toBe(CLAIM_TARGETS_ALGO_REF);
+    expect(claimsCall.evaluationRef).toBe(CLAIMANT_SHARES_EVALUATION_REF);
+    expect(claimsCall.algoRef).toBe(CLAIMANT_SHARES_ALGO_REF);
     expect(claimsCall.status).toBe("draft");
 
     const claimsPayload = claimsCall.payloadJson as {
       version: 1;
-      subjects: Array<{ subjectRef: string; claimants: unknown[] }>;
+      subjects: Array<{ subjectRef: string; claimantShares: unknown[] }>;
     };
     expect(claimsPayload.version).toBe(1);
     expect(claimsPayload.subjects).toHaveLength(5);
-    expect(claimsPayload.subjects[0]?.claimants).toHaveLength(1);
+    expect(claimsPayload.subjects[0]?.claimantShares).toHaveLength(1);
   });
 
   it("calls upsertDraftEvaluation with status='draft'", async () => {
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
-      getSelectedReceiptsForClaims: vi
+      getSelectedReceiptsForAttribution: vi
         .fn()
-        .mockResolvedValue(makeClaimReceipts(2)),
+        .mockResolvedValue(makeAttributionReceipts(2)),
       getSelectedReceiptsWithMetadata: vi
         .fn()
         .mockResolvedValue(makeReceipts(2)),
@@ -228,7 +230,7 @@ describe("evaluateEpochDraft", () => {
   it("handles no receipts — writes evaluation with empty counts", async () => {
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
-      getSelectedReceiptsForClaims: vi.fn().mockResolvedValue([]),
+      getSelectedReceiptsForAttribution: vi.fn().mockResolvedValue([]),
       getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue([]),
     });
 
@@ -256,9 +258,9 @@ describe("buildLockedEvaluations", () => {
     const receipts = makeReceipts(3);
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
-      getSelectedReceiptsForClaims: vi
+      getSelectedReceiptsForAttribution: vi
         .fn()
-        .mockResolvedValue(makeClaimReceipts(3)),
+        .mockResolvedValue(makeAttributionReceipts(3)),
       getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
     });
 
@@ -274,7 +276,7 @@ describe("buildLockedEvaluations", () => {
     expect(result.evaluations[0].evaluationRef).toBe(ECHO_EVALUATION_REF);
     expect(result.evaluations[0].status).toBe("locked");
     expect(result.evaluations[1].evaluationRef).toBe(
-      CLAIM_TARGETS_EVALUATION_REF
+      CLAIMANT_SHARES_EVALUATION_REF
     );
     expect(result.evaluations[1].status).toBe("locked");
     expect(result.artifactsHash).toMatch(/^[a-f0-9]{64}$/);
@@ -287,9 +289,9 @@ describe("buildLockedEvaluations", () => {
   it("returns valid artifactsHash", async () => {
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
-      getSelectedReceiptsForClaims: vi
+      getSelectedReceiptsForAttribution: vi
         .fn()
-        .mockResolvedValue(makeClaimReceipts(2)),
+        .mockResolvedValue(makeAttributionReceipts(2)),
       getSelectedReceiptsWithMetadata: vi
         .fn()
         .mockResolvedValue(makeReceipts(2)),
@@ -313,9 +315,9 @@ describe("idempotency", () => {
     const receipts = makeReceipts(4);
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
-      getSelectedReceiptsForClaims: vi
+      getSelectedReceiptsForAttribution: vi
         .fn()
-        .mockResolvedValue(makeClaimReceipts(4)),
+        .mockResolvedValue(makeAttributionReceipts(4)),
       getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
     });
 
@@ -351,9 +353,9 @@ describe("idempotency", () => {
   it("buildLockedEvaluations output survives JSON.stringify (no BigInt regression)", async () => {
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
-      getSelectedReceiptsForClaims: vi
+      getSelectedReceiptsForAttribution: vi
         .fn()
-        .mockResolvedValue(makeClaimReceipts(3)),
+        .mockResolvedValue(makeAttributionReceipts(3)),
       getSelectedReceiptsWithMetadata: vi
         .fn()
         .mockResolvedValue(makeReceipts(3)),

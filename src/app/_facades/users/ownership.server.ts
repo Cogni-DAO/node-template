@@ -3,7 +3,7 @@
 
 /**
  * Module: `@app/_facades/users/ownership.server`
- * Purpose: Computes an ownership summary for the authenticated user from attribution claim targets and linked identities.
+ * Purpose: Computes an ownership summary for the authenticated user from canonical claimant-share attribution and linked identities.
  * Scope: Reads current user's bindings plus epoch claim/evaluation data. Does not handle HTTP transport or persistence writes.
  * Invariants:
  * - CLAIMANTS_ARE_PLURAL: multi-claimant subjects are treated as first-class
@@ -17,13 +17,13 @@
 
 import {
   type AttributionClaimant,
-  type AttributionClaimSubject,
   type AttributionEpoch,
   type AttributionStore,
-  buildDefaultClaimTargetsPayload,
-  CLAIM_TARGETS_EVALUATION_REF,
-  expandClaimUnits,
-  parseClaimTargetsPayload,
+  buildDefaultReceiptClaimantSharesPayload,
+  CLAIMANT_SHARES_EVALUATION_REF,
+  type ClaimantSharesSubject,
+  expandClaimantUnits,
+  parseClaimantSharesPayload,
 } from "@cogni/attribution-ledger";
 import { withTenantScope } from "@cogni/db-client";
 import { type UserId, userActor } from "@cogni/ids";
@@ -35,9 +35,9 @@ import type { SessionUser } from "@/shared/auth";
 import { getNodeId } from "@/shared/config";
 import { userBindings } from "@/shared/db/schema";
 
-const MAX_RECENT_CLAIMS = 12;
+const MAX_RECENT_ATTRIBUTIONS = 12;
 
-type ClaimMatch = OwnershipSummaryOutput["recentClaims"][number];
+type AttributionMatch = OwnershipSummaryOutput["recentAttributions"][number];
 
 function toBindingKey(provider: string, externalId: string): string {
   return `${provider}:${externalId}`;
@@ -57,7 +57,7 @@ function matchClaimantToUser(
   return claimant.provider;
 }
 
-function computeOwnershipPercent(
+function computeFinalizedSharePercent(
   numerator: bigint,
   denominator: bigint
 ): number {
@@ -79,18 +79,18 @@ function metadataString(
 async function loadClaimSubjectsForEpoch(
   store: AttributionStore,
   epoch: AttributionEpoch
-): Promise<readonly AttributionClaimSubject[]> {
+): Promise<readonly ClaimantSharesSubject[]> {
   const evaluationStatus = epoch.status === "finalized" ? "locked" : "draft";
   const evaluation = await store.getEvaluation(
     epoch.id,
-    CLAIM_TARGETS_EVALUATION_REF,
+    CLAIMANT_SHARES_EVALUATION_REF,
     evaluationStatus
   );
-  const parsed = parseClaimTargetsPayload(evaluation?.payloadJson ?? null);
+  const parsed = parseClaimantSharesPayload(evaluation?.payloadJson ?? null);
   if (parsed) return parsed.subjects;
 
-  const receipts = await store.getSelectedReceiptsForClaims(epoch.id);
-  return buildDefaultClaimTargetsPayload({
+  const receipts = await store.getSelectedReceiptsForAttribution(epoch.id);
+  return buildDefaultReceiptClaimantSharesPayload({
     receipts,
     weightConfig: epoch.weightConfig,
   }).subjects;
@@ -123,15 +123,15 @@ export async function readOwnershipSummary(
   const epochsDesc = [...epochs].sort((a, b) => Number(b.id - a.id));
 
   let finalizedUnits = 0n;
-  let activeUnits = 0n;
+  let pendingUnits = 0n;
   let finalizedUniverseUnits = 0n;
-  let claimsMatched = 0;
+  let matchedAttributionCount = 0;
   const matchedEpochs = new Set<string>();
-  const recentClaims: ClaimMatch[] = [];
+  const recentAttributions: AttributionMatch[] = [];
 
   for (const epoch of epochsDesc) {
     const subjects = await loadClaimSubjectsForEpoch(store, epoch);
-    const expanded = expandClaimUnits({ version: 1, subjects });
+    const expanded = expandClaimantUnits({ version: 1, subjects });
 
     if (epoch.status === "finalized") {
       finalizedUniverseUnits += expanded.reduce(
@@ -141,31 +141,31 @@ export async function readOwnershipSummary(
     }
 
     for (const claim of expanded) {
-      const matchedVia = matchClaimantToUser(
+      const matchedBy = matchClaimantToUser(
         claim.claimant,
         sessionUser.id,
         bindingKeys
       );
-      if (!matchedVia) continue;
+      if (!matchedBy) continue;
 
-      claimsMatched++;
+      matchedAttributionCount++;
       matchedEpochs.add(epoch.id.toString());
 
       if (epoch.status === "finalized") {
         finalizedUnits += claim.units;
       } else {
-        activeUnits += claim.units;
+        pendingUnits += claim.units;
       }
 
-      if (recentClaims.length < MAX_RECENT_CLAIMS) {
-        recentClaims.push({
+      if (recentAttributions.length < MAX_RECENT_ATTRIBUTIONS) {
+        recentAttributions.push({
           epochId: epoch.id.toString(),
           epochStatus: epoch.status,
           subjectRef: claim.subjectRef,
           source: claim.source,
           eventType: claim.eventType,
           units: claim.units.toString(),
-          matchedVia,
+          matchedBy,
           eventTime: metadataString(claim.metadata, "eventTime"),
           artifactUrl: metadataString(claim.metadata, "artifactUrl"),
         });
@@ -174,16 +174,16 @@ export async function readOwnershipSummary(
   }
 
   return {
-    totalUnits: (finalizedUnits + activeUnits).toString(),
+    totalUnits: (finalizedUnits + pendingUnits).toString(),
     finalizedUnits: finalizedUnits.toString(),
-    activeUnits: activeUnits.toString(),
-    ownershipPercent: computeOwnershipPercent(
+    pendingUnits: pendingUnits.toString(),
+    finalizedSharePercent: computeFinalizedSharePercent(
       finalizedUnits,
       finalizedUniverseUnits
     ),
     epochsMatched: matchedEpochs.size,
-    claimsMatched,
+    matchedAttributionCount,
     linkedIdentityCount: bindings.length,
-    recentClaims,
+    recentAttributions,
   };
 }

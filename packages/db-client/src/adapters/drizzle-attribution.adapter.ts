@@ -40,7 +40,7 @@ import type {
   InsertSignatureParams,
   InsertStatementParams,
   SelectedReceiptForAllocation,
-  SelectedReceiptForClaims,
+  SelectedReceiptForAttribution,
   SelectedReceiptWithMetadata,
   UnselectedReceipt,
   UpsertEvaluationParams,
@@ -609,9 +609,9 @@ export class DrizzleAttributionAdapter implements AttributionStore {
     }));
   }
 
-  async getSelectedReceiptsForClaims(
+  async getSelectedReceiptsForAttribution(
     epochId: bigint
-  ): Promise<SelectedReceiptForClaims[]> {
+  ): Promise<SelectedReceiptForAttribution[]> {
     await this.resolveEpochScoped(epochId);
     const rows = await this.db
       .select({

@@ -45,14 +45,14 @@ interface ProfileData {
   linkedProviders: LinkedProvider[];
 }
 
-interface OwnershipClaim {
+interface OwnershipAttribution {
   epochId: string;
   epochStatus: "open" | "review" | "finalized";
   subjectRef: string;
   source: string | null;
   eventType: string | null;
   units: string;
-  matchedVia: string;
+  matchedBy: string;
   eventTime: string | null;
   artifactUrl: string | null;
 }
@@ -60,12 +60,12 @@ interface OwnershipClaim {
 interface OwnershipSummary {
   totalUnits: string;
   finalizedUnits: string;
-  activeUnits: string;
-  ownershipPercent: number;
+  pendingUnits: string;
+  finalizedSharePercent: number;
   epochsMatched: number;
-  claimsMatched: number;
+  matchedAttributionCount: number;
   linkedIdentityCount: number;
-  recentClaims: OwnershipClaim[];
+  recentAttributions: OwnershipAttribution[];
 }
 
 /* ─── Preset avatar color palette ─────────────────────────────────── */
@@ -428,19 +428,20 @@ export function ProfileView(): ReactElement {
             {formatOwnershipUnits(ownership?.finalizedUnits ?? "0")} pts
           </div>
           <div className="mt-1 text-muted-foreground text-sm">
-            {ownership?.ownershipPercent?.toFixed(2) ?? "0.00"}% finalized share
+            {ownership?.finalizedSharePercent?.toFixed(2) ?? "0.00"}% finalized
+            share
           </div>
         </div>
         <div className="rounded-lg border border-border bg-card/50 p-4">
           <div className="text-muted-foreground text-xs uppercase tracking-wide">
-            Active Epochs
+            Pending
           </div>
           <div className="mt-2 font-semibold text-2xl text-foreground">
-            {formatOwnershipUnits(ownership?.activeUnits ?? "0")} pts
+            {formatOwnershipUnits(ownership?.pendingUnits ?? "0")} pts
           </div>
           <div className="mt-1 text-muted-foreground text-sm">
-            {ownership?.claimsMatched ?? 0} matched claim
-            {(ownership?.claimsMatched ?? 0) === 1 ? "" : "s"} via{" "}
+            {ownership?.matchedAttributionCount ?? 0} matched attribution
+            {(ownership?.matchedAttributionCount ?? 0) === 1 ? "" : "s"} by{" "}
             {ownership?.linkedIdentityCount ?? 0} linked identit
             {(ownership?.linkedIdentityCount ?? 0) === 1 ? "y" : "ies"}
           </div>
@@ -451,13 +452,13 @@ export function ProfileView(): ReactElement {
 
       <div className="py-5">
         <div className="mb-3 font-medium text-foreground text-sm">
-          Recent matched contributions
+          Recent matched attributions
         </div>
-        {ownership && ownership.recentClaims.length > 0 ? (
+        {ownership && ownership.recentAttributions.length > 0 ? (
           <div className="space-y-2">
-            {ownership.recentClaims.map((claim) => (
+            {ownership.recentAttributions.map((claim) => (
               <div
-                key={`${claim.epochId}:${claim.subjectRef}:${claim.matchedVia}`}
+                key={`${claim.epochId}:${claim.subjectRef}:${claim.matchedBy}`}
                 className="flex items-center justify-between rounded-lg border border-border bg-card/30 px-3 py-2"
               >
                 <div className="min-w-0">
@@ -466,7 +467,7 @@ export function ProfileView(): ReactElement {
                     {claim.eventType ?? claim.subjectRef}
                   </div>
                   <div className="truncate text-muted-foreground text-xs">
-                    Matched via {claim.matchedVia}
+                    Matched by {claim.matchedBy}
                     {claim.eventTime
                       ? ` · ${new Date(claim.eventTime).toLocaleDateString()}`
                       : ""}
