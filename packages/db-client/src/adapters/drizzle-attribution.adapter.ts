@@ -16,6 +16,7 @@
  * - POOL_LOCKED_AT_REVIEW: insertPoolComponent rejects inserts when epoch status != 'open'.
  * - CONFIG_LOCKED_AT_REVIEW: closeIngestion pins allocationAlgoRef + weightConfigHash.
  * - EVALUATION_FINAL_ATOMIC: closeIngestionWithEvaluations inserts locked evaluations + sets artifacts_hash + transitions epoch in one transaction.
+ * - STATEMENT_ITEMS_BOUNDARY_CLONE: toStatementItemsJson converts readonly AttributionStatementItem[] to mutable Drizzle-compatible JSONB at the adapter boundary.
  * Side-effects: IO (database operations)
  * Links: docs/spec/attribution-ledger.md, packages/attribution-ledger/src/store.ts
  * @public

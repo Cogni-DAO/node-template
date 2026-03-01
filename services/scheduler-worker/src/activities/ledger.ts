@@ -16,6 +16,7 @@
  *   - Per CONFIG_LOCKED_AT_REVIEW: autoCloseIngestion pins allocationAlgoRef + weightConfigHash
  *   - Per EVALUATION_FINAL_ATOMIC: autoCloseIngestion passes evaluations to closeIngestionWithEvaluations for atomic write
  *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing statement if already finalized
+ *   - Per FINALIZE_CLAIMANT_AWARE: finalizeEpoch loads locked claimant-share evaluations, builds claimant allocations with resolved-user overrides, and stores claimant metadata in statement items
  * Side-effects: IO (database, GitHub API, viem EIP-191 verification)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
  * @internal

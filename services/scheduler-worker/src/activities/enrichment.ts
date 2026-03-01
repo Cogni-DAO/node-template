@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/scheduler-worker-service/activities/enrichment`
  * Purpose: Temporal Activities for epoch enrichment — draft evaluation creation and final evaluation building.
- * Scope: Echo enricher (cogni.echo.v0) as plumbing proof. Future enrichers follow the same factory pattern.
+ * Scope: Echo enricher (cogni.echo.v0) and claimant-share enricher (cogni.claimant_shares.v0). Both evaluateEpochDraft and buildLockedEvaluations produce evaluations for each enricher. buildClaimantSharesEvaluationData extracts the shared hash computation.
  * Invariants:
  * - ENRICHER_IDEMPOTENT: Same receipts → same hashes → same evaluation.
  * - ENRICHER_DRAFT_ONLY: evaluateEpochDraft writes status='draft' only; buildLockedEvaluations returns data without writing.

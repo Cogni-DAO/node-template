@@ -6,7 +6,7 @@
  * Purpose: Server-only facade helpers for claimant-aware attribution reads.
  * Scope: Loads canonical claimant-share evaluations, applies resolved-user overrides, and maps results to contract output. Does not handle HTTP transport.
  * Invariants:
- * - FINALIZED_ATTRIBUTION_PREFERS_LOCKED_EVALUATIONS: finalized reads use locked claimant-share evaluations when available
+ * - EVALUATION_STATUS_BY_EPOCH: open epochs read draft evaluations; review and finalized epochs read locked evaluations
  * - FALLBACK_SAFE: missing/invalid evaluation payloads fall back to deterministic receipt-backed claimant shares
  * - ALLOCATION_OVERRIDES_OPTIONAL: final_units only override resolved user claimants, leaving unresolved identities intact
  * Side-effects: IO (database reads)
