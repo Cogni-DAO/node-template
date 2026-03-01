@@ -13,7 +13,13 @@
 
 "use client";
 
-import { Activity, Clock, LayoutDashboard, PieChart } from "lucide-react";
+import {
+  Activity,
+  Clock,
+  FileSignature,
+  LayoutDashboard,
+  PieChart,
+} from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
 import { NavigationLink } from "@/components";
@@ -41,6 +47,12 @@ const GOV_TABS = [
     href: "/gov/holdings",
     label: "Holdings",
     icon: PieChart,
+    match: "prefix" as const,
+  },
+  {
+    href: "/gov/review",
+    label: "Review",
+    icon: FileSignature,
     match: "prefix" as const,
   },
 ];

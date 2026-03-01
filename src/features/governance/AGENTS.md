@@ -37,11 +37,11 @@ Governance feature slice — schedule sync, governance status dashboard, and cla
 ## Public Surface
 
 - **Exports (services):** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`, `getGovernanceStatus()`, `GovernanceStatusResult`
-- **Exports (hooks):** `useGovernanceStatus()`, `useCurrentEpoch()`, `useEpochHistory()`, `useHoldings()`
-- **Exports (components):** `ContributorCard`, `ContributionRow`, `EpochCard`, `EpochCountdown`, `HoldingCard`, `SourceBadge`
+- **Exports (hooks):** `useGovernanceStatus()`, `useCurrentEpoch()`, `useEpochHistory()`, `useHoldings()`, `useReviewEpochs()`, `useSignEpoch()`
+- **Exports (components):** `ContributorCard`, `ContributionRow`, `EpochCard`, `EpochCountdown`, `HoldingCard`, `SourceBadge`, `OnSaveAdjustment`
 - **Exports (lib):** `composeEpochView()`, `composeEpochViewFromClaimants()`, `composeHoldings()`
-- **Exports (types):** `EpochView`, `EpochContributor`, `IngestionReceipt`, `HoldingView`, `CurrentEpochData`, `EpochHistoryData`, `HoldingsData`
-- **Routes (app pages):** `/gov` (system), `/gov/epoch` (current), `/gov/history` (finalized), `/gov/holdings` (aggregated)
+- **Exports (types):** `EpochView`, `EpochContributor`, `IngestionReceipt`, `HoldingView`, `CurrentEpochData`, `EpochHistoryData`, `HoldingsData`, `SignEpochState`, `SignEpochPhase`
+- **Routes (app pages):** `/gov` (system), `/gov/epoch` (current), `/gov/history` (finalized), `/gov/holdings` (aggregated), `/gov/review` (approver admin)
 - **Routes (API — in `src/app/api/v1/attribution/`):** `GET /epochs`, `GET /epochs/:id/allocations`, `GET /epochs/:id/statement`, `GET /epochs/:id/claimants`, `GET /epochs/:id/activity`
 - **CLI:** `pnpm governance:schedules:sync`, `pnpm db:seed`, `pnpm dev:setup`
 - **Env/Config keys:** `.cogni/repo-spec.yaml` → `governance.schedules`
