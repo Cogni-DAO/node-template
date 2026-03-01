@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-03-01
+- **Last reviewed:** 2026-03-02
 - **Status:** draft
 
 ## Purpose
@@ -37,10 +37,12 @@ Authenticated HTTP endpoints for attribution operations. SIWE-protected reads fo
   - `PATCH /api/v1/attribution/epochs/[id]/allocations` — adjust allocation final_units (SIWE + approver)
   - `POST /api/v1/attribution/epochs/[id]/pool-components` — record pool component (SIWE + approver)
   - `POST /api/v1/attribution/epochs/[id]/review` — close ingestion, transition open → review (SIWE + approver)
-  - `POST /api/v1/attribution/epochs/[id]/finalize` — sign + finalize epoch, returns 202 + workflowId (SIWE + approver, WRITES_VIA_TEMPORAL)
+  - `GET /api/v1/attribution/epochs/[id]/sign-data` — EIP-712 typed data for epoch signing (SIWE + approver)
+  - `GET|PATCH|DELETE /api/v1/attribution/epochs/[id]/subject-overrides` — manage subject identity overrides for epoch review (SIWE + approver)
+  - `POST /api/v1/attribution/epochs/[id]/finalize` — sign + finalize epoch, returns 202 + {workflowId, created} (SIWE + approver, WRITES_VIA_TEMPORAL). Returns 503 if no ledger-tasks pollers.
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** `epochs/route.ts`, `epochs/[id]/activity/route.ts`, `epochs/[id]/claimants/route.ts`, `epochs/[id]/allocations/route.ts`, `epochs/[id]/pool-components/route.ts`, `epochs/[id]/review/route.ts`, `epochs/[id]/finalize/route.ts`
+- **Files considered API:** `epochs/route.ts`, `epochs/[id]/activity/route.ts`, `epochs/[id]/claimants/route.ts`, `epochs/[id]/allocations/route.ts`, `epochs/[id]/pool-components/route.ts`, `epochs/[id]/review/route.ts`, `epochs/[id]/sign-data/route.ts`, `epochs/[id]/subject-overrides/route.ts`, `epochs/[id]/finalize/route.ts`
 
 ## Ports
 
@@ -73,7 +75,7 @@ curl -X PATCH -b session http://localhost:3000/api/v1/attribution/epochs/1/alloc
 ## Dependencies
 
 - **Internal:** `@/bootstrap/http`, `@/bootstrap/container`, `@/contracts/attribution.*.v1.contract`, `@/shared/config`, `@/app/_lib/auth/session`
-- **External:** `next/server`
+- **External:** `next/server`, `@temporalio/client` (finalize route only)
 
 ## Change Protocol
 

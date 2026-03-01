@@ -8,7 +8,7 @@
  * Invariants:
  *   - WRITE_ROUTES_AUTHED: requires SIWE session
  *   - WRITE_ROUTES_APPROVER_GATED: requires wallet in ledger approvers
- *   - WRITES_VIA_TEMPORAL: returns 202 + workflowId (async)
+ *   - WRITES_VIA_TEMPORAL: returns 202 + {workflowId, created} (async)
  *   - Contract remains stable; breaking changes require new version
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md
