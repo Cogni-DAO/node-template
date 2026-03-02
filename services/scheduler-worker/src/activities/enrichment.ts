@@ -7,6 +7,7 @@
  * Scope: Profile-driven enricher dispatch via @cogni/attribution-pipeline-plugins registries. No enricher logic lives here.
  * Invariants:
  * - ENRICHER_IDEMPOTENT: Same receipts → same hashes → same evaluation.
+ * - ENRICHER_SKIP_UNCHANGED: evaluateEpochDraft pre-computes inputsHash and skips adapter call if existing draft matches (saves LLM tokens for future AI enrichers).
  * - ENRICHER_DRAFT_ONLY: evaluateEpochDraft writes status='draft' only; buildLockedEvaluations returns data without writing.
  * - PROFILE_DISPATCH: enrichers run in profile.enricherRefs order, resolved via attributionPipeline.
  * Side-effects: IO (database via attributionStore)
@@ -14,7 +15,10 @@
  * @internal
  */
 
-import { computeArtifactsHash } from "@cogni/attribution-ledger";
+import {
+  computeArtifactsHash,
+  computeEnricherInputsHash,
+} from "@cogni/attribution-ledger";
 import {
   type EnricherContext,
   resolveProfile,
@@ -114,12 +118,46 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       throw new Error(`evaluateEpochDraft: epoch ${input.epochId} not found`);
     }
 
+    // Pre-load receipts once for inputsHash check (cheap DB read).
+    // This avoids calling enricher adapters (potentially LLM-backed) when inputs haven't changed.
+    const receipts =
+      await attributionStore.getSelectedReceiptsWithMetadata(epochId);
+
+    const candidateInputsHash = await computeEnricherInputsHash({
+      epochId,
+      receipts: receipts.map((r) => ({
+        receiptId: r.receiptId,
+        receiptPayloadHash: r.payloadHash,
+      })),
+    });
+
     const evaluationRefs: string[] = [];
+    let skippedCount = 0;
 
     for (const ref of profile.enricherRefs) {
       const adapter = registries.enrichers.get(ref.enricherRef);
       if (!adapter) {
         throw new Error(`Enricher adapter not found: ${ref.enricherRef}`);
+      }
+
+      // Check if existing draft evaluation already matches current inputs.
+      const existing = await attributionStore.getEvaluation(
+        epochId,
+        adapter.evaluationRef,
+        "draft"
+      );
+      if (existing && existing.inputsHash === candidateInputsHash) {
+        logger.info(
+          {
+            epochId: input.epochId,
+            evaluationRef: adapter.evaluationRef,
+            inputsHash: `${candidateInputsHash.slice(0, 12)}...`,
+          },
+          "Draft evaluation unchanged — skipping enricher"
+        );
+        evaluationRefs.push(adapter.evaluationRef);
+        skippedCount++;
+        continue;
       }
 
       const ctx: EnricherContext = {
@@ -147,16 +185,16 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       evaluationRefs.push(result.evaluationRef);
     }
 
-    const receipts =
-      await attributionStore.getSelectedReceiptsWithMetadata(epochId);
-
     logger.info(
       {
         epochId: input.epochId,
         evaluationRefs,
         receiptCount: receipts.length,
+        skippedCount,
       },
-      "Draft evaluations written"
+      skippedCount === evaluationRefs.length
+        ? "All draft evaluations unchanged — nothing to recompute"
+        : "Draft evaluations written"
     );
 
     return {

@@ -320,6 +320,102 @@ describe("buildLockedEvaluations", () => {
   });
 });
 
+// ── Change detection (skip when inputsHash unchanged) ───────────
+
+describe("evaluateEpochDraft change detection", () => {
+  it("skips enricher when existing draft evaluation has matching inputsHash", async () => {
+    const receipts = makeReceipts(3);
+
+    // Pre-compute the inputsHash that would result from these receipts.
+    // The echo adapter uses computeEnricherInputsHash with the same receipt shape.
+    const { computeEnricherInputsHash } = await import(
+      "@cogni/attribution-ledger"
+    );
+    const expectedHash = await computeEnricherInputsHash({
+      epochId: 1n,
+      receipts: receipts.map((r) => ({
+        receiptId: r.receiptId,
+        receiptPayloadHash: r.payloadHash,
+      })),
+    });
+
+    const { store, activities } = makeActivities({
+      getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
+      getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
+      // Return an existing evaluation with the same inputsHash
+      getEvaluation: vi.fn().mockResolvedValue({
+        id: "eval-1",
+        nodeId: NODE_ID,
+        epochId: 1n,
+        evaluationRef: ECHO_EVALUATION_REF,
+        status: "draft",
+        algoRef: ECHO_ALGO_REF,
+        inputsHash: expectedHash,
+        payloadHash: "old-payload-hash",
+        payloadJson: {},
+        payloadRef: null,
+        createdAt: new Date(),
+      }),
+    });
+
+    const result = await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
+    });
+
+    // Should return the ref but NOT call the adapter or write to store
+    expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
+    expect(store.upsertDraftEvaluation).not.toHaveBeenCalled();
+  });
+
+  it("runs enricher when existing draft evaluation has different inputsHash", async () => {
+    const receipts = makeReceipts(3);
+    const { store, activities } = makeActivities({
+      getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
+      getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
+      // Return an existing evaluation with a STALE inputsHash
+      getEvaluation: vi.fn().mockResolvedValue({
+        id: "eval-1",
+        nodeId: NODE_ID,
+        epochId: 1n,
+        evaluationRef: ECHO_EVALUATION_REF,
+        status: "draft",
+        algoRef: ECHO_ALGO_REF,
+        inputsHash: "stale-hash-does-not-match",
+        payloadHash: "old-payload-hash",
+        payloadJson: {},
+        payloadRef: null,
+        createdAt: new Date(),
+      }),
+    });
+
+    const result = await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
+    });
+
+    expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
+    expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs enricher when no existing draft evaluation exists", async () => {
+    const receipts = makeReceipts(3);
+    const { store, activities } = makeActivities({
+      getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
+      getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
+      getEvaluation: vi.fn().mockResolvedValue(null),
+    });
+
+    const result = await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
+    });
+
+    expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
+    expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ── Idempotency ─────────────────────────────────────────────────
 
 describe("idempotency", () => {

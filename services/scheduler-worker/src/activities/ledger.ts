@@ -679,17 +679,54 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       })
     );
 
-    // 4. Upsert user projections (recomputable, unsigned)
+    const totalProposedUnits = receiptWeights.reduce(
+      (acc, w) => acc + w.units,
+      0n
+    );
+
+    // 4. Check if projections have actually changed before writing.
+    // Avoids unnecessary DB writes when the same daily run produces identical results.
+    const existingProjections =
+      await attributionStore.getUserProjectionsForEpoch(epochId);
+    const existingMap = new Map(
+      existingProjections.map((p) => [
+        p.userId,
+        { units: p.projectedUnits, count: p.receiptCount },
+      ])
+    );
+
+    const projectionsChanged =
+      projections.length !== existingMap.size ||
+      projections.some((p) => {
+        const existing = existingMap.get(p.userId);
+        return (
+          !existing ||
+          existing.units !== p.projectedUnits ||
+          existing.count !== p.receiptCount
+        );
+      });
+
+    if (!projectionsChanged) {
+      logger.info(
+        {
+          epochId: input.epochId,
+          totalAllocations: receiptWeights.length,
+          totalProposedUnits: totalProposedUnits.toString(),
+        },
+        "Projections unchanged — skipping writes"
+      );
+      return {
+        totalAllocations: receiptWeights.length,
+        totalProposedUnits: totalProposedUnits.toString(),
+      };
+    }
+
+    // 5. Upsert user projections (recomputable, unsigned)
     if (projections.length > 0) {
       await attributionStore.upsertUserProjections(projections);
       const activeUserIds = projections.map((p) => p.userId);
       await attributionStore.deleteStaleUserProjections(epochId, activeUserIds);
     }
-
-    const totalProposedUnits = receiptWeights.reduce(
-      (acc, w) => acc + w.units,
-      0n
-    );
 
     logger.info(
       {
@@ -995,7 +1032,8 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
     const finalClaimantAllocations = explodeToClaimants(
       receiptWeights,
-      lockedClaimants
+      lockedClaimants,
+      overrides
     );
     if (finalClaimantAllocations.length === 0) {
       throw new Error(
@@ -1006,6 +1044,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     // Build override audit trail for statement persistence
     const reviewOverrideSnapshots = buildReceiptWeightOverrideSnapshots(
       rawWeights,
+      lockedClaimants,
       overrides
     );
 
