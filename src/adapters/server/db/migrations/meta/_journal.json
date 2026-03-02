@@ -127,6 +127,13 @@
       "when": 1772438438075,
       "tag": "0017_breezy_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1772448132340,
+      "tag": "0018_many_stone_men",
+      "breakpoints": true
     }
   ]
 }
