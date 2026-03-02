@@ -11,7 +11,10 @@
  * @internal
  */
 
-import { validateEnricherOrder } from "@cogni/attribution-pipeline-contracts";
+import {
+  getEffectiveEnricherRefs,
+  validateEnricherOrder,
+} from "@cogni/attribution-pipeline-contracts";
 import { describe, expect, it } from "vitest";
 
 import { COGNI_V0_PROFILE } from "../../src/profiles/cogni-v0.0";
@@ -25,10 +28,16 @@ describe("cogni-v0.0 profile", () => {
     expect(COGNI_V0_PROFILE.allocatorRef).toBe("weight-sum-v0");
   });
 
-  it("selects echo and claimant-shares enrichers", () => {
-    const refs = COGNI_V0_PROFILE.enricherRefs.map((r) => r.evaluationRef);
-    expect(refs).toContain("cogni.echo.v0");
-    expect(refs).toContain("cogni.claimant_shares.v0");
+  it("selects echo as the plugin enricher and claimant-shares via core evaluations", () => {
+    const pluginRefs = COGNI_V0_PROFILE.pluginEnricherRefs.map(
+      (r) => r.evaluationRef
+    );
+    const effectiveRefs = getEffectiveEnricherRefs(COGNI_V0_PROFILE).map(
+      (r) => r.evaluationRef
+    );
+    expect(pluginRefs).toEqual(["cogni.echo.v0"]);
+    expect(effectiveRefs).toContain("cogni.echo.v0");
+    expect(effectiveRefs).toContain("cogni.claimant_shares.v0");
   });
 
   it("has activity epochKind", () => {
@@ -38,12 +47,12 @@ describe("cogni-v0.0 profile", () => {
   it("is a plain readonly object (PROFILE_IS_DATA)", () => {
     expect(COGNI_V0_PROFILE.constructor).toBe(Object);
     expect(typeof COGNI_V0_PROFILE.profileId).toBe("string");
-    expect(Array.isArray(COGNI_V0_PROFILE.enricherRefs)).toBe(true);
+    expect(Array.isArray(COGNI_V0_PROFILE.pluginEnricherRefs)).toBe(true);
   });
 
   it("enricher ordering is valid (ENRICHER_ORDER_EXPLICIT)", () => {
     expect(() =>
-      validateEnricherOrder([...COGNI_V0_PROFILE.enricherRefs])
+      validateEnricherOrder(getEffectiveEnricherRefs(COGNI_V0_PROFILE))
     ).not.toThrow();
   });
 });

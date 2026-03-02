@@ -19,16 +19,12 @@ import type { PipelineProfile } from "@cogni/attribution-pipeline-contracts";
 
 /**
  * cogni-v0.0 profile — weekly activity attribution.
- * Runs echo + claimant-shares enrichers, allocates via weight-sum-v0.
- * Claimant-shares depends on nothing (independent), echo depends on nothing.
+ * Runs echo as the only optional plugin enricher; claimant-shares is mandatory core evaluation.
  */
 export const COGNI_V0_PROFILE: PipelineProfile = {
   profileId: "cogni-v0.0",
   label: "Cogni Weekly Activity v0.0",
-  enricherRefs: [
-    { evaluationRef: "cogni.echo.v0", dependsOn: [] },
-    { evaluationRef: "cogni.claimant_shares.v0", dependsOn: [] },
-  ],
+  pluginEnricherRefs: [{ evaluationRef: "cogni.echo.v0", dependsOn: [] }],
   allocatorRef: "weight-sum-v0",
   epochKind: "activity",
 };

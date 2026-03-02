@@ -8,7 +8,7 @@
  * Invariants:
  * - PROFILE_IS_DATA: profiles are plain readonly objects — no classes, no methods, no I/O.
  * - PROFILE_IMMUTABLE_PUBLISH_NEW: profiles are semver'd and never mutated after publication.
- * - PROFILE_SELECTS_ENRICHERS: enricherRefs is the sole authority for which enrichers run.
+ * - PROFILE_SELECTS_PLUGIN_ENRICHERS: pluginEnricherRefs selects optional/plugin enrichers only.
  * - PROFILE_SELECTS_ALLOCATOR: allocatorRef is the sole authority for which allocator runs.
  * - FRAMEWORK_NO_IO: this module contains zero I/O.
  * Side-effects: none
@@ -31,7 +31,7 @@ export interface EnricherRef {
 }
 
 /**
- * A pipeline profile is a plain readonly object selecting enrichers and allocator.
+ * A pipeline profile is a plain readonly object selecting plugin enrichers and allocator.
  * Keyed by credit_estimate_algo from repo-spec.yaml.
  * Profiles are semver'd and NEVER mutated — publish a new version instead.
  */
@@ -43,10 +43,10 @@ export interface PipelineProfile {
   readonly label: string;
 
   /**
-   * Ordered list of enricher refs to run.
-   * Order is significant — enrichers execute sequentially in this order.
+   * Ordered list of optional/plugin enricher refs to run.
+   * Core evaluations are added separately by the framework.
    */
-  readonly enricherRefs: readonly EnricherRef[];
+  readonly pluginEnricherRefs: readonly EnricherRef[];
 
   /** The allocation algorithm ref (pinned on epoch at closeIngestion). */
   readonly allocatorRef: string;

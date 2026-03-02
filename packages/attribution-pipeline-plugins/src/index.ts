@@ -15,14 +15,6 @@
  * @public
  */
 
-export { createClaimantSharesAdapter } from "./plugins/claimant-shares/adapter";
-// Claimant-shares plugin
-export {
-  CLAIMANT_SHARES_ALGO_REF,
-  CLAIMANT_SHARES_DESCRIPTOR,
-  CLAIMANT_SHARES_EVALUATION_REF,
-  CLAIMANT_SHARES_SCHEMA_REF,
-} from "./plugins/claimant-shares/descriptor";
 export { createEchoAdapter } from "./plugins/echo/adapter";
 // Echo plugin
 export {
