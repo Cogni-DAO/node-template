@@ -57,7 +57,6 @@ This spec introduces no new invariants. All behavioral guarantees are defined in
  │  │     github:                                                        │  │
  │  │       attribution_pipeline: cogni-v0.0  ◄── selects profile        │  │
  │  │       source_refs: ["org/repo"]                                    │  │
- │  │       streams: ["pull_requests", "reviews", "issues"]              │  │
  │  └────────────────────────────────────────────────────────────────────┘  │
  │                                     │                                    │
  └─────────────────────────────────────┼────────────────────────────────────┘
@@ -68,7 +67,7 @@ This spec introduces no new invariants. All behavioral guarantees are defined in
  │                                                                         │
  │  ┌───────────────────────────────────────────────────────────────────┐  │
  │  │  1. INGEST                          "What happened?"              │  │
- │  │     Source adapters (GitHub, Discord) ──► ingestion_receipts      │  │
+ │  │     Source adapters (GitHub) ──► ingestion_receipts      │  │
  │  │     • Cursor-based incremental fetch                              │  │
  │  │     • Deterministic IDs (idempotent inserts)                      │  │
  │  │     • Append-only (DB trigger rejects UPDATE/DELETE)              │  │
@@ -196,9 +195,14 @@ attribution_pipeline: cogni-v0.0 ──► resolveProfile("cogni-v0.0")
                                     PipelineProfile {
                                       profileId: "cogni-v0.0"
                                       enricherRefs: [
-                                        { evaluationRef: "cogni.echo.v0" }
+                                        { enricherRef: "cogni.echo.v0" }
                                       ]
                                       allocatorRef: "weight-sum-v0"
+                                      defaultWeightConfig: {
+                                        "github:pr_merged": 1000,
+                                        "github:review_submitted": 500,
+                                        "github:issue_closed": 300
+                                      }
                                     }
                                          │
                             ┌────────────┴────────────┐
