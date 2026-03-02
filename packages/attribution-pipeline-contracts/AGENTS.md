@@ -53,7 +53,7 @@ Stable framework package for the attribution pipeline plugin architecture. Defin
   - `PipelineProfile` — enricherRefs[], allocatorRef, epochKind
   - `EnricherRef` — evaluationRef + dependsOn[]
   - `ProfileRegistry` — ReadonlyMap<profileId, PipelineProfile>
-  - `resolveProfile()` — Lookup profile by credit_estimate_algo or throw
+  - `resolveProfile()` — Lookup profile by attribution_pipeline or throw
   - `validateEnricherOrder()` — Topological sort, cycle/missing-ref detection
   - `validateEvaluationWrite()` — Assert all required evaluation fields present
 - **CLI:** none

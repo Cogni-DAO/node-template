@@ -8,7 +8,7 @@
  * Invariants:
  * - ENRICHER_IDEMPOTENT: Same receipts → same hashes → same evaluation.
  * - ENRICHER_DRAFT_ONLY: evaluateEpochDraft writes status='draft' only; buildLockedEvaluations returns data without writing.
- * - PROFILE_DISPATCH: enrichers run in profile.enricherRefs order, resolved via creditEstimateAlgo.
+ * - PROFILE_DISPATCH: enrichers run in profile.enricherRefs order, resolved via attributionPipeline.
  * Side-effects: IO (database via attributionStore)
  * Links: work/items/task.0113.epoch-artifact-pipeline.md, docs/spec/plugin-attribution-pipeline.md
  * @internal
@@ -40,7 +40,7 @@ export interface EnrichmentActivityDeps {
  */
 export interface EvaluateEpochDraftInput {
   readonly epochId: string; // bigint serialized as string for Temporal
-  readonly creditEstimateAlgo: string;
+  readonly attributionPipeline: string;
 }
 
 /**
@@ -56,7 +56,7 @@ export interface EvaluateEpochDraftOutput {
  */
 export interface BuildLockedEvaluationsInput {
   readonly epochId: string; // bigint serialized as string for Temporal
-  readonly creditEstimateAlgo: string;
+  readonly attributionPipeline: string;
 }
 
 /**
@@ -101,7 +101,7 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
     const epochId = BigInt(input.epochId);
     const profile = resolveProfile(
       registries.profiles,
-      input.creditEstimateAlgo
+      input.attributionPipeline
     );
 
     logger.info(
@@ -178,7 +178,7 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
     const epochId = BigInt(input.epochId);
     const profile = resolveProfile(
       registries.profiles,
-      input.creditEstimateAlgo
+      input.attributionPipeline
     );
 
     logger.info(

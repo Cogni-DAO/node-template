@@ -185,7 +185,7 @@ export interface AutoCloseIngestionInput {
   readonly periodEnd: string; // ISO date
   readonly gracePeriodMs: number;
   readonly weightConfig: Record<string, number>;
-  readonly creditEstimateAlgo: string;
+  readonly attributionPipeline: string;
   readonly approvers: string[];
   readonly evaluations: ReadonlyArray<{
     readonly nodeId: string;
@@ -805,7 +805,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     // Validate and compute config hashes
     validateWeightConfig(input.weightConfig);
     const weightConfigHash = await computeWeightConfigHash(input.weightConfig);
-    const allocationAlgoRef = deriveAllocationAlgoRef(input.creditEstimateAlgo);
+    const allocationAlgoRef = deriveAllocationAlgoRef(
+      input.attributionPipeline
+    );
     const approverSetHash = computeApproverSetHash(input.approvers);
 
     logger.info(

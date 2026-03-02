@@ -144,7 +144,7 @@ describe("parseRepoSpec", () => {
         '    base_issuance_credits: "10000"',
         "  activity_sources:",
         "    github:",
-        "      credit_estimate_algo: cogni-v0.0",
+        "      attribution_pipeline: cogni-v0.0",
         '      source_refs: ["cogni-dao/cogni-template"]',
         '      streams: ["pull_requests", "reviews", "issues"]',
         "cogni_dao:",

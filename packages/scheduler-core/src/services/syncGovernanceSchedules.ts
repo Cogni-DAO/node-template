@@ -63,7 +63,7 @@ export interface LedgerScheduleConfig {
   activitySources: Record<
     string,
     {
-      creditEstimateAlgo: string;
+      attributionPipeline: string;
       sourceRefs: string[];
       streams: string[];
     }

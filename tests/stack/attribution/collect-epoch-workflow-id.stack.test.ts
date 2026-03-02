@@ -42,7 +42,7 @@ const WORKFLOW_INPUT = {
     epochLengthDays: 7,
     activitySources: {
       github: {
-        creditEstimateAlgo: "cogni-v0.0",
+        attributionPipeline: "cogni-v0.0",
         sourceRefs: ["Cogni-DAO/test-repo"],
         streams: ["pull_requests", "reviews", "issues"],
       },

@@ -227,7 +227,7 @@ describe("deriveAllocationAlgoRef", () => {
 
   it("throws for unknown algo", () => {
     expect(() => deriveAllocationAlgoRef("unknown")).toThrow(
-      "Unknown credit_estimate_algo"
+      "Unknown attribution_pipeline"
     );
   });
 });

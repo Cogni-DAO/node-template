@@ -32,7 +32,7 @@ export interface EnricherRef {
 
 /**
  * A pipeline profile is a plain readonly object selecting enrichers and allocator.
- * Keyed by credit_estimate_algo from repo-spec.yaml.
+ * Keyed by attribution_pipeline from repo-spec.yaml.
  * Profiles are semver'd and NEVER mutated — publish a new version instead.
  */
 export interface PipelineProfile {
@@ -62,18 +62,17 @@ export interface PipelineProfile {
 export type ProfileRegistry = ReadonlyMap<string, PipelineProfile>;
 
 /**
- * Resolve a profile by credit_estimate_algo key, or throw.
- * Replaces deriveAllocationAlgoRef().
+ * Resolve a profile by attribution_pipeline key, or throw.
  */
 export function resolveProfile(
   registry: ProfileRegistry,
-  creditEstimateAlgo: string
+  attributionPipeline: string
 ): PipelineProfile {
-  const profile = registry.get(creditEstimateAlgo);
+  const profile = registry.get(attributionPipeline);
   if (!profile) {
     const available = [...registry.keys()].join(", ");
     throw new Error(
-      `Unknown credit_estimate_algo: "${creditEstimateAlgo}". Available profiles: [${available}]`
+      `Unknown attribution_pipeline: "${attributionPipeline}". Available profiles: [${available}]`
     );
   }
   return profile;

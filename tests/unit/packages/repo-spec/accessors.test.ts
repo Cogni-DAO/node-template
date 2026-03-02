@@ -62,7 +62,7 @@ function buildFullSpec(): RepoSpec {
       pool_config: { base_issuance_credits: "10000" },
       activity_sources: {
         github: {
-          credit_estimate_algo: "cogni-v0.0",
+          attribution_pipeline: "cogni-v0.0",
           source_refs: ["cogni-dao/cogni-template"],
           streams: ["pull_requests", "reviews", "issues"],
         },
@@ -195,7 +195,7 @@ describe("extractLedgerConfig", () => {
       "0x070075F1389Ae1182aBac722B36CA12285d0c949",
     ]);
     expect(ledger?.activitySources.github).toEqual({
-      creditEstimateAlgo: "cogni-v0.0",
+      attributionPipeline: "cogni-v0.0",
       sourceRefs: ["cogni-dao/cogni-template"],
       streams: ["pull_requests", "reviews", "issues"],
     });
@@ -219,7 +219,7 @@ describe("extractLedgerConfig", () => {
         epoch_length_days: 7,
         activity_sources: {
           github: {
-            credit_estimate_algo: "cogni-v0.0",
+            attribution_pipeline: "cogni-v0.0",
             source_refs: ["r"],
             streams: ["s"],
           },
@@ -245,7 +245,7 @@ describe("extractLedgerConfig", () => {
         epoch_length_days: 7,
         activity_sources: {
           github: {
-            credit_estimate_algo: "cogni-v0.0",
+            attribution_pipeline: "cogni-v0.0",
             source_refs: ["r"],
             streams: ["s"],
           },
@@ -283,7 +283,7 @@ describe("extractLedgerApprovers", () => {
         epoch_length_days: 7,
         activity_sources: {
           github: {
-            credit_estimate_algo: "cogni-v0.0",
+            attribution_pipeline: "cogni-v0.0",
             source_refs: ["r"],
             streams: ["s"],
           },

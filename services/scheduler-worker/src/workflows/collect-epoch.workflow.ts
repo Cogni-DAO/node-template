@@ -84,11 +84,11 @@ export interface AttributionIngestRunV1 {
   readonly scopeId: string;
   readonly scopeKey: string;
   readonly epochLengthDays: number;
-  /** Map of source → { creditEstimateAlgo, sourceRefs, streams } */
+  /** Map of source → { attributionPipeline, sourceRefs, streams } */
   readonly activitySources: Record<
     string,
     {
-      creditEstimateAlgo: string;
+      attributionPipeline: string;
       sourceRefs: string[];
       streams: string[];
     }
@@ -175,25 +175,25 @@ export async function CollectEpochWorkflow(
     }
   }
 
-  // 5. Extract creditEstimateAlgo from activity sources (required — no fallback)
+  // 5. Extract attributionPipeline from activity sources (required — no fallback)
   const firstSource = Object.values(config.activitySources)[0];
-  if (!firstSource?.creditEstimateAlgo) {
+  if (!firstSource?.attributionPipeline) {
     throw ApplicationFailure.nonRetryable(
-      "creditEstimateAlgo missing from activitySources — check repo-spec.yaml"
+      "attributionPipeline missing from activitySources — check repo-spec.yaml"
     );
   }
-  const creditEstimateAlgo = firstSource.creditEstimateAlgo;
+  const attributionPipeline = firstSource.attributionPipeline;
 
   // 6. Materialize selection and resolve identities (SELECTION_AUTO_POPULATE)
   await materializeSelection({ epochId: epoch.epochId });
 
   // 7. Evaluate epoch with draft evaluations (profile-driven enricher dispatch)
-  await evaluateEpochDraft({ epochId: epoch.epochId, creditEstimateAlgo });
+  await evaluateEpochDraft({ epochId: epoch.epochId, attributionPipeline });
 
   // 8. Compute allocations (periodic — runs every collection pass)
   await computeAllocations({
     epochId: epoch.epochId,
-    algorithmId: deriveAllocationAlgoRef(creditEstimateAlgo),
+    algorithmId: deriveAllocationAlgoRef(attributionPipeline),
     weightConfig: epoch.weightConfig,
   });
 
@@ -210,14 +210,14 @@ export async function CollectEpochWorkflow(
     const gracePeriodMs = config.autoCloseGracePeriodMs ?? 24 * 60 * 60 * 1000; // default 24h
     const { evaluations, artifactsHash } = await buildLockedEvaluations({
       epochId: epoch.epochId,
-      creditEstimateAlgo,
+      attributionPipeline,
     });
     await autoCloseIngestion({
       epochId: epoch.epochId,
       periodEnd: periodEndIso,
       gracePeriodMs,
       weightConfig: epoch.weightConfig,
-      creditEstimateAlgo,
+      attributionPipeline,
       approvers: config.approvers,
       evaluations,
       artifactsHash,
@@ -227,7 +227,7 @@ export async function CollectEpochWorkflow(
 
 /** V0 weight config derivation — pure, deterministic. */
 function deriveWeightConfigV0(
-  sources: Record<string, { creditEstimateAlgo: string }>
+  sources: Record<string, { attributionPipeline: string }>
 ): Record<string, number> {
   const weights: Record<string, number> = {};
   for (const source of Object.keys(sources)) {

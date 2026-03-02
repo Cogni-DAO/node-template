@@ -8,7 +8,7 @@
  * Invariants:
  * - ENRICHER_IDEMPOTENT: Same receipts produce same hashes across draft and locked runs.
  * - BIGINT_WIRE_SAFE: buildLockedEvaluations output survives JSON.stringify (no BigInt in wire format).
- * - PROFILE_DISPATCH: enrichers are dispatched via creditEstimateAlgo → profile → enricherRefs.
+ * - PROFILE_DISPATCH: enrichers are dispatched via attributionPipeline → profile → enricherRefs.
  * Side-effects: none (mocked store)
  * Links: services/scheduler-worker/src/activities/enrichment.ts
  * @internal
@@ -29,7 +29,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createEnrichmentActivities } from "../src/activities/enrichment.js";
 
 const NODE_ID = "aaaaaaaa-0000-0000-0000-000000000001";
-const CREDIT_ESTIMATE_ALGO = "cogni-v0.0";
+const ATTRIBUTION_PIPELINE = "cogni-v0.0";
 
 const registries = createDefaultRegistries();
 
@@ -175,7 +175,7 @@ describe("evaluateEpochDraft", () => {
 
     const result = await activities.evaluateEpochDraft({
       epochId: "1",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
 
     expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
@@ -216,7 +216,7 @@ describe("evaluateEpochDraft", () => {
 
     await activities.evaluateEpochDraft({
       epochId: "1",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
 
     const call = vi.mocked(store.upsertDraftEvaluation).mock.calls[0][0];
@@ -232,7 +232,7 @@ describe("evaluateEpochDraft", () => {
 
     const result = await activities.evaluateEpochDraft({
       epochId: "1",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
 
     expect(result.receiptCount).toBe(0);
@@ -243,7 +243,7 @@ describe("evaluateEpochDraft", () => {
     expect(payload.totalEvents).toBe(0);
   });
 
-  it("throws on unknown creditEstimateAlgo", async () => {
+  it("throws on unknown attributionPipeline", async () => {
     const { activities } = makeActivities({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
     });
@@ -251,7 +251,7 @@ describe("evaluateEpochDraft", () => {
     await expect(
       activities.evaluateEpochDraft({
         epochId: "1",
-        creditEstimateAlgo: "nonexistent-profile",
+        attributionPipeline: "nonexistent-profile",
       })
     ).rejects.toThrow(/nonexistent-profile/);
   });
@@ -272,7 +272,7 @@ describe("buildLockedEvaluations", () => {
 
     const result = await activities.buildLockedEvaluations({
       epochId: "1",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
 
     expect(result.evaluations).toHaveLength(1);
@@ -298,7 +298,7 @@ describe("buildLockedEvaluations", () => {
 
     const result = await activities.buildLockedEvaluations({
       epochId: "1",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
     expect(result.artifactsHash).toMatch(/^[a-f0-9]{64}$/);
   });
@@ -313,7 +313,7 @@ describe("buildLockedEvaluations", () => {
 
     const result = await activities.buildLockedEvaluations({
       epochId: "1",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
 
     expect(result.evaluations[0].schemaRef).toBe("cogni.echo.v0/1.0.0");
@@ -335,11 +335,11 @@ describe("idempotency", () => {
 
     await activities.evaluateEpochDraft({
       epochId: "1",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
     const finalResult = await activities.buildLockedEvaluations({
       epochId: "1",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
 
     // Draft and final should have same payload hash and inputs hash
@@ -367,7 +367,7 @@ describe("idempotency", () => {
 
     const result = await activities.buildLockedEvaluations({
       epochId: "999",
-      creditEstimateAlgo: CREDIT_ESTIMATE_ALGO,
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
 
     // This is the exact operation Temporal performs on activity return values.
