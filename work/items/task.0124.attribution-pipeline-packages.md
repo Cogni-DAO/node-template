@@ -2,7 +2,7 @@
 id: task.0124
 type: task
 title: "Scaffold @cogni/attribution-pipeline (framework) + @cogni/attribution-pipeline-plugins (built-ins)"
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 3
