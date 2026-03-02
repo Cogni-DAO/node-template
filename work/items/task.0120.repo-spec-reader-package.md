@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.operator-plane
 branch: task/0120-repo-spec-reader
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/504
 reviewer:
 revision: 0
 blocked_by:
