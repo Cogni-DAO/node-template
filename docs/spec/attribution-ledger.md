@@ -22,6 +22,7 @@ tags: [governance, transparency, payments, attribution]
 
 |              |                                                                                           |                                                            |
 | ------------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Overview** | [attribution-pipeline-overview](./attribution-pipeline-overview.md)                       | End-to-end pipeline map (start here)                       |
 | **Project**  | [proj.transparent-credit-payouts](../../work/projects/proj.transparent-credit-payouts.md) | Project roadmap                                            |
 | **Spike**    | [spike.0082](../../work/items/spike.0082.transparency-log-design.md)                      | Original design research                                   |
 | **Research** | [epoch-event-ingestion-pipeline](../research/epoch-event-ingestion-pipeline.md)           | Ingestion pipeline research                                |

@@ -54,6 +54,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ### Core Architecture
 
+- [Attribution Pipeline Overview](docs/spec/attribution-pipeline-overview.md)
 - [Technical Roadmap](ROADMAP.md)
 - [Node vs Operator Contract](docs/spec/node-operator-contract.md)
 - [MVP Deliverables](docs/archive/MVP_DELIVERABLES.md)

@@ -6,7 +6,7 @@ status: draft
 spec_state: proposed
 trust: draft
 summary: "Two-package plugin architecture for the attribution pipeline. @cogni/attribution-pipeline-contracts is the stable framework (contracts, registries, dispatch, ordering). @cogni/attribution-pipeline-plugins houses built-in implementations and profiles. The executor (scheduler-worker) is a generic shell — zero plugin-specific code."
-read_when: Adding a new enricher plugin, adding a new allocation algorithm, understanding how credit_estimate_algo drives the pipeline, working on quarterly review epochs, or implementing a custom attribution pipeline for a new repository.
+read_when: Adding a new enricher plugin, adding a new allocation algorithm, understanding how attribution_pipeline drives the pipeline, working on quarterly review epochs, or implementing a custom attribution pipeline for a new repository.
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-03-01
@@ -16,12 +16,13 @@ tags: [governance, attribution, plugins, architecture]
 
 # Plugin Attribution Pipeline: Profile-Based Enricher and Allocator Dispatch
 
-> A **pipeline profile** selects which enricher plugins run and which allocation algorithm computes credit. Profiles are plain data keyed by `credit_estimate_algo` from `repo-spec.yaml`. Adding a new enricher or allocator means writing a descriptor + adapter in the plugins package and registering it in a profile — no switch/case editing, no hardcoded wiring, no touching the framework. The framework package (`@cogni/attribution-pipeline-contracts`) is boring and stable; the plugins package (`@cogni/attribution-pipeline-plugins`) is where iteration happens.
+> A **pipeline profile** selects which enricher plugins run and which allocation algorithm computes credit. Profiles are plain data keyed by `attribution_pipeline` from `repo-spec.yaml`. Adding a new enricher or allocator means writing a descriptor + adapter in the plugins package and registering it in a profile — no switch/case editing, no hardcoded wiring, no touching the framework. The framework package (`@cogni/attribution-pipeline-contracts`) is boring and stable; the plugins package (`@cogni/attribution-pipeline-plugins`) is where iteration happens.
 
 ### Key References
 
 |              |                                                                                           |                                                  |
 | ------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **Overview** | [attribution-pipeline-overview](./attribution-pipeline-overview.md)                       | End-to-end pipeline map (start here)             |
 | **Project**  | [proj.transparent-credit-payouts](../../work/projects/proj.transparent-credit-payouts.md) | Project roadmap                                  |
 | **Spec**     | [attribution-ledger](./attribution-ledger.md)                                             | Core domain: store port, hashing, statement math |
 | **Spec**     | [packages-architecture](./packages-architecture.md)                                       | Package boundary rules                           |
@@ -34,7 +35,7 @@ tags: [governance, attribution, plugins, architecture]
 
 ```mermaid
 graph TD
-    RS["repo-spec.yaml<br/>credit_estimate_algo: cogni-v0.0"] -->|resolveProfile| P["PipelineProfile"]
+    RS["repo-spec.yaml<br/>attribution_pipeline: cogni-v0.0"] -->|resolveProfile| P["PipelineProfile"]
     P -->|enricherRefs| EL["Enricher Loop<br/>(ordered, dep-validated)"]
     P -->|allocatorRef| AD["Allocator Dispatch"]
 
@@ -122,7 +123,7 @@ packages/attribution-pipeline-plugins/      # built-in implementations — churn
 
 ### Profile Type
 
-A profile is a plain readonly object, never a class. Keyed by the `credit_estimate_algo` value from `repo-spec.yaml`. Profile IDs are semver'd (`cogni-v0.0`, `cogni-v0.1`). Operators upgrade by changing `credit_estimate_algo` in `repo-spec.yaml`. Profiles are **never mutated** — publish a new version instead.
+A profile is a plain readonly object, never a class. Keyed by the `attribution_pipeline` value from `repo-spec.yaml`. Profile IDs are semver'd (`cogni-v0.0`, `cogni-v0.1`). Operators upgrade by changing `attribution_pipeline` in `repo-spec.yaml`. Profiles are **never mutated** — publish a new version instead.
 
 ```typescript
 interface PipelineProfile {
@@ -178,13 +179,13 @@ type ProfileRegistry = ReadonlyMap<string, PipelineProfile>;
 /** Resolve profile or throw. Replaces deriveAllocationAlgoRef(). */
 function resolveProfile(
   registry: ProfileRegistry,
-  creditEstimateAlgo: string
+  attributionPipeline: string
 ): PipelineProfile;
 ```
 
 **Profile lifecycle within an epoch:**
 
-1. `repo-spec.yaml` declares `credit_estimate_algo: cogni-v0.0`.
+1. `repo-spec.yaml` declares `attribution_pipeline: cogni-v0.0`.
 2. At **epoch creation**, the executor resolves the profile, validates the enricher dependency DAG, and stores `profile_id` and the exact `enricher_refs` snapshot on the epoch row (immutable provenance). If `profile.configSchema` is non-null, loads and validates `.cogni/attribution/cogni-v0.0.yaml`.
 3. During **`open`**, each enrichment pass re-resolves the profile to get the current `enricherRefs`. Draft evaluations are upserted (overwritten) on each pass. If the operator publishes `cogni-v0.1` and updates `repo-spec.yaml`, the next enrichment pass uses `v0.1`'s enrichers. Orphan drafts from removed enrichers are harmless — they won't be locked at close.
 4. At **closeIngestion** (open→review), the profile is resolved one final time. `allocatorRef` is written to `allocation_algo_ref`. Only evaluations matching the current profile's `enricherRefs` are locked. The exact plugin refs used at close are stored on the epoch (EPOCH_PINS_PLUGIN_REFS). After this point, the epoch is immutable.
@@ -381,7 +382,7 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 | Rule                          | Constraint                                                                                                                                                                                                                                                                                                             |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | PROFILE_IS_DATA               | A `PipelineProfile` is a plain readonly object. No classes, no methods, no I/O. Constructed at import time, registered in a `ReadonlyMap`.                                                                                                                                                                             |
-| PROFILE_IMMUTABLE_PUBLISH_NEW | Profiles are semver'd and **never mutated** after publication. To change enricher composition or allocator selection, publish a new profile version (e.g., `cogni-v0.0` → `cogni-v0.1`). Operators upgrade by changing `credit_estimate_algo` in `repo-spec.yaml`.                                                     |
+| PROFILE_IMMUTABLE_PUBLISH_NEW | Profiles are semver'd and **never mutated** after publication. To change enricher composition or allocator selection, publish a new profile version (e.g., `cogni-v0.0` → `cogni-v0.1`). Operators upgrade by changing `attribution_pipeline` in `repo-spec.yaml`.                                                     |
 | PROFILE_SELECTS_ENRICHERS     | The profile's `enricherRefs` array is the **sole authority** for which enrichers run during an epoch. The executor iterates this array and dispatches to the matching `EnricherAdapter`. Adding a new enricher to a pipeline = adding its ref to a new profile version.                                                |
 | PROFILE_SELECTS_ALLOCATOR     | The profile's `allocatorRef` is the **sole authority** for which allocation algorithm runs. Replaces `deriveAllocationAlgoRef()`. The allocator ref is also pinned on the epoch at closeIngestion (per ALLOCATION_ALGO_PINNED in attribution-ledger spec).                                                             |
 | ENRICHER_ORDER_EXPLICIT       | Enricher execution order is declared in the profile's `enricherRefs` array. Each entry may declare `dependsOn[]` refs. The framework validates the DAG at profile registration: cycles throw, missing refs throw, declared order must be a valid topological sort. No implicit ordering.                               |
@@ -444,7 +445,7 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 | `packages/attribution-pipeline-plugins/src/profiles/*.ts`           | Built-in profile definitions                                          |
 | `packages/attribution-pipeline-plugins/src/registry.ts`             | createDefaultRegistries() — assembles all built-in plugins + profiles |
 | `packages/attribution-ledger/src/allocation.ts`                     | Existing allocator implementations (wrapped by plugin descriptors)    |
-| `.cogni/repo-spec.yaml`                                             | `credit_estimate_algo` field that selects the profile                 |
+| `.cogni/repo-spec.yaml`                                             | `attribution_pipeline` field that selects the profile                 |
 
 ## Open Questions
 
