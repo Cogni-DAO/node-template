@@ -734,6 +734,7 @@ Admin app variables are optional — a Node may install only the review app.
 - [ ] Should the operator's node registry tables live in the same Postgres as the scheduler-worker (monorepo phase) or a separate database? Same DB is simpler; separate DB is cleaner for eventual extraction.
 - [ ] For push-triggered re-sync: should the webhook handler parse the push payload inline to detect `.cogni/**` changes, or re-fetch unconditionally and rely on SYNC_IDEMPOTENT (hash comparison) to short-circuit?
 - [ ] Should `.cogni/projects/*.yaml` manifests in external repos be fetched via individual `repos.getContent` calls, or via a tree listing + batch fetch? Tree listing is one API call but returns all files.
+- [ ] **Rename `.cogni/projects/` → `.cogni/scopes/`** — "scopes" is the canonical term in the identity model and attribution ledger. "Projects" is overloaded (GitHub projects, project management). All ~30 references across specs, tasks, and roadmap need updating when multi-scope ships. V0 doesn't need the directory at all — the default scope lives at the top level of `repo-spec.yaml`.
 
 ## Related
 
