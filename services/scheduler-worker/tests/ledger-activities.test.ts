@@ -86,7 +86,7 @@ function makeMockStore(
     upsertSubjectOverride: vi.fn(),
     batchUpsertSubjectOverrides: vi.fn().mockResolvedValue([]),
     deleteSubjectOverride: vi.fn(),
-    getSubjectOverridesForEpoch: vi.fn().mockResolvedValue([]),
+    getReviewSubjectOverridesForEpoch: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as AttributionStore;
 }
