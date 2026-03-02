@@ -129,9 +129,29 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 - [ ] All write operations execute in Temporal workflows (Next.js stateless)
 - [ ] All math is BIGINT — no floating point, including weight values (milli-units)
 
-### Walk (P1) — Work-Item Scoring + Signed Receipts + UI
+### Walk (P1) — Governance Claims Rail + Work-Item Scoring + UI
 
-**Goal:** Shift credit allocation from flat event weights to work-item-based budgets. Generic enrichment pipeline for future plugins (AI scoring, etc.). Per-receipt wallet signatures. UI surfaces.
+**Goal:** Ship the end-to-end claim loop: signed attribution statement → Merkle tree → on-chain governance token claims. This is the DAO promise — prove you contributed, claim your ownership stake — without needing revenue. Also: shift allocation from flat weights to work-item budgets, generic enrichment pipeline, and two-view UI (off-chain attribution + on-chain holdings).
+
+**Governance claims rail (the critical path):**
+
+| Deliverable                                                                                                               | Status      | Est | Work Item         |
+| ------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
+| `computeMerkleTree(statement)` pure function — finalized allocation → root + per-claimant proofs (golden-tested)          | Not Started | 1   | (create at start) |
+| Deploy ERC20Votes Merkle claim contract on Base (Uniswap MerkleDistributor pattern, mints governance tokens on claim)     | Not Started | 2   | (create at start) |
+| Operator Port (P1: Safe/multisig) — publishes Merkle root on-chain per epoch, funds contract if needed                    | Not Started | 2   | (create at start) |
+| Claim flow — contributor connects wallet, submits claim tx with inclusion proof, governance tokens minted to their wallet | Not Started | 2   | (create at start) |
+| Claim status tracking — read contract state for claimed/unclaimed per epoch per contributor                               | Not Started | 1   | (create at start) |
+| Statement signing (DAO multisig / key store) — reuses same Safe as Operator Port                                          | Not Started | 2   | (create at start) |
+
+**UI (two views):**
+
+| Deliverable                                                                                                           | Status      | Est | Work Item         |
+| --------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
+| Attribution view: `/epochs/:id`, `/contributors/:id` — DB-sourced attribution history, activity, proposed/final units | Not Started | 3   | (create at start) |
+| Holdings view: on-chain governance token balance, claim history, unclaimed epochs, voting power                       | Not Started | 2   | (create at start) |
+
+**Enrichment + scoring pipeline:**
 
 | Deliverable                                           | Status      | Est | Work Item                                              |
 | ----------------------------------------------------- | ----------- | --- | ------------------------------------------------------ |
@@ -139,28 +159,30 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 | Epoch artifact pipeline + echo enricher               | In Review   | 3   | task.0113                                              |
 | Plugin pipeline framework + built-in plugins packages | In Review   | 3   | task.0124                                              |
 | work-item-budget-v0 allocation algorithm              | Not Started | 2   | task.0114                                              |
-| Retroactive backfill for finalized epochs             | Not Started | 2   | task.0110 (not filed)                                  |
-| Pending credit for unresolved identities              | Not Started | 2   | task.0111 (not filed)                                  |
-| Webhook-first GitHub collection                       | Not Started | 3   | task.0112 (not filed)                                  |
 | Per-receipt EIP-191 wallet signing                    | Not Started | 2   | (create at P1 start — EIP-712 foundation in task.0119) |
 | `ledger_issuers` role system (can_issue, can_approve) | Not Started | 2   | (create at P1 start)                                   |
-| Statement signing (DAO multisig / key store)          | Not Started | 2   | (create at P1 start)                                   |
-| UI: `/epochs/:id`, `/contributors/:id` pages          | Not Started | 3   | (create at P1 start)                                   |
-| X/Twitter activity adapter                            | Not Started | 2   | (create at P1 start)                                   |
-| Funding activity adapter                              | Not Started | 2   | (create at P1 start)                                   |
-| Merkle tree per epoch + inclusion proofs              | Not Started | 2   | (create at P1 start)                                   |
-| SourceCred grain → activity migration strategy        | Not Started | 2   | (create at P1 start)                                   |
 
-### Run (P2+) — Federation + SourceCred Removal
+**Collection hardening:**
 
-**Goal:** Receipts as portable VCs. SourceCred removed. Cross-org verification.
+| Deliverable                                    | Status      | Est | Work Item             |
+| ---------------------------------------------- | ----------- | --- | --------------------- |
+| Retroactive backfill for finalized epochs      | Not Started | 2   | task.0110 (not filed) |
+| Pending credit for unresolved identities       | Not Started | 2   | task.0111 (not filed) |
+| Webhook-first GitHub collection                | Not Started | 3   | task.0112 (not filed) |
+| X/Twitter activity adapter                     | Not Started | 2   | (create at P1 start)  |
+| Funding activity adapter                       | Not Started | 2   | (create at P1 start)  |
+| SourceCred grain → activity migration strategy | Not Started | 2   | (create at P1 start)  |
 
-| Deliverable                                          | Status      | Est | Work Item            |
-| ---------------------------------------------------- | ----------- | --- | -------------------- |
-| Receipt schema → VC data model (JWT VC, DID subject) | Not Started | 2   | (create at P2 start) |
-| Multi-issuer trust policy                            | Not Started | 3   | (create at P2 start) |
-| SourceCred removal from stack                        | Not Started | 2   | (create at P2 start) |
-| On-chain Merkle root anchoring                       | Not Started | 2   | (create at P2 start) |
+### Run (P2+) — Federation + SourceCred Removal + USDC Settlement
+
+**Goal:** Receipts as portable VCs. SourceCred removed. Cross-org verification. When revenue exists, add USDC settlement via MerkleDistributor alongside governance token claims (see [proj.financial-ledger](proj.financial-ledger.md)).
+
+| Deliverable                                                 | Status      | Est | Work Item            |
+| ----------------------------------------------------------- | ----------- | --- | -------------------- |
+| Receipt schema → VC data model (JWT VC, DID subject)        | Not Started | 2   | (create at P2 start) |
+| Multi-issuer trust policy                                   | Not Started | 3   | (create at P2 start) |
+| SourceCred removal from stack                               | Not Started | 2   | (create at P2 start) |
+| USDC settlement via MerkleDistributor (when revenue exists) | Not Started | 2   | (create at P2 start) |
 
 ## Architecture & Schema
 
@@ -256,13 +278,14 @@ Attribution statements produced by this project are **governance truth** — who
 
 ### What V0 explicitly defers
 
+- **Governance token claims (full claim rail)** → P1 (Merkle tree → ERC20Votes contract → claim flow)
+- **Operator Port** → P1 (Safe/multisig for publishing Merkle roots + statement signing)
 - **Per-receipt wallet signing** → P1 (EIP-191, domain-bound)
 - **`ledger_issuers` role system** → P1
-- **Merkle trees / inclusion proofs** → P1
-- **Statement signing** → P1 (requires key store / multisig)
-- **UI pages** → P1
+- **UI: attribution view + on-chain holdings view** → P1
 - **DID/VC alignment** → P2
 - **Federation / cross-org verification** → P2
+- **USDC settlement** → P2 (when revenue exists, see proj.financial-ledger)
 - **X/Twitter + funding adapters** → P1
 - **Discord source adapter** → deferred from V0 launch (GitHub-only initially)
 - **GitHub webhook fast-path** → P1
