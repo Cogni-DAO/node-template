@@ -2,7 +2,7 @@
 id: bug.0125
 type: bug
 title: Claimant ownership is bolted on as an enricher — should be a first-class pipeline phase
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 10
 estimate: 5

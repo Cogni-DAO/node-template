@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/attribution-ledger/allocation`
- * Purpose: Versioned allocation algorithm framework — pure function dispatch for computing proposed allocations from selected receipts.
+ * Purpose: Versioned allocation algorithm framework — pure function dispatch for computing per-receipt weight allocations from selected receipts.
  * Scope: Pure functions. Does not perform I/O or hold state. Deterministic output for same inputs.
  * Invariants:
  * - ALLOCATION_ALGO_VERSIONED: dispatch by algoRef; same inputs → identical output.

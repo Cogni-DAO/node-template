@@ -14,7 +14,8 @@
  * - NODE_SCOPED: all operations are scoped to a node_id.
  * - RECEIPT_SCOPE_AGNOSTIC: receipts carry no scope_id; scope assigned at selection via epoch membership.
  * - EVALUATION_FINAL_ATOMIC: locked evaluation writes + artifacts_hash + epoch open→review in one transaction.
- * - STATEMENT_FROM_FINAL_ONLY: allocation for statements consumes only status='locked' evaluations.
+ * - STATEMENT_FROM_FINAL_ONLY: allocation for statements consumes only status='locked' evaluations and claimant records.
+ * - CLAIMANT_RESOLUTION_REQUIRED: upsertDraftClaimants, lockClaimantsForEpoch, loadLockedClaimants manage the epoch_receipt_claimants lifecycle.
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md
  * @public

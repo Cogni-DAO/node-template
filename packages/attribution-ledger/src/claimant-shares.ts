@@ -3,8 +3,8 @@
 
 /**
  * Module: `@cogni/attribution-ledger/claimant-shares`
- * Purpose: Defines the canonical claimant-share attribution shape and deterministic expansion/computation helpers.
- * Scope: Defines claimant-share payloads, a default receipt-backed builder, deterministic unit splitting, and claimant-aware proportional credit computation. Does not perform I/O or plugin-specific enrichment.
+ * Purpose: Claimant domain types, deterministic unit splitting, and the explodeToClaimants() join function for receipt-weight × claimant allocation.
+ * Scope: Defines claimant types (user/identity), explodeToClaimants() for joining receipt weights with locked claimant records, deterministic unit splitting with largest-remainder rounding, and claimant-aware proportional credit computation. Does not perform I/O.
  * Invariants:
  * - CLAIMANTS_ARE_PLURAL: every attribution subject carries `claimantShares[]`, even when only one claimant is present.
  * - CLAIMANTS_CAN_BE_UNRESOLVED: identity claimants may reference provider + external_id without a resolved user_id.
