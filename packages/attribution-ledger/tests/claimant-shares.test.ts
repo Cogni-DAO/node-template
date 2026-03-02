@@ -13,6 +13,12 @@
  * @internal
  */
 
+import {
+  computeReceiptWeights,
+  type ReceiptClaimantsRecord,
+  type ReceiptForWeighting,
+  type ReceiptUnitWeight,
+} from "@cogni/attribution-ledger";
 import { describe, expect, it } from "vitest";
 import {
   applySubjectOverrides,
@@ -22,6 +28,7 @@ import {
   computeAttributionStatementLines,
   computeFinalClaimantAllocations,
   expandClaimantUnits,
+  explodeToClaimants,
   parseClaimantSharesPayload,
 } from "../src/claimant-shares";
 
@@ -525,5 +532,191 @@ describe("buildReviewOverrideSnapshots", () => {
 
     expect(snapshots[0]?.subject_ref).toBe("a-receipt");
     expect(snapshots[1]?.subject_ref).toBe("z-receipt");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Receipt-weight allocation model tests
+// ---------------------------------------------------------------------------
+
+describe("computeReceiptWeights", () => {
+  const weightConfig = {
+    "github:pr_merged": 1000,
+    "github:issue_closed": 500,
+  };
+
+  it("computes per-receipt weights for included receipts", () => {
+    const receipts: ReceiptForWeighting[] = [
+      {
+        receiptId: "r2",
+        source: "github",
+        eventType: "issue_closed",
+        included: true,
+        weightOverrideMilli: null,
+      },
+      {
+        receiptId: "r1",
+        source: "github",
+        eventType: "pr_merged",
+        included: true,
+        weightOverrideMilli: null,
+      },
+    ];
+
+    const result = computeReceiptWeights(
+      "weight-sum-v0",
+      receipts,
+      weightConfig
+    );
+
+    expect(result).toHaveLength(2);
+    // Sorted by receiptId
+    expect(result[0]?.receiptId).toBe("r1");
+    expect(result[0]?.units).toBe(1000n);
+    expect(result[1]?.receiptId).toBe("r2");
+    expect(result[1]?.units).toBe(500n);
+  });
+
+  it("filters out excluded receipts", () => {
+    const receipts: ReceiptForWeighting[] = [
+      {
+        receiptId: "r1",
+        source: "github",
+        eventType: "pr_merged",
+        included: false,
+        weightOverrideMilli: null,
+      },
+    ];
+
+    const result = computeReceiptWeights(
+      "weight-sum-v0",
+      receipts,
+      weightConfig
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("uses weightOverrideMilli when provided", () => {
+    const receipts: ReceiptForWeighting[] = [
+      {
+        receiptId: "r1",
+        source: "github",
+        eventType: "pr_merged",
+        included: true,
+        weightOverrideMilli: 9999n,
+      },
+    ];
+
+    const result = computeReceiptWeights(
+      "weight-sum-v0",
+      receipts,
+      weightConfig
+    );
+    expect(result[0]?.units).toBe(9999n);
+  });
+
+  it("throws for unknown algoRef", () => {
+    expect(() => computeReceiptWeights("unknown", [], {})).toThrow(
+      "Unknown allocation algorithm: unknown"
+    );
+  });
+});
+
+describe("explodeToClaimants", () => {
+  function makeClaimantRecord(
+    receiptId: string,
+    claimantKeys: string[]
+  ): ReceiptClaimantsRecord {
+    return {
+      id: `id-${receiptId}`,
+      nodeId: "node-1",
+      epochId: 1n,
+      receiptId,
+      status: "locked",
+      resolverRef: "cogni.default-author.v0",
+      algoRef: "default-author-v0",
+      inputsHash: "hash",
+      claimantKeys,
+      createdAt: new Date(),
+      createdBy: "system",
+    };
+  }
+
+  it("joins single-claimant receipts and sums across receipts", () => {
+    const weights: ReceiptUnitWeight[] = [
+      { receiptId: "r1", units: 1000n },
+      { receiptId: "r2", units: 500n },
+    ];
+    const claimants = [
+      makeClaimantRecord("r1", ["user:alice"]),
+      makeClaimantRecord("r2", ["user:alice"]),
+    ];
+
+    const result = explodeToClaimants(weights, claimants);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.claimant).toEqual({ kind: "user", userId: "alice" });
+    expect(result[0]?.finalUnits).toBe(1500n);
+    expect(result[0]?.receiptIds).toEqual(["r1", "r2"]);
+  });
+
+  it("splits equally among multiple claimants with largest-remainder", () => {
+    const weights: ReceiptUnitWeight[] = [{ receiptId: "r1", units: 10n }];
+    const claimants = [
+      makeClaimantRecord("r1", ["user:bob", "user:alice", "user:charlie"]),
+    ];
+
+    const result = explodeToClaimants(weights, claimants);
+
+    // 10 / 3 = 3 each with 1 remainder → first key alphabetically gets extra
+    expect(result).toHaveLength(3);
+    // Sorted by claimant key: user:alice, user:bob, user:charlie
+    expect(result[0]?.claimant).toEqual({ kind: "user", userId: "alice" });
+    expect(result[0]?.finalUnits).toBe(4n); // 3 + 1 remainder
+    expect(result[1]?.claimant).toEqual({ kind: "user", userId: "bob" });
+    expect(result[1]?.finalUnits).toBe(3n);
+    expect(result[2]?.claimant).toEqual({ kind: "user", userId: "charlie" });
+    expect(result[2]?.finalUnits).toBe(3n);
+  });
+
+  it("handles identity claimant keys", () => {
+    const weights: ReceiptUnitWeight[] = [{ receiptId: "r1", units: 1000n }];
+    const claimants = [makeClaimantRecord("r1", ["identity:github:42"])];
+
+    const result = explodeToClaimants(weights, claimants);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.claimant).toEqual({
+      kind: "identity",
+      provider: "github",
+      externalId: "42",
+      providerLogin: null,
+    });
+    expect(result[0]?.finalUnits).toBe(1000n);
+  });
+
+  it("throws when receipt has no matching claimants record", () => {
+    const weights: ReceiptUnitWeight[] = [{ receiptId: "r1", units: 1000n }];
+
+    expect(() => explodeToClaimants(weights, [])).toThrow(
+      'receipt "r1" has no matching claimants record'
+    );
+  });
+
+  it("returns deterministic sorted output", () => {
+    const weights: ReceiptUnitWeight[] = [
+      { receiptId: "r1", units: 100n },
+      { receiptId: "r2", units: 200n },
+    ];
+    const claimants = [
+      makeClaimantRecord("r1", ["user:zara"]),
+      makeClaimantRecord("r2", ["user:alice"]),
+    ];
+
+    const result = explodeToClaimants(weights, claimants);
+
+    // Sorted by claimant key
+    expect(result[0]?.claimant).toEqual({ kind: "user", userId: "alice" });
+    expect(result[1]?.claimant).toEqual({ kind: "user", userId: "zara" });
   });
 });

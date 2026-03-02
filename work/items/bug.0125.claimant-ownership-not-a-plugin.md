@@ -2,7 +2,7 @@
 id: bug.0125
 type: bug
 title: Claimant ownership is bolted on as an enricher — should be a first-class pipeline phase
-status: needs_triage
+status: needs_implement
 priority: 1
 rank: 10
 estimate: 5
@@ -22,7 +22,7 @@ spec_refs:
 assignees: []
 credit:
 project: proj.transparent-credit-payouts
-branch:
+branch: fix/bug0125-claimants
 pr:
 reviewer:
 revision: 0

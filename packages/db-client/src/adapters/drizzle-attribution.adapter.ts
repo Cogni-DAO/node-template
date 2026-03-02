@@ -38,11 +38,13 @@ import type {
   IngestionReceipt,
   InsertFinalClaimantAllocationParams,
   InsertPoolComponentParams,
+  InsertReceiptClaimantsParams,
   InsertReceiptParams,
   InsertSelectionAutoParams,
   InsertSignatureParams,
   InsertStatementParams,
   InsertUserProjectionParams,
+  ReceiptClaimantsRecord,
   ReviewSubjectOverrideRecord,
   SelectedReceiptForAllocation,
   SelectedReceiptForAttribution,
@@ -62,6 +64,7 @@ import {
   epochEvaluations,
   epochFinalClaimantAllocations,
   epochPoolComponents,
+  epochReceiptClaimants,
   epochReviewSubjectOverrides,
   epochSelection,
   epochStatementSignatures,
@@ -1679,5 +1682,107 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           isNull(epochSelection.userId)
         )
       );
+  }
+
+  // -------------------------------------------------------------------------
+  // Receipt claimants
+  // -------------------------------------------------------------------------
+
+  async upsertDraftClaimants(
+    params: InsertReceiptClaimantsParams
+  ): Promise<void> {
+    await this.db
+      .insert(epochReceiptClaimants)
+      .values({
+        nodeId: params.nodeId,
+        epochId: params.epochId,
+        receiptId: params.receiptId,
+        status: "draft",
+        resolverRef: params.resolverRef,
+        algoRef: params.algoRef,
+        inputsHash: params.inputsHash,
+        claimantsJson: [...params.claimantKeys],
+        createdBy: params.createdBy,
+      })
+      .onConflictDoUpdate({
+        target: [
+          epochReceiptClaimants.nodeId,
+          epochReceiptClaimants.epochId,
+          epochReceiptClaimants.receiptId,
+          epochReceiptClaimants.inputsHash,
+        ],
+        set: {
+          resolverRef: params.resolverRef,
+          algoRef: params.algoRef,
+          claimantsJson: [...params.claimantKeys],
+          createdBy: params.createdBy,
+        },
+      });
+  }
+
+  async lockClaimantsForEpoch(epochId: bigint): Promise<number> {
+    await this.resolveEpochScoped(epochId);
+
+    // For each draft row, insert a locked copy, then delete the draft
+    const drafts = await this.db
+      .select()
+      .from(epochReceiptClaimants)
+      .where(
+        and(
+          eq(epochReceiptClaimants.epochId, epochId),
+          eq(epochReceiptClaimants.status, "draft")
+        )
+      );
+
+    if (drafts.length === 0) return 0;
+
+    for (const draft of drafts) {
+      await this.db
+        .insert(epochReceiptClaimants)
+        .values({
+          nodeId: draft.nodeId,
+          epochId: draft.epochId,
+          receiptId: draft.receiptId,
+          status: "locked",
+          resolverRef: draft.resolverRef,
+          algoRef: draft.algoRef,
+          inputsHash: draft.inputsHash,
+          claimantsJson: draft.claimantsJson,
+          createdBy: draft.createdBy,
+        })
+        .onConflictDoNothing();
+    }
+
+    return drafts.length;
+  }
+
+  async loadLockedClaimants(
+    epochId: bigint
+  ): Promise<ReceiptClaimantsRecord[]> {
+    await this.resolveEpochScoped(epochId);
+
+    const rows = await this.db
+      .select()
+      .from(epochReceiptClaimants)
+      .where(
+        and(
+          eq(epochReceiptClaimants.epochId, epochId),
+          eq(epochReceiptClaimants.status, "locked")
+        )
+      );
+
+    return rows.map((row) => ({
+      id: row.id,
+      nodeId: row.nodeId,
+      epochId: row.epochId,
+      receiptId: row.receiptId,
+      status: row.status as "locked",
+      resolverRef: row.resolverRef,
+      algoRef: row.algoRef,
+      inputsHash: row.inputsHash,
+      claimantKeys: row.claimantsJson ?? [],
+      createdAt: row.createdAt,
+      createdBy: row.createdBy,
+    }));
   }
 }

@@ -326,6 +326,35 @@ export function toReviewSubjectOverrides(
 }
 
 // ---------------------------------------------------------------------------
+// Receipt claimants types
+// ---------------------------------------------------------------------------
+
+export interface ReceiptClaimantsRecord {
+  readonly id: string;
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly receiptId: string;
+  readonly status: "draft" | "locked";
+  readonly resolverRef: string;
+  readonly algoRef: string;
+  readonly inputsHash: string;
+  readonly claimantKeys: readonly string[];
+  readonly createdAt: Date;
+  readonly createdBy: string | null;
+}
+
+export interface InsertReceiptClaimantsParams {
+  readonly nodeId: string;
+  readonly epochId: bigint;
+  readonly receiptId: string;
+  readonly resolverRef: string;
+  readonly algoRef: string;
+  readonly inputsHash: string;
+  readonly claimantKeys: readonly string[];
+  readonly createdBy: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Identity resolution types
 // ---------------------------------------------------------------------------
 
@@ -534,6 +563,14 @@ export interface AttributionStore {
   getReviewSubjectOverridesForEpoch(
     epochId: bigint
   ): Promise<ReviewSubjectOverrideRecord[]>;
+
+  // Receipt claimants (per-receipt ownership resolution)
+  /** Upsert a draft claimant row. ON CONFLICT (draft_uniq) → UPDATE. */
+  upsertDraftClaimants(params: InsertReceiptClaimantsParams): Promise<void>;
+  /** Lock all draft claimant rows for an epoch. Returns count locked. */
+  lockClaimantsForEpoch(epochId: bigint): Promise<number>;
+  /** Load all locked claimant rows for an epoch. */
+  loadLockedClaimants(epochId: bigint): Promise<ReceiptClaimantsRecord[]>;
 
   // Identity resolution (cross-domain convenience — V0 on ledger port)
   /**
