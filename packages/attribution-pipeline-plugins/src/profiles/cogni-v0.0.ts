@@ -24,7 +24,7 @@ import type { PipelineProfile } from "@cogni/attribution-pipeline-contracts";
 export const COGNI_V0_PROFILE: PipelineProfile = {
   profileId: "cogni-v0.0",
   label: "Cogni Weekly Activity v0.0",
-  enricherRefs: [{ evaluationRef: "cogni.echo.v0", dependsOn: [] }],
+  enricherRefs: [{ enricherRef: "cogni.echo.v0", dependsOnEvaluations: [] }],
   allocatorRef: "weight-sum-v0",
   epochKind: "activity",
 };

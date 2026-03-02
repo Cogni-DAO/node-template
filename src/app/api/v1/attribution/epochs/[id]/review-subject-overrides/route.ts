@@ -179,7 +179,7 @@ export const PATCH = wrapRouteHandlerWithLogging<{
         }
 
         if (override.overrideShares) {
-          // Validate shares sum to 1_000_000 PPM
+          // Validate shares sum to exactly DENOMINATOR PPM
           const shareSum = override.overrideShares.reduce(
             (sum, s) => sum + s.sharePpm,
             0
@@ -193,10 +193,22 @@ export const PATCH = wrapRouteHandlerWithLogging<{
             );
           }
 
-          // Validate only existing claimants
+          // Validate unique claimant keys (no duplicates)
+          const overrideKeys = override.overrideShares.map((s) =>
+            claimantKey(s.claimant)
+          );
+          if (new Set(overrideKeys).size !== overrideKeys.length) {
+            return NextResponse.json(
+              {
+                error: `Duplicate claimant keys in override shares for ${override.subjectRef}`,
+              },
+              { status: 400 }
+            );
+          }
+
+          // Validate completeness: must include ALL locked claimants (explicit 0 allowed)
           const existingClaimantKeys = new Set(claimantKeys);
-          for (const share of override.overrideShares) {
-            const key = claimantKey(share.claimant);
+          for (const key of overrideKeys) {
             if (!existingClaimantKeys.has(key)) {
               return NextResponse.json(
                 {
@@ -206,16 +218,24 @@ export const PATCH = wrapRouteHandlerWithLogging<{
               );
             }
           }
+          const overrideKeySet = new Set(overrideKeys);
+          for (const key of claimantKeys) {
+            if (!overrideKeySet.has(key)) {
+              return NextResponse.json(
+                {
+                  error: `Locked claimant ${key} missing from override shares for ${override.subjectRef} — all claimants must be included (use sharePpm: 0 to exclude)`,
+                },
+                { status: 400 }
+              );
+            }
+          }
 
           // Validate deterministic sort order
-          const sortedKeys = override.overrideShares.map((s) =>
-            claimantKey(s.claimant)
-          );
-          const expectedOrder = [...sortedKeys].sort((a, b) =>
+          const expectedOrder = [...overrideKeys].sort((a, b) =>
             a.localeCompare(b)
           );
-          for (let i = 0; i < sortedKeys.length; i++) {
-            if (sortedKeys[i] !== expectedOrder[i]) {
+          for (let i = 0; i < overrideKeys.length; i++) {
+            if (overrideKeys[i] !== expectedOrder[i]) {
               return NextResponse.json(
                 {
                   error: `Override shares for ${override.subjectRef} must be sorted by claimant key (lexicographic)`,

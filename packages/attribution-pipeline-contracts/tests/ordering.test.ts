@@ -22,18 +22,18 @@ describe("validateEnricherOrder", () => {
 
   it("accepts single enricher with no deps", () => {
     const refs: EnricherRef[] = [
-      { evaluationRef: "cogni.echo.v0", dependsOn: [] },
+      { enricherRef: "cogni.echo.v0", dependsOnEvaluations: [] },
     ];
     expect(() => validateEnricherOrder(refs)).not.toThrow();
   });
 
   it("accepts valid topological order", () => {
     const refs: EnricherRef[] = [
-      { evaluationRef: "cogni.echo.v0", dependsOn: [] },
-      { evaluationRef: "cogni.claimant_shares.v0", dependsOn: [] },
+      { enricherRef: "cogni.echo.v0", dependsOnEvaluations: [] },
+      { enricherRef: "cogni.claimant_shares.v0", dependsOnEvaluations: [] },
       {
-        evaluationRef: "cogni.ai_scores.v0",
-        dependsOn: ["cogni.echo.v0", "cogni.claimant_shares.v0"],
+        enricherRef: "cogni.ai_scores.v0",
+        dependsOnEvaluations: ["cogni.echo.v0", "cogni.claimant_shares.v0"],
       },
     ];
     expect(() => validateEnricherOrder(refs)).not.toThrow();
@@ -41,16 +41,16 @@ describe("validateEnricherOrder", () => {
 
   it("accepts multiple independent enrichers", () => {
     const refs: EnricherRef[] = [
-      { evaluationRef: "a", dependsOn: [] },
-      { evaluationRef: "b", dependsOn: [] },
-      { evaluationRef: "c", dependsOn: [] },
+      { enricherRef: "a", dependsOnEvaluations: [] },
+      { enricherRef: "b", dependsOnEvaluations: [] },
+      { enricherRef: "c", dependsOnEvaluations: [] },
     ];
     expect(() => validateEnricherOrder(refs)).not.toThrow();
   });
 
   it("throws on missing dependency ref", () => {
     const refs: EnricherRef[] = [
-      { evaluationRef: "cogni.echo.v0", dependsOn: ["nonexistent"] },
+      { enricherRef: "cogni.echo.v0", dependsOnEvaluations: ["nonexistent"] },
     ];
     expect(() => validateEnricherOrder(refs)).toThrow(
       /depends on "nonexistent" which is not in the effective enricher refs/
@@ -59,22 +59,24 @@ describe("validateEnricherOrder", () => {
 
   it("throws on direct cycle (A → B → A)", () => {
     const refs: EnricherRef[] = [
-      { evaluationRef: "a", dependsOn: ["b"] },
-      { evaluationRef: "b", dependsOn: ["a"] },
+      { enricherRef: "a", dependsOnEvaluations: ["b"] },
+      { enricherRef: "b", dependsOnEvaluations: ["a"] },
     ];
     expect(() => validateEnricherOrder(refs)).toThrow(/Cycle detected/);
   });
 
   it("throws on self-cycle", () => {
-    const refs: EnricherRef[] = [{ evaluationRef: "a", dependsOn: ["a"] }];
+    const refs: EnricherRef[] = [
+      { enricherRef: "a", dependsOnEvaluations: ["a"] },
+    ];
     expect(() => validateEnricherOrder(refs)).toThrow(/Cycle detected/);
   });
 
   it("throws on transitive cycle (A → B → C → A)", () => {
     const refs: EnricherRef[] = [
-      { evaluationRef: "a", dependsOn: ["c"] },
-      { evaluationRef: "b", dependsOn: ["a"] },
-      { evaluationRef: "c", dependsOn: ["b"] },
+      { enricherRef: "a", dependsOnEvaluations: ["c"] },
+      { enricherRef: "b", dependsOnEvaluations: ["a"] },
+      { enricherRef: "c", dependsOnEvaluations: ["b"] },
     ];
     expect(() => validateEnricherOrder(refs)).toThrow(/Cycle detected/);
   });
@@ -82,8 +84,8 @@ describe("validateEnricherOrder", () => {
   it("throws when declared order violates dependencies", () => {
     // b depends on a, but b is listed before a
     const refs: EnricherRef[] = [
-      { evaluationRef: "b", dependsOn: ["a"] },
-      { evaluationRef: "a", dependsOn: [] },
+      { enricherRef: "b", dependsOnEvaluations: ["a"] },
+      { enricherRef: "a", dependsOnEvaluations: [] },
     ];
     expect(() => validateEnricherOrder(refs)).toThrow(
       /depends on "a" but "a" appears after it/
@@ -92,9 +94,9 @@ describe("validateEnricherOrder", () => {
 
   it("includes cycle path in error message", () => {
     const refs: EnricherRef[] = [
-      { evaluationRef: "x", dependsOn: ["z"] },
-      { evaluationRef: "y", dependsOn: ["x"] },
-      { evaluationRef: "z", dependsOn: ["y"] },
+      { enricherRef: "x", dependsOnEvaluations: ["z"] },
+      { enricherRef: "y", dependsOnEvaluations: ["x"] },
+      { enricherRef: "z", dependsOnEvaluations: ["y"] },
     ];
     try {
       validateEnricherOrder(refs);

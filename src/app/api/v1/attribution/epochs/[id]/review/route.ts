@@ -66,7 +66,7 @@ export const POST = wrapRouteHandlerWithLogging<{
     const weightConfigHash = await computeWeightConfigHash(
       existing.weightConfig
     );
-    // V0: derive from first source's credit_estimate_algo or default
+    // V0: derive from first source's attribution_pipeline or default
     const allocationAlgoRef = deriveAllocationAlgoRef("cogni-v0.0");
 
     const epoch = await store.closeIngestion(

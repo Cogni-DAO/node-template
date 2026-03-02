@@ -24,7 +24,9 @@
 
 import type { UnselectedReceipt } from "@cogni/attribution-ledger";
 import {
+  applyReceiptWeightOverrides,
   buildEIP712TypedData,
+  buildReceiptWeightOverrideSnapshots,
   claimantKey,
   computeApproverSetHash,
   computeAttributionStatementLines,
@@ -35,6 +37,7 @@ import {
   estimatePoolComponentsV0,
   explodeToClaimants,
   sha256OfCanonicalJson,
+  toReviewSubjectOverrides,
   validateWeightConfig,
 } from "@cogni/attribution-ledger";
 import type { ActivityEvent } from "@cogni/ingestion-core";
@@ -182,7 +185,7 @@ export interface AutoCloseIngestionInput {
   readonly periodEnd: string; // ISO date
   readonly gracePeriodMs: number;
   readonly weightConfig: Record<string, number>;
-  readonly creditEstimateAlgo: string;
+  readonly attributionPipeline: string;
   readonly approvers: string[];
   readonly evaluations: ReadonlyArray<{
     readonly nodeId: string;
@@ -676,17 +679,54 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       })
     );
 
-    // 4. Upsert user projections (recomputable, unsigned)
+    const totalProposedUnits = receiptWeights.reduce(
+      (acc, w) => acc + w.units,
+      0n
+    );
+
+    // 4. Check if projections have actually changed before writing.
+    // Avoids unnecessary DB writes when the same daily run produces identical results.
+    const existingProjections =
+      await attributionStore.getUserProjectionsForEpoch(epochId);
+    const existingMap = new Map(
+      existingProjections.map((p) => [
+        p.userId,
+        { units: p.projectedUnits, count: p.receiptCount },
+      ])
+    );
+
+    const projectionsChanged =
+      projections.length !== existingMap.size ||
+      projections.some((p) => {
+        const existing = existingMap.get(p.userId);
+        return (
+          !existing ||
+          existing.units !== p.projectedUnits ||
+          existing.count !== p.receiptCount
+        );
+      });
+
+    if (!projectionsChanged) {
+      logger.info(
+        {
+          epochId: input.epochId,
+          totalAllocations: receiptWeights.length,
+          totalProposedUnits: totalProposedUnits.toString(),
+        },
+        "Projections unchanged — skipping writes"
+      );
+      return {
+        totalAllocations: receiptWeights.length,
+        totalProposedUnits: totalProposedUnits.toString(),
+      };
+    }
+
+    // 5. Upsert user projections (recomputable, unsigned)
     if (projections.length > 0) {
       await attributionStore.upsertUserProjections(projections);
       const activeUserIds = projections.map((p) => p.userId);
       await attributionStore.deleteStaleUserProjections(epochId, activeUserIds);
     }
-
-    const totalProposedUnits = receiptWeights.reduce(
-      (acc, w) => acc + w.units,
-      0n
-    );
 
     logger.info(
       {
@@ -802,7 +842,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     // Validate and compute config hashes
     validateWeightConfig(input.weightConfig);
     const weightConfigHash = await computeWeightConfigHash(input.weightConfig);
-    const allocationAlgoRef = deriveAllocationAlgoRef(input.creditEstimateAlgo);
+    const allocationAlgoRef = deriveAllocationAlgoRef(
+      input.attributionPipeline
+    );
     const approverSetHash = computeApproverSetHash(input.approvers);
 
     logger.info(
@@ -968,7 +1010,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       0n
     );
 
-    // 5. Load locked claimants + compute receipt weights → explode to claimant allocations
+    // 5. Load locked claimants + receipt weights + overrides → explode to claimant allocations
     const lockedClaimants = await attributionStore.loadLockedClaimants(epochId);
     if (lockedClaimants.length === 0) {
       throw new Error(
@@ -976,23 +1018,35 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       );
     }
 
-    const selections =
-      await attributionStore.getSelectedReceiptsForAllocation(epochId);
-    const receiptWeights = computeReceiptWeights(
+    const [selections, overrideRecords] = await Promise.all([
+      attributionStore.getSelectedReceiptsForAllocation(epochId),
+      attributionStore.getReviewSubjectOverridesForEpoch(epochId),
+    ]);
+    const rawWeights = computeReceiptWeights(
       epoch.allocationAlgoRef,
       selections,
       epoch.weightConfig
     );
+    const overrides = toReviewSubjectOverrides(overrideRecords);
+    const receiptWeights = applyReceiptWeightOverrides(rawWeights, overrides);
 
     const finalClaimantAllocations = explodeToClaimants(
       receiptWeights,
-      lockedClaimants
+      lockedClaimants,
+      overrides
     );
     if (finalClaimantAllocations.length === 0) {
       throw new Error(
         `finalizeEpoch: epoch ${input.epochId} has no claimant allocations`
       );
     }
+
+    // Build override audit trail for statement persistence
+    const reviewOverrideSnapshots = buildReceiptWeightOverrideSnapshots(
+      rawWeights,
+      lockedClaimants,
+      overrides
+    );
 
     // 6. Compute statement lines from final allocations
     const statementLines = computeAttributionStatementLines(
@@ -1056,7 +1110,8 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
             credit_amount: line.creditAmount.toString(),
             receipt_ids: [...line.receiptIds],
           })),
-          reviewOverrides: null,
+          reviewOverrides:
+            reviewOverrideSnapshots.length > 0 ? reviewOverrideSnapshots : null,
         },
         signature: {
           nodeId,

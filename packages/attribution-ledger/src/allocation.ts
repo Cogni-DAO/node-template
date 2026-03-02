@@ -180,14 +180,14 @@ export function validateWeightConfig(config: Record<string, number>): void {
 }
 
 /**
- * Derive allocation algorithm ref from repo-spec credit_estimate_algo.
+ * Derive allocation algorithm ref from repo-spec attribution_pipeline.
  * Pure function — maps governance config to internal algorithm ID.
  */
-export function deriveAllocationAlgoRef(creditEstimateAlgo: string): string {
-  switch (creditEstimateAlgo) {
+export function deriveAllocationAlgoRef(attributionPipeline: string): string {
+  switch (attributionPipeline) {
     case "cogni-v0.0":
       return "weight-sum-v0";
     default:
-      throw new Error(`Unknown credit_estimate_algo: ${creditEstimateAlgo}`);
+      throw new Error(`Unknown attribution_pipeline: ${attributionPipeline}`);
   }
 }

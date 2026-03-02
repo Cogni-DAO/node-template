@@ -84,11 +84,11 @@ export interface AttributionIngestRunV1 {
   readonly scopeId: string;
   readonly scopeKey: string;
   readonly epochLengthDays: number;
-  /** Map of source → { creditEstimateAlgo, sourceRefs, streams } */
+  /** Map of source → { attributionPipeline, sourceRefs, streams } */
   readonly activitySources: Record<
     string,
     {
-      creditEstimateAlgo: string;
+      attributionPipeline: string;
       sourceRefs: string[];
       streams: string[];
     }
@@ -175,23 +175,29 @@ export async function CollectEpochWorkflow(
     }
   }
 
-  // 5. Materialize selection and resolve identities (SELECTION_AUTO_POPULATE)
+  // 5. Extract attributionPipeline from activity sources (required — no fallback)
+  const firstSource = Object.values(config.activitySources)[0];
+  if (!firstSource?.attributionPipeline) {
+    throw ApplicationFailure.nonRetryable(
+      "attributionPipeline missing from activitySources — check repo-spec.yaml"
+    );
+  }
+  const attributionPipeline = firstSource.attributionPipeline;
+
+  // 6. Materialize selection and resolve identities (SELECTION_AUTO_POPULATE)
   await materializeSelection({ epochId: epoch.epochId });
 
-  // 6. Evaluate epoch with draft evaluations (echo enricher)
-  await evaluateEpochDraft({ epochId: epoch.epochId });
+  // 7. Evaluate epoch with draft evaluations (profile-driven enricher dispatch)
+  await evaluateEpochDraft({ epochId: epoch.epochId, attributionPipeline });
 
-  // 7. Compute allocations (periodic — runs every collection pass)
-  const creditEstimateAlgo =
-    Object.values(config.activitySources)[0]?.creditEstimateAlgo ??
-    "cogni-v0.0";
+  // 8. Compute allocations (periodic — runs every collection pass)
   await computeAllocations({
     epochId: epoch.epochId,
-    algorithmId: deriveAllocationAlgoRef(creditEstimateAlgo),
+    algorithmId: deriveAllocationAlgoRef(attributionPipeline),
     weightConfig: epoch.weightConfig,
   });
 
-  // 8. Ensure pool components (base_issuance from config, idempotent)
+  // 9. Ensure pool components (base_issuance from config, idempotent)
   if (config.baseIssuanceCredits) {
     await ensurePoolComponents({
       epochId: epoch.epochId,
@@ -199,18 +205,19 @@ export async function CollectEpochWorkflow(
     });
   }
 
-  // 9. Auto-close check: if now > periodEnd + gracePeriod → closeIngestion with evaluations
+  // 10. Auto-close check: if now > periodEnd + gracePeriod → closeIngestion with evaluations
   if (config.approvers && config.approvers.length > 0) {
     const gracePeriodMs = config.autoCloseGracePeriodMs ?? 24 * 60 * 60 * 1000; // default 24h
     const { evaluations, artifactsHash } = await buildLockedEvaluations({
       epochId: epoch.epochId,
+      attributionPipeline,
     });
     await autoCloseIngestion({
       epochId: epoch.epochId,
       periodEnd: periodEndIso,
       gracePeriodMs,
       weightConfig: epoch.weightConfig,
-      creditEstimateAlgo,
+      attributionPipeline,
       approvers: config.approvers,
       evaluations,
       artifactsHash,
@@ -220,7 +227,7 @@ export async function CollectEpochWorkflow(
 
 /** V0 weight config derivation — pure, deterministic. */
 function deriveWeightConfigV0(
-  sources: Record<string, { creditEstimateAlgo: string }>
+  sources: Record<string, { attributionPipeline: string }>
 ): Record<string, number> {
   const weights: Record<string, number> = {};
   for (const source of Object.keys(sources)) {

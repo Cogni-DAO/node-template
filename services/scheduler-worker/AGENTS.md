@@ -25,7 +25,6 @@ src/
 ├── bootstrap/       # Composition root: env parsing + adapter wiring
 │   ├── env.ts       # Zod-validated env singleton (config parsing only)
 │   └── container.ts # Builds ServiceContainer (concrete adapters → port interfaces)
-├── enrichers/       # Concrete enrichment plugin implementations owned by the worker service
 ├── ports/           # Port barrel — re-exports interfaces from packages
 │   └── index.ts     # ExecutionGrantWorkerPort, ScheduleRunRepository
 ├── activities/      # Temporal activities (I/O via injected ports)
@@ -80,7 +79,7 @@ src/
 
 ## Responsibilities
 
-- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow + CollectEpochWorkflow + FinalizeEpochWorkflow, execute scheduler activities (validateGrant, executeGraph, updateRun, createRun), ledger activities (ensureEpochForWindow, loadCursor, collectFromSource, insertReceipts, saveCursor, materializeSelection, computeAllocations, ensurePoolComponents, autoCloseIngestion, finalizeEpoch), own concrete enrichment plugins and enrichment activities (evaluateEpochDraft, buildLockedEvaluations), resolve receipt claimants during materializeSelection (draft) and lock them at autoCloseIngestion, and produce claimant-aware finalized statements from locked claimant records × receipt weights via explodeToClaimants()
+- This directory **does**: Connect to Temporal, register GovernanceScheduledRunWorkflow + CollectEpochWorkflow + FinalizeEpochWorkflow, execute scheduler activities (validateGrant, executeGraph, updateRun, createRun), ledger activities (ensureEpochForWindow, loadCursor, collectFromSource, insertReceipts, saveCursor, materializeSelection, computeAllocations, ensurePoolComponents, autoCloseIngestion, finalizeEpoch), dispatch enrichment via profile resolution from `@cogni/attribution-pipeline-plugins` registries (evaluateEpochDraft, buildLockedEvaluations), resolve receipt claimants during materializeSelection (draft) and lock them at autoCloseIngestion, and produce claimant-aware finalized statements from locked claimant records × receipt weights via explodeToClaimants()
 - This directory **does not**: Import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces (those live in packages), change ledger core contracts for plugin-specific payloads
 
 ## Usage
@@ -102,7 +101,7 @@ docker build -f services/scheduler-worker/Dockerfile -t scheduler-worker .
 
 ## Dependencies
 
-- **Internal:** `@cogni/scheduler-core` (ports), `@cogni/ingestion-core` (ports), `@cogni/attribution-ledger` (domain logic + epoch window), `@cogni/db-client` (adapters, bootstrap only), `@cogni/repo-spec` (identity from `.cogni/repo-spec.yaml`), `@cogni/ids`
+- **Internal:** `@cogni/scheduler-core` (ports), `@cogni/ingestion-core` (ports), `@cogni/attribution-ledger` (domain logic + epoch window), `@cogni/attribution-pipeline-contracts` (enricher types + profile resolution), `@cogni/attribution-pipeline-plugins` (built-in registries), `@cogni/db-client` (adapters, bootstrap only), `@cogni/repo-spec` (identity from `.cogni/repo-spec.yaml`), `@cogni/ids`
 - **External:** `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity`, `pino`, `viem` (EIP-191 verification), `zod`
 
 ## Change Protocol

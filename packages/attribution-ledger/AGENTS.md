@@ -56,7 +56,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `computeReceiptWeights()` — Per-receipt weight allocation dispatch (V0: `weight-sum-v0`)
   - `computeProposedAllocations()` — Legacy user-scoped allocation dispatch (retained for compatibility)
   - `validateWeightConfig()` — Rejects floats, NaN, Infinity, unsafe integers
-  - `deriveAllocationAlgoRef()` — Maps `credit_estimate_algo` to internal algorithm ref
+  - `deriveAllocationAlgoRef()` — Maps `attribution_pipeline` to internal algorithm ref
   - `ReceiptForWeighting`, `ReceiptUnitWeight` — Receipt-scoped allocation input/output types
   - `SelectedReceiptForAllocation`, `ProposedAllocation` — Legacy user-scoped allocation types (retained)
   - `AllocationAlgoRef` — Type alias for algorithm version string

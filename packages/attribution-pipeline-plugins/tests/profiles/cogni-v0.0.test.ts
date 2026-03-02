@@ -26,7 +26,7 @@ describe("cogni-v0.0 profile", () => {
   });
 
   it("selects echo as the only enricher (no core/plugin split)", () => {
-    const refs = COGNI_V0_PROFILE.enricherRefs.map((r) => r.evaluationRef);
+    const refs = COGNI_V0_PROFILE.enricherRefs.map((r) => r.enricherRef);
     expect(refs).toEqual(["cogni.echo.v0"]);
   });
 

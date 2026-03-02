@@ -358,7 +358,11 @@ type CapabilityRole = "review" | "admin" | "contributor";
 /** A node announced itself to the operator (or updated its capabilities). */
 interface NodeDiscoveryEvent {
   /** How the node was discovered */
-  trigger: "vcs_app_installed" | "vcs_app_removed" | "manual_registration" | "onchain_dao_formed";
+  trigger:
+    | "vcs_app_installed"
+    | "vcs_app_removed"
+    | "manual_registration"
+    | "onchain_dao_formed";
   /** VCS platform that triggered discovery (null for non-VCS triggers) */
   platform?: "github" | "gitlab";
   /** Platform-specific installation/connection ID */
@@ -389,11 +393,14 @@ interface NodeCapability {
 interface NodeScopeConfig {
   scopeId: string; // UUID (deterministic: uuidv5(nodeId, scopeKey))
   scopeKey: string;
-  activitySources: Record<string, {
-    sourceRefs: string[];
-    streams: string[];
-    creditEstimateAlgo: string;
-  }>;
+  activitySources: Record<
+    string,
+    {
+      sourceRefs: string[];
+      streams: string[];
+      creditEstimateAlgo: string;
+    }
+  >;
   approvers: string[]; // EVM addresses
   poolConfig: { baseIssuanceCredits: string };
 }
@@ -409,7 +416,10 @@ interface NodeRegistryPort {
 
   /** Capability management — tracks which auth credentials the operator holds per node. */
   upsertCapability(capability: NodeCapability): Promise<void>;
-  getCapability(nodeId: string, role: CapabilityRole): Promise<NodeCapability | null>;
+  getCapability(
+    nodeId: string,
+    role: CapabilityRole
+  ): Promise<NodeCapability | null>;
   listCapabilities(nodeId: string): Promise<NodeCapability[]>;
   removeCapability(nodeId: string, role: CapabilityRole): Promise<void>;
 }
@@ -525,24 +535,24 @@ When the operator needs to perform an action on a node's repo, it must select th
 // Existing port — capability param selects the right app
 interface VcsTokenProvider {
   getToken(params: {
-    provider: string;      // "github"
-    capability: string;    // "review" | "admin" | "contributor"
-    repoRef?: string;      // "owner/repo"
+    provider: string; // "github"
+    capability: string; // "review" | "admin" | "contributor"
+    repoRef?: string; // "owner/repo"
   }): Promise<VcsTokenResult>;
 }
 ```
 
 **Token selection rules:**
 
-| Operation | Required capability | Token source | If capability missing |
-|-----------|--------------------|--------------|-----------------------|
-| Fetch repo-spec (`.cogni/repo-spec.yaml`) | `review` (contents:read) | Review App installation token | Fall back to any active capability with contents:read; reject if none |
-| Collect activity (PRs, reviews, issues) | `review` (contents:read, issues:read) | Review App installation token | Fail: cannot ingest without read access |
-| Post PR review comments | `review` (pull_requests:write) | Review App installation token | Fail: review handler unavailable |
-| Create/update check runs | `review` (checks:write) | Review App installation token | Fail: check handler unavailable |
-| Merge PR (DAO-authorized) | `admin` (contents:write) | Admin App installation token | Fail: admin handler unavailable for this node |
-| Grant/revoke collaborator | `admin` (administration:write) | Admin App installation token | Fail: admin handler unavailable for this node |
-| Create PR / push branch | `contributor` (contents:write, pull_requests:write) | Contributor App installation token | Fail: contributor handler unavailable |
+| Operation                                 | Required capability                                 | Token source                       | If capability missing                                                 |
+| ----------------------------------------- | --------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------- |
+| Fetch repo-spec (`.cogni/repo-spec.yaml`) | `review` (contents:read)                            | Review App installation token      | Fall back to any active capability with contents:read; reject if none |
+| Collect activity (PRs, reviews, issues)   | `review` (contents:read, issues:read)               | Review App installation token      | Fail: cannot ingest without read access                               |
+| Post PR review comments                   | `review` (pull_requests:write)                      | Review App installation token      | Fail: review handler unavailable                                      |
+| Create/update check runs                  | `review` (checks:write)                             | Review App installation token      | Fail: check handler unavailable                                       |
+| Merge PR (DAO-authorized)                 | `admin` (contents:write)                            | Admin App installation token       | Fail: admin handler unavailable for this node                         |
+| Grant/revoke collaborator                 | `admin` (administration:write)                      | Admin App installation token       | Fail: admin handler unavailable for this node                         |
+| Create PR / push branch                   | `contributor` (contents:write, pull_requests:write) | Contributor App installation token | Fail: contributor handler unavailable                                 |
 
 **Security invariant:** The `VcsTokenProvider` implementation resolves the `capability` parameter to the correct `platform_install_id` from `operator_node_capabilities`. It must **never** fall back to a higher-privilege token when a lower-privilege one is requested but unavailable. If a node has only the Admin App installed and a workflow requests `capability: "review"`, the provider must **reject** — not silently use the admin token for a read operation. This prevents privilege creep where a workflow designed for read-only access accidentally gains write permissions.
 
@@ -563,11 +573,11 @@ async getToken({ provider, capability, repoRef }) {
 
 Three events cause the operator to re-fetch a node's configuration:
 
-| Trigger | Source | Mechanism |
-|---------|--------|-----------|
-| **Initial install** | VCS platform webhook (`installation_repositories.added` for GitHub) | Webhook handler → full registration flow |
-| **Config push** | VCS platform webhook (`push` event where `.cogni/**` files changed) | Webhook handler → re-fetch → reconcile scopes |
-| **Periodic cron** | Operator scheduler (e.g., daily) | Iterate active nodes → re-fetch → reconcile |
+| Trigger             | Source                                                              | Mechanism                                     |
+| ------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| **Initial install** | VCS platform webhook (`installation_repositories.added` for GitHub) | Webhook handler → full registration flow      |
+| **Config push**     | VCS platform webhook (`push` event where `.cogni/**` files changed) | Webhook handler → re-fetch → reconcile scopes |
+| **Periodic cron**   | Operator scheduler (e.g., daily)                                    | Iterate active nodes → re-fetch → reconcile   |
 
 The `push`-triggered sync requires the webhook handler to inspect the push payload's `commits[].modified` / `commits[].added` arrays for `.cogni/` path prefixes. Only `.cogni/**` changes trigger a re-sync — not every push.
 
@@ -605,16 +615,16 @@ Uninstalling a **single app** removes one capability. Uninstalling **all apps** 
 
 #### Invariants
 
-| Rule | Constraint |
-|------|-----------|
-| REGISTRATION_NODE_KEYED | The operator registers **nodes** (by `node_id`), not repos or scopes. A node may change repos (fork) or scopes (add/remove projects) over time. |
-| REGISTRATION_VCS_AGNOSTIC | Core registration port (`NodeRegistryPort`) has no VCS platform types. GitHub/GitLab are adapters that produce `NodeDiscoveryEvent`s. |
-| CAPABILITY_SCOPED_AUTH | Each workflow requests a specific `capabilityRole` when acquiring a token. The token provider resolves to the exact app installation for that role. It must **never** fall back to a higher-privilege token when the requested capability is unavailable — fail, don't escalate. |
-| CAPABILITY_INDEPENDENT | Installing/uninstalling one app does not affect other apps on the same node. The Review App and Admin App have independent lifecycles, credentials, and blast radii. |
-| REPO_SPEC_AUTHORITY | Operator reads the node's repo-spec; never invents or overrides policy. If the fetched spec is invalid, the operator rejects (does not substitute defaults). |
-| SCOPE_RECONCILIATION | On every sync, the operator diffs cached scopes against fetched scopes. New scopes create schedules; removed scopes pause schedules; changed configs update schedule inputs. |
-| SYNC_IDEMPOTENT | Re-fetching an unchanged repo-spec (same hash) is a no-op. No schedule restarts, no DB writes. |
-| SOFT_DELETE_ONLY | Node removal soft-deletes registration rows. Historical ledger data is never purged. |
+| Rule                      | Constraint                                                                                                                                                                                                                                                                       |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| REGISTRATION_NODE_KEYED   | The operator registers **nodes** (by `node_id`), not repos or scopes. A node may change repos (fork) or scopes (add/remove projects) over time.                                                                                                                                  |
+| REGISTRATION_VCS_AGNOSTIC | Core registration port (`NodeRegistryPort`) has no VCS platform types. GitHub/GitLab are adapters that produce `NodeDiscoveryEvent`s.                                                                                                                                            |
+| CAPABILITY_SCOPED_AUTH    | Each workflow requests a specific `capabilityRole` when acquiring a token. The token provider resolves to the exact app installation for that role. It must **never** fall back to a higher-privilege token when the requested capability is unavailable — fail, don't escalate. |
+| CAPABILITY_INDEPENDENT    | Installing/uninstalling one app does not affect other apps on the same node. The Review App and Admin App have independent lifecycles, credentials, and blast radii.                                                                                                             |
+| REPO_SPEC_AUTHORITY       | Operator reads the node's repo-spec; never invents or overrides policy. If the fetched spec is invalid, the operator rejects (does not substitute defaults).                                                                                                                     |
+| SCOPE_RECONCILIATION      | On every sync, the operator diffs cached scopes against fetched scopes. New scopes create schedules; removed scopes pause schedules; changed configs update schedule inputs.                                                                                                     |
+| SYNC_IDEMPOTENT           | Re-fetching an unchanged repo-spec (same hash) is a no-op. No schedule restarts, no DB writes.                                                                                                                                                                                   |
+| SOFT_DELETE_ONLY          | Node removal soft-deletes registration rows. Historical ledger data is never purged.                                                                                                                                                                                             |
 
 ### GitLab Support (Future)
 
@@ -687,10 +697,10 @@ Provide a unified, secure VCS integration layer where: (1) authentication is han
 | NO_PROBOT_DEPENDENCY         | Neither `packages/github-core/` nor `services/git-daemon/` depend on Probot. Auth primitives are implemented directly.                                                 |
 | SERVICE_ISOLATION            | `services/git-daemon/` imports only from `packages/*`. Never from `src/` or other services. (Inherited from services-architecture.)                                    |
 | REVIEW_HANDLER_VIA_GRAPH     | PR review logic executes through the graphExecutor (LangGraph), not inline in the webhook handler.                                                                     |
-| REGISTRATION_NODE_KEYED      | Operator registers nodes (by `node_id`), not repos or scopes. Scopes are derived from syncing the node's config.                                                      |
-| REGISTRATION_VCS_AGNOSTIC    | Core registration port has no VCS platform types. GitHub/GitLab are adapters that produce discovery events.                                                             |
-| CAPABILITY_SCOPED_AUTH       | Token provider resolves `capabilityRole` to the exact app installation. Never falls back to a higher-privilege token — fail, don't escalate.                            |
-| CAPABILITY_INDEPENDENT       | Installing/uninstalling one app does not affect other apps on the same node. Independent lifecycles, credentials, blast radii.                                          |
+| REGISTRATION_NODE_KEYED      | Operator registers nodes (by `node_id`), not repos or scopes. Scopes are derived from syncing the node's config.                                                       |
+| REGISTRATION_VCS_AGNOSTIC    | Core registration port has no VCS platform types. GitHub/GitLab are adapters that produce discovery events.                                                            |
+| CAPABILITY_SCOPED_AUTH       | Token provider resolves `capabilityRole` to the exact app installation. Never falls back to a higher-privilege token — fail, don't escalate.                           |
+| CAPABILITY_INDEPENDENT       | Installing/uninstalling one app does not affect other apps on the same node. Independent lifecycles, credentials, blast radii.                                         |
 | SCOPE_RECONCILIATION         | On every sync, operator diffs cached scopes against fetched scopes. New → create schedule; removed → pause; changed → update.                                          |
 | SYNC_IDEMPOTENT              | Re-fetching an unchanged repo-spec (same hash) is a no-op.                                                                                                             |
 
@@ -713,17 +723,17 @@ Admin app variables are optional — a Node may install only the review app.
 
 ### File Pointers
 
-| File                                      | Purpose                                        |
-| ----------------------------------------- | ---------------------------------------------- |
-| `packages/github-core/src/`               | JWT, installation tokens, webhook verification |
-| `services/git-daemon/src/`                | Webhook server, handler dispatch               |
-| `services/git-daemon/src/config.ts`       | Zod env schema (both app configs)              |
-| `services/git-daemon/src/apps/`           | Per-app Octokit factory                        |
-| `services/git-daemon/src/handlers/`       | Business logic (review, admin)                 |
-| `services/scheduler-worker/src/adapters/` | GitHubSourceAdapter (token-agnostic)           |
-| `packages/ingestion-core/src/port.ts`     | SourceAdapter interface                        |
-| `packages/repo-spec/src/`                 | Repo-spec Zod schemas + pure parser (task.0120)|
-| `packages/db-schema/src/operator.ts`      | Operator node registry tables (future)         |
+| File                                      | Purpose                                         |
+| ----------------------------------------- | ----------------------------------------------- |
+| `packages/github-core/src/`               | JWT, installation tokens, webhook verification  |
+| `services/git-daemon/src/`                | Webhook server, handler dispatch                |
+| `services/git-daemon/src/config.ts`       | Zod env schema (both app configs)               |
+| `services/git-daemon/src/apps/`           | Per-app Octokit factory                         |
+| `services/git-daemon/src/handlers/`       | Business logic (review, admin)                  |
+| `services/scheduler-worker/src/adapters/` | GitHubSourceAdapter (token-agnostic)            |
+| `packages/ingestion-core/src/port.ts`     | SourceAdapter interface                         |
+| `packages/repo-spec/src/`                 | Repo-spec Zod schemas + pure parser (task.0120) |
+| `packages/db-schema/src/operator.ts`      | Operator node registry tables (future)          |
 
 ## Open Questions
 

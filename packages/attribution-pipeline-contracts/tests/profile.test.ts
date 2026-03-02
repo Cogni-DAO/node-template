@@ -19,7 +19,7 @@ import { resolveProfile } from "../src/profile";
 const testProfile: PipelineProfile = {
   profileId: "test-v0.0",
   label: "Test Profile",
-  enricherRefs: [{ evaluationRef: "test.echo.v0", dependsOn: [] }],
+  enricherRefs: [{ enricherRef: "test.echo.v0", dependsOnEvaluations: [] }],
   allocatorRef: "weight-sum-v0",
   epochKind: "activity",
 };
@@ -37,10 +37,10 @@ describe("resolveProfile", () => {
     expect(result).toBe(testProfile);
   });
 
-  it("throws for unknown credit_estimate_algo", () => {
+  it("throws for unknown attribution_pipeline", () => {
     const registry = makeRegistry(testProfile);
     expect(() => resolveProfile(registry, "unknown-v0.0")).toThrow(
-      /Unknown credit_estimate_algo: "unknown-v0.0"/
+      /Unknown attribution_pipeline: "unknown-v0.0"/
     );
   });
 

@@ -3,11 +3,12 @@
 
 /**
  * Module: `@cogni/scheduler-worker/tests/enrichment-activities.test`
- * Purpose: Verifies evaluateEpochDraft and buildLockedEvaluations activity behavior — payload structure, idempotency, and Temporal wire-format safety.
- * Scope: Covers echo enricher (cogni.echo.v0) with mocked store. Does NOT cover workflow orchestration or DB integration.
+ * Purpose: Verifies evaluateEpochDraft and buildLockedEvaluations activity behavior — profile-driven enricher dispatch, payload structure, idempotency, and Temporal wire-format safety.
+ * Scope: Covers echo enricher (cogni.echo.v0) dispatched via cogni-v0.0 profile with mocked store. Does NOT cover workflow orchestration or DB integration.
  * Invariants:
  * - ENRICHER_IDEMPOTENT: Same receipts produce same hashes across draft and locked runs.
  * - BIGINT_WIRE_SAFE: buildLockedEvaluations output survives JSON.stringify (no BigInt in wire format).
+ * - PROFILE_DISPATCH: enrichers are dispatched via attributionPipeline → profile → enricherRefs.
  * Side-effects: none (mocked store)
  * Links: services/scheduler-worker/src/activities/enrichment.ts
  * @internal
@@ -18,15 +19,19 @@ import type {
   SelectedReceiptForAttribution,
   SelectedReceiptWithMetadata,
 } from "@cogni/attribution-ledger";
-import { describe, expect, it, vi } from "vitest";
-
 import {
-  createEnrichmentActivities,
+  createDefaultRegistries,
   ECHO_ALGO_REF,
   ECHO_EVALUATION_REF,
-} from "../src/activities/enrichment.js";
+} from "@cogni/attribution-pipeline-plugins";
+import { describe, expect, it, vi } from "vitest";
+
+import { createEnrichmentActivities } from "../src/activities/enrichment.js";
 
 const NODE_ID = "aaaaaaaa-0000-0000-0000-000000000001";
+const ATTRIBUTION_PIPELINE = "cogni-v0.0";
+
+const registries = createDefaultRegistries();
 
 const mockLogger = {
   info: vi.fn(),
@@ -144,12 +149,23 @@ function makeEpoch() {
   };
 }
 
+function makeActivities(storeOverrides: Partial<AttributionStore> = {}) {
+  const store = makeMockStore(storeOverrides);
+  const activities = createEnrichmentActivities({
+    attributionStore: store,
+    nodeId: NODE_ID,
+    logger: mockLogger,
+    registries,
+  });
+  return { store, activities };
+}
+
 // ── evaluateEpochDraft ────────────────────────────────────────────
 
 describe("evaluateEpochDraft", () => {
-  it("produces correct echo payload structure", async () => {
+  it("produces correct echo payload structure via profile dispatch", async () => {
     const receipts = makeReceipts(5);
-    const store = makeMockStore({
+    const { store, activities } = makeActivities({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
       getSelectedReceiptsForAttribution: vi
         .fn()
@@ -157,13 +173,10 @@ describe("evaluateEpochDraft", () => {
       getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
     });
 
-    const { evaluateEpochDraft } = createEnrichmentActivities({
-      attributionStore: store,
-      nodeId: NODE_ID,
-      logger: mockLogger,
+    const result = await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
-
-    const result = await evaluateEpochDraft({ epochId: "1" });
 
     expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
     expect(result.receiptCount).toBe(5);
@@ -191,7 +204,7 @@ describe("evaluateEpochDraft", () => {
   });
 
   it("calls upsertDraftEvaluation with status='draft'", async () => {
-    const store = makeMockStore({
+    const { store, activities } = makeActivities({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
       getSelectedReceiptsForAttribution: vi
         .fn()
@@ -201,32 +214,26 @@ describe("evaluateEpochDraft", () => {
         .mockResolvedValue(makeReceipts(2)),
     });
 
-    const { evaluateEpochDraft } = createEnrichmentActivities({
-      attributionStore: store,
-      nodeId: NODE_ID,
-      logger: mockLogger,
+    await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
-
-    await evaluateEpochDraft({ epochId: "1" });
 
     const call = vi.mocked(store.upsertDraftEvaluation).mock.calls[0][0];
     expect(call.status).toBe("draft");
   });
 
   it("handles no receipts — writes evaluation with empty counts", async () => {
-    const store = makeMockStore({
+    const { store, activities } = makeActivities({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
       getSelectedReceiptsForAttribution: vi.fn().mockResolvedValue([]),
       getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue([]),
     });
 
-    const { evaluateEpochDraft } = createEnrichmentActivities({
-      attributionStore: store,
-      nodeId: NODE_ID,
-      logger: mockLogger,
+    const result = await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
-
-    const result = await evaluateEpochDraft({ epochId: "1" });
 
     expect(result.receiptCount).toBe(0);
     expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(1);
@@ -235,6 +242,19 @@ describe("evaluateEpochDraft", () => {
       .payloadJson as { totalEvents: number };
     expect(payload.totalEvents).toBe(0);
   });
+
+  it("throws on unknown attributionPipeline", async () => {
+    const { activities } = makeActivities({
+      getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
+    });
+
+    await expect(
+      activities.evaluateEpochDraft({
+        epochId: "1",
+        attributionPipeline: "nonexistent-profile",
+      })
+    ).rejects.toThrow(/nonexistent-profile/);
+  });
 });
 
 // ── buildLockedEvaluations ─────────────────────────────────────────
@@ -242,7 +262,7 @@ describe("evaluateEpochDraft", () => {
 describe("buildLockedEvaluations", () => {
   it("returns evaluations and artifactsHash without writing to store", async () => {
     const receipts = makeReceipts(3);
-    const store = makeMockStore({
+    const { store, activities } = makeActivities({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
       getSelectedReceiptsForAttribution: vi
         .fn()
@@ -250,13 +270,10 @@ describe("buildLockedEvaluations", () => {
       getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
     });
 
-    const { buildLockedEvaluations } = createEnrichmentActivities({
-      attributionStore: store,
-      nodeId: NODE_ID,
-      logger: mockLogger,
+    const result = await activities.buildLockedEvaluations({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
-
-    const result = await buildLockedEvaluations({ epochId: "1" });
 
     expect(result.evaluations).toHaveLength(1);
     expect(result.evaluations[0].evaluationRef).toBe(ECHO_EVALUATION_REF);
@@ -269,7 +286,7 @@ describe("buildLockedEvaluations", () => {
   });
 
   it("returns valid artifactsHash", async () => {
-    const store = makeMockStore({
+    const { activities } = makeActivities({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
       getSelectedReceiptsForAttribution: vi
         .fn()
@@ -279,14 +296,123 @@ describe("buildLockedEvaluations", () => {
         .mockResolvedValue(makeReceipts(2)),
     });
 
-    const { buildLockedEvaluations } = createEnrichmentActivities({
-      attributionStore: store,
-      nodeId: NODE_ID,
-      logger: mockLogger,
+    const result = await activities.buildLockedEvaluations({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
+    });
+    expect(result.artifactsHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("includes schemaRef in wire format", async () => {
+    const { activities } = makeActivities({
+      getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
+      getSelectedReceiptsWithMetadata: vi
+        .fn()
+        .mockResolvedValue(makeReceipts(2)),
     });
 
-    const result = await buildLockedEvaluations({ epochId: "1" });
-    expect(result.artifactsHash).toMatch(/^[a-f0-9]{64}$/);
+    const result = await activities.buildLockedEvaluations({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
+    });
+
+    expect(result.evaluations[0].schemaRef).toBe("cogni.echo.v0/1.0.0");
+  });
+});
+
+// ── Change detection (skip when inputsHash unchanged) ───────────
+
+describe("evaluateEpochDraft change detection", () => {
+  it("skips enricher when existing draft evaluation has matching inputsHash", async () => {
+    const receipts = makeReceipts(3);
+
+    // Pre-compute the inputsHash that would result from these receipts.
+    // The echo adapter uses computeEnricherInputsHash with the same receipt shape.
+    const { computeEnricherInputsHash } = await import(
+      "@cogni/attribution-ledger"
+    );
+    const expectedHash = await computeEnricherInputsHash({
+      epochId: 1n,
+      receipts: receipts.map((r) => ({
+        receiptId: r.receiptId,
+        receiptPayloadHash: r.payloadHash,
+      })),
+    });
+
+    const { store, activities } = makeActivities({
+      getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
+      getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
+      // Return an existing evaluation with the same inputsHash
+      getEvaluation: vi.fn().mockResolvedValue({
+        id: "eval-1",
+        nodeId: NODE_ID,
+        epochId: 1n,
+        evaluationRef: ECHO_EVALUATION_REF,
+        status: "draft",
+        algoRef: ECHO_ALGO_REF,
+        inputsHash: expectedHash,
+        payloadHash: "old-payload-hash",
+        payloadJson: {},
+        payloadRef: null,
+        createdAt: new Date(),
+      }),
+    });
+
+    const result = await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
+    });
+
+    // Should return the ref but NOT call the adapter or write to store
+    expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
+    expect(store.upsertDraftEvaluation).not.toHaveBeenCalled();
+  });
+
+  it("runs enricher when existing draft evaluation has different inputsHash", async () => {
+    const receipts = makeReceipts(3);
+    const { store, activities } = makeActivities({
+      getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
+      getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
+      // Return an existing evaluation with a STALE inputsHash
+      getEvaluation: vi.fn().mockResolvedValue({
+        id: "eval-1",
+        nodeId: NODE_ID,
+        epochId: 1n,
+        evaluationRef: ECHO_EVALUATION_REF,
+        status: "draft",
+        algoRef: ECHO_ALGO_REF,
+        inputsHash: "stale-hash-does-not-match",
+        payloadHash: "old-payload-hash",
+        payloadJson: {},
+        payloadRef: null,
+        createdAt: new Date(),
+      }),
+    });
+
+    const result = await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
+    });
+
+    expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
+    expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs enricher when no existing draft evaluation exists", async () => {
+    const receipts = makeReceipts(3);
+    const { store, activities } = makeActivities({
+      getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
+      getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
+      getEvaluation: vi.fn().mockResolvedValue(null),
+    });
+
+    const result = await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
+    });
+
+    expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
+    expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -295,7 +421,7 @@ describe("buildLockedEvaluations", () => {
 describe("idempotency", () => {
   it("same receipts produce same hashes across evaluateEpochDraft and buildLockedEvaluations", async () => {
     const receipts = makeReceipts(4);
-    const store = makeMockStore({
+    const { store, activities } = makeActivities({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
       getSelectedReceiptsForAttribution: vi
         .fn()
@@ -303,15 +429,13 @@ describe("idempotency", () => {
       getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue(receipts),
     });
 
-    const activities = createEnrichmentActivities({
-      attributionStore: store,
-      nodeId: NODE_ID,
-      logger: mockLogger,
+    await activities.evaluateEpochDraft({
+      epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
-
-    await activities.evaluateEpochDraft({ epochId: "1" });
     const finalResult = await activities.buildLockedEvaluations({
       epochId: "1",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
 
     // Draft and final should have same payload hash and inputs hash
@@ -327,7 +451,7 @@ describe("idempotency", () => {
   });
 
   it("buildLockedEvaluations output survives JSON.stringify (no BigInt regression)", async () => {
-    const store = makeMockStore({
+    const { activities } = makeActivities({
       getEpoch: vi.fn().mockResolvedValue(makeEpoch()),
       getSelectedReceiptsForAttribution: vi
         .fn()
@@ -337,13 +461,10 @@ describe("idempotency", () => {
         .mockResolvedValue(makeReceipts(3)),
     });
 
-    const { buildLockedEvaluations } = createEnrichmentActivities({
-      attributionStore: store,
-      nodeId: NODE_ID,
-      logger: mockLogger,
+    const result = await activities.buildLockedEvaluations({
+      epochId: "999",
+      attributionPipeline: ATTRIBUTION_PIPELINE,
     });
-
-    const result = await buildLockedEvaluations({ epochId: "999" });
 
     // This is the exact operation Temporal performs on activity return values.
     // If any nested field is bigint, JSON.stringify throws TypeError.
