@@ -4,12 +4,13 @@
 /**
  * Module: `@cogni/scheduler-worker-service/bootstrap/container`
  * Purpose: Composition root — wires concrete adapters to port interfaces.
- * Scope: All adapter construction lives here. Returns typed container against port interfaces.
+ * Scope: All adapter construction lives here. Returns typed container against port interfaces. Does not export identity constants.
  * Invariants:
- * - Only file that imports concrete adapter packages (@cogni/db-client)
+ * - Only file that imports concrete adapter packages (@cogni/db-client, @cogni/repo-spec)
  * - activities/ and workflows/ import ports only, never this module
- * Side-effects: Creates DB connection pool
- * Links: services/scheduler-worker/src/ports/index.ts
+ * - REPO_SPEC_AUTHORITY: identity (node_id, scope_id, chain_id) read from @cogni/repo-spec at bootstrap
+ * Side-effects: Creates DB connection pool; reads .cogni/repo-spec.yaml from disk
+ * Links: services/scheduler-worker/src/ports/index.ts, packages/repo-spec/
  * @internal
  */
 
