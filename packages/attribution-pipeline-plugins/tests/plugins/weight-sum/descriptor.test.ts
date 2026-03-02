@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/attribution-pipeline-plugins/tests/plugins/weight-sum/descriptor`
- * Purpose: Unit tests for weight-sum allocator descriptor — delegation to computeProposedAllocations.
+ * Purpose: Unit tests for weight-sum allocator descriptor — delegation to computeReceiptWeights.
  * Scope: Tests allocator descriptor delegation. Does not test the allocation algorithm itself.
  * Invariants: ALLOCATOR_NEEDS_DECLARED, ALLOCATION_ALGO_VERSIONED.
  * Side-effects: none
@@ -11,7 +11,7 @@
  * @internal
  */
 
-import type { SelectedReceiptForAllocation } from "@cogni/attribution-ledger";
+import type { ReceiptForWeighting } from "@cogni/attribution-ledger";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -31,11 +31,10 @@ describe("weight-sum allocator descriptor", () => {
     );
   });
 
-  it("delegates to computeProposedAllocations and returns results", async () => {
-    const events: SelectedReceiptForAllocation[] = [
+  it("delegates to computeReceiptWeights and returns per-receipt results", async () => {
+    const receipts: ReceiptForWeighting[] = [
       {
         receiptId: "r1",
-        userId: "user-1",
         source: "github",
         eventType: "pull_request",
         included: true,
@@ -43,7 +42,6 @@ describe("weight-sum allocator descriptor", () => {
       },
       {
         receiptId: "r2",
-        userId: "user-2",
         source: "github",
         eventType: "pull_request",
         included: true,
@@ -54,25 +52,23 @@ describe("weight-sum allocator descriptor", () => {
     const weightConfig = { "github:pull_request": 1000 };
 
     const result = await WEIGHT_SUM_ALLOCATOR.compute({
-      events,
+      receipts,
       weightConfig,
       evaluations: new Map(),
       profileConfig: null,
     });
 
     expect(result).toHaveLength(2);
-    expect(result.map((r) => r.userId).sort()).toEqual(["user-1", "user-2"]);
-    for (const alloc of result) {
-      expect(alloc.proposedUnits).toBe(1000n);
-      expect(alloc.activityCount).toBe(1);
+    expect(result.map((r) => r.receiptId).sort()).toEqual(["r1", "r2"]);
+    for (const weight of result) {
+      expect(weight.units).toBe(1000n);
     }
   });
 
-  it("filters excluded events", async () => {
-    const events: SelectedReceiptForAllocation[] = [
+  it("filters excluded receipts", async () => {
+    const receipts: ReceiptForWeighting[] = [
       {
         receiptId: "r1",
-        userId: "user-1",
         source: "github",
         eventType: "pull_request",
         included: true,
@@ -80,7 +76,6 @@ describe("weight-sum allocator descriptor", () => {
       },
       {
         receiptId: "r2",
-        userId: "user-2",
         source: "github",
         eventType: "pull_request",
         included: false,
@@ -89,13 +84,13 @@ describe("weight-sum allocator descriptor", () => {
     ];
 
     const result = await WEIGHT_SUM_ALLOCATOR.compute({
-      events,
+      receipts,
       weightConfig: { "github:pull_request": 1000 },
       evaluations: new Map(),
       profileConfig: null,
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0]?.userId).toBe("user-1");
+    expect(result[0]?.receiptId).toBe("r1");
   });
 });

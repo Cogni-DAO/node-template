@@ -23,13 +23,6 @@ export {
   type AllocatorRegistry,
   dispatchAllocator,
 } from "./allocator";
-// Core evaluations
-export {
-  CLAIMANT_SHARES_CORE_DESCRIPTOR,
-  CLAIMANT_SHARES_SCHEMA_REF,
-  CORE_EVALUATION_REFS,
-  getEffectiveEnricherRefs,
-} from "./core-evaluations";
 // Enricher contracts
 export type {
   EnricherAdapter,

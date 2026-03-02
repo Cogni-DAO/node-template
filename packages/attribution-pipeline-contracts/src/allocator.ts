@@ -15,8 +15,8 @@
  */
 
 import type {
-  ProposedAllocation,
-  SelectedReceiptForAllocation,
+  ReceiptForWeighting,
+  ReceiptUnitWeight,
 } from "@cogni/attribution-ledger";
 
 import type { PipelineProfile } from "./profile";
@@ -35,21 +35,21 @@ export interface AllocatorDescriptor {
   readonly requiredEvaluationRefs: readonly string[];
 
   /**
-   * Compute proposed allocations.
+   * Compute per-receipt weight allocations.
    * Async to support future allocators that may need I/O (e.g., LLM-scored).
    * Deterministic allocators simply return a resolved promise.
    */
   readonly compute: (
     context: AllocationContext
-  ) => Promise<ProposedAllocation[]>;
+  ) => Promise<ReceiptUnitWeight[]>;
 }
 
 /**
  * Context passed to allocator compute().
- * Extends the current (events, weightConfig) with optional evaluations map.
+ * Receipt-scoped input — no userId, no claimant awareness.
  */
 export interface AllocationContext {
-  readonly events: readonly SelectedReceiptForAllocation[];
+  readonly receipts: readonly ReceiptForWeighting[];
   readonly weightConfig: Record<string, number>;
   /**
    * Locked evaluation payloads keyed by evaluationRef.
@@ -71,7 +71,7 @@ export async function dispatchAllocator(
   registry: AllocatorRegistry,
   profile: PipelineProfile,
   context: AllocationContext
-): Promise<ProposedAllocation[]> {
+): Promise<ReceiptUnitWeight[]> {
   const descriptor = registry.get(profile.allocatorRef);
   if (!descriptor) {
     const available = [...registry.keys()].join(", ");

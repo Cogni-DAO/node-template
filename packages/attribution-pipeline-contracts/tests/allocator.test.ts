@@ -11,7 +11,7 @@
  * @internal
  */
 
-import type { ProposedAllocation } from "@cogni/attribution-ledger";
+import type { ReceiptUnitWeight } from "@cogni/attribution-ledger";
 import { describe, expect, it } from "vitest";
 
 import type { AllocationContext, AllocatorDescriptor } from "../src/allocator";
@@ -21,14 +21,12 @@ import type { PipelineProfile } from "../src/profile";
 const mockProfile: PipelineProfile = {
   profileId: "test-v0.0",
   label: "Test",
-  pluginEnricherRefs: [],
+  enricherRefs: [],
   allocatorRef: "test-algo-v0",
   epochKind: "activity",
 };
 
-const mockResult: ProposedAllocation[] = [
-  { userId: "user-1", proposedUnits: 1000n, activityCount: 5 },
-];
+const mockResult: ReceiptUnitWeight[] = [{ receiptId: "r1", units: 1000n }];
 
 const mockAllocator: AllocatorDescriptor = {
   algoRef: "test-algo-v0",
@@ -40,7 +38,7 @@ function makeContext(
   overrides?: Partial<AllocationContext>
 ): AllocationContext {
   return {
-    events: [],
+    receipts: [],
     weightConfig: {},
     evaluations: new Map(),
     profileConfig: null,
