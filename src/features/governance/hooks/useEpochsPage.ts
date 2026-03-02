@@ -4,7 +4,7 @@
 /**
  * Module: `@features/governance/hooks/useEpochsPage`
  * Purpose: Unified React Query hook for the epoch page — current epoch + past epochs in one query.
- * Scope: Client-side data fetching. Single list-epochs call, partitions into current (open/review) vs past (review/finalized). Uses appropriate compose function per status.
+ * Scope: Client-side data fetching. Single list-epochs call, partitions into current (open/review) vs past (review/finalized). Uses appropriate compose function per status. Does not access database directly.
  * Invariants: Typed with view model types from types.ts. Prefers open epoch as current, falls back to review.
  * Side-effects: IO (HTTP GET to ledger API endpoints)
  * Links: src/features/governance/types.ts, src/features/governance/lib/compose-epoch.ts
