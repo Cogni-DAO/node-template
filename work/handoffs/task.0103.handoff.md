@@ -53,13 +53,13 @@ last_commit: e2ac1b60
 
 ## Pointers
 
-| File / Resource                                             | Why it matters                                                                              |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` | Core change: constructor, `resolveEpochScoped()`, `validateEpochIds()`, all patched methods |
-| `src/shared/config/repoSpec.server.ts`                      | New `getScopeId()` accessor                                                                 |
-| `src/bootstrap/container.ts:389`                            | App container passes `getScopeId()` to adapter                                              |
-| `services/scheduler-worker/src/bootstrap/container.ts:103`  | Worker container passes `config.SCOPE_ID`                                                   |
-| `tests/component/db/drizzle-ledger.adapter.int.test.ts`     | 40 tests including 12 new scope-isolation tests                                             |
-| `work/items/task.0103.scope-gated-queries-retrofit.md`      | Full design doc with method-by-method audit                                                 |
-| `work/items/task.0100.epoch-signing-state-machine.md`       | Next task: 3-phase state machine (design complete)                                          |
-| `docs/spec/epoch-ledger.md`                                 | Governing spec for the ledger system                                                        |
+| File / Resource                                                  | Why it matters                                                                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `packages/db-client/src/adapters/drizzle-attribution.adapter.ts` | Core change: constructor, `resolveEpochScoped()`, `validateEpochIds()`, all patched methods |
+| `src/shared/config/repoSpec.server.ts`                           | New `getScopeId()` accessor                                                                 |
+| `src/bootstrap/container.ts:389`                                 | App container passes `getScopeId()` to adapter                                              |
+| `services/scheduler-worker/src/bootstrap/container.ts:103`       | Worker container passes `config.SCOPE_ID`                                                   |
+| `tests/component/db/drizzle-attribution.adapter.int.test.ts`     | 40 tests including 12 new scope-isolation tests                                             |
+| `work/items/task.0103.scope-gated-queries-retrofit.md`           | Full design doc with method-by-method audit                                                 |
+| `work/items/task.0100.epoch-signing-state-machine.md`            | Next task: 3-phase state machine (design complete)                                          |
+| `docs/spec/attribution-ledger.md`                                | Governing spec for the ledger system                                                        |

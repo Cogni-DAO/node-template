@@ -15,14 +15,14 @@ last_commit: "66644058"
 
 - **Project:** [proj.transparent-credit-payouts](../projects/proj.transparent-credit-payouts.md) — epoch-based auditable decision ledger for credit payouts
 - **Work item:** [task.0093](../items/task.0093.ledger-schema-domain.md) — 6 Drizzle tables + pure domain logic (model, rules, signing, errors)
-- **Spec:** [epoch-ledger.md](../../docs/spec/epoch-ledger.md) — 20 invariants, 6 tables, API contracts, Temporal workflow IDs
+- **Spec:** [attribution-ledger.md](../../docs/spec/attribution-ledger.md) — 20 invariants, 6 tables, API contracts, Temporal workflow IDs
 - **Why:** Foundation layer for the ledger. Schema + domain logic must exist before ports/adapters (task.0094), Temporal workflows (task.0095), or routes (task.0096)
 
 ## Current State
 
 - **Schema (Done):** 6 Drizzle tables in `packages/db-schema/src/ledger.ts` — `ledger_issuers`, `epochs`, `work_receipts`, `receipt_events`, `epoch_pool_components`, `payout_statements`
-- **Domain logic (Done):** `packages/ledger-core/` — model types, `computeStatementItems()` (BIGINT largest-remainder), `buildReceiptMessage()` (domain-bound SHA-256), 5 error classes with type guards
-- **Re-export barrel (Done):** `src/core/ledger/public.ts` re-exports from `@cogni/attribution-ledger` — app code uses `@/core/ledger`
+- **Domain logic (Done):** `packages/attribution-ledger/` — model types, `computeStatementItems()` (BIGINT largest-remainder), `buildReceiptMessage()` (domain-bound SHA-256), 5 error classes with type guards
+- **Re-export barrel (Done):** `src/core/attribution/public.ts` re-exports from `@cogni/attribution-ledger` — app code uses `@/core/ledger`
 - **Tests (Done):** 31 passing — payout math edge cases, signing determinism, input guards (negative units, newline injection)
 - **Migrations (Uncommitted):** Another dev regenerated migrations — old 0010+0011 collapsed into clean `0010_redundant_misty_knight.sql` (DDL) + `0011_ledger_append_only_triggers.sql` (idempotent triggers). These are unstaged and need to be committed before PR.
 - **PR:** Not yet created. Branch is `feat/ledger-v0`, target is `staging`.
@@ -30,7 +30,7 @@ last_commit: "66644058"
 
 ## Decisions Made
 
-- **Package boundary:** Domain logic in `packages/ledger-core/` (not `src/core/ledger/`) — `scheduler-worker` cannot import from `src/`. Design review [9c414ad9].
+- **Package boundary:** Domain logic in `packages/attribution-ledger/` (not `src/core/attribution/`) — `scheduler-worker` cannot import from `src/`. Design review [9c414ad9].
 - **ADDRESS_NORMALIZED not CHECKSUMMED:** Addresses stored lowercase hex. EIP-55 checksum is UX-layer only. [8de671d9]
 - **LATEST_EVENT_WINS:** No state machine for receipt events. Most recent event by `created_at` determines state. Any transition valid.
 - **POOL_UNIQUE_PER_TYPE:** `UNIQUE(epoch_id, component_id)` — change amount by recording a new component_id, not updating.
@@ -55,10 +55,10 @@ last_commit: "66644058"
 
 | File / Resource                                    | Why it matters                                            |
 | -------------------------------------------------- | --------------------------------------------------------- |
-| `docs/spec/epoch-ledger.md`                        | Authoritative spec — 20 invariants, schema, API contracts |
-| `packages/ledger-core/src/`                        | Pure domain: model.ts, rules.ts, signing.ts, errors.ts    |
+| `docs/spec/attribution-ledger.md`                  | Authoritative spec — 20 invariants, schema, API contracts |
+| `packages/attribution-ledger/src/`                 | Pure domain: model.ts, rules.ts, signing.ts, errors.ts    |
 | `packages/db-schema/src/ledger.ts`                 | 6 Drizzle table definitions                               |
-| `src/core/ledger/public.ts`                        | Re-export barrel — app imports from here                  |
+| `src/core/attribution/public.ts`                   | Re-export barrel — app imports from here                  |
 | `src/adapters/server/db/migrations/0010_*.sql`     | DDL migration (tables, FKs, indexes, CHECK constraints)   |
 | `src/adapters/server/db/migrations/0011_*.sql`     | Custom trigger migration (append-only enforcement)        |
 | `tests/unit/core/ledger/`                          | 31 tests — rules.test.ts + signing.test.ts                |

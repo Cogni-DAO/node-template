@@ -25,7 +25,7 @@ last_commit: 71be222b
 - `pnpm check` passes (lint, type, format, docs, arch)
 - `pnpm test` passes (151 files, 1216 tests, 0 failures)
 - Pre-work rename: `artifactType` → `artifactRef` across all code, schema, and migration
-- 3 new modules in `packages/ledger-core/src/`: `artifact-envelope.ts`, `enricher-inputs.ts`, `validated-store.ts`
+- 3 new modules in `packages/attribution-ledger/src/`: `artifact-envelope.ts`, `enricher-inputs.ts`, `validated-store.ts`
 - New enrichment activity module: `services/scheduler-worker/src/activities/enrichment.ts`
 - Workflow wired: enrichEpochDraft after curation, buildFinalArtifacts before autoClose
 - `autoCloseIngestion` now always uses `closeIngestionWithArtifacts` (artifacts required)
@@ -59,15 +59,15 @@ last_commit: 71be222b
 - `autoCloseIngestion` now requires `artifacts` and `artifactsHash` in its input — any external callers of this activity must be updated.
 - The work-item-linker enricher (reading `.md` files from filesystem) is NOT wired yet. The echo enricher is a placeholder proving the pipeline works.
 - Commitlint prohibits the word "final" in commit bodies — use "locked" or "pinned" instead.
-- `canonicalJsonStringify()` is correctness-critical for all hashing — its tests are in `packages/ledger-core/tests/hashing.test.ts`.
+- `canonicalJsonStringify()` is correctness-critical for all hashing — its tests are in `packages/attribution-ledger/tests/hashing.test.ts`.
 
 ## Pointers
 
 | File / Resource                                                     | Why it matters                                              |
 | ------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `packages/ledger-core/src/artifact-envelope.ts`                     | NEW — `validateArtifactRef` + `validateArtifactEnvelope`    |
-| `packages/ledger-core/src/enricher-inputs.ts`                       | NEW — `computeEnricherInputsHash` with extensions           |
-| `packages/ledger-core/src/validated-store.ts`                       | NEW — `createValidatedAttributionStore` wrapper             |
+| `packages/attribution-ledger/src/artifact-envelope.ts`              | NEW — `validateArtifactRef` + `validateArtifactEnvelope`    |
+| `packages/attribution-ledger/src/enricher-inputs.ts`                | NEW — `computeEnricherInputsHash` with extensions           |
+| `packages/attribution-ledger/src/validated-store.ts`                | NEW — `createValidatedAttributionStore` wrapper             |
 | `services/scheduler-worker/src/activities/enrichment.ts`            | NEW — echo enricher activities                              |
 | `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` | MODIFIED — enrichment wired at steps 6 and 9                |
 | `services/scheduler-worker/src/activities/ledger.ts`                | MODIFIED — `AutoCloseIngestionInput` now requires artifacts |

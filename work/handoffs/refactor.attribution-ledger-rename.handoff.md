@@ -46,7 +46,7 @@ The word "payout" still appears in ~40 locations. These fall into 3 categories:
 - **`statementItems`** (not `payouts`/`distributions`) — JSON blob is statement line items, not payments
 - **DB column** `payouts_json` → `statement_items_json` via additive migration (no wipe)
 - **API wire field** `payouts` → `items` in `StatementSchema` (Zod contract)
-- **Routes** `/api/v1/ledger/` → `/api/v1/attribution/` — no users yet
+- **Routes** `/api/v1/attribution/` → `/api/v1/attribution/` — no users yet
 - **Temporal workflow IDs** (`ledger-collect-*`) and config key (`ledger.approvers`) intentionally NOT renamed — runtime identifiers
 
 ## Next Actions

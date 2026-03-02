@@ -34,7 +34,7 @@ After task.0113, the enricher extracts work-item links and snapshots raw frontma
 
 ### 2a. Enhance Work-Item Enricher with Budget Computation
 
-**File**: `packages/ledger-core/src/enrichers/work-item-linker.ts`
+**File**: `packages/attribution-ledger/src/enrichers/work-item-linker.ts`
 
 Add budget computation to the existing enricher:
 
@@ -78,7 +78,7 @@ New fields vs task.0113: `priorityMultipliers` (top-level) and `budgetMilli` (pe
 
 ### 2b. Updated Allocation Signature
 
-**File**: `packages/ledger-core/src/allocation.ts`
+**File**: `packages/attribution-ledger/src/allocation.ts`
 
 ```typescript
 export function computeProposedAllocations(
