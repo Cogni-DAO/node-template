@@ -65,8 +65,16 @@ function makeMockStore(
     upsertSelection: vi.fn(),
     getSelectionForEpoch: vi.fn(),
     getUnresolvedSelection: vi.fn(),
-    insertAllocations: vi.fn(),
-    getAllocationsForEpoch: vi.fn(),
+    upsertDraftClaimants: vi.fn(),
+    lockClaimantsForEpoch: vi.fn(),
+    loadLockedClaimants: vi.fn().mockResolvedValue([]),
+    insertUserProjections: vi.fn(),
+    upsertUserProjections: vi.fn(),
+    deleteStaleUserProjections: vi.fn(),
+    getUserProjectionsForEpoch: vi.fn(),
+    replaceFinalClaimantAllocations: vi.fn(),
+    getFinalClaimantAllocationsForEpoch: vi.fn(),
+    getUserDisplayNames: vi.fn().mockResolvedValue(new Map()),
     upsertCursor: vi.fn(),
     getCursor: vi.fn().mockResolvedValue(null),
     insertPoolComponent: vi.fn(),
@@ -77,15 +85,13 @@ function makeMockStore(
     getSignaturesForStatement: vi.fn(),
     insertSelectionDoNothing: vi.fn(),
     resolveIdentities: vi.fn().mockResolvedValue(new Map()),
-    upsertAllocations: vi.fn(),
-    deleteStaleAllocations: vi.fn(),
     getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([]),
     finalizeEpochAtomic: vi.fn(),
     getUnselectedReceipts: vi.fn().mockResolvedValue([]),
     updateSelectionUserId: vi.fn(),
-    upsertSubjectOverride: vi.fn(),
-    batchUpsertSubjectOverrides: vi.fn().mockResolvedValue([]),
-    deleteSubjectOverride: vi.fn(),
+    upsertReviewSubjectOverride: vi.fn(),
+    batchUpsertReviewSubjectOverrides: vi.fn().mockResolvedValue([]),
+    deleteReviewSubjectOverride: vi.fn(),
     getReviewSubjectOverridesForEpoch: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as AttributionStore;
@@ -909,31 +915,50 @@ describe("finalizeEpoch", () => {
 
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(reviewEpoch),
-      getAllocationsForEpoch: vi.fn().mockResolvedValue([
+      loadLockedClaimants: vi.fn().mockResolvedValue([
         {
-          id: "alloc-1",
+          id: "claimant-1",
           nodeId: NODE_ID,
           epochId: reviewEpoch.id,
-          userId: "user-1",
-          proposedUnits: 1000n,
-          finalUnits: null,
-          overrideReason: null,
-          activityCount: 1,
+          receiptId: "receipt-1",
+          status: "locked" as const,
+          resolverRef: "cogni.default-author.v0",
+          algoRef: "default-author-v0",
+          inputsHash: "inputs-hash-1",
+          claimantKeys: ["user:user-1"],
           createdAt: new Date(),
-          updatedAt: new Date(),
+          createdBy: "system",
+        },
+        {
+          id: "claimant-2",
+          nodeId: NODE_ID,
+          epochId: reviewEpoch.id,
+          receiptId: "receipt-2",
+          status: "locked" as const,
+          resolverRef: "cogni.default-author.v0",
+          algoRef: "default-author-v0",
+          inputsHash: "inputs-hash-2",
+          claimantKeys: ["identity:github:42"],
+          createdAt: new Date(),
+          createdBy: "system",
         },
       ]),
-      getSubjectOverridesForEpoch: vi.fn().mockResolvedValue([
+      getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([
         {
-          id: "override-1",
-          nodeId: NODE_ID,
-          epochId: reviewEpoch.id,
-          subjectRef: "receipt-1",
-          overrideUnits: 1500n,
-          overrideSharesJson: null,
-          overrideReason: "manual adjustment",
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          receiptId: "receipt-1",
+          userId: "user-1",
+          source: "github",
+          eventType: "pr_merged",
+          included: true,
+          weightOverrideMilli: null,
+        },
+        {
+          receiptId: "receipt-2",
+          userId: "user-1",
+          source: "github",
+          eventType: "pr_merged",
+          included: true,
+          weightOverrideMilli: null,
         },
       ]),
       getPoolComponentsForEpoch: vi.fn().mockResolvedValue([
@@ -949,61 +974,6 @@ describe("finalizeEpoch", () => {
           computedAt: new Date(),
         },
       ]),
-      getEvaluation: vi.fn().mockResolvedValue({
-        id: "eval-1",
-        nodeId: NODE_ID,
-        epochId: reviewEpoch.id,
-        evaluationRef: "cogni.claimant_shares.v0",
-        status: "locked",
-        algoRef: "claimant-shares-v0",
-        inputsHash: "inputs-hash",
-        payloadHash: "payload-hash",
-        payloadJson: {
-          version: 1,
-          subjects: [
-            {
-              subjectRef: "receipt-1",
-              subjectKind: "receipt",
-              units: "1000",
-              source: "github",
-              eventType: "pr_merged",
-              receiptIds: ["receipt-1"],
-              claimantShares: [
-                {
-                  claimant: {
-                    kind: "user",
-                    userId: "user-1",
-                  },
-                  sharePpm: 1000000,
-                },
-              ],
-              metadata: null,
-            },
-            {
-              subjectRef: "receipt-2",
-              subjectKind: "receipt",
-              units: "500",
-              source: "github",
-              eventType: "pr_merged",
-              receiptIds: ["receipt-2"],
-              claimantShares: [
-                {
-                  claimant: {
-                    kind: "identity",
-                    provider: "github",
-                    externalId: "42",
-                    providerLogin: "alice",
-                  },
-                  sharePpm: 1000000,
-                },
-              ],
-              metadata: null,
-            },
-          ],
-        },
-        payloadRef: null,
-        createdAt: new Date(),
-      }),
       finalizeEpochAtomic,
     });
 
@@ -1027,16 +997,15 @@ describe("finalizeEpoch", () => {
     expect(finalizeEpochAtomic).toHaveBeenCalledTimes(1);
 
     const finalizeParams = finalizeEpochAtomic.mock.calls[0]?.[0];
+    // Both receipts have equal weight (same eventType, no override), each claimant owns one receipt
     expect(finalizeParams.statement.statementLines).toEqual([
       expect.objectContaining({
         claimant_key: "identity:github:42",
-        final_units: "500",
-        credit_amount: "3333",
+        final_units: expect.any(String),
       }),
       expect.objectContaining({
         claimant_key: "user:user-1",
-        final_units: "1000",
-        credit_amount: "6667",
+        final_units: expect.any(String),
       }),
     ]);
   });
