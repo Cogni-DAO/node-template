@@ -15,7 +15,6 @@
 
 import {
   Activity,
-  Clock,
   FileSignature,
   LayoutDashboard,
   PieChart,
@@ -33,14 +32,8 @@ const GOV_TABS = [
   },
   {
     href: "/gov/epoch",
-    label: "Current Epoch",
+    label: "Epochs",
     icon: Activity,
-    match: "prefix" as const,
-  },
-  {
-    href: "/gov/history",
-    label: "History",
-    icon: Clock,
     match: "prefix" as const,
   },
   {

@@ -65,16 +65,6 @@ export interface EpochView {
   readonly unresolvedActivities: readonly UnresolvedActivity[];
 }
 
-/** Hook return shape for current epoch. */
-export interface CurrentEpochData {
-  readonly epoch: EpochView | null;
-}
-
-/** Hook return shape for epoch history. */
-export interface EpochHistoryData {
-  readonly epochs: readonly EpochView[];
-}
-
 /** A single user's cumulative holdings. */
 export interface HoldingView {
   readonly claimantKey: string;
