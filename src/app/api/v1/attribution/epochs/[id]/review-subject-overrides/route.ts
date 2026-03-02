@@ -257,7 +257,7 @@ export const PATCH = wrapRouteHandlerWithLogging<{
       );
       const upserted = results.length;
 
-      logEvent(ctx.log, EVENT_NAMES.LEDGER_ALLOCATIONS_UPDATED, {
+      logEvent(ctx.log, EVENT_NAMES.LEDGER_REVIEW_SUBJECT_OVERRIDES_UPDATED, {
         reqId: ctx.reqId,
         routeId: "ledger.patch-review-subject-overrides",
         epochId: id,
@@ -326,7 +326,7 @@ export const DELETE = wrapRouteHandlerWithLogging<{
 
       await store.deleteReviewSubjectOverride(epochId, input.subjectRef);
 
-      logEvent(ctx.log, EVENT_NAMES.LEDGER_ALLOCATIONS_UPDATED, {
+      logEvent(ctx.log, EVENT_NAMES.LEDGER_REVIEW_SUBJECT_OVERRIDES_UPDATED, {
         reqId: ctx.reqId,
         routeId: "ledger.delete-subject-override",
         epochId: id,

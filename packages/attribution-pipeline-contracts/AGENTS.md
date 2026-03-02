@@ -50,7 +50,7 @@ Stable framework package for the attribution pipeline plugin architecture. Defin
   - `AllocationContext` — events, weightConfig, evaluations map, profileConfig
   - `AllocatorRegistry` — ReadonlyMap<algoRef, AllocatorDescriptor>
   - `dispatchAllocator()` — Validate required evaluations, call compute()
-  - `PipelineProfile` — enricherRefs[], allocatorRef, epochKind
+  - `PipelineProfile` — pluginEnricherRefs[], allocatorRef, epochKind
   - `EnricherRef` — evaluationRef + dependsOn[]
   - `ProfileRegistry` — ReadonlyMap<profileId, PipelineProfile>
   - `resolveProfile()` — Lookup profile by credit_estimate_algo or throw

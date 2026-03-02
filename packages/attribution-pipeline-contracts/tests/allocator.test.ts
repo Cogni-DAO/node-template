@@ -21,7 +21,7 @@ import type { PipelineProfile } from "../src/profile";
 const mockProfile: PipelineProfile = {
   profileId: "test-v0.0",
   label: "Test",
-  enricherRefs: [],
+  pluginEnricherRefs: [],
   allocatorRef: "test-algo-v0",
   epochKind: "activity",
 };

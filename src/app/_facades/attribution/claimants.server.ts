@@ -231,14 +231,14 @@ export async function readFinalizedEpochClaimants(
   }
 
   const statement = await store.getStatementForEpoch(epoch.id);
-  const statementItems = statement
+  const statementLines = statement
     ? parseClaimantItemsFromStatement(statement.statementLines)
     : null;
-  if (statement && statementItems) {
+  if (statement && statementLines) {
     return {
       epochId: epoch.id.toString(),
       poolTotalCredits: statement.poolTotalCredits.toString(),
-      items: await enrichClaimantPresentation(store, epoch, statementItems),
+      items: await enrichClaimantPresentation(store, epoch, statementLines),
     };
   }
 

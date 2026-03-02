@@ -5,7 +5,7 @@
  * Module: `@cogni/attribution-pipeline-plugins/tests/profiles/cogni-v0.0`
  * Purpose: Unit tests for cogni-v0.0 profile — shape validation, PROFILE_IS_DATA invariant.
  * Scope: Tests profile data shape. Does not test I/O.
- * Invariants: PROFILE_IS_DATA, PROFILE_SELECTS_ENRICHERS, PROFILE_SELECTS_ALLOCATOR.
+ * Invariants: PROFILE_IS_DATA, PROFILE_SELECTS_PLUGIN_ENRICHERS, PROFILE_SELECTS_ALLOCATOR.
  * Side-effects: none
  * Links: packages/attribution-pipeline-plugins/src/profiles/cogni-v0.0.ts
  * @internal

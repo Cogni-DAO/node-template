@@ -41,14 +41,17 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
 
 - **Exports:**
   - `EPOCH_STATUSES` — Enum array
-  - `EpochStatus`, `FinalizedAllocation`, `StatementLineItem` — Domain types
+  - `EpochStatus` — Canonical epoch status type
+  - `FinalizedAllocation`, `StatementLineItem` — Legacy user-only compatibility types retained while app/core barrels still re-export them
   - `AttributionStore` — Port interface for ledger persistence
   - `AttributionEpoch`, `IngestionReceipt`, `EpochUserProjection`, `FinalClaimantAllocationRecord`, `IngestionCursor`, `AttributionPoolComponent`, `AttributionStatement`, `AttributionStatementSignature`, `AttributionEvaluation`, `ReviewSubjectOverrideRecord` — Read-side record types
   - `InsertReceiptParams`, `InsertUserProjectionParams`, `InsertFinalClaimantAllocationParams`, `InsertPoolComponentParams`, `InsertStatementParams`, `InsertSignatureParams`, `UpsertReviewSubjectOverrideParams`, `UpsertEvaluationParams`, `CloseIngestionWithEvaluationsParams` — Write-side param types
   - `computeEpochWindowV1()` — Pure, deterministic epoch window computation (Monday-aligned UTC). Safe in Temporal workflow code.
   - `EpochWindow`, `EpochWindowParams` — Types for epoch window computation
-  - `computeStatementItems()`, `computeAttributionStatementLines()` — BIGINT proportional distribution with largest-remainder rounding for user-only and claimant-aware statements
-  - `computeAllocationSetHash()`, `computeFinalClaimantAllocationSetHash()` — SHA-256 of canonical sorted allocation data for user-only and claimant-aware finalization
+  - `computeStatementItems()` — Legacy user-only statement helper retained for compatibility
+  - `computeAttributionStatementLines()` — Canonical claimant-aware statement line computation
+  - `computeAllocationSetHash()` — Legacy user-only allocation-set hash retained for compatibility
+  - claimant-aware allocation-set hash helper — canonical hash for claimant-scoped signed units
   - `computeWeightConfigHash()` — SHA-256 of canonical weight config JSON (key-sorted)
   - `computeProposedAllocations()` — Versioned allocation dispatch (V0: `weight-sum-v0`)
   - `validateWeightConfig()` — Rejects floats, NaN, Infinity, unsafe integers
@@ -59,7 +62,9 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `PoolComponentEstimate`, `PoolComponentId`, `POOL_COMPONENT_ALLOWLIST` — Pool types and validation
   - `validatePoolComponentId()` — V0 allowlist validation
   - `EpochNotOpenError`, `EpochAlreadyFinalizedError`, `PoolComponentMissingError` — Domain errors with type guards
-  - `buildCanonicalMessage()`, `computeApproverSetHash()` — EIP-191 signing helpers (pure, zero runtime deps)
+  - `buildEIP712TypedData()` — Canonical EIP-712 typed-data builder for statement signing
+  - `buildCanonicalMessage()` — Deprecated EIP-191 compatibility helper retained for one release cycle
+  - `computeApproverSetHash()` — Deterministic approver-set hash pinned at review
   - `computeArtifactsHash()` — SHA-256 of sorted locked artifact tuples
   - `validateArtifactRef()`, `validateArtifactEnvelope()` — Artifact metadata/hash validation (pure)
   - `computeEnricherInputsHash()` — Deterministic inputs hash for enrichers (base shape + extensions)
@@ -75,7 +80,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
 
 - **Uses ports:** none
 - **Implements ports:** none
-- **Defines ports:** `AttributionStore` (implemented by `DrizzleAttributionAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUnselectedReceipts`, `updateSelectionUserId`, `insertSelectionDoNothing`), projection computation (`getSelectedReceiptsForAllocation`, `insertUserProjections`, `deleteStaleUserProjections`), canonical attribution reads (`getSelectedReceiptsForAttribution`, `getUserDisplayNames`, `getEvaluation`, `getReviewSubjectOverridesForEpoch`, `getFinalClaimantAllocationsForEpoch`), evaluation lifecycle (`upsertDraftEvaluation`, `closeIngestionWithEvaluations`, `getEvaluationsForEpoch`, `getSelectedReceiptsWithMetadata`), and atomic finalization (`finalizeEpochAtomic`).
+- **Defines ports:** `AttributionStore` (implemented by `DrizzleAttributionAdapter` in `@cogni/db-client`). Includes identity resolution (`resolveIdentities`, `getUnselectedReceipts`, `updateSelectionUserId`, `insertSelectionDoNothing`), projection computation (`getSelectedReceiptsForAllocation`, `insertUserProjections`, `deleteStaleUserProjections`), canonical attribution reads (`getSelectedReceiptsForAttribution`, `getUserDisplayNames`, `getEvaluation`, `getReviewSubjectOverridesForEpoch`, `getFinalClaimantAllocationsForEpoch`), evaluation lifecycle (`upsertDraftEvaluation`, `closeIngestionWithEvaluations`, `getEvaluationsForEpoch`, `getSelectedReceiptsWithMetadata`), and atomic epoch sealing (`finalizeEpochAtomic`).
 
 ## Responsibilities
 

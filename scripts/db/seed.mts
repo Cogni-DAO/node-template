@@ -26,18 +26,17 @@
 
 import { createHash } from "node:crypto";
 import {
+  type AttributionStatementLineRecord,
   buildDefaultReceiptClaimantSharesPayload,
   CLAIMANT_SHARES_ALGO_REF,
   CLAIMANT_SHARES_EVALUATION_REF,
-  claimantKey,
   computeArtifactsHash,
-  computeEpochWindowV1,
-  computeWeightConfigHash,
-  deriveAllocationAlgoRef,
-  type AttributionStatementLineRecord,
   computeAttributionStatementLines,
+  computeEpochWindowV1,
   computeFinalClaimantAllocationSetHash,
   computeFinalClaimantAllocations,
+  computeWeightConfigHash,
+  deriveAllocationAlgoRef,
   type SelectedReceiptForAttribution,
   sha256OfCanonicalJson,
   type UpsertEvaluationParams,

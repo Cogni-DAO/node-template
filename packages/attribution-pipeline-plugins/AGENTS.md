@@ -44,8 +44,6 @@ Built-in enricher and allocator plugin implementations for the attribution pipel
   - `ECHO_EVALUATION_REF`, `ECHO_ALGO_REF`, `ECHO_SCHEMA_REF` — echo plugin constants
   - `buildEchoPayload()` — pure function to build echo evaluation payload
   - `createEchoAdapter()` — factory returning `EnricherAdapter` for echo enricher
-  - `CLAIMANT_SHARES_SCHEMA_REF` — schema ref for claimant-shares plugin
-  - `createClaimantSharesAdapter()` — factory returning `EnricherAdapter` for claimant-shares enricher
   - `WEIGHT_SUM_ALLOCATOR` — `AllocatorDescriptor` wrapping `computeProposedAllocations()`
   - `COGNI_V0_PROFILE` — built-in `PipelineProfile` for weekly activity attribution
   - `createDefaultRegistries()` — constructs default `{profiles, enrichers, allocators}` registries

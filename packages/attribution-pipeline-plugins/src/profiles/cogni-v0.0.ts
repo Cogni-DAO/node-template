@@ -8,7 +8,7 @@
  * Invariants:
  * - PROFILE_IS_DATA: plain readonly object — no classes, no methods, no I/O.
  * - PROFILE_IMMUTABLE_PUBLISH_NEW: once published, never mutated.
- * - PROFILE_SELECTS_ENRICHERS: enricherRefs is sole authority for which enrichers run.
+ * - PROFILE_SELECTS_PLUGIN_ENRICHERS: pluginEnricherRefs is sole authority for which optional/plugin enrichers run.
  * - PROFILE_SELECTS_ALLOCATOR: allocatorRef is sole authority for which allocator runs.
  * Side-effects: none
  * Links: docs/spec/plugin-attribution-pipeline.md

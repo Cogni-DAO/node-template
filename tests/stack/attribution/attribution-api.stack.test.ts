@@ -3,9 +3,9 @@
 
 /**
  * Module: `@tests/stack/attribution/ledger-api.stack`
- * Purpose: Stack-level validation of public ledger API routes against a seeded closed epoch.
+ * Purpose: Stack-level validation of public ledger API routes against a seeded finalized epoch.
  * Scope: Tests 4 public read routes via HTTP fetch. Does not test auth-gated or write routes.
- * Invariants: PUBLIC_READS_CLOSED_ONLY, ALL_MATH_BIGINT, VALIDATE_IO, NODE_SCOPED.
+ * Invariants: PUBLIC_READS_FINALIZED_ONLY, ALL_MATH_BIGINT, VALIDATE_IO, NODE_SCOPED.
  * Side-effects: IO (HTTP requests, database writes for seeding)
  * Notes: Seeds data using real node_id/scope_id from repo-spec since routes use getNodeId().
  * Links: src/app/api/v1/public/attribution/, src/contracts/attribution.*.v1.contract.ts
@@ -38,7 +38,7 @@ function baseUrl(path: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Setup: seed a closed epoch with the real node_id
+// Setup: seed a finalized epoch with the real node_id
 // ---------------------------------------------------------------------------
 
 let seeded: SeededClosedEpoch;
@@ -77,7 +77,7 @@ beforeAll(async () => {
 
 describe("Public ledger API routes", () => {
   describe("GET /api/v1/public/attribution/epochs", () => {
-    it("returns closed epochs matching ListEpochsOutputSchema", async () => {
+    it("returns finalized epochs matching ListEpochsOutputSchema", async () => {
       const response = await fetchStackTest(
         baseUrl("/api/v1/public/attribution/epochs?limit=100&offset=0")
       );

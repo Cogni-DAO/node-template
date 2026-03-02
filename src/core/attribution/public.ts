@@ -35,6 +35,9 @@ export type {
 export {
   AllocationNotFoundError,
   ATTRIBUTION_STATEMENT_TYPES,
+  // Legacy user-only helpers remain exported here for compatibility with older
+  // core consumers. New claimant-aware flows should use
+  // computeFinalClaimantAllocationSetHash() and computeAttributionStatementLines().
   computeAllocationSetHash,
   computeStatementItems,
   EPOCH_STATUSES,

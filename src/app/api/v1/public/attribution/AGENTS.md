@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Public (unauthenticated) HTTP endpoints for finalized attribution data. Exposes closed-epoch lists, user projections, epoch statements, and claimant-aware finalized attribution to the community-attribution frontend without requiring a SIWE session.
+Public (unauthenticated) HTTP endpoints for finalized attribution data. Exposes finalized-epoch lists, user projections, epoch statements, and claimant-aware finalized attribution to the community-attribution frontend without requiring a SIWE session.
 
 ## Pointers
 
@@ -31,9 +31,9 @@ Public (unauthenticated) HTTP endpoints for finalized attribution data. Exposes 
 
 - **Exports:** none (route handlers only)
 - **Routes:**
-  - `GET /api/v1/public/attribution/epochs` — list closed epochs (paginated)
-  - `GET /api/v1/public/attribution/epochs/[id]/user-projections` — user projections for a closed epoch
-  - `GET /api/v1/public/attribution/epochs/[id]/claimants` — claimant-aware finalized attribution for a closed epoch
+  - `GET /api/v1/public/attribution/epochs` — list finalized epochs (paginated)
+  - `GET /api/v1/public/attribution/epochs/[id]/user-projections` — user projections for a finalized epoch
+  - `GET /api/v1/public/attribution/epochs/[id]/claimants` — claimant-aware finalized attribution for a finalized epoch
   - `GET /api/v1/public/attribution/epochs/[id]/statement` — payout statement (null if none)
 - **CLI:** none
 - **Env/Config keys:** none
@@ -46,7 +46,7 @@ Public (unauthenticated) HTTP endpoints for finalized attribution data. Exposes 
 
 ## Responsibilities
 
-- This directory **does:** serve finalized epoch data via `wrapPublicRoute()`, validate output via Zod contracts, enforce PUBLIC_READS_CLOSED_ONLY invariant.
+- This directory **does:** serve finalized epoch data via `wrapPublicRoute()`, validate output via Zod contracts, enforce PUBLIC_READS_FINALIZED_ONLY invariant.
 - This directory **does not:** expose open/current epoch data, raw activity streams, PII fields, or write mutations.
 
 ## Usage
@@ -62,7 +62,7 @@ curl http://localhost:3000/api/v1/public/attribution/epochs/1/statement
 
 - All routes use `wrapPublicRoute()` with cache headers
 - Output validated via contract schemas before responding
-- Only closed epochs exposed (PUBLIC_READS_CLOSED_ONLY)
+- Only finalized epochs exposed (PUBLIC_READS_FINALIZED_ONLY)
 
 ## Dependencies
 

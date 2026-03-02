@@ -276,7 +276,7 @@ type EpochReviewOverridesJson = NonNullable<
 >;
 
 /**
- * STATEMENT_ITEMS_BOUNDARY_CLONE: strips readonly from ReviewOverrideSnapshot[]
+ * REVIEW_OVERRIDES_BOUNDARY_CLONE: strips readonly from ReviewOverrideSnapshot[]
  * so Drizzle's mutable JSONB types are satisfied.
  */
 function toReviewOverridesJson(

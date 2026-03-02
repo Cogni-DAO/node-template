@@ -34,7 +34,7 @@ export function validateEnricherOrder(
     for (const dep of ref.dependsOn) {
       if (!refSet.has(dep)) {
         throw new Error(
-          `Enricher "${ref.evaluationRef}" depends on "${dep}" which is not in the profile's enricherRefs`
+          `Enricher "${ref.evaluationRef}" depends on "${dep}" which is not in the effective enricher refs`
         );
       }
     }

@@ -42,6 +42,8 @@ export type {
 export {
   AllocationNotFoundError,
   ATTRIBUTION_STATEMENT_TYPES,
+  // Legacy user-only helpers remain re-exported for compatibility while the
+  // app/core surface finishes migrating to claimant-aware naming.
   computeAllocationSetHash,
   computeStatementItems,
   EPOCH_STATUSES,

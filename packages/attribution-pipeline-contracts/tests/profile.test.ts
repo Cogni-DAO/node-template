@@ -5,7 +5,7 @@
  * Module: `@cogni/attribution-pipeline-contracts/tests/profile`
  * Purpose: Unit tests for resolveProfile and PipelineProfile type contracts.
  * Scope: Tests profile resolution, error messages, PROFILE_IS_DATA invariant. Does not test I/O.
- * Invariants: PROFILE_IS_DATA, PROFILE_SELECTS_ENRICHERS, PROFILE_SELECTS_ALLOCATOR.
+ * Invariants: PROFILE_IS_DATA, PROFILE_SELECTS_PLUGIN_ENRICHERS, PROFILE_SELECTS_ALLOCATOR.
  * Side-effects: none
  * Links: packages/attribution-pipeline/src/profile.ts
  * @internal
@@ -19,7 +19,7 @@ import { resolveProfile } from "../src/profile";
 const testProfile: PipelineProfile = {
   profileId: "test-v0.0",
   label: "Test Profile",
-  enricherRefs: [{ evaluationRef: "test.echo.v0", dependsOn: [] }],
+  pluginEnricherRefs: [{ evaluationRef: "test.echo.v0", dependsOn: [] }],
   allocatorRef: "weight-sum-v0",
   epochKind: "activity",
 };
@@ -60,6 +60,6 @@ describe("resolveProfile", () => {
     // Verify the profile is a plain object, not a class instance
     expect(testProfile.constructor).toBe(Object);
     expect(typeof testProfile.profileId).toBe("string");
-    expect(Array.isArray(testProfile.enricherRefs)).toBe(true);
+    expect(Array.isArray(testProfile.pluginEnricherRefs)).toBe(true);
   });
 });
