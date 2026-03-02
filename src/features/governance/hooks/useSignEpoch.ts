@@ -13,6 +13,7 @@
 
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useReducer } from "react";
 import { useSignTypedData } from "wagmi";
 
@@ -169,6 +170,7 @@ export interface UseSignEpochReturn {
 export function useSignEpoch(epochId: string): UseSignEpochReturn {
   const [internal, dispatch] = useReducer(reducer, { phase: "IDLE" });
   const { signTypedDataAsync } = useSignTypedData();
+  const queryClient = useQueryClient();
 
   const sign = useCallback(async () => {
     if (internal.phase !== "IDLE") return;
@@ -192,11 +194,12 @@ export function useSignEpoch(epochId: string): UseSignEpochReturn {
       const result = await postFinalize(epochId, signature);
 
       dispatch({ type: "FINALIZE_SUCCESS", workflowId: result.workflowId });
+      void queryClient.invalidateQueries({ queryKey: ["governance"] });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Signing failed";
       dispatch({ type: "FAIL", message });
     }
-  }, [internal.phase, epochId, signTypedDataAsync]);
+  }, [internal.phase, epochId, signTypedDataAsync, queryClient]);
 
   const reset = useCallback(() => {
     dispatch({ type: "RESET" });
