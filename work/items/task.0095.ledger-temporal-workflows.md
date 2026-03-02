@@ -70,7 +70,7 @@ activity_ledger:
 
 The workflow reads `epoch_length_days` to compute `periodStart`/`periodEnd`. `activity_sources` declares which adapters to run. `credit_estimate_algo` is a named reference to the weight config version — V0 hardcodes `cogni-v0.0` weights in code; vNext loads scoring schemas from repo-spec.
 
-**Scope parameter:** Workflows accept `scope_id` (V0: always `'default'`). Deterministic workflow IDs include scope: `ledger-collect-{scopeId}-{periodStart}-{periodEnd}`. Epoch invariants (`ONE_OPEN_EPOCH`, `EPOCH_WINDOW_UNIQUE`) are composite on `(node_id, scope_id)`. See [epoch-ledger.md §Project Scoping](../../docs/spec/epoch-ledger.md#project-scoping).
+**Scope parameter:** Workflows accept `scope_id` (V0: always `'default'`). Deterministic workflow IDs include scope: `ledger-collect-{scopeId}-{periodStart}-{periodEnd}`. Epoch invariants (`ONE_OPEN_EPOCH`, `EPOCH_WINDOW_UNIQUE`) are composite on `(node_id, scope_id)`. See [attribution-ledger.md §Project Scoping](../../docs/spec/attribution-ledger.md#project-scoping).
 
 **Collection cadence** is a Temporal Schedule concern (daily cron `0 6 * * *`), not repo-spec. Daily runs let admins track epoch progress throughout the week. Each run is additive — cursor-based sync picks up where the last run left off.
 
@@ -153,7 +153,7 @@ Deterministic ID: ledger-finalize-{epochId}
 
 ### New pure function: `computeProposedAllocations`
 
-Added to `packages/ledger-core/src/rules.ts`:
+Added to `packages/attribution-ledger/src/rules.ts`:
 
 ```typescript
 interface CuratedEventForAllocation {
@@ -219,10 +219,10 @@ Implementation in `DrizzleAttributionAdapter`: queries `user_bindings` table wit
 
 **Modify:**
 
-- `packages/ledger-core/src/rules.ts` — add `computeProposedAllocations()` pure function
-- `packages/ledger-core/src/store.ts` — add `resolveIdentities()` to port interface
-- `packages/ledger-core/src/index.ts` — re-export new types
-- `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — implement `resolveIdentities()`
+- `packages/attribution-ledger/src/rules.ts` — add `computeProposedAllocations()` pure function
+- `packages/attribution-ledger/src/store.ts` — add `resolveIdentities()` to port interface
+- `packages/attribution-ledger/src/index.ts` — re-export new types
+- `packages/db-client/src/adapters/drizzle-attribution.adapter.ts` — implement `resolveIdentities()`
 - `services/scheduler-worker/src/main.ts` — start ledger worker alongside scheduler worker
 - `services/scheduler-worker/src/config.ts` — add `NODE_ID` env var (required)
 
@@ -272,10 +272,10 @@ Implementation in `DrizzleAttributionAdapter`: queries `user_bindings` table wit
 - `services/scheduler-worker/src/ledger-worker.ts` (new)
 - `services/scheduler-worker/src/main.ts` (start ledger worker)
 - `services/scheduler-worker/src/config.ts` (add NODE_ID)
-- `packages/ledger-core/src/rules.ts` (add computeProposedAllocations)
-- `packages/ledger-core/src/store.ts` (add resolveIdentities)
-- `packages/ledger-core/src/index.ts` (re-export)
-- `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` (implement resolveIdentities)
+- `packages/attribution-ledger/src/rules.ts` (add computeProposedAllocations)
+- `packages/attribution-ledger/src/store.ts` (add resolveIdentities)
+- `packages/attribution-ledger/src/index.ts` (re-export)
+- `packages/db-client/src/adapters/drizzle-attribution.adapter.ts` (implement resolveIdentities)
 
 ## Plan
 
@@ -288,7 +288,7 @@ Implementation in `DrizzleAttributionAdapter`: queries `user_bindings` table wit
 - [x] Extend `CreateScheduleParams` with optional `workflowType` + `taskQueueOverride`
 - [x] Extend `syncGovernanceSchedules` for LEDGER_INGEST → CollectEpochWorkflow on `ledger-tasks` queue
 - [x] Add LEDGER_INGEST schedule to governance schedules in repo-spec
-- [ ] Add `computeProposedAllocations()` to `packages/ledger-core/src/rules.ts` + unit tests → moved to task.0102
+- [ ] Add `computeProposedAllocations()` to `packages/attribution-ledger/src/rules.ts` + unit tests → moved to task.0102
 - [ ] Add `resolveIdentities()` to store port + implement in DrizzleAttributionAdapter → moved to task.0101
 - [x] Create `services/scheduler-worker/src/activities/ledger.ts` with `createLedgerActivities(deps)`
 - [x] Implement `CollectEpochWorkflow` — create epoch, collect from sources, insert events, save cursors

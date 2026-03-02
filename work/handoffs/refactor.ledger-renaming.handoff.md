@@ -29,7 +29,7 @@ All 8 phases completed across 9 commits:
 | —     | payout → statement rename across all layers                           | `716a78c4`       |
 | 6     | Tests, fixtures, seed scripts, reference data                         | `30806d3e`       |
 | 7     | Migration 0017 (ALTER TABLE RENAME + triggers) + drizzle snapshot     | `d25399f2`       |
-| 8     | Spec update (`docs/spec/epoch-ledger.md`)                             | (pending commit) |
+| 8     | Spec update (`docs/spec/attribution-ledger.md`)                       | (pending commit) |
 
 ## Decisions
 
@@ -43,8 +43,8 @@ All 8 phases completed across 9 commits:
 
 | File / Resource                                                     | Role                                      |
 | ------------------------------------------------------------------- | ----------------------------------------- |
-| `packages/ledger-core/src/store.ts`                                 | Source of truth for all method/type names |
+| `packages/attribution-ledger/src/store.ts`                          | Source of truth for all method/type names |
 | `packages/db-schema/src/ledger.ts`                                  | Source of truth for table/column names    |
-| `packages/db-client/src/adapters/drizzle-ledger.adapter.ts`         | All store port implementations            |
-| `docs/spec/epoch-ledger.md`                                         | Full spec with pipeline vocabulary        |
+| `packages/db-client/src/adapters/drizzle-attribution.adapter.ts`    | All store port implementations            |
+| `docs/spec/attribution-ledger.md`                                   | Full spec with pipeline vocabulary        |
 | `src/adapters/server/db/migrations/0017_ledger_pipeline_rename.sql` | Rename migration + trigger updates        |

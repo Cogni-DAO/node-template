@@ -108,7 +108,10 @@ Three layers, kept strictly separate:
 | Deliverable                                                                       | Status      | Est | Work Item  |
 | --------------------------------------------------------------------------------- | ----------- | --- | ---------- |
 | Unified repo-spec reader package (`@cogni/repo-spec`)                             | In Review   | 3   | task.0120  |
-| Fetch repo-spec from installed Node repos via GitHub API                          | Not Started | 2   | task.0122  |
+| Node registration lifecycle (discovery, fetch, persist, reconcile)                | Not Started | 5   | task.0122  |
+| Operator node registry DB (registrations, capabilities, scopes)                   | Not Started | —   | task.0122  |
+| GitHub webhook handlers (review + admin routes, multi-app capability tracking)    | Not Started | —   | task.0122  |
+| Scope reconciliation with Temporal schedule management                            | Not Started | —   | task.0122  |
 | Gateway proxy route (OpenAI-compatible, billing middleware)                       | Not Started | 3   | story.0116 |
 | API key management (generation, hashed storage, gateway auth)                     | Not Started | 2   | story.0116 |
 | `charge_receipts.external_agent_ref` column (nullable TEXT, freeform from header) | Not Started | 1   | story.0116 |

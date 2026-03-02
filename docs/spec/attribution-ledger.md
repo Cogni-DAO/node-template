@@ -354,7 +354,7 @@ Constraints:
 | `retrieved_at`     | TIMESTAMPTZ | NOT NULL — When adapter fetched from source (PROVENANCE_REQUIRED) |
 | `ingested_at`      | TIMESTAMPTZ | DB insert time                                                    |
 
-Composite PK: `(node_id, receipt_id)`. No `scope_id` — receipts are scope-agnostic global facts (RECEIPT_SCOPE_AGNOSTIC). Scope assigned at selection layer via epoch membership. No `epoch_id` — epoch membership assigned at selection layer. No `user_id` — identity resolution lands in `epoch_selection.user_id` (truly immutable raw log).
+Composite PK: `(node_id, receipt_id)`. No `scope_id` — receipts are scope-agnostic global facts (RECEIPT_SCOPE_AGNOSTIC). Scope assigned at selection layer via epoch membership. No `epoch_id` — epoch membership assigned at selection layer. No `user_id` — identity resolution lands in `epoch_selection.user_id` (truly immutable raw log). No `domain` column — `ingestion_receipts` is a **shared Layer 0 event archive**. Attribution, Treasury, Knowledge, and any future domain pipeline each select independently from this table. Domain membership is determined at each pipeline's selection layer, not at ingestion.
 
 DB trigger rejects UPDATE/DELETE (RECEIPT_APPEND_ONLY).
 
@@ -611,6 +611,8 @@ export interface StreamCursor {
 
 Adapters live in `services/scheduler-worker/src/adapters/ingestion/` (ADAPTERS_NOT_IN_CORE). They use official OSS clients: `@octokit/graphql` for GitHub, `discord.js` for Discord.
 
+**Forward path:** Singer (MIT/Apache) taps will replace bespoke TypeScript adapters for new data sources. Contract: `tap → stdout JSON stream → map to IngestionReceipt`. Temporal orchestrates tap execution and persists Singer `state.json` to Postgres. V0 TypeScript adapters (GitHub) remain until Singer equivalents are proven. Both write to the same `ingestion_receipts` table — downstream pipelines don't know the difference. See [data-ingestion-pipelines spec](./data-ingestion-pipelines.md).
+
 ## API
 
 ### Write Routes (SIWE + scope approver check → Temporal workflow → 202)
@@ -814,6 +816,15 @@ Finalized statements now preserve claimant identity explicitly (`claimant_key`, 
 - Real-time streaming (poll-based collection sufficient for weekly epochs)
 - Formal enricher registration/plugin framework (V0 calls enricher activities directly; plugin contracts scaffolded in `@cogni/attribution-pipeline-contracts`)
 - Payload shape standardization across enrichers (pipeline validates envelope only; payload is per-plugin, opaque)
+
+## Accounting Boundary
+
+A finalized attribution statement is **governance truth** (who earned what share), NOT a financial event. No money moves when an epoch is signed. Financial events occur only when funds move on-chain:
+
+1. **Treasury funds MerkleDistributor** — Dr Liability:UnclaimedRewards / Cr Assets:Treasury:USDC
+2. **User claims on-chain** — liability reduction via distributor claim
+
+Optional accrual at epoch sign (Dr Expense:ContributorRewards / Cr Liability:UnclaimedRewards) is permitted but not required. See [financial-ledger spec](./financial-ledger.md) for the treasury pipeline.
 
 ## Related
 

@@ -64,7 +64,7 @@ export class DrizzleAttributionAdapter implements ActivityLedgerStore {
 
 - Existing `EpochNotFoundError` (already in ledger-core)
 - Existing `DrizzleAttributionAdapter` class (no new file)
-- Existing adapter integration test (`tests/component/db/drizzle-ledger.adapter.int.test.ts`)
+- Existing adapter integration test (`tests/component/db/drizzle-attribution.adapter.int.test.ts`)
 
 **Rejected**:
 
@@ -86,7 +86,7 @@ export class DrizzleAttributionAdapter implements ActivityLedgerStore {
 
 ### Detailed Changes
 
-#### 1. Adapter constructor: add scopeId (`packages/db-client/src/adapters/drizzle-ledger.adapter.ts`)
+#### 1. Adapter constructor: add scopeId (`packages/db-client/src/adapters/drizzle-attribution.adapter.ts`)
 
 ```typescript
 export class DrizzleAttributionAdapter implements ActivityLedgerStore {
@@ -158,12 +158,12 @@ Every place that creates `new DrizzleAttributionAdapter(db)` must pass `scopeId`
 
 - `src/adapters/server/container.ts` — app container (get from `getScopeId()` or equivalent config)
 - `services/scheduler-worker/src/activities/ledger-activities.ts` — Temporal worker (get from workflow input or config)
-- `tests/component/db/drizzle-ledger.adapter.int.test.ts` — tests (use test scopeId)
+- `tests/component/db/drizzle-attribution.adapter.int.test.ts` — tests (use test scopeId)
 - `tests/stack/ledger/*.stack.test.ts` — stack tests (use test scopeId)
 
 #### 4. Add scope-isolation test cases
 
-Add to existing `drizzle-ledger.adapter.int.test.ts`:
+Add to existing `drizzle-attribution.adapter.int.test.ts`:
 
 ```typescript
 describe("SCOPE_GATED_QUERIES", () => {
@@ -184,10 +184,10 @@ describe("SCOPE_GATED_QUERIES", () => {
 
 <!-- High-level scope -->
 
-- Modify: `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — add scopeId to constructor, add `resolveEpochScoped()`, patch all epochId methods
+- Modify: `packages/db-client/src/adapters/drizzle-attribution.adapter.ts` — add scopeId to constructor, add `resolveEpochScoped()`, patch all epochId methods
 - Modify: `src/adapters/server/container.ts` — pass scopeId to adapter construction
 - Modify: `services/scheduler-worker/src/activities/ledger-activities.ts` — pass scopeId to adapter construction
-- Test: `tests/component/db/drizzle-ledger.adapter.int.test.ts` — scope-isolation test cases
+- Test: `tests/component/db/drizzle-attribution.adapter.int.test.ts` — scope-isolation test cases
 
 ## Validation
 
@@ -196,7 +196,7 @@ describe("SCOPE_GATED_QUERIES", () => {
 ```bash
 pnpm check
 pnpm packages:build
-pnpm dotenv -e .env.test -- vitest run tests/component/db/drizzle-ledger.adapter.int.test.ts
+pnpm dotenv -e .env.test -- vitest run tests/component/db/drizzle-attribution.adapter.int.test.ts
 ```
 
 **Expected:** Types pass, all existing adapter tests still green, new scope-isolation tests green.

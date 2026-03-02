@@ -86,7 +86,7 @@ Add `artifacts_hash TEXT` column to `epochs` — NULL while open, set at closeIn
 
 ### Hashing Invariants
 
-- **CANONICAL_JSON**: `canonicalJsonStringify()` — sorted keys at every depth, no whitespace, BigInt as string. Define once in `packages/ledger-core/src/hashing.ts`.
+- **CANONICAL_JSON**: `canonicalJsonStringify()` — sorted keys at every depth, no whitespace, BigInt as string. Define once in `packages/attribution-ledger/src/hashing.ts`.
 - **INPUTS_HASH_COMPLETE**: Each enricher defines its own inputs_hash composition. Must cover ALL meaningful dependencies consumed. For the hello-world enricher: `epoch_id`, sorted `(event_id, event_payload_hash)` list, sorted `(work_item_id, frontmatter_hash)` list. Canonically serialized via `canonicalJsonStringify()` before hashing. **Note**: `repoCommitSha` is in the payload for audit but NOT in `inputs_hash` — `frontmatterHash` already detects real `.md` content changes.
 - **PAYLOAD_HASH_COVERS_CONTENT**: `payload_hash` = SHA-256 of canonical JSON. Used in `artifacts_hash` computation (never re-serialized).
 - **ENRICHER_SNAPSHOT_RULE**: Anything learned from outside the ledger MUST be snapshotted into the artifact payload or referenced by content-hash.
@@ -96,7 +96,7 @@ Add `artifacts_hash TEXT` column to `epochs` — NULL while open, set at closeIn
 
 ### 1c. Hello-World GitHub Enricher (link extraction + frontmatter snapshot)
 
-**New file**: `packages/ledger-core/src/enrichers/work-item-linker.ts` — **pure functions only**
+**New file**: `packages/attribution-ledger/src/enrichers/work-item-linker.ts` — **pure functions only**
 
 ```typescript
 // Extract work item IDs from event metadata
@@ -173,7 +173,7 @@ Note: `computeAllocations` is NOT wired to artifacts in this task. The existing 
 
 ### Store Port Changes
 
-**File**: `packages/ledger-core/src/store.ts`
+**File**: `packages/attribution-ledger/src/store.ts`
 
 New type:
 

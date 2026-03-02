@@ -45,37 +45,37 @@ external_refs:
 
 ### Completed
 
-- [x] `packages/ledger-core/src/model.ts` — removed receipt types, renamed `ApprovedReceipt` → `FinalizedAllocation`
-- [x] `packages/ledger-core/src/errors.ts` — removed `ReceiptSignatureInvalidError`, `IssuerNotAuthorizedError`
-- [x] `packages/ledger-core/src/signing.ts` — deleted, replaced by `hashing.ts`
-- [x] `packages/ledger-core/src/hashing.ts` — `computeAllocationSetHash()`
-- [x] `packages/ledger-core/src/store.ts` — `ActivityLedgerStore` interface + all param/result types
-- [x] `packages/ledger-core/src/index.ts` — updated barrel exports
+- [x] `packages/attribution-ledger/src/model.ts` — removed receipt types, renamed `ApprovedReceipt` → `FinalizedAllocation`
+- [x] `packages/attribution-ledger/src/errors.ts` — removed `ReceiptSignatureInvalidError`, `IssuerNotAuthorizedError`
+- [x] `packages/attribution-ledger/src/signing.ts` — deleted, replaced by `hashing.ts`
+- [x] `packages/attribution-ledger/src/hashing.ts` — `computeAllocationSetHash()`
+- [x] `packages/attribution-ledger/src/store.ts` — `ActivityLedgerStore` interface + all param/result types
+- [x] `packages/attribution-ledger/src/index.ts` — updated barrel exports
 - [x] `packages/db-schema/src/ledger.ts` — full rewrite: 8 tables, 3-layer model, node_id
 - [x] `migrations/0014_supreme_captain_marvel.sql` — DDL for all new tables
 - [x] `migrations/0015_ledger_triggers.sql` — append-only + freeze-on-close triggers
-- [x] `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — single shared adapter
+- [x] `packages/db-client/src/adapters/drizzle-attribution.adapter.ts` — single shared adapter
 - [x] `packages/db-client/package.json` — added `@cogni/attribution-ledger` dependency
 - [x] `packages/db-client/tsconfig.json` — added ledger-core reference
-- [x] `src/ports/ledger-store.port.ts` — port re-export
+- [x] `src/ports/attribution-store.port.ts` — port re-export
 - [x] `src/ports/index.ts` — added ledger exports
 - [x] `src/shared/db/schema.ts` — added `@cogni/db-schema/ledger` re-export
 - [x] `src/shared/env/server-env.ts` — added `NODE_ID` env var (UUID)
 - [x] `src/bootstrap/container.ts` — wired `activityLedgerStore`
-- [x] `src/core/ledger/public.ts` — updated re-exports
+- [x] `src/core/attribution/public.ts` — updated re-exports
 - [x] `src/core/public.ts` — updated re-exports
 - [x] `tests/unit/core/ledger/rules.test.ts` — updated for `FinalizedAllocation`
 - [x] `tests/unit/core/ledger/hashing.test.ts` — new unit test
 - [x] `tests/_fixtures/env/base-env.ts` — added `NODE_ID`
-- [x] `docs/spec/epoch-ledger.md` — updated schema + invariants
-- [x] `packages/ledger-core/src/errors.ts` — added `EpochNotFoundError`, `AllocationNotFoundError` + type guards (review fix)
-- [x] `packages/db-client/src/adapters/drizzle-ledger.adapter.ts` — `closeEpoch` distinguishes not-found vs already-closed; `updateAllocationFinalUnits` throws on missing allocation (review fix)
+- [x] `docs/spec/attribution-ledger.md` — updated schema + invariants
+- [x] `packages/attribution-ledger/src/errors.ts` — added `EpochNotFoundError`, `AllocationNotFoundError` + type guards (review fix)
+- [x] `packages/db-client/src/adapters/drizzle-attribution.adapter.ts` — `closeEpoch` distinguishes not-found vs already-closed; `updateAllocationFinalUnits` throws on missing allocation (review fix)
 - [x] `scripts/validate-docs-metadata.mjs` — added `needs_review` to valid status enum
 - [x] File header DH004 fixes (scope negative clause on both new files)
 
 ### Remaining
 
-- [ ] `tests/component/db/drizzle-ledger.adapter.int.test.ts` — component test against real DB (testcontainers)
+- [ ] `tests/component/db/drizzle-attribution.adapter.int.test.ts` — component test against real DB (testcontainers)
 
 ## Validation
 

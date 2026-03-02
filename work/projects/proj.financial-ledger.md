@@ -2,71 +2,80 @@
 id: proj.financial-ledger
 type: project
 primary_charter:
-title: "Financial Ledger — Co-op Settlement from Attribution Statements"
+title: "Financial Ledger — Beancount Treasury + MerkleDistributor Settlement"
 state: Active
 priority: 1
 estimate: 5
-summary: "All money I/O in one place. Inbound USDC → treasury postings. Attribution statements → multi-instrument settlement (cash, retained equity, reserves). Double-entry-ish transaction log with co-op accounting semantics."
-outcome: "Every dollar in and every dollar out has a matching posting. Attribution statements produce settlements split across cash, retained equity, and reserves. Treasury balances are auditable and deterministic. Shared ingestion spine feeds both Attribution and Treasury from common adapters."
+summary: "All money I/O in one place. Beancount as canonical double-entry ledger. Attribution statements → Merkle claim trees → on-chain user claims via MerkleDistributor. Operator Port for treasury signing. Attribution is governance truth; distribution is financial truth."
+outcome: "Every dollar in and every dollar out has a Beancount journal entry. Finalized attribution statements produce Merkle trees published on-chain. Users claim their share with inclusion proofs. Treasury balances auditable via bean-check + on-chain reconciliation."
 assignees: derekg1729
 created: 2026-02-28
-updated: 2026-02-28
+updated: 2026-03-02
 labels: [governance, payments, web3, treasury]
 ---
 
-# Financial Ledger — Co-op Settlement from Attribution Statements
+# Financial Ledger — Beancount Treasury + MerkleDistributor Settlement
+
+> Spec: [financial-ledger](../../docs/spec/financial-ledger.md)
+> Ingestion: [data-ingestion-pipelines](../../docs/spec/data-ingestion-pipelines.md)
 
 ## Goal
 
-Build the money side of the DAO. The Attribution Ledger answers "who did what and how much credit?" — this project answers "where did the money go?" Every inbound payment and every outbound distribution gets a posting. Attribution statements are consumed as input and produce multi-instrument settlements: cash now, retained equity (member capital accounts), and collective reserves. The system uses co-op patronage semantics, not speculative token economics.
+Build the money side of the DAO. The Attribution Ledger answers "who did what and how much credit?" — this project answers "where did the money go?"
 
-The ingestion spine (adapters → receipts → cursors) is shared infrastructure across Attribution and Treasury. Everything downstream (selection vs. classification, allocation vs. posting, statement vs. settlement) is domain-specific by design.
+**Key accounting separation:** A signed attribution statement is a governance commitment (who earned what share), NOT a financial event. Financial events occur only when funds move on-chain:
+
+1. **Epoch signed** — optional accrual entry (Dr Expense:ContributorRewards / Cr Liability:UnclaimedRewards). No money moves.
+2. **Treasury funds distributor** — real financial event (Dr Liability:UnclaimedRewards / Cr Assets:Treasury:USDC). Operator Port executes.
+3. **User claims on-chain** — liability reduction via MerkleDistributor claim.
+
+Beancount is the canonical ledger. Postgres stores operational state. Rotki enriches crypto tx history and tax lots but is NOT the canonical ledger.
 
 ## Supersedes
 
-**proj.dao-dividends** (Paused) — that project's "update Split recipients from payout statement" P0 becomes one settlement instrument here. The broader scope (retained equity, reserves, reconciliation) was always missing from that project.
+**proj.dao-dividends** (Superseded) — Splits-based push distribution replaced by MerkleDistributor user-initiated claims.
 
 ## Roadmap
 
-### Crawl (P0) — Shared Ingestion Spine + Treasury Schema + Statement-to-Settlement
+### Crawl (P0) — Beancount Journal + MerkleDistributor + First Settlement
 
-**Goal:** Standardize the receipt ingestion framework so both Attribution and Treasury share adapters, cursors, and append-only semantics. Stand up the Treasury schema (accounts, postings, settlements). Wire the first settlement path: finalized attribution statement → settlement with a single instrument (cash distribution via Splits contract).
+**Goal:** Stand up the Beancount-based treasury. Deploy MerkleDistributor contract (Uniswap pattern). Wire the first settlement path: finalized attribution statement → Merkle tree computation → root publication → user claims.
 
-| Deliverable                                                                                                                                          | Status      | Est | Work Item         |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
-| Extract shared ingestion package (`@cogni/ingestion-core` or extend existing)                                                                        | Not Started | 2   | (create at start) |
-| Add `domain` field to `IngestionReceipt` envelope (`attribution` / `treasury`)                                                                       | Not Started | 1   | (create at start) |
-| Treasury domain schema: `treasury_accounts`, `treasury_postings`, `treasury_settlements`                                                             | Not Started | 3   | (create at start) |
-| Settlement port interface (`SettlementStore`) — separate from `AttributionStore`                                                                     | Not Started | 2   | (create at start) |
-| `computeSettlement(statement, policy)` pure function — takes attribution statement + settlement policy, returns settlement with instrument breakdown | Not Started | 2   | (create at start) |
-| V0 settlement policy: 100% cash (single instrument, matches current proj.dao-dividends P0)                                                           | Not Started | 1   | (create at start) |
-| Settlement execution: update Splits recipients from settlement, trigger `distributeERC20()`                                                          | Not Started | 2   | task.0085         |
-| Treasury adapter for on-chain receipts (USDC inbound payments → treasury postings)                                                                   | Not Started | 2   | (create at start) |
-| Temporal workflow: `SettleEpochWorkflow` — reads finalized statement, computes settlement, executes distribution, records postings                   | Not Started | 2   | (create at start) |
+| Deliverable                                                                                                                            | Status      | Est | Work Item         |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
+| Beancount accounts hierarchy + initial journal structure                                                                               | Not Started | 1   | (create at start) |
+| Journal generation: Temporal workflow reads finalized statement → produces Beancount entries → validates with `bean-check`             | Not Started | 2   | (create at start) |
+| MerkleDistributor contract deployment on Base (Uniswap pattern, battle-tested)                                                         | Not Started | 2   | (create at start) |
+| `computeMerkleTree(statement)` pure function — takes finalized allocation → returns Merkle root + proofs per claimant                  | Not Started | 2   | (create at start) |
+| Settlement port interface (`SettlementStore`) — publish Merkle root, record funding tx, track claims                                   | Not Started | 2   | (create at start) |
+| Operator Port integration for treasury signing (fund distributor, publish root)                                                        | Not Started | 2   | (create at start) |
+| V0 settlement policy: 100% cash via MerkleDistributor                                                                                  | Not Started | 1   | (create at start) |
+| On-chain receipt adapter: USDC inbound payments → Beancount journal entries                                                            | Not Started | 2   | (create at start) |
+| Temporal workflow: `SettleEpochWorkflow` — reads finalized statement, computes Merkle tree, funds distributor, records Beancount entry | Not Started | 2   | (create at start) |
 
 ### Walk (P1) — Co-op Multi-Instrument Settlement + Member Accounts
 
-**Goal:** Settlement splits across three instruments per co-op patronage model. Member capital accounts track retained equity. Reserve fund accumulates collective balance. Governance controls the split policy.
+**Goal:** Settlement splits across three instruments per co-op patronage model. Member capital accounts as Beancount sub-accounts. Reserve fund as Beancount account. Governance controls the split policy.
 
 | Deliverable                                                                                           | Status      | Est | Work Item            |
 | ----------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
 | Settlement policy schema: `{ cash_pct, retained_equity_pct, reserve_pct }` in repo-spec               | Not Started | 1   | (create at P1 start) |
-| `treasury_member_accounts` — per-user retained equity balances (capital credits)                      | Not Started | 2   | (create at P1 start) |
-| `treasury_reserve_fund` — collective reserve balance with component tracking                          | Not Started | 1   | (create at P1 start) |
+| Member capital sub-accounts in Beancount: `Liability:MemberEquity:{userId}`                           | Not Started | 2   | (create at P1 start) |
+| Reserve fund Beancount account: `Equity:Reserves:Collective`                                          | Not Started | 1   | (create at P1 start) |
 | Multi-instrument `computeSettlement()` — splits each user's share across cash/equity/reserve          | Not Started | 2   | (create at P1 start) |
-| Settlement execution for retained equity — record postings to member accounts (no on-chain tx)        | Not Started | 2   | (create at P1 start) |
+| Settlement execution for retained equity — Beancount journal entry (no on-chain tx)                   | Not Started | 2   | (create at P1 start) |
 | Governance snapshot pinning at settlement: `ledger_code_ref`, `manifest_hash`, settlement policy hash | Not Started | 2   | (create at P1 start) |
-| Treasury read API: member balance, reserve balance, settlement history                                | Not Started | 2   | (create at P1 start) |
+| Treasury read API: member balance, reserve balance, settlement history (queries Beancount)            | Not Started | 2   | (create at P1 start) |
 
 ### Run (P2+) — Git-Canonical Bundles, Federation, Equity Redemption
 
-**Goal:** Finalized statements and settlements become git-canonical artifacts. Fork-inheritable credit history. Member equity redemption (converting retained equity to cash). Federation royalty pool components.
+**Goal:** Finalized statements and settlements become git-canonical artifacts. Fork-inheritable credit history. Member equity redemption. Federation royalty pool.
 
 | Deliverable                                                                                         | Status      | Est | Work Item            |
 | --------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
 | Git-canonical `bundle.v1.json` — finalized statement + settlement + hash chain (`prev_bundle_hash`) | Not Started | 3   | (create at P2 start) |
 | Bundle commit bot: PR flow, Postgres becomes index keyed by `(bundle_hash, commit_sha)`             | Not Started | 2   | (create at P2 start) |
-| Equity redemption workflow — convert retained equity to cash distribution                           | Not Started | 2   | (create at P2 start) |
+| Equity redemption workflow — convert retained equity to MerkleDistributor cash claim                | Not Started | 2   | (create at P2 start) |
 | Federation `upstreams[]` — reference upstream bundles for fork-inheritable credit                   | Not Started | 2   | (create at P2 start) |
 | Foundation royalty pool component — enrolled nodes auto-insert upstream royalty into pool           | Not Started | 2   | (create at P2 start) |
 | Portable identity mapping — wallet addresses as cross-fork recipient identifiers                    | Not Started | 2   | (create at P2 start) |
@@ -75,47 +84,50 @@ The ingestion spine (adapters → receipts → cursors) is shared infrastructure
 ## Constraints
 
 - Financial Ledger does NOT redefine attribution semantics — it consumes finalized `AttributionStatement` as input
-- Ingestion spine is shared; everything downstream is domain-specific (no garbage abstractions across domains)
+- Attribution finalization is NOT a financial event — it is a governance commitment (liability, not transfer)
+- Beancount is the canonical financial ledger; Postgres stores operational state
+- Rotki for crypto tx enrichment/tax lots only — NOT the canonical ledger
 - All monetary math uses BIGINT (inherits `ALL_MATH_BIGINT` from attribution-ledger spec)
-- Treasury postings are append-only (double-entry: every debit has a matching credit)
-- Settlement is multi-instrument from day one in the schema, even if V0 only uses cash
-- No custom on-chain contracts — use pre-deployed Splits infrastructure (inherited from proj.dao-dividends)
-- Co-op semantics: retained equity is par-value member capital (redeemable at face value), NOT speculative governance tokens
+- MerkleDistributor (Uniswap pattern) for on-chain claims — user-initiated, not push distribution
+- No custom smart contracts — use battle-tested MerkleDistributor
+- Operator Port required for treasury signing — not a custodial wallet, not raw private keys
+- Co-op semantics: retained equity is par-value member capital, NOT speculative governance tokens
 - Reserve fund is collective/unallocated — not claimable per member on exit
 - Settlement policy is governance-controlled, stored in repo-spec (same pattern as `ledger.approvers`)
-- V0: Postgres-canonical. Git-canonical bundles are P2 (don't dump raw data into git prematurely)
 - Temporal workflow IDs and config keys: use `treasury-*` namespace (separate from `ledger-collect-*`)
 
 ## Dependencies
 
 - [x] proj.transparent-credit-payouts P0 — finalized attribution statements exist
-- [ ] proj.ai-operator-wallet P0 — operator wallet + Splits contract operational
-- [ ] Shared ingestion spine extraction (P0 deliverable of this project)
-- [ ] task.0085 — DAO treasury forwarding (settlement execution reuses this)
+- [ ] Operator Port operational (signing + policy boundary for treasury actions)
+- [ ] MerkleDistributor contract deployed on Base
+- [ ] Beancount tooling integrated (journal generation + `bean-check` validation)
 
 ## As-Built Specs
 
-- [attribution-ledger](../../docs/spec/attribution-ledger.md) — ingestion spine, receipt schema, cursor model (to be shared)
-- [billing-evolution](../../docs/spec/billing-evolution.md) — credit unit standard, charge receipts
+- [financial-ledger](../../docs/spec/financial-ledger.md) — treasury accounting invariants, accounts hierarchy
+- [data-ingestion-pipelines](../../docs/spec/data-ingestion-pipelines.md) — shared event archive, Singer taps
+- [attribution-ledger](../../docs/spec/attribution-ledger.md) — ingestion spine, receipt schema, cursor model
+- [billing-evolution](../../docs/spec/billing-evolution.md) — credit unit standard, charge receipts (current as-built)
 - [cred-licensing-policy](../../docs/spec/cred-licensing-policy.md) — federation enrollment model (P2 dependency)
-- [web3-openrouter-payments](../../docs/spec/web3-openrouter-payments.md) — operator wallet economics
 
 ## Design Notes
 
-### Three-domain ingestion, two-ledger accounting
+### Shared event archive, N domain pipelines
 
 ```
-SHARED INGESTION SPINE
-├── Source Adapters (GitHub, Discord, on-chain, billing)
-├── IngestionReceipt { ..., domain: 'attribution' | 'treasury' }
-├── IngestionCursor (incremental sync, idempotent)
-└── Append-only, provenance-tracked
+LAYER 0 — EVENT ARCHIVE (shared, domain-agnostic)
+├── ingestion_receipts  (append-only raw facts, NO domain tag)
+├── ingestion_cursors   (adapter sync state)
+├── Source adapters     (Singer taps + V0 TS adapters, coexisting)
+├── Deterministic IDs   (e.g., github:pr:owner/repo:42)
+└── Provenance          (producer, producerVersion, payloadHash)
 
-ATTRIBUTION LEDGER (who did what)          FINANCIAL LEDGER (where money went)
-├── Selection (curation)                   ├── Classification (tx categorization)
-├── Evaluation (scoring/features)          ├── Postings (double-entry debits/credits)
-├── Allocation (units/statements)          ├── Settlement (multi-instrument fulfillment)
-└── Statement (deterministic output)       └── Reconciliation (on-chain ↔ off-chain)
+LAYER 1 — DOMAIN PIPELINES (each selects independently from Layer 0)
+├── Attribution:  select → evaluate → allocate → statement (governance truth)
+├── Treasury:     classify → journal entry → settlement → reconciliation (financial truth)
+├── Knowledge:    extract → link → version (future)
+└── ???:          whatever the AI-run DAO needs next
 ```
 
 ### Co-op settlement model
@@ -126,9 +138,9 @@ Settlement policy (governance-controlled) says: `{ cash_pct: 60, retained_equity
 
 Settlement produces:
 
-- **Cash now**: 60% of each user's share → on-chain USDC via Splits
-- **Retained equity**: 30% of each user's share → credited to member capital account (redeemable later)
-- **Reserve fund**: 10% of pool → collective reserve (not per-member)
+- **Cash now**: 60% of each user's share → claimable from MerkleDistributor contract (user-initiated claim with inclusion proof)
+- **Retained equity**: 30% of each user's share → credited to member capital account in Beancount (redeemable later)
+- **Reserve fund**: 10% of pool → collective reserve Beancount account (not per-member)
 
 This matches co-op patronage norms: partial cash distribution, partial retained patronage (allocated equity redeemable at face value on a revolving schedule), and collective reserves for stability.
 
@@ -136,13 +148,13 @@ This matches co-op patronage norms: partial cash distribution, partial retained 
 
 Retained equity is NOT a speculative asset. It's a par-value capital credit — you contributed $X of value, the co-op owes you $X, redeemable when the revolving fund schedule allows. No market, no trading, no volatility. This is the clean co-op model.
 
-If governance tokens (Aragon GovernanceERC20) are used separately for voting power, that's a different concern entirely. Don't conflate voting power with economic claims.
-
 ### OSS reference implementations
 
-- **Open Collective** — transaction pairing/grouping, expense→approval→payout flows. Reference for the posting/settlement layer, NOT for attribution.
+- **Uniswap MerkleDistributor** — battle-tested claim contract. Our on-chain settlement primitive.
+- **Beancount** — double-entry accounting language + `bean-check` validation. Our canonical ledger.
+- **Rotki** — crypto bookkeeping/tax assistant. Enrichment + validation, not canonical.
+- **Open Collective** — transaction pairing/grouping, expense→approval→payout flows. Reference for the posting/settlement layer.
 - **SourceCred** — `data/ledger.json` in-repo pattern. Reference for P2 git-canonical bundles.
-- **Coordinape** — peer allocation per epoch. Different philosophy (we use explicit weights + admin finalize), but useful as comparison point.
 
 ### What V0 explicitly defers
 
@@ -156,4 +168,7 @@ If governance tokens (Aragon GovernanceERC20) are used separately for voting pow
 - Equity redemption schedules (P2)
 - On-chain Merkle anchoring (P2)
 - Voting thresholds / multisig quorum for settlement approval (P2)
-- Dolt or table-level branch/merge (P2+ option, not planned)
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/proj.financial-ledger.handoff.md)
