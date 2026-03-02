@@ -2,7 +2,7 @@
 id: bug.0127
 type: bug
 title: Finalization pipeline ignores review-subject overrides — signed statement reflects unadjusted allocations
-status: needs_review
+status: done
 priority: 0
 rank: 1
 estimate: 3
@@ -20,7 +20,7 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-02
-updated: 2026-03-02
+updated: 2026-03-03
 labels: [data-integrity, signing, finalization]
 external_refs:
 ---

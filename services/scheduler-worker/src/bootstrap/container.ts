@@ -6,7 +6,7 @@
  * Purpose: Composition root — wires concrete adapters to port interfaces.
  * Scope: All adapter construction lives here. Returns typed container against port interfaces. Does not export identity constants.
  * Invariants:
- * - Only file that imports concrete adapter packages (@cogni/db-client, @cogni/repo-spec)
+ * - Only file that imports concrete adapter packages (@cogni/db-client, @cogni/repo-spec, @cogni/attribution-pipeline-plugins)
  * - activities/ and workflows/ import ports only, never this module
  * - REPO_SPEC_AUTHORITY: identity (node_id, scope_id, chain_id) read from @cogni/repo-spec at bootstrap
  * Side-effects: Creates DB connection pool; reads .cogni/repo-spec.yaml from disk
