@@ -35,7 +35,7 @@ const ClaimantSchema = z.discriminatedUnion("kind", [
 
 const ClaimantShareSchema = z.object({
   claimant: ClaimantSchema,
-  sharePpm: z.number().int().min(1).max(1_000_000),
+  sharePpm: z.number().int().min(0).max(1_000_000),
 });
 
 const SubjectOverrideInputSchema = z.object({

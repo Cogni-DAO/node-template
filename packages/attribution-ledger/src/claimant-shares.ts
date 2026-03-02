@@ -202,20 +202,31 @@ import type { ReceiptClaimantsRecord } from "./store";
 
 /**
  * Core pure function: receipt weights × claimants → claimant allocations.
- * v0: equal split among claimantKeys. Future: explicit PPM shares.
  * - Joins by receiptId
- * - For each receipt: splits units equally among claimantKeys (largest-remainder for rounding)
+ * - For each receipt: if overrideShares exist, splits units by PPM shares;
+ *   otherwise splits units equally among claimantKeys (largest-remainder rounding)
  * - Groups by claimantKey across all receipts, sums units
  * - Returns sorted by claimantKey (deterministic)
  * - THROWS if any receiptId in weights has no matching claimants record
  */
 export function explodeToClaimants(
   receiptWeights: readonly ReceiptUnitWeight[],
-  claimants: readonly ReceiptClaimantsRecord[]
+  claimants: readonly ReceiptClaimantsRecord[],
+  overrides?: readonly SubjectOverride[]
 ): FinalClaimantAllocation[] {
   const claimantsByReceipt = new Map<string, ReceiptClaimantsRecord>();
   for (const record of claimants) {
     claimantsByReceipt.set(record.receiptId, record);
+  }
+
+  // Build share override lookup: receiptId → ClaimantShare[]
+  const shareOverrideMap = new Map<string, readonly ClaimantShare[]>();
+  if (overrides) {
+    for (const o of overrides) {
+      if (o.overrideShares !== null) {
+        shareOverrideMap.set(o.subjectRef, o.overrideShares);
+      }
+    }
   }
 
   // Accumulator: claimantKey → { claimant, totalUnits, receiptIds }
@@ -239,31 +250,14 @@ export function explodeToClaimants(
     const keys = record.claimantKeys;
     if (keys.length === 0) continue;
 
-    // Equal split with largest-remainder rounding
-    const perClaimant = weight.units / BigInt(keys.length);
-    let remainder = weight.units - perClaimant * BigInt(keys.length);
+    const shareOverride = shareOverrideMap.get(weight.receiptId);
 
-    // Sort keys for deterministic remainder assignment
-    const sortedKeys = [...keys].sort();
-
-    for (const ck of sortedKeys) {
-      const extra = remainder > 0n ? 1n : 0n;
-      if (remainder > 0n) remainder--;
-
-      const units = perClaimant + extra;
-      const claimant = parseClaimantKey(ck);
-
-      const existing = grouped.get(ck);
-      if (existing) {
-        existing.totalUnits += units;
-        existing.receiptIds.add(weight.receiptId);
-      } else {
-        grouped.set(ck, {
-          claimant,
-          totalUnits: units,
-          receiptIds: new Set([weight.receiptId]),
-        });
-      }
+    if (shareOverride && shareOverride.length > 0) {
+      // PPM-based split: distribute units according to explicit shares
+      splitByPpm(weight, shareOverride, grouped);
+    } else {
+      // Equal split with largest-remainder rounding
+      splitEqually(weight, keys, grouped);
     }
   }
 
@@ -274,6 +268,122 @@ export function explodeToClaimants(
       finalUnits: entry.totalUnits,
       receiptIds: [...entry.receiptIds].sort(),
     }));
+}
+
+/** PPM-based split with largest-remainder rounding, tiebroken by claimant key. */
+function splitByPpm(
+  weight: ReceiptUnitWeight,
+  shares: readonly ClaimantShare[],
+  grouped: Map<
+    string,
+    {
+      claimant: AttributionClaimant;
+      totalUnits: bigint;
+      receiptIds: Set<string>;
+    }
+  >
+): void {
+  const denom = BigInt(CLAIMANT_SHARE_DENOMINATOR_PPM);
+
+  // Compute floor allocations and remainders
+  const entries: Array<{
+    ck: string;
+    claimant: AttributionClaimant;
+    floor: bigint;
+    remainder: bigint;
+  }> = [];
+  let floorSum = 0n;
+
+  for (const share of shares) {
+    const ck = claimantKey(share.claimant);
+    const floor = (weight.units * BigInt(share.sharePpm)) / denom;
+    const remainder = (weight.units * BigInt(share.sharePpm)) % denom;
+    entries.push({ ck, claimant: share.claimant, floor, remainder });
+    floorSum += floor;
+  }
+
+  // Distribute residual units via largest-remainder (tiebreak by claimant key)
+  let residual = weight.units - floorSum;
+  const byRemainder = [...entries].sort((a, b) => {
+    if (b.remainder !== a.remainder) {
+      return b.remainder > a.remainder ? 1 : -1;
+    }
+    return a.ck.localeCompare(b.ck);
+  });
+
+  const bonuses = new Set<string>();
+  for (const entry of byRemainder) {
+    if (residual <= 0n) break;
+    bonuses.add(entry.ck);
+    residual -= 1n;
+  }
+
+  // Accumulate into grouped map
+  for (const entry of entries) {
+    const units = entry.floor + (bonuses.has(entry.ck) ? 1n : 0n);
+    accumulateClaimant(
+      grouped,
+      entry.ck,
+      entry.claimant,
+      units,
+      weight.receiptId
+    );
+  }
+}
+
+/** Equal split with largest-remainder rounding, tiebroken by claimant key sort order. */
+function splitEqually(
+  weight: ReceiptUnitWeight,
+  keys: readonly string[],
+  grouped: Map<
+    string,
+    {
+      claimant: AttributionClaimant;
+      totalUnits: bigint;
+      receiptIds: Set<string>;
+    }
+  >
+): void {
+  const perClaimant = weight.units / BigInt(keys.length);
+  let remainder = weight.units - perClaimant * BigInt(keys.length);
+
+  const sortedKeys = [...keys].sort();
+
+  for (const ck of sortedKeys) {
+    const extra = remainder > 0n ? 1n : 0n;
+    if (remainder > 0n) remainder--;
+
+    const units = perClaimant + extra;
+    const claimant = parseClaimantKey(ck);
+    accumulateClaimant(grouped, ck, claimant, units, weight.receiptId);
+  }
+}
+
+function accumulateClaimant(
+  grouped: Map<
+    string,
+    {
+      claimant: AttributionClaimant;
+      totalUnits: bigint;
+      receiptIds: Set<string>;
+    }
+  >,
+  ck: string,
+  claimant: AttributionClaimant,
+  units: bigint,
+  receiptId: string
+): void {
+  const existing = grouped.get(ck);
+  if (existing) {
+    existing.totalUnits += units;
+    existing.receiptIds.add(receiptId);
+  } else {
+    grouped.set(ck, {
+      claimant,
+      totalUnits: units,
+      receiptIds: new Set([receiptId]),
+    });
+  }
 }
 
 /**
@@ -351,11 +461,12 @@ export function applyReceiptWeightOverrides(
 
 /**
  * Build review override snapshots from receipt weights and subject overrides.
- * Uses receipt weights as the source of original_units (no ClaimantSharesSubject needed).
- * Only includes receipts that had overrides with non-null overrideUnits.
+ * Uses receipt weights as the source of original_units.
+ * When overrideShares is present, computes original_shares from locked claimants (equal PPM split).
  */
 export function buildReceiptWeightOverrideSnapshots(
   originalWeights: readonly ReceiptUnitWeight[],
+  lockedClaimants: readonly ReceiptClaimantsRecord[],
   overrides: readonly SubjectOverride[]
 ): ReviewOverrideSnapshot[] {
   if (overrides.length === 0) return [];
@@ -365,10 +476,23 @@ export function buildReceiptWeightOverrideSnapshots(
     weightMap.set(w.receiptId, w.units);
   }
 
+  const claimantMap = new Map<string, readonly string[]>();
+  for (const c of lockedClaimants) {
+    claimantMap.set(c.receiptId, c.claimantKeys);
+  }
+
   const snapshots: ReviewOverrideSnapshot[] = [];
   for (const override of overrides) {
     const originalUnits = weightMap.get(override.subjectRef);
     if (originalUnits === undefined) continue;
+
+    let originalShares: ClaimantShare[] = [];
+    if (override.overrideShares) {
+      const keys = claimantMap.get(override.subjectRef);
+      if (keys && keys.length > 0) {
+        originalShares = computeEqualSplitShares(keys);
+      }
+    }
 
     snapshots.push({
       subject_ref: override.subjectRef,
@@ -377,7 +501,7 @@ export function buildReceiptWeightOverrideSnapshots(
         override.overrideUnits !== null
           ? override.overrideUnits.toString()
           : null,
-      original_shares: [],
+      original_shares: originalShares,
       override_shares: override.overrideShares
         ? [...override.overrideShares]
         : null,
@@ -386,4 +510,21 @@ export function buildReceiptWeightOverrideSnapshots(
   }
 
   return snapshots.sort((a, b) => a.subject_ref.localeCompare(b.subject_ref));
+}
+
+/** Compute equal-split PPM shares for a set of claimant keys (largest-remainder). */
+function computeEqualSplitShares(keys: readonly string[]): ClaimantShare[] {
+  const n = keys.length;
+  const perClaimant = Math.floor(CLAIMANT_SHARE_DENOMINATOR_PPM / n);
+  let remainder = CLAIMANT_SHARE_DENOMINATOR_PPM - perClaimant * n;
+
+  const sortedKeys = [...keys].sort();
+  return sortedKeys.map((key) => {
+    const extra = remainder > 0 ? 1 : 0;
+    if (remainder > 0) remainder--;
+    return {
+      claimant: parseClaimantKey(key),
+      sharePpm: perClaimant + extra,
+    };
+  });
 }

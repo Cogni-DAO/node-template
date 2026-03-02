@@ -98,7 +98,8 @@ export const GET = wrapRouteHandlerWithLogging<{
 
     const claimantAllocations = explodeToClaimants(
       receiptWeights,
-      lockedClaimants
+      lockedClaimants,
+      overrides
     );
 
     const finalAllocationSetHash =

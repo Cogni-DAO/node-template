@@ -22,8 +22,10 @@ import { describe, expect, it } from "vitest";
 import {
   applyReceiptWeightOverrides,
   buildReceiptWeightOverrideSnapshots,
+  CLAIMANT_SHARE_DENOMINATOR_PPM,
   computeAttributionStatementLines,
   explodeToClaimants,
+  type SubjectOverride,
 } from "../src/claimant-shares";
 
 // ---------------------------------------------------------------------------
@@ -285,6 +287,155 @@ describe("explodeToClaimants", () => {
     expect(result[0]?.claimant).toEqual({ kind: "user", userId: "alice" });
     expect(result[1]?.claimant).toEqual({ kind: "user", userId: "zara" });
   });
+
+  it("uses PPM-based split when overrideShares is present", () => {
+    const weights: ReceiptUnitWeight[] = [{ receiptId: "r1", units: 1000n }];
+    const claimants = [makeClaimantRecord("r1", ["user:alice", "user:bob"])];
+    const overrides: SubjectOverride[] = [
+      {
+        subjectRef: "r1",
+        overrideUnits: null,
+        overrideShares: [
+          {
+            claimant: { kind: "user", userId: "alice" },
+            sharePpm: 700_000,
+          },
+          {
+            claimant: { kind: "user", userId: "bob" },
+            sharePpm: 300_000,
+          },
+        ],
+        overrideReason: "rebalanced",
+      },
+    ];
+
+    const result = explodeToClaimants(weights, claimants, overrides);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]?.claimant).toEqual({ kind: "user", userId: "alice" });
+    expect(result[0]?.finalUnits).toBe(700n);
+    expect(result[1]?.claimant).toEqual({ kind: "user", userId: "bob" });
+    expect(result[1]?.finalUnits).toBe(300n);
+  });
+
+  it("PPM split uses largest-remainder rounding", () => {
+    // 10 units split 333333/333334/333333 PPM among 3 claimants
+    // floor: 10*333333/1000000 = 3, 10*333334/1000000 = 3, 10*333333/1000000 = 3 → sum=9
+    // remainder: 333330, 333340, 333330 → bob gets the extra 1
+    const weights: ReceiptUnitWeight[] = [{ receiptId: "r1", units: 10n }];
+    const claimants = [
+      makeClaimantRecord("r1", ["user:alice", "user:bob", "user:charlie"]),
+    ];
+    const overrides: SubjectOverride[] = [
+      {
+        subjectRef: "r1",
+        overrideUnits: null,
+        overrideShares: [
+          {
+            claimant: { kind: "user", userId: "alice" },
+            sharePpm: 333_333,
+          },
+          {
+            claimant: { kind: "user", userId: "bob" },
+            sharePpm: 333_334,
+          },
+          {
+            claimant: { kind: "user", userId: "charlie" },
+            sharePpm: 333_333,
+          },
+        ],
+        overrideReason: null,
+      },
+    ];
+
+    const result = explodeToClaimants(weights, claimants, overrides);
+
+    // Total must equal 10
+    const total = result.reduce((s, r) => s + r.finalUnits, 0n);
+    expect(total).toBe(10n);
+    // bob has the highest remainder (333340 vs 333330) so gets the extra unit
+    expect(
+      result.find(
+        (r) => r.claimant.kind === "user" && r.claimant.userId === "bob"
+      )?.finalUnits
+    ).toBe(4n);
+  });
+
+  it("mixed receipts: some with share overrides, some without", () => {
+    const weights: ReceiptUnitWeight[] = [
+      { receiptId: "r1", units: 1000n },
+      { receiptId: "r2", units: 600n },
+    ];
+    const claimants = [
+      makeClaimantRecord("r1", ["user:alice", "user:bob"]),
+      makeClaimantRecord("r2", ["user:alice", "user:bob"]),
+    ];
+    const overrides: SubjectOverride[] = [
+      {
+        subjectRef: "r1",
+        overrideUnits: null,
+        overrideShares: [
+          {
+            claimant: { kind: "user", userId: "alice" },
+            sharePpm: 800_000,
+          },
+          {
+            claimant: { kind: "user", userId: "bob" },
+            sharePpm: 200_000,
+          },
+        ],
+        overrideReason: null,
+      },
+      // r2 has no overrideShares — equal split
+    ];
+
+    const result = explodeToClaimants(weights, claimants, overrides);
+
+    // r1: alice=800, bob=200 (PPM split)
+    // r2: alice=300, bob=300 (equal split)
+    // Total: alice=1100, bob=500
+    expect(result[0]?.claimant).toEqual({ kind: "user", userId: "alice" });
+    expect(result[0]?.finalUnits).toBe(1100n);
+    expect(result[1]?.claimant).toEqual({ kind: "user", userId: "bob" });
+    expect(result[1]?.finalUnits).toBe(500n);
+  });
+
+  it("explicit 0 PPM gives claimant 0 units", () => {
+    const weights: ReceiptUnitWeight[] = [{ receiptId: "r1", units: 1000n }];
+    const claimants = [makeClaimantRecord("r1", ["user:alice", "user:bob"])];
+    const overrides: SubjectOverride[] = [
+      {
+        subjectRef: "r1",
+        overrideUnits: null,
+        overrideShares: [
+          {
+            claimant: { kind: "user", userId: "alice" },
+            sharePpm: CLAIMANT_SHARE_DENOMINATOR_PPM,
+          },
+          {
+            claimant: { kind: "user", userId: "bob" },
+            sharePpm: 0,
+          },
+        ],
+        overrideReason: "bob excluded",
+      },
+    ];
+
+    const result = explodeToClaimants(weights, claimants, overrides);
+
+    expect(result[0]?.finalUnits).toBe(1000n); // alice gets everything
+    expect(result[1]?.finalUnits).toBe(0n); // bob gets nothing
+  });
+
+  it("backward compat: no overrides arg behaves like equal split", () => {
+    const weights: ReceiptUnitWeight[] = [{ receiptId: "r1", units: 100n }];
+    const claimants = [makeClaimantRecord("r1", ["user:alice", "user:bob"])];
+
+    const withoutArg = explodeToClaimants(weights, claimants);
+    const withEmptyOverrides = explodeToClaimants(weights, claimants, []);
+
+    expect(withoutArg).toEqual(withEmptyOverrides);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -423,15 +574,43 @@ describe("buildReceiptWeightOverrideSnapshots", () => {
     { receiptId: "r2", units: 500n },
   ];
 
+  function makeClaimantRecord(
+    receiptId: string,
+    claimantKeys: string[]
+  ): ReceiptClaimantsRecord {
+    return {
+      id: `id-${receiptId}`,
+      nodeId: "node-1",
+      epochId: 1n,
+      receiptId,
+      status: "locked",
+      resolverRef: "cogni.default-author.v0",
+      algoRef: "default-author-v0",
+      inputsHash: "hash",
+      claimantKeys,
+      createdAt: new Date(),
+      createdBy: "system",
+    };
+  }
+
+  const lockedClaimants = [
+    makeClaimantRecord("r1", ["user:alice"]),
+    makeClaimantRecord("r2", ["user:bob"]),
+  ];
+
   it("captures original and override units", () => {
-    const snapshots = buildReceiptWeightOverrideSnapshots(baseWeights, [
-      {
-        subjectRef: "r1",
-        overrideUnits: 200n,
-        overrideShares: null,
-        overrideReason: "reduced",
-      },
-    ]);
+    const snapshots = buildReceiptWeightOverrideSnapshots(
+      baseWeights,
+      lockedClaimants,
+      [
+        {
+          subjectRef: "r1",
+          overrideUnits: 200n,
+          overrideShares: null,
+          overrideReason: "reduced",
+        },
+      ]
+    );
 
     expect(snapshots).toHaveLength(1);
     expect(snapshots[0]).toEqual({
@@ -445,39 +624,100 @@ describe("buildReceiptWeightOverrideSnapshots", () => {
   });
 
   it("excludes overrides for nonexistent receipts", () => {
-    const snapshots = buildReceiptWeightOverrideSnapshots(baseWeights, [
-      {
-        subjectRef: "nonexistent",
-        overrideUnits: 100n,
-        overrideShares: null,
-        overrideReason: null,
-      },
-    ]);
+    const snapshots = buildReceiptWeightOverrideSnapshots(
+      baseWeights,
+      lockedClaimants,
+      [
+        {
+          subjectRef: "nonexistent",
+          overrideUnits: 100n,
+          overrideShares: null,
+          overrideReason: null,
+        },
+      ]
+    );
 
     expect(snapshots).toHaveLength(0);
   });
 
   it("returns empty when no overrides", () => {
-    expect(buildReceiptWeightOverrideSnapshots(baseWeights, [])).toEqual([]);
+    expect(
+      buildReceiptWeightOverrideSnapshots(baseWeights, lockedClaimants, [])
+    ).toEqual([]);
   });
 
   it("sorts by subject_ref", () => {
-    const snapshots = buildReceiptWeightOverrideSnapshots(baseWeights, [
-      {
-        subjectRef: "r2",
-        overrideUnits: 0n,
-        overrideShares: null,
-        overrideReason: null,
-      },
-      {
-        subjectRef: "r1",
-        overrideUnits: 0n,
-        overrideShares: null,
-        overrideReason: null,
-      },
-    ]);
+    const snapshots = buildReceiptWeightOverrideSnapshots(
+      baseWeights,
+      lockedClaimants,
+      [
+        {
+          subjectRef: "r2",
+          overrideUnits: 0n,
+          overrideShares: null,
+          overrideReason: null,
+        },
+        {
+          subjectRef: "r1",
+          overrideUnits: 0n,
+          overrideShares: null,
+          overrideReason: null,
+        },
+      ]
+    );
 
     expect(snapshots[0]?.subject_ref).toBe("r1");
     expect(snapshots[1]?.subject_ref).toBe("r2");
+  });
+
+  it("computes original_shares when overrideShares is present", () => {
+    const multiClaimants = [
+      makeClaimantRecord("r1", ["user:alice", "user:bob"]),
+    ];
+
+    const snapshots = buildReceiptWeightOverrideSnapshots(
+      baseWeights,
+      multiClaimants,
+      [
+        {
+          subjectRef: "r1",
+          overrideUnits: null,
+          overrideShares: [
+            {
+              claimant: { kind: "user", userId: "alice" },
+              sharePpm: 800_000,
+            },
+            {
+              claimant: { kind: "user", userId: "bob" },
+              sharePpm: 200_000,
+            },
+          ],
+          overrideReason: "rebalanced",
+        },
+      ]
+    );
+
+    expect(snapshots).toHaveLength(1);
+    // original_shares should be equal split: 500000/500000
+    expect(snapshots[0]?.original_shares).toEqual([
+      {
+        claimant: { kind: "user", userId: "alice" },
+        sharePpm: 500_000,
+      },
+      {
+        claimant: { kind: "user", userId: "bob" },
+        sharePpm: 500_000,
+      },
+    ]);
+    expect(snapshots[0]?.override_shares).toEqual([
+      {
+        claimant: { kind: "user", userId: "alice" },
+        sharePpm: 800_000,
+      },
+      {
+        claimant: { kind: "user", userId: "bob" },
+        sharePpm: 200_000,
+      },
+    ]);
   });
 });
