@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/attribution-pipeline-plugins/plugins/weight-sum/descriptor`
- * Purpose: Weight-sum allocator descriptor — wraps existing computeProposedAllocations from attribution-ledger.
+ * Purpose: Weight-sum allocator descriptor — wraps computeReceiptWeights from attribution-ledger.
  * Scope: Pure descriptor binding. Does not perform I/O or modify allocation logic.
  * Invariants:
  * - ALLOCATOR_NEEDS_DECLARED: requiredEvaluationRefs validated by dispatchAllocator before compute.
@@ -13,7 +13,7 @@
  * @public
  */
 
-import { computeProposedAllocations } from "@cogni/attribution-ledger";
+import { computeReceiptWeights } from "@cogni/attribution-ledger";
 import type { AllocatorDescriptor } from "@cogni/attribution-pipeline-contracts";
 
 /** Algorithm ref for the weight-sum allocator. */
@@ -21,17 +21,17 @@ export const WEIGHT_SUM_ALGO_REF = "weight-sum-v0";
 
 /**
  * Weight-sum allocator descriptor.
- * Wraps `computeProposedAllocations("weight-sum-v0", ...)` from attribution-ledger.
+ * Wraps `computeReceiptWeights("weight-sum-v0", ...)` from attribution-ledger.
  * Requires the echo evaluation (for event count validation) but does not
- * consume evaluation payloads — allocation is computed from events + weights.
+ * consume evaluation payloads — allocation is computed from receipts + weights.
  */
 export const WEIGHT_SUM_ALLOCATOR: AllocatorDescriptor = {
   algoRef: WEIGHT_SUM_ALGO_REF,
   requiredEvaluationRefs: ["cogni.echo.v0"],
   compute: async (context) => {
-    return computeProposedAllocations(
+    return computeReceiptWeights(
       WEIGHT_SUM_ALGO_REF,
-      context.events,
+      context.receipts,
       context.weightConfig
     );
   },

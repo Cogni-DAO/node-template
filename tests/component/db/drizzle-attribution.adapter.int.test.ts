@@ -1737,4 +1737,132 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       ).rejects.toThrow(EpochNotInReviewError);
     });
   });
+
+  // ── Receipt Claimants ────────────────────────────────────────────
+  describe("receipt claimants (upsert / lock / load)", () => {
+    let claimantEpochId: bigint;
+
+    beforeAll(async () => {
+      const epoch = await adapter.createEpoch({
+        nodeId: TEST_NODE_ID,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(200),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      claimantEpochId = epoch.id;
+
+      // Seed receipts + selections so epoch has data
+      await adapter.insertIngestionReceipts([
+        makeIngestionReceipt({
+          receiptId: "claimant-r1",
+          nodeId: TEST_NODE_ID,
+        }),
+        makeIngestionReceipt({
+          receiptId: "claimant-r2",
+          nodeId: TEST_NODE_ID,
+        }),
+      ]);
+      await adapter.insertSelectionDoNothing([
+        makeSelectionAuto({
+          epochId: claimantEpochId,
+          receiptId: "claimant-r1",
+        }),
+        makeSelectionAuto({
+          epochId: claimantEpochId,
+          receiptId: "claimant-r2",
+        }),
+      ]);
+    });
+
+    afterAll(async () => {
+      // Clean up: close + finalize so no open epoch leaks
+      const open = await adapter.getOpenEpoch(TEST_NODE_ID, TEST_SCOPE_ID);
+      if (open) {
+        await adapter.closeIngestion(
+          open.id,
+          "cleanup",
+          "weight-sum-v0",
+          "cleanup-wch"
+        );
+        await adapter.finalizeEpoch(open.id, 0n);
+      }
+    });
+
+    it("upsertDraftClaimants inserts a draft row", async () => {
+      await adapter.upsertDraftClaimants({
+        nodeId: TEST_NODE_ID,
+        epochId: claimantEpochId,
+        receiptId: "claimant-r1",
+        resolverRef: "cogni.default-author.v0",
+        algoRef: "default-author-v0",
+        inputsHash: "hash-aaa",
+        claimantKeys: ["user:u1"],
+        createdBy: "system",
+      });
+
+      // loadLockedClaimants should return nothing (still draft)
+      const locked = await adapter.loadLockedClaimants(claimantEpochId);
+      expect(locked).toHaveLength(0);
+    });
+
+    it("upsertDraftClaimants overwrites on same (node, epoch, receipt) with different inputsHash", async () => {
+      // Second upsert with a different inputsHash — should overwrite, not duplicate
+      await adapter.upsertDraftClaimants({
+        nodeId: TEST_NODE_ID,
+        epochId: claimantEpochId,
+        receiptId: "claimant-r1",
+        resolverRef: "cogni.default-author.v0",
+        algoRef: "default-author-v0",
+        inputsHash: "hash-bbb", // different hash
+        claimantKeys: ["user:u1-resolved"],
+        createdBy: "system",
+      });
+
+      // Insert a second receipt's claimants
+      await adapter.upsertDraftClaimants({
+        nodeId: TEST_NODE_ID,
+        epochId: claimantEpochId,
+        receiptId: "claimant-r2",
+        resolverRef: "cogni.default-author.v0",
+        algoRef: "default-author-v0",
+        inputsHash: "hash-ccc",
+        claimantKeys: ["user:u2"],
+        createdBy: "system",
+      });
+    });
+
+    it("lockClaimantsForEpoch creates locked copies and deletes drafts", async () => {
+      const count = await adapter.lockClaimantsForEpoch(claimantEpochId);
+      expect(count).toBe(2); // claimant-r1 + claimant-r2
+
+      const locked = await adapter.loadLockedClaimants(claimantEpochId);
+      expect(locked).toHaveLength(2);
+
+      const r1 = locked.find((r) => r.receiptId === "claimant-r1");
+      expect(r1).toBeDefined();
+      expect(r1!.status).toBe("locked");
+      expect(r1!.claimantKeys).toEqual(["user:u1-resolved"]); // overwritten value
+      expect(r1!.inputsHash).toBe("hash-bbb"); // overwritten hash
+
+      const r2 = locked.find((r) => r.receiptId === "claimant-r2");
+      expect(r2).toBeDefined();
+      expect(r2!.status).toBe("locked");
+      expect(r2!.claimantKeys).toEqual(["user:u2"]);
+    });
+
+    it("lockClaimantsForEpoch returns 0 when no drafts remain", async () => {
+      const count = await adapter.lockClaimantsForEpoch(claimantEpochId);
+      expect(count).toBe(0);
+    });
+
+    it("loadLockedClaimants returns only locked rows for the epoch", async () => {
+      const locked = await adapter.loadLockedClaimants(claimantEpochId);
+      expect(locked).toHaveLength(2);
+      for (const row of locked) {
+        expect(row.status).toBe("locked");
+        expect(row.epochId).toBe(claimantEpochId);
+        expect(row.nodeId).toBe(TEST_NODE_ID);
+      }
+    });
+  });
 });

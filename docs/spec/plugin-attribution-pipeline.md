@@ -39,20 +39,21 @@ graph TD
     P -->|allocatorRef| AD["Allocator Dispatch"]
 
     EL --> E1["cogni.echo.v0<br/>descriptor + adapter"]
-    EL --> E2["cogni.claimant_shares.v0<br/>descriptor + adapter"]
-    EL --> E3["cogni.work_item_links.v0<br/>descriptor + adapter"]
+    EL -.-> E3["cogni.work_item_links.v0<br/>(future)"]
     EL -.-> E4["cogni.ai_scores.v0<br/>(future)"]
 
     E1 --> EV["epoch_evaluations<br/>(draft then locked)"]
-    E2 --> EV
-    E3 --> EV
+    E3 -.-> EV
 
     EV -->|AllocationContext| AD
     AD --> WS["weight-sum-v0"]
     AD -.-> WB["work-item-budget-v0<br/>(future)"]
     AD -.-> ES["eval-scored-v0<br/>(future)"]
 
-    WS --> PA["ProposedAllocation[]"]
+    WS --> RW["ReceiptUnitWeight[]"]
+    RW -->|"explodeToClaimants()"| FC["FinalClaimantAllocation[]"]
+
+    CL["epoch_receipt_claimants<br/>(draft then locked)"] -->|locked claimants| FC
 
     subgraph "@cogni/attribution-pipeline-contracts (framework)"
         P
@@ -62,8 +63,6 @@ graph TD
 
     subgraph "@cogni/attribution-pipeline-plugins (built-ins)"
         E1
-        E2
-        E3
         WS
     end
 ```
@@ -90,8 +89,7 @@ packages/attribution-pipeline-contracts/    # framework — stable contracts
 │   ├── allocator.ts        # AllocatorDescriptor, AllocationContext, dispatchAllocator()
 │   ├── profile.ts          # PipelineProfile, ProfileRegistry, resolveProfile()
 │   ├── ordering.ts         # enricher dependency validation, cycle detection
-│   ├── validation.ts       # evaluation write validation (evaluationRef, algoRef, inputsHash, schemaRef)
-│   └── core-evaluations.ts # claimant-shares core evaluation constants + effective enricher merging
+│   └── validation.ts       # evaluation write validation (evaluationRef, algoRef, inputsHash, schemaRef)
 └── tests/
     ├── profile.test.ts
     ├── allocator.test.ts
@@ -194,9 +192,9 @@ function resolveProfile(
 
 **Built-in profiles (defined in `@cogni/attribution-pipeline-plugins`):**
 
-| Profile ID   | enricherRefs                                | allocatorRef    | epochKind  |
-| ------------ | ------------------------------------------- | --------------- | ---------- |
-| `cogni-v0.0` | `[cogni.echo.v0, cogni.claimant_shares.v0]` | `weight-sum-v0` | `activity` |
+| Profile ID   | enricherRefs      | allocatorRef    | epochKind  |
+| ------------ | ----------------- | --------------- | ---------- |
+| `cogni-v0.0` | `[cogni.echo.v0]` | `weight-sum-v0` | `activity` |
 
 Future profiles add enricher refs (e.g., `cogni.work_item_links.v0`, `cogni.ai_scores.v0`) and select different allocators (e.g., `work-item-budget-v0`, `eval-scored-v0`). No code changes to the framework or dispatch layer — only new plugin implementations and profile data in the plugins package.
 
@@ -284,17 +282,18 @@ interface AllocatorDescriptor {
   readonly requiredEvaluationRefs: readonly string[];
 
   /**
-   * Compute proposed allocations. Async to support future allocators that may
-   * need I/O (e.g., LLM-scored allocation). Deterministic allocators simply
+   * Compute per-receipt weight allocations. Async to support future allocators
+   * that may need I/O (e.g., LLM-scored). Deterministic allocators simply
    * return a resolved promise.
    */
   readonly compute: (
     context: AllocationContext
-  ) => Promise<ProposedAllocation[]>;
+  ) => Promise<ReceiptUnitWeight[]>;
 }
 
 interface AllocationContext {
-  readonly events: readonly SelectedReceiptForAllocation[];
+  /** Receipt-scoped input — no userId, no claimant awareness. */
+  readonly receipts: readonly ReceiptForWeighting[];
   readonly weightConfig: Record<string, number>;
   /**
    * Locked evaluation payloads keyed by evaluationRef.
@@ -313,10 +312,10 @@ async function dispatchAllocator(
   registry: AllocatorRegistry,
   profile: PipelineProfile,
   context: AllocationContext
-): Promise<ProposedAllocation[]>;
+): Promise<ReceiptUnitWeight[]>;
 ```
 
-The `weight-sum-v0` descriptor (in the plugins package) wraps the existing `computeProposedAllocations("weight-sum-v0", events, weightConfig)` from `@cogni/attribution-ledger`, returning the result as a resolved promise. The function in attribution-ledger is not removed — the descriptor delegates to it.
+The `weight-sum-v0` descriptor (in the plugins package) wraps `computeReceiptWeights("weight-sum-v0", receipts, weightConfig)` from `@cogni/attribution-ledger`, returning the result as a resolved promise. Allocators produce per-receipt weights; the caller joins with locked claimants via `explodeToClaimants()` to produce per-claimant allocations.
 
 ### Enricher Ordering and Dependency Validation
 
@@ -328,7 +327,7 @@ Enricher execution order is **explicit**, not implicit. Each `EnricherRef` in a 
 2. **Missing ref detection** — every `dependsOn` entry must reference an `evaluationRef` that exists in the same profile's `enricherRefs`. Dangling refs throw at registration.
 3. **Execution order** — the executor runs enrichers in the order declared by `enricherRefs`, which must be a valid topological order of the dependency graph. If the declared order violates dependencies, registration throws.
 
-For `cogni-v0.0`, both echo and claimant-shares have empty `dependsOn` — they run sequentially in declared order with no dependency relationship. Future profiles with cross-enricher dependencies (e.g., `ai_scores` depends on `work_item_links`) declare them explicitly.
+For `cogni-v0.0`, echo is the only enricher with empty `dependsOn`. Claimant resolution is a separate first-class pipeline phase (via `epoch_receipt_claimants` table), not an enricher. Future profiles with cross-enricher dependencies (e.g., `ai_scores` depends on `work_item_links`) declare them explicitly.
 
 ### Quarterly Review — Same Lifecycle, Different Profile
 
@@ -337,7 +336,7 @@ A quarterly review epoch is **not** a special epoch type with its own lifecycle.
 | Dimension      | Weekly Activity (`cogni-v0.0`)     | Quarterly Review (`cogni-quarterly-v0.0`)  |
 | -------------- | ---------------------------------- | ------------------------------------------ |
 | `epochKind`    | `"activity"`                       | `"quarterly_review"`                       |
-| `enricherRefs` | echo, claimant_shares              | claimant_shares, (future: peer_assessment) |
+| `enricherRefs` | echo                               | (future: peer_assessment)                  |
 | `allocatorRef` | `weight-sum-v0`                    | `weight-sum-v0` (or future dedicated algo) |
 | Epoch window   | 7 days, Monday-aligned             | ~90 days, quarter-aligned                  |
 | Weight config  | per-event-type weights             | different weight schema                    |
@@ -355,7 +354,7 @@ The workflow passes `profile.epochKind` when creating the epoch. No branching in
 
 ### Boundary Summary
 
-- **`packages/attribution-ledger/`** — Pure domain. Owns `AttributionStore`, hashing, statement math, `claimant-shares.ts`, `allocation.ts` (existing implementations). Never imports from either pipeline package (PLUGIN_NO_LEDGER_CORE_LEAK).
+- **`packages/attribution-ledger/`** — Pure domain. Owns `AttributionStore`, hashing, statement math, `claimant-shares.ts` (`explodeToClaimants()`), `allocation.ts` (`computeReceiptWeights()`). Never imports from either pipeline package (PLUGIN_NO_LEDGER_CORE_LEAK).
 - **`packages/attribution-pipeline-contracts/`** — **Framework.** Boring, stable, no I/O. Owns all plugin contracts (`EnricherAdapter`, `AllocatorDescriptor`, `PipelineProfile`), registries, dispatch logic, ordering/dependency validation, and evaluation write validation. Customers depend on this package to write custom plugins. Changes here are rare and versioned carefully.
 - **`packages/attribution-pipeline-plugins/`** — **Built-in implementations.** This is where churn happens. Owns all built-in plugin implementations (descriptor + adapter per plugin), built-in profile definitions, and `createDefaultRegistries()`. Depends on the framework package for contracts. New enrichers, allocators, and profiles land here.
 - **Executor (`services/scheduler-worker/`)** — Runtime shell. Imports registries from the plugins package (or builds custom ones). Wires `EnricherContext` with live dependencies (store, logger, nodeId). Executes the profile's enricher loop and allocator dispatch. Persists results. Contains **zero plugin-specific code** (EXECUTOR_IS_GENERIC).
@@ -370,7 +369,7 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 
 ## Non-Goals
 
-- **`actor_id` integration** — The pipeline dispatches plugins and produces `ProposedAllocation[]` keyed by `userId`. When `actor_id` lands (see [identity-model spec](./identity-model.md)), the allocation output type gains an `actorId` field in `attribution-ledger`, not here. Orthogonal concern.
+- **`actor_id` integration** — The pipeline dispatches plugins and produces `ReceiptUnitWeight[]` (per-receipt, not per-user). Claimant resolution via `epoch_receipt_claimants` already supports identity-keyed claimants. When `actor_id` lands (see [identity-model spec](./identity-model.md)), claimant keys can resolve to actor-backed subjects. Orthogonal concern.
 - **Quarterly review evaluation payload design** — The people-centric assessment model (what the LLM evaluates, what governance inputs look like) requires a dedicated research spike. This spec defines how quarterly review _dispatches_ via a different profile, not what the enricher _produces_.
 - **Source adapter plugin interface** — Already defined in [attribution-ledger spec](./attribution-ledger.md#source-adapter-interface). Source adapters are a separate plugin surface.
 - **LLM evaluation prompt engineering** — Implementation detail of the `cogni.ai_scores.v0` enricher adapter, not a pipeline architecture concern.
@@ -439,7 +438,7 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 | `packages/attribution-pipeline-contracts/src/allocator.ts`          | AllocatorDescriptor, AllocationContext, dispatchAllocator()           |
 | `packages/attribution-pipeline-contracts/src/ordering.ts`           | Enricher dependency DAG validation, cycle detection                   |
 | `packages/attribution-pipeline-contracts/src/validation.ts`         | Evaluation write validation (all required fields present)             |
-| `packages/attribution-pipeline-contracts/src/core-evaluations.ts`   | Claimant-shares core evaluation constants + effective enricher refs   |
+| `packages/attribution-ledger/src/claimant-shares.ts`                | `explodeToClaimants()` — joins receipt weights × locked claimants     |
 | `packages/attribution-pipeline-plugins/src/plugins/*/descriptor.ts` | Per-plugin pure constants, types, builder functions                   |
 | `packages/attribution-pipeline-plugins/src/plugins/*/adapter.ts`    | Per-plugin EnricherAdapter implementations (I/O via injected deps)    |
 | `packages/attribution-pipeline-plugins/src/profiles/*.ts`           | Built-in profile definitions                                          |
@@ -449,7 +448,7 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 
 ## Open Questions
 
-- [ ] **Claimant-shares finalization path:** The finalization path in `ledger.ts` reads claimant-shares evaluation payload directly to compute `ClaimantCreditLineItems`. Should this go through the pipeline dispatch, or continue reading from the evaluation table directly? The latter is simpler since finalization is a domain operation, not a plugin concern.
+- [x] **Claimant-shares finalization path:** ~~Should finalization go through the pipeline dispatch?~~ Resolved by bug.0125: claimant resolution is now a first-class pipeline phase with its own `epoch_receipt_claimants` table. Finalization loads locked claimants + computes `computeReceiptWeights()` + `explodeToClaimants()`. Not a plugin concern — it's a domain operation in `attribution-ledger`.
 - [ ] **Customer-authored plugins:** When a customer wants to bring their own enricher/allocator implementation (not just config), how does our service discover and execute it safely? Deferred — config-driven customization via `.cogni/attribution/` covers the near-term need. Code-level extensibility requires a trust/sandbox model.
 - [ ] **`schemaRef` format:** Proposed format is `"<evaluationRef>/<semver>"` (e.g., `"cogni.echo.v0/1.0.0"`). Alternative: separate namespace. Need to confirm this doesn't collide with existing evaluation ref naming.
 

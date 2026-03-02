@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/scheduler-worker-service/activities/enrichment`
  * Purpose: Temporal Activities for epoch enrichment — draft evaluation creation and final evaluation building.
- * Scope: Echo enricher (cogni.echo.v0) and claimant-share enricher (cogni.claimant_shares.v0). Both evaluateEpochDraft and buildLockedEvaluations produce evaluations for each enricher. buildClaimantSharesEvaluationData extracts the shared hash computation.
+ * Scope: Echo enricher (cogni.echo.v0). Claimant resolution is handled separately in materializeSelection (epoch_receipt_claimants table).
  * Invariants:
  * - ENRICHER_IDEMPOTENT: Same receipts → same hashes → same evaluation.
  * - ENRICHER_DRAFT_ONLY: evaluateEpochDraft writes status='draft' only; buildLockedEvaluations returns data without writing.
@@ -14,9 +14,6 @@
  */
 
 import {
-  buildDefaultReceiptClaimantSharesPayload,
-  CLAIMANT_SHARES_ALGO_REF,
-  CLAIMANT_SHARES_EVALUATION_REF,
   computeArtifactsHash,
   computeEnricherInputsHash,
   sha256OfCanonicalJson,
@@ -87,54 +84,6 @@ export interface BuildLockedEvaluationsOutput {
   readonly artifactsHash: string;
 }
 
-async function buildClaimantSharesEvaluationData(params: {
-  readonly epochId: string;
-  readonly weightConfig: Record<string, number>;
-  readonly receipts: ReadonlyArray<{
-    receiptId: string;
-    userId: string | null;
-    source: string;
-    eventType: string;
-    included: boolean;
-    weightOverrideMilli: bigint | null;
-    platformUserId: string;
-    payloadHash: string;
-    platformLogin: string | null;
-    artifactUrl: string | null;
-    eventTime: Date;
-  }>;
-}): Promise<{
-  readonly inputsHash: string;
-  readonly payloadHash: string;
-  readonly payloadJson: Record<string, unknown>;
-}> {
-  const payloadJson = buildDefaultReceiptClaimantSharesPayload({
-    receipts: params.receipts,
-    weightConfig: params.weightConfig,
-  });
-  const payloadHash = await sha256OfCanonicalJson(payloadJson);
-  const inputsHash = await sha256OfCanonicalJson({
-    epochId: params.epochId,
-    weightConfig: params.weightConfig,
-    receipts: params.receipts.map((receipt) => ({
-      receiptId: receipt.receiptId,
-      userId: receipt.userId,
-      source: receipt.source,
-      eventType: receipt.eventType,
-      included: receipt.included,
-      weightOverrideMilli: receipt.weightOverrideMilli?.toString() ?? null,
-      platformUserId: receipt.platformUserId,
-      payloadHash: receipt.payloadHash,
-    })),
-  });
-
-  return {
-    inputsHash,
-    payloadHash,
-    payloadJson,
-  };
-}
-
 /**
  * Creates enrichment activity functions with injected dependencies.
  */
@@ -185,8 +134,6 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
 
     const receipts =
       await attributionStore.getSelectedReceiptsWithMetadata(epochId);
-    const attributionReceipts =
-      await attributionStore.getSelectedReceiptsForAttribution(epochId);
 
     const payload = buildEchoPayload(receipts);
     const payloadHash = await sha256OfCanonicalJson(payload);
@@ -209,34 +156,17 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       payloadJson: payload,
     });
 
-    const claimantSharesEvaluation = await buildClaimantSharesEvaluationData({
-      epochId: input.epochId,
-      weightConfig: epoch.weightConfig,
-      receipts: attributionReceipts,
-    });
-
-    await attributionStore.upsertDraftEvaluation({
-      nodeId,
-      epochId,
-      evaluationRef: CLAIMANT_SHARES_EVALUATION_REF,
-      status: "draft",
-      algoRef: CLAIMANT_SHARES_ALGO_REF,
-      inputsHash: claimantSharesEvaluation.inputsHash,
-      payloadHash: claimantSharesEvaluation.payloadHash,
-      payloadJson: claimantSharesEvaluation.payloadJson,
-    });
-
     logger.info(
       {
         epochId: input.epochId,
-        evaluationRefs: [ECHO_EVALUATION_REF, CLAIMANT_SHARES_EVALUATION_REF],
+        evaluationRefs: [ECHO_EVALUATION_REF],
         receiptCount: receipts.length,
       },
-      "Draft evaluations written"
+      "Draft evaluation written"
     );
 
     return {
-      evaluationRefs: [ECHO_EVALUATION_REF, CLAIMANT_SHARES_EVALUATION_REF],
+      evaluationRefs: [ECHO_EVALUATION_REF],
       receiptCount: receipts.length,
     };
   }
@@ -262,8 +192,6 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
 
     const receipts =
       await attributionStore.getSelectedReceiptsWithMetadata(epochId);
-    const attributionReceipts =
-      await attributionStore.getSelectedReceiptsForAttribution(epochId);
 
     const payload = buildEchoPayload(receipts);
     const payloadHash = await sha256OfCanonicalJson(payload);
@@ -286,25 +214,7 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
       payloadJson: payload,
     };
 
-    const claimantSharesEvaluationData =
-      await buildClaimantSharesEvaluationData({
-        epochId: input.epochId,
-        weightConfig: epoch.weightConfig,
-        receipts: attributionReceipts,
-      });
-
-    const claimantSharesEvaluation: UpsertEvaluationParamsWire = {
-      nodeId,
-      epochId: input.epochId,
-      evaluationRef: CLAIMANT_SHARES_EVALUATION_REF,
-      status: "locked",
-      algoRef: CLAIMANT_SHARES_ALGO_REF,
-      inputsHash: claimantSharesEvaluationData.inputsHash,
-      payloadHash: claimantSharesEvaluationData.payloadHash,
-      payloadJson: claimantSharesEvaluationData.payloadJson,
-    };
-
-    const evaluations = [evaluation, claimantSharesEvaluation];
+    const evaluations = [evaluation];
     const artifactsHash = await computeArtifactsHash(evaluations);
 
     logger.info(

@@ -18,10 +18,6 @@ import type {
   SelectedReceiptForAttribution,
   SelectedReceiptWithMetadata,
 } from "@cogni/attribution-ledger";
-import {
-  CLAIMANT_SHARES_ALGO_REF,
-  CLAIMANT_SHARES_EVALUATION_REF,
-} from "@cogni/attribution-ledger";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -62,11 +58,21 @@ function makeMockStore(
     upsertSelection: vi.fn(),
     getSelectionForEpoch: vi.fn(),
     getUnresolvedSelection: vi.fn(),
-    insertAllocations: vi.fn(),
-    upsertAllocations: vi.fn(),
-    deleteStaleAllocations: vi.fn(),
-    getAllocationsForEpoch: vi.fn(),
+    upsertDraftClaimants: vi.fn(),
+    lockClaimantsForEpoch: vi.fn(),
+    loadLockedClaimants: vi.fn().mockResolvedValue([]),
+    insertUserProjections: vi.fn(),
+    upsertUserProjections: vi.fn(),
+    deleteStaleUserProjections: vi.fn(),
+    getUserProjectionsForEpoch: vi.fn(),
+    replaceFinalClaimantAllocations: vi.fn(),
+    getFinalClaimantAllocationsForEpoch: vi.fn(),
+    getUserDisplayNames: vi.fn().mockResolvedValue(new Map()),
     getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([]),
+    upsertReviewSubjectOverride: vi.fn(),
+    batchUpsertReviewSubjectOverrides: vi.fn().mockResolvedValue([]),
+    deleteReviewSubjectOverride: vi.fn(),
+    getReviewSubjectOverridesForEpoch: vi.fn().mockResolvedValue([]),
     upsertCursor: vi.fn(),
     getCursor: vi.fn().mockResolvedValue(null),
     insertPoolComponent: vi.fn(),
@@ -159,13 +165,10 @@ describe("evaluateEpochDraft", () => {
 
     const result = await evaluateEpochDraft({ epochId: "1" });
 
-    expect(result.evaluationRefs).toEqual([
-      ECHO_EVALUATION_REF,
-      CLAIMANT_SHARES_EVALUATION_REF,
-    ]);
+    expect(result.evaluationRefs).toEqual([ECHO_EVALUATION_REF]);
     expect(result.receiptCount).toBe(5);
 
-    expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(2);
+    expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(1);
 
     const echoCall = vi.mocked(store.upsertDraftEvaluation).mock.calls[0][0];
     expect(echoCall.evaluationRef).toBe(ECHO_EVALUATION_REF);
@@ -185,19 +188,6 @@ describe("evaluateEpochDraft", () => {
     expect(payload.byUserId).toBeDefined();
     expect(payload.byUserId["user-aaa"]).toBe(3);
     expect(payload.byUserId["user-bbb"]).toBe(2);
-
-    const claimsCall = vi.mocked(store.upsertDraftEvaluation).mock.calls[1][0];
-    expect(claimsCall.evaluationRef).toBe(CLAIMANT_SHARES_EVALUATION_REF);
-    expect(claimsCall.algoRef).toBe(CLAIMANT_SHARES_ALGO_REF);
-    expect(claimsCall.status).toBe("draft");
-
-    const claimsPayload = claimsCall.payloadJson as {
-      version: 1;
-      subjects: Array<{ subjectRef: string; claimantShares: unknown[] }>;
-    };
-    expect(claimsPayload.version).toBe(1);
-    expect(claimsPayload.subjects).toHaveLength(5);
-    expect(claimsPayload.subjects[0]?.claimantShares).toHaveLength(1);
   });
 
   it("calls upsertDraftEvaluation with status='draft'", async () => {
@@ -221,9 +211,6 @@ describe("evaluateEpochDraft", () => {
 
     const call = vi.mocked(store.upsertDraftEvaluation).mock.calls[0][0];
     expect(call.status).toBe("draft");
-    expect(vi.mocked(store.upsertDraftEvaluation).mock.calls[1][0].status).toBe(
-      "draft"
-    );
   });
 
   it("handles no receipts — writes evaluation with empty counts", async () => {
@@ -242,7 +229,7 @@ describe("evaluateEpochDraft", () => {
     const result = await evaluateEpochDraft({ epochId: "1" });
 
     expect(result.receiptCount).toBe(0);
-    expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(2);
+    expect(store.upsertDraftEvaluation).toHaveBeenCalledTimes(1);
 
     const payload = vi.mocked(store.upsertDraftEvaluation).mock.calls[0][0]
       .payloadJson as { totalEvents: number };
@@ -271,13 +258,9 @@ describe("buildLockedEvaluations", () => {
 
     const result = await buildLockedEvaluations({ epochId: "1" });
 
-    expect(result.evaluations).toHaveLength(2);
+    expect(result.evaluations).toHaveLength(1);
     expect(result.evaluations[0].evaluationRef).toBe(ECHO_EVALUATION_REF);
     expect(result.evaluations[0].status).toBe("locked");
-    expect(result.evaluations[1].evaluationRef).toBe(
-      CLAIMANT_SHARES_EVALUATION_REF
-    );
-    expect(result.evaluations[1].status).toBe("locked");
     expect(result.artifactsHash).toMatch(/^[a-f0-9]{64}$/);
 
     // Should NOT write to store
@@ -337,12 +320,6 @@ describe("idempotency", () => {
 
     expect(draftCall.payloadHash).toBe(finalEvaluation.payloadHash);
     expect(draftCall.inputsHash).toBe(finalEvaluation.inputsHash);
-
-    const draftClaimsCall = vi.mocked(store.upsertDraftEvaluation).mock
-      .calls[1][0];
-    const finalClaimsEvaluation = finalResult.evaluations[1];
-    expect(draftClaimsCall.payloadHash).toBe(finalClaimsEvaluation.payloadHash);
-    expect(draftClaimsCall.inputsHash).toBe(finalClaimsEvaluation.inputsHash);
 
     // buildLockedEvaluations returns wire format (epochId as string, not bigint)
     expect(finalEvaluation.epochId).toBe("1");

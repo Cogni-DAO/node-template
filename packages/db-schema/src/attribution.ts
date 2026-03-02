@@ -278,6 +278,64 @@ export const epochPoolComponents = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Receipt Claimants — per-receipt ownership resolution (draft/locked lifecycle)
+// ---------------------------------------------------------------------------
+
+/**
+ * Epoch receipt claimants — per-receipt ownership records.
+ * Draft rows written during materializeSelection / enrichment. Locked at closeIngestion.
+ * One draft per (node_id, epoch_id, receipt_id). One locked snapshot per receipt.
+ * CLAIMANTS_TABLE_NODE_SCOPED: all uniques/indexes include node_id.
+ */
+export const epochReceiptClaimants = pgTable(
+  "epoch_receipt_claimants",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    nodeId: uuid("node_id").notNull(),
+    epochId: bigint("epoch_id", { mode: "bigint" })
+      .notNull()
+      .references(() => epochs.id),
+    receiptId: text("receipt_id").notNull(),
+    status: text("status").notNull().default("draft"),
+    resolverRef: text("resolver_ref").notNull(),
+    algoRef: text("algo_ref").notNull(),
+    inputsHash: text("inputs_hash").notNull(),
+    claimantsJson: jsonb("claimants_json").$type<string[]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdBy: text("created_by"),
+  },
+  (table) => [
+    check(
+      "epoch_receipt_claimants_status_check",
+      sql`${table.status} IN ('draft', 'locked')`
+    ),
+    // One draft per receipt per epoch per tenant (upsert overwrites)
+    uniqueIndex("epoch_receipt_claimants_draft_uniq")
+      .on(table.nodeId, table.epochId, table.receiptId)
+      .where(sql`${table.status} = 'draft'`),
+    // Exactly one locked snapshot per receipt per epoch per tenant
+    uniqueIndex("epoch_receipt_claimants_locked_uniq")
+      .on(table.nodeId, table.epochId, table.receiptId)
+      .where(sql`${table.status} = 'locked'`),
+    // Idempotency: same inputs → same row
+    uniqueIndex("epoch_receipt_claimants_inputs_uniq").on(
+      table.nodeId,
+      table.epochId,
+      table.receiptId,
+      table.inputsHash
+    ),
+    // Allocation reads: all locked rows for an epoch
+    index("epoch_receipt_claimants_epoch_status_idx").on(
+      table.nodeId,
+      table.epochId,
+      table.status
+    ),
+  ]
+);
+
+// ---------------------------------------------------------------------------
 // Evaluation Layer: Enrichment outputs (draft/locked lifecycle)
 // ---------------------------------------------------------------------------
 

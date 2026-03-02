@@ -16,33 +16,25 @@
  *   - Per CONFIG_LOCKED_AT_REVIEW: autoCloseIngestion pins allocationAlgoRef + weightConfigHash
  *   - Per EVALUATION_FINAL_ATOMIC: autoCloseIngestion passes evaluations to closeIngestionWithEvaluations for atomic write
  *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing statement if already finalized
- *   - Per FINALIZE_CLAIMANT_AWARE: finalizeEpoch loads locked claimant-share evaluations, computes final claimant allocations with review overrides, and stores claimant metadata in attribution statement lines
+ *   - Per FINALIZE_CLAIMANT_AWARE: finalizeEpoch loads locked claimant rows from epoch_receipt_claimants, computes receipt weights, explodes to claimant allocations, and stores claimant metadata in attribution statement lines
  * Side-effects: IO (database, GitHub API, viem EIP-712 verification)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
  * @internal
  */
 
-import type {
-  ClaimantSharesSubject,
-  UnselectedReceipt,
-} from "@cogni/attribution-ledger";
+import type { UnselectedReceipt } from "@cogni/attribution-ledger";
 import {
-  applySubjectOverrides,
-  buildDefaultReceiptClaimantSharesPayload,
   buildEIP712TypedData,
-  buildReviewOverrideSnapshots,
-  CLAIMANT_SHARES_EVALUATION_REF,
   claimantKey,
   computeApproverSetHash,
   computeAttributionStatementLines,
   computeFinalClaimantAllocationSetHash,
-  computeFinalClaimantAllocations,
-  computeProposedAllocations,
+  computeReceiptWeights,
   computeWeightConfigHash,
   deriveAllocationAlgoRef,
   estimatePoolComponentsV0,
-  parseClaimantSharesPayload,
-  toReviewSubjectOverrides,
+  explodeToClaimants,
+  sha256OfCanonicalJson,
   validateWeightConfig,
 } from "@cogni/attribution-ledger";
 import type { ActivityEvent } from "@cogni/ingestion-core";
@@ -231,30 +223,6 @@ export interface FinalizeEpochOutput {
   readonly poolTotalCredits: string; // bigint serialized
   readonly finalAllocationSetHash: string;
   readonly statementLineCount: number;
-}
-
-async function loadLockedClaimantSubjects(
-  attributionStore: AttributionStore,
-  epoch: {
-    readonly id: bigint;
-    readonly weightConfig: Record<string, number>;
-  }
-): Promise<readonly ClaimantSharesSubject[]> {
-  const evaluation = await attributionStore.getEvaluation(
-    epoch.id,
-    CLAIMANT_SHARES_EVALUATION_REF,
-    "locked"
-  );
-  const parsed = parseClaimantSharesPayload(evaluation?.payloadJson ?? null);
-  if (parsed) return parsed.subjects;
-
-  const receipts = await attributionStore.getSelectedReceiptsForAttribution(
-    epoch.id
-  );
-  return buildDefaultReceiptClaimantSharesPayload({
-    receipts,
-    weightConfig: epoch.weightConfig,
-  }).subjects;
 }
 
 /**
@@ -603,6 +571,26 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       } else {
         unresolved++;
       }
+
+      // Write default-author claimant for this receipt
+      const ck = resolvedUserId
+        ? `user:${resolvedUserId}`
+        : `identity:${receipt.source}:${receipt.platformUserId}`;
+      const claimantInputsHash = await sha256OfCanonicalJson({
+        receiptId: receipt.receiptId,
+        userId: resolvedUserId,
+        platformUserId: receipt.platformUserId,
+      });
+      await attributionStore.upsertDraftClaimants({
+        nodeId,
+        epochId,
+        receiptId: receipt.receiptId,
+        resolverRef: "cogni.default-author.v0",
+        algoRef: "default-author-v0",
+        inputsHash: claimantInputsHash,
+        claimantKeys: [ck],
+        createdBy: "system",
+      });
     }
 
     logger.info(
@@ -625,8 +613,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
   }
 
   /**
-   * Compute proposed allocations from selected receipts.
-   * Upserts results (ALLOCATION_PRESERVES_OVERRIDES) and removes stale allocations.
+   * Compute receipt-weight allocations and aggregate into user projections.
+   * Uses computeReceiptWeights + explodeToClaimants for claimant-scoped output.
+   * Upserts user projections (recomputable, unsigned) and removes stale ones.
    */
   async function computeAllocations(
     input: ComputeAllocationsInput
@@ -651,46 +640,65 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       return { totalAllocations: 0, totalProposedUnits: "0" };
     }
 
-    // 2. Compute proposed allocations (pure)
-    const proposed = computeProposedAllocations(
+    // 2. Compute per-receipt weights (pure)
+    const receiptWeights = computeReceiptWeights(
       algorithmId,
       receipts,
       weightConfig
     );
 
-    // 3. Upsert user projections (recomputable, unsigned)
-    await attributionStore.upsertUserProjections(
-      proposed.map((p) => ({
+    // 3. Aggregate into user projections for the review UI
+    //    Group by userId from selection rows (existing pattern for projections)
+    const weightByReceipt = new Map(
+      receiptWeights.map((w) => [w.receiptId, w])
+    );
+    const userUnits = new Map<string, { units: bigint; count: number }>();
+    for (const receipt of receipts) {
+      if (!receipt.included) continue;
+      const weight = weightByReceipt.get(receipt.receiptId);
+      if (!weight) continue;
+      const existing = userUnits.get(receipt.userId) ?? {
+        units: 0n,
+        count: 0,
+      };
+      existing.units += weight.units;
+      existing.count += 1;
+      userUnits.set(receipt.userId, existing);
+    }
+
+    const projections = [...userUnits.entries()].map(
+      ([userId, { units, count }]) => ({
         nodeId,
         epochId,
-        userId: p.userId,
-        projectedUnits: p.proposedUnits,
-        receiptCount: p.activityCount,
-      }))
+        userId,
+        projectedUnits: units,
+        receiptCount: count,
+      })
     );
 
-    // 4. Remove stale user projections (guard: skip if proposed is empty)
-    if (proposed.length > 0) {
-      const activeUserIds = proposed.map((p) => p.userId);
+    // 4. Upsert user projections (recomputable, unsigned)
+    if (projections.length > 0) {
+      await attributionStore.upsertUserProjections(projections);
+      const activeUserIds = projections.map((p) => p.userId);
       await attributionStore.deleteStaleUserProjections(epochId, activeUserIds);
     }
 
-    const totalProposedUnits = proposed.reduce(
-      (acc, p) => acc + p.proposedUnits,
+    const totalProposedUnits = receiptWeights.reduce(
+      (acc, w) => acc + w.units,
       0n
     );
 
     logger.info(
       {
         epochId: input.epochId,
-        totalAllocations: proposed.length,
+        totalAllocations: receiptWeights.length,
         totalProposedUnits: totalProposedUnits.toString(),
       },
       "Allocations computed"
     );
 
     return {
-      totalAllocations: proposed.length,
+      totalAllocations: receiptWeights.length,
       totalProposedUnits: totalProposedUnits.toString(),
     };
   }
@@ -812,6 +820,13 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       ...e,
       epochId: BigInt(e.epochId),
     }));
+
+    // Lock claimant rows alongside evaluations
+    const lockedCount = await attributionStore.lockClaimantsForEpoch(epochId);
+    logger.info(
+      { epochId: input.epochId, lockedClaimants: lockedCount },
+      "Claimant rows locked"
+    );
 
     const epoch = await attributionStore.closeIngestionWithEvaluations({
       epochId,
@@ -953,34 +968,33 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       0n
     );
 
-    // 5. Load claimant subjects + subject overrides
-    const claimantSubjects = await loadLockedClaimantSubjects(
-      attributionStore,
-      epoch
+    // 5. Load locked claimants + compute receipt weights → explode to claimant allocations
+    const lockedClaimants = await attributionStore.loadLockedClaimants(epochId);
+    if (lockedClaimants.length === 0) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} has no locked claimant rows`
+      );
+    }
+
+    const selections =
+      await attributionStore.getSelectedReceiptsForAllocation(epochId);
+    const receiptWeights = computeReceiptWeights(
+      epoch.allocationAlgoRef,
+      selections,
+      epoch.weightConfig
     );
 
-    const overrideRecords =
-      await attributionStore.getReviewSubjectOverridesForEpoch(epochId);
-    const subjectOverrides = toReviewSubjectOverrides(overrideRecords);
-
-    // 6. Apply subject overrides + build review snapshot for audit trail
-    const modifiedSubjects = applySubjectOverrides(
-      claimantSubjects,
-      subjectOverrides
+    const finalClaimantAllocations = explodeToClaimants(
+      receiptWeights,
+      lockedClaimants
     );
-    const reviewOverridesSnapshot = buildReviewOverrideSnapshots(
-      claimantSubjects,
-      subjectOverrides
-    );
-
-    const finalClaimantAllocations =
-      computeFinalClaimantAllocations(modifiedSubjects);
     if (finalClaimantAllocations.length === 0) {
       throw new Error(
         `finalizeEpoch: epoch ${input.epochId} has no claimant allocations`
       );
     }
 
+    // 6. Compute statement lines from final allocations
     const statementLines = computeAttributionStatementLines(
       finalClaimantAllocations,
       poolTotal
@@ -1042,8 +1056,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
             credit_amount: line.creditAmount.toString(),
             receipt_ids: [...line.receiptIds],
           })),
-          reviewOverrides:
-            reviewOverridesSnapshot.length > 0 ? reviewOverridesSnapshot : null,
+          reviewOverrides: null,
         },
         signature: {
           nodeId,

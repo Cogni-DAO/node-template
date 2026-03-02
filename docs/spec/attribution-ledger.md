@@ -37,7 +37,7 @@ tags: [governance, transparency, payments, attribution]
 | RECEIPT_APPEND_ONLY              | DB trigger rejects UPDATE/DELETE on `ingestion_receipts`. Once ingested, receipt records are immutable facts.                                                                                                                                                                                                                                                                           |
 | RECEIPT_IDEMPOTENT               | `ingestion_receipts.id` is deterministic from source data (e.g., `github:pr:owner/repo:42`). Re-ingestion of the same receipt is a no-op (PK conflict → skip).                                                                                                                                                                                                                          |
 | POOL_IMMUTABLE                   | DB trigger rejects UPDATE/DELETE on `epoch_pool_components`. Once recorded, a pool component's algorithm, inputs, and amount cannot be changed.                                                                                                                                                                                                                                         |
-| IDENTITY_BEST_EFFORT             | Ingestion receipts carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved receipts keep `user_id = NULL` in selection, but claimant-share evaluations preserve them as identity claimants so attribution remains visible and can resolve later when bindings appear.                                            |
+| IDENTITY_BEST_EFFORT             | Ingestion receipts carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved receipts keep `user_id = NULL` in selection, but `epoch_receipt_claimants` rows preserve them as identity claimants (keyed by stable external identity) so attribution remains visible and can resolve later when bindings appear.    |
 | ADMIN_FINALIZES_ONCE             | An admin reviews recomputable user projections, optionally records per-subject review overrides, then triggers finalize. Finalization materializes canonical claimant-scoped final allocations before signing. Single action closes the epoch — no per-event approval workflow.                                                                                                         |
 | APPROVERS_PER_SCOPE              | Each scope declares its own `approvers[]` list. Epoch finalize requires 1-of-N EIP-712 signature from the scope's approvers. V0: single scope, single approver in repo-spec. Multi-scope: each `.cogni/projects/*.yaml` carries its own list.                                                                                                                                           |
 | SIGNATURE_SCOPE_BOUND            | Signed typed data must include `node_id + scope_id + final_allocation_set_hash`. Prevents cross-scope and cross-node signature replay.                                                                                                                                                                                                                                                  |
@@ -65,7 +65,7 @@ tags: [governance, transparency, payments, attribution]
 | ADAPTERS_NOT_IN_CORE             | Source adapters live in `services/scheduler-worker/` behind a port interface. `packages/attribution-ledger/` contains only pure domain logic (types, rules, errors).                                                                                                                                                                                                                    |
 | EVALUATION_UNIQUE_PER_REF_STATUS | `UNIQUE(epoch_id, evaluation_ref, status)` — one draft + one locked row per evaluation ref per epoch. Drafts overwritten via UPSERT; locked evaluations written once at `closeIngestionWithEvaluations`.                                                                                                                                                                                |
 | EVALUATION_FINAL_ATOMIC          | Locked evaluation writes + `evaluations_hash` computation + epoch `open→review` transition happen in a single DB transaction. No partial finalization. If any step fails, nothing commits.                                                                                                                                                                                              |
-| STATEMENT_FROM_FINAL_ONLY        | `computeProposedAllocations` for statement purposes MUST consume only `status='locked'` evaluations. Draft evaluations are explicitly excluded from any binding computation.                                                                                                                                                                                                            |
+| STATEMENT_FROM_FINAL_ONLY        | `computeReceiptWeights` for statement purposes MUST consume only `status='locked'` evaluations and `status='locked'` claimant records. Draft data is explicitly excluded from any binding computation.                                                                                                                                                                                  |
 | CANONICAL_JSON                   | All payload and inputs hashing uses `canonicalJsonStringify()` — sorted keys at every depth, no whitespace, BigInt serialized as string. Defined once in `packages/attribution-ledger/src/hashing.ts`, used everywhere.                                                                                                                                                                 |
 | INPUTS_HASH_COMPLETE             | Each enricher defines its own `inputs_hash` covering ALL meaningful dependencies consumed. Canonically serialized before hashing. If any input changes, `inputs_hash` changes, and the system knows the evaluation is stale.                                                                                                                                                            |
 | PAYLOAD_HASH_COVERS_CONTENT      | `payload_hash` = SHA-256 of `canonicalJsonStringify(payload)`. Stored in DB regardless of inline vs. object storage. `evaluations_hash` on the epoch uses `payload_hash`, never re-serializes.                                                                                                                                                                                          |
@@ -73,7 +73,7 @@ tags: [governance, transparency, payments, attribution]
 | EVALUATION_REF_NAMESPACED        | Evaluation refs follow `org.type.version` format (e.g., `cogni.work_item_links.v0`, `cogni.echo.v0`). Regex: `/^[a-z][a-z0-9]*\.[a-z][a-z0-9_]*\.v\d+$/`. Prevents cross-team collisions.                                                                                                                                                                                               |
 | WEIGHT_PINNING                   | Weight config is set at epoch creation. Subsequent collection runs use the existing epoch's `weight_config`, not the input-derived config. Config drift logs a warning. `weight_config_hash` (SHA-256 of canonical JSON) is computed and locked at `closeIngestion` as the reproducibility anchor.                                                                                      |
 | CONFIG_LOCKED_AT_REVIEW          | At `closeIngestion` (open→review), the epoch's `weight_config_hash` and `allocation_algo_ref` are computed and locked. These fields are NULL while open and immutable after review. All subsequent verification and statement computation uses these locked snapshots.                                                                                                                  |
-| ALLOCATION_ALGO_PINNED           | `allocation_algo_ref` is NULL while epoch is open, set at `closeIngestion`. `computeProposedAllocations(algoRef, events, weightConfig)` dispatches to the correct versioned algorithm. Same inputs + same algoRef → identical output. V0: `weight-sum-v0` (simple per-event-type weight sum). Future: content-addressable ref.                                                          |
+| ALLOCATION_ALGO_PINNED           | `allocation_algo_ref` is NULL while epoch is open, set at `closeIngestion`. `computeReceiptWeights(algoRef, receipts, weightConfig)` dispatches to the correct versioned algorithm. Same inputs + same algoRef → identical output. V0: `weight-sum-v0` (simple per-event-type weight sum). Future: content-addressable ref.                                                             |
 | ALLOCATION_PRESERVES_OVERRIDES   | Periodic recomputation updates only `epoch_user_projections.projected_units` and `receipt_count`. Review overrides live separately in `epoch_review_subject_overrides`, and signed canonical units live in `epoch_final_claimant_allocations`. Recomputing projections never mutates review overrides or finalized claimant allocations.                                                |
 | POOL_LOCKED_AT_REVIEW            | No new pool component inserts after `closeIngestion` (open→review). `component_id` validated against V0 allowlist: `base_issuance`, `kpi_bonus_v0`, `top_up`. Application-level enforcement.                                                                                                                                                                                            |
 | EPOCH_WINDOW_DETERMINISTIC       | Epoch boundaries computed by `computeEpochWindowV1()` — pure function, Monday-aligned UTC, anchored to 2026-01-05. Same `(asOf, epochLengthDays)` always yields the same window.                                                                                                                                                                                                        |
@@ -112,7 +112,7 @@ The attribution ledger uses two orthogonal scoping keys:
 
 **Temporal worker** (`services/scheduler-worker/`) handles all write/compute actions: activity collection via source adapters, identity resolution, allocation computation, epoch finalization. All workflows are idempotent via deterministic workflow IDs. The worker imports pure domain logic from `@cogni/attribution-ledger` and DB operations from `@cogni/db-client`.
 
-**`packages/attribution-ledger/`** contains pure domain logic shared between the app and the worker: model types, `computeStatementItems()`, `computeProposedAllocations()`, and error classes. `src/core/attribution/public.ts` re-exports from this package so app code uses `@/core/attribution`.
+**`packages/attribution-ledger/`** contains pure domain logic shared between the app and the worker: model types, `computeStatementItems()`, `computeReceiptWeights()`, `explodeToClaimants()`, and error classes. `src/core/attribution/public.ts` re-exports from this package so app code uses `@/core/attribution`.
 
 **Postgres** stores the append-only ingestion receipts with DB-trigger enforcement of immutability.
 
@@ -164,10 +164,11 @@ The attribution pipeline has three composable extension points. Each surface has
 │     Draft on each pass,      Locked = statements.                           │
 │     locked at close.         Stored in epoch_evaluations table.             │
 │                                                                             │
-│  3. ALLOCATION ALGORITHMS    algoRef dispatch → ProposedAllocation[]        │
+│  3. ALLOCATION ALGORITHMS    algoRef dispatch → ReceiptUnitWeight[]         │
 │     "Who gets what?"         weight-sum-v0, work-item-budget-v0...          │
 │     Pure function.           Consumes selected receipts + locked evals.     │
-│     No I/O. Deterministic.   Same inputs + same algoRef → identical output. │
+│     Per-receipt weights.     Same inputs + same algoRef → identical output. │
+│     No I/O. Deterministic.   explodeToClaimants() joins with claimants.     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -213,7 +214,7 @@ Source adapters collect contribution activity from external systems and normaliz
 3. **Normalizes** to `IngestionReceipt` with deterministic ID, provenance fields, and platform identity
 4. **Inserts** idempotently (PK conflict = skip)
 
-Identity resolution happens after ingestion: lookup `user_bindings` (from [decentralized-identity spec](./decentralized-user-identity.md)) to map `(source, platform_user_id)` → `user_id`. If no binding exists yet, the receipt still flows into claimant-share evaluation as an unresolved identity claimant keyed by stable external identity (`provider + externalId`).
+Identity resolution happens after ingestion: lookup `user_bindings` (from [decentralized-identity spec](./decentralized-user-identity.md)) to map `(source, platform_user_id)` → `user_id`. If no binding exists yet, the receipt still flows into `epoch_receipt_claimants` as an unresolved identity claimant keyed by stable external identity (`identity:provider:externalId`).
 
 ### Weight Policy
 
@@ -229,7 +230,7 @@ Credit allocation uses a simple per-event-type weight configuration stored as in
 }
 ```
 
-Proposed allocation per user = SUM of weights for their attributed events. The weight config is pinned per epoch (stored in the epoch row) for reproducibility. V0 derives weights from `activitySources` keys via `deriveWeightConfigV0()` — a pure, deterministic mapping (e.g., `github` → `github:pr_merged: 1000, github:review_submitted: 500, github:issue_closed: 300`). If an epoch already exists, its pinned config takes precedence over input-derived weights (WEIGHT_PINNING).
+Per-receipt weight = `weightOverrideMilli ?? weightConfig[source:eventType] ?? 0`. Allocators compute per-receipt units (`ReceiptUnitWeight[]`), then `explodeToClaimants()` joins receipt weights with locked `epoch_receipt_claimants` to produce per-claimant allocations. The weight config is pinned per epoch (stored in the epoch row) for reproducibility. V0 derives weights from `activitySources` keys via `deriveWeightConfigV0()` — a pure, deterministic mapping (e.g., `github` → `github:pr_merged: 1000, github:review_submitted: 500, github:issue_closed: 300`). If an epoch already exists, its pinned config takes precedence over input-derived weights (WEIGHT_PINNING).
 
 ### Epoch Lifecycle
 
@@ -241,7 +242,7 @@ Epoch status models **governance finality**, not payment execution. Distribution
                  → Runs source adapters → ingestion_receipts (raw facts)
                  → Resolves identities → updates user_id on selection rows
                  → Runs enrichers → epoch_evaluations (draft, overwritten each pass)
-                 → `cogni.claimant_shares.v0` emits claimant-share subjects from selected receipts
+                 → Claimant resolution: `materializeSelection` inserts `epoch_receipt_claimants` (draft) per receipt
                  → Computes recomputable per-user rollups → epoch_user_projections
                  → Admin selects: adjust inclusion, resolve identities, record pool components
 
@@ -256,7 +257,9 @@ Epoch status models **governance finality**, not payment execution. Distribution
                  → Read models resolve current display names and linked/unlinked state at read time
 
 3. FINALIZED     Admin triggers finalize (requires signature + base_issuance)
-                 → Reads locked claimant-share subjects + review overrides
+                 → Loads locked `epoch_receipt_claimants` + selected receipts
+                 → `computeReceiptWeights()` → per-receipt units
+                 → `explodeToClaimants()` joins receipt weights × locked claimants → `FinalClaimantAllocation[]`
                  → Materializes `epoch_final_claimant_allocations` (canonical signed claimant units)
                  → Reads pool components → pool_total_credits
                  → computeAttributionStatementLines(final_claimant_allocations, pool_total) → epoch_statement
@@ -271,17 +274,18 @@ Epoch status models **governance finality**, not payment execution. Distribution
 
 ### Statement Computation
 
-Finalization is claimant-aware. Given locked claimant-share subjects, review subject overrides, and a total pool:
+Finalization is claimant-aware. Claimant ownership lives in the `epoch_receipt_claimants` table (not in evaluations). Given locked claimant records, selected receipts, and a total pool:
 
-1. Load claimant-share subjects from the locked `cogni.claimant_shares.v0` evaluation (fallback: rebuild deterministically from selected receipts)
-2. Apply `epoch_review_subject_overrides` to subject units and/or claimant share splits
-3. Expand subjects into canonical claimant-scoped unit rows and persist them in `epoch_final_claimant_allocations`
-4. Compute each claimant's share: `final_units / total_units`
-5. Distribute `pool_total_credits` proportionally using BIGINT arithmetic
-6. Apply largest-remainder rounding to ensure exact sum equals pool total
-7. Output statement lines shaped like `[{ claimant_key, claimant, final_units, pool_share, credit_amount, receipt_ids }]`
+1. Load locked `epoch_receipt_claimants` for the epoch (one row per receipt, each with `claimantKeys[]`)
+2. Load selected receipts and compute per-receipt weights via `computeReceiptWeights(algoRef, receipts, weightConfig)`
+3. Join receipt weights × locked claimants via `explodeToClaimants()` — splits units equally among claimant keys per receipt (largest-remainder rounding), groups by claimant key across all receipts
+4. Persist canonical claimant-scoped unit rows in `epoch_final_claimant_allocations`
+5. Compute each claimant's share: `final_units / total_units`
+6. Distribute `pool_total_credits` proportionally using BIGINT arithmetic
+7. Apply largest-remainder rounding to ensure exact sum equals pool total
+8. Output statement lines shaped like `[{ claimant_key, claimant, final_units, pool_share, credit_amount, receipt_ids }]`
 
-The final allocation set hash (SHA-256 of canonical claimant allocation data, sorted by claimant key) pins the exact finalized input set. Combined with `pool_total_credits`, locked evaluations, review overrides, and `weight_config`, the statement is fully deterministic and reproducible.
+The final allocation set hash (SHA-256 of canonical claimant allocation data, sorted by claimant key) pins the exact finalized input set. Combined with `pool_total_credits`, locked evaluations, locked claimant records, and `weight_config`, the statement is fully deterministic and reproducible.
 
 ### Pool Model
 
@@ -299,8 +303,8 @@ Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and 
 
 1. Fetch all `ingestion_receipts` for the epoch
 2. Recompute user projections from receipts + stored `weight_config`
-3. Read locked claimant-share evaluation + `epoch_review_subject_overrides`
-4. Recompute final claimant allocations and compare them against `epoch_final_claimant_allocations`
+3. Read locked `epoch_receipt_claimants` + `epoch_review_subject_overrides`
+4. Recompute `computeReceiptWeights()` + `explodeToClaimants()` and compare against `epoch_final_claimant_allocations`
 5. Recompute statement lines from final claimant allocations + pool components
 6. Compare recomputed values against stored statement
 7. Return verification report
@@ -383,6 +387,33 @@ After each collection run, the `materializeSelection` activity creates selection
 2. **Insert-or-update-userId-only**: New receipts get `INSERT` with resolved `user_id` (or NULL if unresolved), `included = true`. Existing rows with `user_id IS NULL` get only `user_id` updated (fills in newly-added bindings on re-run). Fields `included`, `weight_override_milli`, `note` are never touched by auto-population.
 3. **Query by epochId**: The activity queries receipts by epoch membership (via the epoch's `period_start`/`period_end`), using `epochId` as the authoritative scope. The epoch row is loaded first; period dates serve as a guard assertion.
 4. **Provider-scoped resolution**: Identity resolution queries `user_bindings` filtered by `provider` (e.g., `'github'`). No cross-provider resolution. The `platformUserId` stored in `ingestion_receipts` must match the `external_id` format in `user_bindings` (GitHub: numeric `databaseId` as string).
+
+### `epoch_receipt_claimants` — per-receipt ownership records (draft/locked lifecycle)
+
+| Column           | Type             | Notes                                                                                         |
+| ---------------- | ---------------- | --------------------------------------------------------------------------------------------- |
+| `id`             | UUID PK          | DEFAULT gen_random_uuid()                                                                     |
+| `node_id`        | UUID             | NOT NULL (NODE_SCOPED)                                                                        |
+| `epoch_id`       | BIGINT FK→epochs | NOT NULL                                                                                      |
+| `receipt_id`     | TEXT             | NOT NULL — references ingestion_receipts                                                      |
+| `status`         | TEXT             | NOT NULL DEFAULT `'draft'` — CHECK IN (`'draft'`, `'locked'`)                                 |
+| `resolver_ref`   | TEXT             | NOT NULL — which resolver produced this (e.g., `cogni.default-author.v0`)                     |
+| `algo_ref`       | TEXT             | NOT NULL — algorithm version                                                                  |
+| `inputs_hash`    | TEXT             | NOT NULL — deterministic hash of inputs for idempotency                                       |
+| `claimants_json` | JSONB            | NOT NULL — v0: `string[]` of claimant keys (equal split assumed). Future: explicit PPM shares |
+| `created_at`     | TIMESTAMPTZ      | NOT NULL DEFAULT now()                                                                        |
+| `created_by`     | TEXT             | `"system"`, `"enricher:coauthor-detect"`, `"review:manual"` (nullable)                        |
+
+Constraints / indexes:
+
+- Partial unique `(node_id, epoch_id, receipt_id) WHERE status = 'draft'` — one draft per receipt per epoch per tenant (upsert overwrites)
+- Partial unique `(node_id, epoch_id, receipt_id) WHERE status = 'locked'` — exactly one locked snapshot per receipt
+- `UNIQUE(node_id, epoch_id, receipt_id, inputs_hash)` — idempotency: same inputs → same row
+- Index `(node_id, epoch_id, status)` — allocation reads: all locked rows for an epoch
+
+**Lifecycle:** Draft claimant rows are inserted by `materializeSelection` (default-author resolver: `receiptId → claimantKey(author)`). Future enrichers that discover coauthors call `upsertDraftClaimants()` directly. At `closeIngestion`, `lockClaimantsForEpoch()` copies all draft rows to locked status. Locked rows are immutable — used at finalization by `explodeToClaimants()`.
+
+**v0 claimants_json shape:** `["user:uuid-123"]` or `["identity:github:42"]` — array of claimant keys. Equal split assumed by `explodeToClaimants()`. No PPM in v0.
 
 ### `epoch_user_projections` — recomputable per-user rollups
 
@@ -642,12 +673,13 @@ interface LedgerIngestRunV1 {
    - Activity: `adapter.collect({ streams: [stream], cursor, window })` → receipts + `producerVersion`
    - Activity: insert `ingestion_receipts` (idempotent by PK, uses `adapter.version` as `producer_version`)
    - Activity: save cursor to `ingestion_cursors` (monotonic advancement)
-6. **Select and resolve identities** — `materializeSelection` activity (SELECTION_AUTO_POPULATE):
+6. **Select, resolve identities, and resolve claimants** — `materializeSelection` activity (SELECTION_AUTO_POPULATE):
    - Load epoch by ID → get period_start/period_end (guard assertion)
    - Query receipts in epoch window that are unselected (no selection row) or unresolved (selection.user_id IS NULL)
    - For each source: batch resolve `platformUserId` → `userId` via `user_bindings` (provider-scoped)
    - INSERT new selection rows (included=true, userId=resolved or NULL)
    - UPDATE existing unresolved rows: set userId only (never touch included/weight_override_milli/note)
+   - **Claimant resolution**: for each selected receipt, insert draft `epoch_receipt_claimants` row via `upsertDraftClaimants()`. Default-author resolver: `claimantKey = user:{userId}` (resolved) or `identity:{source}:{platformUserId}` (unresolved). v0: single claimant per receipt, equal split.
 7. **Enrich (draft)** — `evaluateEpochDraft` activity:
    - Load selected receipts with metadata via `getSelectedReceiptsWithMetadata(epochId)`
    - Run each registered enricher (e.g., echo enricher aggregates receipt counts)
@@ -656,6 +688,7 @@ interface LedgerIngestRunV1 {
 8. **Compute allocations** — `computeAllocations` activity (unchanged, runs against selected receipts)
 9. **Ensure pool components** — `ensurePoolComponents` activity
 10. **Auto-close (at period end + grace):**
+    - `lockClaimantsForEpoch(epochId)` — copies all draft `epoch_receipt_claimants` rows to locked status (immutable after this point)
     - `buildLockedEvaluations({ epochId })` — same computation as draft, returns evaluations + `artifactsHash` without writing
     - `closeIngestionWithEvaluations({ epochId, evaluations, artifactsHash, ... })` — single transaction: insert locked evaluations + set `artifacts_hash` + pin config hashes + transition `open→review` (EVALUATION_FINAL_ATOMIC)
 
@@ -679,13 +712,15 @@ Input: `{ epochId, signature }` — `signerAddress` derived from SIWE session (n
 4. Verify at least one `base_issuance` pool component exists (POOL_REQUIRES_BASE)
 5. Verify signer is in scope's `approvers[]` AND matches pinned `approverSetHash` (APPROVERS_PER_SCOPE)
 6. Build canonical finalize message from epoch data, `ecrecover(message, signature)` — verify recovered address matches `signerAddress`
-7. Read locked claimant-share evaluation (fallback: rebuild from selected receipts)
-8. Read `epoch_review_subject_overrides` and compute canonical `epoch_final_claimant_allocations`
-9. Read pool components, compute `pool_total_credits = SUM(amount_credits)`
-10. `computeAttributionStatementLines(final_claimant_allocations, pool_total)` — BIGINT, largest-remainder
-11. Compute claimant-aware `final_allocation_set_hash`
-12. Atomic transaction: set `pool_total_credits` on epoch, update status to `'finalized'`, upsert final claimant allocations, insert epoch statement + statement signature
-13. Return statement
+7. Load locked `epoch_receipt_claimants` + selected receipts for the epoch
+8. `computeReceiptWeights(algoRef, receipts, weightConfig)` → per-receipt units
+9. `explodeToClaimants(receiptWeights, lockedClaimants)` → `FinalClaimantAllocation[]` (fails loud if any receipt lacks locked claimants)
+10. Persist `epoch_final_claimant_allocations` (canonical signed claimant units)
+11. Read pool components, compute `pool_total_credits = SUM(amount_credits)`
+12. `computeAttributionStatementLines(final_claimant_allocations, pool_total)` — BIGINT, largest-remainder
+13. Compute claimant-aware `final_allocation_set_hash`
+14. Atomic transaction: set `pool_total_credits` on epoch, update status to `'finalized'`, upsert final claimant allocations, insert epoch statement + statement signature
+15. Return statement
 
 Deterministic workflow ID: `ledger-finalize-{scopeId}-{epochId}`
 
@@ -744,7 +779,7 @@ The following are explicitly deferred from V0 and will be designed when needed:
 - **UI pages** — V1+
 - **DID/VC alignment** — V2+
 - **Automated webhook fast-path** (GitHub `handleWebhook`) — V1: real-time ingestion
-- **Formal `EpochEnricher` port** — V1: registration, dependency ordering between enrichers, lifecycle hooks. V0 calls enricher activities directly from the workflow.
+- **Formal `EpochEnricher` port** — V1: full executor dispatch via `resolveProfile()` + `dispatchAllocator()`. V0 calls enricher activities directly; plugin contracts scaffolded but executor not yet wired through them.
 - **Object storage for large evaluations** (`payload_ref`) — V1: when an evaluation exceeds 256KB inline threshold. V0: all payloads inline.
 - **AI quality scoring enricher** (`cogni.ai_scores.v0`) — future enricher, same `epoch_evaluations` table, different `evaluation_ref`
 
@@ -756,7 +791,8 @@ The following are explicitly deferred from V0 and will be designed when needed:
 | `packages/attribution-ledger/src/store.ts`                          | Store port interface with evaluation CRUD methods                         |
 | `packages/attribution-ledger/src/hashing.ts`                        | `canonicalJsonStringify`, `computeArtifactsHash`, `sha256OfCanonicalJson` |
 | `packages/attribution-ledger/src/enrichers/work-item-linker.ts`     | `extractWorkItemIds()` pure function + types                              |
-| `packages/attribution-ledger/src/allocation.ts`                     | Allocation algorithms (`weight-sum-v0`)                                   |
+| `packages/attribution-ledger/src/allocation.ts`                     | `computeReceiptWeights()`, `ReceiptForWeighting`, `ReceiptUnitWeight`     |
+| `packages/attribution-ledger/src/claimant-shares.ts`                | `explodeToClaimants()`, claimant domain types                             |
 | `packages/db-client/src/adapters/drizzle-attribution.adapter.ts`    | Drizzle adapter — all store port implementations                          |
 | `services/scheduler-worker/src/activities/ledger.ts`                | Temporal activities (attribution I/O)                                     |
 | `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` | `CollectEpochWorkflow` — pipeline orchestration                           |
@@ -776,7 +812,7 @@ Finalized statements now preserve claimant identity explicitly (`claimant_key`, 
 - Server-held signing keys
 - Full RBAC system (V0 uses per-scope approver allowlist)
 - Real-time streaming (poll-based collection sufficient for weekly epochs)
-- Formal enricher registration/plugin framework (V0 calls enricher activities directly)
+- Formal enricher registration/plugin framework (V0 calls enricher activities directly; plugin contracts scaffolded in `@cogni/attribution-pipeline-contracts`)
 - Payload shape standardization across enrichers (pipeline validates envelope only; payload is per-plugin, opaque)
 
 ## Related

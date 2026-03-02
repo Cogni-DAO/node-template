@@ -14,8 +14,11 @@
 // Allocation algorithm framework (pure, deterministic)
 export {
   computeProposedAllocations,
+  computeReceiptWeights,
   deriveAllocationAlgoRef,
   type ProposedAllocation,
+  type ReceiptForWeighting,
+  type ReceiptUnitWeight,
   type SelectedReceiptForAllocation,
   validateWeightConfig,
 } from "./allocation";
@@ -43,6 +46,7 @@ export {
   computeFinalClaimantAllocations,
   type ExpandedClaimantUnit,
   expandClaimantUnits,
+  explodeToClaimants,
   type FinalClaimantAllocation,
   parseClaimantSharesPayload,
   type ReviewOverrideSnapshot,
@@ -136,11 +140,13 @@ export type {
   IngestionReceipt,
   InsertFinalClaimantAllocationParams,
   InsertPoolComponentParams,
+  InsertReceiptClaimantsParams,
   InsertReceiptParams,
   InsertSelectionAutoParams,
   InsertSignatureParams,
   InsertStatementParams,
   InsertUserProjectionParams,
+  ReceiptClaimantsRecord,
   ReviewSubjectOverrideRecord,
   SelectedReceiptWithMetadata,
   UnselectedReceipt,

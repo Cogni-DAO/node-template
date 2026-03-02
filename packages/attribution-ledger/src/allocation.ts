@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/attribution-ledger/allocation`
- * Purpose: Versioned allocation algorithm framework — pure function dispatch for computing proposed allocations from selected receipts.
+ * Purpose: Versioned allocation algorithm framework — pure function dispatch for computing per-receipt weight allocations from selected receipts.
  * Scope: Pure functions. Does not perform I/O or hold state. Deterministic output for same inputs.
  * Invariants:
  * - ALLOCATION_ALGO_VERSIONED: dispatch by algoRef; same inputs → identical output.
@@ -28,6 +28,71 @@ export interface ProposedAllocation {
   readonly userId: string;
   readonly proposedUnits: bigint;
   readonly activityCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// Receipt-weight allocation model (replaces user-scoped allocation for pipeline)
+// ---------------------------------------------------------------------------
+
+/** Allocator input — per-receipt, no userId, no claimant awareness. */
+export interface ReceiptForWeighting {
+  readonly receiptId: string;
+  readonly source: string;
+  readonly eventType: string;
+  readonly included: boolean;
+  readonly weightOverrideMilli: bigint | null;
+}
+
+/** Allocator output — per-receipt weight, not per-user. */
+export interface ReceiptUnitWeight {
+  readonly receiptId: string;
+  readonly units: bigint;
+}
+
+/**
+ * Compute per-receipt weights using the named algorithm version.
+ * Pure function — no I/O, deterministic output for same inputs.
+ * Throws if algoRef is unknown.
+ */
+export function computeReceiptWeights(
+  algoRef: string,
+  receipts: readonly ReceiptForWeighting[],
+  weightConfig: Record<string, number>
+): ReceiptUnitWeight[] {
+  switch (algoRef) {
+    case "weight-sum-v0":
+      return receiptWeightSumV0(receipts, weightConfig);
+    default:
+      throw new Error(`Unknown allocation algorithm: ${algoRef}`);
+  }
+}
+
+/**
+ * V0 receipt-weight algorithm — weight-sum-v0:
+ * 1. Filter to included === true
+ * 2. For each receipt: weight = weightOverrideMilli ?? BigInt(weightConfig[`${source}:${eventType}`] ?? 0)
+ * 3. Return sorted by receiptId (deterministic)
+ */
+function receiptWeightSumV0(
+  receipts: readonly ReceiptForWeighting[],
+  weightConfig: Record<string, number>
+): ReceiptUnitWeight[] {
+  const result: ReceiptUnitWeight[] = [];
+
+  for (const receipt of receipts) {
+    if (!receipt.included) continue;
+
+    const configKey = `${receipt.source}:${receipt.eventType}`;
+    const weight =
+      receipt.weightOverrideMilli ?? BigInt(weightConfig[configKey] ?? 0);
+
+    result.push({
+      receiptId: receipt.receiptId,
+      units: weight,
+    });
+  }
+
+  return result.sort((a, b) => a.receiptId.localeCompare(b.receiptId));
 }
 
 /**

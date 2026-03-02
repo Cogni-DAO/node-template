@@ -47,10 +47,10 @@ Stable framework package for the attribution pipeline plugin architecture. Defin
   - `EnricherLogger` — Minimal logger interface (Pino-compatible)
   - `EnricherAdapterRegistry` — ReadonlyMap<evaluationRef, EnricherAdapter>
   - `AllocatorDescriptor` — algoRef, requiredEvaluationRefs[], compute()
-  - `AllocationContext` — events, weightConfig, evaluations map, profileConfig
+  - `AllocationContext` — receipts (ReceiptForWeighting[]), weightConfig, evaluations map, profileConfig
   - `AllocatorRegistry` — ReadonlyMap<algoRef, AllocatorDescriptor>
-  - `dispatchAllocator()` — Validate required evaluations, call compute()
-  - `PipelineProfile` — pluginEnricherRefs[], allocatorRef, epochKind
+  - `dispatchAllocator()` — Validate required evaluations, call compute() → ReceiptUnitWeight[]
+  - `PipelineProfile` — enricherRefs[], allocatorRef, epochKind
   - `EnricherRef` — evaluationRef + dependsOn[]
   - `ProfileRegistry` — ReadonlyMap<profileId, PipelineProfile>
   - `resolveProfile()` — Lookup profile by credit_estimate_algo or throw
@@ -86,7 +86,7 @@ pnpm --filter @cogni/attribution-pipeline-contracts build
 
 ## Dependencies
 
-- **Internal:** `@cogni/attribution-ledger` (domain types only: AttributionStore, ProposedAllocation, SelectedReceiptForAllocation)
+- **Internal:** `@cogni/attribution-ledger` (domain types only: AttributionStore, ReceiptForWeighting, ReceiptUnitWeight)
 - **External:** none
 
 ## Change Protocol

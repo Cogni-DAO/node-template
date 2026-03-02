@@ -38,11 +38,13 @@ import type {
   IngestionReceipt,
   InsertFinalClaimantAllocationParams,
   InsertPoolComponentParams,
+  InsertReceiptClaimantsParams,
   InsertReceiptParams,
   InsertSelectionAutoParams,
   InsertSignatureParams,
   InsertStatementParams,
   InsertUserProjectionParams,
+  ReceiptClaimantsRecord,
   ReviewSubjectOverrideRecord,
   SelectedReceiptForAllocation,
   SelectedReceiptForAttribution,
@@ -62,6 +64,7 @@ import {
   epochEvaluations,
   epochFinalClaimantAllocations,
   epochPoolComponents,
+  epochReceiptClaimants,
   epochReviewSubjectOverrides,
   epochSelection,
   epochStatementSignatures,
@@ -1679,5 +1682,89 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           isNull(epochSelection.userId)
         )
       );
+  }
+
+  // -------------------------------------------------------------------------
+  // Receipt claimants
+  // -------------------------------------------------------------------------
+
+  async upsertDraftClaimants(
+    params: InsertReceiptClaimantsParams
+  ): Promise<void> {
+    await this.db
+      .insert(epochReceiptClaimants)
+      .values({
+        nodeId: params.nodeId,
+        epochId: params.epochId,
+        receiptId: params.receiptId,
+        status: "draft",
+        resolverRef: params.resolverRef,
+        algoRef: params.algoRef,
+        inputsHash: params.inputsHash,
+        claimantsJson: [...params.claimantKeys],
+        createdBy: params.createdBy,
+      })
+      .onConflictDoUpdate({
+        target: [
+          epochReceiptClaimants.nodeId,
+          epochReceiptClaimants.epochId,
+          epochReceiptClaimants.receiptId,
+        ],
+        targetWhere: sql`${epochReceiptClaimants.status} = 'draft'`,
+        set: {
+          resolverRef: params.resolverRef,
+          algoRef: params.algoRef,
+          inputsHash: params.inputsHash,
+          claimantsJson: [...params.claimantKeys],
+          createdBy: params.createdBy,
+        },
+      });
+  }
+
+  async lockClaimantsForEpoch(epochId: bigint): Promise<number> {
+    await this.resolveEpochScoped(epochId);
+
+    const updated = await this.db
+      .update(epochReceiptClaimants)
+      .set({ status: "locked" })
+      .where(
+        and(
+          eq(epochReceiptClaimants.epochId, epochId),
+          eq(epochReceiptClaimants.status, "draft")
+        )
+      )
+      .returning({ id: epochReceiptClaimants.id });
+
+    return updated.length;
+  }
+
+  async loadLockedClaimants(
+    epochId: bigint
+  ): Promise<ReceiptClaimantsRecord[]> {
+    await this.resolveEpochScoped(epochId);
+
+    const rows = await this.db
+      .select()
+      .from(epochReceiptClaimants)
+      .where(
+        and(
+          eq(epochReceiptClaimants.epochId, epochId),
+          eq(epochReceiptClaimants.status, "locked")
+        )
+      );
+
+    return rows.map((row) => ({
+      id: row.id,
+      nodeId: row.nodeId,
+      epochId: row.epochId,
+      receiptId: row.receiptId,
+      status: row.status as "locked",
+      resolverRef: row.resolverRef,
+      algoRef: row.algoRef,
+      inputsHash: row.inputsHash,
+      claimantKeys: row.claimantsJson ?? [],
+      createdAt: row.createdAt,
+      createdBy: row.createdBy,
+    }));
   }
 }

@@ -3,8 +3,8 @@
 
 /**
  * Module: `@cogni/attribution-ledger/claimant-shares`
- * Purpose: Defines the canonical claimant-share attribution shape and deterministic expansion/computation helpers.
- * Scope: Defines claimant-share payloads, a default receipt-backed builder, deterministic unit splitting, and claimant-aware proportional credit computation. Does not perform I/O or plugin-specific enrichment.
+ * Purpose: Claimant domain types, deterministic unit splitting, and the explodeToClaimants() join function for receipt-weight × claimant allocation.
+ * Scope: Defines claimant types (user/identity), explodeToClaimants() for joining receipt weights with locked claimant records, deterministic unit splitting with largest-remainder rounding, and claimant-aware proportional credit computation. Does not perform I/O.
  * Invariants:
  * - CLAIMANTS_ARE_PLURAL: every attribution subject carries `claimantShares[]`, even when only one claimant is present.
  * - CLAIMANTS_CAN_BE_UNRESOLVED: identity claimants may reference provider + external_id without a resolved user_id.
@@ -441,6 +441,113 @@ export function computeAttributionStatementLines(
       };
     }
   );
+}
+
+// ---------------------------------------------------------------------------
+// Receipt-weight × claimants join (explodeToClaimants)
+// ---------------------------------------------------------------------------
+
+import type { ReceiptUnitWeight } from "./allocation";
+import type { ReceiptClaimantsRecord } from "./store";
+
+/**
+ * Core pure function: receipt weights × claimants → claimant allocations.
+ * v0: equal split among claimantKeys. Future: explicit PPM shares.
+ * - Joins by receiptId
+ * - For each receipt: splits units equally among claimantKeys (largest-remainder for rounding)
+ * - Groups by claimantKey across all receipts, sums units
+ * - Returns sorted by claimantKey (deterministic)
+ * - THROWS if any receiptId in weights has no matching claimants record
+ */
+export function explodeToClaimants(
+  receiptWeights: readonly ReceiptUnitWeight[],
+  claimants: readonly ReceiptClaimantsRecord[]
+): FinalClaimantAllocation[] {
+  const claimantsByReceipt = new Map<string, ReceiptClaimantsRecord>();
+  for (const record of claimants) {
+    claimantsByReceipt.set(record.receiptId, record);
+  }
+
+  // Accumulator: claimantKey → { claimant, totalUnits, receiptIds }
+  const grouped = new Map<
+    string,
+    {
+      claimant: AttributionClaimant;
+      totalUnits: bigint;
+      receiptIds: Set<string>;
+    }
+  >();
+
+  for (const weight of receiptWeights) {
+    const record = claimantsByReceipt.get(weight.receiptId);
+    if (!record) {
+      throw new Error(
+        `explodeToClaimants: receipt "${weight.receiptId}" has no matching claimants record`
+      );
+    }
+
+    const keys = record.claimantKeys;
+    if (keys.length === 0) continue;
+
+    // Equal split with largest-remainder rounding
+    const perClaimant = weight.units / BigInt(keys.length);
+    let remainder = weight.units - perClaimant * BigInt(keys.length);
+
+    // Sort keys for deterministic remainder assignment
+    const sortedKeys = [...keys].sort();
+
+    for (const ck of sortedKeys) {
+      const extra = remainder > 0n ? 1n : 0n;
+      if (remainder > 0n) remainder--;
+
+      const units = perClaimant + extra;
+      const claimant = parseClaimantKey(ck);
+
+      const existing = grouped.get(ck);
+      if (existing) {
+        existing.totalUnits += units;
+        existing.receiptIds.add(weight.receiptId);
+      } else {
+        grouped.set(ck, {
+          claimant,
+          totalUnits: units,
+          receiptIds: new Set([weight.receiptId]),
+        });
+      }
+    }
+  }
+
+  return [...grouped.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, entry]) => ({
+      claimant: entry.claimant,
+      finalUnits: entry.totalUnits,
+      receiptIds: [...entry.receiptIds].sort(),
+    }));
+}
+
+/**
+ * Parse a claimant key string back to an AttributionClaimant.
+ * Format: "user:<uuid>" or "identity:<provider>:<externalId>"
+ */
+function parseClaimantKey(key: string): AttributionClaimant {
+  if (key.startsWith("user:")) {
+    return { kind: "user", userId: key.slice(5) };
+  }
+  if (key.startsWith("identity:")) {
+    const rest = key.slice(9);
+    const colonIdx = rest.indexOf(":");
+    if (colonIdx === -1) {
+      throw new Error(`Invalid identity claimant key: "${key}"`);
+    }
+    return {
+      kind: "identity",
+      provider: rest.slice(0, colonIdx),
+      externalId: rest.slice(colonIdx + 1),
+      providerLogin: null,
+    };
+  }
+  throw new Error(`Unknown claimant key format: "${key}"`);
 }
 
 // ---------------------------------------------------------------------------

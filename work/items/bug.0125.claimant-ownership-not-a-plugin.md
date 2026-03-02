@@ -2,7 +2,7 @@
 id: bug.0125
 type: bug
 title: Claimant ownership is bolted on as an enricher — should be a first-class pipeline phase
-status: needs_triage
+status: needs_merge
 priority: 1
 rank: 10
 estimate: 5
@@ -22,14 +22,15 @@ spec_refs:
 assignees: []
 credit:
 project: proj.transparent-credit-payouts
-branch:
-pr:
+branch: fix/bug0125-claimants
+pr: https://github.com/Cogni-DAO/node-template/pull/507
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-03-02
 updated: 2026-03-02
+
 labels: [architecture, attribution]
 external_refs:
 ---
@@ -143,6 +144,31 @@ Receipt (immutable fact, has platformUserId hint)
 - [ ] Single-claimant receipts (GitHub) work as the degenerate case
 - [ ] Multi-claimant receipts are natively supported
 - [ ] `pnpm check` passes
+
+## Review Feedback
+
+### Blocking: upsertDraftClaimants conflict target mismatch
+
+**File:** `packages/db-client/src/adapters/drizzle-attribution.adapter.ts:1707`
+
+The `onConflictDoUpdate` targets `(nodeId, epochId, receiptId, inputsHash)` matching the `inputs_uniq` index. When the same receipt gets a different `inputsHash` (identity resolves between runs — userId goes from null to a real UUID), the INSERT has no conflict on `inputs_uniq` but violates the `draft_uniq` partial index. Since ON CONFLICT doesn't cover that constraint, Postgres throws an unhandled unique constraint violation, crashing `materializeSelection`.
+
+**Fix:** Use raw SQL to target the partial index:
+
+```sql
+INSERT INTO epoch_receipt_claimants (...) VALUES (...)
+ON CONFLICT (node_id, epoch_id, receipt_id) WHERE status = 'draft'
+DO UPDATE SET resolver_ref = EXCLUDED.resolver_ref, algo_ref = EXCLUDED.algo_ref,
+  inputs_hash = EXCLUDED.inputs_hash, claimants_json = EXCLUDED.claimants_json,
+  created_by = EXCLUDED.created_by
+```
+
+### Non-blocking suggestions
+
+1. **lockClaimantsForEpoch N+1 + missing draft deletion** (`drizzle-attribution.adapter.ts:1723`): Replace per-row loop with batch `INSERT...SELECT`, then delete drafts. Comment says "then delete the draft" but delete is missing.
+2. **computeAllocations O(n\*m)** (`ledger.ts:655`): Build a Map from receiptWeights before the loop.
+3. **Dead code**: `buildDefaultReceiptClaimantSharesPayload`, `parseClaimantSharesPayload`, `expandClaimantUnits`, `computeFinalClaimantAllocations`, `computeProposedAllocations`, `ProposedAllocation` have zero external consumers. Follow-up task.
+4. **Missing test**: `materializeSelection` should verify `upsertDraftClaimants` is called for each receipt.
 
 ## Plan
 
