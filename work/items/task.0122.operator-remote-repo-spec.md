@@ -152,7 +152,19 @@ task.0099 covers the **node's own** DB tables (`node_meta`, scope_id columns on 
 
 ### Scopes change over time
 
-Per identity-model.md: `scope_id` is 1:N per node, declared in `.cogni/projects/*.yaml`. A node may add projects (new scopes), remove projects (scope removal), or change config (approvers, pool size). The operator must track these changes via periodic or event-driven re-sync.
+Per identity-model.md: `scope_id` is 1:N per node, declared in `.cogni/scopes/*.yaml` (pending rename from `.cogni/projects/`). A node may add scopes, remove scopes, or change config (approvers, pool size). The operator must track these changes via periodic or event-driven re-sync.
+
+### Alignment with `@cogni/repo-spec` package (task.0120)
+
+The landed `@cogni/repo-spec` package provides exactly what the `GitHubRepoSpecFetcher` needs:
+
+- `parseRepoSpec(string | unknown)` — accepts raw YAML string (from GitHub API base64 decode)
+- `extractNodeId(spec)` → `node_id` UUID for registration primary key
+- `extractLedgerConfig(spec)` → `{ activitySources, approvers, pool }` maps to `NodeScopeConfig`
+
+**Default scope model:** V0 repos declare a single scope at the top level of `repo-spec.yaml` (`scope_id` + `scope_key` fields). The `@cogni/repo-spec` parser treats these as optional — `extractLedgerConfig()` returns `null` when absent. A node with no scope config is valid: "registered, zero scopes to schedule" (e.g., gateway-only billing).
+
+**Multi-scope extension:** The parser currently handles one `repo-spec.yaml` → one scope. Multi-scope (`.cogni/scopes/*.yaml`) will require extending the parser to fetch and merge N manifests. The reconciliation logic in this task already assumes N scopes — no redesign needed, just an additive parser extension.
 
 ## Validation
 
