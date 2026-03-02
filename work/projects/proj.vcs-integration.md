@@ -42,6 +42,7 @@ Consolidate all VCS integration into this repo: a shared auth package (`packages
 | `packages/github-core/` — JWT, token cache, webhook verify, client factory            | Not Started | 2   | (create at P1 start) |
 | Dynamic installation ID resolution via `GET /repos/{owner}/{repo}/installation`       | Not Started | 0.5 | (create at P1 start) |
 | Token cache keyed by (app, installationId) with early-expiry refresh                  | Not Started | 0.5 | (create at P1 start) |
+| Node registration lifecycle — core port, webhook handler, scope reconciliation        | Not Started | 5   | task.0122            |
 | `services/git-daemon/` scaffold — main, config, health, Fastify, per-app webhook URLs | Not Started | 1   | (create at P1 start) |
 | Create Admin GitHub App (contents:write, admin:write, members:write)                  | Not Started | 0.5 | (create at P1 start) |
 | Review handler — PR review via graphExecutor                                          | Not Started | 3   | (create at P1 start) |

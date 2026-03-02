@@ -22,7 +22,7 @@ tags: [identity, architecture, governance]
 |          |                                                                      |                                          |
 | -------- | -------------------------------------------------------------------- | ---------------------------------------- |
 | **Spec** | [Node vs Operator Contract](./node-operator-contract.md)             | Node/Operator boundaries, scope_id intro |
-| **Spec** | [Epoch Ledger](./epoch-ledger.md)                                    | Ledger scoping by (node_id, scope_id)    |
+| **Spec** | [Attribution Ledger](./attribution-ledger.md)                        | Ledger scoping by (node_id, scope_id)    |
 | **Spec** | [User Identity + Account Bindings](./decentralized-user-identity.md) | user_id, user_bindings, identity_events  |
 | **Spec** | [Accounts Design](./accounts-design.md)                              | billing_account_id, credit ledger        |
 | **Spec** | [DAO Enforcement](./dao-enforcement.md)                              | dao_address, payment rails               |
@@ -155,12 +155,12 @@ actor_id (N) ──── (1) billing_account_id Multiple actors per tenant
 
 ### Composite Keys
 
-| Invariant           | Composite Key                                       | Spec Reference  |
-| ------------------- | --------------------------------------------------- | --------------- |
-| ONE_OPEN_EPOCH      | `(node_id, scope_id, status) WHERE status='open'`   | epoch-ledger.md |
-| EPOCH_WINDOW_UNIQUE | `(node_id, scope_id, period_start, period_end)`     | epoch-ledger.md |
-| ACTIVITY_IDEMPOTENT | `(node_id, id)` on activity_events                  | epoch-ledger.md |
-| CURSOR_PK           | `(node_id, scope_id, source, stream, source_scope)` | epoch-ledger.md |
+| Invariant           | Composite Key                                       | Spec Reference        |
+| ------------------- | --------------------------------------------------- | --------------------- |
+| ONE_OPEN_EPOCH      | `(node_id, scope_id, status) WHERE status='open'`   | attribution-ledger.md |
+| EPOCH_WINDOW_UNIQUE | `(node_id, scope_id, period_start, period_end)`     | attribution-ledger.md |
+| ACTIVITY_IDEMPOTENT | `(node_id, id)` on activity_events                  | attribution-ledger.md |
+| CURSOR_PK           | `(node_id, scope_id, source, stream, source_scope)` | attribution-ledger.md |
 
 ## Invariants
 
@@ -205,7 +205,7 @@ Provide a single, unambiguous reference for every identity primitive in the syst
 ## Related
 
 - [Node vs Operator Contract](./node-operator-contract.md) — Node/Operator boundaries, scope_id in definitions
-- [Epoch Ledger](./epoch-ledger.md) — Ledger scoping by (node_id, scope_id)
+- [Attribution Ledger](./attribution-ledger.md) — Ledger scoping by (node_id, scope_id)
 - [User Identity + Account Bindings](./decentralized-user-identity.md) — user_id, bindings, identity_events
 - [Accounts Design](./accounts-design.md) — billing_account_id, credit ledger
 - [DAO Enforcement](./dao-enforcement.md) — dao_address, repo-spec authority, payment rails

@@ -1,122 +1,174 @@
 ---
 id: task.0122
 type: task
-title: "Operator: fetch and parse repo-spec from installed Node repos via GitHub API"
+title: "Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation"
 status: needs_implement
 priority: 1
 rank: 2
-estimate: 2
-summary: "Add a GitHub API-based repo-spec fetcher to the operator plane so that when external projects install our GitHub App, we can read their `.cogni/repo-spec.yaml` and configure their tenant accordingly."
-outcome: "The operator can fetch, validate, and cache a parsed `RepoSpec` for any repo where the GitHub App is installed. Individual Nodes continue reading their own repo-spec from disk — this is operator-only infrastructure."
-spec_refs: node-operator-contract-spec
+estimate: 5
+summary: "Implement the operator-side node registration lifecycle: core port abstraction (VCS-agnostic), GitHub adapter for discovery via installation webhooks, remote repo-spec fetching, operator DB persistence (node + scope tables), and scope reconciliation with Temporal schedule management."
+outcome: "When an external project installs the Cogni GitHub App, the operator automatically discovers the node, fetches and parses its repo-spec, persists the registration, and creates epoch schedules for each declared scope. Config changes (push to .cogni/) trigger re-sync with scope reconciliation. The core registration port is VCS-agnostic — GitHub is one adapter."
+spec_refs: vcs-integration, node-operator-contract-spec, identity-model-spec
 assignees: derekg1729
 credit:
 project: proj.operator-plane
 branch:
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by: task.0120
 deploy_verified: false
 created: 2026-03-01
-updated: 2026-03-01
-labels: [operator, github-app, config, multi-tenant]
+updated: 2026-03-02
+labels: [operator, github-app, config, multi-tenant, registration]
 external_refs:
 ---
 
-# Operator: Fetch and Parse Repo-Spec from Installed Node Repos via GitHub API
+# Operator: Node Registration Lifecycle
 
 ## Context
 
-Our GitHub App is installed into external repos (Node deployments). Each Node authors its own `.cogni/repo-spec.yaml` declaring identity, payment rails, approvers, and governance config. Per **REPO_SPEC_AUTHORITY**: "Node authors `.cogni/repo-spec.yml`; Operator consumes snapshot+hash; Operator never invents policy."
+When an external project installs the Cogni GitHub App (or connects via any future VCS platform), the Operator needs to discover the node, read its configuration, and start running epoch schedules. Today, repo configuration is entirely env-var-driven (`GITHUB_REPOS`, hardcoded `node_id`/`scope_id` constants). This task replaces that static configuration with a dynamic, event-driven registration lifecycle.
 
-Today the app only reads repo-spec from **local disk** (`fs.readFileSync` at `process.cwd()/.cogni/repo-spec.yaml`). The GitHub App has installation tokens for each repo but **never fetches file contents** — it only queries activity metadata (PRs, reviews, issues) via GraphQL.
+**Key insight from the identity model:** The registration entity is the **node** (identified by `node_id`), not individual scopes. A node's scopes are 1:N and mutable over time — the operator discovers them by syncing the node's `.cogni/repo-spec.yaml` and `.cogni/projects/*.yaml` manifests. See [vcs-integration.md §Node Registration Lifecycle](../../docs/spec/vcs-integration.md#node-registration-lifecycle).
 
-For the operator plane (multi-tenant gateway, story.0116), we need to read repo-specs from _installed_ repos so we can:
+**Core design principle:** GitHub App installation is an **adapter**, not core. The registration port is VCS-agnostic. GitHub translates `installation_repositories.added` into a `NodeDiscoveryEvent`. Future GitLab, manual API, or on-chain triggers use the same core port.
 
-- Onboard tenants by reading their declared config (DAO wallet, payment rails, approvers)
-- Validate their repo-spec against our schemas before provisioning
-- Periodically sync config changes (repo-spec is governance-managed, may change over time)
-
-**This is operator-only infrastructure.** Individual Nodes continue reading their own repo-spec from disk via `src/shared/config/repoSpec.server.ts`. This task adds a _new_ code path used exclusively by the operator when servicing external Node installations.
+Per **REPO_SPEC_AUTHORITY**: "Node authors `.cogni/repo-spec.yml`; Operator consumes snapshot+hash; Operator never invents policy."
 
 ## Requirements
 
-### GitHub App permissions
+### Core registration port (VCS-agnostic)
 
-- [ ] Verify the GitHub App has `contents: read` permission. If not, document the required permission update (configured in GitHub's app settings UI, not in code).
+- [ ] `CapabilityRole` type — `"review" | "admin" | "contributor"`
+- [ ] `NodeDiscoveryEvent` type — trigger (including `vcs_app_removed`), platform, platformInstallationId, capabilityRole, repoRef
+- [ ] `NodeRegistration` type — nodeId, repoRef, repoSpecHash, scopes[]
+- [ ] `NodeCapability` type — nodeId, capabilityRole, platform, platformInstallationId, status
+- [ ] `NodeScopeConfig` type — scopeId, scopeKey, activitySources, approvers, poolConfig
+- [ ] `NodeRegistryPort` interface — upsertNode, getNode, getNodeByRepoRef, listActiveNodes, suspendNode, removeNode, upsertCapability, getCapability, listCapabilities, removeCapability
+- [ ] `RemoteRepoSpecFetcher` port interface — fetchRepoSpec(repoRef, auth?) → raw YAML string (VCS-agnostic: callers provide platform-specific auth)
+- [ ] All types live in a package (`packages/repo-spec/` or `packages/ingestion-core/`), not in a service
 
-### Remote repo-spec fetcher
+### GitHub adapter (discovery + fetch)
 
-- [ ] New module (likely in `services/scheduler-worker/src/adapters/` or a new operator-scoped location) that fetches `.cogni/repo-spec.yaml` from a repo via `octokit.repos.getContent({ owner, repo, path: ".cogni/repo-spec.yaml" })`
-- [ ] Uses existing GitHub App installation token infrastructure (`github-auth.ts` → `VcsTokenProvider`) — no new auth setup needed
-- [ ] Decodes the base64 content returned by GitHub API
-- [ ] Passes the raw YAML string to `parseRepoSpec()` from `@cogni/repo-spec` (task.0120)
-- [ ] Returns the validated, typed `RepoSpec` or a structured error (missing file, invalid YAML, schema validation failure)
+- [ ] Verify the GitHub App has `contents: read` permission. Document finding.
+- [ ] `GitHubRepoSpecFetcher` — implements `RemoteRepoSpecFetcher` using `octokit.repos.getContent({ path: ".cogni/repo-spec.yaml" })`
+- [ ] Uses existing `VcsTokenProvider` / `GitHubAppTokenProvider` — requests `capability: "review"` (least privilege for a read)
+- [ ] Decodes base64 content, passes raw YAML to `parseRepoSpec()` from `@cogni/repo-spec` (task.0120)
+- [ ] Error handling: 404 → "No .cogni/repo-spec.yaml found", 403 → "App lacks contents:read", invalid YAML → surfaces Zod errors
 
-### Error handling
+### Webhook handlers (MVP: Next.js API routes)
 
-- [ ] **Missing file** (404 from GitHub) — clear error: "No .cogni/repo-spec.yaml found in {owner}/{repo}"
-- [ ] **Invalid YAML** — surface Zod validation errors so the Node operator can fix their config
-- [ ] **Permission denied** (403) — clear error: "GitHub App lacks contents:read permission for {owner}/{repo}"
+- [ ] `POST /api/v1/webhooks/github/review` — Review App webhook route
+- [ ] `POST /api/v1/webhooks/github/admin` — Admin App webhook route
+- [ ] Each route verifies signature with its own `WEBHOOK_SECRET` (APP_ROUTE_BY_URL invariant)
+- [ ] Webhook URL determines `capabilityRole`: `/review` → `"review"`, `/admin` → `"admin"`
+- [ ] Handle `installation_repositories.added` → upsert capability + trigger registration flow (if first app for this node)
+- [ ] Handle `installation.deleted` → remove capability + check if any capabilities remain → suspend node if none
+- [ ] Handle `push` events (review route only) → check if `.cogni/**` files changed → trigger re-sync
+- [ ] Other event types: log and ignore (future handlers)
+
+### Operator DB persistence
+
+- [ ] Migration: `operator_node_registrations` table (node_id PK, repo_ref, repo_spec_hash, status, installed_at, last_synced_at)
+- [ ] Migration: `operator_node_capabilities` table (node_id + capability_role composite PK, platform, platform_install_id, status, installed_at)
+- [ ] Migration: `operator_node_scopes` table (node_id + scope_id composite PK, scope_key, config_snapshot JSONB, temporal_schedule_id, status, last_synced_at)
+- [ ] `DrizzleNodeRegistryAdapter` implementing `NodeRegistryPort` (including capability CRUD)
+- [ ] Soft-delete only — no purging of registration, capability, or scope rows
+
+### Scope reconciliation
+
+- [ ] On every sync: diff fetched scopes vs. cached `operator_node_scopes`
+- [ ] New scope → insert row, create Temporal schedule (CollectEpochWorkflow with scope's config)
+- [ ] Changed scope (config_snapshot differs) → update row, update Temporal schedule input
+- [ ] Removed scope (in DB but not in fetched spec) → mark 'removed', pause Temporal schedule
+- [ ] Unchanged (same repo_spec_hash) → no-op (SYNC_IDEMPOTENT)
 
 ### Tests
 
-- [ ] Unit test with mocked Octokit — happy path (valid repo-spec), 404, 403, invalid YAML
-- [ ] Integration note: can be tested against a real repo with `pnpm test:external` if desired (not required)
+- [ ] Unit: `GitHubRepoSpecFetcher` with mocked Octokit — happy path, 404, 403, invalid YAML
+- [ ] Unit: Scope reconciliation logic — new scope, changed scope, removed scope, no-op
+- [ ] Unit: Webhook signature verification (both review and admin routes)
+- [ ] Unit: `DrizzleNodeRegistryAdapter` — node upsert/get/suspend, capability upsert/get/remove, scope CRUD
+- [ ] Unit: Multi-app lifecycle — second app install doesn't duplicate node, uninstall one app doesn't affect other, last app removal suspends node
+- [ ] Unit: Capability-scoped token selection — requesting unavailable capability rejects (never escalates)
 
 ## Allowed Changes
 
-- `services/scheduler-worker/src/adapters/` — new fetcher module (or new operator-scoped directory)
-- `services/scheduler-worker/package.json` — add `@cogni/repo-spec` workspace dep (if not already added by task.0120)
-- `services/scheduler-worker/tests/` — new unit tests for remote fetcher
-- GitHub App settings (external, documented only) — `contents: read` permission if missing
+- `packages/repo-spec/src/` (or `packages/ingestion-core/src/`) — core types: NodeDiscoveryEvent, NodeRegistration, NodeCapability, NodeScopeConfig, NodeRegistryPort, RemoteRepoSpecFetcher, CapabilityRole
+- `services/scheduler-worker/src/adapters/` — GitHubRepoSpecFetcher implementation
+- `src/app/api/v1/webhooks/github/review/route.ts` — **new** Review App webhook handler
+- `src/app/api/v1/webhooks/github/admin/route.ts` — **new** Admin App webhook handler
+- `packages/db-schema/src/operator.ts` — **new** operator registry tables (registrations, capabilities, scopes)
+- `packages/db-client/src/adapters/` — DrizzleNodeRegistryAdapter
+- `src/adapters/server/db/migrations/` — new migration for operator tables
+- `services/scheduler-worker/package.json` — add `@cogni/repo-spec` dep (if not already from task.0120)
+- GitHub App settings (external, documented only) — verify `contents: read`
 
 ## Plan
 
-- [ ] Step 1: Verify GitHub App permissions — check if `contents: read` is already configured. Document finding.
-- [ ] Step 2: Create remote repo-spec fetcher module — uses existing Octokit client + installation tokens, calls `repos.getContent`, decodes base64, pipes to `parseRepoSpec()`.
-- [ ] Step 3: Write unit tests — mock Octokit responses for happy path, 404, 403, malformed YAML.
-- [ ] Step 4: `pnpm check`, file headers, update work item status.
+- [ ] Step 1: Core types — Define `CapabilityRole`, `NodeDiscoveryEvent`, `NodeRegistration`, `NodeCapability`, `NodeScopeConfig`, `NodeRegistryPort`, `RemoteRepoSpecFetcher` in packages. Pure types, no implementations.
+- [ ] Step 2: GitHub fetcher — `GitHubRepoSpecFetcher` using Octokit + existing token provider (requests `capability: "review"`). Unit tests with mocked responses.
+- [ ] Step 3: Operator DB tables — Migration for `operator_node_registrations` + `operator_node_capabilities` + `operator_node_scopes`. Drizzle schema in `packages/db-schema/src/operator.ts`.
+- [ ] Step 4: Registry adapter — `DrizzleNodeRegistryAdapter` implementing `NodeRegistryPort` (including capability CRUD). Unit tests for node, capability, and scope operations.
+- [ ] Step 5: Scope reconciliation — Pure function that diffs fetched vs. cached scopes, returns a list of actions (create/update/remove). Unit tests for all cases.
+- [ ] Step 6: Webhook handlers — Two routes (`/webhooks/github/review` + `/webhooks/github/admin`). Each verifies its own signature. URL determines capabilityRole. Event dispatch: install → upsert capability + register node if first app, push → re-sync, uninstall → remove capability + check remaining. Unit tests including multi-app lifecycle.
+- [ ] Step 7: Temporal schedule wiring — On scope create/update/remove, create/update/pause the corresponding `CollectEpochWorkflow` schedule.
+- [ ] Step 8: `pnpm check`, file headers, AGENTS.md, update work item status.
 
 ## Design Notes
 
-### Node vs Operator boundary
+### Why core types are VCS-agnostic
 
-This is a clean operator-only concern. The fetch path is:
+The `NodeRegistryPort` and `RemoteRepoSpecFetcher` interfaces have no GitHub/Octokit types. GitHub is one adapter. Future adapters:
+- **GitLab:** OAuth token + `RepositoryFiles.show()` API
+- **Manual:** `POST /api/v1/operator/nodes/register` with YAML body
+- **On-chain:** DAO formation event triggers discovery via event listener
 
-```
-Operator receives GitHub App installation event
-  → resolves installation token (existing infra)
-  → fetches .cogni/repo-spec.yaml via GitHub Contents API
-  → parseRepoSpec(yamlString) via @cogni/repo-spec package
-  → provisions tenant config from validated RepoSpec
-```
+The adapter translates a platform-specific event into a `NodeDiscoveryEvent`, then the core registration flow is identical.
 
-Nodes never use this path. They read from disk. The `@cogni/repo-spec` package (task.0120) is the shared layer — same Zod schemas, same types, different I/O.
+### Multiple GitHub Apps per node
+
+A node may install the Review App (read/review), the Admin App (write/admin), or both. Each is a separate GitHub App with a separate `installation_id`, separate webhook URL, and separate token. The registration model separates identity (registrations) from auth credentials (capabilities):
+
+- **Identity is upserted once** — the first app install triggers node registration via repo-spec fetch
+- **Capabilities are tracked per-app** — each install/uninstall updates `operator_node_capabilities`
+- **Token selection is capability-scoped** — workflows declare which `capabilityRole` they need; the token provider resolves to the exact installation_id. CAPABILITY_SCOPED_AUTH ensures a workflow designed for read-only access never accidentally gets a write token.
+
+### Why webhook lives in Next.js (not git-daemon)
+
+`services/git-daemon/` doesn't exist yet (P1 in proj.vcs-integration). The webhook handler needs DB access (operator tables) and the scheduler API. The Next.js app already has both. When git-daemon is built, the handler migrates there — the core types and registry adapter don't change.
 
 ### Why `repos.getContent` and not a git clone
 
 - We need one file, not a full checkout
-- `getContent` returns base64-encoded file contents for files up to 1MB — more than sufficient for a YAML config
+- `getContent` returns base64-encoded file contents for files up to 1MB — sufficient for YAML config
 - Uses the same installation token we already have — no additional auth
 - No disk I/O on the operator side
+
+### Relationship to task.0099
+
+task.0099 covers the **node's own** DB tables (`node_meta`, scope_id columns on epochs). That's a node knowing itself. This task covers the **operator's** tables for tracking other nodes. Different databases, different concerns, no overlap.
+
+### Scopes change over time
+
+Per identity-model.md: `scope_id` is 1:N per node, declared in `.cogni/projects/*.yaml`. A node may add projects (new scopes), remove projects (scope removal), or change config (approvers, pool size). The operator must track these changes via periodic or event-driven re-sync.
 
 ## Validation
 
 **Command:**
 
 ```bash
-pnpm check && pnpm test services/scheduler-worker/tests/<fetcher-test>.ts
+pnpm check && pnpm test -- --grep "registration\|repo-spec-fetch\|webhook"
 ```
 
-**Expected:** All tests pass. Fetcher correctly parses valid repo-specs and surfaces clear errors for missing/invalid configs.
+**Expected:** All tests pass. Registration flow works end-to-end from webhook → fetch → persist → schedule.
 
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0122` linked in PR body
-- [ ] **Spec:** REPO_SPEC_AUTHORITY upheld — operator consumes, never invents policy
-- [ ] **Tests:** mocked Octokit tests for all error cases
+- [ ] **Spec:** REPO_SPEC_AUTHORITY, REGISTRATION_NODE_KEYED, REGISTRATION_VCS_AGNOSTIC, CAPABILITY_SCOPED_AUTH, CAPABILITY_INDEPENDENT, SCOPE_RECONCILIATION, SYNC_IDEMPOTENT upheld
+- [ ] **Tests:** fetcher, reconciliation, webhook signature (both routes), registry adapter, multi-app lifecycle, capability-scoped token rejection
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links

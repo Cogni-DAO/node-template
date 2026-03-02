@@ -38,6 +38,7 @@ This task is a **prerequisite for multi-scope support**. Without it, adding a se
 
 ## Requirements
 
+- Scopes may be discovered dynamically via operator node registration (task.0122 §Scope Reconciliation), not only known at boot time. The routing layer must not assume a static set of scopes.
 - All epoch endpoints move under `/api/v1/attribution/scopes/[scopeId]/epochs/[id]/...`
 - Public epoch endpoints move under `/api/v1/public/attribution/scopes/[scopeId]/epochs/[id]/...`
 - The `scopeId` URL param is validated (UUID format) and used to construct the adapter per-request
