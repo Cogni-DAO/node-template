@@ -19,7 +19,7 @@ import { resolveProfile } from "../src/profile";
 const testProfile: PipelineProfile = {
   profileId: "test-v0.0",
   label: "Test Profile",
-  enricherRefs: [{ evaluationRef: "test.echo.v0", dependsOn: [] }],
+  enricherRefs: [{ enricherRef: "test.echo.v0", dependsOnEvaluations: [] }],
   allocatorRef: "weight-sum-v0",
   epochKind: "activity",
 };

@@ -231,10 +231,10 @@ attribution_pipeline: cogni-v0.0 ──► resolveProfile("cogni-v0.0")
    export const COGNI_V0_1_PROFILE: PipelineProfile = {
      profileId: "cogni-v0.1",
      enricherRefs: [
-       { evaluationRef: "cogni.echo.v0", dependsOn: [] },
+       { enricherRef: "cogni.echo.v0", dependsOnEvaluations: [] },
        {
-         evaluationRef: "cogni.work_item_links.v0",
-         dependsOn: ["cogni.echo.v0"],
+         enricherRef: "cogni.work_item_links.v0",
+         dependsOnEvaluations: ["cogni.echo.v0"],
        },
      ],
      allocatorRef: "weight-sum-v0",

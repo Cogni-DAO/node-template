@@ -116,12 +116,10 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
 
     const evaluationRefs: string[] = [];
 
-    for (const enricherRef of profile.enricherRefs) {
-      const adapter = registries.enrichers.get(enricherRef.evaluationRef);
+    for (const ref of profile.enricherRefs) {
+      const adapter = registries.enrichers.get(ref.enricherRef);
       if (!adapter) {
-        throw new Error(
-          `Enricher adapter not found: ${enricherRef.evaluationRef}`
-        );
+        throw new Error(`Enricher adapter not found: ${ref.enricherRef}`);
       }
 
       const ctx: EnricherContext = {
@@ -195,12 +193,10 @@ export function createEnrichmentActivities(deps: EnrichmentActivityDeps) {
 
     const evaluations: UpsertEvaluationParamsWire[] = [];
 
-    for (const enricherRef of profile.enricherRefs) {
-      const adapter = registries.enrichers.get(enricherRef.evaluationRef);
+    for (const ref of profile.enricherRefs) {
+      const adapter = registries.enrichers.get(ref.enricherRef);
       if (!adapter) {
-        throw new Error(
-          `Enricher adapter not found: ${enricherRef.evaluationRef}`
-        );
+        throw new Error(`Enricher adapter not found: ${ref.enricherRef}`);
       }
 
       const ctx: EnricherContext = {

@@ -20,21 +20,21 @@ import type { EnricherRef } from "./profile";
  * the declared order is a valid topological sort.
  *
  * Throws on:
- * - Missing refs: a dependsOn entry references an evaluationRef not in the list
+ * - Missing refs: a dependsOnEvaluations entry references an enricherRef not in the list
  * - Cycles: the dependency graph contains a cycle
  * - Invalid order: the declared order violates the dependency graph (a dep appears after its dependent)
  */
 export function validateEnricherOrder(
-  evaluationRefs: readonly EnricherRef[]
+  enricherRefs: readonly EnricherRef[]
 ): void {
-  const refSet = new Set(evaluationRefs.map((r) => r.evaluationRef));
+  const refSet = new Set(enricherRefs.map((r) => r.enricherRef));
 
   // 1. Check for missing refs
-  for (const ref of evaluationRefs) {
-    for (const dep of ref.dependsOn) {
+  for (const ref of enricherRefs) {
+    for (const dep of ref.dependsOnEvaluations) {
       if (!refSet.has(dep)) {
         throw new Error(
-          `Enricher "${ref.evaluationRef}" depends on "${dep}" which is not in the effective enricher refs`
+          `Enricher "${ref.enricherRef}" depends on "${dep}" which is not in the effective enricher refs`
         );
       }
     }
@@ -46,14 +46,14 @@ export function validateEnricherOrder(
   const DONE = 2;
 
   const state = new Map<string, number>();
-  for (const ref of evaluationRefs) {
-    state.set(ref.evaluationRef, UNVISITED);
+  for (const ref of enricherRefs) {
+    state.set(ref.enricherRef, UNVISITED);
   }
 
-  // Build adjacency list (evaluationRef → dependsOn[])
+  // Build adjacency list (enricherRef → dependsOnEvaluations[])
   const deps = new Map<string, readonly string[]>();
-  for (const ref of evaluationRefs) {
-    deps.set(ref.evaluationRef, ref.dependsOn);
+  for (const ref of enricherRefs) {
+    deps.set(ref.enricherRef, ref.dependsOnEvaluations);
   }
 
   function visit(node: string, path: string[]): void {
@@ -73,31 +73,31 @@ export function validateEnricherOrder(
     state.set(node, DONE);
   }
 
-  for (const ref of evaluationRefs) {
-    visit(ref.evaluationRef, []);
+  for (const ref of enricherRefs) {
+    visit(ref.enricherRef, []);
   }
 
   // 3. Check that declared order respects dependencies
   // Each enricher's dependencies must appear before it in the array
   const positionOf = new Map<string, number>();
-  for (let i = 0; i < evaluationRefs.length; i++) {
-    const ref = evaluationRefs[i];
+  for (let i = 0; i < enricherRefs.length; i++) {
+    const ref = enricherRefs[i];
     if (ref) {
-      positionOf.set(ref.evaluationRef, i);
+      positionOf.set(ref.enricherRef, i);
     }
   }
 
-  for (const ref of evaluationRefs) {
-    const refPos = positionOf.get(ref.evaluationRef);
+  for (const ref of enricherRefs) {
+    const refPos = positionOf.get(ref.enricherRef);
     if (refPos === undefined) continue;
 
-    for (const dep of ref.dependsOn) {
+    for (const dep of ref.dependsOnEvaluations) {
       const depPos = positionOf.get(dep);
       if (depPos === undefined) continue; // already caught by missing ref check
 
       if (depPos >= refPos) {
         throw new Error(
-          `Enricher "${ref.evaluationRef}" depends on "${dep}" but "${dep}" appears after it in the declared order (position ${depPos} >= ${refPos})`
+          `Enricher "${ref.enricherRef}" depends on "${dep}" but "${dep}" appears after it in the declared order (position ${depPos} >= ${refPos})`
         );
       }
     }

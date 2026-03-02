@@ -159,15 +159,16 @@ interface PipelineProfile {
 }
 
 interface EnricherRef {
-  /** The evaluationRef that identifies this enricher (e.g., "cogni.echo.v0"). */
-  readonly evaluationRef: string;
+  /** Identifies this enricher (e.g., "cogni.echo.v0"). */
+  readonly enricherRef: string;
 
   /**
-   * Evaluation refs this enricher depends on (must complete before this one runs).
+   * Evaluation refs that must exist before this enricher runs.
+   * Dependencies are evaluation outputs, not enricher identities.
    * Empty array = no dependencies, can run first.
    * The framework validates the DAG at profile registration — cycles throw.
    */
-  readonly dependsOn: readonly string[];
+  readonly dependsOnEvaluations: readonly string[];
 }
 ```
 
@@ -265,7 +266,7 @@ interface EnricherContext {
 type EnricherAdapterRegistry = ReadonlyMap<string, EnricherAdapter>;
 ```
 
-The executor iterates `profile.enricherRefs` in declared order (respecting `dependsOn`), resolves each from the registry, and calls `evaluateDraft()` or `buildLocked()`. The executor owns no enricher-specific logic.
+The executor iterates `profile.enricherRefs` in declared order (respecting `dependsOnEvaluations`), resolves each from the registry, and calls `evaluateDraft()` or `buildLocked()`. The executor owns no enricher-specific logic.
 
 ### Allocator Interface
 
@@ -322,13 +323,13 @@ The `weight-sum-v0` descriptor (in the plugins package) wraps `computeReceiptWei
 
 Defined in `@cogni/attribution-pipeline-contracts/src/ordering.ts` (framework).
 
-Enricher execution order is **explicit**, not implicit. Each `EnricherRef` in a profile declares its `dependsOn[]` — the evaluation refs that must complete before it runs. The framework validates the dependency graph at profile registration time:
+Enricher execution order is **explicit**, not implicit. Each `EnricherRef` in a profile declares its `dependsOnEvaluations[]` — the evaluation refs that must exist before it runs. The framework validates the dependency graph at profile registration time:
 
-1. **Cycle detection** — topological sort of `dependsOn` edges. Cycles throw at registration, not at runtime.
-2. **Missing ref detection** — every `dependsOn` entry must reference an `evaluationRef` that exists in the same profile's `enricherRefs`. Dangling refs throw at registration.
+1. **Cycle detection** — topological sort of `dependsOnEvaluations` edges. Cycles throw at registration, not at runtime.
+2. **Missing ref detection** — every `dependsOnEvaluations` entry must reference an `enricherRef` that exists in the same profile's `enricherRefs`. Dangling refs throw at registration.
 3. **Execution order** — the executor runs enrichers in the order declared by `enricherRefs`, which must be a valid topological order of the dependency graph. If the declared order violates dependencies, registration throws.
 
-For `cogni-v0.0`, echo is the only enricher with empty `dependsOn`. Claimant resolution is a separate first-class pipeline phase (via `epoch_receipt_claimants` table), not an enricher. Future profiles with cross-enricher dependencies (e.g., `ai_scores` depends on `work_item_links`) declare them explicitly.
+For `cogni-v0.0`, echo is the only enricher with empty `dependsOnEvaluations`. Claimant resolution is a separate first-class pipeline phase (via `epoch_receipt_claimants` table), not an enricher. Future profiles with cross-enricher dependencies (e.g., `ai_scores` depends on `work_item_links`) declare them explicitly.
 
 ### Quarterly Review — Same Lifecycle, Different Profile
 
@@ -385,7 +386,7 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 | PROFILE_IMMUTABLE_PUBLISH_NEW | Profiles are semver'd and **never mutated** after publication. To change enricher composition or allocator selection, publish a new profile version (e.g., `cogni-v0.0` → `cogni-v0.1`). Operators upgrade by changing `attribution_pipeline` in `repo-spec.yaml`.                                                     |
 | PROFILE_SELECTS_ENRICHERS     | The profile's `enricherRefs` array is the **sole authority** for which enrichers run during an epoch. The executor iterates this array and dispatches to the matching `EnricherAdapter`. Adding a new enricher to a pipeline = adding its ref to a new profile version.                                                |
 | PROFILE_SELECTS_ALLOCATOR     | The profile's `allocatorRef` is the **sole authority** for which allocation algorithm runs. Replaces `deriveAllocationAlgoRef()`. The allocator ref is also pinned on the epoch at closeIngestion (per ALLOCATION_ALGO_PINNED in attribution-ledger spec).                                                             |
-| ENRICHER_ORDER_EXPLICIT       | Enricher execution order is declared in the profile's `enricherRefs` array. Each entry may declare `dependsOn[]` refs. The framework validates the DAG at profile registration: cycles throw, missing refs throw, declared order must be a valid topological sort. No implicit ordering.                               |
+| ENRICHER_ORDER_EXPLICIT       | Enricher execution order is declared in the profile's `enricherRefs` array. Each entry may declare `dependsOnEvaluations[]` refs. The framework validates the DAG at profile registration: cycles throw, missing refs throw, declared order must be a valid topological sort. No implicit ordering.                    |
 | EVALUATION_WRITE_VALIDATED    | Every evaluation write (draft or locked) must include `evaluationRef`, `algoRef`, `inputsHash`, `schemaRef`, and `payloadHash`. The framework validates all fields are present and non-empty. `schemaRef` identifies the payload shape version for forward compatibility (e.g., `"cogni.echo.v0/1.0.0"`).              |
 | ENRICHER_DETERMINISTIC        | Given the same `(inputs + plugin version)`, an enricher must produce the same `(inputsHash, payloadHash, payloadJson)`. Determinism is enforced by including all relevant inputs in `inputsHash` computation. The `algoRef` + `schemaRef` on the evaluation record identify the exact plugin version that produced it. |
 | ALLOCATOR_NEEDS_DECLARED      | Each `AllocatorDescriptor` declares `requiredEvaluationRefs[]`. `dispatchAllocator()` validates that all required evaluation refs are present in `AllocationContext.evaluations` before calling `compute()`. Missing evaluations throw, not silently degrade.                                                          |

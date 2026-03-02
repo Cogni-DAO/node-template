@@ -20,14 +20,15 @@
  * A single enricher reference within a profile, with optional dependency declarations.
  */
 export interface EnricherRef {
-  /** The evaluationRef that identifies this enricher (e.g., "cogni.echo.v0"). */
-  readonly evaluationRef: string;
+  /** Identifies this enricher (e.g., "cogni.echo.v0"). */
+  readonly enricherRef: string;
 
   /**
-   * Evaluation refs this enricher depends on (must complete before this one runs).
+   * Evaluation refs that must exist before this enricher runs.
+   * Dependencies are evaluation outputs, not enricher identities.
    * Empty array = no dependencies, can run first.
    */
-  readonly dependsOn: readonly string[];
+  readonly dependsOnEvaluations: readonly string[];
 }
 
 /**
