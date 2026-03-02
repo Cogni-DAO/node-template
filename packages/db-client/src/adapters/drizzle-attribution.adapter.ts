@@ -1709,11 +1709,12 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           epochReceiptClaimants.nodeId,
           epochReceiptClaimants.epochId,
           epochReceiptClaimants.receiptId,
-          epochReceiptClaimants.inputsHash,
         ],
+        targetWhere: sql`${epochReceiptClaimants.status} = 'draft'`,
         set: {
           resolverRef: params.resolverRef,
           algoRef: params.algoRef,
+          inputsHash: params.inputsHash,
           claimantsJson: [...params.claimantKeys],
           createdBy: params.createdBy,
         },
@@ -1723,37 +1724,18 @@ export class DrizzleAttributionAdapter implements AttributionStore {
   async lockClaimantsForEpoch(epochId: bigint): Promise<number> {
     await this.resolveEpochScoped(epochId);
 
-    // For each draft row, insert a locked copy, then delete the draft
-    const drafts = await this.db
-      .select()
-      .from(epochReceiptClaimants)
+    const updated = await this.db
+      .update(epochReceiptClaimants)
+      .set({ status: "locked" })
       .where(
         and(
           eq(epochReceiptClaimants.epochId, epochId),
           eq(epochReceiptClaimants.status, "draft")
         )
-      );
+      )
+      .returning({ id: epochReceiptClaimants.id });
 
-    if (drafts.length === 0) return 0;
-
-    for (const draft of drafts) {
-      await this.db
-        .insert(epochReceiptClaimants)
-        .values({
-          nodeId: draft.nodeId,
-          epochId: draft.epochId,
-          receiptId: draft.receiptId,
-          status: "locked",
-          resolverRef: draft.resolverRef,
-          algoRef: draft.algoRef,
-          inputsHash: draft.inputsHash,
-          claimantsJson: draft.claimantsJson,
-          createdBy: draft.createdBy,
-        })
-        .onConflictDoNothing();
-    }
-
-    return drafts.length;
+    return updated.length;
   }
 
   async loadLockedClaimants(

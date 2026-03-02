@@ -649,12 +649,13 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
     // 3. Aggregate into user projections for the review UI
     //    Group by userId from selection rows (existing pattern for projections)
+    const weightByReceipt = new Map(
+      receiptWeights.map((w) => [w.receiptId, w])
+    );
     const userUnits = new Map<string, { units: bigint; count: number }>();
     for (const receipt of receipts) {
       if (!receipt.included) continue;
-      const weight = receiptWeights.find(
-        (w) => w.receiptId === receipt.receiptId
-      );
+      const weight = weightByReceipt.get(receipt.receiptId);
       if (!weight) continue;
       const existing = userUnits.get(receipt.userId) ?? {
         units: 0n,
