@@ -16,6 +16,8 @@
 import { computeReceiptWeights } from "@cogni/attribution-ledger";
 import type { AllocatorDescriptor } from "@cogni/attribution-pipeline-contracts";
 
+import { ECHO_EVALUATION_REF } from "../echo/descriptor";
+
 /** Algorithm ref for the weight-sum allocator. */
 export const WEIGHT_SUM_ALGO_REF = "weight-sum-v0";
 
@@ -27,7 +29,7 @@ export const WEIGHT_SUM_ALGO_REF = "weight-sum-v0";
  */
 export const WEIGHT_SUM_ALLOCATOR: AllocatorDescriptor = {
   algoRef: WEIGHT_SUM_ALGO_REF,
-  requiredEvaluationRefs: ["cogni.echo.v0"],
+  requiredEvaluationRefs: [ECHO_EVALUATION_REF],
   compute: async (context) => {
     return computeReceiptWeights(
       WEIGHT_SUM_ALGO_REF,

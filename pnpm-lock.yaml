@@ -694,6 +694,15 @@ importers:
 
   services/scheduler-worker:
     dependencies:
+      '@cogni/attribution-ledger':
+        specifier: workspace:*
+        version: link:../../packages/attribution-ledger
+      '@cogni/attribution-pipeline-contracts':
+        specifier: workspace:*
+        version: link:../../packages/attribution-pipeline-contracts
+      '@cogni/attribution-pipeline-plugins':
+        specifier: workspace:*
+        version: link:../../packages/attribution-pipeline-plugins
       '@cogni/db-client':
         specifier: workspace:*
         version: link:../../packages/db-client

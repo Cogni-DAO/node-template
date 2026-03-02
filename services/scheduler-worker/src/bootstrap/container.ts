@@ -19,6 +19,10 @@ import path from "node:path";
 
 import { createValidatedAttributionStore } from "@cogni/attribution-ledger";
 import {
+  createDefaultRegistries,
+  type DefaultRegistries,
+} from "@cogni/attribution-pipeline-plugins";
+import {
   DrizzleAttributionAdapter,
   DrizzleExecutionGrantWorkerAdapter,
   DrizzleScheduleRunAdapter,
@@ -105,6 +109,7 @@ function loadRepoSpecIdentity(): {
 export interface AttributionContainer {
   attributionStore: AttributionStore;
   sourceAdapters: ReadonlyMap<string, SourceAdapter>;
+  registries: DefaultRegistries;
   nodeId: string;
   scopeId: string;
   chainId: number;
@@ -197,6 +202,7 @@ export function createAttributionContainer(
   return {
     attributionStore,
     sourceAdapters: adapters,
+    registries: createDefaultRegistries(),
     nodeId,
     scopeId,
     chainId,

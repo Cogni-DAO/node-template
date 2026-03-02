@@ -68,6 +68,7 @@ export async function startAttributionWorker(
     attributionStore: container.attributionStore,
     nodeId: container.nodeId,
     logger: container.logger,
+    registries: container.registries,
   });
 
   const activities = { ...ledgerActivities, ...enrichmentActivities };
