@@ -168,3 +168,7 @@ Retained equity is NOT a speculative asset. It's a par-value capital credit — 
 - Equity redemption schedules (P2)
 - On-chain Merkle anchoring (P2)
 - Voting thresholds / multisig quorum for settlement approval (P2)
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/proj.financial-ledger.handoff.md)
