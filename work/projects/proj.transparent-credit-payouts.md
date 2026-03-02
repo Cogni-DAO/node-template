@@ -217,6 +217,10 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 
 **From receipt-signing model:** The original P0 designed per-receipt wallet-signed receipts with SIWE-gated multi-role authorization. This revision moves wallet signing to P1 and replaces manual receipt creation with automated activity ingestion. The core payout math (`computeStatementItems`, BIGINT, largest-remainder) is unchanged.
 
+### Accounting boundary
+
+Attribution statements produced by this project are **governance truth** — who earned what share. They are NOT financial events. No money moves when an epoch is signed. Financial settlement (treasury funding MerkleDistributor, user claims) is handled by [proj.financial-ledger](proj.financial-ledger.md). See [financial-ledger spec](../../docs/spec/financial-ledger.md) for the accounting separation.
+
 ### Technical decisions
 
 | Decision       | Choice                                               | Why                                               |
