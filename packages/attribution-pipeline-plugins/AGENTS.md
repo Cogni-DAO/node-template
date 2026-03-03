@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-03-02
+- **Last reviewed:** 2026-03-03
 - **Status:** draft
 
 ## Purpose
@@ -36,15 +36,17 @@ Built-in enricher and allocator plugin implementations for the attribution pipel
 }
 ```
 
-**External deps:** none beyond workspace packages.
+**External deps:** `zod` plus workspace packages.
 
 ## Public Surface
 
 - **Exports:**
   - `ECHO_EVALUATION_REF`, `ECHO_ALGO_REF`, `ECHO_SCHEMA_REF` — echo plugin constants
+  - `EchoPayloadSchema` — runtime Zod schema for echo payloadJson
   - `buildEchoPayload()` — pure function to build echo evaluation payload
   - `createEchoAdapter()` — factory returning `EnricherAdapter` for echo enricher
-  - `WEIGHT_SUM_ALLOCATOR` — `AllocatorDescriptor` wrapping `computeProposedAllocations()`
+  - `WeightSumOutputSchema` — runtime Zod schema for allocator output
+  - `WEIGHT_SUM_ALLOCATOR` — `AllocatorDescriptor` wrapping `computeReceiptWeights()`
   - `COGNI_V0_PROFILE` — built-in `PipelineProfile` for weekly activity attribution
   - `createDefaultRegistries()` — constructs default `{profiles, enrichers, allocators}` registries
 - **CLI:** none
@@ -80,7 +82,7 @@ pnpm --filter @cogni/attribution-pipeline-plugins build
 ## Dependencies
 
 - **Internal:** `@cogni/attribution-pipeline-contracts` (framework contracts), `@cogni/attribution-ledger` (domain types, allocation algorithms, claimant-shares logic)
-- **External:** none
+- **External:** `zod`
 
 ## Change Protocol
 

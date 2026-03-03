@@ -16,7 +16,6 @@
  * @internal
  */
 
-import { deriveAllocationAlgoRef } from "@cogni/attribution-ledger/allocation";
 import { computeEpochWindowV1 } from "@cogni/attribution-ledger/epoch-window";
 import {
   ApplicationFailure,
@@ -195,7 +194,7 @@ export async function CollectEpochWorkflow(
   // 8. Compute allocations
   await computeAllocations({
     epochId: epoch.epochId,
-    algorithmId: deriveAllocationAlgoRef(attributionPipeline),
+    attributionPipeline,
     weightConfig: epoch.weightConfig,
   });
 

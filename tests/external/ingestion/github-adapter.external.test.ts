@@ -5,7 +5,7 @@
  * Module: `@cogni/tests/external/ingestion/github-adapter.external.test`
  * Purpose: Validate GitHubSourceAdapter against real GitHub API using Cogni-DAO/test-repo.
  * Scope: Proves GraphQL queries parse, all 3 streams produce ActivityEvent[], deterministic IDs, ledger round-trip. Does not test webhook handling.
- * Invariants: Requires GITHUB_REVIEW_APP_ID + GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64 in env. Skips gracefully if missing.
+ * Invariants: Requires GH_REVIEW_APP_ID + GH_REVIEW_APP_PRIVATE_KEY_BASE64 in env. Skips gracefully if missing.
  * Side-effects: IO (GitHub GraphQL, testcontainers PostgreSQL)
  * Links: services/scheduler-worker/src/adapters/ingestion/github.ts, docs/spec/attribution-ledger.md
  * @internal
@@ -29,15 +29,11 @@ import { GitHubAppTokenProvider } from "../../../services/scheduler-worker/src/a
 // Auth resolution — skip entire suite if no GitHub App credentials available
 // ---------------------------------------------------------------------------
 
-const GITHUB_REVIEW_APP_ID = process.env.GITHUB_REVIEW_APP_ID ?? "";
-const GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64 =
-  process.env.GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64 ?? "";
-const GITHUB_REVIEW_INSTALLATION_ID = process.env.GITHUB_REVIEW_INSTALLATION_ID
-  ? Number(process.env.GITHUB_REVIEW_INSTALLATION_ID)
-  : undefined;
+const GH_REVIEW_APP_ID = process.env.GH_REVIEW_APP_ID ?? "";
+const GH_REVIEW_APP_PRIVATE_KEY_BASE64 =
+  process.env.GH_REVIEW_APP_PRIVATE_KEY_BASE64 ?? "";
 
-const hasAppCreds =
-  GITHUB_REVIEW_APP_ID && GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64;
+const hasAppCreds = GH_REVIEW_APP_ID && GH_REVIEW_APP_PRIVATE_KEY_BASE64;
 const describeWithAuth = hasAppCreds ? describe : describe.skip;
 
 // ---------------------------------------------------------------------------
@@ -68,12 +64,11 @@ const WIDE_WINDOW = {
 
 describeWithAuth("GitHubSourceAdapter (external)", () => {
   const tokenProvider = new GitHubAppTokenProvider({
-    appId: GITHUB_REVIEW_APP_ID,
+    appId: GH_REVIEW_APP_ID,
     privateKey: Buffer.from(
-      GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64,
+      GH_REVIEW_APP_PRIVATE_KEY_BASE64,
       "base64"
     ).toString("utf-8"),
-    installationId: GITHUB_REVIEW_INSTALLATION_ID,
   });
 
   const adapter = new GitHubSourceAdapter({

@@ -2,19 +2,19 @@
 id: task.0133
 type: task
 title: "Split AttributionStore via ISP + add Zod output schemas to enricher/allocator contracts"
-status: needs_implement
+status: done
 priority: 1
 rank: 10
 estimate: 3
-summary: "Apply Interface Segregation Principle to the 46-method AttributionStore god interface — define scoped sub-interfaces (EpochReader, ReceiptStore, SelectionStore, EvaluationStore, etc.) and narrow EnricherContext/AllocationContext to depend only on what they need. Add Zod output schemas to EnricherDescriptor and AllocatorDescriptor so step I/O is runtime-validated and self-documenting. This unblocks future AI enrichers (LangGraph-backed) that need clear typed contracts to produce valid output."
-outcome: "AttributionStore composed from narrow sub-interfaces. EnricherContext depends on EvaluationStore & SelectionStore (not the full store). Enricher descriptors declare outputSchema (Zod). Echo enricher and weight-sum allocator export Zod schemas for their payloads. Existing tests pass without behavioral changes."
+summary: "Apply Interface Segregation Principle to the AttributionStore port, narrow enricher context to scoped read/write views, and add descriptor-owned Zod output schemas to enricher and allocator contracts so runtime plugin I/O is validated."
+outcome: "AttributionStore composes narrow sub-interfaces. EnricherContext depends on EvaluationStore & SelectionReader. Enricher and allocator descriptors declare Zod output schemas. Evaluation writes and allocator dispatch parse runtime outputs against descriptor schemas. The worker allocation path resolves profiles and dispatches allocators through registries."
 spec_refs:
   [plugin-attribution-pipeline-spec, attribution-pipeline-overview-spec]
 assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
-branch:
-pr:
+branch: fix/workflow-zod
+pr: https://github.com/Cogni-DAO/node-template/pull/513
 reviewer:
 revision: 0
 blocked_by:
@@ -41,7 +41,7 @@ Separately, enricher/allocator `payloadJson` is `Record<string, unknown>` — a 
 
 ### Part 1: Interface Segregation (backward-compatible)
 
-- [ ] Define narrow sub-interfaces in `store.ts`, grouped by domain:
+- [x] Define narrow sub-interfaces in `store.ts`, grouped by domain:
 
   | Interface              | Methods                                                                                                                                                                                                                                                       | Consumers                                 |
   | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
@@ -59,28 +59,28 @@ Separately, enricher/allocator `payloadJson` is `Record<string, unknown>` — a 
   | `FinalAllocationStore` | `replaceFinalClaimantAllocations`, `getFinalClaimantAllocationsForEpoch`                                                                                                                                                                                      | Finalization                              |
   | `IdentityResolver`     | `resolveIdentities`, `getUserDisplayNames`                                                                                                                                                                                                                    | Selection materialization                 |
 
-- [ ] `AttributionStore` becomes `AttributionStore extends EpochReader, EpochWriter, ReceiptStore, SelectionStore, EvaluationStore, ProjectionStore, ClaimantStore, CursorStore, PoolStore, StatementStore, OverrideStore, FinalAllocationStore, IdentityResolver` — **zero breaking changes**, existing code continues to work
-- [ ] `DrizzleAttributionAdapter` implementation is unchanged — it already implements `AttributionStore` which now extends the sub-interfaces
-- [ ] Export all sub-interfaces from `@cogni/attribution-ledger`
+- [x] `AttributionStore` becomes `AttributionStore extends EpochReader, EpochWriter, ReceiptStore, SelectionStore, EvaluationStore, ProjectionStore, ClaimantStore, CursorStore, PoolStore, StatementStore, OverrideStore, FinalAllocationStore, IdentityResolver` — **zero breaking changes**, existing code continues to work
+- [x] `DrizzleAttributionAdapter` implementation is unchanged — it already implements `AttributionStore` which now extends the sub-interfaces
+- [x] Export all sub-interfaces from `@cogni/attribution-ledger`
 
 ### Part 2: Narrow EnricherContext and AllocationContext
 
-- [ ] Change `EnricherContext.attributionStore` from `AttributionStore` to `EvaluationStore & SelectionStore` (the only methods echo enricher actually calls)
-- [ ] Change `AllocationContext` to not carry the full store (it already doesn't — it takes data, not a store reference). Verify and document.
-- [ ] Update `EnricherAdapter` JSDoc to clarify: enrichers receive a scoped store view, not the full store
+- [x] Change `EnricherContext.attributionStore` from `AttributionStore` to `EvaluationStore & SelectionReader`
+- [x] Change `AllocationContext` to not carry the full store (it already doesn't — it takes data, not a store reference). Verify and document.
+- [x] Update `EnricherAdapter` JSDoc to clarify: enrichers receive a scoped store view, not the full store
 
 ### Part 3: Zod output schemas on enricher/allocator descriptors
 
-- [ ] Add `outputSchema: z.ZodType` field to `EnricherDescriptor` in `packages/attribution-pipeline-contracts/src/enricher.ts`
-- [ ] Add `outputSchema: z.ZodType` field to `AllocatorDescriptor` in `packages/attribution-pipeline-contracts/src/allocator.ts`
-- [ ] Echo enricher (`plugins/echo/descriptor.ts`): define and export `EchoPayloadSchema` (Zod) matching the shape produced by `buildEchoPayload()`
-- [ ] Weight-sum allocator (`plugins/weight-sum/descriptor.ts`): define and export `WeightSumOutputSchema` (Zod) matching `ReceiptUnitWeight[]`
-- [ ] `validateEvaluationWrite()` in `validation.ts`: add optional schema validation — if the enricher declares an `outputSchema`, parse `payloadJson` against it before write. Log a warning on mismatch (don't throw in V0 — avoid breaking existing pipelines during rollout)
-- [ ] `dispatchAllocator()`: after `compute()`, validate output against `outputSchema` if declared (same warn-not-throw policy)
+- [x] Add `outputSchema: z.ZodType` field to `EnricherDescriptor` in `packages/attribution-pipeline-contracts/src/enricher.ts`
+- [x] Add `outputSchema: z.ZodType` field to `AllocatorDescriptor` in `packages/attribution-pipeline-contracts/src/allocator.ts`
+- [x] Echo enricher (`plugins/echo/descriptor.ts`): define and export `EchoPayloadSchema` (Zod) matching the shape produced by `buildEchoPayload()`
+- [x] Weight-sum allocator (`plugins/weight-sum/descriptor.ts`): define and export `WeightSumOutputSchema` (Zod) matching `ReceiptUnitWeight[]`
+- [x] `validateEvaluationWrite()` in `validation.ts`: parse `payloadJson` against the descriptor `outputSchema` before write and throw on mismatch
+- [x] `dispatchAllocator()`: after `compute()`, validate output against `outputSchema` and throw on mismatch
 
 ### Part 4: Design note for LangGraph-backed AI enrichers
 
-- [ ] Add a `## AI Enricher Pattern` section to the `plugin-attribution-pipeline` spec documenting how a LangGraph-backed enricher fits the existing architecture:
+- [x] Add a `## AI Enricher Pattern` section to the `plugin-attribution-pipeline` spec documenting how a LangGraph-backed enricher fits the existing architecture:
   - An AI enricher implements `EnricherAdapter` (same interface as pure enrichers)
   - Its `evaluateDraft()` calls `GraphExecutorPort.runGraph()` with a dedicated graph
   - The graph uses `Annotation.Root()` for typed state (receipts + prior evaluations as input)
@@ -111,17 +111,17 @@ Separately, enricher/allocator `payloadJson` is `Record<string, unknown>` — a 
 
 ## Plan
 
-- [ ] Define sub-interfaces in `store.ts`, make `AttributionStore` extend all of them
-- [ ] Export sub-interfaces from `@cogni/attribution-ledger` barrel
-- [ ] Narrow `EnricherContext.attributionStore` type in contracts package to `EvaluationStore & SelectionStore`
-- [ ] Update echo enricher adapter if needed (should be source-compatible since it only uses evaluation + selection methods)
-- [ ] Add `outputSchema` to `EnricherDescriptor` and `AllocatorDescriptor` (optional field)
-- [ ] Define `EchoPayloadSchema` in echo descriptor, `WeightSumOutputSchema` in weight-sum descriptor
-- [ ] Add optional schema validation to `validateEvaluationWrite()` and `dispatchAllocator()`
-- [ ] Add `## AI Enricher Pattern` design note to plugin-attribution-pipeline spec
-- [ ] Add unit tests for sub-interface type narrowing (compile-time check: enricher context accepts scoped store)
-- [ ] Add unit tests for Zod schema validation in evaluation write path
-- [ ] Run full test suite, verify zero regressions
+- [x] Define sub-interfaces in `store.ts`, make `AttributionStore` extend all of them
+- [x] Export sub-interfaces from `@cogni/attribution-ledger` barrel
+- [x] Narrow `EnricherContext.attributionStore` type in contracts package to `EvaluationStore & SelectionReader`
+- [x] Update echo enricher adapter to use the scoped store view
+- [x] Add `outputSchema` to `EnricherDescriptor` and `AllocatorDescriptor`
+- [x] Define `EchoPayloadSchema` in echo descriptor, `WeightSumOutputSchema` in weight-sum descriptor
+- [x] Add schema validation to `validateEvaluationWrite()` and `dispatchAllocator()`
+- [x] Add `## AI Enricher Pattern` design note to plugin-attribution-pipeline spec
+- [x] Add unit tests for sub-interface type narrowing (compile-time check: enricher context accepts scoped store)
+- [x] Add unit tests for Zod schema validation in evaluation write and allocator dispatch paths
+- [x] Run full test suite and verify zero regressions
 
 ## Validation
 
@@ -150,11 +150,11 @@ pnpm check
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0133` linked in PR body
-- [ ] **Spec:** PLUGIN_NO_LEDGER_CORE_LEAK upheld (sub-interfaces defined in ledger, not contracts)
-- [ ] **Spec:** EVALUATION_WRITE_VALIDATED still enforced (schema validation is additive)
-- [ ] **Spec:** ENRICHER_ORDER_EXPLICIT unchanged (ordering.ts untouched)
-- [ ] **Tests:** new unit tests for sub-interface narrowing + Zod schema validation
-- [ ] **Backward compat:** `AttributionStore` is a strict superset of all sub-interfaces (no consumer breaks)
+- [x] **Spec:** PLUGIN_NO_LEDGER_CORE_LEAK upheld (sub-interfaces defined in ledger, not contracts)
+- [x] **Spec:** EVALUATION_WRITE_VALIDATED still enforced (schema validation is additive)
+- [x] **Spec:** ENRICHER_ORDER_EXPLICIT unchanged (ordering.ts untouched)
+- [x] **Tests:** new unit tests for sub-interface narrowing + Zod schema validation
+- [x] **Backward compat:** `AttributionStore` is a strict superset of all sub-interfaces (no consumer breaks)
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links

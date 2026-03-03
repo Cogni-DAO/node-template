@@ -16,7 +16,7 @@
  *   - Per CONFIG_LOCKED_AT_REVIEW: autoCloseIngestion pins allocationAlgoRef + weightConfigHash
  *   - Per EVALUATION_FINAL_ATOMIC: autoCloseIngestion passes evaluations to closeIngestionWithEvaluations for atomic write
  *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing statement if already finalized
- *   - Per FINALIZE_CLAIMANT_AWARE: finalizeEpoch loads locked claimant rows from epoch_receipt_claimants, computes receipt weights, explodes to claimant allocations, and stores claimant metadata in attribution statement lines
+ *   - Per FINALIZE_CLAIMANT_AWARE: finalizeEpoch loads locked claimant rows from epoch_receipt_claimants, dispatches the pinned allocator, explodes to claimant allocations, and stores claimant metadata in attribution statement lines
  * Side-effects: IO (database, GitHub API, viem EIP-712 verification)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
  * @internal
@@ -31,15 +31,18 @@ import {
   computeApproverSetHash,
   computeAttributionStatementLines,
   computeFinalClaimantAllocationSetHash,
-  computeReceiptWeights,
   computeWeightConfigHash,
-  deriveAllocationAlgoRef,
   estimatePoolComponentsV0,
   explodeToClaimants,
   sha256OfCanonicalJson,
   toReviewSubjectOverrides,
   validateWeightConfig,
 } from "@cogni/attribution-ledger";
+import {
+  dispatchAllocator,
+  resolveProfile,
+} from "@cogni/attribution-pipeline-contracts";
+import type { DefaultRegistries } from "@cogni/attribution-pipeline-plugins";
 import type { ActivityEvent } from "@cogni/ingestion-core";
 
 import { verifyTypedData } from "viem";
@@ -53,6 +56,7 @@ import type { AttributionStore, SourceAdapter } from "../ports/index.js";
 export interface AttributionActivityDeps {
   readonly attributionStore: AttributionStore;
   readonly sourceAdapters: ReadonlyMap<string, SourceAdapter>;
+  readonly registries: DefaultRegistries;
   readonly nodeId: string;
   readonly scopeId: string;
   readonly chainId: number;
@@ -150,7 +154,7 @@ export interface MaterializeSelectionOutput {
  */
 export interface ComputeAllocationsInput {
   readonly epochId: string; // bigint serialized
-  readonly algorithmId: string;
+  readonly attributionPipeline: string;
   readonly weightConfig: Record<string, number>;
 }
 
@@ -246,8 +250,30 @@ export interface FinalizeEpochOutput {
  * Follows the same DI pattern as createActivities() in activities/index.ts.
  */
 export function createAttributionActivities(deps: AttributionActivityDeps) {
-  const { attributionStore, sourceAdapters, nodeId, scopeId, chainId, logger } =
-    deps;
+  const {
+    attributionStore,
+    sourceAdapters,
+    registries,
+    nodeId,
+    scopeId,
+    chainId,
+    logger,
+  } = deps;
+
+  function toEvaluationPayloadMap(
+    evaluations: ReadonlyArray<{
+      readonly evaluationRef: string;
+      readonly payloadJson: Record<string, unknown> | null;
+    }>
+  ): ReadonlyMap<string, Record<string, unknown>> {
+    const payloads = new Map<string, Record<string, unknown>>();
+    for (const evaluation of evaluations) {
+      if (evaluation.payloadJson) {
+        payloads.set(evaluation.evaluationRef, evaluation.payloadJson);
+      }
+    }
+    return payloads;
+  }
 
   /**
    * Creates or returns an existing epoch for the given time window.
@@ -630,17 +656,18 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
   /**
    * Compute receipt-weight allocations and aggregate into user projections.
-   * Uses computeReceiptWeights + explodeToClaimants for claimant-scoped output.
+   * Uses profile-driven allocator dispatch for per-receipt output.
    * Upserts user projections (recomputable, unsigned) and removes stale ones.
    */
   async function computeAllocations(
     input: ComputeAllocationsInput
   ): Promise<ComputeAllocationsOutput> {
     const epochId = BigInt(input.epochId);
-    const { algorithmId, weightConfig } = input;
+    const { attributionPipeline, weightConfig } = input;
+    const profile = resolveProfile(registries.profiles, attributionPipeline);
 
     logger.info(
-      { epochId: input.epochId, algorithmId },
+      { epochId: input.epochId, allocatorRef: profile.allocatorRef },
       "Computing allocations"
     );
 
@@ -657,10 +684,18 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     }
 
     // 2. Compute per-receipt weights (pure)
-    const receiptWeights = computeReceiptWeights(
-      algorithmId,
-      receipts,
-      weightConfig
+    const evaluations = toEvaluationPayloadMap(
+      await attributionStore.getEvaluationsForEpoch(epochId, "draft")
+    );
+    const receiptWeights = await dispatchAllocator(
+      registries.allocators,
+      profile.allocatorRef,
+      {
+        receipts,
+        weightConfig,
+        evaluations,
+        profileConfig: null,
+      }
     );
 
     // 3. Aggregate into user projections for the review UI
@@ -671,6 +706,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     const userUnits = new Map<string, { units: bigint; count: number }>();
     for (const receipt of receipts) {
       if (!receipt.included) continue;
+      if (!receipt.userId) continue;
       const weight = weightByReceipt.get(receipt.receiptId);
       if (!weight) continue;
       const existing = userUnits.get(receipt.userId) ?? {
@@ -855,9 +891,11 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     // Validate and compute config hashes
     validateWeightConfig(input.weightConfig);
     const weightConfigHash = await computeWeightConfigHash(input.weightConfig);
-    const allocationAlgoRef = deriveAllocationAlgoRef(
+    const profile = resolveProfile(
+      registries.profiles,
       input.attributionPipeline
     );
+    const allocationAlgoRef = profile.allocatorRef;
     const approverSetHash = computeApproverSetHash(input.approvers);
 
     logger.info(
@@ -1042,10 +1080,17 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       attributionStore.getSelectedReceiptsForAllocation(epochId),
       attributionStore.getReviewSubjectOverridesForEpoch(epochId),
     ]);
-    const rawWeights = computeReceiptWeights(
+    const rawWeights = await dispatchAllocator(
+      registries.allocators,
       epoch.allocationAlgoRef,
-      selections,
-      epoch.weightConfig
+      {
+        receipts: selections,
+        weightConfig: epoch.weightConfig,
+        evaluations: toEvaluationPayloadMap(
+          await attributionStore.getEvaluationsForEpoch(epochId, "locked")
+        ),
+        profileConfig: null,
+      }
     );
     const overrides = toReviewSubjectOverrides(overrideRecords);
     const receiptWeights = applyReceiptWeightOverrides(rawWeights, overrides);

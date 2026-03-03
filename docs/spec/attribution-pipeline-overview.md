@@ -10,7 +10,7 @@ read_when: Understanding the full attribution pipeline, onboarding to the credit
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-03-02
-verified: 2026-03-02
+verified: 2026-03-03
 tags: [governance, attribution, overview]
 ---
 
@@ -97,11 +97,11 @@ This spec introduces no new invariants. All behavioral guarantees are defined in
  │  ┌───────────────────────────────────────────────────────────────────┐  │
  │  │  4. ALLOCATE                        "Who gets what?"              │  │
  │  │     PipelineProfile.allocatorRef: weight-sum-v0                   │  │
- │  │       └─► computeReceiptWeights(algoRef, receipts, weightConfig)  │  │
+ │  │       └─► dispatchAllocator(registry, allocatorRef, context)      │  │
  │  │             └─► ReceiptUnitWeight[]  (per-receipt milli-units)     │  │
  │  │                   └─► explodeToClaimants(weights, claimants)       │  │
  │  │                         └─► FinalClaimantAllocation[]              │  │
- │  │     • Pure, deterministic, no I/O                                 │  │
+ │  │     • Worker path stays generic — no direct allocator helper call  │  │
  │  │     • Integer math only (BIGINT, largest-remainder rounding)      │  │
  │  └───────────────────────────────────────────────────────────────────┘  │
  │                                                                         │
@@ -140,15 +140,15 @@ This spec introduces no new invariants. All behavioral guarantees are defined in
  │  FINALIZE  (admin signs, Temporal executes)                             │
  │                                                                         │
  │  1. GET /sign-data  →  builds EIP-712 typed data:                       │
- │     Load locked claimants + selected receipts + overrides               │
- │     computeReceiptWeights() → applyReceiptWeightOverrides()             │
+ │     Load locked claimants + selected receipts + locked evaluations      │
+ │     dispatchAllocator() → applyReceiptWeightOverrides()                 │
  │       → explodeToClaimants() → computeFinalClaimantAllocationSetHash()  │
  │     Return typed data: { nodeId, scopeId, epochId, hash, poolTotal }   │
  │                                                                         │
  │  2. Admin wallet signs EIP-712 typed data (MetaMask / WalletConnect)    │
  │                                                                         │
  │  3. POST /finalize  →  starts FinalizeEpochWorkflow:                    │
- │     • Recompute identical hash (same pipeline as sign-data)             │
+ │     • Recompute identical hash (same allocator dispatch path as sign-data)│
  │     • Verify EIP-712 signature against approvers[]                      │
  │     • Atomic DB transaction:                                            │
  │       - Write epoch_final_claimant_allocations                          │
@@ -226,7 +226,10 @@ attribution_pipeline: cogni-v0.0 ──► resolveProfile("cogni-v0.0")
 2. **Register it** in `packages/attribution-pipeline-plugins/src/registry.ts`:
 
    ```typescript
-   enrichers.set(workItemLinksAdapter.evaluationRef, workItemLinksAdapter);
+   enrichers.set(
+     workItemLinksAdapter.descriptor.evaluationRef,
+     workItemLinksAdapter
+   );
    ```
 
 3. **Create or update a profile** in `packages/attribution-pipeline-plugins/src/profiles/`:

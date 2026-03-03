@@ -5,7 +5,7 @@
  * Module: `@cogni/tests/external/ingestion/ledger-collection.external.test`
  * Purpose: Validate ledger activity functions end-to-end against real GitHub API + Postgres.
  * Scope: Exercises createAttributionActivities pipeline with real DrizzleAttributionAdapter + GitHubSourceAdapter. Does not test Temporal workflow orchestration.
- * Invariants: Requires GITHUB_REVIEW_APP_ID + GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64 in env. Skips gracefully if missing.
+ * Invariants: Requires GH_REVIEW_APP_ID + GH_REVIEW_APP_PRIVATE_KEY_BASE64 in env. Skips gracefully if missing.
  * Side-effects: IO (GitHub GraphQL, testcontainers PostgreSQL)
  * Links: services/scheduler-worker/src/activities/ledger.ts, docs/spec/attribution-ledger.md
  * @internal
@@ -32,15 +32,11 @@ import { GitHubAppTokenProvider } from "../../../services/scheduler-worker/src/a
 // Auth resolution — skip entire suite if no GitHub App credentials available
 // ---------------------------------------------------------------------------
 
-const GITHUB_REVIEW_APP_ID = process.env.GITHUB_REVIEW_APP_ID ?? "";
-const GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64 =
-  process.env.GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64 ?? "";
-const GITHUB_REVIEW_INSTALLATION_ID = process.env.GITHUB_REVIEW_INSTALLATION_ID
-  ? Number(process.env.GITHUB_REVIEW_INSTALLATION_ID)
-  : undefined;
+const GH_REVIEW_APP_ID = process.env.GH_REVIEW_APP_ID ?? "";
+const GH_REVIEW_APP_PRIVATE_KEY_BASE64 =
+  process.env.GH_REVIEW_APP_PRIVATE_KEY_BASE64 ?? "";
 
-const hasAppCreds =
-  GITHUB_REVIEW_APP_ID && GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64;
+const hasAppCreds = GH_REVIEW_APP_ID && GH_REVIEW_APP_PRIVATE_KEY_BASE64;
 const describeWithAuth = hasAppCreds ? describe : describe.skip;
 
 // ---------------------------------------------------------------------------
@@ -77,12 +73,11 @@ describeWithAuth("Ledger Collection Pipeline (external)", () => {
   const ledger = new DrizzleAttributionAdapter(db, TEST_SCOPE_ID);
 
   const tokenProvider = new GitHubAppTokenProvider({
-    appId: GITHUB_REVIEW_APP_ID,
+    appId: GH_REVIEW_APP_ID,
     privateKey: Buffer.from(
-      GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64,
+      GH_REVIEW_APP_PRIVATE_KEY_BASE64,
       "base64"
     ).toString("utf-8"),
-    installationId: GITHUB_REVIEW_INSTALLATION_ID,
   });
 
   const githubAdapter = new GitHubSourceAdapter({
