@@ -51,8 +51,8 @@ services:
       - BILLING_INGEST_TOKEN
       - INTERNAL_OPS_TOKEN
       # OAuth providers (optional — provider silently skipped if missing)
-      - GITHUB_OAUTH_CLIENT_ID
-      - GITHUB_OAUTH_CLIENT_SECRET
+      - GH_OAUTH_CLIENT_ID
+      - GH_OAUTH_CLIENT_SECRET
       - DISCORD_OAUTH_CLIENT_ID
       - DISCORD_OAUTH_CLIENT_SECRET
       - GOOGLE_OAUTH_CLIENT_ID

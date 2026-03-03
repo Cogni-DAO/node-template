@@ -255,12 +255,11 @@ export const authOptions: NextAuthOptions = {
       },
     }),
     // Only register OAuth providers when credentials are configured
-    ...(process.env.GITHUB_OAUTH_CLIENT_ID &&
-    process.env.GITHUB_OAUTH_CLIENT_SECRET
+    ...(process.env.GH_OAUTH_CLIENT_ID && process.env.GH_OAUTH_CLIENT_SECRET
       ? [
           GitHub({
-            clientId: process.env.GITHUB_OAUTH_CLIENT_ID,
-            clientSecret: process.env.GITHUB_OAUTH_CLIENT_SECRET,
+            clientId: process.env.GH_OAUTH_CLIENT_ID,
+            clientSecret: process.env.GH_OAUTH_CLIENT_SECRET,
           }),
         ]
       : []),

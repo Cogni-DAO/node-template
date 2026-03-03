@@ -68,8 +68,8 @@ GitHub OAuth Apps only support **one callback URL each**, so you need a separate
 5. Add to `.env.local`:
 
    ```env
-   GITHUB_OAUTH_CLIENT_ID=<your-dev-client-id>
-   GITHUB_OAUTH_CLIENT_SECRET=<your-dev-client-secret>
+   GH_OAUTH_CLIENT_ID=<your-dev-client-id>
+   GH_OAUTH_CLIENT_SECRET=<your-dev-client-secret>
    ```
 
 ### 1b. Create the Production App
@@ -82,7 +82,7 @@ Repeat the same steps with production values:
 | Homepage URL               | `https://app.cogni.dev`                          |
 | Authorization callback URL | `https://app.cogni.dev/api/auth/callback/github` |
 
-Add the credentials to your production environment (Vercel, Railway, etc.) as `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`.
+Add the credentials to your production environment (Vercel, Railway, etc.) as `GH_OAUTH_CLIENT_ID` and `GH_OAUTH_CLIENT_SECRET`.
 
 ### GitHub Checklist
 
@@ -190,8 +190,8 @@ If you're already signed in (e.g. via wallet), you can link an OAuth provider fr
 | ---------------------------- | -------- | ----------------------- |
 | `NEXTAUTH_URL`               | Yes      | `.env.local`            |
 | `NEXTAUTH_SECRET`            | Yes      | `.env.local`            |
-| `GITHUB_OAUTH_CLIENT_ID`     | No\*     | `.env.local` / prod env |
-| `GITHUB_OAUTH_CLIENT_SECRET` | No\*     | `.env.local` / prod env |
+| `GH_OAUTH_CLIENT_ID`         | No\*     | `.env.local` / prod env |
+| `GH_OAUTH_CLIENT_SECRET`     | No\*     | `.env.local` / prod env |
 | `GOOGLE_OAUTH_CLIENT_ID`     | No\*     | `.env.local` / prod env |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | No\*     | `.env.local` / prod env |
 
