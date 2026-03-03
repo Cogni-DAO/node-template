@@ -295,6 +295,7 @@ export async function seedClosedEpoch(
   const poolTotal = 10000n;
   await store.closeIngestion(
     epoch.id,
+    [],
     "test-approver-set-hash",
     "weight-sum-v0",
     "test-weight-config-hash"
@@ -418,6 +419,7 @@ export async function seedReviewEpoch(
   // Transition open → review (stop here — do NOT finalize)
   const reviewEpoch = await store.closeIngestion(
     epoch.id,
+    [],
     "test-approver-set-hash",
     "weight-sum-v0",
     "test-weight-config-hash"
