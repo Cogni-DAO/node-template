@@ -103,6 +103,7 @@ function toEpoch(row: typeof epochs.$inferSelect): AttributionEpoch {
     weightConfig: row.weightConfig,
     poolTotalCredits: row.poolTotalCredits,
     approverSetHash: row.approverSetHash,
+    approvers: row.approvers ?? null,
     allocationAlgoRef: row.allocationAlgoRef,
     weightConfigHash: row.weightConfigHash,
     artifactsHash: row.artifactsHash,
@@ -488,6 +489,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
 
   async closeIngestion(
     epochId: bigint,
+    approvers: string[],
     approverSetHash: string,
     allocationAlgoRef: string,
     weightConfigHash: string
@@ -496,6 +498,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       .update(epochs)
       .set({
         status: "review",
+        approvers: approvers.map((a) => a.toLowerCase()),
         approverSetHash,
         allocationAlgoRef,
         weightConfigHash,
@@ -613,6 +616,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
         .update(epochs)
         .set({
           status: "review",
+          approvers: params.approvers.map((a) => a.toLowerCase()),
           approverSetHash: params.approverSetHash,
           allocationAlgoRef: params.allocationAlgoRef,
           weightConfigHash: params.weightConfigHash,
@@ -732,15 +736,10 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           eq(ingestionReceipts.nodeId, epochSelection.nodeId)
         )
       )
-      .where(
-        and(
-          eq(epochSelection.epochId, epochId),
-          isNotNull(epochSelection.userId)
-        )
-      );
+      .where(eq(epochSelection.epochId, epochId));
     return rows.map((r) => ({
       receiptId: r.receiptId,
-      userId: r.userId as string,
+      userId: r.userId,
       source: r.source,
       eventType: r.eventType,
       included: r.included,
@@ -816,16 +815,10 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           eq(ingestionReceipts.nodeId, epochSelection.nodeId)
         )
       )
-      .where(
-        and(
-          eq(epochSelection.epochId, epochId),
-          isNotNull(epochSelection.userId)
-        )
-      );
+      .where(eq(epochSelection.epochId, epochId));
     return rows.map((r) => ({
       receiptId: r.receiptId,
-      // Safe: WHERE clause filters to userId IS NOT NULL
-      userId: r.userId as string,
+      userId: r.userId,
       source: r.source,
       eventType: r.eventType,
       included: r.included,

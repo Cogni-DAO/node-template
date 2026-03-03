@@ -178,6 +178,20 @@ export interface EnsurePoolComponentsOutput {
 }
 
 /**
+ * Input for resolveStreams activity.
+ */
+export interface ResolveStreamsInput {
+  readonly source: string;
+}
+
+/**
+ * Output from resolveStreams activity.
+ */
+export interface ResolveStreamsOutput {
+  readonly streams: string[];
+}
+
+/**
  * Input for autoCloseIngestion activity.
  */
 export interface AutoCloseIngestionInput {
@@ -215,7 +229,6 @@ export interface FinalizeEpochInput {
   readonly epochId: string; // bigint serialized
   readonly signature: string; // EIP-712 hex
   readonly signerAddress: string; // from SIWE session
-  readonly approvers: string[]; // EVM addresses (lowercased)
 }
 
 /**
@@ -872,6 +885,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
     const epoch = await attributionStore.closeIngestionWithEvaluations({
       epochId,
+      approvers: input.approvers,
       approverSetHash,
       allocationAlgoRef,
       weightConfigHash,
@@ -973,18 +987,24 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       );
     }
 
-    // 3. Verify signer is in approvers and matches pinned approverSetHash
+    // 3. Verify signer is in pinned approvers (APPROVERS_PINNED_AT_REVIEW)
+    if (!epoch.approvers || epoch.approvers.length === 0) {
+      throw new Error(
+        `finalizeEpoch: epoch ${input.epochId} has no pinned approvers (APPROVERS_PINNED_AT_REVIEW violated)`
+      );
+    }
     const signerLower = input.signerAddress.toLowerCase();
-    const approversLower = input.approvers.map((a) => a.toLowerCase());
+    const approversLower = epoch.approvers.map((a) => a.toLowerCase());
     if (!approversLower.includes(signerLower)) {
       throw new Error(
         `finalizeEpoch: signer ${input.signerAddress} not in approvers`
       );
     }
-    const currentApproverSetHash = computeApproverSetHash(input.approvers);
-    if (epoch.approverSetHash !== currentApproverSetHash) {
+    // Self-consistent integrity check: recompute hash from pinned list
+    const pinnedApproverSetHash = computeApproverSetHash(epoch.approvers);
+    if (epoch.approverSetHash !== pinnedApproverSetHash) {
       throw new Error(
-        `finalizeEpoch: approver set hash mismatch — epoch has ${epoch.approverSetHash}, current is ${currentApproverSetHash}`
+        `finalizeEpoch: approver set hash integrity failure — stored hash ${epoch.approverSetHash} does not match recomputed ${pinnedApproverSetHash}`
       );
     }
 
@@ -1142,6 +1162,28 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     };
   }
 
+  /**
+   * Resolve stream IDs for a source by querying the adapter's self-declared streams.
+   */
+  async function resolveStreams(
+    input: ResolveStreamsInput
+  ): Promise<ResolveStreamsOutput> {
+    const adapter = sourceAdapters.get(input.source);
+    if (!adapter) {
+      logger.warn(
+        { source: input.source },
+        "No adapter found for source — returning empty streams"
+      );
+      return { streams: [] };
+    }
+    const streams = adapter.streams().map((s) => s.id);
+    logger.info(
+      { source: input.source, streams },
+      "Resolved streams from adapter"
+    );
+    return { streams };
+  }
+
   return {
     ensureEpochForWindow,
     loadCursor,
@@ -1153,6 +1195,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     ensurePoolComponents,
     autoCloseIngestion,
     finalizeEpoch,
+    resolveStreams,
   };
 }
 

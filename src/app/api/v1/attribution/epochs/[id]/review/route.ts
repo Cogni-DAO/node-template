@@ -4,7 +4,7 @@
 /**
  * Module: `@app/api/v1/attribution/epochs/[id]/review/route`
  * Purpose: SIWE + approver-gated endpoint for transitioning an epoch from open → review.
- * Scope: Auth-protected POST endpoint. Pins approver set hash. Does not accept a request body.
+ * Scope: Auth-protected POST endpoint. Pins approver list and hash at close. Does not accept a request body.
  * Invariants: WRITE_ROUTES_APPROVER_GATED, APPROVERS_PINNED_AT_REVIEW, INGESTION_CLOSED_ON_REVIEW.
  * Side-effects: IO (HTTP response, database write)
  * Links: docs/spec/attribution-ledger.md, contracts/attribution.review-epoch.v1.contract
@@ -50,8 +50,9 @@ export const POST = wrapRouteHandlerWithLogging<{
       return NextResponse.json({ error: "Invalid epoch ID" }, { status: 400 });
     }
 
-    // APPROVERS_PINNED_AT_REVIEW: pin current approver set on the epoch
-    const approverSetHash = computeApproverSetHash(getLedgerApprovers());
+    // APPROVERS_PINNED_AT_REVIEW: pin current approver set + hash on the epoch
+    const approvers = getLedgerApprovers();
+    const approverSetHash = computeApproverSetHash(approvers);
 
     const store = getContainer().attributionStore;
 
@@ -71,6 +72,7 @@ export const POST = wrapRouteHandlerWithLogging<{
 
     const epoch = await store.closeIngestion(
       epochId,
+      approvers,
       approverSetHash,
       allocationAlgoRef,
       weightConfigHash
