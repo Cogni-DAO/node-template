@@ -10,6 +10,7 @@
 
 import type {
   AttributionEpoch,
+  AttributionEvaluation,
   AttributionStore,
   IngestionCursor,
   UnselectedReceipt,
@@ -18,6 +19,7 @@ import {
   computeApproverSetHash,
   computeEpochWindowV1,
 } from "@cogni/attribution-ledger";
+import { createDefaultRegistries } from "@cogni/attribution-pipeline-plugins";
 import type {
   ActivityEvent,
   CollectResult,
@@ -34,6 +36,7 @@ import { createAttributionActivities } from "../src/activities/ledger.js";
 
 const NODE_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const SCOPE_ID = "bbbbbbbb-0000-0000-0000-000000000001";
+const registries = createDefaultRegistries();
 
 const mockLogger = {
   info: vi.fn(),
@@ -139,6 +142,29 @@ function makeEpoch(
     artifactsHash: null,
     openedAt: new Date(),
     closedAt: null,
+    createdAt: new Date(),
+    ...overrides,
+  };
+}
+
+function makeEvaluation(
+  overrides: Partial<AttributionEvaluation> = {}
+): AttributionEvaluation {
+  return {
+    id: "eval-1",
+    nodeId: NODE_ID,
+    epochId: 1n,
+    evaluationRef: "cogni.echo.v0",
+    status: "draft",
+    algoRef: "echo-v0",
+    inputsHash: "inputs-hash",
+    payloadHash: "payload-hash",
+    payloadJson: {
+      totalEvents: 1,
+      byEventType: { pr_merged: 1 },
+      byUserId: { "user-1": 1 },
+    },
+    payloadRef: null,
     createdAt: new Date(),
     ...overrides,
   };
@@ -266,6 +292,7 @@ describe("createAttributionActivities", () => {
     const activities = createAttributionActivities({
       attributionStore: makeMockStore(),
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -293,6 +320,7 @@ describe("ensureEpochForWindow", () => {
     const { ensureEpochForWindow } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -320,6 +348,7 @@ describe("ensureEpochForWindow", () => {
     const { ensureEpochForWindow } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -347,6 +376,7 @@ describe("ensureEpochForWindow", () => {
     const { ensureEpochForWindow } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -380,6 +410,7 @@ describe("ensureEpochForWindow", () => {
     const { ensureEpochForWindow } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -409,6 +440,7 @@ describe("loadCursor", () => {
     const { loadCursor } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -441,6 +473,7 @@ describe("loadCursor", () => {
     const { loadCursor } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -464,6 +497,7 @@ describe("collectFromSource", () => {
     const { collectFromSource } = createAttributionActivities({
       attributionStore: makeMockStore(),
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -490,6 +524,7 @@ describe("collectFromSource", () => {
     const { collectFromSource } = createAttributionActivities({
       attributionStore: makeMockStore(),
       sourceAdapters: adapters,
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -519,6 +554,7 @@ describe("insertReceipts", () => {
     const { insertReceipts } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -535,6 +571,7 @@ describe("insertReceipts", () => {
     const { insertReceipts } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -559,6 +596,7 @@ describe("saveCursor", () => {
     const { saveCursor } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -599,6 +637,7 @@ describe("saveCursor", () => {
     const { saveCursor } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -640,6 +679,7 @@ describe("saveCursor", () => {
     const { saveCursor } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -677,6 +717,7 @@ describe("materializeSelection", () => {
     const { materializeSelection } = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,
@@ -883,6 +924,95 @@ describe("materializeSelection", () => {
   });
 });
 
+describe("computeAllocations", () => {
+  it("dispatches through the profile allocator and writes user projections", async () => {
+    const store = makeMockStore({
+      getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([
+        {
+          receiptId: "receipt-1",
+          userId: "user-1",
+          source: "github",
+          eventType: "pr_merged",
+          included: true,
+          weightOverrideMilli: null,
+        },
+        {
+          receiptId: "receipt-2",
+          userId: "user-2",
+          source: "github",
+          eventType: "pr_merged",
+          included: true,
+          weightOverrideMilli: null,
+        },
+      ]),
+      getEvaluationsForEpoch: vi
+        .fn()
+        .mockResolvedValue([makeEvaluation({ status: "draft" })]),
+      getUserProjectionsForEpoch: vi.fn().mockResolvedValue([]),
+    });
+
+    const activities = createAttributionActivities({
+      attributionStore: store,
+      sourceAdapters: new Map(),
+      registries,
+      nodeId: NODE_ID,
+      scopeId: SCOPE_ID,
+      chainId: 8453,
+      logger: mockLogger,
+    });
+
+    const result = await activities.computeAllocations({
+      epochId: "1",
+      attributionPipeline: "cogni-v0.0",
+      weightConfig: { "github:pr_merged": 1000 },
+    });
+
+    expect(result).toEqual({
+      totalAllocations: 2,
+      totalProposedUnits: "2000",
+    });
+    expect(store.upsertUserProjections).toHaveBeenCalledOnce();
+    expect(store.deleteStaleUserProjections).toHaveBeenCalledWith(1n, [
+      "user-1",
+      "user-2",
+    ]);
+  });
+
+  it("fails when the allocator's required evaluations are missing", async () => {
+    const store = makeMockStore({
+      getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([
+        {
+          receiptId: "receipt-1",
+          userId: "user-1",
+          source: "github",
+          eventType: "pr_merged",
+          included: true,
+          weightOverrideMilli: null,
+        },
+      ]),
+      getEvaluationsForEpoch: vi.fn().mockResolvedValue([]),
+    });
+
+    const activities = createAttributionActivities({
+      attributionStore: store,
+      sourceAdapters: new Map(),
+      registries,
+      nodeId: NODE_ID,
+      scopeId: SCOPE_ID,
+      chainId: 8453,
+      logger: mockLogger,
+    });
+
+    await expect(
+      activities.computeAllocations({
+        epochId: "1",
+        attributionPipeline: "cogni-v0.0",
+        weightConfig: { "github:pr_merged": 1000 },
+      })
+    ).rejects.toThrow(/requires evaluations \[cogni\.echo\.v0\]/);
+  });
+});
+
 describe("finalizeEpoch", () => {
   it("finalizes using claimant allocations and preserves unresolved identities", async () => {
     vi.mocked(verifyTypedData).mockResolvedValue(true);
@@ -963,6 +1093,17 @@ describe("finalizeEpoch", () => {
           weightOverrideMilli: null,
         },
       ]),
+      getEvaluationsForEpoch: vi.fn().mockResolvedValue([
+        makeEvaluation({
+          status: "locked",
+          epochId: reviewEpoch.id,
+          payloadJson: {
+            totalEvents: 2,
+            byEventType: { pr_merged: 2 },
+            byUserId: { "user-1": 2 },
+          },
+        }),
+      ]),
       getPoolComponentsForEpoch: vi.fn().mockResolvedValue([
         {
           id: "pool-1",
@@ -982,6 +1123,7 @@ describe("finalizeEpoch", () => {
     const activities = createAttributionActivities({
       attributionStore: store,
       sourceAdapters: new Map(),
+      registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
       chainId: 8453,

@@ -355,12 +355,12 @@ export class GitHubSourceAdapter implements SourceAdapter {
     let reachedEarlyStop = false;
 
     do {
-      const response = await this.executeQuery<RepoConnectionResponse<PrNode>>(
-        MERGED_PRS_QUERY,
-        { owner, name: repoName, cursor: pageCursor }
-      );
+      const response: RepoConnectionResponse<PrNode> = await this.executeQuery<
+        RepoConnectionResponse<PrNode>
+      >(MERGED_PRS_QUERY, { owner, name: repoName, cursor: pageCursor });
 
-      const connection = response.repository.pullRequests;
+      const connection: RepoConnectionResponse<PrNode>["repository"]["pullRequests"] =
+        response.repository.pullRequests;
       if (!connection) break;
 
       for (const pr of connection.nodes) {
@@ -455,11 +455,14 @@ export class GitHubSourceAdapter implements SourceAdapter {
     let reachedEarlyStop = false;
 
     do {
-      const response = await this.executeQuery<
-        RepoConnectionResponse<PrWithReviewsNode>
-      >(REVIEWS_QUERY, { owner, name: repoName, cursor: pageCursor });
+      const response: RepoConnectionResponse<PrWithReviewsNode> =
+        await this.executeQuery<RepoConnectionResponse<PrWithReviewsNode>>(
+          REVIEWS_QUERY,
+          { owner, name: repoName, cursor: pageCursor }
+        );
 
-      const connection = response.repository.pullRequests;
+      const connection: RepoConnectionResponse<PrWithReviewsNode>["repository"]["pullRequests"] =
+        response.repository.pullRequests;
       if (!connection) break;
 
       for (const pr of connection.nodes) {
@@ -567,11 +570,14 @@ export class GitHubSourceAdapter implements SourceAdapter {
     let reachedEarlyStop = false;
 
     do {
-      const response = await this.executeQuery<
-        RepoConnectionResponse<IssueNode>
-      >(CLOSED_ISSUES_QUERY, { owner, name: repoName, cursor: pageCursor });
+      const response: RepoConnectionResponse<IssueNode> =
+        await this.executeQuery<RepoConnectionResponse<IssueNode>>(
+          CLOSED_ISSUES_QUERY,
+          { owner, name: repoName, cursor: pageCursor }
+        );
 
-      const connection = response.repository.issues;
+      const connection: RepoConnectionResponse<IssueNode>["repository"]["issues"] =
+        response.repository.issues;
       if (!connection) break;
 
       for (const issue of connection.nodes) {

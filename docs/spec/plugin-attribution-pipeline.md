@@ -220,6 +220,9 @@ interface EnricherDescriptor {
    * Format: "<evaluationRef>/<semver>" (e.g., "cogni.echo.v0/1.0.0").
    */
   readonly schemaRef: string;
+
+  /** Runtime schema for payloadJson emitted by this enricher. */
+  readonly outputSchema: ZodType<Record<string, unknown>>;
 }
 ```
 
@@ -229,13 +232,13 @@ Pure payload builder functions are exported alongside the descriptor as named ex
 
 ```typescript
 interface EnricherAdapter {
-  /** Must match the descriptor's evaluationRef. */
-  readonly evaluationRef: string;
+  /** Descriptor + runtime schema for this enricher. */
+  readonly descriptor: EnricherDescriptor;
 
   /**
    * Produce a draft evaluation for the given epoch.
    * Called during the enrichment phase (epoch is open).
-   * May perform I/O: read from store, call external APIs, invoke LLMs.
+   * May perform I/O: read from a scoped store view, call external APIs, invoke LLMs.
    * Must return a complete UpsertEvaluationParams with status='draft'.
    */
   evaluateDraft(ctx: EnricherContext): Promise<UpsertEvaluationParams>;
@@ -251,14 +254,16 @@ interface EnricherAdapter {
 interface EnricherContext {
   readonly epochId: bigint;
   readonly nodeId: string;
-  readonly attributionStore: AttributionStore;
+  readonly attributionStore: EvaluationStore & SelectionReader;
   readonly logger: Logger;
   /** User-provided config parsed from .cogni/attribution/<profileId>.yaml, or null. */
   readonly profileConfig: Record<string, unknown> | null;
 }
 ```
 
-**`UpsertEvaluationParams`** must include `evaluationRef`, `algoRef`, `inputsHash`, `schemaRef`, and `payloadHash`. The framework validates all four ref fields are present on every evaluation write (EVALUATION_WRITE_VALIDATED).
+`EnricherContext.attributionStore` is intentionally scoped. Enrichers receive only evaluation read/write capabilities and read-only selection queries — no selection writes, no identity resolution, no epoch mutations.
+
+**`UpsertEvaluationParams`** must include `evaluationRef`, `algoRef`, `inputsHash`, `schemaRef`, and `payloadHash`. The framework validates those fields, verifies descriptor parity, and parses `payloadJson` with the enricher's `outputSchema` on every evaluation write (EVALUATION_WRITE_VALIDATED).
 
 **Adapter registry** — The executor resolves adapters by `evaluationRef`:
 
@@ -291,6 +296,9 @@ interface AllocatorDescriptor {
   readonly compute: (
     context: AllocationContext
   ) => Promise<ReceiptUnitWeight[]>;
+
+  /** Runtime schema for allocator output. */
+  readonly outputSchema: ZodType<ReceiptUnitWeight[]>;
 }
 
 interface AllocationContext {
@@ -307,12 +315,12 @@ interface AllocationContext {
 }
 ```
 
-`dispatchAllocator()` resolves the allocator from the profile, validates required evaluations are present, and calls `compute()`:
+`dispatchAllocator()` resolves the allocator by `allocatorRef`, validates required evaluations are present, calls `compute()`, and parses the result with the descriptor's `outputSchema`:
 
 ```typescript
 async function dispatchAllocator(
   registry: AllocatorRegistry,
-  profile: PipelineProfile,
+  allocatorRef: string,
   context: AllocationContext
 ): Promise<ReceiptUnitWeight[]>;
 ```
@@ -450,7 +458,7 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 
 ## Open Questions
 
-- [x] **Claimant-shares finalization path:** ~~Should finalization go through the pipeline dispatch?~~ Resolved by bug.0125: claimant resolution is now a first-class pipeline phase with its own `epoch_receipt_claimants` table. Finalization loads locked claimants + computes `computeReceiptWeights()` + `explodeToClaimants()`. Not a plugin concern — it's a domain operation in `attribution-ledger`.
+- [x] **Claimant-shares finalization path:** ~~Should finalization go through the pipeline dispatch?~~ Resolved: finalization dispatches the pinned allocator via the plugin registry, then applies subject overrides and `explodeToClaimants()` using locked claimant rows. Claimant resolution remains a first-class pipeline phase via `epoch_receipt_claimants`.
 - [ ] **Customer-authored plugins:** When a customer wants to bring their own enricher/allocator implementation (not just config), how does our service discover and execute it safely? Deferred — config-driven customization via `.cogni/attribution/` covers the near-term need. Code-level extensibility requires a trust/sandbox model.
 - [ ] **`schemaRef` format:** Proposed format is `"<evaluationRef>/<semver>"` (e.g., `"cogni.echo.v0/1.0.0"`). Alternative: separate namespace. Need to confirm this doesn't collide with existing evaluation ref naming.
 
