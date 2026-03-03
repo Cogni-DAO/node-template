@@ -22,20 +22,20 @@ All money I/O in one place. Inbound USDC → treasury postings. Attribution stat
 
 ## Core Invariants
 
-| Rule                      | Constraint                                                                                                                                                                                                                              |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BEANCOUNT_CANONICAL       | Beancount journal files are the source-of-truth financial ledger. All monetary state is reproducible from the journal.                                                                                                                  |
-| ATTRIBUTION_NOT_FINANCIAL | A signed attribution statement is a governance commitment (who earned what share), NOT a financial event. No money moves at epoch finalization.                                                                                         |
-| FUNDING_IS_FINANCIAL      | Emissions funding of the MerkleDistributor IS a financial event. Entry: Dr Liability:UnclaimedEquity / Cr Assets:EmissionsVault:COGNI.                                                                                                  |
-| CLAIM_IS_FINANCIAL        | User on-chain claim from the distributor IS a financial event (liability reduction).                                                                                                                                                    |
-| ROTKI_ENRICHMENT_ONLY     | Rotki for crypto transaction enrichment and tax lot validation. NOT the canonical ledger.                                                                                                                                               |
-| EQUITY_PRIMARY            | Governance/rewards token distributions are the primary token distribution instrument. USDC distributions are governance-voted, not automated.                                                                                              |
-| MERKLE_CLAIMS             | Stock per-epoch MerkleDistributor (Uniswap pattern, Base mainnet) is the preferred MVP on-chain distribution rail. User-initiated claims with inclusion proofs. Not Splits push distribution.                                            |
-| MULTI_INSTRUMENT          | Beancount hierarchy tracks all instrument types (equity tokens, USDC, future). Financial events are instrument-typed. Settlement policy determines which instruments are active.                                                        |
-| OPERATOR_PORT_REQUIRED    | Treasury actions (fund distributor, rotate Merkle roots, contract management, batch operations) require an Operator Port — a signing + policy boundary with rate limits, approvals, allowlists, and audit logs. NOT a custodial wallet. |
-| ALL_MATH_BIGINT           | No floating point in monetary calculations. Inherited from attribution-ledger.                                                                                                                                                          |
-| TRUSTED_MVP_EXPLICIT      | MVP claim publication/funding is trusted governance execution (Safe/manual or equivalent), NOT on-chain emissions enforcement. The trust model must be stated explicitly in product and operator docs.                                   |
-| SETTLEMENT_MANIFEST_REQUIRED | Every published distribution records a settlement manifest containing `epochId`, `statementHash`, `merkleRoot`, `totalAmount`, `fundingTxHash`, `publisher`, and `publishedAt`.                                                       |
+| Rule                         | Constraint                                                                                                                                                                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BEANCOUNT_CANONICAL          | Beancount journal files are the source-of-truth financial ledger. All monetary state is reproducible from the journal.                                                                                                                  |
+| ATTRIBUTION_NOT_FINANCIAL    | A signed attribution statement is a governance commitment (who earned what share), NOT a financial event. No money moves at epoch finalization.                                                                                         |
+| FUNDING_IS_FINANCIAL         | Emissions funding of the MerkleDistributor IS a financial event. Entry: Dr Liability:UnclaimedEquity / Cr Assets:EmissionsVault:COGNI.                                                                                                  |
+| CLAIM_IS_FINANCIAL           | User on-chain claim from the distributor IS a financial event (liability reduction).                                                                                                                                                    |
+| ROTKI_ENRICHMENT_ONLY        | Rotki for crypto transaction enrichment and tax lot validation. NOT the canonical ledger.                                                                                                                                               |
+| EQUITY_PRIMARY               | Governance/rewards token distributions are the primary token distribution instrument. USDC distributions are governance-voted, not automated.                                                                                           |
+| MERKLE_CLAIMS                | Stock per-epoch MerkleDistributor (Uniswap pattern, Base mainnet) is the preferred MVP on-chain distribution rail. User-initiated claims with inclusion proofs. Not Splits push distribution.                                           |
+| MULTI_INSTRUMENT             | Beancount hierarchy tracks all instrument types (equity tokens, USDC, future). Financial events are instrument-typed. Settlement policy determines which instruments are active.                                                        |
+| OPERATOR_PORT_REQUIRED       | Treasury actions (fund distributor, rotate Merkle roots, contract management, batch operations) require an Operator Port — a signing + policy boundary with rate limits, approvals, allowlists, and audit logs. NOT a custodial wallet. |
+| ALL_MATH_BIGINT              | No floating point in monetary calculations. Inherited from attribution-ledger.                                                                                                                                                          |
+| TRUSTED_MVP_EXPLICIT         | MVP claim publication/funding is trusted governance execution (Safe/manual or equivalent), NOT on-chain emissions enforcement. The trust model must be stated explicitly in product and operator docs.                                  |
+| SETTLEMENT_MANIFEST_REQUIRED | Every published distribution records a settlement manifest containing `epochId`, `statementHash`, `merkleRoot`, `totalAmount`, `fundingTxHash`, `publisher`, and `publishedAt`.                                                         |
 
 ## Accounts Hierarchy (Beancount)
 
@@ -94,15 +94,28 @@ node formation
 
 See [proj.financial-ledger](../../work/projects/proj.financial-ledger.md) for the implementation roadmap.
 
+## Enforcement Progression
+
+The signed `AttributionStatement` contains `poolTotalCredits` — but nothing in the attribution pipeline hard-enforces that this value respects the budget policy. The enforcement point is the **token release from the emissions holder**, not the statement itself.
+
+| Phase     | What enforces the budget cap?                                                                                                                                                                                     | Source of truth for remaining supply                                                                                               |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Crawl** | Nothing automated. Off-chain pure functions compute `epoch_pool`, but a bug or direct DB write can inflate `poolTotalCredits`. Admin reviews the signed statement.                                                | `budget_bank_ledger.remaining_after` in Postgres                                                                                   |
+| **Walk**  | Safe signers verify the funding amount against budget policy before authorizing each token release. The emissions holder's on-chain balance is the hard cap — you cannot release more tokens than the holder has. | `emissionsHolder.balanceOf(token)` on-chain. Postgres `remaining` becomes a reconciliation check; if they diverge, the chain wins. |
+| **Run**   | `EmissionsController` contract enforces `amount ≤ maxPerEpoch` and `totalReleased + amount ≤ totalSupply` via `require()`. Over-budget transactions revert.                                                       | On-chain contract state. Postgres is an index/cache.                                                                               |
+
+**If the signed statement says 50K credits but the budget allows 10K:** In Crawl, nothing stops it. In Walk, the Safe signers reject the funding transaction. In Run, the contract reverts it.
+
 ## Threat Model
 
-| Threat | MVP controls |
-| ------ | ------------ |
-| Malicious maintainer changes settlement code or publication inputs before release | Branch protection, required review, signed releases or build attestations, and reproducible settlement artifacts. |
-| Compromised operator publishes a root early or funds a distributor with the wrong amount | Safe/manual publish-and-fund policy, limited publisher set, and manifest review before execution. |
-| Statement/root mismatch: a valid signed statement exists, but a different root is published | Settlement manifest stores `statementHash`, and the published root is derived from the signed statement rather than ad hoc balances. |
-| Replay or duplicate publication for an epoch | One settlement publication record per epoch plus explicit operator review before any replacement action. |
-| Overfunding distributor beyond the intended epoch amount | Funding amount must equal manifest `totalAmount`, with reconciliation against the stored settlement record and journal entry. |
+| Threat                                                                                      | MVP controls                                                                                                                          |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Signed statement contains `poolTotalCredits` exceeding budget policy                        | Walk: Safe signers verify amount against policy before authorizing release. Run: EmissionsController `require()` reverts over-budget. |
+| Malicious maintainer changes settlement code or publication inputs before release           | Branch protection, required review, signed releases or build attestations, and reproducible settlement artifacts.                     |
+| Compromised operator publishes a root early or funds a distributor with the wrong amount    | Safe/manual publish-and-fund policy, limited publisher set, and manifest review before execution.                                     |
+| Statement/root mismatch: a valid signed statement exists, but a different root is published | Settlement manifest stores `statementHash`, and the published root is derived from the signed statement rather than ad hoc balances.  |
+| Replay or duplicate publication for an epoch                                                | One settlement publication record per epoch plus explicit operator review before any replacement action.                              |
+| Overfunding distributor beyond the intended epoch amount                                    | Funding amount must equal manifest `totalAmount`, reconciled against settlement record, journal entry, and emissions holder balance.  |
 
 ## Non-Goals
 

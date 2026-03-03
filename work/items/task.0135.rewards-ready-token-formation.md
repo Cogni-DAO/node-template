@@ -41,22 +41,22 @@ These are not engineering choices. They are governance/founder decisions that de
 
 ### Decision 1: Total Token Supply
 
-| Option | Implication |
-|--------|------------|
-| 1,000,000 (1M) | Simple. 520K budget = 52% of supply via attribution over ~1 year at 10K/epoch. |
-| 10,000,000 (10M) | More granularity. 520K budget = 5.2% of supply. Leaves room for future programs. |
-| Match `budget_total` 1:1 | 520K tokens total. All supply goes through attribution. No reserve. |
-| Other | Governance picks the number. |
+| Option                   | Implication                                                                      |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| 1,000,000 (1M)           | Simple. 520K budget = 52% of supply via attribution over ~1 year at 10K/epoch.   |
+| 10,000,000 (10M)         | More granularity. 520K budget = 5.2% of supply. Leaves room for future programs. |
+| Match `budget_total` 1:1 | 520K tokens total. All supply goes through attribution. No reserve.              |
+| Other                    | Governance picks the number.                                                     |
 
 **Related question:** What is the credit:token ratio? V0 spec says 1:1 (1 credit = 1 token unit at 18 decimals). If total supply ≠ `budget_total`, the ratio changes or a reserve exists.
 
 ### Decision 2: Emissions Holder Type
 
-| Option | Pros | Cons | IaC Status |
-|--------|------|------|------------|
-| **DAO contract itself** | Simplest. DAO already exists. Tokens held by the DAO, released via governance proposals. | Weakest controls — any passing proposal can move all tokens. No rate limiting. | No new infra needed. |
-| **Safe multisig** (e.g., 2-of-3) | Battle-tested. Explicit human authorization for each release. Visible on safe.global. | Requires Safe creation (manual via UI or Safe SDK). Adds a new address to manage. | No Safe SDK in codebase. Manual creation via safe.global UI is viable. |
-| **Dedicated vault contract** | Strongest controls (enforced release caps, epoch timing). | Custom contract = audit burden. Premature for Crawl per reviewer feedback. | No Foundry/Hardhat in repo. Would need external tooling. |
+| Option                           | Pros                                                                                     | Cons                                                                              | IaC Status                                                             |
+| -------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **DAO contract itself**          | Simplest. DAO already exists. Tokens held by the DAO, released via governance proposals. | Weakest controls — any passing proposal can move all tokens. No rate limiting.    | No new infra needed.                                                   |
+| **Safe multisig** (e.g., 2-of-3) | Battle-tested. Explicit human authorization for each release. Visible on safe.global.    | Requires Safe creation (manual via UI or Safe SDK). Adds a new address to manage. | No Safe SDK in codebase. Manual creation via safe.global UI is viable. |
+| **Dedicated vault contract**     | Strongest controls (enforced release caps, epoch timing).                                | Custom contract = audit burden. Premature for Crawl per reviewer feedback.        | No Foundry/Hardhat in repo. Would need external tooling.               |
 
 **Recommendation:** Safe multisig is the sweet spot for Walk. For Crawl, the DAO contract itself may be sufficient if the goal is just "token setup is final, not placeholder."
 
@@ -64,12 +64,12 @@ These are not engineering choices. They are governance/founder decisions that de
 
 **Investigation required.** This determines whether we update the existing DAO or deploy a new one.
 
-| Question | How to Answer |
-|----------|---------------|
-| Does Aragon GovernanceERC20 have a `mint()` function? | Check the deployed contract on Basescan (`0xF61c...` → token address from plugin). Read the contract ABI. |
-| Does the DAO have MINTER permission on the token? | Check Aragon's ACL. The TokenVoting setup plugin may or may not grant mint permission to the DAO. |
-| If mintable: can the DAO mint via a governance proposal? | Create an Aragon proposal that calls `token.mint(emissionsHolder, totalSupply - 1e18)`. |
-| If NOT mintable: must we deploy a new DAO? | New `createDao()` call with updated MintSettings: `receivers: [emissionsHolder], amounts: [totalSupply]`. Loses current DAO address. |
+| Question                                                 | How to Answer                                                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Does Aragon GovernanceERC20 have a `mint()` function?    | Check the deployed contract on Basescan (`0xF61c...` → token address from plugin). Read the contract ABI.                            |
+| Does the DAO have MINTER permission on the token?        | Check Aragon's ACL. The TokenVoting setup plugin may or may not grant mint permission to the DAO.                                    |
+| If mintable: can the DAO mint via a governance proposal? | Create an Aragon proposal that calls `token.mint(emissionsHolder, totalSupply - 1e18)`.                                              |
+| If NOT mintable: must we deploy a new DAO?               | New `createDao()` call with updated MintSettings: `receivers: [emissionsHolder], amounts: [totalSupply]`. Loses current DAO address. |
 
 **Codebase note:** The GovernanceERC20 ABI in the repo (`src/shared/web3/node-formation/aragon-abi.ts`) only exposes `balanceOf()` — it's intentionally minimal. The actual on-chain contract may have more functions. Must check Basescan.
 
@@ -102,9 +102,9 @@ cogni_dao:
   dao_contract: "0x..."
   plugin_contract: "0x..."
   signal_contract: "0x..."
-  token_contract: "0x..."          # NEW: explicit token address
-  emissions_holder: "0x..."        # NEW: address holding unreleased supply
-  total_supply: "1000000"          # NEW: total token supply (token units)
+  token_contract: "0x..." # NEW: explicit token address
+  emissions_holder: "0x..." # NEW: address holding unreleased supply
+  total_supply: "1000000" # NEW: total token supply (token units)
 ```
 
 ### Files

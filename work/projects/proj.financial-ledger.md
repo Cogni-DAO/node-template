@@ -25,10 +25,10 @@ Build the money side of the DAO. The Attribution Ledger answers "who did what an
 
 **Two settlement instruments, different triggers:**
 
-| Instrument                              | Trigger                                  | Execution model                              |
-| --------------------------------------- | ---------------------------------------- | -------------------------------------------- |
-| **Governance/rewards token**            | Finalized statement → published claim set | Trusted DAO-controlled execution in MVP       |
-| **USDC payouts**                        | Governance vote                          | Manual / governance-gated (future)           |
+| Instrument                   | Trigger                                   | Execution model                         |
+| ---------------------------- | ----------------------------------------- | --------------------------------------- |
+| **Governance/rewards token** | Finalized statement → published claim set | Trusted DAO-controlled execution in MVP |
+| **USDC payouts**             | Governance vote                           | Manual / governance-gated (future)      |
 
 **Key accounting separation:** A signed attribution statement is a governance commitment (who earned what share), NOT a financial event. Financial events occur only when funds move on-chain:
 
@@ -51,32 +51,32 @@ Beancount is the canonical ledger and must be capable of tracking ALL instrument
 
 **Goal:** Make the token and artifact model trustworthy before any live claims. Reuse the Aragon `GovernanceERC20` as the rewards token, update node formation to mint a fixed supply to a DAO-controlled emissions holder, and produce auditable settlement artifacts from finalized statements.
 
-| Deliverable                                                                                                                            | Status      | Est | Work Item         |
-| -------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
-| Beancount accounts hierarchy (multi-instrument: equity tokens + USDC)                                                                  | Not Started | 1   | (create at start) |
-| Node formation update: mint fixed `GovernanceERC20` supply to a DAO-controlled emissions holder instead of founder bootstrap mint      | Not Started | 2   | `task.0135` |
+| Deliverable                                                                                                                                            | Status      | Est | Work Item         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | --- | ----------------- |
+| Beancount accounts hierarchy (multi-instrument: equity tokens + USDC)                                                                                  | Not Started | 1   | (create at start) |
+| Node formation update: mint fixed `GovernanceERC20` supply to a DAO-controlled emissions holder instead of founder bootstrap mint                      | Not Started | 2   | `task.0135`       |
 | `computeMerkleTree(statement)` pure function — takes finalized statement `credit_amount` entitlements + settlement policy → root + proofs per claimant | Not Started | 2   | (create at start) |
-| Settlement manifest store/view — persist `epochId`, `statementHash`, `merkleRoot`, `totalAmount`, `fundingTxHash`, `publisher`, `publishedAt` | Not Started | 2   | (create at start) |
-| Recipient resolution gate — unresolved claimants block settlement eligibility                                                           | Not Started | 2   | (create at start) |
-| Threat model + operational integrity controls for publish/fund flow                                                                     | Not Started | 1   | (create at start) |
-| Compact lifecycle doc for token flow — formation mint → statement → manifest/root → funded distributor → claim                       | Not Started | 1   | (create at start) |
+| Settlement manifest store/view — persist `epochId`, `statementHash`, `merkleRoot`, `totalAmount`, `fundingTxHash`, `publisher`, `publishedAt`          | Not Started | 2   | (create at start) |
+| Recipient resolution gate — unresolved claimants block settlement eligibility                                                                          | Not Started | 2   | (create at start) |
+| Threat model + operational integrity controls for publish/fund flow                                                                                    | Not Started | 1   | (create at start) |
+| Compact lifecycle doc for token flow — formation mint → statement → manifest/root → funded distributor → claim                                         | Not Started | 1   | (create at start) |
 
 ### Walk (P1) — Trusted GovernanceERC20 Claims
 
 **Goal:** Ship the first community-respectable claim rail using boring, audited primitives and explicit trusted governance execution.
 
-| Deliverable                                                                                            | Status      | Est | Work Item            |
-| ------------------------------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
-| Stock per-epoch Uniswap `MerkleDistributor` deployment path (default)                                                          | Not Started | 2   | (create at P1 start) |
-| Distributor choice spike — only adopt audited multi-epoch variant if operational need is proven                                 | Not Started | 1   | (create at P1 start) |
-| Settlement port interface (`SettlementStore`) — publish root, record funding tx, track claims                                   | Not Started | 2   | (create at P1 start) |
-| Operator Port integration for treasury signing (Safe/manual publish + fund)                                                     | Not Started | 2   | (create at P1 start) |
+| Deliverable                                                                                                                                                | Status      | Est | Work Item            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Stock per-epoch Uniswap `MerkleDistributor` deployment path (default)                                                                                      | Not Started | 2   | (create at P1 start) |
+| Distributor choice spike — only adopt audited multi-epoch variant if operational need is proven                                                            | Not Started | 1   | (create at P1 start) |
+| Settlement port interface (`SettlementStore`) — publish root, record funding tx, track claims                                                              | Not Started | 2   | (create at P1 start) |
+| Operator Port integration for treasury signing (Safe/manual publish + fund)                                                                                | Not Started | 2   | (create at P1 start) |
 | Temporal workflow: `SettleEpochWorkflow` — reads finalized statement, computes Merkle tree, publishes manifest, funds distributor, records Beancount entry | Not Started | 2   | (create at P1 start) |
-| Journal generation: Temporal workflow validates Beancount entries with `bean-check` before/after distributor funding            | Not Started | 2   | (create at P1 start) |
-| On-chain receipt adapter: USDC inbound payments → Beancount journal entries                                                      | Not Started | 2   | (create at P1 start) |
-| Claim flow UI — contributor connects wallet, sees unclaimed epochs, submits Merkle claim transaction                            | Not Started | 2   | (create at P1 start) |
-| Holdings view — token balance, claim history, and claimed/unclaimed epoch status                                                | Not Started | 2   | (create at P1 start) |
-| Treasury read API: settlement history + manifest lookup (queries Beancount + settlement store)                                  | Not Started | 2   | (create at P1 start) |
+| Journal generation: Temporal workflow validates Beancount entries with `bean-check` before/after distributor funding                                       | Not Started | 2   | (create at P1 start) |
+| On-chain receipt adapter: USDC inbound payments → Beancount journal entries                                                                                | Not Started | 2   | (create at P1 start) |
+| Claim flow UI — contributor connects wallet, sees unclaimed epochs, submits Merkle claim transaction                                                       | Not Started | 2   | (create at P1 start) |
+| Holdings view — token balance, claim history, and claimed/unclaimed epoch status                                                                           | Not Started | 2   | (create at P1 start) |
+| Treasury read API: settlement history + manifest lookup (queries Beancount + settlement store)                                                             | Not Started | 2   | (create at P1 start) |
 
 ### Run (P2+) — On-Chain Enforcement + Multi-Instrument Hardening
 
@@ -84,14 +84,14 @@ Beancount is the canonical ledger and must be capable of tracking ALL instrument
 
 | Deliverable                                                                                         | Status      | Est | Work Item            |
 | --------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| On-chain emissions controller — enforce release caps / epoch timing / authorized publication       | Not Started | 3   | (create at P2 start) |
-| Statement/root binding on-chain — published roots cryptographically tied to `statementHash`        | Not Started | 3   | (create at P2 start) |
-| Governor/Timelock-native authorization for publish/fund actions                                    | Not Started | 2   | (create at P2 start) |
-| Halvening emissions / richer budget policy after live usage                                        | Not Started | 2   | (create at P2 start) |
-| Governance-voted USDC distribution path (proposal → vote → execute via Operator Port)             | Not Started | 2   | (create at P2 start) |
-| Multi-instrument `computeSettlement()` — splits each user's share across instruments               | Not Started | 2   | (create at P2 start) |
-| Member capital sub-accounts in Beancount: `Liability:MemberEquity:{userId}`                        | Not Started | 2   | (create at P2 start) |
-| Reserve fund Beancount account: `Equity:Reserves:Collective`                                       | Not Started | 1   | (create at P2 start) |
+| On-chain emissions controller — enforce release caps / epoch timing / authorized publication        | Not Started | 3   | (create at P2 start) |
+| Statement/root binding on-chain — published roots cryptographically tied to `statementHash`         | Not Started | 3   | (create at P2 start) |
+| Governor/Timelock-native authorization for publish/fund actions                                     | Not Started | 2   | (create at P2 start) |
+| Halvening emissions / richer budget policy after live usage                                         | Not Started | 2   | (create at P2 start) |
+| Governance-voted USDC distribution path (proposal → vote → execute via Operator Port)               | Not Started | 2   | (create at P2 start) |
+| Multi-instrument `computeSettlement()` — splits each user's share across instruments                | Not Started | 2   | (create at P2 start) |
+| Member capital sub-accounts in Beancount: `Liability:MemberEquity:{userId}`                         | Not Started | 2   | (create at P2 start) |
+| Reserve fund Beancount account: `Equity:Reserves:Collective`                                        | Not Started | 1   | (create at P2 start) |
 | Git-canonical `bundle.v1.json` — finalized statement + settlement + hash chain (`prev_bundle_hash`) | Not Started | 3   | (create at P2 start) |
 | Bundle commit bot: PR flow, Postgres becomes index keyed by `(bundle_hash, commit_sha)`             | Not Started | 2   | (create at P2 start) |
 | Equity redemption workflow — convert retained equity to USDC claim (governance-gated)               | Not Started | 2   | (create at P2 start) |

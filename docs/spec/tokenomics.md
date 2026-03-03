@@ -47,14 +47,14 @@ Replace arbitrary, inflationary credit issuance with principled tokenomics:
 
 ## Invariants
 
-| Rule                        | Constraint                                                                                                                                                                                              |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BUDGET_HARD_CAP             | `SUM(all epoch_pools ever) ≤ budget_total`. Enforced by remaining-budget check.                                                                                                                         |
+| Rule                        | Constraint                                                                                                                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BUDGET_HARD_CAP             | `SUM(all epoch_pools ever) ≤ budget_total`. Off-chain governance policy enforced by remaining-budget check in Crawl. In Walk+, the real cap is the on-chain emissions holder balance.                                 |
 | EPOCH_POOL_DETERMINISTIC    | `epoch_pool = min(accrual_per_epoch, remaining)` when an epoch has included receipts, otherwise `0`. Policy function, not admin choice. Admin can reduce (exclude receipts, zero-weight), never inflate above policy. |
-| ONE_USER_FACING_UNIT        | Users see one number in one denomination. Internal milli-units are never displayed.                                                                                                                     |
-| BUDGET_BANK_APPEND_ONLY     | Budget ledger entries are append-only so `remaining` is replayable and auditable. This is a governance transparency property, not a hard security boundary.                                            |
-| SETTLEMENT_DECOUPLED        | Attribution statements are governance commitments. Settlement (how entitlements become claims) is a separate, pluggable layer.                                                                          |
-| GOVERNANCE_REWARD_PLUGGABLE | The attribution pipeline outputs `creditAmount`. Whether credits settle into the same governance token or separate instruments is a settlement-layer decision. Attribution remains instrument-agnostic. |
+| ONE_USER_FACING_UNIT        | Users see one number in one denomination. Internal milli-units are never displayed.                                                                                                                                   |
+| BUDGET_BANK_APPEND_ONLY     | Budget ledger entries are append-only so `remaining` is replayable and auditable. This is a governance transparency property, not a hard security boundary.                                                           |
+| SETTLEMENT_DECOUPLED        | Attribution statements are governance commitments. Settlement (how entitlements become claims) is a separate, pluggable layer.                                                                                        |
+| GOVERNANCE_REWARD_PLUGGABLE | The attribution pipeline outputs `creditAmount`. Whether credits settle into the same governance token or separate instruments is a settlement-layer decision. Attribution remains instrument-agnostic.               |
 
 ## Design
 
@@ -137,14 +137,14 @@ activity_ledger:
 
 #### C4. Code Changes (Crawl)
 
-| File                                             | Change                                                                                                                                        |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/repo-spec/src/schema.ts`               | Add `budgetPolicySchema`. Deprecate `poolConfigSpecSchema`.                                                                                   |
-| `packages/repo-spec/src/accessors.ts`            | Add `getBudgetPolicy()` accessor.                                                                                                             |
-| `packages/attribution-ledger/src/pool.ts`        | Add `computeEpochBudget(remaining, policy, hasIncludedReceipts)` pure function. Keep `estimatePoolComponentsV0` for backward compat.      |
-| `packages/attribution-ledger/src/budget-bank.ts` | Optional helper module if retained. MVP should model remaining-budget bookkeeping only; no hidden carry mechanics.                           |
+| File                                             | Change                                                                                                                                                            |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/repo-spec/src/schema.ts`               | Add `budgetPolicySchema`. Deprecate `poolConfigSpecSchema`.                                                                                                       |
+| `packages/repo-spec/src/accessors.ts`            | Add `getBudgetPolicy()` accessor.                                                                                                                                 |
+| `packages/attribution-ledger/src/pool.ts`        | Add `computeEpochBudget(remaining, policy, hasIncludedReceipts)` pure function. Keep `estimatePoolComponentsV0` for backward compat.                              |
+| `packages/attribution-ledger/src/budget-bank.ts` | Optional helper module if retained. MVP should model remaining-budget bookkeeping only; no hidden carry mechanics.                                                |
 | DB migration                                     | Add `budget_bank_ledger` table: `(node_id, scope_id, epoch_id, entry_type, amount, remaining_after, created_at)`. Append-only for replayability and auditability. |
-| `services/scheduler-worker/`                     | `CollectEpochWorkflow` reads remaining budget, computes epoch_pool via policy, records pool component.                                       |
+| `services/scheduler-worker/`                     | `CollectEpochWorkflow` reads remaining budget, computes epoch_pool via policy, records pool component.                                                            |
 
 #### C5. Budget Policy State Machine
 
@@ -166,6 +166,43 @@ If `remaining = 0`, `epoch_pool = 0`. Epoch still runs (activity is recorded for
 
 ---
 
+### Enforcement Progression — Where the Budget Cap Actually Lives
+
+The attribution pipeline can produce a signed statement with any `poolTotalCredits`. The pipeline itself does not enforce the budget cap — it computes `epoch_pool` from policy, but nothing prevents a bug, a direct DB write, or an additional pool component from inflating the total. The enforcement point is the **token release**, not the statement.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  CRAWL (off-chain only)                                                 │
+│                                                                         │
+│  budget_total, remaining    → Postgres + pure functions                 │
+│  accrual_per_epoch          → repo-spec.yaml                            │
+│  Enforcement:               → NONE. Governance policy, not security.    │
+│  What stops over-issuance?  → Nothing automated. Admin reviews.         │
+├─────────────────────────────────────────────────────────────────────────┤
+│  WALK (first token claims)                                              │
+│                                                                         │
+│  Real remaining supply      → emissionsHolder.balanceOf(token) on-chain │
+│  budget_total in Postgres   → reconciliation check, NOT source of truth │
+│  accrual_per_epoch          → repo-spec.yaml (human-verified per epoch) │
+│  Enforcement:               → Safe signers verify amount ≤ policy       │
+│                                before authorizing each release.         │
+│  What stops over-issuance?  → Humans reject the Safe transaction.       │
+│                             → Emissions holder balance is the hard cap. │
+├─────────────────────────────────────────────────────────────────────────┤
+│  RUN (on-chain enforcement)                                             │
+│                                                                         │
+│  EmissionsController.maxPerEpoch      → on-chain, immutable per era     │
+│  EmissionsController.totalReleased    → on-chain counter                │
+│  Enforcement:                         → require() reverts over-budget tx │
+│  Postgres budget_bank_ledger          → index/cache, not source of truth│
+│  repo-spec accrual_per_epoch          → read from contract state        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key insight:** Once the emissions holder exists on-chain (Walk), `budget_total` and `remaining` in Postgres are redundant with the on-chain token balance. The `budget_bank_ledger` is Crawl scaffolding that gets progressively replaced by on-chain state. It remains useful for off-chain auditability but is never the security boundary.
+
+---
+
 ### Walk + Run — Settlement Handoff Contracts
 
 > **These phases are design inputs for [proj.financial-ledger](../../work/projects/proj.financial-ledger.md).** This spec defines the economics and handoff constraints only; the settlement roadmap lives in the project.
@@ -183,6 +220,7 @@ Attribution credits (off-chain)
 - The settlement token is the Aragon `GovernanceERC20` created at node formation.
 - Node formation must move from founder bootstrap minting to a fixed-supply mint into a DAO-controlled emissions holder.
 - Crawl budget policy remains off-chain accounting and governance policy. It is not the hard security boundary for token release.
+- In Walk, the source of truth for remaining supply is `emissionsHolder.balanceOf(token)` on-chain, not Postgres. Off-chain `remaining` becomes a reconciliation check.
 - Walk should prefer stock audited per-epoch Merkle claims. Bespoke on-chain release enforcement is a later hardening step.
 - Merkle settlement consumes signed `creditAmount` entitlements from the finalized statement, not internal `finalUnits`.
 - USDC distributions remain a separate, governance-voted financial action.
@@ -191,22 +229,22 @@ Attribution credits (off-chain)
 
 | Edge Case               | Resolution                                                                                                                                                                             |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `total_points = 0`      | Epoch pool = 0. No statement produced. Quiet epochs do not create larger future distributions in the prototype policy.                                                                  |
+| `total_points = 0`      | Epoch pool = 0. No statement produced. Quiet epochs do not create larger future distributions in the prototype policy.                                                                 |
 | Unresolved claimants    | Already handled by `IdentityClaimant` type. Claimant key is stable (`identity:github:12345`). Statement finalization can proceed, but on-chain settlement waits for wallet resolution. |
 | Address changes         | Wallet binding layer (existing `user_bindings`). Statement references `claimantKey`, not wallet address. Claim address resolved at settlement time.                                    |
-| Forked scopes           | Each scope has its own budget policy and budget cap. Fork = new scope = new supply budget. No cross-contamination.                                                                   |
-| Root rotation authority | Walk: Safe/manual or equivalent trusted governance execution publishes roots and funding. Run: Governor/Timelock or stronger on-chain authorization gates it.                            |
+| Forked scopes           | Each scope has its own budget policy and budget cap. Fork = new scope = new supply budget. No cross-contamination.                                                                     |
+| Root rotation authority | Walk: Safe/manual or equivalent trusted governance execution publishes roots and funding. Run: Governor/Timelock or stronger on-chain authorization gates it.                          |
 | Unclaimed tokens        | `sweep(epochId)` after claim window → treasury. Swept amounts are NOT re-emitted.                                                                                                      |
 
 ## OSS Building Blocks
 
-| Need                | OSS                                                  | Status                           |
-| ------------------- | ---------------------------------------------------- | -------------------------------- |
-| Governance token    | Aragon GovernanceERC20 (from node formation)         | Walk                             |
-| Merkle claims       | Uniswap MerkleDistributor (per-epoch, preferred)     | Walk                             |
-| Governance          | OpenZeppelin Governor + TimelockController           | Run                              |
-| Streaming (alt)     | Sablier Lockup / Superfluid                          | Run (optional)                   |
-| Double-entry ledger | Beancount                                            | Walk (via proj.financial-ledger) |
+| Need                | OSS                                              | Status                           |
+| ------------------- | ------------------------------------------------ | -------------------------------- |
+| Governance token    | Aragon GovernanceERC20 (from node formation)     | Walk                             |
+| Merkle claims       | Uniswap MerkleDistributor (per-epoch, preferred) | Walk                             |
+| Governance          | OpenZeppelin Governor + TimelockController       | Run                              |
+| Streaming (alt)     | Sablier Lockup / Superfluid                      | Run (optional)                   |
+| Double-entry ledger | Beancount                                        | Walk (via proj.financial-ledger) |
 
 ## What Does NOT Change
 

@@ -28,11 +28,11 @@ Extend the P0 web DAO formation wizard (complete, manually validated on Base mai
 
 **Goal:** Close remaining P0 gaps and make the token setup compatible with real contributor distributions.
 
-| Deliverable                                                                                                                                                                                                                                         | Status      | Est | Work Item |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Rewards-ready mint mode — fixed `GovernanceERC20` supply minted to a DAO-controlled emissions holder, with server verification of holder + total supply                                                                                           | Not Started | 2   | `task.0135` |
-| Automated e2e testing (DAO formation flow with testnet)                                                                                                                                                                                             | Not Started | 2   | —         |
-| Encoding parity test: TokenVoting setup encoding must match Foundry exactly (`packages/aragon-osx/src/__tests__/encoding.parity.test.ts`). Fixture generation: Run Foundry script with known inputs, capture encoded bytes, commit as test fixture. | Not Started | 2   | —         |
+| Deliverable                                                                                                                                                                                                                                         | Status      | Est | Work Item   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------- |
+| Rewards-ready mint mode — fixed `GovernanceERC20` supply minted to a DAO-controlled emissions holder, with server verification of holder + total supply                                                                                             | Not Started | 2   | `task.0135` |
+| Automated e2e testing (DAO formation flow with testnet)                                                                                                                                                                                             | Not Started | 2   | —           |
+| Encoding parity test: TokenVoting setup encoding must match Foundry exactly (`packages/aragon-osx/src/__tests__/encoding.parity.test.ts`). Fixture generation: Run Foundry script with known inputs, capture encoded bytes, commit as test fixture. | Not Started | 2   | —           |
 
 ### Walk (P1) — Multi-Holder + CLI Setup Tools + Operator Registry
 
