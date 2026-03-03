@@ -14,7 +14,7 @@ assignees: derekg1729
 credit:
 project: proj.transparent-credit-payouts
 branch: fix/workflow-zod
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/513
 reviewer:
 revision: 0
 blocked_by:
