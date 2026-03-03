@@ -16,7 +16,7 @@
 
 import type {
   EvaluationStore,
-  SelectionStore,
+  SelectionReader,
 } from "@cogni/attribution-ledger";
 import type { ZodType } from "zod";
 
@@ -60,8 +60,8 @@ export interface EnricherLogger {
 export interface EnricherContext {
   readonly epochId: bigint;
   readonly nodeId: string;
-  /** Scoped store view for enrichers: evaluation reads/writes + selection reads. */
-  readonly attributionStore: EvaluationStore & SelectionStore;
+  /** Scoped store view for enrichers: evaluation reads/writes + read-only selection queries. */
+  readonly attributionStore: EvaluationStore & SelectionReader;
   readonly logger: EnricherLogger;
   /** User-provided config parsed from .cogni/attribution/<profileId>.yaml, or null. */
   readonly profileConfig: Record<string, unknown> | null;

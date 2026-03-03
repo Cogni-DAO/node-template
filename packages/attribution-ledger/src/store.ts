@@ -446,7 +446,8 @@ export interface ReceiptStore {
   ): Promise<IngestionReceipt[]>;
 }
 
-export interface SelectionStore {
+/** Read-only selection queries — safe for enrichers and allocation consumers. */
+export interface SelectionReader {
   /**
    * Returns selected receipts with resolved user IDs for allocation computation.
    * Joined query: epoch_selection JOIN ingestion_receipts, filtered to userId IS NOT NULL.
@@ -465,6 +466,12 @@ export interface SelectionStore {
     epochId: bigint
   ): Promise<SelectedReceiptForAttribution[]>;
 
+  getSelectionForEpoch(epochId: bigint): Promise<AttributionSelection[]>;
+  getUnresolvedSelection(epochId: bigint): Promise<AttributionSelection[]>;
+}
+
+/** Selection writes + identity materialization — used by activities, not enrichers. */
+export interface SelectionWriter {
   upsertSelection(params: UpsertSelectionParams[]): Promise<void>;
 
   /**
@@ -473,8 +480,6 @@ export interface SelectionStore {
    * admin-set fields if a row is created between getUnselectedReceipts and insert.
    */
   insertSelectionDoNothing(params: InsertSelectionAutoParams[]): Promise<void>;
-  getSelectionForEpoch(epochId: bigint): Promise<AttributionSelection[]>;
-  getUnresolvedSelection(epochId: bigint): Promise<AttributionSelection[]>;
 
   /**
    * Returns receipts in the epoch window that need selection work:
@@ -498,6 +503,9 @@ export interface SelectionStore {
     userId: string
   ): Promise<void>;
 }
+
+/** Full selection surface — combines read and write. */
+export interface SelectionStore extends SelectionReader, SelectionWriter {}
 
 export interface EvaluationStore {
   /** Upsert draft evaluation — overwrites on (epoch_id, evaluation_ref, status='draft'). */
