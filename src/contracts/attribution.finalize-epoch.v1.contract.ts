@@ -35,7 +35,7 @@ export const finalizeEpochOperation = {
   id: "ledger.finalize-epoch.v1",
   summary: "Finalize epoch with signature",
   description:
-    "Transitions an epoch from review → finalized. Requires EIP-191 signature of the canonical statement message. SIWE-protected, approver-gated. Returns 202 with workflow ID (WRITES_VIA_TEMPORAL).",
+    "Transitions an epoch from review → finalized. Requires an EIP-712 signature of the typed payout statement. SIWE-protected, approver-gated. Returns 202 with workflow ID (WRITES_VIA_TEMPORAL).",
   input: FinalizeEpochInputSchema,
   output: FinalizeEpochOutputSchema,
 } as const;
