@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-03-02
+- **Last reviewed:** 2026-03-03
 - **Status:** draft
 
 ## Purpose
@@ -44,6 +44,7 @@ src/
 - **bootstrap/container.ts is the only place** that instantiates concrete adapters
 - **observability/logger.ts is the only file** that imports pino directly
 - **ports/ contains no implementations** — pure type re-exports from packages
+- **worker allocation stays generic** — activities/workflows dispatch allocators through `@cogni/attribution-pipeline-contracts`, never direct ledger allocation helpers
 
 ## Boundaries
 
@@ -102,7 +103,7 @@ docker build -f services/scheduler-worker/Dockerfile -t scheduler-worker .
 ## Dependencies
 
 - **Internal:** `@cogni/scheduler-core` (ports), `@cogni/ingestion-core` (ports), `@cogni/attribution-ledger` (domain logic + epoch window), `@cogni/attribution-pipeline-contracts` (enricher validation, profile resolution, allocator dispatch), `@cogni/attribution-pipeline-plugins` (built-in registries), `@cogni/db-client` (adapters, bootstrap only), `@cogni/repo-spec` (identity from `.cogni/repo-spec.yaml`), `@cogni/ids`
-- **External:** `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity`, `pino`, `viem` (EIP-191 verification), `zod`
+- **External:** `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity`, `pino`, `viem` (EIP-712 verification), `zod`
 
 ## Change Protocol
 

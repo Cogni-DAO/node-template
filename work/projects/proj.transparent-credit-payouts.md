@@ -10,7 +10,7 @@ summary: "Epoch-based ledger where source adapters collect contribution activity
 outcome: "A third party can recompute the payout table exactly from stored activity events + pool components + weight config. All activity is attributed to contributors via identity bindings. Admin finalizes once per epoch."
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-03-01
+updated: 2026-03-03
 labels: [governance, transparency, payments, web3]
 ---
 
@@ -95,9 +95,9 @@ repo-spec.yaml → schedule sync → Temporal schedule → CollectEpochWorkflow 
 - [ ] **FinalizeEpochWorkflow** — read allocations+pool, computeStatementItems, atomic close+statement (task.0102)
 - [ ] **`computeAllocationSetHash()`** — canonical hash for signing (task.0102)
 - [ ] **3-phase epoch status** — DB migration open/review/finalized + triggers (task.0100)
-- [ ] **EIP-191 signing** — canonical message, verify, store signatures (task.0100)
+- [ ] **EIP-712 signing** — typed data, verify, store signatures (task.0100)
 - [ ] **close-ingestion API route** — manual trigger for open→review (task.0100)
-- [ ] **sign API route** — submit + verify EIP-191 signature (task.0100)
+- [ ] **sign-data API route** — return EIP-712 typed data for signing (task.0100)
 - [ ] **finalize API route** — verify review+signature, trigger FinalizeEpochWorkflow (task.0100)
 - [x] **pool-components API route** — record pool components for epoch (task.0096)
 - [x] **Remaining read/write API routes** — list epochs, activity, allocations, statement (task.0096 — verify deferred to task.0102)
@@ -129,27 +129,20 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 - [ ] All write operations execute in Temporal workflows (Next.js stateless)
 - [ ] All math is BIGINT — no floating point, including weight values (milli-units)
 
-### Walk (P1) — Governance Claims Rail + Work-Item Scoring + UI
+### Walk (P1) — Work-Item Scoring + Attribution UI
 
-**Goal:** Ship the end-to-end claim loop: signed attribution statement → Merkle tree → on-chain governance token claims. This is the DAO promise — prove you contributed, claim your ownership stake — without needing revenue. Also: shift allocation from flat weights to work-item budgets, generic enrichment pipeline, and two-view UI (off-chain attribution + on-chain holdings).
+**Goal:** Improve attribution quality and make the signed statement legible to contributors. This project stops at the signed `AttributionStatement`. On-chain governance-token claims are owned by [proj.financial-ledger](proj.financial-ledger.md), which consumes the finalized statement as its settlement input.
 
-**Governance claims rail (the critical path):**
-
-| Deliverable                                                                                                               | Status      | Est | Work Item         |
-| ------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
-| `computeMerkleTree(statement)` pure function — finalized allocation → root + per-claimant proofs (golden-tested)          | Not Started | 1   | (create at start) |
-| Deploy ERC20Votes Merkle claim contract on Base (Uniswap MerkleDistributor pattern, mints governance tokens on claim)     | Not Started | 2   | (create at start) |
-| Operator Port (P1: Safe/multisig) — publishes Merkle root on-chain per epoch, funds contract if needed                    | Not Started | 2   | (create at start) |
-| Claim flow — contributor connects wallet, submits claim tx with inclusion proof, governance tokens minted to their wallet | Not Started | 2   | (create at start) |
-| Claim status tracking — read contract state for claimed/unclaimed per epoch per contributor                               | Not Started | 1   | (create at start) |
-| Statement signing (DAO multisig / key store) — reuses same Safe as Operator Port                                          | Not Started | 2   | (create at start) |
-
-**UI (two views):**
+**UI:**
 
 | Deliverable                                                                                                           | Status      | Est | Work Item         |
 | --------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
 | Attribution view: `/epochs/:id`, `/contributors/:id` — DB-sourced attribution history, activity, proposed/final units | Not Started | 3   | (create at start) |
-| Holdings view: on-chain governance token balance, claim history, unclaimed epochs, voting power                       | Not Started | 2   | (create at start) |
+
+**Settlement handoff:**
+
+- Financial Ledger owns `signed statement → recipient resolution → Merkle root → on-chain claim`.
+- This project owns the off-chain attribution UI and the signed statement artifact only.
 
 **Enrichment + scoring pipeline:**
 
@@ -158,7 +151,7 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 | Scope-aware epoch API routing (blocks multi-scope)    | Not Started | 3   | task.0123                                              |
 | Epoch artifact pipeline + echo enricher               | In Review   | 3   | task.0113                                              |
 | Plugin pipeline framework + built-in plugins packages | In Review   | 3   | task.0124                                              |
-| Store ISP + Zod enricher/allocator output schemas     | Not Started | 3   | task.0133                                              |
+| Store ISP + Zod enricher/allocator output schemas     | Done        | 3   | task.0133                                              |
 | work-item-budget-v0 allocation algorithm              | Not Started | 2   | task.0114                                              |
 | Per-receipt EIP-191 wallet signing                    | Not Started | 2   | (create at P1 start — EIP-712 foundation in task.0119) |
 | `ledger_issuers` role system (can_issue, can_approve) | Not Started | 2   | (create at P1 start)                                   |
@@ -226,6 +219,8 @@ If the weight policy becomes a black box (complex formulas, hidden multipliers, 
 ## As-Built Specs
 
 - [attribution-ledger](../../docs/spec/attribution-ledger.md) — V0 schema, invariants, API, claimant-aware finalization, architecture
+- [plugin-attribution-pipeline](../../docs/spec/plugin-attribution-pipeline.md) — profile-driven plugin contracts, schema-backed descriptors, generic worker dispatch
+- [attribution-pipeline-overview](../../docs/spec/attribution-pipeline-overview.md) — end-to-end map from repo-spec through signed statement
 
 ## Research
 

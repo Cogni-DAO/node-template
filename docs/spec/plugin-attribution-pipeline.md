@@ -10,7 +10,7 @@ read_when: Adding a new enricher plugin, adding a new allocation algorithm, unde
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-03-01
-verified: 2026-03-02
+verified: 2026-03-03
 tags: [governance, attribution, plugins, architecture]
 ---
 
@@ -90,7 +90,7 @@ packages/attribution-pipeline-contracts/    # framework — stable contracts
 │   ├── allocator.ts        # AllocatorDescriptor, AllocationContext, dispatchAllocator()
 │   ├── profile.ts          # PipelineProfile, ProfileRegistry, resolveProfile()
 │   ├── ordering.ts         # enricher dependency validation, cycle detection
-│   └── validation.ts       # evaluation write validation (evaluationRef, algoRef, inputsHash, schemaRef)
+│   └── validation.ts       # evaluation write validation (required refs, descriptor parity, payload schema parse)
 └── tests/
     ├── profile.test.ts
     ├── allocator.test.ts
@@ -315,7 +315,7 @@ interface AllocationContext {
 }
 ```
 
-`dispatchAllocator()` resolves the allocator by `allocatorRef`, validates required evaluations are present, calls `compute()`, and parses the result with the descriptor's `outputSchema`:
+`dispatchAllocator()` resolves the allocator by `allocatorRef`, validates required evaluations are present, calls `compute()`, and parses the result with the descriptor's `outputSchema`. Output mismatch throws:
 
 ```typescript
 async function dispatchAllocator(
@@ -326,6 +326,29 @@ async function dispatchAllocator(
 ```
 
 The `weight-sum-v0` descriptor (in the plugins package) wraps `computeReceiptWeights("weight-sum-v0", receipts, weightConfig)` from `@cogni/attribution-ledger`, returning the result as a resolved promise. Allocators produce per-receipt weights; the caller joins with locked claimants via `explodeToClaimants()` to produce per-claimant allocations.
+
+### AI Enricher Pattern
+
+A LangGraph-backed enricher still implements the same `EnricherAdapter` contract. The framework and Temporal workflow do not branch for AI enrichers.
+
+```mermaid
+graph TD
+    A["evaluateDraft(ctx)"] --> B["Load receipts + prior evaluations<br/>from EnricherContext"]
+    B --> C["GraphExecutorPort.runGraph()<br/>graphId = dedicated enricher graph"]
+    C --> D["LangGraph state uses Annotation.Root()<br/>for typed graph state"]
+    D --> E["Graph output matches descriptor.outputSchema"]
+    E --> F["Adapter returns EnricherEvaluationResult"]
+    F --> G["validateEvaluationWrite()<br/>descriptor parity + payload parse"]
+```
+
+Design rules:
+
+- The adapter remains the only place that knows an enricher is AI-backed.
+- `evaluateDraft()` and `buildLocked()` may inject `GraphExecutorPort` the same way they inject store and logger dependencies today.
+- The graph owns its internal typed state via `Annotation.Root()`. The adapter owns conversion from graph output to `EnricherEvaluationResult`.
+- The graph's terminal output must match the enricher descriptor's `outputSchema`. The framework then validates the returned `payloadJson` the same way it validates any other enricher.
+- Billing, observability, streaming, and provider routing stay inside `GraphExecutorPort.runGraph()`. The outer epoch workflow still sees a plain enricher adapter call.
+- The worker remains generic: a future AI enricher is registered in the plugins package and selected by profile, not hardcoded into scheduler-worker.
 
 ### Enricher Ordering and Dependency Validation
 
@@ -388,18 +411,18 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 
 ### Framework Invariants (enforced by `@cogni/attribution-pipeline-contracts`)
 
-| Rule                          | Constraint                                                                                                                                                                                                                                                                                                             |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PROFILE_IS_DATA               | A `PipelineProfile` is a plain readonly object. No classes, no methods, no I/O. Constructed at import time, registered in a `ReadonlyMap`.                                                                                                                                                                             |
-| PROFILE_IMMUTABLE_PUBLISH_NEW | Profiles are semver'd and **never mutated** after publication. To change enricher composition or allocator selection, publish a new profile version (e.g., `cogni-v0.0` → `cogni-v0.1`). Operators upgrade by changing `attribution_pipeline` in `repo-spec.yaml`.                                                     |
-| PROFILE_SELECTS_ENRICHERS     | The profile's `enricherRefs` array is the **sole authority** for which enrichers run during an epoch. The executor iterates this array and dispatches to the matching `EnricherAdapter`. Adding a new enricher to a pipeline = adding its ref to a new profile version.                                                |
-| PROFILE_SELECTS_ALLOCATOR     | The profile's `allocatorRef` is the **sole authority** for which allocation algorithm runs. Replaces `deriveAllocationAlgoRef()`. The allocator ref is also pinned on the epoch at closeIngestion (per ALLOCATION_ALGO_PINNED in attribution-ledger spec).                                                             |
-| ENRICHER_ORDER_EXPLICIT       | Enricher execution order is declared in the profile's `enricherRefs` array. Each entry may declare `dependsOnEvaluations[]` refs. The framework validates the DAG at profile registration: cycles throw, missing refs throw, declared order must be a valid topological sort. No implicit ordering.                    |
-| EVALUATION_WRITE_VALIDATED    | Every evaluation write (draft or locked) must include `evaluationRef`, `algoRef`, `inputsHash`, `schemaRef`, and `payloadHash`. The framework validates all fields are present and non-empty. `schemaRef` identifies the payload shape version for forward compatibility (e.g., `"cogni.echo.v0/1.0.0"`).              |
-| ENRICHER_DETERMINISTIC        | Given the same `(inputs + plugin version)`, an enricher must produce the same `(inputsHash, payloadHash, payloadJson)`. Determinism is enforced by including all relevant inputs in `inputsHash` computation. The `algoRef` + `schemaRef` on the evaluation record identify the exact plugin version that produced it. |
-| ALLOCATOR_NEEDS_DECLARED      | Each `AllocatorDescriptor` declares `requiredEvaluationRefs[]`. `dispatchAllocator()` validates that all required evaluation refs are present in `AllocationContext.evaluations` before calling `compute()`. Missing evaluations throw, not silently degrade.                                                          |
-| ALLOCATION_CONTEXT_EXTENSIBLE | `AllocationContext` is the single input type for all allocators. New allocators access enricher outputs via `context.evaluations` (a `Map<evaluationRef, payload>`). Context grows by adding optional fields, never by changing the `compute()` signature.                                                             |
-| FRAMEWORK_NO_IO               | The framework package (`@cogni/attribution-pipeline-contracts`) contains zero I/O, zero side effects, zero env reads. It is pure types, pure functions, and validation logic. All I/O lives in adapter implementations (plugins package) or the executor (scheduler-worker).                                           |
+| Rule                          | Constraint                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| PROFILE_IS_DATA               | A `PipelineProfile` is a plain readonly object. No classes, no methods, no I/O. Constructed at import time, registered in a `ReadonlyMap`.                                                                                                                                                                                                                                     |
+| PROFILE_IMMUTABLE_PUBLISH_NEW | Profiles are semver'd and **never mutated** after publication. To change enricher composition or allocator selection, publish a new profile version (e.g., `cogni-v0.0` → `cogni-v0.1`). Operators upgrade by changing `attribution_pipeline` in `repo-spec.yaml`.                                                                                                             |
+| PROFILE_SELECTS_ENRICHERS     | The profile's `enricherRefs` array is the **sole authority** for which enrichers run during an epoch. The executor iterates this array and dispatches to the matching `EnricherAdapter`. Adding a new enricher to a pipeline = adding its ref to a new profile version.                                                                                                        |
+| PROFILE_SELECTS_ALLOCATOR     | The profile's `allocatorRef` is the **sole authority** for which allocation algorithm runs. Replaces `deriveAllocationAlgoRef()`. The allocator ref is also pinned on the epoch at closeIngestion (per ALLOCATION_ALGO_PINNED in attribution-ledger spec).                                                                                                                     |
+| ENRICHER_ORDER_EXPLICIT       | Enricher execution order is declared in the profile's `enricherRefs` array. Each entry may declare `dependsOnEvaluations[]` refs. The framework validates the DAG at profile registration: cycles throw, missing refs throw, declared order must be a valid topological sort. No implicit ordering.                                                                            |
+| EVALUATION_WRITE_VALIDATED    | Every evaluation write (draft or locked) must include `evaluationRef`, `algoRef`, `inputsHash`, `schemaRef`, and `payloadHash`. The framework validates required fields, requires the result refs to match the descriptor refs, and parses `payloadJson` with the descriptor `outputSchema`. `schemaRef` identifies the payload shape version (e.g., `"cogni.echo.v0/1.0.0"`). |
+| ENRICHER_DETERMINISTIC        | Given the same `(inputs + plugin version)`, an enricher must produce the same `(inputsHash, payloadHash, payloadJson)`. Determinism is enforced by including all relevant inputs in `inputsHash` computation. The `algoRef` + `schemaRef` on the evaluation record identify the exact plugin version that produced it.                                                         |
+| ALLOCATOR_NEEDS_DECLARED      | Each `AllocatorDescriptor` declares `requiredEvaluationRefs[]`. `dispatchAllocator()` validates that all required evaluation refs are present in `AllocationContext.evaluations` before calling `compute()`. Missing evaluations throw, not silently degrade. After `compute()`, allocator output must parse against the descriptor `outputSchema`.                            |
+| ALLOCATION_CONTEXT_EXTENSIBLE | `AllocationContext` is the single input type for all allocators. New allocators access enricher outputs via `context.evaluations` (a `Map<evaluationRef, payload>`). Context grows by adding optional fields, never by changing the `compute()` signature.                                                                                                                     |
+| FRAMEWORK_NO_IO               | The framework package (`@cogni/attribution-pipeline-contracts`) contains zero I/O, zero side effects, zero env reads. It is pure types, pure functions, and validation logic. All I/O lives in adapter implementations (plugins package) or the executor (scheduler-worker).                                                                                                   |
 
 ### Boundary Invariants (enforced by package dependencies and dep-cruiser)
 
@@ -441,20 +464,20 @@ Provide a plugin architecture for the attribution pipeline that supports three u
 
 ### File Pointers
 
-| File                                                                | Purpose                                                               |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `packages/attribution-pipeline-contracts/src/profile.ts`            | PipelineProfile type, ProfileRegistry, resolveProfile()               |
-| `packages/attribution-pipeline-contracts/src/enricher.ts`           | EnricherDescriptor + EnricherAdapter port interface + EnricherContext |
-| `packages/attribution-pipeline-contracts/src/allocator.ts`          | AllocatorDescriptor, AllocationContext, dispatchAllocator()           |
-| `packages/attribution-pipeline-contracts/src/ordering.ts`           | Enricher dependency DAG validation, cycle detection                   |
-| `packages/attribution-pipeline-contracts/src/validation.ts`         | Evaluation write validation (all required fields present)             |
-| `packages/attribution-ledger/src/claimant-shares.ts`                | `explodeToClaimants()` — joins receipt weights × locked claimants     |
-| `packages/attribution-pipeline-plugins/src/plugins/*/descriptor.ts` | Per-plugin pure constants, types, builder functions                   |
-| `packages/attribution-pipeline-plugins/src/plugins/*/adapter.ts`    | Per-plugin EnricherAdapter implementations (I/O via injected deps)    |
-| `packages/attribution-pipeline-plugins/src/profiles/*.ts`           | Built-in profile definitions                                          |
-| `packages/attribution-pipeline-plugins/src/registry.ts`             | createDefaultRegistries() — assembles all built-in plugins + profiles |
-| `packages/attribution-ledger/src/allocation.ts`                     | Existing allocator implementations (wrapped by plugin descriptors)    |
-| `.cogni/repo-spec.yaml`                                             | `attribution_pipeline` field that selects the profile                 |
+| File                                                                | Purpose                                                                        |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `packages/attribution-pipeline-contracts/src/profile.ts`            | PipelineProfile type, ProfileRegistry, resolveProfile()                        |
+| `packages/attribution-pipeline-contracts/src/enricher.ts`           | EnricherDescriptor + EnricherAdapter port interface + EnricherContext          |
+| `packages/attribution-pipeline-contracts/src/allocator.ts`          | AllocatorDescriptor, AllocationContext, dispatchAllocator()                    |
+| `packages/attribution-pipeline-contracts/src/ordering.ts`           | Enricher dependency DAG validation, cycle detection                            |
+| `packages/attribution-pipeline-contracts/src/validation.ts`         | Evaluation write validation (required fields, descriptor parity, schema parse) |
+| `packages/attribution-ledger/src/claimant-shares.ts`                | `explodeToClaimants()` — joins receipt weights × locked claimants              |
+| `packages/attribution-pipeline-plugins/src/plugins/*/descriptor.ts` | Per-plugin pure constants, types, builder functions                            |
+| `packages/attribution-pipeline-plugins/src/plugins/*/adapter.ts`    | Per-plugin EnricherAdapter implementations (I/O via injected deps)             |
+| `packages/attribution-pipeline-plugins/src/profiles/*.ts`           | Built-in profile definitions                                                   |
+| `packages/attribution-pipeline-plugins/src/registry.ts`             | createDefaultRegistries() — assembles all built-in plugins + profiles          |
+| `packages/attribution-ledger/src/allocation.ts`                     | Existing allocator implementations (wrapped by plugin descriptors)             |
+| `.cogni/repo-spec.yaml`                                             | `attribution_pipeline` field that selects the profile                          |
 
 ## Open Questions
 

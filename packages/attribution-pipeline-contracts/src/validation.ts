@@ -3,10 +3,10 @@
 
 /**
  * Module: `@cogni/attribution-pipeline-contracts/validation`
- * Purpose: Evaluation write validation — asserts all required fields are present.
+ * Purpose: Evaluation write validation — asserts required fields, descriptor parity, and payload schema validity.
  * Scope: Pure functions. Does not perform I/O or hold state.
  * Invariants:
- * - EVALUATION_WRITE_VALIDATED: every evaluation write must include evaluationRef, algoRef, inputsHash, schemaRef, payloadHash.
+ * - EVALUATION_WRITE_VALIDATED: every evaluation write must include required refs and parse against the descriptor output schema.
  * - FRAMEWORK_NO_IO: this module contains zero I/O.
  * Side-effects: none
  * Links: docs/spec/plugin-attribution-pipeline.md
@@ -16,11 +16,12 @@
 import type { EnricherDescriptor, EnricherEvaluationResult } from "./enricher";
 
 /**
- * Validate that an evaluation result has all required fields populated.
- * Throws on first missing or empty field.
+ * Validate that an evaluation result has all required fields populated,
+ * matches the descriptor refs, and parses against the descriptor schema.
+ * Throws on first mismatch.
  *
  * EVALUATION_WRITE_VALIDATED: every evaluation write includes
- * evaluationRef, algoRef, inputsHash, schemaRef, payloadHash.
+ * evaluationRef, algoRef, inputsHash, schemaRef, payloadHash, and schema-valid payloadJson.
  */
 export function validateEvaluationWrite(
   descriptor: EnricherDescriptor,
