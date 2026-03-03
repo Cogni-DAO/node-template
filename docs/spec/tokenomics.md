@@ -1,20 +1,20 @@
 ---
 id: tokenomics-spec
 type: spec
-title: "Tokenomics: Budget Policy + Settlement Templates"
+title: "Tokenomics: Budget Policy + Settlement Handoff"
 status: draft
-spec_state: active
+spec_state: proposed
 trust: draft
-summary: "Crawl-walk-run tokenomics design. Crawl: rename units, add BudgetBank accrual with hard cap, deterministic epoch_pool policy. Walk: ERC-20 token + MerkleDistributor settlement. Run: halvening eras, governance/reward split, template system for node operators."
+summary: "Tokenomics contract for BudgetBank economics and settlement-layer handoff. Defines hard-capped issuance, deterministic epoch pools, one user-facing unit, and how finalized credits hand off to future token settlement."
 read_when: Understanding credit economics, pool sizing, emission schedules, or settlement design.
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-03-02
-verified: 2026-03-02
+verified: 2026-03-03
 tags: [governance, tokenomics, attribution]
 ---
 
-# Tokenomics: Budget Policy + Settlement Templates
+# Tokenomics: Budget Policy + Settlement Handoff
 
 > The attribution pipeline answers "who did what." This spec answers "how much is the pool, where does it come from, and what do the numbers mean to the user."
 
@@ -25,7 +25,7 @@ Replace arbitrary, inflationary credit issuance with principled tokenomics:
 1. **One user-facing unit** — kill the score/credits split
 2. **Hard-capped supply** — finite pool, no infinite minting
 3. **Deterministic epoch pools** — policy function, not admin discretion
-4. **Carry-over budget** — quiet weeks bank up, busy weeks draw down
+4. **Carry-over buffer** — quiet weeks bank unused budget; later epochs draw from that bank without exceeding `accrual_per_epoch`
 5. **Separation of concerns** — attribution (governance truth) vs. settlement (financial truth) vs. governance (voting power)
 
 ## Non-Goals
@@ -47,14 +47,14 @@ Replace arbitrary, inflationary credit issuance with principled tokenomics:
 
 ## Invariants
 
-| Rule                     | Constraint                                                                                                                                                              |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BUDGET_HARD_CAP          | `SUM(all epoch_pools ever) ≤ vault_total`. Enforced by BudgetBank balance check.                                                                                        |
-| EPOCH_POOL_DETERMINISTIC | `epoch_pool = min(accrued_this_period, bank_balance)`. Policy function, not admin choice. Admin can reduce (exclude receipts, zero-weight), never inflate above policy. |
-| ONE_USER_FACING_UNIT     | Users see one number in one denomination. Internal milli-units are never displayed.                                                                                     |
-| BUDGET_BANK_APPEND_ONLY  | Bank accrual and spend are append-only ledger entries. No retroactive edits.                                                                                            |
-| SETTLEMENT_DECOUPLED     | Attribution statements are governance commitments. Settlement (how entitlements become claims) is a separate, pluggable layer.                                          |
-| GOVERNANCE_NOT_REWARD    | Voting power and contributor rewards are separate concerns. May use the same token (Walk) or different tokens (Run), but the pipeline never conflates them.             |
+| Rule                        | Constraint                                                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BUDGET_HARD_CAP             | `SUM(all epoch_pools ever) ≤ vault_total`. Enforced by BudgetBank balance check.                                                                                                                        |
+| EPOCH_POOL_DETERMINISTIC    | `epoch_pool = min(accrued_this_period, bank_balance)`. Policy function, not admin choice. Admin can reduce (exclude receipts, zero-weight), never inflate above policy.                                 |
+| ONE_USER_FACING_UNIT        | Users see one number in one denomination. Internal milli-units are never displayed.                                                                                                                     |
+| BUDGET_BANK_APPEND_ONLY     | Bank accrual and spend are append-only ledger entries. No retroactive edits.                                                                                                                            |
+| SETTLEMENT_DECOUPLED        | Attribution statements are governance commitments. Settlement (how entitlements become claims) is a separate, pluggable layer.                                                                          |
+| GOVERNANCE_REWARD_PLUGGABLE | The attribution pipeline outputs `creditAmount`. Whether credits settle into the same governance token or separate instruments is a settlement-layer decision. Attribution remains instrument-agnostic. |
 
 ## Design
 
@@ -117,6 +117,8 @@ Replace the magic `base_issuance_credits: "10000"` with a vault + accrual model.
 - **Max carry hit**: bank capped at 40K. Excess accrual lost (use it or lose it beyond 4 weeks).
 - **Vault exhausted**: remaining = 0. No more credits issued. Period. (Governance can vote to extend — that's a new vault, not an edit.)
 
+Carry is a **buffer**, not a catch-up multiplier. Quiet weeks preserve runway; they do not increase the next epoch's issuance above `accrual_per_epoch`.
+
 **Why `epoch_pool` is NOT admin-settable:**
 The admin controls _what activity counts_ (include/exclude receipts, weight overrides, identity resolution). The admin does NOT control _how big the pool is_. The pool is a policy function of the BudgetBank state. This prevents inflation attacks while preserving admin curation of attribution quality.
 
@@ -141,14 +143,14 @@ activity_ledger:
 
 #### C4. Code Changes (Crawl)
 
-| File                                             | Change                                                                                                              |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `packages/repo-spec/src/schema.ts`               | Add `budgetPolicySchema`. Deprecate `poolConfigSpecSchema`.                                                         |
-| `packages/repo-spec/src/accessors.ts`            | Add `getBudgetPolicy()` accessor.                                                                                   |
-| `packages/attribution-ledger/src/pool.ts`        | Add `computeEpochBudget(bankState, policy)` pure function. Keep `estimatePoolComponentsV0` for backward compat.     |
-| `packages/attribution-ledger/src/budget-bank.ts` | **New.** `BudgetBankState` type, `accrue()`, `spend()`, `canSpend()` pure functions.                                |
-| DB migration                                     | Add `budget_bank_ledger` table: `(scope_id, epoch_id, entry_type, amount, balance_after, created_at)`. Append-only. |
-| `services/scheduler-worker/`                     | `CollectEpochWorkflow` reads bank state, computes epoch_pool via policy, records pool component.                    |
+| File                                             | Change                                                                                                                                        |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/repo-spec/src/schema.ts`               | Add `budgetPolicySchema`. Deprecate `poolConfigSpecSchema`.                                                                                   |
+| `packages/repo-spec/src/accessors.ts`            | Add `getBudgetPolicy()` accessor.                                                                                                             |
+| `packages/attribution-ledger/src/pool.ts`        | Add `computeEpochBudget(bankState, policy)` pure function. Keep `estimatePoolComponentsV0` for backward compat.                               |
+| `packages/attribution-ledger/src/budget-bank.ts` | **New.** `BudgetBankState` type, `accrue()`, `spend()`, `canSpend()` pure functions.                                                          |
+| DB migration                                     | Add `budget_bank_ledger` table: `(node_id, scope_id, epoch_id, entry_type, amount, balance_after, remaining_after, created_at)`. Append-only. |
+| `services/scheduler-worker/`                     | `CollectEpochWorkflow` reads bank state, computes epoch_pool via policy, records pool component.                                              |
 
 #### C5. Budget Bank State Machine
 
@@ -160,9 +162,13 @@ activity_ledger:
                            │
                            ▼
                     ┌──────────────┐
-     close epoch ──►│    SPEND      │──► epoch_pool = min(accrual, bank)
-                    │              │    bank -= epoch_pool
-                    └──────┬───────┘    remaining -= epoch_pool
+     close epoch ──►│    SPEND      │──► if included receipts exist:
+                    │              │      epoch_pool = min(accrual, bank)
+                    └──────┬───────┘      bank -= epoch_pool
+                                           remaining -= epoch_pool
+                                         else:
+                                           epoch_pool = 0
+                                           bank unchanged
                            │
                            ▼
                     ┌──────────────┐
@@ -174,207 +180,112 @@ If `remaining = 0`, ACCRUE is a no-op and `epoch_pool = 0`. Epoch still runs (ac
 
 ---
 
-### Walk + Run — Token + Settlement + Templates
+### Walk + Run — Settlement Handoff Contracts
 
-> **These phases are design inputs for [proj.financial-ledger](../../work/projects/proj.financial-ledger.md).** No separate project. The financial ledger project owns token deployment, MerkleDistributor, and all on-chain settlement.
+> **These phases are design inputs for [proj.financial-ledger](../../work/projects/proj.financial-ledger.md).** This spec defines the economics and handoff constraints only; the settlement roadmap lives in the project.
 
-#### Economic Model
-
-Credits distributed by the attribution pipeline represent **equity ownership / governance stake** — not cash compensation. This is the co-op patronage model: contribute work → earn ownership in the org.
+Credits distributed by the attribution pipeline represent **equity ownership / governance stake** — not cash compensation. The MVP settlement path is single-token:
 
 ```
-Attribution credits (off-chain, Crawl)
-  → Equity/governance token (on-chain, Walk)
-  → Voting power + ownership claim (Run)
-
-USDC payouts are a SEPARATE concern:
-  → Not automated by the attribution pipeline
-  → Governance vote required to approve any USDC distribution
-  → Financial ledger must be capable of tracking both instruments
+Attribution credits (off-chain)
+  → Aragon GovernanceERC20 claims (on-chain)
+  → Voting power + ownership claim
 ```
 
-**Why equity-first, not cash-first:**
+**Settlement contracts:**
 
-- Cash payouts require revenue. Early-stage DAOs have none.
-- Equity aligns incentives: contributors want the org to succeed.
-- Governance tokens give contributors a voice in how the org operates.
-- USDC distribution becomes a governance-voted action when the treasury can support it.
-
-#### W1. ERC-20 Equity Token
-
-Deploy a standard OpenZeppelin ERC-20 with fixed supply. Pre-mint entire supply to an `EmissionsVault` contract.
-
-```
-Token: COGNI (or operator-chosen symbol)
-Total supply: governance decision (e.g., 1,000,000)
-Decimals: 18
-Initial holder: EmissionsVault contract (100% at mint)
-Purpose: equity ownership + governance voting
-```
-
-The vault replaces the off-chain `budget_bank_ledger`. `vault_total` becomes the token's `totalSupply`. `accrual_per_epoch` becomes the vault's release rate. The BudgetBank logic (accrual, carry, spend) remains off-chain with the vault as the on-chain funding source.
-
-**The token IS both equity and governance.** Single-token is simpler and sufficient for V0. A GOV/REWARD split is a Run-phase option only if the single-token model proves insufficient.
-
-#### W2. MerkleDistributor Settlement
-
-Use a **reusable** MerkleDistributor (not per-epoch deployment):
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  ReusableMerkleDistributor                                  │
-│                                                             │
-│  setEpochRoot(epochId, merkleRoot, totalAmount)             │
-│    • Only callable by vault owner (operator/timelock)       │
-│    • Equity tokens transferred from EmissionsVault          │
-│    • epochId → root mapping stored                          │
-│                                                             │
-│  claim(epochId, index, account, amount, proof)              │
-│    • Standard Merkle inclusion proof                        │
-│    • Marks claimed per (epochId, index)                     │
-│    • Transfers equity tokens to claimant                    │
-│                                                             │
-│  sweep(epochId)                                             │
-│    • After claim window (e.g., 90 days)                     │
-│    • Unclaimed tokens → treasury                            │
-│    • Only callable by owner                                 │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-This is a thin wrapper around Uniswap's MerkleDistributor that supports multiple epochs in one contract. Maps directly to `proj.financial-ledger` P0 deliverables.
-
-#### W3. Credit → Token Denomination
-
-```
-1 credit (off-chain) = 1 token unit (on-chain, 18 decimals)
-```
-
-Or governance can set a ratio. The attribution pipeline doesn't change — it still outputs `creditAmount` as BIGINT. The settlement layer maps credits to tokens.
-
-#### W4. Settlement Flow
-
-```
-Finalized epoch statement (existing)
-  → computeMerkleTree(statement.lines) → root + proofs
-  → operator calls setEpochRoot(epochId, root, totalTokens)
-  → EmissionsVault transfers equity tokens to distributor
-  → users call claim() with their proof
-  → unclaimed swept after 90 days
-```
-
-#### R1. Halvening Emissions
-
-Replace flat `accrual_per_epoch` with era-based decay:
-
-```
-era_length_epochs: 52        # ~1 year at weekly epochs
-era_0_accrual: 10000         # credits/tokens per epoch in era 0
-halvening_factor: 2           # accrual halves each era
-
-Era 0 (epochs 0–51):   10,000/epoch  →  520,000 total
-Era 1 (epochs 52–103):  5,000/epoch  →  260,000 total
-Era 2 (epochs 104–155): 2,500/epoch  →  130,000 total
-...
-Geometric sum → max ~1,040,000 total (approaches 2 × era_0 × era_length)
-```
-
-The vault is sized to this sum. `computeEpochBudget()` becomes era-aware:
-
-```typescript
-function currentAccrual(epochIndex: number, policy: HalveningPolicy): bigint {
-  const era = Math.floor(epochIndex / policy.eraLengthEpochs);
-  return policy.era0Accrual / BigInt(policy.halveningFactor) ** BigInt(era);
-}
-```
-
-BudgetBank carry logic unchanged — just the accrual rate decays.
-
-#### R2. USDC Distribution (Governance-Voted)
-
-USDC payouts are **not automated** by the attribution pipeline. They are a separate governance action:
-
-1. Governance proposal: "Distribute X USDC from treasury to token holders pro-rata" (or per attribution statement)
-2. Vote passes → operator executes via Operator Port
-3. Separate MerkleDistributor instance (or same contract, different token) for USDC claims
-4. Financial ledger records: Dr Expense:Distributions:USDC / Cr Assets:Treasury:USDC
-
-This keeps the attribution pipeline clean (it only produces equity allocations) while allowing the DAO to do cash distributions when treasury supports it.
-
-#### R3. Template System
-
-Four orthogonal policy profiles, bundled into curated templates:
-
-```yaml
-# repo-spec.yaml (Run phase)
-tokenomics_template: "cogni.coop-merkle.v1"
-```
-
-Template resolves to:
-
-| Profile                | Crawl (MVP Safe)         | Walk (Vault+Merkle) | Run (Coop)       |
-| ---------------------- | ------------------------ | ------------------- | ---------------- |
-| **AttributionProfile** | `cogni-v0.0`             | `cogni-v0.1`        | `cogni-v1.0`     |
-| **BudgetPolicy**       | `flat-accrual.v0`        | `flat-accrual.v0`   | `halvening.v1`   |
-| **SettlementPolicy**   | `off-chain-statement.v0` | `vault-merkle.v1`   | `coop-split.v1`  |
-| **GovernancePolicy**   | `safe-multisig.v0`       | `safe-multisig.v0`  | `oz-governor.v1` |
-
-Templates are versioned, immutable definitions shipped with Cogni. Operators pick one at node init. Changing templates requires governance vote (or new node).
-
-**Template IDs** follow the same naming convention as pipeline profiles: `org.name.version`.
+- The settlement token is the Aragon `GovernanceERC20` created at node formation.
+- Node formation must move from founder bootstrap minting to a fixed-supply mint into a DAO-controlled emissions holder.
+- BudgetBank remains the off-chain release policy. It governs how much of the fixed token supply becomes claimable each epoch.
+- Merkle settlement consumes signed `creditAmount` entitlements from the finalized statement, not internal `finalUnits`.
+- USDC distributions remain a separate, governance-voted financial action.
 
 #### Edge Cases
 
-| Edge Case               | Resolution                                                                                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `total_points = 0`      | Epoch pool accrues to bank. No statement produced. Already handled (empty allocations → empty statement lines).                                         |
-| Unresolved claimants    | Already handled by `IdentityClaimant` type. Claimant key is stable (`identity:github:12345`). When identity resolves later, cumulative holdings update. |
-| Address changes         | Wallet binding layer (existing `user_bindings`). Statement references `claimantKey`, not wallet address. Claim address resolved at settlement time.     |
-| Forked scopes           | Each scope has its own BudgetBank. Fork = new scope = new vault. No cross-contamination.                                                                |
-| Root rotation authority | Walk: operator multisig calls `setEpochRoot`. Run: TimelockController gates it.                                                                         |
-| Unclaimed tokens        | `sweep(epochId)` after claim window → treasury. Swept amounts are NOT re-emitted.                                                                       |
+| Edge Case               | Resolution                                                                                                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `total_points = 0`      | Epoch pool remains in bank. No statement produced. SPEND does not fire for epochs with no included receipts or zero total weight.                                                      |
+| Unresolved claimants    | Already handled by `IdentityClaimant` type. Claimant key is stable (`identity:github:12345`). Statement finalization can proceed, but on-chain settlement waits for wallet resolution. |
+| Address changes         | Wallet binding layer (existing `user_bindings`). Statement references `claimantKey`, not wallet address. Claim address resolved at settlement time.                                    |
+| Forked scopes           | Each scope has its own BudgetBank. Fork = new scope = new vault. No cross-contamination.                                                                                               |
+| Root rotation authority | Walk: operator multisig calls `setEpochRoot`. Run: TimelockController gates it.                                                                                                        |
+| Unclaimed tokens        | `sweep(epochId)` after claim window → treasury. Swept amounts are NOT re-emitted.                                                                                                      |
 
-## Migration Path
+## Token Lifecycle — Creation to Claim
 
-### From Current → Crawl
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        TOKEN LIFECYCLE                                    │
+│                                                                          │
+│  1. CREATE            2. HOLD               3. RELEASE    4. CLAIM       │
+│  ─────────            ──────                ─────────     ─────────      │
+│                                                                          │
+│  DAOFactory           EmissionsHolder       BudgetBank    Merkle proof   │
+│  .createDao()         (DAO-owned)           policy        + claim()      │
+│       │                    │                    │              │          │
+│       ▼                    ▼                    ▼              ▼          │
+│  ┌─────────┐        ┌───────────┐        ┌──────────┐   ┌──────────┐    │
+│  │ Aragon  │  mint  │ Emissions │ release│  Merkle  │   │  User's  │    │
+│  │ Gov     │───────►│ Holder    │───────►│Distributor│──►│  Wallet  │    │
+│  │ ERC20   │  fixed │ (vault)   │per epoch│          │   │          │    │
+│  └─────────┘ supply └───────────┘        └──────────┘   └──────────┘    │
+│                           │                                   │          │
+│                    totalSupply -              token = voting   │          │
+│                    SUM(released)              power + equity   │          │
+│                                                               │          │
+│                                              unclaimed after  │          │
+│                                              window ──► sweep │          │
+│                                              back to treasury │          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
 
-1. Existing finalized epochs: untouched. Their `pool_components` records are immutable.
-2. New `budget_bank_ledger` table initialized with `remaining = vault_total`.
-3. First epoch under new policy accrues normally.
-4. `pool_config.base_issuance_credits` in repo-spec replaced by `budget_policy`.
-5. UI: "Score" column removed. "Credits Earned" shown instead.
+**One token, three roles:** governance voting, ownership stake, contributor reward. No separate reward token. Reuses the Aragon `GovernanceERC20` from [node formation](./node-formation.md).
 
-### From Crawl → Walk
+### Per-Epoch Settlement Flow
 
-1. Deploy ERC-20 equity token + EmissionsVault + ReusableMerkleDistributor.
-2. `vault_total` in repo-spec gains a contract address.
-3. Settlement workflow added (Temporal: `SettleEpochWorkflow`).
-4. Off-chain `budget_bank_ledger` optionally mirrors on-chain vault balance.
+```
+Finalized AttributionStatement (off-chain, signed)
+  │
+  ├─► computeMerkleTree(statement.creditAmounts)
+  │     → root + per-claimant proofs
+  │
+  ├─► Operator: transfer epoch_pool tokens
+  │     EmissionsHolder → MerkleDistributor
+  │
+  ├─► Operator: setEpochRoot(epochId, root, totalAmount)
+  │
+  └─► Contributors: claim(epochId, index, account, amount, proof)
+        → GovernanceERC20 transferred to wallet
+        → (epochId, index) marked claimed
+```
 
-### From Walk → Run
+### Key Facts
 
-1. Halvening policy replaces flat accrual in repo-spec.
-2. Template system replaces individual policy fields.
-3. USDC distribution path added as governance-voted action (separate from equity emissions).
+| Question                     | Answer                                                                                 |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| What token?                  | Aragon `GovernanceERC20` (minted at DAO creation, no new contract)                     |
+| Who holds unreleased supply? | DAO-controlled emissions holder (replaces current founder-gets-all mint)               |
+| How much released per epoch? | `epoch_pool` from BudgetBank policy (see C2). Never exceeds `accrual_per_epoch`        |
+| Credit:token mapping?        | V0: 1 credit = 1 token unit (18 decimals). Governance can change ratio                 |
+| What do tokens give you?     | Voting power + ownership stake. NOT automatic cash                                     |
+| USDC payouts?                | Separate governance vote. Not automated. See [financial-ledger](./financial-ledger.md) |
+| Unclaimed tokens?            | `sweep()` after claim window → treasury. NOT re-emitted                                |
+| Vault exhausted?             | No more tokens. Governance can vote to extend (new action, not an edit)                |
 
-## Key Code Paths (New/Modified)
+### Open Design Decisions
 
-| Component                 | Location                                                 | Change                         |
-| ------------------------- | -------------------------------------------------------- | ------------------------------ |
-| Budget policy schema      | `packages/repo-spec/src/schema.ts`                       | New `budgetPolicySchema`       |
-| Budget policy accessor    | `packages/repo-spec/src/accessors.ts`                    | New `getBudgetPolicy()`        |
-| BudgetBank pure functions | `packages/attribution-ledger/src/budget-bank.ts`         | **New file**                   |
-| Pool estimation           | `packages/attribution-ledger/src/pool.ts`                | Add `computeEpochBudget()`     |
-| DB migration              | `scripts/migrations/`                                    | Add `budget_bank_ledger` table |
-| Workflow integration      | `services/scheduler-worker/src/activities/ledger.ts`     | Read bank state, compute pool  |
-| UI cleanup                | `src/features/governance/components/EpochDetail.tsx`     | Remove Score column            |
-| UI cleanup                | `src/features/governance/components/ContributionRow.tsx` | Remove score display           |
+| Decision              | Options                                     | Status    |
+| --------------------- | ------------------------------------------- | --------- |
+| Total token supply    | Governance decision (e.g., 1M, 10M)         | Undecided |
+| Emissions holder type | Safe multisig or dedicated vault contract   | Undecided |
+| Distributor model     | Per-epoch or reusable multi-epoch           | Undecided |
+| Claim window          | 90 days? 180 days? Governance-configurable? | Undecided |
 
 ## OSS Building Blocks
 
 | Need                | OSS                                                  | Status                           |
 | ------------------- | ---------------------------------------------------- | -------------------------------- |
-| ERC-20 token        | OpenZeppelin ERC20                                   | Walk                             |
+| Governance token    | Aragon GovernanceERC20 (from node formation)         | Walk                             |
 | Merkle claims       | Uniswap MerkleDistributor (extended for multi-epoch) | Walk                             |
 | Governance          | OpenZeppelin Governor + TimelockController           | Run                              |
 | Streaming (alt)     | Sablier Lockup / Superfluid                          | Run (optional)                   |

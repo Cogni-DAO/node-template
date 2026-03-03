@@ -47,22 +47,24 @@ Beancount is the canonical ledger and must be capable of tracking ALL instrument
 
 ## Roadmap
 
-### Crawl (P0) — Beancount Journal + Equity Token + MerkleDistributor
+### Crawl (P0) — Beancount Journal + GovernanceERC20 Claims
 
-**Goal:** Stand up the Beancount-based treasury. Deploy ERC-20 equity token + EmissionsVault + ReusableMerkleDistributor. Wire the first settlement path: finalized attribution statement → Merkle tree → equity token claims.
+**Goal:** Stand up the Beancount-based treasury. Reuse the Aragon `GovernanceERC20` as the rewards token, update node formation to mint a fixed supply to a DAO-controlled emissions holder, and wire the first settlement path: finalized attribution statement → recipient resolution → Merkle tree → governance-token claims.
 
 | Deliverable                                                                                                                            | Status      | Est | Work Item         |
 | -------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
 | Beancount accounts hierarchy (multi-instrument: equity tokens + USDC)                                                                  | Not Started | 1   | (create at start) |
-| ERC-20 equity token deployment (OpenZeppelin, fixed supply, pre-minted to EmissionsVault)                                              | Not Started | 2   | (create at start) |
+| Node formation update: mint fixed `GovernanceERC20` supply to a DAO-controlled emissions holder instead of founder bootstrap mint      | Not Started | 2   | (create at start) |
 | ReusableMerkleDistributor contract (Uniswap pattern, multi-epoch support via `setEpochRoot`)                                           | Not Started | 2   | (create at start) |
-| `computeMerkleTree(statement)` pure function — takes finalized allocation → returns Merkle root + proofs per claimant                  | Not Started | 2   | (create at start) |
+| `computeMerkleTree(statement)` pure function — takes finalized statement `credit_amount` entitlements → root + proofs per claimant     | Not Started | 2   | (create at start) |
 | Settlement port interface (`SettlementStore`) — publish Merkle root, record funding tx, track claims                                   | Not Started | 2   | (create at start) |
 | Operator Port integration for treasury signing (fund distributor, publish root)                                                        | Not Started | 2   | (create at start) |
-| V0 settlement policy: 100% equity tokens via MerkleDistributor                                                                         | Not Started | 1   | (create at start) |
+| V0 settlement policy: 100% `GovernanceERC20` via MerkleDistributor; unresolved claimants block settlement until wallet resolution      | Not Started | 1   | (create at start) |
 | Journal generation: Temporal workflow reads finalized statement → produces Beancount entries → validates with `bean-check`             | Not Started | 2   | (create at start) |
 | On-chain receipt adapter: USDC inbound payments → Beancount journal entries                                                            | Not Started | 2   | (create at start) |
 | Temporal workflow: `SettleEpochWorkflow` — reads finalized statement, computes Merkle tree, funds distributor, records Beancount entry | Not Started | 2   | (create at start) |
+| Claim flow UI — contributor connects wallet, sees unclaimed epochs, submits Merkle claim transaction                                   | Not Started | 2   | (create at start) |
+| Holdings view — token balance, claim history, and claimed/unclaimed epoch status                                                       | Not Started | 2   | (create at start) |
 
 ### Walk (P1) — Halvening + Co-op Multi-Instrument Settlement
 
@@ -99,12 +101,14 @@ Beancount is the canonical ledger and must be capable of tracking ALL instrument
 - Financial Ledger does NOT redefine attribution semantics — it consumes finalized `AttributionStatement` as input
 - Attribution finalization is NOT a financial event — it is a governance commitment (liability, not transfer)
 - **Equity tokens are the primary distribution instrument** — USDC payouts are a separate, governance-voted action
+- **Signed statement is the settlement input** — settlement consumes the finalized `AttributionStatement`; no second approval signature is introduced at settlement time
+- **V0 settlement requires fully wallet-resolved claimants** — unresolved identity claimants remain in the signed statement but block on-chain settlement for that epoch
 - **Multi-instrument capable** — Beancount must track equity tokens, USDC, and future instruments
 - Beancount is the canonical financial ledger; Postgres stores operational state
 - Rotki for crypto tx enrichment/tax lots only — NOT the canonical ledger
 - All monetary math uses BIGINT (inherits `ALL_MATH_BIGINT` from attribution-ledger spec)
 - MerkleDistributor (Uniswap pattern) for on-chain claims — user-initiated, not push distribution
-- No custom smart contracts — use battle-tested MerkleDistributor + OpenZeppelin ERC-20
+- No bespoke rewards token contract — reuse Aragon `GovernanceERC20`; distributor should be battle-tested
 - Operator Port required for treasury signing — not a custodial wallet, not raw private keys
 - Co-op semantics: retained equity is par-value member capital, NOT speculative tokens
 - Reserve fund is collective/unallocated — not claimable per member on exit
@@ -117,14 +121,20 @@ Beancount is the canonical ledger and must be capable of tracking ALL instrument
 - [x] proj.transparent-credit-payouts P0 — finalized attribution statements exist
 - [ ] task.0130 (tokenomics Crawl) — BudgetBank policy replaces magic pool_config
 - [ ] Operator Port operational (signing + policy boundary for treasury actions)
-- [ ] ERC-20 equity token + EmissionsVault deployed on Base
+- [ ] Node formation / DAO setup updated: fixed `GovernanceERC20` supply minted to DAO-controlled emissions holder
 - [ ] ReusableMerkleDistributor deployed on Base
 - [ ] Beancount tooling integrated (journal generation + `bean-check` validation)
+
+**Crawl handoff into this project:**
+
+- `task.0130` retires `pool_config.base_issuance_credits` in favor of `budget_policy`.
+- `budget_bank_ledger` is seeded from historical finalized `base_issuance` totals; no retroactive carry is assumed for pre-BudgetBank epochs.
+- Settlement still starts from finalized signed statements. BudgetBank changes pool sizing policy, not claimant allocation semantics.
 
 ## As-Built Specs
 
 - [financial-ledger](../../docs/spec/financial-ledger.md) — treasury accounting invariants, accounts hierarchy
-- [tokenomics](../../docs/spec/tokenomics.md) — BudgetBank policy, emission schedules, settlement templates (design input)
+- [tokenomics](../../docs/spec/tokenomics.md) — BudgetBank economics and settlement handoff (design input, proposed)
 - [data-ingestion-pipelines](../../docs/spec/data-ingestion-pipelines.md) — shared event archive, Singer taps
 - [attribution-ledger](../../docs/spec/attribution-ledger.md) — ingestion spine, receipt schema, cursor model
 - [billing-evolution](../../docs/spec/billing-evolution.md) — credit unit standard, charge receipts (current as-built)
@@ -163,7 +173,7 @@ An attribution statement says: "User A earned 40%, User B earned 35%, User C ear
 
 ### Equity token = governance + ownership
 
-The equity token IS both governance power (voting) and ownership claim. Single-token model in V0. Contributors earn equity by contributing work. Governance can vote to:
+The rewards token IS the Aragon `GovernanceERC20` created at node formation. Single-token model in V0. Contributors earn governance power and ownership claim through the same token. For settlement, the fixed supply is minted to a DAO-controlled emissions holder, and epoch budgets determine how much of that supply becomes claimable over time. Governance can vote to:
 
 - Distribute USDC from treasury to token holders
 - Modify settlement policy for future epochs

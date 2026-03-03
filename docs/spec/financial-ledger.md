@@ -26,7 +26,7 @@ All money I/O in one place. Inbound USDC → treasury postings. Attribution stat
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | BEANCOUNT_CANONICAL       | Beancount journal files are the source-of-truth financial ledger. All monetary state is reproducible from the journal.                                                                                                                  |
 | ATTRIBUTION_NOT_FINANCIAL | A signed attribution statement is a governance commitment (who earned what share), NOT a financial event. No money moves at epoch finalization.                                                                                         |
-| FUNDING_IS_FINANCIAL      | Treasury → MerkleDistributor contract funding IS a financial event. Entry: Dr Liability:UnclaimedRewards / Cr Assets:Treasury:USDC.                                                                                                     |
+| FUNDING_IS_FINANCIAL      | Emissions funding of the MerkleDistributor IS a financial event. Entry: Dr Liability:UnclaimedEquity / Cr Assets:EmissionsVault:COGNI.                                                                                                  |
 | CLAIM_IS_FINANCIAL        | User on-chain claim from the distributor IS a financial event (liability reduction).                                                                                                                                                    |
 | ROTKI_ENRICHMENT_ONLY     | Rotki for crypto transaction enrichment and tax lot validation. NOT the canonical ledger.                                                                                                                                               |
 | EQUITY_PRIMARY            | Equity tokens (ERC-20) are the primary automated distribution instrument. USDC distributions are governance-voted, not automated.                                                                                                       |
@@ -70,7 +70,15 @@ Income:x402Settlements            ; x402 per-request settlement revenue
 
 ## Design
 
-Stub — to be fleshed out when implementation begins. See [proj.financial-ledger](../../work/projects/proj.financial-ledger.md) for the project roadmap.
+MVP settlement path:
+
+1. Attribution finalization produces a signed `AttributionStatement`.
+2. Settlement resolves each finalized claimant to a wallet address. Epochs with unresolved claimants remain governance-finalized but are not settlement-eligible.
+3. `computeMerkleTree()` derives leaves from statement-line `credit_amount` entitlements and maps them into `GovernanceERC20` token amounts.
+4. The settlement token is the Aragon `GovernanceERC20` minted at node formation to a DAO-controlled emissions holder.
+5. Operator execution publishes the Merkle root and funds the distributor. No second statement-signing step is introduced at settlement time.
+
+See [proj.financial-ledger](../../work/projects/proj.financial-ledger.md) for the implementation roadmap.
 
 ## Non-Goals
 
