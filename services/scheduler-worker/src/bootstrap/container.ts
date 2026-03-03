@@ -167,23 +167,19 @@ export function createAttributionContainer(
   // Build source adapters
   const adapters = new Map<string, SourceAdapter>();
 
-  if (
-    config.GITHUB_REVIEW_APP_ID &&
-    config.GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64
-  ) {
+  if (config.GH_REVIEW_APP_ID && config.GH_REVIEW_APP_PRIVATE_KEY_BASE64) {
     const privateKey = Buffer.from(
-      config.GITHUB_REVIEW_APP_PRIVATE_KEY_BASE64,
+      config.GH_REVIEW_APP_PRIVATE_KEY_BASE64,
       "base64"
     ).toString("utf-8");
 
     const tokenProvider = new GitHubAppTokenProvider({
-      appId: config.GITHUB_REVIEW_APP_ID,
+      appId: config.GH_REVIEW_APP_ID,
       privateKey,
-      installationId: config.GITHUB_REVIEW_INSTALLATION_ID,
     });
 
     const repos =
-      config.GITHUB_REPOS?.split(",")
+      config.GH_REPOS?.split(",")
         .map((r) => r.trim())
         .filter(Boolean) ?? [];
 
@@ -194,7 +190,7 @@ export function createAttributionContainer(
       );
     } else {
       logger.warn(
-        "GITHUB_REVIEW_APP_ID set but GITHUB_REPOS empty — GitHub adapter skipped"
+        "GH_REVIEW_APP_ID set but GH_REPOS empty — GitHub adapter skipped"
       );
     }
   }
