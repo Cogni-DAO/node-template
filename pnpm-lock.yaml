@@ -503,6 +503,9 @@ importers:
       '@cogni/attribution-ledger':
         specifier: workspace:*
         version: link:../attribution-ledger
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -525,6 +528,9 @@ importers:
       '@cogni/attribution-pipeline-contracts':
         specifier: workspace:*
         version: link:../attribution-pipeline-contracts
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -10694,9 +10700,6 @@ packages:
   zod@4.1.12:
     resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
 
-  zod@4.1.13:
-    resolution: {integrity: sha512-AvvthqfqrAhNH9dnfmrfKzX5upOdjUVJYFqNSlkmGf64gRaTzlPwz99IHYnVs28qYAybvAlBV+H7pn0saFY4Ig==}
-
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
@@ -12531,8 +12534,8 @@ snapshots:
     dependencies:
       '@langchain/core': 1.1.17(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.208.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(openai@6.16.0(ws@8.19.0(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76))
       js-tiktoken: 1.0.21
-      openai: 6.16.0(ws@8.19.0(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.13)
-      zod: 4.1.13
+      openai: 6.16.0(ws@8.19.0(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76)
+      zod: 3.25.76
     transitivePeerDependencies:
       - ws
 
@@ -20138,12 +20141,6 @@ snapshots:
     optionalDependencies:
       ws: 8.19.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       zod: 3.25.76
-    optional: true
-
-  openai@6.16.0(ws@8.19.0(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.13):
-    optionalDependencies:
-      ws: 8.19.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      zod: 4.1.13
 
   openapi-fetch@0.13.8:
     dependencies:
@@ -22887,8 +22884,6 @@ snapshots:
   zod@3.25.76: {}
 
   zod@4.1.12: {}
-
-  zod@4.1.13: {}
 
   zod@4.3.6: {}
 
