@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-02-13
+- **Last reviewed:** 2026-03-05
 - **Status:** stable
 
 ## Purpose
@@ -78,7 +78,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 - **Uses ports:** GraphExecutorPort (runGraph with GraphId), AccountService (recordChargeReceipt), LlmService (completion, completionStream), AiTelemetryPort (recordInvocation), LangfusePort (createTrace, recordGeneration)
 - **Implements ports:** none
-- **Contracts:** ai.completion.v1, ai.chat.v1, ai.threads.v1, ai.models.v1, ai.activity.v1
+- **Contracts:** chat.completions.v1, ai.chat.v1, ai.threads.v1, ai.models.v1, ai.activity.v1
 
 ## Responsibilities
 
@@ -142,7 +142,7 @@ import { Thread } from "@/components/kit/chat";
 
 ## Change Protocol
 
-- On wire format change: Update contract (ai.completion.v1, ai.chat.v1, ai.models.v1)
+- On wire format change: Update contract (chat.completions.v1, ai.chat.v1, ai.models.v1)
 - On public API change: Update public.ts exports and this AGENTS.md
 - Breaking changes: Bump contract version
 - Keep old versions until callers migrate
