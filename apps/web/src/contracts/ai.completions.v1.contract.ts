@@ -12,7 +12,7 @@
  * Side-effects: none
  * Notes: See https://platform.openai.com/docs/api-reference/chat/create
  * Links: Used by HTTP routes for validation
- * @internal
+ * @public
  */
 
 import { z } from "zod";

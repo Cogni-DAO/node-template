@@ -200,7 +200,8 @@ function createOpenAiSseStream(
           encoder.encode(sseEncode(JSON.stringify(firstChunk)))
         );
 
-        // Stream content chunks
+        // Stream content and tool call chunks
+        let toolCallIndex = 0;
         for await (const event of aiStream) {
           if (event.type === "text_delta") {
             const chunk: ChatCompletionChunk = {
@@ -219,8 +220,39 @@ function createOpenAiSseStream(
             controller.enqueue(
               encoder.encode(sseEncode(JSON.stringify(chunk)))
             );
+          } else if (event.type === "tool_call_start") {
+            // Emit tool call with full arguments in one chunk (AiEvent provides complete args)
+            const currentIndex = toolCallIndex++;
+            const chunk: ChatCompletionChunk = {
+              id: completionId,
+              object: "chat.completion.chunk",
+              created,
+              model,
+              choices: [
+                {
+                  index: 0,
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: currentIndex,
+                        id: event.toolCallId,
+                        type: "function" as const,
+                        function: {
+                          name: event.toolName,
+                          arguments: JSON.stringify(event.args),
+                        },
+                      },
+                    ],
+                  },
+                  finish_reason: null,
+                },
+              ],
+            };
+            controller.enqueue(
+              encoder.encode(sseEncode(JSON.stringify(chunk)))
+            );
           }
-          // done/error events are terminal — handled via final promise below
+          // done/error/tool_call_result events are terminal or internal — handled via final promise below
         }
 
         // Await final result for finish_reason and usage
