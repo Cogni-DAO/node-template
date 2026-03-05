@@ -11,7 +11,7 @@ outcome: Written research findings with clear recommendations on technology choi
 spec_refs:
 assignees: derekg1729
 credit:
-project:
+project: proj.oss-research-node
 branch:
 pr:
 reviewer:

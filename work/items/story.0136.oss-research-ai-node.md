@@ -11,7 +11,7 @@ outcome: A specialized Cogni Node that serves as an OSS knowledge authority via 
 spec_refs:
 assignees: derekg1729
 credit:
-project:
+project: proj.oss-research-node
 branch:
 pr:
 reviewer:
