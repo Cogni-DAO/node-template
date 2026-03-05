@@ -30,6 +30,7 @@ import {
 import { createServiceDbClient } from "@cogni/db-client/service";
 import {
   extractChainId,
+  extractLedgerConfig,
   extractNodeId,
   extractScopeId,
   parseRepoSpec,
@@ -73,6 +74,7 @@ function loadRepoSpecIdentity(): {
   nodeId: string;
   scopeId: string;
   chainId: number;
+  configuredSources: string[];
 } {
   // Try /app/.cogni first (Docker), then cwd (dev)
   const candidates = [
@@ -95,10 +97,14 @@ function loadRepoSpecIdentity(): {
   }
 
   const spec = parseRepoSpec(content);
+  const ledgerConfig = extractLedgerConfig(spec);
   return {
     nodeId: extractNodeId(spec),
     scopeId: extractScopeId(spec),
     chainId: extractChainId(spec),
+    configuredSources: ledgerConfig
+      ? Object.keys(ledgerConfig.activitySources)
+      : [],
   };
 }
 
@@ -148,13 +154,15 @@ export function createAttributionContainer(
   config: Env,
   logger: Logger
 ): AttributionContainer | null {
-  const { nodeId, scopeId, chainId } = loadRepoSpecIdentity();
+  const { nodeId, scopeId, chainId, configuredSources } =
+    loadRepoSpecIdentity();
 
   logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
     phase: "ledger_container",
     nodeId,
     scopeId,
     chainId,
+    configuredSources,
   });
 
   const db = createServiceDbClient(config.DATABASE_URL);
@@ -206,6 +214,20 @@ export function createAttributionContainer(
     if (!reg.poll && !reg.webhook) {
       throw new Error(
         `[CAPABILITY_REQUIRED] DataSourceRegistration "${name}" has neither poll nor webhook capability`
+      );
+    }
+  }
+
+  // SOURCE_ADAPTER_COVERAGE: warn loudly for each configured source missing an adapter
+  for (const source of configuredSources) {
+    if (!registrations.has(source)) {
+      logger.error(
+        {
+          event: WORKER_EVENT_NAMES.CONFIG_SOURCE_NO_ADAPTER,
+          source,
+          errorCode: "source_no_adapter",
+        },
+        `activity_sources.${source} is configured in repo-spec but no adapter was registered — check env vars (GH_REVIEW_APP_ID, GH_REVIEW_APP_PRIVATE_KEY_BASE64, GH_REPOS)`
       );
     }
   }

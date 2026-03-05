@@ -417,13 +417,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
     const registration = sourceRegistrations.get(source);
     if (!registration?.poll) {
-      logger.warn({ source }, "No poll adapter found for source, skipping");
-      return {
-        events: [],
-        nextCursorValue: cursorValue ?? new Date(periodStart).toISOString(),
-        nextCursorStreamId: streams[0] ?? source,
-        producerVersion: "unknown",
-      };
+      throw new Error(
+        `[SOURCE_NO_ADAPTER] No poll adapter registered for source "${source}" — check env vars (GH_REVIEW_APP_ID, GH_REVIEW_APP_PRIVATE_KEY_BASE64, GH_REPOS)`
+      );
     }
 
     const result = await registration.poll.collect({
@@ -1218,11 +1214,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
   ): Promise<ResolveStreamsOutput> {
     const registration = sourceRegistrations.get(input.source);
     if (!registration?.poll) {
-      logger.warn(
-        { source: input.source },
-        "No poll adapter found for source — returning empty streams"
+      throw new Error(
+        `[SOURCE_NO_ADAPTER] No poll adapter registered for source "${input.source}" — check env vars (GH_REVIEW_APP_ID, GH_REVIEW_APP_PRIVATE_KEY_BASE64, GH_REPOS)`
       );
-      return { streams: [] };
     }
     const streams = registration.poll.streams().map((s) => s.id);
     logger.info(

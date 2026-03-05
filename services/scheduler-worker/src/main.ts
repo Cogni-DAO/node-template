@@ -71,19 +71,27 @@ async function main(): Promise<void> {
   // Mark ready after all workers start
   healthState.ready = true;
   workerInfo.set({ task_queue: config.TEMPORAL_TASK_QUEUE }, 1);
-  logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_READY, {
-    namespace: config.TEMPORAL_NAMESPACE,
-    taskQueue: config.TEMPORAL_TASK_QUEUE,
-    ledgerEnabled: !!ledgerContainer,
-    ...(ledgerContainer
-      ? {
-          ledgerTaskQueue: "ledger-tasks",
-          nodeId: ledgerContainer.nodeId,
-          scopeId: ledgerContainer.scopeId,
-          chainId: ledgerContainer.chainId,
-        }
-      : {}),
-  });
+  // Log adapter coverage for diagnostics (P0 visibility)
+  if (ledgerContainer) {
+    const registeredSources = [...ledgerContainer.sourceRegistrations.keys()];
+    logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_READY, {
+      namespace: config.TEMPORAL_NAMESPACE,
+      taskQueue: config.TEMPORAL_TASK_QUEUE,
+      ledgerEnabled: true,
+      ledgerTaskQueue: "ledger-tasks",
+      nodeId: ledgerContainer.nodeId,
+      scopeId: ledgerContainer.scopeId,
+      chainId: ledgerContainer.chainId,
+      registeredSources,
+      registeredSourceCount: registeredSources.length,
+    });
+  } else {
+    logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_READY, {
+      namespace: config.TEMPORAL_NAMESPACE,
+      taskQueue: config.TEMPORAL_TASK_QUEUE,
+      ledgerEnabled: false,
+    });
+  }
 
   // Graceful shutdown
   let shuttingDown = false;
