@@ -497,7 +497,7 @@ describe("loadCursor", () => {
 // ── collectFromSource ───────────────────────────────────────────
 
 describe("collectFromSource", () => {
-  it("returns empty events when no adapter exists for source", async () => {
+  it("throws when no adapter exists for source", async () => {
     const { collectFromSource } = createAttributionActivities({
       attributionStore: makeMockStore(),
       sourceRegistrations: new Map(),
@@ -508,16 +508,15 @@ describe("collectFromSource", () => {
       logger: mockLogger,
     });
 
-    const result = await collectFromSource({
-      source: "discord",
-      streams: ["messages"],
-      cursorValue: null,
-      periodStart: "2026-02-16T00:00:00Z",
-      periodEnd: "2026-02-23T00:00:00Z",
-    });
-
-    expect(result.events).toHaveLength(0);
-    expect(result.producerVersion).toBe("unknown");
+    await expect(
+      collectFromSource({
+        source: "discord",
+        streams: ["messages"],
+        cursorValue: null,
+        periodStart: "2026-02-16T00:00:00Z",
+        periodEnd: "2026-02-23T00:00:00Z",
+      })
+    ).rejects.toThrow("[SOURCE_NO_ADAPTER]");
   });
 
   it("calls adapter.collect() and returns events with producerVersion", async () => {
