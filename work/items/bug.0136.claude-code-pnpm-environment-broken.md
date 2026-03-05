@@ -2,7 +2,7 @@
 id: bug.0136
 type: bug
 title: "Claude Code remote environment ships empty pnpm store — pnpm install and pnpm check fail out-of-the-box"
-status: needs_triage
+status: needs_implement
 priority: 0
 rank: 1
 estimate: 2
@@ -12,7 +12,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project:
-branch:
+branch: claude/fix-pnpm-environment-jPDbs
 pr:
 reviewer:
 revision: 0
@@ -21,6 +21,7 @@ deploy_verified: false
 created: 2026-03-05
 updated: 2026-03-05
 labels: [dx, ci, environment, p0]
+last_command: /design
 external_refs:
 ---
 
@@ -89,12 +90,53 @@ external_refs:
 - `vitest.config.mts` — pool configuration (e.g., switch to `threads` pool or increase forks timeout)
 - `tests/unit/bootstrap/container.spec.ts` — timeout adjustments if needed
 
+## Design
+
+### Outcome
+
+Remote Claude Code agent sessions boot into a working state: `pnpm install` completes automatically and `pnpm check` passes without vitest forks-runner timeout errors.
+
+### Approach
+
+**Solution**: Three targeted, low-risk changes — no new code, no new dependencies.
+
+**Fix A — SessionStart hook** (`.claude/settings.json`): Add a project-level Claude Code settings file with a SessionStart hook. The hook runs a conditional install script: if `node_modules/.modules.yaml` is missing (the signal that pnpm linking didn't complete), run `pnpm install --frozen-lockfile`. If already linked, skip (zero cost on subsequent sessions or if the image is ever fixed). This is the Claude Code standard mechanism — hooks in `.claude/settings.json` are loaded automatically for every session.
+
+**Fix B — Vitest pool: `singleFork` mode** (`vitest.config.mts`): Set `poolOptions.forks.singleFork: true`. This reuses a single child process for all test files instead of spawning 16 concurrent forks. Eliminates the stampede that overwhelms the 5s hardcoded `WORKER_START_TIMEOUT` in vitest. Trade-off: tests run sequentially in one worker → ~10-15% slower on beefy machines, but **eliminates the 5 unhandled forks-runner timeout errors** that cause exit code 1 in constrained containers. CI machines are not affected (they have normal ulimits).
+
+**Fix C — Bump `testTimeout` to 30s** (`vitest.config.mts`): The first dynamic import of `@/bootstrap/container` takes ~10.7s in the remote environment (cold module graph with 50+ adapter imports). Current 10s timeout clips it. 30s provides headroom without masking real hangs. CI remains fast — the timeout only matters when a test actually hangs.
+
+**Fix D — AGENTS.md update**: Change `pnpm install --offline --frozen-lockfile` → `pnpm install --frozen-lockfile` since the pnpm store is not pre-populated in the Claude Code image.
+
+**Reuses**: Claude Code's built-in SessionStart hooks system (`.claude/settings.json`), vitest's existing `poolOptions.forks.singleFork` config.
+
+**Rejected alternatives**:
+
+- **Switch to `threads` pool**: Tested — same runner-startup timeout at scale (threads share the same signal constraints). Also breaks tests using `process.chdir()` or process-level env manipulation (container.spec.ts does both).
+- **`vmForks`/`vmThreads`**: More complex, less stable with ESM, can leak memory. Overkill.
+- **Patch vitest's `WORKER_START_TIMEOUT`**: Fragile — gets overwritten on every `pnpm install`. Not portable.
+- **Run `pnpm install` on every SessionStart unconditionally**: Wastes 2 min if already installed. The conditional check (`test -f node_modules/.modules.yaml`) is a one-liner guard.
+
+### Invariants
+
+- [ ] SIMPLE_SOLUTION: Only modifies config files — zero new runtime code
+- [ ] ARCHITECTURE_ALIGNMENT: SessionStart hook follows Claude Code's standard hook pattern
+- [ ] CI_PARITY: `singleFork` + 30s timeout does not regress CI (CI has normal ulimits; `singleFork` just serializes within one worker)
+- [ ] NO_OFFLINE_ASSUMPTION: `AGENTS.md` no longer assumes pnpm store is pre-populated
+
+### Files
+
+- Create: `.claude/settings.json` — SessionStart hook for conditional `pnpm install`
+- Modify: `vitest.config.mts` — add `poolOptions.forks.singleFork: true`, bump `testTimeout` to 30000
+- Modify: `AGENTS.md:29` — drop `--offline` from install instruction
+
 ## Plan
 
-- [ ] **Fix 1 — SessionStart hook**: Create a `.claude/hooks.json` or equivalent SessionStart hook that runs `pnpm install --frozen-lockfile` on session boot (dropping `--offline` until the store is pre-populated)
-- [ ] **Fix 2 — Vitest pool config**: Evaluate switching vitest from `forks` pool to `threads` pool (or `vmForks`) to avoid the pending-signals ulimit issue in constrained containers. Alternatively, increase the forks startup timeout.
-- [ ] **Fix 3 — AGENTS.md update**: Update `AGENTS.md:29` to use `pnpm install --frozen-lockfile` (without `--offline`) as the fallback when the store is not pre-populated
-- [ ] **Long-term — Pre-populated store**: Work with Claude Code platform team or image build pipeline to ensure the pnpm store is persisted in the container image (related: `task.0036`)
+- [ ] Create `.claude/settings.json` with SessionStart hook that conditionally runs `pnpm install --frozen-lockfile`
+- [ ] Update `vitest.config.mts`: add `pool: 'forks'` (explicit), `poolOptions.forks.singleFork: true`, `testTimeout: 30_000`, `hookTimeout: 30_000`
+- [ ] Update `AGENTS.md:29`: change `pnpm install --offline --frozen-lockfile` to `pnpm install --frozen-lockfile`
+- [ ] Run `pnpm check:docs` to validate
+- [ ] Commit and push
 
 ## Validation
 
