@@ -2,7 +2,7 @@
 id: task.0136
 type: task
 title: "Composable DataSource registration: unified poll + webhook ingestion"
-status: needs_merge
+status: needs_implement
 priority: 1
 rank: 10
 estimate: 3
@@ -16,7 +16,7 @@ project: proj.transparent-credit-payouts
 branch: claude/review-github-ingestion-Kwjtl
 pr: "pending — gh CLI not available, create manually: claude/review-github-ingestion-Kwjtl → staging"
 reviewer:
-revision: 2
+revision: 3
 blocked_by:
 deploy_verified: false
 created: 2026-03-05
@@ -353,6 +353,23 @@ pnpm check && pnpm test
 - [ ] **OSS:** Webhook verification uses @octokit/webhooks-methods, no bespoke crypto
 - [ ] **Tests:** webhook normalizer unit tests, stack test for webhook → receipt
 - [ ] **Reviewer:** assigned and approved
+
+## Review Feedback
+
+### Revision 3 — Blocking Issues
+
+1. **Code Duplication (P0)**: `GitHubWebhookNormalizer` duplicated identically in `services/scheduler-worker/src/adapters/ingestion/github-webhook.ts` and `src/adapters/server/ingestion/github-webhook.ts`. Delete the scheduler-worker copy. Update the test to import from the `src/adapters/server/` barrel or relocate the test to `tests/unit/adapters/`.
+
+2. **Unguarded JSON parse (P1)**: `src/features/ingestion/services/webhook-receiver.ts:68` — `JSON.parse(body.toString("utf-8"))` throws untyped Error on malformed payloads, producing 500 instead of 400. Wrap in try/catch and throw a typed error (e.g., `WebhookPayloadParseError`) so the route returns 400.
+
+3. **Body read before size check (P1)**: `src/app/api/internal/webhooks/[source]/route.ts:77-80` — Full body read into memory via `request.arrayBuffer()` before checking `MAX_BODY_SIZE`. Add `Content-Length` header check before reading the body as a fast-path reject for oversized payloads.
+
+### Revision 3 — Non-blocking Suggestions
+
+- Add structured logging to webhook route (source, event type, outcome)
+- Extract version `"0.3.0"` to a shared constant (hardcoded in both containers)
+- Add `WEBHOOK_SECRET_NOT_IN_CODE` invariant to the spec (listed in work item but missing from attribution-ledger.md)
+- Add runtime `CAPABILITY_REQUIRED` validation at bootstrap (stated as "validated at bootstrap" in spec but no code)
 
 ## PR / Links
 
