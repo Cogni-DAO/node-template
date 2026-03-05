@@ -48,14 +48,17 @@ import type { ActivityEvent } from "@cogni/ingestion-core";
 import { verifyTypedData } from "viem";
 
 import type { Logger } from "../observability/logger.js";
-import type { AttributionStore, SourceAdapter } from "../ports/index.js";
+import type {
+  AttributionStore,
+  DataSourceRegistration,
+} from "../ports/index.js";
 
 /**
  * Dependencies injected into ledger activities at worker creation.
  */
 export interface AttributionActivityDeps {
   readonly attributionStore: AttributionStore;
-  readonly sourceAdapters: ReadonlyMap<string, SourceAdapter>;
+  readonly sourceRegistrations: ReadonlyMap<string, DataSourceRegistration>;
   readonly registries: DefaultRegistries;
   readonly nodeId: string;
   readonly scopeId: string;
@@ -252,7 +255,7 @@ export interface FinalizeEpochOutput {
 export function createAttributionActivities(deps: AttributionActivityDeps) {
   const {
     attributionStore,
-    sourceAdapters,
+    sourceRegistrations,
     registries,
     nodeId,
     scopeId,
@@ -412,9 +415,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       "Collecting from source"
     );
 
-    const adapter = sourceAdapters.get(source);
-    if (!adapter) {
-      logger.warn({ source }, "No adapter found for source, skipping");
+    const registration = sourceRegistrations.get(source);
+    if (!registration?.poll) {
+      logger.warn({ source }, "No poll adapter found for source, skipping");
       return {
         events: [],
         nextCursorValue: cursorValue ?? new Date(periodStart).toISOString(),
@@ -423,7 +426,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       };
     }
 
-    const result = await adapter.collect({
+    const result = await registration.poll.collect({
       streams,
       cursor: cursorValue
         ? {
@@ -448,7 +451,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       events: result.events as ActivityEvent[],
       nextCursorValue: result.nextCursor.value,
       nextCursorStreamId: result.nextCursor.streamId,
-      producerVersion: adapter.version,
+      producerVersion: registration.version,
     };
   }
 
@@ -1213,15 +1216,15 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
   async function resolveStreams(
     input: ResolveStreamsInput
   ): Promise<ResolveStreamsOutput> {
-    const adapter = sourceAdapters.get(input.source);
-    if (!adapter) {
+    const registration = sourceRegistrations.get(input.source);
+    if (!registration?.poll) {
       logger.warn(
         { source: input.source },
-        "No adapter found for source — returning empty streams"
+        "No poll adapter found for source — returning empty streams"
       );
       return { streams: [] };
     }
-    const streams = adapter.streams().map((s) => s.id);
+    const streams = registration.poll.streams().map((s) => s.id);
     logger.info(
       { source: input.source, streams },
       "Resolved streams from adapter"

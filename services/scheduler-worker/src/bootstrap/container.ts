@@ -44,9 +44,9 @@ import type { Logger } from "../observability/logger.js";
 
 import type {
   AttributionStore,
+  DataSourceRegistration,
   ExecutionGrantWorkerPort,
   ScheduleRunRepository,
-  SourceAdapter,
 } from "../ports/index.js";
 import type { Env } from "./env.js";
 
@@ -108,7 +108,7 @@ function loadRepoSpecIdentity(): {
  */
 export interface AttributionContainer {
   attributionStore: AttributionStore;
-  sourceAdapters: ReadonlyMap<string, SourceAdapter>;
+  sourceRegistrations: ReadonlyMap<string, DataSourceRegistration>;
   registries: DefaultRegistries;
   nodeId: string;
   scopeId: string;
@@ -164,8 +164,8 @@ export function createAttributionContainer(
     new DrizzleAttributionAdapter(db, scopeId)
   );
 
-  // Build source adapters
-  const adapters = new Map<string, SourceAdapter>();
+  // Build source registrations (CAPABILITY_REQUIRED: at least one of poll/webhook)
+  const registrations = new Map<string, DataSourceRegistration>();
 
   if (config.GH_REVIEW_APP_ID && config.GH_REVIEW_APP_PRIVATE_KEY_BASE64) {
     const privateKey = Buffer.from(
@@ -184,10 +184,16 @@ export function createAttributionContainer(
         .filter(Boolean) ?? [];
 
     if (repos.length > 0) {
-      adapters.set(
-        "github",
-        new GitHubSourceAdapter({ tokenProvider, repos }, attributionLogger)
+      const pollAdapter = new GitHubSourceAdapter(
+        { tokenProvider, repos },
+        attributionLogger
       );
+
+      registrations.set("github", {
+        source: "github",
+        version: pollAdapter.version,
+        poll: pollAdapter,
+      });
     } else {
       logger.warn(
         "GH_REVIEW_APP_ID set but GH_REPOS empty — GitHub adapter skipped"
@@ -197,7 +203,7 @@ export function createAttributionContainer(
 
   return {
     attributionStore,
-    sourceAdapters: adapters,
+    sourceRegistrations: registrations,
     registries: createDefaultRegistries(),
     nodeId,
     scopeId,

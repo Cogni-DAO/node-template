@@ -4,7 +4,7 @@
 /**
  * Module: `scheduler-worker/adapters/ingestion/github`
  * Purpose: GitHub source adapter — collects merged PRs, submitted reviews, and closed issues via GraphQL.
- * Scope: Implements SourceAdapter from @cogni/ingestion-core. Lives in scheduler-worker per ADAPTERS_NOT_IN_CORE.
+ * Scope: Implements PollAdapter from @cogni/ingestion-core. Lives in scheduler-worker per ADAPTERS_NOT_IN_CORE.
  * Invariants:
  * - ACTIVITY_IDEMPOTENT: Deterministic event IDs from source data.
  * - PROVENANCE_REQUIRED: payloadHash (SHA-256), producer, version on every event.
@@ -22,7 +22,7 @@ import type {
   ActivityEvent,
   CollectParams,
   CollectResult,
-  SourceAdapter,
+  PollAdapter,
   StreamDefinition,
   VcsTokenProvider,
 } from "@cogni/ingestion-core";
@@ -196,7 +196,7 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 // Adapter
 // ---------------------------------------------------------------------------
 
-export class GitHubSourceAdapter implements SourceAdapter {
+export class GitHubSourceAdapter implements PollAdapter {
   readonly source = "github" as const;
   readonly version = "0.3.0" as const;
 

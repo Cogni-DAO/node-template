@@ -12,7 +12,7 @@
  */
 
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
-import type { SourceAdapter } from "@cogni/ingestion-core";
+import type { DataSourceRegistration } from "@cogni/ingestion-core";
 import {
   TEST_NODE_ID,
   TEST_SCOPE_ID,
@@ -22,8 +22,8 @@ import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { seedTestActor } from "@tests/_fixtures/stack/seed";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  type AttributionActivityDeps,
   createAttributionActivities,
-  type LedgerActivityDeps,
 } from "../../../services/scheduler-worker/src/activities/ledger";
 import { GitHubSourceAdapter } from "../../../services/scheduler-worker/src/adapters/ingestion/github";
 import { GitHubAppTokenProvider } from "../../../services/scheduler-worker/src/adapters/ingestion/github-auth";
@@ -62,7 +62,7 @@ const mockLogger = {
   error: vi.fn(),
   debug: vi.fn(),
   child: () => mockLogger,
-} as unknown as LedgerActivityDeps["logger"];
+} as unknown as AttributionActivityDeps["logger"];
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -85,11 +85,20 @@ describeWithAuth("Ledger Collection Pipeline (external)", () => {
     repos: [TEST_REPO],
   });
 
-  const adapters = new Map<string, SourceAdapter>([["github", githubAdapter]]);
+  const registrations = new Map<string, DataSourceRegistration>([
+    [
+      "github",
+      {
+        source: "github",
+        version: githubAdapter.version,
+        poll: githubAdapter,
+      },
+    ],
+  ]);
 
   const activities = createAttributionActivities({
-    ledgerStore: ledger,
-    sourceAdapters: adapters,
+    attributionStore: ledger,
+    sourceRegistrations: registrations,
     nodeId: TEST_NODE_ID,
     scopeId: TEST_SCOPE_ID,
     logger: mockLogger,

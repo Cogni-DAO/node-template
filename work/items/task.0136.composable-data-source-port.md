@@ -2,17 +2,18 @@
 id: task.0136
 type: task
 title: "Composable DataSource registration: unified poll + webhook ingestion"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 10
 estimate: 3
 summary: "Replace monolithic SourceAdapter with a composable DataSourceRegistration that binds optional PollAdapter and WebhookNormalizer capabilities. Both paths produce ActivityEvent[] and converge at existing AttributionStore.insertIngestionReceipts(). GitHub webhook verification via @octokit/webhooks-methods (OSS, already in Octokit ecosystem)."
 outcome: "A data source can declare poll-only, webhook-only, or both. Both paths produce ActivityEvent[] and converge at idempotent receipt insertion via AttributionStore. GitHub adapter gains a webhook fast-path without losing poll reconciliation."
-spec_refs: [attribution-ledger-spec, data-ingestion-pipelines-spec, graph-execution-spec]
+spec_refs:
+  [attribution-ledger-spec, data-ingestion-pipelines-spec, graph-execution-spec]
 assignees: []
 credit:
 project: proj.transparent-credit-payouts
-branch:
+branch: claude/review-github-ingestion-Kwjtl
 pr:
 reviewer:
 revision: 2
@@ -69,6 +70,7 @@ Data sources can support poll, webhook, or both ingestion modes through composab
 ```
 
 **Reuses**:
+
 - `ActivityEvent`, `StreamDefinition`, `StreamCursor`, `CollectParams`, `CollectResult` — unchanged from `@cogni/ingestion-core`
 - Deterministic event IDs (`github:pr:owner/repo:42`) — natural dedup across both paths
 - `RECEIPT_IDEMPOTENT` + `ON CONFLICT DO NOTHING` — already guarantees safe dual-ingest
@@ -77,6 +79,7 @@ Data sources can support poll, webhook, or both ingestion modes through composab
 - `@octokit/webhooks-methods` — MIT, Octokit ecosystem, HMAC-SHA256 verification for GitHub
 
 **Rejected**:
+
 1. **Two separate, unrelated ports** (from the research review) — Rejected because it fragments the source concept. Operators configure "github" as a source; the system should present one registration, not two disconnected interfaces that must be independently wired.
 2. **Single interface with optional methods** (current `handleWebhook?()`) — Rejected because poll and webhook run in fundamentally different runtimes (Temporal vs HTTP) with different auth, error handling, and lifecycle. Optional methods on one interface creates a God Object.
 3. **Mode parameter on `collect()`** — Rejected because poll and webhook have completely different input shapes (cursor+window vs headers+body). A union parameter would be type-unsafe.
@@ -106,8 +109,8 @@ Data sources can support poll, webhook, or both ingestion modes through composab
  * Not a port itself — a capability manifest containing ports.
  */
 interface DataSourceRegistration {
-  readonly source: string;     // "github", "discord"
-  readonly version: string;    // bump on schema changes
+  readonly source: string; // "github", "discord"
+  readonly version: string; // bump on schema changes
   readonly poll?: PollAdapter;
   readonly webhook?: WebhookNormalizer;
 }
@@ -133,7 +136,11 @@ interface WebhookNormalizer {
 
   /** Verify webhook signature. Must be called before normalize().
    *  Implementation uses platform OSS — not bespoke crypto. */
-  verify(headers: Record<string, string>, body: Buffer, secret: string): Promise<boolean>;
+  verify(
+    headers: Record<string, string>,
+    body: Buffer,
+    secret: string
+  ): Promise<boolean>;
 
   /** Parse and normalize webhook payload to ActivityEvent[].
    *  Returns empty array for events we don't care about (e.g., PR opened but not merged).
@@ -147,6 +154,7 @@ Note: `verify()` is `async` because `@octokit/webhooks-methods` `verify()` retur
 ### Runtime Topology
 
 **Poll path** (unchanged — Temporal worker):
+
 ```
 Temporal Schedule → CollectEpochWorkflow
   → resolveStreams(registration.poll!.streams())
@@ -157,6 +165,7 @@ Temporal Schedule → CollectEpochWorkflow
 ```
 
 **Webhook path** (new — feature service called from route):
+
 ```
 GitHub POST /api/v1/internal/webhooks/:source
   → route validates internal bearer token (SCHEDULER_API_TOKEN)
@@ -170,6 +179,7 @@ GitHub POST /api/v1/internal/webhooks/:source
 ```
 
 **Key design decisions**:
+
 - The webhook route delegates to a **feature service** (`WebhookReceiverService`), respecting the app layer boundary (`app → features`, never `app → ports`).
 - Receipt insertion uses the **existing** `AttributionStore.insertIngestionReceipts()` — no new port.
 - The route is parameterized by `:source` — one route handles GitHub, Discord, future sources. The feature service dispatches to the correct `DataSourceRegistration`.
@@ -188,19 +198,19 @@ Spec update: amend `WRITES_VIA_TEMPORAL` to _"All write operations (collect, fin
 
 ### Auth Topology
 
-| Path | Auth Mechanism | Where Configured |
-|---|---|---|
-| Poll | GitHub App installation token via `VcsTokenProvider` | Container bootstrap (env vars) |
-| Webhook route | Internal bearer token (`SCHEDULER_API_TOKEN`) | Same as `/api/internal/*` pattern |
-| Webhook verify | Platform-specific signature (`X-Hub-Signature-256`) | `GH_WEBHOOK_SECRET` env var (V0) |
+| Path           | Auth Mechanism                                       | Where Configured                  |
+| -------------- | ---------------------------------------------------- | --------------------------------- |
+| Poll           | GitHub App installation token via `VcsTokenProvider` | Container bootstrap (env vars)    |
+| Webhook route  | Internal bearer token (`SCHEDULER_API_TOKEN`)        | Same as `/api/internal/*` pattern |
+| Webhook verify | Platform-specific signature (`X-Hub-Signature-256`)  | `GH_WEBHOOK_SECRET` env var (V0)  |
 
 ### OSS Dependencies
 
-| Purpose | Library | License | Why |
-|---|---|---|---|
-| GitHub webhook signature verification | `@octokit/webhooks-methods` | MIT | Already in Octokit ecosystem (codebase uses `@octokit/graphql`, `@octokit/auth-app`). Provides `verify(secret, payload, signature)` using Web Crypto HMAC-SHA256. |
-| GitHub webhook event types | `@octokit/webhooks-types` | MIT | Typed webhook payloads (`PullRequestEvent`, `IssuesEvent`, etc.) for the normalizer implementation. |
-| Discord webhook verification (future) | `discord-interactions` | MIT | Official Discord library, Ed25519 verification via `verifyKey()`. Added when Discord adapter gains webhook support. |
+| Purpose                               | Library                     | License | Why                                                                                                                                                               |
+| ------------------------------------- | --------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub webhook signature verification | `@octokit/webhooks-methods` | MIT     | Already in Octokit ecosystem (codebase uses `@octokit/graphql`, `@octokit/auth-app`). Provides `verify(secret, payload, signature)` using Web Crypto HMAC-SHA256. |
+| GitHub webhook event types            | `@octokit/webhooks-types`   | MIT     | Typed webhook payloads (`PullRequestEvent`, `IssuesEvent`, etc.) for the normalizer implementation.                                                               |
+| Discord webhook verification (future) | `discord-interactions`      | MIT     | Official Discord library, Ed25519 verification via `verifyKey()`. Added when Discord adapter gains webhook support.                                               |
 
 No bespoke crypto. Each adapter uses its platform's official OSS library for signature verification.
 
@@ -236,7 +246,8 @@ All new invariants below will be added to `attribution-ledger.md` spec as part o
 - Modify: `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` — Use `registration.poll!` instead of `adapter`
 - Modify: `services/scheduler-worker/src/activities/ledger.ts` — Update type references
 - Create: `src/features/ingestion/services/webhook-receiver.ts` — `WebhookReceiverService` (feature service, uses `AttributionStore` port)
-- Create: `src/app/api/v1/internal/webhooks/[source]/route.ts` — Parameterized webhook route (delegates to feature service)
+- Create: `src/app/api/internal/webhooks/[source]/route.ts` — Parameterized webhook route (delegates to feature service)
+- Create: `src/adapters/server/ingestion/github-webhook.ts` — GitHubWebhookNormalizer (app adapter for route access)
 - Modify: `docs/spec/attribution-ledger.md` — Amend WRITES_VIA_TEMPORAL, add new invariants, update source adapter section
 - Test: `services/scheduler-worker/tests/github-webhook-normalizer.test.ts` — Unit tests for normalize + verify
 - Test: `tests/stack/webhooks/github-webhook.stack.test.ts` — End-to-end webhook → receipt
@@ -273,20 +284,54 @@ All new invariants below will be added to `attribution-ledger.md` spec as part o
 
 ## Plan
 
-- [ ] Define `DataSourceRegistration`, `PollAdapter`, `WebhookNormalizer` in `packages/ingestion-core/src/port.ts`
-- [ ] Update `packages/ingestion-core/src/index.ts` and `src/ports/source-adapter.port.ts` re-exports
-- [ ] Refactor `GitHubSourceAdapter` to implement `PollAdapter` interface
-- [ ] Update container bootstrap to build `DataSourceRegistration` map
-- [ ] Update `CollectEpochWorkflow` to use `registration.poll`
-- [ ] Update `ledger.ts` type references
-- [ ] Implement `GitHubWebhookNormalizer` using `@octokit/webhooks-methods` + `@octokit/webhooks-types`
-- [ ] Create `WebhookReceiverService` feature service
-- [ ] Add parameterized webhook route at `/api/v1/internal/webhooks/[source]`
-- [ ] Wire `WebhookNormalizer` into registration in container bootstrap
-- [ ] Amend `WRITES_VIA_TEMPORAL` and add new invariants to attribution-ledger spec
-- [ ] Add unit tests for webhook normalizer
-- [ ] Add stack test for webhook → receipt flow
-- [ ] Verify all existing tests pass
+- [ ] **Checkpoint 1: Port types**
+  - Milestone: New port interfaces compile. All existing code still works via backward-compat type alias.
+  - Invariants: ADAPTERS_NOT_IN_CORE
+  - Todos:
+    - [ ] Define `DataSourceRegistration`, `PollAdapter`, `WebhookNormalizer` in `packages/ingestion-core/src/port.ts`
+    - [ ] Keep `SourceAdapter` as a backward-compat type alias
+    - [ ] Update `packages/ingestion-core/src/index.ts` re-exports
+    - [ ] Update `src/ports/source-adapter.port.ts` re-exports
+    - [ ] Update `src/ports/index.ts` re-exports
+    - [ ] Update `services/scheduler-worker/src/ports/index.ts` re-exports
+  - Validation: `pnpm check` passes with zero type errors
+
+- [ ] **Checkpoint 2: Refactor existing code to DataSourceRegistration**
+  - Milestone: GitHub adapter + container + workflow + activities use DataSourceRegistration instead of SourceAdapter. Existing behavior unchanged.
+  - Invariants: RECEIPT_IDEMPOTENT, CURSOR_STATE_PERSISTED, ADAPTERS_NOT_IN_CORE
+  - Todos:
+    - [ ] Refactor `GitHubSourceAdapter` to implement `PollAdapter` (remove `handleWebhook?`)
+    - [ ] Update container to build `Map<string, DataSourceRegistration>` with poll capability
+    - [ ] Update `AttributionContainer.sourceAdapters` type to `DataSourceRegistration` map
+    - [ ] Update `AttributionActivityDeps` in ledger.ts to use `DataSourceRegistration`
+    - [ ] Update `collectFromSource` to use `registration.poll!.collect()`
+    - [ ] Update `resolveStreams` to use `registration.poll!.streams()`
+    - [ ] Update workflow references if needed
+  - Validation: `pnpm check` passes. Existing tests pass.
+
+- [ ] **Checkpoint 3: Webhook path — normalizer + feature service + route**
+  - Milestone: GitHub webhook normalizer implemented. Feature service wires verify→normalize→insert. Route delegates to service.
+  - Invariants: WEBHOOK_VERIFY_BEFORE_NORMALIZE, RECEIPT_IDEMPOTENT, ARCHITECTURE_ALIGNMENT, WEBHOOK_VERIFY_VIA_OSS
+  - Todos:
+    - [ ] Install `@octokit/webhooks-methods` (dev dep in scheduler-worker)
+    - [ ] Create `GitHubWebhookNormalizer` in `services/scheduler-worker/src/adapters/ingestion/github-webhook.ts`
+    - [ ] Create `WebhookReceiverService` in `src/features/ingestion/services/webhook-receiver.ts`
+    - [ ] Create webhook route at `src/app/api/v1/internal/webhooks/[source]/route.ts`
+    - [ ] Wire webhook normalizer into GitHub registration in container
+    - [ ] Add `GH_WEBHOOK_SECRET` to env schema
+    - [ ] Add unit tests for `GitHubWebhookNormalizer`
+  - Validation: `pnpm check` passes. Webhook normalizer tests pass.
+
+- [ ] **Checkpoint 4: Spec update + finalize**
+  - Milestone: Attribution-ledger spec updated. Work item status set to needs_closeout.
+  - Invariants: All listed invariants documented in spec
+  - Todos:
+    - [ ] Amend WRITES_VIA_TEMPORAL in `docs/spec/attribution-ledger.md`
+    - [ ] Add new invariants to spec
+    - [ ] Update Source Adapter Interface section in spec
+    - [ ] Update work item status to needs_closeout
+    - [ ] Final `pnpm check` pass
+  - Validation: `pnpm check` passes. `pnpm check:docs` passes.
 
 ## Validation
 

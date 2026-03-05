@@ -8,7 +8,7 @@ summary: "Root cause analysis for zero activity in preview, architectural evalua
 read_when: Debugging empty ledger activity, planning webhook integration, or extending source adapters.
 owner: claude
 created: 2026-03-05
-verified:
+verified: 2026-03-05
 tags: [ingestion, github, temporal, architecture]
 ---
 
@@ -69,20 +69,20 @@ Even with valid app credentials, `GH_REPOS` must be set (comma-separated). If em
 
 ### Poll-only (current state) — correct for V0 but limited
 
-| Issue | Impact |
-|-------|--------|
-| 24h latency | PR merged at 7am waits ~23h to appear |
-| Window gaps | Client-side `updatedAt` early-stop can miss events with GitHub index lag |
+| Issue               | Impact                                                                   |
+| ------------------- | ------------------------------------------------------------------------ |
+| 24h latency         | PR merged at 7am waits ~23h to appear                                    |
+| Window gaps         | Client-side `updatedAt` early-stop can miss events with GitHub index lag |
 | Rate limit pressure | Full re-scan of PR/issue connection ordered by `updatedAt DESC` each day |
-| No real-time signal | Contributors don't see their activity until next day |
+| No real-time signal | Contributors don't see their activity until next day                     |
 
 ### Webhooks alone — dangerous
 
-| Issue | Impact |
-|-------|--------|
-| Delivery not guaranteed | GitHub webhooks are best-effort with limited retries |
-| Ordering not guaranteed | Events arrive out of order |
-| No backfill | Missed webhook = permanently lost event without poll fallback |
+| Issue                   | Impact                                                        |
+| ----------------------- | ------------------------------------------------------------- |
+| Delivery not guaranteed | GitHub webhooks are best-effort with limited retries          |
+| Ordering not guaranteed | Events arrive out of order                                    |
+| No backfill             | Missed webhook = permanently lost event without poll fallback |
 
 ### Recommended: Dual-ingest with idempotent dedup
 
@@ -125,6 +125,7 @@ interface WebhookHandler {
 ```
 
 Why separate:
+
 - **Different runtime**: webhook runs in Next.js request/response, not Temporal
 - **Different auth**: webhook secret verification vs GitHub App installation token
 - **Different error handling**: return 200 to GitHub quickly, process async
@@ -136,7 +137,10 @@ Currently `insertReceipts()` is a Temporal activity. Webhooks can't call Tempora
 ```typescript
 // Shared port — both Temporal activity and webhook route use this
 interface IngestionReceiptWriter {
-  insertReceipts(events: ActivityEvent[], producerVersion: string): Promise<void>;
+  insertReceipts(
+    events: ActivityEvent[],
+    producerVersion: string
+  ): Promise<void>;
 }
 ```
 
@@ -156,15 +160,15 @@ The workflow currently loads one cursor before iterating all streams for a sourc
 
 ## Prioritized Issue Summary
 
-| # | Issue | Severity | Fix |
-|---|-------|----------|-----|
-| 1 | Silent adapter skip when env vars missing | **P0** | Fail loud if `activity_sources.github` is in repo-spec but adapter can't be created |
-| 2 | No verification that Temporal Schedule exists | **P0** | Add health check verifying `governance:ledger_ingest` exists |
-| 3 | Daily-only collection (24h latency) | P1 | Increase to every 4h |
-| 4 | No webhook fast-path | P1 | Add `WebhookHandler` port + GitHub webhook route |
-| 5 | `collectFromSource` returns empty on missing adapter without error | P1 | Throw (or emit metric) when configured source has no adapter |
-| 6 | No webhook signature verification port | P2 | Required before enabling webhooks |
-| 7 | Shared cursor across error boundaries | P2 | Verify per-stream cursor isolation on partial failure |
+| #   | Issue                                                              | Severity | Fix                                                                                 |
+| --- | ------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------- |
+| 1   | Silent adapter skip when env vars missing                          | **P0**   | Fail loud if `activity_sources.github` is in repo-spec but adapter can't be created |
+| 2   | No verification that Temporal Schedule exists                      | **P0**   | Add health check verifying `governance:ledger_ingest` exists                        |
+| 3   | Daily-only collection (24h latency)                                | P1       | Increase to every 4h                                                                |
+| 4   | No webhook fast-path                                               | P1       | Add `WebhookHandler` port + GitHub webhook route                                    |
+| 5   | `collectFromSource` returns empty on missing adapter without error | P1       | Throw (or emit metric) when configured source has no adapter                        |
+| 6   | No webhook signature verification port                             | P2       | Required before enabling webhooks                                                   |
+| 7   | Shared cursor across error boundaries                              | P2       | Verify per-stream cursor isolation on partial failure                               |
 
 ---
 

@@ -35,6 +35,7 @@ import {
   DrizzleScheduleUserAdapter,
   DrizzleThreadPersistenceAdapter,
   EvmRpcOnChainVerifierAdapter,
+  GitHubWebhookNormalizer,
   getAppDb,
   LangfuseAdapter,
   LiteLlmAdapter,
@@ -68,6 +69,7 @@ import type {
   AccountService,
   AiTelemetryPort,
   Clock,
+  DataSourceRegistration,
   ExecutionGrantUserPort,
   ExecutionGrantWorkerPort,
   ExecutionRequestPort,
@@ -139,6 +141,8 @@ export interface Container {
   governanceStatus: GovernanceStatusPort;
   /** Epoch ledger store — shared by app and scheduler-worker */
   attributionStore: AttributionStore;
+  /** Webhook source registrations — normalizers for webhook ingestion */
+  webhookRegistrations: ReadonlyMap<string, DataSourceRegistration>;
 }
 
 // Feature-specific dependency types
@@ -180,6 +184,23 @@ export function getContainer(): Container {
  */
 export function resetContainer(): void {
   _container = null;
+}
+
+/**
+ * Build webhook normalizer registrations (webhook-only capabilities).
+ * Separate from scheduler-worker registrations which have poll capabilities.
+ */
+function buildWebhookRegistrations(): ReadonlyMap<
+  string,
+  DataSourceRegistration
+> {
+  const registrations = new Map<string, DataSourceRegistration>();
+  registrations.set("github", {
+    source: "github",
+    version: "0.3.0",
+    webhook: new GitHubWebhookNormalizer(),
+  });
+  return registrations;
 }
 
 function createContainer(): Container {
@@ -388,6 +409,7 @@ function createContainer(): Container {
       userActor(toUserId(COGNI_SYSTEM_PRINCIPAL_USER_ID))
     ),
     attributionStore: new DrizzleAttributionAdapter(serviceDb, getScopeId()),
+    webhookRegistrations: buildWebhookRegistrations(),
   };
 }
 

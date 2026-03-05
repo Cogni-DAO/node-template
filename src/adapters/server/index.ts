@@ -83,6 +83,7 @@ export {
 } from "./ai-telemetry/langfuse.adapter";
 export { type Database, getAppDb } from "./db/client";
 export { DrizzleGovernanceStatusAdapter } from "./governance/drizzle-governance-status.adapter";
+export { GitHubWebhookNormalizer } from "./ingestion/github-webhook";
 export {
   type MimirAdapterConfig,
   MimirMetricsAdapter,

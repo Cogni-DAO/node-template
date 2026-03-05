@@ -19,4 +19,6 @@ export {
   GitHubAppTokenProvider,
 } from "./github-auth.js";
 
+export { GitHubWebhookNormalizer } from "./github-webhook.js";
+
 export { createGitHubClient, type GitHubClient } from "./octokit-client.js";
