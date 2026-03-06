@@ -2,7 +2,7 @@
 id: spike.0137
 type: spike
 title: "OSS Research AI Node — Research Spike"
-status: needs_triage
+status: needs_research
 priority: 1
 rank: 99
 estimate: 3
@@ -19,7 +19,7 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-05
-updated: 2026-03-05
+updated: 2026-03-06
 labels: [niche-node, oss, ai, x402, research]
 external_refs:
 ---

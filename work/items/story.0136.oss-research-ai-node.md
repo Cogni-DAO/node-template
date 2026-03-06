@@ -2,7 +2,7 @@
 id: story.0136
 type: story
 title: "OSS Research AI Node — First Cogni Niche Specialization"
-status: needs_triage
+status: done
 priority: 1
 rank: 99
 estimate: 5
@@ -19,7 +19,7 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-05
-updated: 2026-03-05
+updated: 2026-03-06
 labels: [niche-node, oss, ai, x402, content]
 external_refs:
 ---
