@@ -4,9 +4,9 @@
 /**
  * Module: `@tests/unit/shared/config/repoSpec.server`
  * Purpose: Validate that repo-spec-driven inbound payment config loads correctly and rejects invalid specs.
- * Scope: Pure unit tests against getPaymentConfig(); uses a temporary cwd with fixture repo-spec files; does not assert cache identity or UI wiring.
+ * Scope: Pure unit tests against getPaymentConfig(); uses vi.spyOn(process, "cwd") with fixture repo-spec files; does not assert cache identity or UI wiring. Compatible with vmThreads pool (no process.chdir).
  * Invariants: repo-spec is the single source for chainId/receivingAddress/provider; invalid specs throw clear errors.
- * Side-effects: none (temp filesystem only)
+ * Side-effects: none (temp filesystem only; cwd mocked via spy, not mutated)
  * Links: src/shared/config/repoSpec.server.ts, .cogni/repo-spec.yaml
  * @public
  */

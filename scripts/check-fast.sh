@@ -6,6 +6,8 @@
 # Purpose: Runs all quality checks (typecheck, lint, format, test, docs) to completion,
 #          never stopping at first failure. Provides structured output with timing,
 #          visual separation, and summary reporting optimized for AI developer workflows.
+#          Detects constrained containers (ulimit -i < 128) and splits test runs:
+#          vmThreads for non-DOM tests, forks for DOM-env (happy-dom) and contract tests.
 # Usage: pnpm check      # Read-only validation
 #        pnpm check:fix  # Run with auto-fixers
 #        Direct: bash scripts/check-fast.sh [--fix]
@@ -15,7 +17,7 @@
 #   - set -o pipefail: Catches failures in piped commands
 #   - set -u: Treats unbound variables as errors
 # Side-effects: None in default mode; --fix mode modifies files via ESLint and Prettier
-# Links: docs/spec/style.md, AGENTS.md, package.json:41-42
+# Links: docs/spec/style.md, AGENTS.md, package.json:41-42, vitest.config.mts
 
 set +e
 set -o pipefail
