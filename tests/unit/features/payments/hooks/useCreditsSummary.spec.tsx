@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * @vitest-environment jsdom
+ * @vitest-environment happy-dom
  *
  * Module: `@features/payments/hooks/useCreditsSummary`
  * Purpose: Unit tests for useCreditsSummary React Query hook with mocked API client.

@@ -73,8 +73,29 @@ else
 fi
 
 run_check "ui-tokens" "bash scripts/check-ui-tokens.sh"
-run_check "test:unit" "pnpm test:unit"
-run_check "test:contract" "pnpm test:contract"
+
+# Detect constrained containers (e.g. Claude Code remote) where ulimit -i 0
+# prevents the forks pool from running large test suites. The root vitest.config.mts
+# switches to vmThreads automatically, but contract tests need forks because
+# next-test-api-route-handler is incompatible with VM contexts.
+# Contract tests (27 files) are small enough that forks completes before hanging.
+CONSTRAINED=false
+ULIMIT_I=$(ulimit -i 2>/dev/null || echo "unlimited")
+if [ "$ULIMIT_I" != "unlimited" ] && [ "$ULIMIT_I" -lt 128 ] 2>/dev/null; then
+  CONSTRAINED=true
+fi
+
+if [ "$CONSTRAINED" = true ]; then
+  # vmThreads: exclude DOM-env tests (happy-dom/jsdom) that have module isolation
+  # issues in VM contexts, then run them separately with forks pool.
+  run_check "test:unit" "pnpm vitest run tests/unit tests/ports --exclude '**/*.spec.tsx' --exclude '**/model-preference.test.ts'"
+  run_check "test:unit:dom" "pnpm vitest run --pool=forks tests/unit/app/chat-page-no-hardcoded-models.spec.tsx tests/unit/app/chat-page-zero-credits.spec.tsx tests/unit/features/ai/preferences/model-preference.test.ts tests/unit/features/payments/hooks/useCreditsSummary.spec.tsx tests/unit/features/treasury/components/TreasuryBadge.spec.tsx tests/unit/app/app-layout-auth-guard.test.tsx"
+  run_check "test:contract" "pnpm vitest run --pool=forks tests/contract"
+else
+  run_check "test:unit" "pnpm test:unit"
+  run_check "test:contract" "pnpm test:contract"
+fi
+
 run_check "test:meta" "pnpm test:meta"
 run_check "test:packages:local" "pnpm test:packages:local"
 run_check "test:packages:integration" "pnpm test:packages:integration"

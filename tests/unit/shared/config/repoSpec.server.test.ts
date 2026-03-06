@@ -15,7 +15,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GovernanceConfig, InboundPaymentConfig } from "@/shared/config";
 import { CHAIN_ID } from "@/shared/web3";
@@ -25,7 +25,6 @@ interface RepoSpecModule {
   getGovernanceConfig: () => GovernanceConfig;
 }
 
-const ORIGINAL_CWD = process.cwd();
 const TEST_NODE_ID = "00000000-0000-4000-8000-000000000001";
 
 function writeRepoSpec(yaml: string): string {
@@ -41,10 +40,19 @@ async function loadPaymentConfig(): Promise<RepoSpecModule> {
   return import("@/shared/config/repoSpec.server");
 }
 
+/** Use vi.spyOn instead of process.chdir() — chdir is not supported in vmThreads pool */
+function useTmpCwd(tmpDir: string): void {
+  vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+}
+
 function cleanup(tmpDir: string): void {
-  process.chdir(ORIGINAL_CWD);
+  vi.restoreAllMocks();
   fs.rmSync(tmpDir, { recursive: true, force: true });
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("getPaymentConfig (repo-spec)", () => {
   it("returns mapped inbound payment config for a valid repo-spec", async () => {
@@ -59,7 +67,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -87,7 +95,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -109,7 +117,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -131,7 +139,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         "    receiving_address: 0x1234",
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -153,7 +161,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         "    provider: ''",
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -175,7 +183,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -199,7 +207,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "not-an-address"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -224,7 +232,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '      - "AnotherChain"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -246,7 +254,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         "payments_in:", // missing credits_topup
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -290,7 +298,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
     ].join("\n");
 
     const tmpDir = writeRepoSpec(yaml);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
@@ -316,7 +324,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
 
   it("returns empty schedules when governance section is omitted", async () => {
     const tmpDir = writeRepoSpec(BASE_YAML);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
@@ -339,7 +347,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
     ].join("\n");
 
     const tmpDir = writeRepoSpec(yaml);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
@@ -362,7 +370,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
     ].join("\n");
 
     const tmpDir = writeRepoSpec(yaml);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
@@ -385,7 +393,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
     ].join("\n");
 
     const tmpDir = writeRepoSpec(yaml);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();

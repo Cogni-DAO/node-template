@@ -5,7 +5,7 @@
  * Module: `vitest.config`
  * Purpose: Vitest test runner configuration for unit tests, contract tests, and lint tests (no infrastructure required).
  * Scope: Configures test environment for fast tests only. Excludes component tests requiring DB/Docker/binaries.
- * Invariants: Coverage disabled by default; fast execution; v8 provider for Node.js compatibility; constrained envs use single-worker mode.
+ * Invariants: Coverage disabled by default; fast execution; v8 provider for Node.js compatibility; constrained envs use vmThreads pool to avoid signal-dependent forks.
  * Side-effects: file system (coverage reports written to ./coverage/)
  * Notes: Uses vite-tsconfig-paths for module resolution; excludes tests/component/** from main test run.
  * Links: SonarCloud integration workflow
@@ -21,8 +21,11 @@ import { defineConfig } from "vitest/config";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Detect constrained containers (e.g. Claude Code remote) where pending signals
-// ulimit is 0, causing vitest forks-runner startup timeouts. Fall back to single
-// worker to avoid the stampede. CI and local dev are unaffected.
+// ulimit is 0, causing the forks pool to hang after ~8 tests. The forks pool
+// uses child_process.fork() which relies on OS signals for IPC; with ulimit -i 0
+// these signals cannot be delivered, causing the worker to spin at 100% CPU.
+// Fix: switch to vmThreads pool which uses MessageChannel (no signals).
+// CI and local dev are unaffected.
 function isConstrainedEnvironment(): boolean {
   try {
     const pending = execSync("bash -c 'ulimit -i'", {
@@ -44,7 +47,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    pool: "forks",
+    pool: constrained ? "vmThreads" : "forks",
     poolOptions: {
       forks: {
         singleFork: constrained,

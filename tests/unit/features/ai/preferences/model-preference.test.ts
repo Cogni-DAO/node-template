@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * @vitest-environment jsdom
+ * @vitest-environment happy-dom
  *
  * Module: `@tests/unit/features/ai/preferences/model-preference`
  * Purpose: Validates localStorage preferences utilities for model selection persistence and error resilience.
