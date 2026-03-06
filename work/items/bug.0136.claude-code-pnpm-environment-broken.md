@@ -2,7 +2,7 @@
 id: bug.0136
 type: bug
 title: "Claude Code remote environment ships empty pnpm store — pnpm install and pnpm check fail out-of-the-box"
-status: needs_closeout
+status: done
 priority: 0
 rank: 1
 estimate: 2
@@ -19,9 +19,9 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-05
-updated: 2026-03-05
+updated: 2026-03-06
 labels: [dx, ci, environment, p0]
-last_command: /implement
+last_command: /review-implementation
 external_refs:
 ---
 
