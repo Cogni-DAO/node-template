@@ -25,6 +25,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // multiple forks causes IPC signal delivery failures. Fix: use singleFork with
 // maxWorkers 1 so only one child process communicates via stdin/stdout pipes.
 // CI and local dev are unaffected.
+// Note: `ulimit -i` is Linux-only; on macOS the catch returns false (unconstrained).
 function isConstrainedEnvironment(): boolean {
   try {
     const pending = execSync("bash -c 'ulimit -i'", {
