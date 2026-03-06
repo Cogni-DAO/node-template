@@ -2,7 +2,7 @@
 id: bug.0136
 type: bug
 title: "Claude Code remote environment ships empty pnpm store — pnpm install and pnpm check fail out-of-the-box"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 2
@@ -21,7 +21,7 @@ deploy_verified: false
 created: 2026-03-05
 updated: 2026-03-06
 labels: [dx, ci, environment, p0]
-last_command: /design
+last_command: /implement
 external_refs:
 ---
 
@@ -159,12 +159,12 @@ The real question: can `forks` with `singleFork: true` + `maxWorkers: 1` survive
 
 ## Plan
 
-- [ ] Validate: run `pnpm vitest run --pool=forks --poolOptions.forks.singleFork=true tests/unit tests/ports` in this constrained env to confirm singleFork survives `ulimit -i 0`
-- [ ] Update `vitest.config.mts`: remove vmThreads, use `forks` always, constrained → `singleFork: true` + `maxWorkers: 1`
-- [ ] Simplify `scripts/check-fast.sh`: delete constrained-env branch, single code path
-- [ ] Revert unnecessary test file changes from rev 1
-- [ ] Update `AGENTS.md:29`: drop `--offline`
-- [ ] Run `pnpm check` end-to-end to validate
+- [x] Validate: singleFork survives `ulimit -i 0` — confirmed, container.spec.ts passes (12.5s)
+- [x] Update `vitest.config.mts`: remove vmThreads, use `forks` always, constrained → `singleFork: true` + `maxWorkers: 1`
+- [x] Simplify `scripts/check-fast.sh`: delete constrained-env branch, single code path
+- [x] Revert unnecessary test file changes from rev 1 (6 files: jsdom→happy-dom reverts + repoSpec.server.test.ts process.chdir restore)
+- [x] `AGENTS.md:29`: already had `--offline` removed in rev 1 — no change needed
+- [x] Run `pnpm check` end-to-end — all checks passed
 - [ ] Commit and push
 
 ## Validation

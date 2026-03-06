@@ -8,7 +8,7 @@
  * Invariants: TreasuryBadge MUST render without authentication; graceful degradation on API errors.
  * Side-effects: none (mocked fetch)
  * Links: docs/spec/onchain-readers.md
- * @vitest-environment happy-dom
+ * @vitest-environment jsdom
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

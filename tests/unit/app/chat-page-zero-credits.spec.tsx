@@ -8,7 +8,7 @@
  * Invariants: INV-UI-NO-PAID-DEFAULT-WHEN-ZERO - UI must not display paid model when credits are 0 or loading.
  * Side-effects: none (mocked dependencies)
  * Links: src/app/(app)/chat/page.tsx, tests/_fixtures/ai/fixtures.ts, src/core/chat/rules.ts
- * @vitest-environment happy-dom
+ * @vitest-environment jsdom
  * @internal
  */
 

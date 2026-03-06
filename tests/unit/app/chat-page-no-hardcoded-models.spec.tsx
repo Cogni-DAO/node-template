@@ -8,7 +8,7 @@
  * Invariants: INV-NO-CLIENT-INVENTED-MODEL-IDS - Client must only use model IDs from API response.
  * Side-effects: none (mocked dependencies)
  * Links: src/app/(app)/chat/page.tsx, tests/_fixtures/ai/fixtures.ts
- * @vitest-environment happy-dom
+ * @vitest-environment jsdom
  * @internal
  */
 
