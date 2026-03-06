@@ -18,7 +18,7 @@ created: 2026-02-17
 updated: 2026-03-06
 labels: [wallet, web3, billing]
 external_refs:
-revision: 1
+revision: 2
 blocked_by:
 deploy_verified: false
 rank: 19
@@ -229,6 +229,25 @@ pnpm test tests/unit/adapters/test/fake-operator-wallet.test.ts
 - [ ] **Tests:** Port contract test + fake adapter test
 - [ ] **Reviewer:** assigned and approved
 - [ ] **Architecture:** Port in `src/ports/`, adapter in `src/adapters/server/wallet/`, no layer violations
+
+## Review Feedback
+
+### Review 2 (2026-03-06) — REQUEST CHANGES
+
+**Blocking issues:**
+
+1. **Deprecated dependency**: `@privy-io/server-auth` is deprecated (pnpm-lock.yaml confirms). Migrate to `@privy-io/node`.
+2. **Wrong function selector in `encodeSplitDistribute`**: `0xc9a6ce04` is not the correct selector for `distributeERC20(address,address)` (actual: `0xd1a06cf8`). Would cause on-chain reverts.
+3. **Missing DESTINATION_ALLOWLIST invariant**: `fundOpenRouterTopUp()` doesn't validate `contract_address` against an allowlist (spec: DESTINATION_ALLOWLIST).
+4. **Missing OPERATOR_MAX_TOPUP_USD cap**: No per-tx cap validation in `fundOpenRouterTopUp()` (spec requirement).
+
+**Recommended fix:** Revert `distributeSplit()` and `fundOpenRouterTopUp()` in the Privy adapter to stubs (throw "not implemented — see task.0085/task.0086") as the design specifies. This eliminates issues 2-4 and defers the complexity to the correct PRs. Migrate `@privy-io/server-auth` → `@privy-io/node`.
+
+**Non-blocking suggestions:**
+
+- Add missing `tests/unit/adapters/test/fake-operator-wallet.test.ts`
+- Paginate `getWallets()` or use targeted wallet lookup
+- Add promise-based lock to `verify()` to prevent redundant concurrent API calls
 
 ## PR / Links
 
