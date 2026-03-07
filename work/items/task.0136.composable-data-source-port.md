@@ -2,7 +2,7 @@
 id: task.0136
 type: task
 title: "Composable DataSource registration: unified poll + webhook ingestion"
-status: done
+status: blocked
 priority: 1
 rank: 10
 estimate: 3
@@ -16,11 +16,11 @@ project: proj.transparent-credit-payouts
 branch: claude/review-github-ingestion-Kwjtl
 pr: "pending — create manually: claude/review-github-ingestion-Kwjtl → staging"
 reviewer:
-revision: 4
-blocked_by:
+revision: 5
+blocked_by: "Review loop limit — escalate to human"
 deploy_verified: false
 created: 2026-03-05
-updated: 2026-03-05
+updated: 2026-03-07
 labels: [architecture, attribution, ingestion]
 external_refs:
 ---
@@ -371,9 +371,44 @@ pnpm check && pnpm test
 - Add `WEBHOOK_SECRET_NOT_IN_CODE` invariant to the spec (listed in work item but missing from attribution-ledger.md)
 - Add runtime `CAPABILITY_REQUIRED` validation at bootstrap (stated as "validated at bootstrap" in spec but no code)
 
+### Revision 5 — Blocking Issues (LOOP_LIMIT — escalate to human)
+
+1. **`pnpm check` fails (P0)**: 3 failures introduced by this change:
+   - **lint**: 10 Biome errors in `tests/external/ingestion/webhook-poll-dedup.external.test.ts` (trailing commas in template literals)
+   - **format**: 5 errors in same file
+   - **check:docs**: 4 header validation errors — `_github-fixture-helper.ts` missing `invariants`/`sideEffects`/`links` labels; all 4 new external test files missing negative-clause in `scope`
+   - **Fix**: Run `pnpm format:write`, fix remaining lint, add missing header fields
+
+2. **`insertReceipts` missing `producerVersion` (P0)**: `tests/external/ingestion/ledger-collection.external.test.ts:201,228` — `insertReceipts({ events })` omits required `producerVersion` field. Will fail at runtime with NOT NULL constraint violation on `producer_version` column. Add `producerVersion: githubAdapter.version`.
+
+3. **Version constant duplication (P1)**: `"0.3.0"` hardcoded independently in `services/scheduler-worker/src/adapters/ingestion/github.ts:201` (`GitHubSourceAdapter.version`) and `src/adapters/server/ingestion/github-webhook.ts:23` (`GITHUB_ADAPTER_VERSION`). If these drift, webhook and poll receipts get different `producer_version` values — breaks audit trail. Extract to one shared location.
+
+4. **Phantom `scopeId` in test input (P2)**: `tests/external/ingestion/ledger-collection.external.test.ts:118,131,148` — passes `scopeId` to `ensureEpochForWindow()` but `EnsureEpochInput` has no such field. Silently ignored. Remove.
+
+### Revision 5 — Non-blocking Suggestions
+
+- Add `GH_WEBHOOK_SECRET` to `.github/workflows/ci.yaml` env blocks (won't break CI since `.optional()` but completes propagation)
+- Fix fixture filename collision in `_github-fixture-helper.ts:51` — use unique names per run (e.g., `.ext-test-${suffix}.txt`)
+- Previous rev 3 suggestion to extract version constant to shared location remains open and is now promoted to blocking
+
+### Revision 3 — Status
+
+All 3 blocking items from rev 3 were addressed:
+
+1. Duplicate normalizer deleted from scheduler-worker ✅
+2. JSON parse wrapped in try/catch with `WebhookPayloadParseError` ✅
+3. Content-Length check added before body read ✅
+
+Rev 3 non-blocking suggestions addressed:
+
+- Structured logging in route ✅
+- `WEBHOOK_SECRET_NOT_IN_CODE` added to spec ✅
+- `CAPABILITY_REQUIRED` validation at bootstrap ✅
+- Version constant extraction — **NOT addressed**, now blocking (rev 5 item 3)
+
 ## PR / Links
 
--
+- Handoff: [handoff](../handoffs/task.0136.handoff.md)
 
 ## Attribution
 
