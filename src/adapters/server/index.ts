@@ -85,6 +85,7 @@ export { type Database, getAppDb } from "./db/client";
 export { DrizzleGovernanceStatusAdapter } from "./governance/drizzle-governance-status.adapter";
 export {
   GITHUB_ADAPTER_VERSION,
+  GITHUB_SOURCE,
   GitHubWebhookNormalizer,
 } from "./ingestion/github-webhook";
 export {

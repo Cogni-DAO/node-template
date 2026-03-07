@@ -29,7 +29,11 @@ import type {
 import {
   buildEventId,
   GITHUB_ADAPTER_VERSION,
+  GITHUB_SOURCE,
   hashCanonicalPayload,
+  issueClosedHashFields,
+  prMergedHashFields,
+  reviewSubmittedHashFields,
 } from "@cogni/ingestion-core";
 
 import type { GitHubClient } from "./octokit-client.js";
@@ -201,7 +205,7 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 // ---------------------------------------------------------------------------
 
 export class GitHubSourceAdapter implements PollAdapter {
-  readonly source = "github" as const;
+  readonly source = GITHUB_SOURCE;
   readonly version = GITHUB_ADAPTER_VERSION;
 
   private readonly tokenProvider: VcsTokenProvider;
@@ -410,18 +414,21 @@ export class GitHubSourceAdapter implements PollAdapter {
       return null;
     }
 
-    const id = buildEventId("github", "pr", `${owner}/${repoName}`, pr.number);
+    const id = buildEventId(
+      GITHUB_SOURCE,
+      "pr",
+      `${owner}/${repoName}`,
+      pr.number
+    );
     const authorId = String(pr.author.databaseId);
 
-    const payloadHash = await hashCanonicalPayload({
-      authorId,
-      id,
-      mergedAt: pr.mergedAt,
-    });
+    const payloadHash = await hashCanonicalPayload(
+      prMergedHashFields(authorId, id, pr.mergedAt)
+    );
 
     return {
       id,
-      source: "github",
+      source: GITHUB_SOURCE,
       eventType: "pr_merged",
       platformUserId: authorId,
       platformLogin: pr.author.login,
@@ -524,7 +531,7 @@ export class GitHubSourceAdapter implements PollAdapter {
     }
 
     const id = buildEventId(
-      "github",
+      GITHUB_SOURCE,
       "review",
       `${owner}/${repoName}`,
       prNumber,
@@ -532,16 +539,13 @@ export class GitHubSourceAdapter implements PollAdapter {
     );
     const authorId = String(review.author.databaseId);
 
-    const payloadHash = await hashCanonicalPayload({
-      authorId,
-      id,
-      state: review.state,
-      submittedAt: review.submittedAt,
-    });
+    const payloadHash = await hashCanonicalPayload(
+      reviewSubmittedHashFields(authorId, id, review.state, review.submittedAt)
+    );
 
     return {
       id,
-      source: "github",
+      source: GITHUB_SOURCE,
       eventType: "review_submitted",
       platformUserId: authorId,
       platformLogin: review.author.login,
@@ -627,22 +631,20 @@ export class GitHubSourceAdapter implements PollAdapter {
     }
 
     const id = buildEventId(
-      "github",
+      GITHUB_SOURCE,
       "issue",
       `${owner}/${repoName}`,
       issue.number
     );
     const authorId = String(issue.author.databaseId);
 
-    const payloadHash = await hashCanonicalPayload({
-      authorId,
-      closedAt: issue.closedAt,
-      id,
-    });
+    const payloadHash = await hashCanonicalPayload(
+      issueClosedHashFields(authorId, issue.closedAt, id)
+    );
 
     return {
       id,
-      source: "github",
+      source: GITHUB_SOURCE,
       eventType: "issue_closed",
       platformUserId: authorId,
       platformLogin: issue.author.login,

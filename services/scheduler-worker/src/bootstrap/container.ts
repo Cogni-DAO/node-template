@@ -30,6 +30,7 @@ import {
   DrizzleScheduleRunAdapter,
 } from "@cogni/db-client";
 import { createServiceDbClient } from "@cogni/db-client/service";
+import { GITHUB_SOURCE } from "@cogni/ingestion-core";
 import {
   extractChainId,
   extractLedgerConfig,
@@ -199,8 +200,8 @@ export function createAttributionContainer(
         attributionLogger
       );
 
-      registrations.set("github", {
-        source: "github",
+      registrations.set(GITHUB_SOURCE, {
+        source: GITHUB_SOURCE,
         version: pollAdapter.version,
         poll: pollAdapter,
       });

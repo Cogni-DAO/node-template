@@ -19,7 +19,6 @@ export type {
   CollectResult,
   DataSourceRegistration,
   PollAdapter,
-  SourceAdapter,
   StreamCursor,
   WebhookNormalizer,
 } from "@cogni/ingestion-core";

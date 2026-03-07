@@ -89,16 +89,3 @@ export interface WebhookNormalizer {
     body: unknown
   ): Promise<ActivityEvent[]>;
 }
-
-/**
- * @deprecated Use DataSourceRegistration with poll capability instead.
- * Backward-compat type alias during migration.
- */
-export type SourceAdapter = DataSourceRegistration & { poll: PollAdapter } & {
-  /** @deprecated Access via registration.poll.streams() */
-  streams(): StreamDefinition[];
-  /** @deprecated Access via registration.poll.collect() */
-  collect(params: CollectParams): Promise<CollectResult>;
-  /** @deprecated Removed in favor of WebhookNormalizer */
-  handleWebhook?(payload: unknown): Promise<ActivityEvent[]>;
-};

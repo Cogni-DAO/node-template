@@ -36,6 +36,7 @@ import {
   DrizzleThreadPersistenceAdapter,
   EvmRpcOnChainVerifierAdapter,
   GITHUB_ADAPTER_VERSION,
+  GITHUB_SOURCE,
   GitHubWebhookNormalizer,
   getAppDb,
   LangfuseAdapter,
@@ -144,6 +145,8 @@ export interface Container {
   attributionStore: AttributionStore;
   /** Webhook source registrations — normalizers for webhook ingestion */
   webhookRegistrations: ReadonlyMap<string, DataSourceRegistration>;
+  /** Webhook secrets per source — resolved from env at bootstrap, not in routes */
+  webhookSecrets: ReadonlyMap<string, string>;
 }
 
 // Feature-specific dependency types
@@ -185,27 +188,35 @@ export function getContainer(): Container {
  */
 export function resetContainer(): void {
   _container = null;
-  _webhookRegistrations = null;
+  _webhookConfig = null;
 }
 
-/** Lazy singleton for webhook registrations (avoids import cost at container init). */
-let _webhookRegistrations: ReadonlyMap<string, DataSourceRegistration> | null =
-  null;
+/** Lazy singleton for webhook config (registrations + secrets). */
+interface WebhookConfig {
+  registrations: ReadonlyMap<string, DataSourceRegistration>;
+  secrets: ReadonlyMap<string, string>;
+}
+let _webhookConfig: WebhookConfig | null = null;
 
-function getWebhookRegistrations(): ReadonlyMap<
-  string,
-  DataSourceRegistration
-> {
-  if (!_webhookRegistrations) {
+function getWebhookConfig(): WebhookConfig {
+  if (!_webhookConfig) {
     const registrations = new Map<string, DataSourceRegistration>();
-    registrations.set("github", {
-      source: "github",
+    const secrets = new Map<string, string>();
+
+    // GitHub webhook — add more sources here following the same pattern
+    registrations.set(GITHUB_SOURCE, {
+      source: GITHUB_SOURCE,
       version: GITHUB_ADAPTER_VERSION,
       webhook: new GitHubWebhookNormalizer(),
     });
-    _webhookRegistrations = registrations;
+    const env = serverEnv();
+    if (env.GH_WEBHOOK_SECRET) {
+      secrets.set(GITHUB_SOURCE, env.GH_WEBHOOK_SECRET);
+    }
+
+    _webhookConfig = { registrations, secrets };
   }
-  return _webhookRegistrations;
+  return _webhookConfig;
 }
 
 function createContainer(): Container {
@@ -415,7 +426,10 @@ function createContainer(): Container {
     ),
     attributionStore: new DrizzleAttributionAdapter(serviceDb, getScopeId()),
     get webhookRegistrations() {
-      return getWebhookRegistrations();
+      return getWebhookConfig().registrations;
+    },
+    get webhookSecrets() {
+      return getWebhookConfig().secrets;
     },
   };
 }

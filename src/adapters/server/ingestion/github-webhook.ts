@@ -19,11 +19,15 @@ import type { ActivityEvent, WebhookNormalizer } from "@cogni/ingestion-core";
 import {
   buildEventId,
   GITHUB_ADAPTER_VERSION,
+  GITHUB_SOURCE,
   hashCanonicalPayload,
+  issueClosedHashFields,
+  prMergedHashFields,
+  reviewSubmittedHashFields,
 } from "@cogni/ingestion-core";
 import { verify } from "@octokit/webhooks-methods";
 
-export { GITHUB_ADAPTER_VERSION };
+export { GITHUB_ADAPTER_VERSION, GITHUB_SOURCE };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -142,19 +146,20 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!eventTime) return [];
 
     const id = isMerged
-      ? buildEventId("github", "pr", fullName, prNumber)
-      : buildEventId("github", "pr", fullName, prNumber, action);
+      ? buildEventId(GITHUB_SOURCE, "pr", fullName, prNumber)
+      : buildEventId(GITHUB_SOURCE, "pr", fullName, prNumber, action);
 
-    const payloadHash = await hashCanonicalPayload({
-      authorId: actor.id,
-      id,
-      eventTime,
-    });
+    // Shared hash builders guarantee identical payloadHash from poll and webhook
+    const payloadHash = await hashCanonicalPayload(
+      isMerged
+        ? prMergedHashFields(actor.id, id, eventTime)
+        : { authorId: actor.id, id, eventTime }
+    );
 
     return [
       {
         id,
-        source: "github",
+        source: GITHUB_SOURCE,
         eventType,
         platformUserId: actor.id,
         platformLogin: actor.login,
@@ -206,19 +211,27 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     const submittedAt = review.submitted_at as string;
     if (!submittedAt) return [];
 
-    const id = buildEventId("github", "review", fullName, prNumber, reviewId);
+    const id = buildEventId(
+      GITHUB_SOURCE,
+      "review",
+      fullName,
+      prNumber,
+      reviewId
+    );
 
-    const payloadHash = await hashCanonicalPayload({
-      authorId: actor.id,
-      id,
-      state: review.state as string,
-      submittedAt,
-    });
+    const payloadHash = await hashCanonicalPayload(
+      reviewSubmittedHashFields(
+        actor.id,
+        id,
+        review.state as string,
+        submittedAt
+      )
+    );
 
     return [
       {
         id,
-        source: "github",
+        source: GITHUB_SOURCE,
         eventType: "review_submitted",
         platformUserId: actor.id,
         platformLogin: actor.login,
@@ -262,19 +275,20 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!eventTime) return [];
 
     const id = isClosed
-      ? buildEventId("github", "issue", fullName, issueNumber)
-      : buildEventId("github", "issue", fullName, issueNumber, action);
+      ? buildEventId(GITHUB_SOURCE, "issue", fullName, issueNumber)
+      : buildEventId(GITHUB_SOURCE, "issue", fullName, issueNumber, action);
 
-    const payloadHash = await hashCanonicalPayload({
-      authorId: actor.id,
-      id,
-      eventTime,
-    });
+    // Shared hash builders guarantee identical payloadHash from poll and webhook
+    const payloadHash = await hashCanonicalPayload(
+      isClosed
+        ? issueClosedHashFields(actor.id, eventTime, id)
+        : { authorId: actor.id, id, eventTime }
+    );
 
     return [
       {
         id,
-        source: "github",
+        source: GITHUB_SOURCE,
         eventType,
         platformUserId: actor.id,
         platformLogin: actor.login,
@@ -316,7 +330,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     const createdAt = comment.created_at as string;
     if (!createdAt) return [];
 
-    const id = buildEventId("github", "comment", fullName, commentId);
+    const id = buildEventId(GITHUB_SOURCE, "comment", fullName, commentId);
 
     const payloadHash = await hashCanonicalPayload({
       authorId: actor.id,
@@ -327,7 +341,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     return [
       {
         id,
-        source: "github",
+        source: GITHUB_SOURCE,
         eventType: "comment_created",
         platformUserId: actor.id,
         platformLogin: actor.login,
@@ -366,7 +380,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!after || after === "0000000000000000000000000000000000000000")
       return [];
 
-    const id = buildEventId("github", "push", fullName, after);
+    const id = buildEventId(GITHUB_SOURCE, "push", fullName, after);
 
     const payloadHash = await hashCanonicalPayload({
       authorId: actor.id,
@@ -383,7 +397,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     return [
       {
         id,
-        source: "github",
+        source: GITHUB_SOURCE,
         eventType: "push",
         platformUserId: actor.id,
         platformLogin: actor.login,

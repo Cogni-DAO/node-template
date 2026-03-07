@@ -23,7 +23,6 @@ import {
   WebhookVerificationError,
 } from "@/features/ingestion/services/webhook-receiver";
 import { getNodeId } from "@/shared/config";
-import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
 const log = makeLogger().child({ component: "webhook-route" });
@@ -33,22 +32,6 @@ export const runtime = "nodejs";
 
 /** Max body size for webhook payloads (1MB) */
 const MAX_BODY_SIZE = 1_048_576;
-
-/**
- * Resolve webhook secret for a given source.
- * V0: environment variable per source. P1: connections table.
- */
-function resolveWebhookSecret(
-  source: string,
-  env: ReturnType<typeof serverEnv>
-): string | null {
-  switch (source) {
-    case "github":
-      return env.GH_WEBHOOK_SECRET ?? null;
-    default:
-      return null;
-  }
-}
 
 interface RouteParams {
   params: Promise<{ source: string }>;
@@ -66,10 +49,10 @@ export async function POST(
   { params }: RouteParams
 ): Promise<Response> {
   const { source } = await params;
-  const env = serverEnv();
+  const container = getContainer();
 
-  // 1. Resolve webhook secret
-  const secret = resolveWebhookSecret(source, env);
+  // 1. Resolve webhook secret from container (data-driven, not per-source switch)
+  const secret = container.webhookSecrets.get(source);
   if (!secret) {
     return NextResponse.json(
       { error: `Webhook not configured for source: ${source}` },
@@ -97,8 +80,6 @@ export async function POST(
 
   // 4. Delegate to feature service
   try {
-    const container = getContainer();
-
     const eventType = headers["x-github-event"] ?? "unknown";
 
     const result = await receiveWebhook(

@@ -181,7 +181,6 @@ export type {
   CollectResult,
   DataSourceRegistration,
   PollAdapter,
-  SourceAdapter,
   StreamCursor,
   StreamDefinition,
   WebhookNormalizer,

@@ -13,6 +13,14 @@
  * @public
  */
 
+// GitHub source constants and canonical hash-field builders
+export {
+  GITHUB_ADAPTER_VERSION,
+  GITHUB_SOURCE,
+  issueClosedHashFields,
+  prMergedHashFields,
+  reviewSubmittedHashFields,
+} from "./github";
 // Pure helpers
 export { buildEventId, canonicalJson, hashCanonicalPayload } from "./helpers";
 // Model types
@@ -27,9 +35,6 @@ export type {
 export type {
   DataSourceRegistration,
   PollAdapter,
-  SourceAdapter,
   WebhookNormalizer,
 } from "./port";
 export type { VcsTokenProvider, VcsTokenResult } from "./vcs-token-provider";
-// Source adapter version constants
-export { GITHUB_ADAPTER_VERSION } from "./versions";
