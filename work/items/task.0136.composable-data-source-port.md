@@ -14,7 +14,7 @@ assignees: []
 credit:
 project: proj.transparent-credit-payouts
 branch: claude/review-github-ingestion-Kwjtl
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/519
 reviewer:
 revision: 5
 blocked_by:
