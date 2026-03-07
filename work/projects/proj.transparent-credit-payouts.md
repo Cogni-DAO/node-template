@@ -10,7 +10,7 @@ summary: "Epoch-based ledger where source adapters collect contribution activity
 outcome: "A third party can recompute the payout table exactly from stored activity events + pool components + weight config. All activity is attributed to contributors via identity bindings. Admin finalizes once per epoch."
 assignees: derekg1729
 created: 2026-02-17
-updated: 2026-03-03
+updated: 2026-03-05
 labels: [governance, transparency, payments, web3]
 ---
 
@@ -126,7 +126,7 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 - [ ] A third party can recompute the payout table from stored data exactly
 - [ ] Duplicate activity collection is idempotent (deterministic event IDs)
 - [ ] Epoch close is idempotent (closing twice yields identical statement hash)
-- [ ] All write operations execute in Temporal workflows (Next.js stateless)
+- [ ] All write operations execute in Temporal workflows (Next.js stateless), except `ingestion_receipts` appends via webhook receivers (WEBHOOK_RECEIPT_APPEND_EXEMPT)
 - [ ] All math is BIGINT — no floating point, including weight values (milli-units)
 
 ### Walk (P1) — Work-Item Scoring + Attribution UI
@@ -162,7 +162,7 @@ Critical comparison against SourceCred's full-history mirror model. SourceCred i
 | ---------------------------------------------- | ----------- | --- | --------------------- |
 | Retroactive backfill for finalized epochs      | Not Started | 2   | task.0110 (not filed) |
 | Pending credit for unresolved identities       | Not Started | 2   | task.0111 (not filed) |
-| Webhook-first GitHub collection                | Not Started | 3   | task.0112 (not filed) |
+| Webhook-first GitHub collection                | Done        | 3   | task.0136             |
 | X/Twitter activity adapter                     | Not Started | 2   | (create at P1 start)  |
 | Funding activity adapter                       | Not Started | 2   | (create at P1 start)  |
 | SourceCred grain → activity migration strategy | Not Started | 2   | (create at P1 start)  |
@@ -191,7 +191,7 @@ See [attribution-ledger spec](../../docs/spec/attribution-ledger.md) for full ar
 - Each pool component type appears at most once per epoch (POOL_UNIQUE_PER_TYPE)
 - At least one `base_issuance` pool component required before epoch finalize
 - Epoch close is idempotent — same inputs produce identical statement hash
-- All write operations go through Temporal — Next.js stays stateless
+- All write operations go through Temporal — Next.js stays stateless. **Exception:** `ingestion_receipts` appends via webhook receivers (per WEBHOOK_RECEIPT_APPEND_EXEMPT)
 - All monetary math in BIGINT — no floating point, including weights (integer milli-units)
 - `user_id` remains the resolved human override surface for attribution, while finalized statements preserve claimant identity explicitly for linked and unlinked subjects — see [identity-model](../../docs/spec/identity-model.md)
 - Identity resolution is best-effort — unresolved events flagged, not silently dropped
@@ -284,4 +284,4 @@ Attribution statements produced by this project are **governance truth** — who
 - **USDC settlement** → P2 (when revenue exists, see proj.financial-ledger)
 - **X/Twitter + funding adapters** → P1
 - **Discord source adapter** → deferred from V0 launch (GitHub-only initially)
-- **GitHub webhook fast-path** → P1
+- ~~**GitHub webhook fast-path**~~ → Done (task.0136)

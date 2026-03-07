@@ -10,7 +10,7 @@ read_when: Working on credit statements, activity ingestion, epoch enrichers, ep
 implements: proj.transparent-credit-payouts
 owner: derekg1729
 created: 2026-02-20
-verified: 2026-03-03
+verified: 2026-03-05
 tags: [governance, transparency, payments, attribution]
 ---
 
@@ -59,11 +59,18 @@ tags: [governance, transparency, payments, attribution]
 | POOL_REPRODUCIBLE                | `pool_total_credits = SUM(epoch_pool_components.amount_credits)`. Each component stores algorithm version + inputs + amount.                                                                                                                                                                                                                                                                              |
 | POOL_UNIQUE_PER_TYPE             | `UNIQUE(epoch_id, component_id)` — each component type appears at most once per epoch.                                                                                                                                                                                                                                                                                                                    |
 | POOL_REQUIRES_BASE               | At least one `base_issuance` component must exist before epoch finalize is allowed.                                                                                                                                                                                                                                                                                                                       |
-| WRITES_VIA_TEMPORAL              | All write operations (collect, finalize) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID.                                                                                                                                                                                                                                              |
+| WRITES_VIA_TEMPORAL              | All write operations (collect, finalize) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID. **Exception:** `ingestion_receipts` appends are exempt — webhook receivers may insert receipts directly via feature services because RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY guarantees make them safe outside Temporal.                    |
 | PROVENANCE_REQUIRED              | Every ingestion receipt includes `producer`, `producer_version`, `payload_hash`, `retrieved_at`. Audit trail for reproducibility.                                                                                                                                                                                                                                                                         |
 | SCOPE_GATED_QUERIES              | `DrizzleAttributionAdapter` takes `scopeId` at construction. Every epochId-based read/write calls `resolveEpochScoped(epochId)` — `WHERE id = $epochId AND scope_id = $scopeId`. Scope mismatches throw `EpochNotFoundError` (indistinguishable from missing epoch). No port signature changes; scope is an adapter-internal concern.                                                                     |
 | CURSOR_STATE_PERSISTED           | Source adapters use `ingestion_cursors` table for incremental sync. Avoids full-window rescans and handles pagination/rate limits.                                                                                                                                                                                                                                                                        |
-| ADAPTERS_NOT_IN_CORE             | Source adapters live in `services/scheduler-worker/` behind a port interface. `packages/attribution-ledger/` contains only pure domain logic (types, rules, errors).                                                                                                                                                                                                                                      |
+| ADAPTERS_NOT_IN_CORE             | Source adapters live in `services/scheduler-worker/` (poll) and `src/adapters/server/` (webhook) behind port interfaces. `packages/attribution-ledger/` contains only pure domain logic (types, rules, errors).                                                                                                                                                                                           |
+| CAPABILITY_REQUIRED              | `DataSourceRegistration` must declare at least one of `poll` or `webhook`. Validated at bootstrap.                                                                                                                                                                                                                                                                                                        |
+| SOURCE_NO_ADAPTER                | `collectFromSource` and `resolveStreams` throw if no poll adapter is registered for a configured source. At bootstrap, `container.ts` cross-checks repo-spec `activity_sources` against registered adapters and logs `CONFIG_SOURCE_NO_ADAPTER` at error level for coverage gaps. Prevents silent zero-activity ingestion.                                                                                |
+| WEBHOOK_VERIFY_BEFORE_NORMALIZE  | Feature service MUST call `WebhookNormalizer.verify()` before `normalize()`. Unverified payloads rejected with 401.                                                                                                                                                                                                                                                                                       |
+| WEBHOOK_RECEIPT_APPEND_EXEMPT    | Webhook receipt insertion exempt from WRITES_VIA_TEMPORAL per RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY. Receipts are append-only, idempotent facts.                                                                                                                                                                                                                                                       |
+| POLL_RECONCILES_WEBHOOKS         | Poll adapter is reconciliation safety net. Webhook misses caught on next poll cycle via deterministic event IDs.                                                                                                                                                                                                                                                                                          |
+| WEBHOOK_VERIFY_VIA_OSS           | Signature verification uses platform OSS libraries (`@octokit/webhooks-methods` for GitHub), not bespoke crypto.                                                                                                                                                                                                                                                                                          |
+| WEBHOOK_SECRET_NOT_IN_CODE       | Webhook secrets sourced from environment variables (V0) or connections table (future), never hardcoded in source. Per `serverEnv.GH_WEBHOOK_SECRET`.                                                                                                                                                                                                                                                      |
 | EVALUATION_UNIQUE_PER_REF_STATUS | `UNIQUE(epoch_id, evaluation_ref, status)` — one draft + one locked row per evaluation ref per epoch. Drafts overwritten via UPSERT; locked evaluations written once at `closeIngestionWithEvaluations`.                                                                                                                                                                                                  |
 | EVALUATION_FINAL_ATOMIC          | Locked evaluation writes + `evaluations_hash` computation + epoch `open→review` transition happen in a single DB transaction. No partial finalization. If any step fails, nothing commits.                                                                                                                                                                                                                |
 | STATEMENT_FROM_FINAL_ONLY        | `computeReceiptWeights` for statement purposes MUST consume only `status='locked'` evaluations and `status='locked'` claimant records. Draft data is explicitly excluded from any binding computation.                                                                                                                                                                                                    |
@@ -152,7 +159,7 @@ The attribution pipeline has three composable extension points. Each surface has
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        CollectEpochWorkflow                                │
 │                                                                             │
-│  1. SOURCE ADAPTERS          SourceAdapter → IngestionReceipt[]             │
+│  1. SOURCE ADAPTERS          DataSourceRegistration → IngestionReceipt[]    │
 │     "What happened?"         GitHub, Discord, manual...                     │
 │     Standardized receipt:    id, source, eventType, platformUserId,         │
 │                              metadata (bag of facts), payloadHash           │
@@ -562,57 +569,44 @@ Constraints:
 
 ## Source Adapter Interface
 
-```typescript
-// Port definition (src/ports/source-adapter.port.ts)
+Data sources declare capabilities via `DataSourceRegistration` — a composable manifest with optional `PollAdapter` (Temporal activity) and `WebhookNormalizer` (HTTP route → feature service). Both produce `ActivityEvent[]` and converge at `AttributionStore.insertIngestionReceipts()`.
 
-export interface SourceAdapter {
+```typescript
+// Port definition (packages/ingestion-core/src/port.ts)
+
+interface DataSourceRegistration {
   readonly source: string; // "github", "discord"
   readonly version: string; // bump on schema changes
+  readonly poll?: PollAdapter; // Temporal activity calls this
+  readonly webhook?: WebhookNormalizer; // Feature service calls this
+}
 
+interface PollAdapter {
   streams(): StreamDefinition[];
-
-  /**
-   * Collect ingestion receipts. Idempotent (deterministic IDs).
-   * Uses cursor for incremental sync. Returns events + next cursor.
-   */
-  collect(params: {
-    streams: string[];
-    cursor: StreamCursor | null;
-    window: { since: Date; until: Date };
-    limit?: number;
-  }): Promise<{ events: ActivityEvent[]; nextCursor: StreamCursor }>;
-
-  /** Optional webhook handler for real-time fast-path (GitHub). */
-  handleWebhook?(payload: unknown): Promise<ActivityEvent[]>;
+  collect(params: CollectParams): Promise<CollectResult>;
 }
 
-export interface ActivityEvent {
-  id: string; // deterministic: "github:pr:owner/repo:42"
-  source: string;
-  eventType: string;
-  platformUserId: string; // GitHub numeric ID, Discord snowflake
-  platformLogin?: string; // display name
-  artifactUrl: string;
-  metadata: Record<string, unknown>;
-  payloadHash: string; // SHA-256 of canonical payload
-  eventTime: Date;
-}
-
-export interface StreamDefinition {
-  id: string; // "pull_requests", "reviews", "messages"
-  name: string;
-  cursorType: "timestamp" | "token";
-  defaultPollInterval: number; // seconds
-}
-
-export interface StreamCursor {
-  streamId: string;
-  value: string;
-  retrievedAt: Date;
+interface WebhookNormalizer {
+  readonly supportedEvents: readonly string[];
+  verify(
+    headers: Record<string, string>,
+    body: Buffer,
+    secret: string
+  ): Promise<boolean>;
+  normalize(
+    headers: Record<string, string>,
+    body: unknown
+  ): Promise<ActivityEvent[]>;
 }
 ```
 
-Adapters live in `services/scheduler-worker/src/adapters/ingestion/` (ADAPTERS_NOT_IN_CORE). They use official OSS clients: `@octokit/graphql` for GitHub, `discord.js` for Discord.
+**Poll path** (Temporal worker): `CollectEpochWorkflow → registration.poll!.collect() → insertIngestionReceipts()`
+
+**Webhook path** (feature service): `POST /api/internal/webhooks/:source → WebhookReceiverService → registration.webhook!.verify() → normalize() → insertIngestionReceipts()`
+
+Both paths produce deterministic event IDs (`github:pr:owner/repo:42`), so duplicate delivery (webhook + poll) is a PK no-op (RECEIPT_IDEMPOTENT).
+
+Poll adapters live in `services/scheduler-worker/src/adapters/ingestion/` and webhook normalizers in `src/adapters/server/ingestion/` (ADAPTERS_NOT_IN_CORE). They use official OSS clients: `@octokit/graphql` for GitHub poll, `@octokit/webhooks-methods` for GitHub webhook verification.
 
 **Forward path:** Singer (MIT/Apache) taps will replace bespoke TypeScript adapters for new data sources. Contract: `tap → stdout JSON stream → map to IngestionReceipt`. Temporal orchestrates tap execution and persists Singer `state.json` to Postgres. V0 TypeScript adapters (GitHub) remain until Singer equivalents are proven. Both write to the same `ingestion_receipts` table — downstream pipelines don't know the difference. See [data-ingestion-pipelines spec](./data-ingestion-pipelines.md).
 
@@ -783,25 +777,29 @@ The following are explicitly deferred from V0 and will be designed when needed:
 - **Settlement distribution state machine** (`epoch_statements.status`: draft → signed → submitted → settled/failed) — V1+
 - **UI pages** — V1+
 - **DID/VC alignment** — V2+
-- **Automated webhook fast-path** (GitHub `handleWebhook`) — V1: real-time ingestion
+- ~~**Automated webhook fast-path**~~ — Implemented via `WebhookNormalizer` port + `GitHubWebhookNormalizer`. See [Source Adapter Interface](#source-adapter-interface).
 - **Formal `EpochEnricher` port** — V1: full executor dispatch via `resolveProfile()` + `dispatchAllocator()`. V0 calls enricher activities directly; plugin contracts scaffolded but executor not yet wired through them.
 - **Object storage for large evaluations** (`payload_ref`) — V1: when an evaluation exceeds 256KB inline threshold. V0: all payloads inline.
 - **AI quality scoring enricher** (`cogni.ai_scores.v0`) — future enricher, same `epoch_evaluations` table, different `evaluation_ref`
 
 ### File Pointers
 
-| File                                                                | Purpose                                                                   |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `packages/db-schema/src/attribution.ts`                             | Drizzle schema: all attribution tables including `epochEvaluations`       |
-| `packages/attribution-ledger/src/store.ts`                          | Store port interface with evaluation CRUD methods                         |
-| `packages/attribution-ledger/src/hashing.ts`                        | `canonicalJsonStringify`, `computeArtifactsHash`, `sha256OfCanonicalJson` |
-| `packages/attribution-ledger/src/enrichers/work-item-linker.ts`     | `extractWorkItemIds()` pure function + types                              |
-| `packages/attribution-ledger/src/allocation.ts`                     | `computeReceiptWeights()`, `ReceiptForWeighting`, `ReceiptUnitWeight`     |
-| `packages/attribution-ledger/src/claimant-shares.ts`                | `explodeToClaimants()`, claimant domain types                             |
-| `packages/db-client/src/adapters/drizzle-attribution.adapter.ts`    | Drizzle adapter — all store port implementations                          |
-| `services/scheduler-worker/src/activities/ledger.ts`                | Temporal activities (attribution I/O)                                     |
-| `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts` | `CollectEpochWorkflow` — pipeline orchestration                           |
-| `services/scheduler-worker/src/adapters/ingestion/github.ts`        | GitHub source adapter (GraphQL, body/branch/labels)                       |
+| File                                                                 | Purpose                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `packages/db-schema/src/attribution.ts`                              | Drizzle schema: all attribution tables including `epochEvaluations`       |
+| `packages/attribution-ledger/src/store.ts`                           | Store port interface with evaluation CRUD methods                         |
+| `packages/attribution-ledger/src/hashing.ts`                         | `canonicalJsonStringify`, `computeArtifactsHash`, `sha256OfCanonicalJson` |
+| `packages/attribution-ledger/src/enrichers/work-item-linker.ts`      | `extractWorkItemIds()` pure function + types                              |
+| `packages/attribution-ledger/src/allocation.ts`                      | `computeReceiptWeights()`, `ReceiptForWeighting`, `ReceiptUnitWeight`     |
+| `packages/attribution-ledger/src/claimant-shares.ts`                 | `explodeToClaimants()`, claimant domain types                             |
+| `packages/db-client/src/adapters/drizzle-attribution.adapter.ts`     | Drizzle adapter — all store port implementations                          |
+| `services/scheduler-worker/src/activities/ledger.ts`                 | Temporal activities (attribution I/O)                                     |
+| `services/scheduler-worker/src/workflows/collect-epoch.workflow.ts`  | `CollectEpochWorkflow` — pipeline orchestration                           |
+| `services/scheduler-worker/src/adapters/ingestion/github.ts`         | GitHub poll adapter (GraphQL, body/branch/labels)                         |
+| `services/scheduler-worker/src/adapters/ingestion/github-webhook.ts` | GitHub webhook normalizer (HMAC-SHA256 via @octokit/webhooks-methods)     |
+| `src/adapters/server/ingestion/github-webhook.ts`                    | GitHub webhook normalizer (app layer copy for route access)               |
+| `src/features/ingestion/services/webhook-receiver.ts`                | Webhook receiver feature service (verify → normalize → insert)            |
+| `src/app/api/internal/webhooks/[source]/route.ts`                    | Parameterized webhook route (delegates to feature service)                |
 
 ## Goal
 

@@ -179,9 +179,12 @@ export type {
   ActivityEvent,
   CollectParams,
   CollectResult,
+  DataSourceRegistration,
+  PollAdapter,
   SourceAdapter,
   StreamCursor,
   StreamDefinition,
+  WebhookNormalizer,
 } from "./source-adapter.port";
 export {
   ThreadConflictError,

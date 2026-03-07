@@ -24,5 +24,12 @@ export type {
   StreamDefinition,
 } from "./model";
 // Port interfaces
-export type { SourceAdapter } from "./port";
+export type {
+  DataSourceRegistration,
+  PollAdapter,
+  SourceAdapter,
+  WebhookNormalizer,
+} from "./port";
 export type { VcsTokenProvider, VcsTokenResult } from "./vcs-token-provider";
+// Source adapter version constants
+export { GITHUB_ADAPTER_VERSION } from "./versions";

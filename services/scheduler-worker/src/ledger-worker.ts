@@ -57,7 +57,7 @@ export async function startAttributionWorker(
 
   const ledgerActivities = createAttributionActivities({
     attributionStore: container.attributionStore,
-    sourceAdapters: container.sourceAdapters,
+    sourceRegistrations: container.sourceRegistrations,
     registries: container.registries,
     nodeId: container.nodeId,
     scopeId: container.scopeId,

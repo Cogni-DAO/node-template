@@ -17,8 +17,11 @@ export type { AttributionStore } from "@cogni/attribution-ledger";
 export type {
   CollectParams,
   CollectResult,
+  DataSourceRegistration,
+  PollAdapter,
   SourceAdapter,
   StreamCursor,
+  WebhookNormalizer,
 } from "@cogni/ingestion-core";
 // Scheduling ports from @cogni/scheduler-core
 export type {

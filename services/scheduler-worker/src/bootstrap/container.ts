@@ -3,12 +3,14 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/bootstrap/container`
- * Purpose: Composition root — wires concrete adapters to port interfaces.
+ * Purpose: Composition root — wires concrete adapters to port interfaces via DataSourceRegistration.
  * Scope: All adapter construction lives here. Returns typed container against port interfaces. Does not export identity constants.
  * Invariants:
  * - Only file that imports concrete adapter packages (@cogni/db-client, @cogni/repo-spec, @cogni/attribution-pipeline-plugins)
  * - activities/ and workflows/ import ports only, never this module
  * - REPO_SPEC_AUTHORITY: identity (node_id, scope_id, chain_id) read from @cogni/repo-spec at bootstrap
+ * - SOURCE_ADAPTER_COVERAGE: cross-checks repo-spec activity_sources against registered adapters; logs CONFIG_SOURCE_NO_ADAPTER at error level for each configured source missing an adapter
+ * - CAPABILITY_REQUIRED: every DataSourceRegistration must have at least one of poll or webhook (throws at bootstrap)
  * Side-effects: Creates DB connection pool; reads .cogni/repo-spec.yaml from disk
  * Links: services/scheduler-worker/src/ports/index.ts, packages/repo-spec/
  * @internal
@@ -30,6 +32,7 @@ import {
 import { createServiceDbClient } from "@cogni/db-client/service";
 import {
   extractChainId,
+  extractLedgerConfig,
   extractNodeId,
   extractScopeId,
   parseRepoSpec,
@@ -44,9 +47,9 @@ import type { Logger } from "../observability/logger.js";
 
 import type {
   AttributionStore,
+  DataSourceRegistration,
   ExecutionGrantWorkerPort,
   ScheduleRunRepository,
-  SourceAdapter,
 } from "../ports/index.js";
 import type { Env } from "./env.js";
 
@@ -73,6 +76,7 @@ function loadRepoSpecIdentity(): {
   nodeId: string;
   scopeId: string;
   chainId: number;
+  configuredSources: string[];
 } {
   // Try /app/.cogni first (Docker), then cwd (dev)
   const candidates = [
@@ -95,10 +99,14 @@ function loadRepoSpecIdentity(): {
   }
 
   const spec = parseRepoSpec(content);
+  const ledgerConfig = extractLedgerConfig(spec);
   return {
     nodeId: extractNodeId(spec),
     scopeId: extractScopeId(spec),
     chainId: extractChainId(spec),
+    configuredSources: ledgerConfig
+      ? Object.keys(ledgerConfig.activitySources)
+      : [],
   };
 }
 
@@ -108,7 +116,7 @@ function loadRepoSpecIdentity(): {
  */
 export interface AttributionContainer {
   attributionStore: AttributionStore;
-  sourceAdapters: ReadonlyMap<string, SourceAdapter>;
+  sourceRegistrations: ReadonlyMap<string, DataSourceRegistration>;
   registries: DefaultRegistries;
   nodeId: string;
   scopeId: string;
@@ -148,13 +156,15 @@ export function createAttributionContainer(
   config: Env,
   logger: Logger
 ): AttributionContainer | null {
-  const { nodeId, scopeId, chainId } = loadRepoSpecIdentity();
+  const { nodeId, scopeId, chainId, configuredSources } =
+    loadRepoSpecIdentity();
 
   logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
     phase: "ledger_container",
     nodeId,
     scopeId,
     chainId,
+    configuredSources,
   });
 
   const db = createServiceDbClient(config.DATABASE_URL);
@@ -164,8 +174,8 @@ export function createAttributionContainer(
     new DrizzleAttributionAdapter(db, scopeId)
   );
 
-  // Build source adapters
-  const adapters = new Map<string, SourceAdapter>();
+  // Build source registrations (CAPABILITY_REQUIRED: at least one of poll/webhook)
+  const registrations = new Map<string, DataSourceRegistration>();
 
   if (config.GH_REVIEW_APP_ID && config.GH_REVIEW_APP_PRIVATE_KEY_BASE64) {
     const privateKey = Buffer.from(
@@ -184,10 +194,16 @@ export function createAttributionContainer(
         .filter(Boolean) ?? [];
 
     if (repos.length > 0) {
-      adapters.set(
-        "github",
-        new GitHubSourceAdapter({ tokenProvider, repos }, attributionLogger)
+      const pollAdapter = new GitHubSourceAdapter(
+        { tokenProvider, repos },
+        attributionLogger
       );
+
+      registrations.set("github", {
+        source: "github",
+        version: pollAdapter.version,
+        poll: pollAdapter,
+      });
     } else {
       logger.warn(
         "GH_REVIEW_APP_ID set but GH_REPOS empty — GitHub adapter skipped"
@@ -195,9 +211,32 @@ export function createAttributionContainer(
     }
   }
 
+  // CAPABILITY_REQUIRED: validate every registration has at least one capability
+  for (const [name, reg] of registrations) {
+    if (!reg.poll && !reg.webhook) {
+      throw new Error(
+        `[CAPABILITY_REQUIRED] DataSourceRegistration "${name}" has neither poll nor webhook capability`
+      );
+    }
+  }
+
+  // SOURCE_ADAPTER_COVERAGE: warn loudly for each configured source missing an adapter
+  for (const source of configuredSources) {
+    if (!registrations.has(source)) {
+      logger.error(
+        {
+          event: WORKER_EVENT_NAMES.CONFIG_SOURCE_NO_ADAPTER,
+          source,
+          errorCode: "source_no_adapter",
+        },
+        `activity_sources.${source} is configured in repo-spec but no adapter was registered — check env vars (GH_REVIEW_APP_ID, GH_REVIEW_APP_PRIVATE_KEY_BASE64, GH_REPOS)`
+      );
+    }
+  }
+
   return {
     attributionStore,
-    sourceAdapters: adapters,
+    sourceRegistrations: registrations,
     registries: createDefaultRegistries(),
     nodeId,
     scopeId,

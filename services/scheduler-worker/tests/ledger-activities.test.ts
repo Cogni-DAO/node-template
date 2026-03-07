@@ -23,7 +23,7 @@ import { createDefaultRegistries } from "@cogni/attribution-pipeline-plugins";
 import type {
   ActivityEvent,
   CollectResult,
-  SourceAdapter,
+  DataSourceRegistration,
 } from "@cogni/ingestion-core";
 import { verifyTypedData } from "viem";
 import { describe, expect, it, vi } from "vitest";
@@ -100,26 +100,30 @@ function makeMockStore(
   } as AttributionStore;
 }
 
-function makeMockAdapter(events: ActivityEvent[] = []): SourceAdapter {
+function makeMockRegistration(
+  events: ActivityEvent[] = []
+): DataSourceRegistration {
   return {
     source: "github",
     version: "0.3.0",
-    streams: () => [
-      {
-        id: "pull_requests",
-        name: "PRs",
-        cursorType: "timestamp" as const,
-        defaultPollInterval: 3600,
-      },
-    ],
-    collect: vi.fn().mockResolvedValue({
-      events,
-      nextCursor: {
-        streamId: "pull_requests",
-        value: "2026-02-22T00:00:00.000Z",
-        retrievedAt: new Date(),
-      },
-    } satisfies CollectResult),
+    poll: {
+      streams: () => [
+        {
+          id: "pull_requests",
+          name: "PRs",
+          cursorType: "timestamp" as const,
+          defaultPollInterval: 3600,
+        },
+      ],
+      collect: vi.fn().mockResolvedValue({
+        events,
+        nextCursor: {
+          streamId: "pull_requests",
+          value: "2026-02-22T00:00:00.000Z",
+          retrievedAt: new Date(),
+        },
+      } satisfies CollectResult),
+    },
   };
 }
 
@@ -291,7 +295,7 @@ describe("createAttributionActivities", () => {
   it("returns all expected activity functions", () => {
     const activities = createAttributionActivities({
       attributionStore: makeMockStore(),
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -319,7 +323,7 @@ describe("ensureEpochForWindow", () => {
 
     const { ensureEpochForWindow } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -347,7 +351,7 @@ describe("ensureEpochForWindow", () => {
 
     const { ensureEpochForWindow } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -375,7 +379,7 @@ describe("ensureEpochForWindow", () => {
 
     const { ensureEpochForWindow } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -409,7 +413,7 @@ describe("ensureEpochForWindow", () => {
 
     const { ensureEpochForWindow } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -439,7 +443,7 @@ describe("loadCursor", () => {
     const store = makeMockStore();
     const { loadCursor } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -472,7 +476,7 @@ describe("loadCursor", () => {
 
     const { loadCursor } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -493,10 +497,10 @@ describe("loadCursor", () => {
 // ── collectFromSource ───────────────────────────────────────────
 
 describe("collectFromSource", () => {
-  it("returns empty events when no adapter exists for source", async () => {
+  it("throws when no adapter exists for source", async () => {
     const { collectFromSource } = createAttributionActivities({
       attributionStore: makeMockStore(),
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -504,26 +508,27 @@ describe("collectFromSource", () => {
       logger: mockLogger,
     });
 
-    const result = await collectFromSource({
-      source: "discord",
-      streams: ["messages"],
-      cursorValue: null,
-      periodStart: "2026-02-16T00:00:00Z",
-      periodEnd: "2026-02-23T00:00:00Z",
-    });
-
-    expect(result.events).toHaveLength(0);
-    expect(result.producerVersion).toBe("unknown");
+    await expect(
+      collectFromSource({
+        source: "discord",
+        streams: ["messages"],
+        cursorValue: null,
+        periodStart: "2026-02-16T00:00:00Z",
+        periodEnd: "2026-02-23T00:00:00Z",
+      })
+    ).rejects.toThrow("[SOURCE_NO_ADAPTER]");
   });
 
   it("calls adapter.collect() and returns events with producerVersion", async () => {
     const event = makeEvent();
-    const adapter = makeMockAdapter([event]);
-    const adapters = new Map<string, SourceAdapter>([["github", adapter]]);
+    const registration = makeMockRegistration([event]);
+    const registrations = new Map<string, DataSourceRegistration>([
+      ["github", registration],
+    ]);
 
     const { collectFromSource } = createAttributionActivities({
       attributionStore: makeMockStore(),
-      sourceAdapters: adapters,
+      sourceRegistrations: registrations,
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -542,7 +547,7 @@ describe("collectFromSource", () => {
     expect(result.events).toHaveLength(1);
     expect(result.events[0].id).toBe("github:pr:test/repo:1");
     expect(result.producerVersion).toBe("0.3.0");
-    expect(adapter.collect).toHaveBeenCalledOnce();
+    expect(registration.poll?.collect).toHaveBeenCalledOnce();
   });
 });
 
@@ -553,7 +558,7 @@ describe("insertReceipts", () => {
     const store = makeMockStore();
     const { insertReceipts } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -570,7 +575,7 @@ describe("insertReceipts", () => {
     const store = makeMockStore();
     const { insertReceipts } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -595,7 +600,7 @@ describe("saveCursor", () => {
     const store = makeMockStore();
     const { saveCursor } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -636,7 +641,7 @@ describe("saveCursor", () => {
 
     const { saveCursor } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -678,7 +683,7 @@ describe("saveCursor", () => {
 
     const { saveCursor } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -716,7 +721,7 @@ describe("materializeSelection", () => {
     });
     const { materializeSelection } = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -953,7 +958,7 @@ describe("computeAllocations", () => {
 
     const activities = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -995,7 +1000,7 @@ describe("computeAllocations", () => {
 
     const activities = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,
@@ -1122,7 +1127,7 @@ describe("finalizeEpoch", () => {
 
     const activities = createAttributionActivities({
       attributionStore: store,
-      sourceAdapters: new Map(),
+      sourceRegistrations: new Map(),
       registries,
       nodeId: NODE_ID,
       scopeId: SCOPE_ID,

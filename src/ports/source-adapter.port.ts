@@ -15,7 +15,10 @@ export type {
   ActivityEvent,
   CollectParams,
   CollectResult,
+  DataSourceRegistration,
+  PollAdapter,
   SourceAdapter,
   StreamCursor,
   StreamDefinition,
+  WebhookNormalizer,
 } from "@cogni/ingestion-core";
