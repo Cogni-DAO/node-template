@@ -17,6 +17,7 @@ import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import type { DataSourceRegistration } from "@cogni/ingestion-core";
 import { extractChainId, parseRepoSpec } from "@cogni/repo-spec";
 import {
+  PROMO_SCOPE_ID,
   TEST_NODE_ID,
   TEST_SCOPE_ID,
   TEST_WEIGHT_CONFIG,
@@ -31,9 +32,9 @@ import {
 import { GitHubSourceAdapter } from "../../../services/scheduler-worker/src/adapters/ingestion/github";
 import { GitHubAppTokenProvider } from "../../../services/scheduler-worker/src/adapters/ingestion/github-auth";
 import {
-  cleanupFixtures,
-  createFixtures,
-  type GitHubFixtures,
+  cleanupPromotionFixtures,
+  createPromotionFixtures,
+  type PromotionFixtures,
 } from "./_github-fixture-helper";
 
 // ---------------------------------------------------------------------------
@@ -107,15 +108,15 @@ describeWithAuth("Ledger Collection Pipeline (external)", () => {
     logger: mockLogger,
   });
 
-  let fixtures: GitHubFixtures;
+  let fixtures: PromotionFixtures;
 
   beforeAll(async () => {
-    fixtures = createFixtures(TEST_REPO);
+    fixtures = createPromotionFixtures(TEST_REPO);
     await seedTestActor(db);
-  }, 60_000);
+  }, 120_000);
 
   afterAll(() => {
-    if (fixtures) cleanupFixtures(fixtures);
+    if (fixtures) cleanupPromotionFixtures(fixtures);
   });
 
   // ── Epoch lifecycle ───────────────────────────────────────────
@@ -348,6 +349,110 @@ describeWithAuth("Ledger Collection Pipeline (external)", () => {
 
       const parsed = new Date(result.nextCursorValue);
       expect(parsed.toISOString()).toBe(result.nextCursorValue);
+    });
+  });
+
+  // ── Production promotion selection ──────────────────────────────
+  // Uses PROMO_SCOPE_ID to avoid epoch collision with the finalized epoch above.
+
+  describe("production promotion selection", () => {
+    const promoLedger = new DrizzleAttributionAdapter(db, PROMO_SCOPE_ID);
+    const promoActivities = createAttributionActivities({
+      attributionStore: promoLedger,
+      sourceRegistrations: registrations,
+      nodeId: TEST_NODE_ID,
+      scopeId: PROMO_SCOPE_ID,
+      chainId: extractChainId(repoSpec),
+      registries: {} as never,
+      logger: mockLogger,
+    });
+
+    it("collects both staging and release PRs from the window", async () => {
+      const result = await promoActivities.collectFromSource({
+        source: "github",
+        streams: ["pull_requests"],
+        cursorValue: null,
+        periodStart: fixtures.createdAfter.toISOString(),
+        periodEnd: fixtures.createdBefore.toISOString(),
+      });
+
+      const stagingPr = result.events.find(
+        (e) => e.id === `github:pr:${TEST_REPO}:${fixtures.stagingPrNumber}`
+      );
+      const releasePr = result.events.find(
+        (e) => e.id === `github:pr:${TEST_REPO}:${fixtures.releasePrNumber}`
+      );
+
+      expect(stagingPr).toBeDefined();
+      expect(stagingPr?.eventType).toBe("pr_merged");
+      expect((stagingPr?.metadata as Record<string, unknown>)?.baseBranch).toBe(
+        "staging"
+      );
+      expect(
+        (stagingPr?.metadata as Record<string, unknown>)?.mergeCommitSha
+      ).toBe(fixtures.stagingMergeCommitSha);
+
+      expect(releasePr).toBeDefined();
+      expect(releasePr?.eventType).toBe("pr_merged");
+      expect((releasePr?.metadata as Record<string, unknown>)?.baseBranch).toBe(
+        "main"
+      );
+
+      // Release PR's commitShas should contain the staging merge commit
+      const releaseCommitShas = (releasePr?.metadata as Record<string, unknown>)
+        ?.commitShas as string[] | undefined;
+      expect(releaseCommitShas).toContain(fixtures.stagingMergeCommitSha);
+    });
+
+    it("materializeSelection includes staging PR, excludes release PR", async () => {
+      // Create a fresh epoch under PROMO_SCOPE_ID
+      const promoEpoch = await promoActivities.ensureEpochForWindow({
+        periodStart: fixtures.createdAfter.toISOString(),
+        periodEnd: fixtures.createdBefore.toISOString(),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      expect(promoEpoch.isNew).toBe(true);
+
+      // Ingest PRs into this epoch's window
+      const collected = await promoActivities.collectFromSource({
+        source: "github",
+        streams: ["pull_requests"],
+        cursorValue: null,
+        periodStart: fixtures.createdAfter.toISOString(),
+        periodEnd: fixtures.createdBefore.toISOString(),
+      });
+
+      await promoActivities.insertReceipts({
+        events: collected.events,
+        producerVersion: githubAdapter.version,
+      });
+
+      // Run selection
+      const selectionResult = await promoActivities.materializeSelection({
+        epochId: promoEpoch.epochId,
+      });
+
+      expect(selectionResult.totalReceipts).toBeGreaterThan(0);
+
+      // Verify selection rows: staging PR included, release PR excluded
+      const selections = await promoLedger.getSelectionForEpoch(
+        BigInt(promoEpoch.epochId)
+      );
+
+      const stagingSelection = selections.find(
+        (s) =>
+          s.receiptId === `github:pr:${TEST_REPO}:${fixtures.stagingPrNumber}`
+      );
+      const releaseSelection = selections.find(
+        (s) =>
+          s.receiptId === `github:pr:${TEST_REPO}:${fixtures.releasePrNumber}`
+      );
+
+      expect(stagingSelection).toBeDefined();
+      expect(stagingSelection?.included).toBe(true);
+
+      expect(releaseSelection).toBeDefined();
+      expect(releaseSelection?.included).toBe(false);
     });
   });
 });

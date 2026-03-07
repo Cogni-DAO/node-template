@@ -34,6 +34,9 @@ export const TEST_SCOPE_ID = "00000000-0000-4000-8000-000000000002";
 /** Scope ID guaranteed to differ from TEST_SCOPE_ID, for cross-scope isolation tests */
 export const OTHER_SCOPE_ID = "00000000-0000-4000-8000-000000000099";
 
+/** Third scope ID for promotion selection tests — avoids epoch collisions with OTHER_SCOPE_ID */
+export const PROMO_SCOPE_ID = "00000000-0000-4000-8000-0000000000aa";
+
 /** Non-overlapping epoch window for test isolation. Default length = 7 days (V0 default). */
 export function epochWindow(
   offset = 0,

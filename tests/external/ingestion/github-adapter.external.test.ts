@@ -166,20 +166,23 @@ describeWithAuth("GitHubSourceAdapter (external)", () => {
       },
     };
 
-    const [run1, run2] = await Promise.all([
-      adapter.collect(params),
-      adapter.collect(params),
-    ]);
+    const run1 = await adapter.collect(params);
+    const run2 = await adapter.collect(params);
 
-    expect(run1.events.length).toBe(run2.events.length);
+    // Filter to our fixture PR — other test files may concurrently merge PRs
+    // into the same repo, so total event counts can differ between runs.
+    const fixtureId = `github:pr:${TEST_REPO}:${fixtures.prNumber}`;
 
-    const ids1 = run1.events.map((e) => e.id).sort();
-    const ids2 = run2.events.map((e) => e.id).sort();
-    expect(ids1).toEqual(ids2);
+    const pr1 = run1.events.find((e) => e.id === fixtureId);
+    const pr2 = run2.events.find((e) => e.id === fixtureId);
 
-    const hashes1 = run1.events.map((e) => e.payloadHash).sort();
-    const hashes2 = run2.events.map((e) => e.payloadHash).sort();
-    expect(hashes1).toEqual(hashes2);
+    expect(pr1).toBeDefined();
+    expect(pr2).toBeDefined();
+    expect(pr1!.id).toBe(pr2!.id);
+    expect(pr1!.payloadHash).toBe(pr2!.payloadHash);
+    expect(pr1!.eventType).toBe(pr2!.eventType);
+    expect(pr1!.platformUserId).toBe(pr2!.platformUserId);
+    expect(pr1!.eventTime.toISOString()).toBe(pr2!.eventTime.toISOString());
   });
 
   // ── Ledger round-trip ───────────────────────────────────────────
