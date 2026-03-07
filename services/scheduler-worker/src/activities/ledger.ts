@@ -479,7 +479,8 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
         payloadHash: e.payloadHash,
         producer: e.source,
         producerVersion,
-        eventTime: e.eventTime,
+        // eventTime crosses Temporal serialization boundary as ISO string, not Date
+        eventTime: new Date(e.eventTime),
         retrievedAt: new Date(),
       }))
     );
