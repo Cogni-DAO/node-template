@@ -6,12 +6,14 @@
  * Purpose: Temporal Activities for the full ledger pipeline — ingestion, selection, allocation, pool, auto-close, and finalization.
  * Scope: Plain async functions that perform I/O (DB, GitHub API, EIP-712 verification). Called by CollectEpochWorkflow and FinalizeEpochWorkflow. Does not contain deterministic orchestration logic.
  * Invariants:
+ *   - NO_DOMAIN_LOGIC_HERE: this file must never contain selection policies, allocation formulas, enrichment logic, or source-specific branching (e.g. `if eventType === "pr_merged"`). It loads data, dispatches to contracts/plugins, and writes results.
  *   - Per RECEIPT_IDEMPOTENT: All activities idempotent via PK constraints or upsert
  *   - Per CURSOR_STATE_PERSISTED: Cursors saved after each collect() call
  *   - Per NODE_SCOPED: All operations pass nodeId + scopeId from deps
  *   - Per TEMPORAL_DETERMINISM: Activities contain all I/O; workflows call only these proxies
  *   - Per SOURCE_NO_ADAPTER: collectFromSource and resolveStreams throw if no poll adapter registered for a configured source (fail loud, not silent skip)
  *   - Per SELECTION_AUTO_POPULATE: materializeSelection inserts new selections (DO NOTHING on conflict), updates only userId on unresolved rows
+ *   - Per SELECTION_POLICY_DELEGATED: materializeSelection resolves selection policy from the pipeline profile and dispatches via dispatchSelectionPolicy — zero hardcoded inclusion logic
  *   - Per IDENTITY_BEST_EFFORT: Unresolved receipts get userId=null in selection rows, never dropped
  *   - Per USER_PROJECTIONS_RECOMPUTABLE: upsertUserProjections persists recomputable user projections only
  *   - Per CONFIG_LOCKED_AT_REVIEW: autoCloseIngestion pins allocationAlgoRef + weightConfigHash
@@ -41,6 +43,7 @@ import {
 } from "@cogni/attribution-ledger";
 import {
   dispatchAllocator,
+  dispatchSelectionPolicy,
   resolveProfile,
 } from "@cogni/attribution-pipeline-contracts";
 import type { DefaultRegistries } from "@cogni/attribution-pipeline-plugins";
@@ -137,10 +140,12 @@ export interface SaveCursorInput {
 
 /**
  * Input for materializeSelection activity.
- * epochId is the sole input — activity loads epoch row for period dates.
+ * epochId + attributionPipeline — activity loads epoch row for period dates,
+ * then resolves the selection policy from the pipeline profile.
  */
 export interface MaterializeSelectionInput {
   readonly epochId: string; // bigint serialized as string for Temporal
+  readonly attributionPipeline: string;
 }
 
 /**
@@ -474,7 +479,8 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
         payloadHash: e.payloadHash,
         producer: e.source,
         producerVersion,
-        eventTime: e.eventTime,
+        // eventTime crosses Temporal serialization boundary as ISO string, not Date
+        eventTime: new Date(e.eventTime),
         retrievedAt: new Date(),
       }))
     );
@@ -523,6 +529,8 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
   /**
    * Materializes selection rows and resolves platform identities for an epoch.
+   *
+   * Delegates inclusion decisions to the selection policy from the pipeline profile.
    * Two-phase writes: INSERT new selection rows, UPDATE userId on existing unresolved rows.
    * SELECTION_AUTO_POPULATE: never overwrites admin-set included/weight_override_milli/note.
    * IDENTITY_BEST_EFFORT: unresolved receipts get userId=null, never dropped.
@@ -532,13 +540,19 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
   ): Promise<MaterializeSelectionOutput> {
     const epochId = BigInt(input.epochId);
 
-    // 1. Load epoch → get period dates
+    // 1. Resolve selection policy from the pipeline profile
+    const profile = resolveProfile(
+      registries.profiles,
+      input.attributionPipeline
+    );
+
+    // 2. Load epoch → get period dates
     const epoch = await attributionStore.getEpoch(epochId);
     if (!epoch) {
       throw new Error(`materializeSelection: epoch ${input.epochId} not found`);
     }
 
-    // 2. Get unselected receipts (delta: only receipts needing work)
+    // 3. Get unselected receipts (delta: only receipts needing work)
     const unselected: UnselectedReceipt[] =
       await attributionStore.getUnselectedReceipts(
         nodeId,
@@ -555,7 +569,33 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       return { totalReceipts: 0, newSelections: 0, resolved: 0, unresolved: 0 };
     }
 
-    // 3. Collect unique platformUserIds by source
+    // 4. Load all receipts for cross-referencing, then dispatch selection policy
+    const allReceipts = await attributionStore.getReceiptsForWindow(
+      nodeId,
+      epoch.periodStart,
+      epoch.periodEnd
+    );
+    const receiptsToSelect = unselected.map((u) => u.receipt);
+    const decisions = dispatchSelectionPolicy(
+      registries.selectionPolicies,
+      profile.selectionPolicyRef,
+      { receiptsToSelect, allReceipts }
+    );
+    const inclusionMap = new Map(
+      decisions.map((d) => [d.receiptId, d.included])
+    );
+
+    logger.info(
+      {
+        epochId: input.epochId,
+        policyRef: profile.selectionPolicyRef,
+        included: decisions.filter((d) => d.included).length,
+        excluded: decisions.filter((d) => !d.included).length,
+      },
+      "Selection policy applied"
+    );
+
+    // 5. Collect unique platformUserIds by source for identity resolution
     const idsBySource = new Map<string, Set<string>>();
     for (const { receipt } of unselected) {
       const ids = idsBySource.get(receipt.source) ?? new Set();
@@ -563,44 +603,36 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       idsBySource.set(receipt.source, ids);
     }
 
-    // 4. Batch resolve identities per source
-    // V0: only github provider supported
+    // 6. Batch resolve identities per source
     const resolvedMap = new Map<string, string>();
     for (const [source, ids] of idsBySource) {
-      if (source === "github") {
-        const result = await attributionStore.resolveIdentities("github", [
-          ...ids,
-        ]);
-        for (const [extId, userId] of result) {
-          resolvedMap.set(extId, userId);
-        }
+      const result = await attributionStore.resolveIdentities(source, [...ids]);
+      for (const [extId, userId] of result) {
+        resolvedMap.set(extId, userId);
       }
-      // TODO: add discord etc. when sources expand
     }
 
-    // 5. Two-phase writes
+    // 7. Write selection rows and claimants
     let newSelections = 0;
     let resolved = 0;
     let unresolved = 0;
 
     for (const { receipt, hasExistingSelection } of unselected) {
       const resolvedUserId = resolvedMap.get(receipt.platformUserId) ?? null;
+      const included = inclusionMap.get(receipt.receiptId) ?? false;
 
       if (!hasExistingSelection) {
-        // Phase 1: INSERT new selection row (ON CONFLICT DO NOTHING for race safety)
-        // Uses insertSelectionDoNothing — NOT upsertSelection which overwrites all fields
         await attributionStore.insertSelectionDoNothing([
           {
             nodeId,
             epochId,
             receiptId: receipt.receiptId,
             userId: resolvedUserId,
-            included: true,
+            included,
           },
         ]);
         newSelections++;
       } else if (resolvedUserId) {
-        // Phase 2: UPDATE userId on existing unresolved row
         await attributionStore.updateSelectionUserId(
           epochId,
           receipt.receiptId,
@@ -614,25 +646,27 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
         unresolved++;
       }
 
-      // Write default-author claimant for this receipt
-      const ck = resolvedUserId
-        ? `user:${resolvedUserId}`
-        : `identity:${receipt.source}:${receipt.platformUserId}`;
-      const claimantInputsHash = await sha256OfCanonicalJson({
-        receiptId: receipt.receiptId,
-        userId: resolvedUserId,
-        platformUserId: receipt.platformUserId,
-      });
-      await attributionStore.upsertDraftClaimants({
-        nodeId,
-        epochId,
-        receiptId: receipt.receiptId,
-        resolverRef: "cogni.default-author.v0",
-        algoRef: "default-author-v0",
-        inputsHash: claimantInputsHash,
-        claimantKeys: [ck],
-        createdBy: "system",
-      });
+      // Write default-author claimant only for included receipts
+      if (included) {
+        const ck = resolvedUserId
+          ? `user:${resolvedUserId}`
+          : `identity:${receipt.source}:${receipt.platformUserId}`;
+        const claimantInputsHash = await sha256OfCanonicalJson({
+          receiptId: receipt.receiptId,
+          userId: resolvedUserId,
+          platformUserId: receipt.platformUserId,
+        });
+        await attributionStore.upsertDraftClaimants({
+          nodeId,
+          epochId,
+          receiptId: receipt.receiptId,
+          resolverRef: "cogni.default-author.v0",
+          algoRef: "default-author-v0",
+          inputsHash: claimantInputsHash,
+          claimantKeys: [ck],
+          createdBy: "system",
+        });
+      }
     }
 
     logger.info(

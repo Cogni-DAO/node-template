@@ -203,7 +203,12 @@ function makeUnselectedReceipt(
       platformUserId: "12345",
       platformLogin: "testuser",
       artifactUrl: "https://github.com/test/repo/pull/1",
-      metadata: { title: "Test PR" },
+      metadata: {
+        title: "Test PR",
+        baseBranch: "staging",
+        mergeCommitSha: "abc111",
+        repo: "test/repo",
+      },
       payloadHash: "abc123",
       producer: "github",
       producerVersion: "0.3.0",
@@ -213,6 +218,37 @@ function makeUnselectedReceipt(
       ...receiptOverrides,
     },
     hasExistingSelection,
+  };
+}
+
+/**
+ * Creates a release PR receipt (baseBranch=main) that promotes staging PRs
+ * by including their mergeCommitShas in its commitShas array.
+ */
+function makeReleasePrReceipt(
+  promotedShas: string[] = ["abc111"]
+): UnselectedReceipt["receipt"] {
+  return {
+    receiptId: "github:pr:test/repo:100",
+    nodeId: NODE_ID,
+    source: "github",
+    eventType: "pr_merged",
+    platformUserId: "99999",
+    platformLogin: "release-bot",
+    artifactUrl: "https://github.com/test/repo/pull/100",
+    metadata: {
+      title: "release: 2026-02-20",
+      baseBranch: "main",
+      mergeCommitSha: "release-merge-sha",
+      commitShas: promotedShas,
+      repo: "test/repo",
+    },
+    payloadHash: "release-hash",
+    producer: "github",
+    producerVersion: "0.3.0",
+    eventTime: new Date("2026-02-20T14:00:00Z"),
+    retrievedAt: new Date("2026-02-20T14:01:00Z"),
+    ingestedAt: new Date("2026-02-20T14:02:00Z"),
   };
 }
 
@@ -714,9 +750,13 @@ describe("saveCursor", () => {
 describe("materializeSelection", () => {
   const epoch = makeEpoch({ id: 1n });
 
+  // Default release PR that promotes staging PRs with mergeCommitSha "abc111"
+  const defaultReleasePr = makeReleasePrReceipt(["abc111"]);
+
   function makeDeps(storeOverrides: Partial<AttributionStore> = {}) {
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(epoch),
+      getReceiptsForWindow: vi.fn().mockResolvedValue([defaultReleasePr]),
       ...storeOverrides,
     });
     const { materializeSelection } = createAttributionActivities({
@@ -736,7 +776,10 @@ describe("materializeSelection", () => {
       getUnselectedReceipts: vi.fn().mockResolvedValue([]),
     });
 
-    const result = await materializeSelection({ epochId: "1" });
+    const result = await materializeSelection({
+      epochId: "1",
+      attributionPipeline: "cogni-v0.0",
+    });
 
     expect(result).toEqual({
       totalReceipts: 0,
@@ -751,9 +794,12 @@ describe("materializeSelection", () => {
       getEpoch: vi.fn().mockResolvedValue(null),
     });
 
-    await expect(materializeSelection({ epochId: "999" })).rejects.toThrow(
-      "epoch 999 not found"
-    );
+    await expect(
+      materializeSelection({
+        epochId: "999",
+        attributionPipeline: "cogni-v0.0",
+      })
+    ).rejects.toThrow("epoch 999 not found");
   });
 
   it("creates new selection rows with resolved userId", async () => {
@@ -767,7 +813,10 @@ describe("materializeSelection", () => {
       resolveIdentities: vi.fn().mockResolvedValue(identityMap),
     });
 
-    const result = await materializeSelection({ epochId: "1" });
+    const result = await materializeSelection({
+      epochId: "1",
+      attributionPipeline: "cogni-v0.0",
+    });
 
     expect(result.totalReceipts).toBe(2);
     expect(result.newSelections).toBe(2);
@@ -815,7 +864,10 @@ describe("materializeSelection", () => {
       resolveIdentities: vi.fn().mockResolvedValue(identityMap),
     });
 
-    const result = await materializeSelection({ epochId: "1" });
+    const result = await materializeSelection({
+      epochId: "1",
+      attributionPipeline: "cogni-v0.0",
+    });
 
     expect(result.totalReceipts).toBe(1);
     expect(result.newSelections).toBe(0);
@@ -843,7 +895,10 @@ describe("materializeSelection", () => {
       resolveIdentities: vi.fn().mockResolvedValue(new Map()),
     });
 
-    const result = await materializeSelection({ epochId: "1" });
+    const result = await materializeSelection({
+      epochId: "1",
+      attributionPipeline: "cogni-v0.0",
+    });
 
     expect(result.totalReceipts).toBe(1);
     expect(result.newSelections).toBe(0);
@@ -876,7 +931,10 @@ describe("materializeSelection", () => {
       resolveIdentities: vi.fn().mockResolvedValue(identityMap),
     });
 
-    await materializeSelection({ epochId: "1" });
+    await materializeSelection({
+      epochId: "1",
+      attributionPipeline: "cogni-v0.0",
+    });
 
     // updateSelectionUserId called — but the adapter's WHERE clause
     // ensures it only updates when user_id IS NULL
@@ -895,23 +953,40 @@ describe("materializeSelection", () => {
         receiptId: "ev-new",
         platformUserId: "111",
         hasExistingSelection: false,
+        metadata: {
+          title: "PR 1",
+          baseBranch: "staging",
+          mergeCommitSha: "abc111",
+          repo: "test/repo",
+        },
       }),
       makeUnselectedReceipt({
         receiptId: "ev-existing",
         platformUserId: "222",
         hasExistingSelection: true,
+        metadata: {
+          title: "PR 2",
+          baseBranch: "staging",
+          mergeCommitSha: "abc222",
+          repo: "test/repo",
+        },
       }),
     ];
     const identityMap = new Map([
       ["111", "user-aaa"],
       ["222", "user-bbb"],
     ]);
+    const releasePr = makeReleasePrReceipt(["abc111", "abc222"]);
     const { store, materializeSelection } = makeDeps({
       getUnselectedReceipts: vi.fn().mockResolvedValue(unselected),
       resolveIdentities: vi.fn().mockResolvedValue(identityMap),
+      getReceiptsForWindow: vi.fn().mockResolvedValue([releasePr]),
     });
 
-    const result = await materializeSelection({ epochId: "1" });
+    const result = await materializeSelection({
+      epochId: "1",
+      attributionPipeline: "cogni-v0.0",
+    });
 
     expect(result.totalReceipts).toBe(2);
     expect(result.newSelections).toBe(1);

@@ -37,8 +37,8 @@ describe("cogni-v0.0 profile", () => {
   it("provides defaultWeightConfig with GitHub event weights", () => {
     expect(COGNI_V0_PROFILE.defaultWeightConfig).toEqual({
       "github:pr_merged": 1000,
-      "github:review_submitted": 500,
-      "github:issue_closed": 300,
+      "github:review_submitted": 0,
+      "github:issue_closed": 0,
     });
   });
 
