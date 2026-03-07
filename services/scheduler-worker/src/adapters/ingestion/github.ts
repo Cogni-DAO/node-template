@@ -26,7 +26,11 @@ import type {
   StreamDefinition,
   VcsTokenProvider,
 } from "@cogni/ingestion-core";
-import { buildEventId, hashCanonicalPayload } from "@cogni/ingestion-core";
+import {
+  buildEventId,
+  GITHUB_ADAPTER_VERSION,
+  hashCanonicalPayload,
+} from "@cogni/ingestion-core";
 
 import type { GitHubClient } from "./octokit-client.js";
 import { createGitHubClient } from "./octokit-client.js";
@@ -198,7 +202,7 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 export class GitHubSourceAdapter implements PollAdapter {
   readonly source = "github" as const;
-  readonly version = "0.3.0" as const;
+  readonly version = GITHUB_ADAPTER_VERSION;
 
   private readonly tokenProvider: VcsTokenProvider;
   private readonly repos: readonly string[];

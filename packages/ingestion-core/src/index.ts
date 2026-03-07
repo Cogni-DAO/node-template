@@ -31,3 +31,5 @@ export type {
   WebhookNormalizer,
 } from "./port";
 export type { VcsTokenProvider, VcsTokenResult } from "./vcs-token-provider";
+// Source adapter version constants
+export { GITHUB_ADAPTER_VERSION } from "./versions";
