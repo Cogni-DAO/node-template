@@ -63,6 +63,10 @@ interface GitHubActor {
   databaseId?: number; // Only on User, not Bot/Mannequin
 }
 
+interface PrCommitNode {
+  commit: { oid: string };
+}
+
 interface PrNode {
   number: number;
   title: string;
@@ -71,11 +75,14 @@ interface PrNode {
   updatedAt: string;
   url: string;
   author: GitHubActor | null;
+  baseRefName: string;
   headRefName: string;
+  mergeCommit: { oid: string } | null;
   additions: number;
   deletions: number;
   changedFiles: number;
   labels: { nodes: Array<{ name: string }> };
+  commits: { nodes: PrCommitNode[] };
 }
 
 interface ReviewNode {
@@ -88,8 +95,10 @@ interface ReviewNode {
 interface PrWithReviewsNode {
   number: number;
   url: string;
+  baseRefName: string;
   mergedAt: string;
   updatedAt: string;
+  mergeCommit: { oid: string } | null;
   reviews: { nodes: ReviewNode[] };
 }
 
@@ -140,11 +149,14 @@ const MERGED_PRS_QUERY = /* GraphQL */ `
           updatedAt
           url
           author { __typename login ... on User { databaseId } }
+          baseRefName
           headRefName
+          mergeCommit { oid }
           additions
           deletions
           changedFiles
           labels(first: 20) { nodes { name } }
+          commits(first: 250) { nodes { commit { oid } } }
         }
       }
     }
@@ -159,8 +171,10 @@ const REVIEWS_QUERY = /* GraphQL */ `
         nodes {
           number
           url
+          baseRefName
           mergedAt
           updatedAt
+          mergeCommit { oid }
           reviews(first: 100) {
             nodes {
               databaseId
@@ -429,7 +443,10 @@ export class GitHubSourceAdapter implements PollAdapter {
       metadata: {
         title: pr.title,
         body: pr.body,
+        baseBranch: pr.baseRefName,
         branch: pr.headRefName,
+        mergeCommitSha: pr.mergeCommit?.oid ?? null,
+        commitShas: pr.commits.nodes.map((c) => c.commit.oid),
         labels: pr.labels.nodes.map((l) => l.name),
         additions: pr.additions,
         deletions: pr.deletions,
@@ -491,7 +508,9 @@ export class GitHubSourceAdapter implements PollAdapter {
             owner,
             repoName,
             pr.number,
-            review
+            review,
+            pr.baseRefName,
+            pr.mergeCommit?.oid ?? null
           );
           if (event) events.push(event);
         }
@@ -510,7 +529,9 @@ export class GitHubSourceAdapter implements PollAdapter {
     owner: string,
     repoName: string,
     prNumber: number,
-    review: ReviewNode
+    review: ReviewNode,
+    prBaseBranch: string,
+    prMergeCommitSha: string | null
   ): Promise<ActivityEvent | null> {
     if (
       !review.author ||
@@ -548,6 +569,8 @@ export class GitHubSourceAdapter implements PollAdapter {
       artifactUrl: `https://github.com/${owner}/${repoName}/pull/${prNumber}#pullrequestreview-${review.databaseId}`,
       metadata: {
         prNumber,
+        prBaseBranch: prBaseBranch,
+        prMergeCommitSha: prMergeCommitSha,
         state: review.state,
         repo: `${owner}/${repoName}`,
       },

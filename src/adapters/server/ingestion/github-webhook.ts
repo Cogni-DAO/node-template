@@ -151,6 +151,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
       eventTime,
     });
 
+    const base = pr.base as Record<string, unknown> | undefined;
+
     return [
       {
         id,
@@ -161,6 +163,10 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         artifactUrl: pr.html_url as string,
         metadata: {
           title: pr.title as string,
+          baseBranch: (base?.ref as string) ?? null,
+          mergeCommitSha: isMerged
+            ? ((pr.merge_commit_sha as string) ?? null)
+            : null,
           repo: fullName,
           action,
           ...(pr.additions != null
@@ -215,6 +221,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
       submittedAt,
     });
 
+    const base = pr.base as Record<string, unknown> | undefined;
+
     return [
       {
         id,
@@ -225,6 +233,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         artifactUrl: review.html_url as string,
         metadata: {
           prNumber,
+          prBaseBranch: (base?.ref as string) ?? null,
           state: review.state as string,
           repo: fullName,
         },
