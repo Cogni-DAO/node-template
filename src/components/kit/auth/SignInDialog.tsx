@@ -57,8 +57,10 @@ export function SignInDialog({
   onOpenChange,
   onWalletConnect,
 }: SignInDialogProps): ReactElement {
+  // Optimistic: show all known OAuth buttons immediately to avoid pop-in lag.
+  // The fetch narrows the set if a provider isn't configured server-side.
   const [availableProviders, setAvailableProviders] = useState<Set<string>>(
-    new Set()
+    () => new Set(OAUTH_PROVIDERS.map((p) => p.id))
   );
 
   useEffect(() => {
@@ -75,10 +77,7 @@ export function SignInDialog({
         setAvailableProviders(ids);
       })
       .catch(() => {
-        // If provider fetch fails, show all OAuth options as fallback
-        if (!cancelled) {
-          setAvailableProviders(new Set(["github", "google"]));
-        }
+        // If provider fetch fails, keep the optimistic set
       });
 
     return () => {
