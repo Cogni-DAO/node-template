@@ -523,6 +523,14 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
   /**
    * Materializes selection rows and resolves platform identities for an epoch.
+   *
+   * Selection policy (PRODUCTION_PROMOTION):
+   * - PR receipts merged to staging are included ONLY if their mergeCommitSha
+   *   appears in a release PR merged to main (i.e., the code reached production).
+   * - Review receipts on promoted staging PRs are included (weight=0 for visibility).
+   * - Release PRs (baseBranch=main) are NOT included — they're reference data.
+   * - All other receipts get included=false.
+   *
    * Two-phase writes: INSERT new selection rows, UPDATE userId on existing unresolved rows.
    * SELECTION_AUTO_POPULATE: never overwrites admin-set included/weight_override_milli/note.
    * IDENTITY_BEST_EFFORT: unresolved receipts get userId=null, never dropped.
@@ -555,7 +563,62 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       return { totalReceipts: 0, newSelections: 0, resolved: 0, unresolved: 0 };
     }
 
-    // 3. Collect unique platformUserIds by source
+    // 3. Build promoted commit SHA set from release PRs merged to main.
+    //    A release PR (baseBranch=main) contains staging squash commits in its commitShas.
+    //    Also check already-ingested receipts beyond the unselected set.
+    const allReceipts = await attributionStore.getReceiptsForWindow(
+      nodeId,
+      epoch.periodStart,
+      epoch.periodEnd
+    );
+    const promotedShas = new Set<string>();
+    const promotedPrNumbers = new Set<string>(); // "repo:prNumber" keys for review matching
+    for (const receipt of allReceipts) {
+      if (
+        receipt.eventType === "pr_merged" &&
+        receipt.metadata &&
+        (receipt.metadata as Record<string, unknown>).baseBranch === "main"
+      ) {
+        const commitShas = (receipt.metadata as Record<string, unknown>)
+          .commitShas as string[] | undefined;
+        if (commitShas) {
+          for (const sha of commitShas) {
+            promotedShas.add(sha);
+          }
+        }
+      }
+    }
+
+    // 4. Identify which staging PRs are promoted, and collect their PR numbers for review matching
+    for (const receipt of allReceipts) {
+      if (receipt.eventType === "pr_merged" && receipt.metadata) {
+        const meta = receipt.metadata as Record<string, unknown>;
+        if (
+          meta.baseBranch !== "main" &&
+          meta.mergeCommitSha &&
+          promotedShas.has(meta.mergeCommitSha as string)
+        ) {
+          const repo = meta.repo as string;
+          // Extract PR number from receiptId: "github:pr:owner/repo:42"
+          const parts = receipt.receiptId.split(":");
+          const prNum = parts[parts.length - 1];
+          if (repo && prNum) {
+            promotedPrNumbers.add(`${repo}:${prNum}`);
+          }
+        }
+      }
+    }
+
+    logger.info(
+      {
+        epochId: input.epochId,
+        promotedShaCount: promotedShas.size,
+        promotedPrCount: promotedPrNumbers.size,
+      },
+      "Built promotion set from release PRs"
+    );
+
+    // 5. Collect unique platformUserIds by source (only for included receipts)
     const idsBySource = new Map<string, Set<string>>();
     for (const { receipt } of unselected) {
       const ids = idsBySource.get(receipt.source) ?? new Set();
@@ -563,8 +626,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       idsBySource.set(receipt.source, ids);
     }
 
-    // 4. Batch resolve identities per source
-    // V0: only github provider supported
+    // 6. Batch resolve identities per source
     const resolvedMap = new Map<string, string>();
     for (const [source, ids] of idsBySource) {
       if (source === "github") {
@@ -575,32 +637,52 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
           resolvedMap.set(extId, userId);
         }
       }
-      // TODO: add discord etc. when sources expand
     }
 
-    // 5. Two-phase writes
+    // 7. Determine inclusion and write selection rows
     let newSelections = 0;
     let resolved = 0;
     let unresolved = 0;
 
     for (const { receipt, hasExistingSelection } of unselected) {
       const resolvedUserId = resolvedMap.get(receipt.platformUserId) ?? null;
+      const meta = (receipt.metadata ?? {}) as Record<string, unknown>;
+
+      // Determine inclusion based on production promotion policy
+      let included = false;
+      if (receipt.eventType === "pr_merged") {
+        if (meta.baseBranch === "main") {
+          // Release PR itself — not included (reference data only)
+          included = false;
+        } else if (
+          meta.mergeCommitSha &&
+          promotedShas.has(meta.mergeCommitSha as string)
+        ) {
+          // Staging PR whose merge commit appears in a release PR → promoted
+          included = true;
+        }
+      } else if (receipt.eventType === "review_submitted") {
+        // Include reviews on promoted staging PRs (for visibility, weight=0)
+        const repo = meta.repo as string | undefined;
+        const prNum = meta.prNumber as number | undefined;
+        if (repo && prNum && promotedPrNumbers.has(`${repo}:${prNum}`)) {
+          included = true;
+        }
+      }
+      // All other event types: included=false
 
       if (!hasExistingSelection) {
-        // Phase 1: INSERT new selection row (ON CONFLICT DO NOTHING for race safety)
-        // Uses insertSelectionDoNothing — NOT upsertSelection which overwrites all fields
         await attributionStore.insertSelectionDoNothing([
           {
             nodeId,
             epochId,
             receiptId: receipt.receiptId,
             userId: resolvedUserId,
-            included: true,
+            included,
           },
         ]);
         newSelections++;
       } else if (resolvedUserId) {
-        // Phase 2: UPDATE userId on existing unresolved row
         await attributionStore.updateSelectionUserId(
           epochId,
           receipt.receiptId,
@@ -614,25 +696,27 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
         unresolved++;
       }
 
-      // Write default-author claimant for this receipt
-      const ck = resolvedUserId
-        ? `user:${resolvedUserId}`
-        : `identity:${receipt.source}:${receipt.platformUserId}`;
-      const claimantInputsHash = await sha256OfCanonicalJson({
-        receiptId: receipt.receiptId,
-        userId: resolvedUserId,
-        platformUserId: receipt.platformUserId,
-      });
-      await attributionStore.upsertDraftClaimants({
-        nodeId,
-        epochId,
-        receiptId: receipt.receiptId,
-        resolverRef: "cogni.default-author.v0",
-        algoRef: "default-author-v0",
-        inputsHash: claimantInputsHash,
-        claimantKeys: [ck],
-        createdBy: "system",
-      });
+      // Write default-author claimant only for included receipts
+      if (included) {
+        const ck = resolvedUserId
+          ? `user:${resolvedUserId}`
+          : `identity:${receipt.source}:${receipt.platformUserId}`;
+        const claimantInputsHash = await sha256OfCanonicalJson({
+          receiptId: receipt.receiptId,
+          userId: resolvedUserId,
+          platformUserId: receipt.platformUserId,
+        });
+        await attributionStore.upsertDraftClaimants({
+          nodeId,
+          epochId,
+          receiptId: receipt.receiptId,
+          resolverRef: "cogni.default-author.v0",
+          algoRef: "default-author-v0",
+          inputsHash: claimantInputsHash,
+          claimantKeys: [ck],
+          createdBy: "system",
+        });
+      }
     }
 
     logger.info(
@@ -642,6 +726,8 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
         newSelections,
         resolved,
         unresolved,
+        promotedShaCount: promotedShas.size,
+        promotedPrCount: promotedPrNumbers.size,
       },
       "Selection materialization and identity resolution complete"
     );
