@@ -8,8 +8,9 @@
  * Purpose: Dev seed script for governance and profile UI — populates attribution
  * ledger data with claimant-aware, linked/unlinked GitHub contributors.
  * Scope: Seeds linked users + GitHub bindings, epochs (2 finalized, 1 review,
- * 1 open), ingestion receipts, selections, receipt claimants,
- * pool components, and finalized claimant-aware statements for local dev.
+ * 1 open), ingestion receipts, and downstream ledger data for local dev.
+ * Open epoch seeds receipts only — selections, projections, and claimants
+ * are created by the pipeline when triggered via dev:trigger-github.
  * Does not modify production databases or run in CI.
  * Invariants:
  * - ONE_OPEN_EPOCH: only one open epoch per node/scope
@@ -50,10 +51,11 @@ import { users } from "@cogni/db-schema/refs";
 const REPO_REF = "Cogni-DAO/node-template";
 const NODE_ID = "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d";
 const SCOPE_ID = "a28a8b1e-1f9d-5cd5-9329-569e4819feda";
+// Must match cogni-v0.0 profile defaultWeightConfig
 const WEIGHT_CONFIG: Record<string, number> = {
-  "github:pr_merged": 8000,
-  "github:review_submitted": 2000,
-  "discord:message_sent": 500,
+  "github:pr_merged": 1000,
+  "github:review_submitted": 0,
+  "github:issue_closed": 0,
 };
 const SEED_APPROVERS = ["0x070075F1389Ae1182aBac722B36CA12285d0c949"];
 const ALLOCATION_ALGO_REF = deriveAllocationAlgoRef("cogni-v0.0");
@@ -903,10 +905,8 @@ async function seedOpenEpoch(
     `  Created epoch ${epoch.id} (${epochDef.periodStart.toISOString().slice(0, 10)} -> ${epochDef.periodEnd.toISOString().slice(0, 10)}) [OPEN]`
   );
 
-  const attributionReceipts = buildAttributionReceipts(epochDef.events);
-
   await store.insertIngestionReceipts(
-    epochDef.events.map((event, index) => ({
+    epochDef.events.map((event) => ({
       receiptId: event.id,
       nodeId: NODE_ID,
       source: event.source,
@@ -918,8 +918,7 @@ async function seedOpenEpoch(
         title: event.title,
         ...event.metadata,
       },
-      payloadHash:
-        attributionReceipts[index]?.payloadHash ?? eventPayloadHash(event),
+      payloadHash: eventPayloadHash(event),
       producer: PRODUCER,
       producerVersion: PRODUCER_VERSION,
       eventTime: event.eventTime,
@@ -927,51 +926,9 @@ async function seedOpenEpoch(
     }))
   );
   console.log(`  Inserted ${epochDef.events.length} ingestion receipts`);
-
-  await store.insertSelectionDoNothing(
-    attributionReceipts.map((receipt) => ({
-      nodeId: NODE_ID,
-      epochId: epoch.id,
-      receiptId: receipt.receiptId,
-      userId: receipt.userId,
-      included: true,
-    }))
+  console.log(
+    "  Selections, projections, and claimants will be created by the pipeline when triggered"
   );
-  console.log(`  Inserted ${epochDef.events.length} selections`);
-
-  const userProjections = computeUserProjections(
-    attributionReceipts,
-    WEIGHT_CONFIG
-  );
-  if (userProjections.length > 0) {
-    await store.insertUserProjections(
-      userProjections.map((projection) => ({
-        nodeId: NODE_ID,
-        epochId: epoch.id,
-        userId: projection.userId,
-        projectedUnits: projection.projectedUnits,
-        receiptCount: projection.receiptCount,
-      }))
-    );
-  }
-  console.log(`  Inserted ${userProjections.length} resolved-user projections`);
-
-  await store.insertPoolComponent({
-    nodeId: NODE_ID,
-    epochId: epoch.id,
-    componentId: "base_issuance",
-    algorithmVersion: "v1.0.0",
-    inputsJson: { base_amount: Number(epochDef.poolCredits) },
-    amountCredits: epochDef.poolCredits,
-  });
-  console.log("  Inserted pool component");
-
-  // Insert draft receipt claimants (not locked — epoch is open)
-  const claimantParams = buildReceiptClaimantParams(epoch.id, epochDef.events);
-  for (const params of claimantParams) {
-    await store.upsertDraftClaimants(params);
-  }
-  console.log(`  Inserted ${claimantParams.length} draft receipt claimants`);
 }
 
 async function main(): Promise<void> {
