@@ -1,14 +1,14 @@
 ---
 id: task.0145
 type: task
-title: "Beancount Financial Ledger Setup + Journal Generation from Existing Sources"
-status: needs_design
+title: "TigerBeetle Financial Ledger + LedgerPort Integration"
+status: needs_implement
 priority: 1
 rank: 1
 estimate: 3
-summary: "Stand up Beancount as the canonical double-entry ledger. Live-journal model: journals live in a file store the app controls (not gated by git PRs), bean-check validates on every write, git gets periodic checkpoint commits. Generate journal entries from our 3 existing financial sources: OpenRouter AI spend (charge_receipts), attribution distributions (finalized epoch statements), and Cherry Servers hosting (API polling)."
-outcome: "A running Beancount ledger with the accounts hierarchy from the financial-ledger spec, automated journal generation from all 3 sources, bean-check validation on every write, and a checkpoint mechanism that commits journal state to git on a schedule."
-spec_refs: financial-ledger-spec, billing-evolution-spec, tokenomics-spec
+summary: "Stand up TigerBeetle as the double-entry transaction engine. Create LedgerPort interface and TigerBeetleAdapter. Wire into the 3 existing money-movement paths: AI spend (charge_receipts), credit deposits (USDC payments), and hosting expenses (Cherry Servers). Postgres keeps metadata; TigerBeetle enforces balanced transfers."
+outcome: "TigerBeetle running as a container in dev stack. LedgerPort wired into recordChargeReceipt and creditAccount. Every AI spend and credit deposit has a corresponding double-entry transfer. Account balances queryable from TigerBeetle."
+spec_refs: financial-ledger-spec, billing-evolution-spec
 assignees: derekg1729
 credit:
 project: proj.financial-ledger
@@ -24,114 +24,137 @@ labels: [treasury, accounting, governance]
 external_refs:
 ---
 
-# Beancount Financial Ledger Setup + Journal Generation from Existing Sources
+# TigerBeetle Financial Ledger + LedgerPort Integration
 
-## Context
+## Design
 
-The financial-ledger spec declares BEANCOUNT_CANONICAL — Beancount journal files are the source-of-truth financial ledger. Today, zero Beancount code exists. We have 3 financial data sources already producing data:
+### Outcome
 
-1. **OpenRouter AI spend** — `charge_receipts` table with `response_cost_usd`, flowing in real-time via LiteLLM
-2. **Attribution distributions** — finalized epoch `StatementLineItem` entries with `amountCredits` per contributor
-3. **Cherry Servers hosting** — hourly VPS billing at EUR 0.02-0.03/hr, queryable via REST API
+Every money-movement operation in the system has a corresponding double-entry transfer in TigerBeetle, enforced at the database level. The system can answer "what's our burn rate?" and "what are our balances?" from a single authoritative source.
 
-### Live-Journal Model (NOT git-gated)
+### Approach
 
-The Beancount journal must be a **live artifact the system writes to** — an AI-run company can't wait for PRs to update its books.
+**Solution**: TigerBeetle as the transaction engine (Apache 2.0, 14k stars, Jepsen-verified, native TypeScript client via N-API). `LedgerPort` interface in hex architecture. Co-write pattern: existing Postgres operations continue unchanged, TigerBeetle transfer recorded alongside.
 
-- **Write path**: Temporal workflows / cron jobs generate journal entries, `bean-check` validates, persisted to file store
-- **Read path**: Any service queries the current journal (balances, P&L, burn rate)
-- **Checkpoint path**: Periodic cron commits journal snapshot to git (audit trail, diffable, but not the write bottleneck)
+**Reuses**: Existing hex port/adapter pattern (`AccountService`, `DrizzleAccountService`). Existing Docker Compose dev stack. Existing `charge_receipts` and `credit_ledger` as Postgres metadata. `tigerbeetle-node` npm package for TypeScript client.
+
+**Rejected alternatives**:
+
+- **Beancount**: Python dependency, file-based, can't participate in Postgres transactions, requires subprocess for validation. Wrong runtime model for a TypeScript app.
+- **Postgres-only double-entry**: Would work but reinvents what TigerBeetle does structurally — balanced transfers, overdraft protection, two-phase commits. Why build when battle-tested OSS exists?
+- **Formance Ledger**: Good but adds a Go microservice + REST overhead. TigerBeetle's N-API client is zero-serialization.
+- **Medici**: Requires MongoDB. We're Postgres.
+
+### Invariants
+
+- [ ] DOUBLE_ENTRY_CANONICAL: Every transfer in TigerBeetle is balanced (enforced by engine)
+- [ ] LEDGER_PORT_IS_WRITE_PATH: All money-movement goes through LedgerPort (spec: financial-ledger-spec)
+- [ ] POSTGRES_IS_METADATA: TigerBeetle for balances/transfers, Postgres for explanations/refs (spec: financial-ledger-spec)
+- [ ] ALL_MATH_BIGINT: TigerBeetle uses u128 natively (spec: financial-ledger-spec)
+- [ ] IDEMPOTENT_CHARGE_RECEIPTS: Existing idempotency via source_system/source_reference unchanged (spec: billing-evolution-spec)
+- [ ] POST_CALL_NEVER_BLOCKS: LedgerPort write failure logged but does not block user response (spec: billing-evolution-spec)
+- [ ] SIMPLE_SOLUTION: Leverages TigerBeetle OSS over bespoke accounting code
+- [ ] ARCHITECTURE_ALIGNMENT: Follows hex port/adapter pattern (spec: architecture)
+
+### Files
+
+- Create: `src/ports/ledger.port.ts` — LedgerPort interface
+- Create: `src/adapters/server/ledger/tigerbeetle.adapter.ts` — TigerBeetle implementation
+- Create: `src/adapters/test/ledger/fake-ledger.adapter.ts` — In-memory fake for tests
+- Create: `src/core/ledger/accounts.ts` — Account ID constants and ledger ID mappings
+- Modify: `src/bootstrap/container.ts` — Wire TigerBeetleAdapter
+- Modify: `src/adapters/server/accounts/drizzle.adapter.ts` — Co-write to LedgerPort in recordChargeReceipt/creditAccount
+- Modify: `infra/services/runtime/docker-compose.yml` — Add TigerBeetle container
+- Create: `tests/contract/ledger.contract.ts` — Port contract tests
+- Create: `tests/unit/core/ledger/accounts.test.ts` — Account mapping tests
 
 ## Requirements
 
-- **R1**: Beancount accounts hierarchy from financial-ledger spec exists as a base `.beancount` file (all accounts opened with correct commodity declarations for COGNI, USDC, EUR)
-- **R2**: Journal entries generated from `charge_receipts` — each receipt maps to `Expense:AI:OpenRouter` / `Assets:Treasury:USDC` with `response_cost_usd` as the amount
-- **R3**: Journal entries generated from finalized attribution epoch statements — accrual entries per spec: `Dr Expense:ContributorRewards:Equity / Cr Liability:UnclaimedEquity`
-- **R4**: Journal entries generated from Cherry Servers billing — periodic expense entries via API polling: `Expense:Infrastructure:Hosting` / `Assets:Treasury:EUR`
-- **R5**: `bean-check` validates the full journal on every write — invalid entries are rejected, not persisted
-- **R6**: Journal files stored in a location the app controls (e.g., `data/ledger/`) — NOT requiring git commits to update
-- **R7**: Checkpoint mechanism: cron or epoch-boundary hook commits current journal state to git as a snapshot
-- **R8**: Idempotent journal generation — re-running for an already-processed receipt/epoch/period produces no duplicates (use `charge_receipts.source_reference` or epoch ID as transaction metadata for dedup)
-- **R9**: All monetary math uses fixed-point / decimal — no floating point in journal amounts (inherits ALL_MATH_BIGINT)
+- **R1**: TigerBeetle running as a container in `docker-compose.yml` (dev + test stacks)
+- **R2**: `LedgerPort` interface with `transfer`, `pendingTransfer`, `postTransfer`, `voidTransfer`, `lookupAccounts`, `getAccountBalance`
+- **R3**: `TigerBeetleAdapter` implementing LedgerPort via `tigerbeetle-node`
+- **R4**: Accounts hierarchy created on startup: one TigerBeetle account per logical account (UserCredits, Revenue:AIUsage, Assets:Treasury, etc.) with correct ledger IDs per asset type
+- **R5**: `recordChargeReceipt()` co-writes a TigerBeetle transfer (Liability:UserCredits → Revenue:AIUsage) alongside existing Postgres writes
+- **R6**: `creditAccount()` for deposits co-writes a TigerBeetle transfer (Assets:OnChain:USDC → Liability:UserCredits)
+- **R7**: `user_data_128` on TigerBeetle transfers links back to Postgres `charge_receipts.id` or `credit_ledger.id` for metadata joins
+- **R8**: Fake adapter for unit/contract tests (in-memory, no TigerBeetle dependency)
+- **R9**: Port contract tests verifying double-entry invariants pass for both real and fake adapters
+- **R10**: LedgerPort failure is non-blocking for AI responses (log critical, don't throw to user) — matches POST_CALL_NEVER_BLOCKS
 
 ## Allowed Changes
 
-- `packages/beancount/` — new package for Beancount integration (journal generation, validation, file management)
-- `services/scheduler-worker/` — new Temporal workflows/activities for journal generation and checkpointing
-- `packages/db-schema/src/` — if a `journal_sync_cursors` or equivalent tracking table is needed
-- `packages/db-client/src/` — adapter for reading charge_receipts and attribution statements for journal generation
-- `data/ledger/` — journal file storage location (gitignored except for checkpoint commits)
-- `.cogni/repo-spec.yaml` — if ledger configuration needs to live here
-- `platform/infra/providers/cherry/` — Cherry Servers API client for billing data
-- DB migrations for any new tracking tables
+- `src/ports/` — new `ledger.port.ts`
+- `src/adapters/server/ledger/` — new TigerBeetle adapter
+- `src/adapters/test/ledger/` — new fake adapter
+- `src/core/ledger/` — account constants, ledger ID mappings
+- `src/bootstrap/container.ts` — wire LedgerPort
+- `src/adapters/server/accounts/drizzle.adapter.ts` — co-write integration
+- `infra/services/runtime/` — docker-compose TigerBeetle service
+- `tests/contract/` — port contract tests
+- `tests/unit/core/ledger/` — unit tests
+- `package.json` — add `tigerbeetle-node` dependency
 
 ## Plan
 
-### Phase 1: Beancount Infrastructure
+### Phase 1: TigerBeetle Infrastructure
 
-- [ ] Create `packages/beancount/` package with tsup build config
-- [ ] Implement accounts hierarchy as a base `.beancount` file generator (from financial-ledger spec accounts)
-- [ ] Implement `JournalWriter` — append entries to journal file, validate with `bean-check` before persisting
-- [ ] Implement `bean-check` wrapper — shell out to `bean-check`, parse exit code + stderr for validation errors
-- [ ] Add Beancount as a system dependency (Python `beancount` package — document in dev setup)
-- [ ] Unit tests: accounts generation, journal entry formatting, bean-check validation (valid + invalid entries)
+- [ ] Add TigerBeetle to `docker-compose.yml` (dev + test) — `ghcr.io/tigerbeetle/tigerbeetle`, needs `IPC_LOCK` capability, data volume
+- [ ] Add `tigerbeetle-node` to package.json dependencies
+- [ ] Create `src/core/ledger/accounts.ts` — ledger ID constants (USDC=2, CREDIT=200, COGNI=100, EUR=3), well-known account ID mappings
+- [ ] Create `src/ports/ledger.port.ts` — LedgerPort interface
+- [ ] Create `src/adapters/server/ledger/tigerbeetle.adapter.ts` — implements LedgerPort, creates accounts on init
+- [ ] Create `src/adapters/test/ledger/fake-ledger.adapter.ts` — in-memory Map-based fake
+- [ ] Wire in `src/bootstrap/container.ts`
+- [ ] Create `tests/contract/ledger.contract.ts` — port contract tests (both adapters must pass)
 
-### Phase 2: OpenRouter Journal Generation (charge_receipts -> journal)
+### Phase 2: AI Spend Integration (charge_receipts co-write)
 
-- [ ] Implement `ChargeReceiptJournalAdapter` — reads charge_receipts from DB, generates Beancount transactions
-- [ ] Map fields: `response_cost_usd` -> amount, `created_at` -> date, `source_reference` -> metadata (dedup key)
-- [ ] Dedup: track last-processed cursor (timestamp or ID) in `journal_sync_cursors` table
-- [ ] Temporal activity: `generateOpenRouterJournalEntries` — batch process new receipts since last cursor
-- [ ] Integration test: insert charge_receipts -> run generation -> verify journal entries + bean-check passes
+- [ ] Modify `DrizzleAccountService.recordChargeReceipt()` to call `ledgerPort.transfer()` after Postgres write
+- [ ] Transfer: debit Liability:UserCredits:CREDIT, credit Revenue:AIUsage:CREDIT, amount = chargedCredits
+- [ ] Set `user_data_128` = charge_receipt UUID for metadata linkage
+- [ ] Non-blocking: wrap in try/catch, log critical on failure, never throw to caller
+- [ ] Integration test: recordChargeReceipt → verify TigerBeetle transfer exists + balances correct
 
-### Phase 3: Attribution Journal Generation (finalized statements -> journal)
+### Phase 3: Credit Deposit Integration (USDC payments co-write)
 
-- [ ] Implement `AttributionJournalAdapter` — reads finalized epoch statements, generates accrual entries
-- [ ] One journal transaction per finalized epoch: aggregate `poolTotalCredits` as the accrual amount
-- [ ] Dedup: epoch ID as transaction metadata — skip already-journaled epochs
-- [ ] Temporal activity: `generateAttributionJournalEntries` — process newly finalized epochs
-- [ ] Integration test: finalize epoch -> run generation -> verify accrual entries
+- [ ] Modify `DrizzleAccountService.creditAccount()` to call `ledgerPort.transfer()` for deposit reason
+- [ ] Transfer: debit Assets:OnChain:USDC (ledger 2), credit Liability:UserCredits:CREDIT (ledger 200) — cross-ledger via linked transfers
+- [ ] Set `user_data_128` = credit_ledger entry UUID
+- [ ] Integration test: creditAccount → verify TigerBeetle transfer + balances
 
-### Phase 4: Cherry Servers Journal Generation (API -> journal)
+### Phase 4: Cherry Servers Expense (new cron adapter)
 
-- [ ] Implement Cherry Servers billing API client — `GET /v1/projects/{id}/billing` (or equivalent endpoint)
-- [ ] Implement `CherryServersJournalAdapter` — periodic expense entries from billing data
-- [ ] Dedup: billing period as transaction metadata — skip already-journaled periods
-- [ ] Temporal activity: `generateHostingJournalEntries` — poll Cherry API, generate entries
-- [ ] Integration test: mock Cherry API response -> verify journal entries
-
-### Phase 5: Orchestration + Checkpointing
-
-- [ ] Temporal workflow: `UpdateLedgerWorkflow` — runs all 3 adapters, validates full journal, reports errors
-- [ ] Schedule: run on epoch boundary (existing scheduler-worker cron) + configurable interval for OpenRouter/Cherry
-- [ ] Git checkpoint: activity that commits journal files to a designated branch (e.g., `ledger/checkpoints`)
-- [ ] Alerting hook: emit structured log on journal validation failure (Pino -> Loki, existing observability)
-
-## Design Decisions to Resolve
-
-- **Beancount runtime dependency**: How is `bean-check` available? Options: (a) Python subprocess (simplest), (b) WASM port if exists, (c) Docker sidecar. Recommend (a) for Crawl.
-- **Journal storage format**: Single file vs. per-source includes (`main.beancount` with `include` directives). Per-source includes recommended for parallel writes and clearer diffs.
-- **Credit-to-USD mapping for attribution**: Attribution entries are in credits, not USD. Options: (a) custom `CREDIT` commodity in Beancount until Walk phase maps to tokens, (b) policy-defined credit:USD ratio now. Recommend (a) — credits are governance commitments, not cash.
-- **Cherry Servers API scope**: CHERRY_REFERENCE.md shows server/plan queries but not billing/invoice endpoints specifically — verify exact endpoint and auth during implementation.
-- **PR sizing**: This task has 5 phases. If implementation reveals any phase exceeds ~400 LOC of change, split into subtasks. Phase 1 (infrastructure) is the natural first PR; phases 2-4 (adapters) could be one or three PRs depending on complexity.
+- [ ] Create Cherry Servers billing API client (verify endpoint from CHERRY_REFERENCE.md)
+- [ ] Temporal activity: poll Cherry API, call `ledgerPort.transfer()` for hosting expense
+- [ ] Transfer: debit Expense:Infrastructure:Hosting:EUR, credit Assets:Treasury:EUR
+- [ ] Dedup: billing period as idempotency key in `user_data_64`
+- [ ] Integration test with mock API
 
 ## Validation
+
+**Port contract tests:**
+
+```bash
+pnpm test tests/contract/ledger.contract.ts
+```
+
+**Expected:** Both TigerBeetleAdapter and FakeLedgerAdapter pass identical contract tests.
 
 **Unit tests:**
 
 ```bash
-pnpm --filter @cogni/beancount test
+pnpm test tests/unit/core/ledger/
 ```
 
-**Expected:** Journal generation, formatting, and bean-check validation tests pass.
+**Expected:** Account mapping, ledger ID constants verified.
 
-**Integration tests:**
+**Integration tests (requires dev stack):**
 
 ```bash
-pnpm dotenv -e .env.test -- vitest run --config vitest.stack.config.mts packages/beancount/
+pnpm dotenv -e .env.test -- vitest run --config vitest.stack.config.mts tests/stack/ledger/
 ```
 
-**Expected:** DB records -> journal entries -> bean-check validates -> cursor advances.
+**Expected:** charge_receipts → TigerBeetle transfer, credit deposit → TigerBeetle transfer, balances match.
 
 **Lint/type:**
 
@@ -141,21 +164,13 @@ pnpm check
 
 **Expected:** Clean.
 
-**Manual verification:**
-
-```bash
-bean-check data/ledger/main.beancount
-```
-
-**Expected:** Exit code 0 — the books balance.
-
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0145` linked in PR body
-- [ ] **Spec:** BEANCOUNT_CANONICAL, ATTRIBUTION_NOT_FINANCIAL, IDEMPOTENT_CHARGE_RECEIPTS invariants upheld
-- [ ] **Tests:** unit + integration tests for each journal adapter + bean-check validation
+- [ ] **Spec:** DOUBLE_ENTRY_CANONICAL, LEDGER_PORT_IS_WRITE_PATH, POSTGRES_IS_METADATA, POST_CALL_NEVER_BLOCKS invariants upheld
+- [ ] **Tests:** port contract tests + integration tests for each co-write path
 - [ ] **Reviewer:** assigned and approved
-- [ ] **bean-check:** runs clean on generated journal
+- [ ] **TigerBeetle balances**: match expected state after test scenarios
 
 ## PR / Links
 
