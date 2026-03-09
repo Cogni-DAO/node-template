@@ -222,8 +222,10 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@0xsplits/splits-sdk": "6.4.1",
     "@axe-core/playwright": "^4.11.0",
     "@biomejs/biome": "^2.3.7",
+    "@cogni/attribution-pipeline-plugins": "workspace:*",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@eslint/js": "^9.39.1",
@@ -231,6 +233,7 @@
     "@playwright/test": "^1.56.1",
     "@poupe/eslint-plugin-tailwindcss": "^0.2.4",
     "@tailwindcss/postcss": "^4.1.16",
+    "@temporalio/worker": "^1.11.7",
     "@testcontainers/postgresql": "^11.8.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
@@ -281,8 +284,6 @@
     "prettier-plugin-tailwindcss": "^0.7.1",
     "shadcn": "^3.5.0",
     "smee-client": "^5.0.0",
-    "@temporalio/worker": "^1.11.7",
-    "@cogni/attribution-pipeline-plugins": "workspace:*",
     "tailwindcss": "^4.1.16",
     "tsup": "^8.5.1",
     "tsx": "^4.20.6",
