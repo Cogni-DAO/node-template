@@ -150,8 +150,31 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 | Temporal Cloud migration (self-hosted → Temporal Cloud)                               | Not Started | 2   | >1000 workflows/day OR Temporal ops burden          | —         |
 | External Secrets Operator (ESO → Vault/GCP Secret Manager)                            | Not Started | 2   | Multi-cluster OR secret rotation requirement       | —         |
 | Queue-based LLM decoupling (HTTP intake → queue → worker → callback)                 | Not Started | 3   | LLM calls >30s blocking HTTP connections at scale  | —         |
+| **Ephemeral preview environments (per-branch)** — see below                          | Not Started | 5   | >3 concurrent feature branches needing validation  | —         |
 
 **Key principle:** Kustomize manifests written in P1 are portable — same bases work on k3s, EKS, and GKE. Argo CD works everywhere. No migration rewrites, only overlay changes.
+
+##### Ephemeral Preview Environments
+
+**Goal:** Every feature branch gets an isolated, short-lived deployment for both AI and human validation. Critical for rapid iteration at scale with multiple developers and AI agents working concurrently.
+
+**Current state:** Single `staging` preview environment. Feature branches are only validated in CI (static tests + stack tests). No live preview until merge to staging.
+
+**Target state:** `feat/xyz` push → CI builds image → Argo CD creates ephemeral namespace → live preview at `feat-xyz.preview.domain` → PR merged or closed → namespace garbage-collected.
+
+| Component                                                                | Approach                                                                                       |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **Namespace isolation**                                                  | Argo CD ApplicationSet with `pullRequest` generator — auto-creates apps per open PR            |
+| **Preview URL routing**                                                  | Wildcard DNS (`*.preview.domain`) + k8s Ingress per namespace (Caddy or nginx-ingress)         |
+| **Database isolation**                                                   | Ephemeral Postgres per preview (Neon branching, or lightweight PG container per namespace)      |
+| **Shared infra**                                                         | Temporal + LiteLLM shared across previews (namespaced by branch name)                          |
+| **Lifecycle**                                                            | TTL-based cleanup — Argo CD prunes namespace when PR closes or after 48h inactivity            |
+| **AI validation**                                                        | OpenClaw agent runs E2E/smoke tests against preview URL, posts results to PR                   |
+| **Human validation**                                                     | PR comment with preview URL, deployed status badge, one-click access                           |
+| **Cost control**                                                         | Resource quotas per namespace, auto-scale-to-zero after 30min idle (KEDA or kube-downscaler)   |
+| **Branch management**                                                    | Argo CD ApplicationSet handles fan-out; no manual branch→env mapping                          |
+
+**Why this matters for AI-driven development:** When AI agents are creating PRs at high velocity, each PR needs a live environment for validation — not just CI tests. The AI agent can hit the preview API, run behavioral checks, and self-approve or flag issues before human review. This closes the feedback loop from "code pushed" to "validated in production-like env" in minutes.
 
 **Scaling decision tree:**
 
