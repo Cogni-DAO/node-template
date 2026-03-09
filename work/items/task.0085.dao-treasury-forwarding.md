@@ -98,6 +98,11 @@ Recommendation: start with (3) — the adapter is ready, script can call it. Wir
 - `packages/operator-wallet/` (new package — port, domain, adapter)
 - `scripts/deploy-split.ts` (new)
 - `scripts/distribute-split.ts` (new — manual distribution trigger)
+- `src/ports/treasury-settlement.port.ts` (new — semantic settlement port)
+- `src/ports/index.ts` (barrel export)
+- `src/adapters/server/treasury/split-treasury-settlement.adapter.ts` (new)
+- `src/features/payments/application/confirmCreditsPurchase.ts` (new — orchestrator)
+- `src/app/_facades/payments/credits.server.ts` (swap to orchestrator)
 - `src/ports/operator-wallet.port.ts` (re-export from package)
 - `src/bootstrap/container.ts` (wiring)
 - `src/shared/config/repoSpec.server.ts` (getDaoTreasuryAddress accessor)
@@ -124,13 +129,21 @@ Recommendation: start with (3) — the adapter is ready, script can call it. Wir
   - [x] `pnpm check` passes, contract tests pass
 
 - [x] **Checkpoint 3: Wire distribution trigger**
-  - [x] `scripts/distribute-split.ts` — manual CLI trigger (option 3)
-  - [ ] Automated trigger (periodic/event-driven) — follow-up task
+  - [x] `TreasurySettlementPort` — semantic port (`settleConfirmedCreditPurchase`)
+  - [x] `SplitTreasurySettlementAdapter` — wraps `OperatorWalletPort.distributeSplit(USDC)`
+  - [x] `confirmCreditsPurchase()` — application orchestrator in `features/payments/application/`
+  - [x] Facade updated to use orchestrator, logs structured settlement outcome
+  - [x] `scripts/distribute-split.ts` — manual CLI fallback
+  - [x] 4 unit tests for orchestrator, facade test updated
+  - [ ] Package extraction of payments application layer — follow-up (task.0148)
 
 ## Validation
 
 ```bash
 pnpm check
+pnpm test tests/unit/features/payments/application/confirmCreditsPurchase.spec.ts
+pnpm test tests/unit/app/_facades/payments/credits.server.spec.ts
+pnpm test tests/unit/features/payments/services/creditsConfirm.spec.ts
 pnpm test tests/contract/operator-wallet.contract.test.ts
 pnpm test tests/unit/packages/repo-spec/accessors.test.ts
 ```
