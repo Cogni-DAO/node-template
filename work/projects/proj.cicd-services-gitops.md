@@ -135,7 +135,38 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 | Optional: Argo Rollouts for canary/blue-green        | Not Started | 2   | —         |
 | Migrate Next.js app to k3s (retire Compose entirely) | Not Started | 3   | —         |
 
-#### P3: CI Portability (Dagger)
+#### P3: Scaling Infrastructure
+
+**Goal:** Escape hatches for hypergrowth. Move from single-node self-hosted to horizontally scalable managed infrastructure. **Trigger:** Do NOT build preemptively — activate when load signals hit thresholds below.
+
+| Deliverable                                                                           | Status      | Est | Trigger                                           | Work Item |
+| ------------------------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------- | --------- |
+| Horizontal Pod Autoscaler (HPA) for scheduler-worker + app                            | Not Started | 2   | >10 concurrent LLM requests per replica           | —         |
+| Multi-node k3s cluster (add worker nodes via OpenTofu)                                | Not Started | 2   | Single-node CPU >70% sustained 30min              | —         |
+| Managed Postgres migration (Neon/RDS/Supabase)                                        | Not Started | 3   | >100 concurrent DB connections OR backup pain      | —         |
+| LiteLLM horizontal scaling (multiple replicas behind K8s Service)                     | Not Started | 2   | LLM queue depth >50 OR p99 latency >30s           | —         |
+| CDN + global load balancer (Cloudflare in front of k8s Ingress)                       | Not Started | 2   | Geographic latency complaints OR >1000 req/s       | —         |
+| Managed Kubernetes migration (k3s → EKS/GKE)                                         | Not Started | 3   | Multi-node k3s operational burden OR >5 nodes      | —         |
+| Temporal Cloud migration (self-hosted → Temporal Cloud)                               | Not Started | 2   | >1000 workflows/day OR Temporal ops burden          | —         |
+| External Secrets Operator (ESO → Vault/GCP Secret Manager)                            | Not Started | 2   | Multi-cluster OR secret rotation requirement       | —         |
+| Queue-based LLM decoupling (HTTP intake → queue → worker → callback)                 | Not Started | 3   | LLM calls >30s blocking HTTP connections at scale  | —         |
+
+**Key principle:** Kustomize manifests written in P1 are portable — same bases work on k3s, EKS, and GKE. Argo CD works everywhere. No migration rewrites, only overlay changes.
+
+**Scaling decision tree:**
+
+```
+Load increasing?
+  ├─ CPU bound → Add k3s worker nodes (OpenTofu) + HPA
+  ├─ DB bound  → Managed Postgres (connection pooling, read replicas)
+  ├─ LLM bound → LiteLLM replicas + request queue
+  ├─ Ops burden → Managed k8s (EKS/GKE) + Temporal Cloud
+  └─ Global    → Cloudflare + multi-region (only if latency matters)
+```
+
+#### P4: CI Portability (Dagger)
+
+> _Previously P3. Renumbered after P3 Scaling insertion._
 
 **Goal:** Pipelines-as-code. Avoids GitHub Actions vendor lock-in. **Scope:** Dagger = CI (build/test/push). ArgoCD = CD (state reconciliation). Do NOT use Dagger for push-based deploy.
 
@@ -148,7 +179,7 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 | Simplify GitHub Actions to thin wrappers (`dagger call build`, `dagger call test`)             | Not Started | 1   | —         |
 | Validate: Same pipeline runs locally and in CI                                                 | Not Started | 1   | —         |
 
-#### P4: CI Acceleration (NX)
+#### P5: CI Acceleration (NX)
 
 **Goal:** Optimize CI task selection/caching. Only after CD is stable. **Why deferred:** NX solves CI time/cost, not deployment correctness. GitOps must be stable first.
 
