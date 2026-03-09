@@ -32,6 +32,8 @@ import type {
   AttributionStatementSignature,
   AttributionStore,
   CloseIngestionWithEvaluationsParams,
+  TransitionEpochForWindowParams,
+  TransitionEpochForWindowResult,
   EpochUserProjection,
   FinalClaimantAllocationRecord,
   IngestionCursor,
@@ -647,6 +649,128 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       }
 
       return toEpoch(updated);
+    });
+  }
+
+  async transitionEpochForWindow(
+    params: TransitionEpochForWindowParams
+  ): Promise<TransitionEpochForWindowResult> {
+    return await this.db.transaction(async (tx) => {
+      // 1. Check if epoch already exists for this window (any status) → return it
+      const [existing] = await tx
+        .select()
+        .from(epochs)
+        .where(
+          and(
+            eq(epochs.nodeId, params.nodeId),
+            eq(epochs.scopeId, params.scopeId),
+            eq(epochs.periodStart, params.periodStart),
+            eq(epochs.periodEnd, params.periodEnd)
+          )
+        )
+        .limit(1);
+      if (existing) {
+        return {
+          epoch: toEpoch(existing),
+          isNew: false,
+          closedStaleEpochId: null,
+        };
+      }
+
+      // 2. Check for stale open epoch (different window, since step 1 didn't match)
+      const [stale] = await tx
+        .select()
+        .from(epochs)
+        .where(
+          and(
+            eq(epochs.nodeId, params.nodeId),
+            eq(epochs.scopeId, params.scopeId),
+            eq(epochs.status, "open")
+          )
+        )
+        .limit(1);
+
+      let closedStaleEpochId: bigint | null = null;
+
+      if (stale) {
+        if (!params.closeParams) {
+          throw new Error(
+            `Stale open epoch ${stale.id} blocks creation of new epoch. ` +
+              `Caller must provide closeParams (build evaluations first).`
+          );
+        }
+
+        // 3a. Insert locked evaluations for the stale epoch
+        for (const evaluation of params.closeParams.evaluations) {
+          await tx
+            .insert(epochEvaluations)
+            .values({
+              nodeId: evaluation.nodeId,
+              epochId: evaluation.epochId,
+              evaluationRef: evaluation.evaluationRef,
+              status: "locked",
+              algoRef: evaluation.algoRef,
+              inputsHash: evaluation.inputsHash,
+              payloadHash: evaluation.payloadHash,
+              payloadJson: evaluation.payloadJson,
+            })
+            .onConflictDoNothing({
+              target: [
+                epochEvaluations.epochId,
+                epochEvaluations.evaluationRef,
+                epochEvaluations.status,
+              ],
+            });
+        }
+
+        // 3b. Transition stale epoch open → review
+        const [closed] = await tx
+          .update(epochs)
+          .set({
+            status: "review",
+            approvers: params.closeParams.approvers.map((a) => a.toLowerCase()),
+            approverSetHash: params.closeParams.approverSetHash,
+            allocationAlgoRef: params.closeParams.allocationAlgoRef,
+            weightConfigHash: params.closeParams.weightConfigHash,
+            artifactsHash: params.closeParams.artifactsHash,
+          })
+          .where(
+            and(
+              eq(epochs.id, stale.id),
+              eq(epochs.scopeId, this.scopeId),
+              eq(epochs.status, "open")
+            )
+          )
+          .returning();
+
+        // Idempotent: concurrent close won — that's fine, epoch is no longer open
+        closedStaleEpochId = stale.id;
+        if (closed) {
+          closedStaleEpochId = closed.id;
+        }
+      }
+
+      // 4. Create the new epoch for the requested window
+      const [created] = await tx
+        .insert(epochs)
+        .values({
+          nodeId: params.nodeId,
+          scopeId: params.scopeId,
+          periodStart: params.periodStart,
+          periodEnd: params.periodEnd,
+          weightConfig: params.weightConfig,
+        })
+        .returning();
+
+      if (!created) {
+        throw new Error("Failed to create epoch — INSERT returned no rows");
+      }
+
+      return {
+        epoch: toEpoch(created),
+        isNew: true,
+        closedStaleEpochId,
+      };
     });
   }
 

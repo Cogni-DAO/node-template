@@ -276,6 +276,25 @@ export interface CloseIngestionWithEvaluationsParams {
   readonly artifactsHash: string;
 }
 
+/** Params for the atomic epoch transition primitive (close stale + get-or-create current). */
+export interface TransitionEpochForWindowParams {
+  readonly nodeId: string;
+  readonly scopeId: string;
+  readonly periodStart: Date;
+  readonly periodEnd: Date;
+  readonly weightConfig: Record<string, number>;
+  /** Close params for the stale epoch. Required when a stale open epoch exists for a different window. */
+  readonly closeParams?: CloseIngestionWithEvaluationsParams;
+}
+
+/** Result from transitionEpochForWindow. */
+export interface TransitionEpochForWindowResult {
+  readonly epoch: AttributionEpoch;
+  readonly isNew: boolean;
+  /** If a stale epoch was closed during this transition, its ID. */
+  readonly closedStaleEpochId: bigint | null;
+}
+
 /**
  * Narrowed params for auto-population INSERT (SELECTION_AUTO_POPULATE).
  * Intentionally excludes weightOverrideMilli and note to prevent accidental overwrites.
@@ -418,6 +437,22 @@ export interface EpochWriter {
   closeIngestionWithEvaluations(
     params: CloseIngestionWithEvaluationsParams
   ): Promise<AttributionEpoch>;
+
+  /**
+   * Atomic epoch transition: close stale open epoch (if any) + get-or-create epoch for the given window.
+   * Single DB transaction eliminates race window between close and create.
+   *
+   * Behavior:
+   * - If an epoch already exists for this window → return it (any status).
+   * - If an open epoch exists for a DIFFERENT window AND closeParams provided → close it, then create new.
+   * - If an open epoch exists for a DIFFERENT window AND no closeParams → throws (caller must build evaluations first).
+   * - If no open epoch exists → create new epoch for this window.
+   *
+   * Invariants: ONE_OPEN_EPOCH, EPOCH_WINDOW_UNIQUE, EVALUATION_FINAL_ATOMIC (when closing stale).
+   */
+  transitionEpochForWindow(
+    params: TransitionEpochForWindowParams
+  ): Promise<TransitionEpochForWindowResult>;
 
   /**
    * Atomic finalize: epoch transition + statement upsert + signature upsert in one DB transaction.

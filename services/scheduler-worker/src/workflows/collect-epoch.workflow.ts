@@ -3,14 +3,15 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/workflows/collect-epoch`
- * Purpose: Temporal Workflow orchestrator for epoch ingestion — delegates to child workflows for collection, enrichment, and allocation.
- * Scope: Deterministic orchestration only. All I/O happens in Activities (via child workflows). Steps: compute window → ensure epoch → CollectSourcesWorkflow → EnrichAndAllocateWorkflow → ensure pool → auto-close check. Does not handle finalization (see FinalizeEpochWorkflow).
+ * Purpose: Temporal Workflow for epoch ingestion, selection, allocation, and pool estimation.
+ * Scope: Deterministic orchestration only. All I/O happens in Activities. Steps: compute window → transition epoch (close stale + create) → collect per source → materialize selection → compute allocations → ensure pool. Does not handle finalization (see FinalizeEpochWorkflow).
  * Invariants:
  *   - Per TEMPORAL_DETERMINISM: No I/O, network calls, or direct imports of adapters
  *   - Per WRITES_VIA_TEMPORAL: All writes execute in Temporal activities
- *   - Per CHILD_WORKFLOW_COMPOSITION: Collection and enrichment stages delegate to typed child workflows via executeChild()
+ *   - Per CURSOR_STATE_PERSISTED: Cursors saved after each adapter collect() call
  *   - Per ACTIVITY_IDEMPOTENT: All activities idempotent via PK constraints or upsert
  *   - Per WEIGHT_PINNING: Epoch weightConfig is pinned at creation; subsequent runs use pinned value
+ *   - Per EPOCH_CLOSE_ON_TRANSITION: Previous epoch closes at start of new window, not via timer/grace period
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
  * @internal
@@ -19,25 +20,56 @@
 import { computeEpochWindowV1 } from "@cogni/attribution-ledger/epoch-window";
 import {
   ApplicationFailure,
-  executeChild,
-  ParentClosePolicy,
   proxyActivities,
   workflowInfo,
 } from "@temporalio/workflow";
 
 import type { EnrichmentActivities } from "../activities/enrichment.js";
 import type { LedgerActivities } from "../activities/ledger.js";
-import { STANDARD_ACTIVITY_OPTIONS } from "./activity-profiles.js";
-import { CollectSourcesWorkflow } from "./stages/collect-sources.workflow.js";
-import { EnrichAndAllocateWorkflow } from "./stages/enrich-and-allocate.workflow.js";
 
-// Proxy ledger activities with standard timeout/retry profile.
-// Only activities that remain inline in this parent workflow (setup + pool/close).
-const { ensureEpochForWindow, ensurePoolComponents, autoCloseIngestion } =
-  proxyActivities<LedgerActivities>(STANDARD_ACTIVITY_OPTIONS);
+// Proxy ledger activities with reasonable timeouts.
+// collectFromSource may hit GitHub API pagination — allow up to 5 minutes.
+const {
+  ensureEpochForWindow,
+  findStaleOpenEpoch,
+  transitionEpochForWindow,
+  loadCursor,
+  saveCursor,
+  insertReceipts,
+  materializeSelection,
+  computeAllocations,
+  ensurePoolComponents,
+  resolveStreams,
+} = proxyActivities<LedgerActivities>({
+  startToCloseTimeout: "2 minutes",
+  retry: {
+    initialInterval: "2 seconds",
+    maximumInterval: "1 minute",
+    backoffCoefficient: 2,
+    maximumAttempts: 5,
+  },
+});
 
-const { deriveWeightConfig, buildLockedEvaluations } =
-  proxyActivities<EnrichmentActivities>(STANDARD_ACTIVITY_OPTIONS);
+const { collectFromSource } = proxyActivities<LedgerActivities>({
+  startToCloseTimeout: "5 minutes",
+  retry: {
+    initialInterval: "5 seconds",
+    maximumInterval: "2 minutes",
+    backoffCoefficient: 2,
+    maximumAttempts: 3,
+  },
+});
+
+const { deriveWeightConfig, evaluateEpochDraft, buildLockedEvaluations } =
+  proxyActivities<EnrichmentActivities>({
+    startToCloseTimeout: "2 minutes",
+    retry: {
+      initialInterval: "2 seconds",
+      maximumInterval: "1 minute",
+      backoffCoefficient: 2,
+      maximumAttempts: 5,
+    },
+  });
 
 /** Schedule adapter wrapper (infra — extract .input immediately) */
 interface ScheduleActionPayload {
@@ -66,17 +98,18 @@ export interface AttributionIngestRunV1 {
   readonly baseIssuanceCredits?: string;
   /** EVM approver addresses for epoch close. Optional for backward compat. */
   readonly approvers?: string[];
-  /** Grace period in ms after periodEnd before auto-close (default: 24h). */
-  readonly autoCloseGracePeriodMs?: number;
 }
 
 /**
- * CollectEpochWorkflow — thin orchestrator for one epoch collection pass.
+ * CollectEpochWorkflow — orchestrates one epoch collection pass.
  *
- * 1-4. Setup: compute window, derive weights, ensure epoch
- * 5.   Delegate source collection to CollectSourcesWorkflow (child)
- * 6-8. Delegate enrichment + allocation to EnrichAndAllocateWorkflow (child)
- * 9-10. Pool + auto-close (inline, conditional)
+ * 1. Compute epoch window from TemporalScheduledStartTime
+ * 2. Derive weight config from pipeline profile
+ * 3. Detect stale epoch from previous window → build evaluations → transition atomically
+ * 4. For each source, resolve streams from adapter, then per sourceRef/stream: collect → insert → save cursor
+ *
+ * Epoch close happens at the START of the next window (not via timer/grace period).
+ * When a new window begins, any stale open epoch is closed atomically with the new epoch's creation.
  *
  * Receives ScheduleActionPayload from the schedule adapter; extracts .input immediately.
  * Deterministic workflow ID: ledger-collect-{scopeKey}-{periodStart}-{periodEnd}
@@ -116,67 +149,95 @@ export async function CollectEpochWorkflow(
   // 3. Derive weight config from the pipeline profile (profile owns weights)
   const { weightConfig } = await deriveWeightConfig({ attributionPipeline });
 
-  // 4. Ensure epoch (any status — pin weights on first create)
-  const epoch = await ensureEpochForWindow({
+  // 4. Detect stale open epoch from a previous window
+  const { staleEpoch } = await findStaleOpenEpoch({
     periodStart: periodStartIso,
     periodEnd: periodEndIso,
-    weightConfig,
   });
+
+  // 5. Ensure epoch — either via transition (close stale + create) or simple find-or-create
+  let epoch;
+  if (staleEpoch) {
+    // Build locked evaluations for the stale epoch before closing it
+    const { evaluations, artifactsHash } = await buildLockedEvaluations({
+      epochId: staleEpoch.epochId,
+      attributionPipeline,
+    });
+
+    // Transition: close stale epoch + create new epoch in one DB transaction.
+    // Hash computation happens inside the activity (crypto not safe in workflow code).
+    epoch = await transitionEpochForWindow({
+      periodStart: periodStartIso,
+      periodEnd: periodEndIso,
+      weightConfig,
+      closeParams: {
+        staleEpochId: staleEpoch.epochId,
+        staleWeightConfig: staleEpoch.weightConfig,
+        approvers: config.approvers ?? [],
+        attributionPipeline,
+        evaluations,
+        artifactsHash,
+      },
+    });
+  } else {
+    // No stale epoch — simple find-or-create (existing path)
+    epoch = await ensureEpochForWindow({
+      periodStart: periodStartIso,
+      periodEnd: periodEndIso,
+      weightConfig,
+    });
+  }
 
   // If epoch already closed/finalized, skip collection
   if (epoch.status !== "open") return;
 
-  // 5. Collect from all sources (child workflow — independently retryable/visible)
-  await executeChild(CollectSourcesWorkflow, {
-    args: [
-      {
-        epochId: epoch.epochId,
-        sources: config.activitySources,
-        periodStart: periodStartIso,
-        periodEnd: periodEndIso,
-      },
-    ],
-    workflowId: `collect-sources-${epoch.epochId}`,
-    parentClosePolicy: ParentClosePolicy.PARENT_CLOSE_POLICY_TERMINATE,
+  // 6. Collect from each source, each sourceRef — streams resolved from adapter
+  for (const [source, sourceConfig] of Object.entries(config.activitySources)) {
+    const { streams } = await resolveStreams({ source });
+    for (const sourceRef of sourceConfig.sourceRefs) {
+      for (const stream of streams) {
+        const cursorValue = await loadCursor({ source, stream, sourceRef });
+        const result = await collectFromSource({
+          source,
+          streams: [stream],
+          cursorValue,
+          periodStart: periodStartIso,
+          periodEnd: periodEndIso,
+        });
+        if (result.events.length > 0) {
+          await insertReceipts({
+            events: result.events,
+            producerVersion: result.producerVersion,
+          });
+        }
+        await saveCursor({
+          source,
+          stream,
+          sourceRef,
+          cursorValue: result.nextCursorValue,
+        });
+      }
+    }
+  }
+
+  // 7. Materialize selection and resolve identities (SELECTION_AUTO_POPULATE)
+  await materializeSelection({ epochId: epoch.epochId, attributionPipeline });
+
+  // 8. Evaluate epoch with draft evaluations (profile-driven enricher dispatch)
+  await evaluateEpochDraft({ epochId: epoch.epochId, attributionPipeline });
+
+  // 9. Compute allocations
+  await computeAllocations({
+    epochId: epoch.epochId,
+    attributionPipeline,
+    weightConfig: epoch.weightConfig,
   });
 
-  // 6-8. Enrich and allocate (child workflow — selection → enrichment → allocation)
-  await executeChild(EnrichAndAllocateWorkflow, {
-    args: [
-      {
-        epochId: epoch.epochId,
-        attributionPipeline,
-        weightConfig: epoch.weightConfig,
-      },
-    ],
-    workflowId: `enrich-allocate-${epoch.epochId}`,
-    parentClosePolicy: ParentClosePolicy.PARENT_CLOSE_POLICY_TERMINATE,
-  });
-
-  // 9. Ensure pool components (base_issuance from config, idempotent)
+  // 10. Ensure pool components (base_issuance from config, idempotent)
   if (config.baseIssuanceCredits) {
     await ensurePoolComponents({
       epochId: epoch.epochId,
       baseIssuanceCredits: config.baseIssuanceCredits,
-    });
-  }
-
-  // 10. Auto-close check: if now > periodEnd + gracePeriod → closeIngestion with evaluations
-  if (config.approvers && config.approvers.length > 0) {
-    const gracePeriodMs = config.autoCloseGracePeriodMs ?? 24 * 60 * 60 * 1000; // default 24h
-    const { evaluations, artifactsHash } = await buildLockedEvaluations({
-      epochId: epoch.epochId,
-      attributionPipeline,
-    });
-    await autoCloseIngestion({
-      epochId: epoch.epochId,
-      periodEnd: periodEndIso,
-      gracePeriodMs,
-      weightConfig: epoch.weightConfig,
-      attributionPipeline,
-      approvers: config.approvers,
-      evaluations,
-      artifactsHash,
     });
   }
 }
