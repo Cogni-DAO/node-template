@@ -2,7 +2,7 @@
 id: bug.0147
 type: bug
 title: "Next.js 16.0.7 build fails: Turbopack scans thread-stream test fixtures via RainbowKit dep chain, webpack fallback blocked by node: barrel leaks"
-status: needs_review
+status: needs_merge
 priority: 1
 rank: 5
 estimate: 3
@@ -13,14 +13,14 @@ spec_refs:
 assignees: []
 credit:
 project:
-branch:
+branch: dependabot/npm_and_yarn/next-16.0.7
 pr: https://github.com/Cogni-DAO/node-template/pull/138
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-03-09
-updated: 2026-03-09
+updated: 2026-03-10
 labels: [build, dependencies, rainbowkit, turbopack, p1-blocked]
 external_refs:
   - https://github.com/Cogni-DAO/node-template/pull/138
@@ -106,11 +106,11 @@ pnpm build              # Clean
 
 ## Plan
 
-- [ ] Step 1: Fix barrel export contamination — move `accountId.ts` out of the `shared/util` barrel (it's server-only) or use a direct import. Fix the `ports/index.ts` → `scheduler-core` leak similarly.
-- [ ] Step 2: Switch production builds to webpack (`next build --webpack` in `package.json`). Turbopack stays as default for `next dev`.
-- [ ] Step 3: Verify `pnpm build` passes with webpack on Next 16.0.7.
-- [ ] Step 4: Bump RainbowKit 2.2.9 → 2.2.10 while we're touching deps (minor, reduces future risk).
-- [ ] Step 5: Run `pnpm check` and `pnpm test` to validate no regressions.
+- [x] Step 1: Fix barrel export contamination — remove `accountId.ts` from `@/shared/util` barrel; split `@/ports` into client-safe `index.ts` and server-only `server.ts`.
+- [x] Step 2: Switch production builds to webpack (`next build --webpack` in `package.json`). Turbopack stays as default for `next dev`.
+- [x] Step 3: Verify `pnpm build` passes with webpack on Next 16.0.7.
+- [ ] Step 4: Bump RainbowKit 2.2.9 → 2.2.10 while we're touching deps (minor, reduces future risk). _Deferred — not blocking._
+- [x] Step 5: Run `pnpm check` to validate no regressions.
 - [ ] Step 6: Re-evaluate Turbopack for production builds when upstream fixes land (track via Next.js and pino issue trackers).
 
 ## Validation
