@@ -505,7 +505,7 @@ export function ProfileView(): ReactElement {
           <h3 className="mb-3 font-medium text-muted-foreground text-xs uppercase tracking-wide">
             On-Chain Distributions
           </h3>
-          <div className="rounded-lg border border-dashed border-border p-6 text-center">
+          <div className="rounded-lg border border-border p-6 text-center">
             <p className="text-muted-foreground text-sm">
               No on-chain distributions yet. Token distributions will appear
               here once enabled.
