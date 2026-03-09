@@ -182,13 +182,13 @@ function calculateOpenRouterTopUp(
 
 Top-up-specific signing constraints (wallet lifecycle and custody are in [operator-wallet spec](./operator-wallet.md)):
 
-| Gate                     | Enforcement                                                                                                                                              |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Chain lock**           | Only `chain_id` from `.cogni/repo-spec.yaml` (Base 8453). Enforced by existing DAO enforcement rails — see [dao-enforcement spec](./dao-enforcement.md). |
+| Gate                     | Enforcement                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Chain lock**           | Only `chain_id` from `.cogni/repo-spec.yaml` (Base 8453). Enforced by existing DAO enforcement rails — see [dao-enforcement spec](./dao-enforcement.md).                                                |
 | **Contract allowlist**   | `to` MUST equal `TRANSFERS_CONTRACT` (`0x0305...` — Coinbase Commerce on Base). Reject any other destination. ERC-20 approval also targets the Transfers contract (direct `transferFrom`, not Permit2). |
-| **Sender match**         | `transfer_intent.metadata.sender` MUST equal the operator wallet address.                                                                                |
-| **Simulate before send** | `publicClient.simulateContract()` MUST succeed before signing. Reverted simulations abort the top-up.                                                    |
-| **Max value per tx**     | `OPERATOR_MAX_TOPUP_USD` env cap (e.g. $500). Reject charges exceeding this.                                                                             |
+| **Sender match**         | `transfer_intent.metadata.sender` MUST equal the operator wallet address.                                                                                                                               |
+| **Simulate before send** | `publicClient.simulateContract()` MUST succeed before signing. Reverted simulations abort the top-up.                                                                                                   |
+| **Max value per tx**     | `OPERATOR_MAX_TOPUP_USD` env cap (e.g. $500). Reject charges exceeding this.                                                                                                                            |
 
 ### Top-Up State Machine
 

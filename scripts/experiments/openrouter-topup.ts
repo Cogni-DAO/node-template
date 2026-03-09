@@ -179,7 +179,9 @@ async function main() {
   // Dry-run: stop after logging charge response (no gas spent)
   if (DRY_RUN) {
     console.log(`\n[exp1] ═══ DRY RUN — stopping before execution ═══`);
-    console.log(`[exp1] Key findings logged above. Re-run without --dry-run to execute.`);
+    console.log(
+      `[exp1] Key findings logged above. Re-run without --dry-run to execute.`
+    );
     process.exit(0);
   }
 
@@ -210,14 +212,22 @@ async function main() {
   const totalUsdc = intent.recipientAmount + intent.feeAmount;
 
   console.log(`\n[exp1] Using transferTokenPreApproved (USDC input)`);
-  console.log(`  recipientAmount: ${intent.recipientAmount} (${Number(intent.recipientAmount) / 1e6} USDC)`);
-  console.log(`  feeAmount:       ${intent.feeAmount} (${Number(intent.feeAmount) / 1e6} USDC)`);
-  console.log(`  total USDC:      ${totalUsdc} (${Number(totalUsdc) / 1e6} USDC)`);
+  console.log(
+    `  recipientAmount: ${intent.recipientAmount} (${Number(intent.recipientAmount) / 1e6} USDC)`
+  );
+  console.log(
+    `  feeAmount:       ${intent.feeAmount} (${Number(intent.feeAmount) / 1e6} USDC)`
+  );
+  console.log(
+    `  total USDC:      ${totalUsdc} (${Number(totalUsdc) / 1e6} USDC)`
+  );
 
   // Step 5a: Approve USDC to the Transfers contract directly.
   // transferTokenPreApproved uses direct ERC-20 transferFrom (NOT Permit2).
   // Source: Transfers.sol checks erc20.allowance(msg.sender, address(this))
-  console.log(`\n[exp1] Approving ${Number(totalUsdc) / 1e6} USDC to Transfers contract (${contractAddress})...`);
+  console.log(
+    `\n[exp1] Approving ${Number(totalUsdc) / 1e6} USDC to Transfers contract (${contractAddress})...`
+  );
   const approveHash = await walletClient.writeContract({
     address: USDC_ADDRESS,
     abi: ERC20_ABI,

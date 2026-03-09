@@ -14,7 +14,7 @@
 import { PUSH_SPLIT_V2o2_FACTORY_ADDRESS } from "@0xsplits/splits-sdk/constants";
 import {
   splitV2ABI,
-  splitV2o2FactoryAbi
+  splitV2o2FactoryAbi,
 } from "@0xsplits/splits-sdk/constants/abi";
 
 import type { Address } from "viem";
@@ -52,9 +52,11 @@ const TEST_USDC_AMOUNT = "0.1"; // $0.10 USDC
 const FACTORY_ADDRESS = getAddress(PUSH_SPLIT_V2o2_FACTORY_ADDRESS) as Address;
 
 // CLI flags
-const DISTRIBUTE_ONLY = process.argv.find((a) => a.startsWith("--distribute-only="));
+const DISTRIBUTE_ONLY = process.argv.find((a) =>
+  a.startsWith("--distribute-only=")
+);
 const EXISTING_SPLIT = DISTRIBUTE_ONLY
-  ? getAddress(DISTRIBUTE_ONLY.split("=")[1]) as Address
+  ? (getAddress(DISTRIBUTE_ONLY.split("=")[1]) as Address)
   : undefined;
 
 // ---------------------------------------------------------------------------
@@ -106,7 +108,9 @@ async function main() {
   });
 
   let splitAddress: Address;
-  let deployReceipt: Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>> | undefined;
+  let deployReceipt:
+    | Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>>
+    | undefined;
 
   if (EXISTING_SPLIT) {
     // --distribute-only mode: skip deploy, reuse existing split
@@ -173,10 +177,14 @@ async function main() {
 
   // Step 2: Send USDC to the split (skip if balance already present)
   const usdcAmount = parseUsdc(TEST_USDC_AMOUNT);
-  let sendReceipt: Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>> | undefined;
+  let sendReceipt:
+    | Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>>
+    | undefined;
 
   if (splitBalance >= usdcAmount) {
-    console.log(`[exp2] Split already has sufficient balance, skipping transfer`);
+    console.log(
+      `[exp2] Split already has sufficient balance, skipping transfer`
+    );
   } else {
     console.log(`\n[exp2] Sending ${TEST_USDC_AMOUNT} USDC to split...`);
 
@@ -197,7 +205,9 @@ async function main() {
 
     // Re-check split balance
     const splitBal2 = await getUsdcBalance(publicClient, splitAddress);
-    console.log(`[exp2] Split balance after transfer: ${formatUsdc(splitBal2)}`);
+    console.log(
+      `[exp2] Split balance after transfer: ${formatUsdc(splitBal2)}`
+    );
   }
 
   // Step 3: Record pre-distribute balances
@@ -254,23 +264,26 @@ async function main() {
   console.log(
     `  Treasury match:     ${treasuryDelta === expectedTreasury ? "✓ EXACT" : `⚠️  off by ${treasuryDelta - expectedTreasury}`}`
   );
-  console.log(`  Operator net:       ${formatUsdc(operatorNet)} (sent ${formatUsdc(usdcAmount)}, got back ~${formatUsdc(expectedOperator)})`);
+  console.log(
+    `  Operator net:       ${formatUsdc(operatorNet)} (sent ${formatUsdc(usdcAmount)}, got back ~${formatUsdc(expectedOperator)})`
+  );
   console.log(`  Operator expected:  ${formatUsdc(expectedOperator)}`);
-  console.log(`  Split remainder:    ${formatUsdc(splitAfter)} (should be ~dust)`);
+  console.log(
+    `  Split remainder:    ${formatUsdc(splitAfter)} (should be ~dust)`
+  );
 
   console.log(`\n[exp2] ═══ SPIKE FINDINGS ═══`);
   console.log(`  Split address:     ${splitAddress}`);
   console.log(`  Factory used:      PushSplitV2o2 (${FACTORY_ADDRESS})`);
-  if (deployReceipt) console.log(`  Deploy gas:        ${deployReceipt.gasUsed}`);
+  if (deployReceipt)
+    console.log(`  Deploy gas:        ${deployReceipt.gasUsed}`);
   console.log(`  Distribute gas:    ${distributeReceipt.gasUsed}`);
   if (deployReceipt && sendReceipt) {
     console.log(
       `  Total gas:         ${deployReceipt.gasUsed + sendReceipt.gasUsed + distributeReceipt.gasUsed}`
     );
   }
-  console.log(
-    `  Push model works:  ${treasuryDelta > 0n ? "✓ YES" : "✗ NO"}`
-  );
+  console.log(`  Push model works:  ${treasuryDelta > 0n ? "✓ YES" : "✗ NO"}`);
 
   // Save split address for experiment 3
   console.log(`\n[exp2] Save this for experiment 3:`);

@@ -59,14 +59,20 @@ function requireEnv(key: string): string {
 export function getEnv() {
   // Normalize private key: viem requires 0x prefix
   const rawKey = requireEnv("OPERATOR_PRIVATE_KEY");
-  const operatorPrivateKey = (rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`) as Hex;
+  const operatorPrivateKey = (
+    rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`
+  ) as Hex;
 
   return {
     openrouterApiKey: requireEnv("OPENROUTER_API_KEY"),
     operatorPrivateKey,
     // Treasury: explicit env var, or DAO wallet from repo-spec
-    treasuryAddress: (process.env.TREASURY_ADDRESS || "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6") as Address,
-    baseRpcUrl: process.env.EVM_RPC_URL || process.env.BASE_RPC_URL || "https://mainnet.base.org",
+    treasuryAddress: (process.env.TREASURY_ADDRESS ||
+      "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6") as Address,
+    baseRpcUrl:
+      process.env.EVM_RPC_URL ||
+      process.env.BASE_RPC_URL ||
+      "https://mainnet.base.org",
   };
 }
 

@@ -192,17 +192,17 @@ The `OperatorWalletPort` abstraction makes the custody backend swappable. If the
 
 ### Custody Safety
 
-| Constraint                | Enforcement                                                                                                                                                 |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Typed intents only**    | Port exposes `distributeSplit` and `fundOpenRouterTopUp` — no generic signing method.                                                                       |
+| Constraint                | Enforcement                                                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Typed intents only**    | Port exposes `distributeSplit` and `fundOpenRouterTopUp` — no generic signing method.                                                                                         |
 | **Destination allowlist** | Split distribute targets the Split contract from repo-spec. Top-up targets Coinbase Transfers (`0x0305...`) with direct ERC-20 approval (not Permit2). No other destinations. |
-| **Max per-tx**            | `OPERATOR_MAX_TOPUP_USD` env cap for top-ups. Port rejects any intent exceeding this.                                                                       |
-| **Address in repo-spec**  | Operator wallet address is governance-in-git. Changing it requires a commit (auditable).                                                                    |
-| **Key ≠ App**             | Privy HSM holds the signing key. The app never loads or accesses raw key material.                                                                          |
-| **Key ≠ AI**              | The AI (OpenClaw, governance agents) submits intents through the workflow layer. The AI never accesses key material or Privy credentials.                   |
-| **Privy wallet policies** | Privy-side policies restrict chain, contracts, and caps — defense in depth on top of app-side validation.                                                   |
-| **Signed requests**       | All Privy API calls use "Require signed requests" — `PRIVY_SIGNING_KEY` authenticates the app to Privy. Leaked `APP_SECRET` alone cannot sign transactions. |
-| **DAO share via Splits**  | DAO treasury receives its share via on-chain Split contract — no app-level sweep. Operator wallet only holds its operational share.                         |
+| **Max per-tx**            | `OPERATOR_MAX_TOPUP_USD` env cap for top-ups. Port rejects any intent exceeding this.                                                                                         |
+| **Address in repo-spec**  | Operator wallet address is governance-in-git. Changing it requires a commit (auditable).                                                                                      |
+| **Key ≠ App**             | Privy HSM holds the signing key. The app never loads or accesses raw key material.                                                                                            |
+| **Key ≠ AI**              | The AI (OpenClaw, governance agents) submits intents through the workflow layer. The AI never accesses key material or Privy credentials.                                     |
+| **Privy wallet policies** | Privy-side policies restrict chain, contracts, and caps — defense in depth on top of app-side validation.                                                                     |
+| **Signed requests**       | All Privy API calls use "Require signed requests" — `PRIVY_SIGNING_KEY` authenticates the app to Privy. Leaked `APP_SECRET` alone cannot sign transactions.                   |
+| **DAO share via Splits**  | DAO treasury receives its share via on-chain Split contract — no app-level sweep. Operator wallet only holds its operational share.                                           |
 
 ### repo-spec Configuration
 

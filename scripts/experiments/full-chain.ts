@@ -18,9 +18,7 @@ import type { Address, Hex } from "viem";
 import {
   createClients,
   ERC20_ABI,
-  formatUsdc,
   getEnv,
-  getUsdcBalance,
   logBalances,
   parseUsdc,
   TRANSFERS_ABI,
@@ -150,9 +148,7 @@ async function main() {
   // Pre-flight
   await logBalances(publicClient, operatorAddress, "Operator pre-flight");
   const creditsBefore = await getCredits(env.openrouterApiKey);
-  console.log(
-    `[exp3] OpenRouter credits before: $${creditsBefore.toFixed(4)}`
-  );
+  console.log(`[exp3] OpenRouter credits before: $${creditsBefore.toFixed(4)}`);
 
   // ─── Step 1: Send USDC to Split ──────────────────────────────────
   console.log(`\n[exp3] Step 1: Sending ${TEST_USDC_AMOUNT} USDC to split...`);
@@ -252,7 +248,9 @@ async function main() {
 
   // transferTokenPreApproved uses direct ERC-20 transferFrom (NOT Permit2).
   // Source: Transfers.sol checks erc20.allowance(msg.sender, address(this))
-  console.log(`[exp3] Approving USDC to Transfers contract (${contractAddress})...`);
+  console.log(
+    `[exp3] Approving USDC to Transfers contract (${contractAddress})...`
+  );
   const approveHash = await walletClient.writeContract({
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
@@ -310,18 +308,12 @@ async function main() {
   console.log(` FULL CHAIN RESULTS`);
   console.log(`═══════════════════════════════════════════════════`);
   console.log(`  Step 1 (send to split):    tx ${sendHash}`);
-  console.log(
-    `    Gas: ${sendReceipt.gasUsed}`
-  );
+  console.log(`    Gas: ${sendReceipt.gasUsed}`);
   console.log(`  Step 2 (distribute):       tx ${distributeHash}`);
-  console.log(
-    `    Gas: ${distributeReceipt.gasUsed}`
-  );
+  console.log(`    Gas: ${distributeReceipt.gasUsed}`);
   console.log(`  Step 3 (approve Permit2):  tx ${approveHash}`);
   console.log(`  Step 3 (OpenRouter topup): tx ${topupHash}`);
-  console.log(
-    `    Gas: ${topupReceipt.gasUsed}`
-  );
+  console.log(`    Gas: ${topupReceipt.gasUsed}`);
   console.log(`  Step 4 (credits check):`);
   console.log(`    Before:                  $${creditsBefore.toFixed(4)}`);
   console.log(`    After:                   $${creditsAfter.toFixed(4)}`);

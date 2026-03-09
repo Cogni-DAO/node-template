@@ -40,19 +40,19 @@ Extend the P0 web DAO formation wizard (complete, manually validated on Base mai
 
 **Goal:** Optional on-chain LLC formation via OtoCo, multi-holder support, CLI setup tools, and operator node registry.
 
-| Deliverable                                                                          | Status      | Est | Work Item            |
-| ------------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
-| OtoCo testnet validation — verify Base Sepolia contracts, createSeries events, GovernanceERC20 token attachment | Not Started | 2 | `spike.0146` |
-| OtoCo ABI + receipt decoder — add OtoCo ABIs, implement receipt decoders for entity creation events | Not Started | 2 | (create after spike) |
-| Formation wizard TX 3+4 — optional "Incorporate as LLC" step, state machine extension | Not Started | 2 | (create after spike) |
-| Server verification for OtoCo entity — extend verify endpoint, add `legal_entity` to repo-spec YAML output | Not Started | 2 | (create after spike) |
-| Multi-holder support (multiple initial token recipients)                             | Not Started | 2   | (create at P1 start) |
-| Create `packages/setup-cli/` with Node adapters (fs, shell, gh, tofu)                | Not Started | 3   | (create at P1 start) |
-| Implement `pnpm setup local` for contributor workflow                                | Not Started | 2   | (create at P1 start) |
-| Implement `pnpm setup infra --env preview\|production`                               | Not Started | 2   | (create at P1 start) |
-| Implement `pnpm setup github --env preview\|production`                              | Not Started | 2   | (create at P1 start) |
-| Add WalletConnect adapter (CLI wallet signing if proven needed)                      | Not Started | 1   | (create at P1 start) |
-| Operator-side `node_registry_nodes` table (see Design Notes §Operator Node Registry) | Not Started | 2   | (create at P1 start) |
+| Deliverable                                                                                                     | Status      | Est | Work Item            |
+| --------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| OtoCo testnet validation — verify Base Sepolia contracts, createSeries events, GovernanceERC20 token attachment | Not Started | 2   | `spike.0146`         |
+| OtoCo ABI + receipt decoder — add OtoCo ABIs, implement receipt decoders for entity creation events             | Not Started | 2   | (create after spike) |
+| Formation wizard TX 3+4 — optional "Incorporate as LLC" step, state machine extension                           | Not Started | 2   | (create after spike) |
+| Server verification for OtoCo entity — extend verify endpoint, add `legal_entity` to repo-spec YAML output      | Not Started | 2   | (create after spike) |
+| Multi-holder support (multiple initial token recipients)                                                        | Not Started | 2   | (create at P1 start) |
+| Create `packages/setup-cli/` with Node adapters (fs, shell, gh, tofu)                                           | Not Started | 3   | (create at P1 start) |
+| Implement `pnpm setup local` for contributor workflow                                                           | Not Started | 2   | (create at P1 start) |
+| Implement `pnpm setup infra --env preview\|production`                                                          | Not Started | 2   | (create at P1 start) |
+| Implement `pnpm setup github --env preview\|production`                                                         | Not Started | 2   | (create at P1 start) |
+| Add WalletConnect adapter (CLI wallet signing if proven needed)                                                 | Not Started | 1   | (create at P1 start) |
+| Operator-side `node_registry_nodes` table (see Design Notes §Operator Node Registry)                            | Not Started | 2   | (create at P1 start) |
 
 ### Run (P2+) — npx End-to-End + Federation Enrollment
 
