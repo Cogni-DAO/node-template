@@ -7,8 +7,10 @@
  * Scope: Pure functions. Accepts typed API response fragments. Does not perform IO or access external services.
  * Invariants:
  *   - ALL_MATH_BIGINT: credit/unit values stay as strings; Number() only for sorting/display derivation
+ *   - UNIFIED_SCALE: all units (receipt weights, overrides, contributor totals) are in the same scale — no milli-unit conversion
  *   - Avatar/color are static placeholders (no profile system yet)
  *   - Receipts with selection.userId=null are counted in unresolvedCount/unresolvedActivities, not silently dropped
+ *   - Finalized epoch receipts get per-receipt units computed from epoch.weightConfig
  * Side-effects: none
  * Links: src/features/governance/types.ts
  * @public

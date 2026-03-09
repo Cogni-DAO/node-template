@@ -8,6 +8,7 @@
  * composed from multiple ledger endpoints by hooks.
  * Invariants:
  *   - ALL_MATH_BIGINT: credit/unit values are strings (BigInt serialized)
+ *   - UNIFIED_SCALE: units and override values share the same scale — no milli-unit conversion
  *   - avatar/color are placeholder defaults until a profile system exists
  *   - EpochView.unresolvedCount reflects events with no resolved user_id (IDENTITY_BEST_EFFORT)
  * Side-effects: none
