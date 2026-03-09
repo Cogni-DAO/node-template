@@ -280,7 +280,7 @@ function ColorPickerSwatch({
 /* ─── View ─────────────────────────────────────────────────────────── */
 
 export function ProfileView(): ReactElement {
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const { openConnectModal } = useConnectModal();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -298,10 +298,14 @@ export function ProfileView(): ReactElement {
 
   useEffect(() => {
     if (linkedProvider || error) {
+      if (linkedProvider) {
+        // Re-validate session so RainbowKit picks up the still-valid SIWE auth
+        void updateSession();
+      }
       // Strip query params after reading — prevents re-display on refresh/back
       router.replace("/profile");
     }
-  }, [linkedProvider, error, router]);
+  }, [linkedProvider, error, router, updateSession]);
 
   // Fetch profile data + configured providers in parallel
   useEffect(() => {
