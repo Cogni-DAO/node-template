@@ -34,17 +34,17 @@ tags: [agents, mistakes, troubleshooting]
 
 ### Run the right test suite for your change
 
-| What you changed | Run this |
-|---|---|
-| TypeScript types / imports | `pnpm typecheck` |
-| Lint / formatting | `pnpm lint:fix && pnpm format` |
-| `src/` unit logic | `pnpm test:unit` |
-| Contract shapes | `pnpm test:contract` |
-| `packages/` code | `pnpm test:packages:local` |
-| `services/` code | `pnpm test:services:local` |
-| Architecture / imports | `pnpm arch:check` |
-| AGENTS.md / docs | `pnpm check:docs` |
-| Specific test file | `pnpm vitest run path/to/file.test.ts` |
+| What you changed           | Run this                               |
+| -------------------------- | -------------------------------------- |
+| TypeScript types / imports | `pnpm typecheck`                       |
+| Lint / formatting          | `pnpm lint:fix && pnpm format`         |
+| `src/` unit logic          | `pnpm test:unit`                       |
+| Contract shapes            | `pnpm test:contract`                   |
+| `packages/` code           | `pnpm test:packages:local`             |
+| `services/` code           | `pnpm test:services:local`             |
+| Architecture / imports     | `pnpm arch:check`                      |
+| AGENTS.md / docs           | `pnpm check:docs`                      |
+| Specific test file         | `pnpm vitest run path/to/file.test.ts` |
 
 Run `pnpm check` as a final gate before commit — not after every edit.
 
