@@ -2,7 +2,7 @@
 id: bug.0147
 type: bug
 title: "Attribution pipeline credits bots and unpromoted PRs — three correctness failures in epoch selection"
-status: needs_implement
+status: needs_triage
 priority: 0
 rank: 10
 estimate: 3
