@@ -14,7 +14,7 @@ assignees: []
 credit:
 project:
 branch: fix/bug-0146-epoch-transition-deadlock
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/532
 reviewer:
 revision: 2
 blocked_by:
