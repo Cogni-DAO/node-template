@@ -53,6 +53,7 @@ import {
 import { ServiceDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
+import { SplitTreasurySettlementAdapter } from "@/adapters/server/treasury/split-treasury-settlement.adapter";
 import {
   FakeMetricsAdapter,
   getTestEvmOnchainClient,
@@ -89,6 +90,7 @@ import type {
   ServiceAccountService,
   ThreadPersistencePort,
   TreasuryReadPort,
+  TreasurySettlementPort,
 } from "@/ports";
 import {
   getDaoTreasuryAddress,
@@ -99,6 +101,7 @@ import {
 import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@/shared/constants/system-tenant";
 import { serverEnv } from "@/shared/env/server-env";
 import { makeLogger } from "@/shared/observability";
+import { USDC_TOKEN_ADDRESS } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
 export type UnhandledErrorPolicy = "rethrow" | "respond_500";
@@ -154,6 +157,8 @@ export interface Container {
   webhookRegistrations: ReadonlyMap<string, DataSourceRegistration>;
   /** Operator wallet — undefined when PRIVY_APP_ID not set */
   operatorWallet: OperatorWalletPort | undefined;
+  /** Treasury settlement — undefined when operator wallet not configured */
+  treasurySettlement: TreasurySettlementPort | undefined;
 }
 
 // Feature-specific dependency types
@@ -474,6 +479,9 @@ function createContainer(): Container {
       return getWebhookRegistrations();
     },
     operatorWallet,
+    treasurySettlement: operatorWallet
+      ? new SplitTreasurySettlementAdapter(operatorWallet, USDC_TOKEN_ADDRESS)
+      : undefined,
   };
 }
 
