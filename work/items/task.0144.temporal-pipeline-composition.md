@@ -1,7 +1,7 @@
 ---
 id: task.0144
 type: task
-status: needs_implement
+status: needs_closeout
 title: "Typed Temporal pipeline composition — shared proxy configs, child workflows, stage I/O types"
 priority: 1
 rank: 5
@@ -14,7 +14,7 @@ spec_refs:
 assignees: []
 credit:
 project: proj.transparent-credit-payouts
-branch:
+branch: claude/implement-task-144-MVLAz
 pr:
 reviewer:
 revision: 1
@@ -22,6 +22,7 @@ blocked_by:
 deploy_verified: false
 created: 2026-03-09
 updated: 2026-03-09
+
 labels: [attribution, temporal, architecture, dx]
 external_refs:
 ---
