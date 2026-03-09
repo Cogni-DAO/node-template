@@ -10,7 +10,7 @@ summary: "All money I/O in one place. Beancount as canonical double-entry ledger
 outcome: "Every dollar in and every token out has a Beancount journal entry and an auditable settlement manifest. Finalized attribution statements produce DAO-controlled Merkle claims that contributors can actually claim on-chain."
 assignees: derekg1729
 created: 2026-02-28
-updated: 2026-03-03
+updated: 2026-03-09
 labels: [governance, payments, web3, treasury]
 ---
 
@@ -53,7 +53,7 @@ Beancount is the canonical ledger and must be capable of tracking ALL instrument
 
 | Deliverable                                                                                                                                            | Status      | Est | Work Item         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | --- | ----------------- |
-| Beancount accounts hierarchy (multi-instrument: equity tokens + USDC)                                                                                  | Not Started | 1   | (create at start) |
+| Beancount accounts hierarchy + journal generation from existing sources (OpenRouter, attribution, Cherry Servers)                                      | Not Started | 3   | `task.0145`       |
 | Node formation update: mint fixed `GovernanceERC20` supply to a DAO-controlled emissions holder instead of founder bootstrap mint                      | Not Started | 2   | `task.0135`       |
 | `computeMerkleTree(statement)` pure function — takes finalized statement `credit_amount` entitlements + settlement policy → root + proofs per claimant | Not Started | 2   | (create at start) |
 | Settlement manifest store/view — persist `epochId`, `statementHash`, `merkleRoot`, `totalAmount`, `fundingTxHash`, `publisher`, `publishedAt`          | Not Started | 2   | (create at start) |
