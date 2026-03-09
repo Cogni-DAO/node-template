@@ -2,7 +2,7 @@
 id: task.0085
 type: task
 title: Splits deployment + distribution wiring
-status: needs_closeout
+status: needs_implement
 priority: 0
 estimate: 2
 summary: Deploy Push Split V2o2 on Base via repeatable script, implement distributeSplit() in Privy adapter, wire into credit settlement flow.
