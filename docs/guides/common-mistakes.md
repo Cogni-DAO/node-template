@@ -30,31 +30,25 @@ tags: [agents, mistakes, troubleshooting]
 ## Tooling Misunderstandings
 
 - Use `console.log` (use Pino server logger / clientLogger for browser)
-- Skip `pnpm check` before commit
+- Running `pnpm check` after every small change — it takes 5-10 minutes. Run the specific suite for your change instead:
 
-### What `pnpm check` runs
+### Run the right test suite for your change
 
-- `pnpm packages:build` — build workspace packages
-- `pnpm typecheck` — TypeScript compiler check
-- `pnpm lint` — ESLint + Biome
-- `pnpm format:check` — Prettier
-- `pnpm test:core` — unit tests (core, features, shared)
-- `pnpm test:packages:local` — package unit tests
-- `pnpm test:services:local` — service unit tests
-- `pnpm check:docs` — AGENTS.md documentation lint
-- `pnpm check:root-layout` — root layout validation
-- `pnpm arch:check` — dependency-cruiser architecture enforcement
+| What you changed | Run this |
+|---|---|
+| TypeScript types / imports | `pnpm typecheck` |
+| Lint / formatting | `pnpm lint:fix && pnpm format` |
+| `src/` unit logic | `pnpm test:unit` |
+| Contract shapes | `pnpm test:contract` |
+| `packages/` code | `pnpm test:packages:local` |
+| `services/` code | `pnpm test:services:local` |
+| Architecture / imports | `pnpm arch:check` |
+| AGENTS.md / docs | `pnpm check:docs` |
+| Specific test file | `pnpm vitest run path/to/file.test.ts` |
 
-### What `pnpm check` does NOT run
+Run `pnpm check` as a final gate before commit — not after every edit.
 
-- `pnpm build` (Next.js production build) — a change can pass `check` but fail `build`
-- Component tests (`pnpm test:component`) — requires testcontainers
-- Stack tests (`pnpm test:stack:*`) — requires running server + DB
-- E2E tests (`pnpm e2e`) — requires full Docker stack
-
-**Runtime:** 5-10 minutes. Not a quick lint.
-
-For CI parity: use `pnpm check:full` (much longer, needs Docker).
+**Do not run `pnpm check:full`** — it requires Docker and full stack infrastructure. Agents should use `pnpm check` only. CI handles the full validation.
 
 ## Documentation Mistakes
 
