@@ -1,7 +1,7 @@
 ---
 id: task.0144
 type: task
-status: done
+status: needs_merge
 title: "Typed Temporal pipeline composition — shared proxy configs, child workflows, stage I/O types"
 priority: 1
 rank: 5
