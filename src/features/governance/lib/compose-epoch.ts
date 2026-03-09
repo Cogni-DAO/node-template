@@ -135,11 +135,20 @@ export interface EpochClaimantLineItemDto {
   readonly receiptIds: readonly string[];
 }
 
+/** Snapshot of a review override applied before finalization. */
+export interface ReviewOverrideSnapshotDto {
+  readonly subject_ref: string;
+  readonly original_units: string;
+  readonly override_units: string | null;
+  readonly reason: string | null;
+}
+
 /** Minimal claimant-attribution response shape from the epoch-claimants API. */
 export interface EpochClaimantsDto {
   readonly epochId: string;
   readonly poolTotalCredits: string;
   readonly items: readonly EpochClaimantLineItemDto[];
+  readonly reviewOverrides?: readonly ReviewOverrideSnapshotDto[] | null;
 }
 
 /**
@@ -169,6 +178,7 @@ function partitionReceipts(receipts: readonly ApiIngestionReceipt[]): {
       eventTime: r.eventTime,
       units: null,
       metadata: r.metadata ?? null,
+      override: null,
     };
     receiptsById.set(r.receiptId, mapped);
 
@@ -260,6 +270,7 @@ export function composeEpochView(
     const mappedReceipt: IngestionReceipt = {
       ...baseReceipt,
       units: weight.toString(),
+      override: null,
     };
 
     const userId = receipt.selection?.userId ?? null;
@@ -345,15 +356,36 @@ export function composeEpochView(
  */
 export function composeEpochViewFromClaimants(
   epoch: EpochDto,
-  claimants: Pick<EpochClaimantsDto, "poolTotalCredits" | "items">,
+  claimants: Pick<
+    EpochClaimantsDto,
+    "poolTotalCredits" | "items" | "reviewOverrides"
+  >,
   receipts: readonly ApiIngestionReceipt[]
 ): EpochView {
   const { receiptsById, unresolvedCount, unresolvedActivities } =
     partitionReceipts(receipts);
 
+  // Build override lookup: subjectRef (receiptId) → override snapshot
+  const overridesByRef = new Map(
+    (claimants.reviewOverrides ?? []).map((o) => [o.subject_ref, o])
+  );
+
   const contributors: EpochContributor[] = claimants.items.map((item) => {
     const claimantReceipts = item.receiptIds
-      .map((receiptId) => receiptsById.get(receiptId) ?? null)
+      .map((receiptId) => {
+        const receipt = receiptsById.get(receiptId) ?? null;
+        if (!receipt) return null;
+        const ov = overridesByRef.get(receiptId);
+        if (!ov || ov.override_units == null) return receipt;
+        return {
+          ...receipt,
+          override: {
+            originalUnits: ov.original_units,
+            overrideUnits: ov.override_units,
+            reason: ov.reason,
+          },
+        };
+      })
       .filter((receipt): receipt is IngestionReceipt => receipt !== null);
     const descriptor = describeClaimant({
       claimant: item.claimant,

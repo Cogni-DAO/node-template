@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/_fixtures/attribution/fake-github-registration`
  * Purpose: Fake DataSourceRegistration for stack tests — returns canned ActivityEvent[] without hitting GitHub API.
- * Scope: Test fixture only. Provides a factory for building fake registrations with deterministic responses.
+ * Scope: Test fixture only. Provides a factory for building fake registrations with deterministic, idempotent responses. Does not perform network I/O or access external APIs.
  * Invariants:
  *   - Same shape as real GitHubSourceAdapter registration (source, version, poll)
  *   - Events include metadata fields the promotion selection policy inspects (baseBranch, mergeCommitSha, commitShas)
@@ -32,30 +32,17 @@ const FAKE_STREAMS: StreamDefinition[] = [
 
 /**
  * Creates a fake GitHub DataSourceRegistration that returns canned events.
- * The poll adapter returns all events on the first collect() call, then empty on subsequent calls.
+ * Every collect() call returns the same events — idempotency is handled by DB constraints.
  */
 export function createFakeGitHubRegistration(
   cannedEvents: ActivityEvent[]
 ): DataSourceRegistration {
-  let collected = false;
-
   return {
     source: "github",
     version: "0.0.0-test",
     poll: {
       streams: () => FAKE_STREAMS,
       collect: async (): Promise<CollectResult> => {
-        if (collected) {
-          return {
-            events: [],
-            nextCursor: {
-              streamId: "pull_requests",
-              value: new Date().toISOString(),
-              retrievedAt: new Date(),
-            },
-          };
-        }
-        collected = true;
         return {
           events: cannedEvents,
           nextCursor: {

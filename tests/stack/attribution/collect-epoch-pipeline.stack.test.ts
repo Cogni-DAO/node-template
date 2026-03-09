@@ -3,11 +3,8 @@
 
 /**
  * Module: `@tests/stack/attribution/collect-epoch-pipeline.stack`
- * Purpose: End-to-end Temporal stack test for CollectEpochWorkflow — exercises the full
- *          workflow→activity serialization boundary with a fake GitHub adapter.
- * Scope: Starts a dedicated Temporal Worker with real DB activities + fake DataSourceRegistration.
- *        Verifies receipts, selections, and evaluations are persisted correctly.
- *        Catches serialization bugs (e.g. Date→string across Temporal boundary) that unit tests miss.
+ * Purpose: End-to-end Temporal stack test for CollectEpochWorkflow exercising the full workflow→activity serialization boundary with a fake GitHub adapter.
+ * Scope: Starts a dedicated Temporal Worker with real DB activities + fake DataSourceRegistration, verifying receipts, selections, evaluations, and identity resolution. Does not test webhook ingestion, schedule triggers, or multi-source pipelines.
  * Invariants:
  *   - TEMPORAL_SERIALIZATION_BOUNDARY: All activity inputs cross JSON wire format (Date→string, bigint→string)
  *   - SELECTION_POLICY_DELEGATED: Selection runs via plugin dispatch, not hardcoded logic
@@ -31,7 +28,10 @@ import {
   createFakeGitHubRegistration,
   makeCannedGitHubEvents,
 } from "@tests/_fixtures/attribution/fake-github-registration";
-import { TEST_NODE_ID } from "@tests/_fixtures/attribution/seed-attribution";
+import {
+  seedUserBinding,
+  TEST_NODE_ID,
+} from "@tests/_fixtures/attribution/seed-attribution";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createEnrichmentActivities } from "../../../services/scheduler-worker/src/activities/enrichment";
@@ -288,5 +288,81 @@ describe("[attribution] CollectEpochWorkflow pipeline (stack)", () => {
       PERIOD_END
     );
     expect(receipts).toHaveLength(cannedEvents.length);
+  }, 30_000);
+
+  it("resolves identities when user_bindings exist", async () => {
+    // Seed user_bindings for the canned events' platformUserIds.
+    // materializeSelection will find selections with null userId (from prior runs),
+    // resolve identities via user_bindings, and call updateSelectionUserId.
+    const db = getSeedDb();
+    const userAliceId = await seedUserBinding(db, {
+      externalId: "12345",
+      providerLogin: "alice",
+    });
+    const userBobId = await seedUserBinding(db, {
+      externalId: "67890",
+      providerLogin: "bob",
+    });
+
+    const workflowId = `test-collect-identity-${randomUUID().slice(0, 8)}`;
+
+    const handle = await client.workflow.start("CollectEpochWorkflow", {
+      workflowId,
+      taskQueue: TEST_TASK_QUEUE,
+      args: [
+        {
+          input: {
+            version: 1,
+            scopeId: PIPELINE_TEST_SCOPE_ID,
+            scopeKey: "test-pipeline",
+            epochLengthDays: 7,
+            activitySources: {
+              github: {
+                attributionPipeline: TEST_PIPELINE,
+                sourceRefs: ["test-org/test-repo"],
+              },
+            },
+          },
+        },
+      ],
+      searchAttributes: {
+        TemporalScheduledStartTime: [EPOCH_MIDPOINT],
+      },
+    });
+
+    await handle.result();
+
+    // Verify selections now have resolved userIds
+    const store = new DrizzleAttributionAdapter(
+      getSeedDb(),
+      PIPELINE_TEST_SCOPE_ID
+    );
+    const epoch = await store.getEpochByWindow(
+      TEST_NODE_ID,
+      PIPELINE_TEST_SCOPE_ID,
+      PERIOD_START,
+      PERIOD_END
+    );
+    if (!epoch) throw new Error("Epoch not found after workflow completion");
+
+    // All receipts should now have resolved userIds — no unselected with null userId
+    const unselected = await store.getUnselectedReceipts(
+      TEST_NODE_ID,
+      epoch.id,
+      PERIOD_START,
+      PERIOD_END
+    );
+    // Only the release PR (platformUserId "99999") has no binding — it's excluded anyway
+    for (const u of unselected) {
+      expect(u.receipt.platformUserId).toBe("99999");
+    }
+
+    // User projections should exist for both resolved users
+    const projections = await store.getUserProjectionsForEpoch(epoch.id);
+    expect(projections.length).toBeGreaterThanOrEqual(2);
+
+    const projectedUserIds = new Set(projections.map((p) => p.userId));
+    expect(projectedUserIds.has(userAliceId)).toBe(true);
+    expect(projectedUserIds.has(userBobId)).toBe(true);
   }, 30_000);
 });

@@ -63,6 +63,7 @@ export function ContributionRow({
   const title = receiptTitle(receipt);
   const score =
     receipt.units != null ? Math.round(Number(receipt.units) / 1000) : null;
+  const override = receipt.override;
 
   return (
     <TableRow className="hover:bg-muted/20">
@@ -117,11 +118,22 @@ export function ContributionRow({
       <TableCell className="text-right" />
       {/* Score column */}
       <TableCell className="text-right">
-        {score != null && (
+        {override ? (
+          <span
+            className="font-mono text-warning text-xs"
+            title={`Overridden from ${Math.round(Number(override.originalUnits) / 1000)} → ${Math.round(Number(override.overrideUnits) / 1000)}${override.reason ? `: ${override.reason}` : ""}`}
+          >
+            <span className="text-muted-foreground/50 line-through">
+              {Math.round(Number(override.originalUnits) / 1000)}
+            </span>
+            {"  "}
+            {Math.round(Number(override.overrideUnits) / 1000)}
+          </span>
+        ) : score != null ? (
           <span className="font-mono text-muted-foreground text-xs">
             {score}
           </span>
-        )}
+        ) : null}
       </TableCell>
       {/* Activity column — empty for default view */}
       <TableCell className="text-right" />

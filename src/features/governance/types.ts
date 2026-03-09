@@ -27,6 +27,12 @@ export interface IngestionReceipt {
   readonly units: string | null;
   /** Raw metadata from ingestion (includes title, repo, etc.). */
   readonly metadata: Record<string, unknown> | null;
+  /** Override applied during review (finalized epochs only). */
+  readonly override: {
+    readonly originalUnits: string;
+    readonly overrideUnits: string;
+    readonly reason: string | null;
+  } | null;
 }
 
 /** A contributor row within an epoch view. */
