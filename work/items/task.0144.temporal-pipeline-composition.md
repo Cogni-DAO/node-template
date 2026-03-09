@@ -15,7 +15,7 @@ assignees: []
 credit:
 project: proj.transparent-credit-payouts
 branch: task/0144-temporal-pipeline-composition
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/524
 reviewer:
 revision: 1
 blocked_by:
