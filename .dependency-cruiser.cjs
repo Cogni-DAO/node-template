@@ -583,6 +583,47 @@ module.exports = {
       comment: "adapters must not import the composition root",
     },
 
+    // activities/ and workflows/ cannot import adapters/ (clean architecture)
+    {
+      name: "no-service-activities-to-adapters",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/(activities|workflows)/",
+      },
+      to: {
+        path: "^services/[^/]+/src/adapters/",
+      },
+      comment:
+        "activities/workflows depend on ports, not adapters (clean architecture)",
+    },
+
+    // activities/ and workflows/ cannot import @cogni/db-client (concrete adapter package)
+    {
+      name: "no-service-activities-to-db-client",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/(activities|workflows)/",
+      },
+      to: {
+        path: "^packages/db-client/",
+      },
+      comment:
+        "activities/workflows use port interfaces, not concrete DB adapters",
+    },
+
+    // activities/ and workflows/ cannot import bootstrap/ (composition root)
+    {
+      name: "no-service-activities-to-bootstrap",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/(activities|workflows)/",
+      },
+      to: {
+        path: "^services/[^/]+/src/bootstrap/",
+      },
+      comment: "activities/workflows must not reach into the composition root",
+    },
+
     // =========================================================================
     // Scheduler worker boundary rules (per SCHEDULER_SPEC.md)
     // =========================================================================
@@ -599,6 +640,21 @@ module.exports = {
       },
       comment:
         "Per WORKER_NEVER_CONTROLS_SCHEDULES: worker executes workflows only, CRUD endpoints are schedule authority",
+    },
+
+    // scheduler-worker activities/workflows must dispatch allocators through
+    // attribution-pipeline-contracts, not import allocation.ts directly.
+    {
+      name: "no-worker-direct-ledger-allocation-subpath",
+      severity: "error",
+      from: {
+        path: "^services/scheduler-worker/src/(activities|workflows)/",
+      },
+      to: {
+        path: "^packages/attribution-ledger/src/allocation\\.ts$",
+      },
+      comment:
+        "Worker allocation must go through plugin registry dispatch, not direct ledger allocation imports",
     },
   ],
 };

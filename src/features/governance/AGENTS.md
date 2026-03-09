@@ -5,17 +5,16 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-17
 - **Status:** draft
 
 ## Purpose
 
-Governance feature slice — schedule sync for DAO charter governance runs, and governance status dashboard service for DAO transparency.
+Governance feature slice — schedule sync, governance status dashboard, claimant-aware epoch contribution UI (current epoch, history, holdings), and approver review page with subject-level override editing and EIP-712 signing.
 
 ## Pointers
 
 - [Governance Scheduling Spec](../../../docs/spec/governance-scheduling.md)
-- [Scheduler Spec](../../../docs/spec/scheduler.md)
+- [Attribution Ledger Spec](../../../docs/spec/attribution-ledger.md)
 - [Repo Spec Config](../../../.cogni/repo-spec.yaml)
 
 ## Boundaries
@@ -36,11 +35,15 @@ Governance feature slice — schedule sync for DAO charter governance runs, and 
 
 ## Public Surface
 
-- **Exports:** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`, `getGovernanceStatus()`, `GovernanceStatusResult`, `useGovernanceStatus()`
-- **Routes:** none (system-ops only; triggered via internal ops endpoint)
-- **CLI:** `pnpm governance:schedules:sync` (endpoint trigger helper)
+- **Exports (services):** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`, `getGovernanceStatus()`, `GovernanceStatusResult`
+- **Exports (hooks):** `useGovernanceStatus()`, `useCurrentEpoch()`, `useEpochHistory()`, `useHoldings()`, `useReviewEpochs()`, `useSignEpoch()`, `useReviewSubjectOverrides()`
+- **Exports (components):** `ContributorCard`, `ContributionRow`, `EpochCard`, `EpochCountdown`, `EpochDetail`, `HoldingCard`, `SourceBadge`
+- **Exports (lib):** `composeEpochView()`, `composeEpochViewFromClaimants()`, `applyOverridesToEpochView()`, `composeHoldings()`
+- **Exports (types):** `EpochView`, `EpochContributor`, `IngestionReceipt`, `HoldingView`, `CurrentEpochData`, `EpochHistoryData`, `HoldingsData`, `SignEpochState`, `SignEpochPhase`, `ReviewSubjectOverrideView`, `EpochDetailProps`
+- **Routes (app pages):** `/gov` (system), `/gov/epoch` (current), `/gov/history` (finalized), `/gov/holdings` (aggregated), `/gov/review` (approver admin — inline editing + EIP-712 sign & finalize)
+- **Routes (API — in `src/app/api/v1/attribution/`):** `GET /epochs`, `GET /epochs/:id/user-projections`, `GET /epochs/:id/statement`, `GET /epochs/:id/claimants`, `GET /epochs/:id/activity`, `GET /epochs/:id/sign-data`, `GET|PATCH|DELETE /epochs/:id/review-subject-overrides`
+- **CLI:** `pnpm governance:schedules:sync`, `pnpm db:seed`, `pnpm dev:setup`
 - **Env/Config keys:** `.cogni/repo-spec.yaml` → `governance.schedules`
-- **Files considered API:** `services/syncGovernanceSchedules.ts`, `services/get-governance-status.ts`, `hooks/useGovernanceStatus.ts`
 
 ## Ports
 
@@ -49,30 +52,31 @@ Governance feature slice — schedule sync for DAO charter governance runs, and 
 
 ## Responsibilities
 
-- This directory **does**: Sync governance schedules from config to Temporal; pause removed schedules (PRUNE_IS_PAUSE)
-- This directory **does not**: Execute workflows, manage tenant-facing schedule CRUD, access DB directly
+- This directory **does**: Sync governance schedules; provide epoch UI hooks, view-model composition, and presentational components; pause removed schedules (PRUNE_IS_PAUSE)
+- This directory **does not**: Execute workflows, manage tenant-facing schedule CRUD, access DB directly, perform credit math (ALL_MATH_BIGINT stays server-side)
 
 ## Usage
 
 ```bash
 pnpm test tests/unit/features/governance/  # unit tests
 pnpm governance:schedules:sync             # trigger internal route (app must be running)
+pnpm dev:setup                             # db:setup + db:setup:test + gov schedule sync
 ```
 
 ## Standards
 
-- Pure function with injected deps (`GovernanceScheduleSyncDeps`)
-- Unit tests with mocked ports
+- Hooks fetch attribution activity and claimant endpoints, compose via `lib/` pure functions into view models (`types.ts`)
+- Components are presentational only — no data fetching
 - No direct adapter or DB imports
 
 ## Dependencies
 
-- **Internal:** `@cogni/scheduler-core` (ports), `@/shared/config` (governance config)
-- **External:** none
+- **Internal:** `@cogni/scheduler-core` (ports), `@/shared/config` (governance config), `@tanstack/react-query` (hooks), `p-limit` (concurrent fetches)
+- **External:** `lucide-react` (icons)
 
 ## Change Protocol
 
-- Update this file when exports or dep interface changes
+- Update this file when exports, routes, or env/config changes
 - Bump **Last reviewed** date
 - Ensure `pnpm check` passes
 
@@ -80,3 +84,5 @@ pnpm governance:schedules:sync             # trigger internal route (app must be
 
 - Governance schedules are system-ops only; never exposed as tenant-facing API
 - PRUNE_IS_PAUSE: removed charters get paused, never deleted
+- Epoch seed script uses `computeEpochWindowV1()` from `@cogni/attribution-ledger` for Monday-aligned UTC windows matching the scheduler grid
+- Display names and linked/unlinked presentation are resolved server-side from claimant reads; UI never renders raw `userId` fragments

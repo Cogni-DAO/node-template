@@ -217,7 +217,7 @@ Define a status-driven lifecycle where every `needs_*` status maps to exactly on
 | CLEAN_WORKTREE_ON_EXIT    | `/implement` and `/closeout` must end with clean `git status`.                                                             |
 | COMMIT_ON_PROGRESS        | Commands that change repo files must end with ≥1 commit. Review-only commands are exempt.                                  |
 | CLAIM_REQUIRED            | Governance runner must set `claimed_by_run` before acting. Prevents double-dispatch.                                       |
-| LOOP_LIMIT                | `revision >= 3` → `blocked` with escalation note.                                                                          |
+| LOOP_LIMIT                | `revision >= 5` → `blocked` with escalation note.                                                                          |
 | STORIES_ARE_INTAKE        | Stories go `done` after triage. Never enter implementation lifecycle.                                                      |
 | DEPLOY_TRACKED_SEPARATELY | `done` = merged. `deploy_verified` field tracks production deployment.                                                     |
 | PR_LINKS_ITEM             | Every code PR references exactly one primary work item (`task.*` or `bug.*`) and at least one spec, or `Spec-Impact: none` |

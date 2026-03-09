@@ -3,43 +3,46 @@
 
 /**
  * Module: `@shared/config/repoSpec.server`
- * Purpose: Server-only accessors for governance-managed configuration from .cogni/repo-spec.yaml (payments + governance schedules).
- * Scope: Reads and caches repo-spec on first access; validates chain alignment and receiver address shape; exposes getPaymentConfig() and getGovernanceConfig(). Does not run in client bundles or accept env overrides.
- * Invariants: Chain ID must match CHAIN_ID; EVM address format required; governance schedules default to empty.
+ * Purpose: Server-only thin wrapper — file I/O, caching, and CHAIN_ID validation. All schema logic delegated to @cogni/repo-spec.
+ * Scope: Reads and caches repo-spec on first access; passes CHAIN_ID to package accessors. Does not define schemas or validation logic.
+ * Invariants: Chain ID must match CHAIN_ID; ledger config requires scope_id + scope_key.
  * Side-effects: IO (reads repo-spec from disk) on first call only.
- * Links: .cogni/repo-spec.yaml, docs/spec/payments-design.md
+ * Links: packages/repo-spec/src/index.ts, .cogni/repo-spec.yaml
  * @public
  */
 
 import fs from "node:fs";
 import path from "node:path";
 
-import { parse } from "yaml";
+import {
+  extractGovernanceConfig,
+  extractLedgerApprovers,
+  extractPaymentConfig,
+  type GovernanceConfig,
+  type InboundPaymentConfig,
+  parseRepoSpec,
+  type RepoSpec,
+} from "@cogni/repo-spec";
 
 import { CHAIN_ID } from "@/shared/web3/chain";
 
-import { type RepoSpec, repoSpecSchema } from "./repoSpec.schema";
+export type {
+  GovernanceConfig,
+  GovernanceSchedule,
+  InboundPaymentConfig,
+  LedgerConfig,
+  LedgerPoolConfig,
+} from "@cogni/repo-spec";
 
-export interface GovernanceSchedule {
-  charter: string;
-  cron: string;
-  timezone: string;
-  entrypoint: string;
-}
+// ---------------------------------------------------------------------------
+// File I/O + caching (server-only concerns)
+// ---------------------------------------------------------------------------
 
-export interface GovernanceConfig {
-  schedules: GovernanceSchedule[];
-}
-
-export interface InboundPaymentConfig {
-  chainId: number;
-  receivingAddress: string;
-  provider: string;
-}
-
-let cachedPaymentConfig: InboundPaymentConfig | null = null;
+let cachedSpec: RepoSpec | null = null;
 
 function loadRepoSpec(): RepoSpec {
+  if (cachedSpec) return cachedSpec;
+
   const repoSpecPath = path.join(process.cwd(), ".cogni", "repo-spec.yaml");
 
   if (!fs.existsSync(repoSpecPath)) {
@@ -49,81 +52,78 @@ function loadRepoSpec(): RepoSpec {
   }
 
   const content = fs.readFileSync(repoSpecPath, "utf8");
-
-  let parsed: unknown;
-  try {
-    parsed = parse(content);
-  } catch (error) {
-    throw new Error(
-      `[repo-spec] Failed to parse .cogni/repo-spec.yaml; ensure valid YAML: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-
-  const result = repoSpecSchema.safeParse(parsed);
-  if (!result.success) {
-    throw new Error(
-      `[repo-spec] Invalid repo-spec.yaml structure: ${result.error.message}`
-    );
-  }
-
-  return result.data;
+  cachedSpec = parseRepoSpec(content);
+  return cachedSpec;
 }
 
-function validateAndMap(spec: RepoSpec): InboundPaymentConfig {
-  // Convert chain_id to number (supports both string and number from YAML)
-  const chainId =
-    typeof spec.cogni_dao.chain_id === "string"
-      ? Number(spec.cogni_dao.chain_id)
-      : spec.cogni_dao.chain_id;
+// ---------------------------------------------------------------------------
+// Cached accessors (delegate to @cogni/repo-spec pure functions)
+// ---------------------------------------------------------------------------
 
-  if (!Number.isFinite(chainId)) {
-    throw new Error(
-      "[repo-spec] Invalid cogni_dao.chain_id; expected numeric chain ID"
-    );
-  }
-
-  // TODO: Remove Sepolia (11155111) support from RepoSpecChainName enum once DAO is deployed on Base mainnet
-  if (chainId !== CHAIN_ID) {
-    throw new Error(
-      `[repo-spec] Chain mismatch: repo-spec declares ${chainId}, app requires ${CHAIN_ID}`
-    );
-  }
-
-  const topup = spec.payments_in.credits_topup;
-
-  return {
-    chainId,
-    receivingAddress: topup.receiving_address.trim(),
-    provider: topup.provider.trim(),
-  };
-}
+let cachedPaymentConfig: InboundPaymentConfig | null = null;
 
 export function getPaymentConfig(): InboundPaymentConfig {
-  if (cachedPaymentConfig) {
-    return cachedPaymentConfig;
-  }
+  if (cachedPaymentConfig) return cachedPaymentConfig;
 
   const spec = loadRepoSpec();
-  cachedPaymentConfig = validateAndMap(spec);
-
+  cachedPaymentConfig = extractPaymentConfig(spec, CHAIN_ID);
   return cachedPaymentConfig;
+}
+
+let cachedNodeId: string | null = null;
+
+/**
+ * Node identity from repo-spec. Scopes all ledger tables.
+ * Fails fast if repo-spec is missing or node_id is invalid.
+ */
+export function getNodeId(): string {
+  if (cachedNodeId) return cachedNodeId;
+
+  const spec = loadRepoSpec();
+  cachedNodeId = spec.node_id;
+  return cachedNodeId;
+}
+
+let cachedScopeId: string | null = null;
+
+/**
+ * Scope identity from repo-spec. Used by DrizzleAttributionAdapter for SCOPE_GATED_QUERIES.
+ * Fails fast if repo-spec is missing scope_id.
+ */
+export function getScopeId(): string {
+  if (cachedScopeId) return cachedScopeId;
+
+  const spec = loadRepoSpec();
+  if (!spec.scope_id) {
+    throw new Error(
+      "repo-spec missing scope_id — required for ledger scope gating"
+    );
+  }
+  cachedScopeId = spec.scope_id;
+  return cachedScopeId;
 }
 
 let cachedGovernanceConfig: GovernanceConfig | null = null;
 
-function mapGovernanceConfig(spec: RepoSpec): GovernanceConfig {
-  return {
-    schedules: spec.governance?.schedules ?? [],
-  };
-}
-
 export function getGovernanceConfig(): GovernanceConfig {
-  if (cachedGovernanceConfig) {
-    return cachedGovernanceConfig;
-  }
+  if (cachedGovernanceConfig) return cachedGovernanceConfig;
 
   const spec = loadRepoSpec();
-  cachedGovernanceConfig = mapGovernanceConfig(spec);
-
+  cachedGovernanceConfig = extractGovernanceConfig(spec);
   return cachedGovernanceConfig;
+}
+
+let cachedLedgerApprovers: string[] | null = null;
+
+/**
+ * Ledger approver allowlist from repo-spec.
+ * Returns lowercased EVM addresses for case-insensitive comparison.
+ * Returns empty array if ledger config not present (write routes will reject all).
+ */
+export function getLedgerApprovers(): string[] {
+  if (cachedLedgerApprovers) return cachedLedgerApprovers;
+
+  const spec = loadRepoSpec();
+  cachedLedgerApprovers = extractLedgerApprovers(spec);
+  return cachedLedgerApprovers;
 }

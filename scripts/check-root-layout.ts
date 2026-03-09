@@ -138,6 +138,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "vitest.api.config.mts",
   "vitest.config.mts",
   "vitest.component.config.mts",
+  "vitest.external.config.mts",
   "vitest.stack.config.mts",
   "vitest.workspace.ts",
   "work",

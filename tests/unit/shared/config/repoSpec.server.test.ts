@@ -15,7 +15,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GovernanceConfig, InboundPaymentConfig } from "@/shared/config";
 import { CHAIN_ID } from "@/shared/web3";
@@ -25,7 +25,7 @@ interface RepoSpecModule {
   getGovernanceConfig: () => GovernanceConfig;
 }
 
-const ORIGINAL_CWD = process.cwd();
+const TEST_NODE_ID = "00000000-0000-4000-8000-000000000001";
 
 function writeRepoSpec(yaml: string): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "repo-spec-"));
@@ -35,20 +35,25 @@ function writeRepoSpec(yaml: string): string {
   return tmpDir;
 }
 
+/** Mock process.cwd instead of process.chdir — thread-safe (chdir is process-global). */
+function useTmpCwd(dir: string): void {
+  vi.spyOn(process, "cwd").mockReturnValue(dir);
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 async function loadPaymentConfig(): Promise<RepoSpecModule> {
   vi.resetModules();
   return import("@/shared/config/repoSpec.server");
-}
-
-function cleanup(tmpDir: string): void {
-  process.chdir(ORIGINAL_CWD);
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 }
 
 describe("getPaymentConfig (repo-spec)", () => {
   it("returns mapped inbound payment config for a valid repo-spec", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -57,7 +62,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -69,13 +74,14 @@ describe("getPaymentConfig (repo-spec)", () => {
         provider: "cogni-usdc-backend-v1",
       });
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("throws on missing or non-numeric chain_id", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         "  chain_id: not-a-number",
         "payments_in:",
@@ -84,19 +90,20 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
       expect(() => getPaymentConfig()).toThrow(/Invalid cogni_dao\.chain_id/i);
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("throws when chain_id does not match CHAIN_ID", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID + 1}"`,
         "payments_in:",
@@ -105,19 +112,20 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
       expect(() => getPaymentConfig()).toThrow(/Chain mismatch/i);
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("throws on invalid receiving_address shape", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -126,19 +134,20 @@ describe("getPaymentConfig (repo-spec)", () => {
         "    receiving_address: 0x1234",
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
       expect(() => getPaymentConfig()).toThrow(/receiving_address/i);
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("throws when provider is missing or empty", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -147,19 +156,20 @@ describe("getPaymentConfig (repo-spec)", () => {
         "    provider: ''",
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
       expect(() => getPaymentConfig()).toThrow(/provider/i);
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("accepts chain_id as a number (not just string)", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: ${CHAIN_ID}`,
         "payments_in:",
@@ -168,7 +178,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -176,13 +186,14 @@ describe("getPaymentConfig (repo-spec)", () => {
 
       expect(config.chainId).toBe(CHAIN_ID);
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("throws on invalid EVM address format (schema validation)", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -191,19 +202,20 @@ describe("getPaymentConfig (repo-spec)", () => {
         '    receiving_address: "not-an-address"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
-      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+      expect(() => getPaymentConfig()).toThrow(/Invalid repo-spec structure/i);
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("accepts any string values for allowed_chains (informational metadata)", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
@@ -215,7 +227,7 @@ describe("getPaymentConfig (repo-spec)", () => {
         '      - "AnotherChain"',
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
@@ -224,31 +236,33 @@ describe("getPaymentConfig (repo-spec)", () => {
         "0x1111111111111111111111111111111111111111"
       );
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("throws when payments_in.credits_topup is missing", async () => {
     const tmpDir = writeRepoSpec(
       [
+        `node_id: "${TEST_NODE_ID}"`,
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:", // missing credits_topup
       ].join("\n")
     );
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
-      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+      expect(() => getPaymentConfig()).toThrow(/Invalid repo-spec structure/i);
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 });
 
 /** Minimal valid base YAML for governance tests (cogni_dao + payments_in required by schema) */
 const BASE_YAML = [
+  `node_id: "${TEST_NODE_ID}"`,
   "cogni_dao:",
   `  chain_id: "${CHAIN_ID}"`,
   "payments_in:",
@@ -279,7 +293,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
     ].join("\n");
 
     const tmpDir = writeRepoSpec(yaml);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
@@ -299,13 +313,13 @@ describe("getGovernanceConfig (repo-spec)", () => {
         entrypoint: "GOVERN",
       });
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("returns empty schedules when governance section is omitted", async () => {
     const tmpDir = writeRepoSpec(BASE_YAML);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
@@ -313,7 +327,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
 
       expect(config.schedules).toEqual([]);
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
@@ -328,7 +342,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
     ].join("\n");
 
     const tmpDir = writeRepoSpec(yaml);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
@@ -336,7 +350,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
 
       expect(config.schedules[0]?.timezone).toBe("UTC");
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
@@ -351,13 +365,15 @@ describe("getGovernanceConfig (repo-spec)", () => {
     ].join("\n");
 
     const tmpDir = writeRepoSpec(yaml);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
-      expect(() => getGovernanceConfig()).toThrow(/repo-spec\.yaml structure/i);
+      expect(() => getGovernanceConfig()).toThrow(
+        /Invalid repo-spec structure/i
+      );
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
@@ -372,13 +388,15 @@ describe("getGovernanceConfig (repo-spec)", () => {
     ].join("\n");
 
     const tmpDir = writeRepoSpec(yaml);
-    process.chdir(tmpDir);
+    useTmpCwd(tmpDir);
 
     try {
       const { getGovernanceConfig } = await loadRepoSpecModule();
-      expect(() => getGovernanceConfig()).toThrow(/repo-spec\.yaml structure/i);
+      expect(() => getGovernanceConfig()).toThrow(
+        /Invalid repo-spec structure/i
+      );
     } finally {
-      cleanup(tmpDir);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 });

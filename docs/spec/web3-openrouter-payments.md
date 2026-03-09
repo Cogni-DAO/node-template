@@ -43,7 +43,8 @@ Given:
   REVENUE_SHARE    = SYSTEM_TENANT_REVENUE_SHARE     (default 0.75)
   PROVIDER_FEE     = OPENROUTER_CRYPTO_FEE           (default 0.05 — 5%)
 
-User pays $1.00 USDC to operator wallet.
+User pays $1.00 USDC to Split contract.
+Split distributes: ~92.1% → operator wallet, ~7.9% → DAO treasury.
 
 User credits:    $1.00 worth  → consumes $0.50 of provider cost   (1 / MARKUP)
 System credits:  $0.75 worth  → consumes $0.375 of provider cost  (REVENUE_SHARE / MARKUP)
@@ -55,7 +56,7 @@ Gross top-up sent:    $0.9211                                     net / (1 - PRO
                     = $0.875 / 0.95
 
 After fee: $0.9211 × 0.95 = $0.875 ← exact provider cost covered ✓
-DAO share: $1.00 - $0.9211 = $0.0789 (7.9% margin, forwarded as USDC to treasury)
+DAO share: $1.00 - $0.9211 = $0.0789 (7.9% margin, routed by Split to treasury on-chain)
 
 Formula:
   openrouterTopUpUsd = paymentUsd × (1 + REVENUE_SHARE) / (MARKUP × (1 - PROVIDER_FEE))
@@ -69,32 +70,32 @@ The gross-up ensures OpenRouter always receives the exact provider cost after th
 ```mermaid
 sequenceDiagram
     participant User
+    participant Split as Split Contract
     participant Wallet as Operator Wallet (EOA)
+    participant Treasury as DAO Treasury
     participant App as Cogni App
     participant DB as Database
     participant Workflow as Top-Up Workflow
     participant OR as OpenRouter API
     participant Chain as Base (8453)
 
-    User->>Wallet: USDC transfer (existing payment flow)
+    User->>Split: USDC transfer (existing payment flow, receiving_address = Split)
     App->>App: verify USDC transfer on-chain (existing verifier)
     App->>DB: mint user credits + system tenant bonus (existing creditsConfirm)
 
-    App->>DB: insert outbound_topups row (CHARGE_PENDING)
-    App->>DB: insert outbound_transfers row (PENDING)
-
-    Note over Workflow: DAO Treasury Forwarding
-    Workflow->>Wallet: sendUsdcToTreasury(daoShareRaw)
-    Wallet->>Chain: ERC20 transfer(treasury, daoShareRaw)
-    Workflow->>DB: update outbound_transfers → CONFIRMED
+    Note over App,Split: Splits Distribution (trustless on-chain)
+    App->>Split: distributeERC20(USDC)
+    Split->>Wallet: ~92.1% USDC (operator share)
+    Split->>Treasury: ~7.9% USDC (DAO share)
 
     Note over Workflow: OpenRouter Top-Up
+    App->>DB: insert outbound_topups row (CHARGE_PENDING)
     Workflow->>Workflow: topUpUsd = paymentUsd × (1 + REVENUE_SHARE) / (MARKUP × (1 - FEE))
     Workflow->>OR: POST /api/v1/credits/coinbase {amount, sender, chain_id: 8453}
     OR-->>Workflow: {transfer_intent: {metadata, call_data}}
     Workflow->>DB: update → CHARGE_CREATED (store charge_id, expires_at)
 
-    Workflow->>Workflow: encode swapAndTransferUniswapV3Native(intent, 500)
+    Workflow->>Workflow: encode transfer function per metadata.function_name
     Workflow->>Wallet: simulateContract(encodedTx)
     Wallet-->>Workflow: simulation OK
     Workflow->>Wallet: signTopUpTransaction(intent)
@@ -108,13 +109,18 @@ sequenceDiagram
 
 ### OpenRouter Charge → On-Chain Transaction
 
-OpenRouter's `/api/v1/credits/coinbase` does **not** return ready-to-sign calldata. It returns a `transfer_intent` for the [Coinbase Commerce Onchain Payment Protocol](https://github.com/coinbase/commerce-onchain-payment-protocol). The workflow must:
+OpenRouter's `/api/v1/credits/coinbase` does **not** return ready-to-sign calldata. It returns a `transfer_intent` for the [Coinbase Commerce Onchain Payment Protocol](https://github.com/coinbase/commerce-onchain-payment-protocol). The Transfers contract on Base is `0xeADE6bE02d043b3550bE19E960504dbA14A14971`. The workflow must:
 
-1. **Create charge** → receives `transfer_intent` with `metadata.contract_address`, `call_data` (recipient, amounts, deadline, signature, etc.)
-2. **Encode the contract call** → `swapAndTransferUniswapV3Native(intent, poolFeesTier=500)` on the Coinbase Transfers contract
-3. **Set tx value** → ETH amount covering `recipient_amount + fee_amount` plus slippage buffer (excess auto-refunds)
+1. **Create charge** → receives `transfer_intent` with `metadata.contract_address`, `metadata.function_name`, `call_data` (recipient, amounts, deadline, signature, etc.)
+2. **Encode the contract call** → use `metadata.function_name` to determine which Transfers function to call:
+   - `swapAndTransferUniswapV3Native(intent, poolFeesTier)` — input is ETH via `msg.value`
+   - `transferTokenPreApproved(intent)` — input is ERC-20 (USDC), pre-approved to Transfers contract
+   - `swapAndTransferUniswapV3TokenPreApproved(intent, tokenIn, maxWillingToPay, poolFeesTier)` — input is any ERC-20, swaps to recipient currency
+3. **Set tx value / approval** — if Native: ETH covering `recipient_amount + fee_amount` + slippage buffer. If Token: ERC-20 approval to Transfers contract, no ETH beyond gas.
 4. **Simulate** → `publicClient.simulateContract()` before broadcast to prevent reverts
-5. **Sign + broadcast** → via `WalletSignerPort.signTopUpTransaction(intent)`
+5. **Sign + broadcast** → via `OperatorWalletPort.fundOpenRouterTopUp(intent)`
+
+> **Open**: Which `function_name` does OpenRouter return? spike.0090 resolves this. If `Native`, operator wallet needs an ETH funding strategy. If `TokenPreApproved`, operator can pay directly with USDC from Split distribution.
 
 ```typescript
 // Transfer intent shape from OpenRouter
@@ -138,8 +144,10 @@ interface TransferIntent {
   };
 }
 
-// Coinbase Transfers contract on Base mainnet
+// Coinbase Transfers contract on Base mainnet (confirmed from protocol repo)
 const TRANSFERS_CONTRACT = "0xeADE6bE02d043b3550bE19E960504dbA14A14971";
+// Note: metadata.contract_address from OpenRouter API should match this.
+// If it returns a different address, validate against allowlist before proceeding.
 ```
 
 ### Top-Up Amount Calculation
@@ -162,25 +170,10 @@ function calculateOpenRouterTopUp(
   return (paymentUsd * (1 + revenueShare)) / (markupFactor * (1 - providerFee));
 }
 
-/**
- * Calculate DAO's share of a user payment (forwarded as USDC to treasury).
- */
-function calculateDaoShare(
-  paymentUsd: number,
-  markupFactor: number,
-  revenueShare: number,
-  providerFee: number
-): number {
-  return (
-    paymentUsd -
-    calculateOpenRouterTopUp(
-      paymentUsd,
-      markupFactor,
-      revenueShare,
-      providerFee
-    )
-  );
-}
+// calculateDaoShare is NOT needed — the Splits contract handles DAO share
+// routing on-chain. The Split percentages are derived from the same constants:
+//   operatorPct ≈ (1 + REVENUE_SHARE) / (MARKUP × (1 - PROVIDER_FEE))
+//   daoPct      ≈ 1 - operatorPct
 ```
 
 ### Signing Gates
@@ -218,27 +211,11 @@ CHARGE_CREATED  → CHARGE_PENDING   (charge expired, retry creates new charge)
 - `TX_BROADCAST`: poll for confirmation, do NOT re-broadcast (would double-spend)
 - `CONFIRMED` / `FAILED`: terminal, no retry
 
-### DAO Treasury Forwarding State Machine
+### DAO Treasury Share (handled by Splits — no app logic)
 
-Simpler than top-up — single ERC20 transfer.
+The DAO's ~7.9% share is routed trustlessly by the [Splits](https://splits.org/) contract. After credit mint, the app calls `distributeERC20(USDC)` on the Split contract — the Split sends the DAO's share to treasury and the operator's share to the operator wallet. No `outbound_transfers` table, no app-level sweep logic, no retry infrastructure.
 
-**States:** `PENDING` → `TX_BROADCAST` → `CONFIRMED` (terminal: `FAILED`)
-
-**Table:** `outbound_transfers` (new)
-
-| Column              | Type        | Constraints                   | Description                                 |
-| ------------------- | ----------- | ----------------------------- | ------------------------------------------- |
-| `id`                | UUID        | PK, default gen_random_uuid() | transfer record id                          |
-| `client_payment_id` | TEXT        | NOT NULL, UNIQUE              | Links to originating user payment           |
-| `destination`       | TEXT        | NOT NULL                      | Destination address (treasury)              |
-| `token`             | TEXT        | NOT NULL                      | Token address (USDC)                        |
-| `amount_raw`        | TEXT        | NOT NULL                      | Raw transfer amount (string for bigint)     |
-| `status`            | TEXT        | NOT NULL                      | PENDING / TX_BROADCAST / CONFIRMED / FAILED |
-| `tx_hash`           | TEXT        | nullable                      | On-chain tx hash                            |
-| `block_number`      | BIGINT      | nullable                      | Confirmation block                          |
-| `error_message`     | TEXT        | nullable                      | Last error                                  |
-| `created_at`        | TIMESTAMPTZ | NOT NULL, default now()       |                                             |
-| `updated_at`        | TIMESTAMPTZ | NOT NULL, default now()       |                                             |
+See [proj.ai-operator-wallet](../../work/projects/proj.ai-operator-wallet.md) PR 2 for Split deployment details.
 
 ## Goal
 
@@ -269,7 +246,7 @@ Close the financial loop: every user credit purchase automatically provisions th
 | MAX_TOPUP_CAP             | Single top-up MUST NOT exceed `OPERATOR_MAX_TOPUP_USD`. Charges above this cap are rejected before OpenRouter API call.       |
 | NO_REBROADCAST            | A top-up in `TX_BROADCAST` state MUST NOT be re-broadcast. Only poll for confirmation or fail after timeout.                  |
 | MARGIN_PRESERVED          | `(1 + REVENUE_SHARE) / (MARKUP × (1 - PROVIDER_FEE)) < 1` MUST hold. Application MUST fail fast at startup if violated.       |
-| DAO_SHARE_FORWARDED       | Every settled payment MUST have a corresponding `outbound_transfers` record forwarding the DAO share to treasury.             |
+| DAO_SHARE_VIA_SPLIT       | Every settled payment MUST trigger `distributeERC20()` on the Split contract. DAO share is routed on-chain, not by app logic. |
 
 ### Margin Safety Check
 
@@ -303,16 +280,16 @@ With defaults: `2.0 × 0.95 = 1.9 > 1.75` — DAO margin is 7.9% per dollar. The
 
 **Table:** `charge_receipts` (existing — new `charge_reason` values)
 
-| charge_reason          | source_system | source_reference                      | Description                     |
-| ---------------------- | ------------- | ------------------------------------- | ------------------------------- |
-| `openrouter_topup`     | `openrouter`  | `openrouter_topup/${clientPaymentId}` | ETH → OpenRouter credits top-up |
-| `dao_treasury_forward` | `operator`    | `dao_forward/${clientPaymentId}`      | USDC → DAO treasury             |
+| charge_reason      | source_system | source_reference                      | Description                               |
+| ------------------ | ------------- | ------------------------------------- | ----------------------------------------- |
+| `openrouter_topup` | `openrouter`  | `openrouter_topup/${clientPaymentId}` | Operator wallet → OpenRouter credits      |
+| `split_distribute` | `splits`      | `split_dist/${clientPaymentId}`       | Split contract distributed USDC to shares |
 
 ### File Pointers
 
 | File                                               | Purpose                                                                                                      |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `src/core/billing/pricing.ts`                      | `calculateOpenRouterTopUp()`, `calculateDaoShare()` — pure top-up math                                       |
+| `src/core/billing/pricing.ts`                      | `calculateOpenRouterTopUp()` — pure top-up math (DAO share handled by Splits on-chain)                       |
 | `src/core/billing/pricing.ts`                      | `calculateRevenueShareBonus()` — existing                                                                    |
 | `src/shared/env/server-env.ts`                     | `USER_PRICE_MARKUP_FACTOR`, `SYSTEM_TENANT_REVENUE_SHARE`, `OPENROUTER_CRYPTO_FEE`, `OPERATOR_MAX_TOPUP_USD` |
 | `src/ports/wallet-signer.port.ts`                  | `WalletSignerPort` interface — see [operator-wallet spec](./operator-wallet.md)                              |
@@ -321,8 +298,10 @@ With defaults: `2.0 × 0.95 = 1.9 > 1.75` — DAO margin is 7.9% per dollar. The
 
 ## Open Questions
 
-- [ ] What is the minimum top-up amount? OpenRouter may have a floor. Should small payments be batched into a single charge when they individually fall below the floor?
-- [ ] Should the two outbound transactions (treasury forward + top-up) be dispatched sequentially or in parallel? Sequential is simpler but slower. Parallel requires independent error handling.
+- [x] What is the minimum top-up amount? **$5 minimum, $100K maximum** (confirmed from OpenRouter API docs). Small payments below $5 should be batched.
+- [x] ~~Should the two outbound transactions (treasury forward + top-up) be dispatched sequentially or in parallel?~~ Treasury forward is now handled by Splits `distributeERC20()` — only one app-initiated outbound tx (the top-up).
+- [ ] Which `metadata.function_name` does OpenRouter return? `swapAndTransferUniswapV3Native` (needs ETH) vs `transferTokenPreApproved` (pays with USDC). **spike.0090 resolves this.**
+- [ ] Does `metadata.contract_address` match the confirmed Coinbase Transfers address (`0xeADE6...`)? **spike.0090 resolves this.**
 
 ## Related
 

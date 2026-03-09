@@ -145,7 +145,7 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     expect(grantsAfterSecond).toHaveLength(1);
     expect(grantsAfterSecond[0]?.id).toBe(firstGrantId);
 
-    // Schedules should still be 1 (not duplicated)
+    // Schedules should still be 2 (heartbeat + ledger_ingest, not duplicated)
     const schedulesAfterSecond: string[] = [];
     for await (const summary of client.schedule.list()) {
       if (summary.scheduleId.startsWith("governance:")) {
@@ -153,7 +153,7 @@ describe("Governance Schedule Sync Job (Stack)", () => {
       }
     }
 
-    expect(schedulesAfterSecond).toHaveLength(1);
+    expect(schedulesAfterSecond).toHaveLength(2);
   });
 
   it("pauses schedules removed from config", async () => {

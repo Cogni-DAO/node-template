@@ -79,6 +79,17 @@ export type {
   LangfuseSpanHandle,
   RecordInvocationParams,
 } from "./ai-telemetry.port";
+export type {
+  AttributionEpoch,
+  AttributionPoolComponent,
+  AttributionSelection,
+  AttributionStatement,
+  AttributionStatementSignature,
+  AttributionStore,
+  EpochUserProjection,
+  IngestionCursor,
+  IngestionReceipt,
+} from "./attribution-store.port";
 export type { Clock } from "./clock.port";
 export type {
   GovernanceRun,
@@ -163,6 +174,18 @@ export type {
   SandboxRunSpec,
   SandboxVolumeMount,
 } from "./sandbox-runner.port";
+// Ingestion ports - re-exported from @cogni/ingestion-core package
+export type {
+  ActivityEvent,
+  CollectParams,
+  CollectResult,
+  DataSourceRegistration,
+  PollAdapter,
+  SourceAdapter,
+  StreamCursor,
+  StreamDefinition,
+  WebhookNormalizer,
+} from "./source-adapter.port";
 export {
   ThreadConflictError,
   type ThreadPersistencePort,

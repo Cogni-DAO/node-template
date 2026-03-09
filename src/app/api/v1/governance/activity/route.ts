@@ -27,7 +27,9 @@ export const dynamic = "force-dynamic";
 /** Synthetic session user representing the system tenant account. */
 const SYSTEM_SESSION_USER = {
   id: COGNI_SYSTEM_PRINCIPAL_USER_ID,
-  walletAddress: "",
+  walletAddress: null,
+  displayName: null,
+  avatarColor: null,
 } as const;
 
 export const GET = wrapRouteHandlerWithLogging(

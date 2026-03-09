@@ -50,6 +50,14 @@ services:
       - SCHEDULER_API_TOKEN
       - BILLING_INGEST_TOKEN
       - INTERNAL_OPS_TOKEN
+      - GH_WEBHOOK_SECRET
+      # OAuth providers (optional — provider silently skipped if missing)
+      - GH_OAUTH_CLIENT_ID
+      - GH_OAUTH_CLIENT_SECRET
+      - DISCORD_OAUTH_CLIENT_ID
+      - DISCORD_OAUTH_CLIENT_SECRET
+      - GOOGLE_OAUTH_CLIENT_ID
+      - GOOGLE_OAUTH_CLIENT_SECRET
       - LANGFUSE_PUBLIC_KEY
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
@@ -369,6 +377,12 @@ services:
       # Internal API (scheduler-worker → app)
       - APP_BASE_URL=http://app:3000
       - SCHEDULER_API_TOKEN=${SCHEDULER_API_TOKEN}
+      # GitHub App credentials (optional — required only for GitHub ingestion)
+      # Bare passthrough: passes empty string "" when var is unset in host env.
+      # Zod schema coerces "" → undefined so both cases are safe.
+      - GH_REVIEW_APP_ID
+      - GH_REVIEW_APP_PRIVATE_KEY_BASE64
+      - GH_REPOS
       # Observability
       - LOG_LEVEL=${PINO_LOG_LEVEL:-info}
       - SERVICE_NAME=scheduler-worker
