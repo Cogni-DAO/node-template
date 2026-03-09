@@ -61,8 +61,7 @@ export function ContributionRow({
 }): ReactElement {
   const Icon = TYPE_ICONS[receipt.eventType] ?? Pin;
   const title = receiptTitle(receipt);
-  const score =
-    receipt.units != null ? Math.round(Number(receipt.units) / 1000) : null;
+  const score = receipt.units;
   const override = receipt.override;
 
   return (
@@ -121,13 +120,13 @@ export function ContributionRow({
         {override ? (
           <span
             className="font-mono text-warning text-xs"
-            title={`Overridden from ${Math.round(Number(override.originalUnits) / 1000)} → ${Math.round(Number(override.overrideUnits) / 1000)}${override.reason ? `: ${override.reason}` : ""}`}
+            title={`Overridden from ${override.originalUnits} → ${override.overrideUnits}${override.reason ? `: ${override.reason}` : ""}`}
           >
             <span className="text-muted-foreground/50 line-through">
-              {Math.round(Number(override.originalUnits) / 1000)}
+              {override.originalUnits}
             </span>
             {"  "}
-            {Math.round(Number(override.overrideUnits) / 1000)}
+            {override.overrideUnits}
           </span>
         ) : score != null ? (
           <span className="font-mono text-muted-foreground text-xs">
@@ -135,8 +134,6 @@ export function ContributionRow({
           </span>
         ) : null}
       </TableCell>
-      {/* Activity column — empty for default view */}
-      <TableCell className="text-right" />
     </TableRow>
   );
 }

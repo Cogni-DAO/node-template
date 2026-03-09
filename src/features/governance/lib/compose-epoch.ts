@@ -375,10 +375,17 @@ export function composeEpochViewFromClaimants(
       .map((receiptId) => {
         const receipt = receiptsById.get(receiptId) ?? null;
         if (!receipt) return null;
-        const ov = overridesByRef.get(receiptId);
-        if (!ov || ov.override_units == null) return receipt;
-        return {
+        // Compute per-receipt weight from weight config (same as open/review path)
+        const weightKey = `${receipt.source}:${receipt.eventType}`;
+        const weight = epoch.weightConfig[weightKey] ?? 0;
+        const withUnits: IngestionReceipt = {
           ...receipt,
+          units: weight > 0 ? weight.toString() : null,
+        };
+        const ov = overridesByRef.get(receiptId);
+        if (!ov || ov.override_units == null) return withUnits;
+        return {
+          ...withUnits,
           override: {
             originalUnits: ov.original_units,
             overrideUnits: ov.override_units,
@@ -431,7 +438,7 @@ export interface OverrideEntry {
 
 /**
  * Recompute contributor sums after applying subject overrides client-side.
- * Override units are in display scale (e.g. "2"); receipt.units are milli-units (e.g. "8000").
+ * All units (receipt.units and override.overrideUnits) are in milli-units.
  * Receipts are never mutated — only contributor-level units and shares are recomputed.
  */
 export function applyOverridesToEpochView(
@@ -446,7 +453,7 @@ export function applyOverridesToEpochView(
       for (const receipt of contributor.receipts) {
         const override = overrides.get(receipt.receiptId);
         if (override?.overrideUnits != null) {
-          totalUnits += BigInt(override.overrideUnits) * 1000n;
+          totalUnits += BigInt(override.overrideUnits);
         } else {
           totalUnits += BigInt(receipt.units ?? "0");
         }
