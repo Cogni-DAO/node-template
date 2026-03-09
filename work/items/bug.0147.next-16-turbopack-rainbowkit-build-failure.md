@@ -2,7 +2,7 @@
 id: bug.0147
 type: bug
 title: "Next.js 16.0.7 build fails: Turbopack scans thread-stream test fixtures via RainbowKit dep chain, webpack fallback blocked by node: barrel leaks"
-status: needs_triage
+status: needs_review
 priority: 1
 rank: 5
 estimate: 3
