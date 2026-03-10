@@ -32,7 +32,8 @@ Improve the build pipeline, local testing tooling, and database provisioning acr
 | Manifest-first Docker layering for cache optimization                     | Done   | 1   | —         |
 | `check:full` local CI-parity gate with trap-based cleanup                 | Done   | 1   | —         |
 | `validate-dsns.sh` for runtime DSN isolation                              | Done   | 1   | —         |
-| Runtime containers receive only `DATABASE_URL` and `DATABASE_SERVICE_URL` | Done   | 1   | —         |
+| Runtime containers receive only `DATABASE_URL` and `DATABASE_SERVICE_URL` | Done        | 1   | —         |
+| App to `apps/web` workspace, flatten platform/ → infra/ + scripts/       | Not Started | 5   | task.0151 |
 
 ### Walk (P1) — DSN-Only Provisioning & Build Improvements
 
@@ -59,7 +60,7 @@ Improve the build pipeline, local testing tooling, and database provisioning acr
 | Update docs: "Only 3 DSNs exist"                                                                                                                                                                                            | Not Started | 1   | (create at P2 start) |
 | Add `DATABASE_ROOT_URL` to INFRASTRUCTURE_SETUP.md secret table                                                                                                                                                             | Not Started | 1   | (create at P2 start) |
 | Graph-scoped builds: adopt `turbo prune --docker` or `pnpm deploy` for minimal build context (currently builds all packages even if app doesn't depend on them — acceptable for 2 packages, revisit if package count grows) | Not Started | 3   | (create at P2 start) |
-| App as workspace package: move app to `apps/web` for proper filter targeting (`pnpm --filter web... build`)                                                                                                                 | Not Started | 2   | (create at P2 start) |
+| App as workspace package: move app to `apps/web` for proper filter targeting (`pnpm --filter web... build`)                                                                                                                 | Not Started | 2   | — (superseded by task.0151) |
 | `check:full --watch`: re-run on file changes                                                                                                                                                                                | Not Started | 2   | (create at P2 start) |
 | Parallel test execution in check:full (once isolation is proven stable)                                                                                                                                                     | Not Started | 2   | (create at P2 start) |
 
