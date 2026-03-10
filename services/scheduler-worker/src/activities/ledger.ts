@@ -587,14 +587,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       throw new Error(`materializeSelection: epoch ${input.epochId} not found`);
     }
 
-    // 3. Get unselected receipts (delta: only receipts needing work)
+    // 3. Get selection candidates (delta: only receipts needing work)
     const unselected: UnselectedReceipt[] =
-      await attributionStore.getUnselectedReceipts(
-        nodeId,
-        epochId,
-        epoch.periodStart,
-        epoch.periodEnd
-      );
+      await attributionStore.getSelectionCandidates(nodeId, epochId);
 
     if (unselected.length === 0) {
       logger.info(
@@ -604,12 +599,8 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       return { totalReceipts: 0, newSelections: 0, resolved: 0, unresolved: 0 };
     }
 
-    // 4. Load all receipts for cross-referencing, then dispatch selection policy
-    const allReceipts = await attributionStore.getReceiptsForWindow(
-      nodeId,
-      epoch.periodStart,
-      epoch.periodEnd
-    );
+    // 4. Load all receipts for cross-referencing (full history for cross-epoch promotion matching)
+    const allReceipts = await attributionStore.getAllReceipts(nodeId);
     const receiptsToSelect = unselected.map((u) => u.receipt);
     const decisions = dispatchSelectionPolicy(
       registries.selectionPolicies,
@@ -1001,7 +992,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     const weightConfigHash = await computeWeightConfigHash(
       inputClose.staleWeightConfig
     );
-    const approverSetHash = computeApproverSetHash(inputClose.approvers);
+    const approverSetHash = await computeApproverSetHash(inputClose.approvers);
     const profile = resolveProfile(
       registries.profiles,
       inputClose.attributionPipeline
@@ -1157,7 +1148,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       );
     }
     // Self-consistent integrity check: recompute hash from pinned list
-    const pinnedApproverSetHash = computeApproverSetHash(epoch.approvers);
+    const pinnedApproverSetHash = await computeApproverSetHash(epoch.approvers);
     if (epoch.approverSetHash !== pinnedApproverSetHash) {
       throw new Error(
         `finalizeEpoch: approver set hash integrity failure — stored hash ${epoch.approverSetHash} does not match recomputed ${pinnedApproverSetHash}`
