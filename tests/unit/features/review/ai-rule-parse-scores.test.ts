@@ -4,8 +4,8 @@
 /**
  * Module: `@tests/unit/features/review/ai-rule-structured-output`
  * Purpose: Unit tests for the AI rule evaluation structured output schema.
- * Scope: Tests EvaluationOutputSchema validation. Does NOT test LLM calls.
- * Invariants: Pure schema validation — no side-effects, no mocking needed.
+ * Scope: Tests EvaluationOutputSchema validation. Does NOT test LLM calls or graph execution.
+ * Invariants: Pure schema validation + mock-based integration.
  * Side-effects: none
  * Links: task.0149
  * @public

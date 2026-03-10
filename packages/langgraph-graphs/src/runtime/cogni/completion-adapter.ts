@@ -269,8 +269,6 @@ export class CogniCompletionAdapter extends Runnable<BaseMessage[], AIMessage> {
     schema: { parse: (v: unknown) => RunOutput } | Record<string, unknown>,
     _options?: Record<string, unknown>
   ): Runnable<BaseMessage[], RunOutput> {
-    const adapter = this;
-
     return RunnableLambda.from(
       async (
         messages: BaseMessage[],
@@ -286,7 +284,7 @@ export class CogniCompletionAdapter extends Runnable<BaseMessage[], AIMessage> {
           ...messages,
         ];
 
-        const aiMessage = await adapter.invoke(augmented, config);
+        const aiMessage = await this.invoke(augmented, config);
 
         // Extract text content from AIMessage
         const text =
@@ -306,12 +304,21 @@ export class CogniCompletionAdapter extends Runnable<BaseMessage[], AIMessage> {
               : "";
 
         // Strip markdown code fences if model wraps JSON in them
+        // Trim first so ^ and $ anchors match even with leading/trailing whitespace
         const cleaned = text
-          .replace(/^```(?:json)?\s*/i, "")
-          .replace(/\s*```$/i, "")
+          .trim()
+          .replace(/^```(?:json)?\n?/i, "")
+          .replace(/\n?```$/, "")
           .trim();
 
-        const parsed = JSON.parse(cleaned) as RunOutput;
+        let parsed: RunOutput;
+        try {
+          parsed = JSON.parse(cleaned) as RunOutput;
+        } catch {
+          throw new Error(
+            `[CogniCompletionAdapter.withStructuredOutput] LLM returned invalid JSON: ${cleaned.slice(0, 200)}`
+          );
+        }
 
         // Validate with Zod if schema has .parse()
         if ("parse" in schema && typeof schema.parse === "function") {
