@@ -34,7 +34,7 @@ requireEnv("TEST_BASE_URL");
 
 export default defineConfig({
   root: __dirname,
-  plugins: [tsconfigPaths({ projects: ["./tsconfig.app.json"] })],
+  plugins: [tsconfigPaths({ projects: ["./tsconfig.test.json"] })],
   test: {
     include: ["tests/stack/**/*.stack.test.ts"],
     environment: "node",
@@ -55,7 +55,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@tests": path.resolve(__dirname, "../../tests"),
+      "@tests": path.resolve(__dirname, "./tests"),
     },
   },
 });

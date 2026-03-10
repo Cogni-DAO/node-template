@@ -54,14 +54,7 @@ export default defineConfig({
       "packages/*/tests/**/*.{test,spec}.{ts,tsx}",
       "services/*/tests/**/*.{test,spec}.{ts,tsx}",
     ],
-    exclude: [
-      "node_modules",
-      "dist",
-      ".next",
-      "e2e",
-      "tests/_fakes/**",
-      "tests/_fixtures/**",
-    ],
+    exclude: ["node_modules", "dist", ".next", "e2e"],
     coverage: {
       enabled: false,
       provider: "v8",

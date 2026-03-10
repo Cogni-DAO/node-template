@@ -3,7 +3,7 @@
 
 /**
  * Module: `vitest.config.mts`
- * Purpose: Vitest configuration for app-specific unit, meta, and contract tests.
+ * Purpose: Vitest configuration for app-specific unit, meta, contract, and ports tests.
  * Scope: Tests that import @/ (app code). Excludes component/stack/external tests which have their own configs.
  * Invariants: Uses tsconfigPaths for @/ resolution; setup file mocks server-only and RainbowKit.
  * Side-effects: process.env (test env vars set in setup)
@@ -18,24 +18,23 @@ import { defineConfig } from "vitest/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// biome-ignore lint/style/noDefaultExport: Vitest config requires default export
 export default defineConfig({
+  root: __dirname,
   esbuild: {
     jsx: "automatic",
   },
-  plugins: [
-    tsconfigPaths({
-      projects: [path.resolve(__dirname, "../../tsconfig.base.json")],
-    }),
-  ],
+  plugins: [tsconfigPaths({ projects: ["./tsconfig.test.json"] })],
   test: {
     globals: true,
     environment: "node",
-    setupFiles: [path.resolve(__dirname, "tests/setup.ts")],
+    setupFiles: ["./tests/setup.ts"],
     include: [
-      "apps/web/tests/unit/**/*.{test,spec}.{ts,tsx}",
-      "apps/web/tests/meta/**/*.{test,spec}.{ts,tsx}",
-      "apps/web/tests/contract/**/*.{test,spec}.{ts,tsx}",
-      "apps/web/tests/ports/**/*.{test,spec}.{ts,tsx}",
+      "tests/unit/**/*.{test,spec}.{ts,tsx}",
+      "tests/meta/**/*.{test,spec}.{ts,tsx}",
+      "tests/contract/**/*.{test,spec}.{ts,tsx}",
+      "tests/ports/**/*.{test,spec}.{ts,tsx}",
+      "tests/security/**/*.{test,spec}.{ts,tsx}",
     ],
     exclude: ["node_modules", "dist", ".next"],
     testTimeout: 30_000,
@@ -43,7 +42,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@tests": path.resolve(__dirname, "../../tests"),
+      "@tests": path.resolve(__dirname, "./tests"),
     },
   },
 });

@@ -36,6 +36,7 @@ export const KNOWN_FILE = {
   content: [
     "// Example file for testing",
     "export function greet(name: string): string {",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional template literal in test fixture string
     "  return `Hello, ${name}!`;",
     "}",
     "",

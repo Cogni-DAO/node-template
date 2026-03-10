@@ -29,7 +29,7 @@ expand(env);
 
 export default defineConfig({
   root: __dirname,
-  plugins: [tsconfigPaths({ projects: ["./tsconfig.app.json"] })],
+  plugins: [tsconfigPaths({ projects: ["./tsconfig.test.json"] })],
   test: {
     include: ["tests/component/**/*.int.test.ts"],
     environment: "node",
@@ -39,7 +39,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@tests": path.resolve(__dirname, "../../tests"),
+      "@tests": path.resolve(__dirname, "./tests"),
     },
   },
 });
