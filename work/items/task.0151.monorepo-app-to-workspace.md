@@ -2,7 +2,7 @@
 id: task.0151
 type: task
 title: "Monorepo re-architecture: app to apps/web, platform/ to infra/ + scripts/"
-status: needs_merge
+status: needs_implement
 priority: 0
 rank: 1
 estimate: 5
@@ -15,7 +15,7 @@ project: proj.cicd-services-gitops
 branch: feat/gitops-foundation
 pr: https://github.com/Cogni-DAO/node-template/pull/547
 reviewer:
-revision: 2
+revision: 3
 blocked_by:
 deploy_verified: false
 created: 2026-03-10
@@ -269,9 +269,27 @@ pnpm check:full
 - `infra/compose/runtime/configs/AGENTS.md:18` link off by one level
 - `scripts/check-root-layout.ts` still allows `platform` in root entries (L61, L118) — remove stale entry
 
+### R3 — Full Branch Review (2026-03-11)
+
+**Blocking (must fix — CI will fail):**
+
+1. **`scripts/ci/build.sh:89,100`** — Both `docker build ... .` use default `./Dockerfile` which no longer exists. Add `-f apps/web/Dockerfile` to both commands.
+
+2. **`scripts/ci/compute_migrator_fingerprint.sh:15-16,19`** — Three stale paths: `src/shared/db` → `apps/web/src/shared/db`, `src/adapters/server/db/migrations` → `apps/web/src/adapters/server/db/migrations`, `Dockerfile` → `apps/web/Dockerfile`. Script exits 1 on every run.
+
+3. **`.github/workflows/ci.yaml:362,380`** — `docker/build-push-action` steps for app and migrator use `context: .` but no `file:` parameter. Docker defaults to `./Dockerfile` (missing). Add `file: ./apps/web/Dockerfile` to both.
+
+4. **`tests/arch/entrypoints-boundaries.spec.ts:25`** — Regex `^(src\/[^/]+)` won't match `apps/web/src/...` probe paths. Fix: `/^(apps\/web\/src\/[^/]+)/`.
+
+**Non-blocking:**
+
+- `infra/compose/runtime/docker-compose.yml:428,486-487` — Production compose has stale `./sandbox-proxy/` and `./openclaw/` volume mounts (pre-existing on staging, not a regression). Dev compose has correct paths.
+- `biome/base.json:120` — `apps/web/src/infra/**` doesn't exist (was `src/infra/**` on staging, also phantom). Harmless override.
+- `.dockerignore:53` — `src/**/__arch_probes__` should be `apps/web/src/**/__arch_probes__`. Minor context size issue.
+
 ## PR / Links
 
--
+- https://github.com/Cogni-DAO/node-template/pull/547
 
 ## Attribution
 
