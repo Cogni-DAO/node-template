@@ -22,7 +22,7 @@ function runDepCruise(probeFilesOrDirs: string[]): {
 } {
   // Extract caller layers from probe paths
   const callerLayers = probeFilesOrDirs.map((path) => {
-    const match = path.match(/^(src\/[^/]+)/);
+    const match = path.match(/^(apps\/web\/src\/[^/]+)/);
     return match ? match[1] : path;
   });
 

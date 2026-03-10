@@ -12,11 +12,11 @@ set -euo pipefail
 # Migrator input paths (order matters for stable hashing)
 MIGRATOR_INPUTS=(
     "drizzle.config.ts"
-    "src/shared/db"
-    "src/adapters/server/db/migrations"
+    "apps/web/src/shared/db"
+    "apps/web/src/adapters/server/db/migrations"
     "package.json"
     "pnpm-lock.yaml"
-    "Dockerfile"
+    "apps/web/Dockerfile"
 )
 
 # Create concatenated hash of all inputs
