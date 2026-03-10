@@ -325,6 +325,7 @@ pnpm check
 
 - Project: proj.agentic-project-management
 - Depends on: task.0149
+- Handoff: [handoff](../handoffs/task.0151.handoff.md)
 
 ## Attribution
 
