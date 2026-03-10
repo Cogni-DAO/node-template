@@ -2,7 +2,7 @@
 id: task.0151
 type: task
 title: "Monorepo re-architecture: app to apps/web, platform/ to infra/ + scripts/"
-status: needs_implement
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 5
@@ -19,7 +19,7 @@ revision: 2
 blocked_by:
 deploy_verified: false
 created: 2026-03-10
-updated: 2026-03-11
+updated: 2026-03-12
 labels: [architecture, monorepo, infra]
 external_refs:
 ---
