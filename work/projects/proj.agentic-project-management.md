@@ -60,17 +60,12 @@ The port's `SubjectRef` must align with actor kinds so that when the `actors` ta
 
 **Goal:** All agent work-item access goes through a typed port. Markdown remains source of truth. Zero external dependencies.
 
-| Deliverable                                                                               | Status      | Est | Work Item             |
-| ----------------------------------------------------------------------------------------- | ----------- | --- | --------------------- |
-| `WorkItemQueryPort` interface in `packages/work-items/`                                   | Not Started | 1   | task.0149             |
-| `WorkItemCommandPort` interface with optimistic concurrency                               | Not Started | 2   | task.0149             |
-| `SubjectRef` type aligned with identity-model actor kinds                                 | Not Started | 1   | task.0149             |
-| `ExternalRef` type (system + kind + url/id)                                               | Not Started | 0   | task.0149             |
-| `WorkRelation` type with typed relation kinds                                             | Not Started | 0   | task.0149             |
-| `MarkdownWorkItemAdapter` implementing both ports                                         | Not Started | 3   | (create at impl)      |
-| Migrate `/implement`, `/triage`, `/closeout`, `/review-implementation` skills to use port | Not Started | 2   | (create at impl)      |
-| Centralized ID allocation behind `create()`                                               | Not Started | 0   | (included in adapter) |
-| Contract tests for port invariants                                                        | Not Started | 1   | (create at impl)      |
+| Deliverable                                                                       | Status      | Est | Work Item                |
+| --------------------------------------------------------------------------------- | ----------- | --- | ------------------------ |
+| `packages/work-items/` — port interfaces, domain types, status transition table   | Not Started | 2   | task.0149                |
+| `packages/work-items-md/` — MarkdownWorkItemAdapter + contract tests              | Not Started | 3   | task.0151                |
+| Migrate `/triage` + `/implement` skills to use port (proof-of-concept)            | Not Started | 2   | task.0152                |
+| Migrate remaining skills (`/closeout`, `/review-implementation`, `/bug`, `/idea`) | Not Started | 2   | (create after task.0152) |
 
 ### Walk (P1) — Relations, External Refs, PR Linking
 
@@ -138,15 +133,14 @@ type ExternalRef = {
 };
 
 // ── Relations ─────────────────────────────────────────
+// Canonical direction only — store "blocks", derive "blocked_by" at query time.
+// This avoids double-storage and consistency drift.
 
 type RelationType =
-  | "blocks"
-  | "blocked_by"
-  | "depends_on"
-  | "parent_of"
-  | "child_of"
-  | "relates_to"
-  | "duplicates";
+  | "blocks" // A blocks B (inverse: blocked_by)
+  | "parent_of" // A is parent of B (inverse: child_of)
+  | "relates_to" // symmetric
+  | "duplicates"; // A duplicates B
 
 type WorkRelation = {
   fromId: WorkItemId;
@@ -154,13 +148,27 @@ type WorkRelation = {
   type: RelationType;
 };
 
+// ── Status ────────────────────────────────────────────
+// From docs/spec/development-lifecycle.md — the port enforces these transitions.
+
+type WorkItemStatus =
+  | "needs_triage"
+  | "needs_research"
+  | "needs_design"
+  | "needs_implement"
+  | "needs_closeout"
+  | "needs_merge"
+  | "done"
+  | "blocked"
+  | "cancelled";
+
 // ── Work item ─────────────────────────────────────────
 
 type WorkItem = {
   id: WorkItemId;
   type: "task" | "bug" | "story" | "spike" | "subtask";
   title: string;
-  status: string; // status enum from development-lifecycle.md
+  status: WorkItemStatus;
   priority?: number;
   rank?: number;
   estimate?: number;
@@ -171,8 +179,17 @@ type WorkItem = {
   assignees: SubjectRef[];
   externalRefs: ExternalRef[];
   labels: string[];
-  fields: Record<string, unknown>; // remaining frontmatter (spec_refs, etc.)
-  revision: Revision;
+  specRefs: string[]; // linked spec IDs (e.g., ["identity-model-spec"])
+  branch?: string; // git branch name
+  pr?: string; // PR URL or number
+  reviewer?: string;
+  revision: number; // incremented on review rejection
+  blockedBy?: WorkItemId; // required when status=blocked
+  deployVerified: boolean;
+  // Governance runner locking
+  claimedByRun?: string; // run ID holding the lock
+  claimedAt?: string; // ISO timestamp
+  lastCommand?: string; // last /command that acted on this item
   createdAt: string;
   updatedAt: string;
 };
@@ -205,13 +222,14 @@ interface WorkItemQueryPort {
 ```typescript
 interface WorkItemCommandPort {
   create(input: {
-    type: string;
+    type: WorkItem["type"];
     title: string;
     summary?: string;
     outcome?: string;
+    specRefs?: string[];
     projectId?: WorkItemId;
     parentId?: WorkItemId;
-    fields?: Record<string, unknown>;
+    labels?: string[];
     assignees?: SubjectRef[];
   }): Promise<WorkItem>;
 
@@ -221,17 +239,30 @@ interface WorkItemCommandPort {
     set?: Partial<
       Pick<
         WorkItem,
-        "title" | "summary" | "outcome" | "estimate" | "priority" | "rank"
+        | "title"
+        | "summary"
+        | "outcome"
+        | "estimate"
+        | "priority"
+        | "rank"
+        | "specRefs"
+        | "labels"
+        | "branch"
+        | "pr"
+        | "reviewer"
       >
     >;
-    fields?: Record<string, unknown>;
   }): Promise<WorkItem>;
 
+  // Validates against the state machine in development-lifecycle.md.
+  // Throws if the transition is invalid (e.g., needs_triage → done for a task).
+  // Increments revision when transitioning from needs_merge → needs_implement.
   transitionStatus(input: {
     id: WorkItemId;
     expectedRevision: Revision;
-    toStatus: string;
-    reason?: string;
+    toStatus: WorkItemStatus;
+    reason?: string; // required when toStatus=blocked
+    blockedBy?: WorkItemId; // required when toStatus=blocked
   }): Promise<WorkItem>;
 
   setAssignees(input: {
@@ -240,6 +271,8 @@ interface WorkItemCommandPort {
     assignees: SubjectRef[];
   }): Promise<WorkItem>;
 
+  // Relations use canonical direction only (blocks, parent_of, relates_to, duplicates).
+  // Inverse queries (blocked_by, child_of) are derived at read time.
   upsertRelation(rel: WorkRelation): Promise<void>;
   removeRelation(rel: {
     fromId: WorkItemId;
@@ -251,6 +284,18 @@ interface WorkItemCommandPort {
     id: WorkItemId;
     expectedRevision: Revision;
     ref: ExternalRef;
+  }): Promise<WorkItem>;
+
+  // Governance runner locking — claim/release for concurrent dispatch safety.
+  claim(input: {
+    id: WorkItemId;
+    runId: string;
+    command: string;
+  }): Promise<WorkItem>;
+
+  release(input: {
+    id: WorkItemId;
+    runId: string; // must match current claimedByRun
   }): Promise<WorkItem>;
 }
 ```
@@ -304,3 +349,11 @@ interface WorkItemCommandPort {
 **SubjectRef vs ActorId:** P0 uses `SubjectRef` (kind + string ID) because the `actors` table doesn't exist yet. When story.0117 lands, `SubjectRef` resolves to `actor_id` FK. The port contract doesn't change — only the adapter's resolution logic.
 
 **Frontmatter evolution:** Relations and external_refs are new structured frontmatter fields. The validator needs updating to accept them. Existing items without these fields are valid (empty defaults).
+
+**No `fields` bag:** Every frontmatter field with defined semantics (`branch`, `pr`, `revision`, `blocked_by`, `deploy_verified`, `claimed_by_run`, etc.) is modeled as a typed property on `WorkItem`. There is no `Record<string, unknown>` escape hatch — if a field matters, it's in the type. Unknown frontmatter keys are preserved by the markdown adapter on write (round-trip safety) but not exposed through the port.
+
+**Canonical relation direction:** Store only `blocks`, `parent_of`, `relates_to`, `duplicates`. Derive `blocked_by`, `child_of` at query time by reversing `fromId`/`toId`. This avoids double-storage, consistency drift, and halves the relation write surface. The existing `blocked_by` CSV in frontmatter maps to a `blocks` relation stored on the blocking item.
+
+**SubjectRef vs AttributionClaimant:** `SubjectRef` (assignment) and `AttributionClaimant` (credit) are separate concerns with similar shapes. `SubjectRef` models who is working on an item; `AttributionClaimant` models who earned credit. They may converge when the `actors` table unifies identity, but forcing convergence now would couple work management to the attribution pipeline. Keep separate, document the parallel.
+
+**Cursor pagination:** The `WorkQuery.cursor` field exists in the interface for future adapters (DB, OpenProject). The markdown adapter ignores it and returns all matching items — documenting this explicitly. No cursor logic is built for v0.
