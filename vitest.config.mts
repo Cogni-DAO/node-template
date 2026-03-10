@@ -51,6 +51,8 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     include: [
       "tests/**/*.{test,spec}.{ts,tsx}",
+      "apps/web/tests/unit/**/*.{test,spec}.{ts,tsx}",
+      "apps/web/tests/meta/**/*.{test,spec}.{ts,tsx}",
       "packages/*/tests/**/*.{test,spec}.{ts,tsx}",
       "services/*/tests/**/*.{test,spec}.{ts,tsx}",
     ],
@@ -61,9 +63,9 @@ export default defineConfig({
       "e2e",
       "tests/_fakes/**",
       "tests/_fixtures/**",
-      "tests/component/**",
-      "tests/external/**",
-      "tests/stack/**",
+      "apps/web/tests/component/**",
+      "apps/web/tests/external/**",
+      "apps/web/tests/stack/**",
     ],
     coverage: {
       enabled: false,

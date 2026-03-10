@@ -28,7 +28,7 @@ expand(env);
 // Repo access: tests/setup.ts provides fallback for COGNI_REPO_PATH
 
 export default defineConfig({
-  plugins: [tsconfigPaths({ projects: ["./tsconfig.base.json"] })],
+  plugins: [tsconfigPaths({ projects: ["./tsconfig.app.json"] })],
   test: {
     include: ["tests/component/**/*.int.test.ts"],
     environment: "node",

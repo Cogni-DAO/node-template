@@ -58,12 +58,14 @@ A complete set of deployment manifests, IaC modules, and Argo CD configuration �
 **Solution**: Kustomize (built into kubectl, no extra tools) for manifest management. OpenTofu extending existing Cherry Servers provider for k3s VM provisioning. Argo CD for GitOps reconciliation. All pure infrastructure files under `infra/cd/` and `infra/`.
 
 **Reuses**:
+
 - Existing Cherry Servers OpenTofu provider (`infra/tofu/cherry/base/`)
 - Existing cloud-init bootstrap pattern (`bootstrap.yaml`)
 - Existing scheduler-worker service contract (health endpoints, env schema, image tagging)
 - Existing GHCR image registry and tagging strategy (`{env}-{sha}-{service}`)
 
 **Rejected alternatives**:
+
 - **Helm**: More powerful but more complex. Kustomize's overlay model is simpler for our use case (same base, env-specific patches). No template language to debug. Built into kubectl.
 - **Separate `cogni-deployments` repo**: Adds repo management overhead. Monorepo `infra/cd/` directory works for now — Argo CD can watch a subdirectory. Extract when the need arises (multiple teams, access control).
 - **Full k8s (EKS/GKE)**: Overkill for pre-users. k3s gives us full K8s API on a single node with ~512MB RAM overhead. Same manifests work on full k8s later.
@@ -79,6 +81,7 @@ A complete set of deployment manifests, IaC modules, and Argo CD configuration �
 **Phase C (future, P2)**: Migrate remaining services (app, litellm, temporal, postgres) to k3s. Retire Docker Compose entirely.
 
 **Scheduler-worker goes first** because it's:
+
 - Stateless (no volumes to migrate)
 - Has health endpoints (`/livez`, `/readyz`)
 - Has Zod-validated env (fail-fast on misconfiguration)
@@ -88,6 +91,7 @@ A complete set of deployment manifests, IaC modules, and Argo CD configuration �
 ### Network Connectivity (Phase B)
 
 During the transition period (scheduler-worker in k3s, everything else in Compose), the k3s pod needs to reach:
+
 - **Temporal** (gRPC port 7233)
 - **PostgreSQL** (port 5432)
 - **App** (HTTP port 3000, for `APP_BASE_URL`)
@@ -153,34 +157,34 @@ Derived from current `docker-compose.yml` + `services/scheduler-worker/src/boots
 
 **ConfigMap** (non-secret, env-specific values in overlays):
 
-| Key | Base Value | Overlay Override |
-|-----|-----------|-----------------|
-| `TEMPORAL_ADDRESS` | — | `temporal:7233` (selectorless Service, see below) |
-| `TEMPORAL_NAMESPACE` | — | `cogni-production` / `cogni-staging` |
-| `TEMPORAL_TASK_QUEUE` | `scheduler-tasks` | — |
-| `APP_BASE_URL` | — | `http://app:3000` (selectorless Service) |
-| `LOG_LEVEL` | `info` | — |
-| `SERVICE_NAME` | `scheduler-worker` | — |
-| `HEALTH_PORT` | `9000` | — |
-| `IMAGE_DIGEST` | — | Set to image digest from overlay (used by `/version` endpoint) |
-| `GH_REVIEW_APP_ID` | — | Optional — GitHub App ID (not secret, public identifier) |
-| `GH_REPOS` | — | Optional — comma-separated repos (not secret) |
+| Key                   | Base Value         | Overlay Override                                               |
+| --------------------- | ------------------ | -------------------------------------------------------------- |
+| `TEMPORAL_ADDRESS`    | —                  | `temporal:7233` (selectorless Service, see below)              |
+| `TEMPORAL_NAMESPACE`  | —                  | `cogni-production` / `cogni-staging`                           |
+| `TEMPORAL_TASK_QUEUE` | `scheduler-tasks`  | —                                                              |
+| `APP_BASE_URL`        | —                  | `http://app:3000` (selectorless Service)                       |
+| `LOG_LEVEL`           | `info`             | —                                                              |
+| `SERVICE_NAME`        | `scheduler-worker` | —                                                              |
+| `HEALTH_PORT`         | `9000`             | —                                                              |
+| `IMAGE_DIGEST`        | —                  | Set to image digest from overlay (used by `/version` endpoint) |
+| `GH_REVIEW_APP_ID`    | —                  | Optional — GitHub App ID (not secret, public identifier)       |
+| `GH_REPOS`            | —                  | Optional — comma-separated repos (not secret)                  |
 
 **Secret** (SOPS-encrypted in repo, decrypted at apply time):
 
-| Key | Source |
-|-----|--------|
-| `DATABASE_URL` | Postgres DSN (service role, BYPASSRLS) |
-| `SCHEDULER_API_TOKEN` | min 32 chars, internal API auth |
+| Key                                | Source                                                           |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| `DATABASE_URL`                     | Postgres DSN (service role, BYPASSRLS)                           |
+| `SCHEDULER_API_TOKEN`              | min 32 chars, internal API auth                                  |
 | `GH_REVIEW_APP_PRIVATE_KEY_BASE64` | Optional — GitHub App private key (only truly secret GitHub var) |
 
 **Selectorless Service + EndpointSlice** (transition period — scheduler-worker in k3s, deps in Compose):
 
-| K8s Service Name | Port | Target | Purpose |
-|------------------|------|--------|---------|
-| `temporal` | 7233 | `<compose-vm-ip>:7233` | gRPC connectivity |
-| `postgres` | 5432 | `<compose-vm-ip>:5432` | DB connectivity |
-| `app` | 3000 | `<compose-vm-ip>:3000` | HTTP connectivity |
+| K8s Service Name | Port | Target                 | Purpose           |
+| ---------------- | ---- | ---------------------- | ----------------- |
+| `temporal`       | 7233 | `<compose-vm-ip>:7233` | gRPC connectivity |
+| `postgres`       | 5432 | `<compose-vm-ip>:5432` | DB connectivity   |
+| `app`            | 3000 | `<compose-vm-ip>:3000` | HTTP connectivity |
 
 > **R1: Why selectorless Service + EndpointSlice, not ExternalName or legacy Endpoints.** ExternalName returns a CNAME — DNS-only, can't remap ports. Legacy `kind: Endpoints` is deprecated in K8s v1.33+. Selectorless Service + EndpointSlice is the current K8s-documented pattern for services without pod selectors. Overlay patches the IP per environment.
 
@@ -204,7 +208,7 @@ metadata:
     kubernetes.io/service-name: temporal
 addressType: IPv4
 endpoints:
-  - addresses: ["10.0.0.1"]  # placeholder — patched by overlay
+  - addresses: ["10.0.0.1"] # placeholder — patched by overlay
 ports:
   - port: 7233
     protocol: TCP
@@ -231,7 +235,7 @@ spec:
     spec:
       containers:
         - name: scheduler-worker
-          image: ghcr.io/cogni-dao/cogni-template  # overridden by overlay
+          image: ghcr.io/cogni-dao/cogni-template # overridden by overlay
           ports:
             - containerPort: 9000
               name: health
@@ -288,7 +292,7 @@ configs:
   "ghcr.io":
     auth:
       username: cogni-deploy
-      password: "${ghcr_deploy_token}"  # from OpenTofu variable
+      password: "${ghcr_deploy_token}" # from OpenTofu variable
 ```
 
 ### Argo CD Application Pattern
@@ -307,7 +311,7 @@ spec:
   source:
     repoURL: https://github.com/cogni-dao/cogni-template.git
     path: infra/cd/argocd/applications
-    targetRevision: staging  # or main for production
+    targetRevision: staging # or main for production
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
@@ -340,26 +344,26 @@ This task creates the manifests. CI integration (auto-PR on image push) is a fol
 Findings from two rounds of `/review-design` applied to this design:
 
 **R1 review:**
+
 1. **R1 — Selectorless Service + EndpointSlice**: ExternalName does DNS-only (CNAME), can't remap ports. Legacy `kind: Endpoints` deprecated in K8s v1.33+. Using selectorless Service + EndpointSlice (current K8s-documented pattern). _(Applied above.)_
 2. **R2 — ksops as sidecar CMP**: Legacy `configManagementPlugins` in argocd-cm removed in Argo CD 2.8. ksops runs as repo-server sidecar container. _(Applied above.)_
 3. **R3 — Non-secret env vars moved to ConfigMap**: `GH_REVIEW_APP_ID` and `GH_REPOS` are not sensitive. Only `GH_REVIEW_APP_PRIVATE_KEY_BASE64` stays in Secret. _(Applied above.)_
 4. **R4 — IMAGE_DIGEST added to ConfigMap**: Used by `/version` endpoint. Set in overlay to match the image digest. _(Applied above.)_
 5. **R5 — Cloud-init scope clarified**: `bootstrap-k3s.yaml` includes Argo CD install commands but they're exercised in task.0149, not this task. _(Applied above.)_
 
-**R2 review:**
-6. **R6 — GHCR private registry auth**: k3s `registries.yaml` provides node-level auth for private GHCR. Simpler than per-Deployment `imagePullSecrets` for single-node. _(Applied above.)_
-7. **R7 — Non-HA Argo install labeled explicitly**: Non-HA is correct for single-node crawl; HA install is a P2 concern. _(Applied above.)_
-8. **R8 — Multi-service scope**: Directory structure and app-of-apps pattern designed for all services (scheduler-worker, app, litellm, temporal, postgres), not just scheduler-worker. Only scheduler-worker base is fully specified in this task. _(Applied above.)_
+**R2 review:** 6. **R6 — GHCR private registry auth**: k3s `registries.yaml` provides node-level auth for private GHCR. Simpler than per-Deployment `imagePullSecrets` for single-node. _(Applied above.)_ 7. **R7 — Non-HA Argo install labeled explicitly**: Non-HA is correct for single-node crawl; HA install is a P2 concern. _(Applied above.)_ 8. **R8 — Multi-service scope**: Directory structure and app-of-apps pattern designed for all services (scheduler-worker, app, litellm, temporal, postgres), not just scheduler-worker. Only scheduler-worker base is fully specified in this task. _(Applied above.)_
 
 ## Validation
 
 **Automated:**
+
 - `kubectl kustomize infra/cd/overlays/staging/` exits 0
 - `kubectl kustomize infra/cd/overlays/production/` exits 0
 - `tofu plan` in `infra/tofu/cherry/k3s/` succeeds (with mock vars)
 - All YAML files are valid
 
 **Manual:**
+
 1. Review Kustomize output matches current docker-compose scheduler-worker env config
 2. Review OpenTofu module extends cherry/base pattern correctly
 3. Review Argo CD Applications point at correct paths

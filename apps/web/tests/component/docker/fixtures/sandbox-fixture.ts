@@ -18,7 +18,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import Docker from "dockerode";
-import { afterAll, afterEach, beforeAll, expect } from "vitest";
+import { beforeAll } from "vitest";
 
 import { SandboxRunnerAdapter } from "@/adapters/server/sandbox";
 

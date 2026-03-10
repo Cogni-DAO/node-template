@@ -15,6 +15,7 @@ RUN apk add --no-cache g++ make python3
 # 1. Copy dependency manifests first (maximizes install layer caching)
 #    --parents preserves directory structure with wildcards (BuildKit feature)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --parents apps/web/package.json ./
 COPY --parents packages/*/package.json ./
 
 # Use official node dist to avoid unofficial-builds.nodejs.org flakiness
@@ -44,9 +45,9 @@ RUN pnpm packages:build
 ARG AUTH_SECRET_BUILD="build-time-placeholder-min-32-chars-xxxxxxxxxxxxxxxx"
 ENV AUTH_SECRET=${AUTH_SECRET_BUILD}
 
-# Build workspace root (Next.js app)
-RUN --mount=type=cache,id=next-cache,target=/app/.next/cache,sharing=locked \
-    pnpm -w build
+# Build the web app
+RUN --mount=type=cache,id=next-cache,target=/app/apps/web/.next/cache,sharing=locked \
+    pnpm --filter web build
 
 # Migrator – minimal image for database migrations via drizzle-kit
 FROM base AS migrator
@@ -56,8 +57,8 @@ WORKDIR /app
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/drizzle.config.ts ./
-COPY --from=builder /app/src/shared/db ./src/shared/db
-COPY --from=builder /app/src/adapters/server/db/migrations ./src/adapters/server/db/migrations
+COPY --from=builder /app/apps/web/src/shared/db ./apps/web/src/shared/db
+COPY --from=builder /app/apps/web/src/adapters/server/db/migrations ./apps/web/src/adapters/server/db/migrations
 
 # Run canonical migration script (drizzle-kit migrate)
 CMD ["pnpm", "db:migrate:container"]
@@ -79,9 +80,10 @@ ENV LOG_FORMAT=json
 LABEL org.opencontainers.image.title="cogni-template"
 
 # Copy standalone bundle (includes production dependencies)
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+# outputFileTracingRoot=../../ means standalone output mirrors monorepo structure
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 USER nextjs
 
@@ -90,4 +92,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://localhost:3000/livez || exit 1
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

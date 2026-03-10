@@ -34,15 +34,15 @@ const GIT_ENV = {
 export const KNOWN_FILE = {
   path: "src/example.ts",
   content: [
-    '// Example file for testing',
-    'export function greet(name: string): string {',
-    '  return `Hello, ${name}!`;',
-    '}',
-    '',
+    "// Example file for testing",
+    "export function greet(name: string): string {",
+    "  return `Hello, ${name}!`;",
+    "}",
+    "",
     'export const VERSION = "1.0.0";',
-    '',
-    '// End of file',
-    '',
+    "",
+    "// End of file",
+    "",
   ].join("\n"),
 };
 
@@ -81,10 +81,16 @@ export function assertBinariesAvailable(): void {
  */
 export function createTempGitRepo(): TempGitRepo {
   // Resolve symlinks (macOS: /tmp → /private/tmp) so validatePath's realpath check passes
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "repo-test-")));
+  const root = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), "repo-test-"))
+  );
 
   const git = (cmd: string) =>
-    execSync(cmd, { cwd: root, env: { ...process.env, ...GIT_ENV }, stdio: "pipe" });
+    execSync(cmd, {
+      cwd: root,
+      env: { ...process.env, ...GIT_ENV },
+      stdio: "pipe",
+    });
 
   // Init repo and write known file
   git("git init");
@@ -93,7 +99,7 @@ export function createTempGitRepo(): TempGitRepo {
   fs.writeFileSync(path.join(root, KNOWN_FILE.path), KNOWN_FILE.content);
   fs.writeFileSync(
     path.join(root, "package.json"),
-    JSON.stringify({ name: "test-repo", version: "0.0.0" }),
+    JSON.stringify({ name: "test-repo", version: "0.0.0" })
   );
 
   // Commit

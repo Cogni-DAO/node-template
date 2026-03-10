@@ -16,7 +16,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const PUBLIC_API_DIR = "src/app/api/v1/public";
+const PUBLIC_API_DIR = "apps/web/src/app/api/v1/public";
 
 /**
  * Recursively find all route.ts files under a directory.

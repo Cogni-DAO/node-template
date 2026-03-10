@@ -33,7 +33,7 @@ requireEnv("DATABASE_SERVICE_URL");
 requireEnv("TEST_BASE_URL");
 
 export default defineConfig({
-  plugins: [tsconfigPaths({ projects: ["./tsconfig.base.json"] })],
+  plugins: [tsconfigPaths({ projects: ["./tsconfig.app.json"] })],
   test: {
     include: ["tests/stack/**/*.stack.test.ts"],
     environment: "node",

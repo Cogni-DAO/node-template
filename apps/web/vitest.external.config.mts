@@ -25,7 +25,7 @@ const env = config({ path: ".env.test" });
 expand(env);
 
 export default defineConfig({
-  plugins: [tsconfigPaths({ projects: ["./tsconfig.base.json"] })],
+  plugins: [tsconfigPaths({ projects: ["./tsconfig.app.json"] })],
   test: {
     include: ["tests/external/**/*.external.test.ts"],
     environment: "node",
