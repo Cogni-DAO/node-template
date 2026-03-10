@@ -13,8 +13,8 @@ Web pages for DAO formation and node configuration workflows. Protected route gr
 
 ## Pointers
 
-- [Node Formation Spec](../../../../docs/spec/node-formation.md): P0 MVP design
-- [Chain Action Flow UI](../../../../docs/spec/chain-action-flow-ui.md): vNext reusable UI components
+- [Node Formation Spec](../../../../../../docs/spec/node-formation.md): P0 MVP design
+- [Chain Action Flow UI](../../../../../../docs/spec/chain-action-flow-ui.md): vNext reusable UI components
 
 ## Boundaries
 

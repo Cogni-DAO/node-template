@@ -13,8 +13,8 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 
 ## Pointers
 
-- [Architecture](../../docs/spec/architecture.md)
-- [UI Implementation Guide](../../docs/spec/ui-implementation.md)
+- [Architecture](../../../../docs/spec/architecture.md)
+- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
 
 ## Boundaries
 
@@ -47,7 +47,7 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 
 ## Usage
 
-**IMPORTANT: If you are making any changes to files in this directory, you must read:** [`docs/spec/ui-implementation.md`](../../docs/spec/ui-implementation.md)
+**IMPORTANT: If you are making any changes to files in this directory, you must read:** [`docs/spec/ui-implementation.md`](../../../../docs/spec/ui-implementation.md)
 
 Minimal local commands:
 

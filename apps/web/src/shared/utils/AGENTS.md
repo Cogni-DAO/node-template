@@ -13,7 +13,7 @@ Pure utility functions shared across UI and feature layers. Domain-agnostic help
 
 ## Pointers
 
-- [Root AGENTS.md](../../../AGENTS.md)
+- [Root AGENTS.md](../../../../../AGENTS.md)
 - [Shared Layer Guide](../AGENTS.md)
 
 ## Boundaries

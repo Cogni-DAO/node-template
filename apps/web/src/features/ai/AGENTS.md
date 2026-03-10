@@ -13,11 +13,11 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 ## Pointers
 
-- [Root AGENTS.md](../../../AGENTS.md)
-- [Architecture](../../../docs/spec/architecture.md)
-- [AI Setup Spec](../../../docs/spec/ai-setup.md) (P0/P1 checklists, invariants)
-- [LangGraph Server](../../../docs/spec/langgraph-server.md) (external runtime, adapter implementation)
-- [LangGraph Patterns](../../../docs/spec/langgraph-patterns.md) (graph patterns, anti-patterns)
+- [Root AGENTS.md](../../../../../AGENTS.md)
+- [Architecture](../../../../../docs/spec/architecture.md)
+- [AI Setup Spec](../../../../../docs/spec/ai-setup.md) (P0/P1 checklists, invariants)
+- [LangGraph Server](../../../../../docs/spec/langgraph-server.md) (external runtime, adapter implementation)
+- [LangGraph Patterns](../../../../../docs/spec/langgraph-patterns.md) (graph patterns, anti-patterns)
 - [Chat subfeature](./chat/AGENTS.md)
 - **Related:** [../payments/](../payments/) (credits), [../../contracts/](../../contracts/) (ai.completion.v1, ai.chat.v1, ai.models.v1)
 
@@ -58,7 +58,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 - **Subdirectories:**
   - Note: `runners/` and `graphs/` DELETED — logic absorbed by `LangGraphInProcProvider` in adapters layer.
   - Note: Tool contracts live in `@cogni/ai-tools` package (per TOOLS_IN_PACKAGES invariant).
-  - Note: LangGraph graphs live in `packages/langgraph-graphs/` — provider wires them via catalog. See [LangGraph Patterns](../../../docs/spec/langgraph-patterns.md).
+  - Note: LangGraph graphs live in `packages/langgraph-graphs/` — provider wires them via catalog. See [LangGraph Patterns](../../../../../docs/spec/langgraph-patterns.md).
   - `services/` - AI service modules:
     - `completion.ts` - Orchestrator with internal DRY helpers (execute, executeStream)
     - `message-preparation.ts` - Message filtering, validation, fallbackPromptHash

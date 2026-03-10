@@ -13,7 +13,7 @@ Cross-cutting observability concerns: structured logging, request context, and e
 
 ## Pointers
 
-- [Observability](../../../docs/spec/observability.md) - Observability system documentation
+- [Observability](../../../../../docs/spec/observability.md) - Observability system documentation
 - [Event Registry](events/index.ts) - EVENT_NAMES as const (single source of truth)
 - [Server Logger](server/logger.ts) - Pino factory with sync mode
 - [Client Logger](client/logger.ts) - Browser console logger with event registry

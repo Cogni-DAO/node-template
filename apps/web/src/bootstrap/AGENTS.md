@@ -14,9 +14,9 @@ System setup installers were moved to `scripts/bootstrap/` and are out of scope 
 
 ## Pointers
 
-- [Root AGENTS.md](../../AGENTS.md)
-- [Architecture](../../docs/spec/architecture.md)
-- [Platform bootstrap (installers)](../../scripts/bootstrap/README.md)
+- [Root AGENTS.md](../../../../AGENTS.md)
+- [Architecture](../../../../docs/spec/architecture.md)
+- [Platform bootstrap (installers)](../../../../scripts/bootstrap/README.md)
 
 ## Boundaries
 

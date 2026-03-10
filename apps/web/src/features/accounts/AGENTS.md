@@ -15,7 +15,7 @@ Account error translation and billing safety helpers that map port-level errors 
 
 - [AccountService port](../../ports/accounts.port.ts)
 - [Core accounts domain](../../core/accounts/)
-- [Admin endpoint contracts](../../contracts/admin.accounts.*.contract.ts)
+- [Endpoint contracts](../../contracts/)
 
 ## Boundaries
 

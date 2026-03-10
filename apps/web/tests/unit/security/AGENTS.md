@@ -13,8 +13,8 @@ Security-focused unit tests that enforce architectural invariants and prevent re
 
 ## Pointers
 
-- [Root AGENTS.md](../../../AGENTS.md)
-- [Security Spec](../../../docs/spec/security-auth.md)
+- [Root AGENTS.md](../../../../../AGENTS.md)
+- [Security Spec](../../../../../docs/spec/security-auth.md)
 
 ## Boundaries
 

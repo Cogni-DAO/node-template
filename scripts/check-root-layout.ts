@@ -58,7 +58,7 @@ const REQUIRED_PATHS: PathRequirement[] = [
   { anyOf: ["apps/web/src/shared"], kind: "dir" },
   { anyOf: ["apps/web/src/bootstrap"], kind: "dir" },
   { anyOf: ["apps/web/public"], kind: "dir" },
-  { anyOf: ["platform", "infra"], kind: "dir" },
+  { anyOf: ["infra"], kind: "dir" },
   { anyOf: ["packages"], kind: "dir" },
   { anyOf: ["apps"], kind: "dir" },
 ];
@@ -115,7 +115,6 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "infra",
   "package.json",
   "packages",
-  "platform",
   "playwright.config.mjs",
   "playwright.config.ts",
   "pnpm-lock.yaml",

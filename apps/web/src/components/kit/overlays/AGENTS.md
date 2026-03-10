@@ -6,7 +6,7 @@
 
 - **Owners:** @derek @core-dev
 - **Status:** stable
-- **Parent:** [components/kit](../AGENTS.md)
+- **Parent:** [components/kit](../../../AGENTS.md)
 
 ## Purpose
 
@@ -14,8 +14,8 @@ Reusable kit components for overlay UI patterns including dialogs, modals, sheet
 
 ## Pointers
 
-- [Parent: Kit Components](../AGENTS.md)
-- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
+- [Parent: Kit Components](../../../AGENTS.md)
+- [UI Implementation Guide](../../../../../../docs/spec/ui-implementation.md)
 - **Related:** [../data-display/](../data-display/) (ScrollArea used in Dialog)
 
 ## Boundaries

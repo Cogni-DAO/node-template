@@ -13,8 +13,8 @@ Unit tests for pure domain logic with no external dependencies.
 
 ## Pointers
 
-- [Root AGENTS.md](../../../AGENTS.md)
-- [Architecture](../../../docs/spec/architecture.md)
+- [Root AGENTS.md](../../../../../AGENTS.md)
+- [Architecture](../../../../../docs/spec/architecture.md)
 
 ## Boundaries
 

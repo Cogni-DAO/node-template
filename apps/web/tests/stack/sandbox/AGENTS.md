@@ -13,7 +13,7 @@ Stack tests for sandbox P0.5, P0.5a, and OpenClaw gateway. Proves socket bridge,
 
 ## Pointers
 
-- [Sandbox Spec](../../../docs/spec/sandboxed-agents.md)
+- [Sandbox Spec](../../../../../docs/spec/sandboxed-agents.md)
 - [Sandbox Adapter](../../../src/adapters/server/sandbox/)
 - [Shared Fixtures](../../_fixtures/sandbox/fixtures.ts)
 

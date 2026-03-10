@@ -13,10 +13,9 @@ Presentational UI components for USDC payment flow. Displays payment button, mod
 
 ## Pointers
 
-- [Root AGENTS.md](../../../../AGENTS.md)
-- [Payments Design](../../../../docs/spec/payments-design.md)
-- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
-- [Payment Flow Redesign Plan](~/.claude/plans/floating-stirring-trinket.md)
+- [Root AGENTS.md](../../../../../../AGENTS.md)
+- [Payments Design](../../../../../../docs/spec/payments-design.md)
+- [UI Implementation Guide](../../../../../../docs/spec/ui-implementation.md)
 
 ## Boundaries
 

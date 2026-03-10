@@ -13,7 +13,7 @@ Theme switching UI components. Provides SheetThemeToggle for mobile navigation a
 
 ## Pointers
 
-- [Root AGENTS.md](../../../../AGENTS.md)
+- [Root AGENTS.md](../../../../../../AGENTS.md)
 - [ModeToggle](../inputs/ModeToggle.tsx) - Dropdown-based theme toggle for desktop
 
 ## Boundaries

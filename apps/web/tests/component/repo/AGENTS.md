@@ -14,8 +14,8 @@ Component tests for RipgrepAdapter, GitLsFilesAdapter, and Brain repo capability
 ## Pointers
 
 - [RipgrepAdapter source](../../../src/adapters/server/repo/ripgrep.adapter.ts)
-- [RepoCapability interface](../../../packages/ai-tools/src/capabilities/repo.ts)
-- [COGNI_BRAIN_SPEC](../../../docs/spec/cogni-brain.md)
+- [RepoCapability interface](../../../../../packages/ai-tools/src/capabilities/repo.ts)
+- [COGNI_BRAIN_SPEC](../../../../../docs/spec/cogni-brain.md)
 
 ## Boundaries
 

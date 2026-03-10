@@ -13,9 +13,9 @@ Governance feature slice — schedule sync, governance status dashboard, claiman
 
 ## Pointers
 
-- [Governance Scheduling Spec](../../../docs/spec/governance-scheduling.md)
-- [Attribution Ledger Spec](../../../docs/spec/attribution-ledger.md)
-- [Repo Spec Config](../../../.cogni/repo-spec.yaml)
+- [Governance Scheduling Spec](../../../../../docs/spec/governance-scheduling.md)
+- [Attribution Ledger Spec](../../../../../docs/spec/attribution-ledger.md)
+- [Repo Spec Config](../../../../../.cogni/repo-spec.yaml)
 
 ## Boundaries
 

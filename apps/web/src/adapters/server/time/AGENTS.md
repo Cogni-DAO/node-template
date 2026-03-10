@@ -14,7 +14,7 @@ System clock implementations for timestamp generation in production environments
 ## Pointers
 
 - [Clock port](../../../ports/clock.port.ts)
-- [FakeClock test double](../../test/time/)
+- [FakeClock test double](../../test/)
 
 ## Boundaries
 

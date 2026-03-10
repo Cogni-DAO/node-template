@@ -14,7 +14,7 @@ Shared authentication types and primitives used across app layer and adapters. P
 ## Pointers
 
 - [Root auth module](../../auth.ts)
-- [Security & Auth Spec](../../../docs/spec/security-auth.md)
+- [Security & Auth Spec](../../../../../docs/spec/security-auth.md)
 - [session.ts](./session.ts) - Session type definitions
 
 ## Boundaries

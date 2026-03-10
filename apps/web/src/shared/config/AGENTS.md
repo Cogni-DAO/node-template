@@ -14,7 +14,7 @@ Server-only thin wrapper over `@cogni/repo-spec`. Handles file I/O, caching, and
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
-- [.cogni/repo-spec.yaml](../../.cogni/repo-spec.yaml)
+- [.cogni/repo-spec.yaml](../../../../../.cogni/repo-spec.yaml)
 
 ## Boundaries
 

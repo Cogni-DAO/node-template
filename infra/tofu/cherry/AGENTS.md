@@ -14,7 +14,6 @@ Cherry Servers cloud provider configurations split between immutable VM provisio
 ## Pointers
 
 - [base/](base/): VM provisioning and static bootstrap
-- [app/](app/): SSH-based app deployment and health gates
 
 ## Boundaries
 

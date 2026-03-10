@@ -13,8 +13,8 @@ CI/CD automation scripts and configuration documentation for multiple pipeline s
 
 ## Pointers
 
-- [scripts/](scripts/): Provider-agnostic build/push/deploy scripts
-- [github/](github/): GitHub Actions documentation and environment mapping
+- [build.sh](build.sh): Build Docker images
+- [deploy.sh](deploy.sh): Deploy to infrastructure
 
 ## Boundaries
 

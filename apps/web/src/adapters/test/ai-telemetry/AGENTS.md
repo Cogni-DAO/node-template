@@ -13,9 +13,9 @@ In-memory test doubles for AI telemetry ports. Records invocations for test asse
 
 ## Pointers
 
-- [Root AGENTS.md](../../../../AGENTS.md)
+- [Root AGENTS.md](../../../../../../AGENTS.md)
 - [Parent test adapters AGENTS.md](../AGENTS.md)
-- [AI Setup](../../../../docs/spec/ai-setup.md)
+- [AI Setup](../../../../../../docs/spec/ai-setup.md)
 
 ## Boundaries
 

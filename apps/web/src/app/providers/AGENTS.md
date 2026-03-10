@@ -13,8 +13,8 @@ Client-side provider composition for the web UI shell. Configures React context 
 
 ## Pointers
 
-- [Root AGENTS.md](../../../AGENTS.md)
-- [Architecture](../../../docs/spec/architecture.md)
+- [Root AGENTS.md](../../../../../AGENTS.md)
+- [Architecture](../../../../../docs/spec/architecture.md)
 - [App AGENTS.md](../AGENTS.md)
 
 ## Boundaries

@@ -20,10 +20,10 @@ Sandbox adapter for AI agent execution — two modes: **ephemeral** containers (
 
 ## Pointers
 
-- [Sandbox Spec](../../../../docs/spec/sandboxed-agents.md)
-- [Sandbox Runtime](../../../../services/sandbox-runtime/)
+- [Sandbox Spec](../../../../../../docs/spec/sandboxed-agents.md)
+- [Sandbox Runtime](../../../../../../services/sandbox-runtime/)
 - [Port Definition](../../../ports/sandbox-runner.port.ts)
-- [Proxy Config Template](../../../../infra/compose/nginx.conf.template)
+- [Proxy Config Template](../../../../../../infra/compose/sandbox-proxy/nginx.conf.template)
 
 ## Boundaries
 

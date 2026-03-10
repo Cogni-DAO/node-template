@@ -13,8 +13,8 @@ Authentication UI components. Provides the wallet connection button (RainbowKit)
 
 ## Pointers
 
-- [Root AGENTS.md](../../../../AGENTS.md)
-- [Authentication](../../../../docs/spec/authentication.md)
+- [Root AGENTS.md](../../../../../../AGENTS.md)
+- [Authentication](../../../../../../docs/spec/authentication.md)
 
 ## Boundaries
 

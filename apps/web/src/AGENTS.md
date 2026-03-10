@@ -13,15 +13,14 @@ Next.js application source implementing hexagonal architecture for a fully web3-
 
 ## Pointers
 
-- [Root AGENTS.md](../AGENTS.md)
-- [Architecture](../docs/spec/architecture.md)
-- [Authentication overview](../docs/spec/authentication.md)
-- [Accounts design (billing + identity)](../docs/spec/accounts-design.md)
-- [Security & auth spec](../docs/spec/security-auth.md)
-- [Database architecture](../docs/spec/databases.md)
-- [Environment modes](../docs/spec/environments.md)
-- [Auth schema](shared/db/schema.auth.ts) - Users table with SIWE wallet identity
-- [Billing schema](shared/db/schema.billing.ts) - Billing accounts, ledger, virtual keys
+- [Root AGENTS.md](../../../AGENTS.md)
+- [Architecture](../../../docs/spec/architecture.md)
+- [Authentication overview](../../../docs/spec/authentication.md)
+- [Accounts design (billing + identity)](../../../docs/spec/accounts-design.md)
+- [Security & auth spec](../../../docs/spec/security-auth.md)
+- [Database architecture](../../../docs/spec/databases.md)
+- [Environment modes](../../../docs/spec/environments.md)
+- [DB schema](./shared/db/schema.ts) - Users, billing accounts, ledger, virtual keys
 - [Auth implementation](auth.ts) - NextAuth.js with SIWE provider
 
 ## Boundaries

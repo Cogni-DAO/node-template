@@ -6,7 +6,7 @@
 
 - **Owners:** @derek @core-dev
 - **Status:** stable
-- **Parent:** [components/kit](../AGENTS.md)
+- **Parent:** [components/kit](../../../AGENTS.md)
 
 ## Purpose
 
@@ -14,9 +14,9 @@ Reusable kit wrappers for chat UI components with vendor isolation and compositi
 
 ## Pointers
 
-- [Parent: Kit Components](../AGENTS.md)
+- [Parent: Kit Components](../../../AGENTS.md)
 - [Chat Feature](../../../features/ai/chat/AGENTS.md)
-- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
+- [UI Implementation Guide](../../../../../../docs/spec/ui-implementation.md)
 - **Related:** [../../vendor/assistant-ui/](../../vendor/assistant-ui/) (vendor primitives)
 
 ## Boundaries

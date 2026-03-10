@@ -14,10 +14,10 @@ Chat subfeature of AI — provides assistant-ui + AI SDK streaming integration f
 
 ## Pointers
 
-- [Root AGENTS.md](../../../../AGENTS.md)
+- [Root AGENTS.md](../../../../../../AGENTS.md)
 - [Parent: AI Feature](../AGENTS.md)
-- [Architecture](../../../../docs/spec/architecture.md)
-- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
+- [Architecture](../../../../../../docs/spec/architecture.md)
+- [UI Implementation Guide](../../../../../../docs/spec/ui-implementation.md)
 - **Related:** [../services/](../services/) (completion, AI logic), [../../payments/](../../payments/) (credits)
 
 ## Boundaries

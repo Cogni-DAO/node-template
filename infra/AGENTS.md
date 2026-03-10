@@ -13,8 +13,8 @@ Infrastructure as Code configurations for cloud providers, services, and deploym
 
 ## Pointers
 
-- [providers/cherry/](providers/cherry/): Cherry Servers deployment configs
-- [files/](files/): Shared templates and utility scripts
+- [tofu/cherry/](tofu/cherry/): Cherry Servers deployment configs
+- [compose/](compose/): Docker Compose service stacks
 
 ## Boundaries
 
@@ -31,7 +31,7 @@ Infrastructure as Code configurations for cloud providers, services, and deploym
 - **Exports:** none
 - **CLI (if any):** tofu commands in provider directories
 - **Env/Config keys:** `CHERRY_AUTH_TOKEN`, provider auth tokens, deployment variables
-- **Files considered API:** `providers/*/variables.tf`, `files/*.tmpl`
+- **Files considered API:** `tofu/*/variables.tf`, `compose/*/docker-compose*.yml`
 
 ## Responsibilities
 
@@ -43,8 +43,7 @@ Infrastructure as Code configurations for cloud providers, services, and deploym
 Minimal local commands:
 
 ```bash
-cd providers/cherry/base && tofu plan
-cd providers/cherry/app && tofu apply
+cd tofu/cherry/base && tofu plan
 ```
 
 ## Standards
@@ -55,7 +54,7 @@ cd providers/cherry/app && tofu apply
 
 ## Dependencies
 
-- **Internal:** Shared files/, templates, scripts
+- **Internal:** compose/, tofu/
 - **External:** OpenTofu, cloud provider APIs
 
 ## Change Protocol
@@ -66,5 +65,5 @@ cd providers/cherry/app && tofu apply
 
 ## Notes
 
-- Providers split between immutable (base/) and mutable (app/) resources
-- Shared artifacts in files/ directory for reuse
+- Providers split between immutable (base/) and mutable deployment resources
+- Compose stacks split: runtime (app + infra), edge (Caddy TLS), sandbox-proxy (nginx)

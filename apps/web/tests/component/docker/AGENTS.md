@@ -14,7 +14,7 @@ Component tests for sandbox container execution via Docker. Proves network isola
 ## Pointers
 
 - [Sandbox Adapter](../../../src/adapters/server/sandbox/)
-- [Sandbox Spec](../../../docs/spec/sandboxed-agents.md)
+- [Sandbox Spec](../../../../../docs/spec/sandboxed-agents.md)
 - [Parent Component Tests](../)
 
 ## Boundaries

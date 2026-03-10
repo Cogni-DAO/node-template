@@ -14,7 +14,7 @@ Database client singletons and tenant-scoping helpers for PostgreSQL access. App
 ## Pointers
 
 - [Database schema](../../../shared/db/schema.ts)
-- [Drizzle configuration](../../../../../drizzle.config.ts)
+- [Drizzle configuration](../../../../../../drizzle.config.ts)
 
 ## Boundaries
 

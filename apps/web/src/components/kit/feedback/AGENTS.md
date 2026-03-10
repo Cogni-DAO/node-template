@@ -6,7 +6,7 @@
 
 - **Owners:** @derekg1729
 - **Status:** stable
-- **Parent:** [components/kit](../AGENTS.md)
+- **Parent:** [components/kit](../../../AGENTS.md)
 
 ## Purpose
 
@@ -14,9 +14,9 @@ Provides reusable feedback UI components for error states, loading indicators, a
 
 ## Pointers
 
-- [Parent: Kit Components](../AGENTS.md)
-- [UI Implementation Guide](../../../../docs/spec/ui-implementation.md)
-- [Error Handling Architecture](../../../../docs/spec/error-handling.md)
+- [Parent: Kit Components](../../../AGENTS.md)
+- [UI Implementation Guide](../../../../../../docs/spec/ui-implementation.md)
+- [Error Handling Architecture](../../../../../../docs/spec/error-handling.md)
 
 ## Boundaries
 

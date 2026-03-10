@@ -14,7 +14,7 @@ Public (unauthenticated) pages wrapped in `AppHeader` + `AppFooter` shell. Serve
 ## Pointers
 
 - [App AGENTS.md](../AGENTS.md)
-- [Architecture](../../../docs/spec/architecture.md)
+- [Architecture](../../../../../docs/spec/architecture.md)
 
 ## Boundaries
 

@@ -13,9 +13,9 @@ Private app-layer helpers for route handlers. Provides server-side utilities lik
 
 ## Pointers
 
-- [Root AGENTS.md](../../../AGENTS.md)
+- [Root AGENTS.md](../../../../../AGENTS.md)
 - [App Layer](../AGENTS.md)
-- [Model Selection](../../../docs/spec/model-selection.md)
+- [Model Selection](../../../../../docs/spec/model-selection.md)
 
 ## Boundaries
 
