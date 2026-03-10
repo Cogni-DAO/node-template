@@ -82,6 +82,12 @@ class MockAttributionStore {
   async getReceiptsForWindow() {
     return [];
   }
+  async getAllReceipts() {
+    return [];
+  }
+  async getReceiptsForEpoch() {
+    return [];
+  }
   async getSelectedReceiptsForAllocation() {
     return [];
   }
@@ -108,7 +114,7 @@ class MockAttributionStore {
     return null;
   }
   async insertPoolComponent() {
-    return {} as never;
+    return { component: {} as never, created: true };
   }
   async getPoolComponentsForEpoch() {
     return [];
@@ -146,7 +152,7 @@ class MockAttributionStore {
   async getUserDisplayNames() {
     return new Map();
   }
-  async getUnselectedReceipts() {
+  async getSelectionCandidates() {
     return [];
   }
   async updateSelectionUserId() {}

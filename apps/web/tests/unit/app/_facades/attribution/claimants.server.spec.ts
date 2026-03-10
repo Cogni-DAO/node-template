@@ -73,7 +73,9 @@ function makeStore(
     getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([]),
     upsertCursor: vi.fn(),
     getCursor: vi.fn(),
-    insertPoolComponent: vi.fn(),
+    insertPoolComponent: vi
+      .fn()
+      .mockResolvedValue({ component: {}, created: true }),
     getPoolComponentsForEpoch: vi.fn(),
     insertEpochStatement: vi.fn(),
     getStatementForEpoch: vi.fn().mockResolvedValue(null),
@@ -83,7 +85,7 @@ function makeStore(
     resolveIdentities: vi.fn().mockResolvedValue(new Map()),
     getUserDisplayNames: vi.fn().mockResolvedValue(new Map()),
     finalizeEpochAtomic: vi.fn(),
-    getUnselectedReceipts: vi.fn(),
+    getSelectionCandidates: vi.fn(),
     updateSelectionUserId: vi.fn(),
     upsertReviewSubjectOverride: vi.fn(),
     batchUpsertReviewSubjectOverrides: vi.fn(),

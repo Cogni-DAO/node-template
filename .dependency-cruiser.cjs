@@ -321,7 +321,7 @@ module.exports = {
       name: "no-internal-adapter-imports",
       severity: "error",
       from: {
-        path: "^apps/web/src/(?!adapters/server/)(?!auth\\.ts$)(?!bootstrap/container\\.ts$)(?!bootstrap/graph-executor\\.factory\\.ts$)(?!bootstrap/agent-discovery\\.ts$)(?!bootstrap/jobs/syncGovernanceSchedules\\.job\\.ts$)",
+        path: "^apps/web/src/(?!adapters/server/)(?!auth\\.ts$)(?!bootstrap/container\\.ts$)(?!bootstrap/graph-executor\\.factory\\.ts$)(?!bootstrap/review-adapter\\.factory\\.ts$)(?!bootstrap/agent-discovery\\.ts$)(?!bootstrap/jobs/syncGovernanceSchedules\\.job\\.ts$)",
       },
       to: {
         path: "^apps/web/src/adapters/server/(?!index\\.ts$).*\\.ts$",
@@ -331,6 +331,7 @@ module.exports = {
         "Exempt: auth.ts (bootstrap), container.ts (trust boundaries), " +
         "graph-executor.factory.ts + agent-discovery.ts (sandbox subpath imports " +
         "to avoid Turbopack bundling dockerode native addon chain), " +
+        "review-adapter.factory.ts (wires review GitHub adapters), " +
         "syncGovernanceSchedules.job.ts (needs serviceDb for advisory lock).",
     },
 

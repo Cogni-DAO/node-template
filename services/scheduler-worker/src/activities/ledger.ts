@@ -587,14 +587,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       throw new Error(`materializeSelection: epoch ${input.epochId} not found`);
     }
 
-    // 3. Get unselected receipts (delta: only receipts needing work)
+    // 3. Get selection candidates (delta: only receipts needing work)
     const unselected: UnselectedReceipt[] =
-      await attributionStore.getUnselectedReceipts(
-        nodeId,
-        epochId,
-        epoch.periodStart,
-        epoch.periodEnd
-      );
+      await attributionStore.getSelectionCandidates(nodeId, epochId);
 
     if (unselected.length === 0) {
       logger.info(
@@ -892,31 +887,23 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     let ensured = 0;
 
     for (const estimate of estimates) {
-      try {
-        await attributionStore.insertPoolComponent({
-          nodeId,
-          epochId,
-          componentId: estimate.componentId,
-          algorithmVersion: estimate.algorithmVersion,
-          inputsJson: estimate.inputsJson,
-          amountCredits: estimate.amountCredits,
-          evidenceRef: estimate.evidenceRef,
-        });
+      // insertPoolComponent is idempotent (ON CONFLICT DO NOTHING + SELECT)
+      const { created } = await attributionStore.insertPoolComponent({
+        nodeId,
+        epochId,
+        componentId: estimate.componentId,
+        algorithmVersion: estimate.algorithmVersion,
+        inputsJson: estimate.inputsJson,
+        amountCredits: estimate.amountCredits,
+        evidenceRef: estimate.evidenceRef,
+      });
+      if (created) {
         ensured++;
-      } catch (err) {
-        // Idempotent: PK conflict means component already exists — skip
-        const msg = err instanceof Error ? err.message : String(err);
-        if (
-          msg.includes("duplicate key") ||
-          msg.includes("unique constraint")
-        ) {
-          logger.info(
-            { componentId: estimate.componentId },
-            "Pool component already exists — skipping"
-          );
-        } else {
-          throw err;
-        }
+      } else {
+        logger.info(
+          { componentId: estimate.componentId },
+          "Pool component already exists — skipping"
+        );
       }
     }
 
