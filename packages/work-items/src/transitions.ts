@@ -74,5 +74,5 @@ export function isValidTransition(
   to: WorkItemStatus
 ): boolean {
   const allowed = VALID_TRANSITIONS.get(from);
-  return allowed != null && allowed.includes(to);
+  return allowed?.includes(to) ?? false;
 }

@@ -9,7 +9,7 @@
 
 ## Purpose
 
-Work item port interfaces and domain types for structured work item management. Provides `WorkItemQueryPort`, `WorkItemCommandPort`, domain types (`WorkItem`, `SubjectRef`, `ExternalRef`, `WorkRelation`), and a status transition table. Zero I/O leaf package (only `type-fest`).
+Work item port interfaces, domain types, and the markdown file-backed adapter for structured work item management. Root entry (`@cogni/work-items`) exports pure types/interfaces. Adapter entry (`@cogni/work-items/markdown`) exports `MarkdownWorkItemAdapter` for reading/writing `work/items/*.md` frontmatter.
 
 ## Pointers
 
@@ -36,55 +36,51 @@ Work item port interfaces and domain types for structured work item management. 
 }
 ```
 
-**External deps:** `type-fest` (Tagged branded types).
+**External deps:** `type-fest` (Tagged branded types), `yaml` (frontmatter parsing — adapter only).
 
 ## Public Surface
 
 - **Exports (root `@cogni/work-items`):**
-  - `WorkItemId` — `Tagged<string, "WorkItemId">`, branded work item identity
-  - `Revision` — adapter-specific revision token for optimistic concurrency
-  - `WorkItemType` — `"task" | "bug" | "story" | "spike" | "subtask"`
-  - `WorkItemStatus` — 9-value status enum from development-lifecycle.md
-  - `SubjectRef` — discriminated union: `user | agent | system` (identity-model.md actor kinds)
-  - `ExternalRef` — backend-agnostic external reference (GitHub, GitLab, etc.)
-  - `RelationType` — `"blocks" | "parent_of" | "relates_to" | "duplicates"` (canonical only)
-  - `WorkRelation` — typed relation between work items
-  - `WorkItem` — full work item type with all semantic fields
-  - `WorkQuery` — query filter type with cursor pagination
+  - `WorkItemId`, `Revision`, `WorkItemType`, `WorkItemStatus` — identity and enum types
+  - `SubjectRef`, `ExternalRef`, `RelationType`, `WorkRelation` — structured domain types
+  - `WorkItem`, `WorkQuery` — full work item type and query filter
   - `toWorkItemId(raw: string): WorkItemId` — boundary constructor
-  - `WorkItemQueryPort` — read interface: `get`, `list`, `listRelations`
-  - `WorkItemCommandPort` — write interface: `create`, `patch`, `transitionStatus`, `setAssignees`, `upsertRelation`, `removeRelation`, `upsertExternalRef`, `claim`, `release`
-  - `VALID_TRANSITIONS` — `ReadonlyMap<WorkItemStatus, readonly WorkItemStatus[]>`
-  - `isValidTransition(from, to): boolean` — transition validator
-- **Files considered API:** `index.ts` (root barrel)
+  - `WorkItemQueryPort`, `WorkItemCommandPort` — read/write interfaces
+  - `VALID_TRANSITIONS`, `isValidTransition(from, to): boolean` — transition table
+- **Exports (adapter `@cogni/work-items/markdown`):**
+  - `MarkdownWorkItemAdapter` — implements QueryPort + CommandPort against markdown files
+  - `StaleRevisionError` — thrown on optimistic concurrency conflict
+  - `InvalidTransitionError` — thrown on invalid status transition
+- **Files considered API:** `src/index.ts` (root barrel), `src/adapters/markdown/index.ts` (adapter barrel)
 
 ## Ports
 
 - **Uses ports:** none
-- **Implements ports:** none (defines them — adapters implement)
+- **Implements ports:** `WorkItemQueryPort`, `WorkItemCommandPort` (via MarkdownWorkItemAdapter)
 
 ## Responsibilities
 
-- This directory **does**: Define port interfaces, domain types, and transition rules
-- This directory **does not**: Perform I/O, contain adapter code, depend on any other package
+- This directory **does**: Define port interfaces, domain types, transition rules, and the markdown adapter
+- This directory **does not**: Import from `@/` or `src/`, depend on app-layer or service code
 
 ## Usage
 
 ```bash
 pnpm --filter @cogni/work-items typecheck
 pnpm --filter @cogni/work-items build
+pnpm vitest run packages/work-items/tests/
 ```
 
 ## Standards
 
-- Per `FORBIDDEN`: No I/O, no `@/`, no `src/`, no framework imports
-- Per `ALLOWED`: Pure TypeScript types, interfaces, and data constants only
+- Root entry: no I/O, no `@/`, no `src/`, no framework imports (pure types)
+- Adapter entry: I/O allowed (filesystem), but no `@/` or `src/` imports
 - No `as WorkItemId` casts outside test fixtures — use `toWorkItemId()` at boundaries
 
 ## Dependencies
 
 - **Internal:** none (leaf package)
-- **External:** `type-fest` (Tagged branded types)
+- **External:** `type-fest` (Tagged branded types), `yaml` (YAML parse/stringify)
 
 ## Change Protocol
 
@@ -95,5 +91,6 @@ pnpm --filter @cogni/work-items build
 ## Notes
 
 - `toWorkItemId()` does no format validation — WorkItemIds include both numeric (`task.0149`) and slug-based (`proj.agentic-project-management`) formats
-- The adapter (task.0151) lives in `src/adapters/markdown/` within this same package
+- `MarkdownWorkItemAdapter` constructor takes `workDir` (repo root) — scans `work/items/` and `work/projects/`
 - `blocked` can transition to any `needs_*` status — adapters may enforce stricter return-to-previous-status logic
+- ID allocation race: two concurrent `create()` calls can collide. v0 assumes single-caller.
