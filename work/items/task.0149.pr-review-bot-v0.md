@@ -2,7 +2,7 @@
 id: task.0149
 type: task
 title: "PR Review Bot V0 — LangGraph graph + gate orchestrator for automated PR review"
-status: needs_closeout
+status: done
 priority: 1
 rank: 1
 estimate: 4
@@ -21,7 +21,7 @@ revision: 3
 blocked_by:
 deploy_verified: false
 created: 2026-03-10
-updated: 2026-03-11
+updated: 2026-03-10
 labels: [vcs, ai, review, langgraph]
 external_refs:
   - https://github.com/cogni-dao/cogni-git-review
@@ -120,7 +120,7 @@ GitHub webhook (pull_request.opened / .synchronize / .reopened)
 
 - **R1**: `pull_request` webhooks with action `opened`, `synchronize`, or `reopened` trigger PR review (in addition to existing attribution normalization)
 - **R2**: Review dispatched as fire-and-forget after returning 200 — never blocks webhook response or attribution processing
-- **R3**: A GitHub Check Run named "Cogni PR Review" is created (in_progress) then updated (success/failure/neutral)
+- **R3**: A GitHub Check Run named "Cogni Git PR Review" is created (in_progress) then updated (success/failure/neutral)
 - **R4**: Gate orchestrator processes `gates[]` from `.cogni/repo-spec.yaml` in order, with per-gate timeout (120s default), crash isolation (gate crash → neutral), and priority aggregation (fail > neutral > pass)
 - **R5**: `review-limits` gate checks `max_changed_files` and `max_total_diff_kb` without LLM — pure numeric comparison
 - **R6**: `ai-rule` gate pre-fetches PR evidence (diff + files, budget-truncated), invokes the pr-review graph via `POST /api/internal/graphs/{graphId}/runs` (same endpoint as `executeGraphActivity`) with system tenant caller, receives per-metric 0-1 scores, and applies `success_criteria` thresholds deterministically
