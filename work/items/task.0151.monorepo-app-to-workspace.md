@@ -108,12 +108,19 @@ Additionally, `platform/` is over-nested (3 levels to a compose file) and mixes 
 | ------------------ | -------------------------------------------------------------- |
 | `tests/arch/`      | Dependency graph validation across entire codebase             |
 | `tests/lint/`      | Architecture boundary enforcement (src/, packages/, services/) |
-| `tests/contract/`  | Port contract compliance (used by packages + services)         |
-| `tests/ports/`     | Port adapter tests (cross-boundary)                            |
 | `tests/packages/`  | Package integration tests                                      |
 | `tests/_fakes/`    | Shared test utilities                                          |
 | `tests/_fixtures/` | Shared test data                                               |
 | `tests/helpers/`   | Shared test helpers                                            |
+
+**Reclassified as app-specific** (import `@/` app code):
+
+| Dir               | Original classification | Actual                                       |
+| ----------------- | ----------------------- | -------------------------------------------- |
+| `tests/contract/` | Cross-workspace         | Imports `@/` facades/adapters → app-specific |
+| `tests/ports/`    | Cross-workspace         | Imports `@/ports`, `@/shared` → app-specific |
+
+**Tech debt:** `stack/` and `external/` tests conceptually test the full running system but import `@/` app code for test utilities. Future cleanup: extract shared test helpers to root `tests/helpers/`, move contracts to `packages/`, then stack/external can move back to root. See proj.cicd-services-gitops.
 
 ## Plan
 
@@ -183,8 +190,8 @@ infra/
 - [ ] `pnpm test` at root runs cross-workspace tests
 - [ ] `pnpm dev:stack` starts dev server + infrastructure
 - [ ] All AGENTS.md files reference correct paths (`pnpm check:docs`)
-- [ ] Root `tests/` contains only cross-workspace dirs: `arch/`, `lint/`, `contract/`, `ports/`, `packages/`, `_fakes/`, `_fixtures/`, `helpers/`
-- [ ] `apps/web/tests/` contains only app-specific dirs: `unit/`, `component/`, `stack/`, `external/`, `meta/`
+- [ ] Root `tests/` contains only cross-workspace dirs: `arch/`, `lint/`, `packages/`, `_fakes/`, `_fixtures/`, `helpers/`
+- [ ] `apps/web/tests/` contains app-specific dirs: `unit/`, `component/`, `stack/`, `external/`, `meta/`, `contract/`, `ports/`
 - [ ] No file references `platform/` anywhere in the codebase
 
 ## Validation

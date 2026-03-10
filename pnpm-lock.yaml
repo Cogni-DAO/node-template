@@ -581,6 +581,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      viem:
+        specifier: 2.39.3
+        version: 2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
 
   packages/db-client:
     dependencies:

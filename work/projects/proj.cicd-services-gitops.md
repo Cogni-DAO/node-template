@@ -64,6 +64,8 @@ Improve the build pipeline, local testing tooling, and database provisioning acr
 | `check:full --watch`: re-run on file changes                                                                                                                                                                                | Not Started | 2   | (create at P2 start)        |
 | Parallel test execution in check:full (once isolation is proven stable)                                                                                                                                                     | Not Started | 2   | (create at P2 start)        |
 
+| Test architecture: `tests/_fakes/` and `tests/_fixtures/` import `@/` app code — they're app-owned, not shared. Either move into `apps/web/tests/` or extract truly shared parts into a test utils package. Same coupling affects stack/external tests. Root `tests/` should be free of `@/` imports. | Not Started | 3 | (create at P2 start) |
+
 ### Future — IaC Lane
 
 Terraform/OpenTofu can manage role creation as an alternative to CD-time provisioning. This is the preferred long-term approach for production, but CD-time provisioner remains valid if convergent (idempotent).

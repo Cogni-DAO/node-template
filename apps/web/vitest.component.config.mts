@@ -28,6 +28,7 @@ expand(env);
 // Repo access: tests/setup.ts provides fallback for COGNI_REPO_PATH
 
 export default defineConfig({
+  root: __dirname,
   plugins: [tsconfigPaths({ projects: ["./tsconfig.app.json"] })],
   test: {
     include: ["tests/component/**/*.int.test.ts"],
@@ -38,7 +39,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@tests": path.resolve(__dirname, "./tests"),
+      "@tests": path.resolve(__dirname, "../../tests"),
     },
   },
 });

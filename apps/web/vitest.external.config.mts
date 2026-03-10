@@ -25,6 +25,7 @@ const env = config({ path: ".env.test" });
 expand(env);
 
 export default defineConfig({
+  root: __dirname,
   plugins: [tsconfigPaths({ projects: ["./tsconfig.app.json"] })],
   test: {
     include: ["tests/external/**/*.external.test.ts"],
@@ -41,7 +42,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@tests": path.resolve(__dirname, "./tests"),
+      "@tests": path.resolve(__dirname, "../../tests"),
     },
   },
 });
