@@ -7,7 +7,7 @@
  * Scope: GitHub API calls for Check Runs only. Does not contain review logic or import feature types.
  * Invariants: Requires checks:write permission on GitHub App.
  * Side-effects: IO (GitHub API calls)
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

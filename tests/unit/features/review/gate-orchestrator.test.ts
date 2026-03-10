@@ -7,7 +7,7 @@
  * Scope: Tests with mocked gate implementations. Does NOT test real LLM or GitHub API calls.
  * Invariants: Gates run in declared order. Crash → neutral. Timeout → neutral. Aggregation: fail > neutral > pass.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

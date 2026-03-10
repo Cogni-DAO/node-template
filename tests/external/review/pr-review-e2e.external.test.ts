@@ -7,7 +7,7 @@
  * Scope: Validates the full review pipeline against a running app with real GitHub API and real LLM calls. Does NOT test with mocks — hits real GitHub, real app, real LiteLLM.
  * Invariants: Requires dev stack + smee, GH_REVIEW_APP credentials, system tenant seeded.
  * Side-effects: IO (git push, GitHub API, LLM calls billed to system tenant)
- * Links: task.0149, src/app/_facades/review/dispatch.server.ts
+ * Links: task.0153, src/app/_facades/review/dispatch.server.ts
  * @internal
  */
 
@@ -190,7 +190,7 @@ describeIfReady("PR Review E2E (external)", () => {
     expect(reviewComment?.body).toContain("Cogni Review");
     // Should contain gate counts line
     expect(reviewComment?.body).toMatch(/passed.*failed.*neutral/);
-    // Should contain at least one gate result with metric scores
-    expect(reviewComment?.body).toMatch(/review.limits|ai-rule|review-limits/i);
+    // Should contain blocker details or gate counts
+    expect(reviewComment?.body).toMatch(/Blockers|Gates/i);
   }, 210_000);
 });

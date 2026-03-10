@@ -1,5 +1,5 @@
 ---
-id: task.0149
+id: task.0153
 type: task
 title: "PR Review Bot V0 — LangGraph graph + gate orchestrator for automated PR review"
 status: needs_merge
@@ -233,7 +233,7 @@ pnpm test src/adapters/server/review/
 
 ## Review Checklist
 
-- [ ] **Work Item:** `task.0149` linked in PR body
+- [ ] **Work Item:** `task.0153` linked in PR body
 - [ ] **Spec:** vcs-integration invariants upheld (NO_PROBOT_DEPENDENCY, WEBHOOK_SIGNATURE_REQUIRED, REVIEW_HANDLER_VIA_GRAPH)
 - [ ] **Spec:** unified-graph-launch alignment — graph execution via internal API (same endpoint as `executeGraphActivity`), no new execution path
 - [ ] **Tests:** unit tests for all new modules, integration test for webhook → review flow

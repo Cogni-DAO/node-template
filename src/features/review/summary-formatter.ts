@@ -7,7 +7,7 @@
  * Scope: Pure formatting — receives review results, returns markdown strings. Does not perform I/O.
  * Invariants: Output is valid GitHub-flavored markdown. Format aligns with cogni-git-review.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 
@@ -41,7 +41,11 @@ export function formatCheckRunSummary(result: ReviewResult): string {
  */
 export function formatPrComment(
   result: ReviewResult,
-  opts?: { daoBaseUrl?: string; headSha?: string }
+  opts?: {
+    daoBaseUrl?: string;
+    headSha?: string;
+    checkRunUrl?: string;
+  }
 ): string {
   const lines: string[] = [];
 
@@ -50,16 +54,19 @@ export function formatPrComment(
   // Counts line
   lines.push(`**Gates:** ${countsLine(result.gateResults)}\n`);
 
-  // Failed gates detail (compact — top 3 blockers only)
+  // Failed gates detail (compact — top 3 blockers, with metric tables)
   const failed = result.gateResults.filter((g) => g.status === "fail");
   if (failed.length > 0) {
     lines.push("**Blockers:**");
     for (const gate of failed.slice(0, 3)) {
       lines.push(`- **${gate.gateId}**:`);
       if (gate.metrics && gate.metrics.length > 0) {
+        lines.push("");
+        lines.push("  | Metric | Score | Observation |");
+        lines.push("  |--------|-------|-------------|");
         for (const m of gate.metrics) {
           lines.push(
-            `  - ${m.metric}: ${m.score.toFixed(2)} — ${m.observation.slice(0, 100)}`
+            `  | ${m.metric} | ${m.score.toFixed(2)} | ${m.observation.slice(0, 100)} |`
           );
         }
       } else {
@@ -76,9 +83,10 @@ export function formatPrComment(
     );
   }
 
-  lines.push(
-    `\n<sub>Reviewed by [Cogni](https://github.com/cogni-dao) — automated review</sub>`
-  );
+  // View Details link to Check Run
+  if (opts?.checkRunUrl) {
+    lines.push(`\n[View Details](${opts.checkRunUrl})`);
+  }
 
   // Staleness marker (for future comment-update logic)
   if (opts?.headSha) {

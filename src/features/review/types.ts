@@ -7,7 +7,7 @@
  * Scope: Shared interfaces for gates, orchestrator, and review handler. Does not contain business logic.
  * Invariants: Types are plain serializable objects.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

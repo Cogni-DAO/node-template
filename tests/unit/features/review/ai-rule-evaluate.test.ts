@@ -7,7 +7,7 @@
  * Scope: Tests evaluateAiRule with a mock GraphExecutorPort returning structuredOutput. Does NOT test real LLM calls.
  * Invariants: evaluateAiRule reads structuredOutput from GraphFinal, maps metrics to scores, applies criteria.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

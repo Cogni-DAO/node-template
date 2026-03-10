@@ -7,7 +7,7 @@
  * Scope: Resolves bootstrap deps (container, graph executor, adapter factory), delegates to feature handler. Does not contain business logic.
  * Invariants: ARCHITECTURE_ALIGNMENT — facade imports bootstrap, never adapters. Fire-and-forget.
  * Side-effects: IO (async review execution)
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

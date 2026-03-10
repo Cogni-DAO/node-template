@@ -7,7 +7,7 @@
  * Scope: Tests require[], any_of[], comparison operators, missing metrics, edge cases. Does NOT test LLM or I/O.
  * Invariants: Pure function — no side-effects, no mocking needed.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

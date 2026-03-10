@@ -7,7 +7,7 @@
  * Scope: Orchestrates gate evaluation. Does not own graph executor or GitHub client lifecycle.
  * Invariants: Gates run in declared order. Per-gate timeout (120s default). Crash → neutral. Aggregation: fail > neutral > pass.
  * Side-effects: IO (delegates to gates which may call LLM)
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

@@ -7,7 +7,7 @@
  * Scope: Pure function — compares metric scores against thresholds. Does not call LLM or perform I/O.
  * Invariants: Comparison operators (gte, gt, lte, lt, eq) are exhaustive. Missing metrics handled via neutral_on_missing_metrics flag.
  * Side-effects: none
- * Links: task.0149, packages/repo-spec/src/schema.ts (SuccessCriteria)
+ * Links: task.0153, packages/repo-spec/src/schema.ts (SuccessCriteria)
  * @public
  */
 

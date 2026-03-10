@@ -7,7 +7,7 @@
  * Scope: GitHub API calls for PR comments only. Does not contain review logic.
  * Invariants: Staleness guard — skip if HEAD SHA changed during review.
  * Side-effects: IO (GitHub API calls)
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

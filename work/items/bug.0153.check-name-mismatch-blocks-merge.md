@@ -1,5 +1,5 @@
 ---
-id: bug.0150
+id: bug.0153
 type: bug
 title: "Check name mismatch: code creates 'Cogni PR Review' but branch protection requires 'Cogni Git PR Review'"
 status: done

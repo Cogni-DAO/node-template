@@ -8,7 +8,7 @@
  * Invariants: Fire-and-forget — errors logged, never block webhook response. System tenant billing.
  *   ARCHITECTURE_ALIGNMENT — deps injected, no adapter imports.
  * Side-effects: IO (GitHub API via injected deps, LLM via graph executor)
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 
@@ -192,9 +192,14 @@ export async function handlePrReview(
         ? (repoSpec.cogni_dao.base_url as string)
         : undefined;
 
+    const checkRunUrl = checkRunId
+      ? `https://github.com/${owner}/${repo}/runs/${checkRunId}`
+      : undefined;
+
     const commentBody = formatPrComment(result, {
       ...(daoBaseUrl !== undefined && { daoBaseUrl }),
       headSha,
+      ...(checkRunUrl !== undefined && { checkRunUrl }),
     });
     const posted = await deps.postPrComment(
       owner,

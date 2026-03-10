@@ -7,7 +7,7 @@
  * Scope: GitHub API calls for diff fetching. Does not contain review logic.
  * Invariants: Budget truncation applied before passing to LLM.
  * Side-effects: IO (GitHub API calls)
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

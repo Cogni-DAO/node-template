@@ -7,7 +7,7 @@
  * Scope: Tests EvaluationOutputSchema validation. Does NOT test LLM calls or graph execution.
  * Invariants: Pure schema validation + mock-based integration.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

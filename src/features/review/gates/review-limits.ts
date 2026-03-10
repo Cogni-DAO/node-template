@@ -7,7 +7,7 @@
  * Scope: Pure numeric comparison of file count and diff size. Does not call LLM or external APIs.
  * Invariants: No LLM calls. Returns pass if within limits, neutral if exceeds.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

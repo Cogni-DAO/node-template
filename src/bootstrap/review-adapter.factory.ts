@@ -7,7 +7,7 @@
  * Scope: Bootstrap composition — wires Octokit auth + adapter functions. Does not contain business logic.
  * Invariants: ARCHITECTURE_ALIGNMENT — only bootstrap imports adapters.
  * Side-effects: none (factory function, IO deferred to call sites)
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

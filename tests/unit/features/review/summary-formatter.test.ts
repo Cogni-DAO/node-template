@@ -7,7 +7,7 @@
  * Scope: Tests overall structure, per-gate sections, metrics tables, counts line, gate ordering, DAO vote link, and attribution footer. Does NOT test GitHub API.
  * Invariants: Pure function — no side-effects, no mocking needed.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 
@@ -139,12 +139,12 @@ describe("formatPrComment", () => {
     expect(md).toContain("1 failed");
   });
 
-  it("shows blockers for failed gates", () => {
+  it("shows blockers with metric tables for failed gates", () => {
     const md = formatPrComment(failResult);
     expect(md).toContain("Blockers");
     expect(md).toContain("code-quality");
-    expect(md).toContain("coherence");
-    expect(md).toContain("0.40");
+    expect(md).toContain("| coherence |");
+    expect(md).toContain("| 0.40 |");
   });
 
   it("includes DAO vote link on failure when daoBaseUrl provided", () => {
@@ -167,10 +167,17 @@ describe("formatPrComment", () => {
     expect(md).not.toContain("Propose Vote to Merge");
   });
 
-  it("includes Cogni attribution footer", () => {
+  it("includes View Details link when checkRunUrl provided", () => {
+    const md = formatPrComment(passResult, {
+      checkRunUrl: "https://github.com/owner/repo/runs/123",
+    });
+    expect(md).toContain("[View Details]");
+    expect(md).toContain("https://github.com/owner/repo/runs/123");
+  });
+
+  it("omits View Details link when no checkRunUrl", () => {
     const md = formatPrComment(passResult);
-    expect(md).toContain("Cogni");
-    expect(md).toContain("automated review");
+    expect(md).not.toContain("View Details");
   });
 
   it("includes staleness marker when headSha provided", () => {

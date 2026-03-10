@@ -7,7 +7,7 @@
  * Scope: Tests file count, diff size, boundary conditions, and multi-violation reporting. Does NOT test LLM or GitHub API.
  * Invariants: Pure function — no side-effects, no mocking needed.
  * Side-effects: none
- * Links: task.0149
+ * Links: task.0153
  * @public
  */
 

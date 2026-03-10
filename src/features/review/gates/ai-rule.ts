@@ -7,7 +7,7 @@
  * Scope: Builds LLM message from evidence + rule, invokes graph, consumes structured output. Does not own the graph executor lifecycle.
  * Invariants: Uses GraphExecutorPort for LLM routing + billing. System tenant billing.
  * Side-effects: IO (LLM call via graph executor)
- * Links: task.0149, packages/repo-spec/src/schema.ts (Rule)
+ * Links: task.0153, packages/repo-spec/src/schema.ts (Rule)
  * @public
  */
 
