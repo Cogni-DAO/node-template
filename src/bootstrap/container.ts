@@ -23,6 +23,7 @@ import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
 import { numberToPpm } from "@cogni/operator-wallet";
+import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/privy";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
@@ -398,8 +399,6 @@ function createContainer(): Container {
   };
 
   // OperatorWallet: test uses fake, production uses Privy (optional — only when configured)
-  // NOTE: PrivyOperatorWalletAdapter imported directly (not from barrel) to avoid
-  // pulling @privy-io/node into the test bundle. Same pattern as SandboxGraphProvider.
   const operatorWalletConfig = getOperatorWalletConfig();
   const operatorWallet: OperatorWalletPort | undefined = env.isTestMode
     ? getTestOperatorWallet()
@@ -417,12 +416,6 @@ function createContainer(): Container {
           );
           return undefined;
         }
-        // Lazy import: @privy-io/node can be slow to load.
-        // Only loaded when Privy env vars are configured (production).
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { PrivyOperatorWalletAdapter } =
-          // eslint-disable-next-line unicorn/prefer-module
-          require("@cogni/operator-wallet/adapters/privy") as typeof import("@cogni/operator-wallet/adapters/privy");
         const treasuryAddress = getDaoTreasuryAddress();
         if (!treasuryAddress) {
           log.warn(
