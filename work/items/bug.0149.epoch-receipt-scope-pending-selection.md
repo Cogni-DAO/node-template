@@ -13,7 +13,7 @@ assignees: []
 credit:
 project:
 branch: fix/bug-0149-epoch-receipt-scope
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/541
 reviewer:
 revision: 0
 blocked_by:
