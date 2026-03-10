@@ -160,6 +160,7 @@
     "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/repo-spec": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
+    "@cogni/work-items": "workspace:*",
     "@langchain/langgraph-sdk": "^0.0.32",
     "@octokit/auth-app": "^7.1.4",
     "@octokit/core": "^6.1.4",

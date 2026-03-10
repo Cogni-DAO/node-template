@@ -66,6 +66,7 @@ function makeMockStore(
     getSelectedReceiptsWithMetadata: vi.fn().mockResolvedValue([]),
     insertIngestionReceipts: vi.fn(),
     getReceiptsForWindow: vi.fn(),
+    getAllReceipts: vi.fn().mockResolvedValue([]),
     upsertSelection: vi.fn(),
     getSelectionForEpoch: vi.fn(),
     getUnresolvedSelection: vi.fn(),
@@ -91,7 +92,7 @@ function makeMockStore(
     resolveIdentities: vi.fn().mockResolvedValue(new Map()),
     getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([]),
     finalizeEpochAtomic: vi.fn(),
-    getUnselectedReceipts: vi.fn().mockResolvedValue([]),
+    getSelectionCandidates: vi.fn().mockResolvedValue([]),
     updateSelectionUserId: vi.fn(),
     upsertReviewSubjectOverride: vi.fn(),
     batchUpsertReviewSubjectOverrides: vi.fn().mockResolvedValue([]),
@@ -757,7 +758,7 @@ describe("materializeSelection", () => {
   function makeDeps(storeOverrides: Partial<AttributionStore> = {}) {
     const store = makeMockStore({
       getEpoch: vi.fn().mockResolvedValue(epoch),
-      getReceiptsForWindow: vi.fn().mockResolvedValue([defaultReleasePr]),
+      getAllReceipts: vi.fn().mockResolvedValue([defaultReleasePr]),
       ...storeOverrides,
     });
     const { materializeSelection } = createAttributionActivities({
@@ -774,7 +775,7 @@ describe("materializeSelection", () => {
 
   it("returns zero counts when no unselected receipts", async () => {
     const { materializeSelection } = makeDeps({
-      getUnselectedReceipts: vi.fn().mockResolvedValue([]),
+      getSelectionCandidates: vi.fn().mockResolvedValue([]),
     });
 
     const result = await materializeSelection({
@@ -810,7 +811,7 @@ describe("materializeSelection", () => {
     ];
     const identityMap = new Map([["111", "user-aaa"]]);
     const { store, materializeSelection } = makeDeps({
-      getUnselectedReceipts: vi.fn().mockResolvedValue(unselected),
+      getSelectionCandidates: vi.fn().mockResolvedValue(unselected),
       resolveIdentities: vi.fn().mockResolvedValue(identityMap),
     });
 
@@ -861,7 +862,7 @@ describe("materializeSelection", () => {
     ];
     const identityMap = new Map([["111", "user-aaa"]]);
     const { store, materializeSelection } = makeDeps({
-      getUnselectedReceipts: vi.fn().mockResolvedValue(unselected),
+      getSelectionCandidates: vi.fn().mockResolvedValue(unselected),
       resolveIdentities: vi.fn().mockResolvedValue(identityMap),
     });
 
@@ -892,7 +893,7 @@ describe("materializeSelection", () => {
       }),
     ];
     const { store, materializeSelection } = makeDeps({
-      getUnselectedReceipts: vi.fn().mockResolvedValue(unselected),
+      getSelectionCandidates: vi.fn().mockResolvedValue(unselected),
       resolveIdentities: vi.fn().mockResolvedValue(new Map()),
     });
 
@@ -913,7 +914,7 @@ describe("materializeSelection", () => {
 
   it("does NOT overwrite admin-set fields on re-run", async () => {
     // Simulate: receipt has existing selection (hasExistingSelection=true) with userId already set
-    // getUnselectedReceipts wouldn't return it (it filters by userId IS NULL).
+    // getSelectionCandidates wouldn't return it (it filters by userId IS NULL).
     // This test verifies the contract: updateSelectionUserId is conditional.
     // The activity only calls updateSelectionUserId, which has WHERE user_id IS NULL.
     // So an admin who manually set userId to something else is never overwritten.
@@ -928,7 +929,7 @@ describe("materializeSelection", () => {
     ];
     const identityMap = new Map([["111", "user-aaa"]]);
     const { store, materializeSelection } = makeDeps({
-      getUnselectedReceipts: vi.fn().mockResolvedValue(unselected),
+      getSelectionCandidates: vi.fn().mockResolvedValue(unselected),
       resolveIdentities: vi.fn().mockResolvedValue(identityMap),
     });
 
@@ -979,9 +980,9 @@ describe("materializeSelection", () => {
     ]);
     const releasePr = makeReleasePrReceipt(["abc111", "abc222"]);
     const { store, materializeSelection } = makeDeps({
-      getUnselectedReceipts: vi.fn().mockResolvedValue(unselected),
+      getSelectionCandidates: vi.fn().mockResolvedValue(unselected),
       resolveIdentities: vi.fn().mockResolvedValue(identityMap),
-      getReceiptsForWindow: vi.fn().mockResolvedValue([releasePr]),
+      getAllReceipts: vi.fn().mockResolvedValue([releasePr]),
     });
 
     const result = await materializeSelection({
