@@ -82,7 +82,6 @@ Additionally, `platform/` is over-nested (3 levels to a compose file) and mixes 
 | `next-env.d.ts`               | Next.js auto-generated types                            |
 | `postcss.config.mjs`          | Tailwind CSS pipeline                                   |
 | `components.json`             | shadcn/ui config                                        |
-| `playwright.config.ts`        | E2E config (testDir, app routes)                        |
 | `vitest.component.config.mts` | Component tests (testcontainers, app adapters)          |
 | `vitest.stack.config.mts`     | Stack tests (HTTP routes, running server)               |
 | `vitest.external.config.mts`  | External API tests                                      |
@@ -91,7 +90,7 @@ Additionally, `platform/` is over-nested (3 levels to a compose file) and mixes 
 
 ### Root configs: cross-workspace → stay at root
 
-`pnpm-workspace.yaml`, `package.json` (workspace scripts/deps), `tsconfig.json`, `tsconfig.base.json`, `tsconfig.eslint.json`, `tsconfig.scripts.json`, `vitest.config.mts`, `vitest.workspace.ts`, `biome.json`, `eslint.config.mjs`, `.prettierrc`, `.prettierignore`, `commitlint.config.cjs`, `.dependency-cruiser.cjs`, `drizzle.config.ts`, `.editorconfig`, `.gitignore`, `sonar-project.properties`
+`pnpm-workspace.yaml`, `package.json` (workspace scripts/deps), `tsconfig.json`, `tsconfig.base.json`, `tsconfig.eslint.json`, `tsconfig.scripts.json`, `vitest.config.mts`, `vitest.workspace.ts`, `biome.json`, `eslint.config.mjs`, `.prettierrc`, `.prettierignore`, `commitlint.config.cjs`, `.dependency-cruiser.cjs`, `drizzle.config.ts`, `playwright.config.ts` (e2e/ stays at root — config belongs with its test dir), `.editorconfig`, `.gitignore`, `sonar-project.properties`
 
 ### Tests: app-specific → move to apps/web/tests/
 
@@ -125,7 +124,7 @@ Additionally, `platform/` is over-nested (3 levels to a compose file) and mixes 
 - [ ] `git mv src/ apps/web/src/`
 - [ ] `git mv public/ apps/web/public/`
 - [ ] `git mv Dockerfile apps/web/Dockerfile` — update build context, COPY paths
-- [ ] Move app-specific configs to `apps/web/`: `next.config.ts`, `tsconfig.app.json`, `next-env.d.ts`, `postcss.config.mjs`, `components.json`, `playwright.config.ts`, `knip.json`
+- [ ] Move app-specific configs to `apps/web/`: `next.config.ts`, `tsconfig.app.json`, `next-env.d.ts`, `postcss.config.mjs`, `components.json`, `knip.json`
 - [ ] Move app-specific vitest configs: `vitest.component.config.mts`, `vitest.stack.config.mts`, `vitest.external.config.mts`
 - [ ] Move app-specific test dirs: `tests/unit/` → `apps/web/tests/unit/`, same for `component/`, `stack/`, `external/`, `meta/`
 - [ ] Update `tsconfig.base.json` path aliases: `@/*` → `apps/web/src/*`, etc.
