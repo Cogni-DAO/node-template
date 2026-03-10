@@ -6,8 +6,8 @@ status: needs_implement
 priority: 1
 rank: 1
 estimate: 3
-summary: "Create the deployment manifest infrastructure for GitOps: Kustomize bases+overlays for scheduler-worker, OpenTofu module for k3s provisioning on Cherry Servers, and Argo CD Application manifests. Pure infra files — no app code changes, fully parallelizable with feature work."
-outcome: "A complete, validated set of deployment manifests that can be applied to a k3s cluster. `kubectl kustomize` builds clean YAML for both staging and production overlays. OpenTofu module is plan-ready for k3s provisioning. Argo CD knows how to watch the manifests repo and deploy scheduler-worker."
+summary: "Create the GitOps delivery foundation: Kustomize bases+overlays (scheduler-worker first, structured for all services), app-of-apps Argo CD pattern, SOPS/age secrets, and OpenTofu k3s module. Pure infra files — no app code changes, fully parallelizable with feature work."
+outcome: "A complete, validated set of deployment manifests ready for multi-service GitOps. Scheduler-worker base is fully specified; directory structure accommodates app, litellm, temporal, postgres migration in P2. `kubectl kustomize` builds clean YAML for both overlays. OpenTofu module is plan-ready. Argo CD app-of-apps manages per-service Applications."
 spec_refs: ci-cd-spec, services-architecture-spec
 assignees: derekg1729
 credit:
@@ -15,11 +15,11 @@ project: proj.cicd-services-gitops
 branch: feat/gitops-foundation
 pr:
 reviewer:
-revision: 0
+revision: 2
 blocked_by:
 deploy_verified: false
 created: 2026-03-09
-updated: 2026-03-09
+updated: 2026-03-10
 labels: [deployment, infra, ci-cd, gitops]
 external_refs:
 ---
@@ -92,7 +92,7 @@ During the transition period (scheduler-worker in k3s, everything else in Compos
 - **PostgreSQL** (port 5432)
 - **App** (HTTP port 3000, for `APP_BASE_URL`)
 
-**Approach**: Dedicated k3s VM on same Cherry Servers network. Services exposed via VM's internal IP. ExternalName or headless services in k3s point to the Compose VM's IP.
+**Approach**: Dedicated k3s VM on same Cherry Servers network. Services exposed via VM's internal IP. Selectorless Services + EndpointSlices in k3s point to the Compose VM's IP.
 
 ### Invariants
 
@@ -117,15 +117,15 @@ During the transition period (scheduler-worker in k3s, everything else in Compos
 - Create: `platform/cd/base/scheduler-worker/deployment.yaml` — K8s Deployment (replicas, probes, env, resources)
 - Create: `platform/cd/base/scheduler-worker/service.yaml` — ClusterIP Service for health probes
 - Create: `platform/cd/base/scheduler-worker/configmap.yaml` — Non-secret env vars (TEMPORAL_ADDRESS, etc.)
-- Create: `platform/cd/base/scheduler-worker/external-services.yaml` — Headless Service + Endpoints for Compose VM connectivity (temporal, postgres, app) — NOT ExternalName (see R1 below)
-- Create: `platform/cd/overlays/staging/kustomization.yaml` — Staging overlay (image digest, namespace, replicas, Endpoints IP patches)
+- Create: `platform/cd/base/scheduler-worker/external-services.yaml` — Selectorless Service + EndpointSlice for Compose VM connectivity (temporal, postgres, app)
+- Create: `platform/cd/overlays/staging/kustomization.yaml` — Staging overlay (image digest, namespace, replicas, EndpointSlice IP patches)
 - Create: `platform/cd/overlays/production/kustomization.yaml` — Production overlay (image digest, namespace, replicas)
 - Create: `platform/cd/overlays/staging/namespace.yaml` — Namespace definition
 - Create: `platform/cd/overlays/production/namespace.yaml` — Namespace definition
 
 **Argo CD Configuration** (`platform/cd/argocd/`):
 
-- Create: `platform/cd/argocd/install.yaml` — Argo CD install reference (namespace + kustomize remote base)
+- Create: `platform/cd/argocd/install.yaml` — Argo CD non-HA install reference (namespace + pinned kustomize remote base). Non-HA is appropriate for single-node k3s crawl; HA install is a P2 concern.
 - Create: `platform/cd/argocd/app-of-apps.yaml` — Root Application that manages all service Applications
 - Create: `platform/cd/argocd/applications/scheduler-worker.yaml` — Per-service Argo Application pointing at overlay
 
@@ -155,10 +155,10 @@ Derived from current `docker-compose.yml` + `services/scheduler-worker/src/boots
 
 | Key | Base Value | Overlay Override |
 |-----|-----------|-----------------|
-| `TEMPORAL_ADDRESS` | — | `temporal-host:7233` (ExternalName, see below) |
+| `TEMPORAL_ADDRESS` | — | `temporal:7233` (selectorless Service, see below) |
 | `TEMPORAL_NAMESPACE` | — | `cogni-production` / `cogni-staging` |
 | `TEMPORAL_TASK_QUEUE` | `scheduler-tasks` | — |
-| `APP_BASE_URL` | — | `http://app-host:3000` (ExternalName) |
+| `APP_BASE_URL` | — | `http://app:3000` (selectorless Service) |
 | `LOG_LEVEL` | `info` | — |
 | `SERVICE_NAME` | `scheduler-worker` | — |
 | `HEALTH_PORT` | `9000` | — |
@@ -174,7 +174,7 @@ Derived from current `docker-compose.yml` + `services/scheduler-worker/src/boots
 | `SCHEDULER_API_TOKEN` | min 32 chars, internal API auth |
 | `GH_REVIEW_APP_PRIVATE_KEY_BASE64` | Optional — GitHub App private key (only truly secret GitHub var) |
 
-**Headless Service + Endpoints** (transition period — scheduler-worker in k3s, deps in Compose):
+**Selectorless Service + EndpointSlice** (transition period — scheduler-worker in k3s, deps in Compose):
 
 | K8s Service Name | Port | Target | Purpose |
 |------------------|------|--------|---------|
@@ -182,7 +182,7 @@ Derived from current `docker-compose.yml` + `services/scheduler-worker/src/boots
 | `postgres` | 5432 | `<compose-vm-ip>:5432` | DB connectivity |
 | `app` | 3000 | `<compose-vm-ip>:3000` | HTTP connectivity |
 
-> **R1: Why headless + Endpoints, not ExternalName.** ExternalName services return a CNAME — they do DNS-only resolution and cannot remap ports. Compose services may bind to `127.0.0.1` internally, not the VM's external interface. Headless Service + explicit Endpoints handles port mapping correctly and works regardless of how Compose binds. Overlay patches the IP per environment.
+> **R1: Why selectorless Service + EndpointSlice, not ExternalName or legacy Endpoints.** ExternalName returns a CNAME — DNS-only, can't remap ports. Legacy `kind: Endpoints` is deprecated in K8s v1.33+. Selectorless Service + EndpointSlice is the current K8s-documented pattern for services without pod selectors. Overlay patches the IP per environment.
 
 ```yaml
 # Example: external-services.yaml (base)
@@ -194,16 +194,20 @@ spec:
   clusterIP: None
   ports:
     - port: 7233
+      protocol: TCP
 ---
-apiVersion: v1
-kind: Endpoints
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
 metadata:
-  name: temporal
-subsets:
-  - addresses:
-      - ip: 10.0.0.1  # placeholder — patched by overlay
-    ports:
-      - port: 7233
+  name: temporal-1
+  labels:
+    kubernetes.io/service-name: temporal
+addressType: IPv4
+endpoints:
+  - addresses: ["10.0.0.1"]  # placeholder — patched by overlay
+ports:
+  - port: 7233
+    protocol: TCP
 ```
 
 These let the scheduler-worker pod use the same hostnames (`temporal`, `app`) as in Compose. Replaced with real K8s Services when those workloads migrate to k3s.
@@ -272,6 +276,21 @@ Extends existing `bootstrap.yaml` pattern but installs k3s instead of Docker:
 
 k3s install is a single command: `curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --disable servicelb" sh -`
 
+**GHCR private registry auth**: k3s reads `/etc/rancher/k3s/registries.yaml` at startup. Cloud-init writes this file with GHCR credentials (PAT token). This is simpler than per-Deployment `imagePullSecrets` for single-node — all pods get registry auth automatically.
+
+```yaml
+# /etc/rancher/k3s/registries.yaml
+mirrors:
+  ghcr.io:
+    endpoint:
+      - "https://ghcr.io"
+configs:
+  "ghcr.io":
+    auth:
+      username: cogni-deploy
+      password: "${ghcr_deploy_token}"  # from OpenTofu variable
+```
+
 ### Argo CD Application Pattern
 
 App-of-apps pattern: one root Application creates per-service Applications.
@@ -303,7 +322,7 @@ spec:
 - Generate one age keypair per environment (staging, production)
 - Public key committed in `.sops.yaml` (safe — encryption only)
 - Private key stored as K8s Secret in the cluster (manual, one-time)
-- **ksops** as the Argo CD plugin (installed via `configManagementPlugins` in Argo CD ConfigMap — simplest for single-node k3s, no custom image needed)
+- **ksops** as an Argo CD sidecar CMP (repo-server sidecar container with ksops binary + plugin.yaml). The legacy `configManagementPlugins` in argocd-cm was removed in Argo CD 2.8; sidecar model is the only supported path.
 - Secrets encrypted at rest in git, decrypted at apply time
 - `platform/cd/secrets/README.md` documents the full setup: key generation, cluster secret creation, ksops plugin config
 
@@ -316,15 +335,21 @@ CI pushes image → CI creates PR updating overlay digest →
 
 This task creates the manifests. CI integration (auto-PR on image push) is a follow-up.
 
-### Design Review Notes (R1 review)
+### Design Review Notes
 
-Findings from `/review-design` applied to this design:
+Findings from two rounds of `/review-design` applied to this design:
 
-1. **R1 — Headless + Endpoints, not ExternalName**: ExternalName does DNS-only (CNAME), can't remap ports. Compose services may bind `127.0.0.1` internally. Headless Service + Endpoints with explicit IP:port works correctly. Overlay patches the IP. _(Applied above.)_
-2. **R2 — ksops chosen over ambiguous "OR"**: Picked ksops via `configManagementPlugins` — simplest for single-node k3s, no custom Argo CD image. _(Applied above.)_
-3. **R3 — Non-secret env vars moved to ConfigMap**: `GH_REVIEW_APP_ID` and `GH_REPOS` are not sensitive. Moved to ConfigMap. Only `GH_REVIEW_APP_PRIVATE_KEY_BASE64` stays in Secret. _(Applied above.)_
-4. **R4 — IMAGE_DIGEST added to ConfigMap**: Missing from original design. Used by `/version` endpoint. Set in overlay to match the image digest. _(Applied above.)_
+**R1 review:**
+1. **R1 — Selectorless Service + EndpointSlice**: ExternalName does DNS-only (CNAME), can't remap ports. Legacy `kind: Endpoints` deprecated in K8s v1.33+. Using selectorless Service + EndpointSlice (current K8s-documented pattern). _(Applied above.)_
+2. **R2 — ksops as sidecar CMP**: Legacy `configManagementPlugins` in argocd-cm removed in Argo CD 2.8. ksops runs as repo-server sidecar container. _(Applied above.)_
+3. **R3 — Non-secret env vars moved to ConfigMap**: `GH_REVIEW_APP_ID` and `GH_REPOS` are not sensitive. Only `GH_REVIEW_APP_PRIVATE_KEY_BASE64` stays in Secret. _(Applied above.)_
+4. **R4 — IMAGE_DIGEST added to ConfigMap**: Used by `/version` endpoint. Set in overlay to match the image digest. _(Applied above.)_
 5. **R5 — Cloud-init scope clarified**: `bootstrap-k3s.yaml` includes Argo CD install commands but they're exercised in task.0149, not this task. _(Applied above.)_
+
+**R2 review:**
+6. **R6 — GHCR private registry auth**: k3s `registries.yaml` provides node-level auth for private GHCR. Simpler than per-Deployment `imagePullSecrets` for single-node. _(Applied above.)_
+7. **R7 — Non-HA Argo install labeled explicitly**: Non-HA is correct for single-node crawl; HA install is a P2 concern. _(Applied above.)_
+8. **R8 — Multi-service scope**: Directory structure and app-of-apps pattern designed for all services (scheduler-worker, app, litellm, temporal, postgres), not just scheduler-worker. Only scheduler-worker base is fully specified in this task. _(Applied above.)_
 
 ## Validation
 
@@ -339,4 +364,4 @@ Findings from `/review-design` applied to this design:
 2. Review OpenTofu module extends cherry/base pattern correctly
 3. Review Argo CD Applications point at correct paths
 4. Review SOPS config has correct path rules
-5. Review ExternalName services point at placeholder IPs (replaced during task.0149)
+5. Review EndpointSlice addresses use placeholder IPs (replaced during task.0149)
