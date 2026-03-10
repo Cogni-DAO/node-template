@@ -2,7 +2,7 @@
 id: task.0149
 type: task
 title: "PR Review Bot V0 — LangGraph graph + gate orchestrator for automated PR review"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 1
 estimate: 4
@@ -17,11 +17,11 @@ project: proj.vcs-integration
 branch:
 pr:
 reviewer:
-revision: 2
+revision: 3
 blocked_by:
 deploy_verified: false
 created: 2026-03-10
-updated: 2026-03-10
+updated: 2026-03-11
 labels: [vcs, ai, review, langgraph]
 external_refs:
   - https://github.com/cogni-dao/cogni-git-review
@@ -248,6 +248,14 @@ pnpm test src/adapters/server/review/
 - Existing gates config: .cogni/repo-spec.yaml
 - Existing rules: .cogni/rules/\*.yaml
 - System tenant: src/shared/constants/system-tenant.ts
+
+## Review Feedback
+
+### Revision 3 — Blocking Issues
+
+1. **No unit tests for feature layer** — criteria-evaluator, gate-orchestrator, ai-rule (parseScoresFromResponse), review-limits, summary-formatter all have zero tests. Tests are required per TESTS_PROVE_WORK.
+
+2. **Timer leak in gate-orchestrator** — `timeout()` helper at `gate-orchestrator.ts:139-150` creates a `setTimeout` that is never cleared when the gate completes before timeout. In a long-running process handling many PRs, this leaks timers.
 
 ## Attribution
 

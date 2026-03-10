@@ -15,6 +15,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { dispatchPrReview } from "@/app/_facades/review/dispatch.server";
 import { getContainer } from "@/bootstrap/container";
 import {
   receiveWebhook,
@@ -114,6 +115,13 @@ export async function POST(
       { source, eventType, eventCount: result.eventCount },
       "webhook processed"
     );
+
+    // Fire-and-forget: dispatch PR review if this is a pull_request event.
+    // Runs async AFTER returning 200 — errors logged, never block webhook response.
+    if (source === "github" && eventType === "pull_request") {
+      const payload = JSON.parse(bodyBuffer.toString("utf-8"));
+      dispatchPrReview(payload, env, log);
+    }
 
     return NextResponse.json(
       { ok: true, eventCount: result.eventCount },
