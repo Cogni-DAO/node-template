@@ -16,8 +16,8 @@ import { toUserId } from "@cogni/ids";
 import { getContainer } from "@/bootstrap/container";
 import type { CreditsConfirmOutput } from "@/contracts/payments.credits.confirm.v1.contract";
 import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
+import { confirmCreditsPurchase } from "@/features/payments/application/confirmCreditsPurchase";
 import { AuthUserNotFoundError } from "@/features/payments/errors";
-import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getCreditsSummary } from "@/features/payments/services/creditsSummary";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
@@ -70,9 +70,10 @@ export async function confirmCreditsPaymentFacade(
     }),
   };
 
-  const result = await confirmCreditsPayment(
+  const result = await confirmCreditsPurchase(
     accountService,
     container.serviceAccountService,
+    container.treasurySettlement,
     {
       billingAccountId: billingAccount.id,
       defaultVirtualKeyId: billingAccount.defaultVirtualKeyId,
@@ -90,11 +91,30 @@ export async function confirmCreditsPaymentFacade(
     billingAccountId: billingAccount.id,
     paymentIntentId: params.clientPaymentId,
     chainId: 0, // Widget payments are off-chain
-    txHash: "",
+    txHash: result.settlement?.txHash ?? "",
     creditsApplied: params.amountUsdCents,
     durationMs: performance.now() - start,
   };
   enrichedCtx.log.info(event, "widget payment confirmed");
+
+  // Log settlement outcome
+  if (result.settlement) {
+    enrichedCtx.log.info(
+      {
+        settlementTxHash: result.settlement.txHash,
+        paymentIntentId: params.clientPaymentId,
+      },
+      "treasury settlement completed"
+    );
+  } else if (result.settlementError) {
+    enrichedCtx.log.warn(
+      {
+        err: result.settlementError,
+        paymentIntentId: params.clientPaymentId,
+      },
+      "treasury settlement failed — credits confirmed, settlement skipped"
+    );
+  }
 
   return {
     billingAccountId: result.billingAccountId,

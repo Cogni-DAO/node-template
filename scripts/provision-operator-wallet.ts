@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   );
   console.log(`  2. Deploy Splits contract with this address as recipient`);
   console.log(
-    `  3. Update .cogni/repo-spec.yaml → operator_wallet.split_address = <split address>`
+    `  3. Update .cogni/repo-spec.yaml → payments_in.credits_topup.receiving_address = <split address>`
   );
   console.log(`  4. Fund wallet with small ETH balance on Base for gas`);
 }

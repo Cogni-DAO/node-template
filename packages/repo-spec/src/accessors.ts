@@ -34,7 +34,11 @@ export interface LedgerConfig {
   epochLengthDays: number;
   activitySources: Record<
     string,
-    { attributionPipeline: string; sourceRefs: string[] }
+    {
+      attributionPipeline: string;
+      sourceRefs: string[];
+      excludedLogins?: string[];
+    }
   >;
   poolConfig: LedgerPoolConfig;
   /** base_issuance_credits as string (bigint serialized) for schedule payload. */
@@ -155,6 +159,7 @@ export function extractLedgerConfig(spec: RepoSpec): LedgerConfig | null {
     sources[name] = {
       attributionPipeline: src.attribution_pipeline,
       sourceRefs: src.source_refs,
+      excludedLogins: src.excluded_logins,
     };
   }
 
@@ -193,4 +198,12 @@ export function extractOperatorWalletConfig(
   spec: RepoSpec
 ): OperatorWalletSpec | undefined {
   return spec.operator_wallet;
+}
+
+/**
+ * Extract DAO treasury address from repo-spec.
+ * Returns undefined if cogni_dao.dao_contract is not present.
+ */
+export function extractDaoTreasuryAddress(spec: RepoSpec): string | undefined {
+  return spec.cogni_dao.dao_contract;
 }

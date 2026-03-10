@@ -19,7 +19,7 @@ updated: 2026-03-09
 labels: [wallet, web3, billing, openrouter]
 external_refs:
 revision: 1
-blocked_by: task.0085
+blocked_by: task.0150
 deploy_verified: false
 rank: 21
 ---

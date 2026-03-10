@@ -22,6 +22,8 @@ import type { AttributionStore } from "@cogni/attribution-ledger";
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
+import { numberToPpm } from "@cogni/operator-wallet";
+import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/privy";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
@@ -52,6 +54,7 @@ import {
 import { ServiceDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
+import { SplitTreasurySettlementAdapter } from "@/adapters/server/treasury/split-treasury-settlement.adapter";
 import {
   FakeMetricsAdapter,
   getTestEvmOnchainClient,
@@ -72,9 +75,6 @@ import type {
   AiTelemetryPort,
   Clock,
   DataSourceRegistration,
-  ExecutionGrantUserPort,
-  ExecutionGrantWorkerPort,
-  ExecutionRequestPort,
   GovernanceStatusPort,
   LangfusePort,
   LlmService,
@@ -83,16 +83,28 @@ import type {
   OperatorWalletPort,
   PaymentAttemptServiceRepository,
   PaymentAttemptUserRepository,
-  ScheduleRunRepository,
-  ScheduleUserPort,
   ServiceAccountService,
   ThreadPersistencePort,
   TreasuryReadPort,
+  TreasurySettlementPort,
 } from "@/ports";
-import { getOperatorWalletConfig, getScopeId } from "@/shared/config";
+import type {
+  ExecutionGrantUserPort,
+  ExecutionGrantWorkerPort,
+  ExecutionRequestPort,
+  ScheduleRunRepository,
+  ScheduleUserPort,
+} from "@/ports/server";
+import {
+  getDaoTreasuryAddress,
+  getOperatorWalletConfig,
+  getPaymentConfig,
+  getScopeId,
+} from "@/shared/config";
 import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@/shared/constants/system-tenant";
 import { serverEnv } from "@/shared/env/server-env";
 import { makeLogger } from "@/shared/observability";
+import { USDC_TOKEN_ADDRESS } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
 export type UnhandledErrorPolicy = "rethrow" | "respond_500";
@@ -148,6 +160,8 @@ export interface Container {
   webhookRegistrations: ReadonlyMap<string, DataSourceRegistration>;
   /** Operator wallet — undefined when PRIVY_APP_ID not set */
   operatorWallet: OperatorWalletPort | undefined;
+  /** Treasury settlement — undefined when operator wallet not configured */
+  treasurySettlement: TreasurySettlementPort | undefined;
 }
 
 // Feature-specific dependency types
@@ -385,8 +399,6 @@ function createContainer(): Container {
   };
 
   // OperatorWallet: test uses fake, production uses Privy (optional — only when configured)
-  // NOTE: PrivyOperatorWalletAdapter imported directly (not from barrel) to avoid
-  // pulling @privy-io/node into the test bundle. Same pattern as SandboxGraphProvider.
   const operatorWalletConfig = getOperatorWalletConfig();
   const operatorWallet: OperatorWalletPort | undefined = env.isTestMode
     ? getTestOperatorWallet()
@@ -404,18 +416,23 @@ function createContainer(): Container {
           );
           return undefined;
         }
-        // Lazy import: @privy-io/node can be slow to load.
-        // Only loaded when Privy env vars are configured (production).
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { PrivyOperatorWalletAdapter } =
-          // eslint-disable-next-line unicorn/prefer-module
-          require("../adapters/server/wallet/privy-operator-wallet.adapter") as typeof import("@/adapters/server/wallet/privy-operator-wallet.adapter");
+        const treasuryAddress = getDaoTreasuryAddress();
+        if (!treasuryAddress) {
+          log.warn(
+            "operator_wallet configured but cogni_dao.dao_contract missing — skipping operator wallet"
+          );
+          return undefined;
+        }
+        const paymentConfig = getPaymentConfig();
         return new PrivyOperatorWalletAdapter({
           appId: env.PRIVY_APP_ID,
           appSecret: env.PRIVY_APP_SECRET,
           signingKey: env.PRIVY_SIGNING_KEY,
           expectedAddress: operatorWalletConfig.address,
-          splitAddress: operatorWalletConfig.split_address,
+          splitAddress: paymentConfig.receivingAddress,
+          treasuryAddress,
+          markupPpm: numberToPpm(env.USER_PRICE_MARKUP_FACTOR),
+          revenueSharePpm: numberToPpm(env.SYSTEM_TENANT_REVENUE_SHARE),
         });
       })();
 
@@ -457,6 +474,9 @@ function createContainer(): Container {
       return getWebhookRegistrations();
     },
     operatorWallet,
+    treasurySettlement: operatorWallet
+      ? new SplitTreasurySettlementAdapter(operatorWallet, USDC_TOKEN_ADDRESS)
+      : undefined,
   };
 }
 
