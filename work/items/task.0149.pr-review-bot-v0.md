@@ -14,8 +14,8 @@ spec_refs:
 assignees: []
 credit:
 project: proj.vcs-integration
-branch:
-pr:
+branch: worktree-feat-git-review-v0
+pr: https://github.com/Cogni-DAO/node-template/pull/545
 reviewer:
 revision: 3
 blocked_by:
