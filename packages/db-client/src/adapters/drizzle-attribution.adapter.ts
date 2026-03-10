@@ -13,7 +13,7 @@
  * - SELECTION_FREEZE_ON_FINALIZE: DB trigger enforces; adapter does not duplicate check.
  * - ONE_OPEN_EPOCH: DB constraint enforces; adapter lets DB error propagate.
  * - USER_PROJECTIONS_RECOMPUTABLE: upsertUserProjections updates projected_units/receipt_count and never stores signed final units.
- * - POOL_LOCKED_AT_REVIEW: insertPoolComponent rejects inserts when epoch status != 'open'.
+ * - POOL_LOCKED_AT_REVIEW: insertPoolComponent rejects inserts when epoch status != 'open'. Idempotent via ON CONFLICT DO NOTHING + SELECT fallback; returns { component, created }.
  * - CONFIG_LOCKED_AT_REVIEW: closeIngestion pins allocationAlgoRef + weightConfigHash.
  * - EVALUATION_FINAL_ATOMIC: closeIngestionWithEvaluations inserts locked evaluations + sets artifacts_hash + transitions epoch in one transaction.
  * - EPOCH_CLOSE_ON_TRANSITION: transitionEpochForWindow closes stale open epoch + creates new epoch in one DB transaction.
