@@ -1,13 +1,13 @@
 ---
 id: task.0150
 type: task
-title: Operator wallet + splits setup wizard (following DAO formation pattern)
+title: Operator wallet e2e validation — Privy credentials, Split deploy, test:external
 status: needs_design
-priority: 2
-estimate: 5
-summary: Add operator wallet provisioning and Split contract deployment as a setup wizard step in src/features/setup/, following the established DAO formation pattern. Replace standalone scripts with UI-driven flow + server-side verification.
-outcome: Fork owners complete operator wallet + Split deployment via a setup wizard page. Server verifies receipts, derives addresses, writes repo-spec. Scripts become thin CLI fallbacks importing from the feature.
-spec_refs: operator-wallet, node-formation, packages-architecture
+priority: 1
+estimate: 3
+summary: Validate the operator wallet pipeline end-to-end. Provision Privy credentials, deploy Split on Base, update repo-spec with real addresses, create test:external tests for PrivyOperatorWalletAdapter and distributeSplit(). Without this, the entire task.0085 pipeline is untested against real infrastructure.
+outcome: Privy credentials provisioned. Split deployed on Base. repo-spec has real addresses. test:external suite proves PrivyOperatorWalletAdapter.distributeSplit() works against real Privy + real chain. Pipeline validated before task.0086 (OpenRouter top-up) builds on it.
+spec_refs: operator-wallet
 assignees: derekg1729
 credit:
 project: proj.ai-operator-wallet
@@ -16,87 +16,93 @@ pr:
 reviewer:
 created: 2026-03-10
 updated: 2026-03-10
-labels: [wallet, web3, setup]
+labels: [wallet, web3, testing]
 external_refs:
-revision: 1
+revision: 2
 blocked_by:
 deploy_verified: false
-rank: 40
+rank: 15
 ---
 
-# Operator wallet + splits setup wizard
+# Operator wallet e2e validation
 
-> Follow-up from task.0085. The operator wallet provisioning and Split deployment are standalone scripts that print manual next-steps. They should follow the established DAO formation pattern: UI wizard → txBuilders → server verify → write repo-spec.
+> The entire operator wallet pipeline (task.0085) has only been tested with FakeOperatorWalletAdapter. The real PrivyOperatorWalletAdapter has never been called. No Privy credentials exist. No Split contract is deployed. repo-spec has placeholder addresses. This task validates the pipeline before task.0086 (OpenRouter top-up) builds on it.
 
-## Problem
+## Why this blocks everything
 
-The DAO formation flow (`src/features/setup/daoFormation/`) already solves this exact problem for Aragon contracts:
-- Pure `txBuilders` for ABI encoding
-- `formation.reducer` state machine driving a multi-tx wizard
-- Server-side receipt verification (never trusts client addresses)
-- Generates repo-spec YAML automatically
+The payment pipeline is: User USDC → Split contract → distribute() → operator/DAO split → operator funds OpenRouter (task.0086).
 
-But operator wallet + Split deployment (`scripts/provision-operator-wallet.ts`, `scripts/deploy-split.ts`) bypasses all of this:
-- Inline `main()` with `process.exit` and `console.log` — not importable
-- Prints "copy-paste this address into repo-spec.yaml" — manual glue
-- No server verification of the deployed Split's allocations
-- No UI — requires CLI + env vars + private key handling
+Task.0086 can't be implemented until:
 
-## Design Direction
+1. Privy credentials exist and the adapter actually works
+2. A Split contract is deployed on Base with correct allocations
+3. `distributeSplit()` is proven to work against real chain
+4. repo-spec has real addresses so the container wires the real adapter
 
-### Follow the DAO formation pattern
+Without this task, task.0086 would be building on unvalidated foundations.
 
-Add a new setup step (likely `/setup/operator-wallet` or extend the existing formation flow):
+## Current state (what's broken)
 
-| Layer | DAO Formation (existing) | Operator Wallet Setup (new) |
-|-------|--------------------------|---------------------------|
-| **txBuilders** | `buildCreateDaoArgs()`, `buildDeploySignalArgs()` | `buildDeploySplitArgs()` (from billing constants) |
-| **Reducer** | `formationReducer` — 8 phases, 2 txns | New reducer — provision wallet (API) → deploy Split (1 txn) |
-| **Server verify** | Decode receipts, verify balances, verify CogniSignal.DAO() | Decode receipt, verify Split allocations match billing constants, verify recipients |
-| **Repo-spec output** | Generates `cogni_dao` section | Generates `operator_wallet.address` + updates `receiving_address` |
-| **Packages** | `@cogni/aragon-osx` (encoding, receipts), `@cogni/cogni-contracts` (ABI) | `@cogni/operator-wallet` (split math, adapter) — extend with Split ABI encoding + receipt decoding |
+| Component                  | Status          | Problem                                                               |
+| -------------------------- | --------------- | --------------------------------------------------------------------- |
+| Privy credentials          | Missing         | Never provisioned. No PRIVY_APP_ID/SECRET/SIGNING_KEY                 |
+| PrivyOperatorWalletAdapter | Never tested    | Only FakeOperatorWalletAdapter used in tests                          |
+| Split contract             | Not deployed    | `scripts/deploy-split.ts` exists but never run on mainnet             |
+| repo-spec addresses        | Placeholder     | `operator_wallet.address: 0x000...`, `receiving_address` = DAO wallet |
+| Container wiring (prod)    | Never exercised | `operatorWallet: undefined` because no Privy env vars                 |
+| Treasury settlement (prod) | Silently no-ops | `treasurySettlement: undefined` because no operatorWallet             |
 
-### Key differences from DAO formation
+## Plan
 
-- **Privy wallet provisioning is an API call, not a wallet transaction.** The user doesn't sign a tx — the server creates a Privy-managed wallet via API. This is Step 1 before any on-chain work.
-- **Split deployment uses a deployer EOA or Privy wallet.** The connected browser wallet may not be the deployer — need to handle this.
-- **`distribute-split` is operational, not setup.** It's a recurring action, not a one-time deploy. Stays as a CLI script (or becomes a scheduled activity) — not part of the setup wizard.
+### Checkpoint 1: Privy credentials + operator wallet provisioning
 
-### Package work
+- [ ] Create Privy account / obtain credentials (PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_SIGNING_KEY)
+- [ ] Run `pnpm tsx scripts/provision-operator-wallet.ts`
+- [ ] Record operator wallet address
+- [ ] Update `.cogni/repo-spec.yaml` → `operator_wallet.address`
+- [ ] Add Privy env vars to `.env.local` (and document in `.env.local.example`)
+- [ ] Verify container boots with real adapter: check logs for Privy adapter init (not "skipping")
 
-Extend `@cogni/operator-wallet` with:
-- `src/domain/split-encoding.ts` — pure `buildDeploySplitArgs()` using `splitV2o2FactoryAbi`
-- `src/domain/split-receipt.ts` — `decodeSplitDeployReceipt()` (extract Split address from SplitCreated event)
+### Checkpoint 2: Split contract deployment on Base
 
-This mirrors how `@cogni/aragon-osx` has `encoding.ts` + `osx/receipt.ts`.
+- [ ] Fund deployer EOA with ETH on Base (~$0.01 for gas)
+- [ ] Run `pnpm tsx scripts/deploy-split.ts` with real addresses
+- [ ] Verify deployed Split allocations match billing constants (92.1% / 7.9%)
+- [ ] Update `.cogni/repo-spec.yaml` → `payments_in.credits_topup.receiving_address` = Split address
+- [ ] Verify on Basescan: Split contract exists, recipients correct
 
-### Scripts become thin CLIs
+### Checkpoint 3: test:external for operator wallet
 
-After extraction, `scripts/deploy-split.ts` becomes a 20-line CLI wrapper that imports from `@cogni/operator-wallet` and calls the same functions the setup wizard uses. Useful for operators who prefer CLI, but no longer the primary path.
+- [ ] `tests/external/operator-wallet.external.test.ts` — requires PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_SIGNING_KEY
+  - Test: PrivyOperatorWalletAdapter.getAddress() returns expected address
+  - Test: PrivyOperatorWalletAdapter.getSplitAddress() returns deployed Split address
+  - Test: distributeSplit(USDC) succeeds (may need small USDC in Split first, or verify tx reverts gracefully with 0 balance)
+- [ ] Guard with env var check (skip if credentials missing, like existing external tests)
+- [ ] Add to `pnpm test:external` suite
 
-## Design Questions
+### Checkpoint 4: dev:stack validation
 
-- [ ] **Single page or multi-step?** Is operator wallet setup a new page (`/setup/operator-wallet`) or a continuation of the DAO formation wizard (step 3 after DAO + Signal)?
-- [ ] **Privy provisioning UX** — who triggers it? The setup wizard page calls a server action that hits Privy API? Or is it a pre-req the operator does separately?
-- [ ] **Deployer key handling** — DAO formation uses the connected browser wallet. Split deployment currently uses `DEPLOYER_PRIVATE_KEY` env var. Should the setup wizard use the connected wallet too? Or keep it server-side via Privy?
-- [ ] **`scripts/experiments/` cleanup** — spike scripts (`full-chain.ts`, `splits-deploy.ts`) now duplicate package logic. Delete, or keep as manual test fixtures?
+- [ ] `pnpm dev:stack` with Privy env vars — verify container wires real adapter
+- [ ] Simulate credit confirmation flow — verify treasury settlement attempts real distributeSplit()
+- [ ] Verify structured logs show settlement outcome (not undefined)
 
-## Requirements
+## Relationship to other tasks
 
-- [ ] `buildDeploySplitArgs()` — pure function in `@cogni/operator-wallet`, derives from billing constants
-- [ ] `decodeSplitDeployReceipt()` — extract Split address from SplitCreated event
-- [ ] Server-side verification: decode receipt, verify allocations match billing constants, verify recipients are operator + DAO treasury
-- [ ] Setup page/wizard step with state machine (reducer pattern)
-- [ ] Server writes `operator_wallet.address` and `receiving_address` to repo-spec
-- [ ] Idempotent: skip if addresses already non-placeholder
-- [ ] Existing scripts refactored to thin CLI wrappers importing from package
+- **task.0085** (done) — built the code; this task validates it works
+- **task.0086** (blocked by this) — implements fundOpenRouterTopUp(); depends on proven Privy adapter
+- **Setup wizard refactor** — scripts → UI (DAO formation pattern) is a separate concern; do AFTER pipeline is validated
+
+## Open questions
+
+- [ ] Do we need a test Split on Base Sepolia first, or go straight to mainnet? (Mainnet deployment is cheap — ~$0.01 gas — but Sepolia would be safer for initial validation)
+- [ ] How much USDC should be seeded in the Split for test:external to call distributeSplit()? Or should the test just verify the tx doesn't revert with 0 balance?
 
 ## Validation
 
 ```bash
 pnpm check
-pnpm test tests/unit/packages/operator-wallet/
-pnpm test tests/unit/features/setup/
+pnpm test:external  # requires PRIVY_* env vars
+pnpm dev:stack      # verify real adapter wiring
 ```
 
 ## Attribution
