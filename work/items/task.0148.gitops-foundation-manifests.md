@@ -40,7 +40,7 @@ The project plan (`proj.cicd-services-gitops` P1) already defines the target arc
 ```
 cogni-template (app repo)     → Build + test + push images
     ↓ (image pushed)
-deployments/ (manifests)      → Kustomize bases + overlays
+platform/cd/ (manifests)      → Kustomize bases + overlays
     ↓ (Argo syncs)
 k3s cluster (OpenTofu)        → Argo CD watches + applies
 ```
@@ -55,7 +55,7 @@ A complete set of deployment manifests, IaC modules, and Argo CD configuration �
 
 ### Approach
 
-**Solution**: Kustomize (built into kubectl, no extra tools) for manifest management. OpenTofu extending existing Cherry Servers provider for k3s VM provisioning. Argo CD for GitOps reconciliation. All pure infrastructure files under `deployments/` and `platform/infra/`.
+**Solution**: Kustomize (built into kubectl, no extra tools) for manifest management. OpenTofu extending existing Cherry Servers provider for k3s VM provisioning. Argo CD for GitOps reconciliation. All pure infrastructure files under `platform/cd/` and `platform/infra/`.
 
 **Reuses**:
 - Existing Cherry Servers OpenTofu provider (`platform/infra/providers/cherry/base/`)
@@ -65,7 +65,7 @@ A complete set of deployment manifests, IaC modules, and Argo CD configuration �
 
 **Rejected alternatives**:
 - **Helm**: More powerful but more complex. Kustomize's overlay model is simpler for our use case (same base, env-specific patches). No template language to debug. Built into kubectl.
-- **Separate `cogni-deployments` repo**: Adds repo management overhead. Monorepo `deployments/` directory works for now — Argo CD can watch a subdirectory. Extract when the need arises (multiple teams, access control).
+- **Separate `cogni-deployments` repo**: Adds repo management overhead. Monorepo `platform/cd/` directory works for now — Argo CD can watch a subdirectory. Extract when the need arises (multiple teams, access control).
 - **Full k8s (EKS/GKE)**: Overkill for pre-users. k3s gives us full K8s API on a single node with ~512MB RAM overhead. Same manifests work on full k8s later.
 - **Pulumi/CDK**: TypeScript IaC is appealing but adds runtime dependency. OpenTofu is already established in the repo and battle-tested.
 - **k3s on same VM as Docker Compose**: Messy coexistence. Dedicated VM keeps the transition clean and allows easy rollback.
@@ -74,7 +74,7 @@ A complete set of deployment manifests, IaC modules, and Argo CD configuration �
 
 **Phase A (this task)**: Write all manifests and IaC files. Validate locally. No infrastructure changes.
 
-**Phase B (task.0149)**: Provision k3s VM. Install Argo CD. Point at `deployments/`. Migrate scheduler-worker. Verify. Retire scheduler-worker from Compose.
+**Phase B (task.0149)**: Provision k3s VM. Install Argo CD. Point at `platform/cd/`. Migrate scheduler-worker. Verify. Retire scheduler-worker from Compose.
 
 **Phase C (future, P2)**: Migrate remaining services (app, litellm, temporal, postgres) to k3s. Retire Docker Compose entirely.
 
@@ -110,31 +110,31 @@ During the transition period (scheduler-worker in k3s, everything else in Compos
 
 ### Files
 
-**Deployment Manifests** (`deployments/`):
+**Deployment Manifests** (`platform/cd/`):
 
-- Create: `deployments/AGENTS.md` — directory-level documentation
-- Create: `deployments/base/scheduler-worker/kustomization.yaml` — Kustomize base resource list
-- Create: `deployments/base/scheduler-worker/deployment.yaml` — K8s Deployment (replicas, probes, env, resources)
-- Create: `deployments/base/scheduler-worker/service.yaml` — ClusterIP Service for health probes
-- Create: `deployments/base/scheduler-worker/configmap.yaml` — Non-secret env vars (TEMPORAL_ADDRESS, etc.)
-- Create: `deployments/base/scheduler-worker/external-services.yaml` — Headless Service + Endpoints for Compose VM connectivity (temporal, postgres, app) — NOT ExternalName (see R1 below)
-- Create: `deployments/overlays/staging/kustomization.yaml` — Staging overlay (image digest, namespace, replicas, Endpoints IP patches)
-- Create: `deployments/overlays/production/kustomization.yaml` — Production overlay (image digest, namespace, replicas)
-- Create: `deployments/overlays/staging/namespace.yaml` — Namespace definition
-- Create: `deployments/overlays/production/namespace.yaml` — Namespace definition
+- Create: `platform/cd/AGENTS.md` — directory-level documentation
+- Create: `platform/cd/base/scheduler-worker/kustomization.yaml` — Kustomize base resource list
+- Create: `platform/cd/base/scheduler-worker/deployment.yaml` — K8s Deployment (replicas, probes, env, resources)
+- Create: `platform/cd/base/scheduler-worker/service.yaml` — ClusterIP Service for health probes
+- Create: `platform/cd/base/scheduler-worker/configmap.yaml` — Non-secret env vars (TEMPORAL_ADDRESS, etc.)
+- Create: `platform/cd/base/scheduler-worker/external-services.yaml` — Headless Service + Endpoints for Compose VM connectivity (temporal, postgres, app) — NOT ExternalName (see R1 below)
+- Create: `platform/cd/overlays/staging/kustomization.yaml` — Staging overlay (image digest, namespace, replicas, Endpoints IP patches)
+- Create: `platform/cd/overlays/production/kustomization.yaml` — Production overlay (image digest, namespace, replicas)
+- Create: `platform/cd/overlays/staging/namespace.yaml` — Namespace definition
+- Create: `platform/cd/overlays/production/namespace.yaml` — Namespace definition
 
-**Argo CD Configuration** (`deployments/argocd/`):
+**Argo CD Configuration** (`platform/cd/argocd/`):
 
-- Create: `deployments/argocd/install.yaml` — Argo CD install reference (namespace + kustomize remote base)
-- Create: `deployments/argocd/app-of-apps.yaml` — Root Application that manages all service Applications
-- Create: `deployments/argocd/applications/scheduler-worker.yaml` — Per-service Argo Application pointing at overlay
+- Create: `platform/cd/argocd/install.yaml` — Argo CD install reference (namespace + kustomize remote base)
+- Create: `platform/cd/argocd/app-of-apps.yaml` — Root Application that manages all service Applications
+- Create: `platform/cd/argocd/applications/scheduler-worker.yaml` — Per-service Argo Application pointing at overlay
 
-**Secrets Strategy** (`deployments/secrets/`):
+**Secrets Strategy** (`platform/cd/secrets/`):
 
-- Create: `deployments/secrets/README.md` — SOPS/age setup instructions, key management
-- Create: `deployments/secrets/.sops.yaml` — SOPS configuration (age recipient, path rules)
-- Create: `deployments/secrets/staging/scheduler-worker.enc.yaml` — Encrypted K8s Secret (SOPS-encrypted)
-- Create: `deployments/secrets/production/scheduler-worker.enc.yaml` — Encrypted K8s Secret (SOPS-encrypted)
+- Create: `platform/cd/secrets/README.md` — SOPS/age setup instructions, key management
+- Create: `platform/cd/secrets/.sops.yaml` — SOPS configuration (age recipient, path rules)
+- Create: `platform/cd/secrets/staging/scheduler-worker.enc.yaml` — Encrypted K8s Secret (SOPS-encrypted)
+- Create: `platform/cd/secrets/production/scheduler-worker.enc.yaml` — Encrypted K8s Secret (SOPS-encrypted)
 
 **OpenTofu k3s Module** (`platform/infra/providers/cherry/k3s/`):
 
@@ -287,7 +287,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/cogni-dao/cogni-template.git
-    path: deployments/argocd/applications
+    path: platform/cd/argocd/applications
     targetRevision: staging  # or main for production
   destination:
     server: https://kubernetes.default.svc
@@ -305,7 +305,7 @@ spec:
 - Private key stored as K8s Secret in the cluster (manual, one-time)
 - **ksops** as the Argo CD plugin (installed via `configManagementPlugins` in Argo CD ConfigMap — simplest for single-node k3s, no custom image needed)
 - Secrets encrypted at rest in git, decrypted at apply time
-- `deployments/secrets/README.md` documents the full setup: key generation, cluster secret creation, ksops plugin config
+- `platform/cd/secrets/README.md` documents the full setup: key generation, cluster secret creation, ksops plugin config
 
 ### Promotion Flow (CI Integration — future, not this task)
 
@@ -329,8 +329,8 @@ Findings from `/review-design` applied to this design:
 ## Validation
 
 **Automated:**
-- `kubectl kustomize deployments/overlays/staging/` exits 0
-- `kubectl kustomize deployments/overlays/production/` exits 0
+- `kubectl kustomize platform/cd/overlays/staging/` exits 0
+- `kubectl kustomize platform/cd/overlays/production/` exits 0
 - `tofu plan` in `platform/infra/providers/cherry/k3s/` succeeds (with mock vars)
 - All YAML files are valid
 

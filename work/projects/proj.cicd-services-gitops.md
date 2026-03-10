@@ -109,7 +109,7 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 | Deliverable                                                                    | Status      | Est | Work Item  |
 | ------------------------------------------------------------------------------ | ----------- | --- | ---------- |
 | Extend digest-driven deploy to app+migrator                                    | Not Started | 1   | —          |
-| Create `deployments/` monorepo dir with Kustomize bases+overlays               | Not Started | 3   | task.0148  |
+| Create `platform/cd/` dir with Kustomize bases+overlays               | Not Started | 3   | task.0148  |
 | Write Kustomize base for scheduler-worker (`base/scheduler-worker/`)           | Not Started | ↑   | task.0148  |
 | Create overlays: `overlays/staging/`, `overlays/production/`                   | Not Started | ↑   | task.0148  |
 | Argo app-of-apps pattern for multi-service management                          | Not Started | ↑   | task.0148  |
