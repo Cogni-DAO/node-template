@@ -168,3 +168,7 @@ export type {
   TreasuryReadPort,
   TreasurySnapshot,
 } from "./treasury-read.port";
+export type {
+  TreasurySettlementOutcome,
+  TreasurySettlementPort,
+} from "./treasury-settlement.port";
