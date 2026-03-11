@@ -2,7 +2,7 @@
 id: task.0160
 type: task
 title: Scheduler-worker Dockerfile cache parity with app
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 2
@@ -12,7 +12,7 @@ spec_refs: build-architecture-spec, services-architecture-spec
 assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
-branch:
+branch: task/0160-scheduler-worker-dockerfile-cache-parity
 pr:
 reviewer:
 revision: 0
