@@ -36,9 +36,18 @@ importers:
       '@biomejs/biome':
         specifier: ^2.3.7
         version: 2.3.7
+      '@cogni/ai-tools':
+        specifier: workspace:*
+        version: link:packages/ai-tools
+      '@cogni/aragon-osx':
+        specifier: workspace:*
+        version: link:packages/aragon-osx
       '@cogni/attribution-pipeline-plugins':
         specifier: workspace:*
         version: link:packages/attribution-pipeline-plugins
+      '@cogni/repo-spec':
+        specifier: workspace:*
+        version: link:packages/repo-spec
       '@commitlint/cli':
         specifier: ^19.8.1
         version: 19.8.1(@types/node@22.19.7)(typescript@5.9.3)

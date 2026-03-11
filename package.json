@@ -152,7 +152,10 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
     "@biomejs/biome": "^2.3.7",
+    "@cogni/ai-tools": "workspace:*",
+    "@cogni/aragon-osx": "workspace:*",
     "@cogni/attribution-pipeline-plugins": "workspace:*",
+    "@cogni/repo-spec": "workspace:*",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@eslint/js": "^9.39.1",
