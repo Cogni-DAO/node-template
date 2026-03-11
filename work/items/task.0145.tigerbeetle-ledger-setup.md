@@ -90,7 +90,7 @@ This is explicitly a Crawl limitation. Walk phase adds transactional guarantees.
 - **R2**: `FinancialLedgerPort` interface with `transfer`, `linkedTransfers`, `lookupAccounts`, `getAccountBalance` (Crawl scope — two-phase methods deferred to task.0147)
 - **R3**: `TigerBeetleAdapter` implementing FinancialLedgerPort via `tigerbeetle-node`
 - **R4**: Accounts hierarchy created on startup (idempotent — handle `exists` and `exists_with_different_fields` explicitly). One TigerBeetle account per logical account with correct ledger IDs per asset type.
-- **R5**: `creditAccount()` for deposits co-writes linked TigerBeetle transfers (USDC → clearing → CREDIT) alongside existing Postgres writes. Non-blocking.
+- **R5**: `creditAccount()` for deposits co-writes a TigerBeetle transfer (Equity:CreditIssuance → Liability:UserCredits on CREDIT ledger) alongside existing Postgres writes. Non-blocking.
 - **R6**: `recordChargeReceipt()` co-writes a TigerBeetle transfer (Liability:UserCredits → Revenue:AIUsage) alongside existing Postgres writes. Non-blocking.
 - **R7**: `user_data_128` on TigerBeetle transfers links back to Postgres `credit_ledger.id` or `charge_receipts.id` for metadata joins
 - **R8**: Integration tests against real TigerBeetle in Docker (same pattern as drizzle adapter int tests against real Postgres). No fake adapter — mock the port at call sites for unit tests.
@@ -129,9 +129,8 @@ This is explicitly a Crawl limitation. Walk phase adds transactional guarantees.
 
 ### Step 4: Credit Deposit Co-Write
 
-- [ ] Modify `DrizzleAccountService.creditAccount()` to call `financialLedgerPort.linkedTransfers()` for deposit reason
-- [ ] Linked transfers: Assets:OnChain:USDC → Clearing:USDCtoCredit → Liability:UserCredits:CREDIT (see spec: financial-ledger-spec, Cross-Ledger Transfers section)
-- [ ] Conversion: `credits = micro_usdc * 10` (integer math, CREDITS_PER_USD / USDC_SCALE)
+- [x] Modify `DrizzleAccountService.creditAccount()` to call `financialLedgerPort.transfer()` for deposit reason
+- [x] Transfer: Equity:CreditIssuance → Liability:UserCredits on CREDIT ledger (MVP 5-account model, no clearing accounts)
 - [ ] Set `user_data_128` = credit_ledger entry UUID for metadata linkage
 - [ ] Non-blocking: wrap in try/catch, log critical on failure, continue
 
@@ -144,7 +143,7 @@ This is explicitly a Crawl limitation. Walk phase adds transactional guarantees.
 
 ### Step 6: Integration Tests
 
-- [ ] Create `packages/financial-ledger/tests/tigerbeetle.adapter.int.test.ts` — integration tests against real TigerBeetle in Docker: single-ledger transfer, linked cross-ledger transfer, idempotent account creation, account balance queries
+- [x] Create `apps/web/tests/stack/payments/tigerbeetle-adapter.stack.test.ts` — stack integration tests against real TigerBeetle: single-ledger transfer, linked transfers, idempotent account creation, account balance queries
 
 ## Out of Scope (separate tasks)
 
