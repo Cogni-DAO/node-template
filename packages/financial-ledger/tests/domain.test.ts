@@ -37,12 +37,10 @@ describe("domain/conversion", () => {
     });
 
     it("matches CREDITS_PER_USD for 1 USD", () => {
-      // 1 USD = 1_000_000 micro-USDC → should equal CREDITS_PER_USD
       expect(microUsdcToCredits(1_000_000n)).toBe(CREDITS_PER_USD);
     });
 
     it("is pure integer math (no precision loss)", () => {
-      // 1 micro-USDC → 10 credits (exact)
       expect(microUsdcToCredits(1n)).toBe(10n);
     });
   });
@@ -64,13 +62,16 @@ describe("domain/conversion", () => {
     it("round-trips with known values", () => {
       const uuid = "ffffffff-ffff-ffff-ffff-ffffffffffff";
       const result = uuidToBigInt(uuid);
-      // Max u128 value
       expect(result).toBe(BigInt("0xffffffffffffffffffffffffffffffff"));
     });
   });
 });
 
 describe("domain/accounts", () => {
+  it("has exactly 5 MVP accounts", () => {
+    expect(ACCOUNT_DEFINITIONS).toHaveLength(5);
+  });
+
   it("all account IDs are unique", () => {
     const ids = ACCOUNT_DEFINITIONS.map((def) => def.id);
     const uniqueIds = new Set(ids);
@@ -91,23 +92,15 @@ describe("domain/accounts", () => {
     }
   });
 
-  it("clearing accounts exist for USDC-to-CREDIT bridge", () => {
-    const clearingUsdc = ACCOUNT_DEFINITIONS.find(
-      (d) => d.id === ACCOUNT.CLEARING_USDC_TO_CREDIT_USDC
-    );
-    const clearingCredit = ACCOUNT_DEFINITIONS.find(
-      (d) => d.id === ACCOUNT.CLEARING_USDC_TO_CREDIT_CREDIT
-    );
-    expect(clearingUsdc).toBeDefined();
-    expect(clearingCredit).toBeDefined();
-    expect(clearingUsdc?.ledger).toBe(LEDGER.USDC);
-    expect(clearingCredit?.ledger).toBe(LEDGER.CREDIT);
-  });
-
   it("ACCOUNT constants match ACCOUNT_DEFINITIONS", () => {
     const definedIds = new Set(ACCOUNT_DEFINITIONS.map((d) => d.id));
     for (const id of Object.values(ACCOUNT)) {
       expect(definedIds.has(id)).toBe(true);
     }
+  });
+
+  it("uses only USDC and CREDIT ledgers", () => {
+    const ledgers = new Set(ACCOUNT_DEFINITIONS.map((d) => d.ledger));
+    expect(ledgers).toEqual(new Set([LEDGER.USDC, LEDGER.CREDIT]));
   });
 });

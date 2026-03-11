@@ -472,8 +472,8 @@ export class UserDrizzleAccountService implements AccountService {
         this.financialLedger
           .transfer({
             id: uuidToBigInt(receipt.id),
-            debitAccountId: ACCOUNT.LIABILITY_USER_CREDITS_CREDIT,
-            creditAccountId: ACCOUNT.REVENUE_AI_USAGE_CREDIT,
+            debitAccountId: ACCOUNT.LIABILITY_USER_CREDITS,
+            creditAccountId: ACCOUNT.REVENUE_AI_USAGE,
             amount: BigInt(params.chargedCredits),
             ledger: LEDGER.CREDIT,
             code: TRANSFER_CODE.AI_USAGE,
@@ -543,8 +543,8 @@ export class UserDrizzleAccountService implements AccountService {
         this.financialLedger
           .transfer({
             id: uuidToBigInt(ledgerEntryId),
-            debitAccountId: ACCOUNT.ASSETS_USER_DEPOSITS_CREDIT,
-            creditAccountId: ACCOUNT.LIABILITY_USER_CREDITS_CREDIT,
+            debitAccountId: ACCOUNT.EQUITY_CREDIT_ISSUANCE,
+            creditAccountId: ACCOUNT.LIABILITY_USER_CREDITS,
             amount: amountBigInt,
             ledger: LEDGER.CREDIT,
             code: TRANSFER_CODE.CREDIT_DEPOSIT,
@@ -850,8 +850,8 @@ export class ServiceDrizzleAccountService implements ServiceAccountService {
         this.financialLedger
           .transfer({
             id: uuidToBigInt(ledgerEntryId),
-            debitAccountId: ACCOUNT.ASSETS_USER_DEPOSITS_CREDIT,
-            creditAccountId: ACCOUNT.LIABILITY_USER_CREDITS_CREDIT,
+            debitAccountId: ACCOUNT.EQUITY_CREDIT_ISSUANCE,
+            creditAccountId: ACCOUNT.LIABILITY_USER_CREDITS,
             amount: amountBigInt,
             ledger: LEDGER.CREDIT,
             code: TRANSFER_CODE.CREDIT_DEPOSIT,

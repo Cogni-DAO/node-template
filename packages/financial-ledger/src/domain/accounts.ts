@@ -8,19 +8,19 @@
  * Invariants:
  *   - MULTI_INSTRUMENT: Separate ledger ID per asset type
  *   - ALL_MATH_BIGINT: All account IDs are bigint (u128)
+ *   - MVP_MINIMAL: Only accounts for flows that exist today (credits + USDC)
  * Side-effects: none
- * Links: docs/spec/financial-ledger.md (Accounts Hierarchy, Ledger IDs)
+ * Links: docs/spec/financial-ledger.md
  * @public
  */
 
 // ─── Ledger IDs (Asset Types) ──────────────────────────────────────
-// Per financial-ledger-spec: one ledger per asset type
+// One ledger per asset type. TigerBeetle enforces transfers only within a ledger.
 
 export const LEDGER = {
-  USD: 1,
+  /** On-chain stablecoin (USDC on Base, scale=6, 1 USDC = 1_000_000) */
   USDC: 2,
-  EUR: 3,
-  COGNI: 100,
+  /** Internal AI credits (scale=0, 10M credits = 1 USD) */
   CREDIT: 200,
 } as const;
 
@@ -30,55 +30,53 @@ export const ACCOUNT_CODE = {
   ASSETS: 1,
   LIABILITY: 2,
   REVENUE: 3,
-  EXPENSE: 4,
-  CLEARING: 5,
+  EQUITY: 5,
 } as const;
 
 // ─── Transfer Codes ────────────────────────────────────────────────
+// One code per business event. Used for reporting/filtering.
 
 export const TRANSFER_CODE = {
+  /** User deposits USDC → credits minted */
   CREDIT_DEPOSIT: 1,
+  /** AI usage consumes credits */
   AI_USAGE: 2,
-  OPERATOR_FUNDING: 3,
-  PROVIDER_EXPENSE: 4,
-  HOSTING_EXPENSE: 5,
-  EPOCH_ACCRUAL: 6,
-  CLAIM_SETTLEMENT: 7,
+  /** Split distributes USDC: treasury → operator wallet */
+  SPLIT_DISTRIBUTE: 3,
+  /** Operator wallet tops up OpenRouter */
+  PROVIDER_TOPUP: 4,
 } as const;
 
 // ─── Well-Known Account IDs ────────────────────────────────────────
-// Per financial-ledger-spec: Accounts Hierarchy
-// IDs use simple sequential bigints grouped by ledger:
-//   1xxx = CREDIT ledger, 2xxx = USDC ledger,
-//   3xxx = COGNI ledger,  4xxx = EUR ledger,  9xxx = Clearing
+// MVP: 5 accounts across 2 ledgers. Expand only when a real flow requires it.
+//
+// CREDIT ledger (1xxx):
+//   Credit issuance → user liability → revenue on consumption
+//
+// USDC ledger (2xxx):
+//   Treasury holds USDC → operator float after Split distribute
+//
+// Future accounts (add when flows exist):
+//   - Expense:ProviderTopUp:USDC (when OpenRouter top-up co-write is wired)
+//   - COGNI/EUR ledgers (when token distribution or hosting expense tracking ships)
 
 export const ACCOUNT = {
-  // --- Ledger 200: CREDIT (internal AI credits, 10M per USD) ---
-  ASSETS_USER_DEPOSITS_CREDIT: 1001n,
-  LIABILITY_USER_CREDITS_CREDIT: 1002n,
-  REVENUE_AI_USAGE_CREDIT: 1003n,
-  REVENUE_X402_SETTLEMENTS_CREDIT: 1004n,
+  // --- CREDIT ledger (200) ---
 
-  // --- Ledger 2: USDC (on-chain stablecoin, scale=6) ---
-  ASSETS_ONCHAIN_USDC: 2001n,
-  ASSETS_TREASURY_USDC: 2002n,
-  ASSETS_OPERATOR_FLOAT_USDC: 2003n,
-  EXPENSE_AI_OPENROUTER_USDC: 2004n,
-  EXPENSE_CONTRIBUTOR_REWARDS_USDC: 2005n,
+  /** Credits owed to users. Increases on deposit/bonus, decreases on AI spend. */
+  LIABILITY_USER_CREDITS: 1001n,
+  /** Credits consumed by AI usage. Terminal — credits flow here and stop. */
+  REVENUE_AI_USAGE: 1002n,
+  /** Offset for all credit creation (deposit-backed and bonus).
+   *  Every credit minted debits this account to keep the ledger balanced. */
+  EQUITY_CREDIT_ISSUANCE: 1003n,
 
-  // --- Ledger 100: COGNI (governance token, scale=0) ---
-  ASSETS_EMISSIONS_VAULT_COGNI: 3001n,
-  ASSETS_DISTRIBUTOR_COGNI: 3002n,
-  LIABILITY_UNCLAIMED_EQUITY_COGNI: 3003n,
-  EXPENSE_CONTRIBUTOR_REWARDS_COGNI: 3004n,
+  // --- USDC ledger (2) ---
 
-  // --- Ledger 3: EUR (fiat for hosting costs, scale=2) ---
-  ASSETS_TREASURY_EUR: 4001n,
-  EXPENSE_INFRASTRUCTURE_HOSTING_EUR: 4002n,
-
-  // --- Clearing accounts (cross-ledger bridges) ---
-  CLEARING_USDC_TO_CREDIT_USDC: 9001n,
-  CLEARING_USDC_TO_CREDIT_CREDIT: 9002n,
+  /** USDC held in Split contract / DAO treasury (on-chain). */
+  ASSETS_TREASURY: 2001n,
+  /** USDC in operator wallet — post Split distribute, pre OpenRouter top-up. */
+  ASSETS_OPERATOR_FLOAT: 2002n,
 } as const;
 
 // ─── Account Definitions (for idempotent creation) ─────────────────
@@ -94,109 +92,34 @@ export interface AccountDefinition {
 export const ACCOUNT_DEFINITIONS: readonly AccountDefinition[] = [
   // CREDIT ledger
   {
-    id: ACCOUNT.ASSETS_USER_DEPOSITS_CREDIT,
-    ledger: LEDGER.CREDIT,
-    code: ACCOUNT_CODE.ASSETS,
-    name: "Assets:UserDeposits:CREDIT",
-  },
-  {
-    id: ACCOUNT.LIABILITY_USER_CREDITS_CREDIT,
+    id: ACCOUNT.LIABILITY_USER_CREDITS,
     ledger: LEDGER.CREDIT,
     code: ACCOUNT_CODE.LIABILITY,
-    name: "Liability:UserCredits:CREDIT",
+    name: "Liability:UserCredits",
   },
   {
-    id: ACCOUNT.REVENUE_AI_USAGE_CREDIT,
+    id: ACCOUNT.REVENUE_AI_USAGE,
     ledger: LEDGER.CREDIT,
     code: ACCOUNT_CODE.REVENUE,
-    name: "Revenue:AIUsage:CREDIT",
+    name: "Revenue:AIUsage",
   },
   {
-    id: ACCOUNT.REVENUE_X402_SETTLEMENTS_CREDIT,
+    id: ACCOUNT.EQUITY_CREDIT_ISSUANCE,
     ledger: LEDGER.CREDIT,
-    code: ACCOUNT_CODE.REVENUE,
-    name: "Revenue:x402Settlements:CREDIT",
+    code: ACCOUNT_CODE.EQUITY,
+    name: "Equity:CreditIssuance",
   },
   // USDC ledger
   {
-    id: ACCOUNT.ASSETS_ONCHAIN_USDC,
-    ledger: LEDGER.USDC,
-    code: ACCOUNT_CODE.ASSETS,
-    name: "Assets:OnChain:USDC",
-  },
-  {
-    id: ACCOUNT.ASSETS_TREASURY_USDC,
+    id: ACCOUNT.ASSETS_TREASURY,
     ledger: LEDGER.USDC,
     code: ACCOUNT_CODE.ASSETS,
     name: "Assets:Treasury:USDC",
   },
   {
-    id: ACCOUNT.ASSETS_OPERATOR_FLOAT_USDC,
+    id: ACCOUNT.ASSETS_OPERATOR_FLOAT,
     ledger: LEDGER.USDC,
     code: ACCOUNT_CODE.ASSETS,
     name: "Assets:OperatorFloat:USDC",
-  },
-  {
-    id: ACCOUNT.EXPENSE_AI_OPENROUTER_USDC,
-    ledger: LEDGER.USDC,
-    code: ACCOUNT_CODE.EXPENSE,
-    name: "Expense:AI:OpenRouter:USDC",
-  },
-  {
-    id: ACCOUNT.EXPENSE_CONTRIBUTOR_REWARDS_USDC,
-    ledger: LEDGER.USDC,
-    code: ACCOUNT_CODE.EXPENSE,
-    name: "Expense:ContributorRewards:USDC",
-  },
-  // COGNI ledger
-  {
-    id: ACCOUNT.ASSETS_EMISSIONS_VAULT_COGNI,
-    ledger: LEDGER.COGNI,
-    code: ACCOUNT_CODE.ASSETS,
-    name: "Assets:EmissionsVault:COGNI",
-  },
-  {
-    id: ACCOUNT.ASSETS_DISTRIBUTOR_COGNI,
-    ledger: LEDGER.COGNI,
-    code: ACCOUNT_CODE.ASSETS,
-    name: "Assets:Distributor:COGNI",
-  },
-  {
-    id: ACCOUNT.LIABILITY_UNCLAIMED_EQUITY_COGNI,
-    ledger: LEDGER.COGNI,
-    code: ACCOUNT_CODE.LIABILITY,
-    name: "Liability:UnclaimedEquity:COGNI",
-  },
-  {
-    id: ACCOUNT.EXPENSE_CONTRIBUTOR_REWARDS_COGNI,
-    ledger: LEDGER.COGNI,
-    code: ACCOUNT_CODE.EXPENSE,
-    name: "Expense:ContributorRewards:COGNI",
-  },
-  // EUR ledger
-  {
-    id: ACCOUNT.ASSETS_TREASURY_EUR,
-    ledger: LEDGER.EUR,
-    code: ACCOUNT_CODE.ASSETS,
-    name: "Assets:Treasury:EUR",
-  },
-  {
-    id: ACCOUNT.EXPENSE_INFRASTRUCTURE_HOSTING_EUR,
-    ledger: LEDGER.EUR,
-    code: ACCOUNT_CODE.EXPENSE,
-    name: "Expense:Infrastructure:Hosting:EUR",
-  },
-  // Clearing
-  {
-    id: ACCOUNT.CLEARING_USDC_TO_CREDIT_USDC,
-    ledger: LEDGER.USDC,
-    code: ACCOUNT_CODE.CLEARING,
-    name: "Clearing:USDCtoCredit:USDC",
-  },
-  {
-    id: ACCOUNT.CLEARING_USDC_TO_CREDIT_CREDIT,
-    ledger: LEDGER.CREDIT,
-    code: ACCOUNT_CODE.CLEARING,
-    name: "Clearing:USDCtoCredit:CREDIT",
   },
 ];
