@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.financial-ledger
 branch: task/0145-tigerbeetle-v2
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/559
 reviewer:
 revision: 1
 blocked_by:
