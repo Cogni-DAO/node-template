@@ -31,7 +31,11 @@ export default [
   },
   // Parser config for UI files ONLY - no rules, just enables TS/JSX parsing
   {
-    files: ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+    files: [
+      "apps/web/src/**/*.{ts,tsx}",
+      "tests/**/*.{ts,tsx}",
+      "apps/web/tests/**/*.{ts,tsx}",
+    ],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

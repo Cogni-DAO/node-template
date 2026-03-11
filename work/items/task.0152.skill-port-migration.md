@@ -7,7 +7,7 @@ priority: 0
 rank: 7
 estimate: 2
 summary: "Replace direct frontmatter YAML editing in /triage and /implement skills with WorkItemCommandPort calls. Proves the port is usable by real agent workflows. Remaining skills (/closeout, /review-implementation, /bug, /idea) migrate in a follow-up task."
-outcome: "/triage reads work items via get(), transitions status via transitionStatus(), patches fields via patch(). /implement does the same. No direct YAML parsing or file writing in these skills. Work scanner (src/lib/work-scanner.ts) uses WorkItemQueryPort.list() instead of filesystem scan."
+outcome: "/triage reads work items via get(), transitions status via transitionStatus(), patches fields via patch(). /implement does the same. No direct YAML parsing or file writing in these skills. Work scanner (apps/web/src/lib/work-scanner.ts) uses WorkItemQueryPort.list() instead of filesystem scan."
 spec_refs: [development-lifecycle]
 assignees: []
 credit:
@@ -16,7 +16,7 @@ branch:
 pr:
 reviewer:
 revision: 0
-blocked_by: task.0151
+blocked_by: task.0156
 deploy_verified: false
 created: 2026-03-10
 updated: 2026-03-10

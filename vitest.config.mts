@@ -3,8 +3,8 @@
 
 /**
  * Module: `vitest.config`
- * Purpose: Vitest test runner configuration for unit tests, contract tests, and lint tests (no infrastructure required).
- * Scope: Configures test environment for fast tests only. Excludes component tests requiring DB/Docker/binaries.
+ * Purpose: Vitest test runner configuration for cross-workspace tests (arch, lint, packages, services).
+ * Scope: Tests that do NOT import @/ app code. App-specific tests run via apps/web/vitest.config.mts.
  * Invariants: Coverage disabled by default; fast execution; v8 provider for Node.js compatibility; constrained envs use threads pool (MessagePort IPC, no signals) to avoid ulimit -i 0 hangs.
  * Side-effects: file system (coverage reports written to ./coverage/)
  * Notes: Uses vite-tsconfig-paths for module resolution; excludes tests/component/** from main test run.
@@ -54,17 +54,7 @@ export default defineConfig({
       "packages/*/tests/**/*.{test,spec}.{ts,tsx}",
       "services/*/tests/**/*.{test,spec}.{ts,tsx}",
     ],
-    exclude: [
-      "node_modules",
-      "dist",
-      ".next",
-      "e2e",
-      "tests/_fakes/**",
-      "tests/_fixtures/**",
-      "tests/component/**",
-      "tests/external/**",
-      "tests/stack/**",
-    ],
+    exclude: ["node_modules", "dist", ".next", "e2e"],
     coverage: {
       enabled: false,
       provider: "v8",
