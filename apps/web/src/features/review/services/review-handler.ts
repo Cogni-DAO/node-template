@@ -181,13 +181,32 @@ export async function handlePrReview(
       ) {
         return undefined;
       }
-      const base = repoSpec.cogni_dao.base_url as string;
+      const dao = repoSpec.cogni_dao as Record<string, unknown>;
+      const base = dao.base_url as string | undefined;
+      const daoContract = dao.dao_contract as string | undefined;
+      const pluginContract = dao.plugin_contract as string | undefined;
+      const signalContract = dao.signal_contract as string | undefined;
+      const daoChainId = dao.chain_id as string | undefined;
+
+      if (
+        !base ||
+        !daoContract ||
+        !pluginContract ||
+        !signalContract ||
+        !daoChainId
+      ) {
+        return undefined;
+      }
+
       try {
-        const url = new URL(base);
+        const url = new URL("/propose/merge", base);
+        url.searchParams.set("dao", daoContract);
+        url.searchParams.set("plugin", pluginContract);
+        url.searchParams.set("signal", signalContract);
+        url.searchParams.set("chainId", daoChainId);
         url.searchParams.set("action", "merge");
         url.searchParams.set("target", "change");
-        url.searchParams.set("resource", String(prNumber));
-        url.searchParams.set("vcs", "github");
+        url.searchParams.set("pr", String(prNumber));
         url.searchParams.set("repoUrl", `https://github.com/${owner}/${repo}`);
         return url.toString();
       } catch {
