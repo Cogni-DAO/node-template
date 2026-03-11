@@ -184,13 +184,28 @@ export async function handlePrReview(
     }
 
     // 8. Post PR Comment (with staleness guard)
-    const daoBaseUrl =
-      "cogni_dao" in repoSpec &&
-      repoSpec.cogni_dao &&
-      typeof repoSpec.cogni_dao === "object" &&
-      "base_url" in repoSpec.cogni_dao
-        ? (repoSpec.cogni_dao.base_url as string)
-        : undefined;
+    const daoBaseUrl = (() => {
+      if (
+        !("cogni_dao" in repoSpec) ||
+        !repoSpec.cogni_dao ||
+        typeof repoSpec.cogni_dao !== "object" ||
+        !("base_url" in repoSpec.cogni_dao)
+      ) {
+        return undefined;
+      }
+      const base = repoSpec.cogni_dao.base_url as string;
+      try {
+        const url = new URL(base);
+        url.searchParams.set("action", "merge");
+        url.searchParams.set("target", "change");
+        url.searchParams.set("resource", String(prNumber));
+        url.searchParams.set("vcs", "github");
+        url.searchParams.set("repoUrl", `https://github.com/${owner}/${repo}`);
+        return url.toString();
+      } catch {
+        return base;
+      }
+    })();
 
     const checkRunUrl = checkRunId
       ? `https://github.com/${owner}/${repo}/runs/${checkRunId}`

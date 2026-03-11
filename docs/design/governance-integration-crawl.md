@@ -12,14 +12,15 @@ created: 2026-03-11
 
 Four separate repos handle Cogni's governance pipeline:
 
-| Repo | Function | Status in cogni-template |
-|------|----------|--------------------------|
-| **cogni-git-review** | AI PR review (gates, checks, comments) | **ALREADY PORTED** — `features/review/`, `adapters/server/review/`, `.cogni/repo-spec.yaml` |
-| **cogni-git-admin** | On-chain signal → GitHub actions (merge PR, grant/revoke access) | **NOT ported** |
-| **cogni-proposal-launcher** | Deep link UI for creating DAO governance proposals | **NOT ported** |
-| **Alchemy webhooks** | Delivers blockchain events to cogni-git-admin | **NOT wired** |
+| Repo                        | Function                                                         | Status in cogni-template                                                                    |
+| --------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **cogni-git-review**        | AI PR review (gates, checks, comments)                           | **ALREADY PORTED** — `features/review/`, `adapters/server/review/`, `.cogni/repo-spec.yaml` |
+| **cogni-git-admin**         | On-chain signal → GitHub actions (merge PR, grant/revoke access) | **NOT ported**                                                                              |
+| **cogni-proposal-launcher** | Deep link UI for creating DAO governance proposals               | **NOT ported**                                                                              |
+| **Alchemy webhooks**        | Delivers blockchain events to cogni-git-admin                    | **NOT wired**                                                                               |
 
 The review bot is fully operational. What's missing is the **on-chain governance loop**:
+
 ```
 PR fails review → user clicks "Propose Vote" link → proposal-launcher creates DAO proposal
 → DAO votes → on-chain signal emitted → Alchemy webhook → cogni-template executes GitHub action
@@ -32,6 +33,7 @@ Get the full governance loop working **today** with the existing GitHub App (+ a
 ## What Already Exists (Do NOT Rebuild)
 
 ### In cogni-template
+
 - **Webhook receiver**: `/api/internal/webhooks/[source]` — signature verify → normalize → insert receipts
 - **`WebhookNormalizer` port**: `@cogni/ingestion-core` — `verify()` + `normalize()` interface
 - **GitHub webhook normalizer**: Handles `pull_request`, `issues`, `push`, etc.
@@ -41,6 +43,7 @@ Get the full governance loop working **today** with the existing GitHub App (+ a
 - **EVM RPC adapter**: `evm-rpc-onchain-verifier.adapter.ts` — viem client already configured
 
 ### In cogni-git-admin (to port)
+
 - Signal parser (~94 lines) — decodes `CogniAction` event from tx logs
 - Action executor (~60 lines) — routes signal to handler
 - Action handlers (~150 lines) — merge-pr, add-admin, remove-admin
@@ -49,6 +52,7 @@ Get the full governance loop working **today** with the existing GitHub App (+ a
 - GitHub service (~270 lines) — atomic GitHub API operations (merge, collaborator mgmt)
 
 ### In cogni-proposal-launcher (to port)
+
 - 3 page routes: `/merge-change`, `/join`, `/propose-faucet`
 - Deep link validation library (~100 lines)
 - Contract ABIs + encoding (~150 lines)
@@ -85,15 +89,18 @@ All new code plugs into existing infrastructure:
 ### New Components (3 pieces)
 
 #### 1. Alchemy Webhook Normalizer
+
 **Location**: `apps/web/src/adapters/server/ingestion/alchemy-webhook.ts`
 
 Implements `WebhookNormalizer` from `@cogni/ingestion-core`:
+
 - `verify()` — HMAC-SHA256 of raw body against `ALCHEMY_WEBHOOK_SECRET`
 - `normalize()` — Extract tx hashes from Alchemy `ADDRESS_ACTIVITY` / `MINED_TRANSACTION` webhooks → `ActivityEvent[]`
 
 Register in `bootstrap/container.ts` alongside GitHub normalizer.
 
 #### 2. Signal Executor Feature
+
 **Location**: `apps/web/src/features/governance/`
 
 ```
@@ -113,12 +120,14 @@ features/governance/
 ```
 
 **Key decisions:**
+
 - Reuse existing GitHub App credentials (`GH_REVIEW_APP_ID` / `GH_REVIEW_APP_PRIVATE_KEY_BASE64`) — same app, just needs `administration: write` permission added
 - Reuse existing `github-auth.ts` adapter for Octokit creation
 - Reuse existing `EVM_RPC_URL` env var for viem RPC client (already in `.env.local.example`)
 - Signal handler is a pure feature service — no framework dependency
 
 **Dispatch wiring** (in webhook route):
+
 ```typescript
 // In /api/internal/webhooks/[source]/route.ts — add alongside PR review dispatch:
 if (source === "alchemy") {
@@ -127,6 +136,7 @@ if (source === "alchemy") {
 ```
 
 #### 3. Proposal Launcher Pages
+
 **Location**: `apps/web/src/app/(governance)/`
 
 ```
@@ -138,6 +148,7 @@ app/(governance)/
 ```
 
 **Key decisions:**
+
 - Route group `(governance)` keeps wallet providers isolated — no wagmi loaded for non-governance pages
 - Port from Pages Router (`useRouter().query`) → App Router (`useSearchParams()`)
 - Middleware validation stays in `src/middleware.ts` (existing Next.js middleware)
@@ -149,6 +160,7 @@ app/(governance)/
 ### Phase 1: Alchemy Webhook Ingestion (~1 hour)
 
 1. **Add env vars** to `.env.local.example`:
+
    ```
    ALCHEMY_WEBHOOK_SECRET=your-alchemy-signing-key
    ALCHEMY_CHAIN_ID=11155111
@@ -192,9 +204,11 @@ app/(governance)/
 ### Phase 3: Proposal Launcher Pages (~2 hours)
 
 1. **Add web3 dependencies**:
+
    ```
    pnpm add wagmi @rainbow-me/rainbowkit @tanstack/react-query
    ```
+
    (viem already present)
 
 2. **Create route group layout** with wagmi/RainbowKit providers
@@ -219,20 +233,21 @@ app/(governance)/
 
 ## Env Vars (New)
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `ALCHEMY_WEBHOOK_SECRET` | For governance | HMAC key for Alchemy webhook verification |
-| `SIGNAL_CONTRACT` | For governance | CogniSignal contract address |
-| `DAO_ADDRESS` | For governance | DAO contract address |
-| `CHAIN_ID` | For governance | EVM chain ID (default: 11155111 Sepolia) |
-| `NEXT_PUBLIC_CHAIN_ID` | For proposal UI | Chain ID exposed to client |
-| `NEXT_PUBLIC_RPC_URL` | For proposal UI | Public RPC for wallet connection |
+| Variable                 | Required        | Purpose                                   |
+| ------------------------ | --------------- | ----------------------------------------- |
+| `ALCHEMY_WEBHOOK_SECRET` | For governance  | HMAC key for Alchemy webhook verification |
+| `SIGNAL_CONTRACT`        | For governance  | CogniSignal contract address              |
+| `DAO_ADDRESS`            | For governance  | DAO contract address                      |
+| `CHAIN_ID`               | For governance  | EVM chain ID (default: 11155111 Sepolia)  |
+| `NEXT_PUBLIC_CHAIN_ID`   | For proposal UI | Chain ID exposed to client                |
+| `NEXT_PUBLIC_RPC_URL`    | For proposal UI | Public RPC for wallet connection          |
 
 **Already present**: `EVM_RPC_URL`, `GH_REVIEW_APP_ID`, `GH_REVIEW_APP_PRIVATE_KEY_BASE64`, `GH_WEBHOOK_SECRET`
 
 ## GitHub App Permission Changes
 
 Add to existing app:
+
 - `administration: write` — needed for collaborator management (grant/revoke)
 - `contents: write` — needed for PR merge (may already be present for review)
 
@@ -240,24 +255,26 @@ No new app needed. Same webhook URL. Same credentials.
 
 ## Dependencies (New)
 
-| Package | Already in template? | Purpose |
-|---------|---------------------|---------|
-| `viem` | YES | EVM RPC, event decoding |
-| `zod` | YES | Validation |
-| `@octokit/rest` | YES (via octokit) | GitHub API |
-| `wagmi` | NO — add | Ethereum wallet hooks |
-| `@rainbow-me/rainbowkit` | NO — add | Wallet connection UI |
-| `@tanstack/react-query` | YES | Data fetching for wagmi |
+| Package                  | Already in template? | Purpose                 |
+| ------------------------ | -------------------- | ----------------------- |
+| `viem`                   | YES                  | EVM RPC, event decoding |
+| `zod`                    | YES                  | Validation              |
+| `@octokit/rest`          | YES (via octokit)    | GitHub API              |
+| `wagmi`                  | NO — add             | Ethereum wallet hooks   |
+| `@rainbow-me/rainbowkit` | NO — add             | Wallet connection UI    |
+| `@tanstack/react-query`  | YES                  | Data fetching for wagmi |
 
 ## Walk / Run (Future Phases)
 
 ### Walk: Operator Repo + Separate Apps
+
 - Dedicated operator repo with different GitHub App (reduced permissions)
 - cogni-git-admin as standalone service with its own app credentials
 - Webhook routing: Alchemy → operator repo → dispatch to appropriate service
 - Benefit: principle of least privilege
 
 ### Run: Full Governance Stack
+
 - Multi-chain support (mainnet + L2s)
 - Database-backed DAO authorization allowlist (not hardcoded env vars)
 - Nonce replay protection
@@ -267,20 +284,20 @@ No new app needed. Same webhook URL. Same credentials.
 
 ## Risks
 
-| Risk | Mitigation |
-|------|------------|
-| Single GitHub App with broad permissions | Crawl-only; Walk phase separates apps |
-| No nonce replay protection in MVP | Acceptable for testnet; add in Walk |
-| No DAO authorization allowlist | MVP hardcodes single DAO via env; Walk adds DB |
-| wagmi bundle size impact | Route group isolation — only loaded on governance pages |
+| Risk                                     | Mitigation                                              |
+| ---------------------------------------- | ------------------------------------------------------- |
+| Single GitHub App with broad permissions | Crawl-only; Walk phase separates apps                   |
+| No nonce replay protection in MVP        | Acceptable for testnet; add in Walk                     |
+| No DAO authorization allowlist           | MVP hardcodes single DAO via env; Walk adds DB          |
+| wagmi bundle size impact                 | Route group isolation — only loaded on governance pages |
 
 ## File Count Estimate
 
-| Component | New files | Lines (approx) |
-|-----------|-----------|----------------|
-| Alchemy normalizer | 2 (adapter + test) | ~120 |
-| Signal executor feature | 7 (types, parser, params, 3 actions, handler) | ~450 |
-| Dispatch wiring | 1 (modify webhook route) | ~20 |
-| Proposal launcher | 8 (3 pages, layout, 4 libs) | ~600 |
-| Env/config updates | 2 (modify existing) | ~30 |
-| **Total** | **~20 files** | **~1,220 lines** |
+| Component               | New files                                     | Lines (approx)   |
+| ----------------------- | --------------------------------------------- | ---------------- |
+| Alchemy normalizer      | 2 (adapter + test)                            | ~120             |
+| Signal executor feature | 7 (types, parser, params, 3 actions, handler) | ~450             |
+| Dispatch wiring         | 1 (modify webhook route)                      | ~20              |
+| Proposal launcher       | 8 (3 pages, layout, 4 libs)                   | ~600             |
+| Env/config updates      | 2 (modify existing)                           | ~30              |
+| **Total**               | **~20 files**                                 | **~1,220 lines** |

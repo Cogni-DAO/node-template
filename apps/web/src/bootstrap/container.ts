@@ -25,6 +25,8 @@ import { toUserId, userActor } from "@cogni/ids";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
+  ALCHEMY_ADAPTER_VERSION,
+  AlchemyWebhookNormalizer,
   type Database,
   DrizzleAiTelemetryAdapter,
   DrizzleExecutionGrantUserAdapter,
@@ -204,6 +206,11 @@ function getWebhookRegistrations(): ReadonlyMap<
       source: "github",
       version: GITHUB_ADAPTER_VERSION,
       webhook: new GitHubWebhookNormalizer(),
+    });
+    registrations.set("alchemy", {
+      source: "alchemy",
+      version: ALCHEMY_ADAPTER_VERSION,
+      webhook: new AlchemyWebhookNormalizer(),
     });
     _webhookRegistrations = registrations;
   }
