@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
 branch: task/0160-scheduler-worker-dockerfile-cache-parity
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/557
 reviewer:
 revision: 0
 blocked_by:
