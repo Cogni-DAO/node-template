@@ -7,6 +7,7 @@
  * Scope: Implements AccountService and ServiceAccountService ports with ledger-based credit accounting and virtual key management. Does not compute pricing.
  * Invariants:
  * - Atomic ops; ledger source of truth; balance cached; UUID v4 validated
+ * - CO_WRITE_NON_BLOCKING: TigerBeetle co-writes fire after PG tx commits; failures logged, never thrown
  * - IDEMPOTENT_CHARGES: (source_system, source_reference) is idempotency key per GRAPH_EXECUTION.md
  * - Persists chargeReason, sourceSystem, runId to charge_receipts (required fields)
  * - listChargeReceipts returns sourceSystem for Activity UI join
@@ -15,7 +16,7 @@
  * - ServiceDrizzleAccountService uses serviceDb directly (BYPASSRLS)
  * Side-effects: IO (database operations)
  * Notes: Uses transactions for consistency; recordChargeReceipt is non-blocking (never throws InsufficientCredits per ACTIVITY_METRICS.md)
- * Links: Implements AccountService port, uses shared database schema, docs/spec/activity-metrics.md, docs/spec/graph-execution.md, types/billing.ts
+ * Links: Implements AccountService port, uses shared database schema, docs/spec/activity-metrics.md, docs/spec/graph-execution.md, docs/spec/financial-ledger.md, types/billing.ts
  * @public
  */
 

@@ -2,7 +2,7 @@
 id: task.0145
 type: task
 title: "TigerBeetle Infrastructure + FinancialLedgerPort"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 3
@@ -12,7 +12,7 @@ spec_refs: financial-ledger-spec, billing-evolution-spec
 assignees: derekg1729
 credit:
 project: proj.financial-ledger
-branch: task/0145-tigerbeetle-ledger
+branch: task/0145-tigerbeetle-v2
 pr:
 reviewer:
 revision: 1

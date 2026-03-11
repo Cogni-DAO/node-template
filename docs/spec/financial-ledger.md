@@ -10,7 +10,7 @@ read_when: Working on treasury accounting, on-chain distributions, settlement wo
 implements: proj.financial-ledger
 owner: derekg1729
 created: 2026-03-02
-verified:
+verified: 2026-03-12
 tags: [governance, payments, web3, treasury]
 ---
 
@@ -67,7 +67,7 @@ Operations that do NOT touch value (attribution scoring, weight computation, ide
                              │ economic event recognized
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  LedgerPort (src/ports/ledger.port.ts)                       │
+│  FinancialLedgerPort (packages/financial-ledger/src/port/)    │
 │                                                              │
 │  transfer(debit, credit, amount, ledger, metadata)           │
 │  pendingTransfer(...)  →  postTransfer(...)  |  voidTransfer  │
@@ -120,19 +120,28 @@ TigerBeetle's pending → posted/voided pattern maps to:
 
 ## Accounts Hierarchy
 
+### MVP (Crawl) — 5 accounts, 2 ledgers
+
+Implemented in `@cogni/financial-ledger` (`packages/financial-ledger/src/domain/accounts.ts`). Only accounts for flows that exist today.
+
 ```
 ; --- Ledger 200: CREDIT (internal AI credits, 10M per USD) ---
-Assets:UserDeposits:CREDIT          ; Credits minted from USDC deposits
-Liability:UserCredits:CREDIT        ; User credit balances (owed to users)
-Revenue:AIUsage:CREDIT              ; Credits burned on AI usage
-Revenue:x402Settlements:CREDIT      ; x402 per-request revenue (future)
+Equity:CreditIssuance:CREDIT       ; 1003n — Offset for all credit creation (deposit + bonus)
+Liability:UserCredits:CREDIT        ; 1001n — User credit balances (owed to users)
+Revenue:AIUsage:CREDIT              ; 1002n — Credits burned on AI usage
 
 ; --- Ledger 2: USDC (on-chain stablecoin, scale=6) ---
+Assets:Treasury:USDC                ; 2001n — DAO treasury wallet (Split contract)
+Assets:OperatorFloat:USDC           ; 2002n — Operator wallet working balance
+```
+
+### Forward (Walk/Run) — additional accounts added as flows ship
+
+```
+; --- Ledger 2: USDC ---
 Assets:OnChain:USDC                 ; Confirmed on-chain USDC deposits
-Assets:Treasury:USDC                ; DAO treasury wallet
-Assets:OperatorFloat:USDC           ; Operator wallet working balance
 Expense:AI:OpenRouter:USDC          ; OpenRouter provider costs
-Expense:ContributorRewards:USDC     ; USDC distributions (governance-voted, future)
+Expense:ContributorRewards:USDC     ; USDC distributions (governance-voted)
 
 ; --- Ledger 100: COGNI (governance token, scale=0) ---
 Assets:EmissionsVault:COGNI         ; Pre-minted tokens awaiting release
@@ -176,19 +185,19 @@ Expense:Infrastructure:Hosting:EUR  ; Cherry Servers hosting costs
 
 ## Design
 
-### LedgerPort Integration Points
+### FinancialLedgerPort Integration Points
 
-The LedgerPort is called from these existing code paths:
+FinancialLedgerPort is called from these existing code paths:
 
-| Existing code path                         | What changes                                          |
-| ------------------------------------------ | ----------------------------------------------------- |
-| `AccountService.recordChargeReceipt()`     | Also calls `LedgerPort.transfer()` for AI spend       |
-| `AccountService.creditAccount()` (deposit) | Also calls `LedgerPort.transfer()` for credit mint    |
-| Attribution `finalizeEpoch()`              | Also calls `LedgerPort.pendingTransfer()` for accrual |
-| Operator wallet top-up (new)               | Calls `LedgerPort.transfer()` for OpenRouter expense  |
-| Cherry Servers cron (new)                  | Calls `LedgerPort.transfer()` for hosting expense     |
+| Existing code path                         | What changes                                                  | Status |
+| ------------------------------------------ | ------------------------------------------------------------- | ------ |
+| `AccountService.recordChargeReceipt()`     | Co-writes `FinancialLedgerPort.transfer()` for AI spend       | Wired  |
+| `AccountService.creditAccount()` (deposit) | Co-writes `FinancialLedgerPort.transfer()` for credit mint    | Wired  |
+| Attribution `finalizeEpoch()`              | Calls `FinancialLedgerPort.pendingTransfer()` for accrual     | Walk   |
+| Operator wallet top-up (new)               | Calls `FinancialLedgerPort.transfer()` for OpenRouter expense | Walk   |
+| Cherry Servers cron (new)                  | Calls `FinancialLedgerPort.transfer()` for hosting expense    | Walk   |
 
-The pattern is **co-write**: the existing Postgres operation continues to work, and a TigerBeetle transfer is recorded alongside it. TigerBeetle becomes the balance authority over time; Postgres balances become reconciliation checks.
+The pattern is **co-write**: the existing Postgres operation continues to work, and a TigerBeetle transfer is recorded alongside it (fire-and-forget in Crawl). TigerBeetle becomes the balance authority over time; Postgres balances become reconciliation checks.
 
 ### MVP Settlement Path
 
