@@ -2,7 +2,7 @@
 id: task.0158
 type: task
 title: "Wire WorkItemQueryPort into UI — contracts, API routes, React Query dashboard"
-status: needs_closeout
+status: needs_implement
 priority: 0
 rank: 6
 estimate: 3
@@ -15,7 +15,7 @@ project: proj.agentic-project-management
 branch: feat/work-items-ui-read-path
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-03-11
@@ -110,6 +110,18 @@ The `/work` dashboard reads work items through the `WorkItemQueryPort` via a pro
 **Auth**: Routes use `auth: { mode: "required" }` — work items are visible to all authenticated users.
 
 **No feature service layer**: The read path is a pure pass-through (query port → DTO). A feature service would add no value. Facade calls port directly, matching the profile/users pattern.
+
+## Review Feedback (revision 1)
+
+### Blocking
+
+1. **Missing tests** — Design promised contract schema tests and facade unit tests. Create:
+   - `apps/web/tests/unit/contracts/work.items.list.v1.test.ts` — validate schema accepts valid DTO and rejects invalid
+   - `apps/web/tests/unit/facades/work-items.test.ts` — mock `WorkItemQueryPort`, verify `listWorkItems()` and `getWorkItem()` map correctly
+
+2. **AGENTS.md not updated** — Per change protocol:
+   - `apps/web/src/contracts/AGENTS.md` Public Surface: add `work.items.list.v1`, `work.items.get.v1`
+   - `apps/web/src/app/api/AGENTS.md` Routes: add `GET /api/v1/work/items`, `GET /api/v1/work/items/[id]`
 
 ## Validation
 
