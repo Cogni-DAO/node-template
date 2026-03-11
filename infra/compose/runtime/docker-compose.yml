@@ -64,6 +64,10 @@ services:
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+      # Privy (Operator Wallet) — optional, silently skipped if missing
+      - PRIVY_APP_ID
+      - PRIVY_APP_SECRET
+      - PRIVY_SIGNING_KEY
       # Prometheus query (for analytics/AI tools) - read-only credentials
       - PROMETHEUS_REMOTE_WRITE_URL
       - PROMETHEUS_QUERY_URL

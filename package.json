@@ -10,6 +10,7 @@
   "scripts": {
     "start:stack": "pnpm dev:infra && pnpm start",
     "check": "bash scripts/check-fast.sh",
+    "check:verbose": "bash scripts/check-fast.sh --verbose",
     "check:fix": "bash scripts/check-fast.sh --fix",
     "check:full": "bash scripts/check-full.sh",
     "check:full:fast": "bash scripts/check-full.sh --skip-build",
@@ -154,9 +155,11 @@
     "@cogni/ids": "workspace:*",
     "@cogni/ingestion-core": "workspace:*",
     "@cogni/langgraph-graphs": "workspace:*",
+    "@cogni/operator-wallet": "workspace:*",
     "@cogni/repo-spec": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
     "@cogni/work-items": "workspace:*",
+    "@privy-io/node": "^0.10.1",
     "cron-parser": "^4.9.0",
     "drizzle-orm": "^0.44.7",
     "pino": "^10.1.0",
@@ -165,6 +168,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@0xsplits/splits-sdk": "6.4.1",
     "@axe-core/playwright": "^4.11.0",
     "@biomejs/biome": "^2.3.7",
     "@commitlint/cli": "^19.8.1",
@@ -228,7 +232,7 @@
     "tsup": "^8.5.1",
     "tsx": "^4.20.6",
     "typescript": "^5",
-    "undici": "^7.16.0",
+    "undici": "^7.18.2",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.0.7",
     "ws": "^8.19.0",
