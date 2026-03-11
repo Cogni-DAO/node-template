@@ -52,6 +52,7 @@ import {
 } from "@/shared/db";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES } from "@/shared/observability/events";
 import { isValidUuid } from "@/shared/util/uuid";
 import type { SourceSystem } from "@/types/billing";
 
@@ -484,10 +485,15 @@ export class UserDrizzleAccountService implements AccountService {
           code: TRANSFER_CODE.AI_USAGE,
           userData128: uuidToBigInt(committedReceiptId),
         })
-        .catch((err) => {
+        .catch(() => {
           logger.error(
-            { err, receiptId: committedReceiptId },
-            "TigerBeetle co-write failed for charge receipt"
+            {
+              event: EVENT_NAMES.ADAPTER_TIGERBEETLE_ERROR,
+              dep: "tigerbeetle",
+              reasonCode: "co_write_charge_receipt",
+              receiptId: committedReceiptId,
+            },
+            EVENT_NAMES.ADAPTER_TIGERBEETLE_ERROR
           );
         });
     }
@@ -560,10 +566,15 @@ export class UserDrizzleAccountService implements AccountService {
           code: TRANSFER_CODE.CREDIT_DEPOSIT,
           userData128: uuidToBigInt(ledgerEntryId),
         })
-        .catch((err) => {
+        .catch(() => {
           logger.error(
-            { err, ledgerEntryId },
-            "TigerBeetle co-write failed for credit deposit"
+            {
+              event: EVENT_NAMES.ADAPTER_TIGERBEETLE_ERROR,
+              dep: "tigerbeetle",
+              reasonCode: "co_write_credit_deposit",
+              ledgerEntryId,
+            },
+            EVENT_NAMES.ADAPTER_TIGERBEETLE_ERROR
           );
         });
     }
@@ -872,10 +883,15 @@ export class ServiceDrizzleAccountService implements ServiceAccountService {
           code: TRANSFER_CODE.CREDIT_DEPOSIT,
           userData128: uuidToBigInt(ledgerEntryId),
         })
-        .catch((err) => {
+        .catch(() => {
           logger.error(
-            { err, ledgerEntryId },
-            "TigerBeetle co-write failed for credit deposit"
+            {
+              event: EVENT_NAMES.ADAPTER_TIGERBEETLE_ERROR,
+              dep: "tigerbeetle",
+              reasonCode: "co_write_credit_deposit",
+              ledgerEntryId,
+            },
+            EVENT_NAMES.ADAPTER_TIGERBEETLE_ERROR
           );
         });
     }
