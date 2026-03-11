@@ -50,17 +50,14 @@ export function resetTxDedup(): void {
 export interface SignalHandlerDeps {
   /** viem public client for RPC calls */
   readonly rpcClient: PublicClient;
-  /** Authenticated Octokit for GitHub API calls */
-  readonly createOctokit: (installationId: number) => Octokit;
+  /** Resolve an authenticated Octokit for the target repo (handles installation lookup internally) */
+  readonly resolveOctokit: (owner: string, repo: string) => Promise<Octokit>;
   /** DAO config from repo-spec */
   readonly daoConfig: {
     readonly signal_contract: string;
     readonly dao_contract: string;
     readonly chain_id: string;
   };
-  /** GitHub App ID — needed to look up installation */
-  readonly appId: string;
-  readonly privateKeyBase64: string;
   readonly log: Logger;
 }
 
@@ -114,7 +111,7 @@ export async function handleSignal(
 
     // 3. Find CogniAction log
     const cogniLog = receipt.logs.find(
-      (l) =>
+      (l: { topics: readonly string[]; address: string }) =>
         l.topics[0]?.toLowerCase() === COGNI_TOPIC0 &&
         l.address.toLowerCase() === deps.daoConfig.signal_contract.toLowerCase()
     );
@@ -205,28 +202,9 @@ export async function handleSignal(
       };
     }
 
-    // 8. Parse repo and create Octokit
+    // 8. Resolve Octokit for target repo
     const repoRef = parseRepoRef(signal.repoUrl);
-
-    // Look up installation ID via app-level Octokit
-    const { createAppAuth } = await import("@octokit/auth-app");
-    const { Octokit } = await import("@octokit/core");
-
-    const privateKey = Buffer.from(deps.privateKeyBase64, "base64").toString(
-      "utf-8"
-    );
-    const appOctokit = new Octokit({
-      authStrategy: createAppAuth,
-      auth: { appId: deps.appId, privateKey },
-    });
-
-    const installationResponse = await appOctokit.request(
-      "GET /repos/{owner}/{repo}/installation",
-      { owner: repoRef.owner, repo: repoRef.repo }
-    );
-
-    const installationId = (installationResponse.data as { id: number }).id;
-    const octokit = deps.createOctokit(installationId);
+    const octokit = await deps.resolveOctokit(repoRef.owner, repoRef.repo);
 
     // 9. Execute action
     const result = await handler(signal, repoRef, octokit, log);

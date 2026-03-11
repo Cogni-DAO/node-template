@@ -66,15 +66,3 @@ export interface RepoRef {
   repo: string;
   url: string;
 }
-
-// ---------------------------------------------------------------------------
-// DAO config — read from .cogni/repo-spec.yaml cogni_dao section
-// ---------------------------------------------------------------------------
-
-export interface DaoConfig {
-  readonly dao_contract: string;
-  readonly plugin_contract: string;
-  readonly signal_contract: string;
-  readonly chain_id: string;
-  readonly base_url: string;
-}

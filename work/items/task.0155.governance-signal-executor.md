@@ -2,7 +2,7 @@
 id: task.0155
 type: task
 title: "Governance signal executor: Alchemy webhook → on-chain verification → GitHub actions"
-status: needs_closeout
+status: done
 priority: 0
 rank: 1
 estimate: 3
@@ -21,7 +21,7 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-11
-updated: 2026-03-11
+updated: 2026-03-12
 labels: [governance, alchemy, signal, github-actions]
 external_refs:
   - docs/design/governance-integration-crawl.md

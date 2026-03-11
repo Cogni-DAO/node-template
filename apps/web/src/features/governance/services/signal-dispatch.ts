@@ -100,24 +100,34 @@ export function dispatchSignalExecution(
     transport: http(rpcUrl),
   });
 
+  // Pre-decode private key once for all tx hashes
+  const privateKey = Buffer.from(privateKeyBase64, "base64").toString("utf-8");
+
+  // Octokit factory: looks up installation ID for the target repo, returns authenticated client
+  async function resolveOctokit(owner: string, repo: string): Promise<Octokit> {
+    const appOctokit = new Octokit({
+      authStrategy: createAppAuth,
+      auth: { appId, privateKey },
+    });
+    const response = await appOctokit.request(
+      "GET /repos/{owner}/{repo}/installation",
+      { owner, repo }
+    );
+    const installationId = (response.data as { id: number }).id;
+    return new Octokit({
+      authStrategy: createAppAuth,
+      auth: { appId, privateKey, installationId },
+    });
+  }
+
   // Dispatch each tx hash
   for (const txHash of txHashes) {
     void (async () => {
       try {
         await handleSignal(txHash, {
           rpcClient,
-          createOctokit: (installationId: number) => {
-            const privateKey = Buffer.from(privateKeyBase64, "base64").toString(
-              "utf-8"
-            );
-            return new Octokit({
-              authStrategy: createAppAuth,
-              auth: { appId, privateKey, installationId },
-            });
-          },
+          resolveOctokit,
           daoConfig,
-          appId,
-          privateKeyBase64,
           log,
         });
       } catch (error) {

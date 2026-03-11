@@ -118,7 +118,7 @@ export async function grantCollaborator(
   }
 
   // Parse permission from signal
-  let permission: "admin" | "maintain" | "push" = "admin";
+  let permission: "admin" | "maintain" | "push" = "push";
   if (signal.paramsJson) {
     try {
       const params = JSON.parse(signal.paramsJson) as Record<string, unknown>;
