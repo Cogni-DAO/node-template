@@ -41,7 +41,7 @@ fail_on_error: true
 # address: Privy-managed EOA that receives operator share from Split
 # Split contract address lives in payments_in.credits_topup.receiving_address
 operator_wallet:
-  address: "0x0000000000000000000000000000000000000000" # placeholder — run scripts/provision-operator-wallet.ts to set
+  address: "0xdCCa8D85603C2CC47dc6974a790dF846f8695056" # Privy-managed operator wallet
 
 cogni_dao:
   dao_contract: "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6" # Current Cogni parent DAO Contract Address
@@ -55,7 +55,7 @@ cogni_dao:
 payments_in:
   credits_topup:
     provider: cogni-usdc-backend-v1
-    receiving_address: "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6" # Expected receiver (DAO Wallet), testing only address rn
+    receiving_address: "0xd92EEc51C471CcF76996f0163Fd3cB6A61798f9C" # Push Split V2o2 — 92.1% operator / 7.9% DAO
     allowed_chains:
       - Base
     allowed_tokens:

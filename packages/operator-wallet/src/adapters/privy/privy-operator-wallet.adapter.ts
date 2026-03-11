@@ -15,7 +15,7 @@ import { splitV2ABI } from "@0xsplits/splits-sdk/constants/abi";
 import type { AuthorizationContext } from "@privy-io/node";
 import { PrivyClient } from "@privy-io/node";
 import type { Address } from "viem";
-import { encodeFunctionData } from "viem";
+import { encodeFunctionData, getAddress } from "viem";
 
 import {
   calculateSplitAllocations,
@@ -77,9 +77,9 @@ export class PrivyOperatorWalletAdapter implements OperatorWalletPort {
     this.authContext = {
       authorization_private_keys: [config.signingKey],
     };
-    this.expectedAddress = config.expectedAddress;
-    this.splitAddress = config.splitAddress;
-    this.treasuryAddress = config.treasuryAddress;
+    this.expectedAddress = getAddress(config.expectedAddress);
+    this.splitAddress = getAddress(config.splitAddress);
+    this.treasuryAddress = getAddress(config.treasuryAddress);
     this.markupPpm = config.markupPpm;
     this.revenueSharePpm = config.revenueSharePpm;
   }
