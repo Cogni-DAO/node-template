@@ -37,7 +37,7 @@ cogni-git-admin has a full e2e suite (`e2e/`) that tests the complete DAO vote �
 1. **fixture-replay** — POST captured Alchemy webhook JSON to running app (fast, 30s). Currently `test.skip`'d — fixture targets a stale PR.
 2. **blockchain-integration** — live wallet tx on Sepolia, wait for real Alchemy webhook, poll GitHub for PR merge (slow, 5min).
 
-Signal executor is now ported to cogni-template (task.0158). We need equivalent validation here.
+Signal executor is now ported to cogni-template (task.0161). We need equivalent validation here.
 
 ### Sepolia contracts (same as cogni-git-admin)
 
@@ -83,7 +83,7 @@ pnpm test:external tests/external/governance/
 ## PR / Links
 
 - Reference: cogni-git-admin e2e suite
-- Depends on: task.0158
+- Depends on: task.0161
 
 ## Attribution
 

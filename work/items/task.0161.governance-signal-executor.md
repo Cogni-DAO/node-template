@@ -1,5 +1,5 @@
 ---
-id: task.0158
+id: task.0161
 type: task
 title: "Governance signal executor: Alchemy webhook → on-chain verification → GitHub actions"
 status: needs_merge
@@ -97,7 +97,7 @@ pnpm test apps/web/tests/unit/features/governance/
 - Design doc: docs/design/governance-integration-crawl.md
 - Source: cogni-git-admin (signal parser, action handlers)
 - Related: proj.web3-gov-mvp (proposal launcher pages — separate PR)
-- Handoff: [handoff](../handoffs/task.0158.handoff.md)
+- Handoff: [handoff](../handoffs/task.0161.handoff.md)
 
 ## Attribution
 

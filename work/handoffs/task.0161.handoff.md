@@ -1,7 +1,7 @@
 ---
-id: task.0158.handoff
+id: task.0161.handoff
 type: handoff
-work_item_id: task.0158
+work_item_id: task.0161
 status: active
 created: 2026-03-12
 updated: 2026-03-12
