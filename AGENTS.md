@@ -53,7 +53,6 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Style & Lint Rules](docs/spec/style.md) — Code style and lint configuration
 - [AI Setup Spec](docs/spec/ai-setup.md) — AI correlation IDs, telemetry
 - [Work Management](work/README.md) — Charters, projects, and work items
-- [Spec Index](docs/reference/SPEC_INDEX.md) — Full index of all specifications
 - [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md) — Template for subdirectory files
 
 ## Usage

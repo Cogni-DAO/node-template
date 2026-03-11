@@ -104,9 +104,8 @@ fi
 
 run_check "ui-tokens" "bash scripts/check-ui-tokens.sh"
 
-# Consolidated test invocations: fewer vitest cold starts saves ~300s in constrained envs.
-# Root-config tests (unit + contract + meta + packages:integration) share vitest.config.mts.
-run_check "test:core" "pnpm vitest run tests/unit tests/ports tests/contract tests/meta tests/packages"
+# App tests run via apps/web config (resolves @/ from app node_modules).
+run_check "test:app" "pnpm vitest run --config apps/web/vitest.config.mts"
 run_check "test:packages:local" "pnpm test:packages:local"
 run_check "test:services:local" "pnpm test:services:local"
 run_check "check:docs" "pnpm check:docs"
