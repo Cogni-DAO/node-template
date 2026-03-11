@@ -27,6 +27,8 @@ import type { WorkItemQueryPort } from "@cogni/work-items";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
 import type { Logger } from "pino";
 import {
+  ALCHEMY_ADAPTER_VERSION,
+  AlchemyWebhookNormalizer,
   type Database,
   DrizzleAiTelemetryAdapter,
   DrizzleExecutionGrantUserAdapter,
@@ -208,6 +210,11 @@ function getWebhookRegistrations(): ReadonlyMap<
       source: "github",
       version: GITHUB_ADAPTER_VERSION,
       webhook: new GitHubWebhookNormalizer(),
+    });
+    registrations.set("alchemy", {
+      source: "alchemy",
+      version: ALCHEMY_ADAPTER_VERSION,
+      webhook: new AlchemyWebhookNormalizer(),
     });
     _webhookRegistrations = registrations;
   }
