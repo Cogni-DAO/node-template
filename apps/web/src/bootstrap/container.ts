@@ -20,6 +20,7 @@ import type {
 } from "@cogni/ai-tools";
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
+import type { FinancialLedgerPort } from "@cogni/financial-ledger";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
 import { numberToPpm } from "@cogni/operator-wallet";
@@ -164,6 +165,8 @@ export interface Container {
   workItemQuery: WorkItemQueryPort;
   /** Webhook source registrations — normalizers for webhook ingestion */
   webhookRegistrations: ReadonlyMap<string, DataSourceRegistration>;
+  /** Financial ledger — undefined when TIGERBEETLE_ADDRESS not set */
+  financialLedger: FinancialLedgerPort | undefined;
   /** Operator wallet — undefined when PRIVY_APP_ID not set */
   operatorWallet: OperatorWalletPort | undefined;
   /** Treasury settlement — undefined when operator wallet not configured */
@@ -303,10 +306,47 @@ function createContainer(): Container {
         return new MimirMetricsAdapter(mimirConfig);
       })();
 
+  // FinancialLedger: optional — only when TIGERBEETLE_ADDRESS is configured
+  // Uses lazy require to avoid pulling N-API addon when not configured
+  const financialLedger: FinancialLedgerPort | undefined = (() => {
+    if (!env.TIGERBEETLE_ADDRESS) return undefined;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createClient } = require("tigerbeetle-node") as {
+        createClient: (opts: {
+          cluster_id: bigint;
+          replica_addresses: string[];
+          // biome-ignore lint/suspicious/noExplicitAny: dynamic require typing
+        }) => any;
+      };
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { TigerBeetleAdapter } =
+        require("@cogni/financial-ledger/adapters") as {
+          TigerBeetleAdapter: new (client: unknown) => FinancialLedgerPort;
+        };
+      const client = createClient({
+        cluster_id: 0n,
+        replica_addresses: [env.TIGERBEETLE_ADDRESS],
+      });
+      log.info(
+        { address: env.TIGERBEETLE_ADDRESS },
+        "TigerBeetle financial ledger connected"
+      );
+      return new TigerBeetleAdapter(client);
+    } catch (err) {
+      log.warn(
+        { err },
+        "TigerBeetle client failed to initialize — financial ledger disabled"
+      );
+      return undefined;
+    }
+  })();
+
   // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
   const serviceAccountService = new ServiceDrizzleAccountService(
-    getServiceDb()
+    getServiceDb(),
+    financialLedger
   );
   // TreasuryReadPort: always uses ViemTreasuryAdapter (no test fake needed - mocked at port level in tests)
   const treasuryReadPort = new ViemTreasuryAdapter(evmOnchainClient);
@@ -453,7 +493,7 @@ function createContainer(): Container {
     config,
     llmService,
     accountsForUser: (userId: UserId) =>
-      new UserDrizzleAccountService(db, userId),
+      new UserDrizzleAccountService(db, userId, financialLedger),
     serviceAccountService,
     clock,
     paymentAttemptsForUser: (userId: UserId) =>
@@ -486,6 +526,7 @@ function createContainer(): Container {
     get webhookRegistrations() {
       return getWebhookRegistrations();
     },
+    financialLedger,
     operatorWallet,
     treasurySettlement: operatorWallet
       ? new SplitTreasurySettlementAdapter(operatorWallet, USDC_TOKEN_ADDRESS)

@@ -22,6 +22,13 @@
 import { randomUUID } from "node:crypto";
 import type { GraphId } from "@cogni/ai-core";
 import { withTenantScope } from "@cogni/db-client";
+import type { FinancialLedgerPort } from "@cogni/financial-ledger";
+import {
+  ACCOUNT,
+  LEDGER,
+  TRANSFER_CODE,
+  uuidToBigInt,
+} from "@cogni/financial-ledger";
 import { type ActorId, type UserId, userActor } from "@cogni/ids";
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
@@ -189,7 +196,8 @@ export class UserDrizzleAccountService implements AccountService {
 
   constructor(
     private readonly db: Database,
-    userId: UserId
+    userId: UserId,
+    private readonly financialLedger?: FinancialLedgerPort
   ) {
     this.actorId = userActor(userId);
   }
@@ -380,9 +388,11 @@ export class UserDrizzleAccountService implements AccountService {
       );
 
       // Insert charge receipt (unique constraint on source_system, source_reference ensures no duplicates)
+      const receiptId = randomUUID();
       const [receipt] = await tx
         .insert(chargeReceipts)
         .values({
+          id: receiptId,
           billingAccountId: params.billingAccountId,
           virtualKeyId: params.virtualKeyId,
           runId: params.runId,
@@ -455,6 +465,27 @@ export class UserDrizzleAccountService implements AccountService {
           "inv_post_call_negative_balance: Charge receipt recorded with negative balance"
         );
       }
+
+      // TigerBeetle co-write: fire-and-forget AI usage debit
+      // Postgres is source of truth; TB is async shadow ledger
+      if (this.financialLedger && receipt) {
+        this.financialLedger
+          .transfer({
+            id: uuidToBigInt(receipt.id),
+            debitAccountId: ACCOUNT.LIABILITY_USER_CREDITS_CREDIT,
+            creditAccountId: ACCOUNT.REVENUE_AI_USAGE_CREDIT,
+            amount: BigInt(params.chargedCredits),
+            ledger: LEDGER.CREDIT,
+            code: TRANSFER_CODE.AI_USAGE,
+            userData128: uuidToBigInt(receipt.id),
+          })
+          .catch((err) => {
+            logger.error(
+              { err, receiptId: receipt.id },
+              "TigerBeetle co-write failed for charge receipt"
+            );
+          });
+      }
     });
   }
 
@@ -473,6 +504,7 @@ export class UserDrizzleAccountService implements AccountService {
     virtualKeyId?: string;
     metadata?: Record<string, unknown>;
   }): Promise<{ newBalance: number }> {
+    const ledgerEntryId = randomUUID();
     return withTenantScope(this.db, this.actorId, async (tx) => {
       await ensureBillingAccountExists(tx, billingAccountId);
       const resolvedVirtualKeyId =
@@ -496,6 +528,7 @@ export class UserDrizzleAccountService implements AccountService {
       const newBalance = toNumber(updatedAccount.balanceCredits);
 
       await tx.insert(creditLedger).values({
+        id: ledgerEntryId,
         billingAccountId,
         virtualKeyId: resolvedVirtualKeyId,
         amount: amountBigInt,
@@ -504,6 +537,26 @@ export class UserDrizzleAccountService implements AccountService {
         reference: reference ?? null,
         metadata: metadata ?? null,
       });
+
+      // TigerBeetle co-write: deposit credit (fire-and-forget)
+      if (this.financialLedger && reason === "deposit") {
+        this.financialLedger
+          .transfer({
+            id: uuidToBigInt(ledgerEntryId),
+            debitAccountId: ACCOUNT.ASSETS_USER_DEPOSITS_CREDIT,
+            creditAccountId: ACCOUNT.LIABILITY_USER_CREDITS_CREDIT,
+            amount: amountBigInt,
+            ledger: LEDGER.CREDIT,
+            code: TRANSFER_CODE.CREDIT_DEPOSIT,
+            userData128: uuidToBigInt(ledgerEntryId),
+          })
+          .catch((err) => {
+            logger.error(
+              { err, ledgerEntryId },
+              "TigerBeetle co-write failed for credit deposit"
+            );
+          });
+      }
 
       return { newBalance };
     });
@@ -654,7 +707,10 @@ export class UserDrizzleAccountService implements AccountService {
 // --- ServiceDrizzleAccountService (serviceDb, BYPASSRLS) ---
 
 export class ServiceDrizzleAccountService implements ServiceAccountService {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly financialLedger?: FinancialLedgerPort
+  ) {}
 
   async getBillingAccountById(
     billingAccountId: string
@@ -755,6 +811,7 @@ export class ServiceDrizzleAccountService implements ServiceAccountService {
     virtualKeyId?: string;
     metadata?: Record<string, unknown>;
   }): Promise<{ newBalance: number }> {
+    const ledgerEntryId = randomUUID();
     return await this.db.transaction(async (tx) => {
       await ensureBillingAccountExists(tx, billingAccountId);
       const resolvedVirtualKeyId =
@@ -778,6 +835,7 @@ export class ServiceDrizzleAccountService implements ServiceAccountService {
       const newBalance = toNumber(updatedAccount.balanceCredits);
 
       await tx.insert(creditLedger).values({
+        id: ledgerEntryId,
         billingAccountId,
         virtualKeyId: resolvedVirtualKeyId,
         amount: amountBigInt,
@@ -786,6 +844,26 @@ export class ServiceDrizzleAccountService implements ServiceAccountService {
         reference: reference ?? null,
         metadata: metadata ?? null,
       });
+
+      // TigerBeetle co-write: deposit credit (fire-and-forget)
+      if (this.financialLedger && reason === "deposit") {
+        this.financialLedger
+          .transfer({
+            id: uuidToBigInt(ledgerEntryId),
+            debitAccountId: ACCOUNT.ASSETS_USER_DEPOSITS_CREDIT,
+            creditAccountId: ACCOUNT.LIABILITY_USER_CREDITS_CREDIT,
+            amount: amountBigInt,
+            ledger: LEDGER.CREDIT,
+            code: TRANSFER_CODE.CREDIT_DEPOSIT,
+            userData128: uuidToBigInt(ledgerEntryId),
+          })
+          .catch((err) => {
+            logger.error(
+              { err, ledgerEntryId },
+              "TigerBeetle co-write failed for credit deposit"
+            );
+          });
+      }
 
       return { newBalance };
     });

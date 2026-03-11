@@ -62,6 +62,8 @@ services:
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
+      # TigerBeetle (Financial Ledger) — optional, silently skipped if missing
+      - TIGERBEETLE_ADDRESS=${TIGERBEETLE_ADDRESS:-tigerbeetle:3000}
       # Privy (Operator Wallet) — optional, silently skipped if missing
       - PRIVY_APP_ID
       - PRIVY_APP_SECRET
@@ -614,6 +616,50 @@ services:
       git-sync:
         condition: service_completed_successfully
 
+  # =============================================================================
+  # TigerBeetle (Financial Ledger)
+  # Per financial-ledger-spec: double-entry ledger engine
+  # Bootstrap profile: format runs once to initialize data file
+  # =============================================================================
+
+  tigerbeetle-format:
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.16.76
+    container_name: tigerbeetle-format
+    profiles:
+      - bootstrap
+    restart: "no"
+    command:
+      [
+        "format",
+        "--cluster=0",
+        "--replica=0",
+        "--replica-count=1",
+        "/data/0_0.tigerbeetle",
+      ]
+    volumes:
+      - tigerbeetle_data:/data
+
+  tigerbeetle:
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.16.76
+    container_name: tigerbeetle
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+    networks:
+      - internal
+    ports:
+      - "127.0.0.1:3000:3000"
+    command: ["start", "--addresses=0.0.0.0:3000", "/data/0_0.tigerbeetle"]
+    volumes:
+      - tigerbeetle_data:/data
+    healthcheck:
+      # TigerBeetle doesn't have an HTTP health endpoint; check TCP port
+      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/3000 || exit 1"]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 10s
+
 networks:
   cogni-edge:
     name: cogni-edge
@@ -644,5 +690,7 @@ volumes:
     name: repo_data
   pnpm_store:
     name: pnpm_store
+  tigerbeetle_data:
+    name: tigerbeetle_data
   cogni_workspace:
     name: cogni_workspace

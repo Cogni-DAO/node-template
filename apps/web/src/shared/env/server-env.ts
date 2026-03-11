@@ -210,6 +210,11 @@ export const serverSchema = z.object({
   // SHA override for mounts without .git (e.g., git-sync worktree)
   COGNI_REPO_SHA: optionalString,
 
+  // TigerBeetle (Financial Ledger) - Optional
+  // Required only when double-entry ledger is enabled.
+  // Per financial-ledger-spec: address of TigerBeetle cluster.
+  TIGERBEETLE_ADDRESS: optionalString,
+
   // Privy (Operator Wallet) - Optional
   // Required only when operator wallet features are enabled.
   // Per operator-wallet.md: KEY_NEVER_IN_APP — Privy HSM holds signing keys.
