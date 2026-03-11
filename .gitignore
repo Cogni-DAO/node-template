@@ -99,6 +99,9 @@ infra/tofu/cherry/base/keys/*
 !infra/tofu/cherry/base/keys/*.pub
 services/*/dist
 
+# Local repo-spec override (dev/test DAO config — never commit)
+.cogni/repo-spec.dev.yaml
+
 # Claude Code worktrees
 .claude/worktrees/
 

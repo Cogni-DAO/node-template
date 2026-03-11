@@ -44,15 +44,16 @@ let cachedSpec: RepoSpec | null = null;
 function loadRepoSpec(): RepoSpec {
   if (cachedSpec) return cachedSpec;
 
-  const repoSpecPath = path.join(
-    serverEnv().COGNI_REPO_ROOT,
-    ".cogni",
-    "repo-spec.yaml"
-  );
+  const cogniDir = path.join(serverEnv().COGNI_REPO_ROOT, ".cogni");
+  const devPath = path.join(cogniDir, "repo-spec.dev.yaml");
+  const mainPath = path.join(cogniDir, "repo-spec.yaml");
+
+  // Prefer gitignored dev override when present (local DAO testing)
+  const repoSpecPath = fs.existsSync(devPath) ? devPath : mainPath;
 
   if (!fs.existsSync(repoSpecPath)) {
     throw new Error(
-      `[repo-spec] Missing configuration at ${repoSpecPath}; DAO wallet and chain settings must be committed`
+      `[repo-spec] Missing configuration at ${mainPath}; DAO wallet and chain settings must be committed`
     );
   }
 
