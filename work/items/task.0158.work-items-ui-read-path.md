@@ -2,7 +2,7 @@
 id: task.0158
 type: task
 title: "Wire WorkItemQueryPort into UI — contracts, API routes, React Query dashboard"
-status: needs_closeout
+status: needs_merge
 priority: 0
 rank: 6
 estimate: 3
