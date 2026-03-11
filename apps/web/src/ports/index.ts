@@ -109,6 +109,10 @@ export type {
   VerificationResult,
   VerificationStatus,
 } from "./onchain-verifier.port";
+export type {
+  OperatorWalletPort,
+  TransferIntent,
+} from "./operator-wallet.port";
 export {
   type CreatePaymentAttemptParams,
   isPaymentAttemptNotFoundPortError,
@@ -164,3 +168,7 @@ export type {
   TreasuryReadPort,
   TreasurySnapshot,
 } from "./treasury-read.port";
+export type {
+  TreasurySettlementOutcome,
+  TreasurySettlementPort,
+} from "./treasury-settlement.port";

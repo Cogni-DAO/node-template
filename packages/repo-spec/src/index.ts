@@ -13,11 +13,13 @@
 
 export {
   extractChainId,
+  extractDaoTreasuryAddress,
   extractGatesConfig,
   extractGovernanceConfig,
   extractLedgerApprovers,
   extractLedgerConfig,
   extractNodeId,
+  extractOperatorWalletConfig,
   extractPaymentConfig,
   extractScopeId,
   type GatesConfig,
@@ -44,6 +46,8 @@ export {
   gatesArraySchema,
   governanceScheduleSchema,
   governanceSpecSchema,
+  type OperatorWalletSpec,
+  operatorWalletSpecSchema,
   type PoolConfigSpec,
   poolConfigSpecSchema,
   type RepoSpec,

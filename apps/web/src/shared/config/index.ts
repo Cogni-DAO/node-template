@@ -14,9 +14,11 @@
 export {
   type GovernanceConfig,
   type GovernanceSchedule,
+  getDaoTreasuryAddress,
   getGovernanceConfig,
   getLedgerApprovers,
   getNodeId,
+  getOperatorWalletConfig,
   getPaymentConfig,
   getScopeId,
   type InboundPaymentConfig,
