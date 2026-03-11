@@ -102,15 +102,15 @@ export function MergeProposal() {
       ];
 
       const { startDate, endDate } = generateProposalTimestamps();
-      const proposalArgs = [
-        "0x" as `0x${string}`,
-        actions,
-        0n,
-        startDate,
-        endDate,
-        0,
-        false,
-      ] as const;
+      const proposalArgs: [
+        `0x${string}`,
+        typeof actions,
+        bigint,
+        bigint,
+        bigint,
+        number,
+        boolean,
+      ] = ["0x" as `0x${string}`, actions, 0n, startDate, endDate, 0, false];
 
       const gasLimit = await estimateProposalGas(client, {
         address: params.plugin as `0x${string}`,

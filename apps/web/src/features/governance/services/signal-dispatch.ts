@@ -19,6 +19,7 @@ import { createPublicClient, http } from "viem";
 import { base, mainnet, sepolia } from "viem/chains";
 
 import { getDaoConfig } from "@/shared/config";
+import { EVENT_NAMES } from "@/shared/observability/events";
 import { CHAINS } from "@/shared/web3/chain";
 
 import { handleSignal } from "./signal-handler";
@@ -53,13 +54,17 @@ export function dispatchSignalExecution(
 
   if (!appId || !privateKeyBase64) {
     log.debug(
+      { event: EVENT_NAMES.SIGNAL_DISPATCH_SKIPPED, reason: "no_github_app" },
       "signal dispatch skipped — GH_REVIEW_APP_ID/PRIVATE_KEY not configured"
     );
     return;
   }
 
   if (!rpcUrl) {
-    log.debug("signal dispatch skipped — EVM_RPC_URL not configured");
+    log.debug(
+      { event: EVENT_NAMES.SIGNAL_DISPATCH_SKIPPED, reason: "no_rpc_url" },
+      "signal dispatch skipped — EVM_RPC_URL not configured"
+    );
     return;
   }
 
@@ -67,6 +72,7 @@ export function dispatchSignalExecution(
   const daoConfig = getDaoConfig();
   if (!daoConfig) {
     log.debug(
+      { event: EVENT_NAMES.SIGNAL_DISPATCH_SKIPPED, reason: "no_dao_config" },
       "signal dispatch skipped — cogni_dao not configured in repo-spec"
     );
     return;

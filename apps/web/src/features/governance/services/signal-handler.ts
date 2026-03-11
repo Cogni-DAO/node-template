@@ -18,6 +18,8 @@ import type { Octokit } from "@octokit/core";
 import type { Logger } from "pino";
 import type { Address, Hex, PublicClient } from "viem";
 
+import { EVENT_NAMES } from "@/shared/observability/events";
+
 import { resolveAction } from "../actions";
 import { COGNI_TOPIC0, parseCogniAction, parseRepoRef } from "../signal-parser";
 import type { ActionResult } from "../signal-types";
@@ -215,14 +217,26 @@ export async function handleSignal(
     }
 
     log.info(
-      { action: signal.action, target: signal.target, success: result.success },
-      "signal execution complete"
+      {
+        event: EVENT_NAMES.SIGNAL_EXECUTION_COMPLETE,
+        action: signal.action,
+        target: signal.target,
+        outcome: result.success ? "success" : "error",
+        errorCode: result.success ? undefined : result.action,
+      },
+      EVENT_NAMES.SIGNAL_EXECUTION_COMPLETE
     );
 
     return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    log.error({ error: msg }, "signal execution failed");
+    log.error(
+      {
+        event: EVENT_NAMES.ADAPTER_EVM_RPC_ERROR,
+        errorCode: "execution_error",
+      },
+      msg
+    );
     return { success: false, action: "execution_error", error: msg };
   }
 }
