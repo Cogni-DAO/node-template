@@ -192,5 +192,11 @@ describeIfReady("PR Review E2E (external)", () => {
     expect(reviewComment?.body).toMatch(/passed.*failed.*neutral/);
     // Should contain blocker details or gate counts
     expect(reviewComment?.body).toMatch(/Blockers|Gates/i);
+
+    // Governance deep link with full query params
+    expect(reviewComment?.body).toContain("Propose Vote to Merge");
+    expect(reviewComment?.body).toMatch(
+      /action=merge.*target=change.*resource=\d+.*vcs=github/
+    );
   }, 210_000);
 });
