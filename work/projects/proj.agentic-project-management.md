@@ -63,7 +63,8 @@ The port's `SubjectRef` must align with actor kinds so that when the `actors` ta
 | Deliverable                                                                       | Status      | Est | Work Item                |
 | --------------------------------------------------------------------------------- | ----------- | --- | ------------------------ |
 | `packages/work-items/` — port interfaces, domain types, status transition table   | Done        | 2   | task.0155                |
-| `packages/work-items/` — MarkdownWorkItemAdapter + contract tests                 | In Review   | 3   | task.0156                |
+| `packages/work-items/` — MarkdownWorkItemAdapter + contract tests                 | Done        | 3   | task.0156                |
+| Wire WorkItemQueryPort into UI — contracts, API routes, React Query dashboard     | Not Started | 3   | task.0155                |
 | Migrate `/triage` + `/implement` skills to use port (proof-of-concept)            | Not Started | 2   | task.0152                |
 | Migrate remaining skills (`/closeout`, `/review-implementation`, `/bug`, `/idea`) | Not Started | 2   | (create after task.0152) |
 
