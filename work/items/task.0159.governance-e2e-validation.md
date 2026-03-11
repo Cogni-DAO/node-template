@@ -1,5 +1,5 @@
 ---
-id: task.0156
+id: task.0159
 type: task
 title: "Governance signal executor e2e test — live Sepolia tx + webhook replay"
 status: needs_design
@@ -37,7 +37,7 @@ cogni-git-admin has a full e2e suite (`e2e/`) that tests the complete DAO vote �
 1. **fixture-replay** — POST captured Alchemy webhook JSON to running app (fast, 30s). Currently `test.skip`'d — fixture targets a stale PR.
 2. **blockchain-integration** — live wallet tx on Sepolia, wait for real Alchemy webhook, poll GitHub for PR merge (slow, 5min).
 
-Signal executor is now ported to cogni-template (task.0155). We need equivalent validation here.
+Signal executor is now ported to cogni-template (task.0158). We need equivalent validation here.
 
 ### Sepolia contracts (same as cogni-git-admin)
 
@@ -76,14 +76,14 @@ pnpm test:external tests/external/governance/
 
 ## Review Checklist
 
-- [ ] **Work Item:** `task.0156` linked in PR body
+- [ ] **Work Item:** `task.0159` linked in PR body
 - [ ] **Tests:** tier 1 exercises HMAC → RPC → decode pipeline
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
 
 - Reference: cogni-git-admin e2e suite
-- Depends on: task.0155
+- Depends on: task.0158
 
 ## Attribution
 
