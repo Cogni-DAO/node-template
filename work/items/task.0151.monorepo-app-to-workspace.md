@@ -290,6 +290,7 @@ pnpm check:full
 ## PR / Links
 
 - https://github.com/Cogni-DAO/node-template/pull/547
+- Handoff: [handoff](../handoffs/task.0151.handoff.md)
 
 ## Attribution
 

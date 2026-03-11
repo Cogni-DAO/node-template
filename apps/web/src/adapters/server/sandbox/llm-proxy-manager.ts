@@ -83,11 +83,13 @@ export interface ProxyStopResult {
   billingEntries: readonly ProxyBillingEntry[];
 }
 
-/** Path to the nginx config template */
-const TEMPLATE_PATH = join(
-  serverEnv().COGNI_REPO_ROOT,
-  "infra/compose/sandbox-proxy/nginx.conf.template"
-);
+/** Path to the nginx config template (lazy to avoid serverEnv() at import time) */
+function getTemplatePath(): string {
+  return join(
+    serverEnv().COGNI_REPO_ROOT,
+    "infra/compose/sandbox-proxy/nginx.conf.template"
+  );
+}
 
 /**
  * Manages containerized Nginx proxy instances for sandbox LLM access.
@@ -555,10 +557,10 @@ export class LlmProxyManager {
     litellmHost: string;
   }): string {
     // Read template
-    if (!existsSync(TEMPLATE_PATH)) {
-      throw new Error(`Nginx template not found: ${TEMPLATE_PATH}`);
+    if (!existsSync(getTemplatePath())) {
+      throw new Error(`Nginx template not found: ${getTemplatePath()}`);
     }
-    let template = readFileSync(TEMPLATE_PATH, "utf-8");
+    let template = readFileSync(getTemplatePath(), "utf-8");
 
     // Substitute variables (mimics envsubst)
     const substitutions: Record<string, string> = {
