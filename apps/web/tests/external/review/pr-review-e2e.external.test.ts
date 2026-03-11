@@ -54,11 +54,12 @@ interface CheckRun {
   name: string;
   status: string;
   conclusion: string | null;
+  output?: { summary: string | null };
 }
 
 function getCheckRuns(repo: string, sha: string): CheckRun[] {
   const json = exec(
-    `gh api repos/${repo}/commits/${sha}/check-runs --jq '.check_runs | map({id, name, status, conclusion})'`
+    `gh api repos/${repo}/commits/${sha}/check-runs --jq '.check_runs | map({id, name, status, conclusion, output: {summary: .output.summary}})'`
   );
   return JSON.parse(json) as CheckRun[];
 }
@@ -193,9 +194,10 @@ describeIfReady("PR Review E2E (external)", () => {
     // Should contain blocker details or gate counts
     expect(reviewComment?.body).toMatch(/Blockers|Gates/i);
 
-    // Governance deep link with full query params
-    expect(reviewComment?.body).toContain("Propose Vote to Merge");
-    expect(reviewComment?.body).toMatch(
+    // Governance deep link lives on Check Run "View Details" page, not PR comment
+    const checkRunSummary = checkRun?.output?.summary ?? "";
+    expect(checkRunSummary).toContain("Propose DAO Vote to Merge");
+    expect(checkRunSummary).toMatch(
       /action=merge.*target=change.*resource=\d+.*vcs=github/
     );
   }, 210_000);

@@ -171,19 +171,7 @@ export async function handlePrReview(
       loadRule,
     });
 
-    // 7. Update Check Run
-    if (checkRunId) {
-      const summary = formatCheckRunSummary(result);
-      await deps.updateCheckRun(
-        owner,
-        repo,
-        checkRunId,
-        result.conclusion,
-        summary
-      );
-    }
-
-    // 8. Post PR Comment (with staleness guard)
+    // 7. Build DAO deep link (for Check Run "View Details" page)
     const daoBaseUrl = (() => {
       if (
         !("cogni_dao" in repoSpec) ||
@@ -207,12 +195,26 @@ export async function handlePrReview(
       }
     })();
 
+    // 8. Update Check Run (with proposal link on View Details page)
+    if (checkRunId) {
+      const summary = formatCheckRunSummary(result, {
+        ...(daoBaseUrl !== undefined && { daoBaseUrl }),
+      });
+      await deps.updateCheckRun(
+        owner,
+        repo,
+        checkRunId,
+        result.conclusion,
+        summary
+      );
+    }
+
+    // 9. Post PR Comment (with staleness guard)
     const checkRunUrl = checkRunId
       ? `https://github.com/${owner}/${repo}/runs/${checkRunId}`
       : undefined;
 
     const commentBody = formatPrComment(result, {
-      ...(daoBaseUrl !== undefined && { daoBaseUrl }),
       headSha,
       ...(checkRunUrl !== undefined && { checkRunUrl }),
     });
