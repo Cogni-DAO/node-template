@@ -3,8 +3,8 @@ id: task.0163
 type: task
 primary_charter:
 title: "RunStreamPort + RedisRunStreamAdapter: hexagonal streaming boundary"
-state: Active
-status: needs_implement
+state: Done
+status: done
 revision: 1
 priority: 0
 rank: 2
