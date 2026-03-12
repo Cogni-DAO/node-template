@@ -2,7 +2,7 @@
 id: task.0162
 type: task
 title: Enable TypeScript LSP plugin for Claude Code
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 10
 estimate: 1
@@ -12,7 +12,7 @@ spec_refs:
 assignees: claude
 credit:
 project: proj.development-workflows
-branch:
+branch: claude/grep-vs-lsp-analysis-cb4OM
 pr:
 reviewer:
 revision: 1
@@ -49,20 +49,10 @@ The LSP advantage is **precision, not speed** — ripgrep is already fast. LSP r
 
 ## Plan
 
-- [ ] Add `typescript-language-server` to devDependencies: `pnpm add -D typescript-language-server`
-- [ ] Update `.claude/settings.json` to enable the plugin at project scope (merge into existing settings, preserve hooks):
-  ```json
-  {
-    "enabledPlugins": {
-      "typescript-lsp@claude-plugins-official": true
-    },
-    "env": {
-      "ENABLE_LSP_TOOL": "1"
-    }
-  }
-  ```
-- [ ] Update `docs/research/grep-vs-lsp-analysis.md` frontmatter: `status: draft` → `status: active`, `trust: draft` → `trust: reviewed`, add `verified: <today>`
-- [ ] Run `pnpm check:docs` and fix any lint errors
+- [x] Add `typescript-language-server` to devDependencies: `pnpm add -D typescript-language-server`
+- [x] Update `.claude/settings.json` to enable the plugin at project scope (merge into existing settings, preserve hooks)
+- [x] Update `docs/research/grep-vs-lsp-analysis.md` frontmatter: `status: draft` → `status: active`, `trust: draft` → `trust: reviewed`, add `verified: 2026-03-12`
+- [x] Run `pnpm check:docs` and fix any lint errors
 - [ ] Commit and push
 
 ## Validation

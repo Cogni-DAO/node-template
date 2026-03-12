@@ -1,4 +1,10 @@
 {
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true
+  },
+  "env": {
+    "ENABLE_LSP_TOOL": "1"
+  },
   "hooks": {
     "SessionStart": [
       {
