@@ -77,6 +77,9 @@ export class RedisRunStreamAdapter implements RunStreamPort {
     const key = streamKey(runId);
 
     // Phase 1: Replay — catch up from cursor via XRANGE
+    // Track last yielded ID so Phase 2 XREAD starts after the last replayed entry.
+    let cursor = fromId ?? "0-0";
+
     if (fromId) {
       const replayEntries = await this.redis.xrange(key, fromId, "+");
       for (const raw of replayEntries) {
@@ -84,6 +87,7 @@ export class RedisRunStreamAdapter implements RunStreamPort {
         // Skip the fromId entry itself (XRANGE is inclusive)
         if (raw[0] === fromId) continue;
         const entry = parseEntry(raw);
+        cursor = entry.id;
         yield entry;
         if (TERMINAL_EVENT_TYPES.has(entry.event.type)) return;
       }
@@ -93,17 +97,6 @@ export class RedisRunStreamAdapter implements RunStreamPort {
     // Use a dedicated client for blocking reads to avoid blocking the shared connection.
     const blockClient = this.redis.duplicate();
     try {
-      let cursor = fromId ?? "0-0";
-
-      // If we replayed, our cursor is the last entry we yielded (or fromId if replay was empty)
-      // If no fromId, start from the beginning
-      if (fromId) {
-        // After replay, we need the ID of the last replayed entry
-        // XRANGE already gave us everything after fromId, so cursor stays at fromId
-        // and XREAD with fromId will give us entries after it
-        cursor = fromId;
-      }
-
       while (!signal.aborted) {
         const result = await blockClient.xread(
           "COUNT",
