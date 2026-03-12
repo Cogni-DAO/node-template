@@ -15,24 +15,24 @@ source "$QUERIES_SH"
 
 # --- Data Collection ---
 
-# Cost: 24h and 7d
-cost_24h=$(TIME_WINDOW=24h prom_query "sum(increase(ai_llm_cost_usd_total{env=\"${ENV}\"}[24h]))" \
-  | extract_value | awk '{printf "%.4f", $1}')
+# Cost: 24h and 7d (degrade to 0 if Grafana unreachable)
+cost_24h=$(prom_query "sum(increase(ai_llm_cost_usd_total{env=\"${ENV}\"}[24h]))" \
+  | extract_value | awk '{printf "%.4f", $1}') || cost_24h="0.0000"
 
-cost_7d=$(TIME_WINDOW=7d prom_query "sum(increase(ai_llm_cost_usd_total{env=\"${ENV}\"}[7d]))" \
-  | extract_value | awk '{printf "%.4f", $1}')
+cost_7d=$(prom_query "sum(increase(ai_llm_cost_usd_total{env=\"${ENV}\"}[7d]))" \
+  | extract_value | awk '{printf "%.4f", $1}') || cost_7d="0.0000"
 
 # Burn rate: 7d average per day
 burn_rate=$(echo "$cost_7d" | awk '{printf "%.4f", $1 / 7}')
 
-# Errors: 24h LLM errors
-errors_24h=$(TIME_WINDOW=24h prom_query "sum(increase(ai_llm_errors_total{env=\"${ENV}\"}[24h]))" \
-  | extract_value | awk '{printf "%.0f", $1}')
+# Errors: 24h LLM errors (degrade to 0 if Grafana unreachable)
+errors_24h=$(prom_query "sum(increase(ai_llm_errors_total{env=\"${ENV}\"}[24h]))" \
+  | extract_value | awk '{printf "%.0f", $1}') || errors_24h="0"
 
-# Firing alerts count
+# Firing alerts count (degrade to 0 if Grafana unreachable)
 firing_alerts=$(curl -s "${GRAFANA_URL}/api/ruler/grafana/api/v1/rules" \
   -H "Authorization: Bearer ${TOKEN}" \
-  | jq '[.. | objects | select(.state? == "firing")] | length' 2>/dev/null || echo "0")
+  | jq '[.. | objects | select(.state? == "firing")] | length' 2>/dev/null) || firing_alerts="0"
 
 # Credits: from governance API (BigInt / 10M = USD)
 credits_raw=$(curl -s "http://app:3000/api/v1/governance/status" 2>/dev/null \

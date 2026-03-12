@@ -30,7 +30,9 @@ const STATUS_TO_SKILL: Record<string, string> = {
 
 const tier = process.argv[2] ?? "GREEN";
 const workDir =
-  process.argv[3] === "--work-dir" ? process.argv[4] : "/repo/current";
+  process.argv[3] === "--work-dir"
+    ? (process.argv[4] ?? "/repo/current")
+    : "/repo/current";
 
 if (tier === "RED") {
   // biome-ignore lint/suspicious/noConsole: CLI tool — stdout is the output mechanism
