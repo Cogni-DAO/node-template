@@ -11,7 +11,7 @@ outcome: All graph runs flow through GraphRunWorkflow; no inline execution in HT
 assignees:
   - derekg1729
 created: 2026-02-07
-updated: 2026-02-14
+updated: 2026-03-12
 labels:
   - ai-graphs
   - scheduler
@@ -60,7 +60,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | Add `usage_unit_created` event + decorator change — decorator becomes observability-only                 | Not Started | 1   | —         |
 | Strip billing from adapters — remove cost extraction from InProc, remove ProxyBillingReader from Sandbox | Done        | 1   | task.0029 |
 | Delete old paths — ProxyBillingReader, billing volumes, OPENCLAW_BILLING_DIR, gateway audit log          | Done        | 1   | task.0029 |
-| Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing           | Todo        | 3   | task.0006 |
+| Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing           | In Review   | 3   | task.0006 |
 
 ### Walk (P1): Unified Workflow Path + Run Persistence
 
@@ -109,6 +109,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 ## As-Built Specs
 
+- [graph-execution.md](../../docs/spec/graph-execution.md) — GraphExecutorPort, NamespaceGraphRouter, billing, streaming
 - [unified-graph-launch.md](../../docs/spec/unified-graph-launch.md) — Core invariants, schema, design decisions
 - [billing-ingest.md](../../docs/spec/billing-ingest.md) — Callback-driven billing: adapters emit call_id, LiteLLM callback writes receipts, decorator enforces barrier
 - [scheduler.md](../../docs/spec/scheduler.md) — Temporal architecture, internal API
