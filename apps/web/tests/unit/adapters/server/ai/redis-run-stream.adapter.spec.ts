@@ -191,6 +191,36 @@ describe("RedisRunStreamAdapter", () => {
       );
     });
 
+    it("uses last replayed entry as XREAD cursor (no duplicates)", async () => {
+      // Replay returns non-terminal entries after fromId
+      redisMock.xrange.mockResolvedValue([
+        encodeEntry("1-0", makeEvent("text_delta", { delta: "a" })), // fromId, skipped
+        encodeEntry("2-0", makeEvent("text_delta", { delta: "b" })),
+        encodeEntry("3-0", makeEvent("text_delta", { delta: "c" })),
+      ]);
+      const doneEvent = makeEvent("done");
+      blockMock.xread.mockResolvedValueOnce([
+        [expectedKey, [encodeEntry("4-0", doneEvent)]],
+      ]);
+
+      const controller = new AbortController();
+      const entries = await collectAsync(
+        adapter.subscribe(runId, controller.signal, "1-0")
+      );
+
+      expect(entries).toHaveLength(3); // 2 replay + 1 live
+      // XREAD cursor must be "3-0" (last replayed), NOT "1-0" (fromId)
+      expect(blockMock.xread).toHaveBeenCalledWith(
+        "COUNT",
+        100,
+        "BLOCK",
+        RUN_STREAM_BLOCK_MS,
+        "STREAMS",
+        expectedKey,
+        "3-0"
+      );
+    });
+
     it("starts from 0-0 when no fromId is provided", async () => {
       const doneEvent = makeEvent("done");
 
