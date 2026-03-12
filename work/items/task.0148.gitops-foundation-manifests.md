@@ -2,7 +2,7 @@
 id: task.0148
 type: task
 title: "GitOps foundation — Kustomize manifests, k3s IaC module, Argo CD bootstrap"
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 3
