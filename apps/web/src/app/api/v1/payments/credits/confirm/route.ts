@@ -87,21 +87,19 @@ export const POST = wrapRouteHandlerWithLogging(
       // Validate output and return
       const output = creditsConfirmOperation.output.parse(result);
 
-      if (sessionUser) {
-        capture({
-          event: AnalyticsEvents.BILLING_CREDITS_PURCHASED,
-          identity: {
-            userId: sessionUser.id,
-            sessionId: ctx.reqId,
-            tenantId: output.billingAccountId,
-            traceId: ctx.traceId,
-          },
-          properties: {
-            amount_usd: input.amountUsdCents / 100,
-            credits: output.balanceCredits,
-          },
-        });
-      }
+      capture({
+        event: AnalyticsEvents.BILLING_CREDITS_PURCHASED,
+        identity: {
+          userId: sessionUser.id,
+          sessionId: ctx.reqId,
+          tenantId: output.billingAccountId,
+          traceId: ctx.traceId,
+        },
+        properties: {
+          amount_usd: input.amountUsdCents / 100,
+          credits: output.balanceCredits,
+        },
+      });
 
       return NextResponse.json(output);
     } catch (error) {

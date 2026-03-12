@@ -19,9 +19,6 @@ export const AnalyticsEvents = {
   /** User completed authentication (any provider). */
   AUTH_SIGNED_IN: "cogni.auth.signed_in",
 
-  /** New session started (post-auth, first request). */
-  SESSION_STARTED: "cogni.session.started",
-
   /** User linked an additional identity provider. */
   IDENTITY_PROVIDER_LINKED: "cogni.identity.provider_linked",
 

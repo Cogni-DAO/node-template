@@ -8,7 +8,7 @@ created: 2025-02-28
 # Event Taxonomy v0
 
 > Single source of truth for PostHog product analytics events.
-> Code registry: `src/shared/analytics/events.ts`
+> Code registry: `apps/web/src/shared/analytics/events.ts`
 
 ## Event Envelope (Required on Every Event)
 
@@ -48,16 +48,6 @@ User completed authentication (any provider).
 | `is_new_user` | boolean | Whether this is a first-time sign-in             |
 
 **Answers:** How many users sign in? Which providers are most popular? New user acquisition rate?
-
-#### `cogni.session.started`
-
-New session established after authentication.
-
-| Property          | Type | Description |
-| ----------------- | ---- | ----------- |
-| _(envelope only)_ |      |             |
-
-**Answers:** How many active sessions? Session frequency per user?
 
 #### `cogni.identity.provider_linked`
 

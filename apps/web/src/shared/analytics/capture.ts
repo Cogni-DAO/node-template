@@ -10,7 +10,7 @@
  *   - No PII (emails, raw tokens, secrets) in properties
  *   - No unbounded nested blobs — properties are flat and typed
  *   - Graceful degradation: capture never throws; logs warning on failure
- *   - Server-side only (uses posthog-node SDK)
+ *   - Server-side only (minimal HTTP batch client, no posthog-node dependency)
  * Side-effects: IO (HTTP to PostHog API)
  * Notes: Supports both self-hosted PostHog and PostHog Cloud via POSTHOG_HOST + POSTHOG_API_KEY env vars.
  * Links: docs/analytics/events.v0.md, docs/analytics/posthog.md
@@ -175,16 +175,16 @@ export function capture(params: CaptureParams): void {
   const timestamp = new Date();
 
   // Build merged properties with required envelope fields
+  // Event-specific properties first, then envelope fields win (prevent accidental overwrite)
   const mergedProperties: Record<string, unknown> = {
-    // Envelope fields (always present)
+    ...properties,
+    // Envelope fields (always present — override any caller collision)
     session_id: identity.sessionId,
     environment: _environment ?? "unknown",
     app_version: _appVersion ?? "unknown",
     // Optional identity fields
     ...(identity.tenantId != null ? { tenant_id: identity.tenantId } : {}),
     ...(identity.traceId != null ? { trace_id: identity.traceId } : {}),
-    // Event-specific properties
-    ...properties,
   };
 
   if (_client) {

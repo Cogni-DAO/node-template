@@ -32,14 +32,11 @@ Self-hosted PostHog runs as a separate compose stack alongside the main Cogni ru
 #### Start PostHog
 
 ```bash
-# Ensure the internal network exists
-docker network create internal || true
-
-# Start PostHog stack
-docker compose -f platform/infra/services/posthog/docker-compose.posthog.yml up -d
+# Start PostHog stack (creates internal network automatically)
+pnpm posthog:up
 
 # Wait for health (PostHog web takes ~60s to start)
-docker compose -f platform/infra/services/posthog/docker-compose.posthog.yml ps
+docker compose -f infra/compose/posthog/docker-compose.posthog.yml ps
 ```
 
 #### Services & Ports
@@ -63,7 +60,8 @@ docker compose -f platform/infra/services/posthog/docker-compose.posthog.yml ps
 
 ```bash
 POSTHOG_API_KEY=phc_your_project_api_key_here
-POSTHOG_HOST=http://posthog-web:8000    # Docker internal URL
+POSTHOG_HOST=http://localhost:8000       # For pnpm dev (host mode)
+# POSTHOG_HOST=http://posthog-web:8000  # For Docker mode (app in container on internal network)
 ```
 
 ### Option B: PostHog Cloud (Recommended for Production)
@@ -83,16 +81,16 @@ POSTHOG_HOST=https://us.i.posthog.com   # or https://eu.i.posthog.com
 
 ### Environment Variables
 
-| Variable          | Required | Default | Description                                           |
-| ----------------- | -------- | ------- | ----------------------------------------------------- |
-| `POSTHOG_API_KEY` | No       | —       | PostHog project API key. Analytics disabled if unset. |
-| `POSTHOG_HOST`    | No       | —       | PostHog API endpoint URL.                             |
+| Variable          | Required | Default | Description               |
+| ----------------- | -------- | ------- | ------------------------- |
+| `POSTHOG_API_KEY` | **Yes**  | —       | PostHog project API key.  |
+| `POSTHOG_HOST`    | **Yes**  | —       | PostHog API endpoint URL. |
 
-Analytics is **opt-in**: if `POSTHOG_API_KEY` is not set, events are silently dropped after the buffer fills. The app starts and runs normally without PostHog.
+Both variables are **required**. The app will fail to start if either is missing. For local dev, use self-hosted PostHog (`pnpm posthog:up`) or PostHog Cloud free tier.
 
 ### How Events Are Sent
 
-The app uses `capture()` from `src/shared/analytics/capture.ts`:
+The app uses `capture()` from `apps/web/src/shared/analytics/capture.ts`:
 
 ```typescript
 import { capture, AnalyticsEvents } from "@/shared/analytics";
@@ -167,10 +165,10 @@ LIMIT 10;
 
 ```bash
 # Stop (preserve data)
-docker compose -f platform/infra/services/posthog/docker-compose.posthog.yml down
+docker compose -f infra/compose/posthog/docker-compose.posthog.yml down
 
 # Stop and delete all data
-docker compose -f platform/infra/services/posthog/docker-compose.posthog.yml down -v
+docker compose -f infra/compose/posthog/docker-compose.posthog.yml down -v
 ```
 
 ## Risks & Trade-offs
@@ -185,7 +183,7 @@ Canonical identity is `users.id` (UUID). For unauthenticated events (pre-sign-in
 
 ### Event Volume
 
-The MVP event set (13 events) is intentionally small. `page_viewed` is excluded to avoid volume spam. Monitor ClickHouse disk usage if self-hosting.
+The MVP event set (12 events) is intentionally small. `page_viewed` is excluded to avoid volume spam. Monitor ClickHouse disk usage if self-hosting.
 
 ### Trace ID Correlation
 

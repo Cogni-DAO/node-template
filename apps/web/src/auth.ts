@@ -409,7 +409,7 @@ export const authOptions: NextAuthOptions = {
         );
         capture({
           event: AnalyticsEvents.IDENTITY_PROVIDER_LINKED,
-          identity: { userId: linkIntent.userId, sessionId: randomUUID() },
+          identity: { userId: verifiedUserId, sessionId: randomUUID() },
           properties: { provider },
         });
         return true;

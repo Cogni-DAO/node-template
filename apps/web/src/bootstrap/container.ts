@@ -93,7 +93,7 @@ import type {
   ScheduleRunRepository,
   ScheduleUserPort,
 } from "@/ports/server";
-import { initAnalytics } from "@/shared/analytics";
+import { initAnalytics, shutdownAnalytics } from "@/shared/analytics";
 import { getScopeId } from "@/shared/config";
 import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@/shared/constants/system-tenant";
 import { serverEnv } from "@/shared/env/server-env";
@@ -237,16 +237,21 @@ function createContainer(): Container {
     "container initialized"
   );
 
-  // Initialize PostHog product analytics (opt-in: no-op when POSTHOG_API_KEY unset)
-  if (env.POSTHOG_API_KEY && env.POSTHOG_HOST) {
-    initAnalytics({
-      apiKey: env.POSTHOG_API_KEY,
-      host: env.POSTHOG_HOST,
-      appVersion: env.COGNI_REPO_SHA ?? "unknown",
-      environment: env.DEPLOY_ENVIRONMENT ?? "local",
-    });
-    log.info("PostHog analytics initialized");
-  }
+  // Initialize PostHog product analytics (required — env validated at boot)
+  initAnalytics({
+    apiKey: env.POSTHOG_API_KEY,
+    host: env.POSTHOG_HOST,
+    appVersion: env.COGNI_REPO_SHA ?? "unknown",
+    environment: env.DEPLOY_ENVIRONMENT ?? "local",
+  });
+  log.info("PostHog analytics initialized");
+
+  // Flush analytics events on graceful shutdown
+  const flushOnExit = () => {
+    shutdownAnalytics().catch(() => {});
+  };
+  process.on("SIGTERM", flushOnExit);
+  process.on("SIGINT", flushOnExit);
 
   // LLM adapter: always LiteLlmAdapter (test stacks use mock-openai-api via litellm.test.config.yaml)
   const llmService = new LiteLlmAdapter();
