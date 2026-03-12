@@ -3,8 +3,8 @@ id: task.0162
 type: task
 primary_charter:
 title: "Redis 7 infrastructure: docker-compose, ioredis dependency, env config"
-state: Active
-status: needs_closeout
+state: Done
+status: done
 priority: 0
 rank: 1
 estimate: 1
