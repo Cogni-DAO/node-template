@@ -2,7 +2,7 @@
 id: task.0161
 type: task
 title: "Mission Control: operator loop — deterministic pre-step + thin dispatch prompt"
-status: needs_merge
+status: done
 priority: 0
 rank: 1
 estimate: 2
@@ -18,7 +18,7 @@ project: proj.system-tenant-governance
 branch: feat/mission-control-clean
 pr: https://github.com/Cogni-DAO/node-template/pull/562
 reviewer:
-revision: 6
+revision: 7
 blocked_by:
 deploy_verified: false
 created: 2026-03-10
