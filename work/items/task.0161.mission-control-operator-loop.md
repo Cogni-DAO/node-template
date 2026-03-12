@@ -2,7 +2,7 @@
 id: task.0161
 type: task
 title: "Mission Control: operator loop — deterministic pre-step + thin dispatch prompt"
-status: needs_closeout
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 2
@@ -23,6 +23,7 @@ blocked_by:
 deploy_verified: false
 created: 2026-03-10
 updated: 2026-03-12
+testing: "Untested — requires gateway container runtime (OpenClaw + Grafana + Base RPC). Validate in staging."
 labels: [governance, heartbeat, operator, mission-control]
 external_refs:
   - docs/research/autonomous-agent-operator-loops.md
