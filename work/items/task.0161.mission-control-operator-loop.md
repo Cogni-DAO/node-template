@@ -16,7 +16,7 @@ assignees:
 credit:
 project: proj.system-tenant-governance
 branch: feat/mission-control-clean
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/562
 reviewer:
 revision: 6
 blocked_by:
