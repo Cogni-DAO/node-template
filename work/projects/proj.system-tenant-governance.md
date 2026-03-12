@@ -36,6 +36,7 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 | -------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
 | Schema & bootstrap: `is_system_tenant` column, `cogni_system` seed, startup healthcheck, purchase-time revenue share | Done        | 3   | task.0046 |
 | Governance run foundation: repo-spec governance config + system tenant execution grant                               | Done        | 2   | task.0054 |
+| Governance signal executor: Alchemy webhook → on-chain verification → GitHub actions                                 | In Review   | 3   | task.0161 |
 | Governance health brief endpoint: app-served metrics/logs for governance agent consumption                           | Todo        | 3   | task.0083 |
 | Mission Control operator loop: deterministic pre-step + thin dispatch prompt                                         | In Review   | 2   | task.0162 |
 | Direct system account funding: "Keep Cogni Alive" on credits page                                                    | Todo        | 2   | task.0090 |
@@ -117,6 +118,7 @@ Enable the `cogni_system` billing account to execute governance AI loops as a fi
 
 - [System Tenant Design](../../docs/spec/system-tenant.md) — Core invariants, schema, policy resolution flow
 - [Governance Scheduling](../../docs/spec/governance-scheduling.md) — Declarative schedule sync from repo-spec
+- [Governance Signal Execution](../../docs/spec/governance-signal-execution.md) — On-chain DAO votes → Alchemy webhook → GitHub actions
 
 ## File Pointers (P0 Scope)
 
