@@ -64,8 +64,9 @@ services:
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
-      # TigerBeetle (Financial Ledger) — optional, silently skipped if missing
-      - TIGERBEETLE_ADDRESS=${TIGERBEETLE_ADDRESS:-tigerbeetle:3002}
+      # TigerBeetle (Financial Ledger) — optional, native client requires IP (no DNS).
+      # Static IP assigned via ipam on internal network.
+      - TIGERBEETLE_ADDRESS=${TIGERBEETLE_ADDRESS:-10.100.0.100:3002}
       # Privy (Operator Wallet) — optional, silently skipped if missing
       - PRIVY_APP_ID
       - PRIVY_APP_SECRET
@@ -534,7 +535,8 @@ services:
     labels:
       - "autoheal=true"
     networks:
-      - internal
+      internal:
+        ipv4_address: 10.100.0.100
     entrypoint:
       - "sh"
       - "-c"
@@ -560,8 +562,11 @@ networks:
     name: cogni-edge
     external: true
   # Internal network for app stack services (postgres, litellm, alloy)
-  # No explicit name - let Compose namespace it per project to avoid collisions
+  # Subnet defined for TigerBeetle static IP (native client requires IP, no DNS)
   internal:
+    ipam:
+      config:
+        - subnet: 10.100.0.0/24
   # Isolated network for sandbox containers (no external gateway)
   sandbox-internal:
     name: sandbox-internal

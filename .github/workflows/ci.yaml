@@ -440,7 +440,7 @@ jobs:
           DATABASE_URL: postgresql://user:password@localhost:55432/cogni_template_test
           DATABASE_SERVICE_URL: postgresql://user_service:service_password@localhost:55432/cogni_template_test
           # TigerBeetle (host-side vitest, port-forwarded)
-          TIGERBEETLE_ADDRESS: localhost:3002
+          TIGERBEETLE_ADDRESS: 127.0.0.1:3002
         # Note: wait-for-probes.ts globalSetup polls /livez then /readyz before tests run
 
       - name: CI Telemetry

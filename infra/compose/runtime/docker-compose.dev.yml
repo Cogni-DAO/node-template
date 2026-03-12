@@ -62,8 +62,9 @@ services:
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
-      # TigerBeetle (Financial Ledger) — optional, silently skipped if missing
-      - TIGERBEETLE_ADDRESS=${TIGERBEETLE_ADDRESS:-tigerbeetle:3002}
+      # TigerBeetle (Financial Ledger) — optional, native client requires IP (no DNS).
+      # Static IP assigned via ipam on internal network.
+      - TIGERBEETLE_ADDRESS=${TIGERBEETLE_ADDRESS:-10.100.0.100:3002}
       # Privy (Operator Wallet) — optional, silently skipped if missing
       - PRIVY_APP_ID
       - PRIVY_APP_SECRET
@@ -633,7 +634,8 @@ services:
     labels:
       - "autoheal=true"
     networks:
-      - internal
+      internal:
+        ipv4_address: 10.100.0.100
     ports:
       - "127.0.0.1:3002:3002"
     entrypoint:
@@ -661,6 +663,9 @@ networks:
   internal:
     name: internal
     external: false
+    ipam:
+      config:
+        - subnet: 10.100.0.0/24
   sandbox-internal:
     name: sandbox-internal
     internal: true # KEY: No external gateway - prevents internet egress
