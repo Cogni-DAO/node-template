@@ -2,7 +2,7 @@
 id: task.0161
 type: task
 title: "Mission Control: operator loop — deterministic pre-step + thin dispatch prompt"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 2
