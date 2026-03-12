@@ -40,6 +40,7 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 **Architecture:** `while(tool_call) → execute tool → feed results → repeat`. Terminates when model produces plain text. Internally codenamed "nO".
 
 **Key innovations:**
+
 - **Flat message history** — no complex threading, no multi-agent swarms
 - **At most one sub-agent** at a time — prevents recursive explosion
 - **TODO lists as planning** — structured JSON task lists injected as system reminders
@@ -47,6 +48,7 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 - **Diffs-first workflow** — minimal edits, easy review/revert
 
 **Applicability to us:**
+
 - ✅ Single sub-agent model matches our researcher→brain delegation
 - ✅ TODO list pattern → our WIP.md serves the same function
 - ✅ Context compression → our 500-char truncation per observation step
@@ -59,12 +61,14 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 **Architecture:** Every step is an atomic `{thought, command}` pair. The Agent-Computer Interface (ACI) translates commands into environmental actions and summarizes results for the model. Malformed generations trigger error response → retry.
 
 **Key innovations:**
+
 - **Custom ACI** — purpose-built interface between LLM and environment (not raw shell)
 - **History collapse** — observations older than last 5 collapsed to single-line summaries
 - **Error recovery** — malformed output → structured error → model retries (not crash)
 - **Live-SWE-agent** (2025) — agent evolves its own tool interface at runtime
 
 **Applicability to us:**
+
 - ✅ History collapse → our EDO index is exactly this (old decisions → one-line summary)
 - ✅ Error recovery → our circuit breaker (3 failures → escalate, not crash)
 - ✅ Custom ACI → our queries.sh and mc-billing.sh are purpose-built interfaces
@@ -77,11 +81,13 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 **Architecture:** `Plan → Implement chunk → Test → Fix → Checkpoint review → Next chunk`. Human checkpoints after major phases.
 
 **Key innovations:**
+
 - **Self-verification** — agents must have access to CI, tests, linters, type checkers
 - **Fresh start preference** — if agent is going in circles, restart with clean instructions (don't iterate on broken state)
 - **Checkpoint pattern** — explicit pauses after significant phases for human review
 
 **Applicability to us:**
+
 - ✅ Self-verification → our outcome verification via external signals (git status, PR state, metrics)
 - ✅ Fresh start → our stale reasoning detection (fresh context per run, not accumulated history)
 - ✅ Checkpoint = each hourly run is a natural checkpoint
@@ -94,12 +100,14 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 **Architecture:** `Generate solution → Evaluate against tests → If fail: reflect on why → Store reflection → Retry with reflection context`. Achieved 91% pass@1 on HumanEval vs GPT-4's 80%.
 
 **Key innovations:**
+
 - **Verbal reinforcement** — reflections stored as natural language, not numeric rewards
 - **Episodic memory** — reflections indexed to specific problem instances, retrieved on similar problems
 - **Separate error ID from correction** — two distinct LLM calls: "what went wrong?" then "how to fix?"
 - **Test-driven** — correctness determined by external tests, not self-evaluation
 
 **Applicability to us:**
+
 - ✅ Episodic memory → our WIP.md "Completed" section stores reflections per completed item
 - ✅ External evaluation → our EDO outcome verification (metrics, git, gh CLI)
 - ✅ Separate diagnosis from action → our Phase 1 (gather) separate from Phase 2 (decide)
@@ -112,14 +120,16 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 **Architecture:** `Execute task → Store result as embedding → Reprioritize task list → Retrieve relevant past results for next task → Repeat`.
 
 **Key innovations:**
+
 - **Vector-indexed task results** — past outcomes stored as embeddings, retrieved by relevance
 - **Dynamic reprioritization** — task list reordered after each execution based on results
 - **Context from past results** — before executing, query vector DB for most relevant past results
 
 **Applicability to us:**
-- ✅ Task prioritization → our _index.md priority ordering (finish-before-starting)
+
+- ✅ Task prioritization → our \_index.md priority ordering (finish-before-starting)
 - ⚠️ Vector retrieval is overkill for our scale (10-50 work items, not thousands)
-- ✅ Dynamic reprioritization concept → reading _index.md each run (fresh priorities)
+- ✅ Dynamic reprioritization concept → reading \_index.md each run (fresh priorities)
 - 🔑 **KEY INSIGHT**: We don't need vector search. Simple keyword match on WIP.md reflections is sufficient at our scale. But the principle is sound: retrieve relevant past experience before acting.
 
 ### Pattern 6: Google BATS — Budget-Aware Tool Spending
@@ -129,12 +139,14 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 **Architecture:** Inject continuous budget signal ("Query budget remaining: N") into the agent's reasoning loop. Agent conditions behavior on real-time resource availability.
 
 **Key innovations:**
+
 - **Budget Tracker module** — live counter injected into every reasoning step
 - **Comparable accuracy with 40% fewer tool calls** — budget awareness alone cuts waste
 - **Planning module** adjusts effort to match remaining budget
 - **Verification module** decides "dig deeper" vs "pivot" based on resources
 
 **Applicability to us:**
+
 - ✅ **CRITICAL** — our agent MUST see its cost data. BATS proves budget-unaware agents waste 40% more.
 - ✅ Budget header → our `_budget_header.md` serves this exact function
 - ✅ Dig deeper vs pivot → our dispatch-or-no-op decision based on budget gate
@@ -155,6 +167,7 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 **Key insight:** "If a single step fails, the agent doesn't just give up. It can refer back to the master plan, reassess, or ask the planner to revise." ReAct agents are easily derailed because they have no master plan to fall back on.
 
 **Applicability to us:**
+
 - ✅ Our operator loop IS plan-and-execute: the 9-step procedure is the plan, brain subagent executes
 - ✅ Master plan as anchor → our SKILL.md procedure prevents goal drift
 - ✅ Different models for different tasks → researcher (cheap) plans, brain (strong) executes
@@ -167,12 +180,14 @@ Our agent runs hourly on a cron, picks work items, dispatches lifecycle skills, 
 **Architecture:** Monitor failure rate → threshold exceeded → circuit "opens" → halt retries → cooling period → escalate.
 
 **Key findings:**
+
 - Error propagation is the #1 reliability killer — one early mistake cascades
 - Token budgets per loop and cost-threshold circuit breakers are primary levers
 - Escalation ladders specify when agent must pause and request human approval
 - Graceful degradation: pause, present state to human, resume from checkpoint
 
 **Applicability to us:**
+
 - ✅ Our 3-failure circuit breaker aligns with production patterns
 - ✅ Escalation to Discord = our escalation ladder
 - ✅ WIP.md "Blocked" section = the cooling period + state preservation
@@ -208,7 +223,7 @@ Current design stores reflections in WIP.md. Enhancement: before dispatching a l
 
 ### 5. Fresh Context Per Run (from Devin, SWE-Agent history collapse)
 
-Each hourly run starts fresh. No accumulated conversation history. Only persistent state: WIP.md, EDO index, _budget_header.md. This prevents stale reasoning from corrupting decisions. Our design already does this correctly.
+Each hourly run starts fresh. No accumulated conversation history. Only persistent state: WIP.md, EDO index, \_budget_header.md. This prevents stale reasoning from corrupting decisions. Our design already does this correctly.
 
 ### 6. Circuit Breaker with Same-Failure Detection (from production patterns)
 
@@ -230,8 +245,9 @@ Our researcher→brain delegation already enforces this. One brain subagent, one
 ## Recommendation
 
 The task.0153 design is architecturally sound. It correctly uses:
+
 - Plan-and-Execute (9-step procedure + brain executor)
-- Budget awareness (mc-billing.sh → _budget_header.md → gate check)
+- Budget awareness (mc-billing.sh → \_budget_header.md → gate check)
 - External verification (EDO verification_method, WIP expected_signal)
 - Circuit breaker (3 failures → escalate)
 - Fresh context per run (no accumulated history)
@@ -268,6 +284,7 @@ None needed. The operator loop is a gateway skill, not an API contract. The EDO 
 ### Task updates
 
 **task.0153** should incorporate the three enhancements:
+
 1. Add `last_failure_reason` field to WIP.md Active entries
 2. Add reflection retrieval step before dispatch (scan completed section for same-skill reflections)
 3. Ensure SKILL.md explicitly instructs reading budget data before pick decision (already partially there)
