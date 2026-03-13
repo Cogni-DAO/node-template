@@ -64,7 +64,7 @@ services:
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
       # TigerBeetle (Financial Ledger) — optional, native client requires IP (no DNS).
       # Static IP assigned via ipam on internal network.
-      - TIGERBEETLE_ADDRESS=${TIGERBEETLE_ADDRESS:-10.100.0.100:3002}
+      - TIGERBEETLE_ADDRESS=10.100.0.100:3002
       # Privy (Operator Wallet) — optional, silently skipped if missing
       - PRIVY_APP_ID
       - PRIVY_APP_SECRET
