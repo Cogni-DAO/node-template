@@ -21,7 +21,7 @@ import type { TransferIntent } from "../src/port/operator-wallet.port.js";
 
 const OPERATOR_ADDRESS = "0xdCCa8D85603C2CC47dc6974a790dF846f8695056";
 const FAKE_WALLET_ID = "wallet-123";
-const FAKE_TX_HASH = "0x" + "ab".repeat(32);
+const FAKE_TX_HASH = `0x${"ab".repeat(32)}`;
 
 const mockSendTransaction = vi.fn().mockResolvedValue({ hash: FAKE_TX_HASH });
 

@@ -20,6 +20,8 @@ import type {
 } from "@cogni/ai-tools";
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
+import type { FinancialLedgerPort } from "@cogni/financial-ledger";
+import { createTigerBeetleAdapter } from "@cogni/financial-ledger/adapters";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
 import { numberToPpm } from "@cogni/operator-wallet";
@@ -164,6 +166,8 @@ export interface Container {
   workItemQuery: WorkItemQueryPort;
   /** Webhook source registrations — normalizers for webhook ingestion */
   webhookRegistrations: ReadonlyMap<string, DataSourceRegistration>;
+  /** Financial ledger — undefined when TIGERBEETLE_ADDRESS not set */
+  financialLedger: FinancialLedgerPort | undefined;
   /** Operator wallet — undefined when PRIVY_APP_ID not set */
   operatorWallet: OperatorWalletPort | undefined;
   /** Treasury settlement — undefined when operator wallet not configured */
@@ -303,10 +307,31 @@ function createContainer(): Container {
         return new MimirMetricsAdapter(mimirConfig);
       })();
 
+  // FinancialLedger: optional — only when TIGERBEETLE_ADDRESS is configured
+  // @cogni/financial-ledger/adapters is in serverExternalPackages (N-API addon, not bundleable)
+  const financialLedger: FinancialLedgerPort | undefined = (() => {
+    if (!env.TIGERBEETLE_ADDRESS) return undefined;
+    try {
+      const adapter = createTigerBeetleAdapter(env.TIGERBEETLE_ADDRESS);
+      log.info(
+        { address: env.TIGERBEETLE_ADDRESS },
+        "TigerBeetle financial ledger connected"
+      );
+      return adapter;
+    } catch (err) {
+      log.warn(
+        { err },
+        "TigerBeetle client failed to initialize — financial ledger disabled"
+      );
+      return undefined;
+    }
+  })();
+
   // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
   const serviceAccountService = new ServiceDrizzleAccountService(
-    getServiceDb()
+    getServiceDb(),
+    financialLedger
   );
   // TreasuryReadPort: always uses ViemTreasuryAdapter (no test fake needed - mocked at port level in tests)
   const treasuryReadPort = new ViemTreasuryAdapter(evmOnchainClient);
@@ -453,7 +478,7 @@ function createContainer(): Container {
     config,
     llmService,
     accountsForUser: (userId: UserId) =>
-      new UserDrizzleAccountService(db, userId),
+      new UserDrizzleAccountService(db, userId, financialLedger),
     serviceAccountService,
     clock,
     paymentAttemptsForUser: (userId: UserId) =>
@@ -486,6 +511,7 @@ function createContainer(): Container {
     get webhookRegistrations() {
       return getWebhookRegistrations();
     },
+    financialLedger,
     operatorWallet,
     treasurySettlement: operatorWallet
       ? new SplitTreasurySettlementAdapter(operatorWallet, USDC_TOKEN_ADDRESS)

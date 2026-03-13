@@ -35,6 +35,9 @@ importers:
       '@cogni/db-schema':
         specifier: workspace:*
         version: link:packages/db-schema
+      '@cogni/financial-ledger':
+        specifier: workspace:*
+        version: link:packages/financial-ledger
       '@cogni/ids':
         specifier: workspace:*
         version: link:packages/ids
@@ -324,6 +327,9 @@ importers:
       '@cogni/db-schema':
         specifier: workspace:*
         version: link:../../packages/db-schema
+      '@cogni/financial-ledger':
+        specifier: workspace:*
+        version: link:../../packages/financial-ledger
       '@cogni/ids':
         specifier: workspace:*
         version: link:../../packages/ids
@@ -501,6 +507,9 @@ importers:
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
+      tigerbeetle-node:
+        specifier: ^0.16.76
+        version: 0.16.76
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -681,6 +690,19 @@ importers:
       drizzle-orm:
         specifier: ^0.44.7
         version: 0.44.7(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(pg@8.17.1)(postgres@3.4.7)
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.15.10)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.1)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/financial-ledger:
+    dependencies:
+      tigerbeetle-node:
+        specifier: ^0.16.76
+        version: 0.16.76
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -9957,6 +9979,10 @@ packages:
 
   through@2.3.8:
     resolution: {integrity: sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==}
+
+  tigerbeetle-node@0.16.76:
+    resolution: {integrity: sha512-1rm0eXIUvbHiSn251wtdn9fUQuvZBAWgjXbrRhqQXeJfhfD6VKRN868Wv1nIVn4fB3omP5ClVPB7VP/LySsXTQ==}
+    engines: {node: '>=18.0.0'}
 
   tiny-invariant@1.3.3:
     resolution: {integrity: sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==}
@@ -22157,6 +22183,8 @@ snapshots:
   throttleit@2.1.0: {}
 
   through@2.3.8: {}
+
+  tigerbeetle-node@0.16.76: {}
 
   tiny-invariant@1.3.3: {}
 
