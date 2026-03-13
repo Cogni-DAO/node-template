@@ -84,6 +84,21 @@ All three sub-experiments validated on Base mainnet. Key findings:
 - New env vars: `OPENROUTER_CRYPTO_FEE`, `OPERATOR_MAX_TOPUP_USD`
 - Margin safety check at startup: `MARKUP × (1 - FEE) > 1 + REVENUE_SHARE`
 
+### Crawl+ (P0.5) — Akash Crypto Payment Bridge
+
+**Goal:** Validate cross-chain pipeline for funding Akash deployments from the operator wallet. Design `HostingPort` abstraction for crypto-native hosting providers.
+
+| #   | Deliverable                                               | Status      | Est | Work Item    |
+| --- | --------------------------------------------------------- | ----------- | --- | ------------ |
+| 0   | Spike: Base USDC → AKT swap + Akash escrow + HostingPort  | Not Started | 2   | spike.0162   |
+| 1   | HostingPort interface + Akash adapter (Temporal workflow) | Not Started | 3   | (post-spike) |
+| 2   | AKT swap integration (Squid Router Base USDC → AKT)       | Not Started | 2   | (post-spike) |
+| 3   | Akash deployment lifecycle (create, fund escrow, close)   | Not Started | 3   | (post-spike) |
+
+**Spike 0 — Validate Akash payment bridge (spike.0162):**
+
+Cross-chain pipeline: Base USDC → Squid Router → AKT on Akash → fund escrow. Key unknowns: Squid Router route/cost/latency for Base→Akash, programmatic Akash deployment creation (AkashJS vs Console API), Cosmos wallet strategy (Privy compatibility), Temporal vs DB-backed state machine for the multi-step pipeline. Also designs `HostingPort` abstraction — a port/adapter that decouples deployment lifecycle from chain-specific bridging, so when Akash migrates off Cosmos we swap the adapter without touching domain logic.
+
 ### Walk (P1) — Monitoring + Hardening
 
 **Goal:** Observability, automated balance checks, optional OSS custody adapter.
