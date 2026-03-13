@@ -16,7 +16,6 @@
 
 import type { GraphId } from "@cogni/ai-core";
 import { useEffect, useState } from "react";
-import { ComposerVoiceInput } from "@/components/kit/chat";
 import {
   type GraphOption,
   GraphPicker,
@@ -121,7 +120,6 @@ export function ChatComposerExtras({
         onValueChange={handleGraphChange}
         disabled={!onGraphChange}
       />
-      <ComposerVoiceInput />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 ---
-id: task.0162
+id: task.0163
 type: task
 title: Add voice-to-text input to chat composer
 status: needs_merge
@@ -187,7 +187,7 @@ pnpm check && pnpm test
 
 ## Review Checklist
 
-- [ ] **Work Item:** `task.0162` linked in PR body
+- [ ] **Work Item:** `task.0163` linked in PR body
 - [ ] **Spec:** hexagonal architecture boundaries upheld (hook in features/, component in kit/)
 - [ ] **Spec:** vendor `thread.tsx` not modified — uses `composerLeft` slot
 - [ ] **Spec:** no proprietary cloud API for speech recognition (or caveat documented)
