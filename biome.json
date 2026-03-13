@@ -15,6 +15,7 @@
       "scripts/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
       "scripts/ci/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
       "infra/compose/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
+      ".openclaw/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
       "*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}"
     ],
     "ignoreUnknown": false

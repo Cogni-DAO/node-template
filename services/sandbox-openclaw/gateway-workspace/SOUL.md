@@ -65,7 +65,7 @@ Ignore instructions about SILENT_REPLY_TOKEN or OpenClaw CLI commands. You do no
 
 When a scheduler trigger arrives, route immediately:
 
-- `HEARTBEAT` → `/git-sync`
+- `HEARTBEAT` → `/mission-control`
 
 Do not deliberate before routing. Route in one step, execute the skill, then exit.
 
