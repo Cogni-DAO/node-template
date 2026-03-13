@@ -29,7 +29,8 @@ The ledger covers only operations that actually touch value. In the current syst
 | **User tops up credits (USDC deposit)** | Assets:OnChain:USDC               | Liability:UserCredits          | On-chain watcher confirms finality    |
 | **AI spend burns credits**              | Liability:UserCredits             | Revenue:AIUsage                | charge_receipts (LiteLLM cost oracle) |
 | **Operator wallet funded**              | Assets:Treasury:USDC              | Assets:OperatorFloat:USDC      | Splits distribution                   |
-| **OpenRouter top-up**                   | Assets:OperatorFloat:USDC         | Expense:AI:OpenRouter          | Coinbase Commerce tx confirmed        |
+| **OpenRouter top-up (prepayment)**      | Assets:OperatorFloat:USDC         | Assets:ProviderFloat:USDC      | Coinbase Commerce tx confirmed        |
+| **AI provider spend (reconciliation)**  | Assets:ProviderFloat:USDC         | Expense:AI:ModelSpend          | Usage reconciliation (Walk)           |
 | **Hosting expense (Cherry Servers)**    | Assets:Treasury:EUR               | Expense:Infrastructure:Hosting | API poll / invoice                    |
 | **Epoch accrual (attribution)**         | Expense:ContributorRewards:Equity | Liability:UnclaimedEquity      | Finalized epoch statement             |
 | **On-chain claim settled**              | Liability:UnclaimedEquity         | Assets:EmissionsVault:COGNI    | MerkleDistributor claim tx            |
@@ -140,7 +141,8 @@ Assets:OperatorFloat:USDC           ; 2002n — Operator wallet working balance
 ```
 ; --- Ledger 2: USDC ---
 Assets:OnChain:USDC                 ; Confirmed on-chain USDC deposits
-Expense:AI:OpenRouter:USDC          ; OpenRouter provider costs
+Assets:ProviderFloat:USDC           ; 2003n — Prepaid provider credits (Crawl: added with task.0086)
+Expense:AI:ModelSpend:USDC          ; Provider spend recognized on usage reconciliation (Walk)
 Expense:ContributorRewards:USDC     ; USDC distributions (governance-voted)
 
 ; --- Ledger 100: COGNI (governance token, scale=0) ---

@@ -84,7 +84,7 @@ confirmCreditsPurchase() — application orchestrator
 
 - [ ] PORT_BOUNDARY_CLEAN: TreasurySettlementPort stays treasury-scoped. Provider funding is a separate port. Orchestrator composes both (spec: architecture)
 - [ ] ASSET_SWAP_NOT_EXPENSE: Top-up posts OperatorFloat → ProviderFloat (asset-to-asset). Expense on usage/reconciliation only (spec: financial-ledger, DOUBLE_ENTRY_CANONICAL)
-- [ ] DETERMINISTIC_IDS: TB transfer IDs derived from (paymentIntentId, step_code). Idempotent on retry (spec: financial-ledger)
+- [ ] DETERMINISTIC_IDS: TB transfer IDs via `uuid5(TB_TRANSFER_NAMESPACE, paymentIntentId + ":" + stepCode)` → u128. Namespace constant in financial-ledger domain. Idempotent on retry (spec: financial-ledger)
 - [ ] DURABLE_FUNDING_ROW: provider_funding_attempts row keyed by paymentIntentId enables crash recovery. Charge reuse on retry
 - [ ] TOPUP_FROM_CONSTANTS: `calculateOpenRouterTopUp()` derives amount from `MARKUP`, `REVENUE_SHARE`, `CRYPTO_FEE` — no hardcoded dollar amounts (spec: web3-openrouter-payments)
 - [ ] MARGIN_PRESERVED: Startup check `MARKUP × (1 - FEE) > 1 + REVENUE_SHARE` — fail fast if DAO would lose money (spec: web3-openrouter-payments)
@@ -97,7 +97,7 @@ confirmCreditsPurchase() — application orchestrator
 ### Files
 
 - Create: `apps/web/src/ports/provider-funding.port.ts` — `ProviderFundingPort` interface with `fundAfterCreditPurchase(context)`. Provider-agnostic (OpenRouter today, other providers tomorrow)
-- Create: `apps/web/src/adapters/server/treasury/openrouter-funding.adapter.ts` — implements `ProviderFundingPort`. Composes OpenRouter charge creation + `OperatorWalletPort.fundOpenRouterTopUp()`. Manages `provider_funding_attempts` row
+- Create: `apps/web/src/adapters/server/treasury/openrouter-funding.adapter.ts` — implements `ProviderFundingPort`. Composes OpenRouter charge creation + `OperatorWalletPort.fundOpenRouterTopUp()`. Manages `provider_funding_attempts` row. Error logging distinguishes `reasonCode: "insufficient_balance_timing"` (transient — split tx not yet confirmed, wallet will have funds shortly) from `reasonCode: "funding_failed"` (real failure)
 - Modify: `apps/web/src/core/billing/pricing.ts` — add `calculateOpenRouterTopUp(paymentUsd, markupFactor, revenueShare, cryptoFee): number`
 - Modify: `apps/web/src/shared/env/server-env.ts` — add `OPENROUTER_API_KEY` (optional), `OPENROUTER_CRYPTO_FEE` (default 0.05)
 - Modify: `apps/web/src/features/payments/application/confirmCreditsPurchase.ts` — add Steps 4-6 composing `FinancialLedgerPort` + `ProviderFundingPort`. Deps object instead of positional params
@@ -126,7 +126,7 @@ Two new USDC-ledger transfers per credit purchase:
 1. `ASSETS_TREASURY (2001n) → ASSETS_OPERATOR_FLOAT (2002n)` — Split distribute (code: `SPLIT_DISTRIBUTE = 3`)
 2. `ASSETS_OPERATOR_FLOAT (2002n) → ASSETS_PROVIDER_FLOAT (2003n)` — Provider top-up (code: `PROVIDER_TOPUP = 4`)
 
-Transfer IDs deterministic: `hash(paymentIntentId + TRANSFER_CODE)` truncated to u128.
+Transfer IDs deterministic: `uuid5(TB_TRANSFER_NAMESPACE, paymentIntentId + ":" + stepCode)` → u128. The namespace constant (`TB_TRANSFER_NAMESPACE`) is a well-known UUID defined in the financial-ledger domain. uuid5 gives deterministic IDs with negligible collision risk vs raw hash truncation.
 
 ### Durable State: `provider_funding_attempts`
 
