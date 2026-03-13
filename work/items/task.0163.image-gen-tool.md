@@ -2,7 +2,7 @@
 id: task.0163
 type: task
 title: "Image generation tool + pipeline artifact support"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 10
 estimate: 5
@@ -20,7 +20,7 @@ revision: 3
 blocked_by:
 deploy_verified: false
 created: 2026-03-12
-updated: 2026-03-13
+updated: 2026-03-14
 labels: [ai-graphs, creative-ai, tooling]
 external_refs:
 ---

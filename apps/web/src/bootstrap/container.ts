@@ -12,8 +12,9 @@
  * @public
  */
 
-import type { ToolSourcePort } from "@cogni/ai-core";
+import type { ArtifactSinkPort, ToolSourcePort } from "@cogni/ai-core";
 import type {
+  ImageGenerateCapability,
   MetricsCapability,
   RepoCapability,
   WebSearchCapability,
@@ -44,6 +45,7 @@ import {
   getAppDb,
   LangfuseAdapter,
   LiteLlmAdapter,
+  LocalFsArtifactSinkAdapter,
   type MimirAdapterConfig,
   MimirMetricsAdapter,
   SystemClock,
@@ -63,6 +65,7 @@ import {
 } from "@/adapters/test";
 import { createToolBindings } from "@/bootstrap/ai/tool-bindings";
 import { createBoundToolSource } from "@/bootstrap/ai/tool-source.factory";
+import { createImageGenerateCapability } from "@/bootstrap/capabilities/image-generate";
 import {
   createMetricsCapability,
   derivePrometheusQueryUrl,
@@ -140,6 +143,10 @@ export interface Container {
   webSearchCapability: WebSearchCapability;
   /** Repo capability for AI tools - requires COGNI_REPO_PATH */
   repoCapability: RepoCapability;
+  /** Image generation capability for AI tools - requires LITELLM_BASE_URL + LITELLM_MASTER_KEY */
+  imageGenerateCapability: ImageGenerateCapability;
+  /** Artifact sink for persisting generated artifacts (dev: local-fs, prod: MinIO/S3) */
+  artifactSink: ArtifactSinkPort;
   /** Tool source with real implementations for AI tool execution */
   toolSource: ToolSourcePort;
   /** Thread persistence scoped to a user (RLS enforced) */
@@ -371,11 +378,20 @@ function createContainer(): Container {
   // RepoCapability for AI tools (requires COGNI_REPO_PATH)
   const repoCapability = createRepoCapability(env);
 
+  // ImageGenerateCapability for AI tools (requires LITELLM_BASE_URL + LITELLM_MASTER_KEY)
+  const imageGenerateCapability = createImageGenerateCapability(env);
+
+  // ArtifactSink: dev-only local filesystem (production: MinIO — see proj.tool-use-evolution.md)
+  const artifactSink = new LocalFsArtifactSinkAdapter({
+    baseDir: "/tmp/cogni-artifacts",
+  });
+
   // ToolSource with real implementations (per CAPABILITY_INJECTION)
   const toolBindings = createToolBindings({
     metricsCapability,
     webSearchCapability,
     repoCapability,
+    imageGenerateCapability,
   });
   const toolSource = createBoundToolSource(toolBindings);
 
@@ -419,6 +435,8 @@ function createContainer(): Container {
     metricsCapability,
     webSearchCapability,
     repoCapability,
+    imageGenerateCapability,
+    artifactSink,
     toolSource,
     threadPersistenceForUser: (userId: UserId) =>
       new DrizzleThreadPersistenceAdapter(db, userActor(userId)),

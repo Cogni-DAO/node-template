@@ -61,6 +61,14 @@ export {
   LangGraphInProcProvider,
 } from "./ai/langgraph";
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
+export {
+  LiteLlmImageGenerateAdapter,
+  type LiteLlmImageGenerateConfig,
+} from "./ai/litellm-image-generate.adapter";
+export {
+  LocalFsArtifactSinkAdapter,
+  type LocalFsArtifactSinkConfig,
+} from "./ai/local-fs-artifact-sink.adapter";
 export type { ObservabilityDecoratorConfig } from "./ai/observability-executor.decorator";
 // Observability decorator for Langfuse traces
 export { ObservabilityGraphExecutorDecorator } from "./ai/observability-executor.decorator";

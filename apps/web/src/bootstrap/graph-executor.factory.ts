@@ -130,7 +130,11 @@ function createInProcProvider(
     deps,
     completionStreamFn
   );
-  return new LangGraphInProcProvider(inprocAdapter, container.toolSource);
+  return new LangGraphInProcProvider(
+    inprocAdapter,
+    container.toolSource,
+    container.artifactSink
+  );
 }
 
 /**

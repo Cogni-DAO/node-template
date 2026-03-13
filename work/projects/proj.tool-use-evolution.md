@@ -287,6 +287,25 @@ Per invariant MCP_UNTRUSTED_BY_DEFAULT.
 | Enforce bounded output (summary-first)                                           | Not Started | 1   | —         |
 | LangGraph interrupts for human-in-the-loop approval                              | Not Started | 1   | —         |
 
+### Walk (P1): Artifact Storage — ArtifactSinkPort Adapters
+
+**Goal:** Durable artifact storage for tool outputs (images, audio, files).
+
+ArtifactSinkPort + ArtifactRef defined in ai-core (task.0163). Adapters swap storage backends without changing tool or graph code.
+
+| Deliverable                                                              | Status      | Est | Work Item |
+| ------------------------------------------------------------------------ | ----------- | --- | --------- |
+| `ArtifactSinkPort` interface + `ArtifactRef` type                        | Done        | 1   | task.0163 |
+| `onFullResult` async hook on `ToolRunnerConfig` (pre-redaction artifact) | Done        | 1   | task.0163 |
+| `core__image_generate` tool contract + `ImageGenerateCapability`         | Done        | 2   | task.0163 |
+| Dev-only local filesystem sink adapter                                   | Done        | 1   | task.0163 |
+| MinIO (S3-compatible OSS) adapter for durable object storage             | Not Started | 2   | —         |
+| Artifact retrieval API endpoint (GET by ref ID)                          | Not Started | 1   | —         |
+| UI image rendering from artifact refs                                    | Not Started | 1   | —         |
+| Per-run artifact count/size limits                                       | Not Started | 1   | —         |
+
+> **Note:** MinIO is the OSS-first path to durable object storage. S3-compatible API means the adapter works for both MinIO (self-hosted) and AWS S3 (cloud). Do NOT use pod-local `/tmp` in production — it is ephemeral and tied to pod/node lifetime.
+
 ### PX: Advanced (Do NOT Build Yet)
 
 | Deliverable                     | Status      | Est | Work Item |

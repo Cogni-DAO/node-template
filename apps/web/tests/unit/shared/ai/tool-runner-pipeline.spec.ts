@@ -435,4 +435,110 @@ describe("createToolRunner pipeline ordering (method-based interface)", () => {
       expect(typeof capabilities).toBe("object");
     });
   });
+
+  describe("onFullResult hook (artifact extraction seam)", () => {
+    it("calls onFullResult with toolCallId and validated output after validateOutput, before redact", async () => {
+      // Arrange
+      const rawOutput = {
+        imageBase64: "abc123",
+        mimeType: "image/png",
+        model: "test-model",
+        prompt: "a cat",
+      };
+      const { boundTool } = createSpyableBoundToolRuntime({ rawOutput });
+      const collector = createEventCollector();
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+
+      const hookCallOrder: string[] = [];
+      const hookArgs: { toolCallId: string; fullOutput: unknown }[] = [];
+
+      // Spy on the hook to track call order relative to pipeline steps
+      const originalRedact = boundTool.redact;
+      boundTool.redact = vi.fn().mockImplementation((output: unknown) => {
+        hookCallOrder.push("redact");
+        return originalRedact(output);
+      });
+
+      const onFullResult = vi
+        .fn()
+        .mockImplementation(async (toolCallId: string, fullOutput: unknown) => {
+          hookCallOrder.push("onFullResult");
+          hookArgs.push({ toolCallId, fullOutput });
+        });
+
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+        onFullResult,
+      });
+
+      // Act
+      await runner.exec(
+        TEST_TOOL_NAME,
+        { value: "test" },
+        {
+          modelToolCallId: "call_img_001",
+        }
+      );
+
+      // Assert — hook called exactly once
+      expect(onFullResult).toHaveBeenCalledTimes(1);
+
+      // Assert — hook receives the validated output (pre-redaction)
+      expect(hookArgs[0].toolCallId).toBe("call_img_001");
+      expect(hookArgs[0].fullOutput).toEqual(rawOutput);
+
+      // Assert — onFullResult fires before redact
+      expect(hookCallOrder).toEqual(["onFullResult", "redact"]);
+    });
+
+    it("swallows onFullResult errors without breaking pipeline", async () => {
+      // Arrange
+      const rawOutput = { result: "ok", secret: "hidden" };
+      const { boundTool } = createSpyableBoundToolRuntime({ rawOutput });
+      const collector = createEventCollector();
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+
+      const onFullResult = vi.fn().mockRejectedValue(new Error("Sink failed"));
+
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+        onFullResult,
+      });
+
+      // Act
+      const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
+
+      // Assert — pipeline completes successfully despite hook error
+      expect(onFullResult).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toEqual({ result: "ok" });
+      }
+    });
+
+    it("does not call onFullResult when exec fails", async () => {
+      // Arrange
+      const { boundTool } = createSpyableBoundToolRuntime({
+        execThrows: true,
+      });
+      const collector = createEventCollector();
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+
+      const onFullResult = vi.fn();
+
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+        onFullResult,
+      });
+
+      // Act
+      await runner.exec(TEST_TOOL_NAME, { value: "test" });
+
+      // Assert — hook never called on exec failure
+      expect(onFullResult).not.toHaveBeenCalled();
+    });
+  });
 });

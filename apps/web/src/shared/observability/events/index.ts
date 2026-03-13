@@ -72,6 +72,7 @@ export const EVENT_NAMES = {
   ADAPTER_RIPGREP_SEARCH: "adapter.ripgrep.search",
   ADAPTER_RIPGREP_OPEN: "adapter.ripgrep.open",
   ADAPTER_OPENCLAW_GATEWAY_ERROR: "adapter.openclaw_gateway.error",
+  ADAPTER_IMAGE_GENERATE_ERROR: "adapter.image_generate.error",
 
   // Ledger Domain
   LEDGER_ALLOCATIONS_UPDATED: "ledger.allocations_updated",
