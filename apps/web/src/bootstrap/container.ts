@@ -19,7 +19,11 @@ import type {
   WebSearchCapability,
 } from "@cogni/ai-tools";
 import type { AttributionStore } from "@cogni/attribution-ledger";
-import { DrizzleAttributionAdapter } from "@cogni/db-client";
+import type { BroadcastLedgerUserPort } from "@cogni/broadcast-core";
+import {
+  DrizzleAttributionAdapter,
+  DrizzleBroadcastUserAdapter,
+} from "@cogni/db-client";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
@@ -147,6 +151,8 @@ export interface Container {
   threadPersistenceForUser(userId: UserId): ThreadPersistencePort;
   /** Governance status queries (system tenant scope) */
   governanceStatus: GovernanceStatusPort;
+  /** Broadcasting ledger — user-facing CRUD for content messages and platform posts */
+  broadcastLedger: BroadcastLedgerUserPort;
   /** Epoch ledger store — shared by app and scheduler-worker */
   attributionStore: AttributionStore;
   /** Work item queries — reads from markdown files via WorkItemQueryPort */
@@ -442,6 +448,10 @@ function createContainer(): Container {
     governanceStatus: new DrizzleGovernanceStatusAdapter(
       db,
       userActor(toUserId(COGNI_SYSTEM_PRINCIPAL_USER_ID))
+    ),
+    broadcastLedger: new DrizzleBroadcastUserAdapter(
+      db,
+      log.child({ component: "DrizzleBroadcastUserAdapter" })
     ),
     attributionStore: new DrizzleAttributionAdapter(serviceDb, getScopeId()),
     workItemQuery: new MarkdownWorkItemAdapter(env.COGNI_REPO_ROOT),
