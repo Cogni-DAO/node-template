@@ -54,7 +54,7 @@ The operator wallet (proj.ai-operator-wallet) currently handles outbound payment
 1. Use Squid Router SDK to quote Base USDC → AKT
    - Check supported routes: Base → Osmosis (Axelar bridge) → AKT
    - Alternative: Base → Osmosis via Squid → swap USDC→AKT on Osmosis DEX → IBC to Akash
-2. Execute a small swap ($5-10 USDC → AKT)
+2. Execute a minimal swap ($2-3 USDC → AKT)
 3. Measure: swap fee %, bridge latency, slippage, gas cost on Base side
 4. Document: does AKT land on Osmosis or directly on Akash? Is an IBC transfer needed?
 
@@ -144,11 +144,11 @@ The operator wallet (proj.ai-operator-wallet) currently handles outbound payment
 
 ## Prerequisites
 
-- Operator wallet with USDC + ETH on Base mainnet (~$15 USDC + ~$5 ETH for gas)
-- Akash wallet with small AKT balance for deployment testing (~10 AKT)
+- Operator wallet with USDC + ETH on Base mainnet (~$3 USDC + ~$2 ETH for gas)
+- Akash testnet (sandbox) for deployment lifecycle testing (free faucet AKT)
 - Squid Router SDK (`@0xsplits/squid-sdk` or `@0xsquid/sdk`)
 - AkashJS SDK (`@akashnetwork/akashjs`)
 
 ## Budget
 
-~$30 total: $10-15 for swap testing (USDC → AKT + gas), $10-15 for Akash deployment escrow testing, ~$5 ETH for gas across experiments.
+~$5 total: minimal swap test ($2-3 USDC → AKT + gas), remainder for Akash escrow deposit test. Use testnet where possible to conserve funds.
