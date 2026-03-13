@@ -13,7 +13,10 @@
  * @public
  */
 
-import type { ContentMessage } from "@cogni/broadcast-core";
+import {
+  CONTENT_MESSAGE_STATUSES,
+  type ContentMessage,
+} from "@cogni/broadcast-core";
 import { toUserId } from "@cogni/ids";
 import { NextResponse } from "next/server";
 
@@ -124,13 +127,21 @@ export const GET = wrapRouteHandlerWithLogging(
 
       const container = getContainer();
       const url = new URL(request.url);
-      const statusFilter = url.searchParams.get("status") ?? undefined;
+      const statusParam = url.searchParams.get("status");
+
+      // Validate status filter against known statuses
+      const validStatuses: readonly string[] = CONTENT_MESSAGE_STATUSES;
+      if (statusParam && !validStatuses.includes(statusParam)) {
+        return NextResponse.json(
+          { error: `Invalid status filter: ${statusParam}` },
+          { status: 400 }
+        );
+      }
+      const statusFilter = statusParam as ContentMessage["status"] | undefined;
 
       const messages = await container.broadcastLedger.listContentMessages(
         toUserId(sessionUser.id),
-        statusFilter
-          ? { status: statusFilter as ContentMessage["status"] }
-          : undefined
+        statusFilter ? { status: statusFilter } : undefined
       );
 
       ctx.log.info({ count: messages.length }, "broadcast.list_success");

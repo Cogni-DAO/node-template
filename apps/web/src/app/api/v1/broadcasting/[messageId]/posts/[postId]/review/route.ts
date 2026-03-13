@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { PlatformPost } from "@cogni/broadcast-core";
+import { type PlatformPost, toPlatformPostId } from "@cogni/broadcast-core";
 import { toUserId } from "@cogni/ids";
 import { NextResponse } from "next/server";
 
@@ -95,7 +95,7 @@ export const POST = wrapRouteHandlerWithLogging<{
 
       const post = await container.broadcastLedger.updatePlatformPostReview(
         toUserId(sessionUser.id),
-        postId as never,
+        toPlatformPostId(postId),
         input.decision,
         input.editedBody
       );
