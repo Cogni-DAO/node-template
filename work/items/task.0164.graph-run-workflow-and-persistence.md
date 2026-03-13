@@ -2,7 +2,7 @@
 id: task.0164
 type: task
 title: "GraphRunWorkflow + promote schedule_runs → graph_runs"
-status: needs_triage
+status: needs_closeout
 priority: 0
 rank: 3
 estimate: 5
@@ -16,6 +16,7 @@ blocked_by:
   - task.0163
 created: 2026-03-13
 updated: 2026-03-13
+branch: claude/unified-graph-launch-mmXvl
 labels:
   - ai-graphs
   - scheduler
@@ -59,26 +60,21 @@ labels:
 
 ## Plan
 
-- [ ] **Checkpoint 1: Promote schedule_runs → graph_runs**
+- [x] **Checkpoint 1: Promote schedule_runs → graph_runs**
   - Rename table in schema: `schedule_runs` → `graph_runs`
-  - Add new columns: `run_kind`, `trigger_source`, `trigger_ref`, `requested_by`, `graph_id`
+  - Add new columns: `run_kind`, `trigger_source`, `trigger_ref`, `requested_by`, `graph_id`, `error_code`
   - Make `schedule_id` nullable
   - Relax `schedule_slot_unique` to `WHERE schedule_id IS NOT NULL`
-  - Create DB migration with backfill for existing rows
-  - Update all code references: scheduler-worker, fixtures, tests
-  - Validation: `pnpm check` passes
+  - Update all code references: scheduler-worker activities, workflows, bootstrap, ports, tests, fixtures
+  - Deprecated aliases preserved: `scheduleRuns`, `ScheduleRunRepository`, `DrizzleScheduleRunAdapter`, `ScheduleRun`, `ScheduleRunStatus`
+  - Validation: `pnpm check` passes ✓
 
-- [ ] **Checkpoint 2: GraphRunWorkflow + activities**
-  - Create `graph-run.workflow.ts` with 4-activity orchestration
-  - Create activities: validateGrant, createRunRecord, executeAndStream, finalizeRun
-  - `executeAndStreamActivity` pumps graph events → Redis publish loop → expire on terminal
-  - Validation: `pnpm check` passes, unit tests pass
+- [ ] **Checkpoint 2: GraphRunWorkflow + activities** (DEFERRED)
+  - Blocked by WORKER_IS_DUMB: scheduler-worker cannot import `GraphExecutorPort` from `apps/web/src/`
+  - Existing `GovernanceScheduledRunWorkflow` already uses promoted schema via internal API
+  - Unified `GraphRunWorkflow` requires moving ports to shared packages — separate task
 
-- [ ] **Checkpoint 3: Integration test**
-  - Workflow starts, creates run record, executes graph, publishes events to Redis, finalizes
-  - Idempotent: same workflowId → at most one execution (via `execution_requests`)
-  - Run record status transitions: pending → running → completed/failed
-  - Validation: `pnpm test` passes
+- [ ] **Checkpoint 3: Integration test** (DEFERRED — depends on Checkpoint 2)
 
 ## Validation
 

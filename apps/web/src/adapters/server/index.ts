@@ -18,6 +18,7 @@ export {
   DrizzleExecutionGrantUserAdapter,
   DrizzleExecutionGrantWorkerAdapter,
   DrizzleExecutionRequestAdapter,
+  DrizzleGraphRunAdapter,
   DrizzleScheduleRunAdapter,
   DrizzleScheduleUserAdapter,
   DrizzleScheduleWorkerAdapter,

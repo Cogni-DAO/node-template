@@ -32,7 +32,7 @@ export const InternalGraphRunInputSchema = z.object({
   /**
    * Optional runId - if provided, use it; otherwise generate.
    * Per SCHEDULER_SPEC.md: Worker provides canonical runId for correlation
-   * with schedule_runs and charge_receipts.
+   * with graph_runs and charge_receipts.
    */
   runId: z.string().uuid().optional(),
 });
