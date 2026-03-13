@@ -26,5 +26,6 @@ export type {
 // Scheduling ports from @cogni/scheduler-core
 export type {
   ExecutionGrantWorkerPort,
+  GraphRunRepository,
   ScheduleRunRepository,
 } from "@cogni/scheduler-core";

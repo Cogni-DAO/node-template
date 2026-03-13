@@ -318,7 +318,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
 
     // --- 9. Execute graph ---
     // Use provided runId (from scheduler-worker) or generate if not provided
-    // Per SCHEDULER_SPEC.md: Canonical runId shared with schedule_runs and charge_receipts
+    // Per SCHEDULER_SPEC.md: Canonical runId shared with graph_runs and charge_receipts
     const runId = providedRunId ?? randomUUID();
 
     // Use OTel trace ID (same one passed to executor, used by Langfuse decorator)
