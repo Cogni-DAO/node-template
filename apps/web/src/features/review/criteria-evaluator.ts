@@ -44,17 +44,27 @@ export function formatThreshold(
 
 /**
  * Look up the requirement string for a given metric across all criteria.
+ * Appends "(all)" for require[] or "(any)" for any_of[] group context.
  */
 export function findRequirement(
   metricName: string,
   criteria: SuccessCriteria
 ): string | undefined {
-  const allThresholds = [
-    ...(criteria.require ?? []),
-    ...(criteria.any_of ?? []),
-  ];
-  const match = allThresholds.find((t) => t.metric === metricName);
-  return match ? formatThreshold(match) : undefined;
+  const reqMatch = (criteria.require ?? []).find(
+    (t) => t.metric === metricName
+  );
+  if (reqMatch) {
+    const formatted = formatThreshold(reqMatch);
+    return formatted ? `${formatted} (all)` : undefined;
+  }
+
+  const anyMatch = (criteria.any_of ?? []).find((t) => t.metric === metricName);
+  if (anyMatch) {
+    const formatted = formatThreshold(anyMatch);
+    return formatted ? `${formatted} (any)` : undefined;
+  }
+
+  return undefined;
 }
 
 /**

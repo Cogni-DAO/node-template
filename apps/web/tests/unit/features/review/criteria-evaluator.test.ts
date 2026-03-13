@@ -211,7 +211,7 @@ describe("findRequirement", () => {
       neutral_on_missing_metrics: false,
       require: [{ metric: "quality", gte: 0.8 }],
     };
-    expect(findRequirement("quality", criteria)).toBe("\u2265 0.80");
+    expect(findRequirement("quality", criteria)).toBe("\u2265 0.80 (all)");
   });
 
   it("finds threshold in any_of[]", () => {
@@ -219,7 +219,7 @@ describe("findRequirement", () => {
       neutral_on_missing_metrics: false,
       any_of: [{ metric: "speed", lte: 0.5 }],
     };
-    expect(findRequirement("speed", criteria)).toBe("\u2264 0.50");
+    expect(findRequirement("speed", criteria)).toBe("\u2264 0.50 (any)");
   });
 
   it("returns undefined for unknown metric", () => {
