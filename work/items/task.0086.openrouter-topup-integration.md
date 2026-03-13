@@ -18,7 +18,7 @@ created: 2026-02-17
 updated: 2026-03-13
 labels: [wallet, web3, billing, openrouter]
 external_refs:
-revision: 2
+revision: 3
 blocked_by:
 deploy_verified: false
 rank: 21
@@ -236,6 +236,23 @@ pnpm test tests/contract/provider-funding.contract.test.ts
 2. **Wrong ledger posting.** V1 design posted `OperatorFloat → ExpenseProviderTopup`. A top-up is a prepaid asset, not an expense. **Fix:** `OperatorFloat → Assets:ProviderFloat:USDC` (asset swap). Expense recognized on usage/reconciliation (Walk phase). Spec `financial-ledger.md` also needs correction.
 
 3. **Missing durability.** V1 design rejected all DB records ("logs + TB are the audit trail"). Insufficient for crash recovery: if `createOpenRouterCharge()` succeeds and process dies, charge_id is lost. **Fix:** `provider_funding_attempts` table keyed by `paymentIntentId`. Deterministic TB transfer IDs from `(paymentIntentId, step_code)`.
+
+### Revision 3 — Implementation Review (2026-03-13)
+
+**Blocking (3 issues):**
+
+1. **Facade test failure.** `credits.server.ts:74` calls `serverEnv()` unconditionally — breaks existing facade unit test with `EnvValidationError`. **Fix:** Move `serverEnv()` call inside the `container.providerFunding` guard since `pricingConfig` is only needed when provider funding is configured.
+
+2. **`resumeFromCharge` creates a new charge instead of reusing existing.** `openrouter-funding.adapter.ts:162` calls `createOpenRouterCharge()` again on resume — abandons the stored `chargeId`, funds a different charge, leaves the row pointing at the old one. **Fix:** Either fetch the existing charge by ID, or update the row's `chargeId` with the new charge before funding.
+
+3. **Stale comments in `accounts.ts`.** Line 58 says "5 accounts" (now 6). Line 67 lists "Future: Expense:ProviderTopUp:USDC" — that account now exists and is named `Assets:ProviderFloat:USDC` (asset, not expense). **Fix:** Update count, remove the stale future-account line.
+
+**Suggestions (non-blocking):**
+
+- Use `BigInt(cents) * 10_000n` instead of `BigInt(Math.round((cents / 100) * 1_000_000))` to avoid float arithmetic on currency.
+- Use `isMarginPreserved()` from `pricing.ts` in `container.ts` instead of inlining the same logic.
+- Consider deterministic row ID via `uuid5(namespace, paymentIntentId)` for truly idempotent inserts.
+- Log a warning when `providerFunding` is set but `pricingConfig` is missing — silent misconfiguration skip is risky.
 
 ## PR / Links
 

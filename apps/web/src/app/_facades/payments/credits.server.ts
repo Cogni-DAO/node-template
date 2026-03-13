@@ -21,6 +21,7 @@ import { AuthUserNotFoundError } from "@/features/payments/errors";
 import { getCreditsSummary } from "@/features/payments/services/creditsSummary";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
+import { serverEnv } from "@/shared/env/server-env";
 import type {
   PaymentsConfirmedEvent,
   RequestContext,
@@ -70,10 +71,23 @@ export async function confirmCreditsPaymentFacade(
     }),
   };
 
+  const env = serverEnv();
   const result = await confirmCreditsPurchase(
-    accountService,
-    container.serviceAccountService,
-    container.treasurySettlement,
+    {
+      accountService,
+      serviceAccountService: container.serviceAccountService,
+      treasurySettlement: container.treasurySettlement,
+      financialLedger: container.financialLedger,
+      providerFunding: container.providerFunding,
+      log: enrichedCtx.log,
+      pricingConfig: container.providerFunding
+        ? {
+            markupFactor: env.USER_PRICE_MARKUP_FACTOR,
+            revenueShare: env.SYSTEM_TENANT_REVENUE_SHARE,
+            cryptoFee: env.OPENROUTER_CRYPTO_FEE,
+          }
+        : undefined,
+    },
     {
       billingAccountId: billingAccount.id,
       defaultVirtualKeyId: billingAccount.defaultVirtualKeyId,

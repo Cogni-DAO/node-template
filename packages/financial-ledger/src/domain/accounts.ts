@@ -24,6 +24,13 @@ export const LEDGER = {
   CREDIT: 200,
 } as const;
 
+/**
+ * Namespace UUID for deterministic TigerBeetle transfer IDs.
+ * Used with uuid v5 to derive transfer IDs from (paymentIntentId, stepCode).
+ * Generated once, never changes.
+ */
+export const TB_TRANSFER_NAMESPACE = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+
 // ─── Account Codes (Categories) ────────────────────────────────────
 
 export const ACCOUNT_CODE = {
@@ -77,6 +84,8 @@ export const ACCOUNT = {
   ASSETS_TREASURY: 2001n,
   /** USDC in operator wallet — post Split distribute, pre OpenRouter top-up. */
   ASSETS_OPERATOR_FLOAT: 2002n,
+  /** Prepaid provider credits (OpenRouter). Asset, not expense. Expense on usage/reconciliation. */
+  ASSETS_PROVIDER_FLOAT: 2003n,
 } as const;
 
 // ─── Account Definitions (for idempotent creation) ─────────────────
@@ -121,5 +130,11 @@ export const ACCOUNT_DEFINITIONS: readonly AccountDefinition[] = [
     ledger: LEDGER.USDC,
     code: ACCOUNT_CODE.ASSETS,
     name: "Assets:OperatorFloat:USDC",
+  },
+  {
+    id: ACCOUNT.ASSETS_PROVIDER_FLOAT,
+    ledger: LEDGER.USDC,
+    code: ACCOUNT_CODE.ASSETS,
+    name: "Assets:ProviderFloat:USDC",
   },
 ];

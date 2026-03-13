@@ -225,6 +225,13 @@ export const serverSchema = z.object({
   // Operator wallet top-up cap (USD)
   // Per operator-wallet.md: MAX_TOPUP_CAP — per-tx ceiling for OpenRouter top-ups.
   OPERATOR_MAX_TOPUP_USD: z.coerce.number().positive().default(500),
+
+  // OpenRouter API key — optional. Provider funding disabled when not set.
+  OPENROUTER_API_KEY: optionalString,
+
+  // OpenRouter crypto payment fee (0–1, default 0.05 = 5%)
+  // Per web3-openrouter-payments spec: Coinbase Commerce protocol fee.
+  OPENROUTER_CRYPTO_FEE: z.coerce.number().min(0).max(1).default(0.05),
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

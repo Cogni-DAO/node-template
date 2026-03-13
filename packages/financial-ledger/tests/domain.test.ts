@@ -68,8 +68,8 @@ describe("domain/conversion", () => {
 });
 
 describe("domain/accounts", () => {
-  it("has exactly 5 MVP accounts", () => {
-    expect(ACCOUNT_DEFINITIONS).toHaveLength(5);
+  it("has exactly 6 MVP accounts (5 base + ProviderFloat)", () => {
+    expect(ACCOUNT_DEFINITIONS).toHaveLength(6);
   });
 
   it("all account IDs are unique", () => {

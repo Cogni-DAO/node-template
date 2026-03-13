@@ -4,10 +4,10 @@
 /**
  * Module: `@app/_facades/payments/credits.server`
  * Purpose: Verifies credits confirm facade wiring and error mapping.
- * Scope: Covers app-layer orchestration with mocked container, auth mapping, and feature service; does not test feature service internals or port implementations.
- * Invariants: Billing account resolved from session; foreign key errors map to AUTH_USER_NOT_FOUND; delegates to feature service with correct payload.
+ * Scope: Covers app-layer orchestration with mocked container, auth mapping, and application orchestrator; does not test orchestrator internals or port implementations.
+ * Invariants: Billing account resolved from session; foreign key errors map to AUTH_USER_NOT_FOUND; delegates to confirmCreditsPurchase with correct deps and input.
  * Side-effects: none
- * Notes: Uses mocked AccountService, createContainer, and feature service.
+ * Notes: Uses mocked AccountService, createContainer, and application orchestrator.
  * Links: docs/spec/payments-design.md, src/app/_facades/payments/credits.server.ts
  * @public
  */
@@ -21,8 +21,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { confirmCreditsPaymentFacade } from "@/app/_facades/payments/credits.server";
 import { getContainer } from "@/bootstrap/container";
+import { confirmCreditsPurchase } from "@/features/payments/application/confirmCreditsPurchase";
 import { AuthUserNotFoundError } from "@/features/payments/errors";
-import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { AccountService } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
@@ -35,12 +35,20 @@ vi.mock("@/lib/auth/mapping", () => ({
   getOrCreateBillingAccountForUser: vi.fn(),
 }));
 
-vi.mock("@/features/payments/services/creditsConfirm", () => ({
-  confirmCreditsPayment: vi.fn(),
+vi.mock("@/features/payments/application/confirmCreditsPurchase", () => ({
+  confirmCreditsPurchase: vi.fn(),
+}));
+
+vi.mock("@/shared/env/server-env", () => ({
+  serverEnv: () => ({
+    USER_PRICE_MARKUP_FACTOR: 2.0,
+    SYSTEM_TENANT_REVENUE_SHARE: 0.75,
+    OPENROUTER_CRYPTO_FEE: 0.05,
+  }),
 }));
 
 const mockGetContainer = vi.mocked(getContainer);
-const mockConfirmCreditsPayment = vi.mocked(confirmCreditsPayment);
+const mockConfirmCreditsPurchase = vi.mocked(confirmCreditsPurchase);
 const mockGetOrCreateBillingAccountForUser = vi.mocked(
   getOrCreateBillingAccountForUser
 );
@@ -77,10 +85,13 @@ describe("app/_facades/payments/credits.server", () => {
       treasuryReadPort: {} as never,
       aiTelemetry: {} as never,
       langfuse: undefined,
+      financialLedger: undefined,
+      treasurySettlement: undefined,
+      providerFunding: undefined,
     });
   });
 
-  it("resolves billing account from session and delegates to confirm service", async () => {
+  it("resolves billing account from session and delegates to orchestrator", async () => {
     mockGetOrCreateBillingAccountForUser.mockResolvedValue({
       id: "billing-1",
       ownerUserId: sessionUser.id,
@@ -88,7 +99,7 @@ describe("app/_facades/payments/credits.server", () => {
       defaultVirtualKeyId: "vk-1",
     });
 
-    mockConfirmCreditsPayment.mockResolvedValue({
+    mockConfirmCreditsPurchase.mockResolvedValue({
       billingAccountId: "billing-1",
       balanceCredits: 2_000,
       creditsApplied: 1_000,
@@ -113,16 +124,21 @@ describe("app/_facades/payments/credits.server", () => {
       }
     );
 
-    expect(mockConfirmCreditsPayment).toHaveBeenCalledWith(
-      accountService,
-      expect.anything(), // serviceAccountService (from container)
-      {
+    // Verify orchestrator called with deps object + input
+    expect(mockConfirmCreditsPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountService,
+        treasurySettlement: undefined,
+        financialLedger: undefined,
+        providerFunding: undefined,
+      }),
+      expect.objectContaining({
         billingAccountId: "billing-1",
         defaultVirtualKeyId: "vk-1",
         amountUsdCents: 100,
         clientPaymentId: "payment-xyz",
         metadata: { source: "test" },
-      }
+      })
     );
 
     expect(result).toEqual({

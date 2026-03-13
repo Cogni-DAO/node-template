@@ -129,6 +129,11 @@ export {
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
 export type {
+  ProviderFundingContext,
+  ProviderFundingOutcome,
+  ProviderFundingPort,
+} from "./provider-funding.port";
+export type {
   ProxyBillingEntry,
   SandboxErrorCode,
   SandboxLlmProxyConfig,

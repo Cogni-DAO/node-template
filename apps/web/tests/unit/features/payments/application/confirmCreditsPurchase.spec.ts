@@ -3,20 +3,28 @@
 
 /**
  * Module: `@features/payments/application/confirmCreditsPurchase`
- * Purpose: Verifies the application orchestrator composes credit confirmation with treasury settlement correctly.
- * Scope: Covers orchestration logic: delegation to creditsConfirm, treasury settlement on success, skip on idempotent replay, graceful degradation on settlement failure; does not test creditsConfirm internals or adapter implementations.
- * Invariants: Credit confirmation always succeeds independently of settlement; settlement skipped when creditsApplied=0.
+ * Purpose: Verifies the application orchestrator composes credit confirmation with treasury settlement, TB co-writes, and provider funding correctly.
+ * Scope: Covers orchestration logic: delegation to creditsConfirm, treasury settlement, provider funding, graceful degradation on failure, skip on idempotent replay; does not test creditsConfirm internals or adapter implementations.
+ * Invariants: Credit confirmation always succeeds independently of downstream steps; settlement and funding skipped when creditsApplied=0; all post-settlement steps non-blocking.
  * Side-effects: none
- * Links: src/features/payments/application/confirmCreditsPurchase.ts
+ * Links: src/features/payments/application/confirmCreditsPurchase.ts, task.0086
  * @public
  */
 
-import { createMockAccountService } from "@tests/_fakes";
+import {
+  createMockAccountService,
+  createMockFinancialLedger,
+  createMockProviderFunding,
+  createMockServiceAccountService,
+  createMockTreasurySettlement,
+} from "@tests/_fakes";
+import type { Logger } from "pino";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { confirmCreditsPurchase } from "@/features/payments/application/confirmCreditsPurchase";
+import {
+  type ConfirmCreditsPurchaseDeps,
+  confirmCreditsPurchase,
+} from "@/features/payments/application/confirmCreditsPurchase";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
-import type { ServiceAccountService, TreasurySettlementPort } from "@/ports";
 
 vi.mock("@/features/payments/services/creditsConfirm", () => ({
   confirmCreditsPayment: vi.fn(),
@@ -28,24 +36,12 @@ vi.mock("@/shared/env", () => ({
 
 const mockConfirmCreditsPayment = vi.mocked(confirmCreditsPayment);
 
-function createMockServiceAccountService(): ServiceAccountService {
-  return {
-    getBillingAccountById: vi.fn(),
-    getOrCreateBillingAccountForUser: vi.fn(),
-    creditAccount: vi.fn().mockResolvedValue({ newBalance: 0 }),
-    findCreditLedgerEntryByReference: vi.fn().mockResolvedValue(null),
-  };
-}
-
-function createMockTreasurySettlement(): TreasurySettlementPort & {
-  settleConfirmedCreditPurchase: ReturnType<typeof vi.fn>;
-} {
-  return {
-    settleConfirmedCreditPurchase: vi
-      .fn()
-      .mockResolvedValue({ txHash: "0xfake-settlement-tx" }),
-  };
-}
+const mockLog = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn().mockReturnThis(),
+} as unknown as Logger;
 
 describe("features/payments/application/confirmCreditsPurchase", () => {
   const input = {
@@ -57,6 +53,36 @@ describe("features/payments/application/confirmCreditsPurchase", () => {
 
   let accountService: ReturnType<typeof createMockAccountService>;
   let serviceAccountService: ServiceAccountService;
+
+  const defaultPricingConfig = {
+    markupFactor: 2.0,
+    revenueShare: 0.75,
+    cryptoFee: 0.05,
+  };
+
+  function makeDeps(
+    overrides: Partial<ConfirmCreditsPurchaseDeps> = {}
+  ): ConfirmCreditsPurchaseDeps {
+    const merged = {
+      accountService,
+      serviceAccountService,
+      treasurySettlement: undefined as TreasurySettlementPort | undefined,
+      financialLedger: undefined as
+        | ConfirmCreditsPurchaseDeps["financialLedger"]
+        | undefined,
+      providerFunding: undefined as ProviderFundingPort | undefined,
+      log: mockLog,
+      pricingConfig: undefined as
+        | ConfirmCreditsPurchaseDeps["pricingConfig"]
+        | undefined,
+      ...overrides,
+    };
+    // Auto-set pricingConfig when providerFunding is provided
+    if (merged.providerFunding && !merged.pricingConfig) {
+      merged.pricingConfig = defaultPricingConfig;
+    }
+    return merged;
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -74,9 +100,7 @@ describe("features/payments/application/confirmCreditsPurchase", () => {
     const treasury = createMockTreasurySettlement();
 
     const result = await confirmCreditsPurchase(
-      accountService,
-      serviceAccountService,
-      treasury,
+      makeDeps({ treasurySettlement: treasury }),
       input
     );
 
@@ -99,12 +123,7 @@ describe("features/payments/application/confirmCreditsPurchase", () => {
   });
 
   it("confirms credits without settlement when treasury port is undefined", async () => {
-    const result = await confirmCreditsPurchase(
-      accountService,
-      serviceAccountService,
-      undefined,
-      input
-    );
+    const result = await confirmCreditsPurchase(makeDeps(), input);
 
     expect(mockConfirmCreditsPayment).toHaveBeenCalled();
     expect(result.settlement).toBeUndefined();
@@ -118,9 +137,7 @@ describe("features/payments/application/confirmCreditsPurchase", () => {
     treasury.settleConfirmedCreditPurchase.mockRejectedValue(settlementErr);
 
     const result = await confirmCreditsPurchase(
-      accountService,
-      serviceAccountService,
-      treasury,
+      makeDeps({ treasurySettlement: treasury }),
       input
     );
 
@@ -142,14 +159,106 @@ describe("features/payments/application/confirmCreditsPurchase", () => {
     });
 
     const result = await confirmCreditsPurchase(
-      accountService,
-      serviceAccountService,
-      treasury,
+      makeDeps({ treasurySettlement: treasury }),
       input
     );
 
     expect(treasury.settleConfirmedCreditPurchase).not.toHaveBeenCalled();
     expect(result.creditsApplied).toBe(0);
     expect(result.settlement).toBeUndefined();
+  });
+
+  it("records TB co-write for Split distribute after settlement", async () => {
+    const treasury = createMockTreasurySettlement();
+    const ledger = createMockFinancialLedger();
+
+    await confirmCreditsPurchase(
+      makeDeps({ treasurySettlement: treasury, financialLedger: ledger }),
+      input
+    );
+
+    expect(ledger.transfer).toHaveBeenCalledTimes(1);
+    const call = ledger.transfer.mock.calls[0][0];
+    expect(call.debitAccountId).toBe(2001n); // ASSETS_TREASURY
+    expect(call.creditAccountId).toBe(2002n); // ASSETS_OPERATOR_FLOAT
+    expect(call.ledger).toBe(2); // USDC
+    expect(call.code).toBe(3); // SPLIT_DISTRIBUTE
+  });
+
+  it("calls provider funding after settlement", async () => {
+    const treasury = createMockTreasurySettlement();
+    const funding = createMockProviderFunding();
+
+    await confirmCreditsPurchase(
+      makeDeps({ treasurySettlement: treasury, providerFunding: funding }),
+      input
+    );
+
+    expect(funding.fundAfterCreditPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentIntentId: "payment-1",
+        amountUsdCents: 1000,
+      })
+    );
+    // Verify topUpUsd was calculated and passed
+    const callArg = funding.fundAfterCreditPurchase.mock.calls[0][0];
+    expect(callArg.topUpUsd).toBeGreaterThan(0);
+    expect(callArg.topUpUsd).toBeLessThan(10); // $10 purchase → < $10 top-up
+  });
+
+  it("records TB co-write for provider top-up after funding", async () => {
+    const treasury = createMockTreasurySettlement();
+    const ledger = createMockFinancialLedger();
+    const funding = createMockProviderFunding();
+
+    await confirmCreditsPurchase(
+      makeDeps({
+        treasurySettlement: treasury,
+        financialLedger: ledger,
+        providerFunding: funding,
+      }),
+      input
+    );
+
+    // Should have 2 TB transfers: Split distribute + provider top-up
+    expect(ledger.transfer).toHaveBeenCalledTimes(2);
+
+    const topUpCall = ledger.transfer.mock.calls[1][0];
+    expect(topUpCall.debitAccountId).toBe(2002n); // ASSETS_OPERATOR_FLOAT
+    expect(topUpCall.creditAccountId).toBe(2003n); // ASSETS_PROVIDER_FLOAT
+    expect(topUpCall.ledger).toBe(2); // USDC
+    expect(topUpCall.code).toBe(4); // PROVIDER_TOPUP
+  });
+
+  it("continues when TB co-write fails (non-blocking)", async () => {
+    const treasury = createMockTreasurySettlement();
+    const ledger = createMockFinancialLedger();
+    ledger.transfer.mockRejectedValue(new Error("TB unavailable"));
+
+    const result = await confirmCreditsPurchase(
+      makeDeps({ treasurySettlement: treasury, financialLedger: ledger }),
+      input
+    );
+
+    // Credits still confirmed, settlement still returned
+    expect(result.creditsApplied).toBe(100_000_000);
+    expect(result.settlement).toEqual({ txHash: "0xfake-settlement-tx" });
+  });
+
+  it("continues when provider funding fails (non-blocking)", async () => {
+    const treasury = createMockTreasurySettlement();
+    const funding = createMockProviderFunding();
+    funding.fundAfterCreditPurchase.mockRejectedValue(
+      new Error("charge creation failed")
+    );
+
+    const result = await confirmCreditsPurchase(
+      makeDeps({ treasurySettlement: treasury, providerFunding: funding }),
+      input
+    );
+
+    // Credits confirmed, settlement succeeded, funding error logged but not thrown
+    expect(result.creditsApplied).toBe(100_000_000);
+    expect(result.settlement).toEqual({ txHash: "0xfake-settlement-tx" });
   });
 });
