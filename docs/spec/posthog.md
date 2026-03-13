@@ -30,10 +30,11 @@ tags: [analytics, observability]
 
 ### Environment Variables
 
-| Variable          | Required | Description                                              |
-| ----------------- | -------- | -------------------------------------------------------- |
-| `POSTHOG_API_KEY` | **Yes**  | Project API key (`phc_...`). App fails to start without. |
-| `POSTHOG_HOST`    | **Yes**  | PostHog API endpoint URL. App fails to start without.    |
+| Variable             | Required | Description                                              |
+| -------------------- | -------- | -------------------------------------------------------- |
+| `POSTHOG_API_KEY`    | **Yes**  | Project API key (`phc_...`). App fails to start without. |
+| `POSTHOG_HOST`       | **Yes**  | PostHog API endpoint URL. App fails to start without.    |
+| `POSTHOG_PROJECT_ID` | Optional | Numeric project ID. Required for HogQL agent queries.    |
 
 Validated by `serverEnv()` Zod schema (`z.string().min(1)` and `z.string().url()`).
 

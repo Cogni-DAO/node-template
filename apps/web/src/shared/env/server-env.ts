@@ -215,6 +215,7 @@ export const serverSchema = z.object({
   // PostHog Cloud free tier: 1M events/month at https://us.i.posthog.com
   POSTHOG_API_KEY: z.string().min(1),
   POSTHOG_HOST: z.string().url(),
+  POSTHOG_PROJECT_ID: optionalString,
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

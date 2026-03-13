@@ -23,37 +23,61 @@ You need to configure PostHog product analytics. This is required — the app wi
 ### Preconditions
 
 - [ ] GitHub repo admin access (to set environment secrets)
+- [ ] `gh` CLI authenticated (`gh auth status`)
 
 ### Steps
 
 1. **Sign up** at [posthog.com](https://posthog.com) — use GitHub SSO. No credit card required.
 
-2. **Create a project.** PostHog will prompt you to create an organization and project on first login.
+2. **Create a project.** PostHog prompts you on first login.
 
-3. **Skip the "install snippet" step.** The app already has server-side event capture wired.
+3. **Skip the "install snippet" step.** Server-side capture is already wired.
 
-4. **Copy your Project API Key:**
-   - Click the gear icon (Project Settings) in the left sidebar
-   - Find **Project API Key** — it looks like `phc_xxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+4. **Collect three values from Project Settings** (gear icon → left sidebar):
 
-5. **Set GitHub secrets** in **both** `preview` and `production` environments:
+   | Value               | Where to find it              | Example                            |
+   | ------------------- | ----------------------------- | ---------------------------------- |
+   | **Project API Key** | Project Settings → API Key    | `phc_xxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+   | **Project ID**      | Project Settings → Project ID | `341476`                           |
+   | **Host**            | (fixed per region)            | `https://us.i.posthog.com`         |
 
-   | Secret            | Value                                            |
-   | ----------------- | ------------------------------------------------ |
-   | `POSTHOG_API_KEY` | `phc_xxxxxxxxxxxxxxxxxxxxxxxxxxxx` (from step 4) |
-   | `POSTHOG_HOST`    | `https://us.i.posthog.com`                       |
+5. **Set GitHub secrets.** Replace the placeholder values and run:
 
-   Go to: **Repo → Settings → Environments → preview** (then repeat for **production**)
+   > **Note:** PostHog free tier supports one project. Both preview and production share the same key/project. Separate projects per environment is a paid feature — use the same values for both until then.
+
+   ```bash
+   # Production environment
+   gh secret set POSTHOG_API_KEY --env production --body "phc_YOUR_KEY"
+   gh secret set POSTHOG_HOST --env production --body "https://us.i.posthog.com"
+   gh secret set POSTHOG_PROJECT_ID --env production --body "YOUR_PROJECT_ID"
+
+   # Preview environment (same project — separate projects require paid plan)
+   gh secret set POSTHOG_API_KEY --env preview --body "phc_YOUR_KEY"
+   gh secret set POSTHOG_HOST --env preview --body "https://us.i.posthog.com"
+   gh secret set POSTHOG_PROJECT_ID --env preview --body "YOUR_PROJECT_ID"
+   ```
+
+6. **Add to `.env.local`** (local dev pointing at PostHog Cloud):
+
+   ```bash
+   POSTHOG_API_KEY=phc_YOUR_KEY
+   POSTHOG_HOST=https://us.i.posthog.com
+   POSTHOG_PROJECT_ID=YOUR_PROJECT_ID
+   ```
 
 ### Verify
 
-Push a commit or re-run CI. The stack-test job should pass without PostHog-related env errors.
+```bash
+pnpm dev:stack
+```
+
+Check app logs — no `POSTHOG_API_KEY` validation errors. Events will flow to PostHog Cloud on auth sign-in, credit purchase, etc.
 
 ---
 
-## Local Dev Setup (Optional)
+## Local Dev Setup (Self-Hosted, Optional)
 
-Self-hosted PostHog for local development. Requires ~4GB RAM.
+Self-hosted PostHog for offline development. Requires ~4GB RAM.
 
 ### Preconditions
 
@@ -71,22 +95,15 @@ Self-hosted PostHog for local development. Requires ~4GB RAM.
 
 2. **Create an account:** Open `http://localhost:8000` → create admin user → create project.
 
-3. **Copy API key:** Project Settings → Project API Key.
+3. **Copy values:** Project Settings → Project API Key + Project ID.
 
 4. **Add to `.env.local`:**
 
    ```bash
    POSTHOG_API_KEY=phc_your_key_from_step_3
    POSTHOG_HOST=http://localhost:8000
+   POSTHOG_PROJECT_ID=1
    ```
-
-### Verify
-
-```bash
-pnpm dev:stack
-```
-
-Check the app logs for `PostHog initialized` (no startup errors about missing env vars).
 
 ### Stop / Reset
 
@@ -105,7 +122,7 @@ pnpm posthog:nuke     # stop and delete all data
 
 ### Problem: Events not appearing in PostHog dashboard
 
-**Solution:** Events are batched (50 events or 5 seconds). Wait a few seconds, then check PostHog → Activity → Live Events. If using PostHog Cloud, verify the host is `https://us.i.posthog.com` (not `http://`).
+**Solution:** Events are batched (50 events or 5 seconds). Wait a few seconds, then check PostHog → Activity → Live Events. Verify host is `https://us.i.posthog.com` (not `http://`).
 
 ## Related
 
