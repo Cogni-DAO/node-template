@@ -36,7 +36,7 @@ import {
   DrizzleExecutionGrantWorkerAdapter,
   DrizzleExecutionRequestAdapter,
   DrizzleGovernanceStatusAdapter,
-  DrizzleScheduleRunAdapter,
+  DrizzleGraphRunAdapter,
   DrizzleScheduleUserAdapter,
   DrizzleThreadPersistenceAdapter,
   EvmRpcOnChainVerifierAdapter,
@@ -93,7 +93,7 @@ import type {
   ExecutionGrantUserPort,
   ExecutionGrantWorkerPort,
   ExecutionRequestPort,
-  ScheduleRunRepository,
+  GraphRunRepository,
   ScheduleUserPort,
 } from "@/ports/server";
 import { initAnalytics, shutdownAnalytics } from "@/shared/analytics";
@@ -136,7 +136,7 @@ export interface Container {
   executionGrantPort: ExecutionGrantUserPort;
   executionGrantWorkerPort: ExecutionGrantWorkerPort;
   executionRequestPort: ExecutionRequestPort;
-  scheduleRunRepository: ScheduleRunRepository;
+  graphRunRepository: GraphRunRepository;
   scheduleManager: ScheduleUserPort;
   /** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
   metricsCapability: MetricsCapability;
@@ -373,9 +373,9 @@ function createContainer(): Container {
     serviceDb,
     log.child({ component: "DrizzleExecutionGrantWorkerAdapter" })
   );
-  const scheduleRunRepository = new DrizzleScheduleRunAdapter(
+  const graphRunRepository = new DrizzleGraphRunAdapter(
     serviceDb,
-    log.child({ component: "DrizzleScheduleRunAdapter" })
+    log.child({ component: "DrizzleGraphRunAdapter" })
   );
 
   // Execution request port (not user-scoped — exempt from RLS)
@@ -444,7 +444,7 @@ function createContainer(): Container {
     executionGrantPort,
     executionGrantWorkerPort,
     executionRequestPort,
-    scheduleRunRepository,
+    graphRunRepository,
     scheduleManager,
     metricsCapability,
     webSearchCapability,
@@ -496,7 +496,7 @@ export type SchedulingDeps = Pick<
   | "scheduleControl"
   | "executionGrantPort"
   | "executionGrantWorkerPort"
-  | "scheduleRunRepository"
+  | "graphRunRepository"
   | "scheduleManager"
 >;
 
@@ -506,7 +506,7 @@ export function resolveSchedulingDeps(): SchedulingDeps {
     scheduleControl: container.scheduleControl,
     executionGrantPort: container.executionGrantPort,
     executionGrantWorkerPort: container.executionGrantWorkerPort,
-    scheduleRunRepository: container.scheduleRunRepository,
+    graphRunRepository: container.graphRunRepository,
     scheduleManager: container.scheduleManager,
   };
 }

@@ -39,6 +39,8 @@ export {
   GrantNotFoundError,
   GrantRevokedError,
   GrantScopeMismatchError,
+  // GraphRunRepository (canonical), ScheduleRunRepository (deprecated alias)
+  type GraphRunRepository,
   type IdempotencyCheckResult,
   InvalidCronExpressionError,
   InvalidTimezoneError,
@@ -61,7 +63,6 @@ export {
   type ScheduleDescription,
   ScheduleNotFoundError,
   type ScheduleOverlapPolicyHint,
-  // ScheduleRunRepository
   type ScheduleRunRepository,
   type ScheduleUserPort,
   type ScheduleWorkerPort,
@@ -82,7 +83,12 @@ export {
 export {
   type ExecutionGrant,
   GRANT_SCOPE_ACTIONS,
+  GRAPH_RUN_KINDS,
+  GRAPH_RUN_STATUSES,
   type GrantScopeAction,
+  type GraphRun,
+  type GraphRunKind,
+  type GraphRunStatus,
   SCHEDULE_RUN_STATUSES,
   type ScheduleRun,
   type ScheduleRunStatus,
