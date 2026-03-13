@@ -2,7 +2,7 @@
 id: task.0159
 type: task
 title: "Broadcasting Crawl — core domain, schema, workflow, and X adapter"
-status: needs_closeout
+status: needs_implement
 priority: 1
 rank: 1
 estimate: 5
@@ -17,7 +17,7 @@ project: proj.broadcasting
 branch: claude/research-broadcasting-integration-8p2DB
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-03-13
@@ -198,3 +198,13 @@ pnpm test:contract           # contract tests pass
 ## Attribution
 
 -
+
+## Review Feedback
+
+### Blocking Issues (revision 1)
+
+1. **Unsafe status filter cast** — `apps/web/src/app/api/v1/broadcasting/route.ts:131-132`: Query parameter `?status=X` is cast directly to `ContentMessage["status"]` via `as` without validation. Allows arbitrary strings to reach the database query. **Fix:** Validate against `CONTENT_MESSAGE_STATUSES` array or use a Zod schema parse.
+
+2. **`as never` type escapes** — `apps/web/src/app/api/v1/broadcasting/[messageId]/route.ts:82` and `apps/web/src/app/api/v1/broadcasting/[messageId]/posts/[postId]/review/route.ts:98`: Uses `as never` to bypass branded type system. **Fix:** Use `toContentMessageId(messageId)` and `toPlatformPostId(postId)` from `@cogni/broadcast-core`.
+
+3. **`"edited"` decision without `editedBody`** — `packages/db-client/src/adapters/drizzle-broadcast-user.adapter.ts:213-216`: When `decision === "edited"` but `editedBody` is undefined, the method does not set status, leaving the post in an inconsistent state (e.g., stuck in `pending_review`). **Fix:** Either require `editedBody` when decision is `"edited"` (throw if missing), or treat `"edited"` without body as `"approved"`.
