@@ -30,6 +30,8 @@ import {
 } from "@/contracts/ai.completions.v1.contract";
 import { isAccountsFeatureError } from "@/features/accounts/public";
 import type { AiEvent, StreamFinalResult } from "@/features/ai/public";
+import { isLlmError } from "@/ports";
+import { ChatValidationError } from "@/shared/errors";
 import {
   EVENT_NAMES,
   logEvent,
@@ -74,6 +76,53 @@ function handleRouteError(
     );
   }
 
+  // Chat validation errors (structured via ChatValidationError)
+  if (error instanceof ChatValidationError) {
+    logRequestWarn(ctx.log, error, "MESSAGE_VALIDATION_ERROR");
+    return openAiError(error.message, "invalid_request_error", 400);
+  }
+
+  // Abort errors
+  if (error instanceof Error && error.name === "AbortError") {
+    logRequestWarn(ctx.log, error, "REQUEST_TIMEOUT");
+    return openAiError("Request timed out", "timeout_error", 408);
+  }
+
+  // LLM errors (structured via LlmError kind/status)
+  // Must precede isAccountsFeatureError — both use duck-typed .kind field
+  if (isLlmError(error)) {
+    if (error.kind === "timeout") {
+      logRequestWarn(ctx.log, error, "REQUEST_TIMEOUT");
+      return openAiError("Request timed out", "timeout_error", 408);
+    }
+    if (error.kind === "rate_limited" || error.status === 429) {
+      logRequestWarn(ctx.log, error, "RATE_LIMIT_EXCEEDED");
+      return openAiError(
+        "Rate limit exceeded. Please retry after a brief wait.",
+        "rate_limit_error",
+        429,
+        "rate_limit_exceeded"
+      );
+    }
+    if (error.status === 404) {
+      logRequestWarn(ctx.log, error, "MODEL_NOT_FOUND");
+      return openAiError(
+        "The model does not exist or you do not have access to it.",
+        "invalid_request_error",
+        404,
+        "model_not_found",
+        "model"
+      );
+    }
+    // Catch-all for other LLM errors (provider_4xx, provider_5xx, unknown)
+    logRequestWarn(ctx.log, error, "LLM_SERVICE_UNAVAILABLE");
+    return openAiError(
+      "The server is temporarily unable to process your request. Please retry.",
+      "server_error",
+      503
+    );
+  }
+
   // Accounts feature errors
   if (isAccountsFeatureError(error)) {
     if (error.kind === "INSUFFICIENT_CREDITS") {
@@ -113,54 +162,6 @@ function handleRouteError(
     );
   }
 
-  // LLM-specific errors
-  if (error instanceof Error) {
-    if (
-      error.message.includes("MESSAGE_TOO_LONG") ||
-      error.message.includes("INVALID_CONTENT")
-    ) {
-      logRequestWarn(ctx.log, error, "MESSAGE_VALIDATION_ERROR");
-      return openAiError(error.message, "invalid_request_error", 400);
-    }
-    if (
-      error.message.includes("timeout") ||
-      error.message.includes("AbortError")
-    ) {
-      logRequestWarn(ctx.log, error, "REQUEST_TIMEOUT");
-      return openAiError("Request timed out", "timeout_error", 408);
-    }
-    if (error.message.includes("LiteLLM API error: 429")) {
-      logRequestWarn(ctx.log, error, "RATE_LIMIT_EXCEEDED");
-      return openAiError(
-        "Rate limit exceeded. Please retry after a brief wait.",
-        "rate_limit_error",
-        429,
-        "rate_limit_exceeded"
-      );
-    }
-    if (
-      error.message.includes("LiteLLM API error: 404") ||
-      error.message.includes("No endpoints found")
-    ) {
-      logRequestWarn(ctx.log, error, "MODEL_NOT_FOUND");
-      return openAiError(
-        "The model does not exist or you do not have access to it.",
-        "invalid_request_error",
-        404,
-        "model_not_found",
-        "model"
-      );
-    }
-    if (error.message.includes("LiteLLM")) {
-      logRequestWarn(ctx.log, error, "LLM_SERVICE_UNAVAILABLE");
-      return openAiError(
-        "The server is temporarily unable to process your request. Please retry.",
-        "server_error",
-        503
-      );
-    }
-  }
-
   return null; // Unhandled → let wrapper catch as 500
 }
 
@@ -182,8 +183,7 @@ function createOpenAiSseStream(
   completionId: string,
   created: number,
   includeUsage: boolean,
-  log: RequestContext["log"],
-  reqId: string
+  log: RequestContext["log"]
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
@@ -440,8 +440,7 @@ export const POST = wrapRouteHandlerWithLogging(
           completionId,
           created,
           includeUsage,
-          ctx.log,
-          ctx.reqId
+          ctx.log
         );
 
         return new NextResponse(sseStream, {

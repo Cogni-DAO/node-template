@@ -32,6 +32,8 @@ import type {
   GraphRunRequest,
   GraphRunResult,
 } from "@/ports";
+import { LlmError } from "@/ports";
+import { ChatErrorCode, ChatValidationError } from "@/shared/errors";
 import type { AiEvent } from "@/types/ai-events";
 
 // Mock auth
@@ -175,6 +177,44 @@ function setupMocks(
             : {}),
         }),
       };
+    },
+  };
+
+  mockCreateGraphExecutor.mockReturnValue(executor);
+}
+
+/**
+ * Set up mocks where the graph executor throws a specific error.
+ */
+function setupMocksWithError(error: Error) {
+  const fakeClock = new FakeClock("2025-01-15T12:00:00.000Z");
+  const mockAccountService = createMockAccountServiceWithDefaults();
+
+  mockGetContainer.mockReturnValue({
+    config: { unhandledErrorPolicy: "throw" },
+    log: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      child: vi.fn().mockReturnThis(),
+    },
+    clock: fakeClock,
+  } as never);
+
+  mockGetSessionUser.mockResolvedValue(TEST_SESSION_USER_1);
+
+  mockResolveAiAdapterDeps.mockReturnValue({
+    llmService: {} as never,
+    accountService: mockAccountService,
+    clock: fakeClock,
+    aiTelemetry: new FakeAiTelemetryAdapter(),
+    langfuse: undefined,
+  });
+
+  const executor: GraphExecutorPort = {
+    runGraph(_req: GraphRunRequest): GraphRunResult {
+      throw error;
     },
   };
 
@@ -583,6 +623,121 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
       const json = await response.json();
       expect(() => chatCompletionsContract.error.parse(json)).not.toThrow();
       expect(json.error.type).toBe("invalid_request_error");
+    });
+
+    it("should return 429 for LlmError with rate_limited kind", async () => {
+      setupMocksWithError(
+        new LlmError("Rate limit exceeded", "rate_limited", 429)
+      );
+
+      const { POST } = await import("@/app/api/v1/chat/completions/route");
+
+      const req = new NextRequest(
+        "http://localhost:3000/api/v1/chat/completions",
+        {
+          method: "POST",
+          body: JSON.stringify(createCompletionRequest()),
+        }
+      );
+
+      const response = await POST(req);
+      expect(response.status).toBe(429);
+
+      const json = await response.json();
+      expect(() => chatCompletionsContract.error.parse(json)).not.toThrow();
+      expect(json.error.type).toBe("rate_limit_error");
+      expect(json.error.code).toBe("rate_limit_exceeded");
+    });
+
+    it("should return 408 for LlmError with timeout kind", async () => {
+      setupMocksWithError(new LlmError("Request timed out", "timeout", 408));
+
+      const { POST } = await import("@/app/api/v1/chat/completions/route");
+
+      const req = new NextRequest(
+        "http://localhost:3000/api/v1/chat/completions",
+        {
+          method: "POST",
+          body: JSON.stringify(createCompletionRequest()),
+        }
+      );
+
+      const response = await POST(req);
+      expect(response.status).toBe(408);
+
+      const json = await response.json();
+      expect(() => chatCompletionsContract.error.parse(json)).not.toThrow();
+      expect(json.error.type).toBe("timeout_error");
+    });
+
+    it("should return 404 for LlmError with status 404", async () => {
+      setupMocksWithError(new LlmError("Model not found", "provider_4xx", 404));
+
+      const { POST } = await import("@/app/api/v1/chat/completions/route");
+
+      const req = new NextRequest(
+        "http://localhost:3000/api/v1/chat/completions",
+        {
+          method: "POST",
+          body: JSON.stringify(createCompletionRequest()),
+        }
+      );
+
+      const response = await POST(req);
+      expect(response.status).toBe(404);
+
+      const json = await response.json();
+      expect(() => chatCompletionsContract.error.parse(json)).not.toThrow();
+      expect(json.error.code).toBe("model_not_found");
+      expect(json.error.param).toBe("model");
+    });
+
+    it("should return 503 for LlmError with unknown kind", async () => {
+      setupMocksWithError(new LlmError("Something went wrong", "unknown"));
+
+      const { POST } = await import("@/app/api/v1/chat/completions/route");
+
+      const req = new NextRequest(
+        "http://localhost:3000/api/v1/chat/completions",
+        {
+          method: "POST",
+          body: JSON.stringify(createCompletionRequest()),
+        }
+      );
+
+      const response = await POST(req);
+      expect(response.status).toBe(503);
+
+      const json = await response.json();
+      expect(() => chatCompletionsContract.error.parse(json)).not.toThrow();
+      expect(json.error.type).toBe("server_error");
+    });
+
+    it("should return 400 for ChatValidationError", async () => {
+      setupMocksWithError(
+        new ChatValidationError(
+          ChatErrorCode.MESSAGE_TOO_LONG,
+          "Message exceeds maximum length"
+        )
+      );
+
+      const { POST } = await import("@/app/api/v1/chat/completions/route");
+
+      const req = new NextRequest(
+        "http://localhost:3000/api/v1/chat/completions",
+        {
+          method: "POST",
+          body: JSON.stringify(createCompletionRequest()),
+        }
+      );
+
+      const response = await POST(req);
+      expect(response.status).toBe(400);
+
+      const json = await response.json();
+      expect(() => chatCompletionsContract.error.parse(json)).not.toThrow();
+      expect(json.error.type).toBe("invalid_request_error");
+      expect(json.error.message).toContain("Message exceeds maximum length");
     });
 
     it("should return 401 for unauthenticated requests", async () => {
