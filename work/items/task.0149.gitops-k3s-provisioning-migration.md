@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
 branch: feat/gitops-k3s-provisioning
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/573
 reviewer:
 revision: 0
 blocked_by:
