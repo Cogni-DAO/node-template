@@ -31,15 +31,15 @@ Enable AI-generated content to be drafted, optimized per platform, reviewed by h
 
 | Deliverable                                                                                 | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| `packages/broadcast-core` — domain model, enums, port interfaces, errors                    | Not Started | 1.5 | —         |
-| `packages/db-schema/src/broadcasting.ts` — 2 tables with RLS                                | Not Started | 0.5 | —         |
-| `packages/db-client` — Drizzle broadcast adapters (User + Worker ports)                     | Not Started | 1.5 | —         |
+| `packages/broadcast-core` — domain model, enums, port interfaces, errors                    | Not Started | 1.5 | task.0159 |
+| `packages/db-schema/src/broadcasting.ts` — 2 tables with RLS                                | Not Started | 0.5 | task.0159 |
+| `packages/db-client` — Drizzle broadcast adapters (User + Worker ports)                     | Not Started | 1.5 | task.0159 |
 | Discord `PublishPort` adapter (webhook)                                                     | Not Started | 0.5 | —         |
 | Bluesky `PublishPort` adapter (`@atproto/api`)                                              | Not Started | 0.5 | —         |
-| X/Twitter `PublishPort` adapter (OAuth 2.0, free tier)                                      | Not Started | 1   | —         |
-| `broadcastWorkflow` Temporal workflow (draft → review signal → publish)                     | Not Started | 2   | —         |
-| `ContentOptimizerPort` basic implementation (LLM via GraphExecutorPort)                     | Not Started | 1   | —         |
-| API contracts (`broadcast.draft.v1`, `broadcast.review.v1`, `broadcast.status.v1`) + routes | Not Started | 1   | —         |
+| X/Twitter `PublishPort` adapter (OAuth 2.0, free tier)                                      | Not Started | 1   | task.0159 |
+| `broadcastWorkflow` Temporal workflow (draft → review signal → publish)                     | Not Started | 2   | task.0159 |
+| `ContentOptimizerPort` basic implementation (LLM via GraphExecutorPort)                     | Not Started | 1   | task.0159 |
+| API contracts (`broadcast.draft.v1`, `broadcast.review.v1`, `broadcast.status.v1`) + routes | Not Started | 1   | task.0159 |
 
 ### Walk (P1) — Schema Evolution + LinkedIn + Blog + Engagement
 
