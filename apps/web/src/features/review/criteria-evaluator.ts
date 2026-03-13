@@ -11,9 +11,61 @@
  * @public
  */
 
-import type { SuccessCriteria } from "@cogni/repo-spec";
+import type { SuccessCriteria, ThresholdCriterion } from "@cogni/repo-spec";
 
 import type { GateStatus } from "./types";
+
+const OP_SYMBOLS: Record<string, string> = {
+  gte: "\u2265",
+  gt: ">",
+  lte: "\u2264",
+  lt: "<",
+  eq: "=",
+};
+
+/**
+ * Format a threshold criterion as a human-readable string (e.g., "≥ 0.80").
+ * Returns undefined if the threshold has no recognised operator.
+ */
+export function formatThreshold(
+  threshold: ThresholdCriterion
+): string | undefined {
+  for (const op of Object.keys(OP_SYMBOLS)) {
+    if (
+      op in threshold &&
+      typeof (threshold as Record<string, unknown>)[op] === "number"
+    ) {
+      const value = (threshold as Record<string, unknown>)[op] as number;
+      return `${OP_SYMBOLS[op]} ${value.toFixed(2)}`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Look up the requirement string for a given metric across all criteria.
+ * Appends "(all)" for require[] or "(any)" for any_of[] group context.
+ */
+export function findRequirement(
+  metricName: string,
+  criteria: SuccessCriteria
+): string | undefined {
+  const reqMatch = (criteria.require ?? []).find(
+    (t) => t.metric === metricName
+  );
+  if (reqMatch) {
+    const formatted = formatThreshold(reqMatch);
+    return formatted ? `${formatted} (all)` : undefined;
+  }
+
+  const anyMatch = (criteria.any_of ?? []).find((t) => t.metric === metricName);
+  if (anyMatch) {
+    const formatted = formatThreshold(anyMatch);
+    return formatted ? `${formatted} (any)` : undefined;
+  }
+
+  return undefined;
+}
 
 /**
  * Evaluate metric scores against success criteria.
