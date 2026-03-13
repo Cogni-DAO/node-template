@@ -7,7 +7,7 @@ state: Active
 priority: 1
 estimate: 4
 summary: AI-generated content publishing across social platforms and blog with human-in-the-loop review, engagement feedback, and Temporal-based durable workflows.
-outcome: ContentMessage drafts flow through optimize → review → publish → observe pipeline to Discord, Bluesky, X, LinkedIn, and Blog via swappable platform adapters.
+outcome: ContentMessage drafts flow through optimize → review → publish pipeline to Discord, Bluesky, X, LinkedIn, and Blog via swappable platform adapters. Engagement observation and campaign management added in Walk.
 assignees:
   - derekg1729
 created: 2026-03-11
@@ -21,19 +21,19 @@ labels: [broadcasting, social-media, content, temporal, ai]
 
 ## Goal
 
-Enable AI-generated content to be drafted, optimized per platform, reviewed by humans, published across multiple platforms, and tracked for engagement — all through a single pipeline where every platform is a swappable adapter behind a shared port. Blog posts and social posts share the same core domain model (`ContentMessage → PlatformPost → BroadcastRun`).
+Enable AI-generated content to be drafted, optimized per platform, reviewed by humans, and published across multiple platforms — all through a single pipeline where every platform is a swappable adapter behind a shared port. Blog posts and social posts share the same core domain model (`ContentMessage → PlatformPost`). Engagement tracking, campaign grouping, and retry audit trails are added in Walk phase.
 
 ## Roadmap
 
 ### Crawl (P0) — Core Pipeline + 3 Social Platforms
 
-**Goal:** A `ContentMessage` can be drafted, AI-optimized for each target platform, reviewed via Temporal Signal, and published to Discord + Bluesky + X. Engagement collection deferred to Walk.
+**Goal:** A `ContentMessage` can be drafted, AI-optimized for each target platform, reviewed via Temporal Signal, and published to Discord + Bluesky + X. Simplified 2-table schema (`content_messages` + `platform_posts` with inline publish result).
 
 | Deliverable                                                                                 | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| `packages/broadcast-core` — domain model, enums, port interfaces, errors                    | Not Started | 2   | —         |
-| `packages/db-schema/src/broadcasting.ts` — 5 tables with RLS                                | Not Started | 1   | —         |
-| `packages/db-client` — Drizzle broadcast adapters (User + Worker ports)                     | Not Started | 2   | —         |
+| `packages/broadcast-core` — domain model, enums, port interfaces, errors                    | Not Started | 1.5 | —         |
+| `packages/db-schema/src/broadcasting.ts` — 2 tables with RLS                                | Not Started | 0.5 | —         |
+| `packages/db-client` — Drizzle broadcast adapters (User + Worker ports)                     | Not Started | 1.5 | —         |
 | Discord `PublishPort` adapter (webhook)                                                     | Not Started | 0.5 | —         |
 | Bluesky `PublishPort` adapter (`@atproto/api`)                                              | Not Started | 0.5 | —         |
 | X/Twitter `PublishPort` adapter (OAuth 2.0, free tier)                                      | Not Started | 1   | —         |
@@ -41,19 +41,20 @@ Enable AI-generated content to be drafted, optimized per platform, reviewed by h
 | `ContentOptimizerPort` basic implementation (LLM via GraphExecutorPort)                     | Not Started | 1   | —         |
 | API contracts (`broadcast.draft.v1`, `broadcast.review.v1`, `broadcast.status.v1`) + routes | Not Started | 1   | —         |
 
-### Walk (P1) — LinkedIn + Blog + Engagement + Scheduling
+### Walk (P1) — Schema Evolution + LinkedIn + Blog + Engagement
 
-**Goal:** LinkedIn and Blog adapters join the pipeline. Engagement feedback loop operational. Campaigns group related messages. Scheduled broadcasting via existing scheduler infra.
+**Goal:** Split `broadcast_runs` out of `platform_posts` for retry auditing. Add `engagement_snapshots` and `campaigns` tables. LinkedIn and Blog adapters join the pipeline. Engagement feedback loop operational. Campaigns group related messages.
 
-| Deliverable                                                | Status      | Est | Work Item            |
-| ---------------------------------------------------------- | ----------- | --- | -------------------- |
-| LinkedIn `PublishPort` adapter (OAuth 2.0 + token refresh) | Not Started | 2   | (create at P1 start) |
-| Blog `PublishPort` adapter (aligned with blog dev's work)  | Not Started | 2   | (create at P1 start) |
-| `EngagementPort` adapters (Bluesky, X, Blog analytics)     | Not Started | 2   | (create at P1 start) |
-| Engagement collection child workflow (hourly for 48h)      | Not Started | 1   | (create at P1 start) |
-| Risk-based auto-approval tiers (configurable per tenant)   | Not Started | 1   | (create at P1 start) |
-| Campaign management (group messages, track launch)         | Not Started | 2   | (create at P1 start) |
-| Cron-scheduled broadcasting via `@cogni/scheduler-core`    | Not Started | 1   | (create at P1 start) |
+| Deliverable                                                                        | Status      | Est | Work Item            |
+| ---------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| `broadcast_runs` table — split publish results out of `platform_posts` + migration | Not Started | 1   | (create at P1 start) |
+| `engagement_snapshots` table + `EngagementPort` adapters (Bluesky, X, Blog)        | Not Started | 2   | (create at P1 start) |
+| `campaigns` table + Campaign management (group messages, track launch)             | Not Started | 2   | (create at P1 start) |
+| LinkedIn `PublishPort` adapter (OAuth 2.0 + token refresh)                         | Not Started | 2   | (create at P1 start) |
+| Blog `PublishPort` adapter (aligned with blog dev's work)                          | Not Started | 2   | (create at P1 start) |
+| Engagement collection child workflow (hourly for 48h)                              | Not Started | 1   | (create at P1 start) |
+| Risk-based auto-approval tiers (configurable per tenant)                           | Not Started | 1   | (create at P1 start) |
+| Cron-scheduled broadcasting via `@cogni/scheduler-core`                            | Not Started | 1   | (create at P1 start) |
 
 ### Run (P2+) — Full Suite
 
@@ -70,12 +71,11 @@ Enable AI-generated content to be drafted, optimized per platform, reviewed by h
 
 ## Constraints
 
-- Blog posts and social posts share the same `ContentMessage → PlatformPost → BroadcastRun` pipeline — no separate code paths
+- Blog posts and social posts share the same `ContentMessage → PlatformPost` pipeline — no separate code paths
 - Every platform is a `PublishPort` adapter — adding a platform never modifies core, features, or workflows
 - HIGH-risk posts must receive explicit human approval (no auto-approve)
-- `BroadcastRun` records are append-only (immutable audit trail)
+- Crawl uses 2 tables (`content_messages`, `platform_posts` with inline publish result); Walk splits out `broadcast_runs`, adds `engagement_snapshots` and `campaigns`
 - Platform adapters live in `services/` (scheduler-worker), not in `packages/` (packages have no I/O)
-- Engagement collection is best-effort — missing metrics are null, never fabricated
 - Credential storage reuses `channel_registrations` AES-256-GCM pattern from `proj.messenger-channels`
 
 ## Dependencies

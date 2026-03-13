@@ -16,7 +16,7 @@ tags: [broadcasting, social-media, content, architecture]
 
 ## Mission
 
-Publish AI-generated content across platforms (social, blog, video) through a single **Message → Optimize → Review → Publish → Observe** pipeline. Every platform is a swappable adapter behind a shared port. Blog posts and social posts share the same core domain.
+Publish AI-generated content across platforms (social, blog, video) through a single **Message → Optimize → Review → Publish** pipeline. Every platform is a swappable adapter behind a shared port. Blog posts and social posts share the same core domain. Engagement observation added in Walk phase.
 
 ## Core Concept: The Content Message
 
@@ -56,7 +56,7 @@ contracts → core → ports → features → adapters → app
 
 ## Domain Model (`packages/broadcast-core`)
 
-### Entities
+### Entities (Crawl)
 
 ```typescript
 /** Platform-agnostic content intent. The "what to say". */
@@ -64,7 +64,6 @@ interface ContentMessage {
   id: ContentMessageId; // branded UUID
   ownerUserId: UserId;
   billingAccountId: string;
-  campaignId?: CampaignId; // optional grouping
   body: string; // markdown source text
   title?: string; // for long-form (blog)
   mediaUrls: string[]; // attached images/video
@@ -75,7 +74,7 @@ interface ContentMessage {
   updatedAt: Date;
 }
 
-/** Platform-specific optimized rendition. The "how to say it". */
+/** Platform-specific optimized rendition + publish result. */
 interface PlatformPost {
   id: PlatformPostId; // branded UUID
   contentMessageId: ContentMessageId;
@@ -86,18 +85,28 @@ interface PlatformPost {
   platformMetadata: Record<string, unknown>; // hashtags, facets, embed config, SEO slug
   status: PlatformPostStatus;
   reviewDecision?: ReviewDecision;
+  // Publish result (flattened from BroadcastRun for Crawl simplicity)
+  externalId?: string; // platform's post ID (tweet ID, bsky rkey, etc.)
+  externalUrl?: string; // permalink on platform
+  errorMessage?: string;
+  publishedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
+```
 
-/** Immutable record of a publish attempt. */
+### Entities (Walk/Run — added when needed)
+
+```typescript
+/** Immutable record of a publish attempt. Split out from PlatformPost in Walk
+ *  when retry auditing and multi-attempt tracking become requirements. */
 interface BroadcastRun {
   id: BroadcastRunId;
   platformPostId: PlatformPostId;
   platform: PlatformId;
   status: BroadcastRunStatus;
-  externalId?: string; // platform's post ID (tweet ID, bsky rkey, etc.)
-  externalUrl?: string; // permalink on platform
+  externalId?: string;
+  externalUrl?: string;
   errorMessage?: string;
   publishedAt?: Date;
   createdAt: Date;
@@ -106,7 +115,7 @@ interface BroadcastRun {
 /** Engagement snapshot pulled from platform APIs (where available). */
 interface EngagementSnapshot {
   id: string;
-  broadcastRunId: BroadcastRunId;
+  broadcastRunId: BroadcastRunId; // or platformPostId if runs not yet split
   platform: PlatformId;
   impressions?: number;
   likes?: number;
@@ -128,7 +137,7 @@ interface Campaign {
 }
 ```
 
-### Enums
+### Enums (Crawl)
 
 ```typescript
 const PLATFORM_IDS = ["x", "bluesky", "linkedin", "discord", "blog"] as const;
@@ -158,6 +167,16 @@ const PLATFORM_POST_STATUSES = [
 ] as const;
 type PlatformPostStatus = (typeof PLATFORM_POST_STATUSES)[number];
 
+const REVIEW_DECISIONS = ["approved", "rejected", "edited"] as const;
+type ReviewDecision = (typeof REVIEW_DECISIONS)[number];
+
+const RISK_LEVELS = ["low", "medium", "high"] as const;
+type RiskLevel = (typeof RISK_LEVELS)[number];
+```
+
+### Enums (Walk/Run — added when needed)
+
+```typescript
 const BROADCAST_RUN_STATUSES = [
   "pending",
   "running",
@@ -165,12 +184,6 @@ const BROADCAST_RUN_STATUSES = [
   "error",
 ] as const;
 type BroadcastRunStatus = (typeof BROADCAST_RUN_STATUSES)[number];
-
-const REVIEW_DECISIONS = ["approved", "rejected", "edited"] as const;
-type ReviewDecision = (typeof REVIEW_DECISIONS)[number];
-
-const RISK_LEVELS = ["low", "medium", "high"] as const;
-type RiskLevel = (typeof RISK_LEVELS)[number];
 
 const CAMPAIGN_STATUSES = [
   "draft",
@@ -262,11 +275,11 @@ interface OptimizationResult {
 }
 ```
 
-### `engagement.port.ts` — Feedback Loop
+### `engagement.port.ts` — Feedback Loop (Walk)
 
 ```typescript
 /**
- * Collects engagement metrics from platforms for published posts.
+ * Walk phase — Collects engagement metrics from platforms for published posts.
  * Not all platforms expose this (Discord webhooks don't).
  * Adapters return null for unsupported metrics.
  */
@@ -284,6 +297,9 @@ interface EngagementPort {
 /**
  * CRUD for broadcasting domain entities.
  * Split by trust boundary: User (RLS) vs Worker (BYPASSRLS).
+ *
+ * Crawl scope: ContentMessage + PlatformPost (with inline publish result).
+ * Walk adds: BroadcastRun reads/writes, EngagementSnapshot, Campaign CRUD.
  */
 interface BroadcastLedgerUserPort {
   // ContentMessage CRUD
@@ -316,25 +332,6 @@ interface BroadcastLedgerUserPort {
     decision: ReviewDecision,
     editedBody?: string
   ) => Promise<PlatformPost>;
-
-  // BroadcastRun reads
-  getBroadcastRuns: (
-    callerUserId: UserId,
-    platformPostId: PlatformPostId
-  ) => Promise<readonly BroadcastRun[]>;
-
-  // Engagement reads
-  getEngagementSnapshots: (
-    callerUserId: UserId,
-    broadcastRunId: BroadcastRunId
-  ) => Promise<readonly EngagementSnapshot[]>;
-
-  // Campaign CRUD
-  createCampaign: (
-    callerUserId: UserId,
-    input: CreateCampaignInput
-  ) => Promise<Campaign>;
-  listCampaigns: (callerUserId: UserId) => Promise<readonly Campaign[]>;
 }
 
 interface BroadcastLedgerWorkerPort {
@@ -349,21 +346,11 @@ interface BroadcastLedgerWorkerPort {
     status: PlatformPostStatus
   ) => Promise<void>;
 
-  // Broadcast run lifecycle (worker publishes)
-  createBroadcastRun: (
+  // Publish result (flattened — no separate BroadcastRun in Crawl)
+  finalizePlatformPost: (
     actorId: ActorId,
-    input: CreateBroadcastRunInput
-  ) => Promise<BroadcastRun>;
-  finalizeBroadcastRun: (
-    actorId: ActorId,
-    id: BroadcastRunId,
-    result: FinalizeRunInput
-  ) => Promise<void>;
-
-  // Engagement writes (worker collects)
-  upsertEngagementSnapshot: (
-    actorId: ActorId,
-    snapshot: EngagementSnapshot
+    id: PlatformPostId,
+    result: FinalizePublishInput
   ) => Promise<void>;
 
   // Content message status (worker updates after publish)
@@ -373,11 +360,17 @@ interface BroadcastLedgerWorkerPort {
     status: ContentMessageStatus
   ) => Promise<void>;
 }
+
+// Walk additions (extend ports when these features ship):
+// BroadcastLedgerUserPort: getBroadcastRuns, getEngagementSnapshots, createCampaign, listCampaigns
+// BroadcastLedgerWorkerPort: createBroadcastRun, finalizeBroadcastRun, upsertEngagementSnapshot
 ```
 
 ---
 
 ## Database Schema (`packages/db-schema/src/broadcasting.ts`)
+
+### Crawl — 2 Tables
 
 ```typescript
 export const PLATFORM_IDS = [
@@ -407,20 +400,8 @@ export const PLATFORM_POST_STATUSES = [
   "published",
   "failed",
 ] as const;
-export const BROADCAST_RUN_STATUSES = [
-  "pending",
-  "running",
-  "success",
-  "error",
-] as const;
 export const REVIEW_DECISIONS = ["approved", "rejected", "edited"] as const;
 export const RISK_LEVELS = ["low", "medium", "high"] as const;
-export const CAMPAIGN_STATUSES = [
-  "draft",
-  "active",
-  "completed",
-  "cancelled",
-] as const;
 
 export const contentMessages = pgTable(
   "content_messages",
@@ -432,9 +413,6 @@ export const contentMessages = pgTable(
     billingAccountId: text("billing_account_id")
       .notNull()
       .references(() => billingAccounts.id, { onDelete: "cascade" }),
-    campaignId: uuid("campaign_id").references(() => campaigns.id, {
-      onDelete: "set null",
-    }),
     body: text("body").notNull(),
     title: text("title"),
     mediaUrls: text("media_urls")
@@ -459,7 +437,6 @@ export const contentMessages = pgTable(
   (table) => ({
     ownerIdx: index("content_messages_owner_idx").on(table.ownerUserId),
     statusIdx: index("content_messages_status_idx").on(table.status),
-    campaignIdx: index("content_messages_campaign_idx").on(table.campaignId),
   })
 ).enableRLS();
 
@@ -489,6 +466,11 @@ export const platformPosts = pgTable(
     reviewDecision: text("review_decision", { enum: REVIEW_DECISIONS }),
     reviewedBy: text("reviewed_by"),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    // Publish result (inline — no separate broadcast_runs table in Crawl)
+    externalId: text("external_id"),
+    externalUrl: text("external_url"),
+    errorMessage: text("error_message"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -509,82 +491,19 @@ export const platformPosts = pgTable(
     ),
   })
 ).enableRLS();
-
-export const broadcastRuns = pgTable(
-  "broadcast_runs",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    platformPostId: uuid("platform_post_id")
-      .notNull()
-      .references(() => platformPosts.id, { onDelete: "cascade" }),
-    platform: text("platform", { enum: PLATFORM_IDS }).notNull(),
-    status: text("status", { enum: BROADCAST_RUN_STATUSES })
-      .notNull()
-      .default("pending"),
-    externalId: text("external_id"),
-    externalUrl: text("external_url"),
-    errorMessage: text("error_message"),
-    publishedAt: timestamp("published_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => ({
-    platformPostIdx: index("broadcast_runs_platform_post_idx").on(
-      table.platformPostId
-    ),
-    externalIdIdx: index("broadcast_runs_external_id_idx").on(table.externalId),
-  })
-).enableRLS();
-
-export const engagementSnapshots = pgTable(
-  "engagement_snapshots",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    broadcastRunId: uuid("broadcast_run_id")
-      .notNull()
-      .references(() => broadcastRuns.id, { onDelete: "cascade" }),
-    platform: text("platform", { enum: PLATFORM_IDS }).notNull(),
-    impressions: integer("impressions"),
-    likes: integer("likes"),
-    reposts: integer("reposts"),
-    replies: integer("replies"),
-    clicks: integer("clicks"),
-    collectedAt: timestamp("collected_at", { withTimezone: true }).notNull(),
-  },
-  (table) => ({
-    runIdx: index("engagement_snapshots_run_idx").on(table.broadcastRunId),
-    /** Latest snapshot per run — upsert target */
-    runCollectedUnique: uniqueIndex(
-      "engagement_snapshots_run_collected_unique"
-    ).on(table.broadcastRunId, table.collectedAt),
-  })
-).enableRLS();
-
-export const campaigns = pgTable(
-  "campaigns",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    ownerUserId: text("owner_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    description: text("description"),
-    status: text("status", { enum: CAMPAIGN_STATUSES })
-      .notNull()
-      .default("draft"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => ({
-    ownerIdx: index("campaigns_owner_idx").on(table.ownerUserId),
-  })
-).enableRLS();
 ```
+
+### Walk/Run — Tables Added When Needed
+
+These tables are created via migration when their features ship:
+
+| Table                  | Phase | Trigger                                                                                                                                           |
+| ---------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `broadcast_runs`       | Walk  | Retry auditing — split `external_id`/`external_url`/`error_message`/`published_at` out of `platform_posts` into immutable append-only run records |
+| `engagement_snapshots` | Walk  | Engagement feedback loop — periodic metric collection per platform                                                                                |
+| `campaigns`            | Walk  | Campaign management — group content messages into coordinated launches                                                                            |
+
+Schema for these tables is defined in the [Walk/Run entities section](#entities-walkrun--added-when-needed) above. Migration will add the tables and backfill the FK relationships (e.g., `content_messages.campaign_id` added as nullable column when `campaigns` ships).
 
 ---
 
@@ -655,12 +574,14 @@ async function broadcastWorkflow(
   }
 
   // 4. Publish — parallel Activities per platform
+  //    Each activity calls PublishPort.publish() and updates PlatformPost
+  //    with externalId/externalUrl/publishedAt (or errorMessage on failure)
   const results = await Promise.allSettled(
     approvedPosts.map((post) => publishToPlatform(post))
   );
 
-  // 5. Schedule engagement collection (separate child workflow or timer)
-  await scheduleEngagementCollection(publishedRunIds);
+  // 5. (Walk) Schedule engagement collection (separate child workflow or timer)
+  // await scheduleEngagementCollection(publishedPostIds);
 
   return { results };
 }
@@ -681,14 +602,14 @@ Blog posts are **just another platform adapter** behind the same `PublishPort`. 
 
 ### How Blog Fits
 
-| Concern                  | Social Platforms            | Blog                                                       |
-| ------------------------ | --------------------------- | ---------------------------------------------------------- |
-| **ContentMessage**       | Same entity                 | Same entity (with `title` + richer `metadata`)             |
-| **PlatformPost**         | Short-form optimized text   | Full markdown + SEO metadata (slug, description, og:image) |
-| **PublishPort**          | X API, Bluesky SDK, etc.    | Blog CMS adapter (Fumadocs, headless CMS, or static gen)   |
-| **ContentOptimizerPort** | Shortens, adds hashtags     | Expands, adds headings/structure, SEO keywords             |
-| **EngagementPort**       | Likes, reposts, impressions | Page views, time on page (from analytics)                  |
-| **Review**               | Same Temporal Signal flow   | Same flow (possibly different risk thresholds)             |
+| Concern                   | Social Platforms            | Blog                                                       |
+| ------------------------- | --------------------------- | ---------------------------------------------------------- |
+| **ContentMessage**        | Same entity                 | Same entity (with `title` + richer `metadata`)             |
+| **PlatformPost**          | Short-form optimized text   | Full markdown + SEO metadata (slug, description, og:image) |
+| **PublishPort**           | X API, Bluesky SDK, etc.    | Blog CMS adapter (Fumadocs, headless CMS, or static gen)   |
+| **ContentOptimizerPort**  | Shortens, adds hashtags     | Expands, adds headings/structure, SEO keywords             |
+| **EngagementPort** (Walk) | Likes, reposts, impressions | Page views, time on page (from analytics)                  |
+| **Review**                | Same Temporal Signal flow   | Same flow (possibly different risk thresholds)             |
 
 ### Shared Contracts
 
@@ -697,8 +618,8 @@ The blog dev should:
 1. **Use `ContentMessage` as the source entity** — blog posts start as `ContentMessage` with `targetPlatforms: ["blog"]`
 2. **Implement `PublishPort` for `platform: "blog"`** — publishes markdown to the blog system
 3. **Implement `ContentOptimizerPort` for blog** — long-form optimization (SEO, structure, readability)
-4. **Implement `EngagementPort` for blog** — collect analytics (page views, etc.)
-5. **Reuse the same `broadcastWorkflow`** — blog posts go through the same review pipeline
+4. **Reuse the same `broadcastWorkflow`** — blog posts go through the same review pipeline
+5. **(Walk) Implement `EngagementPort` for blog** — collect analytics (page views, etc.)
 
 ### Cross-Posting Pattern
 
@@ -818,7 +739,7 @@ export const broadcastReviewOperation = {
 ### `broadcast.status.v1.contract.ts`
 
 ```typescript
-// Get full status of a content message + all platform posts + runs
+// Get full status of a content message + all platform posts (with inline publish result)
 export const broadcastStatusOperation = {
   id: "broadcast.status.v1",
   input: z.object({
@@ -826,8 +747,7 @@ export const broadcastStatusOperation = {
   }),
   output: z.object({
     contentMessage: ContentMessageSchema,
-    platformPosts: z.array(PlatformPostWithRunsSchema),
-    engagement: z.array(EngagementSnapshotSchema),
+    platformPosts: z.array(PlatformPostSchema),
   }),
 };
 ```
@@ -852,12 +772,12 @@ All operations logged via Pino with `contractId`, `contentMessageId`, `platform`
 
 1. **MESSAGE_IS_PLATFORM_AGNOSTIC** — `ContentMessage.body` never contains platform-specific formatting. Optimization is the adapter's job.
 2. **ONE_POST_PER_PLATFORM** — A `ContentMessage` produces at most one `PlatformPost` per `PlatformId` (enforced by unique index).
-3. **RUNS_ARE_IMMUTABLE** — `BroadcastRun` records are append-only. Never update a run; create a new one on retry.
-4. **REVIEW_BEFORE_HIGH_RISK** — Posts assessed as HIGH risk must receive an explicit `approved` review decision before publishing. No auto-approve for HIGH.
-5. **ADAPTERS_ARE_SWAPPABLE** — Adding a new platform requires only: (a) a `PublishPort` implementation, (b) a `ContentOptimizerPort` strategy, (c) a row in `PLATFORM_IDS`. No changes to core, features, or workflow.
-6. **BLOG_IS_A_PLATFORM** — Blog posts use the same `ContentMessage → PlatformPost → BroadcastRun` pipeline as social posts. No special-case code paths.
-7. **TEMPORAL_OWNS_DURABILITY** — Publish retries, review waits, and engagement collection schedules are Temporal's responsibility. No application-level retry loops.
-8. **ENGAGEMENT_IS_BEST_EFFORT** — Not all platforms expose metrics. Missing data is null, never fabricated.
+3. **REVIEW_BEFORE_HIGH_RISK** — Posts assessed as HIGH risk must receive an explicit `approved` review decision before publishing. No auto-approve for HIGH.
+4. **ADAPTERS_ARE_SWAPPABLE** — Adding a new platform requires only: (a) a `PublishPort` implementation, (b) a `ContentOptimizerPort` strategy, (c) a row in `PLATFORM_IDS`. No changes to core, features, or workflow.
+5. **BLOG_IS_A_PLATFORM** — Blog posts use the same `ContentMessage → PlatformPost` pipeline as social posts. No special-case code paths.
+6. **TEMPORAL_OWNS_DURABILITY** — Publish retries, review waits, and engagement collection schedules are Temporal's responsibility. No application-level retry loops.
+7. **ENGAGEMENT_IS_BEST_EFFORT** (Walk) — Not all platforms expose metrics. Missing data is null, never fabricated.
+8. **RUNS_ARE_IMMUTABLE** (Walk) — When `broadcast_runs` is split out, records are append-only. Never update a run; create a new one on retry.
 
 ---
 
@@ -865,30 +785,31 @@ All operations logged via Pino with `contractId`, `contentMessageId`, `platform`
 
 ### Crawl (P0) — Core Pipeline + 3 Platforms
 
-| Deliverable                                       | Est     | Notes                                        |
-| ------------------------------------------------- | ------- | -------------------------------------------- |
-| `packages/broadcast-core` — domain model + ports  | 2       | Types, enums, port interfaces, error classes |
-| `packages/db-schema` — broadcasting tables        | 1       | 5 tables with RLS                            |
-| `packages/db-client` — Drizzle broadcast adapters | 2       | User + Worker ports                          |
-| Discord `PublishPort` adapter                     | 0.5     | Webhook, simplest                            |
-| Bluesky `PublishPort` adapter                     | 0.5     | @atproto/api                                 |
-| X `PublishPort` adapter                           | 1       | OAuth 2.0, free tier                         |
-| `broadcastWorkflow` Temporal workflow             | 2       | Draft → review → publish                     |
-| `ContentOptimizerPort` basic impl                 | 1       | LLM via GraphExecutorPort                    |
-| API contracts + routes                            | 1       | draft, review, status                        |
-| **Total**                                         | **~11** |                                              |
+| Deliverable                                       | Est      | Notes                                                              |
+| ------------------------------------------------- | -------- | ------------------------------------------------------------------ |
+| `packages/broadcast-core` — domain model + ports  | 1.5      | Types, enums, port interfaces, error classes (no Campaign/Run yet) |
+| `packages/db-schema` — broadcasting tables        | 0.5      | 2 tables with RLS (`content_messages`, `platform_posts`)           |
+| `packages/db-client` — Drizzle broadcast adapters | 1.5      | User + Worker ports (simplified, no Run/Engagement CRUD)           |
+| Discord `PublishPort` adapter                     | 0.5      | Webhook, simplest                                                  |
+| Bluesky `PublishPort` adapter                     | 0.5      | @atproto/api                                                       |
+| X `PublishPort` adapter                           | 1        | OAuth 2.0, free tier                                               |
+| `broadcastWorkflow` Temporal workflow             | 2        | Draft → review → publish                                           |
+| `ContentOptimizerPort` basic impl                 | 1        | LLM via GraphExecutorPort                                          |
+| API contracts + routes                            | 1        | draft, review, status                                              |
+| **Total**                                         | **~9.5** |                                                                    |
 
-### Walk (P1) — LinkedIn + Blog + Engagement + Scheduling
+### Walk (P1) — LinkedIn + Blog + Engagement + Schema Evolution
 
-| Deliverable                                             | Est |
-| ------------------------------------------------------- | --- |
-| LinkedIn `PublishPort` adapter                          | 2   |
-| Blog `PublishPort` adapter (with blog dev)              | 2   |
-| `EngagementPort` adapters (Bluesky, X, Blog)            | 2   |
-| Engagement collection child workflow                    | 1   |
-| Risk-based auto-approval tiers (configurable)           | 1   |
-| Campaign management (group messages)                    | 2   |
-| Cron-scheduled broadcasting via `@cogni/scheduler-core` | 1   |
+| Deliverable                                                                        | Est |
+| ---------------------------------------------------------------------------------- | --- |
+| `broadcast_runs` table — split publish results out of `platform_posts` + migration | 1   |
+| `engagement_snapshots` table + `EngagementPort` adapters (Bluesky, X, Blog)        | 2   |
+| `campaigns` table + Campaign management (group messages)                           | 2   |
+| LinkedIn `PublishPort` adapter                                                     | 2   |
+| Blog `PublishPort` adapter (with blog dev)                                         | 2   |
+| Engagement collection child workflow                                               | 1   |
+| Risk-based auto-approval tiers (configurable)                                      | 1   |
+| Cron-scheduled broadcasting via `@cogni/scheduler-core`                            | 1   |
 
 ### Run (P2) — Full Suite
 
