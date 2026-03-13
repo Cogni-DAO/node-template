@@ -12,7 +12,11 @@
  * @public
  */
 
-import type { ContentMessage, PlatformPost } from "@cogni/broadcast-core";
+import {
+  type ContentMessage,
+  type PlatformPost,
+  toContentMessageId,
+} from "@cogni/broadcast-core";
 import { toUserId } from "@cogni/ids";
 import { NextResponse } from "next/server";
 
@@ -79,7 +83,7 @@ export const GET = wrapRouteHandlerWithLogging<{
 
     const message = await container.broadcastLedger.getContentMessage(
       userId,
-      messageId as never
+      toContentMessageId(messageId)
     );
 
     if (!message) {

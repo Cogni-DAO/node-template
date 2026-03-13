@@ -210,7 +210,10 @@ export class DrizzleBroadcastUserAdapter implements BroadcastLedgerUserPort {
         updates.status = "approved";
       } else if (decision === "rejected") {
         updates.status = "rejected";
-      } else if (decision === "edited" && editedBody) {
+      } else if (decision === "edited") {
+        if (!editedBody) {
+          throw new Error("editedBody is required when decision is 'edited'");
+        }
         updates.optimizedBody = editedBody;
         updates.status = "approved";
       }
