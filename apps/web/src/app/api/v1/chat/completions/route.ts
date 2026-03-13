@@ -30,7 +30,12 @@ import {
 } from "@/contracts/ai.completions.v1.contract";
 import { isAccountsFeatureError } from "@/features/accounts/public";
 import type { AiEvent, StreamFinalResult } from "@/features/ai/public";
-import { logRequestWarn, type RequestContext } from "@/shared/observability";
+import {
+  EVENT_NAMES,
+  logEvent,
+  logRequestWarn,
+  type RequestContext,
+} from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -177,7 +182,8 @@ function createOpenAiSseStream(
   completionId: string,
   created: number,
   includeUsage: boolean,
-  log: RequestContext["log"]
+  log: RequestContext["log"],
+  reqId: string
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
@@ -281,6 +287,21 @@ function createOpenAiSseStream(
         if (!result.ok) {
           log.error({ error: result.error }, "Stream completed with error");
         }
+
+        logEvent(log, EVENT_NAMES.AI_COMPLETION, {
+          reqId: completionId.replace("chatcmpl-", ""),
+          routeId: "chat.completions",
+          streaming: true,
+          model,
+          outcome: result.ok ? "success" : "error",
+          finishReason,
+          ...(result.ok
+            ? {
+                promptTokens: result.usage.promptTokens,
+                completionTokens: result.usage.completionTokens,
+              }
+            : {}),
+        });
 
         // Final chunk with finish_reason
         const finalChunk: ChatCompletionChunk = {
@@ -419,7 +440,8 @@ export const POST = wrapRouteHandlerWithLogging(
           completionId,
           created,
           includeUsage,
-          ctx.log
+          ctx.log,
+          ctx.reqId
         );
 
         return new NextResponse(sseStream, {
@@ -443,6 +465,17 @@ export const POST = wrapRouteHandlerWithLogging(
         },
         ctx
       );
+
+      logEvent(ctx.log, EVENT_NAMES.AI_COMPLETION, {
+        reqId: ctx.reqId,
+        routeId: "chat.completions",
+        streaming: false,
+        model: input.model,
+        outcome: "success",
+        finishReason: result.choices[0]?.finish_reason ?? "stop",
+        promptTokens: result.usage.prompt_tokens,
+        completionTokens: result.usage.completion_tokens,
+      });
 
       return NextResponse.json(result);
     } catch (error) {
