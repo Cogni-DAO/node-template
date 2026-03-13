@@ -2,7 +2,7 @@
 id: task.0162
 type: task
 title: Add voice-to-text input to chat composer
-status: needs_design
+status: needs_implement
 priority: 1
 rank: 99
 estimate: 3
@@ -15,7 +15,7 @@ project:
 branch: claude/add-voice-to-text-e35go
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-03-13
@@ -46,6 +46,74 @@ external_refs:
 - `apps/web/src/features/ai/components/ChatComposerExtras.tsx` — add voice button alongside model/graph pickers
 - `apps/web/package.json` / root `pnpm-lock.yaml` — add `@huggingface/transformers` dependency
 - `tests/` — unit tests for the hook
+
+## Design
+
+### Outcome
+
+Users can click a mic button in the chat composer, speak, and have their speech transcribed into the composer input — fully client-side with no new backend services.
+
+### Approach
+
+**Engine Decision: Web Speech API with documented caveat (Phase 1.2 fallback)**
+
+The task's primary option (`@huggingface/transformers` + `whisper-tiny` ONNX) adds significant complexity for a first pass:
+
+- ~40MB model download on first use (poor UX without a loading state / progress bar)
+- Requires manual audio capture via `MediaRecorder` API, chunking, and processing pipeline
+- WebGPU/WASM runtime has uneven browser support (Safari lacking)
+- New dependency (`@huggingface/transformers`) adds bundle weight and maintenance burden
+
+The Web Speech API provides the complete UX with **zero new dependencies**:
+
+- Native browser API — Chrome, Edge, Safari, Firefox all support it (varying quality)
+- Real-time interim results (streaming feel)
+- The hook abstraction (`useSpeechToText`) cleanly encapsulates the engine, making the swap to local Whisper a single-file change later
+
+**Caveat**: Chrome's `SpeechRecognition` proxies audio to Google servers. This is documented via a `TODO` in the hook with a plan to swap to `@huggingface/transformers` whisper-tiny in a follow-up task. Firefox uses on-device recognition (truly local).
+
+**Solution**: Three new files, one modification, zero new dependencies.
+
+1. **Hook** (`useSpeechToText.ts`) — Feature-layer hook wrapping `SpeechRecognition` API with state machine (`idle → listening → idle`). Uses `useComposerRuntime().setText()` from `@assistant-ui/react` for text injection. Snapshot-based append semantics prevent race conditions with user typing.
+
+2. **Component** (`ComposerVoiceInput.tsx`) — Kit-layer presentational button. Follows `ComposerAddAttachment.tsx` pattern exactly: `TooltipIconButton`, `size-[34px]`, `Mic`/`MicOff` icons from `lucide-react`. Pure props: `isListening`, `isSupported`, `onToggle`. Returns `null` when unsupported.
+
+3. **Integration** — `ChatComposerExtras.tsx` composes the hook + component alongside existing model/graph pickers. No changes to `Thread.tsx` or vendor code.
+
+**Reuses**: `TooltipIconButton` (vendor), `lucide-react` icons (already installed), `@assistant-ui/react` composer runtime (already wired), `composerLeft` slot (already exists in `Thread.tsx`).
+
+**Rejected alternatives**:
+
+- **`@huggingface/transformers` whisper-tiny**: Too heavy for first pass — 40MB download, MediaRecorder plumbing, model loading UX, WebGPU browser gaps. Deferred to follow-up task.
+- **Third-party React speech hooks** (e.g., `react-speech-recognition`): Wraps the same Web Speech API but adds a dependency for minimal benefit. Our hook is ~60 lines.
+- **New kit component using `useComposerRuntime` directly**: Violates kit boundary (kit `must_not_import` features/ports). Hook stays at feature layer.
+
+### Invariants
+
+<!-- CODE REVIEW CRITERIA -->
+
+- [ ] KIT_BOUNDARY: `ComposerVoiceInput.tsx` in `components/kit/chat/` imports only from `shared`, `types`, vendor, and external deps — no features/ports/core
+- [ ] FEATURE_HOOK: `useSpeechToText.ts` in `features/ai/chat/hooks/` — browser side-effects encapsulated here, not in kit
+- [ ] VENDOR_PRISTINE: No modifications to `thread.tsx` or any vendor component
+- [ ] APPEND_SEMANTICS: Transcribed text appends to existing content via snapshot (no overwrite)
+- [ ] ACCESSIBLE: `aria-label` toggles between "Start voice input" / "Stop voice input"
+- [ ] PROGRESSIVE_ENHANCEMENT: Button hidden when `SpeechRecognition` API unavailable
+- [ ] NO_NEW_DEPS: Zero new npm dependencies (Web Speech API is native)
+- [ ] SIMPLE_SOLUTION: Leverages existing patterns/OSS over bespoke code
+- [ ] ARCHITECTURE_ALIGNMENT: Follows established patterns (spec: architecture)
+
+### Files
+
+<!-- High-level scope -->
+
+- Create: `apps/web/src/features/ai/chat/hooks/useSpeechToText.ts` — feature-layer hook wrapping SpeechRecognition with composer text injection
+- Create: `apps/web/src/components/kit/chat/ComposerVoiceInput.tsx` — presentational mic button (props-driven, no business logic)
+- Modify: `apps/web/src/components/kit/chat/index.ts` — export `ComposerVoiceInput`
+- Modify: `apps/web/src/features/ai/components/ChatComposerExtras.tsx` — compose hook + component alongside pickers
+- Modify: `apps/web/src/components/kit/chat/AGENTS.md` — document new component
+- Modify: `apps/web/src/features/ai/public.ts` — re-export hook if needed by tests
+- Test: `tests/unit/features/ai/chat/hooks/useSpeechToText.test.ts` — hook state machine, append semantics, unsupported fallback, cleanup
+- Test: `tests/unit/components/kit/chat/ComposerVoiceInput.test.tsx` — render/null when unsupported, aria-label toggle
 
 ## Plan
 
