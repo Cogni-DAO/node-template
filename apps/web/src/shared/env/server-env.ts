@@ -211,7 +211,7 @@ export const serverSchema = z.object({
   COGNI_REPO_SHA: optionalString,
 
   // PostHog product analytics — required
-  // See docs/analytics/posthog.md for setup
+  // See docs/guides/posthog-setup.md for setup
   // PostHog Cloud free tier: 1M events/month at https://us.i.posthog.com
   POSTHOG_API_KEY: z.string().min(1),
   POSTHOG_HOST: z.string().url(),
