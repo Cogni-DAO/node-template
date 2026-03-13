@@ -18,6 +18,12 @@ services:
       - internal
     labels:
       - "autoheal=true"
+    # seccomp=unconfined: required for tigerbeetle-node (N-API client) which uses
+    # io_uring for I/O. GitHub Actions runners disable io_uring via seccomp, causing
+    # a native thread panic at client init. Not needed in production compose — real
+    # hosts have io_uring enabled at the kernel level.
+    security_opt:
+      - "seccomp=unconfined"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000/livez"]
       interval: 10s
