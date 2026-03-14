@@ -25,22 +25,20 @@ Enable AI-generated content to be drafted, optimized per platform, reviewed by h
 
 ## Roadmap
 
-### Crawl (P0) — Core Pipeline + 3 Social Platforms
+### Crawl (P0) — Core Pipeline + Echo Publisher
 
-**Goal:** A `ContentMessage` can be drafted, AI-optimized for each target platform, reviewed via Temporal Signal, and published to Discord + Bluesky + X. Simplified 2-table schema (`content_messages` + `platform_posts` with inline publish result).
+**Goal:** A `ContentMessage` can be drafted, AI-optimized per platform via LLM, reviewed by a human, and published (echo adapter for Crawl). Use-case seam in `broadcast-core` enables Temporal to wrap later without rewriting. Real platform adapters are follow-up tasks.
 
-| Deliverable                                                                                 | Status      | Est | Work Item |
-| ------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| `packages/broadcast-core` — domain model, enums, port interfaces, errors                    | Not Started | 1.5 | task.0159 |
-| `packages/db-schema/src/broadcasting.ts` — 2 tables with RLS                                | Not Started | 0.5 | task.0159 |
-| `packages/db-client` — Drizzle broadcast adapters (User + Worker ports)                     | Not Started | 1.5 | task.0159 |
-| Discord `PublishPort` adapter (webhook)                                                     | Not Started | 0.5 | —         |
-| Bluesky `PublishPort` adapter (`@atproto/api`)                                              | Not Started | 0.5 | —         |
-| X/Twitter `PublishPort` adapter (OAuth 2.0, free tier)                                      | Not Started | 1   | task.0159 |
-| `broadcastWorkflow` Temporal workflow (draft → review signal → publish)                     | Not Started | 2   | task.0159 |
-| `ContentOptimizerPort` basic implementation (LLM via GraphExecutorPort)                     | Not Started | 1   | task.0159 |
-| API contracts (`broadcast.draft.v1`, `broadcast.review.v1`, `broadcast.status.v1`) + routes | Not Started | 1   | task.0159 |
-| Broadcasting UI — compose draft, message list, detail + review                              | Not Started | 3   | task.0165 |
+| Deliverable                                                                              | Status      | Est | Work Item |
+| ---------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| `broadcast-core` — domain model, ports, rules, errors                                    | Done        | 1.5 | task.0159 |
+| DB schema — 2 tables with RLS + Drizzle adapters                                         | Done        | 2   | task.0159 |
+| API contracts + routes + container wiring                                                | Done        | 1   | task.0159 |
+| Broadcasting UI — compose, list, detail, review                                          | Done        | 3   | task.0165 |
+| Use-case seam (`broadcast-core/use-cases/`) + LLM optimizer + echo publisher + migration | Not Started | 3   | task.0159 |
+| X/Twitter `PublishPort` adapter (OAuth 2.0, rate limiting)                               | Not Started | 2   | task.0166 |
+| Discord `PublishPort` adapter (webhook)                                                  | Not Started | 0.5 | —         |
+| Bluesky `PublishPort` adapter (`@atproto/api`)                                           | Not Started | 0.5 | —         |
 
 ### Walk (P1) — Schema Evolution + LinkedIn + Blog + Engagement
 
