@@ -15,7 +15,6 @@
 import type {
   ContentMessage,
   ContentMessageStatus,
-  PlatformPost,
   PlatformPostStatus,
   RiskLevel,
 } from "./types";
@@ -77,10 +76,7 @@ export function canTransitionPlatformPost(
  * - MEDIUM: targets > 2 platforms
  * - LOW: short content, single platform
  */
-export function assessRisk(
-  message: ContentMessage,
-  _platformPosts: readonly PlatformPost[]
-): RiskLevel {
+export function assessRisk(message: ContentMessage): RiskLevel {
   const body = message.body;
 
   // HIGH: contains URLs or @ mentions (potential spam/misuse)
