@@ -38,11 +38,18 @@ export interface OpenRouterFundingConfig {
 }
 
 /**
- * OpenRouter charge response — transfer_intent from /api/v1/credits/coinbase.
+ * OpenRouter /api/v1/credits/coinbase response envelope.
+ * Actual API shape: `{ data: OpenRouterChargeData }`.
+ * The `web3_data.transfer_intent` contains the Coinbase Commerce payment intent.
+ * Validated against spike.0090 (scripts/experiments/openrouter-topup.ts:50-60).
  */
-interface OpenRouterChargeResponse {
+interface OpenRouterChargeData {
   id: string;
-  transfer_intent: TransferIntent;
+  created_at: string;
+  expires_at: string;
+  web3_data: {
+    transfer_intent: TransferIntent;
+  };
 }
 
 /**
@@ -120,7 +127,7 @@ export class OpenRouterFundingAdapter implements ProviderFundingPort {
     });
 
     // Step 1: Create OpenRouter charge
-    let chargeResponse: OpenRouterChargeResponse;
+    let chargeResponse: OpenRouterChargeData;
     try {
       chargeResponse = await this.createOpenRouterCharge(topUpUsd);
     } catch (err) {
@@ -142,7 +149,7 @@ export class OpenRouterFundingAdapter implements ProviderFundingPort {
     return this.fundCharge(
       paymentIntentId,
       attemptId,
-      chargeResponse.transfer_intent,
+      chargeResponse.web3_data.transfer_intent,
       topUpUsd
     );
   }
@@ -160,7 +167,7 @@ export class OpenRouterFundingAdapter implements ProviderFundingPort {
 
     // Create a new charge (previous charge may have expired).
     // Update the row so chargeId stays consistent with what we fund.
-    let chargeResponse: OpenRouterChargeResponse;
+    let chargeResponse: OpenRouterChargeData;
     try {
       chargeResponse = await this.createOpenRouterCharge(topUpUsd);
     } catch (err) {
@@ -179,7 +186,7 @@ export class OpenRouterFundingAdapter implements ProviderFundingPort {
     return this.fundCharge(
       paymentIntentId,
       attemptId,
-      chargeResponse.transfer_intent,
+      chargeResponse.web3_data.transfer_intent,
       topUpUsd
     );
   }
@@ -247,7 +254,7 @@ export class OpenRouterFundingAdapter implements ProviderFundingPort {
    */
   private async createOpenRouterCharge(
     amountUsd: number
-  ): Promise<OpenRouterChargeResponse> {
+  ): Promise<OpenRouterChargeData> {
     const response = await fetch(
       "https://openrouter.ai/api/v1/credits/coinbase",
       {
@@ -272,7 +279,7 @@ export class OpenRouterFundingAdapter implements ProviderFundingPort {
     }
 
     const data = (await response.json()) as {
-      data: OpenRouterChargeResponse;
+      data: OpenRouterChargeData;
     };
     return data.data;
   }
