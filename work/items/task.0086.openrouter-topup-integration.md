@@ -12,7 +12,7 @@ assignees: derekg1729
 credit:
 project: proj.ai-operator-wallet
 branch: feat/operator-wallet-e2e
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/576
 reviewer:
 created: 2026-02-17
 updated: 2026-03-14
