@@ -21,6 +21,7 @@ import type {
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import {
   type BroadcastLedgerUserPort,
+  type BroadcastLedgerWorkerPort,
   type ContentOptimizerPort,
   PLATFORM_IDS,
   type PublishPort,
@@ -28,6 +29,7 @@ import {
 import {
   DrizzleAttributionAdapter,
   DrizzleBroadcastUserAdapter,
+  DrizzleBroadcastWorkerAdapter,
 } from "@cogni/db-client";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
@@ -160,6 +162,8 @@ export interface Container {
   governanceStatus: GovernanceStatusPort;
   /** Broadcasting ledger — user-facing CRUD for content messages and platform posts */
   broadcastLedger: BroadcastLedgerUserPort;
+  /** Broadcasting ledger — worker-facing, bypasses RLS for system operations */
+  broadcastWorkerLedger: BroadcastLedgerWorkerPort;
   /** Broadcasting content optimizer — transforms message body for target platforms */
   broadcastOptimizer: ContentOptimizerPort;
   /** Broadcasting publishers — keyed by platform ID (echo adapters for Crawl) */
@@ -463,6 +467,10 @@ function createContainer(): Container {
     broadcastLedger: new DrizzleBroadcastUserAdapter(
       db,
       log.child({ component: "DrizzleBroadcastUserAdapter" })
+    ),
+    broadcastWorkerLedger: new DrizzleBroadcastWorkerAdapter(
+      serviceDb,
+      log.child({ component: "DrizzleBroadcastWorkerAdapter" })
     ),
     broadcastOptimizer: new EchoContentOptimizerAdapter(),
     broadcastPublishers: new Map(

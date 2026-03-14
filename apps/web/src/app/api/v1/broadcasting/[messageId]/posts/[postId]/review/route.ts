@@ -12,8 +12,14 @@
  * @public
  */
 
-import { type PlatformPost, toPlatformPostId } from "@cogni/broadcast-core";
-import { toUserId } from "@cogni/ids";
+import {
+  applyReviewDecision,
+  type PlatformPost,
+  publishPost,
+  toContentMessageId,
+  toPlatformPostId,
+} from "@cogni/broadcast-core";
+import { toUserId, userActor } from "@cogni/ids";
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -78,7 +84,7 @@ export const POST = wrapRouteHandlerWithLogging<{
       if (!sessionUser) throw new Error("sessionUser required");
       if (!context) throw new Error("context required for dynamic routes");
 
-      const { postId } = await context.params;
+      const { messageId, postId } = await context.params;
 
       let body: unknown;
       try {
@@ -92,13 +98,52 @@ export const POST = wrapRouteHandlerWithLogging<{
 
       const input = broadcastReviewOperation.input.parse(body);
       const container = getContainer();
+      const userId = toUserId(sessionUser.id);
+      const msgId = toContentMessageId(messageId);
+      const pId = toPlatformPostId(postId);
 
-      const post = await container.broadcastLedger.updatePlatformPostReview(
-        toUserId(sessionUser.id),
-        toPlatformPostId(postId),
+      // Apply review decision (validates ownership + status)
+      let post = await applyReviewDecision(
+        { ledger: container.broadcastLedger },
+        userId,
+        msgId,
+        pId,
         input.decision,
         input.editedBody
       );
+
+      // If approved, attempt to publish
+      if (input.decision === "approved") {
+        const publisher = container.broadcastPublishers.get(post.platform);
+        if (publisher) {
+          try {
+            const result = await publishPost(
+              {
+                ledger: container.broadcastWorkerLedger,
+                publisher,
+              },
+              userActor(userId),
+              msgId,
+              pId
+            );
+            post = result.post;
+            ctx.log.info(
+              {
+                platformPostId: postId,
+                published: result.published,
+                skipped: result.skipped,
+              },
+              "broadcast.publish_result"
+            );
+          } catch (publishError) {
+            ctx.log.warn(
+              { platformPostId: postId, err: publishError },
+              "broadcast.publish_failed"
+            );
+            // Review succeeded even if publish failed — don't error the response
+          }
+        }
+      }
 
       ctx.log.info(
         { platformPostId: postId, decision: input.decision },
