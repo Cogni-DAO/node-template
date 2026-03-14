@@ -232,6 +232,13 @@ export const serverSchema = z.object({
   // OpenRouter crypto payment fee (0–1, default 0.05 = 5%)
   // Per web3-openrouter-payments spec: Coinbase Commerce protocol fee.
   OPENROUTER_CRYPTO_FEE: z.coerce.number().min(0).max(1).default(0.05),
+
+  // PostHog product analytics — required
+  // See docs/guides/posthog-setup.md for setup
+  // PostHog Cloud free tier: 1M events/month at https://us.i.posthog.com
+  POSTHOG_API_KEY: z.string().min(1),
+  POSTHOG_HOST: z.string().url(),
+  POSTHOG_PROJECT_ID: optionalString,
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

@@ -103,6 +103,7 @@ import type {
   ScheduleRunRepository,
   ScheduleUserPort,
 } from "@/ports/server";
+import { initAnalytics, shutdownAnalytics } from "@/shared/analytics";
 import {
   getDaoTreasuryAddress,
   getOperatorWalletConfig,
@@ -259,6 +260,22 @@ function createContainer(): Container {
     },
     "container initialized"
   );
+
+  // Initialize PostHog product analytics (required — env validated at boot)
+  initAnalytics({
+    apiKey: env.POSTHOG_API_KEY,
+    host: env.POSTHOG_HOST,
+    appVersion: env.COGNI_REPO_SHA ?? "unknown",
+    environment: env.DEPLOY_ENVIRONMENT ?? "local",
+  });
+  log.info("PostHog analytics initialized");
+
+  // Flush analytics events on graceful shutdown
+  const flushOnExit = () => {
+    shutdownAnalytics().catch(() => {});
+  };
+  process.on("SIGTERM", flushOnExit);
+  process.on("SIGINT", flushOnExit);
 
   // LLM adapter: always LiteLlmAdapter (test stacks use mock-openai-api via litellm.test.config.yaml)
   const llmService = new LiteLlmAdapter();

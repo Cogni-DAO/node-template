@@ -30,13 +30,14 @@ Close the financial loop so every credit purchase automatically provisions OpenR
 
 Spike + 3 atomic PRs, each shippable:
 
-| #   | Deliverable                                   | Status    | Est | Work Item  |
-| --- | --------------------------------------------- | --------- | --- | ---------- |
-| 0   | Experimental spike: validate payment chain    | Done      | 1   | spike.0090 |
-| 1   | Operator wallet provisioning + wiring         | Done      | 2   | task.0084  |
-| 2   | Splits contract deployment + payment re-route | Done      | 1   | task.0085  |
-| 3a  | OpenRouter top-up adapter (signing gates)     | Done      | 2   | task.0086  |
-| 3b  | OpenRouter top-up wiring (orchestration)      | In Review | 2   | task.0086  |
+| #   | Deliverable                                   | Status      | Est | Work Item  |
+| --- | --------------------------------------------- | ----------- | --- | ---------- |
+| 0   | Experimental spike: validate payment chain    | Done        | 1   | spike.0090 |
+| 1   | Operator wallet provisioning + wiring         | Done        | 2   | task.0084  |
+| 2   | Splits contract deployment + payment re-route | Done        | 1   | task.0085  |
+| 3a  | OpenRouter top-up adapter (signing gates)     | Done        | 2   | task.0086  |
+| 3b  | OpenRouter top-up wiring (orchestration)      | In Review   | 2   | task.0086  |
+| 4   | Live money e2e test (full chain on Base)      | Not Started | 2   | task.0165  |
 
 **Spike 0 — Validate payment chain (DONE — spike.0090):**
 
