@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/broadcast-core/use-cases/optimize-draft`
+ * Module: `@cogni/broadcast-core/application/optimize-draft`
  * Purpose: Orchestrate draft optimization — run ContentOptimizerPort per target platform, create PlatformPosts, assess risk.
  * Scope: Pure orchestration. Takes ports as args. Does not perform I/O directly.
  * Invariants:

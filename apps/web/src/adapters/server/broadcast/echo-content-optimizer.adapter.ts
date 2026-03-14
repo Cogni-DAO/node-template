@@ -33,19 +33,14 @@ export class EchoContentOptimizerAdapter implements ContentOptimizerPort {
     const optimizedBody = `[${targetPlatform}] ${message.body}`;
     const riskLevel = assessRisk(message);
 
-    const result: OptimizationResult = {
+    return {
       optimizedBody,
       platformMetadata: { echoAdapter: true, platform: targetPlatform },
       riskLevel,
+      ...(message.title != null ? { optimizedTitle: message.title } : {}),
+      ...(riskLevel !== "low"
+        ? { riskReason: `Echo risk assessment: ${riskLevel}` }
+        : {}),
     };
-
-    if (message.title != null) {
-      return { ...result, optimizedTitle: message.title };
-    }
-    if (riskLevel !== "low") {
-      return { ...result, riskReason: `Echo risk assessment: ${riskLevel}` };
-    }
-
-    return result;
   }
 }

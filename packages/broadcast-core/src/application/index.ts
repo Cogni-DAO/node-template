@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/broadcast-core/use-cases`
+ * Module: `@cogni/broadcast-core/application`
  * Purpose: Barrel export for broadcasting use-case orchestration functions.
  * Scope: Re-exports only. Does not contain logic.
  * Invariants: USE_CASES_ARE_TEMPORAL_READY — all exports are pure functions with ports as args.
