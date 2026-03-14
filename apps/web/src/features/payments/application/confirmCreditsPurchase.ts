@@ -261,6 +261,18 @@ export async function runPostCreditFunding(
     }
   }
 
+  log.info(
+    {
+      event: "payments.funding_complete",
+      paymentIntentId,
+      amountUsdCents,
+      settlementOk: !!settlement,
+      settlementError: !!settlementError,
+      fundingConfigured: !!deps.providerFunding,
+    },
+    "post-credit funding chain complete"
+  );
+
   return {
     ...(settlement ? { settlement } : {}),
     ...(settlementError ? { settlementError } : {}),
