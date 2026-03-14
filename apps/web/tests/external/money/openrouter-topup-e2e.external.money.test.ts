@@ -66,8 +66,9 @@ const TEST_BASE_URL = (
 const DATABASE_SERVICE_URL = requireEnv("DATABASE_SERVICE_URL");
 const TIGERBEETLE_ADDRESS = requireEnv("TIGERBEETLE_ADDRESS");
 const OPENROUTER_API_KEY = requireEnv("OPENROUTER_API_KEY");
-const TEST_WALLET_PRIVATE_KEY = requireEnv(
-  "TEST_WALLET_PRIVATE_KEY"
+const rawKey = requireEnv("TEST_WALLET_PRIVATE_KEY");
+const TEST_WALLET_PRIVATE_KEY = (
+  rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`
 ) as `0x${string}`;
 
 // ── API Response Types ───────────────────────────────────────────────
