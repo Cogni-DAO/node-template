@@ -17,7 +17,7 @@ project: proj.broadcasting
 branch: claude/research-broadcasting-integration-8p2DB
 pr:
 reviewer:
-revision: 3
+revision: 4
 blocked_by:
 deploy_verified: false
 created: 2026-03-13
@@ -237,3 +237,20 @@ pnpm test                    # unit tests pass
 ## Attribution
 
 -
+
+## Review Feedback
+
+### Blocking Issues (revision 4)
+
+1. **No unit tests for use-case functions** — Task requires "Unit tests for all 3 use-cases with mock ports." Zero tests written. Add `packages/broadcast-core/tests/application/*.test.ts`.
+
+2. **No DB migration** — Task requires "Create DB migration for content_messages + platform_posts + RLS." Without migration, tables don't exist.
+
+3. **publish-post stuck state** — When `publisher.publish()` fails at `publish-post.ts:84`, `finalizePlatformPost` sets `errorMessage` but post remains in `publishing` status forever. **Fix:** also call `ledger.updatePlatformPostStatus(actorId, postId, "failed")` in the catch block before `finalizePlatformPost`.
+
+### Non-blocking (revision 4)
+
+- Module path in TSDoc headers says `use-cases` but directory is `application/`
+- Echo optimizer `L42-47`: title and riskReason conditionals should be combined (title set + high risk loses riskReason)
+- `toResponse`/`toPostResponse`/`handleRouteError` still duplicated across route files
+- `optimizeDraft` returns posts with stale status (pushed before status update)
