@@ -4,8 +4,13 @@ blocking: true
 workflow_id: goal-evaluations
 
 evaluations:
-  - proper-ci-cd: This PR implements improvements to the CI/CD pipeline. Ensuring clean, tested, and deployed code.
-  - standard-cogni-template: This PR contributes to building a standardized template for a typescript AI application.
+  - proper-ci-cd: >
+      This PR implements improvements to the CI/CD pipeline, project build reliability,
+      or dependency health (e.g., security patches, version bumps). Ensuring clean, tested,
+      and deployed code.
+  - standard-cogni-template: >
+      This PR contributes to building or maintaining a standardized template for a typescript
+      AI application, including keeping dependencies current and addressing security vulnerabilities.
   - test-coverage: This PR improves test coverage or reliability of existing features.
 
 success_criteria:
