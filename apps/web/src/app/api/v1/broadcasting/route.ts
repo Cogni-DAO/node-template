@@ -16,8 +16,9 @@
 import {
   CONTENT_MESSAGE_STATUSES,
   type ContentMessage,
+  optimizeDraft,
 } from "@cogni/broadcast-core";
-import { toUserId } from "@cogni/ids";
+import { toUserId, userActor } from "@cogni/ids";
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -102,10 +103,26 @@ export const POST = wrapRouteHandlerWithLogging(
         }
       );
 
-      ctx.log.info({ contentMessageId: message.id }, "broadcast.draft_success");
+      // Optimize draft — creates platform posts for each target platform
+      const result = await optimizeDraft(
+        {
+          ledger: container.broadcastWorkerLedger,
+          optimizer: container.broadcastOptimizer,
+        },
+        userActor(toUserId(sessionUser.id)),
+        message.id
+      );
+
+      ctx.log.info(
+        {
+          contentMessageId: message.id,
+          platformPostCount: result.posts.length,
+        },
+        "broadcast.draft_optimized"
+      );
 
       return NextResponse.json(
-        ContentMessageResponseSchema.parse(toResponse(message)),
+        ContentMessageResponseSchema.parse(toResponse(result.message)),
         { status: 201 }
       );
     } catch (error) {
