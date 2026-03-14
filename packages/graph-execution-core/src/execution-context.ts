@@ -34,4 +34,10 @@ export interface ExecutionContext {
   readonly sessionId?: string;
   /** Privacy flag — when true, content is scrubbed before telemetry */
   readonly maskContent?: boolean;
+  /**
+   * Launcher-generated correlation ID for a single run trigger.
+   * Used by chat, schedules, and webhooks — not an HTTP-only concept, not a trace ID.
+   * Distinct from runId (durable execution identity) and traceId (OTel propagation).
+   */
+  readonly requestId?: string;
 }
