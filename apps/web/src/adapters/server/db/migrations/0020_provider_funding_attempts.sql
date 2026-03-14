@@ -16,3 +16,5 @@ CREATE TABLE IF NOT EXISTS "provider_funding_attempts" (
 CREATE INDEX IF NOT EXISTS "provider_funding_attempts_status_idx" ON "provider_funding_attempts" USING btree ("status","created_at");
 --> statement-breakpoint
 ALTER TABLE "provider_funding_attempts" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE "provider_funding_attempts" FORCE ROW LEVEL SECURITY;
