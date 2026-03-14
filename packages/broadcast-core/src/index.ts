@@ -13,6 +13,17 @@
  * @public
  */
 
+// Application (use-case orchestration — Temporal-ready)
+export {
+  type ApplyReviewDecisionDeps,
+  applyReviewDecision,
+  type OptimizeDraftDeps,
+  type OptimizeDraftResult,
+  optimizeDraft,
+  type PublishPostDeps,
+  type PublishPostResult,
+  publishPost,
+} from "./application";
 // Errors
 export {
   ContentMessageNotFoundError,

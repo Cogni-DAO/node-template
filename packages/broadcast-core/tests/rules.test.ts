@@ -124,22 +124,22 @@ describe("canTransitionPlatformPost", () => {
 describe("assessRisk", () => {
   it("returns low for short, single-platform messages", () => {
     const msg = makeMessage({ body: "Hello", targetPlatforms: ["x"] });
-    expect(assessRisk(msg, [])).toBe("low");
+    expect(assessRisk(msg)).toBe("low");
   });
 
   it("returns high for messages with URLs", () => {
     const msg = makeMessage({ body: "Check https://example.com" });
-    expect(assessRisk(msg, [])).toBe("high");
+    expect(assessRisk(msg)).toBe("high");
   });
 
   it("returns high for messages with @ mentions", () => {
     const msg = makeMessage({ body: "Hey @admin check this" });
-    expect(assessRisk(msg, [])).toBe("high");
+    expect(assessRisk(msg)).toBe("high");
   });
 
   it("returns high for messages over 500 characters", () => {
     const msg = makeMessage({ body: "x".repeat(501) });
-    expect(assessRisk(msg, [])).toBe("high");
+    expect(assessRisk(msg)).toBe("high");
   });
 
   it("returns medium for messages targeting > 2 platforms", () => {
@@ -147,7 +147,7 @@ describe("assessRisk", () => {
       body: "Hello world",
       targetPlatforms: ["x", "bluesky", "discord"],
     });
-    expect(assessRisk(msg, [])).toBe("medium");
+    expect(assessRisk(msg)).toBe("medium");
   });
 
   it("returns low for 2-platform messages without URLs", () => {
@@ -155,7 +155,7 @@ describe("assessRisk", () => {
       body: "Hello",
       targetPlatforms: ["x", "bluesky"],
     });
-    expect(assessRisk(msg, [])).toBe("low");
+    expect(assessRisk(msg)).toBe("low");
   });
 });
 
