@@ -10,7 +10,7 @@ read_when: Working on treasury accounting, on-chain distributions, settlement wo
 implements: proj.financial-ledger
 owner: derekg1729
 created: 2026-03-02
-verified: 2026-03-12
+verified: 2026-03-14
 tags: [governance, payments, web3, treasury]
 ---
 
@@ -121,7 +121,7 @@ TigerBeetle's pending → posted/voided pattern maps to:
 
 ## Accounts Hierarchy
 
-### MVP (Crawl) — 5 accounts, 2 ledgers
+### MVP (Crawl) — 6 accounts, 2 ledgers
 
 Implemented in `@cogni/financial-ledger` (`packages/financial-ledger/src/domain/accounts.ts`). Only accounts for flows that exist today.
 
@@ -134,6 +134,7 @@ Revenue:AIUsage:CREDIT              ; 1002n — Credits burned on AI usage
 ; --- Ledger 2: USDC (on-chain stablecoin, scale=6) ---
 Assets:Treasury:USDC                ; 2001n — DAO treasury wallet (Split contract)
 Assets:OperatorFloat:USDC           ; 2002n — Operator wallet working balance
+Assets:ProviderFloat:USDC           ; 2003n — Prepaid provider credits (OpenRouter). Asset, not expense.
 ```
 
 ### Forward (Walk/Run) — additional accounts added as flows ship
@@ -141,7 +142,6 @@ Assets:OperatorFloat:USDC           ; 2002n — Operator wallet working balance
 ```
 ; --- Ledger 2: USDC ---
 Assets:OnChain:USDC                 ; Confirmed on-chain USDC deposits
-Assets:ProviderFloat:USDC           ; 2003n — Prepaid provider credits (Crawl: added with task.0086)
 Expense:AI:ModelSpend:USDC          ; Provider spend recognized on usage reconciliation (Walk)
 Expense:ContributorRewards:USDC     ; USDC distributions (governance-voted)
 
@@ -169,7 +169,7 @@ Expense:Infrastructure:Hosting:EUR  ; Cherry Servers hosting costs
 **Per operator cycle:**
 
 3. **Splits distribution**: Operator share arrives in wallet → record float increase.
-4. **OpenRouter top-up**: Operator wallet funds OpenRouter → record provider expense.
+4. **OpenRouter top-up**: Operator wallet funds OpenRouter → record asset swap (OperatorFloat → ProviderFloat).
 
 **Per epoch:**
 
@@ -191,13 +191,13 @@ Expense:Infrastructure:Hosting:EUR  ; Cherry Servers hosting costs
 
 FinancialLedgerPort is called from these existing code paths:
 
-| Existing code path                         | What changes                                                  | Status |
-| ------------------------------------------ | ------------------------------------------------------------- | ------ |
-| `AccountService.recordChargeReceipt()`     | Co-writes `FinancialLedgerPort.transfer()` for AI spend       | Wired  |
-| `AccountService.creditAccount()` (deposit) | Co-writes `FinancialLedgerPort.transfer()` for credit mint    | Wired  |
-| Attribution `finalizeEpoch()`              | Calls `FinancialLedgerPort.pendingTransfer()` for accrual     | Walk   |
-| Operator wallet top-up (new)               | Calls `FinancialLedgerPort.transfer()` for OpenRouter expense | Walk   |
-| Cherry Servers cron (new)                  | Calls `FinancialLedgerPort.transfer()` for hosting expense    | Walk   |
+| Existing code path                         | What changes                                                                      | Status |
+| ------------------------------------------ | --------------------------------------------------------------------------------- | ------ |
+| `AccountService.recordChargeReceipt()`     | Co-writes `FinancialLedgerPort.transfer()` for AI spend                           | Wired  |
+| `AccountService.creditAccount()` (deposit) | Co-writes `FinancialLedgerPort.transfer()` for credit mint                        | Wired  |
+| Attribution `finalizeEpoch()`              | Calls `FinancialLedgerPort.pendingTransfer()` for accrual                         | Walk   |
+| `confirmCreditsPurchase` (orchestrator)    | Co-writes `FinancialLedgerPort.transfer()` for Split distribute + provider top-up | Wired  |
+| Cherry Servers cron (new)                  | Calls `FinancialLedgerPort.transfer()` for hosting expense                        | Walk   |
 
 The pattern is **co-write**: the existing Postgres operation continues to work, and a TigerBeetle transfer is recorded alongside it (fire-and-forget in Crawl). TigerBeetle becomes the balance authority over time; Postgres balances become reconciliation checks.
 

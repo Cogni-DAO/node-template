@@ -5,12 +5,12 @@ title: "Web3 → OpenRouter Credit Top-Up"
 status: draft
 spec_state: draft
 trust: draft
-summary: When a user buys credits via USDC, the app dispatches a workflow to top up OpenRouter with the proportional provider cost via the operator wallet — closing the loop between inbound crypto payments and outbound LLM spending.
+summary: When a user buys credits via USDC, the app tops up OpenRouter with the proportional provider cost via the operator wallet — closing the loop between inbound crypto payments and outbound LLM spending.
 read_when: Working on operator wallet payments, OpenRouter crypto top-up, or the purchase→provision pipeline.
 implements: proj.ai-operator-wallet
 owner: derekg1729
 created: 2026-02-17
-verified:
+verified: 2026-03-14
 tags: [web3, billing, wallet, openrouter]
 ---
 
@@ -73,38 +73,36 @@ sequenceDiagram
     participant Split as Split Contract
     participant Wallet as Operator Wallet (EOA)
     participant Treasury as DAO Treasury
-    participant App as Cogni App
-    participant DB as Database
-    participant Workflow as Top-Up Workflow
+    participant App as confirmCreditsPurchase
+    participant DB as Database + TigerBeetle
+    participant Adapter as OpenRouterFundingAdapter
     participant OR as OpenRouter API
     participant Chain as Base (8453)
 
-    User->>Split: USDC transfer (existing payment flow, receiving_address = Split)
-    App->>App: verify USDC transfer on-chain (existing verifier)
-    App->>DB: mint user credits + system tenant bonus (existing creditsConfirm)
+    User->>Split: USDC transfer (existing payment flow)
+    App->>App: verify on-chain, mint credits (Steps 1-2)
 
-    Note over App,Split: Splits Distribution (trustless on-chain)
+    Note over App,Split: Step 3: Splits Distribution
     App->>Split: distributeERC20(USDC)
     Split->>Wallet: ~92.1% USDC (operator share)
     Split->>Treasury: ~7.9% USDC (DAO share)
 
-    Note over Workflow: OpenRouter Top-Up
-    App->>DB: insert outbound_topups row (CHARGE_PENDING)
-    Workflow->>Workflow: topUpUsd = paymentUsd × (1 + REVENUE_SHARE) / (MARKUP × (1 - FEE))
-    Workflow->>OR: POST /api/v1/credits/coinbase {amount, sender, chain_id: 8453}
-    OR-->>Workflow: {transfer_intent: {metadata, call_data}}
-    Workflow->>DB: update → CHARGE_CREATED (store charge_id, expires_at)
+    Note over App,DB: Step 4: TB co-write (Treasury → OperatorFloat)
+    App->>DB: financialLedger.transfer(SPLIT_DISTRIBUTE)
 
-    Workflow->>Workflow: encode transfer function per metadata.function_name
-    Workflow->>Wallet: simulateContract(encodedTx)
-    Wallet-->>Workflow: simulation OK
-    Workflow->>Wallet: signTopUpTransaction(intent)
-    Wallet->>Chain: broadcast(signedTx)
-    Workflow->>DB: update → TX_BROADCAST (store tx_hash)
+    Note over Adapter: Step 5: Provider Funding (non-blocking)
+    App->>Adapter: fundAfterCreditPurchase(context)
+    Adapter->>DB: upsert provider_funding_attempts (pending)
+    Adapter->>OR: POST /api/v1/credits/coinbase
+    OR-->>Adapter: {transfer_intent}
+    Adapter->>DB: update → charge_created (store charge_id)
+    Adapter->>Wallet: fundOpenRouterTopUp(intent)
+    Wallet->>Chain: approve + transferTokenPreApproved
+    Chain-->>Adapter: tx confirmed
+    Adapter->>DB: update → funded (store funding_tx_hash)
 
-    Chain-->>Workflow: tx confirmed
-    Workflow->>DB: update → CONFIRMED (store block_number)
-    Workflow->>DB: log charge_receipt (reason: openrouter_topup)
+    Note over App,DB: Step 6: TB co-write (OperatorFloat → ProviderFloat)
+    App->>DB: financialLedger.transfer(PROVIDER_TOPUP)
 ```
 
 ### OpenRouter Charge → On-Chain Transaction
@@ -194,24 +192,21 @@ Top-up-specific signing constraints (wallet lifecycle and custody are in [operat
 
 Money movement requires durable state tracking beyond charge_receipts (which are audit-only, written once on success).
 
-**States:** `CHARGE_PENDING` → `CHARGE_CREATED` → `TX_BROADCAST` → `CONFIRMED` (terminal: `FAILED`)
+**States:** `pending` → `charge_created` → `funded` (terminal: `failed`)
 
 ```
-CHARGE_PENDING   → CHARGE_CREATED  (OpenRouter charge created, store charge_id + expires_at)
-CHARGE_CREATED   → TX_BROADCAST    (tx signed + broadcast, store tx_hash)
-TX_BROADCAST     → CONFIRMED       (tx confirmed on-chain, store block_number)
+pending          → charge_created  (OpenRouter charge created, store charge_id)
+charge_created   → funded          (on-chain tx confirmed, store funding_tx_hash)
 
-Any state       → FAILED          (unrecoverable error or charge expired)
-CHARGE_CREATED  → CHARGE_PENDING   (charge expired, retry creates new charge)
+Any state        → failed          (unrecoverable error)
 ```
 
-**Retry semantics:**
+**Crash recovery semantics:**
 
-- `CHARGE_PENDING`: safe to retry — creates a new OpenRouter charge
-- `CHARGE_CREATED` with unexpired charge: reuse the same charge (same `charge_id`)
-- `CHARGE_CREATED` with expired charge: transition back to `CHARGE_PENDING`, create new charge
-- `TX_BROADCAST`: poll for confirmation, do NOT re-broadcast (would double-spend)
-- `CONFIRMED` / `FAILED`: terminal, no retry
+- `pending`: safe to retry — row exists but no charge yet; re-insert is idempotent (deterministic UUID)
+- `charge_created`: resume from stored `chargeId` — create a fresh charge (old may have expired), update row's `chargeId`, then fund
+- `funded`: idempotent skip — return stored `fundingTxHash`
+- `failed`: skip (don't auto-retry failed attempts)
 
 ### DAO Treasury Share (handled by Splits — no app logic)
 
@@ -258,45 +253,39 @@ With defaults: `2.0 × 0.95 = 1.9 > 1.75` — DAO margin is 7.9% per dollar. The
 
 ### Schema
 
-**Table:** `outbound_topups` (new)
+**Table:** `provider_funding_attempts` — durable crash-recovery state for provider top-ups.
 
-| Column              | Type        | Constraints                   | Description                                                         |
-| ------------------- | ----------- | ----------------------------- | ------------------------------------------------------------------- |
-| `id`                | UUID        | PK, default gen_random_uuid() | topup record id                                                     |
-| `client_payment_id` | TEXT        | NOT NULL, UNIQUE              | Links to originating user payment (idempotency key)                 |
-| `amount_usd`        | DECIMAL     | NOT NULL                      | Top-up USD amount (computed from constants)                         |
-| `status`            | TEXT        | NOT NULL                      | CHARGE_PENDING / CHARGE_CREATED / TX_BROADCAST / CONFIRMED / FAILED |
-| `charge_id`         | TEXT        | nullable                      | OpenRouter charge id                                                |
-| `charge_expires_at` | TIMESTAMPTZ | nullable                      | OpenRouter charge expiry (1 hour)                                   |
-| `tx_hash`           | TEXT        | nullable                      | On-chain tx hash                                                    |
-| `block_number`      | BIGINT      | nullable                      | Confirmation block                                                  |
-| `error_code`        | TEXT        | nullable                      | Last error (for retry logic)                                        |
-| `retry_count`       | INTEGER     | NOT NULL, default 0           | Number of retry attempts                                            |
-| `created_at`        | TIMESTAMPTZ | NOT NULL, default now()       |                                                                     |
-| `updated_at`        | TIMESTAMPTZ | NOT NULL, default now()       |                                                                     |
+| Column              | Type        | Constraints                    | Description                                                    |
+| ------------------- | ----------- | ------------------------------ | -------------------------------------------------------------- |
+| `id`                | UUID        | PK                             | Deterministic: `uuid5(TB_TRANSFER_NAMESPACE, paymentIntentId)` |
+| `payment_intent_id` | TEXT        | NOT NULL, UNIQUE               | Links to originating user payment (idempotency key)            |
+| `status`            | TEXT        | NOT NULL, default `pending`    | `pending` / `charge_created` / `funded` / `failed`             |
+| `provider`          | TEXT        | NOT NULL, default `openrouter` | Provider identifier                                            |
+| `charge_id`         | TEXT        | nullable                       | OpenRouter charge id (reuse on resume)                         |
+| `charge_expires_at` | TIMESTAMPTZ | nullable                       | OpenRouter charge expiry                                       |
+| `amount_usdc_micro` | BIGINT      | nullable                       | Gross top-up amount (scale=6)                                  |
+| `funding_tx_hash`   | TEXT        | nullable                       | On-chain tx hash (set on `funded`)                             |
+| `error_message`     | TEXT        | nullable                       | Last error message (set on `failed`)                           |
+| `created_at`        | TIMESTAMPTZ | NOT NULL, default now()        |                                                                |
+| `updated_at`        | TIMESTAMPTZ | NOT NULL, default now()        |                                                                |
 
 **Indexes:**
 
-- `outbound_topups_client_payment_unique` — UNIQUE on `client_payment_id`
-- `outbound_topups_status_idx` — `(status, created_at)` for retry polling
-
-**Table:** `charge_receipts` (existing — new `charge_reason` values)
-
-| charge_reason      | source_system | source_reference                      | Description                               |
-| ------------------ | ------------- | ------------------------------------- | ----------------------------------------- |
-| `openrouter_topup` | `openrouter`  | `openrouter_topup/${clientPaymentId}` | Operator wallet → OpenRouter credits      |
-| `split_distribute` | `splits`      | `split_dist/${clientPaymentId}`       | Split contract distributed USDC to shares |
+- `provider_funding_attempts_payment_intent_id_unique` — UNIQUE on `payment_intent_id`
+- `provider_funding_attempts_status_idx` — `(status, created_at)` for status-based queries
 
 ### File Pointers
 
-| File                                               | Purpose                                                                                                      |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `src/core/billing/pricing.ts`                      | `calculateOpenRouterTopUp()` — pure top-up math (DAO share handled by Splits on-chain)                       |
-| `src/core/billing/pricing.ts`                      | `calculateRevenueShareBonus()` — existing                                                                    |
-| `src/shared/env/server-env.ts`                     | `USER_PRICE_MARKUP_FACTOR`, `SYSTEM_TENANT_REVENUE_SHARE`, `OPENROUTER_CRYPTO_FEE`, `OPERATOR_MAX_TOPUP_USD` |
-| `src/ports/wallet-signer.port.ts`                  | `WalletSignerPort` interface — see [operator-wallet spec](./operator-wallet.md)                              |
-| `src/features/payments/services/creditsConfirm.ts` | Dispatch point — after credit settlement, trigger outbound flows                                             |
-| `.cogni/repo-spec.yaml`                            | `providers.openrouter` config, `operator_wallet.address`                                                     |
+| File                                                          | Purpose                                                                           |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `src/core/billing/pricing.ts`                                 | `calculateOpenRouterTopUp()`, `isMarginPreserved()` — pure top-up math            |
+| `src/ports/provider-funding.port.ts`                          | `ProviderFundingPort` interface                                                   |
+| `src/ports/operator-wallet.port.ts`                           | `OperatorWalletPort` interface — see [operator-wallet spec](./operator-wallet.md) |
+| `src/adapters/server/treasury/openrouter-funding.adapter.ts`  | `OpenRouterFundingAdapter` — charge creation, crash recovery, wallet delegation   |
+| `src/features/payments/application/confirmCreditsPurchase.ts` | Application orchestrator — composes Steps 1-6                                     |
+| `src/shared/env/server-env.ts`                                | `OPENROUTER_API_KEY`, `OPENROUTER_CRYPTO_FEE`                                     |
+| `packages/db-schema/src/billing.ts`                           | `providerFundingAttempts` table definition                                        |
+| `packages/financial-ledger/src/domain/accounts.ts`            | `ASSETS_PROVIDER_FLOAT`, `TB_TRANSFER_NAMESPACE`, `TRANSFER_CODE`                 |
 
 ## Open Questions
 
