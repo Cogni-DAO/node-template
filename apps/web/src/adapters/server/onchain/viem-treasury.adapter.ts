@@ -49,13 +49,15 @@ export class ViemTreasuryAdapter implements TreasuryReadPort {
       );
     }
 
-    // Query USDC balance
+    // Query USDC balance + block number in parallel
     const usdcAddress = getAddress(USDC_TOKEN_ADDRESS);
-    const balanceRaw = await this.evmClient.getErc20Balance({
-      tokenAddress: usdcAddress as `0x${string}`,
-      holderAddress: treasuryChecksummed as `0x${string}`,
-    });
-    const blockNumber = await this.evmClient.getBlockNumber();
+    const [balanceRaw, blockNumber] = await Promise.all([
+      this.evmClient.getErc20Balance({
+        tokenAddress: usdcAddress as `0x${string}`,
+        holderAddress: treasuryChecksummed as `0x${string}`,
+      }),
+      this.evmClient.getBlockNumber(),
+    ]);
 
     return {
       treasuryAddress: treasuryChecksummed,
