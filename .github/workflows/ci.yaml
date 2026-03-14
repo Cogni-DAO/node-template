@@ -245,6 +245,10 @@ jobs:
   stack-test:
     runs-on: ubuntu-latest
     needs: static
+    # Dependabot PRs cannot access repo secrets (GIT_READ_TOKEN) required by
+    # git-sync for the Docker stack. Static + unit + component tests provide
+    # sufficient validation for dependency-only changes.
+    if: github.actor != 'dependabot[bot]'
     env:
       NODE_ENV: test
       APP_ENV: test
