@@ -137,7 +137,8 @@ jobs:
       IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
       APP_IMAGE: ${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.image_tag }}
       MIGRATOR_IMAGE: ${{ needs.build.outputs.migrator_image }}
-      SCHEDULER_WORKER_IMAGE: ${{ needs.build.outputs.scheduler_worker_image }}
+      # scheduler-worker: managed by Argo CD on k3s (task.0149). Not in COMPOSE_PROFILES.
+      COMPOSE_PROFILES: "sandbox-openclaw"
       DEPLOY_ENVIRONMENT: preview
       APP_ENV: production
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
@@ -233,6 +234,17 @@ jobs:
 
       - name: Deploy to preview
         run: scripts/ci/deploy.sh
+
+      - name: Promote scheduler-worker to k8s overlay
+        if: success()
+        env:
+          SCHEDULER_WORKER_DIGEST: ${{ needs.build.outputs.scheduler_worker_image }}
+        run: |
+          if [[ -n "${SCHEDULER_WORKER_DIGEST:-}" ]]; then
+            scripts/ci/promote-k8s-image.sh
+          else
+            echo "No scheduler-worker digest available, skipping k8s promotion"
+          fi
 
       - name: Upload deployment artifacts
         if: always()
