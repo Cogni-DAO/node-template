@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/broadcast-core/use-cases/publish-post`
+ * Module: `@cogni/broadcast-core/application/publish-post`
  * Purpose: Publish an approved platform post via PublishPort. Idempotent.
  * Scope: Pure orchestration. Takes ports as args. Does not perform I/O directly.
  * Invariants:
@@ -95,6 +95,7 @@ export async function publishPost(
 
     return { post: updatedPost, published: true, skipped: false };
   } catch (error) {
+    await ledger.updatePlatformPostStatus(actorId, postId, "failed");
     await ledger.finalizePlatformPost(actorId, postId, {
       errorMessage:
         error instanceof Error ? error.message : "Unknown publish error",

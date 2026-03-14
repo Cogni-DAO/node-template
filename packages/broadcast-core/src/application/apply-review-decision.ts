@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/broadcast-core/use-cases/apply-review-decision`
+ * Module: `@cogni/broadcast-core/application/apply-review-decision`
  * Purpose: Validate and apply a review decision to a platform post.
  * Scope: Pure orchestration. Takes ports as args. Does not perform I/O directly.
  * Invariants:
