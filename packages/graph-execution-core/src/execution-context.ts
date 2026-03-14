@@ -20,10 +20,12 @@
  * Contains only what downstream code legitimately needs beyond the
  * pure business input on GraphRunRequest.
  *
- * Billing credentials (billingAccountId, virtualKeyId) are resolved
- * by injected resolvers in the app layer, not carried here.
- *
- * Tracing (traceId) flows via OTel context propagation, not this interface.
+ * What stays OUT of this interface:
+ * - Billing credentials → resolved by injected BillingResolver in the app layer
+ * - traceId → flows via OTel context propagation (Temporal SDK propagates automatically)
+ * - requestId → HTTP edge correlation, stays in app-layer logs/interceptors
+ * - abortSignal → browser disconnect ≠ durable run cancellation;
+ *   Temporal uses Context.current().cancellationSignal for activity cancellation
  */
 export interface ExecutionContext {
   /** Actor who initiated this run (user ID for user-initiated, undefined for system) */
@@ -32,8 +34,4 @@ export interface ExecutionContext {
   readonly sessionId?: string;
   /** Privacy flag — when true, content is scrubbed before telemetry */
   readonly maskContent?: boolean;
-  /** Request correlation ID for observability (distinct from runId which is durable execution identity) */
-  readonly requestId?: string;
-  /** Abort signal for delivery-layer cancellation (HTTP disconnect, etc.) */
-  readonly abortSignal?: AbortSignal;
 }
