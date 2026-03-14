@@ -775,9 +775,11 @@ All operations logged via Pino with `contractId`, `contentMessageId`, `platform`
 3. **REVIEW_BEFORE_HIGH_RISK** — Posts assessed as HIGH risk must receive an explicit `approved` review decision before publishing. No auto-approve for HIGH.
 4. **ADAPTERS_ARE_SWAPPABLE** — Adding a new platform requires only: (a) a `PublishPort` implementation, (b) a `ContentOptimizerPort` strategy, (c) a row in `PLATFORM_IDS`. No changes to core, features, or workflow.
 5. **BLOG_IS_A_PLATFORM** — Blog posts use the same `ContentMessage → PlatformPost` pipeline as social posts. No special-case code paths.
-6. **TEMPORAL_OWNS_DURABILITY** — Publish retries, review waits, and engagement collection schedules are Temporal's responsibility. No application-level retry loops.
-7. **ENGAGEMENT_IS_BEST_EFFORT** (Walk) — Not all platforms expose metrics. Missing data is null, never fabricated.
-8. **RUNS_ARE_IMMUTABLE** (Walk) — When `broadcast_runs` is split out, records are append-only. Never update a run; create a new one on retry.
+6. **PUBLISH_IS_IDEMPOTENT** — `publishPost()` must no-op if the post already has an `externalId`. Prevents double-publishing on retries.
+7. **USE_CASES_ARE_TEMPORAL_READY** — Orchestration functions in `broadcast-core/use-cases/` take ports as arguments. No HTTP, no framework deps, no env vars. Temporal activities wrap these directly.
+8. **TEMPORAL_OWNS_DURABILITY** (Walk) — Publish retries, review waits, and engagement collection schedules are Temporal's responsibility. Crawl uses synchronous use-case calls; Walk wraps them in Temporal activities.
+9. **ENGAGEMENT_IS_BEST_EFFORT** (Walk) — Not all platforms expose metrics. Missing data is null, never fabricated.
+10. **RUNS_ARE_IMMUTABLE** (Walk) — When `broadcast_runs` is split out, records are append-only. Never update a run; create a new one on retry.
 
 ---
 
