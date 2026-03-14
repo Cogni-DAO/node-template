@@ -23,6 +23,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type ConfirmCreditsPurchaseDeps,
   confirmCreditsPurchase,
+  type PostCreditFundingDeps,
+  runPostCreditFunding,
 } from "@/features/payments/application/confirmCreditsPurchase";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 
@@ -260,5 +262,87 @@ describe("features/payments/application/confirmCreditsPurchase", () => {
     // Credits confirmed, settlement succeeded, funding error logged but not thrown
     expect(result.creditsApplied).toBe(100_000_000);
     expect(result.settlement).toEqual({ txHash: "0xfake-settlement-tx" });
+  });
+});
+
+describe("runPostCreditFunding (extracted steps 3-6)", () => {
+  const fundingInput = {
+    paymentIntentId: "8453:0xabc123",
+    amountUsdCents: 1000,
+  };
+
+  const pricingConfig = {
+    markupFactor: 2.0,
+    revenueShare: 0.75,
+    cryptoFee: 0.05,
+  };
+
+  const mockLog = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn().mockReturnThis(),
+  } as unknown as Logger;
+
+  function makeFundingDeps(
+    overrides: Partial<PostCreditFundingDeps> = {}
+  ): PostCreditFundingDeps {
+    return {
+      treasurySettlement: undefined,
+      financialLedger: undefined,
+      providerFunding: undefined,
+      log: mockLog,
+      pricingConfig: undefined,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("runs treasury settlement and provider funding", async () => {
+    const treasury = createMockTreasurySettlement();
+    const funding = createMockProviderFunding();
+    const ledger = createMockFinancialLedger();
+
+    const result = await runPostCreditFunding(
+      makeFundingDeps({
+        treasurySettlement: treasury,
+        providerFunding: funding,
+        financialLedger: ledger,
+        pricingConfig,
+      }),
+      fundingInput
+    );
+
+    expect(treasury.settleConfirmedCreditPurchase).toHaveBeenCalledWith({
+      paymentIntentId: "8453:0xabc123",
+    });
+    expect(funding.fundAfterCreditPurchase).toHaveBeenCalled();
+    expect(ledger.transfer).toHaveBeenCalledTimes(2); // Split distribute + provider top-up
+    expect(result.settlement).toBeDefined();
+  });
+
+  it("returns empty result when no ports configured", async () => {
+    const result = await runPostCreditFunding(makeFundingDeps(), fundingInput);
+
+    expect(result.settlement).toBeUndefined();
+    expect(result.settlementError).toBeUndefined();
+  });
+
+  it("never throws — catches all errors internally", async () => {
+    const treasury = createMockTreasurySettlement();
+    treasury.settleConfirmedCreditPurchase.mockRejectedValue(
+      new Error("chain error")
+    );
+
+    const result = await runPostCreditFunding(
+      makeFundingDeps({ treasurySettlement: treasury }),
+      fundingInput
+    );
+
+    expect(result.settlementError).toBeInstanceOf(Error);
+    expect(result.settlement).toBeUndefined();
   });
 });

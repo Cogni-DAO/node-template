@@ -6,6 +6,7 @@
  * Purpose: Application orchestrator — composes credit confirmation with treasury settlement, TigerBeetle co-writes, and provider funding.
  * Scope: Orchestrates the full credit purchase chain: credit user → settle treasury → record USDC movements in TB → top up provider.
  *   Steps 1-2 (credits) always succeed independently. Steps 3-6 (settlement, TB, funding) are non-blocking — log critical on failure.
+ *   `runPostCreditFunding` is extracted so both the widget path (confirmCreditsPurchase) and on-chain path (verifyAndSettle) can invoke post-credit steps.
  * Invariants:
  *   - Credit confirmation always succeeds independently of downstream steps
  *   - Settlement and funding skipped on idempotent replay
@@ -70,6 +71,32 @@ export interface ConfirmCreditsPurchaseResult {
   settlementError?: unknown;
 }
 
+// ---------------------------------------------------------------------------
+// Post-credit funding (steps 3-6) — extracted for reuse by on-chain path
+// ---------------------------------------------------------------------------
+
+export interface PostCreditFundingDeps {
+  treasurySettlement: TreasurySettlementPort | undefined;
+  financialLedger: FinancialLedgerPort | undefined;
+  providerFunding: ProviderFundingPort | undefined;
+  log: Logger;
+  /** Pricing config for provider top-up calculation. Required when providerFunding is set. */
+  pricingConfig?:
+    | {
+        markupFactor: number;
+        revenueShare: number;
+        cryptoFee: number;
+      }
+    | undefined;
+}
+
+export interface PostCreditFundingResult {
+  /** Present when on-chain treasury settlement succeeded */
+  settlement?: TreasurySettlementOutcome;
+  /** Present when treasury settlement was attempted but failed */
+  settlementError?: unknown;
+}
+
 /**
  * Generate a deterministic TigerBeetle transfer ID from paymentIntentId + step code.
  * Uses uuid v5 (SHA-1 namespace) → u128 bigint. Idempotent on retry.
@@ -97,8 +124,6 @@ export async function confirmCreditsPurchase(
   deps: ConfirmCreditsPurchaseDeps,
   input: CreditsConfirmInput
 ): Promise<ConfirmCreditsPurchaseResult> {
-  const { log } = deps;
-
   // Steps 1-2: Credit user + mint system tenant bonus
   const result = await confirmCreditsPayment(
     deps.accountService,
@@ -109,7 +134,35 @@ export async function confirmCreditsPurchase(
   // Skip settlement on idempotent replay (duplicate payment)
   if (result.creditsApplied === 0) return result;
 
-  const paymentIntentId = input.clientPaymentId;
+  // Steps 3-6: post-credit funding chain (treasury settlement, TB co-writes, provider top-up)
+  const fundingResult = await runPostCreditFunding(deps, {
+    paymentIntentId: input.clientPaymentId,
+    amountUsdCents: input.amountUsdCents,
+  });
+
+  return {
+    ...result,
+    ...fundingResult,
+  };
+}
+
+/**
+ * Run post-credit funding chain (steps 3-6).
+ *
+ * Step 3: Treasury settlement — call Split distribute via TreasurySettlementPort.
+ * Step 4: TB co-write — record Split distribute (Treasury → OperatorFloat).
+ * Step 5: Provider funding — top up OpenRouter via ProviderFundingPort.
+ * Step 6: TB co-write — record provider top-up (OperatorFloat → ProviderFloat).
+ *
+ * All steps are non-blocking — log critical on failure, never throw.
+ * Called by both the widget path (confirmCreditsPurchase) and on-chain path (verifyAndSettle).
+ */
+export async function runPostCreditFunding(
+  deps: PostCreditFundingDeps,
+  input: { paymentIntentId: string; amountUsdCents: number }
+): Promise<PostCreditFundingResult> {
+  const { log } = deps;
+  const { paymentIntentId, amountUsdCents } = input;
 
   // Step 3: Settle treasury revenue (Split distribute)
   let settlement: TreasurySettlementOutcome | undefined;
@@ -132,8 +185,7 @@ export async function confirmCreditsPurchase(
   if (deps.financialLedger && settlement) {
     try {
       // cents × 10_000 = micro-USDC (all-bigint, no float rounding)
-      const amountMicroUsdc =
-        BigInt(input.amountUsdCents) * (USDC_SCALE / 100n);
+      const amountMicroUsdc = BigInt(amountUsdCents) * (USDC_SCALE / 100n);
       await deps.financialLedger.transfer({
         id: deterministicTransferId(
           paymentIntentId,
@@ -163,7 +215,7 @@ export async function confirmCreditsPurchase(
   if (deps.providerFunding && deps.pricingConfig) {
     try {
       const topUpUsd = calculateOpenRouterTopUp(
-        input.amountUsdCents,
+        amountUsdCents,
         deps.pricingConfig.markupFactor,
         deps.pricingConfig.revenueShare,
         deps.pricingConfig.cryptoFee
@@ -171,7 +223,7 @@ export async function confirmCreditsPurchase(
       const fundingOutcome = await deps.providerFunding.fundAfterCreditPurchase(
         {
           paymentIntentId,
-          amountUsdCents: input.amountUsdCents,
+          amountUsdCents,
           topUpUsd,
         }
       );
@@ -210,7 +262,6 @@ export async function confirmCreditsPurchase(
   }
 
   return {
-    ...result,
     ...(settlement ? { settlement } : {}),
     ...(settlementError ? { settlementError } : {}),
   };

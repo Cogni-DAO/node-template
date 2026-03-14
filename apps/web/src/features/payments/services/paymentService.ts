@@ -37,6 +37,8 @@ import type {
 import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import type { Logger } from "@/shared/observability";
 import { USDC_TOKEN_ADDRESS, VERIFY_THROTTLE_SECONDS } from "@/shared/web3";
+import type { PostCreditFundingDeps } from "../application/confirmCreditsPurchase";
+import { runPostCreditFunding } from "../application/confirmCreditsPurchase";
 import { PaymentNotFoundError } from "../errors";
 import { confirmCreditsPayment } from "./creditsConfirm";
 
@@ -178,7 +180,8 @@ export async function submitTxHash(
   onChainVerifier: OnChainVerifier,
   clock: Clock,
   log: Logger,
-  input: SubmitTxHashInput
+  input: SubmitTxHashInput,
+  postCreditFundingDeps?: PostCreditFundingDeps
 ): Promise<SubmitTxHashResult> {
   const now = new Date(clock.now());
 
@@ -238,7 +241,8 @@ export async function submitTxHash(
     onChainVerifier,
     clock,
     log,
-    input.defaultVirtualKeyId
+    input.defaultVirtualKeyId,
+    postCreditFundingDeps
   );
 
   if (!attempt.txHash) {
@@ -282,7 +286,8 @@ export async function getStatus(
   onChainVerifier: OnChainVerifier,
   clock: Clock,
   log: Logger,
-  input: GetStatusInput
+  input: GetStatusInput,
+  postCreditFundingDeps?: PostCreditFundingDeps
 ): Promise<GetStatusResult> {
   const now = new Date(clock.now());
 
@@ -340,7 +345,8 @@ export async function getStatus(
         onChainVerifier,
         clock,
         log,
-        input.defaultVirtualKeyId
+        input.defaultVirtualKeyId,
+        postCreditFundingDeps
       );
     }
   }
@@ -380,7 +386,8 @@ async function verifyAndSettle(
   onChainVerifier: OnChainVerifier,
   _clock: Clock,
   log: Logger,
-  defaultVirtualKeyId: string
+  defaultVirtualKeyId: string,
+  postCreditFundingDeps?: PostCreditFundingDeps
 ): Promise<PaymentAttempt> {
   if (!attempt.txHash) {
     return attempt;
@@ -466,6 +473,16 @@ async function verifyAndSettle(
           attempt.billingAccountId,
           "CREDITED"
         );
+
+        // Post-credit funding: treasury settlement + TB co-writes + provider top-up
+        // Runs inline (not fire-and-forget) but never throws (all steps catch internally).
+        // Uses chainId:txHash as canonical funding key (matches clientPaymentId used for crediting).
+        if (postCreditFundingDeps) {
+          await runPostCreditFunding(postCreditFundingDeps, {
+            paymentIntentId: clientPaymentId,
+            amountUsdCents: attempt.amountUsdCents,
+          });
+        }
       }
     } catch (error) {
       log.error(
