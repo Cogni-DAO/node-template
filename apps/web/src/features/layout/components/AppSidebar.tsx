@@ -13,7 +13,14 @@
 
 "use client";
 
-import { Activity, Briefcase, CreditCard, Github, Vote } from "lucide-react";
+import {
+  Activity,
+  Briefcase,
+  CreditCard,
+  Github,
+  Radio,
+  Vote,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -38,6 +45,7 @@ const NAV_ITEMS = [
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/gov", label: "Gov", icon: Vote },
   { href: "/credits", label: "Credits", icon: CreditCard },
+  { href: "/broadcasting", label: "Broadcast", icon: Radio },
 ] as const;
 
 const EXTERNAL_LINKS = [

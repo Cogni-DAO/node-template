@@ -2,7 +2,7 @@
 id: task.0165
 type: task
 title: "Broadcasting UI — compose draft + review posts"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 2
 estimate: 3
@@ -14,14 +14,14 @@ assignees:
   - derekg1729
 credit:
 project: proj.broadcasting
-branch:
+branch: claude/research-broadcasting-integration-8p2DB
 pr:
 reviewer:
 revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-13
-updated: 2026-03-13
+updated: 2026-03-14
 labels: [broadcasting, ui, crawl]
 external_refs:
 ---
@@ -123,14 +123,14 @@ No `features/broadcasting/` directory needed at Crawl. The view is ~200 lines of
 
 ### 1. Wiring (nav + auth)
 
-- [ ] Add `/broadcasting` to `APP_ROUTES` in `proxy.ts`
-- [ ] Add nav item to `AppSidebar.tsx` (`{ href: "/broadcasting", label: "Broadcast", icon: Radio }`)
-- [ ] Add link to `footer-items.tsx`
-- [ ] Create `broadcasting/page.tsx` — auth shell identical to work/page.tsx
+- [x] Add `/broadcasting` to `APP_ROUTES` in `proxy.ts`
+- [x] Add nav item to `AppSidebar.tsx` (`{ href: "/broadcasting", label: "Broadcast", icon: Radio }`)
+- [x] Add link to `footer-items.tsx`
+- [x] Create `broadcasting/page.tsx` — auth shell identical to work/page.tsx
 
 ### 2. API fetch functions
 
-- [ ] Create `broadcasting/_api/broadcasts.ts` with 4 functions:
+- [x] Create `broadcasting/_api/broadcasts.ts` with 4 functions:
   - `fetchBroadcasts(status?: string)` → `GET /api/v1/broadcasting[?status=]`
   - `createDraft(input: BroadcastDraftInput)` → `POST /api/v1/broadcasting`
   - `fetchBroadcastStatus(messageId: string)` → `GET /api/v1/broadcasting/[messageId]`
@@ -138,7 +138,7 @@ No `features/broadcasting/` directory needed at Crawl. The view is ~200 lines of
 
 ### 3. View component
 
-- [ ] Create `broadcasting/view.tsx` ("use client") with:
+- [x] Create `broadcasting/view.tsx` ("use client") with:
   - **List**: `useQuery` for `fetchBroadcasts`, `Select` for status filter, `Table` with columns: body (truncated), status `Badge`, platforms, createdAt
   - **Compose**: `Dialog` with form (body `<textarea>`, title `Input`, platforms `ToggleGroup`, optional mediaUrls). `useMutation` → `createDraft`, invalidate on success
   - **Detail expand**: `ExpandableTableRow` wrapping a child component that calls `useQuery(fetchBroadcastStatus)` on mount (lazy fetch — only when expanded). Show each post: platform, optimizedBody, status, riskLevel `Badge`, reviewDecision
@@ -146,7 +146,7 @@ No `features/broadcasting/` directory needed at Crawl. The view is ~200 lines of
 
 ### 4. Validate
 
-- [ ] `pnpm check` passes
+- [x] `pnpm check` passes
 - [ ] Manual: `/broadcasting` renders, compose creates draft, detail expands, review submits
 
 ## Validation

@@ -41,6 +41,7 @@ export const FOOTER_COLUMNS: FooterColumn[] = [
       { label: "Activity", href: "/activity" },
       { label: "Governance", href: "/gov" },
       { label: "Credits", href: "/credits" },
+      { label: "Broadcast", href: "/broadcasting" },
     ],
   },
   {
