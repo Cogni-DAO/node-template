@@ -141,7 +141,7 @@ No `features/broadcasting/` directory needed at Crawl. The view is ~200 lines of
 - [ ] Create `broadcasting/view.tsx` ("use client") with:
   - **List**: `useQuery` for `fetchBroadcasts`, `Select` for status filter, `Table` with columns: body (truncated), status `Badge`, platforms, createdAt
   - **Compose**: `Dialog` with form (body `<textarea>`, title `Input`, platforms `ToggleGroup`, optional mediaUrls). `useMutation` → `createDraft`, invalidate on success
-  - **Detail expand**: `ExpandableTableRow` — on click, fetch posts via `fetchBroadcastStatus`. Show each post: platform, optimizedBody, status, riskLevel `Badge`, reviewDecision
+  - **Detail expand**: `ExpandableTableRow` wrapping a child component that calls `useQuery(fetchBroadcastStatus)` on mount (lazy fetch — only when expanded). Show each post: platform, optimizedBody, status, riskLevel `Badge`, reviewDecision
   - **Review**: for `pending_review` posts, `Button` approve/reject + inline edit `<textarea>`. `useMutation` → `submitReview`, invalidate on success
 
 ### 4. Validate
