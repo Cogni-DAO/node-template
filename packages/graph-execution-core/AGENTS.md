@@ -44,7 +44,7 @@ Run lifecycle and orchestration contracts shared between the Next.js app, Tempor
   - `GraphRunRequest` — Pure business input (runId, graphId, messages, model, stateKey, toolIds)
   - `GraphRunResult` — Stream + promise returned by executor
   - `GraphFinal` — Result after graph completes (ok, usage, error)
-  - `ExecutionContext` — Per-run cross-cutting metadata (actorUserId, sessionId, maskContent, requestId, abortSignal)
+  - `ExecutionContext` — Per-run cross-cutting metadata (actorUserId, sessionId, maskContent)
   - `RunStreamPort` — Pub/sub port for Redis Streams event transport
   - `RunStreamEntry` — Single entry in a run's event stream
   - `RUN_STREAM_*` — Stream configuration constants

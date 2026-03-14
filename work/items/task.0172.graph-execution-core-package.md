@@ -49,8 +49,9 @@ interface ExecutionContext {
   readonly actorUserId?: string;
   readonly sessionId?: string;
   readonly maskContent?: boolean;
-  readonly requestId?: string; // observability correlation only
-  readonly abortSignal?: AbortSignal; // delivery-layer cancellation
+  // NO requestId (HTTP edge correlation — stays in app-layer logs/interceptors)
+  // NO abortSignal (browser disconnect ≠ durable run cancellation;
+  //   Temporal uses Context.current().cancellationSignal)
 }
 
 interface GraphExecutorPort {
@@ -72,16 +73,16 @@ interface GraphExecutorPort {
 
 ### Concern migration
 
-| Field              | Current                               | New                                        |
-| ------------------ | ------------------------------------- | ------------------------------------------ |
-| `billingAccountId` | `req.caller`                          | `BillingResolver.resolve(ctx.actorUserId)` |
-| `virtualKeyId`     | `req.caller`                          | Same resolver                              |
-| `traceId`          | `req.caller`                          | `getCurrentTraceId()` from OTel            |
-| `requestId`        | `req.caller` / `req.ingressRequestId` | `ctx.requestId`                            |
-| `userId`           | `req.caller`                          | `ctx.actorUserId`                          |
-| `sessionId`        | `req.caller`                          | `ctx.sessionId`                            |
-| `maskContent`      | `req.caller`                          | `ctx.maskContent`                          |
-| `abortSignal`      | `req.abortSignal`                     | `ctx.abortSignal`                          |
+| Field              | Current                               | New                                                                                     |
+| ------------------ | ------------------------------------- | --------------------------------------------------------------------------------------- |
+| `billingAccountId` | `req.caller`                          | `BillingResolver.resolve(ctx.actorUserId)` — app layer only                             |
+| `virtualKeyId`     | `req.caller`                          | Same resolver                                                                           |
+| `traceId`          | `req.caller`                          | `getCurrentTraceId()` from OTel context                                                 |
+| `requestId`        | `req.caller` / `req.ingressRequestId` | App-layer logs/interceptors only — not on any shared type                               |
+| `userId`           | `req.caller`                          | `ctx.actorUserId`                                                                       |
+| `sessionId`        | `req.caller`                          | `ctx.sessionId`                                                                         |
+| `maskContent`      | `req.caller`                          | `ctx.maskContent`                                                                       |
+| `abortSignal`      | `req.abortSignal`                     | App-layer decorator scope — not on shared contract (Temporal uses its own cancellation) |
 
 ## Plan
 
