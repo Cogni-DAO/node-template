@@ -55,7 +55,7 @@ cogni_dao:
 payments_in:
   credits_topup:
     provider: cogni-usdc-backend-v1
-    receiving_address: "0xd92EEc51C471CcF76996f0163Fd3cB6A61798f9C" # Push Split V2o2 — 92.1% operator / 7.9% DAO
+    receiving_address: "0xDe4dE5e40f7215E4606c3e422D28cf01f97C8c66" # Push Split V2o2 — 92.1% operator / 7.9% DAO
     allowed_chains:
       - Base
     allowed_tokens:
