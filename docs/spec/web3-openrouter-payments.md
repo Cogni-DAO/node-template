@@ -10,7 +10,7 @@ read_when: Working on operator wallet payments, OpenRouter crypto top-up, or the
 implements: proj.ai-operator-wallet
 owner: derekg1729
 created: 2026-02-17
-verified: 2026-03-14
+verified: 2026-03-15
 tags: [web3, billing, wallet, openrouter]
 ---
 
@@ -276,17 +276,17 @@ With defaults: `2.0 × 0.95 = 1.9 > 1.75` — DAO margin is 7.9% per dollar. The
 
 ### File Pointers
 
-| File                                                          | Purpose                                                                                   |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `src/core/billing/pricing.ts`                                 | `calculateOpenRouterTopUp()`, `isMarginPreserved()` — pure top-up math                    |
-| `src/ports/provider-funding.port.ts`                          | `ProviderFundingPort` interface                                                           |
-| `src/ports/operator-wallet.port.ts`                           | `OperatorWalletPort` interface — see [operator-wallet spec](./operator-wallet.md)         |
-| `src/adapters/server/treasury/openrouter-funding.adapter.ts`  | `OpenRouterFundingAdapter` — charge creation, crash recovery, wallet delegation           |
-| `src/features/payments/application/confirmCreditsPurchase.ts` | `runPostCreditFunding()` — extracted steps 3-6, invoked by both widget and on-chain paths |
-| `src/features/payments/services/paymentService.ts`            | `verifyAndSettle()` — canonical CREDITED trigger, calls `runPostCreditFunding`            |
-| `src/shared/env/server-env.ts`                                | `OPENROUTER_API_KEY`, `OPENROUTER_CRYPTO_FEE`                                             |
-| `packages/db-schema/src/billing.ts`                           | `providerFundingAttempts` table definition                                                |
-| `packages/financial-ledger/src/domain/accounts.ts`            | `ASSETS_PROVIDER_FLOAT`, `TB_TRANSFER_NAMESPACE`, `TRANSFER_CODE`                         |
+| File                                                          | Purpose                                                                                               |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `src/core/billing/pricing.ts`                                 | `calculateOpenRouterTopUp()`, `isMarginPreserved()` — pure top-up math                                |
+| `src/ports/provider-funding.port.ts`                          | `ProviderFundingPort` interface                                                                       |
+| `src/ports/operator-wallet.port.ts`                           | `OperatorWalletPort` interface — see [operator-wallet spec](./operator-wallet.md)                     |
+| `src/adapters/server/treasury/openrouter-funding.adapter.ts`  | `OpenRouterFundingAdapter` — charge creation, crash recovery, wallet delegation                       |
+| `src/features/payments/application/confirmCreditsPurchase.ts` | `runPostCreditFunding()` — extracted steps 3-6, invoked from `verifyAndSettle` on CREDITED transition |
+| `src/features/payments/services/paymentService.ts`            | `verifyAndSettle()` — canonical CREDITED trigger, calls `runPostCreditFunding`                        |
+| `src/shared/env/server-env.ts`                                | `OPENROUTER_API_KEY`, `OPENROUTER_CRYPTO_FEE`                                                         |
+| `packages/db-schema/src/billing.ts`                           | `providerFundingAttempts` table definition                                                            |
+| `packages/financial-ledger/src/domain/accounts.ts`            | `ASSETS_PROVIDER_FLOAT`, `TB_TRANSFER_NAMESPACE`, `TRANSFER_CODE`                                     |
 
 ## Open Questions
 
