@@ -66,6 +66,7 @@ function makeAdapter(overrides?: { maxTopUpUsd?: number }) {
     markupPpm: 2_000_000n,
     revenueSharePpm: 750_000n,
     maxTopUpUsd: overrides?.maxTopUpUsd ?? 500,
+    rpcUrl: "https://localhost:0/unused-in-unit-tests",
   });
 }
 
