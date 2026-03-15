@@ -9,8 +9,9 @@
  *   - Per TEMPORAL_DETERMINISM: No I/O, network calls, or LLM invocations in workflow code
  *   - Per WORKER_NEVER_CONTROLS_SCHEDULES: Does NOT create/modify/delete schedules
  *   - Per SCHEDULED_TIMESTAMP_FROM_TEMPORAL: scheduledFor comes from workflow input (set by Schedule)
+ *   - Per SINGLE_RUN_LEDGER: run records written to graph_runs table via createGraphRunActivity
  * Side-effects: none (deterministic orchestration only)
- * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md
+ * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md, docs/spec/unified-graph-launch.md
  * @internal
  */
 
@@ -27,8 +28,8 @@ import { GRAPH_EXECUTION_ACTIVITY_OPTIONS } from "./activity-profiles.js";
 // Intentionally shorter timeout (1 min) — grant validation is fast-fail.
 const {
   validateGrantActivity,
-  createScheduleRunActivity,
-  updateScheduleRunActivity,
+  createGraphRunActivity,
+  updateGraphRunActivity,
 } = proxyActivities<Activities>({
   startToCloseTimeout: "1 minute",
   retry: {
@@ -72,7 +73,7 @@ export interface ScheduledRunWorkflowInput {
  *
  * Per SCHEDULER_SPEC.md execution flow:
  * 1. Validate grant (fail-fast)
- * 2. Create schedule_runs record (ledger entry)
+ * 2. Create graph_runs record (ledger entry)
  * 3. Mark run as started
  * 4. Execute graph via internal API
  * 5. Mark run as success/error
@@ -121,8 +122,17 @@ export async function GovernanceScheduledRunWorkflow(
   } catch {
     // Grant validation failed - only DB-backed schedules have ledger rows.
     if (dbScheduleId) {
-      await createScheduleRunActivity({ dbScheduleId, runId, scheduledFor });
-      await updateScheduleRunActivity({
+      await createGraphRunActivity({
+        dbScheduleId,
+        runId,
+        scheduledFor,
+        graphId,
+        runKind: "system_scheduled",
+        triggerSource: "temporal_schedule",
+        triggerRef: temporalScheduleId,
+        requestedBy: "cogni_system",
+      });
+      await updateGraphRunActivity({
         runId,
         status: "skipped",
         errorMessage: "Grant validation failed",
@@ -131,11 +141,20 @@ export async function GovernanceScheduledRunWorkflow(
     return;
   }
 
-  // 2. Create schedule_runs record for DB-backed schedules only.
+  // 2. Create graph_runs record for DB-backed schedules only.
   if (dbScheduleId) {
-    await createScheduleRunActivity({ dbScheduleId, runId, scheduledFor });
+    await createGraphRunActivity({
+      dbScheduleId,
+      runId,
+      scheduledFor,
+      graphId,
+      runKind: "system_scheduled",
+      triggerSource: "temporal_schedule",
+      triggerRef: temporalScheduleId,
+      requestedBy: "cogni_system",
+    });
     // 3. Mark run as started
-    await updateScheduleRunActivity({ runId, status: "running" });
+    await updateGraphRunActivity({ runId, status: "running" });
   }
 
   // 4. Execute graph via internal API
@@ -153,13 +172,13 @@ export async function GovernanceScheduledRunWorkflow(
     // 5. Mark run as success/error based on result
     if (dbScheduleId) {
       if (result.ok) {
-        await updateScheduleRunActivity({
+        await updateGraphRunActivity({
           runId,
           status: "success",
           traceId: result.traceId,
         });
       } else {
-        await updateScheduleRunActivity({
+        await updateGraphRunActivity({
           runId,
           status: "error",
           traceId: result.traceId,
@@ -172,7 +191,7 @@ export async function GovernanceScheduledRunWorkflow(
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error during execution";
     if (dbScheduleId) {
-      await updateScheduleRunActivity({
+      await updateGraphRunActivity({
         runId,
         status: "error",
         errorMessage,

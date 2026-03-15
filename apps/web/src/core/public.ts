@@ -66,7 +66,6 @@ export {
   usdToCredits,
 } from "./billing/pricing";
 export type {
-  Conversation,
   Message,
   MessageRole,
   MessageToolCall,

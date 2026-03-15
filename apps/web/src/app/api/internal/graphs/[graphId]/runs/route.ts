@@ -318,7 +318,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
 
     // --- 9. Execute graph ---
     // Use provided runId (from scheduler-worker) or generate if not provided
-    // Per SCHEDULER_SPEC.md: Canonical runId shared with schedule_runs and charge_receipts
+    // Per SCHEDULER_SPEC.md: Canonical runId shared with graph_runs and charge_receipts
     const runId = providedRunId ?? randomUUID();
 
     // Use OTel trace ID (same one passed to executor, used by Langfuse decorator)
@@ -364,16 +364,6 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       },
     });
 
-    // Build caller from grant + billing account
-    const caller = {
-      billingAccountId: grant.billingAccountId,
-      virtualKeyId: billingAccount.defaultVirtualKeyId,
-      requestId: ctx.reqId,
-      traceId: ctx.traceId,
-      userId: grant.userId,
-      sessionId,
-    };
-
     // Parse input for graph execution
     const messages = Array.isArray(input.messages)
       ? (input.messages as { role: string; content: string }[])
@@ -415,14 +405,12 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     );
     const result = executor.runGraph({
       runId,
-      ingressRequestId: runId,
       graphId,
       messages: messages.map((m) => ({
         role: m.role as "user" | "assistant" | "system",
         content: m.content,
       })),
       model,
-      caller,
       stateKey,
     });
 
