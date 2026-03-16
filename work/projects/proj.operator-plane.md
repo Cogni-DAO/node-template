@@ -80,7 +80,7 @@ Three layers, kept strictly separate:
 
 ### Relationship to proj.transparent-credit-payouts
 
-`epoch_allocations.user_id` is the current canonical reward subject (humans only). When `actors` ships (v1), allocations gain `actor_id` alongside `user_id`. Human actors bridge 1:1 via `actors WHERE kind='user'`. Agent actors enable a new attribution path: gateway usage → actor → epoch rewards. No changes to existing epoch invariants (PAYOUT_DETERMINISTIC, ALL_MATH_BIGINT).
+`epoch_allocations.user_id` is the current canonical reward subject (humans only). When `actors` ships (v1), allocations gain `actor_id` alongside `user_id`. Human actors bridge 1:1 via `actors WHERE kind='user'`. Agent actors enable a new attribution path: gateway usage → actor → epoch rewards. No changes to existing epoch invariants (STATEMENT_DETERMINISTIC, ALL_MATH_BIGINT).
 
 ## Roadmap
 
@@ -107,6 +107,11 @@ Three layers, kept strictly separate:
 
 | Deliverable                                                                       | Status      | Est | Work Item  |
 | --------------------------------------------------------------------------------- | ----------- | --- | ---------- |
+| Unified repo-spec reader package (`@cogni/repo-spec`)                             | In Review   | 3   | task.0120  |
+| Node registration lifecycle (discovery, fetch, persist, reconcile)                | Not Started | 5   | task.0122  |
+| Operator node registry DB (registrations, capabilities, scopes)                   | Not Started | —   | task.0122  |
+| GitHub webhook handlers (review + admin routes, multi-app capability tracking)    | Not Started | —   | task.0122  |
+| Scope reconciliation with Temporal schedule management                            | Not Started | —   | task.0122  |
 | Gateway proxy route (OpenAI-compatible, billing middleware)                       | Not Started | 3   | story.0116 |
 | API key management (generation, hashed storage, gateway auth)                     | Not Started | 2   | story.0116 |
 | `charge_receipts.external_agent_ref` column (nullable TEXT, freeform from header) | Not Started | 1   | story.0116 |
