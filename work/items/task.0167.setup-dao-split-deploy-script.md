@@ -1,86 +1,99 @@
 ---
 id: task.0167
 type: task
-title: "setup-dao script — deploy Split contract + output repo-spec snippet"
+title: "DAO formation — add Split deployment step + operator wallet to repo-spec output"
 status: needs_implement
 priority: 1
 rank: 15
 estimate: 2
-summary: "Unified setup-dao script that provisions an operator wallet (Privy), deploys a Split contract with correct allocations, validates the deployment on-chain, and outputs the repo-spec YAML snippet for a fresh node."
-outcome: "A new operator node can run `pnpm setup:dao` and get a working Split contract + repo-spec snippet in one command. No manual address copying, no mismatch bugs."
-spec_refs: operator-wallet
+summary: "Add Split contract deployment as a step in the existing DAO formation flow. Update buildRepoSpecYaml to include operator_wallet and payments_in sections. The formation UI already handles DAO + Signal deployment — this adds the financial rails."
+outcome: "DAO formation outputs a complete repo-spec with cogni_dao + operator_wallet + payments_in sections. Split contract deployed and validated as part of the formation flow."
+spec_refs: operator-wallet, node-formation
 assignees: derekg1729
 credit:
 project: proj.ai-operator-wallet
 branch: feat/setup-dao-script
 pr:
 reviewer:
-revision: 0
+revision: 2
 blocked_by:
 deploy_verified: false
 created: 2026-03-15
 updated: 2026-03-15
-labels: [wallet, web3, tooling]
+labels: [wallet, web3, tooling, setup]
 external_refs:
 ---
 
-# setup-dao script — deploy Split contract + output repo-spec snippet
+# DAO formation — add Split deployment step + operator wallet to repo-spec output
 
 ## Context
 
-Bug.0166 proved that deploying the Split contract manually with env vars leads to address mismatches. The existing scripts (`provision-operator-wallet.ts`, `deploy-split.ts`) are separate, require manual repo-spec updates, and have no validation step. This task combines them into a single `setup:dao` command that deploys everything and outputs the correct repo-spec YAML.
+The DAO formation flow (`apps/web/src/features/setup/daoFormation/`) deploys an Aragon DAO + CogniSignal contract and outputs a repo-spec YAML snippet. It is missing the financial rails: operator wallet address and Split contract deployment. Bug.0166 proved that deploying the Split separately with manual env vars leads to address mismatches.
+
+## Existing Formation Flow
+
+```
+IDLE → PREFLIGHT → CREATING_DAO → AWAITING_DAO_CONFIRMATION
+  → DEPLOYING_SIGNAL → AWAITING_SIGNAL_CONFIRMATION → VERIFYING → SUCCESS
+```
+
+State machine: `apps/web/src/features/setup/daoFormation/formation.reducer.ts`
+Tx builders: `apps/web/src/features/setup/daoFormation/txBuilders.ts`
+Verification: `apps/web/src/app/api/setup/verify/route.ts` (includes `buildRepoSpecYaml`)
+UI: `apps/web/src/features/setup/components/FormationFlowDialog.tsx`
+Hook: `apps/web/src/features/setup/hooks/useDAOFormation.ts`
 
 ## Requirements
 
-- **R1**: Single `pnpm setup:dao` command that runs the full DAO financial rails setup
-- **R2**: Step 1 — provision operator wallet via Privy (reuse `provision-operator-wallet.ts` logic), or skip if wallet already exists
-- **R3**: Step 2 — deploy Split contract with operator wallet address + DAO treasury address as recipients (reuse `deploy-split.ts` logic)
-- **R4**: Step 3 — validate the deployment by simulating a `distribute` call against the new Split contract (must not revert with `InvalidSplit`)
-- **R5**: Output a copy-pasteable repo-spec YAML snippet with all addresses filled in
-- **R6**: Read `DAO_TREASURY_ADDRESS` from env (the DAO contract address — governance input, not derived)
-- **R7**: Read Privy credentials from env (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_SIGNING_KEY`)
-- **R8**: Read deployer key from env (`DEPLOYER_PRIVATE_KEY`) — separate from operator wallet (Privy holds operator keys)
-- **R9**: Idempotent — if operator wallet already exists in Privy, skip provisioning and use existing address
+- **R1**: Add `DEPLOYING_SPLIT` phase to formation state machine (after SIGNAL, before VERIFY)
+- **R2**: Build Split deploy tx using `@cogni/operator-wallet` allocation math (same as `deploy-split.ts`)
+- **R3**: Operator wallet address is a required input to the formation flow (provisioned separately via `provision-operator-wallet.ts`)
+- **R4**: Validate Split deployment by simulating `distribute` against the new contract
+- **R5**: Update `buildRepoSpecYaml` to include `operator_wallet` and `payments_in.credits_topup` sections
+- **R6**: Delete `scripts/deploy-split.ts` (superseded by formation flow)
 
 ## Allowed Changes
 
-- `scripts/setup-dao.ts` (new — the unified script)
-- `package.json` (add `setup:dao` script)
-- `scripts/setup/SETUP_DESIGN.md` (add DAO setup section reference)
+- `apps/web/src/features/setup/daoFormation/formation.reducer.ts` (add DEPLOYING_SPLIT phase)
+- `apps/web/src/features/setup/daoFormation/txBuilders.ts` (add `buildDeploySplitArgs`)
+- `apps/web/src/features/setup/hooks/useDAOFormation.ts` (wire Split deploy step)
+- `apps/web/src/features/setup/components/FormationFlowDialog.tsx` (UI for Split step)
+- `apps/web/src/app/api/setup/verify/route.ts` (update `buildRepoSpecYaml`, add Split validation)
+- `apps/web/src/contracts/setup.verify.v1.contract.ts` (add Split address to contract)
+- `scripts/deploy-split.ts` (delete)
 
 ## Plan
 
-- [ ] Create `scripts/setup-dao.ts` combining provision + deploy + validate + output
-- [ ] Step 1: Check Privy for existing wallet matching env, provision if missing
-- [ ] Step 2: Deploy Split with operator address + DAO treasury
-- [ ] Step 3: Simulate `distribute` on new Split to validate params match
-- [ ] Step 4: Print repo-spec YAML snippet to stdout
-- [ ] Add `setup:dao` script to root `package.json`
+- [ ] Add `DEPLOYING_SPLIT` / `AWAITING_SPLIT_CONFIRMATION` phases to reducer
+- [ ] Add `operatorWalletAddress` to `DAOFormationConfig`
+- [ ] Add `buildDeploySplitArgs` to txBuilders (reuse `calculateSplitAllocations`)
+- [ ] Wire Split deployment step in `useDAOFormation` hook
+- [ ] Update `FormationFlowDialog` UI to show Split deployment progress
+- [ ] Update verify route: validate Split `distribute` simulation, add to `buildRepoSpecYaml`
+- [ ] Update verify contract with Split address fields
+- [ ] Delete `scripts/deploy-split.ts`
 - [ ] Run `pnpm check`
 
 ## Validation
 
 ```bash
-# Dry run (prints what it would do without deploying)
-pnpm setup:dao --dry-run
-
-# Full run (deploys on Base mainnet)
-pnpm dotenv -e .env.local -- pnpm setup:dao
+pnpm check
+pnpm vitest run --config apps/web/vitest.config.mts apps/web/tests/unit/features/setup
 ```
 
-**Expected:** Script outputs repo-spec YAML snippet with valid addresses. Simulate step passes without `InvalidSplit`.
+**Expected:** Formation flow deploys DAO + Signal + Split. Repo-spec output includes all three sections.
 
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0167` linked in PR body
-- [ ] **Spec:** RECEIVING_ADDRESS_IS_SPLIT, ADDRESS_VERIFIED_AT_STARTUP invariants upheld
-- [ ] **Tests:** validation step proves Split params match on-chain
+- [ ] **Spec:** RECEIVING_ADDRESS_IS_SPLIT, node-formation invariants upheld
+- [ ] **Tests:** formation reducer tests cover DEPLOYING_SPLIT phase
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
 
 - Fixes: bug.0166 (stale Split contract mismatch)
-- Reuses: `scripts/provision-operator-wallet.ts`, `scripts/deploy-split.ts`
+- Extends: existing DAO formation flow
 
 ## Attribution
 
