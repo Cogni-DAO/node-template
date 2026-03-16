@@ -193,15 +193,7 @@ ownership_model:
 - Token is the Aragon `GovernanceERC20` from node formation
 - Settlement token address comes from `cogni_dao.token_contract` in repo-spec (added by task.0135)
 
-Future templates (Run phase) are new implementations, not config switches:
-
-| Template              | Behavior                                                                            |
-| --------------------- | ----------------------------------------------------------------------------------- |
-| `attribution-1to1-v0` | 1 credit = 1 token. Default.                                                        |
-| `weighted-council-v0` | Category weights (code 60%, review 25%, community 15%) applied before token mapping |
-| `vesting-v0`          | Token claims subject to vesting schedule (cliff + linear)                           |
-
-The `ownership_model.template` field selects which `resolveRecipients()` + `computeTokenAmount()` implementation is used. Each template is a code path, not a config permutation.
+The `ownership_model.template` field selects which `resolveRecipients()` + `computeTokenAmount()` implementation is used. Each template is a code path, not a config permutation. Future templates are planned in [proj.on-chain-distributions](../../work/projects/proj.on-chain-distributions.md) Run phase.
 
 ## Goal
 
@@ -212,7 +204,7 @@ Enable governance token claims from attribution entitlements. Contributors earn 
 - Custom Solidity contracts (use stock Uniswap MerkleDistributor)
 - On-chain enforcement of emission caps (Run phase — `EmissionsController`)
 - Multi-instrument settlement (Run: USDC, vesting, streaming)
-- Human review of settlement artifacts (the attribution statement IS the reviewed artifact)
+- Human review of manifest computation (the attribution statement IS the reviewed artifact; funding still requires trusted execution)
 - Auto-pushing tokens to wallets (user-initiated claims only)
 - Modifying the attribution pipeline or statement schema
 - Token deployment or formation (owned by node-formation spec + task.0135)
@@ -220,23 +212,24 @@ Enable governance token claims from attribution entitlements. Contributors earn 
 
 ## Invariants
 
-| Rule                            | Constraint                                                                                                                                                                                           |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| STATEMENTS_ARE_TRUTH            | Signed attribution statements are the entitlement authority. `composeHoldings()` is a read-model projection. The chain is a delivery rail. Neither is the source of truth.                           |
-| PUBLICATION_NOT_APPROVAL        | Publishing a Merkle root is a mechanical system action (Temporal cron), not a governance checkpoint. The only reviewed artifact is the attribution statement.                                        |
-| LEAF_ENCODING_UNISWAP           | Merkle leaf = `keccak256(abi.encodePacked(uint256 index, address account, uint256 amount))`. No double-hashing. No ABI-encode. Must match Uniswap `MerkleDistributor.claim()` exactly.               |
-| TREE_SORTED_PAIR                | Internal tree nodes use sorted-pair hashing: `a < b ? H(a‖b) : H(b‖a)`. Matches Uniswap/OZ `MerkleProof.verify()`.                                                                                   |
-| SETTLEMENT_ID_DETERMINISTIC     | `settlement_id = keccak256(abi.encode(statementHash, nodeId, scopeId, chainId, tokenAddress, policyHash, programType, sequence))`. Same inputs always produce the same ID.                           |
-| MANIFEST_UNIQUE_PER_PUBLICATION | `UNIQUE(node_id, scope_id, epoch_id, settlement_sequence)` on `settlement_manifests`. One primary publication per epoch.                                                                             |
-| RESOLUTION_READS_EXISTING       | `resolveRecipients()` is a pure function consuming a pre-loaded wallet lookup. No DB queries inside the function. No new tables.                                                                     |
-| UNLINKED_ACCRUE_NOT_DROP        | Claimants without linked wallets are excluded from the Merkle tree but NOT from the entitlement record. Their credits remain in the attribution ledger and become claimable when they link a wallet. |
-| TOKEN_AMOUNT_INTEGER_SCALED     | `tokenAmount = creditAmount × 10^tokenDecimals`. V0: 1 credit at 18 decimals = `1 × 10^18` token smallest units. No floating point.                                                                  |
-| ARTIFACT_BEFORE_FUNDING         | Manifest must exist with `status='published'` before any funding transaction.                                                                                                                        |
-| FUNDING_RECORDS_TX              | Every funded manifest records `funding_tx_hash`, `distributor_address`, and `funded_at`.                                                                                                             |
-| OWNERSHIP_MODEL_FROM_REPO_SPEC  | `ownership_model.template` in repo-spec selects the credit→token mapping. V0: `attribution-1to1-v0` only.                                                                                            |
-| ALL_MATH_BIGINT                 | No floating point in token amount calculations.                                                                                                                                                      |
-| PURE_PACKAGE                    | `packages/settlement/` has no Next.js, no Drizzle, no DB adapter dependencies. Pure functions + types only.                                                                                          |
-| WALK_IDEMPOTENCY_OPERATIONAL    | Walk-phase duplicate prevention: DB unique constraint + finite emissions balance + Safe signer review. NOT cryptographic single-execution. Run phase adds on-chain guard.                            |
+| Rule                            | Constraint                                                                                                                                                                                                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| STATEMENTS_ARE_TRUTH            | Signed attribution statements are the governance entitlement authority. `composeHoldings()` is a read-model projection. The chain is a delivery rail. Neither is the source of truth. Financial state (balances, transfers) is authoritative in TigerBeetle per `TIGERBEETLE_IS_BALANCE_TRUTH`. |
+| MANIFEST_COMPUTATION_MECHANICAL | Computing a settlement manifest (resolve recipients, build Merkle tree, persist to DB) is a mechanical system action (Temporal cron). The only human-reviewed artifact is the attribution statement.                                                                                            |
+| FUNDING_REQUIRES_TRUSTED_EXEC   | Funding a distributor (deploying contract, transferring tokens from emissions holder) requires trusted governance execution per `TRUSTED_MVP_EXPLICIT` — Safe/manual or equivalent. Not automated.                                                                                              |
+| LEAF_ENCODING_UNISWAP           | Merkle leaf = `keccak256(abi.encodePacked(uint256 index, address account, uint256 amount))`. No double-hashing. No ABI-encode. Must match Uniswap `MerkleDistributor.claim()` exactly.                                                                                                          |
+| TREE_SORTED_PAIR                | Internal tree nodes use sorted-pair hashing: `a < b ? H(a‖b) : H(b‖a)`. Matches Uniswap/OZ `MerkleProof.verify()`.                                                                                                                                                                              |
+| SETTLEMENT_ID_DETERMINISTIC     | `settlement_id = keccak256(abi.encode(statementHash, nodeId, scopeId, chainId, tokenAddress, policyHash, programType, sequence))`. Same inputs always produce the same ID.                                                                                                                      |
+| MANIFEST_UNIQUE_PER_PUBLICATION | `UNIQUE(node_id, scope_id, epoch_id, settlement_sequence)` on `settlement_manifests`. One primary publication per epoch.                                                                                                                                                                        |
+| RESOLUTION_READS_EXISTING       | `resolveRecipients()` is a pure function consuming a pre-loaded wallet lookup. No DB queries inside the function. No new tables.                                                                                                                                                                |
+| UNLINKED_ACCRUE_NOT_DROP        | Claimants without linked wallets are excluded from the Merkle tree but NOT from the entitlement record. Their credits remain in the attribution ledger and become claimable when they link a wallet.                                                                                            |
+| TOKEN_AMOUNT_INTEGER_SCALED     | `tokenAmount = creditAmount × 10^tokenDecimals`. V0: 1 credit at 18 decimals = `1 × 10^18` token smallest units. No floating point.                                                                                                                                                             |
+| ARTIFACT_BEFORE_FUNDING         | Manifest must exist with `status='published'` before any funding transaction.                                                                                                                                                                                                                   |
+| FUNDING_RECORDS_TX              | Every funded manifest records `funding_tx_hash`, `distributor_address`, and `funded_at`.                                                                                                                                                                                                        |
+| OWNERSHIP_MODEL_FROM_REPO_SPEC  | `ownership_model.template` in repo-spec selects the credit→token mapping. V0: `attribution-1to1-v0` only.                                                                                                                                                                                       |
+| ALL_MATH_BIGINT                 | No floating point in token amount calculations.                                                                                                                                                                                                                                                 |
+| PURE_PACKAGE                    | `packages/settlement/` has no Next.js, no Drizzle, no DB adapter dependencies. Pure functions + types only.                                                                                                                                                                                     |
+| WALK_IDEMPOTENCY_OPERATIONAL    | Walk-phase duplicate prevention: DB unique constraint + finite emissions balance + Safe signer review. NOT cryptographic single-execution. Run phase adds on-chain guard.                                                                                                                       |
 
 ### Schema
 
@@ -245,9 +238,9 @@ Enable governance token claims from attribution entitlements. Contributors earn 
 | Column                     | Type        | Constraints                   | Description                                                          |
 | -------------------------- | ----------- | ----------------------------- | -------------------------------------------------------------------- |
 | `id`                       | UUID        | PK, DEFAULT gen_random_uuid() | Row ID                                                               |
-| `settlement_id`            | TEXT        | NOT NULL                      | Deterministic ID from `computeSettlementId()`                        |
-| `node_id`                  | TEXT        | NOT NULL                      | Node identity                                                        |
-| `scope_id`                 | TEXT        | NOT NULL                      | Governance scope                                                     |
+| `settlement_id`            | TEXT        | NOT NULL, UNIQUE              | Deterministic ID from `computeSettlementId()`                        |
+| `node_id`                  | UUID        | NOT NULL                      | Node identity (matches `epochs.node_id`)                             |
+| `scope_id`                 | UUID        | NOT NULL                      | Governance scope (matches `epochs.scope_id`)                         |
 | `epoch_id`                 | BIGINT      | NOT NULL                      | Epoch this manifest settles                                          |
 | `settlement_sequence`      | INTEGER     | NOT NULL, DEFAULT 0           | 0=primary, 1+=follow-up (when newly-linked wallets become claimable) |
 | `statement_hash`           | TEXT        | NOT NULL                      | SHA-256 of the canonical `AttributionStatement`                      |
@@ -269,6 +262,7 @@ Enable governance token claims from attribution entitlements. Contributors earn 
 **Constraints:**
 
 ```sql
+UNIQUE(settlement_id)
 UNIQUE(node_id, scope_id, epoch_id, settlement_sequence)
 CHECK(status IN ('published', 'funded', 'swept'))
 CHECK(settlement_sequence >= 0)
@@ -351,11 +345,36 @@ interface OwnershipModel {
 | `packages/settlement/tests/merkle.test.ts`                               | Unit tests for tree generation                                             |
 | `packages/settlement/tests/merkle-encoding.test.ts`                      | Encoding compat: verify against Uniswap Solidity verify logic              |
 | `packages/settlement/tests/resolve.test.ts`                              | Resolution + accruing partition tests                                      |
-| `packages/attribution-ledger/src/hashing.ts`                             | `computeStatementHash()` — canonical hash of full statement                |
+| `packages/attribution-ledger/src/hashing.ts`                             | `computeStatementHash()` — canonical hash of full statement (see below)    |
 | `packages/repo-spec/src/schema.ts`                                       | `ownershipModelSchema` — Zod schema for repo-spec `ownership_model:`       |
 | `packages/repo-spec/src/accessors.ts`                                    | `getOwnershipModel()` accessor                                             |
 | `packages/db-schema/src/settlement.ts`                                   | `settlementManifests` Drizzle table definition                             |
 | `services/scheduler-worker/src/workflows/publish-settlement.workflow.ts` | `PublishSettlementWorkflow` — Temporal orchestration                       |
+
+### Statement Hash Definition
+
+`computeStatementHash()` produces a SHA-256 hex string covering the full canonical statement. It belongs in `packages/attribution-ledger/src/hashing.ts` because the statement hash is governance truth, not a settlement concern.
+
+**Fields included (in canonical order):**
+
+```typescript
+const input = canonicalJsonStringify({
+  epochId: statement.epochId.toString(),
+  nodeId: statement.nodeId,
+  scopeId: statement.scopeId,
+  finalAllocationSetHash: statement.finalAllocationSetHash,
+  poolTotalCredits: statement.poolTotalCredits.toString(),
+  statementLines: statement.statementLines.map((line) => ({
+    claimant_key: line.claimant_key,
+    credit_amount: line.credit_amount,
+    final_units: line.final_units,
+    pool_share: line.pool_share,
+  })),
+});
+// statementHash = SHA-256(input)
+```
+
+Uses `CANONICAL_JSON` from attribution-ledger spec (sorted keys, BigInt as string, no whitespace). The `reviewOverrides` and `supersedesStatementId` fields are excluded — they are metadata about the statement, not the entitlement content. `receipt_ids` are excluded because they are provenance, not entitlement-affecting.
 
 ### Threat Model
 
