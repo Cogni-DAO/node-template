@@ -25,6 +25,7 @@
     "@cogni/db-schema": "workspace:*",
     "@cogni/ids": "workspace:*",
     "@cogni/financial-ledger": "workspace:*",
+    "@cogni/operator-wallet": "workspace:*",
     "@cogni/ingestion-core": "workspace:*",
     "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/repo-spec": "workspace:*",
