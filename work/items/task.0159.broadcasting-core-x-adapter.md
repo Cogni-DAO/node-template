@@ -15,7 +15,7 @@ assignees:
 credit:
 project: proj.broadcasting
 branch: claude/research-broadcasting-integration-8p2DB
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/581
 reviewer:
 revision: 4
 blocked_by:
