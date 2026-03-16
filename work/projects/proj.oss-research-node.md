@@ -10,7 +10,7 @@ summary: Build a specialized Cogni service that continuously researches open-sou
 outcome: A deployable service within this repo that earns revenue by answering "I'm trying to do X — what OSS should I use?" via x402 micropayment endpoint and human chat UI, backed by a continuously-updated knowledge base of OSS projects, licenses, and recommendations.
 assignees: derekg1729
 created: 2026-03-05
-updated: 2026-03-05
+updated: 2026-03-16
 labels: [niche-node, oss, ai, x402, content]
 ---
 
@@ -39,7 +39,7 @@ Build the first Cogni niche specialization: an AI service that becomes the autho
 
 | Deliverable                                                                                   | Status      | Est | Work Item  |
 | --------------------------------------------------------------------------------------------- | ----------- | --- | ---------- |
-| Research spike: x402 protocol, OSS data sources, knowledge base schema, node specialization   | Not Started | 3   | spike.0137 |
+| Research spike: x402 protocol, OSS data sources, knowledge base schema, node specialization   | Done        | 3   | spike.0137 |
 | Service scaffold: `services/oss-advisor/` with health endpoints, config, Dockerfile           | Not Started | 2   | —          |
 | Knowledge base schema: projects, licenses, categories, alternatives, maturity signals         | Not Started | 2   | —          |
 | OSS data ingestion: GitHub API adapter (repos, licenses, stars, contributors, last commit)    | Not Started | 2   | —          |
@@ -97,7 +97,8 @@ Build the first Cogni niche specialization: an AI service that becomes the autho
 - [ ] `proj.graph-execution` — LangGraph execution patterns (needed for P0 research agent)
 - [ ] `proj.cicd-services-gitops` — service CI/CD wiring (needed for deployment)
 - [ ] GitHub API access — rate limits may require authenticated token (5000 req/hr)
-- [ ] `spike.0137` completion — research findings inform detailed P0 task breakdown
+- [x] `spike.0137` completion — research findings inform detailed P0 task breakdown
+- [ ] `proj.knowledge-store` Crawl — provides `packages/knowledge-store/` with entity/relation/observation tables and ports
 
 ## As-Built Specs
 
@@ -116,23 +117,23 @@ The user's instinct ("very likely we should spawn this as a new independent serv
 
 The P2 extraction path is clear: when the OSS advisor has paying customers, fork the repo, strip non-advisor code, set up independent DAO + deployment.
 
-### Knowledge base architecture (to be confirmed by spike.0137)
+### Knowledge base architecture (confirmed by spike.0137)
 
-Options under consideration:
+**Decision: Postgres-native, structured-first.** See [research findings](../../docs/research/data-management-specialized-agents.md).
 
-1. **Relational (Postgres)** — familiar, joins for taxonomy, works with existing stack. License/category as normalized tables.
-2. **Hybrid: Postgres + pgvector** — relational for structured data, vector embeddings for "I'm trying to do X" semantic search.
-3. **Graph DB (Neo4j)** — natural for "alternative to" and "works with" relationships. Adds operational complexity.
+Three-layer target architecture: raw archive (Layer 0, exists) → claims/evidence (Layer 1, Walk) → canonical knowledge (Layer 2, Crawl). Crawl ships only Layer 2 tables (`entity`, `relation`, `observation`) with `source_record_id` provenance back to `ingestion_receipts`. Claims layer, entity resolution subsystem, and pgvector semantic index arrive in Walk.
 
-Leaning toward option 2 (Postgres + pgvector) — minimal new infra, good semantic search for the recommendation use case. Spike will confirm.
+The OSS advisor's knowledge base is a niche instance of the generic `packages/knowledge-store/` package (see `proj.knowledge-store`). Entity types: `oss_project`, `license`, `category`. Relation types: `alternative_to`, `depends_on`, `licensed_under`, `in_category`. Signal types: `star_count`, `commit_frequency`, `contributor_count`.
 
-### Research agent design (to be confirmed by spike.0137)
+### Research agent design (confirmed by spike.0137)
 
 The research agent is a LangGraph graph with three phases:
 
 1. **Discover** — GitHub trending, topic search, "awesome-list" crawling, Libraries.io new releases
 2. **Evaluate** — stars, commit frequency, contributor count, funding (GitHub Sponsors/OpenCollective), CVE history, SPDX license extraction
-3. **Catalog** — write structured record to knowledge base, tag with taxonomy, link alternatives
+3. **Catalog** — write structured record to knowledge store via `KnowledgeWritePort`, tag with taxonomy, link alternatives
+
+Ingestion of structured API data (GitHub API → entity records) is a Temporal activity, not a LangGraph graph. LangGraph is for the research agent that requires AI judgment (discovering new projects, evaluating quality, writing summaries).
 
 Refresh cadence: weekly full scan of top categories, daily for trending/new releases, event-driven for specific queries that reveal gaps.
 

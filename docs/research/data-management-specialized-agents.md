@@ -218,7 +218,8 @@ How agents use the knowledge store. This section carries forward from the first 
 - **Shared domain knowledge**: `tenant_id = 'global'`. Curated by the node operator. Visible to all tenants.
 - **Per-tenant knowledge**: `tenant_id = billing_account_id`. User-uploaded or user-generated data.
 - **RLS policy**: `WHERE tenant_id IN ($current_tenant, 'global')` — automatic via Postgres RLS.
-- **Raw archive** (`ingestion_receipts`, `claim`): No tenant_id. Domain-agnostic. Available to all downstream pipelines.
+- **Raw archive** (`ingestion_receipts`): No tenant_id. Domain-agnostic. Available to all downstream pipelines.
+- **Claims** (Walk+): No tenant_id. Evidence layer is domain-agnostic like raw archive.
 - **Canonical knowledge** (`entity`, `relation`, `observation`, `embedding`): Tenant-scoped.
 
 Extends existing `database-rls.md` spec unchanged.
@@ -281,21 +282,23 @@ packages/knowledge-store/
 
 ## Recommendation
 
-Ship the three-layer architecture (raw → claims → canonical) with one new `packages/knowledge-store/` package. Layer 0 already exists. Postgres-native, pgvector for semantic index, RLS for multi-tenancy. Mechanical workflows in Temporal, AI workflows in LangGraph.
+Ship canonical knowledge tables with one new `packages/knowledge-store/` package. Layer 0 already exists (`ingestion-core` + `ingestion_receipts`). Postgres-native, RLS for multi-tenancy. The three-layer model (raw → claims → canonical) is the target architecture, but **Crawl ships only Layer 0 (existing) + Layer 2 (canonical tables with simple provenance back to source records)**. Layer 1 (claims/evidence) is introduced in Walk when corroboration, contradiction handling, or re-extraction actually justify it.
 
 **Trade-offs accepted**:
 
-- JSONB `attributes` on entities instead of per-niche columns. Validated by Zod schemas, not DB constraints. Simpler to extend, slightly harder to query. Acceptable for Crawl. Add typed columns when query patterns stabilize.
-- No reranker in Crawl. Structured queries are primary; semantic search is secondary. Add when retrieval quality plateaus.
-- No Apache AGE. Recursive CTEs handle relationship traversal. Add when a niche demonstrates complex graph query needs.
-- Entity resolution starts simple (exact match + URL normalization). Fuzzy/AI matching in Walk.
+- **No claims layer in Crawl.** Direct provenance from entity/observation → `source_record_id` FK. Claims are an optional intermediate layer — introduce when you need multi-source corroboration or re-extraction replay. Temporal run metadata covers lineage until then.
+- **No `activity_run` table in Crawl.** Temporal already tracks run history. Don't invent a second run ledger until non-ingestion lineage (AI extraction, resolution) requires it.
+- **No `entity_alias` in Crawl.** Simple exact-match dedup. Entity resolution subsystem (aliases, candidate matching, merge/split) arrives in Walk when fuzzy matching is needed.
+- **No embeddings in Crawl.** Structured queries are primary. pgvector semantic index arrives in Walk.
+- **`entity_type`, `relation_type`, `signal_type` are strings**, not DB enums. Validated in app code (Zod). Fork-heavy systems hate enum migrations.
+- JSONB `attributes` on entities. Validated by Zod schemas per `entity_type`, not DB constraints.
+- No Apache AGE. Recursive CTEs handle relationship traversal.
 
 ## Open Questions
 
 - **Attribute schema validation**: Zod schemas per `entity_type` — where do niche forks register their schemas? Package config? Convention-based discovery?
-- **Embedding model cost**: At what ingestion volume does embedding cost become a concern? Model token costs for typical niches.
 - **Observation granularity**: How often to sample time-series signals? Per-source cadence config vs global schedule?
-- **Claim supersession**: When a re-extraction produces a new claim, how exactly does the old claim get marked superseded? Explicit `superseded_by` FK, or implicit via `activity_run_id` ordering?
+- **When to introduce claims**: What's the concrete trigger? First multi-source ingestion? First re-extraction need? Or first contradiction?
 - **Cross-node knowledge sharing**: Can nodes share canonical entities with each other? What's the trust model? (Probably a Run+ concern.)
 
 ---
@@ -304,32 +307,39 @@ Ship the three-layer architecture (raw → claims → canonical) with one new `p
 
 ### Project
 
-`proj.knowledge-store` — Three-layer knowledge architecture for node-template
+`proj.knowledge-store` — Structured knowledge store for node-template
 
 **Goal**: Every cogni-template fork ships with a structured knowledge store that accumulates domain expertise and improves over time.
 
 **Phases**:
 
-- **Crawl**: `packages/knowledge-store/` with schema, ports, Drizzle adapter. Entity + relation + observation tables. Basic entity resolution (exact match). One knowledge query tool in `ai-tools`. No embeddings, no AI extraction.
-- **Walk**: pgvector semantic index. Hybrid retrieval (FTS + vector). AI-based extraction (LangGraph graph). Fuzzy entity resolution. Evidence trail tool. Confidence scoring + staleness decay.
+- **Crawl**: `packages/knowledge-store/` with schema, ports, Drizzle adapter. `entity` + `relation` + `observation` tables with `source_record_id` provenance. `KnowledgeReadPort` + `KnowledgeWritePort`. One `knowledge_query` tool in `ai-tools`. No embeddings, no claims, no entity resolution subsystem.
+- **Walk**: Claims layer (`claim` table, append-only evidence). Entity resolution (`entity_alias`, candidate matching). pgvector semantic index + hybrid retrieval. AI-based extraction (LangGraph). `activity_run` table for non-ingestion lineage. Confidence scoring + staleness decay. `knowledge_evidence` tool.
 - **Run**: Reranker. Cross-node knowledge sharing. Eval framework for knowledge quality. Apache AGE if graph queries needed.
 
 ### Specs
 
 | Spec | Status | Key Invariants |
 |---|---|---|
-| `docs/spec/knowledge-store.md` | New | THREE_LAYER_ARCHITECTURE, CLAIMS_APPEND_ONLY, ENTITY_RESOLUTION_SUBSYSTEM, LINEAGE_REQUIRED (every canonical fact traces to activity_run → claim → source_record) |
+| `docs/spec/knowledge-store.md` | New | CANONICAL_TABLES (entity/relation/observation, separate tables, not one generic row), PROVENANCE_REQUIRED (every row traces to source_record_id), TYPES_ARE_STRINGS (no DB enums), TENANT_SCOPED (RLS on canonical tables) |
 | `docs/spec/database-rls.md` | Update | Add knowledge tables, global tenant pattern |
 | `docs/spec/data-ingestion-pipelines.md` | Update | Clarify Layer 0 role, link to knowledge-store as downstream consumer |
 
 ### Tasks (rough sequence)
 
-1. **task: knowledge-store package scaffold** — Package structure, types, Drizzle schema for entity/relation/observation/claim/entity_alias/activity_run. (Crawl)
-2. **task: KnowledgeWritePort + adapter** — Append claims, resolve entities (exact match), write observations. Drizzle adapter. Contract tests. (Crawl)
-3. **task: KnowledgeReadPort + adapter** — Query entities, traverse relations, get timelines. Drizzle adapter. (Crawl)
-4. **task: knowledge_query tool** — Tool contract in `ai-tools`, wired to KnowledgeReadPort. First agent access to knowledge store. (Crawl)
-5. **task: pgvector + semantic index** — Embedding table, HNSW index, embed via LiteLLM, `knowledge_search` tool. (Walk)
-6. **task: hybrid retrieval** — FTS (tsvector) + vector + RRF fusion in read adapter. (Walk)
-7. **task: AI extraction graph** — LangGraph graph that reads source records and produces claims via LLM. (Walk)
-8. **task: confidence scoring + decay** — Batch Temporal activity that recomputes entity confidence from claims, applies staleness decay. (Walk)
-9. **task: knowledge_evidence tool** — "Why do we believe X?" — trace from entity → claims → source records. (Walk)
+**Crawl:**
+
+1. **task: knowledge-store package scaffold** — Package structure, domain types, Drizzle schema for `entity`, `relation`, `observation`. Simple `source_record_id` FK for provenance. Zod schemas for type validation.
+2. **task: KnowledgeWritePort + adapter** — Write entities (dedup by exact match), write observations, write relations. Drizzle adapter. Contract tests.
+3. **task: KnowledgeReadPort + adapter** — Query entities by type/attributes, traverse relations, get observation timelines. Drizzle adapter.
+4. **task: knowledge_query tool** — Tool contract in `ai-tools`, wired to `KnowledgeReadPort`. First agent access to knowledge store.
+
+**Walk:**
+
+5. **task: claims layer** — `claim` table (append-only), `activity_run` table, update entities to track `confidence` + `source_count` derived from claims.
+6. **task: entity resolution** — `entity_alias` table, candidate matching, merge/split operations. Fuzzy matching.
+7. **task: pgvector + semantic index** — `embedding` table, HNSW index, embed via LiteLLM, `knowledge_search` tool.
+8. **task: hybrid retrieval** — FTS (tsvector) + vector + RRF fusion in read adapter.
+9. **task: AI extraction graph** — LangGraph graph that reads source records and produces claims via LLM.
+10. **task: confidence scoring + decay** — Batch Temporal activity that recomputes entity confidence from claims, applies staleness decay.
+11. **task: knowledge_evidence tool** — "Why do we believe X?" — trace from entity → claims → source records.
