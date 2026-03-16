@@ -51,16 +51,16 @@ The model: **automatic accrual, periodic publication, user-initiated claims.**
 
 | Deliverable                                                                                                                                    | Status      | Est | Work Item         |
 | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | ----------------- |
-| `ownership_model` section in repo-spec schema + YAML — V0 template: `attribution-1to1-v0` (1 credit = 1 token, no configurable weights)        | Not Started | 1   | (create at start) |
-| Resolve token decimal convention: `tokenAmount = creditAmount × 10^tokenDecimals` (standard ERC-20 scaling)                                    | Not Started | 0.5 | (create at start) |
-| `packages/settlement/` package scaffolding — pure package, no Next.js/Drizzle deps                                                             | Not Started | 0.5 | (create at start) |
-| `computeStatementHash()` — canonical hash of full AttributionStatement (add to `@cogni/attribution-ledger/hashing`)                            | Not Started | 0.5 | (create at start) |
-| `resolveRecipients(statementLines, walletLookup, policy)` pure function — claimantKey → wallet, partitions into claimable vs not-yet-claimable | Not Started | 1.5 | (create at start) |
-| `computeMerkleTree(entitlements)` pure function — Uniswap-compatible leaf encoding, sorted-pair tree, proofs                                   | Not Started | 2   | (create at start) |
-| `computeSettlementId()` — deterministic canonical ID for each publication                                                                      | Not Started | 0.5 | (create at start) |
-| Merkle encoding compatibility tests — verify leaves against Uniswap MerkleDistributor Solidity verify logic                                    | Not Started | 1   | (create at start) |
+| `ownership_model` section in repo-spec schema + YAML — V0 template: `attribution-1to1-v0` (1 credit = 1 token, no configurable weights)        | Not Started | 1   | task.0167         |
+| Resolve token decimal convention: `tokenAmount = creditAmount × 10^tokenDecimals` (standard ERC-20 scaling)                                    | Not Started | 0.5 | task.0167         |
+| `packages/settlement/` package scaffolding — pure package, no Next.js/Drizzle deps                                                             | Not Started | 0.5 | task.0167         |
+| `computeStatementHash()` — canonical hash of full AttributionStatement (add to `@cogni/attribution-ledger/hashing`)                            | Not Started | 0.5 | task.0167         |
+| `resolveRecipients(statementLines, walletLookup, policy)` pure function — claimantKey → wallet, partitions into claimable vs not-yet-claimable | Not Started | 1.5 | task.0167         |
+| `computeMerkleTree(entitlements)` pure function — Uniswap-compatible leaf encoding, sorted-pair tree, proofs                                   | Not Started | 2   | task.0167         |
+| `computeSettlementId()` — deterministic canonical ID for each publication                                                                      | Not Started | 0.5 | task.0167         |
+| Merkle encoding compatibility tests — verify leaves against Uniswap MerkleDistributor Solidity verify logic                                    | Not Started | 1   | task.0167         |
 | `settlement_manifests` DB table + Drizzle adapter — audit trail for publications                                                               | Not Started | 1.5 | (create at start) |
-| Settlement spec: invariants, schema, encoding, ownership model templates                                                                       | Not Started | 2   | (create at start) |
+| Settlement spec: invariants, schema, encoding, ownership model templates                                                                       | Done        | 2   | —                 |
 
 ### Walk (P1) — First Live Token Claims
 

@@ -115,6 +115,9 @@ tags: [governance, web3, settlement, merkle]
  │
  ├── Deploy MerkleDistributor(token, root)
  ├── token.transfer(emissionsHolder → distributor, totalAmount)
+ │   totalAmount is in ERC-20 smallest units (18 decimals)
+ ├── Record in TigerBeetle: amount = totalAmount / 10^tokenDecimals (whole tokens)
+ │   Per TB_WHOLE_TOKENS_CHAIN_WEI — TB is scale=0, chain is 18 decimals
  └── Update manifest: status='funded', funding_tx_hash, distributor_address
 
 
@@ -212,24 +215,25 @@ Enable governance token claims from attribution entitlements. Contributors earn 
 
 ## Invariants
 
-| Rule                            | Constraint                                                                                                                                                                                                                                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| STATEMENTS_ARE_TRUTH            | Signed attribution statements are the governance entitlement authority. `composeHoldings()` is a read-model projection. The chain is a delivery rail. Neither is the source of truth. Financial state (balances, transfers) is authoritative in TigerBeetle per `TIGERBEETLE_IS_BALANCE_TRUTH`. |
-| MANIFEST_COMPUTATION_MECHANICAL | Computing a settlement manifest (resolve recipients, build Merkle tree, persist to DB) is a mechanical system action (Temporal cron). The only human-reviewed artifact is the attribution statement.                                                                                            |
-| FUNDING_REQUIRES_TRUSTED_EXEC   | Funding a distributor (deploying contract, transferring tokens from emissions holder) requires trusted governance execution per `TRUSTED_MVP_EXPLICIT` — Safe/manual or equivalent. Not automated.                                                                                              |
-| LEAF_ENCODING_UNISWAP           | Merkle leaf = `keccak256(abi.encodePacked(uint256 index, address account, uint256 amount))`. No double-hashing. No ABI-encode. Must match Uniswap `MerkleDistributor.claim()` exactly.                                                                                                          |
-| TREE_SORTED_PAIR                | Internal tree nodes use sorted-pair hashing: `a < b ? H(a‖b) : H(b‖a)`. Matches Uniswap/OZ `MerkleProof.verify()`.                                                                                                                                                                              |
-| SETTLEMENT_ID_DETERMINISTIC     | `settlement_id = keccak256(abi.encode(statementHash, nodeId, scopeId, chainId, tokenAddress, policyHash, programType, sequence))`. Same inputs always produce the same ID.                                                                                                                      |
-| MANIFEST_UNIQUE_PER_PUBLICATION | `UNIQUE(node_id, scope_id, epoch_id, settlement_sequence)` on `settlement_manifests`. One primary publication per epoch.                                                                                                                                                                        |
-| RESOLUTION_READS_EXISTING       | `resolveRecipients()` is a pure function consuming a pre-loaded wallet lookup. No DB queries inside the function. No new tables.                                                                                                                                                                |
-| UNLINKED_ACCRUE_NOT_DROP        | Claimants without linked wallets are excluded from the Merkle tree but NOT from the entitlement record. Their credits remain in the attribution ledger and become claimable when they link a wallet.                                                                                            |
-| TOKEN_AMOUNT_INTEGER_SCALED     | `tokenAmount = creditAmount × 10^tokenDecimals`. V0: 1 credit at 18 decimals = `1 × 10^18` token smallest units. No floating point.                                                                                                                                                             |
-| ARTIFACT_BEFORE_FUNDING         | Manifest must exist with `status='published'` before any funding transaction.                                                                                                                                                                                                                   |
-| FUNDING_RECORDS_TX              | Every funded manifest records `funding_tx_hash`, `distributor_address`, and `funded_at`.                                                                                                                                                                                                        |
-| OWNERSHIP_MODEL_FROM_REPO_SPEC  | `ownership_model.template` in repo-spec selects the credit→token mapping. V0: `attribution-1to1-v0` only.                                                                                                                                                                                       |
-| ALL_MATH_BIGINT                 | No floating point in token amount calculations.                                                                                                                                                                                                                                                 |
-| PURE_PACKAGE                    | `packages/settlement/` has no Next.js, no Drizzle, no DB adapter dependencies. Pure functions + types only.                                                                                                                                                                                     |
-| WALK_IDEMPOTENCY_OPERATIONAL    | Walk-phase duplicate prevention: DB unique constraint + finite emissions balance + Safe signer review. NOT cryptographic single-execution. Run phase adds on-chain guard.                                                                                                                       |
+| Rule                            | Constraint                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| STATEMENTS_ARE_TRUTH            | Signed attribution statements are the governance entitlement authority. `composeHoldings()` is a read-model projection. The chain is a delivery rail. Neither is the source of truth. Financial state (balances, transfers) is authoritative in TigerBeetle per `TIGERBEETLE_IS_BALANCE_TRUTH`.                                                                                  |
+| MANIFEST_COMPUTATION_MECHANICAL | Computing a settlement manifest (resolve recipients, build Merkle tree, persist to DB) is a mechanical system action (Temporal cron). The only human-reviewed artifact is the attribution statement.                                                                                                                                                                             |
+| FUNDING_REQUIRES_TRUSTED_EXEC   | Funding a distributor (deploying contract, transferring tokens from emissions holder) requires trusted governance execution per `TRUSTED_MVP_EXPLICIT` — Safe/manual or equivalent. Not automated.                                                                                                                                                                               |
+| LEAF_ENCODING_UNISWAP           | Merkle leaf = `keccak256(abi.encodePacked(uint256 index, address account, uint256 amount))`. No double-hashing. No ABI-encode. Must match Uniswap `MerkleDistributor.claim()` exactly.                                                                                                                                                                                           |
+| TREE_SORTED_PAIR                | Internal tree nodes use sorted-pair hashing: `a < b ? H(a‖b) : H(b‖a)`. Matches Uniswap/OZ `MerkleProof.verify()`.                                                                                                                                                                                                                                                               |
+| SETTLEMENT_ID_DETERMINISTIC     | `settlement_id = keccak256(abi.encode(statementHash, nodeId, scopeId, chainId, tokenAddress, policyHash, programType, sequence))`. Same inputs always produce the same ID.                                                                                                                                                                                                       |
+| MANIFEST_UNIQUE_PER_PUBLICATION | `UNIQUE(node_id, scope_id, epoch_id, settlement_sequence)` on `settlement_manifests`. One primary publication per epoch.                                                                                                                                                                                                                                                         |
+| RESOLUTION_READS_EXISTING       | `resolveRecipients()` is a pure function consuming a pre-loaded wallet lookup. No DB queries inside the function. No new tables.                                                                                                                                                                                                                                                 |
+| UNLINKED_ACCRUE_NOT_DROP        | Claimants without linked wallets are excluded from the Merkle tree but NOT from the entitlement record. Their credits remain in the attribution ledger and become claimable when they link a wallet.                                                                                                                                                                             |
+| TOKEN_AMOUNT_INTEGER_SCALED     | `tokenAmount = creditAmount × 10^tokenDecimals`. V0: 1 credit at 18 decimals = `1 × 10^18` token smallest units. No floating point.                                                                                                                                                                                                                                              |
+| TB_WHOLE_TOKENS_CHAIN_WEI       | TigerBeetle COGNI ledger (scale=0) records **whole tokens**. Manifest `total_amount` and Merkle leaves use ERC-20 smallest units (18 decimals). Conversion: `tbAmount = chainAmount / 10^tokenDecimals`. Scaling happens at the settlement boundary — `computeMerkleTree()` outputs chain units; funding activity divides by `10^tokenDecimals` before recording in TigerBeetle. |
+| ARTIFACT_BEFORE_FUNDING         | Manifest must exist with `status='published'` before any funding transaction.                                                                                                                                                                                                                                                                                                    |
+| FUNDING_RECORDS_TX              | Every funded manifest records `funding_tx_hash`, `distributor_address`, and `funded_at`.                                                                                                                                                                                                                                                                                         |
+| OWNERSHIP_MODEL_FROM_REPO_SPEC  | `ownership_model.template` in repo-spec selects the credit→token mapping. V0: `attribution-1to1-v0` only.                                                                                                                                                                                                                                                                        |
+| ALL_MATH_BIGINT                 | No floating point in token amount calculations.                                                                                                                                                                                                                                                                                                                                  |
+| PURE_PACKAGE                    | `packages/settlement/` has no Next.js, no Drizzle, no DB adapter dependencies. Pure functions + types only.                                                                                                                                                                                                                                                                      |
+| WALK_IDEMPOTENCY_OPERATIONAL    | Walk-phase duplicate prevention: DB unique constraint + finite emissions balance + Safe signer review. NOT cryptographic single-execution. Run phase adds on-chain guard.                                                                                                                                                                                                        |
 
 ### Schema
 
@@ -336,24 +340,28 @@ interface OwnershipModel {
 
 ### File Pointers
 
-| File                                                                     | Purpose                                                                    |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `packages/settlement/src/resolve.ts`                                     | `resolveRecipients()` — pure, takes pre-loaded wallet lookup               |
-| `packages/settlement/src/merkle.ts`                                      | `computeMerkleTree()` — Uniswap-compatible encoding, sorted-pair tree      |
-| `packages/settlement/src/settlement-id.ts`                               | `computeSettlementId()` — deterministic ID derivation                      |
-| `packages/settlement/src/types.ts`                                       | Domain types: `ClaimableEntitlement`, `MerkleSettlement`, `OwnershipModel` |
-| `packages/settlement/tests/merkle.test.ts`                               | Unit tests for tree generation                                             |
-| `packages/settlement/tests/merkle-encoding.test.ts`                      | Encoding compat: verify against Uniswap Solidity verify logic              |
-| `packages/settlement/tests/resolve.test.ts`                              | Resolution + accruing partition tests                                      |
-| `packages/attribution-ledger/src/hashing.ts`                             | `computeStatementHash()` — canonical hash of full statement (see below)    |
-| `packages/repo-spec/src/schema.ts`                                       | `ownershipModelSchema` — Zod schema for repo-spec `ownership_model:`       |
-| `packages/repo-spec/src/accessors.ts`                                    | `getOwnershipModel()` accessor                                             |
-| `packages/db-schema/src/settlement.ts`                                   | `settlementManifests` Drizzle table definition                             |
-| `services/scheduler-worker/src/workflows/publish-settlement.workflow.ts` | `PublishSettlementWorkflow` — Temporal orchestration                       |
+Existing files are marked _(exists)_. All others are planned locations — created during implementation.
+
+| File                                                                     | Purpose                                                                    | Status                |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------- | --------------------- |
+| `packages/attribution-ledger/src/hashing.ts`                             | `computeStatementHash()` — canonical hash of full statement (see below)    | Exists (add function) |
+| `packages/repo-spec/src/schema.ts`                                       | `ownershipModelSchema` — Zod schema for repo-spec `ownership_model:`       | Exists (add schema)   |
+| `packages/repo-spec/src/accessors.ts`                                    | `getOwnershipModel()` accessor                                             | Exists (add accessor) |
+| `packages/db-schema/src/settlement.ts`                                   | `settlementManifests` Drizzle table definition                             | Planned               |
+| `packages/settlement/src/resolve.ts`                                     | `resolveRecipients()` — pure, takes pre-loaded wallet lookup               | Planned               |
+| `packages/settlement/src/merkle.ts`                                      | `computeMerkleTree()` — Uniswap-compatible encoding, sorted-pair tree      | Planned               |
+| `packages/settlement/src/settlement-id.ts`                               | `computeSettlementId()` — deterministic ID derivation                      | Planned               |
+| `packages/settlement/src/types.ts`                                       | Domain types: `ClaimableEntitlement`, `MerkleSettlement`, `OwnershipModel` | Planned               |
+| `packages/settlement/tests/merkle.test.ts`                               | Unit tests for tree generation                                             | Planned               |
+| `packages/settlement/tests/merkle-encoding.test.ts`                      | Encoding compat: verify against Uniswap Solidity verify logic              | Planned               |
+| `packages/settlement/tests/resolve.test.ts`                              | Resolution + accruing partition tests                                      | Planned               |
+| `services/scheduler-worker/src/workflows/publish-settlement.workflow.ts` | `PublishSettlementWorkflow` — Temporal orchestration                       | Planned               |
 
 ### Statement Hash Definition
 
 `computeStatementHash()` produces a SHA-256 hex string covering the full canonical statement. It belongs in `packages/attribution-ledger/src/hashing.ts` because the statement hash is governance truth, not a settlement concern.
+
+This is a **new function**, distinct from the existing `computeFinalClaimantAllocationSetHash()`. The allocation set hash covers only the `(claimantKey, finalUnits)` pairs — it fingerprints the allocation result. The statement hash covers statement-level context (epoch, node, scope) plus the allocation set hash, creating a unique fingerprint for the full governance commitment. The allocation set hash is an input to — not replaced by — the statement hash.
 
 **Fields included (in canonical order):**
 
@@ -364,17 +372,11 @@ const input = canonicalJsonStringify({
   scopeId: statement.scopeId,
   finalAllocationSetHash: statement.finalAllocationSetHash,
   poolTotalCredits: statement.poolTotalCredits.toString(),
-  statementLines: statement.statementLines.map((line) => ({
-    claimant_key: line.claimant_key,
-    credit_amount: line.credit_amount,
-    final_units: line.final_units,
-    pool_share: line.pool_share,
-  })),
 });
 // statementHash = SHA-256(input)
 ```
 
-Uses `CANONICAL_JSON` from attribution-ledger spec (sorted keys, BigInt as string, no whitespace). The `reviewOverrides` and `supersedesStatementId` fields are excluded — they are metadata about the statement, not the entitlement content. `receipt_ids` are excluded because they are provenance, not entitlement-affecting.
+Uses the existing `canonicalJsonStringify` from `@cogni/attribution-ledger/hashing` (sorted keys, BigInt as string, no whitespace). Statement lines are NOT included directly — they are already captured by `finalAllocationSetHash`. The `reviewOverrides`, `supersedesStatementId`, and `receipt_ids` fields are excluded — they are metadata/provenance, not entitlement content. `poolShare` is excluded — it is a derived display value that can diverge from `finalUnits / totalUnits` due to rounding.
 
 ### Threat Model
 
@@ -393,6 +395,8 @@ Uses `CANONICAL_JSON` from attribution-ledger spec (sorted keys, BigInt as strin
 - [ ] Publication cadence: weekly (after each epoch finalization) or monthly (batch)? Tradeoff: more frequent = faster claims but more gas for distributor deployments.
 - [ ] Should `PublishSettlementWorkflow` auto-trigger as a child of `FinalizeEpochWorkflow`, or run on a separate Temporal schedule?
 - [ ] Sweep mechanism: Temporal cron checks claim windows, or manual Safe transaction?
+- [ ] Follow-up publications (`settlement_sequence > 0`): what triggers them? Options: (a) same periodic cron detects newly-linked wallets with unsettled entitlements, (b) wallet-link event triggers a one-off workflow, (c) manual operator action. Cadence and trigger must be defined before Walk.
+- [ ] `proofs_json` scalability: at >1,000 claimants per epoch, the JSONB column grows to ~1 MB+. V0 is fine (<100 claimants). If claimant count grows, consider a separate `settlement_proofs` table or off-chain proof storage with root-only on-chain. Add `CLAIMANT_CAP_PER_EPOCH` guard or document the threshold for migration.
 
 ## Related
 
