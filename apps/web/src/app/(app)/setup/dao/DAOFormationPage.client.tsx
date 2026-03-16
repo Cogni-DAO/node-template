@@ -178,12 +178,12 @@ export function DAOFormationPageClient(): ReactElement {
             id="operatorWallet"
             value={operatorWalletAddress}
             onChange={(e) => setOperatorWalletAddress(e.target.value)}
-            placeholder="0x... (from provision-operator-wallet.ts)"
+            placeholder="0x..."
             disabled={!isIdle}
           />
           <p className="text-muted-foreground text-sm">
-            Privy-managed wallet address. Run provision-operator-wallet.ts
-            first.
+            Server-managed wallet that receives operator share and tops up AI
+            providers. See setup guide for Privy wallet provisioning.
           </p>
           {operatorWalletAddress && !isValidOperator && (
             <p className="text-destructive text-sm">Invalid Ethereum address</p>
