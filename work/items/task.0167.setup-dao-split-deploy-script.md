@@ -1,13 +1,13 @@
 ---
 id: task.0167
 type: task
-title: "DAO formation — add Split deployment step + operator wallet to repo-spec output"
+title: "Node lifecycle: formation outputs payments_pending, add setup:payments activation entrypoint"
 status: needs_implement
 priority: 1
 rank: 15
 estimate: 2
-summary: "Add Split contract deployment as a wagmi step in the existing DAO formation flow. User's connected wallet deploys the Split (same pattern as DAO + Signal). Operator wallet address is a form input. repo-spec output includes all addresses."
-outcome: "DAO formation deploys DAO + Signal + Split in one UI flow. repo-spec output includes cogni_dao + operator_wallet + payments_in sections. No env secrets required — user signs all txs via connected wallet."
+summary: "Update formation repo-spec output to include payments_status: pending_activation. Add pnpm setup:payments entrypoint that wraps provision-operator-wallet + deploy-split + validation into one guided flow. Document the formation→activation boundary in node-formation spec."
+outcome: "New nodes get a repo-spec with explicit pending_activation status. Fork owners run one command to activate payments. The formation→activation boundary is documented."
 spec_refs: operator-wallet, node-formation
 assignees: derekg1729
 credit:
@@ -15,122 +15,96 @@ project: proj.ai-operator-wallet
 branch: feat/setup-dao-script
 pr:
 reviewer:
-revision: 3
+revision: 4
 blocked_by:
 deploy_verified: false
 created: 2026-03-15
-updated: 2026-03-15
+updated: 2026-03-16
 labels: [wallet, web3, tooling, setup]
 external_refs:
 ---
 
-# DAO formation — add Split deployment step + operator wallet to repo-spec output
+# Node lifecycle: formation outputs payments_pending, add setup:payments activation entrypoint
 
 ## Context
 
-The DAO formation UI flow deploys an Aragon DAO + CogniSignal contract via the user's connected wallet (wagmi). It outputs a repo-spec YAML snippet missing the financial rails: `operator_wallet` and `payments_in` sections.
-
-Split deployment uses the same pattern — `writeContract` via wagmi to call the 0xSplits factory. The user's connected wallet pays gas and becomes the Split controller. Recipients are the Privy-managed operator wallet (form input) + the DAO treasury (derived from the just-deployed DAO contract). No private keys or env secrets needed.
-
-## Existing Formation Flow
-
-```
-IDLE → PREFLIGHT → CREATING_DAO → AWAITING_DAO_CONFIRMATION
-  → DEPLOYING_SIGNAL → AWAITING_SIGNAL_CONFIRMATION → VERIFYING → SUCCESS
-```
-
-Key files:
-
-- State machine: `apps/web/src/features/setup/daoFormation/formation.reducer.ts`
-- Tx builders: `apps/web/src/features/setup/daoFormation/txBuilders.ts`
-- Hook: `apps/web/src/features/setup/hooks/useDAOFormation.ts`
-- Verify route: `apps/web/src/app/api/setup/verify/route.ts` (`buildRepoSpecYaml`)
-- UI: `apps/web/src/features/setup/components/FormationFlowDialog.tsx`
+Formation (shared operator UI) creates governance identity. Payment activation (Privy wallet + Split) belongs to the child node's own trust domain. Today these are scattered ad-hoc scripts with no clear entrypoint or status tracking.
 
 ## Design
 
-Add `DEPLOYING_SPLIT → AWAITING_SPLIT_CONFIRMATION` between Signal and Verify:
+### Two phases, two trust domains
 
-```
-... → DEPLOYING_SIGNAL → AWAITING_SIGNAL_CONFIRMATION
-  → DEPLOYING_SPLIT → AWAITING_SPLIT_CONFIRMATION → VERIFYING → SUCCESS
-```
+**Formation** (operator repo UI at `/setup/dao`):
 
-- User's connected wallet calls `splitV2o2Factory.createSplit()` via wagmi `writeContract`
-- Recipients: operator wallet address (form input) + DAO contract address (from step 1)
-- Allocations: derived from `calculateSplitAllocations` (same math as `deploy-split.ts`)
-- Controller/owner: operator wallet address (can update allocations later)
-- Split address extracted from `SplitCreated` event in tx receipt
+- Outputs `cogni_dao` section in repo-spec
+- Adds `payments_status: pending_activation` so the child node knows it needs setup
+- Does NOT create operator wallet or deploy Split
 
-`DAOFormationConfig` gains `operatorWalletAddress: HexAddress` field.
+**Activation** (child node repo, after fork + infra setup):
 
-`buildRepoSpecYaml` gains `operatorWalletAddress` and `splitAddress` params:
+- `pnpm setup:payments` — guided CLI entrypoint
+- Step 1: verify Privy env configured
+- Step 2: provision operator wallet (or skip if exists)
+- Step 3: deploy Split (operator wallet + DAO treasury as recipients)
+- Step 4: validate Split by simulating distribute
+- Step 5: output repo-spec fragment with `operator_wallet` + `payments_in`
+- Each step is idempotent (safe to re-run on failure)
 
-```yaml
-operator_wallet:
-  address: "0x..."
+### What constitutes "payments active"
 
-payments_in:
-  credits_topup:
-    provider: cogni-usdc-backend-v1
-    receiving_address: "0x..." # Split address
-    allowed_chains:
-      - Base
-    allowed_tokens:
-      - USDC
-```
+All three must be present in repo-spec:
+
+- `operator_wallet.address` — Privy-managed EOA
+- `payments_in.credits_topup.receiving_address` — Split contract
+- Both verified on-chain (Split has code, allocations match)
+
+The app already handles missing fields gracefully — `getOperatorWalletConfig()` returns `undefined`, funding chain is skipped.
 
 ## Requirements
 
-- **R1**: Add `operatorWalletAddress` to `DAOFormationConfig` (form input)
-- **R2**: Add `DEPLOYING_SPLIT` / `AWAITING_SPLIT_CONFIRMATION` phases to reducer
-- **R3**: `buildDeploySplitArgs` in txBuilders — calls `calculateSplitAllocations`, returns factory call args
-- **R4**: Wire Split deploy step in `useDAOFormation` hook (same wagmi pattern as DAO + Signal)
-- **R5**: Update `buildRepoSpecYaml` to include `operator_wallet` and `payments_in` sections
-- **R6**: Update verify route to accept + validate Split address
-- **R7**: Delete `scripts/deploy-split.ts` (superseded by UI flow)
+- **R1**: `buildRepoSpecYaml` outputs `payments_status: pending_activation` in formation output
+- **R2**: `pnpm setup:payments` script wraps existing provision + deploy + validate steps
+- **R3**: Each step checks preconditions and skips if already done
+- **R4**: Script outputs the repo-spec fragment to paste
+- **R5**: Document formation→activation boundary in node-formation spec
+- **R6**: Update SETUP_DESIGN.md with payments activation section
 
 ## Allowed Changes
 
-- `apps/web/src/features/setup/daoFormation/formation.reducer.ts`
-- `apps/web/src/features/setup/daoFormation/txBuilders.ts`
-- `apps/web/src/features/setup/hooks/useDAOFormation.ts`
-- `apps/web/src/features/setup/components/FormationFlowDialog.tsx`
-- `apps/web/src/app/api/setup/verify/route.ts`
-- `apps/web/src/contracts/setup.verify.v1.contract.ts`
-- `scripts/deploy-split.ts` (delete)
+- `apps/web/src/app/api/setup/verify/route.ts` (update `buildRepoSpecYaml` output)
+- `scripts/setup-payments.ts` (new — wraps provision + deploy + validate)
+- `package.json` (add `setup:payments` script)
+- `docs/spec/node-formation.md` (add activation boundary section)
+- `scripts/setup/SETUP_DESIGN.md` (add payments activation docs)
+- `docs/guides/operator-wallet-setup.md` (simplify to reference setup:payments)
 
 ## Plan
 
-- [ ] Add `operatorWalletAddress` to `DAOFormationConfig`
-- [ ] Add `DEPLOYING_SPLIT` / `AWAITING_SPLIT_CONFIRMATION` / `SPLIT_TX_SENT` / `SPLIT_TX_CONFIRMED` / `SPLIT_TX_FAILED` to reducer
-- [ ] Add `buildDeploySplitArgs` to txBuilders
-- [ ] Wire Split deployment in `useDAOFormation` hook (auto-deploy after signal confirmed)
-- [ ] Update `FormationFlowDialog` UI to show Split deployment progress + operator wallet input
-- [ ] Update verify contract + route with Split address
-- [ ] Update `buildRepoSpecYaml` with operator_wallet + payments_in sections
-- [ ] Delete `scripts/deploy-split.ts`
+- [ ] Update `buildRepoSpecYaml` to include `payments_status: pending_activation`
+- [ ] Create `scripts/setup-payments.ts` wrapping existing scripts
+- [ ] Add `setup:payments` to package.json
+- [ ] Update node-formation spec with activation boundary
+- [ ] Update SETUP_DESIGN.md
+- [ ] Simplify operator-wallet-setup guide
 - [ ] Run `pnpm check`
 
 ## Validation
 
 ```bash
 pnpm check
-pnpm vitest run --config apps/web/vitest.config.mts apps/web/tests/unit/features/setup
+pnpm dotenv -e .env.local -- pnpm setup:payments --help
 ```
-
-**Expected:** Formation flow deploys DAO + Signal + Split. Repo-spec output includes all sections.
 
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0167` linked in PR body
-- [ ] **Spec:** RECEIVING_ADDRESS_IS_SPLIT invariant upheld
-- [ ] **Tests:** formation reducer tests cover DEPLOYING_SPLIT phase
+- [ ] **Spec:** formation→activation boundary documented
+- [ ] **Tests:** existing verify contract tests still pass
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
 
-- Fixes: bug.0166 (stale Split contract mismatch — structural fix, not just redeploy)
+- Fixes: bug.0166 design gap (ad-hoc Split deployment)
 
 ## Attribution
 
