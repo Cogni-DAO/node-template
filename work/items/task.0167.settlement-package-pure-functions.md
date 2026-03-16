@@ -2,7 +2,7 @@
 id: task.0167
 type: task
 title: "Settlement Package: Pure Functions + Domain Types + Ownership Model"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 5
 estimate: 3
@@ -12,7 +12,7 @@ spec_refs: on-chain-settlement
 assignees: derekg1729
 credit:
 project: proj.on-chain-distributions
-branch:
+branch: claude/review-settlement-design-UcjlF
 pr:
 reviewer:
 revision: 0

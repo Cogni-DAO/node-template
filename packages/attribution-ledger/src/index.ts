@@ -78,6 +78,7 @@ export {
   computeAllocationSetHash,
   computeArtifactsHash,
   computeFinalClaimantAllocationSetHash,
+  computeStatementHash,
   computeWeightConfigHash,
   sha256OfCanonicalJson,
 } from "./hashing";

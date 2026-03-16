@@ -11,7 +11,12 @@
  * @public
  */
 
-import type { GateConfig, OperatorWalletSpec, RepoSpec } from "./schema.js";
+import type {
+  GateConfig,
+  OperatorWalletSpec,
+  OwnershipModelSpec,
+  RepoSpec,
+} from "./schema.js";
 
 // ---------------------------------------------------------------------------
 // Accessor result types
@@ -265,4 +270,32 @@ export function extractOperatorWalletConfig(
  */
 export function extractDaoTreasuryAddress(spec: RepoSpec): string | undefined {
   return spec.cogni_dao.dao_contract;
+}
+
+// ---------------------------------------------------------------------------
+// Ownership model accessor
+// ---------------------------------------------------------------------------
+
+export interface OwnershipModelConfig {
+  readonly template: "attribution-1to1-v0";
+  readonly tokenDecimals: number;
+  readonly claimWindowDays: number;
+}
+
+/**
+ * Extract ownership model config from repo-spec.
+ * Returns undefined if ownership_model section is not present.
+ * Maps snake_case YAML fields to camelCase app types.
+ */
+export function extractOwnershipModel(
+  spec: RepoSpec
+): OwnershipModelConfig | undefined {
+  const om = spec.ownership_model as OwnershipModelSpec | undefined;
+  if (!om) return undefined;
+
+  return {
+    template: om.template,
+    tokenDecimals: om.token_decimals,
+    claimWindowDays: om.claim_window_days,
+  };
 }

@@ -20,6 +20,7 @@
     { "path": "./packages/operator-wallet" },
     { "path": "./packages/scheduler-core" },
     { "path": "./packages/repo-spec" },
+    { "path": "./packages/settlement" },
     { "path": "./packages/work-items" }
   ]
 }

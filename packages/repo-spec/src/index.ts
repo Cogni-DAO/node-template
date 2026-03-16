@@ -22,6 +22,7 @@ export {
   extractLedgerConfig,
   extractNodeId,
   extractOperatorWalletConfig,
+  extractOwnershipModel,
   extractPaymentConfig,
   extractScopeId,
   type GatesConfig,
@@ -30,6 +31,7 @@ export {
   type InboundPaymentConfig,
   type LedgerConfig,
   type LedgerPoolConfig,
+  type OwnershipModelConfig,
 } from "./accessors.js";
 export { parseRepoSpec } from "./parse.js";
 export { parseRule } from "./rules.js";
@@ -49,7 +51,9 @@ export {
   governanceScheduleSchema,
   governanceSpecSchema,
   type OperatorWalletSpec,
+  type OwnershipModelSpec,
   operatorWalletSpecSchema,
+  ownershipModelSchema,
   type PoolConfigSpec,
   poolConfigSpecSchema,
   type RepoSpec,

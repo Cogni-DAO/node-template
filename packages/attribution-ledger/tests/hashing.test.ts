@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalJsonStringify,
   computeArtifactsHash,
+  computeStatementHash,
   sha256OfCanonicalJson,
 } from "../src/hashing";
 
@@ -108,5 +109,86 @@ describe("computeArtifactsHash", () => {
       },
     ]);
     expect(hash1).not.toBe(hash2);
+  });
+});
+
+describe("computeStatementHash", () => {
+  const BASE_STATEMENT = {
+    epochId: 1n,
+    nodeId: "550e8400-e29b-41d4-a716-446655440000",
+    scopeId: "660e8400-e29b-41d4-a716-446655440000",
+    finalAllocationSetHash: "abc123",
+    poolTotalCredits: 1000n,
+  };
+
+  it("returns a 64-char hex SHA-256 hash", async () => {
+    const hash = await computeStatementHash(BASE_STATEMENT);
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("is deterministic — same inputs produce same hash", async () => {
+    const a = await computeStatementHash(BASE_STATEMENT);
+    const b = await computeStatementHash(BASE_STATEMENT);
+    expect(a).toBe(b);
+  });
+
+  it("different epochId produces different hash", async () => {
+    const a = await computeStatementHash(BASE_STATEMENT);
+    const b = await computeStatementHash({ ...BASE_STATEMENT, epochId: 2n });
+    expect(a).not.toBe(b);
+  });
+
+  it("different nodeId produces different hash", async () => {
+    const a = await computeStatementHash(BASE_STATEMENT);
+    const b = await computeStatementHash({
+      ...BASE_STATEMENT,
+      nodeId: "770e8400-e29b-41d4-a716-446655440000",
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it("different finalAllocationSetHash produces different hash", async () => {
+    const a = await computeStatementHash(BASE_STATEMENT);
+    const b = await computeStatementHash({
+      ...BASE_STATEMENT,
+      finalAllocationSetHash: "def456",
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it("different poolTotalCredits produces different hash", async () => {
+    const a = await computeStatementHash(BASE_STATEMENT);
+    const b = await computeStatementHash({
+      ...BASE_STATEMENT,
+      poolTotalCredits: 2000n,
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it("uses canonical JSON — key order does not matter", async () => {
+    // canonicalJsonStringify sorts keys, so field order in the object literal
+    // should not affect the hash. This is already guaranteed by the implementation
+    // but we verify it explicitly.
+    const hash = await computeStatementHash(BASE_STATEMENT);
+
+    // Rebuild with fields in different order (JS preserves insertion order
+    // but canonicalJsonStringify sorts keys)
+    const reordered = await computeStatementHash({
+      poolTotalCredits: BASE_STATEMENT.poolTotalCredits,
+      scopeId: BASE_STATEMENT.scopeId,
+      epochId: BASE_STATEMENT.epochId,
+      finalAllocationSetHash: BASE_STATEMENT.finalAllocationSetHash,
+      nodeId: BASE_STATEMENT.nodeId,
+    });
+    expect(hash).toBe(reordered);
+  });
+
+  it("handles large BigInt values correctly", async () => {
+    const hash = await computeStatementHash({
+      ...BASE_STATEMENT,
+      epochId: 999999999999n,
+      poolTotalCredits: 10n ** 30n,
+    });
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
   });
 });

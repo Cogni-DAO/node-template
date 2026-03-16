@@ -127,6 +127,37 @@ export async function computeAllocationSetHash(
 }
 
 /**
+ * Compute a deterministic SHA-256 hash of a full AttributionStatement.
+ *
+ * This is distinct from computeFinalClaimantAllocationSetHash which hashes
+ * only the (claimantKey, finalUnits) pairs. The statement hash covers
+ * statement-level context (epoch, node, scope) plus the allocation set hash,
+ * creating a unique fingerprint for the full governance commitment.
+ *
+ * Fields: epochId, nodeId, scopeId, finalAllocationSetHash, poolTotalCredits.
+ * poolShare excluded (derived display value). Statement lines excluded
+ * (captured by finalAllocationSetHash).
+ *
+ * @param statement - Statement-level fields
+ * @returns SHA-256 hex string
+ */
+export async function computeStatementHash(statement: {
+  readonly epochId: bigint;
+  readonly nodeId: string;
+  readonly scopeId: string;
+  readonly finalAllocationSetHash: string;
+  readonly poolTotalCredits: bigint;
+}): Promise<string> {
+  return sha256OfCanonicalJson({
+    epochId: statement.epochId.toString(),
+    finalAllocationSetHash: statement.finalAllocationSetHash,
+    nodeId: statement.nodeId,
+    poolTotalCredits: statement.poolTotalCredits.toString(),
+    scopeId: statement.scopeId,
+  });
+}
+
+/**
  * Compute a deterministic hash of a claimant-based allocation set.
  *
  * User claimants retain their bare userId as the canonical key for backward

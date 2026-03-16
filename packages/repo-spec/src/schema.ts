@@ -147,6 +147,27 @@ export const operatorWalletSpecSchema = z.object({
 export type OperatorWalletSpec = z.infer<typeof operatorWalletSpecSchema>;
 
 // ---------------------------------------------------------------------------
+// Ownership model schema (on-chain settlement)
+// ---------------------------------------------------------------------------
+
+/**
+ * Schema for ownership_model configuration in repo-spec.
+ * Defines how attribution credits map to governance tokens.
+ * V0: attribution-1to1-v0 — 1 credit = 1 token at token_decimals precision.
+ * Per OWNERSHIP_MODEL_FROM_REPO_SPEC invariant.
+ */
+export const ownershipModelSchema = z.object({
+  /** Template ID — selects credit→token mapping implementation */
+  template: z.enum(["attribution-1to1-v0"]),
+  /** GovernanceERC20 decimals (standard: 18) */
+  token_decimals: z.number().int().min(0).max(18).default(18),
+  /** Days after publication before unclaimed tokens are swept */
+  claim_window_days: z.number().int().min(1).default(90),
+});
+
+export type OwnershipModelSpec = z.infer<typeof ownershipModelSchema>;
+
+// ---------------------------------------------------------------------------
 // Gate + rule schemas (PR review)
 // ---------------------------------------------------------------------------
 
@@ -269,6 +290,9 @@ export const repoSpecSchema = z
 
     /** Operator wallet configuration (optional — needed only when operator wallet is enabled) */
     operator_wallet: operatorWalletSpecSchema.optional(),
+
+    /** Ownership model configuration (optional — needed only for on-chain settlement) */
+    ownership_model: ownershipModelSchema.optional(),
 
     /** DAO governance configuration */
     cogni_dao: z.object({

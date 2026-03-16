@@ -224,6 +224,8 @@
         "packages/attribution-pipeline-plugins/vitest.config.ts",
         "packages/financial-ledger/tsup.config.ts",
         "packages/financial-ledger/vitest.config.ts",
+        "packages/settlement/tsup.config.ts",
+        "packages/settlement/vitest.config.ts",
         "packages/work-items/tsup.config.ts",
         "packages/work-items/vitest.config.ts",
         "services/scheduler-worker/tsup.config.ts",
