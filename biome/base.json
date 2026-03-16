@@ -214,6 +214,8 @@
         "packages/ids/vitest.config.ts",
         "packages/db-schema/tsup.config.ts",
         "packages/ingestion-core/tsup.config.ts",
+        "packages/knowledge-store/tsup.config.ts",
+        "packages/knowledge-store/vitest.config.ts",
         "packages/attribution-ledger/tsup.config.ts",
         "packages/repo-spec/tsup.config.ts",
         "packages/attribution-pipeline-contracts/tsup.config.ts",

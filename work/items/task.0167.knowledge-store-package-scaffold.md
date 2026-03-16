@@ -2,7 +2,7 @@
 id: task.0167
 type: task
 title: "Knowledge store package scaffold — domain types, Drizzle schema, Zod validation"
-status: needs_design
+status: needs_closeout
 priority: 1
 rank: 10
 estimate: 2
@@ -12,14 +12,14 @@ spec_refs:
 assignees: []
 credit:
 project: proj.knowledge-store
-branch:
+branch: claude/review-design-knowledge-BmQ0l
 pr:
 reviewer:
 revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-16
-updated: 2026-03-16
+updated: 2026-03-17
 labels: [infrastructure, knowledge, data]
 external_refs:
 ---

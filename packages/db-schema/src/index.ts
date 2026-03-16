@@ -17,6 +17,7 @@ export * from "./attribution";
 export * from "./auth";
 export * from "./billing";
 export * from "./identity";
+export * from "./knowledge";
 export * from "./profile";
 export * from "./refs";
 export * from "./scheduling";

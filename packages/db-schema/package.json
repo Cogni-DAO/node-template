@@ -46,6 +46,11 @@
       "import": "./dist/identity.js",
       "default": "./dist/identity.js"
     },
+    "./knowledge": {
+      "types": "./dist/knowledge.d.ts",
+      "import": "./dist/knowledge.js",
+      "default": "./dist/knowledge.js"
+    },
     "./attribution": {
       "types": "./dist/attribution.d.ts",
       "import": "./dist/attribution.js",

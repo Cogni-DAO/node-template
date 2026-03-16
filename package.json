@@ -159,6 +159,7 @@
     "@cogni/financial-ledger": "workspace:*",
     "@cogni/ids": "workspace:*",
     "@cogni/ingestion-core": "workspace:*",
+    "@cogni/knowledge-store": "workspace:*",
     "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/operator-wallet": "workspace:*",
     "@cogni/repo-spec": "workspace:*",
