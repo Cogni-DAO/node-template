@@ -35,7 +35,7 @@ Enable AI-generated content to be drafted, optimized per platform, reviewed by h
 | DB schema — 2 tables with RLS + Drizzle adapters                                         | Done        | 2   | task.0159 |
 | API contracts + routes + container wiring                                                | Done        | 1   | task.0159 |
 | Broadcasting UI — compose, list, detail, review                                          | Done        | 3   | task.0165 |
-| Use-case seam (`broadcast-core/use-cases/`) + LLM optimizer + echo publisher + migration | Not Started | 3   | task.0159 |
+| Use-case seam (`broadcast-core/application/`) + echo optimizer + echo publisher + migration | In Review | 3   | task.0159 |
 | X/Twitter `PublishPort` adapter (OAuth 2.0, rate limiting)                               | Not Started | 2   | task.0166 |
 | Discord `PublishPort` adapter (webhook)                                                  | Not Started | 0.5 | —         |
 | Bluesky `PublishPort` adapter (`@atproto/api`)                                           | Not Started | 0.5 | —         |

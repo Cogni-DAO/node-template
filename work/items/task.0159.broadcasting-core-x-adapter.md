@@ -2,7 +2,7 @@
 id: task.0159
 type: task
 title: "Broadcasting Crawl — use-case seam, optimizer, publish pipeline"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 3
@@ -21,7 +21,7 @@ revision: 4
 blocked_by:
 deploy_verified: false
 created: 2026-03-13
-updated: 2026-03-14
+updated: 2026-03-16
 labels: [broadcasting, crawl]
 external_refs:
 ---

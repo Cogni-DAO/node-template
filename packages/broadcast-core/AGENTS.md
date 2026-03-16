@@ -45,6 +45,7 @@ Pure TypeScript types, port interfaces, error classes, and domain rules for the 
   - Domain types: `ContentMessage`, `PlatformPost`, branded IDs
   - Enums: `PLATFORM_IDS`, `CONTENT_MESSAGE_STATUSES`, `PLATFORM_POST_STATUSES`, `REVIEW_DECISIONS`, `RISK_LEVELS`
   - Rules: `assessRisk()`, `canTransitionMessage()`, `canTransitionPlatformPost()`, `requiresReview()`
+  - Application use-cases: `optimizeDraft()`, `applyReviewDecision()`, `publishPost()` — pure orchestration, ports as args, Temporal-ready
   - Error classes with type guards
 - **Files considered API:** `index.ts`
 
