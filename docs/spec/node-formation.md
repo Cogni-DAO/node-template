@@ -60,7 +60,7 @@ Enable any founder to create a fully-verified Cogni DAO node via a 3-field web f
 
    Forward note: the Financial Ledger reward-distribution path reuses this same `GovernanceERC20` as the rewards token. The current founder bootstrap mint is acceptable for formation testing, but it is NOT the final rewards-ready setup. Before live contributor distributions, formation must mint a fixed supply to a DAO-controlled emissions holder and the server verification path must validate that holder and total supply.
 
-3. **NO_PRIVATE_KEY_ENV_VARS**: All transactions signed via wallet UI (wagmi/rainbowkit), never by script-loaded secrets.
+3. **NO_PRIVATE_KEY_ENV_VARS**: Formation transactions are signed via wallet UI (wagmi/rainbowkit), never by script-loaded secrets. Payment activation (child node CLI) uses `DEPLOYER_PRIVATE_KEY` for Split deployment — this is acceptable because it runs in the child node's own environment, not the shared operator repo.
 
 4. **SERVER_VERIFICATION_BOUNDARY**: Browser is untrusted. Server derives ALL addresses from tx receipts. Request contains only `{ chainId, daoTxHash, signalTxHash, initialHolder }`.
 
@@ -327,7 +327,7 @@ Payment activation runs in the child node's own repo after formation + infra set
 2. Resolve operator wallet (0 wallets → create; 1 → use; >1 → error without explicit `OPERATOR_WALLET_ADDRESS`)
 3. Deploy Split contract (recipients: operator wallet + DAO treasury from repo-spec)
 4. Validate: read deployed Split config back on-chain, verify recipients + allocations match
-5. Write repo-spec in place: `operator_wallet.address`, `payments_in.credits_topup.*`, `payments.status: active`
+5. Write repo-spec in place: `operator_wallet.address`, `payments_in.credits_topup.*`, `payments.status: active` (written last, only after on-chain validation succeeds)
 
 **Split controller/admin:** Explicit input via `SPLIT_CONTROLLER_ADDRESS`. Defaults to deployer address with a warning. Production deployments should use a multisig or governance admin.
 
