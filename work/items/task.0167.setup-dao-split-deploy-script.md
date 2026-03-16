@@ -6,8 +6,8 @@ status: needs_implement
 priority: 1
 rank: 15
 estimate: 2
-summary: "Add Split contract deployment as a step in the existing DAO formation flow. Update buildRepoSpecYaml to include operator_wallet and payments_in sections. The formation UI already handles DAO + Signal deployment — this adds the financial rails."
-outcome: "DAO formation outputs a complete repo-spec with cogni_dao + operator_wallet + payments_in sections. Split contract deployed and validated as part of the formation flow."
+summary: "Add Split contract deployment as a wagmi step in the existing DAO formation flow. User's connected wallet deploys the Split (same pattern as DAO + Signal). Operator wallet address is a form input. repo-spec output includes all addresses."
+outcome: "DAO formation deploys DAO + Signal + Split in one UI flow. repo-spec output includes cogni_dao + operator_wallet + payments_in sections. No env secrets required — user signs all txs via connected wallet."
 spec_refs: operator-wallet, node-formation
 assignees: derekg1729
 credit:
@@ -15,7 +15,7 @@ project: proj.ai-operator-wallet
 branch: feat/setup-dao-script
 pr:
 reviewer:
-revision: 2
+revision: 3
 blocked_by:
 deploy_verified: false
 created: 2026-03-15
@@ -28,7 +28,9 @@ external_refs:
 
 ## Context
 
-The DAO formation flow (`apps/web/src/features/setup/daoFormation/`) deploys an Aragon DAO + CogniSignal contract and outputs a repo-spec YAML snippet. It is missing the financial rails: operator wallet address and Split contract deployment. Bug.0166 proved that deploying the Split separately with manual env vars leads to address mismatches.
+The DAO formation UI flow deploys an Aragon DAO + CogniSignal contract via the user's connected wallet (wagmi). It outputs a repo-spec YAML snippet missing the financial rails: `operator_wallet` and `payments_in` sections.
+
+Split deployment uses the same pattern — `writeContract` via wagmi to call the 0xSplits factory. The user's connected wallet pays gas and becomes the Split controller. Recipients are the Privy-managed operator wallet (form input) + the DAO treasury (derived from the just-deployed DAO contract). No private keys or env secrets needed.
 
 ## Existing Formation Flow
 
@@ -37,40 +39,76 @@ IDLE → PREFLIGHT → CREATING_DAO → AWAITING_DAO_CONFIRMATION
   → DEPLOYING_SIGNAL → AWAITING_SIGNAL_CONFIRMATION → VERIFYING → SUCCESS
 ```
 
-State machine: `apps/web/src/features/setup/daoFormation/formation.reducer.ts`
-Tx builders: `apps/web/src/features/setup/daoFormation/txBuilders.ts`
-Verification: `apps/web/src/app/api/setup/verify/route.ts` (includes `buildRepoSpecYaml`)
-UI: `apps/web/src/features/setup/components/FormationFlowDialog.tsx`
-Hook: `apps/web/src/features/setup/hooks/useDAOFormation.ts`
+Key files:
+
+- State machine: `apps/web/src/features/setup/daoFormation/formation.reducer.ts`
+- Tx builders: `apps/web/src/features/setup/daoFormation/txBuilders.ts`
+- Hook: `apps/web/src/features/setup/hooks/useDAOFormation.ts`
+- Verify route: `apps/web/src/app/api/setup/verify/route.ts` (`buildRepoSpecYaml`)
+- UI: `apps/web/src/features/setup/components/FormationFlowDialog.tsx`
+
+## Design
+
+Add `DEPLOYING_SPLIT → AWAITING_SPLIT_CONFIRMATION` between Signal and Verify:
+
+```
+... → DEPLOYING_SIGNAL → AWAITING_SIGNAL_CONFIRMATION
+  → DEPLOYING_SPLIT → AWAITING_SPLIT_CONFIRMATION → VERIFYING → SUCCESS
+```
+
+- User's connected wallet calls `splitV2o2Factory.createSplit()` via wagmi `writeContract`
+- Recipients: operator wallet address (form input) + DAO contract address (from step 1)
+- Allocations: derived from `calculateSplitAllocations` (same math as `deploy-split.ts`)
+- Controller/owner: operator wallet address (can update allocations later)
+- Split address extracted from `SplitCreated` event in tx receipt
+
+`DAOFormationConfig` gains `operatorWalletAddress: HexAddress` field.
+
+`buildRepoSpecYaml` gains `operatorWalletAddress` and `splitAddress` params:
+
+```yaml
+operator_wallet:
+  address: "0x..."
+
+payments_in:
+  credits_topup:
+    provider: cogni-usdc-backend-v1
+    receiving_address: "0x..." # Split address
+    allowed_chains:
+      - Base
+    allowed_tokens:
+      - USDC
+```
 
 ## Requirements
 
-- **R1**: Add `DEPLOYING_SPLIT` phase to formation state machine (after SIGNAL, before VERIFY)
-- **R2**: Build Split deploy tx using `@cogni/operator-wallet` allocation math (same as `deploy-split.ts`)
-- **R3**: Operator wallet address is a required input to the formation flow (provisioned separately via `provision-operator-wallet.ts`)
-- **R4**: Validate Split deployment by simulating `distribute` against the new contract
-- **R5**: Update `buildRepoSpecYaml` to include `operator_wallet` and `payments_in.credits_topup` sections
-- **R6**: Delete `scripts/deploy-split.ts` (superseded by formation flow)
+- **R1**: Add `operatorWalletAddress` to `DAOFormationConfig` (form input)
+- **R2**: Add `DEPLOYING_SPLIT` / `AWAITING_SPLIT_CONFIRMATION` phases to reducer
+- **R3**: `buildDeploySplitArgs` in txBuilders — calls `calculateSplitAllocations`, returns factory call args
+- **R4**: Wire Split deploy step in `useDAOFormation` hook (same wagmi pattern as DAO + Signal)
+- **R5**: Update `buildRepoSpecYaml` to include `operator_wallet` and `payments_in` sections
+- **R6**: Update verify route to accept + validate Split address
+- **R7**: Delete `scripts/deploy-split.ts` (superseded by UI flow)
 
 ## Allowed Changes
 
-- `apps/web/src/features/setup/daoFormation/formation.reducer.ts` (add DEPLOYING_SPLIT phase)
-- `apps/web/src/features/setup/daoFormation/txBuilders.ts` (add `buildDeploySplitArgs`)
-- `apps/web/src/features/setup/hooks/useDAOFormation.ts` (wire Split deploy step)
-- `apps/web/src/features/setup/components/FormationFlowDialog.tsx` (UI for Split step)
-- `apps/web/src/app/api/setup/verify/route.ts` (update `buildRepoSpecYaml`, add Split validation)
-- `apps/web/src/contracts/setup.verify.v1.contract.ts` (add Split address to contract)
+- `apps/web/src/features/setup/daoFormation/formation.reducer.ts`
+- `apps/web/src/features/setup/daoFormation/txBuilders.ts`
+- `apps/web/src/features/setup/hooks/useDAOFormation.ts`
+- `apps/web/src/features/setup/components/FormationFlowDialog.tsx`
+- `apps/web/src/app/api/setup/verify/route.ts`
+- `apps/web/src/contracts/setup.verify.v1.contract.ts`
 - `scripts/deploy-split.ts` (delete)
 
 ## Plan
 
-- [ ] Add `DEPLOYING_SPLIT` / `AWAITING_SPLIT_CONFIRMATION` phases to reducer
 - [ ] Add `operatorWalletAddress` to `DAOFormationConfig`
-- [ ] Add `buildDeploySplitArgs` to txBuilders (reuse `calculateSplitAllocations`)
-- [ ] Wire Split deployment step in `useDAOFormation` hook
-- [ ] Update `FormationFlowDialog` UI to show Split deployment progress
-- [ ] Update verify route: validate Split `distribute` simulation, add to `buildRepoSpecYaml`
-- [ ] Update verify contract with Split address fields
+- [ ] Add `DEPLOYING_SPLIT` / `AWAITING_SPLIT_CONFIRMATION` / `SPLIT_TX_SENT` / `SPLIT_TX_CONFIRMED` / `SPLIT_TX_FAILED` to reducer
+- [ ] Add `buildDeploySplitArgs` to txBuilders
+- [ ] Wire Split deployment in `useDAOFormation` hook (auto-deploy after signal confirmed)
+- [ ] Update `FormationFlowDialog` UI to show Split deployment progress + operator wallet input
+- [ ] Update verify contract + route with Split address
+- [ ] Update `buildRepoSpecYaml` with operator_wallet + payments_in sections
 - [ ] Delete `scripts/deploy-split.ts`
 - [ ] Run `pnpm check`
 
@@ -81,19 +119,18 @@ pnpm check
 pnpm vitest run --config apps/web/vitest.config.mts apps/web/tests/unit/features/setup
 ```
 
-**Expected:** Formation flow deploys DAO + Signal + Split. Repo-spec output includes all three sections.
+**Expected:** Formation flow deploys DAO + Signal + Split. Repo-spec output includes all sections.
 
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0167` linked in PR body
-- [ ] **Spec:** RECEIVING_ADDRESS_IS_SPLIT, node-formation invariants upheld
+- [ ] **Spec:** RECEIVING_ADDRESS_IS_SPLIT invariant upheld
 - [ ] **Tests:** formation reducer tests cover DEPLOYING_SPLIT phase
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
 
-- Fixes: bug.0166 (stale Split contract mismatch)
-- Extends: existing DAO formation flow
+- Fixes: bug.0166 (stale Split contract mismatch — structural fix, not just redeploy)
 
 ## Attribution
 
