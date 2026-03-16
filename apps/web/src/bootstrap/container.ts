@@ -460,7 +460,6 @@ function createContainer(): Container {
     DEPLOY_ENVIRONMENT: env.DEPLOY_ENVIRONMENT ?? "local",
   };
 
-<<<<<<< HEAD
   // OperatorWallet: test uses fake, production uses Privy (optional — only when configured)
   const operatorWalletConfig = getOperatorWalletConfig();
   const operatorWallet: OperatorWalletPort | undefined = env.isTestMode

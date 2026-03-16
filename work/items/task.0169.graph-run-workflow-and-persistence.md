@@ -2,7 +2,7 @@
 id: task.0169
 type: task
 title: "GraphRunWorkflow + promote schedule_runs → graph_runs"
-status: needs_merge
+status: needs_implement
 priority: 0
 rank: 3
 estimate: 5
@@ -37,15 +37,15 @@ labels:
 - New columns on `graph_runs`: `run_kind` (user_immediate | system_scheduled | system_webhook), `trigger_source`, `trigger_ref`, `requested_by`, `graph_id`
 - `schedule_id` made nullable (API/webhook runs have no schedule)
 - `schedule_slot_unique` constraint relaxed to `WHERE schedule_id IS NOT NULL`
-- Existing rows backfilled: `run_kind = 'system_scheduled'`, `trigger_source = 'temporal_schedule'`
+- Zero users — no data to backfill, no migration needed
 - Status enum extended: `pending`, `running`, `success`/`completed`, `error`/`failed`, `skipped`, `cancelled`
 - `attempt` column supports real attempt semantics (unfreeze from hardcoded 0)
 - `GraphRunWorkflow` Temporal workflow exists with activities: `validateGrantActivity`, `createRunRecordActivity`, `executeAndStreamActivity`, `finalizeRunActivity`
 - `executeAndStreamActivity` calls `GraphExecutorPort.runGraph()`, pumps `AsyncIterable<AiEvent>` to completion, publishes each event to Redis via `RunStreamPort.publish()`, and calls `expire()` after terminal event
 - Activity publishes events to Redis regardless of subscriber count (PUMP_TO_COMPLETION_VIA_REDIS)
 - Workflow ID format: `graph-run:{tenantId}:{idempotencyKey}` (IDEMPOTENT_RUN_START — key comes from `execution_requests`, not the run table)
-- DB migration created and tested
-- All existing scheduler-worker code updated to reference `graph_runs` instead of `schedule_runs`
+- All scheduler-worker code references `graph_runs` (already done in checkpoint 1)
+- `GovernanceScheduledRunWorkflow` replaced by `GraphRunWorkflow` (zero users, no migration)
 
 ## Allowed Changes
 
@@ -61,20 +61,16 @@ labels:
 
 ## Plan
 
-- [x] **Checkpoint 1: Promote schedule_runs → graph_runs**
-  - Rename table in schema: `schedule_runs` → `graph_runs`
-  - Add new columns: `run_kind`, `trigger_source`, `trigger_ref`, `requested_by`, `graph_id`, `error_code`
-  - Make `schedule_id` nullable
-  - Relax `schedule_slot_unique` to `WHERE schedule_id IS NOT NULL`
-  - Update all code references: scheduler-worker activities, workflows, bootstrap, ports, tests, fixtures
-  - Deprecated aliases preserved: `scheduleRuns`, `ScheduleRunRepository`, `DrizzleScheduleRunAdapter`, `ScheduleRun`, `ScheduleRunStatus`
+- [x] **Checkpoint 1: Promote schedule_runs → graph_runs** (schema rename + columns)
   - Validation: `pnpm check` passes ✓
 
-- [ ] **Checkpoint 2: GraphRunWorkflow + activities** (DEFERRED)
-  - Blocked by task.0172: extract `packages/graph-execution-core` so scheduler-worker can import `GraphExecutorPort`
-  - Existing `GovernanceScheduledRunWorkflow` already uses promoted schema via internal API
+- [ ] **Checkpoint 2: GraphRunWorkflow + activities** (UNBLOCKED — task.0172 done)
+  - Build `GraphRunWorkflow` in scheduler-worker with activities: `validateGrantActivity`, `createRunRecordActivity`, `executeAndStreamActivity`, `finalizeRunActivity`
+  - `executeAndStreamActivity` calls `GraphExecutorPort.runGraph()`, pumps events to Redis via `RunStreamPort.publish()`
+  - Delete `GovernanceScheduledRunWorkflow` — zero users, no migration, just replace
 
-- [ ] **Checkpoint 3: Integration test** (DEFERRED — depends on Checkpoint 2)
+- [ ] **Checkpoint 3: Integration test**
+  - Stack test: start workflow → verify run record in `graph_runs` → verify events in Redis Stream
 
 ## Validation
 
