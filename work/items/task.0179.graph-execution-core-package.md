@@ -2,7 +2,7 @@
 id: task.0179
 type: task
 title: "Extract packages/graph-execution-core — decouple execution ports from Next.js"
-status: needs_closeout
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 3
@@ -12,14 +12,20 @@ spec_refs:
   - spec.unified-graph-launch
 assignees: []
 project: proj.unified-graph-launch
+credit:
 blocked_by: []
 created: 2026-03-13
-updated: 2026-03-14
+updated: 2026-03-17
 branch: claude/unified-graph-launch-mmXvl
+pr: https://github.com/Cogni-DAO/node-template/pull/574
+reviewer:
+revision: 0
+deploy_verified: false
 labels:
   - ai-graphs
   - scheduler
   - architecture
+external_refs:
 ---
 
 # Extract `packages/graph-execution-core`
@@ -49,9 +55,8 @@ interface ExecutionContext {
   readonly actorUserId?: string;
   readonly sessionId?: string;
   readonly maskContent?: boolean;
-  // NO requestId (HTTP edge correlation — stays in app-layer logs/interceptors)
-  // NO abortSignal (browser disconnect ≠ durable run cancellation;
-  //   Temporal uses Context.current().cancellationSignal)
+  readonly requestId?: string;
+  // NO billing fields, NO traceId, NO abortSignal
 }
 
 interface GraphExecutorPort {
@@ -63,26 +68,26 @@ interface GraphExecutorPort {
 
 1. **GraphRunRequest = pure business input.** No billing, no tracing, no delivery-layer concerns.
 2. **ExecutionContext = per-run cross-cutting metadata.** Tiny, typed, passed as second arg.
-3. **AbortSignal on ExecutionContext, not GraphRunRequest.** It's HTTP/delivery leakage, not durable run input.
-4. **requestId on ExecutionContext, not collapsed into runId.** Different axes: observability correlation vs durable execution identity.
+3. **requestId on ExecutionContext.** Launcher correlation ID is distinct from `runId` (durable execution identity) and `traceId` (OTel propagation).
+4. **AbortSignal stays out of shared contracts.** Browser disconnect is delivery-layer concern, not durable run input; current app runtime carries abort via `ExecutionScope`, not `GraphRunRequest`/`ExecutionContext`.
 5. **traceId via OTel context propagation.** Temporal SDK propagates via headers. Adapters use `getCurrentTraceId()`. Never on any shared interface.
-6. **Billing via injected BillingResolver.** `(actorUserId) => { billingAccountId, virtualKeyId }`. Injected at factory construction (static dep). Resolved per-run from `ctx.actorUserId`.
-7. **Factory is static, per-run context via runGraph(req, ctx).** `createGraphExecutor(staticDeps)` once, not per-request.
+6. **Billing stays out of shared contracts.** Current runtime wiring uses app-layer `runGraphWithScope()` + `AsyncLocalStorage<ExecutionScope>` so inner executors can read billing without polluting `@cogni/graph-execution-core`. Cleanup is deferred to task.0180.
+7. **Factory is static, per-run context via `runGraph(req, ctx)`.** `createGraphExecutor(staticDeps)` is reused; `runGraphWithScope()` is the app-layer launcher wrapper for per-run scope.
 8. **LlmCaller dies from shared surface.** Stays in `llm.port.ts` for direct `LlmService` calls only.
 9. **Message → ai-core.** Clean LLM message type, no app baggage.
 
 ### Concern migration
 
-| Field              | Current                               | New                                                                                     |
-| ------------------ | ------------------------------------- | --------------------------------------------------------------------------------------- |
-| `billingAccountId` | `req.caller`                          | `BillingResolver.resolve(ctx.actorUserId)` — app layer only                             |
-| `virtualKeyId`     | `req.caller`                          | Same resolver                                                                           |
-| `traceId`          | `req.caller`                          | `getCurrentTraceId()` from OTel context                                                 |
-| `requestId`        | `req.caller` / `req.ingressRequestId` | App-layer logs/interceptors only — not on any shared type                               |
-| `userId`           | `req.caller`                          | `ctx.actorUserId`                                                                       |
-| `sessionId`        | `req.caller`                          | `ctx.sessionId`                                                                         |
-| `maskContent`      | `req.caller`                          | `ctx.maskContent`                                                                       |
-| `abortSignal`      | `req.abortSignal`                     | App-layer decorator scope — not on shared contract (Temporal uses its own cancellation) |
+| Field              | Current                               | New                                                                             |
+| ------------------ | ------------------------------------- | ------------------------------------------------------------------------------- |
+| `billingAccountId` | `req.caller`                          | `ExecutionScope.billing.billingAccountId` via app-layer `runGraphWithScope()`   |
+| `virtualKeyId`     | `req.caller`                          | `ExecutionScope.billing.virtualKeyId` via app-layer `runGraphWithScope()`       |
+| `traceId`          | `req.caller`                          | `getCurrentTraceId()` from OTel context                                         |
+| `requestId`        | `req.caller` / `req.ingressRequestId` | `ctx.requestId`                                                                 |
+| `userId`           | `req.caller`                          | `ctx.actorUserId`                                                               |
+| `sessionId`        | `req.caller`                          | `ctx.sessionId`                                                                 |
+| `maskContent`      | `req.caller`                          | `ctx.maskContent`                                                               |
+| `abortSignal`      | `req.abortSignal`                     | `ExecutionScope.abortSignal` in app-layer wrapper only — not on shared contract |
 
 ## Plan
 
@@ -98,5 +103,10 @@ See plan file for detailed checkpoint breakdown.
 
 ```bash
 pnpm check
-pnpm test
+pnpm dotenv -e .env.test -- vitest run --config apps/web/vitest.stack.config.mts
 ```
+
+Manual validation:
+
+- Local chat/e2e run succeeds after `runGraphWithScope()` wiring
+- Full stack suite passes on branch before merge

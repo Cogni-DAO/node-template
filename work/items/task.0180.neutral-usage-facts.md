@@ -13,9 +13,8 @@ spec_refs:
 assignees: []
 project: proj.unified-graph-launch
 blocked_by:
-  - task.0179
 created: 2026-03-16
-updated: 2026-03-16
+updated: 2026-03-17
 branch:
 labels:
   - ai-graphs

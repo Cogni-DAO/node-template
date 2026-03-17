@@ -10,7 +10,7 @@ read_when: Adding new graph trigger types, modifying execution paths, or impleme
 implements: proj.unified-graph-launch
 owner: cogni-dev
 created: 2026-02-03
-verified: 2026-03-13
+verified: 2026-03-17
 tags:
   - ai-graphs
   - scheduler
@@ -307,16 +307,16 @@ Redis 7 is available in all runtime stacks (dev, test, prod) via Docker Compose.
 
 **Implemented (task.0174, task.0175):**
 
-| File                                                  | Purpose                                          |
-| ----------------------------------------------------- | ------------------------------------------------ |
-| `src/ports/run-stream.port.ts`                        | RunStreamPort interface + stream constants       |
-| `src/adapters/server/ai/redis-run-stream.adapter.ts`  | RedisRunStreamAdapter (XADD/XREAD/XRANGE/EXPIRE) |
-| `src/bootstrap/container.ts`                          | Redis client + RunStreamPort wiring              |
-| `src/shared/env/server-env.ts`                        | REDIS_URL env var (optional, Zod validated)      |
-| `src/contracts/run-stream.contract.ts`                | Zod schema for stream entry wire format          |
-| `infra/compose/runtime/docker-compose.yml`            | Redis 7 service (production)                     |
-| `infra/compose/runtime/docker-compose.dev.yml`        | Redis 7 service (dev, port 6379 exposed)         |
-| `tests/unit/adapters/server/ai/redis-run-stream.*.ts` | Unit tests with mocked ioredis (11 tests)        |
+| File                                                           | Purpose                                          |
+| -------------------------------------------------------------- | ------------------------------------------------ |
+| `packages/graph-execution-core/src/run-stream.port.ts`         | RunStreamPort interface + stream constants       |
+| `apps/web/src/adapters/server/ai/redis-run-stream.adapter.ts`  | RedisRunStreamAdapter (XADD/XREAD/XRANGE/EXPIRE) |
+| `apps/web/src/bootstrap/container.ts`                          | Redis client + RunStreamPort wiring              |
+| `apps/web/src/shared/env/server-env.ts`                        | REDIS_URL env var (optional, Zod validated)      |
+| `apps/web/src/contracts/run-stream.contract.ts`                | Zod schema for stream entry wire format          |
+| `infra/compose/runtime/docker-compose.yml`                     | Redis 7 service (production)                     |
+| `infra/compose/runtime/docker-compose.dev.yml`                 | Redis 7 service (dev, port 6379 exposed)         |
+| `apps/web/tests/unit/adapters/server/ai/redis-run-stream.*.ts` | Unit tests with mocked ioredis (11 tests)        |
 
 **Implemented (task.0176):**
 
@@ -329,27 +329,26 @@ Redis 7 is available in all runtime stacks (dev, test, prod) via Docker Compose.
 | `services/scheduler-worker/src/activities/index.ts`                 | `createGraphRunActivity`, `updateGraphRunActivity` activities         |
 | `services/scheduler-worker/src/workflows/scheduled-run.workflow.ts` | Passes trigger provenance to `graph_runs`                             |
 
-**Planned: Package extraction (task.0179)**
+**Implemented (task.0179):**
 
-Prerequisite for `GraphRunWorkflow`: scheduler-worker cannot import `GraphExecutorPort` from `apps/web/src/` (dep-cruiser `PACKAGES_NO_SRC_IMPORTS`). Extract execution contracts to shared packages:
+Scheduler-worker can now import shared execution contracts without violating `PACKAGES_NO_SRC_IMPORTS`. The shared package keeps billing and tracing out of the public graph execution surface; the current app runtime seeds billing via `runGraphWithScope()` until task.0180 removes that bridge.
 
-| Package                             | Receives                                                                                                                  | Notes                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `@cogni/ai-core`                    | `Message`, `MessageRole`, `MessageToolCall`                                                                               | Canonical LLM message type — moved from `apps/web/src/core/chat/model.ts` |
-| `@cogni/graph-execution-core` (new) | `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`, `GraphFinal`, `RunStreamPort`, `RunStreamEntry`, `RunInitiator` | Run lifecycle contracts; depends only on `ai-core`                        |
+| Package                             | Receives                                                                                                                      | Notes                                                        |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `@cogni/ai-core`                    | `Message`, `MessageRole`, `MessageToolCall`                                                                                   | Canonical LLM message type — moved from app-layer chat model |
+| `@cogni/graph-execution-core` (new) | `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`, `GraphFinal`, `ExecutionContext`, `RunStreamPort`, `RunStreamEntry` | Run lifecycle contracts; depends only on `ai-core`           |
 
-**Key design decision:** `GraphRunRequest` carries only business-relevant run provenance (`initiator: { kind: 'user' | 'system' | 'webhook', id?: string }`), not billing, observability, or chat-session state. `LlmCaller` stays in `apps/web` — adapters receive it through constructor deps, not through the run request.
+**Key design decision:** `GraphRunRequest` carries only execution input (`runId`, `graphId`, `messages`, `model`, optional `stateKey`/`toolIds`/`responseFormat`). Trigger provenance belongs on workflow input and the `graph_runs` ledger, not on the shared executor contract. `ExecutionContext` carries only per-run metadata (`actorUserId`, `sessionId`, `maskContent`, `requestId`).
 
 **Planned (future tasks):**
 
 | File                                                                 | Purpose                                                |
 | -------------------------------------------------------------------- | ------------------------------------------------------ |
-| `packages/graph-execution-core/src/index.ts`                         | GraphExecutorPort, RunStreamPort, RunInitiator exports |
 | `services/scheduler-worker/src/workflows/graph-run.workflow.ts`      | GraphRunWorkflow (unified execution path)              |
 | `services/scheduler-worker/src/activities/execute-graph.activity.ts` | executeAndStreamActivity (pumps + publishes to Redis)  |
-| `src/app/api/v1/ai/chat/route.ts`                                    | API trigger (starts workflow → subscribes Redis → SSE) |
-| `src/app/api/v1/ai/runs/[runId]/stream/route.ts`                     | Reconnection SSE endpoint                              |
-| `src/features/ai/services/ai_runtime.ts`                             | AI runtime (workflow start + Redis subscribe)          |
+| `apps/web/src/app/api/v1/ai/chat/route.ts`                           | API trigger (starts workflow → subscribes Redis → SSE) |
+| `apps/web/src/app/api/v1/ai/runs/[runId]/stream/route.ts`            | Reconnection SSE endpoint                              |
+| `apps/web/src/features/ai/services/ai_runtime.ts`                    | AI runtime (workflow start + Redis subscribe)          |
 
 ## Acceptance Checks
 

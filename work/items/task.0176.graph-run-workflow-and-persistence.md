@@ -14,9 +14,8 @@ assignees: []
 project: proj.unified-graph-launch
 blocked_by:
   - task.0175
-  - task.0179
 created: 2026-03-13
-updated: 2026-03-13
+updated: 2026-03-17
 branch: claude/unified-graph-launch-mmXvl
 labels:
   - ai-graphs
