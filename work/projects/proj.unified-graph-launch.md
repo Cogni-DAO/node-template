@@ -11,7 +11,7 @@ outcome: All graph runs flow through GraphRunWorkflow; no inline execution in HT
 assignees:
   - derekg1729
 created: 2026-02-07
-updated: 2026-02-14
+updated: 2026-03-17
 labels:
   - ai-graphs
   - scheduler
@@ -60,25 +60,23 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | Add `usage_unit_created` event + decorator change — decorator becomes observability-only                 | Not Started | 1   | —         |
 | Strip billing from adapters — remove cost extraction from InProc, remove ProxyBillingReader from Sandbox | Done        | 1   | task.0029 |
 | Delete old paths — ProxyBillingReader, billing volumes, OPENCLAW_BILLING_DIR, gateway audit log          | Done        | 1   | task.0029 |
-| Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing           | Todo        | 3   | task.0006 |
+| Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing           | In Review   | 3   | task.0006 |
 
-### Walk (P1): Unified Workflow Path + Run Persistence
+### Walk (P1): Unified Workflow Path + Run Persistence + Redis Streaming
 
-**Goal:** All graph runs go through `GraphRunWorkflow`. Durable run records with trigger provenance.
+**Goal:** All graph runs go through `GraphRunWorkflow`. Durable run records with trigger provenance. Real-time SSE streaming via Redis Streams.
 
-| Deliverable                                                                                             | Status      | Est | Work Item |
-| ------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Add `graph_runs` table (product/run lifecycle semantics — not a billing bandaid)                        | Not Started | 2   | —         |
-| Add trigger provenance fields: `run_kind`, `trigger_source`, `trigger_ref`, `requested_by`              | Not Started | 1   | —         |
-| Add `trigger_*` columns to existing `schedule_runs` table                                               | Not Started | 1   | —         |
-| Create `GraphRunWorkflow` in `services/scheduler-worker/`                                               | Not Started | 2   | —         |
-| Refactor `POST /api/v1/ai/chat` to start `GraphRunWorkflow` instead of inline execution                 | Not Started | 2   | —         |
-| Add `Idempotency-Key` header support to chat endpoint                                                   | Not Started | 1   | —         |
-| Ensure `executeGraphActivity` reuses existing internal API path (`/api/internal/graphs/{graphId}/runs`) | Not Started | 1   | —         |
-| Migrate `schedule_runs` correlation to use `graph_runs.id`                                              | Not Started | 1   | —         |
-| Add attempt semantics (unfreeze `attempt` from 0)                                                       | Not Started | 1   | —         |
-| Observability instrumentation                                                                           | Not Started | 1   | —         |
-| Documentation updates                                                                                   | Not Started | 1   | —         |
+**Three-plane architecture:** Temporal (control) + Redis Streams (stream) + PostgreSQL (durable). See [unified-graph-launch.md §4](../../docs/spec/unified-graph-launch.md) for full design.
+
+| Deliverable                                                                                          | Status            | Est | Work Item |
+| ---------------------------------------------------------------------------------------------------- | ----------------- | --- | --------- |
+| **Infrastructure: Redis 7** — docker-compose, `ioredis` dep, env config                              | Done              | 1   | task.0174 |
+| **RunStreamPort + RedisRunStreamAdapter** — hexagonal port/adapter for Redis Streams                 | Done              | 2   | task.0175 |
+| **Extract `graph-execution-core` package** — decouple execution ports from Next.js                   | Done (PR #574)    | 3   | task.0179 |
+| **GraphRunWorkflow + promote `schedule_runs` → `graph_runs`** — single run ledger, Temporal workflow | Checkpoint 1 done | 5   | task.0176 |
+| **Neutral usage facts** — remove billing identity from inner providers (ALS cleanup)                 | Not Started       | 2   | task.0180 |
+| **Unified streaming API** — chat endpoint refactor, reconnection endpoint, idempotency               | Not Started       | 5   | task.0177 |
+| **Scheduled run migration + observability + docs** — migrate scheduled runs, instrumentation, docs   | Not Started       | 3   | task.0178 |
 
 **Note:** When `graph_runs` exists, reconciler can optionally switch reference-set from LiteLLM spend/logs to `graph_runs`, but it is not required. The LiteLLM API approach remains valid long-term.
 
@@ -97,18 +95,20 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 - **ONE_RUN_EXECUTION_PATH**: All graph execution via `GraphRunWorkflow` — no inline execution in HTTP handlers (P1 goal)
 - **IDEMPOTENT_RUN_START**: `workflowId = graph-run:{tenantId}:{idempotencyKey}` — duplicate starts are no-ops (P1 goal)
 - **LITELLM_IS_REFERENCE_SET**: For billing reconciliation, LiteLLM spend/logs API is the universal reference set across all executor types. No new DB tables required for reconciliation (design review decision 2026-02-13).
-- **GRAPH_RUNS_IS_PRODUCT_TABLE**: `graph_runs` table (P1) exists for product/run lifecycle semantics, not as a billing reconciliation dependency.
-- P0 accepts polling for results; streaming deferred to P1
+- **SINGLE_RUN_LEDGER**: `graph_runs` is promoted from `schedule_runs` (rename + extend). One table for all run types. No second run table. Idempotency stays in `execution_requests`.
+- **REDIS_IS_STREAM_PLANE**: Redis holds only ephemeral stream data. PostgreSQL is durable truth. Redis loss = stream interruption, not data loss.
+- **SSE_FROM_REDIS_NOT_MEMORY**: SSE endpoints read from Redis Streams, not in-process memory. Enables cross-process streaming and reconnection.
 - No generic event bus or rule engine — scope is graph execution only
 
 ## Dependencies
 
-- [ ] Temporal infrastructure operational (existing)
+- [x] Temporal infrastructure operational (existing)
 - [ ] GRAPH_EXECUTION.md P1 run persistence (for P1 of this initiative)
-- [ ] task.0029 callback ingest endpoint (prerequisite for task.0039 reconciler)
+- [x] task.0029 callback ingest endpoint (prerequisite for task.0039 reconciler)
 
 ## As-Built Specs
 
+- [graph-execution.md](../../docs/spec/graph-execution.md) — GraphExecutorPort, NamespaceGraphRouter, billing, streaming
 - [unified-graph-launch.md](../../docs/spec/unified-graph-launch.md) — Core invariants, schema, design decisions
 - [billing-ingest.md](../../docs/spec/billing-ingest.md) — Callback-driven billing: adapters emit call_id, LiteLLM callback writes receipts, decorator enforces barrier
 - [scheduler.md](../../docs/spec/scheduler.md) — Temporal architecture, internal API

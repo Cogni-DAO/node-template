@@ -32,14 +32,14 @@ export const InternalGraphRunInputSchema = z.object({
   /**
    * Optional runId - if provided, use it; otherwise generate.
    * Per SCHEDULER_SPEC.md: Worker provides canonical runId for correlation
-   * with schedule_runs and charge_receipts.
+   * with graph_runs and charge_receipts.
    */
   runId: z.string().uuid().optional(),
 });
 
 /**
  * Internal graph run response schema.
- * Aligns with GraphFinal shape from graph-executor.port.ts.
+ * Aligns with GraphFinal shape from @cogni/graph-execution-core.
  *
  * HTTP errors handled separately:
  * - 401: Missing/invalid SCHEDULER_API_TOKEN

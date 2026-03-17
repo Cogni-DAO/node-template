@@ -41,9 +41,14 @@ vi.mock("@/bootstrap/container", () => ({
 }));
 
 // Mock the graph executor factory (stable boundary per UNIFIED_GRAPH_EXECUTOR)
-vi.mock("@/bootstrap/graph-executor.factory", () => ({
-  createGraphExecutor: vi.fn(),
-}));
+vi.mock("@/bootstrap/graph-executor.factory", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("@/bootstrap/graph-executor.factory")>();
+  return {
+    createGraphExecutor: vi.fn(),
+    runGraphWithScope: original.runGraphWithScope,
+  };
+});
 
 // Mock preflightCreditCheck to avoid serverEnv access in contract tests
 // Preserves other exports from public.server.ts (createAiRuntime, toCoreMessages, etc.)
@@ -150,7 +155,6 @@ describe("app/_facades/ai/completion.server", () => {
         .calls[0]?.[0] as GraphRunRequest;
       expect(runGraphCall).toBeDefined();
       expect(runGraphCall.runId).toBe("test-req-123"); // P0: runId = ctx.reqId
-      expect(runGraphCall.ingressRequestId).toBe("test-req-123");
       expect(runGraphCall.model).toBe(TEST_MODEL_ID);
       expect(runGraphCall.messages).toHaveLength(1);
 

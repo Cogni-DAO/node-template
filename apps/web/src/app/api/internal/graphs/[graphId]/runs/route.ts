@@ -21,7 +21,10 @@ import { toUserId } from "@cogni/ids";
 import { SYSTEM_ACTOR } from "@cogni/ids/system";
 import { NextResponse } from "next/server";
 import { getContainer } from "@/bootstrap/container";
-import { createGraphExecutor } from "@/bootstrap/graph-executor.factory";
+import {
+  createGraphExecutor,
+  runGraphWithScope,
+} from "@/bootstrap/graph-executor.factory";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import {
   InternalGraphRunInputSchema,
@@ -318,7 +321,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
 
     // --- 9. Execute graph ---
     // Use provided runId (from scheduler-worker) or generate if not provided
-    // Per SCHEDULER_SPEC.md: Canonical runId shared with schedule_runs and charge_receipts
+    // Per SCHEDULER_SPEC.md: Canonical runId shared with graph_runs and charge_receipts
     const runId = providedRunId ?? randomUUID();
 
     // Use OTel trace ID (same one passed to executor, used by Langfuse decorator)
@@ -364,16 +367,6 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       },
     });
 
-    // Build caller from grant + billing account
-    const caller = {
-      billingAccountId: grant.billingAccountId,
-      virtualKeyId: billingAccount.defaultVirtualKeyId,
-      requestId: ctx.reqId,
-      traceId: ctx.traceId,
-      userId: grant.userId,
-      sessionId,
-    };
-
     // Parse input for graph execution
     const messages = Array.isArray(input.messages)
       ? (input.messages as { role: string; content: string }[])
@@ -413,17 +406,27 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       toUserId(grant.userId),
       preflightCheckFn
     );
-    const result = executor.runGraph({
-      runId,
-      ingressRequestId: runId,
-      graphId,
-      messages: messages.map((m) => ({
-        role: m.role as "user" | "assistant" | "system",
-        content: m.content,
-      })),
-      model,
-      caller,
-      stateKey,
+    const result = runGraphWithScope({
+      executor,
+      req: {
+        runId,
+        graphId,
+        messages: messages.map((m) => ({
+          role: m.role as "user" | "assistant" | "system",
+          content: m.content,
+        })),
+        model,
+        stateKey,
+      },
+      ctx: {
+        actorUserId: grant.userId,
+        requestId: runId,
+        sessionId,
+      },
+      billing: {
+        billingAccountId: grant.billingAccountId,
+        virtualKeyId: billingAccount.defaultVirtualKeyId,
+      },
     });
 
     // Consume stream and wait for final result.
