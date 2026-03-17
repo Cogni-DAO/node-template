@@ -130,8 +130,8 @@ export function PaymentActivationPageClient({
       functionName: "createSplit",
       args: [
         splitParams,
-        walletAddress as Address, // owner/controller
-        walletAddress as Address, // creator
+        operator, // owner/controller — operator wallet can update allocations programmatically
+        walletAddress as Address, // creator — the deployer who signs this tx
       ],
     });
   }, [
