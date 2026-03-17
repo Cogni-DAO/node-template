@@ -3,18 +3,31 @@
 
 /**
  * Module: `@app/(app)/setup/dao/payments/page`
- * Purpose: Server entrypoint for payment activation page; delegates to client component.
- * Scope: Server component only. Does not perform data fetching or transaction logic.
- * Invariants: Requires authenticated session via (app) route group.
- * Side-effects: none
+ * Purpose: Server entrypoint for payment activation — reads repo-spec state and passes to client component.
+ * Scope: Reads operator_wallet + cogni_dao from repo-spec. Does not perform transactions.
+ * Invariants: Repo-spec is the single source of truth for activation readiness.
+ * Side-effects: IO (filesystem read of .cogni/repo-spec.yaml)
  * Links: docs/spec/node-formation.md
  * @public
  */
 
 import type { ReactElement } from "react";
 
+import {
+  getDaoTreasuryAddress,
+  getOperatorWalletConfig,
+} from "@/shared/config";
+
 import { PaymentActivationPageClient } from "./PaymentActivationPage.client";
 
 export default function PaymentActivationPage(): ReactElement {
-  return <PaymentActivationPageClient />;
+  const operatorWallet = getOperatorWalletConfig();
+  const daoTreasury = getDaoTreasuryAddress();
+
+  return (
+    <PaymentActivationPageClient
+      operatorWalletAddress={operatorWallet?.address ?? null}
+      daoTreasuryAddress={daoTreasury ?? null}
+    />
+  );
 }

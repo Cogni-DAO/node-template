@@ -4,8 +4,8 @@
 /**
  * Module: `@app/(app)/setup/dao/payments/PaymentActivationPage.client`
  * Purpose: Client-side payment activation — deploy Split contract via user's connected wallet.
- * Scope: Renders form for operator wallet address, deploys Split via wagmi, shows result with repo-spec YAML. Does not handle Privy provisioning (that is a CLI step).
- * Invariants: SPLIT_CONTROLLER_IS_ADMIN — user's wallet is the Split controller. CHILD_OWNS_OPERATOR_WALLET — operator address is input, not created here.
+ * Scope: Reads operator wallet + DAO treasury from server props (repo-spec), deploys Split via wagmi. Does not handle Privy provisioning.
+ * Invariants: SPLIT_CONTROLLER_IS_ADMIN — user's wallet is the Split controller. Addresses from repo-spec, not user input.
  * Side-effects: IO (wagmi wallet transactions)
  * Links: docs/spec/node-formation.md
  * @public
@@ -20,7 +20,13 @@ import {
   OPENROUTER_CRYPTO_FEE_PPM,
   SPLIT_TOTAL_ALLOCATION,
 } from "@cogni/operator-wallet";
-import { CheckCircle, Info, Loader2, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  Loader2,
+  XCircle,
+} from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useState } from "react";
 import type { Address } from "viem";
@@ -31,17 +37,11 @@ import {
   useWriteContract,
 } from "wagmi";
 
-import {
-  Button,
-  HintText,
-  Input,
-  PageContainer,
-  SectionCard,
-} from "@/components";
+import { Button, HintText, PageContainer, SectionCard } from "@/components";
 
 /** Default billing constants (PPM). */
-const DEFAULT_MARKUP_PPM = 2_000_000n; // 2.0x
-const DEFAULT_REVENUE_SHARE_PPM = 750_000n; // 75%
+const DEFAULT_MARKUP_PPM = 2_000_000n;
+const DEFAULT_REVENUE_SHARE_PPM = 750_000n;
 
 type ActivationPhase =
   | "IDLE"
@@ -50,14 +50,20 @@ type ActivationPhase =
   | "SUCCESS"
   | "ERROR";
 
-export function PaymentActivationPageClient(): ReactElement {
+interface Props {
+  /** From repo-spec operator_wallet.address — null if not configured */
+  operatorWalletAddress: string | null;
+  /** From repo-spec cogni_dao.dao_contract — null if not configured */
+  daoTreasuryAddress: string | null;
+}
+
+export function PaymentActivationPageClient({
+  operatorWalletAddress,
+  daoTreasuryAddress,
+}: Props): ReactElement {
   const { address: walletAddress } = useAccount();
 
-  // Form state
-  const [operatorWalletAddress, setOperatorWalletAddress] = useState("");
-  const [daoTreasuryAddress, setDaoTreasuryAddress] = useState("");
-
-  // Activation state
+  const [confirmed, setConfirmed] = useState(false);
   const [phase, setPhase] = useState<ActivationPhase>("IDLE");
   const [splitAddress, setSplitAddress] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -74,15 +80,11 @@ export function PaymentActivationPageClient(): ReactElement {
     hash: txHash,
   });
 
-  // Validation
-  const isValidOperator =
-    operatorWalletAddress.length > 0 &&
-    /^0x[a-fA-F0-9]{40}$/.test(operatorWalletAddress);
-  const isValidTreasury =
-    daoTreasuryAddress.length > 0 &&
-    /^0x[a-fA-F0-9]{40}$/.test(daoTreasuryAddress);
-  const canSubmit =
-    isValidOperator && isValidTreasury && phase === "IDLE" && !!walletAddress;
+  // Readiness checks
+  const hasOperator = !!operatorWalletAddress;
+  const hasTreasury = !!daoTreasuryAddress;
+  const isReady = hasOperator && hasTreasury;
+  const canSubmit = isReady && confirmed && phase === "IDLE" && !!walletAddress;
 
   // Derive allocations
   const { operatorAllocation, treasuryAllocation } = calculateSplitAllocations(
@@ -92,7 +94,13 @@ export function PaymentActivationPageClient(): ReactElement {
   );
 
   const handleDeploy = useCallback(() => {
-    if (!canSubmit || !walletAddress) return;
+    if (
+      !canSubmit ||
+      !walletAddress ||
+      !operatorWalletAddress ||
+      !daoTreasuryAddress
+    )
+      return;
 
     setPhase("DEPLOYING");
     setErrorMessage(null);
@@ -116,14 +124,13 @@ export function PaymentActivationPageClient(): ReactElement {
       distributionIncentive: 0,
     };
 
-    // Controller = user's connected wallet (can update allocations later)
     writeContract({
       address: getAddress(PUSH_SPLIT_V2o2_FACTORY_ADDRESS) as Address,
       abi: splitV2o2FactoryAbi,
       functionName: "createSplit",
       args: [
         splitParams,
-        walletAddress as Address, // owner
+        walletAddress as Address, // owner/controller
         walletAddress as Address, // creator
       ],
     });
@@ -144,7 +151,7 @@ export function PaymentActivationPageClient(): ReactElement {
     }
   }, [txHash, phase]);
 
-  // Effect: receipt confirmed — extract Split address
+  // Effect: receipt confirmed
   useEffect(() => {
     if (receipt && phase === "AWAITING_CONFIRMATION") {
       let addr: string | undefined;
@@ -193,13 +200,11 @@ export function PaymentActivationPageClient(): ReactElement {
     setPhase("IDLE");
     setSplitAddress(null);
     setErrorMessage(null);
+    setConfirmed(false);
   };
 
   const repoSpecFragment = splitAddress
-    ? `operator_wallet:
-  address: "${operatorWalletAddress}"
-
-payments_in:
+    ? `payments_in:
   credits_topup:
     provider: cogni-usdc-backend-v1
     receiving_address: "${splitAddress}"
@@ -214,88 +219,96 @@ payments:
 
   const isInFlight = phase === "DEPLOYING" || phase === "AWAITING_CONFIRMATION";
 
+  // --- Not ready: missing prerequisites ---
+  if (!isReady) {
+    return (
+      <PageContainer maxWidth="lg">
+        <SectionCard title="Activate Payments">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <AlertTriangle className="h-5 w-5" />
+              <span className="font-medium">Prerequisites missing</span>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              {!hasTreasury && (
+                <p className="text-destructive">
+                  ✗ <code>cogni_dao.dao_contract</code> not found in repo-spec.
+                  Complete DAO formation at the <strong>Formation</strong> tab
+                  first.
+                </p>
+              )}
+              {!hasOperator && (
+                <p className="text-destructive">
+                  ✗ <code>operator_wallet.address</code> not found in repo-spec.
+                  Provision a Privy wallet and add the address to{" "}
+                  <code>.cogni/repo-spec.yaml</code>.
+                </p>
+              )}
+            </div>
+
+            <HintText icon={<Info size={16} />}>
+              See the operator wallet setup guide for Privy provisioning
+              instructions.
+            </HintText>
+          </div>
+        </SectionCard>
+      </PageContainer>
+    );
+  }
+
+  // --- Ready: show form ---
   return (
     <PageContainer maxWidth="lg">
       <SectionCard title="Activate Payments">
         <HintText icon={<Info size={16} />}>
-          Deploy a revenue split contract. Your connected wallet signs the
-          transaction and becomes the Split controller.
+          Deploy a revenue split contract on Base. Your connected wallet signs
+          the transaction and becomes the Split controller.
         </HintText>
 
-        {/* Operator Wallet Address */}
-        <div className="space-y-2">
-          <label
-            htmlFor="operatorWallet"
-            className="font-medium text-foreground text-sm"
-          >
-            Operator Wallet Address
-          </label>
-          <Input
-            id="operatorWallet"
-            value={operatorWalletAddress}
-            onChange={(e) => setOperatorWalletAddress(e.target.value)}
-            placeholder="0x..."
-            disabled={isInFlight || phase === "SUCCESS"}
-          />
-          <p className="text-muted-foreground text-sm">
-            Privy-managed wallet. Provision via CLI:{" "}
-            <code className="text-xs">pnpm node:activate-payments</code>
+        {/* Read-only addresses from repo-spec */}
+        <div className="space-y-2 rounded-md border bg-muted/50 p-4 text-sm">
+          <p>
+            <span className="font-medium">Operator wallet:</span>{" "}
+            <code className="text-xs">{operatorWalletAddress}</code>
           </p>
-          {operatorWalletAddress && !isValidOperator && (
-            <p className="text-destructive text-sm">Invalid address</p>
-          )}
+          <p>
+            <span className="font-medium">DAO treasury:</span>{" "}
+            <code className="text-xs">{daoTreasuryAddress}</code>
+          </p>
+          <p className="text-muted-foreground">
+            Operator ({Number(operatorAllocation) / 1e4}%) / Treasury (
+            {Number(treasuryAllocation) / 1e4}%)
+          </p>
         </div>
 
-        {/* DAO Treasury Address */}
-        <div className="space-y-2">
-          <label
-            htmlFor="daoTreasury"
-            className="font-medium text-foreground text-sm"
-          >
-            DAO Treasury Address
-          </label>
-          <Input
-            id="daoTreasury"
-            value={daoTreasuryAddress}
-            onChange={(e) => setDaoTreasuryAddress(e.target.value)}
-            placeholder="0x... (cogni_dao.dao_contract from repo-spec)"
-            disabled={isInFlight || phase === "SUCCESS"}
-          />
-          <p className="text-muted-foreground text-sm">
-            The DAO contract address from your repo-spec (
-            <code className="text-xs">cogni_dao.dao_contract</code>)
-          </p>
-          {daoTreasuryAddress && !isValidTreasury && (
-            <p className="text-destructive text-sm">Invalid address</p>
-          )}
-        </div>
-
-        {/* Allocation Preview */}
-        {isValidOperator && isValidTreasury && (
-          <div className="rounded-md border bg-muted/50 p-3 text-sm">
-            <p className="font-medium">Split Allocation</p>
-            <p className="text-muted-foreground">
-              Operator ({Number(operatorAllocation) / 1e4}%):{" "}
-              {operatorWalletAddress.slice(0, 10)}...
-            </p>
-            <p className="text-muted-foreground">
-              Treasury ({Number(treasuryAllocation) / 1e4}%):{" "}
-              {daoTreasuryAddress.slice(0, 10)}...
-            </p>
-          </div>
-        )}
-
-        {/* Deploy Button / Status */}
+        {/* Confirmation checkbox */}
         {phase === "IDLE" && (
-          <Button
-            onClick={handleDeploy}
-            disabled={!canSubmit}
-            className="w-full"
-          >
-            Deploy Split Contract
-          </Button>
+          <>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-border"
+              />
+              <span className="text-muted-foreground text-sm">
+                I am deploying this for my new node&apos;s codebase. The
+                addresses above are correct.
+              </span>
+            </label>
+
+            <Button
+              onClick={handleDeploy}
+              disabled={!canSubmit}
+              className="w-full"
+            >
+              Deploy Split Contract
+            </Button>
+          </>
         )}
 
+        {/* In-flight */}
         {isInFlight && (
           <div className="flex flex-col items-center gap-3 py-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -307,6 +320,7 @@ payments:
           </div>
         )}
 
+        {/* Success */}
         {phase === "SUCCESS" && splitAddress && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-primary">
@@ -315,7 +329,7 @@ payments:
             </div>
             <div className="rounded-md border bg-muted/50 p-3">
               <p className="mb-1 font-medium text-sm">
-                Add to .cogni/repo-spec.yaml:
+                Add to <code>.cogni/repo-spec.yaml</code>:
               </p>
               <pre className="overflow-x-auto text-xs">{repoSpecFragment}</pre>
             </div>
@@ -332,6 +346,7 @@ payments:
           </div>
         )}
 
+        {/* Error */}
         {phase === "ERROR" && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-destructive">
