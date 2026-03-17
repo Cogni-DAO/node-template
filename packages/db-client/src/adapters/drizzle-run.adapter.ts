@@ -72,13 +72,25 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
       };
 
       if (params.scheduleId && params.scheduledFor) {
-        // Scheduled run — idempotent insert via UNIQUE(schedule_id, scheduled_for)
-        await tx
-          .insert(graphRuns)
-          .values(values)
-          .onConflictDoNothing({
-            target: [graphRuns.scheduleId, graphRuns.scheduledFor],
-          });
+        // Scheduled run — insert optimistically, then re-select on duplicate.
+        // This avoids relying on ON CONFLICT inference against a partial unique index.
+        try {
+          await tx.insert(graphRuns).values(values);
+        } catch (error) {
+          const [existing] = await tx
+            .select()
+            .from(graphRuns)
+            .where(
+              and(
+                eq(graphRuns.scheduleId, params.scheduleId),
+                eq(graphRuns.scheduledFor, params.scheduledFor)
+              )
+            );
+
+          if (!existing) {
+            throw error;
+          }
+        }
 
         // Always SELECT to get the row (new or existing)
         const [row] = await tx
