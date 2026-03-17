@@ -1,323 +1,147 @@
 ---
 name: node-setup
-description: "Agentic node setup for Cogni forks. Guides a fresh fork from clone to successful preview + production deployments. Handles: repo identity, DAO formation, SSH keys, Cherry VM provisioning, GitHub secrets, DNS, and deploy verification. Prompts user only for API keys with clickable URLs."
+description: "Agentic node setup for Cogni forks. Orchestrates the full lifecycle: DAO formation, payment activation, repo identity, infrastructure provisioning, and deploy verification. Delegates to guide docs for step-by-step details."
 ---
 
 # Node Setup — Agentic Fork Onboarding
 
-You are an infrastructure setup agent. Your job is to take a fresh Cogni fork from clone to **successful preview and production deployments**. You own the entire process — only prompt the user when you need credentials that require their browser (API keys, tokens, DNS records).
+You are an infrastructure setup agent. Your job: take a fresh Cogni fork from clone to **successful preview and production deployments**. Prompt the user only for credentials that require their browser.
 
-## Architecture References
+## References (read these — they own the details)
 
-- [Node Formation Guide](../../../docs/guides/node-formation-guide.md) — DAO deployment + repo-spec generation (Phase 0)
-- [SETUP_DESIGN.md](../../../scripts/setup/SETUP_DESIGN.md) — canonical secret list and setup flow
+- [Node Formation Guide](../../../docs/guides/node-formation-guide.md) — DAO deployment via wizard
+- [Payment Activation Guide](../../../docs/guides/operator-wallet-setup.md) — Privy wallet + Split contract
+- [SETUP_DESIGN.md](../../../scripts/setup/SETUP_DESIGN.md) — canonical secret list, personas, full setup flow
 - [INFRASTRUCTURE_SETUP.md](../../../docs/runbooks/INFRASTRUCTURE_SETUP.md) — VM provisioning runbook
-- [server-env.ts](../../../apps/web/src/shared/env/server-env.ts) — app's required env vars (source of truth for what the app needs)
-- [deploy.sh](../../../scripts/ci/deploy.sh) — deploy script required secrets list
+- [server-env.ts](../../../apps/web/src/shared/env/server-env.ts) — app runtime env schema (source of truth)
+- [deploy.sh](../../../scripts/ci/deploy.sh) — deploy script required secrets
 
 ## Pre-flight
 
-Before starting, verify:
+Verify: `gh auth status`, `tofu --version`, `pnpm --version`. Detect repo name from `git remote get-url origin`.
 
-1. `gh auth status` — GitHub CLI authenticated
-2. `tofu --version` — OpenTofu installed (if not: `brew install opentofu`)
-3. `pnpm --version` — pnpm available
-4. Git remote points to the fork (not cogni-template)
-5. Branch is clean or on a setup branch
+## Node Lifecycle State Machine
 
-Detect the repo name from `git remote get-url origin` (e.g., `Cogni-DAO/cogni-resy-helper` → `cogni-resy-helper`). Use this throughout for naming.
-
-## Phase 0: DAO Formation & Repo Identity
-
-**Pre-requisite for everything else.** See [Node Formation Guide](../../../docs/guides/node-formation-guide.md) for details.
-
-1. Ask the user: "Have you deployed a DAO for this node yet?"
-   - If **no**: Direct them to https://cognidao.org/setup/dao to deploy a DAO and generate a repo-spec. They copy the generated YAML into `.cogni/repo-spec.yaml`. This is a **blocker** — do not proceed without a valid repo-spec.
-   - If **yes**: Verify `.cogni/repo-spec.yaml` has valid `node_id`, `scope_id`, `cogni_dao.chain_id`, `operator_wallet.address`, and `payments_in.credits_topup` fields. None of these should be zero addresses or empty objects.
-
-2. Verify repo identity is updated (not template defaults). Derive `REPO_SLUG` from repo name (e.g., `cogni-resy-helper`) and `REPO_SNAKE` with underscores (e.g., `cogni_resy_helper`):
-   - `package.json` → `name` field = `REPO_SLUG`
-   - `.cogni/repo-spec.yaml` → `intent.name` = `REPO_SLUG`
-   - `.cogni/repo-spec.yaml` → `activity_sources.github.source_refs` points to `Org/REPO_SLUG`
-   - `sonar-project.properties` → `sonar.projectKey` and `sonar.projectName` = `REPO_SLUG`
-   - `.github/workflows/ci.yaml` → DB names use `REPO_SNAKE_test` (e.g., `cogni_resy_helper_test`)
-   - `.env.local.example` → DB names use `REPO_SNAKE_dev`
-   - `.env.test.example` → DB names use `REPO_SNAKE_test`
-
-3. Run `pnpm check` to verify schema validation passes. If `repo-spec.yaml` fails Zod validation, the stubs are wrong — fix them.
-
-## Phase 1: Local Environment
-
-1. Copy `.env.local.example` → `.env.local` if it doesn't exist
-2. Update `.env.local` with repo-specific values:
-   - DB names: replace `cogni_template` with repo-specific name (e.g., `cogni_resy_helper`)
-   - `COGNI_REPO_URL`: point to this repo's git URL
-   - `CHERRY_AUTH_TOKEN`: rename from `CHERRY_AUTH_KEY` if needed
-
-3. Prompt user for required API keys they must create:
-
-   | Secret                                 | URL to create                                                                                                    |
-   | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-   | `CHERRY_AUTH_TOKEN`                    | https://portal.cherryservers.com/settings/api-keys → Create → copy token                                         |
-   | `OPENROUTER_API_KEY`                   | https://openrouter.ai/settings/keys                                                                              |
-   | `EVM_RPC_URL`                          | https://dashboard.alchemy.com/apps → Create app → Chain: Base, Network: Mainnet → copy HTTPS URL                 |
-   | `GHCR_DEPLOY_TOKEN`                    | https://github.com/settings/tokens/new → **Classic PAT** (not fine-grained) → scope: `read:packages` only        |
-   | `GIT_READ_TOKEN`                       | https://github.com/settings/personal-access-tokens/new → Fine-grained PAT → select this repo → `Contents: Read`  |
-   | `OPENCLAW_GITHUB_RW_TOKEN`             | https://github.com/settings/tokens/new → Classic PAT → scopes: `repo` (Contents:Write + Pull requests:Write)     |
-   | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | https://cloud.walletconnect.com → Create project → copy Project ID (optional — skip if not using wallet connect) |
-
-   For each: give the user the URL, tell them exactly what to click, and wait for them to paste the value. Set it in `.env.local`.
-
-4. Auto-generate values that don't need user input:
-   - `LITELLM_MASTER_KEY`: `sk-$(openssl rand -hex 24)`
-   - `AUTH_SECRET`: `openssl rand -base64 32`
-   - `OPENCLAW_GATEWAY_TOKEN`: `openssl rand -base64 32`
-
-5. Run `pnpm check` — must pass before proceeding.
-
-## Phase 2: SSH Keys
-
-For each environment (preview, production):
-
-```bash
-REPO_NAME=<detected-repo-name>  # e.g., cogni_resy_helper
-ENV=<preview|production>
-ssh-keygen -t ed25519 -f ~/.ssh/${REPO_NAME}_${ENV}_deploy -C "${REPO_NAME}-${ENV}" -N ""
-cp ~/.ssh/${REPO_NAME}_${ENV}_deploy.pub infra/tofu/cherry/base/keys/
+```
+clone → formation → local env → activation → infra → deploy
+         (pending)    (dev:infra)   (active)
 ```
 
-Remove any old template keys from `infra/tofu/cherry/base/keys/` (e.g., `cogni_template_*`).
+Check `payments.status` in `.cogni/repo-spec.yaml` to determine current state.
 
-Commit the public keys:
+### Phase 0: Formation (`payments.status` missing or no repo-spec)
 
-```bash
-git add infra/tofu/cherry/base/keys/*.pub
-git commit -m "chore(infra): add SSH deploy keys for ${REPO_NAME}"
-```
+**Goal:** DAO deployed on-chain, repo-spec generated.
 
-## Phase 3: VM Provisioning (Preview first, then Production)
+1. Direct user to https://cognidao.org/setup/dao
+2. User copies generated YAML into `.cogni/repo-spec.yaml`
+3. Follow [Node Formation Guide](../../../docs/guides/node-formation-guide.md) for details
+4. **Gate:** `.cogni/repo-spec.yaml` has valid `cogni_dao.chain_id` and `payments.status: pending`
 
-### Critical: Cherry auth
+### Phase 1: Repo Identity
 
-**NEVER `source .env.local`** — it silently corrupts env vars due to unquoted special characters. Always extract individual values:
+**Goal:** All template references point to this fork.
 
-```bash
-export CHERRY_AUTH_TOKEN=$(grep '^CHERRY_AUTH_TOKEN=' .env.local | cut -d= -f2-)
-```
+Derive `REPO_SLUG` (e.g., `cogni-resy-helper`) and `REPO_SNAKE` (e.g., `cogni_resy_helper`) from the repo name. Update:
 
-Verify auth works before proceeding:
+- `package.json` → `name`
+- `.cogni/repo-spec.yaml` → `intent.name`, `activity_sources.github.source_refs`
+- `sonar-project.properties` → `sonar.projectKey`, `sonar.projectName`
+- `.github/workflows/ci.yaml` → DB names (`REPO_SNAKE_test`)
+- `.env.local.example`, `.env.test.example` → DB names
 
-```bash
-curl -s -H "Authorization: Bearer $CHERRY_AUTH_TOKEN" "https://api.cherryservers.com/v1/teams" | head -c 100
-```
+**Gate:** `pnpm check` passes.
 
-Must return JSON team data, not 401.
+### Phase 2: Local Environment
 
-### Discover project ID
+**Goal:** `.env.local` configured, dev stack running, database provisioned.
 
-```bash
-# List teams to find project
-curl -s -H "Authorization: Bearer $CHERRY_AUTH_TOKEN" "https://api.cherryservers.com/v1/teams" | python3 -c "import sys,json; teams=json.load(sys.stdin); [print(f'Team: {t[\"name\"]}, ID: {t[\"id\"]}') for t in teams]"
-```
+1. Copy `.env.local.example` → `.env.local`, update DB names and `COGNI_REPO_URL`
+2. Prompt user for credentials they must create (see [SETUP_DESIGN.md](../../../scripts/setup/SETUP_DESIGN.md) for full list):
 
-Then list projects for the team:
+   | Secret                     | Where to create                                                                         |
+   | -------------------------- | --------------------------------------------------------------------------------------- |
+   | `CHERRY_AUTH_TOKEN`        | https://portal.cherryservers.com/settings/api-keys                                      |
+   | `OPENROUTER_API_KEY`       | https://openrouter.ai/settings/keys                                                     |
+   | `EVM_RPC_URL`              | https://dashboard.alchemy.com/apps (Base Mainnet)                                       |
+   | `GHCR_DEPLOY_TOKEN`        | https://github.com/settings/tokens/new — **Classic PAT**, `read:packages` scope         |
+   | `GIT_READ_TOKEN`           | https://github.com/settings/personal-access-tokens/new — Fine-grained, `Contents: Read` |
+   | `OPENCLAW_GITHUB_RW_TOKEN` | https://github.com/settings/tokens/new — Classic PAT, `repo` scope                      |
 
-```bash
-curl -s -H "Authorization: Bearer $CHERRY_AUTH_TOKEN" "https://api.cherryservers.com/v1/teams/<TEAM_ID>/projects" | python3 -c "import sys,json; [print(f'Project: {p[\"name\"]}, ID: {p[\"id\"]}') for p in json.load(sys.stdin)]"
-```
+3. Auto-generate: `LITELLM_MASTER_KEY`, `AUTH_SECRET`, `OPENCLAW_GATEWAY_TOKEN` via `openssl rand`
+4. Start dev infrastructure: `pnpm dev:infra`
+5. Provision database + run migrations: `pnpm dev:setup`
+6. Start dev server: `pnpm dev`
 
-### Create tfvars
+**Gate:** `pnpm check` passes. App boots at http://localhost:3000 without DB errors.
 
-For each environment, create `terraform.<env>.tfvars`:
+### Phase 3: Payment Activation (`payments.status: pending_activation`)
 
-```hcl
-environment     = "<env>"
-vm_name_prefix  = "<repo-name>"           # e.g., "cogni-resy-helper"
-project_id      = "<cherry-project-id>"
-plan            = "B1-4-4gb-80s-shared"   # MUST be 4GB minimum — 2GB OOMs
-region          = "LT-Siauliai"
-public_key_path = "keys/<repo_name>_<env>_deploy.pub"
-```
+**Goal:** Split contract deployed, payments active.
 
-### Provision
+1. User adds `operator_wallet.address` to repo-spec (provision via Privy if needed — see [Payment Activation Guide](../../../docs/guides/operator-wallet-setup.md))
+2. Restart dev server to pick up repo-spec changes
+3. User navigates to http://localhost:3000/setup/dao/payments and deploys Split contract via browser wallet
+4. User pastes the output `payments_in` + `payments.status: active` into repo-spec
 
-```bash
-cd infra/tofu/cherry/base
-tofu init
-tofu workspace new <env> || tofu workspace select <env>
-tofu apply -var-file=terraform.<env>.tfvars -auto-approve
-```
+**Gate:** `payments.status: active` in repo-spec, `payments_in.credits_topup.receiving_address` populated.
 
-Capture the IP:
+### Phase 4: Infrastructure (preview first, then production)
 
-```bash
-export VM_IP=$(tofu output -raw vm_host)
-```
+**Goal:** VMs provisioned, SSH keys generated and stored.
 
-### Wait for cloud-init
+Follow [INFRASTRUCTURE_SETUP.md](../../../docs/runbooks/INFRASTRUCTURE_SETUP.md) for detailed steps. Key points:
 
-The VM needs ~3 minutes for cloud-init to install Docker. Verify:
+1. Generate SSH keypairs, commit public keys
+2. Discover Cherry project ID via API (never hardcode)
+3. Create tfvars (plan: `B1-4-4gb-80s-shared` minimum)
+4. `tofu init && tofu apply`
+5. Wait for cloud-init (~3 min), verify Docker is running
 
-```bash
-ssh -i ~/.ssh/${REPO_NAME}_${ENV}_deploy -o StrictHostKeyChecking=no root@${VM_IP} "cloud-init status --wait && docker version"
-```
+**Gate:** SSH into VM succeeds, `docker version` works.
 
-## Phase 4: GitHub Secrets
+### Phase 5: GitHub Secrets
 
-### Environment secrets (per env — run for preview, then production)
+**Goal:** All secrets set for CI/CD deployment.
 
-**Auto-generated (create fresh per environment):**
+Follow the secret list in [SETUP_DESIGN.md](../../../scripts/setup/SETUP_DESIGN.md). Three categories:
 
-```bash
-ENV="preview"  # or "production"
-REPO_NAME="<repo-name>"
+1. **Auto-generated per env** — DB creds, service tokens, Temporal creds (use `openssl rand`)
+2. **From .env.local** — shared credentials (OpenRouter, EVM RPC, PostHog, etc.)
+3. **Repo-level** — CHERRY_AUTH_TOKEN, GHCR_DEPLOY_TOKEN, GIT_READ_TOKEN
 
-# Database
-POSTGRES_ROOT_PASS=$(openssl rand -hex 32)
-APP_USER="${REPO_NAME//-/_}_app_${ENV}"
-APP_PASS=$(openssl rand -hex 32)
-SVC_USER="${REPO_NAME//-/_}_app_${ENV}_service"
-SVC_PASS=$(openssl rand -hex 32)
-DB_NAME="${REPO_NAME//-/_}_${ENV}"
+Set `DOMAIN` as both variable and secret per environment. Ask user for domain names.
 
-gh secret set POSTGRES_ROOT_USER --env $ENV --body "postgres"
-gh secret set POSTGRES_ROOT_PASSWORD --env $ENV --body "$POSTGRES_ROOT_PASS"
-gh secret set APP_DB_USER --env $ENV --body "$APP_USER"
-gh secret set APP_DB_PASSWORD --env $ENV --body "$APP_PASS"
-gh secret set APP_DB_SERVICE_USER --env $ENV --body "$SVC_USER"
-gh secret set APP_DB_SERVICE_PASSWORD --env $ENV --body "$SVC_PASS"
-gh secret set APP_DB_NAME --env $ENV --body "$DB_NAME"
-gh secret set DATABASE_URL --env $ENV --body "postgresql://${APP_USER}:${APP_PASS}@postgres:5432/${DB_NAME}?sslmode=disable"
-gh secret set DATABASE_SERVICE_URL --env $ENV --body "postgresql://${SVC_USER}:${SVC_PASS}@postgres:5432/${DB_NAME}?sslmode=disable"
+**Gate:** `gh secret list --env preview` shows all required secrets.
 
-# Temporal
-gh secret set TEMPORAL_DB_USER --env $ENV --body "temporal"
-gh secret set TEMPORAL_DB_PASSWORD --env $ENV --body "$(openssl rand -hex 32)"
+### Phase 6: DNS
 
-# Service tokens
-gh secret set AUTH_SECRET --env $ENV --body "$(openssl rand -hex 32)"
-gh secret set LITELLM_MASTER_KEY --env $ENV --body "sk-$(openssl rand -hex 24)"
-gh secret set METRICS_TOKEN --env $ENV --body "$(openssl rand -base64 32)"
-gh secret set SCHEDULER_API_TOKEN --env $ENV --body "$(openssl rand -base64 32)"
-gh secret set BILLING_INGEST_TOKEN --env $ENV --body "$(openssl rand -base64 32)"
-gh secret set INTERNAL_OPS_TOKEN --env $ENV --body "$(openssl rand -base64 32)"
-gh secret set OPENCLAW_GATEWAY_TOKEN --env $ENV --body "$(openssl rand -base64 32)"
+**Goal:** Domain records point to VMs.
 
-# Deploy infra
-gh secret set SSH_DEPLOY_KEY --env $ENV --body "$(cat ~/.ssh/${REPO_NAME//-/_}_${ENV}_deploy)"
-gh secret set VM_HOST --env $ENV --body "$VM_IP"
-```
+Ask user to create A records. Verify with `dig +short <domain>`.
 
-**From .env.local (shared credentials — same value both envs):**
+### Phase 7: Deploy & Verify
 
-```bash
-gh secret set OPENROUTER_API_KEY --env $ENV --body "$(grep '^OPENROUTER_API_KEY=' .env.local | cut -d= -f2-)"
-gh secret set EVM_RPC_URL --env $ENV --body "$(grep '^EVM_RPC_URL=' .env.local | cut -d= -f2-)"
-gh secret set OPENCLAW_GITHUB_RW_TOKEN --env $ENV --body "$(grep '^OPENCLAW_GITHUB_RW_TOKEN=' .env.local | cut -d= -f2-)"
-gh secret set POSTHOG_API_KEY --env $ENV --body "$(grep '^POSTHOG_API_KEY=' .env.local | cut -d= -f2-)"
-gh secret set POSTHOG_HOST --env $ENV --body "$(grep '^POSTHOG_HOST=' .env.local | cut -d= -f2-)"
-gh secret set POSTHOG_PROJECT_ID --env $ENV --body "$(grep '^POSTHOG_PROJECT_ID=' .env.local | cut -d= -f2-)"
-```
+**Goal:** Green CI run, app responding.
 
-**Domain — ask user for their preview and production domains:**
+1. Merge to `staging` to trigger Staging Preview workflow
+2. Monitor: `gh run view <id> --json status,conclusion,jobs`
+3. On failure: check logs, fix, rerun
+4. **Checkpoint:** Preview green → repeat Phases 4-7 for production
 
-```bash
-# DOMAIN is read as a GitHub Actions variable (not secret)
-gh variable set DOMAIN --env $ENV --body "<user-provided-domain>"
-# Also set as secret for deploy.sh env file generation
-gh secret set DOMAIN --env $ENV --body "<user-provided-domain>"
-```
-
-### Repository secrets (set once, shared across envs)
-
-```bash
-gh secret set CHERRY_AUTH_TOKEN --body "$(grep '^CHERRY_AUTH_TOKEN=' .env.local | cut -d= -f2-)"
-gh secret set GHCR_DEPLOY_TOKEN --body "$(grep '^GHCR_DEPLOY_TOKEN=' .env.local | cut -d= -f2-)"
-gh secret set GIT_READ_TOKEN --body "$(grep '^GIT_READ_TOKEN=' .env.local | cut -d= -f2-)"
-gh secret set GIT_READ_USERNAME --body "$(grep '^GIT_READ_USERNAME=' .env.local | cut -d= -f2-)"
-gh secret set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID --body "$(grep '^NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=' .env.local | cut -d= -f2- | cut -d'#' -f1 | xargs)"
-```
-
-**Optional repo secrets — prompt only if user wants them:**
-
-- `SONAR_TOKEN` — https://sonarcloud.io/account/security
-- `ACTIONS_AUTOMATION_BOT_PAT` — https://github.com/settings/tokens/new (needs `repo`, `workflow` scopes)
-
-## Phase 5: DNS
-
-Ask the user to create A records at their domain registrar:
-
-| Host                     | Type | Value                | Purpose                |
-| ------------------------ | ---- | -------------------- | ---------------------- |
-| `<preview-subdomain>`    | A    | `<preview-vm-ip>`    | Preview environment    |
-| `<production-subdomain>` | A    | `<production-vm-ip>` | Production environment |
-
-Example: "Go to your DNS provider (e.g., Namecheap → Advanced DNS) and add these A records."
-
-Verify propagation:
-
-```bash
-dig +short <preview-domain>
-dig +short <production-domain>
-```
-
-## Phase 6: Deploy & Verify
-
-### Trigger deploy
-
-Merge setup changes to `staging` branch to trigger the Staging Preview workflow. Or push directly if on staging.
-
-### Monitor deploy
-
-```bash
-# Watch the run
-gh run list --limit 5
-gh run view <run-id> --json status,conclusion,jobs --jq '{status, conclusion, jobs: [.jobs[] | {name, status, conclusion}]}'
-```
-
-### Common deploy failures and fixes
-
-| Error                                 | Cause                                              | Fix                                                                         |
-| ------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------- |
-| `Missing required secret: X`          | Secret not set in GitHub                           | Set it with `gh secret set`                                                 |
-| `docker login ghcr.io denied`         | `GHCR_DEPLOY_TOKEN` missing or is fine-grained PAT | Must be **Classic PAT** with `read:packages`                                |
-| `no route to host` for registry pulls | Transient VM network issue                         | Rerun: `gh run rerun <id> --failed`                                         |
-| Container unhealthy / OOM             | VM too small                                       | Must be `B1-4-4gb-80s-shared` minimum                                       |
-| `App did not become ready after 30s`  | First deploy cold start, migrations                | Rerun — second attempt usually succeeds                                     |
-| `SSH key label already exists`        | Another repo used same label                       | Fix: `main.tf` should use `${var.vm_name_prefix}-${var.environment}-deploy` |
-
-### Success criteria
-
-The deploy is successful when:
-
-1. Build job: success
-2. Deploy job: success
-3. E2E job: success (or skipped if no DNS yet)
-4. `curl -I https://<domain>/readyz` returns 200
-
-### Checkpoint: Preview success
-
-Once preview deploys successfully, **repeat Phases 3-6 for production** with:
-
-- `ENV=production`
-- Production domain
-- Production SSH key
+**Gate:** `curl -I https://<domain>/readyz` returns 200.
 
 ## Done
 
-The agent's job is complete when:
-
-- [ ] Preview deployment successful (green CI run)
-- [ ] Production deployment successful (green CI run)
-- [ ] `pnpm check` passes locally
+- [ ] Preview deployment green
+- [ ] Production deployment green
 - [ ] DNS resolves for both environments
 - [ ] `/readyz` returns 200 on both domains
 
-## Anti-patterns (things that broke during our first setup)
+## Anti-patterns
 
 1. **NEVER `source .env.local`** — use `grep` extraction for individual vars
 2. **NEVER use fine-grained PATs for GHCR** — only Classic PATs work
-3. **NEVER use 2GB VMs** — the full stack requires 4GB minimum
-4. **NEVER hardcode `cogni-template` names** — always derive from repo name
-5. **NEVER skip `pnpm check`** before deploying — repo-spec validation catches issues early
-6. **NEVER trust that `regions` endpoint auth = real auth** — `/v1/regions` is public, test with `/v1/teams`
+3. **NEVER use 2GB VMs** — full stack requires 4GB minimum
+4. **NEVER hardcode `cogni-template` names** — derive from repo name
+5. **NEVER trust `/v1/regions` for auth verification** — it's public; use `/v1/teams`
