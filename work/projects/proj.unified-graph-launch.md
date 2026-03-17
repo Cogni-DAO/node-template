@@ -11,7 +11,7 @@ outcome: All graph runs flow through GraphRunWorkflow; no inline execution in HT
 assignees:
   - derekg1729
 created: 2026-02-07
-updated: 2026-03-13
+updated: 2026-03-17
 labels:
   - ai-graphs
   - scheduler
@@ -68,15 +68,15 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 **Three-plane architecture:** Temporal (control) + Redis Streams (stream) + PostgreSQL (durable). See [unified-graph-launch.md §4](../../docs/spec/unified-graph-launch.md) for full design.
 
-| Deliverable                                                                                          | Status      | Est | Work Item |
-| ---------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
-| **Infrastructure: Redis 7** — docker-compose, `ioredis` dep, env config                              | Done        | 1   | task.0174 |
-| **RunStreamPort + RedisRunStreamAdapter** — hexagonal port/adapter for Redis Streams                 | Done        | 2   | task.0175 |
-| **Extract `graph-execution-core` package** — decouple execution ports from Next.js                   | Done        | 3   | task.0179 |
-| **GraphRunWorkflow + promote `schedule_runs` → `graph_runs`** — single run ledger, Temporal workflow | In Review   | 5   | task.0176 |
-| **Neutral usage facts** — remove billing identity from inner providers (ALS cleanup)                 | Not Started | 2   | task.0180 |
-| **Unified streaming API** — chat endpoint refactor, reconnection endpoint, idempotency               | Not Started | 5   | task.0177 |
-| **Scheduled run migration + observability + docs** — migrate scheduled runs, instrumentation, docs   | Not Started | 3   | task.0178 |
+| Deliverable                                                                                          | Status            | Est | Work Item |
+| ---------------------------------------------------------------------------------------------------- | ----------------- | --- | --------- |
+| **Infrastructure: Redis 7** — docker-compose, `ioredis` dep, env config                              | Done              | 1   | task.0174 |
+| **RunStreamPort + RedisRunStreamAdapter** — hexagonal port/adapter for Redis Streams                 | Done              | 2   | task.0175 |
+| **Extract `graph-execution-core` package** — decouple execution ports from Next.js                   | Done (PR #574)    | 3   | task.0179 |
+| **GraphRunWorkflow + promote `schedule_runs` → `graph_runs`** — single run ledger, Temporal workflow | Checkpoint 1 done | 5   | task.0176 |
+| **Neutral usage facts** — remove billing identity from inner providers (ALS cleanup)                 | Not Started       | 2   | task.0180 |
+| **Unified streaming API** — chat endpoint refactor, reconnection endpoint, idempotency               | Not Started       | 5   | task.0177 |
+| **Scheduled run migration + observability + docs** — migrate scheduled runs, instrumentation, docs   | Not Started       | 3   | task.0178 |
 
 **Note:** When `graph_runs` exists, reconciler can optionally switch reference-set from LiteLLM spend/logs to `graph_runs`, but it is not required. The LiteLLM API approach remains valid long-term.
 
@@ -102,9 +102,9 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 ## Dependencies
 
-- [ ] Temporal infrastructure operational (existing)
+- [x] Temporal infrastructure operational (existing)
 - [ ] GRAPH_EXECUTION.md P1 run persistence (for P1 of this initiative)
-- [ ] task.0029 callback ingest endpoint (prerequisite for task.0039 reconciler)
+- [x] task.0029 callback ingest endpoint (prerequisite for task.0039 reconciler)
 
 ## As-Built Specs
 
