@@ -57,7 +57,7 @@ payments:
 
 **Explicit input with default:**
 
-- `SPLIT_CONTROLLER_ADDRESS` — Split owner/admin. Defaults to deployer address with a loud warning that this should be changed to a multisig/admin for production.
+- Split controller/owner: the operator wallet address (from repo-spec). Enables programmatic allocation updates.
 
 **Operator wallet selection:**
 
@@ -93,7 +93,7 @@ repo-spec must have all of:
 
 - **R1**: `buildRepoSpecYaml` outputs `payments.status: pending_activation`
 - **R2**: `pnpm node:activate-payments` reads DAO treasury from repo-spec, not env
-- **R3**: Split controller is explicit input (env `SPLIT_CONTROLLER_ADDRESS`, default deployer + warning)
+- **R3**: Split controller is the operator wallet (from repo-spec), not the deployer
 - **R4**: Operator wallet: create if 0 in Privy, use if 1, error if >1 without explicit selection
 - **R5**: Validate deployed Split by reading config back on-chain (not simulate distribute)
 - **R6**: Write repo-spec in place (not print-to-paste)

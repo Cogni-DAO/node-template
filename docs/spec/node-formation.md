@@ -74,7 +74,7 @@ Enable any founder to create a fully-verified Cogni DAO node via a 3-field web f
 
 9. **PAYMENTS_ACTIVE_REQUIRES_ALL**: A node's payments are active only when repo-spec contains all of: `payments.status: active`, `operator_wallet.address`, `payments_in.credits_topup.receiving_address`, `payments_in.credits_topup.provider`, `payments_in.credits_topup.allowed_chains`, `payments_in.credits_topup.allowed_tokens`. Missing any field means payments are inactive — the app skips the funding chain gracefully.
 
-10. **SPLIT_CONTROLLER_IS_ADMIN**: The Split contract's owner/controller is an explicit admin address (founder wallet or multisig), NOT the operator hot wallet. The operator wallet is a recipient only.
+10. **SPLIT_CONTROLLER_IS_OPERATOR**: The Split contract's owner/controller is the operator wallet (Privy-managed). This enables programmatic allocation updates if pricing constants change. The deployer (founder wallet) signs the deployment tx but does not retain admin control.
 
 ## Schema
 
@@ -329,7 +329,7 @@ Payment activation runs in the child node's own repo after formation + infra set
 4. Validate: read deployed Split config back on-chain, verify recipients + allocations match
 5. Write repo-spec in place: `operator_wallet.address`, `payments_in.credits_topup.*`, `payments.status: active` (written last, only after on-chain validation succeeds)
 
-**Split controller/admin:** Explicit input via `SPLIT_CONTROLLER_ADDRESS`. Defaults to deployer address with a warning. Production deployments should use a multisig or governance admin.
+**Split controller/admin:** The operator wallet address (from repo-spec). Enables programmatic allocation updates. The founder's connected wallet signs the deployment tx but the operator wallet is the on-chain owner.
 
 **Existing primitives (kept for advanced/recovery use):**
 
@@ -341,8 +341,8 @@ Payment activation runs in the child node's own repo after formation + infra set
 
 - Shared operator repo: formation factory only. Never creates child wallets.
 - Child node backend: owns Privy credentials and operator wallet.
-- Founder/admin wallet: Split controller/owner (can update allocations).
-- Operator wallet: hot operational spender only (recipient, not admin).
+- Operator wallet: Split controller/owner (can update allocations programmatically) AND operational spender (recipient).
+- Founder wallet: signs the Split deployment tx, does not retain on-chain admin.
 
 ### File Pointers
 
