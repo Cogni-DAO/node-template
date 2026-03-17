@@ -86,21 +86,22 @@ Append-only. Claims are never mutated, only superseded by newer claims from re-e
 
 ### Layer 2: Canonical Knowledge — NEW
 
-The resolved, current-best understanding. Mutable, but every mutation traces to an `activity_run`.
+The resolved, current-best understanding. In Crawl, mutations trace to `source_record_id`. In Walk+, mutations also trace to `activity_run`.
 
 **`entity`** — one row per real-world thing:
 
-| Field | Purpose |
-|---|---|
-| `id` | Stable identifier |
-| `entity_type` | Niche-defined enum (each fork defines its domain types) |
-| `canonical_name` | Best-known name |
-| `attributes` | JSONB, niche-extensible (validated by Zod schemas per entity_type) |
-| `confidence` | Derived from supporting claims |
-| `source_count` | How many independent sources confirm this entity |
-| `first_seen_at`, `last_corroborated_at` | Temporal bounds |
-| `resolved_by_run_id` | Which resolution run created/updated this |
-| `tenant_id` | `'global'` for shared domain knowledge, `billing_account_id` for private |
+| Field | Phase | Purpose |
+|---|---|---|
+| `id` | Crawl | Stable identifier |
+| `entity_type` | Crawl | Niche-defined string (each fork defines its domain types, validated by Zod) |
+| `canonical_name` | Crawl | Best-known name |
+| `attributes` | Crawl | JSONB, niche-extensible (validated by Zod schemas per entity_type) |
+| `source_record_id` | Crawl | FK to `ingestion_receipts` — provenance back to raw data |
+| `first_seen_at`, `last_corroborated_at` | Crawl | Temporal bounds |
+| `tenant_id` | Crawl | `'global'` for shared domain knowledge, `billing_account_id` for private |
+| `confidence` | Walk | Derived from supporting claims |
+| `source_count` | Walk | How many independent sources confirm this entity |
+| `resolved_by_run_id` | Walk | Which resolution run created/updated this |
 
 **`entity_alias`** — entity resolution subsystem:
 
@@ -294,12 +295,21 @@ Ship canonical knowledge tables with one new `packages/knowledge-store/` package
 - JSONB `attributes` on entities. Validated by Zod schemas per `entity_type`, not DB constraints.
 - No Apache AGE. Recursive CTEs handle relationship traversal.
 
+## Scope of This Research
+
+This research focused on **knowledge store architecture** (spike.0137 areas #3, #4, #5). The following spike.0137 areas were **not addressed** and need separate investigation if still relevant:
+
+- **x402 protocol & agent-to-agent payments** (#1) — deferred; see `proj.x402-e2e-migration` for current x402 work
+- **OSS data sources & research pipeline** (#2) — GitHub API, Libraries.io, SPDX, rate limits. Needed before OSS advisor Crawl implementation.
+- **Content & blog pipeline** (#6) — static site generation, SEO strategy. Walk/P1 concern for `proj.oss-research-node`.
+
 ## Open Questions
 
 - **Attribute schema validation**: Zod schemas per `entity_type` — where do niche forks register their schemas? Package config? Convention-based discovery?
 - **Observation granularity**: How often to sample time-series signals? Per-source cadence config vs global schedule?
 - **When to introduce claims**: What's the concrete trigger? First multi-source ingestion? First re-extraction need? Or first contradiction?
 - **Cross-node knowledge sharing**: Can nodes share canonical entities with each other? What's the trust model? (Probably a Run+ concern.)
+- **Cross-package schema FK**: `source_record_id` references `ingestion_receipts` which lives in `packages/db-schema`. The `packages/knowledge-store` Drizzle tables need to reference that table — clarify whether to import the table definition or use a raw string FK.
 
 ---
 
@@ -319,9 +329,9 @@ Ship canonical knowledge tables with one new `packages/knowledge-store/` package
 
 ### Specs
 
-| Spec | Status | Key Invariants |
+| Spec | Status | What it should cover |
 |---|---|---|
-| `docs/spec/knowledge-store.md` | New | CANONICAL_TABLES (entity/relation/observation, separate tables, not one generic row), PROVENANCE_REQUIRED (every row traces to source_record_id), TYPES_ARE_STRINGS (no DB enums), TENANT_SCOPED (RLS on canonical tables) |
+| `docs/spec/knowledge-store.md` | New | Separate tables per concept (not one generic row), every row traces to source_record_id, type fields are strings not DB enums, RLS on canonical tables |
 | `docs/spec/database-rls.md` | Update | Add knowledge tables, global tenant pattern |
 | `docs/spec/data-ingestion-pipelines.md` | Update | Clarify Layer 0 role, link to knowledge-store as downstream consumer |
 

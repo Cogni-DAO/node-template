@@ -110,6 +110,8 @@ Every niche fork defines its own entity types, relation types, and signal types.
 
 `ingestion-core` owns Layer 0: `ActivityEvent`, `PollAdapter`, `WebhookNormalizer`, cursor-based sync. `knowledge-store` is a downstream consumer. The link between layers is `source_record_id` — a FK from canonical knowledge rows back to `ingestion_receipts`. This mirrors how `attribution-ledger` also consumes from `ingestion_receipts` independently.
 
+**Cross-package schema FK**: The `ingestion_receipts` table definition lives in `packages/db-schema`. The `knowledge-store` Drizzle schema needs to reference it for the `source_record_id` FK. Options: (a) import the table from `@cogni/db-schema` as a package dependency, (b) use a raw string FK without type-safe reference. Option (a) is cleaner but creates a compile-time dependency on db-schema. Decide during scaffold task.
+
 ### Package boundary: why not in db-schema?
 
 The knowledge store is a capability package (port + domain + adapters), not just a schema. It contains query logic (recursive CTE traversal, timeline aggregation), dedup rules, and type validation. `db-schema` is a pure schema package with no business logic. Keeping them separate preserves the boundary.
