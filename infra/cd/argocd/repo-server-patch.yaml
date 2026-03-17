@@ -6,7 +6,7 @@
 #
 # The sidecar runs alongside the repo-server and handles .enc.yaml files.
 # Age private key is mounted from the sops-age-key K8s Secret (created manually
-# during cluster bootstrap — see docs/runbooks/k3s-bootstrap.md).
+# during cluster bootstrap — see docs/runbooks/INFRASTRUCTURE_SETUP.md).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

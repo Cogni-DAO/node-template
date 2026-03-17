@@ -48,22 +48,30 @@ log_info "Promoting scheduler-worker image in staging overlay"
 log_info "  Image: $IMAGE_NAME"
 log_info "  Digest: $DIGEST"
 
-# Update the kustomization.yaml images section:
-# Replace newName + newTag with newName + digest
-# The file uses newTag for placeholder; switch to digest for real deployments
-sed -i.bak \
-    -e "s|newName: .*|newName: ${IMAGE_NAME}|" \
-    -e "/newTag:/d" \
-    -e "s|# Replace with @sha256: digest on first real deployment|digest: \"${DIGEST}\"|" \
-    "$OVERLAY_FILE"
+# Update the kustomization.yaml images section.
+# Uses | as sed delimiter to avoid conflicts with / in image URLs.
+# Handles both first-run (newTag → digest) and subsequent runs (digest → digest).
+#
+# First run:  newName: <old>  +  newTag: "placeholder"  →  newName: <new>  +  digest: "<sha>"
+# Re-run:     newName: <old>  +  digest: "<old-sha>"    →  newName: <new>  +  digest: "<sha>"
 
-# If digest line wasn't added (already promoted before), update existing digest
-if ! grep -q "digest:" "$OVERLAY_FILE"; then
-    # Fallback: add digest after newName line
-    sed -i.bak "/newName: ${IMAGE_NAME}/a\\    digest: \"${DIGEST}\"" "$OVERLAY_FILE"
+# Update newName
+sed -i.bak "s|newName: .*|newName: ${IMAGE_NAME}|" "$OVERLAY_FILE"
+
+# Replace newTag with digest (first promotion) or update existing digest (re-run)
+if grep -q 'newTag:' "$OVERLAY_FILE"; then
+    # First run: replace newTag line with digest line
+    sed -i.bak "s|.*newTag:.*|    digest: \"${DIGEST}\"|" "$OVERLAY_FILE"
+elif grep -q 'digest:' "$OVERLAY_FILE"; then
+    # Re-run: update existing digest value
+    sed -i.bak "s|digest: .*|digest: \"${DIGEST}\"|" "$OVERLAY_FILE"
+else
+    # Safety fallback: add digest after newName
+    sed -i.bak "/newName: /a\\
+    digest: \"${DIGEST}\"" "$OVERLAY_FILE"
 fi
 
-# Also update the ConfigMap IMAGE_DIGEST patch value
+# Update the ConfigMap IMAGE_DIGEST patch value
 sed -i.bak \
     -e "s|value: \"staging-placeholder-scheduler-worker\"|value: \"${DIGEST}\"|" \
     -e "s|value: \"sha256:.*\"|value: \"${DIGEST}\"|" \

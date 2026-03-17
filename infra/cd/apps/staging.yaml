@@ -14,6 +14,7 @@ metadata:
 spec:
   project: default
   source:
+    # REPO_URL_PLACEHOLDER — replaced by bootstrap script with actual repo URL.
     repoURL: https://github.com/Cogni-DAO/cogni-template.git
     targetRevision: staging
     path: infra/cd/overlays/staging

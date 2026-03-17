@@ -697,13 +697,12 @@ log_info "Bringing up postgres..."
 # Incremental up may fail when the network definition changes (e.g. IPAM subnet added):
 # Compose tries to recreate the network but Docker refuses while containers are attached.
 # Only fall back to full teardown for that specific case; let other errors propagate.
-# Profile flag is required: sandbox-openclaw services (openclaw-gateway, llm-proxy-openclaw)
-# are on the internal network but invisible to `down` without their profile active.
+# COMPOSE_PROFILES env var ensures profiled services are visible to `down`.
 if ! output="$($RUNTIME_COMPOSE up -d postgres 2>&1)"; then
   printf '%s\n' "$output" >&2
   if grep -qiE 'has active endpoints|error while removing network' <<<"$output"; then
     log_warn "Incremental reconcile failed due to network recreation; forcing full runtime teardown..."
-    $RUNTIME_COMPOSE --profile sandbox-openclaw down --remove-orphans --timeout 30
+    $RUNTIME_COMPOSE down --remove-orphans --timeout 30
     $RUNTIME_COMPOSE up -d postgres
   else
     exit 1

@@ -88,7 +88,7 @@ write_files:
 
       # ── k3s ──────────────────────────────────────────────────
       echo "Installing k3s..."
-      curl -sfL https://get.k3s.io | sh -
+      curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.31.4+k3s1" sh -
       echo "Waiting for k3s node to be ready..."
       kubectl wait --for=condition=Ready node --all --timeout=120s
       k3s --version
@@ -138,6 +138,7 @@ write_files:
       # Sync will be degraded until SOPS secrets are encrypted
       # with the age public key and committed to the repo.
       echo "Applying Argo CD Application..."
+      sed -i "s|repoURL: .*|repoURL: ${cogni_repo_url}|" /tmp/cogni-repo/infra/cd/apps/staging.yaml
       kubectl apply -f /tmp/cogni-repo/infra/cd/apps/staging.yaml
 
       # Cleanup
