@@ -9,16 +9,57 @@ resources:
   - namespace.yaml
   - ../../base/scheduler-worker
 
-# Image digest — update this on promotion (IMAGE_IMMUTABILITY invariant)
-# CI creates a PR changing newTag to the new digest after image push.
+# Image digest — CI updates newTag to @sha256: digest via promote-k8s-image.sh
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    # Replace with @sha256: digest on first real deployment
     newTag: "staging-placeholder-scheduler-worker"
 
+# External service inventory → ConfigMap (non-secret routing data only).
+# Sensitive values belong in Kubernetes Secrets (SOPS path).
+configMapGenerator:
+  - name: external-service-inventory
+    envs:
+      - inventory.env
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+# Inject per-service addresses from inventory into their EndpointSlices.
+# Each replacement scoped by name — won't match unrelated EndpointSlices.
+replacements:
+  - source:
+      kind: ConfigMap
+      name: external-service-inventory
+      fieldPath: data.TEMPORAL_ADDR
+    targets:
+      - select:
+          kind: EndpointSlice
+          name: temporal-external
+        fieldPaths:
+          - endpoints.0.addresses.0
+  - source:
+      kind: ConfigMap
+      name: external-service-inventory
+      fieldPath: data.POSTGRES_ADDR
+    targets:
+      - select:
+          kind: EndpointSlice
+          name: postgres-external
+        fieldPaths:
+          - endpoints.0.addresses.0
+  - source:
+      kind: ConfigMap
+      name: external-service-inventory
+      fieldPath: data.APP_ADDR
+    targets:
+      - select:
+          kind: EndpointSlice
+          name: app-external
+        fieldPaths:
+          - endpoints.0.addresses.0
+
 patches:
-  # Patch ConfigMap with staging-specific values
   - target:
       kind: ConfigMap
       name: scheduler-worker-config
@@ -32,27 +73,3 @@ patches:
       - op: replace
         path: /data/IMAGE_DIGEST
         value: "staging-placeholder-scheduler-worker"
-
-  # Patch EndpointSlice IPs to point at staging Compose VM
-  # Replace 10.0.0.1 with actual staging VM internal IP during task.0149
-  - target:
-      kind: EndpointSlice
-      name: temporal-1
-    patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
-  - target:
-      kind: EndpointSlice
-      name: postgres-1
-    patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
-  - target:
-      kind: EndpointSlice
-      name: app-1
-    patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["10.0.0.1"]

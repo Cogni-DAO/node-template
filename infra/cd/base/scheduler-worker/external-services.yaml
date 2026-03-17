@@ -6,10 +6,10 @@
 # Postgres, and App remain on the Compose VM. These resources let the pod
 # reach them via standard K8s DNS (e.g., "temporal", "postgres", "app").
 #
-# Overlay patches replace placeholder IPs with real Compose VM addresses.
+# Overlay replacements inject per-service addresses from inventory.env.
 # Remove these resources when each dependency migrates to k3s.
 #
-# Pattern: Selectorless ClusterIP Service + manual EndpointSlice.
+# Pattern: Selectorless ClusterIP Service + user-managed EndpointSlice.
 # Plain ClusterIP (not headless) gives a stable virtual IP with standard DNS.
 # See: https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/
 
@@ -27,9 +27,10 @@ spec:
 apiVersion: discovery.k8s.io/v1
 kind: EndpointSlice
 metadata:
-  name: temporal-1
+  name: temporal-external
   labels:
     kubernetes.io/service-name: temporal
+    endpointslice.kubernetes.io/managed-by: cogni-dao/manual-endpoints
 addressType: IPv4
 endpoints:
   - addresses:
@@ -54,9 +55,10 @@ spec:
 apiVersion: discovery.k8s.io/v1
 kind: EndpointSlice
 metadata:
-  name: postgres-1
+  name: postgres-external
   labels:
     kubernetes.io/service-name: postgres
+    endpointslice.kubernetes.io/managed-by: cogni-dao/manual-endpoints
 addressType: IPv4
 endpoints:
   - addresses:
@@ -81,9 +83,10 @@ spec:
 apiVersion: discovery.k8s.io/v1
 kind: EndpointSlice
 metadata:
-  name: app-1
+  name: app-external
   labels:
     kubernetes.io/service-name: app
+    endpointslice.kubernetes.io/managed-by: cogni-dao/manual-endpoints
 addressType: IPv4
 endpoints:
   - addresses:

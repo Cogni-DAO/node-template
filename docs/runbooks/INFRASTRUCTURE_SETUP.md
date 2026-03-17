@@ -158,12 +158,20 @@ EOF
 sops --encrypt --in-place staging/scheduler-worker.enc.yaml
 ```
 
-### 4c: Fill overlay placeholders
+### 4c: Set external service inventory
 
-Edit `infra/cd/overlays/staging/kustomization.yaml`:
+Edit `infra/cd/overlays/staging/inventory.env` with the Compose VM's IP:
 
-- Replace `10.0.0.1` (4 occurrences) with `$COMPOSE_VM_IP`
-- Replace `staging-placeholder-scheduler-worker` with the real image digest (`@sha256:...` from GHCR)
+```env
+POSTGRES_ADDR=<compose-vm-ip>
+TEMPORAL_ADDR=<compose-vm-ip>
+APP_ADDR=<compose-vm-ip>
+```
+
+> `inventory.env` is Git-tracked non-secret inventory (routing addresses only).
+> Sensitive values (passwords, tokens, DSNs) go in Kubernetes Secrets via the SOPS path (Step 4b).
+
+Optionally update `staging-placeholder-scheduler-worker` in `kustomization.yaml` with the real image digest (`@sha256:...` from GHCR). CI will overwrite this on first deploy via `promote-k8s-image.sh`.
 
 ### 4d: Allow k3s traffic on Compose VM firewall
 
