@@ -2,7 +2,7 @@
 id: task.0149
 type: task
 title: "GitOps k3s provisioning + scheduler-worker migration"
-status: needs_merge
+status: needs_implement
 priority: 1
 rank: 1
 estimate: 3
@@ -15,11 +15,11 @@ project: proj.cicd-services-gitops
 branch: feat/gitops-k3s-provisioning
 pr: https://github.com/Cogni-DAO/node-template/pull/573
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-03-09
-updated: 2026-03-13
+updated: 2026-03-17
 labels: [deployment, infra, ci-cd, gitops]
 external_refs:
 ---
@@ -195,3 +195,16 @@ This is a manual one-time ops step documented in the runbook, not automated in O
 - [ ] Rollback test: revert digest commit → Argo syncs previous image
 - [ ] scheduler-worker removed from Docker Compose runtime stack
 - [ ] `pnpm check` passes (no app code changes, but lint/format on modified files)
+
+## Review Feedback (revision 1)
+
+### Blocking
+
+1. **`scripts/ci/promote-k8s-image.sh` sed is broken** — primary sed relies on a comment anchor (`# Replace with @sha256:...`) that doesn't exist in `kustomization.yaml`. Fallback sed fails because `/` in image name breaks the sed address. Net: script fails in CI on every invocation. Fix: rewrite with `yq` or use `|` delimiter and fix anchors.
+
+### Non-blocking suggestions
+
+1. Pin k3s version in bootstrap (`INSTALL_K3S_VERSION`) for reproducibility.
+2. `deploy.sh:705` — remove hardcoded `--profile sandbox-openclaw` from teardown fallback (COMPOSE_PROFILES handles it).
+3. `repo-server-patch.yaml:9` — fix stale doc reference (`k3s-bootstrap.md` → `INFRASTRUCTURE_SETUP.md`).
+4. `staging.yaml:17` — hardcoded repoURL may break if repo moves (already has a redirect).
