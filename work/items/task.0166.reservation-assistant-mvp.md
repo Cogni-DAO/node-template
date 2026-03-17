@@ -2,7 +2,7 @@
 id: task.0166
 type: task
 title: Reservation Assistant MVP
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 4
