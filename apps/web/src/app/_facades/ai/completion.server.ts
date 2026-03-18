@@ -40,7 +40,6 @@ import type { AiEvent, StreamFinalResult } from "@/features/ai/public";
 import type { MessageDto } from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import {
-  InsufficientCreditsPortError,
   isBillingAccountNotFoundPortError,
   isInsufficientCreditsPortError,
   isVirtualKeyNotFoundPortError,
@@ -256,16 +255,6 @@ export async function chatCompletion(
     ) {
       throw mapAccountsPortErrorToFeature(error);
     }
-    // Map AiExecutionError codes to feature errors that route handlers expect.
-    // TODO(task.0183): proper bidirectional error translation layer between
-    // AiExecutionErrorCode and domain errors. This is a stopgap.
-    if (error instanceof AiExecutionError) {
-      if (error.code === "insufficient_credits") {
-        throw mapAccountsPortErrorToFeature(
-          new InsufficientCreditsPortError("unknown", 0, 0)
-        );
-      }
-    }
     throw error;
   }
 }
@@ -384,56 +373,82 @@ export async function completionStream(
     }
   }
 
+  const runStream = getContainer().runStream;
+  const signal = input.abortSignal ?? new AbortController().signal;
+  const rawSubscription = runStream.subscribe(runId, signal);
+  const iterator = rawSubscription[Symbol.asyncIterator]();
+
+  // First-event peek: if the first event is a terminal error (e.g. insufficient_credits),
+  // throw AiExecutionError BEFORE the caller commits SSE headers.
+  // Mid-stream errors are fine — 200 is already sent, error arrives in the stream.
+  const first = await iterator.next();
+  if (first.done) {
+    throw new AiExecutionError("internal");
+  }
+  const firstEvent = first.value.event;
+  if (firstEvent.type === "error") {
+    throw new AiExecutionError(firstEvent.error);
+  }
+
   let resolveFinal: ((value: StreamFinalResult) => void) | undefined;
   const final = new Promise<StreamFinalResult>((resolve) => {
     resolveFinal = resolve;
   });
 
-  const runStream = getContainer().runStream;
   const stream = (async function* (): AsyncIterable<AiEvent> {
     const toolCalls: Array<{
       id: string;
       type: "function";
       function: { name: string; arguments: string };
     }> = [];
+
+    // Process first event (already peeked and validated as non-error)
+    function processEvent(event: AiEvent) {
+      if (event.type === "tool_call_start") {
+        toolCalls.push({
+          id: event.toolCallId,
+          type: "function",
+          function: {
+            name: event.toolName,
+            arguments: JSON.stringify(event.args),
+          },
+        });
+      }
+      if (event.type === "done") {
+        resolveFinal?.({
+          ok: true,
+          requestId: runId,
+          usage: event.usage ?? { promptTokens: 0, completionTokens: 0 },
+          finishReason:
+            event.finishReason ??
+            (toolCalls.length > 0 ? "tool_calls" : "stop"),
+          ...(toolCalls.length > 0 ? { toolCalls } : {}),
+        });
+      } else if (event.type === "error") {
+        resolveFinal?.({
+          ok: false,
+          requestId: runId,
+          error: event.error,
+        });
+      }
+    }
+
+    // Yield peeked first event
+    processEvent(firstEvent);
+    yield firstEvent;
+
+    // Continue with remaining events
     try {
-      for await (const entry of runStream.subscribe(
-        runId,
-        input.abortSignal ?? new AbortController().signal
-      )) {
-        const event = entry.event;
-        // usage_report events are consumed by BillingDecorator and never reach Redis.
-        // Defensive skip in case any leak through.
-        if (event.type === "usage_report") continue;
-        if (event.type === "tool_call_start") {
-          toolCalls.push({
-            id: event.toolCallId,
-            type: "function",
-            function: {
-              name: event.toolName,
-              arguments: JSON.stringify(event.args),
-            },
-          });
+      let next = await iterator.next();
+      while (!next.done) {
+        const event = next.value.event;
+        if (event.type === "usage_report") {
+          next = await iterator.next();
+          continue;
         }
-        if (event.type === "done") {
-          // Enriched done carries RunFinalSummary (usage, finishReason) from GraphFinal.
-          resolveFinal?.({
-            ok: true,
-            requestId: runId,
-            usage: event.usage ?? { promptTokens: 0, completionTokens: 0 },
-            finishReason:
-              event.finishReason ??
-              (toolCalls.length > 0 ? "tool_calls" : "stop"),
-            ...(toolCalls.length > 0 ? { toolCalls } : {}),
-          });
-        } else if (event.type === "error") {
-          resolveFinal?.({
-            ok: false,
-            requestId: runId,
-            error: event.error,
-          });
-        }
+        processEvent(event);
         yield event;
+        next = await iterator.next();
       }
       ctx.log.warn(
         {

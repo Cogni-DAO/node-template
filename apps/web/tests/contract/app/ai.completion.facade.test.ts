@@ -126,6 +126,6 @@ describe("app/_facades/ai/completion.server", () => {
         },
         testCtx
       )
-    ).rejects.toThrow("Completion failed: internal");
+    ).rejects.toThrow("AI execution failed: internal");
   });
 });
