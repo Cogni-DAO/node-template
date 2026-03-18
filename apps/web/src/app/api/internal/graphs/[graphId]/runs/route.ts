@@ -533,7 +533,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
         : "internal";
 
       log.warn(
-        { runId, graphId, errorCode },
+        { runId, graphId, errorCode, err: error },
         "Graph execution rejected before start"
       );
 
