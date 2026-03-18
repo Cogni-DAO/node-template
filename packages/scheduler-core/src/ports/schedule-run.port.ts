@@ -80,6 +80,13 @@ export interface GraphRunRepository {
     errorMessage?: string,
     errorCode?: string
   ) => Promise<void>;
+
+  /**
+   * Retrieves a run by its runId (correlation ID, not PK).
+   * Returns null if not found.
+   * @param actorId - Actor performing the operation (for RLS SET LOCAL / audit trail)
+   */
+  getRunByRunId: (actorId: ActorId, runId: string) => Promise<GraphRun | null>;
 }
 
 /** @deprecated Use GraphRunRepository */
