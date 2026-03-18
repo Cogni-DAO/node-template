@@ -73,9 +73,9 @@ export interface CreateGraphRunInput {
  * Input for executeGraphActivity.
  */
 export interface ExecuteGraphInput {
-  temporalScheduleId: string;
+  temporalScheduleId?: string;
   graphId: string;
-  executionGrantId: string;
+  executionGrantId: string | null;
   input: Record<string, unknown>;
   scheduledFor: string; // ISO string - used for idempotency key
   runId: string; // Canonical runId shared with graph_runs and charge_receipts
@@ -243,7 +243,9 @@ export function createActivities(deps: ActivityDeps) {
     const start = performance.now();
 
     // Per SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS
-    const idempotencyKey = `${temporalScheduleId}:${scheduledFor}`;
+    const idempotencyKey = temporalScheduleId
+      ? `${temporalScheduleId}:${scheduledFor}`
+      : `api:${runId}`;
 
     const url = `${config.appBaseUrl}/api/internal/graphs/${graphId}/runs`;
 
@@ -290,7 +292,7 @@ export function createActivities(deps: ActivityDeps) {
           event: WORKER_EVENT_NAMES.ACTIVITY_GRAPH_ERROR,
           ...correlation,
           status: response.status,
-          temporalScheduleId,
+          ...(temporalScheduleId ? { temporalScheduleId } : {}),
           graphId,
           runId,
           errorText,
@@ -325,7 +327,7 @@ export function createActivities(deps: ActivityDeps) {
 
       logWorkerEvent(logger, WORKER_EVENT_NAMES.ACTIVITY_GRAPH_COMPLETED, {
         ...correlation,
-        temporalScheduleId,
+        ...(temporalScheduleId ? { temporalScheduleId } : {}),
         graphId,
         runId: result.runId,
         durationMs,
@@ -339,7 +341,7 @@ export function createActivities(deps: ActivityDeps) {
         {
           event: WORKER_EVENT_NAMES.ACTIVITY_GRAPH_ERROR,
           ...correlation,
-          temporalScheduleId,
+          ...(temporalScheduleId ? { temporalScheduleId } : {}),
           graphId,
           runId: result.runId,
           errorCode: result.errorCode,

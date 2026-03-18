@@ -366,4 +366,49 @@ describe("executeGraphActivity", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("uses api:{runId} idempotency key when temporalScheduleId is absent", async () => {
+    const mockResponse = createMockApiSuccessResponse();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const activities = createActivities({
+      grantAdapter: {} as Parameters<
+        typeof createActivities
+      >[0]["grantAdapter"],
+      runAdapter: {} as Parameters<typeof createActivities>[0]["runAdapter"],
+      config: {
+        appBaseUrl: "http://localhost:3000",
+        schedulerApiToken: "test-token-min-32-characters-long",
+      },
+      logger: mockLogger,
+    });
+
+    await activities.executeGraphActivity({
+      graphId: FIXED_IDS.graphId,
+      executionGrantId: null,
+      input: { messages: [], model: "gpt-4o-mini" },
+      scheduledFor: "2025-01-15T10:00:00.000Z",
+      runId: FIXED_IDS.runId,
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/internal/graphs/${FIXED_IDS.graphId}/runs`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Idempotency-Key": `api:${FIXED_IDS.runId}`,
+        }),
+        body: JSON.stringify({
+          executionGrantId: null,
+          input: { messages: [], model: "gpt-4o-mini" },
+          runId: FIXED_IDS.runId,
+        }),
+      })
+    );
+
+    vi.unstubAllGlobals();
+  });
 });

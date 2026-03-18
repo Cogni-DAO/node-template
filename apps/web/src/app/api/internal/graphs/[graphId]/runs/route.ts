@@ -194,7 +194,11 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       );
     }
 
-    const { executionGrantId, input, runId: providedRunId } = parseResult.data;
+    const {
+      executionGrantId = null,
+      input,
+      runId: providedRunId,
+    } = parseResult.data;
 
     // --- 5. Compute request hash for idempotency ---
     const requestHash = computeRequestHash(graphId, input);
@@ -270,52 +274,82 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       );
     }
 
-    // --- 7. Validate grant (defense-in-depth) ---
-    let grant: Awaited<
-      ReturnType<
-        typeof container.executionGrantWorkerPort.validateGrantForGraph
-      >
-    >;
-    try {
-      grant = await container.executionGrantWorkerPort.validateGrantForGraph(
-        SYSTEM_ACTOR,
-        executionGrantId,
-        graphId
-      );
-    } catch (error) {
-      if (isGrantNotFoundError(error)) {
-        log.warn({ executionGrantId }, "Grant not found");
-        return NextResponse.json({ error: "Grant not found" }, { status: 403 });
+    // --- 7. Resolve actor + billing context ---
+    let actorUserId: string;
+    let billingAccountId: string;
+    let billingAccount: Awaited<
+      ReturnType<typeof container.serviceAccountService.getBillingAccountById>
+    > | null = null;
+
+    if (executionGrantId) {
+      let grant: Awaited<
+        ReturnType<
+          typeof container.executionGrantWorkerPort.validateGrantForGraph
+        >
+      >;
+      try {
+        grant = await container.executionGrantWorkerPort.validateGrantForGraph(
+          SYSTEM_ACTOR,
+          executionGrantId,
+          graphId
+        );
+      } catch (error) {
+        if (isGrantNotFoundError(error)) {
+          log.warn({ executionGrantId }, "Grant not found");
+          return NextResponse.json(
+            { error: "Grant not found" },
+            { status: 403 }
+          );
+        }
+        if (isGrantExpiredError(error)) {
+          log.warn({ executionGrantId }, "Grant expired");
+          return NextResponse.json({ error: "Grant expired" }, { status: 403 });
+        }
+        if (isGrantRevokedError(error)) {
+          log.warn({ executionGrantId }, "Grant revoked");
+          return NextResponse.json({ error: "Grant revoked" }, { status: 403 });
+        }
+        if (isGrantScopeMismatchError(error)) {
+          log.warn({ executionGrantId, graphId }, "Grant scope mismatch");
+          return NextResponse.json(
+            { error: "Grant scope mismatch" },
+            { status: 403 }
+          );
+        }
+        throw error;
       }
-      if (isGrantExpiredError(error)) {
-        log.warn({ executionGrantId }, "Grant expired");
-        return NextResponse.json({ error: "Grant expired" }, { status: 403 });
-      }
-      if (isGrantRevokedError(error)) {
-        log.warn({ executionGrantId }, "Grant revoked");
-        return NextResponse.json({ error: "Grant revoked" }, { status: 403 });
-      }
-      if (isGrantScopeMismatchError(error)) {
-        log.warn({ executionGrantId, graphId }, "Grant scope mismatch");
+
+      actorUserId = grant.userId;
+      billingAccountId = grant.billingAccountId;
+      billingAccount =
+        await container.serviceAccountService.getBillingAccountById(
+          grant.billingAccountId
+        );
+    } else {
+      if (
+        typeof input.actorUserId !== "string" ||
+        input.actorUserId.length < 1
+      ) {
         return NextResponse.json(
-          { error: "Grant scope mismatch" },
-          { status: 403 }
+          { error: "actorUserId required when executionGrantId is null" },
+          { status: 400 }
         );
       }
-      throw error;
+
+      actorUserId = input.actorUserId;
+      const accountService = container.accountsForUser(toUserId(actorUserId));
+      billingAccount = await accountService.getOrCreateBillingAccountForUser({
+        userId: actorUserId,
+        ...(typeof input.walletAddress === "string" &&
+        input.walletAddress.length > 0
+          ? { walletAddress: input.walletAddress }
+          : {}),
+      });
+      billingAccountId = billingAccount.id;
     }
 
-    // --- 8. Resolve billing account for virtualKeyId ---
-    const billingAccount =
-      await container.serviceAccountService.getBillingAccountById(
-        grant.billingAccountId
-      );
-
     if (!billingAccount) {
-      log.error(
-        { billingAccountId: grant.billingAccountId },
-        "Billing account not found"
-      );
+      log.error({ billingAccountId }, "Billing account not found");
       return NextResponse.json(
         { error: "Billing account not found" },
         { status: 500 }
@@ -348,19 +382,26 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     // schedule share conversation state and Langfuse session grouping.
     const scheduleId = extractScheduleId(idempotencyKey);
 
-    const stateKey = createHash("sha256")
-      .update(scheduleId, "utf8")
-      .digest("hex");
+    const stateKey = executionGrantId
+      ? createHash("sha256").update(scheduleId, "utf8").digest("hex")
+      : typeof input.stateKey === "string" && input.stateKey.length > 0
+        ? input.stateKey
+        : runId;
 
-    // gov: prefix distinguishes governance sessions from user sessions (ba:) in Langfuse
-    const sessionId = `gov:${grant.billingAccountId}:s:${stateKey.slice(0, 32)}`;
+    const sessionPrefix = executionGrantId ? "gov" : "ba";
+    const sessionId = `${sessionPrefix}:${billingAccountId}:s:${createHash(
+      "sha256"
+    )
+      .update(stateKey, "utf8")
+      .digest("hex")
+      .slice(0, 32)}`;
 
     capture({
       event: AnalyticsEvents.AGENT_RUN_REQUESTED,
       identity: {
-        userId: grant.userId,
+        userId: actorUserId,
         sessionId,
-        tenantId: grant.billingAccountId,
+        tenantId: billingAccountId,
         traceId,
       },
       properties: {
@@ -387,7 +428,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     }
     const model = input.model;
 
-    const accountService = container.accountsForUser(toUserId(grant.userId));
+    const accountService = container.accountsForUser(toUserId(actorUserId));
 
     // Create preflight credit check closure
     // Per CREDITS_ENFORCED_AT_EXECUTION_PORT: decorator handles all execution paths
@@ -404,12 +445,12 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       });
 
     // Create graph executor and run
-    const executor = createGraphExecutor(executeStream, toUserId(grant.userId));
+    const executor = createGraphExecutor(executeStream, toUserId(actorUserId));
     const scopedExecutor = createScopedGraphExecutor({
       executor,
       preflightCheckFn,
       billing: {
-        billingAccountId: grant.billingAccountId,
+        billingAccountId,
         virtualKeyId: billingAccount.defaultVirtualKeyId,
       },
     });
@@ -425,7 +466,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
         stateKey,
       },
       {
-        actorUserId: grant.userId,
+        actorUserId,
         requestId: runId,
         sessionId,
       }
@@ -473,9 +514,9 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       capture({
         event: AnalyticsEvents.AGENT_RUN_FAILED,
         identity: {
-          userId: grant.userId,
+          userId: actorUserId,
           sessionId: sessionId,
-          tenantId: grant.billingAccountId,
+          tenantId: billingAccountId,
           traceId,
         },
         properties: {
@@ -512,9 +553,9 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       capture({
         event: AnalyticsEvents.AGENT_RUN_COMPLETED,
         identity: {
-          userId: grant.userId,
+          userId: actorUserId,
           sessionId: sessionId,
-          tenantId: grant.billingAccountId,
+          tenantId: billingAccountId,
           traceId,
         },
         properties: {
@@ -537,9 +578,9 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       capture({
         event: AnalyticsEvents.AGENT_RUN_FAILED,
         identity: {
-          userId: grant.userId,
+          userId: actorUserId,
           sessionId: sessionId,
-          tenantId: grant.billingAccountId,
+          tenantId: billingAccountId,
           traceId,
         },
         properties: {

@@ -20,9 +20,13 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ExecutionContext } from "@cogni/graph-execution-core";
 import { toUserId } from "@cogni/ids";
-import { resolveAiAdapterDeps } from "@/bootstrap/container";
+import { WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
+import {
+  getContainer,
+  getTemporalWorkflowClient,
+  resolveAiAdapterDeps,
+} from "@/bootstrap/container";
 import {
   createGraphExecutor,
   createScopedGraphExecutor,
@@ -110,24 +114,8 @@ export interface CompletionInput {
   graphName: string;
   /** Conversation state key for multi-turn conversations */
   stateKey?: string;
-}
-
-/**
- * Derive Langfuse sessionId from billingAccountId + stateKey.
- * Uses SHA-256 hash to ensure:
- * - Deterministic: same inputs → same sessionId (stable grouping)
- * - Bounded: fixed output length regardless of stateKey length
- * - Safe: no PII or log-injection risk from raw stateKey
- *
- * Format: `ba:{billingAccountId}:s:{sha256(stateKey)[0:32]}`
- * Truncation to 200 chars happens at Langfuse sink boundary.
- */
-function deriveSessionId(billingAccountId: string, stateKey: string): string {
-  const stateKeyHash = createHash("sha256")
-    .update(stateKey)
-    .digest("hex")
-    .slice(0, 32);
-  return `ba:${billingAccountId}:s:${stateKeyHash}`;
+  /** Optional idempotency key for workflow deduplication. */
+  idempotencyKey?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,16 +307,136 @@ export async function completionStream(
   stream: AsyncIterable<AiEvent>;
   final: Promise<StreamFinalResult>;
 }> {
-  // Parse once at edge — single branded UserId for all downstream calls
-  const userId = toUserId(input.sessionUser.id);
+  let useInProc = false;
+  try {
+    const env = getContainer().config;
+    useInProc = env.rateLimitBypass.enabled;
+  } catch {
+    useInProc = true;
+  }
 
-  // Per UNIFIED_GRAPH_EXECUTOR: use bootstrap factory (app → bootstrap → adapters)
-  // Facade CANNOT import adapters - architecture boundary enforced by depcruise
-  // Per ROUTING_BY_NAMESPACE_ONLY: NamespaceGraphRouter routes by graphId namespace to providers
+  if (useInProc) {
+    return completionStreamInProc(input, ctx);
+  }
+
+  const userId = toUserId(input.sessionUser.id);
+  const { accountService, clock } = resolveAiAdapterDeps(userId);
+  const billingAccount = await getOrCreateBillingAccountForUser(
+    accountService,
+    {
+      userId: input.sessionUser.id,
+      ...(input.sessionUser.walletAddress
+        ? { walletAddress: input.sessionUser.walletAddress }
+        : {}),
+    }
+  );
+
+  const idempotencyKey = input.idempotencyKey?.trim() || `api:${ctx.reqId}`;
+  const graphId = input.graphName.includes(":")
+    ? input.graphName
+    : `langgraph:${input.graphName}`;
+  const runId = createHash("sha256")
+    .update(`${billingAccount.id}:${idempotencyKey}`, "utf8")
+    .digest("hex")
+    .slice(0, 32)
+    .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
+
+  const stateKey = input.stateKey ?? runId;
+  const workflowId = `graph-run:${billingAccount.id}:${idempotencyKey}`;
+  const coreMessages = toCoreMessages(input.messages, clock.now()).map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const workflowClient = await getTemporalWorkflowClient();
+  try {
+    await workflowClient.workflow.start("GraphRunWorkflow", {
+      taskQueue: "scheduler-tasks",
+      workflowId,
+      args: [
+        {
+          runId,
+          graphId,
+          executionGrantId: null,
+          input: {
+            messages: coreMessages,
+            model: input.model,
+            stateKey,
+            actorUserId: input.sessionUser.id,
+            ...(input.sessionUser.walletAddress
+              ? { walletAddress: input.sessionUser.walletAddress }
+              : {}),
+          },
+          runKind: "user_immediate" as const,
+          triggerSource: "api",
+          triggerRef: idempotencyKey,
+          requestedBy: input.sessionUser.id,
+        },
+      ],
+    });
+  } catch (error) {
+    if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+  }
+
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  input.abortSignal?.addEventListener("abort", onAbort, { once: true });
+
+  let resolveFinal: ((result: StreamFinalResult) => void) | undefined;
+  const final = new Promise<StreamFinalResult>((resolve) => {
+    resolveFinal = resolve;
+  });
+  const usage = { promptTokens: 0, completionTokens: 0 };
+
+  const stream = (async function* (): AsyncIterable<AiEvent> {
+    try {
+      for await (const { event } of getContainer().runStream.subscribe(
+        runId,
+        controller.signal
+      )) {
+        if (event.type === "usage_report") {
+          usage.promptTokens += event.fact.inputTokens ?? 0;
+          usage.completionTokens += event.fact.outputTokens ?? 0;
+          continue;
+        }
+        if (event.type === "error") {
+          resolveFinal?.({ ok: false, requestId: runId, error: event.error });
+          yield event;
+          return;
+        }
+        if (event.type === "done") {
+          resolveFinal?.({
+            ok: true,
+            requestId: runId,
+            usage,
+            finishReason: "stop",
+          });
+          yield event;
+          return;
+        }
+        yield event;
+      }
+      resolveFinal?.({ ok: false, requestId: runId, error: "internal" });
+    } catch {
+      resolveFinal?.({ ok: false, requestId: runId, error: "internal" });
+    } finally {
+      input.abortSignal?.removeEventListener("abort", onAbort);
+    }
+  })();
+
+  return { stream, final };
+}
+
+async function completionStreamInProc(
+  input: CompletionInput & { abortSignal?: AbortSignal },
+  ctx: RequestContext
+): Promise<{
+  stream: AsyncIterable<AiEvent>;
+  final: Promise<StreamFinalResult>;
+}> {
+  const userId = toUserId(input.sessionUser.id);
   const { accountService, clock } = resolveAiAdapterDeps(userId);
 
-  // Create preflight credit check closure (app layer → features DI boundary)
-  // Per CREDITS_ENFORCED_AT_EXECUTION_PORT: decorator handles all execution paths
   const preflightCheckFn: PreflightCreditCheckFn = (
     billingAccountId,
     model,
@@ -341,10 +449,7 @@ export async function completionStream(
       accountService,
     });
 
-  // Create graph executor via bootstrap factory
-  // Routing is handled by NamespaceGraphRouter - facade is graph-agnostic
   const graphExecutor = createGraphExecutor(executeStream, userId);
-
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
     {
@@ -360,14 +465,6 @@ export async function completionStream(
     virtualKeyId: billingAccount.defaultVirtualKeyId,
   };
 
-  const executionContext: ExecutionContext = {
-    actorUserId: input.sessionUser.id,
-    requestId: ctx.reqId,
-    ...(input.stateKey
-      ? { sessionId: deriveSessionId(billingAccount.id, input.stateKey) }
-      : {}),
-  };
-
   const enrichedCtx: RequestContext = {
     ...ctx,
     log: ctx.log.child({
@@ -376,9 +473,7 @@ export async function completionStream(
     }),
   };
 
-  const timestamp = clock.now();
-  const coreMessages = toCoreMessages(input.messages, timestamp);
-
+  const coreMessages = toCoreMessages(input.messages, clock.now());
   const scopedGraphExecutor = createScopedGraphExecutor({
     executor: graphExecutor,
     billing,
@@ -390,17 +485,13 @@ export async function completionStream(
     graphExecutor: scopedGraphExecutor,
   });
 
-  // runChatStream is now synchronous (returns immediately with stream handle)
-  const { stream, final } = aiRuntime.runChatStream(
+  return aiRuntime.runChatStream(
     {
       messages: coreMessages,
       model: input.model,
-      executionContext,
       graphName: input.graphName,
       ...(input.stateKey ? { stateKey: input.stateKey } : {}),
     },
     enrichedCtx
   );
-
-  return { stream, final };
 }

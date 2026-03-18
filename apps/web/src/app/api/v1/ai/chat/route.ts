@@ -222,6 +222,9 @@ export const POST = wrapRouteHandlerWithLogging(
 
       if (!sessionUser) throw new Error("sessionUser required");
 
+      const idempotencyKeyHeader =
+        request.headers.get("idempotency-key") ?? undefined;
+
       // --- stateKey lifecycle ---
       const stateKey = input.stateKey ?? nanoid(21);
       const userId = toUserId(sessionUser.id);
@@ -304,6 +307,9 @@ export const POST = wrapRouteHandlerWithLogging(
           abortSignal: request.signal,
           graphName: input.graphName,
           stateKey,
+          ...(idempotencyKeyHeader
+            ? { idempotencyKey: idempotencyKeyHeader }
+            : {}),
         },
         ctx
       );

@@ -29,6 +29,7 @@ import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/priv
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { WorkItemQueryPort } from "@cogni/work-items";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
+import { Connection, Client as TemporalClient } from "@temporalio/client";
 import Redis from "ioredis";
 import type { Logger } from "pino";
 import {
@@ -205,6 +206,8 @@ export type ActivityDeps = {
 
 // Module-level singleton
 let _container: Container | null = null;
+let _temporalClient: TemporalClient | null = null;
+let _temporalConnection: Connection | null = null;
 
 /**
  * Get the singleton container instance.
@@ -217,6 +220,20 @@ export function getContainer(): Container {
   return _container;
 }
 
+export async function getTemporalWorkflowClient(): Promise<TemporalClient> {
+  if (_temporalClient) return _temporalClient;
+
+  const env = serverEnv();
+  _temporalConnection = await Connection.connect({
+    address: env.TEMPORAL_ADDRESS,
+  });
+  _temporalClient = new TemporalClient({
+    connection: _temporalConnection,
+    namespace: env.TEMPORAL_NAMESPACE,
+  });
+  return _temporalClient;
+}
+
 /**
  * Reset the singleton container.
  * For tests only - allows fresh container between test runs.
@@ -224,6 +241,11 @@ export function getContainer(): Container {
 export function resetContainer(): void {
   _container = null;
   _webhookRegistrations = null;
+  _temporalClient = null;
+  if (_temporalConnection) {
+    void _temporalConnection.close();
+    _temporalConnection = null;
+  }
 }
 
 /** Lazy singleton for webhook registrations (avoids import cost at container init). */
