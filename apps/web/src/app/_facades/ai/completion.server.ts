@@ -3,23 +3,25 @@
 
 /**
  * Module: `@app/_facades/ai/completion.server`
- * Purpose: App-layer coordinator for AI completion - session → billing account, delegates to feature layer.
- * Scope: Resolves session user to billing account + virtual key, creates LlmCaller, maps DTOs, normalizes errors. Does not contain business logic or HTTP concerns.
+ * Purpose: App-layer coordinator for AI completion - session → billing account, starts Temporal workflow, subscribes to Redis stream.
+ * Scope: Resolves session user to billing account, starts GraphRunWorkflow via Temporal, subscribes to Redis RunStream for AiEvents. Does not contain business logic or HTTP concerns.
  * Invariants:
  *   - ONE_RUN_EXECUTION_PATH: Both chatCompletion() and completionStream() start GraphRunWorkflow via Temporal
  *   - Only app layer imports this; routes call this, not features/* directly
  *   - Must import features via public.ts ONLY (never import from services subdirectories)
  *   - NEVER import adapters (use bootstrap factories instead)
- *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: preflight credit check handled by decorator (no facade-level call)
+ *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: preflight credit check handled by decorator in execution layer
  *   - Validates billing account before delegation; propagates feature errors
- * Side-effects: IO (via resolved dependencies)
+ *   - IDEMPOTENT_WORKFLOW_START: swallows WorkflowExecutionAlreadyStartedError for safe retries
+ * Side-effects: IO (Temporal workflow start, Redis stream subscription)
  * Notes: chatCompletion() delegates to completionStream() and collects response server-side.
  *   Returns OpenAI-compatible ChatCompletion format.
- * Links: Called by API routes, delegates to features/ai/public.ts, GRAPH_EXECUTION.md
+ * Links: Called by API routes, GraphRunWorkflow (scheduler-worker), RunStreamPort (Redis)
  * @public
  */
 
 import { createHash } from "node:crypto";
+import { AiExecutionError } from "@cogni/ai-core";
 import { toUserId } from "@cogni/ids";
 import { WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
 import {
@@ -38,12 +40,14 @@ import type { AiEvent, StreamFinalResult } from "@/features/ai/public";
 import type { MessageDto } from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import {
+  InsufficientCreditsPortError,
   isBillingAccountNotFoundPortError,
   isInsufficientCreditsPortError,
   isVirtualKeyNotFoundPortError,
 } from "@/ports";
 import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Default graph for requests that don't specify one
@@ -199,7 +203,9 @@ export async function chatCompletion(
     const result = await final;
 
     if (!result.ok) {
-      throw new Error(`Completion failed: ${result.error}`);
+      // TODO: proper error translation from AiExecutionErrorCode → domain errors.
+      // Currently AiExecutionError is caught below and re-mapped for known codes.
+      throw new AiExecutionError(result.error);
     }
 
     const content = textParts.join("");
@@ -249,6 +255,16 @@ export async function chatCompletion(
       isVirtualKeyNotFoundPortError(error)
     ) {
       throw mapAccountsPortErrorToFeature(error);
+    }
+    // Map AiExecutionError codes to feature errors that route handlers expect.
+    // TODO(task.0183): proper bidirectional error translation layer between
+    // AiExecutionErrorCode and domain errors. This is a stopgap.
+    if (error instanceof AiExecutionError) {
+      if (error.code === "insufficient_credits") {
+        throw mapAccountsPortErrorToFeature(
+          new InsufficientCreditsPortError("unknown", 0, 0)
+        );
+      }
     }
     throw error;
   }
@@ -419,12 +435,30 @@ export async function completionStream(
         }
         yield event;
       }
+      ctx.log.warn(
+        {
+          event: EVENT_NAMES.AI_RELAY_PUMP_ERROR,
+          reqId: ctx.reqId,
+          runId,
+          errorCode: "stream_ended_no_terminal",
+        },
+        EVENT_NAMES.AI_RELAY_PUMP_ERROR
+      );
       resolveFinal?.({
         ok: false,
         requestId: runId,
         error: "internal",
       });
     } catch {
+      ctx.log.warn(
+        {
+          event: EVENT_NAMES.AI_RELAY_PUMP_ERROR,
+          reqId: ctx.reqId,
+          runId,
+          errorCode: "stream_subscribe_error",
+        },
+        EVENT_NAMES.AI_RELAY_PUMP_ERROR
+      );
       resolveFinal?.({
         ok: false,
         requestId: runId,
