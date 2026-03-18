@@ -53,11 +53,11 @@ The spec's "≤50ms added" claim is aspirational for steady-state streaming late
 
 **Mitigation:** Short initial XREAD timeout (100ms) with exponential backoff to 5s. First token arrives within ~200ms of Redis publish in practice.
 
-### Dual execution path during migration
+### Single orchestration seam via facade — no dual execution path
 
-`/api/v1/chat/completions` (OpenAI-compatible) also calls `completionStream()` → inline `GraphExecutorPort`. Moving only `/api/v1/ai/chat` to Temporal creates a temporary dual path, technically violating ONE_RUN_EXECUTION_PATH.
+Both `/api/v1/ai/chat` and `/api/v1/chat/completions` call the same facade (`completionStream()` in `completion.server.ts`). The facade returns `{ stream: AsyncIterable<AiEvent>, final }`. Each route is a thin protocol adapter: chat maps `AiEvent` → AI SDK UIMessageChunks, completions maps `AiEvent` → OpenAI SSE chunks. Neither contains execution logic.
 
-**Decision:** Accepted as migration gap. Document it. The completions endpoint migration is deferred — it has different wire protocol (OpenAI SSE chunks vs AI SDK Data Stream Protocol) and can follow the same pattern once chat is proven. ONE_RUN_EXECUTION_PATH is fully realized when both endpoints migrate.
+**Decision:** Change the facade, not the routes. `completionStream()` switches from inline `GraphExecutorPort.runGraph()` to workflow start + Redis subscribe. Both routes get Temporal orchestration for free — same interface, same `AiEvent` stream, just from Redis instead of in-process memory. Zero users, no reason to keep inline execution alive. ONE_RUN_EXECUTION_PATH is fully realized in this task for all API triggers.
 
 ### Thread persistence accumulator with Redis events
 
@@ -77,8 +77,10 @@ The current chat route has ~120 lines of accumulator logic (text_delta, tool par
 
 ## Allowed Changes
 
-- `apps/web/src/app/api/v1/ai/chat/route.ts` — refactor to workflow starter + Redis subscriber
-- `apps/web/src/features/ai/services/ai_runtime.ts` — adapt to workflow-based execution (or remove RunEventRelay if dead)
+- `apps/web/src/app/_facades/ai/completion.server.ts` — convergence point: `completionStream()` switches to workflow start + Redis subscribe (both chat and completions routes inherit)
+- `apps/web/src/app/api/v1/ai/chat/route.ts` — thread persistence accumulator adapts to Redis-backed stream
+- `apps/web/src/app/api/v1/chat/completions/route.ts` — minimal: consumes same facade, no execution logic change
+- `apps/web/src/features/ai/services/ai_runtime.ts` — remove RunEventRelay (dead: pump moved to internal API, fanout moved to Redis)
 - `apps/web/src/contracts/` — update/add contracts as needed
 - `apps/web/src/bootstrap/container.ts` — add Temporal WorkflowClient singleton
 - `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts` — generalize for API-originated inputs (stateKey passthrough, conditional schedule logic)
@@ -108,7 +110,7 @@ The current chat route has ~120 lines of accumulator logic (text_delta, tool par
 - [ ] **Checkpoint 3: Integration tests + cleanup**
   - Stack test: chat POST → SSE stream → tokens arrive
   - Idempotency test: duplicate key → same runId
-  - Remove RunEventRelay if fully dead (or leave for completions endpoint)
+  - Delete RunEventRelay (dead: both routes use Redis-backed stream via facade)
   - Validation: `pnpm check` passes, stack tests pass
 
 ## Validation
@@ -125,8 +127,8 @@ pnpm test
 ## Review Checklist
 
 - [ ] **Work Item:** task.0177 linked in PR body
-- [ ] **Spec:** SSE_FROM_REDIS_NOT_MEMORY, IDEMPOTENT_RUN_START invariants upheld
-- [ ] **Migration gap:** ONE_RUN_EXECUTION_PATH not yet fully realized (completions endpoint still inline) — documented
+- [ ] **Spec:** ONE_RUN_EXECUTION_PATH, SSE_FROM_REDIS_NOT_MEMORY, IDEMPOTENT_RUN_START invariants upheld
+- [ ] **No inline execution:** both chat and completions routes go through Temporal via facade
 - [ ] **Tests:** new/updated tests cover the change
 - [ ] **Reviewer:** assigned and approved
 
