@@ -481,6 +481,8 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     // record cleanly instead of leaving it "pending" forever.
     const { runStream } = container;
     let final: Awaited<typeof result.final>;
+    // Hold back the done event — we enrich it with GraphFinal data after stream drain.
+    let pendingDone: { type: "done" } | null = null;
     try {
       for await (const event of result.stream) {
         // Publish each event to Redis Stream for SSE subscribers.
@@ -488,19 +490,8 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
         // Publish failures are logged, not thrown — execution must complete for billing safety.
         try {
           if (event.type === "done") {
-            // Buffer done — enrich with GraphFinal summary (usage, finishReason)
-            // before publishing. Subscribers read the terminal event as canonical source
-            // for usage data since BillingDecorator filters usage_report from the stream.
-            const f = await result.final;
-            const enriched = {
-              ...event,
-              ...(f.ok && f.usage ? { usage: f.usage } : {}),
-              ...(f.ok && f.finishReason
-                ? { finishReason: f.finishReason }
-                : {}),
-            };
-            await runStream.publish(runId, enriched);
-            await runStream.expire(runId, RUN_STREAM_DEFAULT_TTL_SECONDS);
+            // Buffer done — enrich after stream drain when result.final resolves.
+            pendingDone = event;
           } else {
             await runStream.publish(runId, event);
             if (event.type === "error") {
@@ -516,6 +507,26 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       }
 
       final = await result.final;
+
+      // Enrich and publish the buffered done event with usage from GraphFinal.
+      if (pendingDone) {
+        try {
+          const enriched = {
+            ...pendingDone,
+            ...(final.ok && final.usage ? { usage: final.usage } : {}),
+            ...(final.ok && final.finishReason
+              ? { finishReason: final.finishReason }
+              : {}),
+          };
+          await runStream.publish(runId, enriched);
+          await runStream.expire(runId, RUN_STREAM_DEFAULT_TTL_SECONDS);
+        } catch (publishErr) {
+          log.warn(
+            { runId, err: publishErr },
+            "Redis publish of enriched done failed"
+          );
+        }
+      }
     } catch (error) {
       const errorCode = isInsufficientCreditsPortError(error)
         ? "insufficient_credits"
