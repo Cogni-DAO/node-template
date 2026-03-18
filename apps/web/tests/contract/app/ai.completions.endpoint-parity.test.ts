@@ -63,6 +63,7 @@ vi.mock("@/bootstrap/graph-executor.factory", async (importOriginal) => {
     await importOriginal<typeof import("@/bootstrap/graph-executor.factory")>();
   return {
     createGraphExecutor: vi.fn(),
+    createScopedGraphExecutor: vi.fn((params) => params.executor),
     runGraphWithScope: original.runGraphWithScope,
   };
 });
