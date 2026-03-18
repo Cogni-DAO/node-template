@@ -23,6 +23,10 @@ import {
   TEST_SESSION_USER_1,
 } from "@tests/_fakes";
 import { TEST_MODEL_ID } from "@tests/_fakes/ai/fakes";
+import {
+  createRunStreamMock,
+  createTemporalClientMock,
+} from "@tests/_fixtures/ai/completion-facade-setup";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -98,10 +102,7 @@ function setupMocks(
     finishReason?: string;
   } = {}
 ) {
-  const {
-    responseContent = "Hello! How can I help you?",
-    finishReason = "stop",
-  } = options;
+  const { responseContent = "Hello! How can I help you?" } = options;
 
   const fakeClock = new FakeClock("2025-01-15T12:00:00.000Z");
   const mockAccountService = createMockAccountServiceWithDefaults();
@@ -117,71 +118,20 @@ function setupMocks(
       child: vi.fn().mockReturnThis(),
     },
     clock: fakeClock,
-    runStream: {
-      subscribe: async function* () {
-        if (options.statusEvents) {
-          for (const se of options.statusEvents) {
-            yield {
-              id: "s-1",
-              event: {
-                type: "status" as const,
-                phase: se.phase,
-                ...(se.label ? { label: se.label } : {}),
-              },
-            };
-          }
-        }
-        if (options.toolCalls) {
-          for (const tc of options.toolCalls) {
-            yield {
-              id: "t-1",
-              event: {
-                type: "tool_call_start" as const,
-                toolCallId: tc.toolCallId,
-                toolName: tc.toolName,
-                args: tc.args,
-              },
-            };
-          }
-        }
-        if (responseContent) {
-          yield {
-            id: "m-1",
-            event: { type: "text_delta" as const, delta: responseContent },
-          };
-          yield {
-            id: "a-1",
-            event: {
-              type: "assistant_final" as const,
-              content: responseContent,
-            },
-          };
-        }
-        yield {
-          id: "u-1",
-          event: {
-            type: "usage_report" as const,
-            fact: {
-              inputTokens: 15,
-              outputTokens: 25,
-              usageUnitId: "unit-1",
-              occurredAt: new Date().toISOString(),
-              runId: "run-1",
-              billingAccountId: "acct-1",
-              virtualKeyId: "vk-1",
-              model: TEST_MODEL_ID,
-              provider: "test",
-              source: "litellm",
-            },
-          },
-        };
-        yield { id: "d-1", event: { type: "done" as const } };
+    runStream: createRunStreamMock({
+      responseContent,
+      toolCalls: options.toolCalls,
+      statusEvents: options.statusEvents,
+      usageReport: {
+        inputTokens: 15,
+        outputTokens: 25,
+        model: TEST_MODEL_ID,
       },
-    },
+    }),
   } as never);
-  mockGetTemporalWorkflowClient.mockResolvedValue({
-    start: vi.fn().mockResolvedValue({}),
-  } as never);
+  mockGetTemporalWorkflowClient.mockResolvedValue(
+    createTemporalClientMock() as never
+  );
 
   mockGetSessionUser.mockResolvedValue(TEST_SESSION_USER_1);
 
@@ -192,12 +142,10 @@ function setupMocks(
     aiTelemetry: new FakeAiTelemetryAdapter(),
     langfuse: undefined,
   });
-
-  void finishReason;
 }
 
 /**
- * Set up mocks where the graph executor throws a specific error.
+ * Set up mocks where the workflow start throws a specific error.
  */
 function setupMocksWithError(error: Error) {
   const fakeClock = new FakeClock("2025-01-15T12:00:00.000Z");
@@ -213,11 +161,7 @@ function setupMocksWithError(error: Error) {
       child: vi.fn().mockReturnThis(),
     },
     clock: fakeClock,
-    runStream: {
-      subscribe: async function* () {
-        yield { id: "x-1", event: { type: "done" as const } };
-      },
-    },
+    runStream: createRunStreamMock({ responseContent: "" }),
   } as never);
 
   mockGetSessionUser.mockResolvedValue(TEST_SESSION_USER_1);
@@ -230,9 +174,11 @@ function setupMocksWithError(error: Error) {
     langfuse: undefined,
   });
 
-  mockGetTemporalWorkflowClient.mockResolvedValue({
-    start: vi.fn().mockRejectedValue(error),
-  } as never);
+  mockGetTemporalWorkflowClient.mockResolvedValue(
+    createTemporalClientMock({
+      start: vi.fn().mockRejectedValue(error),
+    }) as never
+  );
 }
 
 /**

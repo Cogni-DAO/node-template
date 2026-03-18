@@ -8,6 +8,7 @@ import {
   TEST_SESSION_USER_1,
 } from "@tests/_fakes";
 import { TEST_MODEL_ID } from "@tests/_fakes/ai/fakes";
+import { createRunStreamMock } from "@tests/_fixtures/ai/completion-facade-setup";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { chatCompletion } from "@/app/_facades/ai/completion.server";
@@ -17,9 +18,14 @@ import { makeNoopLogger } from "@/shared/observability";
 
 const startMock = vi.fn().mockResolvedValue({});
 
+// vi.mock factories are hoisted — can't reference module imports.
+// Keep inline; fixture used in non-hoisted test helpers.
 vi.mock("@/bootstrap/container", () => ({
   resolveAiAdapterDeps: vi.fn(),
-  getTemporalWorkflowClient: vi.fn(async () => ({ start: startMock })),
+  getTemporalWorkflowClient: vi.fn(async () => ({
+    client: { start: startMock },
+    taskQueue: "scheduler-tasks",
+  })),
   getContainer: vi.fn(() => ({
     runStream: {
       subscribe: async function* () {
@@ -89,14 +95,10 @@ describe("app/_facades/ai/completion.server", () => {
 
     const { getContainer } = await import("@/bootstrap/container");
     vi.mocked(getContainer).mockReturnValueOnce({
-      runStream: {
-        subscribe: async function* () {
-          yield {
-            id: "1-0",
-            event: { type: "error" as const, error: "internal" as const },
-          };
-        },
-      },
+      runStream: createRunStreamMock({
+        responseContent: "",
+        emitError: "internal",
+      }),
     } as never);
 
     const testCtx: RequestContext = {

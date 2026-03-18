@@ -212,7 +212,10 @@ export type ActivityDeps = {
 let _container: Container | null = null;
 let _temporalConnection: TemporalConnection | null = null;
 let _workflowClient: WorkflowClient | null = null;
-let _workflowClientPromise: Promise<WorkflowClient> | null = null;
+let _workflowClientPromise: Promise<{
+  client: WorkflowClient;
+  taskQueue: string;
+}> | null = null;
 
 /**
  * Get the singleton container instance.
@@ -241,24 +244,33 @@ export function resetContainer(): void {
 }
 
 /**
- * Get a process-wide Temporal WorkflowClient singleton.
+ * Get a process-wide Temporal WorkflowClient singleton + task queue.
  * Avoids per-request Connection.connect() overhead on hot paths.
+ * Returns both client and taskQueue so callers never need serverEnv() directly.
  */
-export async function getTemporalWorkflowClient(): Promise<WorkflowClient> {
-  if (_workflowClient) return _workflowClient;
+export async function getTemporalWorkflowClient(): Promise<{
+  client: WorkflowClient;
+  taskQueue: string;
+}> {
+  if (_workflowClient) {
+    return {
+      client: _workflowClient,
+      taskQueue: serverEnv().TEMPORAL_TASK_QUEUE,
+    };
+  }
   if (!_workflowClientPromise) {
     _workflowClientPromise = (async () => {
       const env = serverEnv();
       const connection = await TemporalConnection.connect({
         address: env.TEMPORAL_ADDRESS,
       });
-      const client = new TemporalClient({
+      const temporalClient = new TemporalClient({
         connection,
         namespace: env.TEMPORAL_NAMESPACE,
       });
       _temporalConnection = connection;
-      _workflowClient = client.workflow;
-      return _workflowClient;
+      _workflowClient = temporalClient.workflow;
+      return { client: _workflowClient, taskQueue: env.TEMPORAL_TASK_QUEUE };
     })();
   }
   return _workflowClientPromise;

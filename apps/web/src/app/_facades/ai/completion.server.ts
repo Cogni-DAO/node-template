@@ -336,10 +336,11 @@ export async function completionStream(
   const workflowId = `graph-run:${billingAccount.id}:${idempotencyKey}`;
   const runId = toDeterministicRunId(`${workflowId}:${graphId}`);
 
-  const workflowClient = await getTemporalWorkflowClient();
+  const { client: workflowClient, taskQueue } =
+    await getTemporalWorkflowClient();
   try {
     await workflowClient.start("GraphRunWorkflow", {
-      taskQueue: "scheduler-tasks",
+      taskQueue,
       workflowId,
       args: [
         {
