@@ -2,7 +2,7 @@
 id: bug.0186
 type: bug
 title: "Chat disconnect persists truncated assistant response — move thread persistence to execution layer"
-status: needs_closeout
+status: needs_implement
 priority: 0
 rank: 99
 estimate: 3
@@ -16,7 +16,7 @@ project: proj.unified-graph-launch
 branch: fix/chat-0186
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-03-19
@@ -198,6 +198,16 @@ pnpm test
 - [ ] **Spec:** PERSIST_AFTER_PUMP invariant holds after disconnect
 - [ ] **Tests:** disconnect + full persistence test
 - [ ] **Reviewer:** assigned and approved
+
+## Review Feedback (revision 1)
+
+**Blocking:**
+
+1. **stateKey never populated** — `CreateGraphRunInput` in `services/scheduler-worker/src/activities/index.ts:59-70` missing `stateKey`. `createGraphRunActivity()` at `graph-run.workflow.ts:149` doesn't pass it. Every graph_runs row has `state_key = NULL`. Fix: add `stateKey?: string` to `CreateGraphRunInput`, pass through workflow, forward to `runAdapter.createRun()`.
+
+**Non-blocking:**
+
+2. `accumulatedEvents` array grows unbounded — consider only accumulating persistence-relevant events (tool_call_start, tool_call_result, assistant_final).
 
 ## PR / Links
 
