@@ -3,7 +3,7 @@
 
 /**
  * Module: `@app/(app)/dashboard/_api/fetchRuns`
- * Purpose: Client-side fetch for graph run list. Calls GET /api/v1/ai/runs when available, stubs with empty array for now.
+ * Purpose: Client-side fetch for graph run list. Calls GET /api/v1/ai/runs; returns empty on 404/network error (API not deployed), throws on other failures.
  * Scope: Data fetching only. Does not implement business logic.
  * Invariants: Returns RunCardData[] matching the RunCard component props.
  * Side-effects: IO (HTTP fetch)

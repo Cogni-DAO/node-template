@@ -2,8 +2,7 @@
 id: task.0183
 type: task
 title: "Run list API: GET /api/v1/ai/runs — query graph_runs with filtering"
-status: done
-branch: feat/task.0183-run-list-api
+status: needs_design
 revision: 0
 priority: 1
 rank: 6
@@ -17,7 +16,7 @@ project: proj.live-dashboard
 blocked_by:
   - task.0176
 created: 2026-03-18
-updated: 2026-03-20
+updated: 2026-03-18
 labels:
   - ai-graphs
   - api
@@ -43,38 +42,25 @@ The live dashboard needs a run list endpoint to populate the card grid. `graph_r
 
 ## Allowed Changes
 
-- `packages/scheduler-core/src/ports/schedule-run.port.ts` — add `listRunsByUser`
-- `packages/db-client/src/adapters/drizzle-run.adapter.ts` — implement `listRunsByUser`
-- `packages/db-schema/src/scheduling.ts` — add composite index
-- `apps/web/src/contracts/ai.runs.v1.contract.ts` — contract
-- `apps/web/src/app/api/v1/ai/runs/route.ts` — GET endpoint
-- Drizzle migration
+- `apps/web/src/contracts/ai.runs.v1.contract.ts` — new contract
+- `apps/web/src/app/api/v1/ai/runs/route.ts` — new endpoint
+- `apps/web/src/features/ai/services/` — run list service
 - Tests
 
 ## Plan
 
-- [ ] **Checkpoint 1: Port + adapter + index**
-  - Milestone: `listRunsByUser` query works with filtering and cursor pagination
-  - Todos:
-    - [ ] Add `listRunsByUser` to `GraphRunRepository` port (scheduler-core)
-    - [ ] Implement in `DrizzleGraphRunAdapter` with cursor-based pagination
-    - [ ] Add composite index `(requested_by, started_at DESC)` to db-schema
-    - [ ] Generate Drizzle migration
-  - Validation:
-    - [ ] `pnpm check` passes
+- [ ] **Checkpoint 1: Contract + service**
+  - Define Zod contract for list runs (input: filters, output: RunCard array)
+  - Feature service querying graph_runs via existing GraphRunRepository port
+  - Validation: `pnpm check` passes
 
-- [ ] **Checkpoint 2: Contract + route + tests**
-  - Milestone: GET /api/v1/ai/runs returns filtered, paginated runs
-  - Todos:
-    - [ ] Create `ai.runs.v1.contract.ts` — input (status?, runKind?, limit, cursor?), output (runs[], nextCursor?)
-    - [ ] Create `GET /api/v1/ai/runs` route — session auth, parse query params, call port, return contract output
-    - [ ] Add `statusLabel: null` and `stateKey` to output shape (dashboard compatibility)
-    - [ ] Contract test for auth, filtering, pagination
-  - Validation:
-    - [ ] `pnpm check` passes
+- [ ] **Checkpoint 2: Route + tests**
+  - GET route with auth + contract validation
+  - Unit test: filter logic, auth scoping
+  - Stack test: create runs → list → verify filtering
+  - Validation: `pnpm check` passes
 
 ## Validation
 
-```bash
-pnpm check
-```
+- `pnpm check` passes
+- Stack test: create graph_runs records → call GET /api/v1/ai/runs → verify response shape, filtering, auth scoping

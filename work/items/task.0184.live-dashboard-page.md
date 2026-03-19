@@ -2,7 +2,7 @@
 id: task.0184
 type: task
 title: "Live dashboard page: /dashboard with run card grid and tab switcher"
-status: needs_design
+status: needs_merge
 revision: 0
 priority: 1
 rank: 7
@@ -13,10 +13,11 @@ spec_refs:
   - spec.unified-graph-launch
 assignees: []
 project: proj.live-dashboard
+branch: worktree-live-dashboard
 blocked_by:
   - task.0183
 created: 2026-03-18
-updated: 2026-03-18
+updated: 2026-03-19
 labels:
   - ui
   - ai-graphs
@@ -76,21 +77,24 @@ P0 of the live operations dashboard. Static card grid powered by the run list AP
 
 ## Plan
 
-- [ ] **Checkpoint 1: RunCard component**
+- [x] **Checkpoint 1: RunCard component**
   - Kit component with status dot, graph name, elapsed timer, duration
-  - Storybook-ready with all states (running, pending, success, error)
+  - All states: running (pulsing dot + live timer), pending, success, error, skipped, cancelled
+  - `statusLabel` field for future AI-settable status text
   - Validation: `pnpm check` passes
 
-- [ ] **Checkpoint 2: Dashboard page + API hook**
+- [x] **Checkpoint 2: Dashboard page + API hook**
   - Page shell with auth, tab switcher, card grid layout
-  - React Query hook calling GET /api/v1/ai/runs (5s polling)
-  - Wire cards to data, running runs pinned to top
+  - React Query polling at 5s via `fetchRuns`
+  - Running runs pinned to top via `sortRuns`
+  - Active count indicator with pulsing Radio icon
   - Validation: `pnpm check` passes
 
-- [ ] **Checkpoint 3: Navigation + polish**
-  - Add /dashboard to sidebar navigation
-  - Empty state, loading skeleton, error state
-  - Responsive layout testing
+- [x] **Checkpoint 3: Navigation + polish**
+  - Dashboard added as first sidebar nav item (LayoutDashboard icon)
+  - Empty state with "Start a Chat" CTA
+  - Loading skeleton, error state
+  - Responsive 1/2/3 col grid
   - Validation: `pnpm check` passes
 
 ## Validation
