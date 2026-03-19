@@ -56,6 +56,8 @@ export interface GraphRunRepository {
       scheduleId?: string;
       /** Only for scheduled runs */
       scheduledFor?: Date;
+      /** Thread state key for conversation correlation */
+      stateKey?: string;
     }
   ) => Promise<GraphRun>;
 

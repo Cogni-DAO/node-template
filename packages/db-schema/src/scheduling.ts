@@ -200,6 +200,8 @@ export const graphRuns = pgTable(
     errorCode: text("error_code"),
     /** Error message if status is 'error' */
     errorMessage: text("error_message"),
+    /** Thread state key for conversation correlation — nullable (headless runs have none) */
+    stateKey: text("state_key"),
   },
   (table) => ({
     scheduleIdx: index("graph_runs_schedule_idx").on(table.scheduleId),
@@ -214,6 +216,8 @@ export const graphRuns = pgTable(
     runIdIdx: index("graph_runs_run_id_idx").on(table.runId),
     /** For querying runs by kind */
     runKindIdx: index("graph_runs_run_kind_idx").on(table.runKind),
+    /** For thread↔run correlation (join graph_runs to ai_threads by stateKey) */
+    stateKeyIdx: index("graph_runs_state_key_idx").on(table.stateKey),
   })
 ).enableRLS();
 

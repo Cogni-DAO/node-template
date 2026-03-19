@@ -23,6 +23,8 @@ export type {
 export { createToolRunner } from "@cogni/ai-core";
 // Activity validation (for app facade)
 export { validateActivityRange } from "./services/activity";
+// Shared assistant message assembler (AiEvent[] → UIMessage)
+export { assembleAssistantMessage } from "./services/assemble-assistant-message";
 // Billing commit (for app-layer closure injection into BillingGraphExecutorDecorator)
 export { commitUsageFact } from "./services/billing";
 // Non-streaming completion (for app facade)

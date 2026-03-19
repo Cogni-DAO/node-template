@@ -2,7 +2,7 @@
 id: bug.0186
 type: bug
 title: "Chat disconnect persists truncated assistant response — move thread persistence to execution layer"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 99
 estimate: 3
@@ -13,14 +13,14 @@ spec_refs:
 assignees: []
 credit:
 project: proj.unified-graph-launch
-branch:
+branch: fix/chat-0186
 pr:
 reviewer:
 revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-19
-updated: 2026-03-19
+updated: 2026-03-20
 labels:
   - ai-graphs
   - p0
@@ -104,7 +104,10 @@ Pipe events → SSE               → on stream end: persist assistant msg to th
 - [ ] PERSIST_AFTER_PUMP: assistant message saved by execution layer after full drain (fixed — was broken)
 - [ ] SSE_FROM_REDIS_NOT_MEMORY: chat route reads from Redis, not in-process (unchanged)
 - [ ] SINGLE_RUN_LEDGER: graph_runs gains stateKey for thread correlation (additive)
-- [ ] SIMPLE_SOLUTION: no new abstractions, reuses existing stream loop + ThreadPersistencePort
+- [ ] IDEMPOTENT_THREAD_PERSIST: assistant message ID = `assistant-{runId}` (deterministic). On retry, check if message already exists in thread before appending. Internal API route can be retried by Temporal — must not duplicate messages.
+- [ ] SHARED_EVENT_ASSEMBLER: one function `assembleAssistantMessage(runId, events)` → UIMessage. Used by internal route for persistence. No ad-hoc duplication.
+- [ ] TERMINAL_ONLY_PERSIST: persist assistant message only when `assistant_final` received (authoritative success). If run errors after partial deltas, do NOT persist a fake assistant message — the error is the terminal state.
+- [ ] STATEKEY_NULLABLE: thread persistence only when stateKey + real user context present. Null stateKey = no thread to persist (e.g., headless API calls).
 
 ### Files
 
@@ -112,10 +115,11 @@ Pipe events → SSE               → on stream end: persist assistant msg to th
 - Modify: `packages/scheduler-core/src/types.ts` — add stateKey to GraphRun
 - Modify: `packages/scheduler-core/src/ports/schedule-run.port.ts` — add stateKey to createRun params
 - Modify: `packages/db-client/src/adapters/drizzle-run.adapter.ts` — persist + return stateKey
-- Modify: `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts` — add accumulator + thread persistence after stream drain
+- Create: `apps/web/src/features/ai/services/assemble-assistant-message.ts` — shared AiEvent[] → UIMessage builder
+- Modify: `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts` — accumulate + persist using shared assembler
 - Modify: `apps/web/src/app/api/v1/ai/chat/route.ts` — strip Phase 2, pure SSE pipe
 - Create: migration for stateKey column + index
-- Test: disconnect mid-stream → verify full response persisted
+- Test: idempotent persistence, terminal-only semantics
 
 ## Allowed Changes
 
@@ -123,7 +127,9 @@ Pipe events → SSE               → on stream end: persist assistant msg to th
 - `packages/scheduler-core/src/types.ts` — GraphRun type
 - `packages/scheduler-core/src/ports/schedule-run.port.ts` — createRun params
 - `packages/db-client/src/adapters/drizzle-run.adapter.ts` — stateKey in adapter
-- `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts` — accumulator + persistence
+- `apps/web/src/features/ai/services/assemble-assistant-message.ts` — shared event→message builder (new)
+- `apps/web/src/features/ai/public.server.ts` — export assembler
+- `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts` — accumulate + persist
 - `apps/web/src/app/api/v1/ai/chat/route.ts` — strip Phase 2
 - `apps/web/src/bootstrap/container.ts` — if wiring changes needed
 - Drizzle migration
@@ -132,19 +138,50 @@ Pipe events → SSE               → on stream end: persist assistant msg to th
 ## Plan
 
 - [ ] **Checkpoint 1: stateKey on graph_runs**
-  - Add column + index migration, schema, type, port, adapter
-  - Pass stateKey through in facade → workflow → internal API
-  - Validation: `pnpm check`, existing tests pass
+  - Milestone: graph_runs has stateKey column; runs store thread correlation
+  - Invariants: SINGLE_RUN_LEDGER, STATEKEY_NULLABLE
+  - Todos:
+    - [ ] Add `stateKey: text("state_key")` to `packages/db-schema/src/scheduling.ts`
+    - [ ] Add index `graph_runs_state_key_idx` in same table definition
+    - [ ] Add `stateKey: string | null` to `GraphRun` in `packages/scheduler-core/src/types.ts`
+    - [ ] Add `stateKey?: string` to `createRun` params in `packages/scheduler-core/src/ports/schedule-run.port.ts`
+    - [ ] Persist stateKey in `DrizzleGraphRunAdapter.createRun()` and `toRun()`
+    - [ ] Generate Drizzle migration: `pnpm db:generate`
+  - Validation:
+    - [ ] `pnpm check` passes
+    - [ ] Existing tests pass (no regressions)
 
-- [ ] **Checkpoint 2: Persist assistant in execution layer**
-  - Add accumulator to internal API route stream drain loop
-  - After drain: load thread, append assistant UIMessage, save
-  - Validation: `pnpm check`, manual test (chat → verify thread persisted)
+- [ ] **Checkpoint 2: Shared event assembler + execution-layer persistence**
+  - Milestone: internal API route persists assistant message after full stream drain
+  - Invariants: SHARED_EVENT_ASSEMBLER, IDEMPOTENT_THREAD_PERSIST, TERMINAL_ONLY_PERSIST, STATEKEY_NULLABLE
+  - Todos:
+    - [ ] Create `apps/web/src/features/ai/services/assemble-assistant-message.ts`
+      - `assembleAssistantMessage(runId: string, events: AiEvent[]): UIMessage | null`
+      - Returns null if no `assistant_final` received (error runs)
+      - Message ID = `assistant-${runId}` (deterministic, idempotent)
+      - Handles text + tool_call_start + tool_call_result → UIMessage parts
+    - [ ] Export from `apps/web/src/features/ai/public.server.ts`
+    - [ ] In internal API route stream drain loop: collect events into array
+    - [ ] After drain + final: call assembler, persist thread if stateKey present
+      - Load thread, check if `assistant-${runId}` already exists (idempotent guard)
+      - If not present: append + save with ThreadConflictError retry
+    - [ ] Unit test for assembler
+  - Validation:
+    - [ ] `pnpm check` passes
+    - [ ] Unit test: assembler produces correct UIMessage from events
+    - [ ] Unit test: assembler returns null on error-only streams
 
 - [ ] **Checkpoint 3: Strip Phase 2 from chat route**
-  - Remove accumulator + persistAfterPump block
-  - Chat route becomes pure SSE pipe
-  - Validation: `pnpm check`, disconnect test (close browser → reopen → full response visible)
+  - Milestone: chat route is pure SSE pipe; no persistence responsibility
+  - Invariants: PERSIST_AFTER_PUMP (now in execution layer)
+  - Todos:
+    - [ ] Remove from chat route: `accumulatedText`, `assistantFinalContent`, `accToolParts`, `toolPartIndexByCallId`, `pumpDone`, `resolvePumpDone`, `persistAfterPump` block
+    - [ ] Remove `redactSecretsInMessages` import (no longer used in route)
+    - [ ] Keep: Phase 1 (user message save), SSE writer, reconciliation for display
+    - [ ] The `for await` loop keeps writing to SSE; `request.signal.aborted` break is now safe (no data loss)
+  - Validation:
+    - [ ] `pnpm check` passes
+    - [ ] Existing chat streaming tests pass
 
 ## Validation
 

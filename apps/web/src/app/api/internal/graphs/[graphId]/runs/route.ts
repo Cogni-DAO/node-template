@@ -19,6 +19,7 @@
  */
 
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import type { AiEvent } from "@cogni/ai-core";
 import { RUN_STREAM_DEFAULT_TTL_SECONDS } from "@cogni/graph-execution-core";
 import { toUserId } from "@cogni/ids";
 import { SYSTEM_ACTOR } from "@cogni/ids/system";
@@ -33,10 +34,14 @@ import {
   InternalGraphRunInputSchema,
   type InternalGraphRunOutput,
 } from "@/contracts/graphs.run.internal.v1.contract";
-import { executeStream } from "@/features/ai/public.server";
+import {
+  assembleAssistantMessage,
+  executeStream,
+  redactSecretsInMessages,
+} from "@/features/ai/public.server";
 import { preflightCreditCheck } from "@/features/ai/services/preflight-credit-check";
 import type { PreflightCreditCheckFn } from "@/ports";
-import { isInsufficientCreditsPortError } from "@/ports";
+import { isInsufficientCreditsPortError, ThreadConflictError } from "@/ports";
 import {
   isGrantExpiredError,
   isGrantNotFoundError,
@@ -483,8 +488,12 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     let final: Awaited<typeof result.final>;
     // Hold back the done event — we enrich it with GraphFinal data after stream drain.
     let pendingDone: { type: "done" } | null = null;
+    // Accumulate events for thread persistence (SHARED_EVENT_ASSEMBLER)
+    const accumulatedEvents: AiEvent[] = [];
     try {
       for await (const event of result.stream) {
+        // Accumulate all events for assistant message assembly after drain.
+        accumulatedEvents.push(event);
         // Publish each event to Redis Stream for SSE subscribers.
         // Per REDIS_IS_STREAM_PLANE: Redis loss = stream interruption, not data loss.
         // Publish failures are logged, not thrown — execution must complete for billing safety.
@@ -524,6 +533,77 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
           log.warn(
             { runId, err: publishErr },
             "Redis publish of enriched done failed"
+          );
+        }
+      }
+
+      // --- Thread persistence (PERSIST_AFTER_PUMP) ---
+      // Per STATEKEY_NULLABLE: only persist when stateKey + user context present.
+      // Per TERMINAL_ONLY_PERSIST: assembler returns null if no assistant_final.
+      // Per IDEMPOTENT_THREAD_PERSIST: message ID = assistant-{runId}, skip if already in thread.
+      if (stateKey && actorUserId) {
+        try {
+          const assistantMsg = assembleAssistantMessage(
+            runId,
+            accumulatedEvents
+          );
+          if (assistantMsg) {
+            const threadPersistence = container.threadPersistenceForUser(
+              toUserId(actorUserId)
+            );
+            const existing = await threadPersistence.loadThread(
+              actorUserId,
+              stateKey
+            );
+
+            // Idempotent guard: skip if this run's assistant message is already persisted
+            const alreadyPersisted = existing.some(
+              (m) => m.id === assistantMsg.id
+            );
+            if (!alreadyPersisted) {
+              const thread = [...existing, assistantMsg];
+              try {
+                await threadPersistence.saveThread(
+                  actorUserId,
+                  stateKey,
+                  redactSecretsInMessages(thread),
+                  existing.length
+                );
+                log.info(
+                  { runId, stateKey, messageCount: thread.length },
+                  "Thread persisted by execution layer"
+                );
+              } catch (persistErr) {
+                if (persistErr instanceof ThreadConflictError) {
+                  // Retry once with fresh load (concurrent write from chat route Phase 1)
+                  const reloaded = await threadPersistence.loadThread(
+                    actorUserId,
+                    stateKey
+                  );
+                  if (!reloaded.some((m) => m.id === assistantMsg.id)) {
+                    await threadPersistence.saveThread(
+                      actorUserId,
+                      stateKey,
+                      redactSecretsInMessages([...reloaded, assistantMsg]),
+                      reloaded.length
+                    );
+                    log.info(
+                      { runId, stateKey },
+                      "Thread persisted (retry after conflict)"
+                    );
+                  }
+                } else {
+                  throw persistErr;
+                }
+              }
+            }
+          }
+        } catch (threadErr) {
+          // Thread persistence failure must not block execution result.
+          // Billing + run record are more critical; log and continue.
+          log.error(
+            { runId, stateKey, err: threadErr },
+            "Thread persistence failed — execution result unaffected"
           );
         }
       }
