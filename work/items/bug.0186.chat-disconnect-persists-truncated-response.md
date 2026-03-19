@@ -2,7 +2,7 @@
 id: bug.0186
 type: bug
 title: "Chat disconnect persists truncated assistant response — move thread persistence to execution layer"
-status: needs_merge
+status: done
 priority: 0
 rank: 99
 estimate: 3

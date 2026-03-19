@@ -2,7 +2,7 @@
 id: task.0182
 type: task
 title: "Run stream reconnection endpoint — GET /api/v1/ai/runs/{runId}/stream"
-status: needs_merge
+status: done
 revision: 1
 branch: feat/task.0182-run-stream-reconnection
 priority: 1
