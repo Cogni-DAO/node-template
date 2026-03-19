@@ -231,10 +231,13 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     expect(latest.idempotencyKey.startsWith(`${temporalScheduleId}:`)).toBe(
       true
     );
-    // The governance run may fail with "internal" in CI when the sandbox:openclaw
-    // gateway container isn't fully ready or ALS context is lost in production builds.
-    // We verify the run was ATTEMPTED (execution_requests row exists with correct key)
-    // rather than asserting success, since sandbox execution is infrastructure-dependent.
+    // Regression guard: before stateKey wiring, governance runs would finalize
+    // as internal errors almost immediately from gateway execution.
+    if (latest.ok === false && latest.errorCode === "internal") {
+      throw new Error(
+        "Governance run finalized with internal error (possible stateKey regression)"
+      );
+    }
 
     const expectedRequestHash = createHash("sha256")
       .update(
