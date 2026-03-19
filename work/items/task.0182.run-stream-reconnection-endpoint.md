@@ -100,7 +100,7 @@ pnpm test
 
 ## PR / Links
 
--
+- https://github.com/Cogni-DAO/node-template/pull/603
 
 ## Attribution
 
