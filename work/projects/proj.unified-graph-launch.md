@@ -75,7 +75,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | **Extract `graph-execution-core` package** — decouple execution ports from Next.js                   | Done (PR #574) | 3   | task.0179 |
 | **GraphRunWorkflow + promote `schedule_runs` → `graph_runs`** — single run ledger, Temporal workflow | Done           | 5   | task.0176 |
 | **Neutral usage facts** — split wrapper composition and remove billing identity from usage facts     | Done           | 2   | task.0180 |
-| **Unified streaming API** — chat endpoint → Temporal + Redis + idempotency                           | Not Started    | 5   | task.0177 |
+| **Unified streaming API** — chat endpoint → Temporal + Redis + idempotency                           | In Review      | 5   | task.0177 |
 | **Run stream reconnection** — GET /api/v1/ai/runs/{runId}/stream with Last-Event-ID replay           | Not Started    | 2   | task.0182 |
 | **Scheduled run migration + observability + docs** — migrate scheduled runs, instrumentation, docs   | Not Started    | 3   | task.0178 |
 
