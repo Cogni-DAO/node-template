@@ -2,7 +2,7 @@
 id: task.0182
 type: task
 title: "Run stream reconnection endpoint — GET /api/v1/ai/runs/{runId}/stream"
-status: needs_implement
+status: needs_closeout
 revision: 1
 branch: feat/task.0182-run-stream-reconnection
 priority: 1
@@ -36,7 +36,7 @@ After task.0177, chat SSE streams from Redis via `RunStreamPort.subscribe()`. Re
 - Returns 410 Gone if Redis stream TTL expired (client falls back to thread history from DB)
 - Auth: session-required (same user who started the run)
 - Validates `runId` belongs to the authenticated user (via `graph_runs` table lookup)
-- Streams AI SDK Data Stream Protocol (same wire format as chat POST)
+- Streams raw SSE with AiEvent JSON (id: Redis stream ID, event: type, data: JSON)
 
 ## Allowed Changes
 

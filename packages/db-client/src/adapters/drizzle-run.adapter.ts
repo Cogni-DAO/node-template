@@ -197,7 +197,8 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
       const [row] = await tx
         .select()
         .from(graphRuns)
-        .where(eq(graphRuns.runId, runId));
+        .where(eq(graphRuns.runId, runId))
+        .limit(1);
 
       return row ? this.toRun(row) : null;
     });

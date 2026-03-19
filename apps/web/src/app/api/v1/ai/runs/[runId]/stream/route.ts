@@ -15,7 +15,7 @@
  * @public
  */
 
-import { SYSTEM_ACTOR } from "@cogni/ids/system";
+import { toUserId, userActor } from "@cogni/ids";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer } from "@/bootstrap/container";
@@ -66,8 +66,9 @@ export const GET = wrapRouteHandlerWithLogging<RouteParams>(
 
     // --- 2. Look up run and verify ownership ---
     const container = getContainer();
+    const actorId = userActor(toUserId(sessionUser.id));
     const run = await container.graphRunRepository.getRunByRunId(
-      SYSTEM_ACTOR,
+      actorId,
       runId
     );
 
@@ -109,6 +110,14 @@ export const GET = wrapRouteHandlerWithLogging<RouteParams>(
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        let closed = false;
+        function safeClose() {
+          if (!closed) {
+            closed = true;
+            controller.close();
+          }
+        }
+
         try {
           const subscription = container.runStream.subscribe(
             runId,
@@ -131,14 +140,14 @@ export const GET = wrapRouteHandlerWithLogging<RouteParams>(
             controller.enqueue(encoder.encode(sseMessage));
           }
 
-          controller.close();
+          safeClose();
         } catch (error) {
           if (error instanceof Error && error.name === "AbortError") {
             log.info({ runId }, "Stream client disconnected");
           } else {
             log.error({ runId, err: error }, "Stream subscription error");
           }
-          controller.close();
+          safeClose();
         }
       },
     });
