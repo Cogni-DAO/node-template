@@ -67,6 +67,8 @@ export interface CreateGraphRunInput {
   dbScheduleId?: string;
   /** Only for scheduled runs (ISO string) */
   scheduledFor?: string;
+  /** Thread state key for conversation correlation */
+  stateKey?: string;
 }
 
 /**
@@ -199,6 +201,7 @@ export function createActivities(deps: ActivityDeps) {
         requestedBy: input.requestedBy,
         scheduleId: dbScheduleId,
         scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
+        stateKey: input.stateKey,
       });
 
       const durationMs = performance.now() - start;

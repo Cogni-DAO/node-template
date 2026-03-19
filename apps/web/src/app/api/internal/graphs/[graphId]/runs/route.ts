@@ -488,12 +488,19 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     let final: Awaited<typeof result.final>;
     // Hold back the done event — we enrich it with GraphFinal data after stream drain.
     let pendingDone: { type: "done" } | null = null;
-    // Accumulate events for thread persistence (SHARED_EVENT_ASSEMBLER)
+    // Accumulate persistence-relevant events only (SHARED_EVENT_ASSEMBLER).
+    // text_delta not needed — assembler uses assistant_final for full content.
+    const PERSIST_EVENT_TYPES = new Set([
+      "assistant_final",
+      "tool_call_start",
+      "tool_call_result",
+    ]);
     const accumulatedEvents: AiEvent[] = [];
     try {
       for await (const event of result.stream) {
-        // Accumulate all events for assistant message assembly after drain.
-        accumulatedEvents.push(event);
+        if (PERSIST_EVENT_TYPES.has(event.type)) {
+          accumulatedEvents.push(event);
+        }
         // Publish each event to Redis Stream for SSE subscribers.
         // Per REDIS_IS_STREAM_PLANE: Redis loss = stream interruption, not data loss.
         // Publish failures are logged, not thrown — execution must complete for billing safety.
