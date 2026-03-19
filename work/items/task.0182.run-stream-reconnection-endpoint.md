@@ -2,7 +2,8 @@
 id: task.0182
 type: task
 title: "Run stream reconnection endpoint — GET /api/v1/ai/runs/{runId}/stream"
-status: needs_closeout
+status: needs_implement
+revision: 1
 branch: feat/task.0182-run-stream-reconnection
 priority: 1
 rank: 5
@@ -82,6 +83,20 @@ pnpm test
 - [ ] **Spec:** SSE_FROM_REDIS_NOT_MEMORY invariant upheld
 - [ ] **Tests:** reconnection + expiry + auth coverage
 - [ ] **Reviewer:** assigned and approved
+
+## Review Feedback (revision 1)
+
+**Blocking:**
+
+1. **`SYSTEM_ACTOR` in user-facing route** (`route.ts:18,70`): `@cogni/ids/system` AGENTS.md says user-facing routes must not import `SYSTEM_ACTOR`. Use `userActor(toUserId(sessionUser.id))` from `@cogni/ids` instead.
+
+2. **Double `controller.close()`** (`route.ts:134,141`): Normal completion calls `close()` at L134. If a later error reaches the catch block, L141 calls `close()` again — which throws on an already-closed controller. Add a guard.
+
+**Non-blocking:**
+
+3. Work item L38 says "AI SDK Data Stream Protocol" but implementation uses raw SSE (approved in design review). Update requirement text.
+4. Add `.limit(1)` to `getRunByRunId` query for clarity.
+5. Add test for 401 unauthenticated access.
 
 ## PR / Links
 
