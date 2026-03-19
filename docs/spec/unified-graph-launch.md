@@ -10,7 +10,7 @@ read_when: Adding new graph trigger types, modifying execution paths, or impleme
 implements: proj.unified-graph-launch
 owner: cogni-dev
 created: 2026-02-03
-verified: 2026-03-18
+verified: 2026-03-19
 tags:
   - ai-graphs
   - scheduler
@@ -353,6 +353,13 @@ Scheduler-worker can now import shared execution contracts without violating `PA
 
 **Key design decision:** `GraphRunRequest` carries only execution input (`runId`, `graphId`, `messages`, `model`, optional `stateKey`/`toolIds`/`responseFormat`). Trigger provenance belongs on workflow input and the `graph_runs` ledger, not on the shared executor contract. `ExecutionContext` carries only per-run metadata (`actorUserId`, `sessionId`, `maskContent`, `requestId`).
 
+**Implemented (task.0182):**
+
+| File                                                      | Purpose                                                            |
+| --------------------------------------------------------- | ------------------------------------------------------------------ |
+| `apps/web/src/app/api/v1/ai/runs/[runId]/stream/route.ts` | SSE reconnection endpoint — Last-Event-ID replay from Redis Stream |
+| `apps/web/src/contracts/runs.stream.v1.contract.ts`       | Path parameter validation (runId UUID)                             |
+
 **Planned (future tasks):**
 
 | File                                                            | Purpose                                                                     | Task      |
@@ -360,7 +367,6 @@ Scheduler-worker can now import shared execution contracts without violating `PA
 | `services/scheduler-worker/src/workflows/graph-run.workflow.ts` | GraphRunWorkflow (replaces GovernanceScheduledRunWorkflow)                  | task.0176 |
 | `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts`  | Add Redis Stream publishing as stream drains (PUMP_TO_COMPLETION_VIA_REDIS) | task.0176 |
 | `apps/web/src/app/api/v1/ai/chat/route.ts`                      | API trigger (starts workflow → subscribes Redis → SSE)                      | task.0177 |
-| `apps/web/src/app/api/v1/ai/runs/[runId]/stream/route.ts`       | Reconnection SSE endpoint                                                   | task.0177 |
 | `apps/web/src/features/ai/services/ai_runtime.ts`               | AI runtime (workflow start + Redis subscribe)                               | task.0177 |
 
 ## Acceptance Checks
