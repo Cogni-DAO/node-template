@@ -65,4 +65,7 @@ export interface RunStreamPort {
 
   /** Set TTL on a run's stream (call after terminal event for auto-cleanup). */
   expire(runId: string, ttlSeconds: number): Promise<void>;
+
+  /** Returns the number of entries in a run's stream (0 if key doesn't exist). */
+  streamLength(runId: string): Promise<number>;
 }

@@ -76,7 +76,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | **GraphRunWorkflow + promote `schedule_runs` → `graph_runs`** — single run ledger, Temporal workflow | Done           | 5   | task.0176 |
 | **Neutral usage facts** — split wrapper composition and remove billing identity from usage facts     | Done           | 2   | task.0180 |
 | **Unified streaming API** — chat endpoint → Temporal + Redis + idempotency                           | In Review      | 5   | task.0177 |
-| **Run stream reconnection** — GET /api/v1/ai/runs/{runId}/stream with Last-Event-ID replay           | Not Started    | 2   | task.0182 |
+| **Run stream reconnection** — GET /api/v1/ai/runs/{runId}/stream with Last-Event-ID replay           | In Review      | 2   | task.0182 |
 | **Scheduled run migration + observability + docs** — migrate scheduled runs, instrumentation, docs   | Not Started    | 3   | task.0178 |
 
 **Note:** When `graph_runs` exists, reconciler can optionally switch reference-set from LiteLLM spend/logs to `graph_runs`, but it is not required. The LiteLLM API approach remains valid long-term.

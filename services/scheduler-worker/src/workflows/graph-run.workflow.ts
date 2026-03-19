@@ -116,6 +116,13 @@ export async function GraphRunWorkflow(
   // Generate run ID if caller did not provide one.
   const runId = providedRunId ?? uuid4();
 
+  // Extract stateKey from graph input for thread↔run correlation.
+  // Per STATEKEY_NULLABLE: may be absent for headless/webhook runs.
+  const stateKey: string | undefined =
+    typeof graphInput?.stateKey === "string" && graphInput.stateKey.length > 0
+      ? graphInput.stateKey
+      : undefined;
+
   // Note: idempotency key is derived inside executeGraphActivity as
   // `${temporalScheduleId}:${scheduledFor}` per SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS.
 
@@ -135,6 +142,7 @@ export async function GraphRunWorkflow(
         requestedBy,
         dbScheduleId,
         scheduledFor,
+        stateKey,
       });
       await updateGraphRunActivity({
         runId,
@@ -155,6 +163,7 @@ export async function GraphRunWorkflow(
     requestedBy,
     dbScheduleId,
     scheduledFor,
+    stateKey,
   });
 
   // 3. Mark run as started

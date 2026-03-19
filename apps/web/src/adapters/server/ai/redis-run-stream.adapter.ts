@@ -130,4 +130,9 @@ export class RedisRunStreamAdapter implements RunStreamPort {
     const key = streamKey(runId);
     await this.redis.expire(key, ttlSeconds);
   }
+
+  async streamLength(runId: string): Promise<number> {
+    const key = streamKey(runId);
+    return this.redis.xlen(key);
+  }
 }

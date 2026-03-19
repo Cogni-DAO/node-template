@@ -98,6 +98,8 @@ export interface GraphRun {
   readonly langfuseTraceId: string | null;
   readonly errorCode: string | null;
   readonly errorMessage: string | null;
+  /** Thread state key for conversation correlation — null for headless runs */
+  readonly stateKey: string | null;
 }
 
 /**

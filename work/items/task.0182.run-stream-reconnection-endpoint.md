@@ -2,7 +2,9 @@
 id: task.0182
 type: task
 title: "Run stream reconnection endpoint — GET /api/v1/ai/runs/{runId}/stream"
-status: needs_triage
+status: needs_merge
+revision: 1
+branch: feat/task.0182-run-stream-reconnection
 priority: 1
 rank: 5
 estimate: 2
@@ -15,7 +17,7 @@ project: proj.unified-graph-launch
 blocked_by:
   - task.0177
 created: 2026-03-18
-updated: 2026-03-18
+updated: 2026-03-19
 labels:
   - ai-graphs
 ---
@@ -34,7 +36,7 @@ After task.0177, chat SSE streams from Redis via `RunStreamPort.subscribe()`. Re
 - Returns 410 Gone if Redis stream TTL expired (client falls back to thread history from DB)
 - Auth: session-required (same user who started the run)
 - Validates `runId` belongs to the authenticated user (via `graph_runs` table lookup)
-- Streams AI SDK Data Stream Protocol (same wire format as chat POST)
+- Streams raw SSE with AiEvent JSON (id: Redis stream ID, event: type, data: JSON)
 
 ## Allowed Changes
 
@@ -44,18 +46,30 @@ After task.0177, chat SSE streams from Redis via `RunStreamPort.subscribe()`. Re
 
 ## Plan
 
-- [ ] **Checkpoint 1: Reconnection endpoint**
-  - Create GET route with auth + runId ownership check
-  - Subscribe to Redis via `RunStreamPort.subscribe(runId, signal, lastEventId)`
-  - Pipe `RunStreamEntry` events through `createUIMessageStream` → SSE
-  - Set `id` field on SSE events (Redis stream entry ID) for subsequent reconnection
-  - Return 410 if stream key doesn't exist (expired)
-  - Validation: `pnpm check` passes
+- [x] **Checkpoint 1: Port extension + Route**
+  - Milestone: GET /api/v1/ai/runs/{runId}/stream returns SSE from Redis Streams
+  - Invariants: SSE_FROM_REDIS_NOT_MEMORY, REDIS_IS_STREAM_PLANE
+  - Todos:
+    - [x] Add `getRunByRunId` to `GraphRunRepository` port (scheduler-core) — needed for ownership check
+    - [x] Implement `getRunByRunId` in `DrizzleGraphRunAdapter` (db-client)
+    - [x] Add `streamLength` to `RunStreamPort` (graph-execution-core) — needed for 410 detection
+    - [x] Implement `streamLength` in `RedisRunStreamAdapter`
+    - [x] Create `apps/web/src/contracts/runs.stream.v1.contract.ts` — path param schema
+    - [x] Create `apps/web/src/app/api/v1/ai/runs/[runId]/stream/route.ts` — GET endpoint
+  - Validation:
+    - [x] Route compiles and serves SSE events from Redis stream
+    - Test levels:
+      - [x] unit: `pnpm test` passes (no regressions)
+      - [x] static: `pnpm check` passes
 
-- [ ] **Checkpoint 2: Tests**
-  - Unit test: 410 for expired stream, auth enforcement
-  - Stack test: start chat → disconnect → reconnect → resume from cursor
-  - Validation: `pnpm check` passes, stack tests pass
+- [x] **Checkpoint 2: Tests**
+  - Milestone: Contract test verifies auth, ownership, 410, and SSE wire format
+  - Todos:
+    - [x] Contract test for endpoint behavior (8 tests)
+  - Validation:
+    - Test levels:
+      - [x] contract: route contract tests pass
+      - [x] static: `pnpm check` passes
 
 ## Validation
 
@@ -70,9 +84,23 @@ pnpm test
 - [ ] **Tests:** reconnection + expiry + auth coverage
 - [ ] **Reviewer:** assigned and approved
 
+## Review Feedback (revision 1)
+
+**Blocking:**
+
+1. **`SYSTEM_ACTOR` in user-facing route** (`route.ts:18,70`): `@cogni/ids/system` AGENTS.md says user-facing routes must not import `SYSTEM_ACTOR`. Use `userActor(toUserId(sessionUser.id))` from `@cogni/ids` instead.
+
+2. **Double `controller.close()`** (`route.ts:134,141`): Normal completion calls `close()` at L134. If a later error reaches the catch block, L141 calls `close()` again — which throws on an already-closed controller. Add a guard.
+
+**Non-blocking:**
+
+3. Work item L38 says "AI SDK Data Stream Protocol" but implementation uses raw SSE (approved in design review). Update requirement text.
+4. Add `.limit(1)` to `getRunByRunId` query for clarity.
+5. Add test for 401 unauthenticated access.
+
 ## PR / Links
 
--
+- https://github.com/Cogni-DAO/node-template/pull/603
 
 ## Attribution
 

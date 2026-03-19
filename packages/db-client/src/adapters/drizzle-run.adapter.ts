@@ -56,6 +56,7 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
       requestedBy?: string;
       scheduleId?: string;
       scheduledFor?: Date;
+      stateKey?: string;
     }
   ): Promise<GraphRun> {
     return withTenantScope(this.db, actorId, async (tx) => {
@@ -68,6 +69,7 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
         requestedBy: params.requestedBy ?? null,
         scheduleId: params.scheduleId ?? null,
         scheduledFor: params.scheduledFor ?? null,
+        stateKey: params.stateKey ?? null,
         status: "pending" as const,
       };
 
@@ -189,6 +191,21 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
     this.logger.info({ runId, status }, "Marked run as completed");
   }
 
+  async getRunByRunId(
+    actorId: ActorId,
+    runId: string
+  ): Promise<GraphRun | null> {
+    return withTenantScope(this.db, actorId, async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(graphRuns)
+        .where(eq(graphRuns.runId, runId))
+        .limit(1);
+
+      return row ? this.toRun(row) : null;
+    });
+  }
+
   private toRun(row: typeof graphRuns.$inferSelect): GraphRun {
     return {
       id: row.id,
@@ -207,6 +224,7 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
       langfuseTraceId: row.langfuseTraceId,
       errorCode: row.errorCode,
       errorMessage: row.errorMessage,
+      stateKey: row.stateKey,
     };
   }
 }
