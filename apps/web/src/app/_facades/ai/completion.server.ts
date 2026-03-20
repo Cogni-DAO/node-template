@@ -13,6 +13,7 @@
  *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: preflight credit check handled by decorator in execution layer
  *   - Validates billing account before delegation; propagates feature errors
  *   - IDEMPOTENT_WORKFLOW_START: swallows WorkflowExecutionAlreadyStartedError for safe retries
+ *   - TERMINAL_EVENT_TRACKING: stream pump tracks sawTerminal flag; failStream only fires when no done/error event received
  * Side-effects: IO (Temporal workflow start, Redis stream subscription)
  * Notes: chatCompletion() delegates to completionStream() and collects response server-side.
  *   Returns OpenAI-compatible ChatCompletion format.
@@ -451,6 +452,7 @@ export async function completionStream(
     }
 
     // Continue with remaining events
+    let sawTerminal = false;
     try {
       let next = await iterator.next();
       while (!next.done) {
@@ -459,11 +461,16 @@ export async function completionStream(
           next = await iterator.next();
           continue;
         }
+        if (event.type === "done" || event.type === "error") {
+          sawTerminal = true;
+        }
         processEvent(event);
         yield event;
         next = await iterator.next();
       }
-      failStream("stream_ended_no_terminal");
+      if (!sawTerminal) {
+        failStream("stream_ended_no_terminal");
+      }
     } catch {
       failStream("stream_subscribe_error");
     }

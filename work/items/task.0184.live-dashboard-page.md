@@ -1,22 +1,24 @@
 ---
 id: task.0184
 type: task
-title: "Live dashboard page: /dashboard with run card grid and tab switcher"
-status: needs_design
-revision: 0
+title: "Live dashboard page: unified operations view with agents table, work items, and activity charts"
+status: needs_merge
+revision: 1
 priority: 1
 rank: 7
 estimate: 3
-summary: New /dashboard page showing agent runs as cards with status dots, elapsed timers, and My Runs / System tabs
-outcome: /dashboard renders a card grid of recent and active runs from the run list API; cards show graph name, status badge, timing; admin sees System tab
+summary: Unified /dashboard showing agents table (deduplicated by thread), active work items, and activity charts — replaces original card grid with operational overview
+outcome: /dashboard renders agents table with status dots and duration (deduplicated by stateKey), active work items panel, and spend/tokens/requests activity charts; Cogni Live tab shows system runs
 spec_refs:
   - spec.unified-graph-launch
 assignees: []
 project: proj.live-dashboard
+branch: worktree-live-dashboard
+pr: https://github.com/Cogni-DAO/node-template/pull/602
 blocked_by:
   - task.0183
 created: 2026-03-18
-updated: 2026-03-18
+updated: 2026-03-20
 labels:
   - ui
   - ai-graphs
@@ -76,21 +78,24 @@ P0 of the live operations dashboard. Static card grid powered by the run list AP
 
 ## Plan
 
-- [ ] **Checkpoint 1: RunCard component**
+- [x] **Checkpoint 1: RunCard component**
   - Kit component with status dot, graph name, elapsed timer, duration
-  - Storybook-ready with all states (running, pending, success, error)
+  - All states: running (pulsing dot + live timer), pending, success, error, skipped, cancelled
+  - `statusLabel` field for future AI-settable status text
   - Validation: `pnpm check` passes
 
-- [ ] **Checkpoint 2: Dashboard page + API hook**
+- [x] **Checkpoint 2: Dashboard page + API hook**
   - Page shell with auth, tab switcher, card grid layout
-  - React Query hook calling GET /api/v1/ai/runs (5s polling)
-  - Wire cards to data, running runs pinned to top
+  - React Query polling at 5s via `fetchRuns`
+  - Running runs pinned to top via `sortRuns`
+  - Active count indicator with pulsing Radio icon
   - Validation: `pnpm check` passes
 
-- [ ] **Checkpoint 3: Navigation + polish**
-  - Add /dashboard to sidebar navigation
-  - Empty state, loading skeleton, error state
-  - Responsive layout testing
+- [x] **Checkpoint 3: Navigation + polish**
+  - Dashboard added as first sidebar nav item (LayoutDashboard icon)
+  - Empty state with "Start a Chat" CTA
+  - Loading skeleton, error state
+  - Responsive 1/2/3 col grid
   - Validation: `pnpm check` passes
 
 ## Validation
