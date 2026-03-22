@@ -606,7 +606,7 @@ services:
       [
         "sh",
         "-c",
-        "mkdir -p /workspace/.openclaw-config && cp /opt/openclaw-config-source.json /workspace/.openclaw-config/openclaw.json && exec node /app/dist/index.js gateway",
+        "mkdir -p /workspace/.openclaw-config && cp /opt/openclaw-config-source.json /workspace/.openclaw-config/openclaw.json && exec node /app/dist/index.js gateway run",
       ]
     environment:
       - HOME=/workspace
@@ -629,8 +629,9 @@ services:
       - GRAFANA_URL=${GRAFANA_URL}
       - GRAFANA_SERVICE_ACCOUNT_TOKEN=${GRAFANA_SERVICE_ACCOUNT_TOKEN}
       # Discord bot (OpenClaw channel plugin)
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
-    read_only: true
+      # Discord disabled until config updated for new OpenClaw version
+      # - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+    # read_only: true — disabled for new OpenClaw (writes browser profiles, corepack cache)
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m
     volumes:

@@ -1,14 +1,13 @@
-# Multi-stage devtools image: node:22 + OpenClaw + pnpm/git/socat
+# Sandbox OpenClaw image: extends OpenClaw base with devtools (pnpm/git/socat/gh).
 # Single image for both gateway (long-running) and ephemeral (one-shot) modes.
 # Per task.0031 spec. No Cogni deps baked in — use pnpm_store volume at runtime.
 
-# Stage 1: OpenClaw runtime source (forked header-forwarding build)
-# Default base is multi-arch (arm64 + amd64). Override with --build-arg for local dev.
+# Build directly FROM the OpenClaw base (no multi-stage COPY).
+# This preserves the exact filesystem layout OpenClaw expects for extension discovery.
 ARG OPENCLAW_BASE=ghcr.io/cogni-dao/openclaw-outbound-headers:latest
-FROM ${OPENCLAW_BASE} AS openclaw
+FROM ${OPENCLAW_BASE}
 
-# Stage 2: Devtools base
-FROM node:22-bookworm
+USER root
 
 # System tools needed by sandbox agents
 RUN apt-get update \
@@ -34,9 +33,6 @@ RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 # npm_config_store_dir is the env var pnpm actually reads (not PNPM_STORE_DIR)
 ENV HOME=/workspace \
     npm_config_store_dir=/pnpm-store
-
-# OpenClaw runtime — same node:22 major, no ABI rebuild needed
-COPY --from=openclaw /app /app
 
 # Non-root user matching sandbox-runtime (adapter hardcodes User: "sandboxer").
 # /app is owned by node:node with world-readable perms — sandboxer can read/execute.
