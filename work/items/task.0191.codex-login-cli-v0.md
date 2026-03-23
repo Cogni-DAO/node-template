@@ -35,6 +35,13 @@ deploy_verified: false
 
 ## Validation
 
-- [ ] `pnpm codex:login` completes OAuth flow and writes .env.local
-- [ ] Dev server starts with Codex model available in LiteLLM
-- [ ] Token refresh works when expired token present in .env.local
+- [x] `pnpm codex:login` completes OAuth flow
+- [x] CodexGraphProvider executes graph via Codex SDK
+- [x] Chat UI renders Codex response (codex:poet)
+- [x] Thread persisted, Langfuse trace created
+- [ ] Automated tests
+
+## PR / Links
+
+- PR: https://github.com/Cogni-DAO/node-template/pull/612
+- Handoff: [handoff](../handoffs/task.0191.handoff.md)
