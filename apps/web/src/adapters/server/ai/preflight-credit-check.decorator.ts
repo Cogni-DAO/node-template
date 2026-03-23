@@ -47,6 +47,12 @@ export class PreflightCreditCheckDecorator implements GraphExecutorPort {
   runGraph(req: GraphRunRequest, ctx?: ExecutionContext): GraphRunResult {
     const result = this.inner.runGraph(req, ctx);
 
+    // Skip credit check for Codex graphs — they use the user's ChatGPT subscription,
+    // not platform credits. Codex billing is handled by OpenAI, not our ledger.
+    if (req.graphId.startsWith("codex:")) {
+      return result;
+    }
+
     // Start credit check eagerly (runs in parallel with any sync setup)
     const checkPromise = this.checkFn(
       this.billingAccountId,
