@@ -41,12 +41,11 @@ codex: namespace → CodexGraphProvider → @openai/codex-sdk → codex CLI → 
 
 ### Walk (v1) — Per-Tenant BYO-AI
 
-- [ ] OAuth flow in web UI: "Connect your ChatGPT account" in settings
-- [ ] `provider_credentials` DB table with encrypted token storage
-- [ ] Codex app-server sidecar with `chatgptAuthTokens` for host-managed multi-user auth
-- [ ] Per-tenant auth resolution in `CodexGraphProvider`
-- [ ] Token refresh via `account/chatgptAuthTokens/refresh` JSON-RPC
-- [ ] Usage tracking per-tenant (Codex usage API)
+- [ ] OAuth PKCE flow on profile page: "Connect ChatGPT" button (same UX as GitHub/Discord/Google linking)
+- [ ] `provider_credentials` DB table with AES-256-GCM encrypted token storage
+- [ ] Per-user auth resolution in `CodexGraphProvider` via SDK `env` injection (no app-server sidecar)
+- [ ] On-demand token refresh at execution time (no background cron)
+- [ ] Disconnect flow (remove credentials)
 
 ### Run (v2) — Multi-Provider BYO
 
@@ -66,7 +65,7 @@ codex: namespace → CodexGraphProvider → @openai/codex-sdk → codex CLI → 
 - @openai/codex-sdk (TypeScript SDK)
 - @openai/codex (CLI binary)
 - @mariozechner/pi-ai (OAuth login flow)
-- Codex app-server (v1, for chatgptAuthTokens multi-user auth)
+- Node.js `crypto` (AES-256-GCM for token encryption)
 
 ## As-Built Specs
 
@@ -81,5 +80,5 @@ codex: namespace → CodexGraphProvider → @openai/codex-sdk → codex CLI → 
 
 - **Codex is a graph executor, not a model provider** — no LiteLLM, no ChatOpenAI shim
 - **v0 uses file-backed auth** — single trusted runner pattern, explicitly not multi-tenant
-- **v1 uses Codex app-server `chatgptAuthTokens`** — host supplies per-user tokens, not temp auth.json files
+- **v1 uses SDK `env` injection** — per-user tokens resolved from DB, injected via temp auth.json + `CodexOptions.env` (app-server sidecar rejected as unnecessary complexity)
 - **Credit check skipped for `codex:` graphs** — billing is handled by OpenAI, not our ledger
