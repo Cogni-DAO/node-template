@@ -56,10 +56,10 @@ import {
   schedules,
   virtualKeys,
 } from "@cogni/db-schema";
-import { and, eq, sql } from "drizzle-orm";
 import { identityEvents, userBindings } from "@cogni/db-schema/identity";
 import { users } from "@cogni/db-schema/refs";
 import { extractNodeId, extractScopeId, parseRepoSpec } from "@cogni/repo-spec";
+import { and, eq } from "drizzle-orm";
 
 // ── Configuration ───────────────────────────────────────────────
 
@@ -902,13 +902,6 @@ function generateScheduledRuns(params: {
     const startedAt = new Date(scheduledFor.getTime() + randInt(500, 3000));
     const completedAt = new Date(startedAt.getTime() + latencyMs);
 
-    const tokensIn = isError
-      ? null
-      : randInt(params.profile.minTokensIn, params.profile.maxTokensIn);
-    const tokensOut = isError
-      ? null
-      : randInt(params.profile.minTokensOut, params.profile.maxTokensOut);
-
     runs.push({
       scheduleId: params.scheduleId,
       runId,
@@ -931,10 +924,18 @@ function generateScheduledRuns(params: {
 
     // One charge receipt per successful run (governance runs are single-turn)
     if (!isError) {
+      const tokensIn = randInt(
+        params.profile.minTokensIn,
+        params.profile.maxTokensIn
+      );
+      const tokensOut = randInt(
+        params.profile.minTokensOut,
+        params.profile.maxTokensOut
+      );
       const costUsd =
-        (tokensIn! / 1000) * params.profile.costPerKTokenIn +
-        (tokensOut! / 1000) * params.profile.costPerKTokenOut;
-      const chargedCredits = BigInt(Math.ceil(costUsd * 1_000_000)); // 1 credit = $0.000001
+        (tokensIn / 1000) * params.profile.costPerKTokenIn +
+        (tokensOut / 1000) * params.profile.costPerKTokenOut;
+      const chargedCredits = BigInt(Math.ceil(costUsd * 1_000_000));
 
       charges.push({
         receipt: {
@@ -957,8 +958,8 @@ function generateScheduledRuns(params: {
           providerCallId: randomUUID(),
           model: params.profile.model,
           provider: params.profile.provider,
-          tokensIn: tokensIn!,
-          tokensOut: tokensOut!,
+          tokensIn,
+          tokensOut,
           latencyMs,
           graphId: params.profile.graphId,
         },
@@ -1278,7 +1279,8 @@ async function seedUserActivity(
 
       for (let r = 0; r < runsToday; r++) {
         const profile =
-          USER_AGENT_PROFILES[randInt(0, USER_AGENT_PROFILES.length - 1)]!;
+          USER_AGENT_PROFILES[randInt(0, USER_AGENT_PROFILES.length - 1)] ??
+          USER_AGENT_PROFILES[0];
         const runId = randomUUID();
         const isError = Math.random() < profile.errorRate;
         const hourOffset = randInt(8, 22); // runs during waking hours
