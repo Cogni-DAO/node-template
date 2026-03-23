@@ -28,6 +28,7 @@ import { LANGGRAPH_CATALOG } from "@cogni/langgraph-graphs";
 import {
   BillingEnrichmentGraphExecutorDecorator,
   BillingGraphExecutorDecorator,
+  CodexGraphProvider,
   type CompletionStreamFn,
   createLangGraphDevClient,
   InProcCompletionUnitAdapter,
@@ -92,6 +93,7 @@ export function createGraphExecutor(
         env.OPENCLAW_GATEWAY_TOKEN
       ),
     ],
+    ["codex", new CodexGraphProvider()],
   ]);
 
   // Create namespace router with all configured providers

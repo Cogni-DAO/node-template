@@ -205,10 +205,12 @@ export const POST = wrapRouteHandlerWithLogging(
       const handlerStartMs = performance.now();
 
       // Validate model against cached allowlist (MVP-004: PERF-001 fix)
+      // Skip for codex: namespace — Codex SDK handles model selection internally
+      const isCodexGraph = input.graphName?.startsWith("codex:");
       const { isModelAllowed, getDefaults } = await import(
         "@/shared/ai/model-catalog.server"
       );
-      const modelIsValid = await isModelAllowed(input.model);
+      const modelIsValid = isCodexGraph || (await isModelAllowed(input.model));
 
       if (!modelIsValid) {
         const defaults = await getDefaults();

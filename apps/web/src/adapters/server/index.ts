@@ -33,6 +33,8 @@ export { NamespaceGraphRouter } from "./ai/aggregating-executor";
 export { BillingEnrichmentGraphExecutorDecorator } from "./ai/billing-enrichment.decorator";
 // Billing decorator for automatic billing enforcement at port level
 export { BillingGraphExecutorDecorator } from "./ai/billing-executor.decorator";
+// Codex-native provider (ChatGPT subscription via SDK)
+export { CODEX_PROVIDER_ID, CodexGraphProvider } from "./ai/codex";
 export {
   type CompletionStreamFn,
   type CompletionStreamParams,
