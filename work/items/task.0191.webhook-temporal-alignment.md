@@ -33,6 +33,7 @@ labels:
 PR review is the first webhook-triggered graph execution and the template for all future webhook→graph flows. Currently it violates `ONE_RUN_EXECUTION_PATH` — the webhook handler runs the LLM inline in Next.js via `createGraphExecutor` → `executeStream`, bypassing Temporal, Redis, and `graph_runs`. The run is invisible to the dashboard.
 
 Per the LangGraph vs Temporal boundary guide (temporal-patterns spec):
+
 - **LangGraph** owns the AI decision (diff analysis, rule evaluation, structured verdict)
 - **Temporal** owns the durable orchestration (trigger, context fetch, graph child, GitHub writes)
 
