@@ -11,6 +11,7 @@ outcome: Zero inline execution paths remain; all graph runs (chat, scheduled, we
 spec_refs:
   - spec.unified-graph-launch
 assignees: []
+branch: task-0178-delete-old-workflow
 project: proj.unified-graph-launch
 blocked_by:
   - task.0177
