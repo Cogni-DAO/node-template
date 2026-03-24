@@ -69,6 +69,9 @@ pnpm db:setup:test          # Create test database + run migrations
 6. **Open PRs to staging only:**
    - Push: `git push origin feat/xyz`
    - Open PR: `your-fork:feat/xyz → Cogni-DAO/cogni-template:staging`
+   - Repo-local direct PR command: `bash scripts/contrib/create-pr.sh`
+   - Preview the generated PR body without creating the PR: `bash scripts/contrib/create-pr.sh --dry-run`
+   - Generated title/body files live under `.contrib/<branch-slug>/`
    - PRs to `main` are blocked by design
 
 7. All CI and AI gates must pass for auto-merge.

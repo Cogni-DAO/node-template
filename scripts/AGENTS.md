@@ -36,9 +36,9 @@ Build-time scripts for migrations, seeds, type generation, development utilities
 ## Public Surface
 
 - **Exports:** none
-- **CLI (if any):** Migration, seed, database drop, and validation commands
+- **CLI (if any):** Migration, seed, database drop, validation commands, contributor PR helper (`contrib/create-pr.sh`)
 - **Env/Config keys:** Database connection, development flags
-- **Files considered API:** validate-agents-md.mjs (validation script), db/drop-test-db.ts (test database utility), diag-openclaw-sandbox.mjs (OpenClaw-in-sandbox diagnostic)
+- **Files considered API:** validate-agents-md.mjs (validation script), db/drop-test-db.ts (test database utility), diag-openclaw-sandbox.mjs (OpenClaw-in-sandbox diagnostic), contrib/create-pr.sh (repo-local PR creation helper)
 
 ## Ports (optional)
 
@@ -58,8 +58,9 @@ Minimal local commands:
 ```bash
 node scripts/migrate.ts
 node scripts/seed-db.ts
-tsx scripts/db/drop-test-db.ts  # Drop test database (safety-guarded)
-pnpm check:agentsmd             # Validate all AGENTS.md files
+tsx scripts/db/drop-test-db.ts            # Drop test database (safety-guarded)
+bash scripts/contrib/create-pr.sh --dry-run # Generate repo-local PR title/body and preview PR creation
+pnpm check:agentsmd                      # Validate all AGENTS.md files
 ```
 
 ## Standards

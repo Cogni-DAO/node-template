@@ -44,12 +44,14 @@ Contribute with the smallest workflow that works.
 ## Output shape
 
 When successful with a fork:
+
 - branch
 - fork remote
 - PR URL
 - current checks status
 
 When blocked and exported:
+
 - branch
 - reason fork/PR failed
 - artifact directory
