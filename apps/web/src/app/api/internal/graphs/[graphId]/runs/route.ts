@@ -485,6 +485,9 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
         billingAccountId,
         virtualKeyId,
       },
+      ...(container.connectionBroker
+        ? { broker: container.connectionBroker }
+        : {}),
     });
     const messages = (
       messageDtos as Array<{ role: string; content: string }>

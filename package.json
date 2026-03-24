@@ -31,6 +31,7 @@
     "codex:login:force": "tsx scripts/dev/codex-login.mts --force",
     "codex:refresh": "tsx scripts/dev/codex-login.mts --refresh",
     "codex:seed": "tsx scripts/dev/codex-seed-gateway.mts",
+    "codex:seed-connection": "dotenv -e .env.local -- tsx scripts/dev/codex-seed-connection.mts",
     "dev": "COGNI_REPO_PATH=$(pwd) dotenv -e .env.local -- pnpm --filter web dev",
     "dev:pretty": "pnpm dev | pino-pretty -S",
     "dev:infra": "docker network create cogni-edge || true && docker compose --env-file .env.local -f infra/compose/runtime/docker-compose.dev.yml --profile sandbox-openclaw up -d git-sync postgres litellm redis loki grafana alloy autoheal temporal-postgres temporal temporal-ui scheduler-worker llm-proxy-openclaw openclaw-gateway",

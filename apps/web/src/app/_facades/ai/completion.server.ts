@@ -29,6 +29,7 @@ import {
   getContainer,
   getTemporalWorkflowClient,
   resolveAiAdapterDeps,
+  resolveDefaultModelConnection,
 } from "@/bootstrap/container";
 import type {
   ChatCompletionOutput,
@@ -337,6 +338,11 @@ export async function completionStream(
     }
   );
 
+  // Auto-resolve BYO-AI: if user has an active ChatGPT connection, use it automatically
+  const modelConnectionId =
+    input.modelConnectionId ??
+    (await resolveDefaultModelConnection(billingAccount.id));
+
   const graphId = input.graphName.includes(":")
     ? input.graphName
     : `langgraph:${input.graphName}`;
@@ -361,9 +367,7 @@ export async function completionStream(
             actorUserId: input.sessionUser.id,
             billingAccountId: billingAccount.id,
             virtualKeyId: billingAccount.defaultVirtualKeyId,
-            ...(input.modelConnectionId
-              ? { modelConnectionId: input.modelConnectionId }
-              : {}),
+            ...(modelConnectionId ? { modelConnectionId } : {}),
           },
           runKind: "user_immediate" as const,
           triggerSource: "api",

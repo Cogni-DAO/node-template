@@ -41,6 +41,7 @@ import {
   AlchemyWebhookNormalizer,
   type Database,
   DrizzleAiTelemetryAdapter,
+  DrizzleConnectionBrokerAdapter,
   DrizzleExecutionGrantUserAdapter,
   DrizzleExecutionGrantWorkerAdapter,
   DrizzleExecutionRequestAdapter,
@@ -88,6 +89,7 @@ import type {
   AccountService,
   AiTelemetryPort,
   Clock,
+  ConnectionBrokerPort,
   DataSourceRegistration,
   GovernanceStatusPort,
   LangfusePort,
@@ -187,6 +189,8 @@ export interface Container {
   treasurySettlement: TreasurySettlementPort | undefined;
   /** Provider funding — undefined when OPENROUTER_API_KEY not set */
   providerFunding: ProviderFundingPort | undefined;
+  /** Connection broker — undefined when CONNECTIONS_ENCRYPTION_KEY not set */
+  connectionBroker: ConnectionBrokerPort | undefined;
 }
 
 // Feature-specific dependency types
@@ -586,6 +590,25 @@ function createContainer(): Container {
     );
   })();
 
+  // Connection broker — BYO-AI credential resolution
+  // Undefined when CONNECTIONS_ENCRYPTION_KEY not set
+  const connectionBroker: ConnectionBrokerPort | undefined = (() => {
+    if (!env.CONNECTIONS_ENCRYPTION_KEY) return undefined;
+    const keyBuf = Buffer.from(env.CONNECTIONS_ENCRYPTION_KEY, "hex");
+    if (keyBuf.length !== 32) {
+      log.warn(
+        "CONNECTIONS_ENCRYPTION_KEY must be 64 hex chars (32 bytes). BYO-AI disabled."
+      );
+      return undefined;
+    }
+    return new DrizzleConnectionBrokerAdapter({
+      db: db as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
+      encryptionKey: keyBuf,
+      encryptionKeyId: "v1",
+      log,
+    });
+  })();
+
   // Redis client for run event streaming (ephemeral stream plane)
   // Per REDIS_IS_STREAM_PLANE: only transient data, no durable state
   const redisClient = new Redis(env.REDIS_URL, {
@@ -639,7 +662,39 @@ function createContainer(): Container {
       ? new SplitTreasurySettlementAdapter(operatorWallet, USDC_TOKEN_ADDRESS)
       : undefined,
     providerFunding,
+    connectionBroker,
   };
+}
+
+/**
+ * Resolve the default BYO-AI model connection for a billing account.
+ * Returns the connectionId if the user has an active openai-chatgpt connection, else undefined.
+ */
+export async function resolveDefaultModelConnection(
+  billingAccountId: string
+): Promise<string | undefined> {
+  const container = getContainer();
+  if (!container.connectionBroker) return undefined;
+
+  try {
+    const { connections } = await import("@cogni/db-schema");
+    const { and, eq, isNull } = await import("drizzle-orm");
+    const db = getAppDb();
+    const rows = await db
+      .select({ id: connections.id })
+      .from(connections)
+      .where(
+        and(
+          eq(connections.billingAccountId, billingAccountId),
+          eq(connections.provider, "openai-chatgpt"),
+          isNull(connections.revokedAt)
+        )
+      )
+      .limit(1);
+    return rows[0]?.id;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
