@@ -13,6 +13,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ## Workflow Guiding Principles
 
 - **Spec first:** Write the plan before code. Confirm the plan with the user.
+- **Port, don't rewrite:** When refactoring, copy existing working logic verbatim and change only the boundary (I/O layer, calling convention). Never rewrite business logic from scratch — it introduces bugs that the original code already solved.
 - **Compact progress:** Summarize after each step.
 - **Prune aggressively:** Delete noise, keep signal.
 - **Delegate cleanly:** Use subagents with narrow scopes.

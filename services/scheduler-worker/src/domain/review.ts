@@ -67,6 +67,41 @@ export interface EvaluationOutput {
 }
 
 // ---------------------------------------------------------------------------
+// LLM Message Building (pure string concatenation)
+// ---------------------------------------------------------------------------
+
+/** Build the user message for a PR review evaluation. */
+export function buildReviewUserMessage(params: {
+  readonly prTitle: string;
+  readonly prBody: string;
+  readonly diffSummary: string;
+  readonly evaluations: ReadonlyArray<{ metric: string; prompt: string }>;
+}): string {
+  const { prTitle, prBody, diffSummary, evaluations } = params;
+
+  const metricsSection = evaluations
+    .map((e, i) => `${i + 1}. **${e.metric}**: ${e.prompt}`)
+    .join("\n");
+
+  return `## Pull Request
+
+**Title:** ${prTitle}
+**Description:** ${prBody || "(no description)"}
+
+## Code Changes
+
+${diffSummary}
+
+## Evaluation Criteria
+
+Score each of the following metrics from 0.0 to 1.0:
+
+${metricsSection}
+
+Respond with your scores and observations for each metric.`;
+}
+
+// ---------------------------------------------------------------------------
 // Criteria Evaluation (deterministic threshold comparison)
 // ---------------------------------------------------------------------------
 

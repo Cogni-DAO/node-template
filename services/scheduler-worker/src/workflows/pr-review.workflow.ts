@@ -39,6 +39,8 @@ export interface PrReviewWorkflowInput {
   prNumber: number;
   headSha: string;
   installationId: number;
+  /** System principal user ID (COGNI_SYSTEM_PRINCIPAL_USER_ID from @cogni/ids constants). */
+  actorUserId: string;
   /** System billing account ID (resolved by webhook handler from DB). */
   billingAccountId: string;
   /** System virtual key ID (resolved by webhook handler from DB). */
@@ -66,6 +68,7 @@ export async function PrReviewWorkflow(
     prNumber,
     headSha,
     installationId,
+    actorUserId,
     billingAccountId,
     virtualKeyId,
   } = input;
@@ -112,28 +115,34 @@ export async function PrReviewWorkflow(
   // 3. Execute pr-review graph as child workflow
   //    GraphRunWorkflow creates graph_runs record + publishes to Redis
   const runId = uuid4();
-  const graphResult: GraphRunResult = await executeChild("GraphRunWorkflow", {
-    workflowId: `graph-run:system:pr-review:${owner}/${repo}/${prNumber}/${headSha}`,
-    args: [
-      {
-        graphId: `langgraph:pr-review`,
-        executionGrantId: null,
-        input: {
-          messages: context.graphMessages,
-          model: context.model,
-          responseFormat: context.responseFormat,
-          actorUserId: "cogni_system",
-          billingAccountId,
-          virtualKeyId,
+  let graphResult: GraphRunResult;
+  try {
+    graphResult = await executeChild("GraphRunWorkflow", {
+      workflowId: `graph-run:system:pr-review:${owner}/${repo}/${prNumber}/${headSha}`,
+      args: [
+        {
+          graphId: `langgraph:pr-review`,
+          executionGrantId: null,
+          input: {
+            messages: context.graphMessages,
+            model: context.model,
+            responseFormat: context.responseFormat,
+            actorUserId,
+            billingAccountId,
+            virtualKeyId,
+          },
+          runKind: "system_webhook" as const,
+          triggerSource: "webhook:github_pr",
+          triggerRef: `pr-review:${owner}/${repo}/${prNumber}/${headSha}`,
+          requestedBy: actorUserId,
+          runId,
         },
-        runKind: "system_webhook" as const,
-        triggerSource: "webhook:github_pr",
-        triggerRef: `pr-review:${owner}/${repo}/${prNumber}/${headSha}`,
-        requestedBy: "cogni_system",
-        runId,
-      },
-    ],
-  });
+      ],
+    });
+  } catch {
+    // Graph child failed — still update check run to neutral so it doesn't hang
+    graphResult = { ok: false, runId };
+  }
 
   // 4. Post review results to GitHub
   await postReviewResultActivity({
@@ -147,5 +156,6 @@ export async function PrReviewWorkflow(
     gatesConfig: context.gatesConfig,
     rules: context.rules,
     evidence: context.evidence,
+    repoSpecYaml: context.repoSpecYaml,
   });
 }

@@ -15,8 +15,8 @@
  * @internal
  */
 
-import { buildReviewUserMessage } from "@cogni/langgraph-graphs/graphs";
 import {
+  extractDaoConfig,
   extractGatesConfig,
   type GateConfig,
   type GatesConfig,
@@ -26,9 +26,11 @@ import {
 } from "@cogni/repo-spec";
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/core";
+import { parse as parseYaml } from "yaml";
 
 import {
   aggregateGateStatuses,
+  buildReviewUserMessage,
   type EvaluationOutput,
   type EvidenceBundle,
   evaluateCriteria,
@@ -75,6 +77,8 @@ export interface FetchPrContextOutput {
   graphMessages: Array<{ role: string; content: string }>;
   responseFormat: { prompt: string; schemaId: string };
   model: string;
+  /** Raw repo-spec YAML for DAO config extraction in postReviewResult */
+  repoSpecYaml?: string;
 }
 
 export interface PostReviewResultInput {
@@ -93,6 +97,8 @@ export interface PostReviewResultInput {
   gatesConfig?: GatesConfig;
   rules?: Record<string, Rule>;
   evidence?: EvidenceBundle;
+  /** Raw repo-spec YAML for DAO config extraction */
+  repoSpecYaml?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +217,7 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
       totalDiffBytes,
     };
 
-    // Fetch repo-spec from target repo (HEAD of default branch)
+    // Fetch repo-spec from target repo (base branch)
     let repoSpecYaml: string;
     try {
       const specResponse = await octokit.request(
@@ -221,10 +227,18 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
           repo: input.repo,
           path: ".cogni/repo-spec.yaml",
           ref: pr.base.ref,
-          mediaType: { format: "raw" },
+          headers: { accept: "application/vnd.github.raw+json" },
         }
       );
-      repoSpecYaml = specResponse.data as unknown as string;
+      // With raw accept header, data is the file content as string
+      repoSpecYaml =
+        typeof specResponse.data === "string"
+          ? specResponse.data
+          : // Fallback: if returned as object with content field (base64-encoded)
+            Buffer.from(
+              (specResponse.data as { content?: string }).content ?? "",
+              "base64"
+            ).toString("utf-8");
     } catch {
       // No repo-spec — return empty gates
       return {
@@ -232,13 +246,26 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
         gatesConfig: { gates: [], failOnError: false },
         rules: {},
         graphMessages: [],
-        responseFormat: { prompt: "", schema: {} },
+        responseFormat: { prompt: "", schemaId: "" },
         model: DEFAULT_REVIEW_MODEL,
       };
     }
 
-    const repoSpec = parseRepoSpec(repoSpecYaml);
-    const gatesConfig = extractGatesConfig(repoSpec);
+    // Parse leniently — target repo may not have full node_id/scope_id fields.
+    // We only need gates config, so try full parse first, fall back to lenient extraction.
+    let gatesConfig: GatesConfig;
+    try {
+      const repoSpec = parseRepoSpec(repoSpecYaml);
+      gatesConfig = extractGatesConfig(repoSpec);
+    } catch {
+      // Full parse failed (missing node_id, etc.) — extract gates from raw YAML
+      const raw = parseYaml(repoSpecYaml) as Record<string, unknown>;
+      const gates = Array.isArray(raw.gates) ? raw.gates : [];
+      gatesConfig = {
+        gates: gates as GateConfig[],
+        failOnError: raw.fail_on_error === true,
+      };
+    }
 
     // Fetch rule files referenced by ai-rule gates
     const rules: Record<string, Rule> = {};
@@ -254,10 +281,17 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
                 repo: input.repo,
                 path: `.cogni/rules/${ruleFile}`,
                 ref: pr.base.ref,
-                mediaType: { format: "raw" },
+                headers: { accept: "application/vnd.github.raw+json" },
               }
             );
-            rules[ruleFile] = parseRule(ruleResponse.data as unknown as string);
+            const ruleYaml =
+              typeof ruleResponse.data === "string"
+                ? ruleResponse.data
+                : Buffer.from(
+                    (ruleResponse.data as { content?: string }).content ?? "",
+                    "base64"
+                  ).toString("utf-8");
+            rules[ruleFile] = parseRule(ruleYaml);
           } catch (error) {
             logger.warn(
               { ruleFile, error: String(error) },
@@ -317,6 +351,7 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
         : [],
       responseFormat,
       model: DEFAULT_REVIEW_MODEL,
+      repoSpecYaml,
     };
   }
 
@@ -349,8 +384,37 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
 
     const reviewResult: ReviewResult = { conclusion, gateResults };
 
+    // Build DAO deep link from repo-spec (for Check Run "View Details" page)
+    let daoBaseUrl: string | undefined;
+    if (input.repoSpecYaml) {
+      try {
+        const spec = parseRepoSpec(input.repoSpecYaml);
+        const dao = extractDaoConfig(spec);
+        if (dao) {
+          const url = new URL("/propose/merge", dao.base_url);
+          url.searchParams.set("dao", dao.dao_contract);
+          url.searchParams.set("plugin", dao.plugin_contract);
+          url.searchParams.set("signal", dao.signal_contract);
+          url.searchParams.set("chainId", dao.chain_id);
+          url.searchParams.set("action", "merge");
+          url.searchParams.set("target", "change");
+          url.searchParams.set("resource", String(input.prNumber));
+          url.searchParams.set("vcs", "github");
+          url.searchParams.set(
+            "repoUrl",
+            `https://github.com/${input.owner}/${input.repo}`
+          );
+          daoBaseUrl = url.toString();
+        }
+      } catch {
+        // Best-effort — no DAO link if parsing fails
+      }
+    }
+
     // Format markdown
-    const checkRunSummary = formatCheckRunSummary(reviewResult);
+    const checkRunSummary = formatCheckRunSummary(reviewResult, {
+      daoBaseUrl,
+    });
 
     const checkRunUrl = input.checkRunId
       ? `https://github.com/${input.owner}/${input.repo}/runs/${input.checkRunId}`

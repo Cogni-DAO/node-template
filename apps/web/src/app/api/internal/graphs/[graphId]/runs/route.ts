@@ -26,6 +26,7 @@ import { RUN_STREAM_DEFAULT_TTL_SECONDS } from "@cogni/graph-execution-core";
 import { toUserId } from "@cogni/ids";
 import { SYSTEM_ACTOR } from "@cogni/ids/system";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getContainer } from "@/bootstrap/container";
 import {
   createGraphExecutor,
@@ -43,6 +44,7 @@ import {
 } from "@/features/ai/public.server";
 import { preflightCreditCheck } from "@/features/ai/services/preflight-credit-check";
 import type { PreflightCreditCheckFn } from "@/ports";
+
 import { isInsufficientCreditsPortError, ThreadConflictError } from "@/ports";
 import {
   isGrantExpiredError,
@@ -742,8 +744,6 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
 // ---------------------------------------------------------------------------
 // Response format resolution
 // ---------------------------------------------------------------------------
-
-import { z } from "zod";
 
 /** Known response format schemas, keyed by schemaId. */
 const RESPONSE_FORMAT_SCHEMAS: Record<string, z.ZodType> = {
