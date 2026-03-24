@@ -2,7 +2,7 @@
 id: task.0178
 type: task
 title: "Delete old scheduled workflow, prune deprecated aliases, document LangGraph/Temporal boundary"
-status: needs_closeout
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 3
