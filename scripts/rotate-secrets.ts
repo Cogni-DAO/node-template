@@ -584,6 +584,7 @@ const SECRETS: Secret[] = [
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const REPO = "Cogni-DAO/node-template";
+/** Deploy environments. Secrets are set per-env, not repo-level. */
 const ENVIRONMENTS = ["preview", "production"] as const;
 
 function getSetSecrets(env?: string): Set<string> {
@@ -613,10 +614,9 @@ function setSecret(name: string, value: string, env?: string): boolean {
   }
 }
 
-/** Set a secret at repo level + both environments */
+/** Set a secret in both deploy environments (preview + production) */
 function setSecretEverywhere(name: string, value: string): boolean {
   let ok = true;
-  if (!setSecret(name, value)) ok = false;
   for (const env of ENVIRONMENTS) {
     if (!setSecret(name, value, env)) ok = false;
   }
@@ -642,12 +642,12 @@ function buildDSNs(): void {
   if (appPw) {
     const url = `postgresql://${appUser}:${appPw}@${host}:5432/${dbName}`;
     setSecretEverywhere("DATABASE_URL", url);
-    console.log("  -> DATABASE_URL set (repo + preview + production)");
+    console.log("  -> DATABASE_URL set (preview + production)");
   }
   if (svcPw) {
     const url = `postgresql://${svcUser}:${svcPw}@${host}:5432/${dbName}`;
     setSecretEverywhere("DATABASE_SERVICE_URL", url);
-    console.log("  -> DATABASE_SERVICE_URL set (repo + preview + production)");
+    console.log("  -> DATABASE_SERVICE_URL set (preview + production)");
   }
 }
 
@@ -658,7 +658,6 @@ async function main() {
   const filterRequired = args.includes("--required");
   const filterStale = args.includes("--stale");
 
-  const repoSecrets = getSetSecrets();
   const previewSecrets = getSetSecrets("preview");
   const prodSecrets = getSetSecrets("production");
 
@@ -668,12 +667,12 @@ async function main() {
   }
   if (filterStale) {
     filtered = filtered.filter(
-      (s) => !repoSecrets.has(s.name) || !previewSecrets.has(s.name) || !prodSecrets.has(s.name)
+      (s) => !previewSecrets.has(s.name) || !prodSecrets.has(s.name)
     );
   }
 
   console.log(`\n  Secret Rotation — ${REPO}`);
-  console.log(`  Environments: repo-level, preview, production`);
+  console.log(`  Environments: preview, production`);
   console.log(`  ${filtered.length} secrets to process\n`);
 
   const rl = readline.createInterface({
@@ -691,10 +690,9 @@ async function main() {
       lastCategory = secret.category;
     }
 
-    const r = repoSecrets.has(secret.name) ? "R" : "-";
     const p = previewSecrets.has(secret.name) ? "P" : "-";
     const d = prodSecrets.has(secret.name) ? "D" : "-";
-    const marker = ` [${r}${p}${d}]`; // R=repo, P=preview, D=production (deploy)
+    const marker = ` [${p}${d}]`; // P=preview, D=production
     const reqTag = secret.required ? "[REQUIRED]" : "[optional]";
 
     console.log(`\n  ${reqTag} ${secret.name}${marker}`);
@@ -715,7 +713,7 @@ async function main() {
       }
       const value = secret.generate!();
       if (setSecretEverywhere(secret.name, value)) {
-        console.log(`  -> ${secret.name} set (repo + preview + production)`);
+        console.log(`  -> ${secret.name} set (preview + production)`);
         set++;
         // Track DB passwords for DSN construction
         if (secret.category === "Database") {
