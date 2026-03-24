@@ -53,8 +53,7 @@ This task establishes the canonical pattern for all future webhook→graph flows
 - `createCheckRunActivity` — GitHub API: create check run in "in_progress" state immediately after workflow starts. Returns `checkRunId`. Provides instant UX feedback on the PR while the graph executes.
 - `fetchPrContextActivity` — GitHub API: fetch diff, PR metadata, repo-spec + rule files **from target repo via API** (not local filesystem — worker has no checkout of the target repo). Returns `EvidenceBundle` + gates config + parsed rules. Truncate large diffs to stay within Temporal's per-event payload limits (~2MB).
 - `postReviewResultActivity` — GitHub API: update check run + post PR comment. Idempotent via `${repo}/${pr}/${headSha}` business key — retries do not double-post. Staleness guard (head SHA check) stays in this activity. On graph failure, updates check run to "neutral" with error message.
-- **Credentials:** Activities resolve GitHub App creds from **worker env** (`GH_REVIEW_APP_ID`, `GH_REVIEW_APP_PRIVATE_KEY_BASE64` — already optional in `services/scheduler-worker/src/bootstrap/env.ts`). Workflow input passes only `installationId` (public). **Never pass private keys as workflow input** — they persist in Temporal event history.
-- **Installation-scoped Octokit:** Worker bootstrap creates per-installation Octokit using App JWT → installation token (duplicate `createInstallationOctokit` in worker bootstrap — ~15 lines, extract to package only if a second service needs it).
+- **Credentials:** Activities use the existing `GitHubAppTokenProvider` already created in `container.ts:188-195` from worker env vars (`GH_REVIEW_APP_ID`, `GH_REVIEW_APP_PRIVATE_KEY_BASE64`). Workflow input passes `installationId` (public) to scope the Octokit to the right installation. **Never pass private keys as workflow input** — they persist in Temporal event history. Single-tenant — one GitHub App, no multi-tenant complexity.
 
 ### Graph changes
 
@@ -129,14 +128,14 @@ PrReviewWorkflow (Temporal):
 
 1. **Gate orchestration stays in the graph** — activities are I/O-only. No package extraction (WORKER_IS_DUMB). Domain logic (gate evaluation, criteria comparison, summary formatting) lives in the `pr-review` graph, not in activities.
 2. **Split check run into two activities** — `createCheckRunActivity` (step 1) shows "in progress" immediately; `postReviewResultActivity` (step 4) updates check run + posts comment. Avoids UX regression of no feedback during LLM execution.
-3. **Installation-scoped Octokit in worker bootstrap** — duplicate `createInstallationOctokit` (~15 lines) rather than extracting a package. Extract to package only if a second service needs it.
+3. **Use existing `GitHubAppTokenProvider`** — worker bootstrap already creates it from env. Activities pass `installationId` from workflow input to scope auth. Single-tenant, no multi-tenant abstraction.
 4. **Diff truncation** — `fetchPrContextActivity` truncates large diffs to stay within Temporal's ~2MB per-event payload limit.
 
 ## Plan
 
 - [ ] **Checkpoint 1: PrReviewWorkflow skeleton + bootstrap**
   - New workflow with activity stubs (createCheckRun, fetchPrContext, postReviewResult)
-  - Installation-scoped Octokit creation in worker bootstrap
+  - Activities use existing GitHubAppTokenProvider from container
   - Register in worker bundle
   - Validation: `pnpm check` passes, worker starts
 

@@ -35,7 +35,7 @@ last_commit: 6cac8b6f
 - **Graph returns structured artifact, not side effects** — `{verdict, conclusion, gateResults, summary}`. GitHub API calls move to Temporal activities
 - **Gate orchestration stays in the graph** (design review decision) — activities are I/O-only. Domain logic (gates, criteria, formatting) stays in graph. No package extraction (WORKER_IS_DUMB)
 - **Split check run into two activities** (design review decision) — `createCheckRunActivity` runs first for immediate "in_progress" UX; `postReviewResultActivity` runs after graph for updates + comments
-- **Installation-scoped Octokit in worker bootstrap** (design review decision) — duplicate `createInstallationOctokit` (~15 lines) in worker rather than extracting a package. Extract only if a second service needs it
+- **Use existing `GitHubAppTokenProvider`** (design review decision) — worker bootstrap already creates it from env. Activities pass `installationId` from workflow input. Single-tenant, no multi-tenant abstraction
 - **Diff truncation** (design review decision) — `fetchPrContextActivity` truncates large diffs to stay within Temporal's ~2MB per-event payload limit
 
 ## Next Actions
