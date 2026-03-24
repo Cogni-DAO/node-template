@@ -219,14 +219,14 @@ export function DashboardView(): ReactElement {
 
   // Activity chart data
   const hasActivity = activityData && !activityLoading;
-  const hasGrouped =
-    hasActivity &&
-    activityData.groupedSeries &&
-    activityData.groupedSeries.length > 0;
+  const groupedSeries =
+    hasActivity && activityData.groupedSeries?.length
+      ? activityData.groupedSeries
+      : null;
 
   const spend = hasActivity
-    ? hasGrouped
-      ? buildGroupedChartData(activityData.groupedSeries!, "spend")
+    ? groupedSeries
+      ? buildGroupedChartData(groupedSeries, "spend")
       : buildAggregateChartData(
           activityData.chartSeries,
           "spend",
@@ -236,8 +236,8 @@ export function DashboardView(): ReactElement {
     : null;
 
   const tokens = hasActivity
-    ? hasGrouped
-      ? buildGroupedChartData(activityData.groupedSeries!, "tokens")
+    ? groupedSeries
+      ? buildGroupedChartData(groupedSeries, "tokens")
       : buildAggregateChartData(
           activityData.chartSeries,
           "tokens",
@@ -247,8 +247,8 @@ export function DashboardView(): ReactElement {
     : null;
 
   const requests = hasActivity
-    ? hasGrouped
-      ? buildGroupedChartData(activityData.groupedSeries!, "requests")
+    ? groupedSeries
+      ? buildGroupedChartData(groupedSeries, "requests")
       : buildAggregateChartData(
           activityData.chartSeries,
           "requests",
