@@ -28,27 +28,32 @@ last_commit: 6cac8b6f
 
 ## Decisions Made
 
-- **Temporal parent + LangGraph child pattern** — documented in [temporal-patterns.md § LangGraph vs Temporal Boundary](../docs/spec/temporal-patterns.md). Webhook fires Temporal workflow; graph returns pure structured artifact; GitHub writes happen in Temporal activities with idempotency
+- **Temporal parent + LangGraph child pattern** — documented in [temporal-patterns.md § Normative Pattern](../docs/spec/temporal-patterns.md). Webhook fires Temporal workflow; graph returns pure structured artifact; GitHub writes happen in Temporal activities with idempotency
 - **`system_webhook` runKind** — already exists in the `GRAPH_RUN_KINDS` enum (`packages/db-schema/src/scheduling.ts`). No schema migration needed
 - **Fire-and-forget from webhook handler** — `dispatchPrReview` starts the Temporal workflow and exits. No blocking Next.js on Redis/SSE
 - **Idempotency key**: `pr-review:${owner}/${repo}/${prNumber}/${headSha}` — prevents duplicate reviews on webhook retries
 - **Graph returns structured artifact, not side effects** — `{verdict, conclusion, gateResults, summary}`. GitHub API calls move to Temporal activities
+- **Gate orchestration stays in the graph** (design review decision) — activities are I/O-only. Domain logic (gates, criteria, formatting) stays in graph. No package extraction (WORKER_IS_DUMB)
+- **Split check run into two activities** (design review decision) — `createCheckRunActivity` runs first for immediate "in_progress" UX; `postReviewResultActivity` runs after graph for updates + comments
+- **Installation-scoped Octokit in worker bootstrap** (design review decision) — duplicate `createInstallationOctokit` (~15 lines) in worker rather than extracting a package. Extract only if a second service needs it
+- **Diff truncation** (design review decision) — `fetchPrContextActivity` truncates large diffs to stay within Temporal's ~2MB per-event payload limit
 
 ## Next Actions
 
-- [ ] Create feature branch from `staging` (after task.0178 PR #616 merges)
-- [ ] `/design` — validate approach, resolve any open questions about GitHub App credential passing to Temporal worker
-- [ ] Checkpoint 1: `PrReviewWorkflow` skeleton + activity stubs in `services/scheduler-worker/src/workflows/`
-- [ ] Checkpoint 2: Implement `fetchPrContext` and `postReviewResult` activities; ensure `pr-review` graph returns structured artifact
-- [ ] Checkpoint 3: Refactor `dispatchPrReview` to start Temporal workflow instead of inline execution
+- [x] Create feature branch from `staging` (task.0178 PR #616 merged)
+- [x] Design review — resolved credentials, check run timing, domain logic placement, diff truncation
+- [ ] Checkpoint 1: `PrReviewWorkflow` skeleton + installation-scoped Octokit bootstrap + register in worker bundle
+- [ ] Checkpoint 2: Implement 3 activities (createCheckRun, fetchPrContext, postReviewResult) + ensure graph returns structured artifact
+- [ ] Checkpoint 3: Refactor `dispatchPrReview` to start Temporal workflow; remove inline execution path
 - [ ] Checkpoint 4: Tests + docs + closeout
 - [ ] Verify PR reviews appear on dashboard Cogni Live tab as `system_webhook` runs
 
 ## Risks / Gotchas
 
-- **GitHub App credentials** — currently resolved in the Next.js process (`dispatch.server.ts:50-57`). The Temporal worker needs access to `GH_REVIEW_APP_ID` and `GH_REVIEW_APP_PRIVATE_KEY_BASE64` — these are already in the worker's env schema (`services/scheduler-worker/src/bootstrap/env.ts`) as optional vars
+- **GitHub App credentials** — currently resolved in the Next.js process (`dispatch.server.ts:50-57`). Activities must resolve creds from **worker env** (`GH_REVIEW_APP_ID`, `GH_REVIEW_APP_PRIVATE_KEY_BASE64` — already optional in `services/scheduler-worker/src/bootstrap/env.ts`). **Never pass private keys as workflow input** — they persist in Temporal event history. Workflow input passes only `installationId` (public)
 - **The review handler does more than LLM** — `handlePrReview` orchestrates: evidence gathering, gate config loading, rule parsing, AI evaluation, check run creation, comment posting. The Temporal workflow replaces this orchestration; individual steps become activities or stay in the graph
-- **Existing review adapters** — `apps/web/src/bootstrap/review-adapter.factory.ts` creates GitHub API adapters (Octokit). These need equivalents in the scheduler-worker, or the adapter factory needs to be shared
+- **Existing review adapters** — `apps/web/src/bootstrap/review-adapter.factory.ts` creates GitHub API adapters (Octokit). The worker already has Octokit setup in `container.ts:188-195`. Activity implementations can use the existing worker container GitHub adapter or create a new one per `installationId`
+- **`readRepoSpec` reads from local filesystem** — `review-adapter.factory.ts:62-65` uses `readFileSync` on the local repo. The worker has no checkout of the target repo. `fetchPrContext` activity must fetch repo-spec and rule files from the target repo via **GitHub API** (using the Octokit that fetches the diff). This is cleaner — reads the spec from the PR's head commit, not whatever's deployed locally
 - **`postPrComment` has a staleness guard** — it checks if the PR head SHA still matches before posting. This logic must survive the move to a Temporal activity
 - **Worker bundle path** — `services/scheduler-worker/src/worker.ts:75` currently points `workflowsPath` to only `graph-run.workflow.js`. The new `PrReviewWorkflow` needs its own bundle entry or must be co-located
 
