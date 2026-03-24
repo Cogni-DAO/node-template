@@ -12,6 +12,7 @@ spec_refs:
   - spec.unified-graph-launch
 assignees: []
 branch: task-0178-delete-old-workflow
+pr: https://github.com/Cogni-DAO/node-template/pull/616
 project: proj.unified-graph-launch
 blocked_by:
   - task.0177
