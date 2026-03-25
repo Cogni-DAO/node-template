@@ -48,21 +48,20 @@ generate_keypair() {
     local key_file="$KEY_DIR/${env_name}-age-key.txt"
 
     if [[ -f "$key_file" ]]; then
-        log_info "Age keypair for $env_name already exists at $key_file"
-        local pubkey
-        pubkey=$(grep 'public key:' "$key_file" | awk '{print $NF}')
-        echo "$pubkey"
+        log_info "Age keypair for $env_name already exists at $key_file" >&2
+        grep 'public key:' "$key_file" | awk '{print $NF}'
         return
     fi
 
-    log_info "Generating age keypair for $env_name..."
-    local output
-    output=$(age-keygen -o "$key_file" 2>&1)
+    log_info "Generating age keypair for $env_name..." >&2
+    # age-keygen prints "Public key: age1..." to stderr
+    age-keygen -o "$key_file" 2>"$KEY_DIR/.keygen-output"
     local pubkey
-    pubkey=$(echo "$output" | grep 'Public key:' | awk '{print $NF}')
+    pubkey=$(grep 'Public key:' "$KEY_DIR/.keygen-output" | awk '{print $NF}')
+    rm -f "$KEY_DIR/.keygen-output"
     chmod 600 "$key_file"
-    log_info "Keypair saved to $key_file"
-    log_info "Public key: $pubkey"
+    log_info "Keypair saved to $key_file" >&2
+    log_info "Public key: $pubkey" >&2
     echo "$pubkey"
 }
 
