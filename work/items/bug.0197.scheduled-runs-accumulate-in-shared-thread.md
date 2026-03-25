@@ -2,7 +2,7 @@
 id: bug.0197
 type: bug
 title: "Scheduled runs accumulate messages in a single shared thread per schedule"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 4
 estimate: 2
@@ -14,7 +14,7 @@ spec_refs:
 assignees: []
 credit:
 project:
-branch:
+branch: task-0189-dashboard-p1-bridge
 pr:
 reviewer:
 revision: 0

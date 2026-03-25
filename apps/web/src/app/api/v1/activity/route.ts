@@ -7,9 +7,9 @@
  * Scope: Validates input via contract, delegates to ActivityFacade. Does not implement business logic.
  * Invariants:
  * - Requires authenticated user.
+ * - scope=system queries system tenant billing account; scope=user (default) queries the session user's.
  * - Returns 400 for invalid cursor or input.
  * - Returns 400 for InvalidRangeError.
- * - Returns 401 for unauthorized access.
  * Side-effects: IO
  * Links: [ActivityFacade](../../../_facades/ai/activity.server.ts)
  * @public

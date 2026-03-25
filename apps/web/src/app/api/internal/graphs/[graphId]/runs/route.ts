@@ -15,6 +15,7 @@
  *   - Per STREAM_PUBLISH_IN_EXECUTION_LAYER: Redis publishing happens here, not in Temporal activity
  *   - Per PERSIST_AFTER_PUMP: persists assistant message to thread after full stream drain (disconnect-safe)
  *   - Per IDEMPOTENT_THREAD_PERSIST: assistant message ID = `assistant-{runId}` — skips if already persisted
+ *   - Scheduled run stateKey = sha256(idempotencyKey) — one isolated thread per execution slot, not per schedule
  * Side-effects: IO (HTTP request/response, database, graph execution, Redis stream publishing, thread persistence)
  * Links: docs/spec/scheduler.md, graphs.run.internal.v1.contract
  * @internal

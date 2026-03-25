@@ -2,7 +2,7 @@
 id: task.0189
 type: task
 title: "Dashboard P0→P1 bridge: thread linking, page consolidation, public Cogni Live, streaming status"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 7
 estimate: 5
@@ -13,7 +13,7 @@ spec_refs:
 assignees: []
 credit:
 project: proj.live-dashboard
-branch:
+branch: task-0189-dashboard-p1-bridge
 pr:
 reviewer:
 revision: 0

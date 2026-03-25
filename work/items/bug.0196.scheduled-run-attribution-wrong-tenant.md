@@ -2,7 +2,7 @@
 id: bug.0196
 type: bug
 title: "Scheduled runs attributed to system tenant instead of schedule owner"
-status: needs_triage
+status: needs_merge
 priority: 1
 rank: 3
 estimate: 3
@@ -16,7 +16,7 @@ spec_refs:
 assignees: []
 credit:
 project:
-branch:
+branch: task-0189-dashboard-p1-bridge
 pr:
 reviewer:
 revision: 0

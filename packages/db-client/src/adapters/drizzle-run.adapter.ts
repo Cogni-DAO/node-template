@@ -9,6 +9,7 @@
  * - Per SINGLE_RUN_LEDGER: one table for all execution types
  * - UNIQUE(schedule_id, scheduled_for) WHERE schedule_id IS NOT NULL prevents duplicate scheduled runs
  * - withTenantScope called on every method (uniform invariant, no-op on serviceDb)
+ * - listRunsByUser relies on RLS for row visibility (no app-level requestedBy filter)
  * Side-effects: IO (database operations)
  * Links: ports/scheduling/schedule-run.port.ts, docs/spec/unified-graph-launch.md
  * @public
