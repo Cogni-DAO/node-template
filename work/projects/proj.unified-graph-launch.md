@@ -87,7 +87,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 | Deliverable                                                                 | Status      | Est | Work Item |
 | --------------------------------------------------------------------------- | ----------- | --- | --------- |
-| **PR review webhook → Temporal parent workflow** with durable GitHub writes | Not Started | 5   | task.0191 |
+| **PR review webhook → Temporal parent workflow** with durable GitHub writes | In Review   | 5   | task.0191 |
 | **Spike: Worker-local execution** — evaluate eliminating internal API hop   | Not Started | 2   | task.0181 |
 
 ## Constraints
