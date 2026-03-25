@@ -154,6 +154,12 @@ echo "Preview VM IP: $PREVIEW_IP"
 # Set private key for health check (must match public_key_path in tfvars)
 export TF_VAR_ssh_private_key="$(cat ~/.ssh/cogni_template_production_deploy)"
 
+# Set SOPS age private key for Argo CD secret decryption
+export TF_VAR_sops_age_private_key="$(grep 'AGE-SECRET-KEY' ~/.cogni/production-age-key.txt)"
+
+# Set GHCR token for k3s private image pulls
+export TF_VAR_ghcr_deploy_token="<github-pat-with-packages-read>"
+
 # Create tfvars file
 cat > terraform.production.tfvars << EOF
 environment     = "production"
