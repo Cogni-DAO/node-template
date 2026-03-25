@@ -130,6 +130,9 @@ jobs:
           APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           MIGRATOR_IMAGE: ${{ env.MIGRATOR_IMAGE }}
           SCHEDULER_WORKER_IMAGE: ${{ env.SCHEDULER_WORKER_IMAGE }}
+          # Production keeps scheduler-worker on Compose until k3s is validated.
+          # Change to "sandbox-openclaw" to migrate scheduler-worker to k3s.
+          COMPOSE_PROFILES: "sandbox-openclaw,compose-scheduler-worker"
           DOMAIN: ${{ secrets.DOMAIN }}
           NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

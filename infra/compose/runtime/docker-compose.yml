@@ -404,7 +404,11 @@ services:
   # Per SCHEDULER_SPEC.md: Executes scheduled graph runs via internal API
   # =============================================================================
 
+  # Profile-gated: migrating to k3s (task.0149). Set COMPOSE_PROFILES=compose-scheduler-worker
+  # to run via Compose (production keeps this until k3s is validated).
+  # Remove this service entirely when production migrates to k3s.
   scheduler-worker:
+    profiles: ["compose-scheduler-worker"]
     image: ${SCHEDULER_WORKER_IMAGE}
     restart: unless-stopped
     labels:

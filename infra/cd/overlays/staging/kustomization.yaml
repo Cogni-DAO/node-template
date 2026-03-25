@@ -33,26 +33,25 @@ patches:
         path: /data/IMAGE_DIGEST
         value: "staging-placeholder-scheduler-worker"
 
-  # Patch EndpointSlice IPs to point at staging Compose VM
-  # Replace 10.0.0.1 with actual staging VM internal IP during task.0149
+  # Patch EndpointSlice IPs — 127.0.0.1 (single-VM: k3s + Compose on same host)
   - target:
       kind: EndpointSlice
       name: temporal-1
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["127.0.0.1"]
   - target:
       kind: EndpointSlice
       name: postgres-1
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["127.0.0.1"]
   - target:
       kind: EndpointSlice
       name: app-1
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["127.0.0.1"]
