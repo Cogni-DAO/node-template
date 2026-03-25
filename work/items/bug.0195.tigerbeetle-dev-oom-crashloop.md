@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.financial-ledger
 branch: bug/0195-tigerbeetle-oom-log-flood
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/623
 reviewer:
 revision: 3
 blocked_by:
