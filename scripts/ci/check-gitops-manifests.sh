@@ -34,13 +34,13 @@ kustomize_build() {
 for env in staging production; do
   echo "Validating managed service overlays for $env..."
   while IFS= read -r service; do
-    overlay="$ROOT_DIR/infra/cd/overlays/$env"
+    overlay="$ROOT_DIR/infra/cd/overlays/$env/$service"
     if [[ ! -f "$overlay/kustomization.yaml" ]]; then
       echo "FAIL: missing $overlay/kustomization.yaml"
       exit 1
     fi
     kustomize_build "$overlay"
-    echo "  ok $env"
+    echo "  ok $env/$service"
   done < <(jq -r '.services[] | select(.gitops_managed==true) | .name' "$CATALOG")
 done
 

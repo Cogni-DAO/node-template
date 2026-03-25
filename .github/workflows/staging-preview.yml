@@ -143,10 +143,7 @@ jobs:
       IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
       APP_IMAGE: ${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.image_tag }}
       MIGRATOR_IMAGE: ${{ needs.build.outputs.migrator_image }}
-      SCHEDULER_WORKER_IMAGE: ${{ needs.build.outputs.scheduler_worker_image }}
-      # Staging: scheduler-worker on k3s (via Argo CD), not Compose.
-      # Only sandbox-openclaw runs as a Compose profile.
-      COMPOSE_PROFILES: "sandbox-openclaw"
+      # scheduler-worker and sandbox-openclaw managed by Argo CD on k3s.
       DEPLOY_ENVIRONMENT: preview
       APP_ENV: production
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git

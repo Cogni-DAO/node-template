@@ -6,18 +6,15 @@ kind: Kustomization
 namespace: cogni-production
 
 resources:
-  - namespace.yaml
-  - ../../base/scheduler-worker
+  - ../../../base/scheduler-worker
 
-# Image digest — update this on promotion (IMAGE_IMMUTABILITY invariant)
+# Image digest — updated by manual PR for production promotion.
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    # Replace with @sha256: digest on first real deployment
     newTag: "production-placeholder-scheduler-worker"
 
 patches:
-  # Patch ConfigMap with production-specific values
   - target:
       kind: ConfigMap
       name: scheduler-worker-config
@@ -32,7 +29,7 @@ patches:
         path: /data/IMAGE_DIGEST
         value: "production-placeholder-scheduler-worker"
 
-  # Patch EndpointSlice IPs — 127.0.0.1 (single-VM: k3s + Compose on same host)
+  # EndpointSlice IPs — 127.0.0.1 (single-VM: k3s + Compose on same host)
   - target:
       kind: EndpointSlice
       name: temporal-1

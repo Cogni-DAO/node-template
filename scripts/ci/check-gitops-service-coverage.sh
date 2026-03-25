@@ -38,8 +38,8 @@ while IFS= read -r service_path; do
   service_dirs["$service"]=1
 done < <(find "$SERVICES_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
 
-printf "%-20s %-8s %-6s %-6s\n" "SERVICE" "MANAGED" "BASE" "ARGO"
-printf "%-20s %-8s %-6s %-6s\n" "--------------------" "--------" "------" "------"
+printf "%-20s %-8s %-6s %-6s %-8s %-10s\n" "SERVICE" "MANAGED" "BASE" "ARGO" "STAGING" "PRODUCTION"
+printf "%-20s %-8s %-6s %-6s %-8s %-10s\n" "--------------------" "--------" "------" "------" "--------" "----------"
 
 while IFS= read -r service; do
   managed=$(jq -r --arg s "$service" '.services[] | select(.name==$s) | .gitops_managed' "$CATALOG")
@@ -54,18 +54,22 @@ while IFS= read -r service; do
 
   base="-"
   argo="-"
+  stg="-"
+  prod="-"
 
   if [[ "$managed" == "true" ]]; then
-    base="no"; argo="no"
+    base="no"; argo="no"; stg="no"; prod="no"
     [[ -d "$BASE_DIR/$service" ]] && base="yes"
     [[ -f "$APPS_DIR/$service.yaml" ]] && argo="yes"
+    [[ -f "$ROOT_DIR/infra/cd/overlays/staging/$service/kustomization.yaml" ]] && stg="yes"
+    [[ -f "$ROOT_DIR/infra/cd/overlays/production/$service/kustomization.yaml" ]] && prod="yes"
 
-    if [[ "$base" == "no" || "$argo" == "no" ]]; then
+    if [[ "$base" == "no" || "$argo" == "no" || "$stg" == "no" || "$prod" == "no" ]]; then
       missing=1
     fi
   fi
 
-  printf "%-20s %-8s %-6s %-6s\n" "$service" "$managed" "$base" "$argo"
+  printf "%-20s %-8s %-6s %-6s %-8s %-10s\n" "$service" "$managed" "$base" "$argo" "$stg" "$prod"
 done < <(jq -r '.services[].name' "$CATALOG" | sort)
 
 for undeclared in "${!service_dirs[@]}"; do

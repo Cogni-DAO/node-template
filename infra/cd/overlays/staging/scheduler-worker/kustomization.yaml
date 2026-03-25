@@ -6,11 +6,10 @@ kind: Kustomization
 namespace: cogni-staging
 
 resources:
-  - namespace.yaml
-  - ../../base/scheduler-worker
+  - ../../../base/scheduler-worker
 
-# Image digest — update this on promotion (IMAGE_IMMUTABILITY invariant)
-# CI creates a PR changing newTag to the new digest after image push.
+# Image digest — updated by promote-k8s-image.sh on each CI push.
+# Argo CD ApplicationSet points here; digest change → auto-sync.
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
@@ -33,7 +32,7 @@ patches:
         path: /data/IMAGE_DIGEST
         value: "staging-placeholder-scheduler-worker"
 
-  # Patch EndpointSlice IPs — 127.0.0.1 (single-VM: k3s + Compose on same host)
+  # EndpointSlice IPs — 127.0.0.1 (single-VM: k3s + Compose on same host)
   - target:
       kind: EndpointSlice
       name: temporal-1

@@ -37,7 +37,7 @@ fi
 IMAGE_NAME="${SCHEDULER_WORKER_DIGEST%%@*}"
 DIGEST="${SCHEDULER_WORKER_DIGEST#*@}"
 
-OVERLAY_FILE="infra/cd/overlays/staging/kustomization.yaml"
+OVERLAY_FILE="infra/cd/overlays/staging/scheduler-worker/kustomization.yaml"
 
 if [[ ! -f "$OVERLAY_FILE" ]]; then
     log_error "Overlay file not found: $OVERLAY_FILE"

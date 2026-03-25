@@ -7,8 +7,8 @@
     },
     {
       "name": "sandbox-openclaw",
-      "gitops_managed": false,
-      "reason": "Deferred — migrate after scheduler-worker is proven on k3s."
+      "gitops_managed": true,
+      "reason": "Long-running OpenClaw gateway with proxy sidecar. Managed via Argo CD."
     },
     {
       "name": "sandbox-runtime",
