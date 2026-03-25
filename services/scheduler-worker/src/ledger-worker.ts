@@ -16,15 +16,13 @@
 
 import { createRequire } from "node:module";
 import { NativeConnection, Worker } from "@temporalio/worker";
-
 import { createEnrichmentActivities } from "./activities/enrichment.js";
-
-const require = createRequire(import.meta.url);
-
 import { createAttributionActivities } from "./activities/ledger.js";
 import type { AttributionContainer } from "./bootstrap/container.js";
 import type { Env } from "./bootstrap/env.js";
 import type { Logger } from "./observability/logger.js";
+
+const require = createRequire(import.meta.url);
 
 /** Task queue for ledger workflows — separate from scheduler-tasks */
 export const LEDGER_TASK_QUEUE = "ledger-tasks";

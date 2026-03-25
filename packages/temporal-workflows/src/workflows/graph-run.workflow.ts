@@ -16,7 +16,7 @@
  *   - TYPED_TERMINAL_ARTIFACT: returns small typed result {ok, runId, structuredOutput} for parent workflow composition
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/unified-graph-launch.md, docs/spec/temporal-patterns.md
- * @internal
+ * @public
  */
 
 import { proxyActivities, uuid4, workflowInfo } from "@temporalio/workflow";

@@ -11,7 +11,7 @@
  *   - Per ACTIVITY_IDEMPOTENT: Existing activity idempotency guarantees preserved
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
- * @internal
+ * @public
  */
 
 import { proxyActivities } from "@temporalio/workflow";

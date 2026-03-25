@@ -4,8 +4,7 @@
 /**
  * Module: `@cogni/temporal-workflows`
  * Purpose: Public type exports ONLY — safe to import from any runtime (app, worker, tests).
- * Scope: Re-exports types and pure domain functions. Does not export workflow functions (use subpath exports).
- *   Does not export workflow functions — those are in subpath exports (scheduler, ledger).
+ * Scope: Re-exports types, pure constants, and domain functions. Does not export workflow functions (use subpath exports).
  * Invariants:
  *   - Per SUBPATH_ISOLATION: this barrel exports types only (plus pure domain functions), never workflow functions
  *   - Safe to import from Next.js app code without pulling in @temporalio/workflow

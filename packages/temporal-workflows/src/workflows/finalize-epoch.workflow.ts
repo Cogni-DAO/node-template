@@ -12,7 +12,7 @@
  *   - Per CONFIG_LOCKED_AT_REVIEW: Verifies allocation_algo_ref and weight_config_hash are set
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
- * @internal
+ * @public
  */
 
 import { proxyActivities } from "@temporalio/workflow";

@@ -10,7 +10,7 @@
  *   - Workflow-specific configs stay inline with rationale comments.
  * Side-effects: none
  * Links: docs/spec/temporal-patterns.md
- * @internal
+ * @public
  */
 
 import type { ActivityOptions } from "@temporalio/workflow";

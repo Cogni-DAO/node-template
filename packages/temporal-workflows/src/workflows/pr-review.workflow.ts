@@ -13,7 +13,7 @@
  *   - TYPED_TERMINAL_ARTIFACT: GraphRunWorkflow child returns structuredOutput for parent consumption
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/temporal-patterns.md, task.0191
- * @internal
+ * @public
  */
 
 import { executeChild, proxyActivities, uuid4 } from "@temporalio/workflow";

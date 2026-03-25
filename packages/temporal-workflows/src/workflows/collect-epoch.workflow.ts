@@ -14,7 +14,7 @@
  *   - Per EPOCH_CLOSE_ON_TRANSITION: Previous epoch closes at start of new window, not via timer/grace period
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
- * @internal
+ * @public
  */
 
 import { computeEpochWindowV1 } from "@cogni/attribution-ledger/epoch-window";
