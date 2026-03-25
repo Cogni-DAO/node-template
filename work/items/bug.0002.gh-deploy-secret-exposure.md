@@ -12,7 +12,7 @@ assignees: derekg1729
 credit:
 project: proj.docs-system-infrastructure
 branch: chore/bug-0002-secret-setup-v2
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/629
 reviewer:
 created: 2026-02-06
 updated: 2026-03-25
