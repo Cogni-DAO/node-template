@@ -312,7 +312,10 @@ const SECRETS: Secret[] = [
     category: "Internal Service",
     source: "agent",
     description: "GitHub webhook HMAC verification secret",
-    steps: ["Auto-generated hex string"],
+    steps: [
+      "Auto-generated hex string",
+      "Must be synced to GitHub App → Webhook → Secret after generation",
+    ],
     generate: () => randHex(32),
   },
   {
@@ -1235,14 +1238,20 @@ async function main() {
     }
 
     if (secret.source === "agent") {
-      // With --all, auto-generate without prompting (they're random values).
-      // Without --all, these only appear when missing — also just generate.
-      if (!showAll) {
+      const alreadySet =
+        previewSecrets.has(secret.name) && prodSecrets.has(secret.name);
+
+      if (alreadySet && showAll) {
+        // --all on already-set agent secret: ask before overwriting
         const action = await prompt(
           rl,
-          `  Generate and set for both envs? [Y/n] `
+          `  Already set. Regenerate? [y/N] `
         );
-        if (action.toLowerCase() === "n") {
+        if (action.toLowerCase() !== "y") {
+          // Not regenerating, but load from cache if available for SOPS templates
+          if (collectedSecrets[secret.name]) {
+            console.log(`  ${DIM}(using cached value)${RESET}`);
+          }
           skipped++;
           continue;
         }
