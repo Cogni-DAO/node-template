@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker-service/workflows/pr-review`
+ * Module: `@cogni/temporal-workflows/workflows/pr-review`
  * Purpose: Temporal parent workflow for webhook-triggered PR review.
- * Scope: Deterministic orchestration only. All I/O in Activities, LLM in GraphRunWorkflow child.
+ * Scope: Deterministic orchestration only. Does not perform I/O — all external calls in Activities, LLM in GraphRunWorkflow child.
  * Invariants:
  *   - Per TEMPORAL_DETERMINISM: No I/O in workflow code
  *   - Per NORMATIVE_WEBHOOK_PATTERN: webhook starts workflow, exits immediately
@@ -13,13 +13,12 @@
  *   - TYPED_TERMINAL_ARTIFACT: GraphRunWorkflow child returns structuredOutput for parent consumption
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/temporal-patterns.md, task.0191
- * @internal
+ * @public
  */
 
 import { executeChild, proxyActivities, uuid4 } from "@temporalio/workflow";
-
-import type { ReviewActivities } from "../activities/review.js";
-import { EXTERNAL_API_ACTIVITY_OPTIONS } from "./activity-profiles.js";
+import { EXTERNAL_API_ACTIVITY_OPTIONS } from "../activity-profiles.js";
+import type { ReviewActivities } from "../activity-types.js";
 import type { GraphRunResult } from "./graph-run.workflow.js";
 
 // All review activities: GitHub API calls with 5-min timeout, 3 retries

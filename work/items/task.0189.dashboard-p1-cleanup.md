@@ -20,7 +20,7 @@ revision: 0
 blocked_by: []
 deploy_verified: false
 created: 2026-03-20
-updated: 2026-03-20
+updated: 2026-03-25
 labels:
   - ui
   - ai-graphs
@@ -38,7 +38,9 @@ P0 (task.0184) shipped a static dashboard with agents table, work items, and act
 4. Agent status is just "Completed"/"Running" — no AI-generated status text or streaming preview
 5. Thread persistence feels flaky — multiple runs to same thread show as separate entries
 
-This task bridges P0→P1 by cleaning up these gaps. It does NOT implement full SSE streaming cards (that's P1 proper).
+6. Run cards have no click-through — clicking a Cogni Live run should drill into the graph run stream (Redis SSE). The `runId` is available, the stream endpoint exists at `/api/v1/ai/runs/{runId}/stream`.
+
+This task bridges P0→P1 by closing these gaps.
 
 ## Requirements
 
@@ -112,7 +114,14 @@ This task bridges P0→P1 by cleaning up these gaps. It does NOT implement full 
   - Dashboard: running agents render as expanded card; completed agents as table rows
   - Validation: trigger a run, see "Thinking" / "Using tools" status on dashboard
 
-- [ ] **Checkpoint 5: Thread dedup audit**
+- [ ] **Checkpoint 5: Run card click-through to stream**
+  - New page or modal at `/dashboard/runs/[runId]` that subscribes to `GET /api/v1/ai/runs/{runId}/stream`
+  - Running runs: live SSE subscription showing events as they arrive
+  - Completed runs: replay from Redis (within TTL) or show final status
+  - Cogni Live rows and My Runs rows both link to this view
+  - Validation: click a system run → see stream events or final result
+
+- [ ] **Checkpoint 6: Thread dedup audit**
   - Investigate: are duplicate entries a data issue or a display issue?
   - If display: verify dedupeByThread logic handles edge cases (null stateKey, same graphId different threads)
   - If data: file separate bug

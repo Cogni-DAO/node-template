@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker-service/workflows/scheduler-workflows`
+ * Module: `@cogni/temporal-workflows/scheduler`
  * Purpose: Barrel file exporting all workflows for the scheduler-tasks queue.
- * Scope: Temporal SDK bundles all exported functions from the workflowsPath file.
+ * Scope: Temporal SDK bundles all exported functions from the workflowsPath file. Does not contain logic.
  * Invariants: One barrel per task queue. All scheduler-queue workflows exported here.
  * Side-effects: none
  * Links: docs/spec/temporal-patterns.md
  * @internal
  */
 
-export { GraphRunWorkflow } from "./graph-run.workflow.js";
-export { PrReviewWorkflow } from "./pr-review.workflow.js";
+export { GraphRunWorkflow } from "./workflows/graph-run.workflow.js";
+export { PrReviewWorkflow } from "./workflows/pr-review.workflow.js";

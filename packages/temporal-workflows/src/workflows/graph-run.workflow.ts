@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker-service/workflows/graph-run`
+ * Module: `@cogni/temporal-workflows/workflows/graph-run`
  * Purpose: Unified Temporal Workflow for all graph execution (scheduled, API, webhook).
- * Scope: Deterministic orchestration only. All I/O happens in Activities.
+ * Scope: Deterministic orchestration only. Does not perform I/O — all external calls happen in Activities.
  * Invariants:
  *   - Per TEMPORAL_DETERMINISM: No I/O, network calls, or LLM calls in workflow code
  *   - Per SINGLE_RUN_LEDGER: always creates graph_runs record (no dbScheduleId gate)
@@ -16,13 +16,12 @@
  *   - TYPED_TERMINAL_ARTIFACT: returns small typed result {ok, runId, structuredOutput} for parent workflow composition
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/unified-graph-launch.md, docs/spec/temporal-patterns.md
- * @internal
+ * @public
  */
 
 import { proxyActivities, uuid4, workflowInfo } from "@temporalio/workflow";
-
-import type { Activities } from "../activities/index.js";
-import { GRAPH_EXECUTION_ACTIVITY_OPTIONS } from "./activity-profiles.js";
+import { GRAPH_EXECUTION_ACTIVITY_OPTIONS } from "../activity-profiles.js";
+import type { SchedulerActivities } from "../activity-types.js";
 
 /**
  * Terminal artifact returned by GraphRunWorkflow.
@@ -41,7 +40,7 @@ const {
   validateGrantActivity,
   createGraphRunActivity,
   updateGraphRunActivity,
-} = proxyActivities<Activities>({
+} = proxyActivities<SchedulerActivities>({
   startToCloseTimeout: "1 minute",
   retry: {
     initialInterval: "1 second",
@@ -52,7 +51,7 @@ const {
 });
 
 // Graph execution: 15-min timeout, no retry (idempotency collision risk).
-const { executeGraphActivity } = proxyActivities<Activities>(
+const { executeGraphActivity } = proxyActivities<SchedulerActivities>(
   GRAPH_EXECUTION_ACTIVITY_OPTIONS
 );
 

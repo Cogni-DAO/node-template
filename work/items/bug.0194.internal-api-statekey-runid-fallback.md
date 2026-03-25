@@ -2,7 +2,7 @@
 id: bug.0194
 type: bug
 title: "Internal graph API conflates stateKey with runId — headless runs create phantom threads"
-status: needs_triage
+status: done
 priority: 3
 rank: 50
 estimate: 1
@@ -11,14 +11,14 @@ outcome: "stateKey=undefined for headless runs; thread persistence skipped when 
 spec_refs: [temporal-patterns-spec]
 assignees: []
 project: proj.unified-graph-launch
-branch:
-pr:
+branch: task-0191-webhook-temporal-alignment
+pr: https://github.com/Cogni-DAO/node-template/pull/618
 reviewer:
 revision: 0
 blocked_by: []
 deploy_verified: false
 created: 2026-03-24
-updated: 2026-03-24
+updated: 2026-03-25
 labels: [ai-graphs, data-quality]
 ---
 

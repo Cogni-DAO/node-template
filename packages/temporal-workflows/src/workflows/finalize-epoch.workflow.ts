@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker-service/workflows/finalize-epoch`
+ * Module: `@cogni/temporal-workflows/workflows/finalize-epoch`
  * Purpose: Temporal Workflow for epoch finalization — sign-at-finalize V0.
- * Scope: Deterministic orchestration only. All I/O happens in Activities.
+ * Scope: Deterministic orchestration only. Does not perform I/O — all external calls happen in Activities.
  * Invariants:
  *   - Per TEMPORAL_DETERMINISM: No I/O, network calls, or direct imports of adapters
  *   - Per WRITES_VIA_TEMPORAL: All writes execute in Temporal activities
@@ -12,12 +12,12 @@
  *   - Per CONFIG_LOCKED_AT_REVIEW: Verifies allocation_algo_ref and weight_config_hash are set
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
- * @internal
+ * @public
  */
 
 import { proxyActivities } from "@temporalio/workflow";
 
-import type { LedgerActivities } from "../activities/ledger.js";
+import type { LedgerActivities } from "../activity-types.js";
 
 // Intentionally lower retry count (3 vs standard 5) — finalization should fail fast
 // rather than retry excessively on signature verification or config lock errors.

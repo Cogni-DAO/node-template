@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker-service/workflows/collect-epoch`
+ * Module: `@cogni/temporal-workflows/workflows/collect-epoch`
  * Purpose: Temporal Workflow orchestrator for epoch ingestion — delegates to child workflows for collection, enrichment, and allocation.
  * Scope: Deterministic orchestration only. All I/O happens in Activities (via child workflows). Steps: compute window → transition epoch (close stale + create) → CollectSourcesWorkflow → EnrichAndAllocateWorkflow → ensure pool. Does not handle finalization (see FinalizeEpochWorkflow).
  * Invariants:
@@ -14,7 +14,7 @@
  *   - Per EPOCH_CLOSE_ON_TRANSITION: Previous epoch closes at start of new window, not via timer/grace period
  * Side-effects: none (deterministic orchestration only)
  * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md
- * @internal
+ * @public
  */
 
 import { computeEpochWindowV1 } from "@cogni/attribution-ledger/epoch-window";
@@ -25,10 +25,11 @@ import {
   proxyActivities,
   workflowInfo,
 } from "@temporalio/workflow";
-
-import type { EnrichmentActivities } from "../activities/enrichment.js";
-import type { LedgerActivities } from "../activities/ledger.js";
-import { STANDARD_ACTIVITY_OPTIONS } from "./activity-profiles.js";
+import { STANDARD_ACTIVITY_OPTIONS } from "../activity-profiles.js";
+import type {
+  EnrichmentActivities,
+  LedgerActivities,
+} from "../activity-types.js";
 import { CollectSourcesWorkflow } from "./stages/collect-sources.workflow.js";
 import { EnrichAndAllocateWorkflow } from "./stages/enrich-and-allocate.workflow.js";
 
