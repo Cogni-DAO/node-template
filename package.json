@@ -51,6 +51,7 @@
     "db:seed": "dotenv -e .env.local -- node --import tsx/esm scripts/db/seed.mts",
     "db:setup": "pnpm db:provision && pnpm db:migrate && pnpm db:seed",
     "dev:setup": "pnpm db:setup && pnpm db:setup:test && pnpm governance:schedules:sync",
+    "setup:secrets": "tsx scripts/setup-secrets.ts",
     "db:setup:test": "pnpm db:provision:test && pnpm db:migrate:test",
     "db:drop:test": "pnpm tsx --tsconfig tsconfig.scripts.json scripts/db/drop-test-db.ts",
     "db:reset:test": "pnpm db:drop:test || true && pnpm db:setup:test",
