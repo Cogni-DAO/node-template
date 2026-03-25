@@ -85,7 +85,7 @@ export interface GraphRunRepository {
   /**
    * Lists runs for a user, ordered by started_at DESC with cursor-based pagination.
    * @param actorId - Actor performing the operation (for RLS SET LOCAL / audit trail)
-   * @param userId - Filter to runs where requested_by = userId
+   * @param userId - Used for RLS tenant scoping (sets app.current_user_id)
    * @param opts - Filtering and pagination options
    */
   listRunsByUser: (

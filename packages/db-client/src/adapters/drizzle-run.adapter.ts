@@ -233,7 +233,9 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
     const pageSize = Math.min(opts?.limit ?? 20, 100);
 
     return withTenantScope(this.db, actorId, async (tx) => {
-      const conditions = [eq(graphRuns.requestedBy, userId)];
+      // No requestedBy filter — RLS policy on graph_runs handles visibility:
+      // user sees runs they requested OR runs from schedules they own.
+      const conditions: ReturnType<typeof eq>[] = [];
 
       if (opts?.status) {
         conditions.push(eq(graphRuns.status, opts.status));
@@ -248,7 +250,7 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
       const rows = await tx
         .select()
         .from(graphRuns)
-        .where(and(...conditions))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(graphRuns.startedAt))
         .limit(pageSize + 1); // fetch one extra to detect next page
 

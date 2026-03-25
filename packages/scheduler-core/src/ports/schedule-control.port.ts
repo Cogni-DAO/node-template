@@ -38,6 +38,8 @@ export interface CreateScheduleParams {
    * Set null/undefined only for legacy Temporal-only schedules.
    */
   readonly dbScheduleId?: string | null;
+  /** User ID of the schedule owner — written as requestedBy on produced runs. */
+  readonly ownerUserId: string;
   /** Cron expression (5-field) */
   readonly cron: string;
   /** IANA timezone */
