@@ -34,7 +34,6 @@ import {
   ScheduleOverlapPolicy,
   ScheduleNotFoundError as TemporalScheduleNotFoundError,
 } from "@temporalio/client";
-import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@/shared/constants/system-tenant";
 
 /**
  * Configuration for TemporalScheduleControlAdapter.
@@ -141,7 +140,7 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
               runKind: "system_scheduled" as const,
               triggerSource: "temporal_schedule",
               triggerRef: params.scheduleId,
-              requestedBy: COGNI_SYSTEM_PRINCIPAL_USER_ID,
+              requestedBy: params.ownerUserId,
               dbScheduleId: params.dbScheduleId ?? null,
               temporalScheduleId: params.scheduleId,
             },
@@ -244,7 +243,7 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
               runKind: "system_scheduled" as const,
               triggerSource: "temporal_schedule",
               triggerRef: params.scheduleId,
-              requestedBy: COGNI_SYSTEM_PRINCIPAL_USER_ID,
+              requestedBy: params.ownerUserId,
               dbScheduleId: params.dbScheduleId ?? null,
               temporalScheduleId: params.scheduleId,
             },

@@ -15,6 +15,7 @@
  *   - Per STREAM_PUBLISH_IN_EXECUTION_LAYER: Redis publishing happens here, not in Temporal activity
  *   - Per PERSIST_AFTER_PUMP: persists assistant message to thread after full stream drain (disconnect-safe)
  *   - Per IDEMPOTENT_THREAD_PERSIST: assistant message ID = `assistant-{runId}` — skips if already persisted
+ *   - Scheduled run stateKey = sha256(idempotencyKey) — one isolated thread per execution slot, not per schedule
  * Side-effects: IO (HTTP request/response, database, graph execution, Redis stream publishing, thread persistence)
  * Links: docs/spec/scheduler.md, graphs.run.internal.v1.contract
  * @internal
@@ -349,9 +350,12 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       billingAccountId = grant.billingAccountId;
       virtualKeyId = billingAccount.defaultVirtualKeyId;
 
-      const scheduleId = extractScheduleId(idempotencyKey);
-      stateKey = createHash("sha256").update(scheduleId, "utf8").digest("hex");
-      sessionId = `gov:${billingAccountId}:s:${stateKey.slice(0, 32)}`;
+      // Per bug.0197: hash the full idempotencyKey (scheduleId:scheduledFor) so each
+      // execution slot gets its own isolated thread instead of accumulating in one.
+      stateKey = createHash("sha256")
+        .update(idempotencyKey, "utf8")
+        .digest("hex");
+      sessionId = `sched:${billingAccountId}:s:${stateKey.slice(0, 32)}`;
     } else {
       // API-triggered runs: execution context is provided in payload.
       const inputUserId =
@@ -404,6 +408,25 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       runId,
       traceId
     );
+
+    // --- 9b. Patch stateKey onto graph_runs record (bug.0197) ---
+    // stateKey is derived here (internal API) but graph_runs was created by
+    // createGraphRunActivity before this route is called. Patch it so dashboard
+    // can link runs to their threads.
+    if (stateKey && executionGrantId) {
+      try {
+        await container.graphRunRepository.patchRunStateKey(
+          SYSTEM_ACTOR,
+          runId,
+          stateKey
+        );
+      } catch (patchErr) {
+        log.warn(
+          { runId, stateKey, err: patchErr },
+          "Failed to patch stateKey on graph_runs — non-fatal"
+        );
+      }
+    }
 
     capture({
       event: AnalyticsEvents.AGENT_RUN_REQUESTED,

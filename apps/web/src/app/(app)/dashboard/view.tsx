@@ -3,13 +3,13 @@
 
 /**
  * Module: `@app/(app)/dashboard/view`
- * Purpose: Unified operations dashboard — agents table (deduplicated by thread), active work items, and activity charts.
+ * Purpose: Unified operations dashboard — runs table (deduplicated by thread), active work items, and activity charts.
  * Scope: Client-side view managing data fetching via React Query. Does not implement business logic.
  * Invariants:
  *   - Polls runs at 5s, work items at 30s, activity at 30s
  *   - Runs deduplicated by stateKey (one row per conversation thread)
- *   - "Cogni Live" tab filters to system_scheduled runs
- *   - Activity charts reuse fetchActivity from /activity/_api
+ *   - "System Runs" tab shows system-scoped runs and activity
+ *   - Activity charts scope matches active tab (user or system)
  * Side-effects: IO (via React Query)
  * Links: [fetchRuns](./_api/fetchRuns.ts), [fetchActivity](../activity/_api/fetchActivity.ts), [ActivityChart](../../../components/kit/data-display/ActivityChart.tsx)
  * @public
@@ -199,10 +199,11 @@ export function DashboardView(): ReactElement {
   });
 
   const { data: activityData, isLoading: activityLoading } = useQuery({
-    queryKey: ["dashboard-activity", activityRange, activityGroupBy],
+    queryKey: ["dashboard-activity", activityRange, activityGroupBy, tab],
     queryFn: () =>
       fetchActivity({
         range: activityRange,
+        ...(tab === "system" && { scope: "system" as const }),
         ...(activityGroupBy && { groupBy: activityGroupBy }),
       }),
     staleTime: 30_000,
@@ -283,7 +284,7 @@ export function DashboardView(): ReactElement {
             My Runs
           </ToggleGroupItem>
           <ToggleGroupItem value="system" className="px-3 text-xs">
-            Cogni Live
+            System Runs
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
@@ -294,7 +295,7 @@ export function DashboardView(): ReactElement {
         <Card>
           <CardHeader className="px-5 py-3">
             <CardTitle className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
-              {tab === "system" ? "Cogni Live" : "Agents"}
+              {tab === "system" ? "System Runs" : "Recent Runs"}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -315,45 +316,56 @@ export function DashboardView(): ReactElement {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {agents.map((run) => (
-                    <TableRow key={run.stateKey ?? run.id}>
-                      <TableCell className="pr-0">
-                        <span
-                          className={cn(
-                            "inline-block size-2 rounded-full",
-                            STATUS_DOT[run.status] ?? "bg-muted-foreground"
+                  {agents.map((run) => {
+                    const threadHref = run.stateKey
+                      ? `/chat?thread=${encodeURIComponent(run.stateKey)}`
+                      : null;
+                    return (
+                      <TableRow key={run.stateKey ?? run.id}>
+                        <TableCell className="pr-0">
+                          <span
+                            className={cn(
+                              "inline-block size-2 rounded-full",
+                              STATUS_DOT[run.status] ?? "bg-muted-foreground"
+                            )}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium text-sm">
+                          {threadHref ? (
+                            <Link href={threadHref} className="hover:underline">
+                              {formatGraphName(run.graphId)}
+                            </Link>
+                          ) : (
+                            formatGraphName(run.graphId)
                           )}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium text-sm">
-                        {formatGraphName(run.graphId)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge intent={badgeIntent(run.status)} size="sm">
-                          {run.statusLabel ??
-                            STATUS_LABEL[run.status] ??
-                            run.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground text-sm tabular-nums">
-                        {run.startedAt && run.completedAt
-                          ? formatDuration(run.startedAt, run.completedAt)
-                          : run.status === "running"
-                            ? "..."
-                            : "—"}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground text-sm">
-                        {run.startedAt ? timeAgo(run.startedAt) : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell>
+                          <Badge intent={badgeIntent(run.status)} size="sm">
+                            {run.statusLabel ??
+                              STATUS_LABEL[run.status] ??
+                              run.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm tabular-nums">
+                          {run.startedAt && run.completedAt
+                            ? formatDuration(run.startedAt, run.completedAt)
+                            : run.status === "running"
+                              ? "..."
+                              : "—"}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm">
+                          {run.startedAt ? timeAgo(run.startedAt) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : (
               <p className="px-5 py-6 text-center text-muted-foreground text-sm">
                 {tab === "system"
-                  ? "No system runs yet. Create a schedule to watch Cogni work."
-                  : "No recent runs. Start a conversation to see agents here."}
+                  ? "No system runs yet. Create a schedule to get started."
+                  : "No recent runs. Start a conversation to see runs here."}
               </p>
             )}
           </CardContent>

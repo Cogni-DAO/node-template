@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/(app)/gov/view`
- * Purpose: Client component displaying DAO governance status — credit balance, next run, recent runs, and activity charts.
+ * Module: `@app/(app)/gov/system/view`
+ * Purpose: Client component displaying DAO system activity — credit balance, upcoming runs, recent runs, and activity charts.
  * Scope: Renders governance data fetched via React Query hooks. Does not perform server-side logic or direct DB access.
  * Invariants: Layout container owned by gov/layout.tsx; 30s polling for status, stale-while-revalidate for activity.
  * Side-effects: IO (via useGovernanceStatus hook and activity fetch)
@@ -42,7 +42,7 @@ import type {
 } from "@/contracts/ai.activity.v1.contract";
 import { useGovernanceStatus } from "@/features/governance/hooks/useGovernanceStatus";
 import { creditsToUsd } from "@/features/payments/public";
-import { fetchGovernanceActivity } from "./_api/fetchGovernanceActivity";
+import { fetchGovernanceActivity } from "../_api/fetchGovernanceActivity";
 
 export function GovernanceView(): ReactElement {
   const router = useRouter();
@@ -66,7 +66,7 @@ export function GovernanceView(): ReactElement {
   });
 
   const handleRangeChange = (newRange: TimeRange) => {
-    router.replace(`/gov?range=${newRange}`, { scroll: false });
+    router.replace(`/gov/system?range=${newRange}`, { scroll: false });
   };
 
   // Error state — matches activity/schedules pattern
