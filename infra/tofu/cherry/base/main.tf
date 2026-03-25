@@ -31,6 +31,7 @@ resource "cherryservers_server" "server" {
       ghcr_deploy_token    = var.ghcr_deploy_token
       cogni_repo_url       = var.cogni_repo_url
       cogni_repo_ref       = var.cogni_repo_ref
+      sops_age_private_key = var.sops_age_private_key
     }))
     allow_reinstall = true
     

@@ -69,3 +69,12 @@ variable "cogni_repo_ref" {
   default     = "staging"
 }
 
+# SOPS/age private key for Argo CD secret decryption.
+# Generated once: age-keygen -o age-key.txt
+# Public key → .sops.yaml in repo. Private key → this variable.
+variable "sops_age_private_key" {
+  description = "Age private key for SOPS decryption (starts with AGE-SECRET-KEY-)"
+  type        = string
+  sensitive   = true
+}
+

@@ -76,6 +76,7 @@ PR #573 provisions a **separate k3s VM** via `infra/tofu/cherry/k3s/main.tf`. Th
 ### Implementation checklist (rev 2 — MVP)
 
 **Bootstrap (cloud-init):**
+
 - [ ] k3s install in `base/bootstrap.yaml` with pinned version `v1.31.4+k3s1`
 - [ ] Write `/etc/rancher/k3s/registries.yaml` for GHCR private registry auth
 - [ ] Write `/etc/rancher/k3s/config.yaml` to disable traefik + servicelb
@@ -87,32 +88,38 @@ PR #573 provisions a **separate k3s VM** via `infra/tofu/cherry/k3s/main.tf`. Th
 - [ ] Validate k3s + kubectl + Argo CD in `main.tf` remote-exec health check
 
 **Kustomize manifests:**
+
 - [ ] EndpointSlice addresses → `127.0.0.1` (single-VM, localhost)
 - [ ] Keep flat overlay structure (one kustomization.yaml per env, not per-service subdirs)
 
 **CI integration:**
+
 - [ ] `promote-k8s-image.sh` updates overlay digest and commits to staging
 - [ ] Wire promote script into `staging-preview.yml` after image push
 - [ ] `COMPOSE_PROFILES` gating: scheduler-worker gets `compose-scheduler-worker` profile
 - [ ] `deploy.sh` passes `COMPOSE_PROFILES` from workflow env (no hardcoded `--profile`)
 
 **Argo CD config (from task.0148, keep as-is):**
+
 - [ ] `infra/cd/argocd/install.yaml` — Kustomization with pinned Argo CD + ksops
 - [ ] `infra/cd/argocd/ksops-cmp.yaml` — CMP plugin ConfigMap
 - [ ] `infra/cd/argocd/repo-server-patch.yaml` — Sidecar container + age key mount
 
 **CI validation (from #625):**
+
 - [ ] `check-gitops-manifests.sh` — render overlays via `kubectl kustomize`
 - [ ] `check-gitops-service-coverage.sh` — catalog ↔ services/ ↔ manifests sync
 - [ ] `gitops-service-catalog.json` — scheduler-worker managed, sandbox-openclaw deferred
 - [ ] Wire into `ci.yaml`, `check-all.sh`, `check-fast.sh`
 
 **Cleanup:**
+
 - [ ] Delete `infra/tofu/cherry/k3s/` module (replaced by base bootstrap)
 - [ ] Remove cross-VM firewall rules
 - [ ] Update `INFRASTRUCTURE_SETUP.md` runbook
 
 **NOT in scope (defer to future tasks):**
+
 - sandbox-openclaw k8s manifests (separate task after scheduler-worker is proven)
 - ApplicationSet pattern (app-of-apps is simpler for 1 service)
 - temporal-workflows refactor (separate PR)

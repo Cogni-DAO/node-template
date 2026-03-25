@@ -88,7 +88,7 @@ if [[ -n "${GITHUB_SHA:-}" ]]; then
     if git diff --cached --quiet; then
         log_info "No changes to commit (digest unchanged)"
     else
-        git commit -m "chore(cd): promote scheduler-worker to ${DIGEST:0:19}..."
+        git commit -m "chore(cd): promote scheduler-worker to ${DIGEST:0:19}... [skip ci]"
         git push origin staging
         log_info "Committed and pushed digest update to staging"
     fi
