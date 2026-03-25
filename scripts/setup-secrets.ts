@@ -1260,7 +1260,7 @@ async function main() {
       if (setSecretBoth(secret.name, value)) {
         collectedSecrets[secret.name] = value;
         console.log(
-          `  ${GREEN}${secret.name}${RESET} set (preview + production)`
+          `  ${GREEN}${secret.name}${RESET} set (preview + production): ${DIM}${value}${RESET}`
         );
         set++;
         if (secret.category === "Database") {
