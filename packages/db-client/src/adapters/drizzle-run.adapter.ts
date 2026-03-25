@@ -234,9 +234,13 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
     const pageSize = Math.min(opts?.limit ?? 20, 100);
 
     return withTenantScope(this.db, actorId, async (tx) => {
-      // No requestedBy filter — RLS policy on graph_runs handles visibility:
-      // user sees runs they requested OR runs from schedules they own.
-      const conditions: ReturnType<typeof eq>[] = [];
+      // requestedBy filter scopes to the queried principal. RLS provides the
+      // security boundary (user sees own runs + schedule-owned runs), but this
+      // WHERE clause ensures user-scope queries don't return system runs and
+      // system-scope queries don't return user runs. Defense-in-depth.
+      const conditions: ReturnType<typeof eq>[] = [
+        eq(graphRuns.requestedBy, userId),
+      ];
 
       if (opts?.status) {
         conditions.push(eq(graphRuns.status, opts.status));
@@ -251,7 +255,7 @@ export class DrizzleGraphRunAdapter implements GraphRunRepository {
       const rows = await tx
         .select()
         .from(graphRuns)
-        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .where(and(...conditions))
         .orderBy(desc(graphRuns.startedAt))
         .limit(pageSize + 1); // fetch one extra to detect next page
 
