@@ -90,18 +90,9 @@ export CHERRY_PROJECT_ID="<your-project-id>"
 ### Step 2b: Generate SOPS Age Keypairs + Encrypt Secrets
 
 ```bash
-# Install tools (if not done via setup.sh --all)
-scripts/bootstrap/install/install-gitops-tools.sh
-
-# Generate keypairs, update .sops.yaml, print TF_VAR exports
-scripts/bootstrap/setup-gitops-secrets.sh staging
-
-# Fill real values in the secret templates, then encrypt:
-cd infra/cd/secrets
-# Edit staging/scheduler-worker.enc.yaml and staging/sandbox-openclaw.enc.yaml
-sops --encrypt --in-place staging/scheduler-worker.enc.yaml
-sops --encrypt --in-place staging/sandbox-openclaw.enc.yaml
-git add . && git commit -m "chore(infra): encrypt staging secrets"
+# Included in pnpm setup:secrets — generates age keypairs, updates .sops.yaml,
+# encrypts .enc.yaml files, and prints TF_VAR exports.
+pnpm setup:secrets --only SOPS_AGE
 ```
 
 ---

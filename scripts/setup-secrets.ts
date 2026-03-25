@@ -73,6 +73,101 @@ function generateSSHKey(env: string): string {
   return privKey;
 }
 
+function setupSopsAge(env: string): void {
+  const keyDir = `${process.env.HOME}/.cogni`;
+  const keyFile = `${keyDir}/${env}-age-key.txt`;
+  const repoRoot = execSync("git rev-parse --show-toplevel").toString().trim();
+  const sopsConfig = `${repoRoot}/infra/cd/secrets/.sops.yaml`;
+
+  execSync(`mkdir -p ${keyDir}`);
+
+  // Generate keypair if it doesn't exist
+  let pubkey: string;
+  if (
+    (() => {
+      try {
+        require("fs").accessSync(keyFile);
+        return true;
+      } catch {
+        return false;
+      }
+    })()
+  ) {
+    console.log(`     Keypair already exists: ${keyFile}`);
+    pubkey = execSync(`grep 'public key:' ${keyFile} | awk '{print $NF}'`)
+      .toString()
+      .trim();
+  } else {
+    console.log(`     Generating age keypair...`);
+    const output = execSync(`age-keygen -o ${keyFile} 2>&1`).toString();
+    pubkey = output.match(/Public key: (age1\S+)/)?.[1] ?? "";
+    execSync(`chmod 600 ${keyFile}`);
+    if (!pubkey) {
+      console.log(`     ${RED}Failed to extract public key${RESET}`);
+      return;
+    }
+    console.log(`     Keypair saved: ${keyFile}`);
+  }
+  console.log(`     Public key: ${pubkey}`);
+
+  // Update .sops.yaml
+  const placeholder =
+    env === "staging"
+      ? "age1staging_placeholder_replace_with_real_public_key"
+      : "age1production_placeholder_replace_with_real_public_key";
+  const sopsContent = require("fs").readFileSync(sopsConfig, "utf-8");
+  if (sopsContent.includes(placeholder)) {
+    require("fs").writeFileSync(
+      sopsConfig,
+      sopsContent.replace(placeholder, pubkey)
+    );
+    console.log(`     Updated .sops.yaml with ${env} public key`);
+  } else if (sopsContent.includes(pubkey)) {
+    console.log(`     .sops.yaml already has ${env} public key`);
+  }
+
+  // Encrypt secret files if they contain plaintext placeholders
+  const secretsDir = `${repoRoot}/infra/cd/secrets/${env === "staging" ? "staging" : "production"}`;
+  try {
+    const files = require("fs")
+      .readdirSync(secretsDir)
+      .filter((f: string) => f.endsWith(".enc.yaml"));
+    for (const file of files) {
+      const fullPath = `${secretsDir}/${file}`;
+      const content = require("fs").readFileSync(fullPath, "utf-8");
+      if (content.includes("REPLACE_WITH_")) {
+        console.log(
+          `     ${YELLOW}Skipping ${file} — still has REPLACE_WITH_ placeholders. Edit values first.${RESET}`
+        );
+      } else if (content.includes("sops:")) {
+        console.log(`     ${file} already encrypted`);
+      } else {
+        console.log(`     Encrypting ${file}...`);
+        execSync(`sops --config ${repoRoot}/infra/cd/secrets/.sops.yaml --encrypt --in-place ${fullPath}`);
+        console.log(`     ${GREEN}${file} encrypted${RESET}`);
+      }
+    }
+  } catch {
+    // secrets dir may not exist yet
+  }
+
+  // Print TF_VAR export
+  const privKey = execSync(
+    `grep 'AGE-SECRET-KEY' ${keyFile} 2>/dev/null || true`
+  )
+    .toString()
+    .trim();
+  if (privKey) {
+    console.log("");
+    console.log(
+      `     ${CYAN}For tofu apply, export:${RESET}`
+    );
+    console.log(
+      `     export TF_VAR_sops_age_private_key="${privKey}"`
+    );
+  }
+}
+
 // ── Secret Catalog ───────────────────────────────────────────────────────────
 
 const SECRETS: Secret[] = [
@@ -164,6 +259,24 @@ const SECRETS: Secret[] = [
       "4. Run: tofu apply -var-file=terraform.<env>.tfvars",
     ],
     // generate handled specially in main loop
+  },
+
+  {
+    name: "SOPS_AGE_KEY",
+    required: true,
+    category: "Infrastructure",
+    source: "agent",
+    description:
+      "SOPS/age keypair for Argo CD secret decryption (local + TF var, not a GitHub secret)",
+    perEnv: true,
+    steps: [
+      "Auto-generated age keypair (one per environment)",
+      "1. Public key written to infra/cd/secrets/.sops.yaml",
+      "2. Private key stored locally in ~/.cogni/",
+      "3. Secret .enc.yaml files encrypted with sops",
+      "4. TF_VAR_sops_age_private_key printed for tofu apply",
+    ],
+    // generate handled specially in main loop (like SSH_DEPLOY_KEY)
   },
 
   // ── Infrastructure: repo-level ──────────────────────────────────────────
@@ -968,6 +1081,24 @@ async function main() {
         const privKey = generateSSHKey(env);
         setSecret(secret.name, privKey, env);
         console.log(`  ${GREEN}SSH_DEPLOY_KEY${RESET} set for ${env}`);
+      }
+      set++;
+      continue;
+    }
+
+    // SOPS_AGE_KEY is special — local-only, not a GitHub secret
+    if (secret.name === "SOPS_AGE_KEY") {
+      const action = await prompt(
+        rl,
+        `  Generate age keypairs + encrypt secrets? [Y/n] `
+      );
+      if (action.toLowerCase() === "n") {
+        skipped++;
+        continue;
+      }
+      for (const env of ENVIRONMENTS) {
+        console.log(`\n  ${BOLD}${env}${RESET}:`);
+        setupSopsAge(env === "preview" ? "staging" : "production");
       }
       set++;
       continue;
