@@ -1235,13 +1235,17 @@ async function main() {
     }
 
     if (secret.source === "agent") {
-      const action = await prompt(
-        rl,
-        `  Generate and set for both envs? [Y/n] `
-      );
-      if (action.toLowerCase() === "n") {
-        skipped++;
-        continue;
+      // With --all, auto-generate without prompting (they're random values).
+      // Without --all, these only appear when missing — also just generate.
+      if (!showAll) {
+        const action = await prompt(
+          rl,
+          `  Generate and set for both envs? [Y/n] `
+        );
+        if (action.toLowerCase() === "n") {
+          skipped++;
+          continue;
+        }
       }
       const value = secret.generate!();
       if (setSecretBoth(secret.name, value)) {
