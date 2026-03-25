@@ -12,7 +12,7 @@ assignees: derekg1729
 credit:
 project: proj.docs-system-infrastructure
 branch: chore/triage-needs-merge-backlog
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/619
 reviewer:
 created: 2026-02-06
 updated: 2026-03-24
