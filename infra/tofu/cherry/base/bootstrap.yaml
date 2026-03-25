@@ -152,9 +152,9 @@ write_files:
       kubectl -n argocd wait --for=condition=Available \
         deployment/argocd-server --timeout=300s
 
-      # Apply app-of-apps — Argo CD syncs the staging overlay.
-      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Applying Argo CD Application..."
-      kubectl apply -f /tmp/cogni-repo/infra/cd/apps/staging.yaml
+      # Apply service Applications — Argo CD auto-syncs each overlay.
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Applying Argo CD Applications..."
+      kubectl apply -f /tmp/cogni-repo/infra/cd/argocd/applications/
 
       rm -rf /tmp/cogni-repo
 

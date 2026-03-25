@@ -404,8 +404,7 @@ EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-template-ed
 RUNTIME_COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml"
 
 # COMPOSE_PROFILES controls which profiled services are visible.
-# Staging: "sandbox-openclaw" (scheduler-worker on k3s).
-# Production: "sandbox-openclaw,compose-scheduler-worker" (until k3s validated).
+# scheduler-worker is managed by Argo CD on k3s — not in Compose.
 export COMPOSE_PROFILES="${COMPOSE_PROFILES:-sandbox-openclaw}"
 
 log_info() {
@@ -756,8 +755,7 @@ emit_deployment_event "deployment.stack_up_started" "in_progress" "Starting cont
 $RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
 
 # Profiles controlled by COMPOSE_PROFILES env var (exported above).
-# Staging: "sandbox-openclaw" (scheduler-worker on k3s).
-# Production: "sandbox-openclaw,compose-scheduler-worker" (until k3s validated).
+# scheduler-worker managed by Argo CD on k3s — not in Compose.
 $RUNTIME_COMPOSE up -d --remove-orphans
 log_info "[$(date -u +%H:%M:%S)] Stack up complete"
 emit_deployment_event "deployment.stack_up_complete" "success" "All containers started"
