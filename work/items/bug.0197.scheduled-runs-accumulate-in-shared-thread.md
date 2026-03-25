@@ -98,51 +98,63 @@ If continuous context IS desired for a schedule (future feature), it should be a
 
 ### Outcome
 
-Each scheduled run is a fresh, independent conversation. No thread accumulation. Run results still accessible individually via dashboard click-through.
+Each scheduled run persists its own isolated thread (prompt + response + tool calls). No accumulation across runs. Dashboard can link each run to its thread.
 
 ### Approach
 
-**Solution**: Set `stateKey = undefined` for grant-backed scheduled runs. Skip thread persistence entirely — scheduled runs are headless.
+**Solution**: Derive `stateKey` from the idempotency key (unique per execution slot) instead of the bare schedule ID. Each run gets a fresh, isolated `ai_threads` row.
 
-**Why not per-slot stateKey?** Changing to `sha256(idempotencyKey)` creates a unique stateKey per slot, which means `loadThread()` returns `[]` and a fresh 1-message thread is persisted. This works but creates thousands of orphan `ai_threads` rows (one per cron tick per schedule) that nobody will ever view. It's data bloat with no user value.
+**File**: `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts:352-353`
 
-**Why headless is better**: Scheduled runs produce results visible via:
+```typescript
+// Before — one thread per schedule (accumulates):
+const scheduleId = extractScheduleId(idempotencyKey);
+stateKey = createHash("sha256").update(scheduleId, "utf8").digest("hex");
 
-- `graph_runs` table (status, timing, errors) — already works
-- Redis stream events (live/replay via SSE) — already works
-- `charge_receipts` (billing) — already works
+// After — one thread per execution slot (isolated):
+stateKey = createHash("sha256").update(idempotencyKey, "utf8").digest("hex");
+// idempotencyKey = "{scheduleId}:{scheduledFor}" — unique per slot
+```
 
-Thread persistence exists for **interactive chat continuity** — the user sends a message, sees the response, sends another. Scheduled runs have no interactive user. The sidebar thread list should not show them.
+Why this works: `loadThread(stateKey)` returns `[]` for a never-seen stateKey, so the persistence path (line 584) saves `[assistantMsg]` — a single-message thread per run. No append, no accumulation.
 
-**Reuses**: Existing `STATEKEY_NULLABLE` invariant — the codebase already handles `stateKey = undefined` for headless runs (webhooks, PR reviews).
+**Second fix**: Propagate `stateKey` to `graph_runs` so the dashboard can link runs to their threads. Currently `graph_runs.state_key` is NULL for all scheduled runs because the GraphRunWorkflow extracts stateKey from `graphInput.stateKey` (line 133), but scheduled run input doesn't contain one. The stateKey is only derived later in the internal API. The `updateGraphRunActivity` at line 182 (`status: "running"`) should also patch `stateKey` on the `graph_runs` record.
+
+**Reuses**: Existing thread persistence path — no new code, just a different hash input. Existing `updateGraphRunActivity` — just add stateKey to the update payload.
 
 **Rejected**:
 
-- **Per-slot stateKey** (`sha256(idempotencyKey)`) — creates thousands of orphan ai_threads rows per schedule. Data bloat for no user value.
+- **No persistence (headless)** — loses the durable record of what each run did. After Redis TTL (1h), the run content is gone.
 - **Per-schedule stateKey with append** (current behavior) — unbounded growth, the bug being fixed.
 
 ### Invariants
 
-- [ ] STATEKEY_NULLABLE: Headless runs (stateKey=undefined) skip thread persistence (spec: unified-graph-launch)
+- [ ] IDEMPOTENT_THREAD_PERSIST: message ID = `assistant-{runId}`, skip if already persisted (spec: unified-graph-launch)
 - [ ] PUMP_TO_COMPLETION_VIA_REDIS: Run events still reach Redis regardless of thread persistence (spec: unified-graph-launch)
-- [ ] SIMPLE_SOLUTION: 2-line change — set stateKey=undefined, remove sessionId derivation for grants
-- [ ] ARCHITECTURE_ALIGNMENT: Follows existing headless run pattern (webhooks)
+- [ ] SIMPLE_SOLUTION: 1-line hash input change + stateKey propagation to graph_runs
+- [ ] ARCHITECTURE_ALIGNMENT: Uses existing thread persistence path, no new abstractions
 
 ### Files
 
-- Modify: `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts:352-354` — set `stateKey = undefined` and `sessionId = run:{runId}` for grant-backed runs
-- Test: existing execution tests should still pass (stateKey was already optional)
+- Modify: `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts:352-353` — hash `idempotencyKey` instead of `scheduleId`
+- Modify: `services/scheduler-worker/src/activities/index.ts` — add optional `stateKey` to `updateGraphRunActivity` input
+- Modify: `packages/db-client/src/adapters/drizzle-run.adapter.ts` — support `stateKey` in update params
+- Test: verify new scheduled runs create isolated 1-message threads
 
 ## Allowed Changes
 
-- `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts` — remove stateKey/sessionId derivation for grant-backed runs
+- `apps/web/src/app/api/internal/graphs/[graphId]/runs/route.ts` — change stateKey hash input for grant-backed runs
+- `services/scheduler-worker/src/activities/index.ts` — add stateKey to updateGraphRun
+- `packages/db-client/src/adapters/drizzle-run.adapter.ts` — support stateKey in run updates
 
 ## Plan
 
-- [ ] Set `stateKey = undefined` for grant-backed runs (line 353)
-- [ ] Set `sessionId = run:${runId}` for grant-backed runs (line 354, already the fallback pattern from line 387)
-- [ ] Verify: new scheduled runs do NOT create ai_threads rows
-- [ ] Verify: old bloated threads stop growing (no new appends)
+- [ ] Change `stateKey = sha256(idempotencyKey)` for grant-backed runs (line 353)
+- [ ] Add optional `stateKey` field to `UpdateGraphRunInput` and `updateRun` adapter method
+- [ ] Patch `stateKey` onto `graph_runs` record when status transitions to "running"
+- [ ] Verify: new scheduled runs create isolated 1-message threads
+- [ ] Verify: `graph_runs.state_key` is populated for new scheduled runs
+- [ ] Verify: old bloated threads stop growing
 - [ ] Consider: clean up old mega-threads (separate task)
 
 ## Validation
