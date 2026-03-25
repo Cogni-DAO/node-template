@@ -1,12 +1,15 @@
 #!/usr/bin/env npx tsx
 /**
- * Interactive secret rotation script.
+ * Interactive secret setup for new Cogni node formation.
+ *
+ * Walks through every GitHub Actions secret needed for preview and production
+ * deploys. Agent-rotatable secrets are auto-generated; human-provided secrets
+ * show a URL to visit and prompt for the value.
  *
  * Usage:
- *   pnpm tsx scripts/rotate-secrets.ts
- *   pnpm tsx scripts/rotate-secrets.ts --required   # only required secrets
- *   pnpm tsx scripts/rotate-secrets.ts --stale       # only stale/missing secrets
- *   pnpm tsx scripts/rotate-secrets.ts --all         # walk through everything
+ *   pnpm setup:secrets                # walk through missing secrets
+ *   pnpm setup:secrets --required     # only required secrets
+ *   pnpm setup:secrets --all          # walk through everything (including already-set)
  */
 
 import { execSync } from "node:child_process";
@@ -655,8 +658,8 @@ function buildDSNs(): void {
 
 async function main() {
   const args = process.argv.slice(2);
+  const showAll = args.includes("--all");
   const filterRequired = args.includes("--required");
-  const filterStale = args.includes("--stale");
 
   const previewSecrets = getSetSecrets("preview");
   const prodSecrets = getSetSecrets("production");
@@ -665,7 +668,8 @@ async function main() {
   if (filterRequired) {
     filtered = filtered.filter((s) => s.required);
   }
-  if (filterStale) {
+  if (!showAll) {
+    // Default: only show secrets missing from at least one environment
     filtered = filtered.filter(
       (s) => !previewSecrets.has(s.name) || !prodSecrets.has(s.name)
     );
