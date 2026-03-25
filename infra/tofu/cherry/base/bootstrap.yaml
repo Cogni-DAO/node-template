@@ -136,7 +136,7 @@ write_files:
       # Inject GHCR PAT for private repo access (same token works for git + registry).
       AUTHED_URL=$(echo "${cogni_repo_url}" | sed "s|https://|https://${ghcr_deploy_username}:${ghcr_deploy_token}@|")
       git clone --depth=1 --branch "${cogni_repo_ref}" \
-        "$$AUTHED_URL" /tmp/cogni-repo
+        "$AUTHED_URL" /tmp/cogni-repo
 
       # Create argocd namespace + age key Secret BEFORE Argo CD install.
       # ksops sidecar mounts this Secret as a volume for decryption.
