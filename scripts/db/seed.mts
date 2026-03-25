@@ -738,8 +738,6 @@ async function seedLinkedUsersAndBindings(
 
 const SYSTEM_USER_ID = "00000000-0000-4000-a000-000000000001";
 const SYSTEM_BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
-/** Must match the literal used by scheduled-run.workflow.ts — NOT the UUID */
-const SYSTEM_REQUESTED_BY = "cogni_system";
 const GOVERNANCE_GRAPH_ID = "sandbox:openclaw";
 const GOVERNANCE_MODEL = "kimi-k2.5";
 
@@ -909,7 +907,7 @@ function generateScheduledRuns(params: {
       runKind: "system_scheduled",
       triggerSource: "temporal_schedule",
       triggerRef: params.temporalScheduleId,
-      requestedBy: SYSTEM_REQUESTED_BY,
+      requestedBy: SYSTEM_USER_ID,
       scheduledFor,
       startedAt,
       completedAt,
