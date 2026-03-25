@@ -12,8 +12,8 @@ spec_refs: ci-cd-spec, services-architecture-spec
 assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
-branch: feat/gitops-k3s-provisioning
-pr: 573
+branch: worktree-cicd-gap-analysis
+pr: 628
 reviewer:
 revision: 2
 blocked_by:
