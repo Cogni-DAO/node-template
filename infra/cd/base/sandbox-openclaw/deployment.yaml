@@ -46,7 +46,7 @@ spec:
             periodSeconds: 5
 
         - name: gateway
-          image: ghcr.io/cogni-dao/cogni-sandbox-openclaw:staging-placeholder
+          image: ghcr.io/cogni-dao/cogni-sandbox-openclaw
           ports:
             - containerPort: 18789
               name: gateway

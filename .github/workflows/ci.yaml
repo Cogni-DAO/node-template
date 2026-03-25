@@ -127,6 +127,9 @@ jobs:
       - name: GitOps service coverage
         run: pnpm check:gitops:coverage
 
+      - name: GitOps manifest render
+        run: pnpm check:gitops:manifests
+
       - name: Unit + contract coverage tests
         run: pnpm test:ci
 

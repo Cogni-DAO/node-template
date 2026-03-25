@@ -7,7 +7,7 @@
 # Invariants:
 #   - APP_IMAGE and DEPLOY_ENVIRONMENT must be set; secrets via env vars
 #   - Prunes BEFORE pull when free < 15GB or used > 70%
-#   - TARGETED_PULL: Only pull images that change per deploy (app, migrator, scheduler-worker, sandbox).
+#   - TARGETED_PULL: Only pull images that change per deploy (app, migrator).
 #     Static/pinned images (postgres, litellm, alloy, temporal, autoheal, nginx, git-sync, busybox)
 #     use local Docker cache. After prune they'll be pulled on next `compose up -d`.
 #   - SSH_KEEPALIVE: All SSH connections use ServerAliveInterval to survive long operations.
@@ -66,8 +66,7 @@ on_fail() {
     ssh $SSH_OPTS root@"$VM_HOST" "docker inspect --format='{{json .State.Health}}' cogni-runtime-litellm-1 2>&1 || true" || true
 
     echo ""
-    echo "=== logs: scheduler-worker ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 scheduler-worker 2>&1 || true" || true
+    # scheduler-worker logs: on k3s, use `kubectl -n cogni-staging logs deploy/scheduler-worker`
 
     echo ""
     echo "=== healthcheck history (all unhealthy/starting containers) ==="
