@@ -20,7 +20,6 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
-import { useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   type ReactNode,
@@ -83,11 +82,14 @@ export default function ChatPage(): ReactNode {
   const [chatError, setChatError] = useState<ChatError | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
 
-  // Thread switching state — initialize from ?thread= URL param for deep-linking
-  const searchParams = useSearchParams();
-  const [activeThreadKey, setActiveThreadKey] = useState<string | null>(
-    () => searchParams?.get("thread") ?? null
-  );
+  // Thread switching state — initialize from ?thread= URL param for deep-linking.
+  // Read from window.location at mount to avoid useSearchParams() which breaks
+  // Next.js static prerendering (requires Suspense boundary in server page wrapper).
+  const [activeThreadKey, setActiveThreadKey] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const url = new URL(window.location.href);
+    return url.searchParams.get("thread") ?? null;
+  });
 
   // Extract server-provided defaults (NO CLIENT INVENTION)
   const models = modelsQuery.data?.models ?? [];
