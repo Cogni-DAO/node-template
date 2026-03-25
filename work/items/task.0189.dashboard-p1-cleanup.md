@@ -14,7 +14,7 @@ assignees: []
 credit:
 project: proj.live-dashboard
 branch: task-0189-dashboard-p1-bridge
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/626
 reviewer:
 revision: 0
 blocked_by: []
