@@ -149,7 +149,9 @@ function setupSopsAge(env: string): void {
 
     const files = fs
       .readdirSync(secretsDir)
-      .filter((f: string) => f.endsWith(".enc.yaml") && !f.endsWith(".example"));
+      .filter(
+        (f: string) => f.endsWith(".enc.yaml") && !f.endsWith(".example")
+      );
     for (const file of files) {
       const fullPath = `${secretsDir}/${file}`;
       let content: string = fs.readFileSync(fullPath, "utf-8");
@@ -161,10 +163,7 @@ function setupSopsAge(env: string): void {
 
       // Fill REPLACE_WITH_ placeholders from collectedSecrets
       let replaced = 0;
-      const placeholderRe = new RegExp(
-        `REPLACE_WITH_${envLabel}_(\\w+)`,
-        "g"
-      );
+      const placeholderRe = new RegExp(`REPLACE_WITH_${envLabel}_(\\w+)`, "g");
       content = content.replace(placeholderRe, (_match, secretName: string) => {
         const val = collectedSecrets[secretName];
         if (val) {
@@ -208,7 +207,8 @@ function setupSopsAge(env: string): void {
   if (privKey) {
     const tofuEnv = env === "staging" ? "preview" : "production";
     const tfvarsPath = `${repoRoot}/infra/tofu/cherry/base/terraform.${tofuEnv}.auto.tfvars`;
-    const ghcrToken = collectedSecrets["GHCR_DEPLOY_TOKEN"] || "<PASTE_GHCR_PAT>";
+    const ghcrToken =
+      collectedSecrets["GHCR_DEPLOY_TOKEN"] || "<PASTE_GHCR_PAT>";
 
     // Read SSH private key if it exists locally
     const sshKeyPaths = [
@@ -220,7 +220,9 @@ function setupSopsAge(env: string): void {
       try {
         sshKey = require("fs").readFileSync(p, "utf-8");
         break;
-      } catch { /* try next */ }
+      } catch {
+        /* try next */
+      }
     }
 
     const content = [
@@ -229,13 +231,17 @@ function setupSopsAge(env: string): void {
       ``,
       `sops_age_private_key = "${privKey}"`,
       `ghcr_deploy_token    = "${ghcrToken}"`,
-      sshKey ? `ssh_private_key      = <<-EOT\n${sshKey}EOT` : `# ssh_private_key = "" # paste or set TF_VAR_ssh_private_key`,
+      sshKey
+        ? `ssh_private_key      = <<-EOT\n${sshKey}EOT`
+        : `# ssh_private_key = "" # paste or set TF_VAR_ssh_private_key`,
       ``,
     ].join("\n");
 
     require("fs").writeFileSync(tfvarsPath, content, { mode: 0o600 });
     console.log(`     ${GREEN}Wrote ${tfvarsPath}${RESET}`);
-    console.log(`     ${CYAN}tofu auto-loads this file — no source/export needed${RESET}`);
+    console.log(
+      `     ${CYAN}tofu auto-loads this file — no source/export needed${RESET}`
+    );
   }
 }
 
@@ -1271,10 +1277,7 @@ async function main() {
 
       if (alreadySet && showAll) {
         // --all on already-set agent secret: ask before overwriting
-        const action = await prompt(
-          rl,
-          `  Already set. Regenerate? [y/N] `
-        );
+        const action = await prompt(rl, `  Already set. Regenerate? [y/N] `);
         if (action.toLowerCase() !== "y") {
           // Not regenerating, but load from cache if available for SOPS templates
           if (collectedSecrets[secret.name]) {
