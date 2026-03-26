@@ -224,6 +224,16 @@ export interface RoleSpec {
     readonly types?: readonly string[];
   };
   readonly concurrency: number;
+  readonly kpis: readonly RoleKPI[];
+}
+
+/** What this role is measured on. Dashboard shows these per role. */
+export interface RoleKPI {
+  readonly metric: string; // machine-readable key
+  readonly name: string; // human-readable label
+  readonly target?: number; // target value (e.g., < 24 hours, > 0.9)
+  readonly unit: string; // "hours" | "ratio" | "count" | "usd"
+  readonly direction: "lower_is_better" | "higher_is_better";
 }
 
 export const CEO_ROLE: RoleSpec = {
@@ -234,6 +244,41 @@ export const CEO_ROLE: RoleSpec = {
   schedule: { cron: "0 * * * *" },
   queueFilter: {},
   concurrency: 1,
+  kpis: [
+    {
+      metric: "backlog_count",
+      name: "Backlog size",
+      unit: "count",
+      direction: "lower_is_better",
+    },
+    {
+      metric: "avg_item_age_hours",
+      name: "Avg item age",
+      target: 48,
+      unit: "hours",
+      direction: "lower_is_better",
+    },
+    {
+      metric: "items_completed_24h",
+      name: "Items completed (24h)",
+      unit: "count",
+      direction: "higher_is_better",
+    },
+    {
+      metric: "spend_24h_usd",
+      name: "LLM spend (24h)",
+      target: 5,
+      unit: "usd",
+      direction: "lower_is_better",
+    },
+    {
+      metric: "success_rate",
+      name: "Success rate",
+      target: 0.8,
+      unit: "ratio",
+      direction: "higher_is_better",
+    },
+  ],
 };
 
 export const GIT_REVIEWER_ROLE: RoleSpec = {
@@ -244,6 +289,42 @@ export const GIT_REVIEWER_ROLE: RoleSpec = {
   schedule: { cron: "0 */4 * * *" },
   queueFilter: { statuses: ["needs_merge"] },
   concurrency: 1,
+  kpis: [
+    {
+      metric: "open_prs",
+      name: "Open PRs",
+      unit: "count",
+      direction: "lower_is_better",
+    },
+    {
+      metric: "stale_prs_48h",
+      name: "PRs stale > 48h",
+      target: 0,
+      unit: "count",
+      direction: "lower_is_better",
+    },
+    {
+      metric: "median_pr_age_hours",
+      name: "Median PR age",
+      target: 24,
+      unit: "hours",
+      direction: "lower_is_better",
+    },
+    {
+      metric: "merge_rate_7d",
+      name: "Merge rate (7d)",
+      target: 0.7,
+      unit: "ratio",
+      direction: "higher_is_better",
+    },
+    {
+      metric: "spend_per_review_usd",
+      name: "Cost per review",
+      target: 0.5,
+      unit: "usd",
+      direction: "lower_is_better",
+    },
+  ],
 };
 ```
 
@@ -288,6 +369,7 @@ The new `git-reviewer` capability is complementary — it sweeps for stale PRs t
 - `FACTORY_SEAM`: `createOperatorGraph` wraps `createReactAgent`. LangChain v1 migration = single file.
 - `EXISTING_AGENTS_UNCHANGED`: `PrReviewWorkflow` + `pr-review` graph stay as-is.
 - `CONTEXT_STAYS_LEAN`: Activity inputs stored in Temporal history. Keep messages minimal.
+- `KPIS_PER_ROLE`: Every RoleSpec declares its KPIs. Dashboard shows actuals vs targets. An unmeasured agent is an unmanaged agent.
 
 ## Crawl / Walk / Run
 
