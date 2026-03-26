@@ -14,11 +14,7 @@
 import { defineConfig } from "tsup";
 
 export const tsupConfig = defineConfig({
-  entry: [
-    "src/index.ts",
-    "src/adapters/cli/index.ts",
-    "src/adapters/mock/index.ts",
-  ],
+  entry: ["src/index.ts", "src/adapters/mock/index.ts"],
   format: ["esm"],
   dts: true,
   clean: false,

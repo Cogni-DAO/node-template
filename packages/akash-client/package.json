@@ -10,11 +10,6 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./adapters/cli": {
-      "types": "./dist/adapters/cli/index.d.ts",
-      "import": "./dist/adapters/cli/index.js",
-      "default": "./dist/adapters/cli/index.js"
-    },
     "./adapters/mock": {
       "types": "./dist/adapters/mock/index.d.ts",
       "import": "./dist/adapters/mock/index.js",
@@ -32,7 +27,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cogni/cosmos-wallet": "workspace:*",
     "zod": "^3.24.0",
     "yaml": "^2.6.0"
   },

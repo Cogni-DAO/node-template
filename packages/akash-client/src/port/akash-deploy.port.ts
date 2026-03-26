@@ -22,7 +22,7 @@ import type {
 
 /**
  * Port for managing Akash Network deployments.
- * Adapters: AkashCliAdapter (shell out to `akash` CLI), MockAkashAdapter (testing).
+ * Adapters: MockAkashAdapter (testing), AkashSdkAdapter (P1, in services/).
  */
 export interface AkashDeployPort {
   /** Generate Akash SDL YAML from a crew configuration */
@@ -51,40 +51,4 @@ export interface AkashDeployPort {
     deploymentId: string,
     sdlYaml: string
   ): Promise<DeploymentInfo>;
-}
-
-/**
- * Implements ClusterProvider from node-launch spec using Akash SDL.
- * This is the bridge between the generic provisioning workflow and Akash-specific deployment.
- */
-export interface AkashClusterProvider {
-  /** Akash doesn't have clusters — returns RPC connection info */
-  ensureCluster(env: string): Promise<AkashConnection>;
-
-  /** Create a deployment (analogous to k8s namespace) */
-  createNamespace(
-    conn: AkashConnection,
-    name: string,
-    crew: CrewConfig
-  ): Promise<DeploymentInfo>;
-
-  /** Update deployment SDL */
-  applyManifests(
-    conn: AkashConnection,
-    deploymentId: string,
-    sdlYaml: string
-  ): Promise<void>;
-
-  /** Inject secrets as env vars in deployment */
-  createSecret(
-    conn: AkashConnection,
-    deploymentId: string,
-    data: Record<string, string>
-  ): Promise<void>;
-}
-
-export interface AkashConnection {
-  rpcEndpoint: string;
-  chainId: string;
-  walletAddress: string;
 }

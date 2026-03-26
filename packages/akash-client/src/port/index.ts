@@ -11,11 +11,7 @@
  * @public
  */
 
-export type {
-  AkashClusterProvider,
-  AkashConnection,
-  AkashDeployPort,
-} from "./akash-deploy.port.js";
+export type { AkashDeployPort } from "./akash-deploy.port.js";
 export type {
   AgentConfig,
   Bid,

@@ -14,8 +14,6 @@
 // Schema types
 export type {
   AgentConfig,
-  AkashClusterProvider,
-  AkashConnection,
   AkashDeployPort,
   Bid,
   CrewConfig,

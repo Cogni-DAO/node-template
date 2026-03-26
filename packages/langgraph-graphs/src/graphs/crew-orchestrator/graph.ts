@@ -7,13 +7,11 @@
  * Scope: Creates a React agent graph with crew deployment tools. Does NOT execute tools directly.
  * Invariants:
  *   - PURE_FACTORY: No side effects, no env reads
- *   - SINGLE_INVOKABLE_INTERFACE: Returns InvokableGraph<MessageGraphInput, MessageGraphOutput>
- *   - TOOL_CALLING_AGENT: Uses createReactAgent pattern with deployment tools
+ *   - TOOLS_VIA_DI: All capabilities received via options, not hard-imported
  * Side-effects: none
  * Links: docs/spec/akash-deploy-service.md
  */
 
-import type { AkashDeployPort } from "@cogni/akash-client";
 import type { LanguageModelLike } from "@langchain/core/language_models/base";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { CREW_ORCHESTRATOR_SYSTEM_PROMPT } from "./prompts.js";
@@ -24,35 +22,28 @@ import {
 
 export const CREW_ORCHESTRATOR_GRAPH_NAME = "crew-orchestrator" as const;
 
-export interface CreateCrewOrchestratorOptions {
-  llm: LanguageModelLike;
-  deployer: AkashDeployPort;
-}
-
 /**
- * Create the crew orchestrator graph.
+ * Options for creating the crew orchestrator graph.
+ * All Akash/registry capabilities come through `deps` — no hard imports.
  *
- * This is a React agent (tool-calling loop) that can:
- * - Parse natural language crew descriptions
- * - Resolve MCP servers from the registry
- * - Generate deployment plans with cost estimates
- * - Deploy crews to the Akash network
- * - Monitor deployment status
- *
- * Usage:
+ * Callers wire this from their runtime context:
  * ```ts
- * const graph = createCrewOrchestratorGraph({ llm: myLlm, deployer: myDeployer });
- * const result = await graph.invoke({
- *   messages: [{ role: "user", content: "Deploy a research crew with GitHub and filesystem MCP" }]
+ * import { resolveMcpServer, listRegisteredMcpServers, ... } from "@cogni/akash-client";
+ * const graph = createCrewOrchestratorGraph({
+ *   llm: myLlm,
+ *   deps: { deployer, resolveMcpServer, listRegisteredMcpServers, getRequiredEnv, getOAuthScopes },
  * });
  * ```
  */
+export interface CreateCrewOrchestratorOptions {
+  llm: LanguageModelLike;
+  deps: CrewOrchestratorToolDeps;
+}
+
 export function createCrewOrchestratorGraph(
   options: CreateCrewOrchestratorOptions
 ) {
-  const { llm, deployer } = options;
-
-  const deps: CrewOrchestratorToolDeps = { deployer };
+  const { llm, deps } = options;
   const tools = createCrewOrchestratorTools(deps);
 
   return createReactAgent({

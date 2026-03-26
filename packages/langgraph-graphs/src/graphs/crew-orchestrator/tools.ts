@@ -7,33 +7,102 @@
  * Scope: LangChain tool factories — pure functions returning tool instances. Does NOT invoke tools at creation time.
  * Invariants:
  *   - PURE_FACTORY: No side effects in tool creation (effects only when tools are called).
- *   - TOOLS_USE_PORT: All Akash operations go through AkashDeployPort.
+ *   - TOOLS_VIA_DI: All Akash + registry operations received via deps, not hard-imported.
  * Side-effects: IO
  * Links: docs/spec/akash-deploy-service.md
  * @internal
  */
 
-import type {
-  AkashDeployPort,
-  CrewConfig,
-  McpServerConfig,
-} from "@cogni/akash-client";
-import {
-  generateSdl,
-  getOAuthScopes,
-  getRequiredEnv,
-  listRegisteredMcpServers,
-  resolveMcpServer,
-} from "@cogni/akash-client";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 
+/** Minimal MCP server config shape (avoids hard import of @cogni/akash-client) */
+interface McpServerConfig {
+  name: string;
+  image: string;
+  transport: string;
+  port: number;
+  env: Record<string, string>;
+  resources: { cpu: number; memory: string; storage: string };
+  requiredAuth: string[];
+}
+
+/** Minimal crew config shape */
+interface CrewConfig {
+  name: string;
+  mission?: string;
+  mcpServers: McpServerConfig[];
+  agents: Array<{
+    name: string;
+    image: string;
+    soulMd?: string;
+    mcpConnections: string[];
+    env: Record<string, string>;
+    resources: { cpu: number; memory: string; storage: string };
+    exposeGlobal: boolean;
+  }>;
+  region: string;
+  maxBudgetUakt: string;
+}
+
+/** Minimal registry entry shape */
+interface McpRegistryEntrySummary {
+  name: string;
+  package: string;
+  requiredEnv: string[];
+  oauthScopes: string[];
+  resources: { cpu: number; memory: string; storage: string };
+}
+
+/** Minimal SDL output shape */
+interface SdlOutput {
+  yaml: string;
+  services: string[];
+  estimatedCostPerBlock: string;
+}
+
+/** Deployer port — matches AkashDeployPort but avoids hard import */
+interface DeployerPort {
+  generateSdl(crew: CrewConfig): SdlOutput;
+  createDeployment(sdlYaml: string): Promise<{
+    deploymentId: string;
+    status: string;
+  }>;
+  listBids(
+    deploymentId: string
+  ): Promise<Array<{ provider: string; price: { amount: string } }>>;
+  acceptBid(
+    deploymentId: string,
+    provider: string
+  ): Promise<{ leaseId?: string }>;
+  sendManifest(deploymentId: string, sdlYaml: string): Promise<void>;
+  getDeployment(deploymentId: string): Promise<Record<string, unknown>>;
+  closeDeployment(deploymentId: string): Promise<Record<string, unknown>>;
+}
+
+/**
+ * All external capabilities injected via DI.
+ * The graph package never hard-imports @cogni/akash-client.
+ */
 export interface CrewOrchestratorToolDeps {
-  deployer: AkashDeployPort;
+  deployer: DeployerPort;
+  resolveMcpServer: (
+    name: string,
+    envOverrides?: Record<string, string>
+  ) => McpServerConfig;
+  listRegisteredMcpServers: () => McpRegistryEntrySummary[];
+  getRequiredEnv: (name: string) => string[];
+  getOAuthScopes: (name: string) => string[];
 }
 
 export function createCrewOrchestratorTools(deps: CrewOrchestratorToolDeps) {
-  const { deployer } = deps;
+  const {
+    deployer,
+    resolveMcpServer,
+    listRegisteredMcpServers,
+    getRequiredEnv,
+    getOAuthScopes,
+  } = deps;
 
   const listMcpServersTool = new DynamicStructuredTool({
     name: "list_mcp_servers",
@@ -42,43 +111,29 @@ export function createCrewOrchestratorTools(deps: CrewOrchestratorToolDeps) {
     schema: z.object({}),
     func: async () => {
       const servers = listRegisteredMcpServers();
-      return JSON.stringify(
-        servers.map((s) => ({
-          name: s.name,
-          package: s.package,
-          requiredEnv: s.requiredEnv,
-          oauthScopes: s.oauthScopes,
-          resources: s.resources,
-        })),
-        null,
-        2
-      );
+      return JSON.stringify(servers, null, 2);
     },
   });
 
   const resolveMcpServersTool = new DynamicStructuredTool({
     name: "resolve_mcp_servers",
     description:
-      "Resolve MCP server names to container images and deployment configs. Returns image, port, required env vars, and OAuth scopes for each server.",
+      "Resolve MCP server names to container images and deployment configs.",
     schema: z.object({
       serverNames: z
         .array(z.string())
-        .describe(
-          "List of MCP server names to resolve (e.g., ['github', 'filesystem', 'postgres'])"
-        ),
+        .describe("List of MCP server names to resolve"),
     }),
     func: async ({ serverNames }) => {
       const resolved = serverNames.map((name) => {
         const config = resolveMcpServer(name);
-        const requiredEnv = getRequiredEnv(name);
-        const oauthScopes = getOAuthScopes(name);
         return {
           name,
           serviceName: config.name,
           image: config.image,
           port: config.port,
-          requiredEnv,
-          oauthScopes,
+          requiredEnv: getRequiredEnv(name),
+          oauthScopes: getOAuthScopes(name),
           resources: config.resources,
         };
       });
@@ -112,12 +167,8 @@ export function createCrewOrchestratorTools(deps: CrewOrchestratorToolDeps) {
         .describe("Agent definitions"),
     }),
     func: async ({ name, mission, mcpServerNames, agents }) => {
-      // Resolve MCP servers
-      const mcpServers: McpServerConfig[] = mcpServerNames.map((n) =>
-        resolveMcpServer(n)
-      );
+      const mcpServers = mcpServerNames.map((n) => resolveMcpServer(n));
 
-      // Build crew config
       const crewConfig: CrewConfig = {
         name,
         mission,
@@ -139,10 +190,8 @@ export function createCrewOrchestratorTools(deps: CrewOrchestratorToolDeps) {
         maxBudgetUakt: "1000000",
       };
 
-      // Generate SDL preview
-      const sdl = generateSdl(crewConfig);
+      const sdl = deployer.generateSdl(crewConfig);
 
-      // Collect auth requirements
       const authRequirements = mcpServerNames.flatMap((n) => {
         const envVars = getRequiredEnv(n);
         const scopes = getOAuthScopes(n);
@@ -170,16 +219,14 @@ export function createCrewOrchestratorTools(deps: CrewOrchestratorToolDeps) {
   const deployCrewTool = new DynamicStructuredTool({
     name: "deploy_crew",
     description:
-      "Deploy a planned crew to the Akash network. Requires all auth credentials to be provided. Returns deployment ID and status.",
+      "Deploy a planned crew to the Akash network. Requires all auth credentials to be provided.",
     schema: z.object({
       crewConfig: z
         .string()
         .describe("JSON-stringified CrewConfig from plan_crew output"),
       credentials: z
         .record(z.string())
-        .describe(
-          "Map of env var names to values (e.g., { GITHUB_TOKEN: 'ghp_...' })"
-        ),
+        .describe("Map of env var names to values"),
     }),
     func: async ({ crewConfig: crewConfigJson, credentials }) => {
       let crewConfig: CrewConfig;
@@ -201,13 +248,9 @@ export function createCrewOrchestratorTools(deps: CrewOrchestratorToolDeps) {
         }
       }
 
-      // Generate final SDL with credentials
       const sdl = deployer.generateSdl(crewConfig);
-
-      // Deploy
       const deployment = await deployer.createDeployment(sdl.yaml);
 
-      // Wait for bids and accept cheapest
       const bids = await deployer.listBids(deployment.deploymentId);
       if (bids.length > 0) {
         const sorted = bids.sort(
@@ -253,8 +296,7 @@ export function createCrewOrchestratorTools(deps: CrewOrchestratorToolDeps) {
 
   const closeDeploymentTool = new DynamicStructuredTool({
     name: "close_deployment",
-    description:
-      "Close/stop an Akash deployment. This releases the escrow and stops all containers.",
+    description: "Close/stop an Akash deployment.",
     schema: z.object({
       deploymentId: z.string().describe("Akash deployment ID to close"),
     }),

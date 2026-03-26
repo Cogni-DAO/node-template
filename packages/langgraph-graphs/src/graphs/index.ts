@@ -22,6 +22,7 @@ export {
   CREW_ORCHESTRATOR_GRAPH_NAME,
   createCrewOrchestratorGraph,
 } from "./crew-orchestrator/graph";
+export type { CrewOrchestratorToolDeps } from "./crew-orchestrator/tools";
 // Poet graph (poetic AI assistant)
 export { createPoetGraph, POET_GRAPH_NAME } from "./poet/graph";
 // Ponderer graph (philosophical thinker)

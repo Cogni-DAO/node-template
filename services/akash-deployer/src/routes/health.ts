@@ -19,14 +19,14 @@ export function handleLivez(_req: IncomingMessage, res: ServerResponse): void {
 }
 
 export function handleReadyz(_req: IncomingMessage, res: ServerResponse): void {
-  // TODO: Check Akash RPC connectivity, wallet balance, etc.
+  // v0 crawl: mock adapter, no real Akash RPC or wallet to check.
+  // P1: add real checks when AkashSdkAdapter is wired.
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(
     JSON.stringify({
       status: "ok",
       checks: {
-        akash_rpc: "ok",
-        wallet: "ok",
+        deployer: "mock",
       },
     })
   );
