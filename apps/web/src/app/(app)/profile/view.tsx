@@ -297,23 +297,19 @@ function ChatGptConnectFlow({
   const [phase, setPhase] = useState<"instructions" | "waiting" | "error">(
     "instructions"
   );
-  const [authData, setAuthData] = useState<{
-    url: string;
-    verifier: string;
-    state: string;
-  } | null>(null);
+  const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [pasteUrl, setPasteUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Get the auth URL + PKCE params on mount (but don't open anything yet)
+  // Get the auth URL on mount (PKCE verifier+state stored server-side in cookie)
   useEffect(() => {
     let cancelled = false;
     fetch("/api/v1/auth/openai-codex/authorize", { method: "POST" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.url && data?.verifier && data?.state && !cancelled) {
-          setAuthData(data);
+        if (data?.url && !cancelled) {
+          setAuthUrl(data.url);
         }
       })
       .catch(() => {
@@ -325,8 +321,8 @@ function ChatGptConnectFlow({
   }, []);
 
   const handleOpenAuth = () => {
-    if (!authData) return;
-    window.open(authData.url, "_blank");
+    if (!authUrl) return;
+    window.open(authUrl, "_blank");
     setPhase("waiting");
   };
 
@@ -335,14 +331,11 @@ function ChatGptConnectFlow({
     setSubmitting(true);
     setErrorMsg("");
     try {
+      // Only send the pasted URL — verifier+state are in the server-side cookie
       const res = await fetch("/api/v1/auth/openai-codex/exchange", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: pasteUrl.trim(),
-          verifier: authData?.verifier,
-          state: authData?.state,
-        }),
+        body: JSON.stringify({ url: pasteUrl.trim() }),
       });
       if (res.ok) {
         onComplete();
@@ -383,10 +376,10 @@ function ChatGptConnectFlow({
           <Button
             variant="outline"
             size="sm"
-            disabled={!authData}
+            disabled={!authUrl}
             onClick={handleOpenAuth}
           >
-            {authData ? "Open OpenAI" : "Loading..."}
+            {authUrl ? "Open OpenAI" : "Loading..."}
           </Button>
           <Button variant="ghost" size="sm" onClick={onCancel}>
             Cancel

@@ -59,6 +59,8 @@ export class DrizzleConnectionBrokerAdapter implements ConnectionBrokerPort {
   private readonly encryptionKeyId: string;
   private readonly log: Logger;
   private readonly refreshFns: Record<string, TokenRefreshFn>;
+  /** Per-connection mutex to prevent concurrent refresh races */
+  private readonly refreshLocks = new Map<string, Promise<CredentialBlob>>();
 
   constructor(config: DrizzleConnectionBrokerConfig) {
     this.db = config.db;
@@ -114,7 +116,7 @@ export class DrizzleConnectionBrokerAdapter implements ConnectionBrokerPort {
       throw new ConnectionDecryptionError(connectionId);
     }
 
-    // Check expiry and refresh if needed
+    // Check expiry and refresh if needed (with per-connection mutex)
     const expiresAt = blob.expires_at ? new Date(blob.expires_at) : null;
     if (
       expiresAt &&
@@ -123,13 +125,25 @@ export class DrizzleConnectionBrokerAdapter implements ConnectionBrokerPort {
     ) {
       const refreshFn = this.refreshFns[row.provider];
       if (refreshFn) {
-        blob = await this.refreshAndPersist(
-          connectionId,
-          row.billingAccountId,
-          row.provider,
-          blob,
-          refreshFn
-        );
+        const existing = this.refreshLocks.get(connectionId);
+        if (existing) {
+          // Another call is already refreshing — wait for its result
+          blob = await existing;
+        } else {
+          const refreshPromise = this.refreshAndPersist(
+            connectionId,
+            row.billingAccountId,
+            row.provider,
+            blob,
+            refreshFn
+          );
+          this.refreshLocks.set(connectionId, refreshPromise);
+          try {
+            blob = await refreshPromise;
+          } finally {
+            this.refreshLocks.delete(connectionId);
+          }
+        }
       }
     }
 

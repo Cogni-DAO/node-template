@@ -3,14 +3,15 @@
 
 /**
  * Module: `@app/api/v1/auth/openai-codex/exchange`
- * Purpose: Accept a pasted redirect URL + PKCE verifier, exchange for tokens, store connection.
- * Scope: POST endpoint. Client sends { url, verifier, state } from the authorize flow.
+ * Purpose: Accept a pasted redirect URL, read PKCE verifier from server cookie, exchange for tokens, store connection.
+ * Scope: POST endpoint. Client sends { url }. Verifier and state read from HttpOnly cookie set by /authorize.
  *   Validates state matches URL, exchanges code via PKCE, encrypts and stores connection.
  * Invariants:
- *   - PKCE_REQUIRED: Code exchange uses verifier from client (held in React state, same as OpenClaw CLI memory)
+ *   - PKCE_REQUIRED: Code exchange uses verifier from server-side cookie (never sent to client)
+ *   - STATE_SERVER_BOUND: State validated from cookie, not client body
  *   - ENCRYPTED_AT_REST: Tokens stored via AEAD with AAD binding
  *   - TOKENS_NEVER_LOGGED: No tokens in logs or responses
- * Side-effects: IO (HTTP token exchange, DB insert)
+ * Side-effects: IO (HTTP token exchange, DB insert, cookie consumed)
  * Links: docs/research/openai-oauth-byo-ai.md
  * @public
  */
@@ -19,14 +20,19 @@ import { randomUUID } from "node:crypto";
 import { connections } from "@cogni/db-schema";
 import type { UserId } from "@cogni/ids";
 import { and, eq, isNull } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { decode } from "next-auth/jwt";
 
+import { authSecret } from "@/auth";
 import { getContainer, resolveAppDb } from "@/bootstrap/container";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import { getServerSessionUser } from "@/lib/auth/server";
 import { aeadEncrypt } from "@/shared/crypto/aead";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
+
+import { CODEX_PKCE_COOKIE } from "../authorize/route";
 
 export const runtime = "nodejs";
 
@@ -42,20 +48,59 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Parse request body: { url, verifier, state }
-  let pastedUrl: string;
+  // Read PKCE verifier + state from server-side cookie
+  const cookieStore = await cookies();
+  const pkceCookieValue = cookieStore.get(CODEX_PKCE_COOKIE)?.value;
+  if (!pkceCookieValue) {
+    return NextResponse.json(
+      { error: "OAuth session expired — please try connecting again" },
+      { status: 400 }
+    );
+  }
+
+  // Consume the cookie (single-use)
+  cookieStore.delete({
+    name: CODEX_PKCE_COOKIE,
+    path: "/api/v1/auth/openai-codex",
+  });
+
   let verifier: string;
   let expectedState: string;
   try {
+    const decoded = await decode({
+      token: pkceCookieValue,
+      secret: authSecret,
+      salt: "codex-pkce",
+    });
+    if (
+      !decoded ||
+      decoded.purpose !== "codex_pkce" ||
+      decoded.userId !== session.id
+    ) {
+      return NextResponse.json(
+        { error: "Invalid OAuth session" },
+        { status: 400 }
+      );
+    }
+    verifier = decoded.verifier as string;
+    expectedState = decoded.state as string;
+  } catch {
+    return NextResponse.json(
+      { error: "OAuth session expired — please try connecting again" },
+      { status: 400 }
+    );
+  }
+
+  // Parse request body: { url }
+  let pastedUrl: string;
+  try {
     const body = await request.json();
     pastedUrl = body.url;
-    verifier = body.verifier;
-    expectedState = body.state;
   } catch {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  if (!pastedUrl || !verifier || !expectedState) {
+  if (!pastedUrl) {
     return NextResponse.json(
       { error: "Missing required fields" },
       { status: 400 }
@@ -67,6 +112,19 @@ export async function POST(request: Request) {
   let urlState: string;
   try {
     const parsed = new URL(pastedUrl);
+
+    // Validate URL origin matches expected redirect URI
+    const expectedOriginPath = new URL(OPENAI_REDIRECT_URI);
+    if (
+      parsed.origin !== expectedOriginPath.origin ||
+      parsed.pathname !== expectedOriginPath.pathname
+    ) {
+      return NextResponse.json(
+        { error: "URL does not match expected redirect" },
+        { status: 400 }
+      );
+    }
+
     code = parsed.searchParams.get("code") ?? "";
     urlState = parsed.searchParams.get("state") ?? "";
   } catch {
@@ -80,7 +138,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // Validate state matches
+  // Validate state from URL matches server-stored state
   if (urlState !== expectedState) {
     return NextResponse.json(
       { error: "State mismatch — please try connecting again" },

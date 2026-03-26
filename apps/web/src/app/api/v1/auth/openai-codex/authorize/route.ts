@@ -17,8 +17,11 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { encode } from "next-auth/jwt";
 
+import { authSecret } from "@/auth";
 import { getServerSessionUser } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
@@ -27,6 +30,11 @@ const OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
 // The public Codex client ID is locked to this exact redirect URI.
 const OPENAI_REDIRECT_URI = "http://localhost:1455/auth/callback";
+
+/** Cookie name for PKCE verifier+state (same pattern as link_intent) */
+export const CODEX_PKCE_COOKIE = "codex_pkce";
+const CODEX_PKCE_SALT = "codex-pkce";
+const CODEX_PKCE_TTL = 5 * 60; // 5 minutes
 
 export async function POST() {
   const session = await getServerSessionUser();
@@ -38,6 +46,24 @@ export async function POST() {
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const state = randomBytes(16).toString("hex");
+
+  // Store verifier + state server-side in signed cookie (never sent to client)
+  const pkceCookie = await encode({
+    token: { verifier, state, userId: session.id, purpose: "codex_pkce" },
+    secret: authSecret,
+    salt: CODEX_PKCE_SALT,
+    maxAge: CODEX_PKCE_TTL,
+  });
+
+  const cookieStore = await cookies();
+  cookieStore.set(CODEX_PKCE_COOKIE, pkceCookie, {
+    httpOnly: true,
+    // biome-ignore lint/style/noProcessEnv: auth infra runs before serverEnv() is available
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/v1/auth/openai-codex",
+    maxAge: CODEX_PKCE_TTL,
+  });
 
   const params = new URLSearchParams({
     response_type: "code",
@@ -51,9 +77,8 @@ export async function POST() {
     id_token_add_organizations: "true",
   });
 
+  // Only return the URL — verifier and state stay server-side
   return NextResponse.json({
     url: `${OPENAI_AUTHORIZE_URL}?${params.toString()}`,
-    verifier,
-    state,
   });
 }
