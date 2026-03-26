@@ -297,33 +297,28 @@ function ChatGptConnectFlow({
   const [phase, setPhase] = useState<"instructions" | "waiting" | "error">(
     "instructions"
   );
-  const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [pasteUrl, setPasteUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Get the auth URL on mount (PKCE verifier+state stored server-side in cookie)
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/v1/auth/openai-codex/authorize", { method: "POST" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.url && !cancelled) {
-          setAuthUrl(data.url);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setPhase("error");
+  // Fetch auth URL + set PKCE cookie on click (not on mount — strict mode double-mounts would overwrite the cookie)
+  const handleOpenAuth = async () => {
+    try {
+      const res = await fetch("/api/v1/auth/openai-codex/authorize", {
+        method: "POST",
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const handleOpenAuth = () => {
-    if (!authUrl) return;
-    window.open(authUrl, "_blank");
-    setPhase("waiting");
+      if (!res.ok) {
+        setPhase("error");
+        return;
+      }
+      const data = await res.json();
+      if (data?.url) {
+        window.open(data.url, "_blank");
+        setPhase("waiting");
+      }
+    } catch {
+      setPhase("error");
+    }
   };
 
   const handlePaste = async () => {
@@ -373,13 +368,8 @@ function ChatGptConnectFlow({
           <p>3. Paste it back here</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!authUrl}
-            onClick={handleOpenAuth}
-          >
-            {authUrl ? "Open OpenAI" : "Loading..."}
+          <Button variant="outline" size="sm" onClick={handleOpenAuth}>
+            Open OpenAI
           </Button>
           <Button variant="ghost" size="sm" onClick={onCancel}>
             Cancel
