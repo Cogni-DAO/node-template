@@ -20,6 +20,7 @@
 
 import type {
   ExecutionContext,
+  GraphFinal,
   GraphRunRequest,
   GraphRunResult,
 } from "@cogni/graph-execution-core";
@@ -28,7 +29,6 @@ import { LANGGRAPH_CATALOG } from "@cogni/langgraph-graphs";
 import {
   BillingEnrichmentGraphExecutorDecorator,
   BillingGraphExecutorDecorator,
-  BYOExecutorDecorator,
   type CompletionStreamFn,
   createLangGraphDevClient,
   InProcCompletionUnitAdapter,
@@ -117,20 +117,8 @@ export function createScopedGraphExecutor(params: {
 }): GraphExecutorPort {
   const container = getContainer();
 
-  // BYO decorator wraps the inner executor — if modelConnectionId is present,
-  // routes to ChatGPT backend; otherwise passes through to inner (LangGraph/LiteLLM).
-  // Stack ordering: BYO runs never reach the inner executor → no platform billing.
-  const innerWithByo = params.broker
-    ? new BYOExecutorDecorator(
-        params.executor,
-        params.broker,
-        params.billing.billingAccountId,
-        container.log
-      )
-    : params.executor;
-
   const enriched = new BillingEnrichmentGraphExecutorDecorator(
-    innerWithByo,
+    params.executor,
     params.billing
   );
 
@@ -156,13 +144,59 @@ export function createScopedGraphExecutor(params: {
 
   return {
     runGraph(req: GraphRunRequest, ctx?: ExecutionContext): GraphRunResult {
-      return runGraphWithScope({
-        executor: observed,
-        req,
-        ...(ctx ? { ctx } : {}),
-        billing: params.billing,
-        ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+      // No BYO connection — standard path
+      if (!req.modelConnectionId || !params.broker) {
+        return runGraphWithScope({
+          executor: observed,
+          req,
+          ...(ctx ? { ctx } : {}),
+          billing: params.billing,
+          ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+        });
+      }
+
+      // BYO path: resolve credentials async, then run graph with LlmService override.
+      // Graph runs normally (system prompt, tools, state) — only the LLM call swaps.
+      const broker = params.broker;
+      const connectionId = req.modelConnectionId;
+      let innerResult: GraphRunResult | undefined;
+      let resolveOuterFinal: ((v: GraphFinal) => void) | undefined;
+      const outerFinal = new Promise<GraphFinal>((r) => {
+        resolveOuterFinal = r;
       });
+
+      const stream = (async function* () {
+        const connection = await broker.resolve(
+          connectionId,
+          params.billing.billingAccountId
+        );
+        container.log.info(
+          { connectionId, provider: connection.provider },
+          "BYO connection resolved, swapping LlmService for this run"
+        );
+
+        const { CodexLlmAdapter } = await import(
+          "@/adapters/server/ai/codex/codex-llm.adapter"
+        );
+        const llmServiceOverride = new CodexLlmAdapter(connection);
+
+        innerResult = runGraphWithScope({
+          executor: observed,
+          req,
+          ...(ctx ? { ctx } : {}),
+          billing: params.billing,
+          ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+          llmServiceOverride,
+        });
+
+        yield* innerResult.stream;
+        // Forward inner final to outer
+        const f = await innerResult.final;
+        // biome-ignore lint/style/noNonNullAssertion: assigned synchronously in Promise constructor
+        resolveOuterFinal!(f);
+      })();
+
+      return { stream, final: outerFinal };
     },
   };
 }
@@ -182,12 +216,16 @@ export function runGraphWithScope(params: {
   readonly ctx?: ExecutionContext;
   readonly billing: BillingContext;
   readonly abortSignal?: AbortSignal;
+  readonly llmServiceOverride?: import("@/ports").LlmService;
 }): GraphRunResult {
   const { executor, req, ctx, billing } = params;
   return runInScope(
     {
       billing,
       ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+      ...(params.llmServiceOverride
+        ? { llmServiceOverride: params.llmServiceOverride }
+        : {}),
     },
     () => executor.runGraph(req, ctx)
   );

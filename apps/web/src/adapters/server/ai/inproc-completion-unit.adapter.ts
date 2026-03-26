@@ -186,10 +186,13 @@ export class InProcCompletionUnitAdapter {
           traceId,
         };
 
+        // BYO-AI: use per-run override if present, otherwise default adapter
+        const llmService = scope.llmServiceOverride ?? this.deps.llmService;
+
         completionPromiseHolder.promise = this.completionStream({
           messages,
           model,
-          llmService: this.deps.llmService,
+          llmService,
           accountService: this.deps.accountService,
           clock: this.deps.clock,
           caller,

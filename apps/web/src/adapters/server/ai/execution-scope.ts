@@ -16,7 +16,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type { BillingContext } from "@/ports";
+import type { BillingContext, LlmService } from "@/ports";
 
 /**
  * Per-run execution scope set by the launcher, read by static inner providers.
@@ -28,6 +28,8 @@ export interface ExecutionScope {
   readonly billing: BillingContext;
   /** Chat-only temporary tech debt — browser disconnect, not durable cancellation. */
   readonly abortSignal?: AbortSignal;
+  /** BYO-AI: per-run LlmService override (e.g. CodexLlmAdapter). Read by InProcCompletionUnitAdapter. */
+  readonly llmServiceOverride?: LlmService;
 }
 
 const executionScopeStorage = new AsyncLocalStorage<ExecutionScope>();
