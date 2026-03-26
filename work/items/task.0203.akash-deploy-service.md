@@ -13,7 +13,7 @@ assignees: [derekg1729]
 credit:
 project: proj.akash-crew-deploy
 branch: feat/akash-deploy-service
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/638
 reviewer:
 revision: 0
 blocked_by:
