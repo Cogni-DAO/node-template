@@ -70,10 +70,7 @@ function buildMcpService(
         {
           port: mcp.port,
           proto: "tcp",
-          to:
-            consumers.length > 0
-              ? consumers
-              : [{ global: false } as SdlExposeTo],
+          to: consumers,
         },
       ],
     },

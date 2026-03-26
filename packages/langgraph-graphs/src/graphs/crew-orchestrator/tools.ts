@@ -182,7 +182,15 @@ export function createCrewOrchestratorTools(deps: CrewOrchestratorToolDeps) {
         ),
     }),
     func: async ({ crewConfig: crewConfigJson, credentials }) => {
-      const crewConfig = JSON.parse(crewConfigJson) as CrewConfig;
+      let crewConfig: CrewConfig;
+      try {
+        crewConfig = JSON.parse(crewConfigJson) as CrewConfig;
+      } catch {
+        return JSON.stringify({
+          error:
+            "Invalid crewConfig JSON. Please provide valid JSON from plan_crew output.",
+        });
+      }
 
       // Inject credentials into MCP server env vars
       for (const mcp of crewConfig.mcpServers) {

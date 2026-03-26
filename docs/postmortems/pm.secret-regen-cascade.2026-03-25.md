@@ -6,7 +6,8 @@ status: draft
 trust: draft
 severity: SEV2
 duration: "~6 hours (and counting for production)"
-services_affected: [preview, production, db-provision, db-migrate, app, scheduler-worker]
+services_affected:
+  [preview, production, db-provision, db-migrate, app, scheduler-worker]
 summary: "Running `pnpm setup:secrets --all` regenerated DB passwords with URL-unsafe characters and missing sslmode param, breaking both preview and production deploys across 3 independent failure modes."
 read_when: "Modifying setup-secrets.ts, regenerating secrets, provisioning new VMs, debugging deploy failures"
 owner: derekg1729
@@ -36,27 +37,27 @@ No data was lost (VMs were fresh). Preview is now deploying successfully. Produc
 
 ## Timeline
 
-| Time (UTC) | Event |
-| --- | --- |
-| ~2026-03-25 19:00 | `pnpm setup:secrets --all` run during PR #628 work — regenerates all secrets |
-| ~2026-03-25 19:30 | Old VMs destroyed, new VMs provisioned via `tofu apply` |
-| 2026-03-25 21:53 | Production deploy (`23566056549`) fails: `password authentication failed` + `ERR_INVALID_URL` on `BW+65+lgnbu6xN+tUd3itu+BJbp68pn/` |
-| 2026-03-25 ~22:00 | Root cause #1 identified: base64 `+`/`/` in passwords break URL parser |
-| 2026-03-25 ~22:00 | Fix committed: `d22f8b00` — `setup-secrets.ts` changed from `rand64()` to `randHex()` |
-| 2026-03-26 01:10 | Manual remediation: hex passwords set via `gh secret set` — but `APP_DB_PASSWORD` and `DATABASE_URL` set independently with different values |
-| 2026-03-26 01:35 | Preview deploy fails: `password authentication failed` at `db-provision` — passwords desynced |
-| 2026-03-26 01:50 | Root cause #2 identified: `APP_DB_PASSWORD` != password embedded in `DATABASE_URL` |
-| 2026-03-26 01:50 | Fix: regenerate synced passwords — single hex value used in both `APP_DB_PASSWORD` and `DATABASE_URL` |
-| 2026-03-26 01:52 | VMs wiped (`docker compose down -v`) but Postgres volume survives (edge containers hold references) |
-| 2026-03-26 02:03 | Re-run of old production workflow still shows old base64 password — likely because `docker compose up -d` doesn't restart containers when only `.env` values change |
-| 2026-03-26 02:16 | Preview deploy fails: Postgres volume retained old password baked into data dir |
-| 2026-03-26 02:20 | Full nuclear wipe: `docker stop + rm -f + volume rm` on both VMs |
-| 2026-03-26 02:40 | Preview deploy: DB provision OK, migration OK, scheduler-worker OK |
-| 2026-03-26 02:44 | Preview deploy fails: `DATABASE_URL points to non-localhost host but is missing sslmode= parameter` |
-| 2026-03-26 02:45 | Root cause #3 identified: `buildDSNs()` in `setup-secrets.ts` omits `?sslmode=disable` |
-| 2026-03-26 02:50 | Fix: manually append `?sslmode=disable` to `DATABASE_URL` and `DATABASE_SERVICE_URL` secrets for both envs |
-| 2026-03-26 ~03:15 | Preview deploy succeeds |
-| 2026-03-26 ~03:15 | Production deploy pending — needs fresh workflow trigger on `main` |
+| Time (UTC)        | Event                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~2026-03-25 19:00 | `pnpm setup:secrets --all` run during PR #628 work — regenerates all secrets                                                                                        |
+| ~2026-03-25 19:30 | Old VMs destroyed, new VMs provisioned via `tofu apply`                                                                                                             |
+| 2026-03-25 21:53  | Production deploy (`23566056549`) fails: `password authentication failed` + `ERR_INVALID_URL` on `BW+65+lgnbu6xN+tUd3itu+BJbp68pn/`                                 |
+| 2026-03-25 ~22:00 | Root cause #1 identified: base64 `+`/`/` in passwords break URL parser                                                                                              |
+| 2026-03-25 ~22:00 | Fix committed: `d22f8b00` — `setup-secrets.ts` changed from `rand64()` to `randHex()`                                                                               |
+| 2026-03-26 01:10  | Manual remediation: hex passwords set via `gh secret set` — but `APP_DB_PASSWORD` and `DATABASE_URL` set independently with different values                        |
+| 2026-03-26 01:35  | Preview deploy fails: `password authentication failed` at `db-provision` — passwords desynced                                                                       |
+| 2026-03-26 01:50  | Root cause #2 identified: `APP_DB_PASSWORD` != password embedded in `DATABASE_URL`                                                                                  |
+| 2026-03-26 01:50  | Fix: regenerate synced passwords — single hex value used in both `APP_DB_PASSWORD` and `DATABASE_URL`                                                               |
+| 2026-03-26 01:52  | VMs wiped (`docker compose down -v`) but Postgres volume survives (edge containers hold references)                                                                 |
+| 2026-03-26 02:03  | Re-run of old production workflow still shows old base64 password — likely because `docker compose up -d` doesn't restart containers when only `.env` values change |
+| 2026-03-26 02:16  | Preview deploy fails: Postgres volume retained old password baked into data dir                                                                                     |
+| 2026-03-26 02:20  | Full nuclear wipe: `docker stop + rm -f + volume rm` on both VMs                                                                                                    |
+| 2026-03-26 02:40  | Preview deploy: DB provision OK, migration OK, scheduler-worker OK                                                                                                  |
+| 2026-03-26 02:44  | Preview deploy fails: `DATABASE_URL points to non-localhost host but is missing sslmode= parameter`                                                                 |
+| 2026-03-26 02:45  | Root cause #3 identified: `buildDSNs()` in `setup-secrets.ts` omits `?sslmode=disable`                                                                              |
+| 2026-03-26 02:50  | Fix: manually append `?sslmode=disable` to `DATABASE_URL` and `DATABASE_SERVICE_URL` secrets for both envs                                                          |
+| 2026-03-26 ~03:15 | Preview deploy succeeds                                                                                                                                             |
+| 2026-03-26 ~03:15 | Production deploy pending — needs fresh workflow trigger on `main`                                                                                                  |
 
 ## Root Cause
 
@@ -139,12 +140,12 @@ No data was lost (VMs were fresh). Preview is now deploying successfully. Produc
 
 ## Action Items
 
-| Pri | Action | Owner | Work Item |
-| --- | ------ | ----- | --------- |
-| P0 | `buildDSNs()` must append `?sslmode=disable` to constructed DATABASE_URLs | derekg1729 | bug.0199 |
-| P1 | Add `setup:secrets --dry-run` validation: URL-parseable, sslmode present, passwords match DSNs | derekg1729 | bug.0200 |
-| P1 | Eliminate `APP_DB_*` component secrets — DSN-only provisioning | derekg1729 | (proj.database-ops P3) |
-| P2 | Document: after secret changes, containers must be recreated (not just restarted) for new `.env` values to take effect. Trigger fresh deploys, not re-runs. | derekg1729 | bug.0201 |
+| Pri | Action                                                                                                                                                      | Owner      | Work Item              |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------- |
+| P0  | `buildDSNs()` must append `?sslmode=disable` to constructed DATABASE_URLs                                                                                   | derekg1729 | bug.0199               |
+| P1  | Add `setup:secrets --dry-run` validation: URL-parseable, sslmode present, passwords match DSNs                                                              | derekg1729 | bug.0200               |
+| P1  | Eliminate `APP_DB_*` component secrets — DSN-only provisioning                                                                                              | derekg1729 | (proj.database-ops P3) |
+| P2  | Document: after secret changes, containers must be recreated (not just restarted) for new `.env` values to take effect. Trigger fresh deploys, not re-runs. | derekg1729 | bug.0201               |
 
 ## Related
 

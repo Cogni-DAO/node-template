@@ -137,37 +137,37 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 
 **Goal:** Affected-only CI via Nx, per-PR preview environments on shared k3s, agent-safe preview/test workflows. Build once, promote by digest. Agents interact through narrow APIs, no raw infra access.
 
-| Deliverable                                                                      | Status      | Est | Work Item  |
-| -------------------------------------------------------------------------------- | ----------- | --- | ---------- |
-| Nx targets for build/test/lint per package/service                               | Not Started | 2   | task.0201  |
-| `nx affected` in CI — only build/test what changed                               | Not Started | 2   | task.0201  |
-| ApplicationSet generator for per-PR preview namespaces                           | Not Started | 3   | task.0201  |
-| Wildcard DNS + Ingress for preview URLs                                          | Not Started | 1   | task.0201  |
-| ResourceQuota + LimitRange per preview namespace                                 | Not Started | 1   | task.0201  |
-| TTL cleanup on PR close / 48h expiry                                             | Not Started | 1   | task.0201  |
-| Targeted smoke/integration tests against preview                                 | Not Started | 2   | task.0201  |
-| Report preview URL + test status to GitHub PR                                    | Not Started | 1   | task.0201  |
-| Migrate Next.js app to k3s (retire Compose entirely)                             | Not Started | 3   | —          |
-| Move runtime secrets to cluster-side management (ESO or equivalent)              | Not Started | 3   | task.0200  |
+| Deliverable                                                         | Status      | Est | Work Item |
+| ------------------------------------------------------------------- | ----------- | --- | --------- |
+| Nx targets for build/test/lint per package/service                  | Not Started | 2   | task.0201 |
+| `nx affected` in CI — only build/test what changed                  | Not Started | 2   | task.0201 |
+| ApplicationSet generator for per-PR preview namespaces              | Not Started | 3   | task.0201 |
+| Wildcard DNS + Ingress for preview URLs                             | Not Started | 1   | task.0201 |
+| ResourceQuota + LimitRange per preview namespace                    | Not Started | 1   | task.0201 |
+| TTL cleanup on PR close / 48h expiry                                | Not Started | 1   | task.0201 |
+| Targeted smoke/integration tests against preview                    | Not Started | 2   | task.0201 |
+| Report preview URL + test status to GitHub PR                       | Not Started | 1   | task.0201 |
+| Migrate Next.js app to k3s (retire Compose entirely)                | Not Started | 3   | —         |
+| Move runtime secrets to cluster-side management (ESO or equivalent) | Not Started | 3   | task.0200 |
 
 #### P3: Scaling Infrastructure
 
 **Goal:** Supply chain security + escape hatches for hypergrowth. **Trigger:** Do NOT build preemptively — activate when load signals hit thresholds below.
 
-| Deliverable                                                          | Status      | Est | Trigger                                           | Work Item |
-| -------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------- | --------- |
-| Enable cosign keyless signing in CI                                  | Not Started | 2   | Before first external user                        | —         |
-| Argo CD: Require signature verification before sync                  | Not Started | 2   | After cosign enabled                              | —         |
-| Optional: Argo Rollouts for canary/blue-green                        | Not Started | 2   | >1 production incident from bad deploy            | —         |
-| Horizontal Pod Autoscaler (HPA) for scheduler-worker + app           | Not Started | 2   | >10 concurrent LLM requests per replica           | —         |
-| Multi-node k3s cluster (add worker nodes via OpenTofu)               | Not Started | 2   | Single-node CPU >70% sustained 30min              | —         |
-| Managed Postgres migration (Neon/RDS/Supabase)                       | Not Started | 3   | >100 concurrent DB connections OR backup pain     | —         |
-| LiteLLM horizontal scaling (multiple replicas behind K8s Service)    | Not Started | 2   | LLM queue depth >50 OR p99 latency >30s           | —         |
-| CDN + global load balancer (Cloudflare in front of k8s Ingress)      | Not Started | 2   | Geographic latency complaints OR >1000 req/s      | —         |
-| Managed Kubernetes migration (k3s → EKS/GKE)                         | Not Started | 3   | Multi-node k3s operational burden OR >5 nodes     | —         |
-| Temporal Cloud migration (self-hosted → Temporal Cloud)              | Not Started | 2   | >1000 workflows/day OR Temporal ops burden        | —         |
+| Deliverable                                                          | Status      | Est | Trigger                                           | Work Item      |
+| -------------------------------------------------------------------- | ----------- | --- | ------------------------------------------------- | -------------- |
+| Enable cosign keyless signing in CI                                  | Not Started | 2   | Before first external user                        | —              |
+| Argo CD: Require signature verification before sync                  | Not Started | 2   | After cosign enabled                              | —              |
+| Optional: Argo Rollouts for canary/blue-green                        | Not Started | 2   | >1 production incident from bad deploy            | —              |
+| Horizontal Pod Autoscaler (HPA) for scheduler-worker + app           | Not Started | 2   | >10 concurrent LLM requests per replica           | —              |
+| Multi-node k3s cluster (add worker nodes via OpenTofu)               | Not Started | 2   | Single-node CPU >70% sustained 30min              | —              |
+| Managed Postgres migration (Neon/RDS/Supabase)                       | Not Started | 3   | >100 concurrent DB connections OR backup pain     | —              |
+| LiteLLM horizontal scaling (multiple replicas behind K8s Service)    | Not Started | 2   | LLM queue depth >50 OR p99 latency >30s           | —              |
+| CDN + global load balancer (Cloudflare in front of k8s Ingress)      | Not Started | 2   | Geographic latency complaints OR >1000 req/s      | —              |
+| Managed Kubernetes migration (k3s → EKS/GKE)                         | Not Started | 3   | Multi-node k3s operational burden OR >5 nodes     | —              |
+| Temporal Cloud migration (self-hosted → Temporal Cloud)              | Not Started | 2   | >1000 workflows/day OR Temporal ops burden        | —              |
 | External Secrets Operator (ESO → Vault/GCP Secret Manager)           | Not Started | 2   | Multi-cluster OR secret rotation requirement      | task.0200 (P2) |
-| Queue-based LLM decoupling (HTTP intake → queue → worker → callback) | Not Started | 3   | LLM calls >30s blocking HTTP connections at scale | —         |
+| Queue-based LLM decoupling (HTTP intake → queue → worker → callback) | Not Started | 3   | LLM calls >30s blocking HTTP connections at scale | —              |
 
 **Key principle:** Kustomize manifests written in P1 are portable — same bases work on k3s, EKS, and GKE. Argo CD works everywhere. No migration rewrites, only overlay changes.
 

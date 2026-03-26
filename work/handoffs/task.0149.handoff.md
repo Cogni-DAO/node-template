@@ -24,6 +24,7 @@ The branch has all code changes done and reviewed. Deployment was attempted but 
 The user is restoring preview and production VMs using staging's known-working Compose-only bootstrap. This does NOT use the gitops branch — it uses staging's existing `bootstrap.yaml` (Docker + Compose only, no k3s).
 
 To apply from staging:
+
 ```bash
 cd infra/tofu/cherry/base
 source ../../../../.env.deployments && export CHERRY_AUTH_TOKEN
@@ -36,12 +37,14 @@ After preview is stable, switch workspace and apply production.
 ## What Was Built (All on This Branch)
 
 ### Infrastructure
+
 - `infra/tofu/cherry/base/bootstrap.yaml` — cloud-init installs Docker + k3s + Argo CD + ksops
 - `infra/tofu/cherry/base/main.tf` — `templatefile()` for GHCR token, SOPS key, repo ref injection
 - `infra/tofu/cherry/base/variables.tf` — new vars: `ghcr_deploy_token`, `sops_age_private_key`, `cogni_repo_url`, `cogni_repo_ref`
 - Both tfvars upgraded to `B1-4-4gb-80s-shared` (4GB RAM required for k3s + Argo CD)
 
 ### Kustomize Manifests
+
 - `infra/cd/base/scheduler-worker/` — Deployment, Service, ConfigMap, EndpointSlices (127.0.0.1 for single-VM)
 - `infra/cd/base/sandbox-openclaw/` — 2-container pod (nginx proxy + gateway), ported from PR #625
 - `infra/cd/overlays/{staging,production}/{service}/` — per-service, per-env patches
@@ -51,6 +54,7 @@ After preview is stable, switch workspace and apply production.
 - `infra/cd/gitops-service-catalog.json` — scheduler-worker + sandbox-openclaw managed, sandbox-runtime deferred
 
 ### Secrets
+
 - SOPS/age keypairs generated, stored at `~/.cogni/{staging,production}-age-key.txt`
 - `.sops.yaml` has real public keys (committed on this branch)
 - `infra/cd/secrets/{staging,production}/*.enc.yaml` — encrypted with real values (committed)
@@ -58,6 +62,7 @@ After preview is stable, switch workspace and apply production.
 - `scripts/setup-secrets.ts` — SOPS_AGE_KEY integrated into existing secrets catalog
 
 ### CI Changes
+
 - `scripts/ci/promote-k8s-image.sh` — updates overlay digest, commits with `[skip ci]`
 - `scripts/ci/check-gitops-manifests.sh` + `check-gitops-service-coverage.sh` — CI validation
 - `staging-preview.yml` — promote step after push
@@ -66,6 +71,7 @@ After preview is stable, switch workspace and apply production.
 - `docker-compose.yml` — services removed (only in `docker-compose.dev.yml` for local dev/CI)
 
 ### Documentation
+
 - `docs/runbooks/DEPLOYMENT_ARCHITECTURE.md` — rewritten for dual-runtime
 - `docs/runbooks/INFRASTRUCTURE_SETUP.md` — k3s vars in provisioning steps
 - `docs/guides/create-service.md` — k8s manifest steps replace Compose guidance
@@ -74,6 +80,7 @@ After preview is stable, switch workspace and apply production.
 - All AGENTS.md files updated
 
 ### Follow-up Tasks (Filed)
+
 - `task.0200` — Move runtime secrets to cluster-side management (ESO)
 - `task.0201` — Nx targeted builds + per-PR preview environments
 
@@ -94,6 +101,7 @@ After preview is stable, switch workspace and apply production.
 ## Known Risks for Next Deploy Attempt
 
 ### Cherry Servers Gotchas
+
 - VMs in "Provisioning" state cannot be deleted via portal (API returns 204 but doesn't terminate)
 - Cherry shared VPS provisioning takes 5-20 minutes — not a code bug
 - Killed tofu processes leave orphaned VMs — Cherry doesn't deduplicate by hostname
@@ -101,9 +109,11 @@ After preview is stable, switch workspace and apply production.
 - Always verify 0 servers on Cherry before applying: `curl -s -H "Authorization: Bearer $TOKEN" "https://api.cherryservers.com/v1/projects/254586/servers" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))"`
 
 ### Bootstrap Sequence
+
 Cloud-init runs: Docker → k3s → git clone (needs GHCR PAT for private repo) → argocd namespace → SOPS age key secret → Argo CD base install → wait for server → ksops CMP → patch repo-server → ApplicationSet. Total ~10 min after VM is active.
 
 ### Secret State
+
 - GitHub Actions secrets were regenerated (all agent secrets have new random values)
 - `GH_WEBHOOK_SECRET` was regenerated — needs re-sync to both GitHub Apps (values in `~/.cogni/secret-values.json`)
 - `GHCR_DEPLOY_TOKEN` set in GitHub repo secrets (read-only PAT, packages:read scope)
@@ -111,11 +121,13 @@ Cloud-init runs: Docker → k3s → git clone (needs GHCR PAT for private repo) 
 - Preview and production have SEPARATE webhook secrets now (set via `gh secret set` per-env)
 
 ### Tofu State
+
 - Preview workspace exists with SSH key 13815 imported
 - Production workspace may need creation (`tofu workspace new production`)
 - `.auto.tfvars` files were deleted for staging compatibility — recreate from `~/.cogni/` cache when returning to this branch
 
 ### What the Next Agent Must Do
+
 1. Ensure preview + production are stable on staging's Compose deploy first
 2. Then switch to this branch, recreate `.auto.tfvars` from cached values
 3. Apply to a FRESH Cherry VM (verify 0 servers first)

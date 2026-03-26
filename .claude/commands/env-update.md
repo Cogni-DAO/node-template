@@ -5,6 +5,7 @@ description: Guide for propagating environment variables across the stack
 You've just added a new environment variable. The propagation path depends on **which service consumes it**.
 
 Two runtimes exist on the same VM:
+
 - **Compose infrastructure** (app, postgres, temporal, litellm, caddy) — env vars via deploy.sh + SSH
 - **k3s services** (scheduler-worker, sandbox-openclaw) — env vars via Kustomize ConfigMap or SOPS Secret
 
@@ -51,10 +52,12 @@ Use this checklist to verify you haven't missed anything.
 ### 5B. k3s / Argo CD Deploy Path (GitOps)
 
 Non-secret config:
+
 - [ ] **`infra/cd/base/{service}/configmap.yaml`**: Add key+value to ConfigMap data.
 - [ ] **`infra/cd/overlays/{env}/{service}/kustomization.yaml`**: Add overlay patch if value differs per environment.
 
 Secret values:
+
 - [ ] **`infra/cd/secrets/{env}/{service}.enc.yaml.example`**: Add key with `REPLACE_WITH_{ENV}_{SECRET_NAME}` placeholder to the template.
 - [ ] **`infra/cd/secrets/{env}/{service}.enc.yaml`**: Fill real value, re-encrypt with `sops --config infra/cd/secrets/.sops.yaml --encrypt --in-place <file>`.
 - [ ] **`scripts/setup-secrets.ts`**: If it's an agent-generated secret, add to the SECRETS catalog so `setup:secrets` auto-generates and populates it. If human-provided, add with `source: "human"`.

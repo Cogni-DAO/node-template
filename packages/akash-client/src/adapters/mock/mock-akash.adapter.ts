@@ -21,18 +21,17 @@ import type {
 } from "../../port/akash-deploy.schemas.js";
 import { generateSdl } from "../../sdl/sdl-generator.js";
 
-let deploymentCounter = 1000;
-
 export class MockAkashAdapter implements AkashDeployPort {
   readonly deployments = new Map<string, DeploymentInfo>();
   readonly sdls = new Map<string, string>();
+  private deploymentCounter = 1000;
 
   generateSdl(crew: CrewConfig): SdlOutput {
     return generateSdl(crew);
   }
 
   async createDeployment(sdlYaml: string): Promise<DeploymentInfo> {
-    const dseq = (++deploymentCounter).toString();
+    const dseq = (++this.deploymentCounter).toString();
     const deploymentId = `akash1mock000000000000000000000000000/${dseq}`;
     const now = new Date().toISOString();
 
@@ -163,6 +162,6 @@ export class MockAkashAdapter implements AkashDeployPort {
   reset(): void {
     this.deployments.clear();
     this.sdls.clear();
-    deploymentCounter = 1000;
+    this.deploymentCounter = 1000;
   }
 }
