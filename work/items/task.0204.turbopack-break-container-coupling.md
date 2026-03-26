@@ -13,7 +13,7 @@ spec_refs:
 project:
 assignees: derekg1729
 credit:
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/635
 reviewer:
 branch: fix/turbopack-dev-memory
 revision: 1
