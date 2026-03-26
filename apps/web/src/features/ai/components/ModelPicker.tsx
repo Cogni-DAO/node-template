@@ -118,12 +118,23 @@ export function ModelPicker({
       .catch(() => {});
   }, []);
 
+  // Track last-used model per backend so switching back restores selection
+  const [lastOpenRouterModel, setLastOpenRouterModel] = useState(value);
+
   const handleBackendChange = (b: LlmBackend) => {
     setBackend(b);
     onModelConnectionChange?.(b === "chatgpt" ? connectionId : undefined);
+    if (b === "chatgpt") {
+      setLastOpenRouterModel(value);
+      onValueChange(CHATGPT_MODELS[0].id);
+    } else {
+      onValueChange(lastOpenRouterModel);
+    }
   };
 
-  const selectedModel = models.find((m) => m.id === value);
+  const isChatGptModel = CHATGPT_MODELS.some((m) => m.id === value);
+  const selectedOpenRouterModel = models.find((m) => m.id === value);
+  const selectedChatGptModel = CHATGPT_MODELS.find((m) => m.id === value);
   const filteredModels = models.filter((model) => {
     const query = searchQuery.toLowerCase();
     return (
@@ -132,11 +143,12 @@ export function ModelPicker({
     );
   });
 
-  // Format model name for display
   const displayName =
-    backend === "chatgpt"
-      ? "ChatGPT"
-      : selectedModel?.name || selectedModel?.id || "Select model";
+    backend === "chatgpt" && isChatGptModel
+      ? selectedChatGptModel!.name
+      : selectedOpenRouterModel?.name ||
+        selectedOpenRouterModel?.id ||
+        "Select model";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
