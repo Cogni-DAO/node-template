@@ -13,10 +13,10 @@
  * Usage: pnpm codex:seed-connection
  */
 
-import { randomBytes, randomUUID, createCipheriv } from "node:crypto";
-import { existsSync, readFileSync, appendFileSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import postgres from "postgres";
 
 const ENV_FILE = resolve(import.meta.dirname, "../../.env.local");
@@ -94,14 +94,18 @@ async function main() {
 
   try {
     // Find or create a user + billing account for local dev
-    let accounts = await sql`SELECT id, owner_user_id FROM billing_accounts WHERE is_system_tenant = false LIMIT 1`;
+    let accounts =
+      await sql`SELECT id, owner_user_id FROM billing_accounts WHERE is_system_tenant = false LIMIT 1`;
     if (accounts.length === 0) {
-      console.log("No user billing accounts found — provisioning local dev user...");
+      console.log(
+        "No user billing accounts found — provisioning local dev user..."
+      );
       const devUserId = `dev-${randomUUID().slice(0, 8)}`;
       const devBaId = `ba-${randomUUID().slice(0, 8)}`;
       await sql`INSERT INTO users (id, name, email) VALUES (${devUserId}, 'Local Dev', 'dev@localhost') ON CONFLICT DO NOTHING`;
       await sql`INSERT INTO billing_accounts (id, owner_user_id, balance_credits) VALUES (${devBaId}, ${devUserId}, 0) ON CONFLICT DO NOTHING`;
-      accounts = await sql`SELECT id, owner_user_id FROM billing_accounts WHERE is_system_tenant = false LIMIT 1`;
+      accounts =
+        await sql`SELECT id, owner_user_id FROM billing_accounts WHERE is_system_tenant = false LIMIT 1`;
       console.log(`  Created user ${devUserId} + billing account ${devBaId}`);
     }
     const billingAccountId = accounts[0].id;
