@@ -28,8 +28,10 @@ export class MockContainerRuntime implements ContainerRuntimePort {
     const endpoints: Record<string, string> = {};
     for (const port of spec.ports) {
       if (port.expose) {
+        const hostPort =
+          port.host !== undefined ? port.host : 10000 + this.counter;
         endpoints[`${spec.name}:${port.container.toString()}`] =
-          `http://localhost:${(port.host ?? 10000 + this.counter).toString()}`;
+          `http://localhost:${hostPort.toString()}`;
       }
     }
 

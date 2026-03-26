@@ -80,5 +80,5 @@ export interface DeploymentSummary {
   deploymentId: string;
   name: string;
   workloads: WorkloadInfo[];
-  status: "active" | "partial" | "failed";
+  status: "active" | "partial" | "stopped" | "failed";
 }

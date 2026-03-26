@@ -33,11 +33,9 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-/** In-memory deployment index — maps deploymentId to workload IDs */
-const deployments = new Map<string, DeploymentSummary>();
-let deployCounter = 0;
-
 export function createDeployRoutes(runtime: ContainerRuntimePort, log: Logger) {
+  const deployments = new Map<string, DeploymentSummary>();
+  let deployCounter = 0;
   return {
     /** POST /api/v1/deploy — Deploy workloads */
     async deploy(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -140,7 +138,7 @@ export function createDeployRoutes(runtime: ContainerRuntimePort, log: Logger) {
         summary.workloads.map((w) => runtime.stop(w.id).catch(() => {}))
       );
 
-      const stopped: DeploymentSummary = { ...summary, status: "failed" };
+      const stopped: DeploymentSummary = { ...summary, status: "stopped" };
       deployments.set(match[1], stopped);
       log.info({ deploymentId: match[1] }, "Stopped");
 
