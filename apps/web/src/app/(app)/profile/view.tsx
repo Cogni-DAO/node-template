@@ -30,6 +30,7 @@ import {
   GoogleIcon,
   PageContainer,
 } from "@/components";
+import { OpenAIIcon } from "@/features/ai/icons/providers/OpenAIIcon";
 
 /* ─── Types ────────────────────────────────────────────────────────── */
 
@@ -291,6 +292,8 @@ export function ProfileView(): ReactElement {
   const [configuredProviders, setConfiguredProviders] = useState<Set<string>>(
     new Set()
   );
+  const [chatGptConnected, setChatGptConnected] = useState(false);
+  const [chatGptLoading, setChatGptLoading] = useState(false);
 
   // Read feedback query params and strip them to prevent re-display on refresh
   const linkedProvider = searchParams.get("linked");
@@ -340,6 +343,16 @@ export function ProfileView(): ReactElement {
       })
       .catch(() => {
         // Provider fetch failed — show nothing rather than broken links
+      });
+
+    // Check BYO-AI ChatGPT connection status
+    fetch("/api/v1/auth/openai-codex/status")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { connected: boolean } | null) => {
+        if (data) setChatGptConnected(data.connected);
+      })
+      .catch(() => {
+        // Connection check failed — hide section
       });
   }, []);
 
@@ -464,6 +477,70 @@ export function ProfileView(): ReactElement {
           </SettingRow>
         );
       })}
+
+      {/* ── AI Providers (BYO-AI) ── */}
+
+      <SectionHeading>AI Providers</SectionHeading>
+
+      <SettingRow
+        icon={<OpenAIIcon className="size-5" />}
+        label="ChatGPT"
+        description={
+          chatGptConnected
+            ? "Your ChatGPT subscription is linked."
+            : "Connect your ChatGPT subscription for $0 AI usage."
+        }
+      >
+        {chatGptConnected ? (
+          <div className="flex items-center gap-2">
+            <ConnectedBadge login="Connected" />
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={chatGptLoading}
+              onClick={async () => {
+                setChatGptLoading(true);
+                try {
+                  const res = await fetch(
+                    "/api/v1/auth/openai-codex/disconnect",
+                    { method: "POST" }
+                  );
+                  if (res.ok) {
+                    setChatGptConnected(false);
+                  }
+                } finally {
+                  setChatGptLoading(false);
+                }
+              }}
+            >
+              Disconnect
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={chatGptLoading}
+            onClick={async () => {
+              setChatGptLoading(true);
+              try {
+                const res = await fetch("/api/v1/auth/openai-codex/authorize", {
+                  method: "POST",
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.url) {
+                  window.location.href = data.url;
+                }
+              } finally {
+                setChatGptLoading(false);
+              }
+            }}
+          >
+            Connect
+          </Button>
+        )}
+      </SettingRow>
 
       {/* ── Ownership ── */}
 
