@@ -5,9 +5,9 @@ title: Akash Deploy Service — MCP & Agent Crew Orchestration
 status: draft
 spec_state: draft
 trust: draft
-summary: On-demand deployment of MCP server + AI agent crews to Akash Network. Implements AkashProvider for ClusterProvider interface. Includes Cosmos/AKT wallet adapter, SDL generation, crew orchestrator LangGraph, and golden image registry.
+summary: On-demand deployment of MCP server + AI agent crews to Akash Network. Pure-library package for SDL generation and crew schemas, service-layer adapter for Akash network I/O, Cosmos wallet port for AKT funding, and LangGraph crew orchestrator.
 read_when: Working on Akash deployments, MCP hosting, agent crew orchestration, or Cosmos wallet integration.
-implements:
+implements: proj.akash-crew-deploy
 owner: derekg1729
 created: 2026-03-26
 verified:
@@ -18,9 +18,9 @@ tags: [infra, akash, mcp, agents, cosmos, deployment]
 
 ## Context
 
-The node-launch spec defines a `ClusterProvider` interface abstracting deployment targets. Today only `CherryK3sProvider` exists. This spec implements `AkashSdlProvider` — enabling on-demand deployment of AI agent + MCP server crews to the Akash decentralized cloud.
+The node-launch spec defines a `ClusterProvider` interface abstracting deployment targets. Today only `CherryK3sProvider` exists. This spec adds Akash Network as a deployment target — enabling on-demand deployment of AI agent + MCP server crews to the decentralized cloud.
 
-The user experience target: speak to an AI agent, describe a crew of agents and MCP servers with a mission, authenticate OAuth for the MCP servers, and the system deploys everything to Akash funded by a single DAO node.
+A "crew" is a set of containers (MCP servers providing tools + AI agents consuming them) deployed as a single Akash deployment with shared internal networking.
 
 ## Goal
 
@@ -31,36 +31,63 @@ Build the infrastructure to deploy arbitrary compositions of MCP servers and AI 
 | Item                             | Reason                                                |
 | -------------------------------- | ----------------------------------------------------- |
 | Full ATOM bridge (EVM -> Cosmos) | Scaffold wallet adapter only; bridge is separate work |
-| MCP server development           | Use existing MCP registries (npmjs, smithery, GitHub) |
+| MCP server development           | Use existing registries (npm, smithery, GitHub)       |
 | Custom agent runtime             | Use OpenClaw golden images                            |
 | Multi-region federation          | Single Akash deployment per crew for now              |
 | OAuth flow implementation        | Scaffold the seam; actual OAuth is per-MCP-server     |
+| Live Akash network in v0         | Mock adapter for crawl; real adapter at P1            |
 
 ## Core Invariants
 
-1. **PROVIDER_AGNOSTIC**: `AkashSdlProvider` implements `ClusterProvider` from node-launch spec. Same workflow, different provider.
+1. **PACKAGES_ARE_PURE**: Packages contain ports, schemas, pure functions, and domain adapters only. No subprocess execution, no process lifecycle, no env reads. CLI/network adapters live in services.
 
 2. **GOLDEN_IMAGES**: MCP servers and agents deploy from pre-built, versioned container images. No build-on-deploy.
 
-3. **SDL_IS_MANIFEST**: Akash SDL is the deployment manifest. Generated from crew config, committed to GitOps repo, deployed via Akash CLI.
+3. **SDL_IS_MANIFEST**: Akash SDL is the deployment manifest. Generated from crew config as a pure function (no I/O).
 
 4. **COSMOS_WALLET_ISOLATION**: Cosmos/AKT wallet is a separate port from EVM operator wallet. No mixed-chain abstractions.
 
 5. **CREW_IS_DEPLOYMENT**: One crew = one Akash deployment with multiple services sharing a network. Services communicate via internal DNS.
 
-6. **REGISTRY_FIRST**: MCP servers resolve from existing registries (npm, smithery.ai, GitHub). No custom registry.
+6. **REGISTRY_FIRST**: MCP servers resolve from existing registries. Built-in registry is a fallback; Smithery API is the target at P1.
+
+7. **TOOLS_VIA_DI**: LangGraph crew orchestrator receives the deployer port via dependency injection. The graph package does not hard-import service-layer code.
 
 ## Design
 
 ### Component Map
 
 ```
-packages/cosmos-wallet/        — Cosmos SDK wallet port + adapter (AKT funding)
-packages/akash-client/         — Akash deployment lifecycle (SDL gen, lease mgmt)
-services/akash-deployer/       — HTTP service implementing AkashProvider
-packages/langgraph-graphs/     — crew-orchestrator graph (new graph)
-infra/tofu/akash/              — SDL templates, provider configs
-infra/cd/base/akash-deployer/  — Kustomize base for the deployer service
+packages/cosmos-wallet/           — Port + schemas + mnemonic adapter (pure, no network at import)
+packages/akash-client/            — Port + schemas + SDL generator (pure) + MCP registry + mock adapter
+services/akash-deployer/          — HTTP service + Akash CLI/SDK adapter (all network I/O here)
+  src/adapters/akash-cli/         — CLI subprocess adapter (lives in service, NOT package)
+packages/langgraph-graphs/        — crew-orchestrator graph (tools accept deployer port via DI)
+infra/tofu/akash/sdl-templates/   — Reference SDL templates
+infra/cd/base/akash-deployer/     — Kustomize base for the deployer service
+```
+
+### Boundary Rules
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  packages/akash-client  (PURE LIBRARY)                  │
+│  ├── port/          AkashDeployPort interface + schemas  │
+│  ├── sdl/           generateSdl() — pure function        │
+│  ├── registry/      MCP server lookup — static data      │
+│  └── adapters/mock/ MockAkashAdapter — in-memory          │
+│                                                          │
+│  NO: execFile, child_process, fetch, env reads           │
+├──────────────────────────────────────────────────────────┤
+│  services/akash-deployer  (RUNTIME SERVICE)              │
+│  ├── adapters/      AkashCliAdapter — subprocess I/O     │
+│  │                  AkashSdlProvider — ClusterProvider    │
+│  ├── routes/        HTTP handlers                        │
+│  ├── config/        Env loading, wallet wiring           │
+│  └── main.ts        Server lifecycle                     │
+│                                                          │
+│  YES: execFile, env vars, network I/O, process signals   │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ### Crew Deployment Flow
@@ -71,11 +98,11 @@ User: "Deploy a crew with filesystem MCP, GitHub MCP, and a research agent"
   v
 Crew Orchestrator Graph (LangGraph)
   |-- 1. parseCrew: Extract MCP servers + agents from NL description
-  |-- 2. resolveImages: Look up golden images from MCP registry + OpenClaw
+  |-- 2. resolveImages: Look up golden images from MCP registry
   |-- 3. collectAuth: Determine OAuth requirements, return auth prompts
   |-- 4. generateSdl: Build Akash SDL from resolved crew config
   |-- 5. fundDeployment: Ensure AKT balance via cosmos-wallet
-  |-- 6. deploy: Submit SDL to Akash network via akash-client
+  |-- 6. deploy: Submit SDL to Akash network via akash-client port
   |-- 7. waitForLease: Wait for provider bid acceptance
   |-- 8. verifyHealth: Poll service health endpoints
   |-- 9. returnEndpoints: Return crew access URLs
@@ -134,56 +161,51 @@ deployment:
   agent-research: { default: { count: 1 } }
 ```
 
-### Cosmos Wallet Adapter
+### Cosmos Wallet Port
 
 ```typescript
 interface CosmosWalletPort {
   getAddress(): Promise<string>;
-  getBalance(denom?: string): Promise<{ amount: string; denom: string }>;
+  getBalance(denom?: string): Promise<CosmosBalance>;
   sendTokens(
     recipient: string,
     amount: string,
     denom?: string
-  ): Promise<string>;
-  fundDeployment(deploymentId: string, amount: string): Promise<string>;
+  ): Promise<CosmosTxResult>;
+  fundDeployment(deploymentId: string, amount: string): Promise<CosmosTxResult>;
+  disconnect(): Promise<void>;
 }
 ```
 
-Two adapter strategies:
+Adapters:
 
-1. **DirectSecp256k1Adapter** — for dev/testing, mnemonic-based
-2. **KeplrBridgeAdapter** — for production, browser-extension signing (scaffold only)
+- **DirectSecp256k1Adapter** — mnemonic-based, for dev/testing and automated DAO operations
+- **KeplrBridgeAdapter** — browser-extension signing, scaffold only (P1)
 
-No Privy support for Cosmos chains, so this is a standalone wallet module.
+No Privy support for Cosmos chains — standalone wallet module.
 
-### AkashProvider (implements ClusterProvider)
+### Akash Deploy Port
 
 ```typescript
-class AkashSdlProvider implements ClusterProvider {
-  async ensureCluster(env: string): Promise<ClusterConnection> {
-    // Akash = provider marketplace, no cluster to ensure
-    // Return connection info for the Akash RPC endpoint
-  }
+interface AkashDeployPort {
+  /** Pure — no I/O */
+  generateSdl(crew: CrewConfig): SdlOutput;
 
-  async createNamespace(conn: ClusterConnection, name: string): Promise<void> {
-    // Akash = create deployment from SDL
-    // name maps to deployment label
-  }
-
-  async applyManifests(conn: ClusterConnection, path: string): Promise<void> {
-    // Read SDL from path, submit to Akash network
-    // Wait for bid, accept lease
-  }
-
-  async createSecret(
-    conn: ClusterConnection,
-    ns: string,
-    data: Record<string, string>
-  ): Promise<void> {
-    // Inject as env vars in SDL (sealed)
-  }
+  /** Network I/O — implemented by service adapter */
+  createDeployment(sdlYaml: string): Promise<DeploymentInfo>;
+  listBids(deploymentId: string): Promise<Bid[]>;
+  acceptBid(deploymentId: string, provider: string): Promise<DeploymentInfo>;
+  sendManifest(deploymentId: string, sdlYaml: string): Promise<void>;
+  getDeployment(deploymentId: string): Promise<DeploymentInfo>;
+  closeDeployment(deploymentId: string): Promise<DeploymentInfo>;
+  updateDeployment(
+    deploymentId: string,
+    sdlYaml: string
+  ): Promise<DeploymentInfo>;
 }
 ```
+
+Port lives in `packages/akash-client`. MockAkashAdapter (in-memory) lives in the package. AkashCliAdapter (subprocess) lives in `services/akash-deployer/src/adapters/`.
 
 ### Golden Image Strategy
 
@@ -192,7 +214,6 @@ class AkashSdlProvider implements ClusterProvider {
 | MCP Server (npm)    | `node:22-alpine` + `npx @mcp/server-<name>` | GHCR golden/ | Env vars         |
 | MCP Server (binary) | `alpine:3.20` + binary                      | GHCR golden/ | Env vars         |
 | AI Agent (OpenClaw) | `ghcr.io/cogni-dao/openclaw:latest`         | GHCR         | SOUL.md + config |
-| AI Agent (custom)   | `node:22-alpine` + agent code               | GHCR         | Env vars         |
 
 Pre-built golden images for common MCP servers:
 
@@ -202,41 +223,49 @@ Pre-built golden images for common MCP servers:
 - `mcp-golden/memory` — @modelcontextprotocol/server-memory
 - `mcp-golden/fetch` — @modelcontextprotocol/server-fetch
 
-### MCP Registry Resolution
+### MCP Registry
+
+Built-in static registry of well-known MCP servers with golden image mappings. Falls back to generic `npx` runner for unknown packages. P1 target: resolve from Smithery API at runtime.
 
 ```typescript
 interface McpRegistryEntry {
   name: string;
-  package: string; // npm package or GitHub repo
+  package: string;
+  goldenImage: string;
   transport: "stdio" | "sse" | "streamable-http";
-  goldenImage?: string; // pre-built image tag
   defaultPort: number;
-  requiredEnv: string[]; // env vars needed (e.g., GITHUB_TOKEN)
-  oauthScopes?: string[]; // OAuth scopes if applicable
+  requiredEnv: string[];
+  oauthScopes: string[];
 }
 ```
 
-Built-in registry of ~20 well-known MCP servers. Falls back to `npx` generic runner for unknown packages.
-
 ## Acceptance Checks
 
-1. `packages/cosmos-wallet` builds and exports CosmosWalletPort
-2. `packages/akash-client` generates valid Akash SDL from crew config
-3. `services/akash-deployer` starts, serves health endpoints, exposes deploy API
-4. Crew orchestrator graph can parse NL crew descriptions into structured configs
-5. SDL templates are valid (parseable by Akash CLI)
-6. GitOps manifests (Kustomize base + ArgoCD app) are syntactically valid
-7. All new packages pass typecheck
+1. `packages/cosmos-wallet` builds, typechecks, exports CosmosWalletPort
+2. `packages/akash-client` generates valid Akash SDL from crew config (unit tested)
+3. `packages/akash-client` contains NO subprocess or network I/O (enforced by dep-cruiser)
+4. `services/akash-deployer` starts, serves health endpoints, exposes deploy API
+5. Crew orchestrator tools accept deployer via DI (no hard import of service code)
+6. SDL templates are valid YAML (parseable)
+7. GitOps manifests (Kustomize base + overlays + ArgoCD app) pass `pnpm check`
+8. All new packages pass typecheck with `composite: true`
+
+## Open Questions
+
+1. **Akash JS SDK vs CLI**: Should the live adapter use `@akashnetwork/akashjs` or shell out to `akash` CLI? SDK is more portable but less documented. Evaluate at P1 start.
+2. **MCP transport**: Most MCP servers use stdio. For Akash deployment, stdio requires a sidecar bridge to HTTP. Should we standardize on SSE/HTTP transport for deployed servers?
+3. **Credential sealing**: Akash SDL env vars are visible to providers. How to seal secrets? Evaluate Akash's sealed secrets or inject via runtime config.
 
 ## Dependencies
 
-- node-launch spec (ClusterProvider interface)
 - task.0149 (k3s + ArgoCD GitOps foundation)
-- Akash CLI or JS SDK for deployment submission
+- Golden MCP container images (built and pushed to GHCR)
 - @cosmjs/stargate for Cosmos wallet operations
+- Akash testnet account for P1
 
 ## Related
 
-- [Node Launch Spec](./node-launch.md) — ClusterProvider interface
+- [Node Launch Spec](./node-launch.md) — ClusterProvider interface (on feat/byo-ai-per-tenant)
 - [Node Formation Spec](./node-formation.md) — DAO formation wizard
 - [Future Akash Integration](../../infra/tofu/akash/FUTURE_AKASH_INTEGRATION.md) — Bridge roadmap
+- [Akash Crew Deploy Project](../../work/projects/proj.akash-crew-deploy.md) — Roadmap
