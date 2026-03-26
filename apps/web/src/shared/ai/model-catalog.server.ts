@@ -331,6 +331,9 @@ export async function isModelAllowed(modelId: string): Promise<boolean> {
  * Returns false if model not found or cache unavailable (safe default)
  */
 export async function isModelFree(modelId: string): Promise<boolean> {
+  // ChatGPT subscription models are $0 platform cost
+  if (CHATGPT_MODEL_IDS.has(modelId)) return true;
+
   try {
     const { models } = await getCachedModels();
     const model = models.find((m) => m.id === modelId);
@@ -351,6 +354,7 @@ export async function isModelFree(modelId: string): Promise<boolean> {
  * - Returns `false` for unknown models when cache exists (treat as paid).
  */
 export function isModelFreeFromCache(modelId: string): boolean | null {
+  if (CHATGPT_MODEL_IDS.has(modelId)) return true;
   if (!cache) return null;
   const model = cache.data.models.find((m) => m.id === modelId);
   return model?.isFree ?? false;
