@@ -257,6 +257,7 @@ export class InProcCompletionUnitAdapter {
     }
   ): AsyncIterable<AiEvent> {
     const { runId, attempt, graphId } = runContext;
+    const scope = getExecutionScope();
     const completionResult = await getCompletionPromise();
     const { stream, final } = completionResult;
 
