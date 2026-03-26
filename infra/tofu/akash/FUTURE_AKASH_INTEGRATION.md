@@ -89,21 +89,16 @@ When ready to move to full crypto-native stack:
 
 ## Implementation Progress
 
-The Akash deploy service is now scaffolded:
+The Akash deploy service is scaffolded with a layered container runtime architecture:
 
-- **`packages/cosmos-wallet/`** — Cosmos SDK wallet port + adapters (Direct mnemonic, Keplr bridge scaffold)
-- **`packages/akash-client/`** — SDL generation, deployment lifecycle, MCP server registry, AkashSdlProvider
-- **`services/akash-deployer/`** — HTTP service for crew deployments (health, deploy, preview, registry APIs)
-- **`packages/langgraph-graphs/`** — Crew orchestrator graph (NL → crew plan → deploy)
-- **`infra/cd/base/akash-deployer/`** — Kustomize base for k8s deployment
-- **`infra/tofu/akash/sdl-templates/`** — Reference SDL templates
+- **`services/akash-deployer/`** — HTTP service with `ContainerRuntimePort` (deploy/stop/list/status). Mock adapter for v0.
+- **`packages/langgraph-graphs/crew-orchestrator/`** — LangGraph graph for NL → workload specs (unwired, P1)
+- **`infra/cd/base/akash-deployer/`** — Kustomize base + overlays + ArgoCD app
 
 See [Akash Deploy Service Spec](../../docs/spec/akash-deploy-service.md) for full architecture.
 
 ## Files in This Directory
 
-- `sdl-templates/mcp-server.sdl.yaml` — Template for single MCP server deployment
-- `sdl-templates/crew.sdl.yaml` — Template for multi-service crew deployment
 - `AGENTS.md` — Agent instructions for this directory
 
 ## Benefits of Future Akash Integration
