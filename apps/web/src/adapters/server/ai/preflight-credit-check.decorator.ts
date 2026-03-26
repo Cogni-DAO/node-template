@@ -47,7 +47,14 @@ export class PreflightCreditCheckDecorator implements GraphExecutorPort {
   runGraph(req: GraphRunRequest, ctx?: ExecutionContext): GraphRunResult {
     const result = this.inner.runGraph(req, ctx);
 
-    // Start credit check eagerly (runs in parallel with any sync setup)
+    // BYO-AI runs have $0 platform cost — skip credit check entirely.
+    // The LLM call routes through the user's own subscription (CodexLlmAdapter),
+    // no usage_report is emitted, and no credits are consumed.
+    if (req.modelConnectionId) {
+      return result;
+    }
+
+    // Platform runs: check credits eagerly (runs in parallel with any sync setup)
     const checkPromise = this.checkFn(
       this.billingAccountId,
       req.model,

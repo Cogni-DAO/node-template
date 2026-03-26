@@ -82,6 +82,14 @@ export {
   type LangfuseAdapterConfig,
   type LangfuseSpanHandle,
 } from "./ai-telemetry/langfuse.adapter";
+// Connection broker adapter
+export {
+  ConnectionDecryptionError,
+  ConnectionNotFoundError,
+  DrizzleConnectionBrokerAdapter,
+  type DrizzleConnectionBrokerConfig,
+  type TokenRefreshFn,
+} from "./connections/drizzle-broker.adapter";
 export { type Database, getAppDb } from "./db/client";
 export { DrizzleGovernanceStatusAdapter } from "./governance/drizzle-governance-status.adapter";
 export {

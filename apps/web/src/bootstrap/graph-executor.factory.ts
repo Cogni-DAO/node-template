@@ -20,6 +20,7 @@
 
 import type {
   ExecutionContext,
+  GraphFinal,
   GraphRunRequest,
   GraphRunResult,
 } from "@cogni/graph-execution-core";
@@ -41,6 +42,7 @@ import { runInScope } from "@/adapters/server/ai/execution-scope";
 import type {
   AiExecutionErrorCode,
   BillingContext,
+  ConnectionBrokerPort,
   GraphExecutorPort,
   PreflightCreditCheckFn,
 } from "@/ports";
@@ -111,6 +113,7 @@ export function createScopedGraphExecutor(params: {
   readonly billing: BillingContext;
   readonly preflightCheckFn: PreflightCreditCheckFn;
   readonly abortSignal?: AbortSignal;
+  readonly broker?: ConnectionBrokerPort;
 }): GraphExecutorPort {
   const container = getContainer();
 
@@ -141,13 +144,85 @@ export function createScopedGraphExecutor(params: {
 
   return {
     runGraph(req: GraphRunRequest, ctx?: ExecutionContext): GraphRunResult {
-      return runGraphWithScope({
-        executor: observed,
-        req,
-        ...(ctx ? { ctx } : {}),
-        billing: params.billing,
-        ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+      // No BYO connection — standard path
+      if (!req.modelConnectionId || !params.broker) {
+        return runGraphWithScope({
+          executor: observed,
+          req,
+          ...(ctx ? { ctx } : {}),
+          billing: params.billing,
+          ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+        });
+      }
+
+      // BYO path: resolve credentials async, then run graph with LlmService override.
+      // Graph runs normally (system prompt, tools, state) — only the LLM call swaps.
+      const broker = params.broker;
+      const connectionId = req.modelConnectionId;
+      let innerResult: GraphRunResult | undefined;
+      let resolveOuterFinal: ((v: GraphFinal) => void) | undefined;
+      const outerFinal = new Promise<GraphFinal>((r) => {
+        resolveOuterFinal = r;
       });
+
+      // INVARIANT: outerFinal resolves only after stream is fully consumed.
+      // Consumers must drain stream before awaiting final.
+      const stream = (async function* () {
+        let connection: import("@/ports").ResolvedConnection;
+        try {
+          connection = await broker.resolve(
+            connectionId,
+            params.billing.billingAccountId
+          );
+        } catch (err) {
+          container.log.error(
+            {
+              connectionId,
+              error: err instanceof Error ? err.message : String(err),
+            },
+            "BYO connection resolution failed"
+          );
+          yield {
+            type: "error" as const,
+            error: "internal" as import("@cogni/ai-core").AiExecutionErrorCode,
+          };
+          yield { type: "done" as const };
+          // biome-ignore lint/style/noNonNullAssertion: assigned synchronously in Promise constructor
+          resolveOuterFinal!({
+            ok: false,
+            runId: req.runId,
+            requestId: ctx?.requestId ?? req.runId,
+            error: "internal" as import("@cogni/ai-core").AiExecutionErrorCode,
+          });
+          return;
+        }
+
+        container.log.info(
+          { connectionId, provider: connection.provider },
+          "BYO connection resolved, swapping LlmService for this run"
+        );
+
+        const { CodexLlmAdapter } = await import(
+          "@/adapters/server/ai/codex/codex-llm.adapter"
+        );
+        const llmServiceOverride = new CodexLlmAdapter(connection);
+
+        innerResult = runGraphWithScope({
+          executor: observed,
+          req,
+          ...(ctx ? { ctx } : {}),
+          billing: params.billing,
+          ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+          llmServiceOverride,
+        });
+
+        yield* innerResult.stream;
+        const f = await innerResult.final;
+        // biome-ignore lint/style/noNonNullAssertion: assigned synchronously in Promise constructor
+        resolveOuterFinal!(f);
+      })();
+
+      return { stream, final: outerFinal };
     },
   };
 }
@@ -167,12 +242,16 @@ export function runGraphWithScope(params: {
   readonly ctx?: ExecutionContext;
   readonly billing: BillingContext;
   readonly abortSignal?: AbortSignal;
+  readonly llmServiceOverride?: import("@/ports").LlmService;
 }): GraphRunResult {
   const { executor, req, ctx, billing } = params;
   return runInScope(
     {
       billing,
       ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+      ...(params.llmServiceOverride
+        ? { llmServiceOverride: params.llmServiceOverride }
+        : {}),
     },
     () => executor.runGraph(req, ctx)
   );

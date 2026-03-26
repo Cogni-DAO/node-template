@@ -316,6 +316,9 @@ export const POST = wrapRouteHandlerWithLogging(
           graphName: input.graphName,
           stateKey,
           ...(idempotencyKey ? { idempotencyKey } : {}),
+          ...(input.modelConnectionId
+            ? { modelConnectionId: input.modelConnectionId }
+            : {}),
         },
         ctx
       );
