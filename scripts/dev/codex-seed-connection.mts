@@ -119,6 +119,7 @@ async function main() {
       access_token: auth.tokens.access_token,
       refresh_token: auth.tokens.refresh_token ?? "",
       account_id: auth.tokens.account_id ?? "",
+      id_token: auth.tokens.id_token ?? "",
     });
 
     // Determine connection ID (reuse existing or generate new)

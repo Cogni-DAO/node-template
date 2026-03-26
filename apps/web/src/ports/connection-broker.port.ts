@@ -28,6 +28,7 @@ export interface ResolvedConnection {
     readonly accessToken: string;
     readonly refreshToken?: string;
     readonly accountId?: string;
+    readonly idToken?: string;
   };
   readonly expiresAt: Date | null;
   readonly scopes: readonly string[];

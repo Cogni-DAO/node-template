@@ -92,11 +92,12 @@ async function* executeWithTempAuth(params: {
         auth_mode: "chatgpt",
         OPENAI_API_KEY: null,
         tokens: {
+          id_token: connection.credentials.idToken ?? "",
           access_token: connection.credentials.accessToken,
           refresh_token: connection.credentials.refreshToken ?? "",
           account_id: connection.credentials.accountId ?? "",
         },
-        last_refresh: Date.now(),
+        last_refresh: new Date().toISOString(),
       }),
       { mode: 0o600 }
     );

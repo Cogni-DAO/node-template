@@ -28,6 +28,7 @@ interface CredentialBlob {
   access_token: string;
   refresh_token?: string;
   account_id?: string;
+  id_token?: string;
   expires_at?: string;
 }
 
@@ -144,6 +145,7 @@ export class DrizzleConnectionBrokerAdapter implements ConnectionBrokerPort {
       accessToken: blob.access_token,
       ...(blob.refresh_token ? { refreshToken: blob.refresh_token } : {}),
       ...(blob.account_id ? { accountId: blob.account_id } : {}),
+      ...(blob.id_token ? { idToken: blob.id_token } : {}),
     };
 
     return {
