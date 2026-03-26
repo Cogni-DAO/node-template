@@ -283,11 +283,8 @@ function ColorPickerSwatch({
 /**
  * ChatGPT OAuth connect flow.
  *
- * Opens a popup to OpenAI auth. After authentication, OpenAI redirects to
- * localhost:1455/auth/callback?code=... (the only redirect URI the public
- * Codex client allows). The page won't load, but the URL bar contains the
- * auth code. User copies it and pastes it here.
- *
+ * Uses the same pattern as OpenClaw VPS auth: show instructions first,
+ * user opens auth link, signs in, copies redirect URL, pastes it back.
  * Works on both local dev and cloud deployments — same flow everywhere.
  */
 function ChatGptConnectFlow({
@@ -297,36 +294,35 @@ function ChatGptConnectFlow({
   onComplete: () => void;
   onCancel: () => void;
 }): ReactElement {
-  const [phase, setPhase] = useState<"starting" | "waiting" | "error">(
-    "starting"
+  const [phase, setPhase] = useState<"instructions" | "waiting" | "error">(
+    "instructions"
   );
+  const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [pasteUrl, setPasteUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Start the flow on mount — open popup to OpenAI
+  // Get the auth URL on mount (but don't open it yet)
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const res = await fetch("/api/v1/auth/openai-codex/authorize", {
-        method: "POST",
-      });
-      if (!res.ok || cancelled) {
+    fetch("/api/v1/auth/openai-codex/authorize", { method: "POST" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.url && !cancelled) setAuthUrl(data.url);
+      })
+      .catch(() => {
         if (!cancelled) setPhase("error");
-        return;
-      }
-      const data = await res.json();
-      if (data.url && !cancelled) {
-        window.open(data.url, "chatgpt_oauth", "width=600,height=700");
-        setPhase("waiting");
-      }
-    })().catch(() => {
-      if (!cancelled) setPhase("error");
-    });
+      });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const handleOpenAuth = () => {
+    if (!authUrl) return;
+    window.open(authUrl, "_blank");
+    setPhase("waiting");
+  };
 
   const handlePaste = async () => {
     if (!pasteUrl.trim()) return;
@@ -351,12 +347,6 @@ function ChatGptConnectFlow({
     }
   };
 
-  if (phase === "starting") {
-    return (
-      <span className="text-muted-foreground text-sm">Opening OpenAI...</span>
-    );
-  }
-
   if (phase === "error") {
     return (
       <Button variant="outline" size="sm" onClick={onCancel}>
@@ -365,19 +355,52 @@ function ChatGptConnectFlow({
     );
   }
 
+  if (phase === "instructions") {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="space-y-1 text-muted-foreground text-xs">
+          <p>To connect your ChatGPT subscription:</p>
+          <p>
+            1. Click <strong>Open OpenAI</strong> below to sign in
+          </p>
+          <p>
+            2. After signing in, copy the <strong>full URL</strong> from your
+            browser&apos;s address bar
+          </p>
+          <p>3. Paste it back here</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!authUrl}
+            onClick={handleOpenAuth}
+          >
+            {authUrl ? "Open OpenAI" : "Loading..."}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <div className="text-muted-foreground text-xs">
-        Sign in at OpenAI in the popup window. After signing in, you&apos;ll see
-        a page that can&apos;t load — that&apos;s expected. Copy the full URL
-        from the popup&apos;s address bar and paste it here.
+        Signed in? Copy the URL from your browser&apos;s address bar and paste
+        it here:
       </div>
       <div className="flex gap-2">
         <input
           type="text"
-          placeholder="Paste the redirect URL here..."
+          placeholder="Paste URL here..."
           value={pasteUrl}
           onChange={(e) => setPasteUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handlePaste();
+          }}
           className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm"
         />
         <Button
