@@ -38,7 +38,10 @@ export type LlmBackend = "openrouter" | "chatgpt";
  * Only Codex-specific models work with ChatGPT account auth.
  * Standard models (gpt-4o-mini, o3, etc.) are NOT supported.
  */
-const CHATGPT_MODELS = [
+// Exported so validation logic can include these in the valid model set.
+// TODO: Replace with a unified /api/v1/ai/models endpoint that returns
+// models from ALL backends (OpenRouter, ChatGPT, Ollama, etc.)
+export const CHATGPT_MODELS = [
   {
     id: "gpt-5.4",
     name: "GPT-5.4",

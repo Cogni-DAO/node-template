@@ -20,7 +20,10 @@ import {
   type GraphOption,
   GraphPicker,
 } from "@/features/ai/components/GraphPicker";
-import { ModelPicker } from "@/features/ai/components/ModelPicker";
+import {
+  CHATGPT_MODELS,
+  ModelPicker,
+} from "@/features/ai/components/ModelPicker";
 import { useModels } from "@/features/ai/hooks/useModels";
 import {
   setPreferredModelId,
@@ -89,7 +92,11 @@ export function ChatComposerExtras({
   // Initialize from localStorage on mount, validate against API models
   useEffect(() => {
     if (modelsQuery.data) {
-      const modelIds = modelsQuery.data.models.map((m) => m.id);
+      // Valid model IDs = OpenRouter models + ChatGPT subscription models
+      const modelIds = [
+        ...modelsQuery.data.models.map((m) => m.id),
+        ...CHATGPT_MODELS.map((m) => m.id),
+      ];
       const validated = validatePreferredModel(modelIds, defaultModelId);
       if (validated !== localModel) {
         setLocalModel(validated);
