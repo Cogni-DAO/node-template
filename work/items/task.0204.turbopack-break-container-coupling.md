@@ -1,7 +1,7 @@
 ---
 id: task.0204
 type: task
-status: needs_closeout
+status: needs_merge
 title: "Turbopack dev memory: break container coupling + expand serverExternalPackages"
 priority: 0
 rank: 1
