@@ -1,38 +1,42 @@
 ---
 id: agent-roles
 type: spec
-title: Agent Workforce — LangGraph Roles on Temporal Schedules
+title: Agent Workforce Architecture
 status: draft
 trust: draft
-summary: Multi-role agent workforce via three registries (GraphSpec, RoleSpec, WorkItem) and one reusable Temporal workflow
-read_when: Adding a new agent role, understanding the agent workforce architecture
+summary: Capability × workflow-shape × domain-activities — the three axes of agent design
+read_when: Adding a new agent, understanding agent architecture, choosing workflow shape
 owner: derekg1729
 created: 2026-03-26
 verified: 2026-03-26
 tags: [agents, governance, roles, langgraph, temporal]
 ---
 
-# Agent Workforce — LangGraph Roles on Temporal Schedules
+# Agent Workforce Architecture
 
 ## Problem
 
-One heartbeat loop, one global queue, no ownership. PR #562 sat 2 weeks because no agent owned the outcome. Adding a new agent should be config, not code.
+PR #562 sat 2 weeks — no agent owned the outcome. Adding a new agent requires too much bespoke code. No standard for how agents are built, triggered, or measured.
 
-## Three Registries
+## Three Axes
 
-| Registry                                 | Concern      | What it defines                                    |
-| ---------------------------------------- | ------------ | -------------------------------------------------- |
-| **GraphSpec** (`LANGGRAPH_CATALOG`)      | How to think | Prompt + tools + factory                           |
-| **RoleSpec** (constants in workflow pkg) | What to own  | graphId + queueFilter + model + schedule + metrics |
-| **WorkItem** (`@cogni/work-items`)       | What to do   | Leased unit of work with lifecycle                 |
+Every agent is the intersection of three independent concerns:
 
-One generic `RoleHeartbeatWorkflow` orchestrates all roles. Adding an agent = 1 `RoleSpec` + 1 `CatalogEntry`. Never a new workflow.
+| Axis                  | Question                   | Layer                                             | Varies how?                   |
+| --------------------- | -------------------------- | ------------------------------------------------- | ----------------------------- |
+| **Capability**        | How does it think?         | LangGraph (prompt, tools, output schema)          | Many — one per agent type     |
+| **Workflow shape**    | How is it invoked?         | Temporal (trigger, lifecycle, composition)        | Few — 2-3 reusable patterns   |
+| **Domain activities** | What effects does it have? | Temporal activities (GitHub, work items, Discord) | By integration domain, shared |
 
-## Design
+New agent capability = always. New workflow shape = only when trigger/lifecycle materially differs. New activities = only when hitting a new external system.
 
-### Change 1: Parameterize the Graph Factory
+## Capabilities (LangGraph)
 
-Add `systemPrompt` to `CreateReactAgentGraphOptions`. Wrap `createReactAgent` behind our own factory seam (`createOperatorGraph`) so the LangChain v1 migration (`createAgent` replaces `createReactAgent`) is a single-file change.
+A capability is a catalog entry: prompt + tools + optional output schema. It defines how an agent reasons. Adding a capability = adding config.
+
+### Factory Seam
+
+Wrap `createReactAgent` behind `createOperatorGraph` so LangChain v1 migration (`createAgent`) is a single-file change:
 
 ```typescript
 // packages/langgraph-graphs/src/graphs/operator/graph.ts
@@ -48,7 +52,9 @@ export function createOperatorGraph(opts: CreateReactAgentGraphOptions) {
 }
 ```
 
-Existing factories (poet, brain, etc.) unchanged. New `CatalogEntry` interface gains optional `systemPrompt`:
+### Catalog Changes
+
+Add optional `systemPrompt` to `CatalogEntry`. Existing graphs unchanged.
 
 ```typescript
 interface CatalogEntry {
@@ -60,80 +66,68 @@ interface CatalogEntry {
 }
 ```
 
-### Change 2: RoleSpec (Separate from GraphSpec)
+### Crawl Capabilities
 
-`RoleSpec` defines the operational contract. It references a graph by ID but does NOT live in the graph catalog — these are different concerns.
+| Capability     | Graph                            | Tools                                                   | Purpose                      |
+| -------------- | -------------------------------- | ------------------------------------------------------- | ---------------------------- |
+| `ceo-operator` | `createOperatorGraph`            | work_item_query, metrics_query, discord_post            | Triage, prioritize, dispatch |
+| `git-reviewer` | `createOperatorGraph`            | github_pr_read, github_pr_comment, work_item_transition | Drive PRs to merge/reject    |
+| `pr-review`    | `createPrReviewGraph` (existing) | none (evidence pre-fetched)                             | Structured PR evaluation     |
 
-```typescript
-// packages/temporal-workflows/src/domain/role-spec.ts
-// Crawl: code constants. Walk: extract to shared package when dashboard needs it.
+Note: `git-reviewer` and `pr-review` are different capabilities. `pr-review` is a single-call evaluator (no tools, structured output). `git-reviewer` is a ReAct agent that can take actions (comment, fix CI, request merge). They may compose — the reviewer capability could invoke `pr-review` as a tool.
 
-export interface RoleSpec {
-  readonly roleId: string;
-  readonly graphId: string; // references LANGGRAPH_CATALOG entry
-  readonly model: string;
-  readonly queueFilter: {
-    readonly statuses?: readonly string[];
-    readonly labels?: readonly string[];
-    readonly types?: readonly string[];
-  };
-  readonly schedule: { readonly cron: string };
-  readonly concurrency: number; // max leased items (crawl: always 1)
-  readonly outcomeHandler: string; // handler ID for processOutcome dispatch
-  readonly escalation?: {
-    readonly staleAfterHours: number;
-    readonly action: "notify" | "reassign";
-  };
-}
+## Workflow Shapes (Temporal)
 
-export const CEO_ROLE: RoleSpec = {
-  roleId: "ceo-operator",
-  graphId: "langgraph:ceo-operator",
-  model: "openai/gpt-4o",
-  queueFilter: {}, // sees everything
-  schedule: { cron: "0 * * * *" }, // hourly
-  concurrency: 1,
-  outcomeHandler: "default", // update item status + Discord
-};
+A workflow shape defines trigger, lifecycle, and composition. There are few shapes — most agents reuse one.
 
-export const GIT_REVIEWER_ROLE: RoleSpec = {
-  roleId: "git-reviewer",
-  graphId: "langgraph:git-reviewer",
-  model: "openai/gpt-4o",
-  queueFilter: { statuses: ["needs_merge"] },
-  schedule: { cron: "0 */4 * * *" }, // every 4h
-  concurrency: 1,
-  outcomeHandler: "pr-lifecycle", // merge/reject + update item
-  escalation: { staleAfterHours: 48, action: "notify" },
-};
+### Shape 1: Webhook Agent (exists — `PrReviewWorkflow`)
+
+```
+trigger → create UX feedback → fetch domain context → executeChild(GraphRunWorkflow) → write result
 ```
 
-### Change 3: RoleHeartbeatWorkflow (with claim/release)
+- **Trigger**: External event (GitHub webhook, Alchemy webhook)
+- **Lifecycle**: One-shot. Event in → result out. No queue, no claim.
+- **Idempotency**: `workflowId = {domain}:{business-key}` (e.g., `pr-review:owner/repo/pr/sha`)
+- **Example**: `PrReviewWorkflow` — already working, deployed
 
-Follows the proven `PrReviewWorkflow` pattern. Uses `claim()`/`release()` from `WorkItemCommandPort` for atomic work locking.
+This shape is right for any agent that **reacts to external events** with **domain-specific I/O**.
+
+### Shape 2: Scheduled Sweep (new — `ScheduledSweepWorkflow`)
+
+```
+cron tick → claim item from queue → build context → executeChild(GraphRunWorkflow) → process outcome → release
+```
+
+- **Trigger**: Temporal Schedule (cron)
+- **Lifecycle**: Per-tick. Claim one item, process it, release. Short-lived (~10 Temporal events).
+- **Idempotency**: `workflowId = sweep:{roleId}:{itemId}`
+- **Locking**: `WorkItemCommandPort.claim()` / `release()` — atomic lease
+- **Example**: CEO Operator (hourly), PM Triage (hourly), Data Analyst (daily)
+
+This shape is right for any agent that **sweeps a work queue** on a schedule.
 
 ```typescript
-// packages/temporal-workflows/src/workflows/role-heartbeat.workflow.ts
+// packages/temporal-workflows/src/workflows/scheduled-sweep.workflow.ts
 
-export interface RoleHeartbeatInput {
+export interface ScheduledSweepInput {
   roleId: string;
   graphId: string;
   model: string;
   queueFilter: { statuses?: string[]; labels?: string[]; types?: string[] };
-  outcomeHandler: string;
 }
 
-export interface RoleHeartbeatResult {
+export interface ScheduledSweepResult {
   outcome: "success" | "error" | "no_op";
   roleId: string;
   itemId?: string;
   runId?: string;
 }
 
-export async function RoleHeartbeatWorkflow(
-  input: RoleHeartbeatInput
-): Promise<RoleHeartbeatResult> {
-  const { roleId, graphId, model, queueFilter, outcomeHandler } = input;
+export async function ScheduledSweepWorkflow(
+  input: ScheduledSweepInput
+): Promise<ScheduledSweepResult> {
+  const { roleId, graphId, model, queueFilter } = input;
 
   // Activity: filter queue → sort → claim first available (atomic lease)
   const claimed = await claimNextItemActivity({ roleId, queueFilter });
@@ -142,10 +136,10 @@ export async function RoleHeartbeatWorkflow(
   const { itemId, runId } = claimed;
 
   try {
-    // Activity: build context messages from item data (keep small — Temporal history limits)
-    const contextMessages = await buildRoleContextActivity({ roleId, itemId });
+    // Activity: build context messages (keep lean — Temporal history limits)
+    const contextMessages = await buildSweepContextActivity({ roleId, itemId });
 
-    // Child workflow: reuse GraphRunWorkflow (billing, observability, error handling)
+    // Child workflow: reuse GraphRunWorkflow
     const graphResult = await executeChild("GraphRunWorkflow", {
       workflowId: `graph-run:system:${roleId}:${itemId}`,
       args: [
@@ -168,13 +162,8 @@ export async function RoleHeartbeatWorkflow(
       ],
     });
 
-    // Activity: role-specific outcome processing (dispatched by outcomeHandler ID)
-    await processOutcomeActivity({
-      roleId,
-      itemId,
-      outcomeHandler,
-      graphResult,
-    });
+    // Activity: process outcome (transition item, post to Discord)
+    await processSweepOutcomeActivity({ roleId, itemId, graphResult });
 
     return {
       outcome: graphResult.ok ? "success" : "error",
@@ -183,126 +172,147 @@ export async function RoleHeartbeatWorkflow(
       runId,
     };
   } finally {
-    // Activity: always release the lease
     await releaseItemActivity({ itemId, runId });
   }
 }
 ```
 
-Key differences from previous version:
+### Shape 3: Long-Running Approval (future — not crawl)
 
-- **`claimNextItemActivity`** uses `WorkItemCommandPort.claim()` — atomic lease, not read
-- **`releaseItemActivity`** in `finally` — always releases, even on error
-- **`executeChild` args match real `GraphRunWorkflowInput`** — `messages`/`model` inside `input:`, plus `runKind`, `triggerSource`, `requestedBy`
-- **`outcomeHandler`** — dispatches to handler by ID, no role-specific branches in workflow
-- **Context kept small** — `buildRoleContextActivity` returns lean messages (Temporal history limits)
+For agents that propose an action and wait for human approval before executing. Uses Temporal signals.
 
-### Change 4: Outcome Handlers
+### When to Create a New Shape
 
-Outcome processing is registry-driven, not a switch statement. Each handler is a function registered at worker startup.
+Only when trigger, lifecycle, or composition pattern materially differs:
+
+- Different trigger type (webhook vs cron vs user request vs signal)
+- Different lifecycle (one-shot vs claim/release vs long-running)
+- Different composition (child workflows vs sequential activities)
+
+If the agent fits an existing shape, use it. Adding a shape is rare — maybe 1-2 per year.
+
+## Domain Activities (Shared)
+
+Activities are organized by integration domain, not per-agent. Any workflow shape can use any activity.
+
+| Domain            | Activities                                                      | Used by                 |
+| ----------------- | --------------------------------------------------------------- | ----------------------- |
+| **GitHub**        | createCheckRun, fetchPrContext, postReviewResult, mergePr       | PR Review, Git Reviewer |
+| **Work Items**    | claimNextItem, releaseItem, transitionStatus, buildSweepContext | Scheduled Sweep agents  |
+| **Communication** | postToDiscord                                                   | All agents              |
+| **Metrics**       | queryHealthMetrics                                              | CEO, Data Analyst       |
+
+New activity = new external integration. Not new agent.
+
+## RoleSpec (Binding)
+
+`RoleSpec` binds a capability to a workflow shape with operational config. It's the glue.
 
 ```typescript
-// packages/temporal-workflows/src/domain/outcome-handlers.ts
+// packages/temporal-workflows/src/domain/role-spec.ts
 
-export type OutcomeHandler = (ctx: {
-  roleId: string;
-  itemId: string;
-  graphResult: GraphRunResult;
-}) => Promise<void>;
+export interface RoleSpec {
+  readonly roleId: string;
+  readonly graphId: string; // → capability (catalog entry)
+  readonly workflowShape: "webhook" | "scheduled-sweep";
+  readonly model: string;
+  readonly schedule?: { readonly cron: string };
+  readonly queueFilter?: {
+    // only for scheduled-sweep shape
+    readonly statuses?: readonly string[];
+    readonly labels?: readonly string[];
+    readonly types?: readonly string[];
+  };
+  readonly concurrency: number;
+}
 
-// Crawl: two handlers
-export const OUTCOME_HANDLERS: Record<string, OutcomeHandler> = {
-  default: async ({ itemId, graphResult }) => {
-    // Transition work item status based on graph result
-    // Post summary to Discord
-  },
-  "pr-lifecycle": async ({ itemId, graphResult }) => {
-    // If graph says merge → merge PR
-    // If graph says reject → close PR with rationale
-    // Transition work item status
-    // Post to Discord
-  },
+export const CEO_ROLE: RoleSpec = {
+  roleId: "ceo-operator",
+  graphId: "langgraph:ceo-operator",
+  workflowShape: "scheduled-sweep",
+  model: "openai/gpt-4o",
+  schedule: { cron: "0 * * * *" },
+  queueFilter: {},
+  concurrency: 1,
+};
+
+export const GIT_REVIEWER_ROLE: RoleSpec = {
+  roleId: "git-reviewer",
+  graphId: "langgraph:git-reviewer",
+  workflowShape: "scheduled-sweep",
+  model: "openai/gpt-4o",
+  schedule: { cron: "0 */4 * * *" },
+  queueFilter: { statuses: ["needs_merge"] },
+  concurrency: 1,
 };
 ```
 
-### Adding a New Agent (the whole process)
+Note: `pr-review` doesn't need a RoleSpec — it's triggered by webhook, not by role config. It's wired directly from the GitHub webhook handler to `PrReviewWorkflow`. RoleSpec is for agents that run on schedules.
 
-```
-1. Write a system prompt           → graphs/operator/prompts.ts
-2. Define tool IDs                 → graphs/operator/tools.ts
-3. Add CatalogEntry                → catalog.ts (graphFactory: createOperatorGraph)
-4. Add RoleSpec constant           → domain/role-spec.ts
-5. (Optional) Add outcome handler  → domain/outcome-handlers.ts
-```
+## Adding a New Agent
 
-No new workflow. No new activity. No new package. Config only.
+### Case 1: New capability, existing workflow shape (common)
 
-### Architecture Diagram
+1. Write system prompt → `graphs/operator/prompts.ts`
+2. Add catalog entry → `catalog.ts`
+3. Add RoleSpec constant → `domain/role-spec.ts`
+4. Add Temporal schedule → `repo-spec.yaml`
 
-```
-repo-spec.yaml schedule
-  │
-  ▼ Temporal Schedule fires
-  │
-  ▼ RoleHeartbeatWorkflow(RoleSpec fields)
-  │
-  ├─ claimNextItemActivity ──── WorkItemCommandPort.claim() (atomic lease)
-  │
-  ├─ buildRoleContextActivity ── format item as lean messages
-  │
-  ├─ executeChild(GraphRunWorkflow) ── GraphExecutorPort (existing)
-  │   └─ LANGGRAPH_CATALOG[graphId] → createOperatorGraph(systemPrompt)
-  │
-  ├─ processOutcomeActivity ──── OUTCOME_HANDLERS[outcomeHandler]
-  │
-  └─ releaseItemActivity ─────── WorkItemCommandPort.release() (always, via finally)
-```
+No new workflow. No new activities (unless new external integration).
+
+### Case 2: New capability, new trigger/lifecycle (rare)
+
+1. Steps 1-2 from above (capability)
+2. New workflow file (~40 lines) with domain-specific activities
+3. Wire trigger (webhook handler, schedule, etc.)
+
+This is the `PrReviewWorkflow` pattern. It happens maybe 1-2 times per year.
+
+### The Existing PR Review Agent
+
+`PrReviewWorkflow` + `pr-review` graph is already the right pattern. It stays as-is. It will evolve by:
+
+- Adding tools to the `pr-review` graph (currently tool-less structured output)
+- Adding activities to the workflow (e.g., `mergePrActivity` when auto-merge lands)
+- The workflow shape stays webhook-triggered
+
+The new `git-reviewer` capability is complementary — it sweeps for stale PRs that webhooks missed, using the scheduled-sweep shape.
 
 ## Invariants
 
-- `THREE_REGISTRIES`: GraphSpec = how to think. RoleSpec = what to own. WorkItem = what to do. Never collapse.
-- `CLAIM_NOT_READ`: `claimNextItemActivity` uses `WorkItemCommandPort.claim()` for atomic lease. No read-then-act.
-- `ALWAYS_RELEASE`: `releaseItemActivity` runs in `finally` block. Leases never orphaned.
-- `ONE_WORKFLOW_ALL_ROLES`: `RoleHeartbeatWorkflow` is parameterized. Adding a role never creates a new workflow.
-- `OUTCOME_HANDLERS_DISPATCHED`: `processOutcomeActivity` dispatches by `outcomeHandler` ID. No role-specific branches in workflow code.
-- `REAL_GRAPHRUNINPUT`: `executeChild(GraphRunWorkflow)` passes the real `GraphRunWorkflowInput` shape — `messages`/`model` inside `input:`, plus `runKind`, `triggerSource`, `triggerRef`, `requestedBy`.
-- `CONTEXT_STAYS_LEAN`: `buildRoleContextActivity` returns minimal messages. Temporal stores activity inputs in history (payload limits).
-- `FACTORY_SEAM`: `createOperatorGraph` wraps `createReactAgent`. LangChain v1 migration = single-file change.
-- `EXISTING_GRAPHS_UNCHANGED`: Poet, brain, ponderer, research, pr-review keep their hardcoded prompts and factories.
-- `IDEMPOTENT_OUTCOMES`: Outcome handlers use stable business keys (`roleId:itemId`) for side effects. Safe to retry.
+- `CAPABILITY_IS_CONFIG`: Adding a capability = catalog entry. Prompt + tools + optional output schema.
+- `SHAPES_ARE_FEW`: Workflow shapes are reusable patterns (2-3 total). New shape only when trigger/lifecycle materially differs.
+- `ACTIVITIES_BY_DOMAIN`: Activities organized by external integration (GitHub, work items, Discord), not per-agent.
+- `CLAIM_NOT_READ`: Scheduled sweep uses `WorkItemCommandPort.claim()` for atomic lease. `release()` in finally.
+- `REAL_GRAPHRUNINPUT`: `executeChild(GraphRunWorkflow)` passes the real interface — messages/model inside `input:`.
+- `FACTORY_SEAM`: `createOperatorGraph` wraps `createReactAgent`. LangChain v1 migration = single file.
+- `EXISTING_AGENTS_UNCHANGED`: `PrReviewWorkflow` + `pr-review` graph stay as-is.
+- `CONTEXT_STAYS_LEAN`: Activity inputs stored in Temporal history. Keep messages minimal.
 
 ## Crawl / Walk / Run
 
 ### Crawl
 
 - `systemPrompt` on `CreateReactAgentGraphOptions` + `CatalogEntry`
-- `createOperatorGraph` factory (behind seam)
-- 2 catalog entries (ceo-operator, git-reviewer) + prompts
-- `RoleSpec` type + 2 constants in temporal-workflows
-- `RoleHeartbeatWorkflow` + 4 activities (claim, context, outcome, release)
-- 2 outcome handlers (default, pr-lifecycle)
+- `createOperatorGraph` factory behind seam
+- 2 capabilities: `ceo-operator`, `git-reviewer` (catalog entries + prompts)
+- `ScheduledSweepWorkflow` + activities (claim, context, outcome, release)
+- `RoleSpec` type + 2 constants
 - Operator tools: `work_item_query`, `work_item_transition`
+- Temporal schedules for both roles
 
 ### Walk
 
-- Role-level metrics dashboard: backlog by role, lease age, SLA breach, success rate, spend, unowned items
-- Webhook triggers for Git Reviewer (GitHub PR events → Temporal signal)
-- PM and Data Analyst roles (new RoleSpec + CatalogEntry each)
-- Outcome logging for feedback loop
-- Extract `RoleSpec` to shared package for dashboard consumption
+- Role-level metrics: backlog, SLA breach, success rate, spend, unowned items
+- Webhook triggers for Git Reviewer (GitHub PR events → `PrReviewWorkflow` evolution or new webhook shape)
+- PM + Data Analyst roles (new capabilities + RoleSpecs, same sweep shape)
+- Outcome logging for prompt improvement
 
 ### Run
 
-- Self-improving prompts (metaprompt reviews outcome logs)
+- Self-improving prompts via outcome analysis
 - Cross-role escalation via work item creation
-- Role performance benchmarking
-
-## Non-Goals
-
-- New graph types — ReAct via `createOperatorGraph` is sufficient for operator roles
-- Agent-to-agent communication — escalation = new work item, not message passing
-- Dynamic role creation — roles are code constants (crawl) or config (walk)
-- RoleSpec as a port/adapter — it's configuration, not application state
+- Long-running approval workflow shape
 
 ## Related
 
