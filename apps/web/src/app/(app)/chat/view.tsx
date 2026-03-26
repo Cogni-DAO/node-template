@@ -322,7 +322,7 @@ export function ChatView({
           onAuthExpired={() => signOut()}
           onError={handleError}
           onFinish={handleThreadFinish}
-          modelConnectionId={modelConnectionId}
+          {...(modelConnectionId ? { modelConnectionId } : {})}
         >
           <Thread
             welcomeMessage={<ChatWelcomeWithHint />}
@@ -334,7 +334,7 @@ export function ChatView({
                 balance={balance}
                 selectedGraph={selectedGraph}
                 onGraphChange={handleGraphChange}
-                chatGptConnectionId={chatGptConnectionId}
+                {...(chatGptConnectionId ? { chatGptConnectionId } : {})}
                 onModelConnectionChange={setModelConnectionId}
               />
             }

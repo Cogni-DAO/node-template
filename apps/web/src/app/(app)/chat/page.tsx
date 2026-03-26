@@ -14,12 +14,12 @@
 import type { ReactElement } from "react";
 import { Suspense } from "react";
 
-import { getAppDb } from "@/adapters/server/db/drizzle.client";
+import { resolveAppDb } from "@/bootstrap/container";
 import { ChatView } from "./view";
 
 async function getChatGptConnectionId(): Promise<string | undefined> {
   try {
-    const db = getAppDb();
+    const db = resolveAppDb();
     const { connections } = await import("@cogni/db-schema");
     const { and, eq, isNull } = await import("drizzle-orm");
 
@@ -44,7 +44,7 @@ export default async function ChatPage(): Promise<ReactElement> {
   const chatGptConnectionId = await getChatGptConnectionId();
   return (
     <Suspense>
-      <ChatView chatGptConnectionId={chatGptConnectionId} />
+      <ChatView {...(chatGptConnectionId ? { chatGptConnectionId } : {})} />
     </Suspense>
   );
 }

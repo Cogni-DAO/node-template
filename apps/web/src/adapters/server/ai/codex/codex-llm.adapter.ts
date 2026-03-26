@@ -91,7 +91,7 @@ export class CodexLlmAdapter implements LlmService {
       log: callLog,
       onResult: deferred.resolve,
       onError: deferred.reject,
-      abortSignal: params.abortSignal,
+      ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
     });
 
     return { stream, final: deferred.promise };
@@ -239,13 +239,15 @@ async function* runCodexExec(params: {
     // seeing done, so the deferred must be resolved before the generator pauses.
     onResult({
       message: { role: "assistant", content: fullText },
-      usage: usage
+      ...(usage
         ? {
-            promptTokens: usage.promptTokens,
-            completionTokens: usage.completionTokens,
-            totalTokens: usage.promptTokens + usage.completionTokens,
+            usage: {
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+              totalTokens: usage.promptTokens + usage.completionTokens,
+            },
           }
-        : undefined,
+        : {}),
       finishReason: "stop",
       resolvedProvider: "openai-chatgpt",
     });
@@ -286,6 +288,6 @@ function formatMessagesAsPrompt(messages: Message[]): string {
     }
   }
 
-  const system = systemParts.length > 0 ? systemParts.join("\n") + "\n\n" : "";
+  const system = systemParts.length > 0 ? `${systemParts.join("\n")}\n\n` : "";
   return system + parts.join("\n\n");
 }
