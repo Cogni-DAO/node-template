@@ -281,14 +281,14 @@ function ColorPickerSwatch({
 /* ─── ChatGPT Connect Flow ────────────────────────────────────────── */
 
 /**
- * Two-path OAuth flow for ChatGPT BYO-AI:
- * - Local dev: relay server on port 1455 catches the redirect automatically
- * - Cloud: user pastes the redirect URL back into an input field
+ * ChatGPT OAuth connect flow.
  *
- * The flow opens a popup to OpenAI auth. After authentication, OpenAI
- * redirects to localhost:1455/auth/callback?code=...
- * If the relay catches it, the callback route completes automatically.
- * If not (cloud), the user copies the URL and pastes it here.
+ * Opens a popup to OpenAI auth. After authentication, OpenAI redirects to
+ * localhost:1455/auth/callback?code=... (the only redirect URI the public
+ * Codex client allows). The page won't load, but the URL bar contains the
+ * auth code. User copies it and pastes it here.
+ *
+ * Works on both local dev and cloud deployments — same flow everywhere.
  */
 function ChatGptConnectFlow({
   onComplete,
@@ -304,7 +304,7 @@ function ChatGptConnectFlow({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Start the flow on mount
+  // Start the flow on mount — open popup to OpenAI
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -327,26 +327,6 @@ function ChatGptConnectFlow({
       cancelled = true;
     };
   }, []);
-
-  // Poll for connection status (catches the relay-based auto-complete)
-  useEffect(() => {
-    if (phase !== "waiting") return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/v1/auth/openai-codex/status");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.connected) {
-            clearInterval(interval);
-            onComplete();
-          }
-        }
-      } catch {
-        // ignore polling errors
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [phase, onComplete]);
 
   const handlePaste = async () => {
     if (!pasteUrl.trim()) return;
@@ -388,13 +368,14 @@ function ChatGptConnectFlow({
   return (
     <div className="flex flex-col gap-2">
       <div className="text-muted-foreground text-xs">
-        Sign in at OpenAI in the popup. If it doesn&apos;t complete
-        automatically, copy the URL from the popup and paste it below.
+        Sign in at OpenAI in the popup window. After signing in, you&apos;ll see
+        a page that can&apos;t load — that&apos;s expected. Copy the full URL
+        from the popup&apos;s address bar and paste it here.
       </div>
       <div className="flex gap-2">
         <input
           type="text"
-          placeholder="Paste redirect URL here..."
+          placeholder="Paste the redirect URL here..."
           value={pasteUrl}
           onChange={(e) => setPasteUrl(e.target.value)}
           className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm"
