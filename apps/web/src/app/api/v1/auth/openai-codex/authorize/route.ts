@@ -69,6 +69,9 @@ export async function POST() {
     code_challenge: challenge,
     code_challenge_method: "S256",
     state,
+    // Required by Codex public client — enables simplified consent flow
+    codex_cli_simplified_flow: "true",
+    id_token_add_organizations: "true",
   });
 
   return NextResponse.json({
