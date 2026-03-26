@@ -87,12 +87,24 @@ When ready to move to full crypto-native stack:
 4. **Phase 4**: Deploy Cosmos multisig for Akash treasury management
 5. **Phase 5**: Migrate from Cherry → Akash with stable payments
 
+## Implementation Progress
+
+The Akash deploy service is now scaffolded:
+
+- **`packages/cosmos-wallet/`** — Cosmos SDK wallet port + adapters (Direct mnemonic, Keplr bridge scaffold)
+- **`packages/akash-client/`** — SDL generation, deployment lifecycle, MCP server registry, AkashSdlProvider
+- **`services/akash-deployer/`** — HTTP service for crew deployments (health, deploy, preview, registry APIs)
+- **`packages/langgraph-graphs/`** — Crew orchestrator graph (NL → crew plan → deploy)
+- **`infra/cd/base/akash-deployer/`** — Kustomize base for k8s deployment
+- **`infra/tofu/akash/sdl-templates/`** — Reference SDL templates
+
+See [Akash Deploy Service Spec](../../docs/spec/akash-deploy-service.md) for full architecture.
+
 ## Files in This Directory
 
-- `main.tf`: Akash Terraform provider configuration (ready for future use)
-- `variables.tf`: Akash deployment variables
-- `deploy.yaml`: Akash SDL for Next.js container deployment
-- `terraform.tfvars.example`: Configuration template
+- `sdl-templates/mcp-server.sdl.yaml` — Template for single MCP server deployment
+- `sdl-templates/crew.sdl.yaml` — Template for multi-service crew deployment
+- `AGENTS.md` — Agent instructions for this directory
 
 ## Benefits of Future Akash Integration
 

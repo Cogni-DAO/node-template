@@ -2,7 +2,7 @@
 id: task.0201
 type: task
 title: "Nx targeted builds + preview environments for monorepo CI/CD"
-status: backlog
+status: needs_triage
 priority: 1
 rank: 1
 estimate: 5
@@ -97,3 +97,7 @@ Current CI runs everything on every push. No affected-only execution. No per-bra
 - [Actions Runner Controller](https://github.com/actions/actions-runner-controller)
 - [Camptocamp DevOps Stack](https://github.com/camptocamp/devops-stack)
 - [Quipper monorepo-deploy-actions](https://github.com/quipper/monorepo-deploy-actions)
+
+## Validation
+
+- [ ] TBD

@@ -2,7 +2,7 @@
 id: task.0200
 type: task
 title: "Move runtime secrets from bootstrap/GitHub to cluster-side management"
-status: backlog
+status: needs_triage
 priority: 2
 rank: 1
 estimate: 3
@@ -35,6 +35,7 @@ external_refs:
 `setup-secrets.ts` is a bootstrap helper: it provisions GitHub Actions secrets, generates SOPS/age keypairs, populates and encrypts k8s secret templates, and writes tofu auto.tfvars. This is correct for initial node standup but is NOT the long-term runtime secret architecture.
 
 Current MVP edges (acceptable for bootstrap, not permanent):
+
 - Same secret values written to preview and production via `setSecretBoth`
 - Derived DATABASE_URL/DATABASE_SERVICE_URL assume same host shape across envs
 - `~/.cogni/secret-values.json` is plaintext local cache (chmod 600, sensitive)
@@ -58,3 +59,7 @@ Pick one cluster-side secret backend (External Secrets Operator + a store, or eq
 - [Argo CD Cluster Bootstrapping](https://argo-cd.readthedocs.io/en/latest/operator-manual/cluster-bootstrapping/)
 - [External Secrets Operator](https://external-secrets.io/latest/introduction/getting-started/)
 - [Infisical Guides](https://github.com/Infisical/infisical-guides)
+
+## Validation
+
+- [ ] TBD

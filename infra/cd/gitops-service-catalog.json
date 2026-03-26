@@ -14,6 +14,11 @@
       "name": "sandbox-runtime",
       "gitops_managed": false,
       "reason": "Ephemeral per-command runtime, not a long-running service. Future: Job template."
+    },
+    {
+      "name": "akash-deployer",
+      "gitops_managed": true,
+      "reason": "Akash Network deployment service for MCP + agent crews. Managed via Argo CD."
     }
   ]
 }

@@ -16,6 +16,12 @@
 
 // Brain graph (code-aware assistant with repo access)
 export { BRAIN_GRAPH_NAME, createBrainGraph } from "./brain/graph";
+export type { CreateCrewOrchestratorOptions } from "./crew-orchestrator/graph";
+// Crew Orchestrator graph (Akash deployment of MCP + agent crews)
+export {
+  CREW_ORCHESTRATOR_GRAPH_NAME,
+  createCrewOrchestratorGraph,
+} from "./crew-orchestrator/graph";
 // Poet graph (poetic AI assistant)
 export { createPoetGraph, POET_GRAPH_NAME } from "./poet/graph";
 // Ponderer graph (philosophical thinker)

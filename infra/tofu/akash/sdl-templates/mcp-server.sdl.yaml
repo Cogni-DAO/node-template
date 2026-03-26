@@ -1,0 +1,45 @@
+# Akash SDL Template: Single MCP Server
+# This template deploys a standalone MCP server container.
+# Used by the akash-client package for golden image deployments.
+#
+# Variables (replaced at generation time):
+#   ${SERVICE_NAME} - DNS-safe service name (e.g., mcp-github)
+#   ${IMAGE}        - Container image (e.g., ghcr.io/cogni-dao/mcp-golden/github:latest)
+#   ${PORT}         - Internal service port (e.g., 3101)
+#   ${CPU}          - CPU units (e.g., 0.5)
+#   ${MEMORY}       - Memory size (e.g., 512Mi)
+#   ${STORAGE}      - Storage size (e.g., 1Gi)
+#   ${PRICE}        - Price per block in uakt (e.g., 100)
+
+version: "2.0"
+
+services:
+  ${SERVICE_NAME}:
+    image: ${IMAGE}
+    expose:
+      - port: ${PORT}
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    ${SERVICE_NAME}:
+      resources:
+        cpu:
+          units: ${CPU}
+        memory:
+          size: ${MEMORY}
+        storage:
+          size: ${STORAGE}
+  placement:
+    default:
+      pricing:
+        ${SERVICE_NAME}:
+          denom: uakt
+          amount: ${PRICE}
+
+deployment:
+  ${SERVICE_NAME}:
+    default:
+      count: 1
