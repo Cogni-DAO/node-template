@@ -6,8 +6,8 @@ title: Agent Workforce — LangGraph Roles on Temporal Schedules
 state: Active
 priority: 0
 estimate: 5
-summary: "Multi-role agent workforce using configurable LangGraph graphs, one reusable Temporal workflow, and WorkItemPort queue filtering — replacing the OpenClaw-based mission-control operator loop"
-outcome: "Multiple AI agents run on independent Temporal schedules, each a LangGraph catalog entry with its own system prompt, tool set, and queue filter. CEO triages all work. Git Reviewer drives PRs to merge. Adding a role = adding a catalog entry, not writing code."
+summary: "Multi-role agent workforce via three registries (GraphSpec, RoleSpec, WorkItem) and one reusable RoleHeartbeatWorkflow on Temporal"
+outcome: "Adding an agent = 1 RoleSpec constant + 1 CatalogEntry + maybe 1 outcome handler. Never a new workflow. CEO triages all work. Git Reviewer drives PRs to merge. Measurable via role-level metrics (backlog, SLA, success rate, spend)."
 assignees:
   - derekg1729
 created: 2026-03-26
@@ -19,92 +19,69 @@ labels: [agents, governance, workforce, langgraph, temporal]
 
 ## Goal
 
-Replace the OpenClaw-based mission-control operator loop with LangGraph graphs running on Temporal schedules. Each role is a catalog entry (system prompt + tools + queue filter). One reusable `RoleHeartbeatWorkflow` orchestrates all roles.
+Three registries, one workflow, measurable agents.
 
-## Context
+| Registry            | Concern             | Package                             |
+| ------------------- | ------------------- | ----------------------------------- |
+| GraphSpec (catalog) | How to think        | `@cogni/langgraph-graphs`           |
+| RoleSpec            | What to own         | `@cogni/temporal-workflows` (crawl) |
+| WorkItem            | What to do (leased) | `@cogni/work-items`                 |
 
-### What exists and works
-
-- **5 LangGraph graphs** in `LANGGRAPH_CATALOG` — all using `createReactAgent`
-- **GraphRunWorkflow** — generic Temporal orchestration for any graph
-- **PrReviewWorkflow** — proven pattern: gather context → run graph → act on result
-- **GraphExecutorPort** — fully decorated (billing, observability, credit checks)
-- **WorkItemQueryPort** — typed work queue with filtering
-- **Temporal schedules** — governance heartbeat already fires hourly
-
-### What's broken
-
-- Mission-control is a shell-script CLI (`mc-controller.ts` + `mc-status.sh`) invoked by OpenClaw
-- One agent, one global queue, no role specialization
-- PR #562 sat 2 weeks — no agent owns PR lifecycle
-- System prompts hardcoded per graph factory — can't create roles without new factory files
+Adding an agent = 1 `RoleSpec` + 1 `CatalogEntry` + optionally 1 outcome handler. Never a new workflow.
 
 ## As-Built Specs
 
-- [Agent Roles](../../docs/spec/agent-roles.md) — Full design: parameterized graphs, reusable workflow, catalog-as-registry
+- [Agent Roles](../../docs/spec/agent-roles.md) — Three registries, RoleHeartbeatWorkflow, claim/release, outcome handlers
 
 ## Roadmap
 
 ### Crawl (P0) — Two Roles on LangGraph + Temporal
 
-**Goal:** CEO Operator and Git Reviewer running as LangGraph graphs on Temporal schedules.
+| Deliverable                                                             | Status      | Est | Work Item |
+| ----------------------------------------------------------------------- | ----------- | --- | --------- |
+| `systemPrompt` on graph options + CatalogEntry                          | Not Started | 0.5 | task.0207 |
+| `createOperatorGraph` factory (behind seam)                             | Not Started | 0.5 | task.0207 |
+| CEO + Git Reviewer catalog entries + prompts                            | Not Started | 1   | task.0207 |
+| Operator tools: `work_item_query`, `work_item_transition`               | Not Started | 2   | task.0207 |
+| `RoleSpec` type + CEO/Git Reviewer constants                            | Not Started | 0.5 | task.0208 |
+| `RoleHeartbeatWorkflow` + activities (claim, context, outcome, release) | Not Started | 2   | task.0208 |
+| 2 outcome handlers (default, pr-lifecycle)                              | Not Started | 1   | task.0208 |
+| Temporal schedules in repo-spec.yaml                                    | Not Started | 0.5 | task.0208 |
 
-| Deliverable                                                                 | Status      | Est | Work Item |
-| --------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Add `systemPrompt` to `CreateReactAgentGraphOptions` + `CatalogEntry`       | Not Started | 0.5 | task.0207 |
-| Create `createOperatorGraph` generic factory                                | Not Started | 0.5 | task.0207 |
-| CEO Operator catalog entry + system prompt                                  | Not Started | 1   | task.0207 |
-| Git Reviewer catalog entry + system prompt                                  | Not Started | 1   | task.0207 |
-| Operator tools: `work_item_query`, `work_item_transition`, `discord_post`   | Not Started | 2   | task.0207 |
-| `RoleHeartbeatWorkflow` + activities (pick, build context, process outcome) | Not Started | 2   | task.0208 |
-| Wire `HEARTBEAT` schedule to `RoleHeartbeatWorkflow`                        | Not Started | 1   | task.0208 |
-| Add `PR_LIFECYCLE` schedule to repo-spec.yaml                               | Not Started | 0.5 | task.0208 |
+### Walk (P1) — Metrics + More Roles
 
-### Walk (P1) — Feedback Loop + More Roles + Dashboard
+| Deliverable                                                                      | Status      | Est | Work Item |
+| -------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Role-level metrics dashboard (backlog, SLA breach, success rate, spend, unowned) | Not Started | 2   | (P1)      |
+| Webhook triggers for Git Reviewer                                                | Not Started | 2   | (P1)      |
+| PM + Data Analyst roles (RoleSpec + CatalogEntry each)                           | Not Started | 2   | (P1)      |
+| Extract RoleSpec to shared package for dashboard                                 | Not Started | 1   | (P1)      |
 
-**Goal:** Outcome logging, PM/Analyst roles, webhook triggers, dashboard.
+### Run (P2) — Self-Improving
 
-| Deliverable                                                           | Status      | Est | Work Item            |
-| --------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Outcome logging per role dispatch                                     | Not Started | 1   | (create at P1 start) |
-| PM Triage role (catalog entry + prompt + `needs_triage` filter)       | Not Started | 1   | (create at P1 start) |
-| Data Analyst role (catalog entry + prompt + metrics labels filter)    | Not Started | 1   | (create at P1 start) |
-| Webhook trigger for Git Reviewer (GitHub PR events → Temporal signal) | Not Started | 2   | (create at P1 start) |
-| Dashboard API: role snapshots from workflow results                   | Not Started | 2   | (create at P1 start) |
-| Prompt versioning and A/B testing                                     | Not Started | 2   | (create at P1 start) |
-
-### Run (P2) — Self-Improving + Cross-Role
-
-**Goal:** Prompts improve from feedback. Roles escalate to each other.
-
-| Deliverable                                                          | Status      | Est | Work Item            |
-| -------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Self-improving prompts (metaprompt reviews failures, proposes edits) | Not Started | 2   | (create at P2 start) |
-| Cross-role escalation (reviewer → PM → CEO via work item creation)   | Not Started | 2   | (create at P2 start) |
-| Role performance dashboard (success rate, time-to-resolution)        | Not Started | 2   | (create at P2 start) |
+| Deliverable                                        | Status      | Est | Work Item |
+| -------------------------------------------------- | ----------- | --- | --------- |
+| Outcome logging + prompt improvement feedback loop | Not Started | 2   | (P2)      |
+| Cross-role escalation via work item creation       | Not Started | 2   | (P2)      |
 
 ## Constraints
 
-- `CATALOG_IS_ROLE_REGISTRY` — Adding a role = adding a catalog entry (config, not code)
-- `ONE_WORKFLOW_ALL_ROLES` — `RoleHeartbeatWorkflow` is reusable across all roles
-- `REUSE_GRAPH_RUN_WORKFLOW` — Delegates to existing `GraphRunWorkflow` via `executeChild`
-- `PROMPT_IS_THE_PLAYBOOK` — System prompt IS the role's instructions
-- `EXISTING_FACTORIES_UNCHANGED` — Poet, brain, ponderer, research, pr-review keep their hardcoded prompts
-
-## Dependencies
-
-- [x] `@cogni/langgraph-graphs` — graph catalog and factories
-- [x] `@cogni/graph-execution-core` — GraphExecutorPort
-- [x] `@cogni/temporal-workflows` — GraphRunWorkflow
-- [x] `@cogni/work-items` — WorkItemQueryPort
-- [x] Temporal infrastructure (deployed)
+- `THREE_REGISTRIES` — GraphSpec, RoleSpec, WorkItem never collapse into one
+- `CLAIM_NOT_READ` — work items leased via `claim()`/`release()`, not read-then-act
+- `ONE_WORKFLOW_ALL_ROLES` — `RoleHeartbeatWorkflow` is parameterized, never per-role
+- `OUTCOME_HANDLERS_DISPATCHED` — by handler ID, no role branches in workflow code
 
 ## Design Notes
 
-**Why not a "Role" type/port:** A role IS a catalog entry + queue filter + schedule. These are configuration, not application state. No CRUD, no port, no adapter.
+**Why three registries, not one:** Graph config (prompt, tools) and operational config (schedule, SLA, budget) are different concerns with different change frequencies. Collapsing them into one registry makes the graph package depend on work-management types. Separation means `@cogni/langgraph-graphs` stays pure.
 
-**Why not per-role workflows:** All roles follow the same loop: pick item → build context → run graph → act on result. One parameterized workflow handles all roles.
+**Why claim/release:** With multiple roles on independent schedules, concurrent heartbeats will race for the same item. `WorkItemCommandPort.claim()` already provides atomic leasing — we just need to use it.
 
-**Why keep OpenClaw:** OpenClaw serves Discord-bound conversational agents (poet channel, ideas channel). Operator/governance agents move to LangGraph + Temporal because they need structured output, tool calling, and Temporal's durability guarantees.
+**Why outcome handlers:** Each role produces different side effects (CEO updates items, Git Reviewer merges PRs). A handler registry keeps the workflow generic. Adding a role with custom outcomes = registering one handler function.
 
-**Relationship to task.0162:** task.0162 (mc-controller.ts) is superseded. The controller logic moves into `RoleHeartbeatWorkflow` activities. The typed pieces (signals, policy, snapshots) evolve into workflow input/output types.
+## Dependencies
+
+- [x] `@cogni/langgraph-graphs` — catalog + factories
+- [x] `@cogni/temporal-workflows` — GraphRunWorkflow
+- [x] `@cogni/work-items` — claim()/release()
+- [x] Temporal infrastructure
