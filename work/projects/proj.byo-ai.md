@@ -2,91 +2,207 @@
 id: proj.byo-ai
 type: project
 primary_charter:
-title: "BYO-AI: Bring Your Own AI Subscription"
+title: "BYO-AI: Bring Your Own LLM Provider"
 state: Active
 priority: 1
 estimate: 8
-summary: "Users connect their own LLM subscriptions (starting with ChatGPT) to power any Cogni graph at $0 platform cost. LLM provider auth — not external agent runtime."
-outcome: "Users link ChatGPT on profile. Any Cogni graph runs on their subscription. ConnectionBrokerPort provides unified credential resolution for BYO provider auth and future tool auth."
+summary: "Users connect their own LLM backends (ChatGPT subscription, Ollama, future providers) to power any Cogni graph at $0 platform cost. Swap happens at LlmService level — graph logic unchanged."
+outcome: "Any Cogni graph runs on any connected LLM backend. Provider selection is a first-class config choice, not an override."
 assignees: [derekg1729]
 created: 2026-03-22
-updated: 2026-03-24
-labels: [ai, oauth, byo-ai, cost-control, codex]
+updated: 2026-03-26
+labels: [ai, oauth, byo-ai, cost-control]
 ---
 
-# BYO-AI: Bring Your Own AI Subscription
+# BYO-AI: Bring Your Own LLM Provider
 
 ## Goal
 
-Let users bring their own LLM subscriptions to power Cogni graph execution. Starting with ChatGPT Plus/Pro, users connect via OAuth and run any Cogni graph at $0 marginal cost using their own subscription.
+Users connect their own LLM backends to power Cogni graph execution. The LLM provider is a first-class configuration choice on every graph run — not a hack, not an override. Any graph, any backend, same graph logic.
 
-## Important Distinction
+## Current State (as-built, 2026-03-26)
 
-| Concept                  | Description                                                                  | This project?            |
-| ------------------------ | ---------------------------------------------------------------------------- | ------------------------ |
-| **BYO LLM provider**     | ChatGPT subscription tokens powering LLM completions for Cogni graphs        | Yes                      |
-| **External Codex agent** | Spawning Codex agent containers as an external runtime (sandbox, CLI, files) | No — separate capability |
+### What works
 
-BYO-AI is about **LLM provider auth**: the user's ChatGPT subscription becomes an alternative completion backend for Cogni's own LangGraph-based graphs. The graph logic runs in our runtime; only the LLM calls route differently.
+- **ChatGPT OAuth** — profile page connect flow (PKCE + paste-back, works local + cloud)
+- **CodexLlmAdapter implements LlmService** — swaps LLM backend via `ExecutionScope.llmServiceOverride`
+- **UI provider toggle** — OpenRouter / ChatGPT in ModelPicker, with ChatGPT model list
+- **Chat + Schedules** — both pass `modelConnectionId` through the full pipeline
+- **Credit check skip** — BYO runs bypass preflight credit check via `req.modelConnectionId`
+- **Billing skip** — BYO runs skip `usage_report` (no `litellmCallId`, no platform cost)
 
-## Core Principles
+### What's wrong (technical debt from crawl)
 
-1. **Graph identity orthogonal to LLM backend.** No "codex graphs." Any Cogni graph runs on any backend. `modelConnectionId` determines the backend, not the graph name.
-
-2. **Typed connection references.** `modelConnectionId` (which LLM backend) is separate from `toolConnectionIds` (which tool credentials). Different resolution semantics, no ambiguity.
-
-3. **No credit bypass — stack ordering.** BYOExecutorDecorator sits inside the credit check in the decorator stack. If BYO handles the run, the inner platform executor never fires. No bypass flag needed.
-
-4. **Isolated app-server state.** Do not assume one shared app-server can multiplex users. Isolate per tenant until proven otherwise.
-
-## Architecture
+The current architecture has **split authority** — multiple places make the same decision independently:
 
 ```
-Any Cogni graph + modelConnectionId    -> BYOExecutorDecorator -> broker -> ChatGPT (user)
-Any Cogni graph + no modelConnectionId -> Standard executor    -> LiteLLM/OpenRouter (platform)
+WHERE "is this model valid?" IS DECIDED:
+  1. ModelPicker.tsx         — hardcoded CHATGPT_MODELS array
+  2. ChatComposerExtras.tsx  — validates against CHATGPT_MODELS + OpenRouter list
+  3. model-catalog.server.ts — isModelAllowed() checks CHATGPT_MODEL_IDS set
+  4. model-catalog.server.ts — isModelFree() checks CHATGPT_MODEL_IDS set
+  5. model-catalog.server.ts — isModelFreeFromCache() checks CHATGPT_MODEL_IDS set
+
+WHERE "should this run pay credits?" IS DECIDED:
+  1. schedules/route.ts      — inline isModelFree() check at schedule creation
+  2. preflight-credit-check  — req.modelConnectionId check at execution time
+
+WHERE "which LLM backend?" IS DECIDED:
+  1. graph-executor.factory   — checks req.modelConnectionId, resolves broker
+  2. inproc-completion-unit   — reads scope.llmServiceOverride
+  3. The model ID itself      — ChatGPT model IDs only work on Codex transport
 ```
 
-`ConnectionBrokerPort` resolves credentials for both BYO provider auth (this project) and tool auth (tenant-connections project). One port, typed returns, provider-specific refresh logic.
+This means: 3 hardcoded `CHATGPT_MODEL_IDS` sets, 2 credit check paths, and the "override" framing treats BYO as an exception rather than a first-class provider.
+
+## Proper Design (next phase)
+
+### Principle: One authority per decision
+
+| Decision                                  | Authority                                         | Where                                                               |
+| ----------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- |
+| What models can this user select?         | `ModelCatalogPort`                                | Server — `/api/v1/ai/models` returns unified list from ALL backends |
+| Is this model free (no platform credits)? | `ModelCatalogPort` — `isFree` field on each model | Same unified list                                                   |
+| Which LLM backend handles this model?     | `ModelRef.provider` field                         | Set at selection time, carried on `GraphRunRequest`                 |
+| What credentials does this backend need?  | `ConnectionBrokerPort`                            | Resolves `connectionId` to provider-specific credentials            |
+
+### ModelRef — typed model selection
+
+Replace `model: string` + `modelConnectionId?: string` with one typed reference:
+
+```ts
+type ModelRef = {
+  provider: "platform" | "chatgpt" | "ollama";
+  modelId: string;
+  connectionId?: string; // required for non-platform providers
+};
+```
+
+`GraphRunRequest` carries `modelRef: ModelRef` instead of separate fields. The factory routes to the correct `LlmService` adapter based on `modelRef.provider`. No "override" — it's the configured provider.
+
+### ModelCatalogPort — unified model authority
+
+```ts
+interface ModelCatalogPort {
+  listModels(userId: string): Promise<ModelOption[]>;
+}
+
+type ModelOption = {
+  ref: ModelRef;
+  label: string;
+  isFree: boolean;
+  provider: string;
+};
+```
+
+The `/api/v1/ai/models` endpoint calls `ModelCatalogPort.listModels()` which aggregates:
+
+- Platform models from LiteLLM `/model/info`
+- ChatGPT models (if user has active `openai-chatgpt` connection)
+- Ollama models (if user has connected Ollama endpoint — future)
+
+The UI renders what the server returns. **No hardcoded model arrays in React.**
+
+### LlmService adapters — one per provider
+
+```
+LlmService (port interface)
+  ├─ LiteLlmAdapter      — platform (OpenRouter via LiteLLM proxy)
+  ├─ CodexLlmAdapter     — ChatGPT subscription (codex exec subprocess)
+  └─ OllamaLlmAdapter    — user-hosted models (OpenAI-compatible HTTP, future)
+```
+
+The factory creates the right adapter based on `modelRef.provider`:
+
+```ts
+function resolveLlmService(
+  ref: ModelRef,
+  broker: ConnectionBrokerPort
+): LlmService {
+  switch (ref.provider) {
+    case "platform":
+      return container.llmService; // LiteLlmAdapter singleton
+    case "chatgpt":
+      return new CodexLlmAdapter(await broker.resolve(ref.connectionId!));
+    case "ollama":
+      return new OllamaLlmAdapter(await broker.resolve(ref.connectionId!));
+  }
+}
+```
+
+No `ExecutionScope.llmServiceOverride`. No special-case checks. The provider is resolved from the request config.
+
+### Credit check — one path
+
+The `PreflightCreditCheckDecorator` checks `modelRef.isFree` (set by the catalog). If free, skip. If paid, check credits. One check, one authority.
+
+The schedule creation route uses the same `isFree` from the catalog response — no separate `isModelFree()` function call.
 
 ## Roadmap
 
-### Crawl (v0) — Local Dev Experiment (DONE)
+### Done — Crawl (local dev, working)
 
-- [x] OAuth login script (`pnpm codex:login`) — PKCE flow
-- [x] `CodexGraphProvider` implementing `GraphExecutorPort` (v0 proof-of-concept)
-- [x] Full unified execution path (Temporal, Redis, Langfuse, thread persistence)
-- Auth: file-backed `~/.codex/auth.json`, single trusted runner
-- `codex:` namespace was a v0 hack — removed in v1
+- [x] CodexLlmAdapter implements LlmService
+- [x] ExecutionScope.llmServiceOverride wiring
+- [x] ChatGPT OAuth (PKCE + paste-back, profile page)
+- [x] UI provider toggle in ModelPicker
+- [x] Credit check skip for BYO runs
+- [x] Billing skip (no usage_report for BYO)
+- [x] Chat + Schedules pass modelConnectionId
+- [x] connections table + AEAD + DrizzleConnectionBrokerAdapter
 
-### Walk (v1) — Per-Tenant BYO-AI
+### Next — Clean up split authority
 
-- [ ] `connections` table (spec.tenant-connections schema, AEAD blob, AAD binding)
-- [ ] `ConnectionBrokerPort` — unified credential resolution with typed returns
-- [ ] `BYOExecutorDecorator` — intercepts on `modelConnectionId`, routes to ChatGPT completion backend
-- [ ] Remove `codex:` namespace — no codex-specific graphs
-- [ ] Typed refs: `modelConnectionId` + `toolConnectionIds` on `GraphRunRequest`
-- [ ] OAuth PKCE flow on profile page: "Connect ChatGPT"
-- [ ] ChatGPT completion backend via `codex exec` subprocess (proven in v0, naturally isolated)
+- [ ] Implement `ModelCatalogPort` — server-side unified model list
+- [ ] `/api/v1/ai/models` aggregates platform + ChatGPT models (based on user connections)
+- [ ] Remove `CHATGPT_MODELS` const from ModelPicker — render from API only
+- [ ] Remove `CHATGPT_MODEL_IDS` set from model-catalog.server.ts
+- [ ] Replace `model: string` + `modelConnectionId?: string` with `ModelRef` on `GraphRunRequest`
+- [ ] Factory resolves LlmService from `ModelRef.provider` — no override pattern
+- [ ] One credit check path using catalog `isFree` field
+- [ ] Remove schedule route inline credit check — use decorator only
+
+### Future — Ollama / hosted OSS (task.0207)
+
+- [ ] `OllamaLlmAdapter implements LlmService` — HTTP POST to user's endpoint
+- [ ] Profile page "Connect Ollama" — user enters endpoint URL
+- [ ] `ModelCatalogPort` fetches models from Ollama `/api/tags` endpoint
+- [ ] SSRF protection for user-provided URLs
+
+### Future — Multi-provider production
+
+- [ ] Codex app-server with `chatgptAuthTokens` (host-managed, replaces subprocess)
 - [ ] Token refresh via broker (pre-execution expiry check)
-- [ ] Stack ordering eliminates credit bypass logic
-
-### Run (v2) — Multi-Provider BYO
-
-- [ ] Anthropic, Google provider support (same broker, new refresh adapters)
 - [ ] Spend limits and usage dashboards per connection
 - [ ] Organization-level connection sharing
+
+## Execution Paths (as-built)
+
+```
+Chat:      UI → chat/route → facade → Temporal → internal/route → factory → decorator stack → graph → LlmService
+Schedule:  UI → schedules/route → Temporal schedule → workflow → internal/route → factory → decorator stack → graph → LlmService
+
+Decorator stack (inside-out):
+  BillingEnrichment → BillingValidator → PreflightCreditCheck → Observability
+
+LlmService dispatch:
+  factory checks modelConnectionId → broker.resolve() → CodexLlmAdapter → codex exec
+  OR
+  factory no modelConnectionId → LiteLlmAdapter → LiteLLM → OpenRouter
+```
 
 ## Constraints
 
 - ChatGPT subscription tokens work with Codex Responses API only (not api.openai.com)
-- v1 uses `codex exec` subprocess (~2s cold start per execution). App-server is a v2 performance optimization.
-- Public OAuth client ID may not accept non-localhost redirect URIs (spike needed)
+- Public OAuth client ID locked to `redirect_uri=http://localhost:1455/auth/callback` — paste-back flow for cloud
+- `codex exec` subprocess has ~2s cold start per LLM call
+- codex exec does not stream incrementally — text arrives in burst at turn completion
 
 ## Dependencies
 
-- @openai/codex-sdk, @openai/codex (SDK + CLI for ChatGPT Responses API)
-- @mariozechner/pi-ai (OAuth login flow)
-- spec.tenant-connections (connections table schema, AEAD invariants)
+- @openai/codex-sdk, @openai/codex (SDK + CLI)
+- @mariozechner/pi-ai (OAuth login flow for CLI, not used in web flow)
+- spec.tenant-connections (connections table, AEAD)
 
 ## As-Built Specs
 
@@ -95,16 +211,6 @@ Any Cogni graph + no modelConnectionId -> Standard executor    -> LiteLLM/OpenRo
 
 ## Design Notes
 
-- The Codex SDK wraps `codex exec` as a subprocess (JSONL over stdio)
-- Platform-specific Rust binaries may not install under pnpm; JS CLI fallback works via `codexPathOverride`
-- ChatGPT Responses API uses WebSocket transport — not standard OpenAI chat completions
-
-## Key Decisions
-
-- **LLM provider, not agent runtime** — BYO-AI = ChatGPT subscription for completions, not spawning Codex containers
-- **Graph identity orthogonal to backend** — no `codex:` namespace
-- **Typed connection refs** — `modelConnectionId` (LLM) + `toolConnectionIds` (tools), not untyped array
-- **No credit bypass** — stack ordering handles billing naturally
-- **ConnectionBrokerPort built now** — serves BYO and future tool auth
-- **`codex exec` subprocess for v1** — proven, isolated per-request. App-server is a v2 optimization.
-- **`connections` table from spec.tenant-connections** — one table, AEAD encryption, AAD binding
+- `LlmService` port is a crawl-step seam, not the final abstraction — will evolve as provider semantics diverge
+- The "override" pattern (`ExecutionScope.llmServiceOverride`) should be replaced with explicit provider resolution from `ModelRef`
+- OpenAI does NOT offer self-service OAuth client registration — the paste-back flow is the documented VPS/remote pattern
