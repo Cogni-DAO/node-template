@@ -292,7 +292,26 @@ export async function getCachedModels(): Promise<ModelsCatalog> {
 /**
  * Check if a model ID is in the allowed list (fast, cached)
  */
+/**
+ * Known ChatGPT subscription model IDs (Codex transport).
+ * TODO: Replace with a unified models API that returns models from all
+ * connected backends (OpenRouter, ChatGPT, Ollama, etc.)
+ */
+const CHATGPT_MODEL_IDS = new Set([
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.3-codex",
+  "gpt-5.3-codex-spark",
+  "gpt-5.2-codex",
+  "gpt-5.1-codex",
+  "gpt-5.1-codex-mini",
+  "gpt-5.1-codex-max",
+]);
+
 export async function isModelAllowed(modelId: string): Promise<boolean> {
+  // ChatGPT subscription models are always valid (validated at Codex exec time)
+  if (CHATGPT_MODEL_IDS.has(modelId)) return true;
+
   try {
     const { models } = await getCachedModels();
     return models.some((m) => m.id === modelId);
