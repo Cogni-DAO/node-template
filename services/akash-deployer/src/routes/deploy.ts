@@ -12,12 +12,10 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ContainerRuntimePort } from "@cogni/container-runtime";
+import { groupSpecSchema, workloadSpecSchema } from "@cogni/container-runtime";
 import type { Logger } from "pino";
-import type {
-  ContainerRuntimePort,
-  DeploymentSummary,
-} from "../runtime/container-runtime.port.js";
-import { deployRequestSchema } from "../runtime/container-runtime.port.js";
+import { z } from "zod";
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -33,11 +31,14 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+const deployRequestSchema = z.object({
+  name: z.string(),
+  workloads: z.array(workloadSpecSchema).min(1),
+});
+
 export function createDeployRoutes(runtime: ContainerRuntimePort, log: Logger) {
-  const deployments = new Map<string, DeploymentSummary>();
-  let deployCounter = 0;
   return {
-    /** POST /api/v1/deploy — Deploy workloads */
+    /** POST /api/v1/deploy — Create group + deploy all workloads into it */
     async deploy(req: IncomingMessage, res: ServerResponse): Promise<void> {
       try {
         const body = await readBody(req);
@@ -49,24 +50,23 @@ export function createDeployRoutes(runtime: ContainerRuntimePort, log: Logger) {
           "Deploying"
         );
 
-        const results = await Promise.all(
-          request.workloads.map((spec) => runtime.deploy(spec))
+        // Create isolated group
+        const group = await runtime.createGroup(
+          groupSpecSchema.parse({ name: request.name })
         );
 
-        const deploymentId = `deploy-${(++deployCounter).toString()}`;
-        const allRunning = results.every((r) => r.status === "running");
+        // Deploy all workloads into the group
+        const results = await Promise.all(
+          request.workloads.map((spec) => runtime.deploy(group.groupId, spec))
+        );
 
-        const summary: DeploymentSummary = {
-          deploymentId,
-          name: request.name,
-          workloads: results,
-          status: allRunning ? "active" : "partial",
-        };
+        const updated = await runtime.getGroup(group.groupId);
+        log.info(
+          { groupId: group.groupId, workloads: results.length },
+          "Deployed"
+        );
 
-        deployments.set(deploymentId, summary);
-        log.info({ deploymentId, workloads: results.length }, "Deployed");
-
-        json(res, 201, summary);
+        json(res, 201, updated);
       } catch (err) {
         log.error({ err }, "Deploy failed");
         if (err instanceof SyntaxError) {
@@ -81,8 +81,29 @@ export function createDeployRoutes(runtime: ContainerRuntimePort, log: Logger) {
       }
     },
 
-    /** GET /api/v1/deployments/:id — Get deployment status */
-    async getDeployment(
+    /** GET /api/v1/groups/:id — Get group status with all workloads */
+    async getGroup(req: IncomingMessage, res: ServerResponse): Promise<void> {
+      const url = new URL(
+        req.url ?? "/",
+        `http://${req.headers.host ?? "localhost"}`
+      );
+      const match = /\/([^/]+)$/.exec(url.pathname);
+      if (!match?.[1]) {
+        json(res, 400, { error: "Missing group ID" });
+        return;
+      }
+
+      const group = await runtime.getGroup(match[1]);
+      if (!group) {
+        json(res, 404, { error: "Not found" });
+        return;
+      }
+
+      json(res, 200, group);
+    },
+
+    /** DELETE /api/v1/groups/:id — Destroy group and all workloads */
+    async destroyGroup(
       req: IncomingMessage,
       res: ServerResponse
     ): Promise<void> {
@@ -92,66 +113,30 @@ export function createDeployRoutes(runtime: ContainerRuntimePort, log: Logger) {
       );
       const match = /\/([^/]+)$/.exec(url.pathname);
       if (!match?.[1]) {
-        json(res, 400, { error: "Missing deployment ID" });
+        json(res, 400, { error: "Missing group ID" });
         return;
       }
 
-      const summary = deployments.get(match[1]);
-      if (!summary) {
+      const group = await runtime.getGroup(match[1]);
+      if (!group) {
         json(res, 404, { error: "Not found" });
         return;
       }
 
-      // Refresh statuses from runtime
-      const refreshed = await Promise.all(
-        summary.workloads.map(async (w) => {
-          const s = await runtime.status(w.id).catch(() => "failed" as const);
-          return { ...w, status: s };
-        })
-      );
+      await runtime.destroyGroup(match[1]);
+      const destroyed = await runtime.getGroup(match[1]);
+      log.info({ groupId: match[1] }, "Destroyed");
 
-      json(res, 200, { ...summary, workloads: refreshed });
+      json(res, 200, destroyed);
     },
 
-    /** DELETE /api/v1/deployments/:id — Stop all workloads in a deployment */
-    async stopDeployment(
-      req: IncomingMessage,
-      res: ServerResponse
-    ): Promise<void> {
-      const url = new URL(
-        req.url ?? "/",
-        `http://${req.headers.host ?? "localhost"}`
-      );
-      const match = /\/([^/]+)$/.exec(url.pathname);
-      if (!match?.[1]) {
-        json(res, 400, { error: "Missing deployment ID" });
-        return;
-      }
-
-      const summary = deployments.get(match[1]);
-      if (!summary) {
-        json(res, 404, { error: "Not found" });
-        return;
-      }
-
-      await Promise.all(
-        summary.workloads.map((w) => runtime.stop(w.id).catch(() => {}))
-      );
-
-      const stopped: DeploymentSummary = { ...summary, status: "stopped" };
-      deployments.set(match[1], stopped);
-      log.info({ deploymentId: match[1] }, "Stopped");
-
-      json(res, 200, stopped);
-    },
-
-    /** GET /api/v1/workloads — List all workloads across all deployments */
-    async listWorkloads(
+    /** GET /api/v1/groups — List all groups */
+    async listGroups(
       _req: IncomingMessage,
       res: ServerResponse
     ): Promise<void> {
-      const all = await runtime.list();
-      json(res, 200, { workloads: all });
+      const groups = await runtime.listGroups();
+      json(res, 200, { groups });
     },
   };
 }

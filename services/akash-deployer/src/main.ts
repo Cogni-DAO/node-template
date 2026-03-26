@@ -14,11 +14,11 @@
 
 import crypto from "node:crypto";
 import { createServer } from "node:http";
+import { MockContainerRuntime } from "@cogni/container-runtime/adapters/mock";
 import pino from "pino";
 import { loadConfig } from "./config/env.js";
 import { createDeployRoutes } from "./routes/deploy.js";
 import { handleLivez, handleReadyz } from "./routes/health.js";
-import { MockContainerRuntime } from "./runtime/mock.adapter.js";
 
 const config = loadConfig();
 
@@ -28,7 +28,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 const log = pino(pinoOpts);
 
-// v0: mock runtime. P1: DockerAdapter or AkashAdapter.
+// v0: mock runtime. P1: DockerAdapter, ToolHive, or AkashAdapter.
 const runtime = new MockContainerRuntime();
 const routes = createDeployRoutes(runtime, log);
 
@@ -40,7 +40,7 @@ function verifyToken(provided: string | null, expected: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
-const DEPLOYMENT_PATTERN = /^\/api\/v1\/deployments\/([^/]+)$/;
+const GROUP_PATTERN = /^\/api\/v1\/groups\/([^/]+)$/;
 
 const server = createServer(async (req, res) => {
   const url = new URL(
@@ -66,13 +66,13 @@ const server = createServer(async (req, res) => {
 
   if (method === "POST" && path === "/api/v1/deploy")
     return routes.deploy(req, res);
-  if (method === "GET" && path === "/api/v1/workloads")
-    return routes.listWorkloads(req, res);
+  if (method === "GET" && path === "/api/v1/groups")
+    return routes.listGroups(req, res);
 
-  const m = DEPLOYMENT_PATTERN.exec(path);
+  const m = GROUP_PATTERN.exec(path);
   if (m) {
-    if (method === "GET") return routes.getDeployment(req, res);
-    if (method === "DELETE") return routes.stopDeployment(req, res);
+    if (method === "GET") return routes.getGroup(req, res);
+    if (method === "DELETE") return routes.destroyGroup(req, res);
   }
 
   res.writeHead(404, { "Content-Type": "application/json" });

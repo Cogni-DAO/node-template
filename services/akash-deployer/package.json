@@ -12,6 +12,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@cogni/container-runtime": "workspace:*",
     "pino": "^9.6.0",
     "zod": "^3.24.0"
   },

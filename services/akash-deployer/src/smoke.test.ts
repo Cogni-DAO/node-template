@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/akash-deployer-service/smoke.test`
- * Purpose: E2E smoke tests — full deploy lifecycle via HTTP.
+ * Purpose: E2E smoke tests — full group deploy lifecycle via HTTP.
  * Scope: Tests only. Does NOT contain production code.
  * Invariants: none
  * Side-effects: IO
@@ -13,13 +13,13 @@
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { MockContainerRuntime } from "@cogni/container-runtime/adapters/mock";
 import pino from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDeployRoutes } from "./routes/deploy.js";
 import { handleLivez, handleReadyz } from "./routes/health.js";
-import { MockContainerRuntime } from "./runtime/mock.adapter.js";
 
-const DEPLOYMENT_PATTERN = /^\/api\/v1\/deployments\/([^/]+)$/;
+const GROUP_PATTERN = /^\/api\/v1\/groups\/([^/]+)$/;
 
 async function startTestServer(): Promise<{ server: Server; baseUrl: string }> {
   const log = pino({ level: "silent" });
@@ -38,13 +38,13 @@ async function startTestServer(): Promise<{ server: Server; baseUrl: string }> {
     if (path === "/readyz") return handleReadyz(req, res);
     if (method === "POST" && path === "/api/v1/deploy")
       return routes.deploy(req, res);
-    if (method === "GET" && path === "/api/v1/workloads")
-      return routes.listWorkloads(req, res);
+    if (method === "GET" && path === "/api/v1/groups")
+      return routes.listGroups(req, res);
 
-    const m = DEPLOYMENT_PATTERN.exec(path);
+    const m = GROUP_PATTERN.exec(path);
     if (m) {
-      if (method === "GET") return routes.getDeployment(req, res);
-      if (method === "DELETE") return routes.stopDeployment(req, res);
+      if (method === "GET") return routes.getGroup(req, res);
+      if (method === "DELETE") return routes.destroyGroup(req, res);
     }
 
     res.writeHead(404);
@@ -58,23 +58,6 @@ async function startTestServer(): Promise<{ server: Server; baseUrl: string }> {
     });
   });
 }
-
-const TWO_WORKLOADS = {
-  name: "test-deployment",
-  workloads: [
-    {
-      name: "mcp-github",
-      image: "ghcr.io/modelcontextprotocol/server-github:latest",
-      ports: [{ container: 3101, expose: false }],
-    },
-    {
-      name: "agent-research",
-      image: "ghcr.io/cogni-dao/openclaw:latest",
-      ports: [{ container: 8080, expose: true }],
-      connectsTo: ["mcp-github"],
-    },
-  ],
-};
 
 describe("akash-deployer smoke tests", () => {
   let server: Server;
@@ -101,24 +84,38 @@ describe("akash-deployer smoke tests", () => {
     expect(res.status).toBe(200);
   });
 
-  it("POST /api/v1/deploy → deploys workloads", async () => {
+  it("POST /api/v1/deploy → creates group with workloads", async () => {
     const res = await fetch(`${baseUrl}/api/v1/deploy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(TWO_WORKLOADS),
+      body: JSON.stringify({
+        name: "test-group",
+        workloads: [
+          {
+            name: "mcp-github",
+            image: "mcp/github:latest",
+            ports: [{ container: 3101 }],
+          },
+          {
+            name: "agent",
+            image: "openclaw:latest",
+            ports: [{ container: 8080, expose: true }],
+          },
+        ],
+      }),
     });
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
-      deploymentId: string;
+      groupId: string;
       status: string;
       workloads: unknown[];
     };
+    expect(body.groupId).toMatch(/^grp-/);
     expect(body.status).toBe("active");
-    expect(body.deploymentId).toMatch(/^deploy-/);
     expect(body.workloads).toHaveLength(2);
   });
 
-  it("GET /api/v1/deployments/:id → retrieves deployment", async () => {
+  it("GET /api/v1/groups/:id → retrieves group", async () => {
     const deployRes = await fetch(`${baseUrl}/api/v1/deploy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -129,50 +126,71 @@ describe("akash-deployer smoke tests", () => {
         ],
       }),
     });
-    const { deploymentId } = (await deployRes.json()) as {
-      deploymentId: string;
-    };
+    const { groupId } = (await deployRes.json()) as { groupId: string };
 
-    const res = await fetch(`${baseUrl}/api/v1/deployments/${deploymentId}`);
+    const res = await fetch(`${baseUrl}/api/v1/groups/${groupId}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      deploymentId: string;
+      groupId: string;
       workloads: Array<{ status: string }>;
     };
-    expect(body.deploymentId).toBe(deploymentId);
+    expect(body.groupId).toBe(groupId);
     expect(body.workloads[0]?.status).toBe("running");
   });
 
-  it("DELETE /api/v1/deployments/:id → stops workloads", async () => {
+  it("DELETE /api/v1/groups/:id → destroys group", async () => {
     const deployRes = await fetch(`${baseUrl}/api/v1/deploy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "stop-test",
+        name: "destroy-test",
         workloads: [
           { name: "svc", image: "alpine", ports: [{ container: 80 }] },
         ],
       }),
     });
-    const { deploymentId } = (await deployRes.json()) as {
-      deploymentId: string;
-    };
+    const { groupId } = (await deployRes.json()) as { groupId: string };
 
-    const res = await fetch(`${baseUrl}/api/v1/deployments/${deploymentId}`, {
+    const res = await fetch(`${baseUrl}/api/v1/groups/${groupId}`, {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string };
+    expect(body.status).toBe("stopped");
   });
 
-  it("GET /api/v1/workloads → lists all workloads", async () => {
-    const res = await fetch(`${baseUrl}/api/v1/workloads`);
+  it("GET /api/v1/groups → lists all groups", async () => {
+    const res = await fetch(`${baseUrl}/api/v1/groups`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { workloads: unknown[] };
-    expect(body.workloads.length).toBeGreaterThan(0);
+    const body = (await res.json()) as { groups: unknown[] };
+    expect(body.groups.length).toBeGreaterThan(0);
   });
 
-  it("GET /api/v1/deployments/bogus → 404", async () => {
-    const res = await fetch(`${baseUrl}/api/v1/deployments/bogus`);
+  it("workloads in a group get internal endpoints", async () => {
+    const res = await fetch(`${baseUrl}/api/v1/deploy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "internal-net",
+        workloads: [
+          { name: "db", image: "postgres:16", ports: [{ container: 5432 }] },
+          {
+            name: "app",
+            image: "myapp:latest",
+            ports: [{ container: 3000, expose: true }],
+          },
+        ],
+      }),
+    });
+    const body = (await res.json()) as {
+      workloads: Array<{ name: string; endpoints: Record<string, string> }>;
+    };
+    const db = body.workloads.find((w) => w.name === "db");
+    expect(db?.endpoints.internal).toBe("http://db:5432");
+  });
+
+  it("GET /api/v1/groups/bogus → 404", async () => {
+    const res = await fetch(`${baseUrl}/api/v1/groups/bogus`);
     expect(res.status).toBe(404);
   });
 
@@ -183,10 +201,5 @@ describe("akash-deployer smoke tests", () => {
       body: "not json",
     });
     expect(res.status).toBe(400);
-  });
-
-  it("GET /unknown → 404", async () => {
-    const res = await fetch(`${baseUrl}/unknown`);
-    expect(res.status).toBe(404);
   });
 });
