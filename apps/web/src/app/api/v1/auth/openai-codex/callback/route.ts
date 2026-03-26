@@ -31,7 +31,6 @@ import { getContainer, resolveAppDb } from "@/bootstrap/container";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import { getServerSessionUser } from "@/lib/auth/server";
 import { aeadEncrypt } from "@/shared/crypto/aead";
-import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
 export const runtime = "nodejs";
@@ -88,8 +87,9 @@ export async function GET(request: Request) {
   }
 
   const verifier = payload.verifier as string;
-  const env = serverEnv();
-  const callbackUrl = `${env.APP_BASE_URL}/api/v1/auth/openai-codex/callback`;
+  // Token exchange must use the same redirect_uri that was sent to the authorize endpoint.
+  // The Codex public client is locked to localhost:1455.
+  const callbackUrl = "http://localhost:1455/auth/callback";
 
   // Exchange authorization code for tokens
   let tokenData: {

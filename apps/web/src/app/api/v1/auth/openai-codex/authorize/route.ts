@@ -60,16 +60,53 @@ export async function POST() {
   });
 
   // Build OpenAI authorize URL
-  const callbackUrl = `${serverEnv().APP_BASE_URL}/api/v1/auth/openai-codex/callback`;
+  // The public Codex client ID is locked to redirect_uri=http://localhost:1455/auth/callback.
+  // We use that exact URI and run a one-shot relay server on port 1455 that forwards
+  // the OAuth code to our real callback route on the Next.js server.
+  const OPENAI_REDIRECT_URI = "http://localhost:1455/auth/callback";
+  const realCallbackUrl = `${serverEnv().APP_BASE_URL}/api/v1/auth/openai-codex/callback`;
+
+  // Start one-shot relay server on port 1455
+  const http = await import("node:http");
+  const relay = http.createServer((req, res) => {
+    const reqUrl = new URL(req.url ?? "/", "http://localhost:1455");
+    if (reqUrl.pathname === "/auth/callback") {
+      // Forward all query params to our real callback
+      const target = `${realCallbackUrl}?${reqUrl.searchParams.toString()}`;
+      res.writeHead(302, { Location: target });
+      res.end();
+      // Close server after handling the one callback
+      relay.close();
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+
+  // Listen with error handling for port-in-use
+  try {
+    await new Promise<void>((resolve, reject) => {
+      relay.once("error", reject);
+      relay.listen(1455, "127.0.0.1", () => resolve());
+    });
+    // Auto-close after 5 minutes if no callback received
+    setTimeout(() => relay.close(), 5 * 60 * 1000);
+  } catch {
+    // Port 1455 in use — another flow may be running
+    return NextResponse.json(
+      { error: "Port 1455 in use — close any running codex login" },
+      { status: 409 }
+    );
+  }
+
   const params = new URLSearchParams({
     response_type: "code",
     client_id: OPENAI_CLIENT_ID,
-    redirect_uri: callbackUrl,
+    redirect_uri: OPENAI_REDIRECT_URI,
     scope: "openid profile email offline_access",
     code_challenge: challenge,
     code_challenge_method: "S256",
     state,
-    // Required by Codex public client — enables simplified consent flow
     codex_cli_simplified_flow: "true",
     id_token_add_organizations: "true",
   });
