@@ -10,7 +10,7 @@ summary: "Implement ClusterProvider adapter for Akash Network. Deploy containeri
 outcome: "A user describes workloads in natural language, the system generates Akash SDL and deploys via the same ClusterProvider interface used for k8s. Mock adapter proves the flow e2e in v0."
 assignees: [derekg1729]
 created: 2026-03-26
-updated: 2026-03-26
+updated: 2026-03-27
 labels: [infra, akash, mcp, agents]
 ---
 
@@ -26,13 +26,13 @@ Add Akash Network as a deployment target via the existing `ClusterProvider` inte
 
 **Goal:** Testable e2e flow with mock provider. HTTP API accepts workload specs, generates SDL, returns deployment info. Orchestrator graph converts NL to workload specs. Prove it with curl.
 
-| Deliverable                                                           | Status      | Est | Work Item |
-| --------------------------------------------------------------------- | ----------- | --- | --------- |
-| `services/akash-deployer` with MockClusterProvider, SDL gen, HTTP API | In Progress | 2   | —         |
-| Orchestrator graph — NL to workload specs via DI (no hard imports)    | In Progress | 1   | —         |
-| GitOps manifests — Kustomize base + overlays + ArgoCD                 | Done        | 1   | —         |
-| Spec (revised design contract)                                        | Done        | 1   | —         |
-| E2E validation — curl proof of full deploy lifecycle                  | Not Started | 1   | —         |
+| Deliverable                                                             | Status    | Est | Work Item |
+| ----------------------------------------------------------------------- | --------- | --- | --------- |
+| `@cogni/container-runtime` package + `services/akash-deployer` HTTP API | In Review | 3   | task.0203 |
+| Orchestrator graph — NL to workload specs via DI (no hard imports)      | In Review | 1   | task.0203 |
+| GitOps manifests — Kustomize base + overlays + ArgoCD                   | Done      | 1   | task.0203 |
+| Spec (4-layer container runtime architecture)                           | Done      | 1   | task.0203 |
+| E2E validation — curl proof of full deploy lifecycle                    | Done      | 1   | task.0203 |
 
 ### Walk (P1)
 
