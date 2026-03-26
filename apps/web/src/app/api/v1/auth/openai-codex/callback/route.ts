@@ -31,6 +31,7 @@ import { getContainer, resolveAppDb } from "@/bootstrap/container";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import { getServerSessionUser } from "@/lib/auth/server";
 import { aeadEncrypt } from "@/shared/crypto/aead";
+import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
 export const runtime = "nodejs";
