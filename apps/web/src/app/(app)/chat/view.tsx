@@ -66,11 +66,7 @@ const ChatWelcomeWithHint = () => (
   </div>
 );
 
-export function ChatView({
-  chatGptConnectionId,
-}: {
-  chatGptConnectionId?: string;
-}): ReactNode {
+export function ChatView(): ReactNode {
   const modelsQuery = useModels();
   const { data: creditsData, isLoading: isCreditsLoading } =
     useCreditsSummary();
@@ -334,7 +330,6 @@ export function ChatView({
                 balance={balance}
                 selectedGraph={selectedGraph}
                 onGraphChange={handleGraphChange}
-                {...(chatGptConnectionId ? { chatGptConnectionId } : {})}
                 onModelConnectionChange={setModelConnectionId}
               />
             }

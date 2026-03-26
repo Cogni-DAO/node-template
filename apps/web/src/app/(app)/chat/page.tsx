@@ -14,37 +14,12 @@
 import type { ReactElement } from "react";
 import { Suspense } from "react";
 
-import { resolveAppDb } from "@/bootstrap/container";
 import { ChatView } from "./view";
 
-async function getChatGptConnectionId(): Promise<string | undefined> {
-  try {
-    const db = resolveAppDb();
-    const { connections } = await import("@cogni/db-schema");
-    const { and, eq, isNull } = await import("drizzle-orm");
-
-    // Find any active chatgpt connection (single-tenant crawl — no user filter needed)
-    const rows = await db
-      .select({ connectionId: connections.id })
-      .from(connections)
-      .where(
-        and(
-          eq(connections.provider, "openai-chatgpt"),
-          isNull(connections.revokedAt)
-        )
-      )
-      .limit(1);
-    return rows[0]?.connectionId;
-  } catch {
-    return undefined;
-  }
-}
-
-export default async function ChatPage(): Promise<ReactElement> {
-  const chatGptConnectionId = await getChatGptConnectionId();
+export default function ChatPage(): ReactElement {
   return (
     <Suspense>
-      <ChatView {...(chatGptConnectionId ? { chatGptConnectionId } : {})} />
+      <ChatView />
     </Suspense>
   );
 }

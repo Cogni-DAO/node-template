@@ -50,7 +50,10 @@ export async function GET() {
       )
       .limit(1);
 
-    return NextResponse.json({ connected: rows.length > 0 });
+    return NextResponse.json({
+      connected: rows.length > 0,
+      ...(rows[0] ? { connectionId: rows[0].id } : {}),
+    });
   } catch {
     return NextResponse.json({ connected: false });
   }

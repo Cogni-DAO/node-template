@@ -15,7 +15,7 @@
 "use client";
 
 import { Check, ChevronDown, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -87,12 +87,8 @@ export interface ModelPickerProps {
   onValueChange: (modelId: string) => void;
   disabled?: boolean;
   balance?: number;
-  /** Current LLM backend provider */
-  backend: LlmBackend;
-  /** Called when user toggles between OpenRouter and ChatGPT */
-  onBackendChange: (backend: LlmBackend) => void;
-  /** Whether user has a linked ChatGPT connection */
-  hasChatGptConnection: boolean;
+  /** Called when BYO backend changes (modelConnectionId or undefined) */
+  onModelConnectionChange?: (connectionId: string | undefined) => void;
 }
 
 export function ModelPicker({
@@ -101,12 +97,31 @@ export function ModelPicker({
   onValueChange,
   disabled,
   balance = 0,
-  backend,
-  onBackendChange,
-  hasChatGptConnection,
+  onModelConnectionChange,
 }: Readonly<ModelPickerProps>) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [backend, setBackend] = useState<LlmBackend>("openrouter");
+  const [connectionId, setConnectionId] = useState<string | undefined>(
+    undefined
+  );
+
+  // Fetch ChatGPT connection status once on mount
+  useEffect(() => {
+    fetch("/api/v1/auth/openai-codex/status")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { connected: boolean; connectionId?: string } | null) => {
+        if (data?.connected && data.connectionId) {
+          setConnectionId(data.connectionId);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleBackendChange = (b: LlmBackend) => {
+    setBackend(b);
+    onModelConnectionChange?.(b === "chatgpt" ? connectionId : undefined);
+  };
 
   const selectedModel = models.find((m) => m.id === value);
   const filteredModels = models.filter((model) => {
@@ -173,7 +188,7 @@ export function ModelPicker({
         <div className="flex gap-1 rounded-lg bg-muted p-1">
           <button
             type="button"
-            onClick={() => onBackendChange("openrouter")}
+            onClick={() => handleBackendChange("openrouter")}
             className={cn(
               "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 font-medium text-sm transition-colors",
               backend === "openrouter"
@@ -193,7 +208,7 @@ export function ModelPicker({
           </button>
           <button
             type="button"
-            onClick={() => onBackendChange("chatgpt")}
+            onClick={() => handleBackendChange("chatgpt")}
             className={cn(
               "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 font-medium text-sm transition-colors",
               backend === "chatgpt"
@@ -207,7 +222,7 @@ export function ModelPicker({
         </div>
 
         {backend === "chatgpt" ? (
-          hasChatGptConnection ? (
+          connectionId ? (
             /* ChatGPT connected — show available models */
             <div className="-mx-6 min-h-0 flex-1 overflow-y-auto px-6">
               <div className="space-y-1">
@@ -257,7 +272,7 @@ export function ModelPicker({
             <div className="-mx-6 px-6">
               <a
                 href="/profile"
-                className="flex w-full items-center gap-3 rounded-md border border-muted-foreground/30 border-dashed px-3 py-4 text-left transition-colors hover:bg-accent"
+                className="flex w-full items-center gap-3 rounded-md border border-border px-3 py-4 text-left transition-colors hover:bg-accent"
               >
                 <OpenAIIcon className="size-5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">

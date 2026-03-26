@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components";
+import { ModelPicker } from "@/features/ai/components/ModelPicker";
 import { useModels } from "@/features/ai/hooks/useModels";
 import { createSchedule } from "./_api/createSchedule";
 import { deleteSchedule } from "./_api/deleteSchedule";
@@ -290,31 +291,13 @@ export function SchedulesView() {
 
             {/* Model Select */}
             <div>
-              <label htmlFor="model" className="mb-2 block font-medium text-sm">
-                Model
-              </label>
-              {!hasModels ? (
-                <p className="text-muted-foreground text-sm">
-                  No models available. Check LiteLLM configuration.
-                </p>
-              ) : (
-                <Select
-                  value={selectedModel || defaultModelId}
-                  onValueChange={setSelectedModel}
-                >
-                  <SelectTrigger id="model">
-                    <SelectValue placeholder="Select a model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        {model.name ?? model.id}
-                        {model.isFree && " (Free)"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              <div className="mb-2 font-medium text-sm">Model</div>
+              <ModelPicker
+                models={models}
+                value={selectedModel || defaultModelId}
+                onValueChange={setSelectedModel}
+                disabled={!hasModels}
+              />
             </div>
 
             {/* Frequency Select */}
