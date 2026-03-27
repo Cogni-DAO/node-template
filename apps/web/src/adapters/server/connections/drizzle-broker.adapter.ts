@@ -72,7 +72,7 @@ export class DrizzleConnectionBrokerAdapter implements ConnectionBrokerPort {
 
   async resolve(
     connectionId: string,
-    billingAccountId: string
+    scope: { actorId: string; tenantId: string }
   ): Promise<ResolvedConnection> {
     // SELECT with tenant + active filters
     const rows = await this.db
@@ -89,9 +89,9 @@ export class DrizzleConnectionBrokerAdapter implements ConnectionBrokerPort {
     }
 
     // Tenant verification (defense-in-depth)
-    if (row.billingAccountId !== billingAccountId) {
+    if (row.billingAccountId !== scope.tenantId) {
       this.log.warn(
-        { connectionId, expectedTenant: billingAccountId },
+        { connectionId, expectedTenant: scope.tenantId },
         "Connection tenant mismatch"
       );
       throw new ConnectionNotFoundError(connectionId);
