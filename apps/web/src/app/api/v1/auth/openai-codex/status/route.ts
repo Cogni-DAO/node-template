@@ -23,6 +23,7 @@ import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import { getServerSessionUser } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const session = await getServerSessionUser();
