@@ -44,6 +44,8 @@ import type {
   BillingContext,
   ConnectionBrokerPort,
   GraphExecutorPort,
+  LlmService,
+  ModelProviderResolverPort,
   PreflightCreditCheckFn,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
@@ -107,6 +109,10 @@ export function createGraphExecutor(
  *
  * Bootstrap owns per-run wrapper composition so launchers do not construct ad hoc
  * scoped executors in facades or routes.
+ *
+ * Provider resolution happens here: the ModelProviderResolverPort resolves the
+ * LlmService from req.modelRef BEFORE execution starts. No more llmServiceOverride
+ * via AsyncLocalStorage — the resolved LlmService is set on the execution scope.
  */
 export function createScopedGraphExecutor(params: {
   readonly executor: GraphExecutorPort;
@@ -114,6 +120,8 @@ export function createScopedGraphExecutor(params: {
   readonly preflightCheckFn: PreflightCreditCheckFn;
   readonly abortSignal?: AbortSignal;
   readonly broker?: ConnectionBrokerPort;
+  readonly resolver: ModelProviderResolverPort;
+  readonly actorId: string;
 }): GraphExecutorPort {
   const container = getContainer();
 
@@ -125,11 +133,12 @@ export function createScopedGraphExecutor(params: {
   // Validate enriched usage_report events before they reach the runtime relay.
   const billed = new BillingGraphExecutorDecorator(enriched, container.log);
 
-  // Wrap with preflight credit check (rejects runs with insufficient credits)
+  // Wrap with preflight credit check — uses provider resolver for billing policy
   const preflighted = new PreflightCreditCheckDecorator(
     billed,
     params.preflightCheckFn,
     params.billing.billingAccountId,
+    params.resolver,
     container.log
   );
 
@@ -144,85 +153,84 @@ export function createScopedGraphExecutor(params: {
 
   return {
     runGraph(req: GraphRunRequest, ctx?: ExecutionContext): GraphRunResult {
-      // No BYO connection — standard path
-      if (!req.modelConnectionId || !params.broker) {
-        return runGraphWithScope({
-          executor: observed,
-          req,
-          ...(ctx ? { ctx } : {}),
-          billing: params.billing,
-          ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+      // Resolve LlmService from provider BEFORE execution
+      const provider = params.resolver.resolve(req.modelRef.providerKey);
+
+      if (
+        provider.requiresConnection &&
+        req.modelRef.connectionId &&
+        params.broker
+      ) {
+        // BYO path: resolve credentials async, then run graph with provider's LlmService.
+        const broker = params.broker;
+        const connectionId = req.modelRef.connectionId;
+        let innerResult: GraphRunResult | undefined;
+        let resolveOuterFinal: ((v: GraphFinal) => void) | undefined;
+        const outerFinal = new Promise<GraphFinal>((r) => {
+          resolveOuterFinal = r;
         });
+
+        const stream = (async function* () {
+          let llmService: LlmService;
+          try {
+            const connection = await broker.resolve(connectionId, {
+              actorId: params.actorId,
+              tenantId: params.billing.billingAccountId,
+            });
+            llmService = provider.createLlmService(connection);
+          } catch (err) {
+            container.log.error(
+              {
+                connectionId,
+                error: err instanceof Error ? err.message : String(err),
+              },
+              "Connection resolution failed"
+            );
+            yield {
+              type: "error" as const,
+              error:
+                "internal" as import("@cogni/ai-core").AiExecutionErrorCode,
+            };
+            yield { type: "done" as const };
+            // biome-ignore lint/style/noNonNullAssertion: assigned synchronously in Promise constructor
+            resolveOuterFinal!({
+              ok: false,
+              runId: req.runId,
+              requestId: ctx?.requestId ?? req.runId,
+              error:
+                "internal" as import("@cogni/ai-core").AiExecutionErrorCode,
+            });
+            return;
+          }
+
+          innerResult = runGraphWithScope({
+            executor: observed,
+            req,
+            ...(ctx ? { ctx } : {}),
+            billing: params.billing,
+            llmService,
+            ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+          });
+
+          yield* innerResult.stream;
+          const f = await innerResult.final;
+          // biome-ignore lint/style/noNonNullAssertion: assigned synchronously in Promise constructor
+          resolveOuterFinal!(f);
+        })();
+
+        return { stream, final: outerFinal };
       }
 
-      // BYO path: resolve credentials async, then run graph with LlmService override.
-      // Graph runs normally (system prompt, tools, state) — only the LLM call swaps.
-      const broker = params.broker;
-      const connectionId = req.modelConnectionId;
-      let innerResult: GraphRunResult | undefined;
-      let resolveOuterFinal: ((v: GraphFinal) => void) | undefined;
-      const outerFinal = new Promise<GraphFinal>((r) => {
-        resolveOuterFinal = r;
+      // Standard path: use provider's LlmService (no connection needed)
+      const llmService = provider.createLlmService();
+      return runGraphWithScope({
+        executor: observed,
+        req,
+        ...(ctx ? { ctx } : {}),
+        billing: params.billing,
+        llmService,
+        ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
       });
-
-      // INVARIANT: outerFinal resolves only after stream is fully consumed.
-      // Consumers must drain stream before awaiting final.
-      const stream = (async function* () {
-        let connection: import("@/ports").ResolvedConnection;
-        try {
-          connection = await broker.resolve(
-            connectionId,
-            params.billing.billingAccountId
-          );
-        } catch (err) {
-          container.log.error(
-            {
-              connectionId,
-              error: err instanceof Error ? err.message : String(err),
-            },
-            "BYO connection resolution failed"
-          );
-          yield {
-            type: "error" as const,
-            error: "internal" as import("@cogni/ai-core").AiExecutionErrorCode,
-          };
-          yield { type: "done" as const };
-          // biome-ignore lint/style/noNonNullAssertion: assigned synchronously in Promise constructor
-          resolveOuterFinal!({
-            ok: false,
-            runId: req.runId,
-            requestId: ctx?.requestId ?? req.runId,
-            error: "internal" as import("@cogni/ai-core").AiExecutionErrorCode,
-          });
-          return;
-        }
-
-        container.log.info(
-          { connectionId, provider: connection.provider },
-          "BYO connection resolved, swapping LlmService for this run"
-        );
-
-        const { CodexLlmAdapter } = await import(
-          "@/adapters/server/ai/codex/codex-llm.adapter"
-        );
-        const llmServiceOverride = new CodexLlmAdapter(connection);
-
-        innerResult = runGraphWithScope({
-          executor: observed,
-          req,
-          ...(ctx ? { ctx } : {}),
-          billing: params.billing,
-          ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
-          llmServiceOverride,
-        });
-
-        yield* innerResult.stream;
-        const f = await innerResult.final;
-        // biome-ignore lint/style/noNonNullAssertion: assigned synchronously in Promise constructor
-        resolveOuterFinal!(f);
-      })();
-
-      return { stream, final: outerFinal };
     },
   };
 }
@@ -233,25 +241,23 @@ export function createScopedGraphExecutor(params: {
  * This is the ONLY app-local launch entrypoint. Every launcher (chat, schedule,
  * webhook, review) calls this — never executor.runGraph() directly.
  *
- * Sets AsyncLocalStorage scope so static inner providers can read billing context.
- * abortSignal is chat-only temporary tech debt — scheduled runs omit it.
+ * Sets AsyncLocalStorage scope so static inner providers can read billing context
+ * and the resolved LlmService.
  */
 export function runGraphWithScope(params: {
   readonly executor: GraphExecutorPort;
   readonly req: GraphRunRequest;
   readonly ctx?: ExecutionContext;
   readonly billing: BillingContext;
+  readonly llmService: LlmService;
   readonly abortSignal?: AbortSignal;
-  readonly llmServiceOverride?: import("@/ports").LlmService;
 }): GraphRunResult {
-  const { executor, req, ctx, billing } = params;
+  const { executor, req, ctx, billing, llmService } = params;
   return runInScope(
     {
       billing,
+      llmService,
       ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
-      ...(params.llmServiceOverride
-        ? { llmServiceOverride: params.llmServiceOverride }
-        : {}),
     },
     () => executor.runGraph(req, ctx)
   );

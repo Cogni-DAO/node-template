@@ -34,17 +34,25 @@ export interface ResolvedConnection {
   readonly scopes: readonly string[];
 }
 
+/** Security scope for connection resolution — defines the trust boundary. */
+export interface ConnectionScope {
+  /** The actor requesting access */
+  readonly actorId: string;
+  /** The tenant boundary — connection must belong to this tenant */
+  readonly tenantId: string;
+}
+
 /**
  * Connection broker port.
  * Resolves a connectionId to decrypted credentials with tenant verification.
  */
 export interface ConnectionBrokerPort {
   /**
-   * Resolve a connection by ID with tenant verification.
+   * Resolve a connection by ID with tenant + actor verification.
    * @throws if connection not found, revoked, or belongs to a different tenant.
    */
   resolve(
     connectionId: string,
-    billingAccountId: string
+    scope: ConnectionScope
   ): Promise<ResolvedConnection>;
 }

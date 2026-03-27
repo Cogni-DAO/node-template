@@ -66,6 +66,14 @@ import {
   ViemTreasuryAdapter,
 } from "@/adapters/server";
 import { ServiceDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
+import {
+  AggregatingModelCatalog,
+  ProviderResolver,
+} from "@/adapters/server/ai/catalog";
+import {
+  CodexModelProvider,
+  PlatformModelProvider,
+} from "@/adapters/server/ai/providers";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 import { OpenRouterFundingAdapter } from "@/adapters/server/treasury/openrouter-funding.adapter";
@@ -95,6 +103,8 @@ import type {
   LangfusePort,
   LlmService,
   MetricsQueryPort,
+  ModelCatalogPort,
+  ModelProviderResolverPort,
   OnChainVerifier,
   OperatorWalletPort,
   PaymentAttemptServiceRepository,
@@ -191,6 +201,10 @@ export interface Container {
   providerFunding: ProviderFundingPort | undefined;
   /** Connection broker — undefined when CONNECTIONS_ENCRYPTION_KEY not set */
   connectionBroker: ConnectionBrokerPort | undefined;
+  /** Model catalog — aggregates all providers for model listing */
+  modelCatalog: ModelCatalogPort;
+  /** Provider resolver — resolves providerKey to ModelProviderPort for runtime dispatch */
+  providerResolver: ModelProviderResolverPort;
 }
 
 // Feature-specific dependency types
@@ -663,6 +677,16 @@ function createContainer(): Container {
       : undefined,
     providerFunding,
     connectionBroker,
+    // Multi-provider model ports
+    ...(() => {
+      const platformProvider = new PlatformModelProvider(llmService);
+      const codexProvider = new CodexModelProvider();
+      const providers = [platformProvider, codexProvider];
+      return {
+        modelCatalog: new AggregatingModelCatalog(providers),
+        providerResolver: new ProviderResolver(providers),
+      };
+    })(),
   };
 }
 

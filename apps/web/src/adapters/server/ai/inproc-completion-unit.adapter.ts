@@ -186,8 +186,8 @@ export class InProcCompletionUnitAdapter {
           traceId,
         };
 
-        // BYO-AI: use per-run override if present, otherwise default adapter
-        const llmService = scope.llmServiceOverride ?? this.deps.llmService;
+        // Resolved LlmService from execution scope (set by provider registry at launch)
+        const llmService = scope.llmService;
 
         completionPromiseHolder.promise = this.completionStream({
           messages,
@@ -307,7 +307,7 @@ export class InProcCompletionUnitAdapter {
         };
         const usageEvent: UsageReportEvent = { type: "usage_report", fact };
         yield usageEvent;
-      } else if (!scope.llmServiceOverride) {
+      } else if (scope.llmService === this.deps.llmService) {
         // Platform run without call ID — billing integrity violation
         this.log.error(
           { runId, model: result.model },

@@ -115,7 +115,8 @@ export class LangGraphInProcProvider implements GraphExecutorPort {
   }
 
   runGraph(req: GraphRunRequest, ctx?: ExecutionContext): GraphRunResult {
-    const { runId, messages, model, graphId } = req;
+    const { runId, messages, modelRef, graphId } = req;
+    const model = modelRef.modelId;
     const scope = getExecutionScope();
     const requestId = ctx?.requestId ?? req.runId;
 

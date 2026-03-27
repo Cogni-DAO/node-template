@@ -21,15 +21,15 @@ import type { BillingContext, LlmService } from "@/ports";
 /**
  * Per-run execution scope set by the launcher, read by static inner providers.
  *
- * Contains only billing + optional abort. Tracing flows via OTel.
+ * Contains only billing + optional abort + resolved LlmService. Tracing flows via OTel.
  * Shared ExecutionContext (actorUserId, sessionId, etc.) flows via runGraph(req, ctx).
  */
 export interface ExecutionScope {
   readonly billing: BillingContext;
   /** Chat-only temporary tech debt — browser disconnect, not durable cancellation. */
   readonly abortSignal?: AbortSignal;
-  /** BYO-AI: per-run LlmService override (e.g. CodexLlmAdapter). Read by InProcCompletionUnitAdapter. */
-  readonly llmServiceOverride?: LlmService;
+  /** Resolved LlmService for this run (from ModelProviderPort.createLlmService). */
+  readonly llmService: LlmService;
 }
 
 const executionScopeStorage = new AsyncLocalStorage<ExecutionScope>();
