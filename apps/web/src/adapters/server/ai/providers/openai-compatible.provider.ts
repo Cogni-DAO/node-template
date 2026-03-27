@@ -20,7 +20,6 @@ import { withTenantScope } from "@cogni/db-client";
 import { connections } from "@cogni/db-schema";
 import { type UserId, userActor } from "@cogni/ids";
 import { and, eq, isNull } from "drizzle-orm";
-import { resolveAppDb } from "@/bootstrap/container";
 import type {
   ConnectionBrokerPort,
   LlmService,
@@ -63,13 +62,18 @@ export class OpenAiCompatibleModelProvider implements ModelProviderPort {
   readonly usageSource = "ollama" as const;
   readonly requiresConnection = true;
 
-  constructor(private readonly broker?: ConnectionBrokerPort | undefined) {}
+  constructor(
+    private readonly broker?: ConnectionBrokerPort | undefined,
+    private readonly resolveDb?:
+      | (() => Parameters<typeof withTenantScope>[0])
+      | undefined
+  ) {}
 
   async listModels(ctx: ProviderContext): Promise<ModelOption[]> {
-    if (!this.broker) return [];
+    if (!this.broker || !this.resolveDb) return [];
 
     // Find active connection for this user's tenant
-    const db = resolveAppDb();
+    const db = this.resolveDb();
     let connectionId: string | undefined;
     try {
       const rows = await withTenantScope(

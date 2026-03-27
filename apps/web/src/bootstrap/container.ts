@@ -683,7 +683,8 @@ function createContainer(): Container {
       const platformProvider = new PlatformModelProvider(llmService);
       const codexProvider = new CodexModelProvider();
       const openAiCompatibleProvider = new OpenAiCompatibleModelProvider(
-        connectionBroker
+        connectionBroker,
+        resolveAppDb
       );
       const providers = [
         platformProvider,
