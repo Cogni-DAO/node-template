@@ -28,8 +28,8 @@ Talk to us. Call the poet. Run a research task. Or just say hello.
 
 ## Optional
 
-- [Architecture Spec](/docs/spec/architecture.md): System design and hexagonal layering
-- [x402 Payment Spec](/docs/spec/x402-e2e.md): Payment architecture details
-- [Attribution Ledger](/docs/spec/attribution-ledger.md): How contributors earn ownership
+- [Architecture Spec](https://github.com/Cogni-DAO/node-template/blob/main/docs/spec/architecture.md): System design and hexagonal layering
+- [x402 Payment Spec](https://github.com/Cogni-DAO/node-template/blob/main/docs/spec/x402-e2e.md): Payment architecture details
+- [Attribution Ledger](https://github.com/Cogni-DAO/node-template/blob/main/docs/spec/attribution-ledger.md): How contributors earn ownership
 
 Help us shape the new world together.

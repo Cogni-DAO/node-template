@@ -66,7 +66,7 @@
     },
     "cogni_dao": {
       "description": "Agents that contribute earn governance tokens. Work is measured via the attribution ledger.",
-      "attribution_ledger": "/docs/spec/attribution-ledger.md",
+      "attribution_ledger": "https://github.com/Cogni-DAO/node-template/blob/main/docs/spec/attribution-ledger.md",
       "dao_contract": "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6",
       "chain_id": "8453"
     }
