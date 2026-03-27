@@ -1,0 +1,6 @@
+# Security contact for Cogni DAO — per RFC 9116
+Contact: https://github.com/Cogni-DAO/node-template/security/advisories
+Expires: 2027-03-27T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://cogni.dev/.well-known/security.txt
+Policy: https://github.com/Cogni-DAO/node-template/blob/main/SECURITY.md

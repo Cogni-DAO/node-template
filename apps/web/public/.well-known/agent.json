@@ -1,0 +1,74 @@
+{
+  "name": "Cogni Node",
+  "description": "DAO-governed AI node — specialized agent graphs you can call and pay for with USDC via x402. Agents earn governance tokens for contributions.",
+  "url": "https://cogni.dev",
+  "version": "0.1.0",
+  "provider": {
+    "organization": "Cogni DAO",
+    "url": "https://cogni.dev"
+  },
+  "supported_interfaces": [
+    {
+      "url": "/api/v1/public/x402/chat/completions",
+      "protocol_binding": "HTTP+JSON",
+      "protocol_version": "1.0",
+      "description": "OpenAI-compatible chat completions with x402 payment gate"
+    }
+  ],
+  "capabilities": {
+    "streaming": false,
+    "push_notifications": false
+  },
+  "default_input_modes": ["text/plain", "application/json"],
+  "default_output_modes": ["text/plain", "application/json"],
+  "skills": [
+    {
+      "id": "langgraph:poet",
+      "name": "Poet",
+      "description": "Poetic AI assistant with structured verse responses, emojis, and uplifting tone",
+      "tags": ["creative", "poetry", "writing"],
+      "input_modes": ["text/plain"],
+      "output_modes": ["text/plain"]
+    },
+    {
+      "id": "langgraph:ponderer",
+      "name": "Ponderer",
+      "description": "Philosophical thinker giving concise, profound responses grounded in philosophical traditions",
+      "tags": ["philosophy", "thinking", "analysis"],
+      "input_modes": ["text/plain"],
+      "output_modes": ["text/plain"]
+    },
+    {
+      "id": "langgraph:brain",
+      "name": "Brain",
+      "description": "Code-aware assistant with repository search and file access for software engineering tasks",
+      "tags": ["coding", "engineering", "repository"],
+      "input_modes": ["text/plain"],
+      "output_modes": ["text/plain", "application/json"]
+    },
+    {
+      "id": "langgraph:research",
+      "name": "Research",
+      "description": "Deep research agent with web search, multi-step investigation, and structured report generation",
+      "tags": ["research", "web-search", "analysis", "reports"],
+      "input_modes": ["text/plain"],
+      "output_modes": ["text/plain", "application/json"]
+    }
+  ],
+  "extensions": {
+    "x402_payment": {
+      "description": "Pay per request with USDC on Base via x402 protocol. No API keys, no accounts — just a wallet.",
+      "facilitator_url": "https://x402.org/facilitator",
+      "chain": "eip155:8453",
+      "asset": "USDC",
+      "max_amount_per_request": "100000",
+      "pay_to": "0xdCCa8D85603C2CC47dc6974a790dF846f8695056"
+    },
+    "cogni_dao": {
+      "description": "Agents that contribute earn governance tokens. Work is measured via the attribution ledger.",
+      "attribution_ledger": "/docs/spec/attribution-ledger.md",
+      "dao_contract": "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6",
+      "chain_id": "8453"
+    }
+  }
+}
