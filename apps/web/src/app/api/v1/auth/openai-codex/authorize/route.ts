@@ -18,6 +18,10 @@ import { NextResponse } from "next/server";
 import { getServerSessionUser } from "@/lib/auth/server";
 import { makeLogger } from "@/shared/observability";
 import { EVENT_NAMES } from "@/shared/observability/events";
+import {
+  byoAuthDurationMs,
+  byoAuthTotal,
+} from "@/shared/observability/server/metrics";
 
 export const runtime = "nodejs";
 
@@ -76,11 +80,18 @@ export async function POST() {
       );
     }
 
+    const durationMs = performance.now() - startMs;
+    byoAuthTotal.inc({
+      route: "authorize",
+      outcome: "success",
+      error_code: "",
+    });
+    byoAuthDurationMs.observe({ route: "authorize" }, durationMs);
     log.info(
       {
         event: EVENT_NAMES.BYO_AUTH_DEVICE_CODE_COMPLETE,
         outcome: "success",
-        durationMs: performance.now() - startMs,
+        durationMs,
       },
       EVENT_NAMES.BYO_AUTH_DEVICE_CODE_COMPLETE
     );
@@ -92,6 +103,15 @@ export async function POST() {
       verificationUrl: VERIFICATION_URL,
     });
   } catch (err) {
+    byoAuthTotal.inc({
+      route: "authorize",
+      outcome: "error",
+      error_code: "network",
+    });
+    byoAuthDurationMs.observe(
+      { route: "authorize" },
+      performance.now() - startMs
+    );
     log.error(
       {
         event: EVENT_NAMES.ADAPTER_OPENAI_DEVICE_AUTH_ERROR,

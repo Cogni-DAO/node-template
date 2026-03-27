@@ -28,6 +28,10 @@ import { aeadEncrypt } from "@/shared/crypto/aead";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 import { EVENT_NAMES } from "@/shared/observability/events";
+import {
+  byoAuthDurationMs,
+  byoAuthTotal,
+} from "@/shared/observability/server/metrics";
 
 export const runtime = "nodejs";
 
@@ -247,17 +251,29 @@ export async function POST(request: Request) {
         : {}),
     });
 
+    const durationMs = performance.now() - startMs;
+    byoAuthTotal.inc({ route: "exchange", outcome: "success", error_code: "" });
+    byoAuthDurationMs.observe({ route: "exchange" }, durationMs);
     log.info(
       {
         event: EVENT_NAMES.BYO_AUTH_EXCHANGE_COMPLETE,
         connectionId,
         provider: "openai-chatgpt",
         outcome: "success",
-        durationMs: performance.now() - startMs,
+        durationMs,
       },
       EVENT_NAMES.BYO_AUTH_EXCHANGE_COMPLETE
     );
   } catch (err) {
+    byoAuthTotal.inc({
+      route: "exchange",
+      outcome: "error",
+      error_code: "db_store",
+    });
+    byoAuthDurationMs.observe(
+      { route: "exchange" },
+      performance.now() - startMs
+    );
     log.error(
       { error: err instanceof Error ? err.message : String(err) },
       "Failed to store connection"
