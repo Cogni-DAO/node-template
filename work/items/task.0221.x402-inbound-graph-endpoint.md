@@ -2,7 +2,7 @@
 id: task.0221
 type: task
 title: "x402 inbound payment gate — prototype public graph execution"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 10
 estimate: 2
@@ -17,9 +17,9 @@ pr:
 reviewer:
 created: 2026-03-27
 updated: 2026-03-27
+revision: 3
 labels: [x402, web3, billing, api]
 external_refs: ["docs/research/x402-provider-passthrough.md"]
-revision: 2
 blocked_by: []
 deploy_verified: false
 ---
