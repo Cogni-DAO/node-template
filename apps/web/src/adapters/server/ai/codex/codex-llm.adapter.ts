@@ -146,10 +146,13 @@ async function* runCodexExec(params: {
 
     // Dynamic import to avoid module-scope subprocess spawn
     const { Codex } = await import("@openai/codex-sdk");
-    // Resolve codex binary from the app's own node_modules (works in Docker
-    // where /repo/current doesn't have node_modules installed).
-    const codexPkg = require.resolve("@openai/codex/package.json");
-    const codexBin = join(codexPkg, "..", "bin", "codex.js");
+    const { serverEnv } = await import("@/shared/env");
+    const codexBin = join(
+      serverEnv().COGNI_REPO_ROOT,
+      "node_modules",
+      ".bin",
+      "codex"
+    );
 
     // Build env — inherit current + override HOME for auth isolation
     const { env: currentEnv } = await import("node:process");
