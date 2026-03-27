@@ -857,15 +857,15 @@ export function ProfileView(): ReactElement {
               >
                 Cloudflare Tunnel
               </a>{" "}
-              to expose your local server securely. Use{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                llama-server --api-key
-              </code>{" "}
-              or{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                vllm serve --api-key
-              </code>{" "}
-              for built-in auth.
+              for remote access.{" "}
+              <a
+                href="https://github.com/Cogni-DAO/node-template/blob/staging/docs/guides/connect-local-llm.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                Setup guide
+              </a>
             </p>
           </div>
           <div className="space-y-2">
