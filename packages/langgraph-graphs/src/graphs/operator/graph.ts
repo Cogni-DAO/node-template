@@ -43,10 +43,11 @@ export function createOperatorGraph(opts: CreateReactAgentGraphOptions) {
     );
   }
 
+  // Use 'prompt' (not deprecated 'messageModifier') — LangGraph converts string to SystemMessage
   return createReactAgent({
     llm: opts.llm,
     tools: [...opts.tools],
-    messageModifier: opts.systemPrompt,
+    prompt: opts.systemPrompt,
     stateSchema: MessagesAnnotation,
   });
 }

@@ -138,7 +138,7 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
     displayName: "CEO Operator",
     description:
       "Strategic operator — triages, prioritizes, and dispatches work items",
-    toolIds: CEO_OPERATOR_TOOL_IDS as unknown as readonly string[],
+    toolIds: CEO_OPERATOR_TOOL_IDS as readonly string[],
     graphFactory: createOperatorGraph,
     systemPrompt: CEO_OPERATOR_PROMPT,
   },
@@ -151,7 +151,7 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
     displayName: "Git Reviewer",
     description:
       "Owns PR lifecycle — review, fix CI, merge or reject with rationale",
-    toolIds: GIT_REVIEWER_TOOL_IDS as unknown as readonly string[],
+    toolIds: GIT_REVIEWER_TOOL_IDS as readonly string[],
     graphFactory: createOperatorGraph,
     systemPrompt: GIT_REVIEWER_PROMPT,
   },
