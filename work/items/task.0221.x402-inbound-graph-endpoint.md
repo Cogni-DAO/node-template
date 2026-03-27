@@ -1,95 +1,206 @@
 ---
 id: task.0221
 type: task
-title: "x402 inbound middleware + public graph execution endpoint"
-status: needs_design
+title: "x402 inbound payment gate — public graph execution for wallet-bearing agents"
+status: needs_implement
 priority: 1
 rank: 10
 estimate: 3
 summary: "Add x402 payment gate to graph execution so agents on the internet can pay USDC per-request to run Cogni graphs. No API key, no account — just a wallet."
-outcome: "An agent with a USDC wallet can POST to /api/v1/graphs/{graphId}/run with an x402 payment, receive a graph-executed AI response, and have the settlement recorded in charge_receipts."
+outcome: "An agent with a USDC wallet can POST to /api/v1/public/x402/chat/completions with an x402 payment, receive a graph-executed AI response via the existing pipeline, and have the settlement recorded in charge_receipts."
 spec_refs: [x402-e2e-spec]
 assignees: []
 credit:
 project: proj.x402-e2e-migration
-branch:
+branch: worktree-spike-0220-aimo-x402
 pr:
 reviewer:
 created: 2026-03-27
 updated: 2026-03-27
 labels: [x402, web3, billing, api]
 external_refs: ["docs/research/x402-provider-passthrough.md"]
-revision: 0
+revision: 1
 blocked_by: []
 deploy_verified: false
 ---
 
-## Context
+## Design
 
-spike.0220 proved x402 E2E works — both inbound (user→node) and outbound (node→Hyperbolic). The demo ran graph prompts through x402-paid LLM calls. Now we need to wire this into the real system.
+### Outcome
 
-Today, graph execution lives at `/api/internal/graphs/[graphId]/runs` — gated by `SCHEDULER_API_TOKEN` bearer auth, called by the scheduler worker. This is internal-only.
+An external AI agent with a USDC wallet can call the Cogni node's public endpoint, pay via x402, and receive an AI graph response — using the existing graph execution pipeline, LiteLLM cost oracle, and charge_receipts audit trail. No session, no API key, no signup.
 
-The task: create a **public** graph endpoint gated by x402 payment instead of bearer tokens. Any agent with a USDC wallet can run graphs.
+### Critical Design Decision: Inbound-only x402
 
-## Design Notes
+The spike (spike.0220) proved full x402 E2E works (inbound + outbound). But the **simplest correct P0** keeps LiteLLM + API key on the outbound leg:
 
-### What exists (from spike.0220 demo)
+```
+Agent --x402 USDC--> [Cogni Node] --API key--> [LiteLLM] --API key--> [Hyperbolic]
+      <--completion--             <--cost header--         <--inference--
+```
 
-- `@x402/fetch`, `@x402/evm` packages handle client-side 402→sign→retry
-- `ExactEvmScheme` + `ExactEvmSchemeV1` for Base mainnet payment signing
-- Hyperbolic x402 endpoint confirmed working (20+ OSS models, $0.10 max/request)
-- Express middleware pattern: check `X-PAYMENT` header → return 402 or proceed
+**Why not x402 outbound in P0:**
+- LiteLLM is the cost oracle (`x-litellm-response-cost` header) — all billing math flows through it
+- Removing LiteLLM means building a new cost oracle from x402 settlement amounts (bespoke)
+- The existing `commitUsageFact()` → `charge_receipts` pipeline works unchanged
+- API key auth to Hyperbolic is reliable; their x402 Vercel wrapper is an additional dependency
+- x402 outbound requires a signing wallet (`NODE_WALLET_PRIVATE_KEY`) — spec says no private keys in P0
 
-### What needs building
+**What changes:** Auth layer (x402 replaces session), billing identity (wallet replaces billingAccountId), preflight check (x402 verify replaces credit balance check). Everything downstream is unchanged.
 
-1. **x402 inbound middleware** (Next.js middleware or route-level)
-   - On missing/invalid `X-PAYMENT` header: return 402 with payment challenge
-   - Payment challenge includes: node receiving address, estimated max cost (from model pricing), USDC on Base
-   - On valid payment: verify via facilitator, proceed to graph execution
-   - After completion: settle actual cost via facilitator
+### Approach
 
-2. **Public graph execution route** (`/api/v1/graphs/[graphId]/run`)
-   - Similar to internal route but: x402 auth instead of bearer token
-   - No execution grant needed — payment IS the authorization
-   - Billing identity = payer wallet address (from x402 payment)
-   - Returns graph result + x402 settlement metadata
+**Solution:** New public route at `/api/v1/public/x402/chat/completions` with x402 payment verification replacing session auth. Reuses the entire existing execution pipeline — same facade, same decorators, same LiteLLM, same charge_receipts.
 
-3. **x402 outbound adapter** (LlmService implementation)
-   - `HyperbolicX402LlmAdapter implements LlmService`
-   - Uses `@x402/fetch` wrapper instead of API key
-   - Replaces LiteLlmAdapter for x402-mode requests
-   - Cost = x402 settlement amount (not LiteLLM header)
+**Reuses:**
+- `chatCompletion` / `chatCompletionStream` facades (unchanged)
+- `createScopedGraphExecutor` with full decorator stack (unchanged)
+- `LiteLlmAdapter` for LLM calls through LiteLLM (unchanged)
+- `commitUsageFact` for receipt writing (unchanged)
+- `calculateLlmUserCharge` for pricing math (unchanged)
+- `/api/v1/public/*` namespace — already bypasses session auth in proxy.ts
 
-4. **Node wallet** (simple for P0)
-   - `NODE_WALLET_PRIVATE_KEY` env var → viem account
-   - Signs outbound x402 payments to Hyperbolic
-   - Receives inbound x402 settlements from users
-   - P1: upgrade to keystore/HSM
+**New code:**
+- Route handler that parses x402 payment, verifies via facilitator, delegates to existing facade
+- `X402PaymentGate` — thin adapter wrapping `@x402/evm` facilitator verification
+- `x402-billing-account.adapter.ts` — resolves/creates billing_account from wallet address
+- 2 new env vars: `NODE_RECEIVING_ADDRESS`, `X402_FACILITATOR_URL`
+- charge_receipts gets `x402_settlement_tx` column via migration
 
-5. **charge_receipts integration**
-   - Record x402_settlement_tx (inbound tx hash)
-   - Record provider_cost_usd (from outbound x402 amount)
-   - Payer = wallet address (not billing_account_id)
+**Rejected alternatives:**
 
-### Key decisions from spike
+1. **x402 outbound to Hyperbolic (full E2E)** — Rejected because it bypasses LiteLLM cost oracle, requires a signing wallet, and adds a Vercel proxy dependency. More complex, less reliable, bespoke cost tracking. Correct for P2, not P0.
 
-- **Hyperbolic uses x402 v1** — must register both v1 and v2 scheme handlers
-- **X-Request-ID required** by Hyperbolic — generate per outbound call
-- **No cost in response body** — cost oracle is the x402 settlement, not LiteLLM
-- **Node needs signing wallet** — this is simpler, not harder, than API key model
+2. **New HyperbolicX402LlmAdapter** — Rejected because it duplicates `LiteLlmAdapter` functionality. LiteLLM already routes to Hyperbolic. The outbound leg doesn't change.
 
-### Open questions
+3. **Separate middleware file** — Rejected. Next.js App Router doesn't have per-route middleware. The x402 logic lives in the route handler, same as session auth lives in existing route handlers.
 
-- Should x402 and bearer-token endpoints coexist? (yes — internal scheduler keeps bearer)
-- How to estimate max cost for the inbound 402 challenge? (use Hyperbolic's maxAmountRequired + margin)
-- Should the payer wallet address create an implicit billing_account? (probably yes — wallet-as-identity)
+4. **`@cogni/x402-middleware` shared package** — Rejected for P0. Only one consumer (this route). Extract to package when a second consumer appears (e.g., MCP server).
+
+### Invariants
+
+<!-- CODE REVIEW CRITERIA — from x402-e2e spec + architecture -->
+
+- [ ] X402_INBOUND: Payment verified via facilitator before any graph execution (spec: x402-e2e-spec, invariant 1)
+- [ ] LITELLM_IS_THE_METER: Outbound still goes through LiteLLM → Hyperbolic via API key. Cost from `x-litellm-response-cost` header. (spec: x402-e2e-spec, invariant 3)
+- [ ] CHARGE_RECEIPTS_IMMUTABLE: Settlement recorded with `x402_settlement_tx` column. Idempotency via `(source_system, source_reference)` unchanged. (spec: x402-e2e-spec, invariant 4)
+- [ ] NO_CREDIT_BALANCE: x402 payment IS the authorization. No DB credit check for x402 requests. (spec: x402-e2e-spec, invariant 6)
+- [ ] RECEIVING_ADDRESS_NOT_SIGNING_KEY: Node only verifies + settles inbound. No private key. (spec: x402-e2e-spec, invariant 7)
+- [ ] PUBLIC_NAMESPACE: Route under `/api/v1/public/x402/` — bypasses session auth in proxy.ts (spec: architecture)
+- [ ] CONTRACTS_FIRST: Request/response shapes defined in `src/contracts/` using Zod (spec: architecture)
+- [ ] HEX_BOUNDARIES: Route → facade → features → ports → core. No shortcutting. (spec: architecture)
+- [ ] CALLBACK_IS_SOLE_WRITER: LiteLLM callback still writes charge_receipts. x402 route only adds settlement metadata. (spec: billing-evolution)
+- [ ] SIMPLE_SOLUTION: Reuses existing pipeline end-to-end. No new LlmService, no new executor, no new billing path.
+
+### Request Flow
+
+```
+                        ┌─────────────────────────────────────────────┐
+                        │  External Agent (has USDC wallet on Base)    │
+                        └───────────────┬─────────────────────────────┘
+                                        │
+                        POST /api/v1/public/x402/chat/completions
+                        (no session, no API key)
+                                        │
+                        ┌───────────────▼─────────────────────────────┐
+                        │  Route Handler: x402 payment gate            │
+                        │                                              │
+                        │  1. Parse request body (OpenAI format)       │
+                        │  2. Check X-PAYMENT header                   │
+                        │     → Missing? Return 402 + challenge        │
+                        │  3. Verify payment via facilitator           │
+                        │     → Invalid? Return 402                    │
+                        │  4. Resolve billing identity from wallet     │
+                        │     → Find or create billing_account         │
+                        │  5. Delegate to chatCompletion facade        │
+                        │     (SAME facade as /v1/chat/completions)    │
+                        │  6. After completion: settle via facilitator  │
+                        │  7. Annotate charge_receipt with settlement  │
+                        └───────────────┬─────────────────────────────┘
+                                        │
+                    ┌───────────────────▼──────────────────────────┐
+                    │  EXISTING PIPELINE (zero changes)              │
+                    │                                                │
+                    │  chatCompletion facade                         │
+                    │    → createScopedGraphExecutor                 │
+                    │      → PreflightCreditCheck (SKIPPED —         │
+                    │        x402 provider returns                   │
+                    │        requiresPlatformCredits: false)          │
+                    │      → BillingGraphExecutorDecorator            │
+                    │      → ObservabilityDecorator                   │
+                    │    → LangGraphInProcProvider.runGraph           │
+                    │      → CogniCompletionAdapter                   │
+                    │        → LiteLlmAdapter.completionStream        │
+                    │          → LiteLLM proxy                        │
+                    │            → Hyperbolic (API key auth)          │
+                    │                                                │
+                    │  LiteLLM callback → /api/internal/billing/     │
+                    │    → commitUsageFact → charge_receipts          │
+                    └────────────────────────────────────────────────┘
+```
+
+### Key detail: Preflight credit check skip
+
+The `PreflightCreditCheckDecorator` asks `provider.requiresPlatformCredits(modelRef)`. For x402 requests, the modelRef uses `providerKey: "platform"` (same LiteLLM adapter), but the billing context signals "x402-paid, skip credit check."
+
+Simplest approach: the route handler wraps the check function to always pass for x402 requests. No new provider needed — the LlmService is the same `LiteLlmAdapter`.
+
+```typescript
+// In x402 route handler:
+const noopCreditCheck: PreflightCreditCheckFn = async () => {}; // x402 is the payment
+```
+
+### Files
+
+<!-- High-level scope -->
+
+- **Create:** `src/contracts/x402.chat.public.v1.contract.ts` — Zod contract for x402 chat endpoint (extends OpenAI format + x402 headers)
+- **Create:** `src/app/api/v1/public/x402/chat/completions/route.ts` — Public route handler with x402 payment gate
+- **Create:** `src/adapters/server/x402/payment-gate.ts` — Thin adapter: parse 402 challenge, verify via facilitator, settle after completion. Uses `@x402/evm` server-side verification.
+- **Create:** `src/adapters/server/x402/wallet-billing.adapter.ts` — Resolves billing_account from wallet address (find-or-create pattern)
+- **Modify:** `packages/db-schema/src/billing.ts` — Add `x402_settlement_tx` (text, nullable) and `provider_cost_usd` (numeric, nullable) columns to charge_receipts. Add `wallet_address` (text, nullable) to billing_accounts.
+- **Modify:** `src/shared/env.ts` — Add `NODE_RECEIVING_ADDRESS` and `X402_FACILITATOR_URL` env vars
+- **Modify:** `apps/web/package.json` — Add `@x402/evm` dependency (server-side facilitator verification)
+- **Create:** migration for new columns
+- **Test:** `tests/stack/x402-chat-completions.stack.test.ts` — E2E: wallet pays x402, gets graph response, charge_receipt written with settlement tx
+
+### Settlement Timing
+
+**Verify-before, settle-after pattern:**
+
+1. **Before execution:** `verifyPayment(signedPayment)` — confirms the agent's USDC authorization covers the max estimated cost. No funds move yet.
+2. **After execution:** LiteLLM callback fires with actual cost → `commitUsageFact()` writes charge_receipt → x402 route calls `settlePayment(actualCost)` → facilitator transfers actual USDC to `NODE_RECEIVING_ADDRESS`.
+3. **charge_receipt update:** After settlement, update the receipt with `x402_settlement_tx` (the on-chain tx hash).
+
+This means the charge_receipt is written in two phases: (1) by LiteLLM callback (standard), (2) enriched with settlement tx by the x402 route. The `x402_settlement_tx` column is nullable — NULL means LiteLLM-only billing (existing behavior), non-NULL means x402-settled.
+
+### Env Vars (2 new, no private keys)
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `NODE_RECEIVING_ADDRESS` | Wallet address on Base where USDC settlements land | `0xdCCa8D85603C2CC47dc6974a790dF846f8695056` |
+| `X402_FACILITATOR_URL` | Hosted facilitator for verify + settle | `https://x402-facilitator.coinbase.com` |
+
+### Dependencies
+
+```json
+{
+  "@x402/evm": "^2.8.0",
+  "@x402/core": "^2.8.0"
+}
+```
+
+Server-side only (facilitator verification). NOT `@x402/fetch` (that's client-side). The node is an x402 server, not client.
 
 ## Validation
 
 - [ ] Agent with USDC wallet can call public endpoint and get graph response
-- [ ] 402 challenge returned for requests without payment
-- [ ] Payment verified via facilitator before graph execution
-- [ ] Settlement recorded in charge_receipts with tx hash
-- [ ] Existing internal bearer-token endpoint unaffected
+- [ ] 402 challenge returned for requests without X-PAYMENT header
+- [ ] 402 challenge includes node receiving address, USDC asset, Base chain
+- [ ] Payment verified via facilitator before graph execution starts
+- [ ] Graph response matches existing /v1/chat/completions format (OpenAI-compatible)
+- [ ] LiteLLM callback writes charge_receipt (existing flow unchanged)
+- [ ] charge_receipt enriched with x402_settlement_tx after settlement
+- [ ] Existing session-auth /v1/chat/completions endpoint unaffected
 - [ ] Works with at least 2 graphs (poet, ponderer)
+- [ ] No private keys required on the node
