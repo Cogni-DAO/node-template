@@ -17,6 +17,7 @@ import { NextResponse } from "next/server";
 
 import { getServerSessionUser } from "@/lib/auth/server";
 import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,7 @@ export async function POST() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const startMs = performance.now();
   try {
     const response = await fetch(OPENAI_DEVICE_CODE_URL, {
       method: "POST",
@@ -42,8 +44,12 @@ export async function POST() {
 
     if (!response.ok) {
       log.error(
-        { status: response.status },
-        "OpenAI device code request failed"
+        {
+          event: EVENT_NAMES.ADAPTER_OPENAI_DEVICE_AUTH_ERROR,
+          status: response.status,
+          durationMs: performance.now() - startMs,
+        },
+        EVENT_NAMES.ADAPTER_OPENAI_DEVICE_AUTH_ERROR
       );
       return NextResponse.json(
         { error: "Failed to start authentication" },
@@ -56,12 +62,28 @@ export async function POST() {
     const interval = Number(data.interval) || 5;
 
     if (!data.device_auth_id || !userCode) {
-      log.error("OpenAI device code response missing required fields");
+      log.error(
+        {
+          event: EVENT_NAMES.ADAPTER_OPENAI_DEVICE_AUTH_ERROR,
+          reasonCode: "missing_fields",
+          durationMs: performance.now() - startMs,
+        },
+        EVENT_NAMES.ADAPTER_OPENAI_DEVICE_AUTH_ERROR
+      );
       return NextResponse.json(
         { error: "Unexpected response from OpenAI" },
         { status: 502 }
       );
     }
+
+    log.info(
+      {
+        event: EVENT_NAMES.BYO_AUTH_DEVICE_CODE_COMPLETE,
+        outcome: "success",
+        durationMs: performance.now() - startMs,
+      },
+      EVENT_NAMES.BYO_AUTH_DEVICE_CODE_COMPLETE
+    );
 
     return NextResponse.json({
       deviceAuthId: data.device_auth_id,
@@ -71,8 +93,13 @@ export async function POST() {
     });
   } catch (err) {
     log.error(
-      { error: err instanceof Error ? err.message : String(err) },
-      "OpenAI device code request error"
+      {
+        event: EVENT_NAMES.ADAPTER_OPENAI_DEVICE_AUTH_ERROR,
+        reasonCode: "network",
+        error: err instanceof Error ? err.message : String(err),
+        durationMs: performance.now() - startMs,
+      },
+      EVENT_NAMES.ADAPTER_OPENAI_DEVICE_AUTH_ERROR
     );
     return NextResponse.json(
       { error: "Failed to connect to OpenAI" },

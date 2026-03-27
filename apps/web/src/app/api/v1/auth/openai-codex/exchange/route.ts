@@ -27,6 +27,7 @@ import { getServerSessionUser } from "@/lib/auth/server";
 import { aeadEncrypt } from "@/shared/crypto/aead";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,8 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+
+  const startMs = performance.now();
 
   // Step 1: Poll OpenAI device auth — check if user has authorized
   let authResult: {
@@ -245,8 +248,14 @@ export async function POST(request: Request) {
     });
 
     log.info(
-      { connectionId, provider: "openai-chatgpt" },
-      "BYO-AI connection created via device code"
+      {
+        event: EVENT_NAMES.BYO_AUTH_EXCHANGE_COMPLETE,
+        connectionId,
+        provider: "openai-chatgpt",
+        outcome: "success",
+        durationMs: performance.now() - startMs,
+      },
+      EVENT_NAMES.BYO_AUTH_EXCHANGE_COMPLETE
     );
   } catch (err) {
     log.error(
