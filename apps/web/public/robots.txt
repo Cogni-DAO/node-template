@@ -1,0 +1,63 @@
+# Cogni Node — AI crawler policy
+# Docs and discovery files: welcome. API endpoints: use the API, don't crawl.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /chat
+Disallow: /profile
+Disallow: /credits
+Disallow: /gov
+Disallow: /schedules
+
+# AI search/browsing agents — welcome
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /api/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /api/
+
+User-agent: Meta-ExternalAgent
+Allow: /
+Disallow: /api/
+
+User-agent: cohere-ai
+Allow: /
+Disallow: /api/
+
+User-agent: Amazonbot
+Allow: /
+Disallow: /api/
+
+# Training-only crawlers — no mutual benefit
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
