@@ -101,10 +101,9 @@ describe("Chat Model Validation Stack Test", () => {
 
     const invalidResponse = await chatPOST(invalidReq);
 
-    // Model validation deferred to execution-time (LiteLLM rejects unknown models).
-    // Route accepts structurally valid modelRef — returns 200 SSE stream that
-    // will contain an error event from the execution layer.
-    expect(invalidResponse.status).toBe(200);
+    // Model validation deferred to execution-time. LiteLLM rejects unknown models,
+    // facade peeks first stream event (error), throws AiExecutionError → route maps to 500.
+    expect(invalidResponse.status).toBe(500);
 
     // Critical: Assert defaultRef actually works (not a retry loop)
     const retryReq = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
