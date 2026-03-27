@@ -159,8 +159,8 @@ const noopCreditCheck: PreflightCreditCheckFn = async () => {}; // x402 is the p
 - **Create:** `src/adapters/server/x402/payment-gate.ts` — Thin adapter: parse 402 challenge, verify via facilitator, settle after completion. Uses `@x402/evm` server-side verification.
 - **Create:** `src/adapters/server/x402/wallet-billing.adapter.ts` — Resolves billing_account from wallet address (find-or-create pattern)
 - **Modify:** `packages/db-schema/src/billing.ts` — Add `x402_settlement_tx` (text, nullable) and `provider_cost_usd` (numeric, nullable) columns to charge_receipts. Add `wallet_address` (text, nullable) to billing_accounts.
-- **Modify:** `src/shared/env.ts` — Add `NODE_RECEIVING_ADDRESS` and `X402_FACILITATOR_URL` env vars
-- **Modify:** `apps/web/package.json` — Add `@x402/evm` dependency (server-side facilitator verification)
+- **Modify:** `.cogni/repo-spec.yaml` — Add `payments_in.x402` section (receiving address, facilitator URL, chain/token config)
+- **Modify:** `apps/web/package.json` — Add `@x402/evm`, `@x402/core` dependencies (server-side facilitator verification)
 - **Create:** migration for new columns
 - **Test:** `tests/stack/x402-chat-completions.stack.test.ts` — E2E: wallet pays x402, gets graph response, charge_receipt written with settlement tx
 
@@ -169,17 +169,35 @@ const noopCreditCheck: PreflightCreditCheckFn = async () => {}; // x402 is the p
 **Verify-before, settle-after pattern:**
 
 1. **Before execution:** `verifyPayment(signedPayment)` — confirms the agent's USDC authorization covers the max estimated cost. No funds move yet.
-2. **After execution:** LiteLLM callback fires with actual cost → `commitUsageFact()` writes charge_receipt → x402 route calls `settlePayment(actualCost)` → facilitator transfers actual USDC to `NODE_RECEIVING_ADDRESS`.
+2. **After execution:** LiteLLM callback fires with actual cost → `commitUsageFact()` writes charge_receipt → x402 route calls `settlePayment(actualCost)` → facilitator transfers actual USDC to node receiving address.
 3. **charge_receipt update:** After settlement, update the receipt with `x402_settlement_tx` (the on-chain tx hash).
 
 This means the charge_receipt is written in two phases: (1) by LiteLLM callback (standard), (2) enriched with settlement tx by the x402 route. The `x402_settlement_tx` column is nullable — NULL means LiteLLM-only billing (existing behavior), non-NULL means x402-settled.
 
-### Env Vars (2 new, no private keys)
+### Configuration: repo-spec (no env vars)
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `NODE_RECEIVING_ADDRESS` | Wallet address on Base where USDC settlements land | `0xdCCa8D85603C2CC47dc6974a790dF846f8695056` |
-| `X402_FACILITATOR_URL` | Hosted facilitator for verify + settle | `https://x402-facilitator.coinbase.com` |
+x402 payment config lives in `.cogni/repo-spec.yaml` alongside existing payment rails — not in env vars. This aligns with how all node identity and financial config is managed:
+
+```yaml
+# .cogni/repo-spec.yaml — new section
+payments_in:
+  x402:
+    provider: x402-usdc-base-v1
+    receiving_address: "0xdCCa8D85603C2CC47dc6974a790dF846f8695056"  # reuses operator_wallet.address
+    facilitator_url: "https://x402.org/facilitator"  # Coinbase-hosted (free ≤1k tx/mo, gas sponsored)
+    allowed_chains:
+      - Base
+    allowed_tokens:
+      - USDC
+```
+
+**Facilitator details:**
+- The x402 facilitator is a **third-party settlement service** (like Stripe for crypto). It verifies signed payment authorizations and executes on-chain USDC transfers.
+- **Coinbase-hosted** at `https://x402.org/facilitator` — free up to 1,000 settlements/month, gas fees sponsored by Coinbase.
+- **Fully open source** at `github.com/coinbase/x402` — Go + TypeScript reference server (~300 lines), self-hostable with a funded wallet + RPC endpoint.
+- **P0:** Use Coinbase free tier. **P2:** Self-host for full sovereignty (same pattern as DAO contract migration).
+
+The `receiving_address` can default to `operator_wallet.address` from existing repo-spec config — same wallet that receives operator share from the Splits contract today.
 
 ### Dependencies
 
