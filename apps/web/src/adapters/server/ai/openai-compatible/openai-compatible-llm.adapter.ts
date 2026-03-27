@@ -213,14 +213,10 @@ export class OpenAiCompatibleLlmAdapter implements LlmService {
       temperature,
       max_tokens: maxTokens,
       stream: true,
-      stream_options: { include_usage: true },
     };
-    if (params.tools && params.tools.length > 0) {
-      requestBody.tools = params.tools;
-    }
-    if (params.toolChoice) {
-      requestBody.tool_choice = params.toolChoice;
-    }
+    // Tools intentionally NOT forwarded — most local models don't support
+    // function calling. The provider declares capabilities.tools: false.
+    // If a model does support tools, a future version can opt in.
 
     const connectCtl = new AbortController();
     const connectTimer = setTimeout(
