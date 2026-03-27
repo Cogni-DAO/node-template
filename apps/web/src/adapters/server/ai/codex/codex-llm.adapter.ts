@@ -146,11 +146,10 @@ async function* runCodexExec(params: {
 
     // Dynamic import to avoid module-scope subprocess spawn
     const { Codex } = await import("@openai/codex-sdk");
-    // Dev: binary in repo node_modules/.bin/codex (pnpm hoists it).
-    // Docker: globally installed (pnpm add -g in Dockerfile), on PATH.
-    const devBin = join(process.cwd(), "node_modules", ".bin", "codex");
-    const { existsSync } = await import("node:fs");
-    const codexBin = existsSync(devBin) ? devBin : "codex";
+    // Resolve codex binary from the app's own node_modules (works in Docker
+    // where /repo/current doesn't have node_modules installed).
+    const codexPkg = require.resolve("@openai/codex/package.json");
+    const codexBin = join(codexPkg, "..", "bin", "codex.js");
 
     // Build env — inherit current + override HOME for auth isolation
     const { env: currentEnv } = await import("node:process");
@@ -212,11 +211,9 @@ async function* runCodexExec(params: {
             { error: event.error.message, durationMs: Date.now() - startMs },
             "Codex turn failed"
           );
-          // Settle deferred BEFORE yielding done — consumer breaks loop on done,
-          // which calls generator.return() and skips any code after the last yield.
-          onError(new Error(`Codex turn failed: ${event.error.message}`));
           yield { type: "error", error: event.error.message } as ChatDeltaEvent;
           yield { type: "done" } as ChatDeltaEvent;
+          onError(new Error(`Codex turn failed: ${event.error.message}`));
           return;
         }
         case "error": {
@@ -224,10 +221,9 @@ async function* runCodexExec(params: {
             { error: event.message, durationMs: Date.now() - startMs },
             "Codex stream error"
           );
-          // Settle deferred BEFORE yielding done (see turn.failed comment).
-          onError(new Error(`Codex error: ${event.message}`));
           yield { type: "error", error: event.message } as ChatDeltaEvent;
           yield { type: "done" } as ChatDeltaEvent;
+          onError(new Error(`Codex error: ${event.message}`));
           return;
         }
         default:
@@ -270,10 +266,9 @@ async function* runCodexExec(params: {
       { error: message, durationMs: Date.now() - startMs },
       "Codex LLM call failed"
     );
-    // Settle deferred BEFORE yielding done (see turn.failed comment).
-    onError(error);
     yield { type: "error", error: message } as ChatDeltaEvent;
     yield { type: "done" } as ChatDeltaEvent;
+    onError(error);
   } finally {
     rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
