@@ -1,13 +1,13 @@
 ---
 id: task.0221
 type: task
-title: "x402 inbound payment gate — public graph execution for wallet-bearing agents"
+title: "x402 inbound payment gate — prototype public graph execution"
 status: needs_implement
 priority: 1
 rank: 10
-estimate: 3
-summary: "Add x402 payment gate to graph execution so agents on the internet can pay USDC per-request to run Cogni graphs. No API key, no account — just a wallet."
-outcome: "An agent with a USDC wallet can POST to /api/v1/public/x402/chat/completions with an x402 payment, receive a graph-executed AI response via the existing pipeline, and have the settlement recorded in charge_receipts."
+estimate: 2
+summary: "Working prototype: x402 payment gate on a public endpoint that runs Cogni graphs. Uses synthetic SessionUser shim for identity (proper actor_id identity is task.0222)."
+outcome: "An agent with a USDC wallet can POST to /api/v1/public/x402/chat/completions, pay via x402, and get an AI graph response. Identity uses a temporary shim — proper agent identity design follows in task.0222."
 spec_refs: [x402-e2e-spec]
 assignees: []
 credit:
@@ -19,7 +19,7 @@ created: 2026-03-27
 updated: 2026-03-27
 labels: [x402, web3, billing, api]
 external_refs: ["docs/research/x402-provider-passthrough.md"]
-revision: 1
+revision: 2
 blocked_by: []
 deploy_verified: false
 ---
@@ -139,30 +139,43 @@ Agent --x402 USDC--> [Cogni Node] --API key--> [LiteLLM] --API key--> [Hyperboli
                     └────────────────────────────────────────────────┘
 ```
 
-### Key detail: Preflight credit check skip
+### Identity: Temporary shim (proper design in task.0222)
 
-The `PreflightCreditCheckDecorator` asks `provider.requiresPlatformCredits(modelRef)`. For x402 requests, the modelRef uses `providerKey: "platform"` (same LiteLLM adapter), but the billing context signals "x402-paid, skip credit check."
-
-Simplest approach: the route handler wraps the check function to always pass for x402 requests. No new provider needed — the LlmService is the same `LiteLlmAdapter`.
+The facade requires `SessionUser` (id, walletAddress, displayName). For x402 prototype, we create a **synthetic SessionUser** from the wallet address:
 
 ```typescript
-// In x402 route handler:
+// Temporary shim — replaced by actor_id resolution in task.0222
+function walletToSessionUser(walletAddress: `0x${string}`): SessionUser {
+  // Deterministic UUID from wallet address (stable across requests)
+  const id = uuidv5(walletAddress.toLowerCase(), X402_AGENT_NAMESPACE);
+  return { id, walletAddress, displayName: null, avatarColor: null };
+}
+```
+
+This creates a deterministic `users` row + `billing_account` on first contact via the existing `getOrCreateBillingAccountForUser()` path. It works but conflates `user_id` with what should be `actor_id` (kind=agent).
+
+**task.0222** will properly implement the `actors` table, `actor_bindings`, wallet→actor resolution, and refactor the facade to accept generic caller identity. This prototype is intentionally shim-level.
+
+### Preflight credit check skip
+
+The `PreflightCreditCheckDecorator` asks `provider.requiresPlatformCredits(modelRef)`. For x402, the route handler injects a noop check — x402 payment IS the authorization.
+
+```typescript
 const noopCreditCheck: PreflightCreditCheckFn = async () => {}; // x402 is the payment
 ```
 
 ### Files
 
-<!-- High-level scope -->
+<!-- High-level scope — prototype, intentionally minimal -->
 
-- **Create:** `src/contracts/x402.chat.public.v1.contract.ts` — Zod contract for x402 chat endpoint (extends OpenAI format + x402 headers)
-- **Create:** `src/app/api/v1/public/x402/chat/completions/route.ts` — Public route handler with x402 payment gate
-- **Create:** `src/adapters/server/x402/payment-gate.ts` — Thin adapter: parse 402 challenge, verify via facilitator, settle after completion. Uses `@x402/evm` server-side verification.
-- **Create:** `src/adapters/server/x402/wallet-billing.adapter.ts` — Resolves billing_account from wallet address (find-or-create pattern)
-- **Modify:** `packages/db-schema/src/billing.ts` — Add `x402_settlement_tx` (text, nullable) and `provider_cost_usd` (numeric, nullable) columns to charge_receipts. Add `wallet_address` (text, nullable) to billing_accounts.
-- **Modify:** `.cogni/repo-spec.yaml` — Add `payments_in.x402` section (receiving address, facilitator URL, chain/token config)
-- **Modify:** `apps/web/package.json` — Add `@x402/evm`, `@x402/core` dependencies (server-side facilitator verification)
-- **Create:** migration for new columns
-- **Test:** `tests/stack/x402-chat-completions.stack.test.ts` — E2E: wallet pays x402, gets graph response, charge_receipt written with settlement tx
+- **Create:** `src/contracts/x402.chat.public.v1.contract.ts` — Zod contract (OpenAI format + x402 headers)
+- **Create:** `src/app/api/v1/public/x402/chat/completions/route.ts` — Public route: x402 gate → synthetic SessionUser → existing facade
+- **Create:** `src/adapters/server/x402/payment-gate.ts` — Verify via facilitator, return 402 challenge, settle after completion
+- **Modify:** `.cogni/repo-spec.yaml` — Add `payments_in.x402` section
+- **Modify:** `apps/web/package.json` — Add `@x402/evm`, `@x402/core`
+- **Modify:** `packages/db-schema/src/billing.ts` — Add `x402_settlement_tx` (text, nullable) to charge_receipts
+- **Create:** migration for new column
+- **Test:** `tests/stack/x402-chat-completions.stack.test.ts` — E2E: wallet pays x402, gets graph response
 
 ### Settlement Timing
 
