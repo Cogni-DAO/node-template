@@ -12,8 +12,8 @@ spec_refs: [multi-provider-llm]
 assignees: [derekg1729]
 credit:
 project: proj.byo-ai
-branch: feat/byo-ai-per-tenant
-pr:
+branch: feat/byo-ai-mobile-polish
+pr: https://github.com/Cogni-DAO/node-template/pull/641
 reviewer:
 created: 2026-03-26
 updated: 2026-03-27
