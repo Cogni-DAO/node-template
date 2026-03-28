@@ -2,7 +2,7 @@
 id: task.0212
 type: task
 title: "Unified usage reporting — emit usage_report for all LLM providers (platform, codex, openai-compatible)"
-status: needs_merge
+status: done
 priority: 1
 rank: 4
 estimate: 2
