@@ -13,7 +13,7 @@ assignees: [derekg1729]
 credit:
 project: proj.byo-ai
 branch: fix/codex-for-real
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/654
 reviewer:
 revision: 0
 blocked_by: []
