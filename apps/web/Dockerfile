@@ -86,9 +86,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 # Codex CLI for BYO-AI ChatGPT execution.
-# Standalone output tracing can't detect spawned binaries, so copy explicitly.
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@openai/codex /opt/codex
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@openai/codex-sdk /opt/codex-sdk
+# Standalone output tracing can't detect spawned binaries.
+# Install globally so pnpm resolves platform-specific optional deps (@openai/codex-linux-x64).
+ENV PNPM_HOME="/usr/local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable pnpm && pnpm add -g @openai/codex@0.116.0 @openai/codex-sdk@0.116.0
 
 USER nextjs
 
