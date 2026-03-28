@@ -12,7 +12,11 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@akashnetwork/akashjs": "^0.10.0",
+    "@akashnetwork/chain-sdk": "1.0.0-alpha.27",
     "@cogni/container-runtime": "workspace:*",
+    "@cosmjs/proto-signing": "^0.32.4",
+    "@cosmjs/stargate": "^0.32.4",
     "pino": "^9.6.0",
     "zod": "^3.24.0"
   },
