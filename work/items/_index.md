@@ -42,6 +42,7 @@
 | 1 | 1 | 3 | needs_review | task.0149 | GitOps k3s provisioning + scheduler-worker migration | CI/CD & Services GitOps | proj.cicd-services-gitops |
 | 1 | 1 | 2 | needs_implement | task.0154 | PR Review deployment finish — output polish, deployment verification, legacy bot retirement | VCS Integration | proj.vcs-integration |
 | 1 | 1 | 5 | needs_design | task.0202 | provisionNode Temporal workflow — zero-touch node launch | Node Formation & Launch | proj.node-formation-ui |
+| 1 | 1 | 3 | needs_implement | task.0228 | MCP Client MVP — McpToolSource + Playwright browser agent | Agentic Interoperability | proj.agentic-interop |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD & Services GitOps | proj.cicd-services-gitops |
