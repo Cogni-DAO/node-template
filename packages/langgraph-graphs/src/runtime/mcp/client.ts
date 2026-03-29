@@ -16,6 +16,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import type { StructuredToolInterface } from "@langchain/core/tools";
 
@@ -222,53 +223,48 @@ export function parseMcpConfigFromEnv(
   }
 
   // Priority 2: Config file with env interpolation
-  const configPath = env.MCP_CONFIG_PATH;
-  if (configPath) {
-    try {
-      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-      const servers: Record<string, RawServerEntry> = raw.mcpServers ?? raw;
+  // Default to config/mcp.servers.json relative to CWD (repo root)
+  const rawPath = env.MCP_CONFIG_PATH ?? "config/mcp.servers.json";
+  const configPath = resolve(rawPath);
+  try {
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    const servers: Record<string, RawServerEntry> = raw.mcpServers ?? raw;
 
-      const config: Record<string, McpServerConfig> = {};
-      for (const [name, rawServer] of Object.entries(servers)) {
-        // Skip disabled servers
-        if (rawServer.disabled) continue;
+    const config: Record<string, McpServerConfig> = {};
+    for (const [name, rawServer] of Object.entries(servers)) {
+      // Skip disabled servers
+      if (rawServer.disabled) continue;
 
-        // Interpolate env vars in all string values
-        const server = interpolateDeep(rawServer, env);
+      // Interpolate env vars in all string values
+      const server = interpolateDeep(rawServer, env);
 
-        // Determine transport
-        const transport =
-          server.transport ??
-          (server.command ? "stdio" : server.url ? "http" : undefined);
+      // Determine transport
+      const transport =
+        server.transport ??
+        (server.command ? "stdio" : server.url ? "http" : undefined);
 
-        if (transport === "stdio" && server.command) {
-          config[name] = {
-            transport: "stdio" as const,
-            command: server.command,
-            args: server.args,
-            env: server.env,
-          };
-        } else if (
-          (transport === "http" || transport === "sse") &&
-          server.url
-        ) {
-          config[name] = {
-            transport: transport as "http" | "sse",
-            url: server.url,
-            headers: server.headers,
-          };
-        }
+      if (transport === "stdio" && server.command) {
+        config[name] = {
+          transport: "stdio" as const,
+          command: server.command,
+          args: server.args,
+          env: server.env,
+        };
+      } else if ((transport === "http" || transport === "sse") && server.url) {
+        config[name] = {
+          transport: transport as "http" | "sse",
+          url: server.url,
+          headers: server.headers,
+        };
       }
-      return config;
-    } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: error logging for spike diagnostics
-      console.error(
-        `[mcp-config] Failed to read MCP config from ${configPath}:`,
-        error
-      );
-      return {};
     }
+    return config;
+  } catch (error) {
+    // biome-ignore lint/suspicious/noConsole: error logging for spike diagnostics
+    console.error(
+      `[mcp-config] Failed to read MCP config from ${configPath}:`,
+      error
+    );
+    return {};
   }
-
-  return {};
 }

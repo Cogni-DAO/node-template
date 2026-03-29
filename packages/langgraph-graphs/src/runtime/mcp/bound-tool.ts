@@ -46,7 +46,7 @@ export function mcpToolToBoundRuntime(
       properties: {},
     },
     effect: "external_side_effect",
-    redaction: { mode: "top_level_only", allowedKeys: [] },
+    redaction: { mode: "top_level_only", allowlist: [] },
   };
 
   return {

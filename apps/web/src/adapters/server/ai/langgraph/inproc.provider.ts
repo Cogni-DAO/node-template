@@ -225,6 +225,11 @@ export class LangGraphInProcProvider implements GraphExecutorPort {
     // Extract tool contracts from resolved catalog tools
     const toolContracts = catalogTools.map((bt) => bt.contract);
 
+    // Collect MCP tool specs for LLM exposure (JSON Schema based, not Zod)
+    const mcpToolSpecs = mcpToolIds
+      .map((id) => runtimeTools[id]?.spec)
+      .filter((s): s is NonNullable<typeof s> => s !== undefined);
+
     // Build request for package runner
     // Use conditional spreads for exactOptionalPropertyTypes
     // Per UNIFIED_INVOKE_SIGNATURE: configurable has model + toolIds
@@ -248,6 +253,7 @@ export class LangGraphInProcProvider implements GraphExecutorPort {
       completionFn,
       createToolExecFn,
       toolContracts,
+      ...(mcpToolSpecs.length > 0 && { mcpToolSpecs }),
       request: runnerRequest,
       ...(req.responseFormat !== undefined && {
         responseFormat: req.responseFormat,
