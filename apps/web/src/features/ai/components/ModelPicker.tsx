@@ -151,7 +151,8 @@ export function ModelPicker({
     (m) => m.ref.providerKey === "openai-compatible"
   );
   const platformModels = models.filter(
-    (m) => m.ref.providerKey !== "openai-compatible"
+    (m) =>
+      m.ref.providerKey !== "openai-compatible" && m.ref.providerKey !== "codex"
   );
 
   const handleBackendChange = (b: LlmBackend) => {

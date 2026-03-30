@@ -221,10 +221,14 @@ function transformModelInfoResponse(data: unknown): LiteLlmModelMeta[] {
         display_name?: string;
         is_free?: boolean;
         provider_key?: string;
+        mode?: string;
         metadata?: {
           cogni?: { default_preferred?: boolean; default_free?: boolean };
         };
       };
+
+      // Skip non-chat models (embeddings, image generation, etc.)
+      if (modelInfo.mode && modelInfo.mode !== "chat") return null;
 
       const cogniSource = modelInfo.metadata?.cogni;
       const cogni: CogniMeta | undefined = cogniSource
