@@ -13,7 +13,7 @@ assignees: []
 credit:
 project: proj.agentic-interop
 branch: fix/bug-0232-codex-mcp-tools
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/660
 reviewer:
 revision: 2
 blocked_by:
