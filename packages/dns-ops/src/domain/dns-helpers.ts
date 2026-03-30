@@ -29,6 +29,24 @@ export function splitDomain(domain: string): { sld: string; tld: string } {
   return { sld, tld };
 }
 
+/**
+ * Protected record names that must never be modified or deleted.
+ * These are production-critical records (root domain, www, mail).
+ */
+const PROTECTED_NAMES = new Set(["@", "www"]);
+
+/** Throws if a record name is protected */
+function assertNotProtected(name: string, domain: string): void {
+  const normalized = name.toLowerCase();
+  if (PROTECTED_NAMES.has(normalized) || normalized === domain.toLowerCase()) {
+    throw new Error(
+      `PROTECTED: refusing to modify record "${name}" on ${domain}. ` +
+        `Root (@), www, and domain-name records are protected. ` +
+        `Remove this guard only if you know what you are doing.`
+    );
+  }
+}
+
 /** Type guard: does this registrar support targeted record operations? */
 function isTargetedDns(
   r: DomainRegistrarPort
@@ -45,6 +63,7 @@ export async function upsertDnsRecord(
   domain: string,
   record: DnsRecord
 ): Promise<DnsRecord> {
+  assertNotProtected(record.name, domain);
   if (isTargetedDns(registrar)) {
     // Cloudflare: find existing by FQDN, update or create
     const fqdn = record.name === "@" ? domain : `${record.name}.${domain}`;
@@ -82,6 +101,7 @@ export async function removeDnsRecord(
   name: string,
   type: DnsRecord["type"]
 ): Promise<void> {
+  assertNotProtected(name, domain);
   if (isTargetedDns(registrar)) {
     const fqdn = name === "@" ? domain : `${name}.${domain}`;
     const existing = await registrar.findRecords(fqdn, type);

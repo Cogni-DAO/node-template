@@ -157,3 +157,63 @@ describe("removeDnsRecord", () => {
     expect(registrar.setDnsRecords).not.toHaveBeenCalled();
   });
 });
+
+// ── protected record safeguards ─────────────────────────────
+
+describe("protected record safeguards", () => {
+  function mockRegistrar(existing: DnsRecord[]): DomainRegistrarPort {
+    return {
+      checkAvailability: vi.fn(),
+      registerDomain: vi.fn(),
+      getDnsRecords: vi.fn().mockResolvedValue(existing),
+      setDnsRecords: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  it("blocks upsert of @ (root) record", async () => {
+    const registrar = mockRegistrar([]);
+    await expect(
+      upsertDnsRecord(registrar, "cognidao.org", {
+        name: "@",
+        type: "A",
+        value: "1.2.3.4",
+      })
+    ).rejects.toThrow("PROTECTED");
+  });
+
+  it("blocks upsert of www record", async () => {
+    const registrar = mockRegistrar([]);
+    await expect(
+      upsertDnsRecord(registrar, "cognidao.org", {
+        name: "www",
+        type: "CNAME",
+        value: "evil.com",
+      })
+    ).rejects.toThrow("PROTECTED");
+  });
+
+  it("blocks removal of @ record", async () => {
+    const registrar = mockRegistrar([]);
+    await expect(
+      removeDnsRecord(registrar, "cognidao.org", "@", "A")
+    ).rejects.toThrow("PROTECTED");
+  });
+
+  it("blocks removal of www record", async () => {
+    const registrar = mockRegistrar([]);
+    await expect(
+      removeDnsRecord(registrar, "cognidao.org", "www", "CNAME")
+    ).rejects.toThrow("PROTECTED");
+  });
+
+  it("allows preview subdomain records", async () => {
+    const registrar = mockRegistrar([]);
+    await expect(
+      upsertDnsRecord(registrar, "cognidao.org", {
+        name: "pr-42.preview",
+        type: "CNAME",
+        value: "deploy.vercel.app",
+      })
+    ).resolves.toBeDefined();
+  });
+});
