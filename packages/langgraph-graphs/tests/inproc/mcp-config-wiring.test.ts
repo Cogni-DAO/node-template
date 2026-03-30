@@ -130,7 +130,7 @@ describe("parseMcpConfigFromEnv (config file)", () => {
     const configPath = writeTempConfig({
       mcpServers: {
         remote: {
-          url: "http://example.com/mcp",
+          url: "https://example.com/mcp",
         },
       },
     });
@@ -139,20 +139,20 @@ describe("parseMcpConfigFromEnv (config file)", () => {
 
     expect(config.remote.transport).toBe("http");
     expect((config.remote as { url: string }).url).toBe(
-      "http://example.com/mcp"
+      "https://example.com/mcp"
     );
   });
 
   it("MCP_SERVERS takes priority over MCP_CONFIG_PATH", () => {
     const configPath = writeTempConfig({
       mcpServers: {
-        fromfile: { transport: "http", url: "http://file" },
+        fromfile: { transport: "http", url: "https://file.example" },
       },
     });
 
     const config = parseMcpConfigFromEnv({
       MCP_SERVERS: JSON.stringify({
-        fromenv: { transport: "http", url: "http://env" },
+        fromenv: { transport: "http", url: "https://env.example" },
       }),
       MCP_CONFIG_PATH: configPath,
     });
