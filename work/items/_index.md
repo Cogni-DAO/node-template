@@ -41,7 +41,6 @@
 | 1 | 1 | 4 | needs_implement | task.0119 | Epoch approver UI — EIP-712 signing, review/edit/finalize admin panel | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 1 | 3 | needs_review | task.0149 | GitOps k3s provisioning + scheduler-worker migration | CI/CD & Services GitOps | proj.cicd-services-gitops |
 | 1 | 1 | 2 | needs_implement | task.0154 | PR Review deployment finish — output polish, deployment verification, legacy bot retirement | VCS Integration | proj.vcs-integration |
-| 1 | 1 | 3 | needs_merge | task.0159 | Broadcasting Crawl — use-case seam, optimizer, publish pipeline | Broadcasting | proj.broadcasting |
 | 1 | 1 | 5 | needs_design | task.0202 | provisionNode Temporal workflow — zero-touch node launch | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 1 | 3 | needs_merge | task.0228 | MCP Client MVP — McpToolSource + Playwright browser agent | Agentic Interoperability | proj.agentic-interop |
 | 1 | 1 | 3 | needs_design | spike.0229 | Knowledge Aggregation — KnowledgeCapability Port | OSS Research AI Node | proj.oss-research-node |
@@ -238,6 +237,7 @@
 | 1 | task.0148 | GitOps foundation — Kustomize manifests, k3s IaC module, Argo CD bootstrap | CI/CD & Services GitOps | proj.cicd-services-gitops |
 | 1 | task.0153 | PR Review Bot V0 — LangGraph graph + gate orchestrator for automated PR review | VCS Integration | proj.vcs-integration |
 | 1 | spike.0158 | Broadcasting Platform Integration — Research Spike | Broadcasting | proj.broadcasting |
+| 1 | task.0159 | Broadcasting Crawl — use-case seam, optimizer, publish pipeline | Broadcasting | proj.broadcasting |
 | 1 | task.0160 | Scheduler-worker Dockerfile cache parity with app | CI/CD & Services GitOps | proj.cicd-services-gitops |
 | 1 | task.0162 | Enable TypeScript LSP plugin for Claude Code | Development Workflows | proj.development-workflows |
 | 1 | task.0163 | Add voice-to-text input to chat composer |  |  |

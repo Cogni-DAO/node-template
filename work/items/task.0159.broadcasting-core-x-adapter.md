@@ -2,12 +2,12 @@
 id: task.0159
 type: task
 title: "Broadcasting Crawl — use-case seam, optimizer, publish pipeline"
-status: needs_merge
+status: done
 priority: 1
 rank: 1
 estimate: 3
-summary: Add use-case orchestration layer to broadcast-core, wire LLM content optimizer and echo publisher, rewire routes through use-cases, add DB migration, fix review feedback (state transitions, ownership validation, idempotency).
-outcome: Creating a broadcast draft triggers LLM optimization and generates platform posts for review. Approving a post publishes it (echo adapter for Crawl). The architecture has a clean seam for Temporal to wrap later without rewriting.
+summary: Add use-case orchestration layer to broadcast-core, wire LLM content optimizer and echo publisher, rewire routes through use-cases, add DB migration, fix review feedback (state transitions, ownership validation, idempotency). Post-merge additions — platform skill guides (5 platforms), broadcast-writer LangGraph graph, updated spec with correct pipeline flow.
+outcome: Creating a broadcast draft triggers LLM optimization and generates platform posts for review. Approving a post publishes it (echo adapter for Crawl). The architecture has a clean seam for Temporal to wrap later without rewriting. Platform skill guides and broadcast-writer graph establish the pluggable optimization architecture.
 spec_refs:
   - broadcasting-spec
 assignees:
@@ -17,11 +17,11 @@ project: proj.broadcasting
 branch: claude/research-broadcasting-integration-8p2DB
 pr: https://github.com/Cogni-DAO/node-template/pull/581
 reviewer:
-revision: 4
+revision: 5
 blocked_by:
 deploy_verified: false
 created: 2026-03-13
-updated: 2026-03-16
+updated: 2026-03-30
 labels: [broadcasting, crawl]
 external_refs:
 ---

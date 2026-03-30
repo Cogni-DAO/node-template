@@ -4,8 +4,7 @@
 /**
  * Module: `@cogni/langgraph-graphs/graphs/broadcast-writer/graph`
  * Purpose: Single-call graph for platform-specific content adaptation.
- * Scope: Receives platform skill guide + content intent as user message, returns optimized post.
- *   One graph run per target platform — caller spawns N runs for N platforms.
+ * Scope: Single-call graph factory for platform content adaptation. Does not execute graphs or read env.
  * Invariants:
  *   - Pure factory function — no side effects, no env reads
  *   - LLM and tools are injected, not instantiated
