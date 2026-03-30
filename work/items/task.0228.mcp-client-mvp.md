@@ -1,7 +1,7 @@
 ---
 id: task.0228
 type: task
-status: needs_merge
+status: done
 priority: 1
 rank: 1
 title: "MCP Client MVP — McpToolSource + Playwright browser agent"
@@ -11,7 +11,7 @@ project: proj.agentic-interop
 branch: feat/mcp-client-mvp
 pr: https://github.com/Cogni-DAO/node-template/pull/657
 created: 2026-03-28
-updated: 2026-03-29
+updated: 2026-03-30
 assignees:
   - cogni-dev
 labels:

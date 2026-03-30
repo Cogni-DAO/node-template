@@ -18,6 +18,7 @@ import {
   CreditCard,
   Github,
   LayoutDashboard,
+  Radio,
   Vote,
 } from "lucide-react";
 import Image from "next/image";
@@ -44,6 +45,7 @@ const NAV_ITEMS = [
   { href: "/work", label: "Work", icon: Briefcase },
   { href: "/gov", label: "Gov", icon: Vote },
   { href: "/credits", label: "Credits", icon: CreditCard },
+  { href: "/broadcasting", label: "Broadcast", icon: Radio },
 ] as const;
 
 const EXTERNAL_LINKS = [

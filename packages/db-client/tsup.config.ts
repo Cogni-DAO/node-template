@@ -23,6 +23,7 @@ export const tsupConfig = defineConfig({
   external: [
     "drizzle-orm",
     "postgres",
+    "@cogni/broadcast-core",
     "@cogni/db-schema",
     "@cogni/ids",
     "@cogni/scheduler-core",

@@ -16,6 +16,7 @@
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "__arch_probes__"],
   "references": [
+    { "path": "../broadcast-core" },
     { "path": "../db-schema" },
     { "path": "../ids" },
     { "path": "../attribution-ledger" },
