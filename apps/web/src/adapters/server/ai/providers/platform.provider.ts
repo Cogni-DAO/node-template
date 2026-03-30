@@ -4,11 +4,12 @@
 /**
  * Module: `@adapters/server/ai/providers/platform.provider`
  * Purpose: ModelProviderPort implementation for platform LiteLLM models.
- * Scope: Lists models from LiteLLM /model/info, creates LlmService from singleton, checks isFree for credits.
+ * Scope: Lists chat models from LiteLLM /model/info, creates LlmService from singleton, checks isFree for credits.
  *   Ported from model-catalog.server.ts — same SWR cache, same transform, same defaults logic.
  * Invariants:
  *   - SWR cache with 1h TTL
  *   - requiresPlatformCredits inverts isFree from catalog metadata
+ *   - Non-chat models (embedding, image_generation) filtered out via LiteLLM mode field
  * Side-effects: global (cache), IO (fetch to LiteLLM)
  * Links: docs/spec/multi-provider-llm.md
  * @internal
@@ -221,10 +222,14 @@ function transformModelInfoResponse(data: unknown): LiteLlmModelMeta[] {
         display_name?: string;
         is_free?: boolean;
         provider_key?: string;
+        mode?: string;
         metadata?: {
           cogni?: { default_preferred?: boolean; default_free?: boolean };
         };
       };
+
+      // Skip non-chat models (embeddings, image generation, etc.)
+      if (modelInfo.mode && modelInfo.mode !== "chat") return null;
 
       const cogniSource = modelInfo.metadata?.cogni;
       const cogni: CogniMeta | undefined = cogniSource
