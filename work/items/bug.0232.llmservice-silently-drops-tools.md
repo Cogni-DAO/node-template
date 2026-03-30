@@ -12,7 +12,7 @@ spec_refs: [spec.tool-use]
 assignees: []
 credit:
 project: proj.agentic-interop
-branch:
+branch: fix/bug-0232-codex-mcp-tools
 pr:
 reviewer:
 revision: 0
